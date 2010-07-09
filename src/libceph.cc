@@ -452,7 +452,7 @@ extern "C" int ceph_ll_open(vinodeno_t vi, int flags, int uid,
   return ret;
 }
 
-extern "C" int ceph_ll_read(int fd, __s64 off, __u64 len, char* buf)
+extern "C" int ceph_ll_read(int fd, int64_t off, uint64_t len, char* buf)
 {
   Mutex::Locker lock(ceph_client_mutex);
   Fh *filehandle=fd_map[fd];
@@ -466,7 +466,7 @@ extern "C" int ceph_ll_read(int fd, __s64 off, __u64 len, char* buf)
   return r;
 }
 
-extern "C" int ceph_ll_write(int fd, __s64 off, __u64 len,
+extern "C" int ceph_ll_write(int fd, int64_t off, uint64_t len,
 			     const char *data)
 {
   Mutex::Locker lock(ceph_client_mutex);
@@ -556,4 +556,15 @@ extern "C" int ceph_ll_unlink(vinodeno_t vino, const char *name,
 extern "C" int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf)
 {
   return (client->ll_statfs(vino, stbuf));
+}
+
+extern "C" int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid)
+{
+  return (client->ll_readlink(vino, value, uid, gid));
+}
+
+
+extern "C" int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid)
+{
+  return (client->ll_symlink(parent, name, value, attr, uid, gid));
 }

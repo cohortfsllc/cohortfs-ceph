@@ -172,6 +172,8 @@ int ceph_ll_rename(vinodeno_t parent, const char *name,
 		   int uid, int gid);
 int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
 int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
+int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
+int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
 #ifdef __cplusplus
 }
 #endif
