@@ -5761,6 +5761,31 @@ int Client::ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, in
   return r;
 }
 
+int Client::ll_walk(const char* name, struct stat *attr)
+{
+  Mutex::Locker lock(client_lock);
+  filepath fp(name, 0);
+  Inode *destination=0;
+  int rc;
+
+  dout(3) << "ll_walk" << name << dendl;
+  tout << "ll_walk" << std::endl;
+  tout << name << std::endl;
+
+  rc=path_walk(fp, &destination, false);
+  if (rc < 0)
+    {
+      attr->st_ino=0;
+      return rc;
+    }
+  else
+    {
+      fill_stat(destination, attr);
+      return 0;
+    }
+}
+
+
 void Client::_ll_get(Inode *in)
 {
   if (in->ll_ref == 0) 

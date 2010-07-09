@@ -627,6 +627,7 @@ public:
 
   // low-level interface
   int ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, int uid = -1, int gid = -1);
+  int ll_walk(const char* name, struct stat *attr);
   bool ll_forget(vinodeno_t vino, int count);
   Inode *_ll_get_inode(vinodeno_t vino);
   int ll_getattr(vinodeno_t vino, struct stat *st, int uid = -1, int gid = -1);
