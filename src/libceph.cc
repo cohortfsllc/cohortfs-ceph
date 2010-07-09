@@ -35,8 +35,25 @@ static Client *client = NULL;
 static MonClient *monclient = NULL;
 static SimpleMessenger *messenger = NULL;
 
+/* This is replicated functionality from the Client class, but the
+   Client class has it as protected.  Likely shouldn't be in here at
+   all */
+
+interval_set<int> free_fd_set;  // unused fds
+hash_map<int, Fh*> fd_map;
+int get_fd() {
+  int fd = free_fd_set.start();
+  free_fd_set.erase(fd, 1);
+  return fd;
+}
+void put_fd(int fd) {
+  free_fd_set.insert(fd, 1);
+}
+
 extern "C" int ceph_initialize(int argc, const char **argv)
 {
+  if (free_fd_set.empty())
+    free_fd_set.insert(10, 1<<30);
   ceph_client_mutex.Lock();
   if (!client_initialized) {
     //create everything to start a client
@@ -384,4 +401,159 @@ extern "C" int ceph_get_file_stripe_address(int fh, loff_t offset, char *buf, in
   len = address.copy(buf, len, 0);
   buf[len] = '\0'; // write a null char to terminate c-style string
   return 0;
+}
+
+/* Low-level exports */
+
+extern "C" int ceph_ll_lookup(vinodeno_t parent, const char *name,
+			      struct stat *attr, int uid, int gid)
+{
+  
+  return (client->ll_lookup(parent, name, attr, uid, gid));
+}
+
+bool ceph_ll_forget(vinodeno_t vino, int count)
+{
+  return (client->ll_forget(vino, count));
+}
+
+extern "C" int ceph_ll_walk(const char *name, struct stat *attr)
+{
+  return(client->ll_walk(name, attr));
+}
+    
+  
+extern "C" int ceph_ll_getattr(vinodeno_t vi, struct stat *attr,
+			       int uid, int gid)
+{
+  return (client->ll_getattr(vi, attr, uid, gid));
+}
+
+extern "C" int ceph_ll_setattr(vinodeno_t vi, struct stat *st,
+			       int mask, int uid, int gid)
+{
+  return (client->ll_setattr(vi, st, mask, uid, gid));
+}
+  
+extern "C" int ceph_ll_open(vinodeno_t vi, int flags, int uid,
+			    int gid)
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  int ret;
+  Fh *filehandle=NULL;
+  ret=client->ll_open(vi, flags, &filehandle, uid, gid);
+  assert(filehandle);
+  if (ret != 0) {
+    return ret;
+  } else {
+    ret = get_fd();
+    fd_map[ret] = filehandle;
+  }
+  return ret;
+}
+
+extern "C" int ceph_ll_read(int fd, __s64 off, __u64 len, char* buf)
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  Fh *filehandle=fd_map[fd];
+  bufferlist bl;
+  int r=client->ll_read(filehandle, off, len, &bl);
+  if (r >= 0)
+    {
+      bl.copy(0, bl.length(), buf);
+      r = bl.length();
+    }
+  return r;
+}
+
+extern "C" int ceph_ll_write(int fd, __s64 off, __u64 len,
+			     const char *data)
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  Fh *filehandle=fd_map[fd];
+  return (client->ll_write(filehandle, off, len, data));
+}
+
+extern "C" int ceph_ll_close(int fd)
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  Fh *filehandle=fd_map[fd];
+  if (!filehandle)
+      return 0;
+  int rc=client->ll_release(filehandle);
+  fd_map.erase(fd);
+  put_fd(fd);
+  return rc;
+}
+
+extern "C" int ceph_ll_create(vinodeno_t parent, const char* name,
+			      mode_t mode, int flags,
+			      struct stat *attr, int uid,
+			      int gid)
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  int ret;
+  Fh *filehandle=NULL;
+
+  ret=client->ll_create(parent, name, mode, flags, attr, &filehandle,
+			uid, gid);
+  if (ret == 0) {
+    ret = get_fd();
+    fd_map[ret] = filehandle;
+  }
+  return ret;
+}
+
+extern "C" int ceph_ll_mkdir(vinodeno_t parent, const char *name,
+			     mode_t mode, struct stat *attr,
+			     int uid, int gid)
+{
+  return (client->ll_mkdir(parent, name, mode, attr, uid, gid));
+}
+
+extern "C" int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
+			    const char *name, struct stat *attr,
+			    int uid, int gid)
+{
+  return (client->ll_link(obj, newparrent, name, attr, uid, gid));
+}
+
+extern "C" int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid,
+				int gid)
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  struct stat st;
+  st.st_size=length;
+  
+  return(client->ll_setattr(obj, &st, CEPH_SETATTR_SIZE, uid, gid));
+}
+  
+extern "C" int ceph_ll_opendir(vinodeno_t vino, void **dirpp,
+			       int uid, int gid)
+{
+  return(client->ll_opendir(vino, dirpp, uid, gid));
+}
+
+extern "C" void ceph_ll_releasedir(DIR* dir)
+{
+  client->ll_releasedir((void*)dir);
+}
+
+extern "C" int ceph_ll_rename(vinodeno_t parent, const char *name,
+			  vinodeno_t newparent, const char *newname,
+			  int uid, int gid)
+{
+  return (client->ll_rename(parent, name, newparent, newname, uid,
+			    gid)); 
+}
+
+extern "C" int ceph_ll_unlink(vinodeno_t vino, const char *name,
+			      int uid, int gid) 
+{
+  return (client->ll_unlink(vino, name, uid, gid));
+}
+
+extern "C" int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf)
+{
+  return (client->ll_statfs(vino, stbuf));
 }

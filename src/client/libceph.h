@@ -8,6 +8,22 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <stdint.h>
+
+#define CEPH_SETATTR_MODE   1
+#define CEPH_SETATTR_UID    2
+#define CEPH_SETATTR_GID    4
+#define CEPH_SETATTR_MTIME  8
+#define CEPH_SETATTR_ATIME 16
+#define CEPH_SETATTR_SIZE  32
+#define CEPH_SETATTR_CTIME 64
+
+#ifndef CEPH_INO_ROOT
+#define CEPH_INO_ROOT  1
+#endif
+#ifndef CEPH_NOSNAP
+#define CEPH_NOSNAP  ((uint64_t)(-2))
+#endif
 
 struct stat_precise {
   ino_t st_ino;
@@ -28,7 +44,29 @@ struct stat_precise {
   time_t st_ctime_micro;
 };
 
+/* Import these definitions into the land of C */
+
+#ifdef __cplusplus
+#include "Client.h"
+#else
+
+typedef struct _inodeno_t {
+  uint64_t val;
+} inodeno_t;
+
+typedef struct _snapid_t {
+  uint64_t val;
+} snapid_t;
+
+typedef struct __vinodeno {
+  inodeno_t ino;
+  snapid_t snapid;
+  } vinodeno_t;
+#endif
+
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 const char *ceph_version(int *major, int *minor, int *patch);
 
@@ -79,12 +117,19 @@ int ceph_utime(const char *path, struct utimbuf *buf);
 int ceph_truncate(const char *path, loff_t size);
 
 // file ops
+#ifdef __cplusplus
 int ceph_mknod(const char *path, mode_t mode, dev_t rdev=0);
 int ceph_open(const char *path, int flags, mode_t mode=0);
-int ceph_close(int fd);
-loff_t ceph_lseek(int fd, loff_t offset, int whence);
 int ceph_read(int fd, char *buf, loff_t size, loff_t offset=-1);
 int ceph_write(int fd, const char *buf, loff_t size, loff_t offset=-1);
+#else
+int ceph_mknod(const char *path, mode_t mode, dev_t rdev);
+int ceph_open(const char *path, int flags, mode_t mode);
+int ceph_read(int fd, char *buf, loff_t size, loff_t offset);
+int ceph_write(int fd, const char *buf, loff_t size, loff_t offset);
+#endif
+int ceph_close(int fd);
+loff_t ceph_lseek(int fd, loff_t offset, int whence);
 int ceph_ftruncate(int fd, loff_t size);
 int ceph_fsync(int fd, bool syncdataonly);
 int ceph_fstat(int fd, struct stat *stbuf);
@@ -99,6 +144,36 @@ int ceph_set_default_file_stripe_count(int count);
 int ceph_set_default_object_size(int size);
 int ceph_set_default_file_replication(int replication);
 int ceph_set_default_preferred_pg(int pg);
+
+/* Low Level */
+
+int ceph_ll_lookup(vinodeno_t parent, const char *name,
+		   struct stat *attr, int uid, int gid);
+bool ceph_ll_forget(vinodeno_t vino, int count);
+int ceph_ll_walk(const char *name, struct stat *attr);
+int ceph_ll_getattr(vinodeno_t vi, struct stat *attr, int uid, int gid);
+int ceph_ll_setattr(vinodeno_t vi, struct stat *st, int mask, int uid, int gid);
+int ceph_ll_open(vinodeno_t vi, int flags, int uid, int gid);
+int ceph_ll_read(int fd, int64_t off, uint64_t len, char* buf);
+int ceph_ll_write(int fd, int64_t off, uint64_t len, const char *data);
+int ceph_ll_close(int fd);
+int ceph_ll_create(vinodeno_t parent, const char *name, mode_t mode,
+		   int flags, struct stat *attr, int uid, int gid);
+int ceph_ll_mkdir(vinodeno_t parent, const char *name,
+		  mode_t mode, struct stat *attr, int uid, int gid);
+int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
+		 const char *name, struct stat *attr,
+		 int uid, int gid);
+int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid, int gid);
+int ceph_ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid);
+void ceph_ll_releasedir(DIR* dir);
+int ceph_ll_rename(vinodeno_t parent, const char *name,
+		   vinodeno_t newparent, const char *newname,
+		   int uid, int gid);
+int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
+int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
+#ifdef __cplusplus
 }
+#endif
 
 #endif
