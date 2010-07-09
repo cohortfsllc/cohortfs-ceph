@@ -568,3 +568,9 @@ extern "C" int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *
 {
   return (client->ll_symlink(parent, name, value, attr, uid, gid));
 }
+
+extern "C" int ceph_ll_rmdir(vinodeno_t vino, const char *name,
+			     int uid = -1, int gid = -1)
+{
+  return (client->ll_rmdir(vino, name, uid, gid));
+}
