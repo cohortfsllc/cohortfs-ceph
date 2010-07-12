@@ -6726,6 +6726,16 @@ int Client::ll_create(vinodeno_t parent, const char *name, mode_t mode, int flag
   return 0;
 }
 
+loff_t Client::ll_lseek(Fh *fh, loff_t offset, int whence)
+{
+  Mutex::Locker lock(client_lock);
+  tout << "ll_lseek" << std::endl;
+  tout << offset << std::endl;
+  tout << whence << std::endl;
+
+  return _lseek(fh, offset, whence);
+}
+
 int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
 {
   Mutex::Locker lock(client_lock);
