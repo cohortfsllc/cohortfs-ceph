@@ -175,10 +175,11 @@ int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
 int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
 int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
 #ifdef __cplusplus
-int ll_rmdir(vinodeno_t vino, const char *name, int uid = -1, int gid = -1);
+int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid = -1, int gid = -1);
 #else
-int ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
+int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
 #endif
+loff_t ceph_ll_lseek(int fd, loff_t offset, int whence);
 #ifdef __cplusplus
 }
 #endif

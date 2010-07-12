@@ -466,6 +466,14 @@ extern "C" int ceph_ll_read(int fd, int64_t off, uint64_t len, char* buf)
   return r;
 }
 
+extern "C" loff_t ceph_ll_lseek(int fd, loff_t offset, int whence);
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  Fh *filehandle=fd_map[fd];
+  int r=client->ll_read(filehandle, off, len, &bl);
+  return (client->ll_lseek(filehandle, offset, whence));
+}
+
 extern "C" int ceph_ll_write(int fd, int64_t off, uint64_t len,
 			     const char *data)
 {
