@@ -62,6 +62,8 @@ typedef struct __vinodeno {
   inodeno_t ino;
   snapid_t snapid;
   } vinodeno_t;
+
+typedef struct Fh Fh;
 #endif
 
 #ifdef __cplusplus
@@ -153,12 +155,13 @@ bool ceph_ll_forget(vinodeno_t vino, int count);
 int ceph_ll_walk(const char *name, struct stat *attr);
 int ceph_ll_getattr(vinodeno_t vi, struct stat *attr, int uid, int gid);
 int ceph_ll_setattr(vinodeno_t vi, struct stat *st, int mask, int uid, int gid);
-int ceph_ll_open(vinodeno_t vi, int flags, int uid, int gid);
-int ceph_ll_read(int fd, int64_t off, uint64_t len, char* buf);
-int ceph_ll_write(int fd, int64_t off, uint64_t len, const char *data);
-int ceph_ll_close(int fd);
+int ceph_ll_open(vinodeno_t vi, int flags, Fh **filehandle, int uid, int gid);
+loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence);
+int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf);
+int ceph_ll_write(Fh* filehandle, int64_t off, uint64_t len, const char *data);
+int ceph_ll_close(Fh* filehandle);
 int ceph_ll_create(vinodeno_t parent, const char *name, mode_t mode,
-		   int flags, struct stat *attr, int uid, int gid);
+		   int flags, Fh **filehandle, struct stat *attr, int uid, int gid);
 int ceph_ll_mkdir(vinodeno_t parent, const char *name,
 		  mode_t mode, struct stat *attr, int uid, int gid);
 int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
@@ -179,7 +182,6 @@ int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid = -1, int gid = -1)
 #else
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
 #endif
-loff_t ceph_ll_lseek(int fd, loff_t offset, int whence);
 #ifdef __cplusplus
 }
 #endif

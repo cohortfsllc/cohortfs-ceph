@@ -35,25 +35,8 @@ static Client *client = NULL;
 static MonClient *monclient = NULL;
 static SimpleMessenger *messenger = NULL;
 
-/* This is replicated functionality from the Client class, but the
-   Client class has it as protected.  Likely shouldn't be in here at
-   all */
-
-interval_set<int> free_fd_set;  // unused fds
-hash_map<int, Fh*> fd_map;
-int get_fd() {
-  int fd = free_fd_set.start();
-  free_fd_set.erase(fd, 1);
-  return fd;
-}
-void put_fd(int fd) {
-  free_fd_set.insert(fd, 1);
-}
-
 extern "C" int ceph_initialize(int argc, const char **argv)
 {
-  if (free_fd_set.empty())
-    free_fd_set.insert(10, 1<<30);
   ceph_client_mutex.Lock();
   if (!client_initialized) {
     //create everything to start a client
@@ -435,28 +418,17 @@ extern "C" int ceph_ll_setattr(vinodeno_t vi, struct stat *st,
   return (client->ll_setattr(vi, st, mask, uid, gid));
 }
   
-extern "C" int ceph_ll_open(vinodeno_t vi, int flags, int uid,
-			    int gid)
+extern "C" int ceph_ll_open(vinodeno_t vi, int flags,
+			    Fh **filehandle, int uid, int gid)
 {
-  Mutex::Locker lock(ceph_client_mutex);
-  int ret;
-  Fh *filehandle=NULL;
-  ret=client->ll_open(vi, flags, &filehandle, uid, gid);
-  assert(filehandle);
-  if (ret != 0) {
-    return ret;
-  } else {
-    ret = get_fd();
-    fd_map[ret] = filehandle;
-  }
-  return ret;
+  return (client->ll_open(vi, flags, filehandle, uid, gid));
 }
 
-extern "C" int ceph_ll_read(int fd, int64_t off, uint64_t len, char* buf)
+extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf)
 {
   Mutex::Locker lock(ceph_client_mutex);
-  Fh *filehandle=fd_map[fd];
   bufferlist bl;
+
   int r=client->ll_read(filehandle, off, len, &bl);
   if (r >= 0)
     {
@@ -466,50 +438,43 @@ extern "C" int ceph_ll_read(int fd, int64_t off, uint64_t len, char* buf)
   return r;
 }
 
-extern "C" loff_t ceph_ll_lseek(int fd, loff_t offset, int whence);
+extern "C" loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence)
 {
   Mutex::Locker lock(ceph_client_mutex);
-  Fh *filehandle=fd_map[fd];
-  int r=client->ll_read(filehandle, off, len, &bl);
   return (client->ll_lseek(filehandle, offset, whence));
 }
 
-extern "C" int ceph_ll_write(int fd, int64_t off, uint64_t len,
+extern "C" int ceph_ll_write(Fh* filehandle, int64_t off, uint64_t len,
 			     const char *data)
 {
   Mutex::Locker lock(ceph_client_mutex);
-  Fh *filehandle=fd_map[fd];
   return (client->ll_write(filehandle, off, len, data));
 }
 
-extern "C" int ceph_ll_close(int fd)
+extern "C" int ceph_ll_close(Fh* filehandle)
 {
-  Mutex::Locker lock(ceph_client_mutex);
-  Fh *filehandle=fd_map[fd];
-  if (!filehandle)
-      return 0;
-  int rc=client->ll_release(filehandle);
-  fd_map.erase(fd);
-  put_fd(fd);
+  ceph_client_mutex.Lock();
+  int rc;
+
+  if (filehandle->inode) {
+       rc=client->ll_release(filehandle);
+       filehandle->inode=NULL;
+  } else {
+    rc=-EBADF;
+  }
+  ceph_client_mutex.Unlock();
   return rc;
 }
 
 extern "C" int ceph_ll_create(vinodeno_t parent, const char* name,
 			      mode_t mode, int flags,
+			      Fh **filehandle,
 			      struct stat *attr, int uid,
 			      int gid)
 {
   Mutex::Locker lock(ceph_client_mutex);
-  int ret;
-  Fh *filehandle=NULL;
-
-  ret=client->ll_create(parent, name, mode, flags, attr, &filehandle,
-			uid, gid);
-  if (ret == 0) {
-    ret = get_fd();
-    fd_map[ret] = filehandle;
-  }
-  return ret;
+  return (client->ll_create(parent, name, mode, flags, attr, filehandle,
+			    uid, gid));
 }
 
 extern "C" int ceph_ll_mkdir(vinodeno_t parent, const char *name,
@@ -578,7 +543,7 @@ extern "C" int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *
 }
 
 extern "C" int ceph_ll_rmdir(vinodeno_t vino, const char *name,
-			     int uid = -1, int gid = -1)
+			     int uid, int gid)
 {
   return (client->ll_rmdir(vino, name, uid, gid));
 }
