@@ -627,11 +627,15 @@ public:
 
   // low-level interface
   int ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, int uid = -1, int gid = -1);
+  int ll_lookup_precise(vinodeno_t parent, const char *name, struct stat_precise *attr, int uid = -1, int gid = -1);
   int ll_walk(const char* name, struct stat *attr);
+  int ll_walk_precise(const char* name, struct stat_precise *attr);
   bool ll_forget(vinodeno_t vino, int count);
   Inode *_ll_get_inode(vinodeno_t vino);
   int ll_getattr(vinodeno_t vino, struct stat *st, int uid = -1, int gid = -1);
   int ll_setattr(vinodeno_t vino, struct stat *st, int mask, int uid = -1, int gid = -1);
+  int ll_getattr_precise(vinodeno_t vino, struct stat_precise *st, int uid = -1, int gid = -1);
+  int ll_setattr_precise(vinodeno_t vino, struct stat_precise *st, int mask, int uid = -1, int gid = -1);
   int ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid=-1, int gid=-1);
   int ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid);
   int ll_getxattridx(vinodeno_t vino, const char *name, int uid, int gid);
@@ -649,13 +653,17 @@ public:
   int ll_readlink(vinodeno_t vino, const char **value, int uid = -1, int gid = -1);
   int ll_mknod(vinodeno_t vino, const char *name, mode_t mode, dev_t rdev, struct stat *attr, int uid = -1, int gid = -1);
   int ll_mkdir(vinodeno_t vino, const char *name, mode_t mode, struct stat *attr, int uid = -1, int gid = -1);
+  int ll_mkdir_precise(vinodeno_t vino, const char *name, mode_t mode, struct stat_precise *attr, int uid = -1, int gid = -1);
   int ll_symlink(vinodeno_t vino, const char *name, const char *value, struct stat *attr, int uid = -1, int gid = -1);
+  int ll_symlink_precise(vinodeno_t vino, const char *name, const char *value, struct stat_precise *attr, int uid = -1, int gid = -1);
   int ll_unlink(vinodeno_t vino, const char *name, int uid = -1, int gid = -1);
   int ll_rmdir(vinodeno_t vino, const char *name, int uid = -1, int gid = -1);
   int ll_rename(vinodeno_t parent, const char *name, vinodeno_t newparent, const char *newname, int uid = -1, int gid = -1);
   int ll_link(vinodeno_t vino, vinodeno_t newparent, const char *newname, struct stat *attr, int uid = -1, int gid = -1);
+  int ll_link_precise(vinodeno_t vino, vinodeno_t newparent, const char *newname, struct stat_precise *attr, int uid = -1, int gid = -1);
   int ll_open(vinodeno_t vino, int flags, Fh **fh, int uid = -1, int gid = -1);
   int ll_create(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat *attr, Fh **fh, int uid = -1, int gid = -1);
+  int ll_create_precise(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat_precise *attr, Fh **fh, int uid = -1, int gid = -1);
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
   loff_t ll_lseek(Fh *fh, loff_t offset, int whence);
