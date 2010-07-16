@@ -18,12 +18,10 @@
 #define CEPH_SETATTR_SIZE  32
 #define CEPH_SETATTR_CTIME 64
 
-#ifndef CEPH_INO_ROOT
+#ifndef __cplusplus
 #define CEPH_INO_ROOT  1
-#endif
-#ifndef CEPH_NOSNAP
 #define CEPH_NOSNAP  ((uint64_t)(-2))
-#endif
+#endif /* __cplusplus */
 
 struct stat_precise {
   ino_t st_ino;
@@ -48,7 +46,7 @@ struct stat_precise {
 
 #ifdef __cplusplus
 #include "Client.h"
-#else
+#else /* !__cplusplus */
 
 typedef struct _inodeno_t {
   uint64_t val;
@@ -64,11 +62,11 @@ typedef struct __vinodeno {
   } vinodeno_t;
 
 typedef struct Fh Fh;
-#endif
+#endif /* __cplusplus */
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif /* __cplusplus */
 
 const char *ceph_version(int *major, int *minor, int *patch);
 
@@ -124,12 +122,12 @@ int ceph_mknod(const char *path, mode_t mode, dev_t rdev=0);
 int ceph_open(const char *path, int flags, mode_t mode=0);
 int ceph_read(int fd, char *buf, loff_t size, loff_t offset=-1);
 int ceph_write(int fd, const char *buf, loff_t size, loff_t offset=-1);
-#else
+#else /* !__cplusplus */
 int ceph_mknod(const char *path, mode_t mode, dev_t rdev);
 int ceph_open(const char *path, int flags, mode_t mode);
 int ceph_read(int fd, char *buf, loff_t size, loff_t offset);
 int ceph_write(int fd, const char *buf, loff_t size, loff_t offset);
-#endif
+#endif /* __cpluscplus */
 int ceph_close(int fd);
 loff_t ceph_lseek(int fd, loff_t offset, int whence);
 int ceph_ftruncate(int fd, loff_t size);
@@ -151,10 +149,14 @@ int ceph_set_default_preferred_pg(int pg);
 
 int ceph_ll_lookup(vinodeno_t parent, const char *name,
 		   struct stat *attr, int uid, int gid);
+int ceph_ll_lookup_precise(vinodeno_t parent, const char *name, struct stat_precise *attr, int uid, int gid);
 bool ceph_ll_forget(vinodeno_t vino, int count);
 int ceph_ll_walk(const char *name, struct stat *attr);
+int ceph_ll_walk_precise(const char *name, struct stat_precise *attr);
 int ceph_ll_getattr(vinodeno_t vi, struct stat *attr, int uid, int gid);
 int ceph_ll_setattr(vinodeno_t vi, struct stat *st, int mask, int uid, int gid);
+int ceph_ll_getattr_precise(vinodeno_t vi, struct stat_precise *attr, int uid, int gid);
+int ceph_ll_setattr_precise(vinodeno_t vi, struct stat_precise *st, int mask, int uid, int gid);
 int ceph_ll_open(vinodeno_t vi, int flags, Fh **filehandle, int uid, int gid);
 loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence);
 int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf);
@@ -177,11 +179,20 @@ int ceph_ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid);
 int ceph_ll_removexattr_by_idx(vinodeno_t vino, int idx, int uid, int gid);
 int ceph_ll_create(vinodeno_t parent, const char *name, mode_t mode,
 		   int flags, Fh **filehandle, struct stat *attr, int uid, int gid);
+int ceph_ll_create_precise(vinodeno_t parent, const char *name, mode_t mode,
+			   int flags, Fh **filehandle,
+			   struct stat_precise *attr, int uid, int gid);
 int ceph_ll_mkdir(vinodeno_t parent, const char *name,
 		  mode_t mode, struct stat *attr, int uid, int gid);
+int ceph_ll_mkdir_precise(vinodeno_t parent, const char *name,
+			  mode_t mode, struct stat_precise *attr,
+			  int uid, int gid);
 int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
 		 const char *name, struct stat *attr,
 		 int uid, int gid);
+int ceph_ll_link_precise(vinodeno_t obj, vinodeno_t newparrent,
+			 const char *name, struct stat_precise *attr,
+			 int uid, int gid);
 int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid, int gid);
 int ceph_ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid);
 void ceph_ll_releasedir(DIR* dir);
@@ -192,11 +203,34 @@ int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
 int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
 int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
 int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
-#ifdef __cplusplus
-int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid = -1, int gid = -1);
-#else
+int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const
+			    char *value, struct stat_precise *attr, int uid, int gid);
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
-#endif
+int ceph_ll_mkdir(vinodeno_t parent, const char *name,
+		  mode_t mode, struct stat *attr, int uid, int gid);
+int ceph_ll_mkdir_precise(vinodeno_t parent, const char *name,
+			  mode_t mode, struct stat_precise *attr,
+			  int uid, int gid);
+int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
+		 const char *name, struct stat *attr,
+		 int uid, int gid);
+int ceph_ll_link_precise(vinodeno_t obj, vinodeno_t newparrent,
+			 const char *name, struct stat_precise *attr,
+			 int uid, int gid);
+int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid, int gid);
+int ceph_ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid);
+void ceph_ll_releasedir(DIR* dir);
+int ceph_ll_rename(vinodeno_t parent, const char *name,
+		   vinodeno_t newparent, const char *newname,
+		   int uid, int gid);
+int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
+int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
+int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
+int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
+int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const
+			    char *value, struct stat_precise *attr, int uid, int gid);
+int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
+
 #ifdef __cplusplus
 }
 #endif

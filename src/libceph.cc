@@ -391,8 +391,14 @@ extern "C" int ceph_get_file_stripe_address(int fh, loff_t offset, char *buf, in
 extern "C" int ceph_ll_lookup(vinodeno_t parent, const char *name,
 			      struct stat *attr, int uid, int gid)
 {
-  
   return (client->ll_lookup(parent, name, attr, uid, gid));
+}
+
+extern "C" int ceph_ll_lookup_precise(vinodeno_t parent, const char *name,
+				      struct stat_precise *attr, int uid,
+				      int gid)
+{
+  return (client->ll_lookup_precise(parent, name, (Client::stat_precise*)attr, uid, gid));
 }
 
 bool ceph_ll_forget(vinodeno_t vino, int count)
@@ -405,6 +411,11 @@ extern "C" int ceph_ll_walk(const char *name, struct stat *attr)
   return(client->ll_walk(name, attr));
 }
     
+extern "C" int ceph_ll_walk_precise(const char *name,
+				    struct stat_precise *attr)
+{
+  return(client->ll_walk_precise(name, (Client::stat_precise*)attr));
+}
   
 extern "C" int ceph_ll_getattr(vinodeno_t vi, struct stat *attr,
 			       int uid, int gid)
@@ -416,6 +427,19 @@ extern "C" int ceph_ll_setattr(vinodeno_t vi, struct stat *st,
 			       int mask, int uid, int gid)
 {
   return (client->ll_setattr(vi, st, mask, uid, gid));
+}
+
+extern "C" int ceph_ll_getattr_precise(vinodeno_t vi,
+				       struct stat_precise *attr,
+				       int uid, int gid)
+{
+  return (client->ll_getattr_precise(vi, (Client::stat_precise*)attr, uid, gid));
+}
+
+extern "C" int ceph_ll_setattr_precise(vinodeno_t vi, struct stat_precise *st,
+				       int mask, int uid, int gid)
+{
+  return (client->ll_setattr_precise(vi, (Client::stat_precise*)st, mask, uid, gid));
 }
   
 extern "C" int ceph_ll_open(vinodeno_t vi, int flags,
@@ -472,9 +496,19 @@ extern "C" int ceph_ll_create(vinodeno_t parent, const char* name,
 			      struct stat *attr, int uid,
 			      int gid)
 {
-  Mutex::Locker lock(ceph_client_mutex);
   return (client->ll_create(parent, name, mode, flags, attr, filehandle,
 			    uid, gid));
+}
+
+extern "C" int ceph_ll_create_precise(vinodeno_t parent,
+				      const char* name,
+				      mode_t mode, int flags,
+				      Fh **filehandle,
+				      struct stat_precise *attr,
+				      int uid, int gid)
+{
+  return (client->ll_create_precise(parent, name, mode, flags, (Client::stat_precise*)attr, filehandle,
+				    uid, gid));
 }
 
 extern "C" int ceph_ll_mkdir(vinodeno_t parent, const char *name,
@@ -484,11 +518,25 @@ extern "C" int ceph_ll_mkdir(vinodeno_t parent, const char *name,
   return (client->ll_mkdir(parent, name, mode, attr, uid, gid));
 }
 
+extern "C" int ceph_ll_mkdir_precise(vinodeno_t parent, const char *name,
+				     mode_t mode, struct stat_precise *attr,
+				     int uid, int gid)
+{
+  return (client->ll_mkdir_precise(parent, name, mode, (Client::stat_precise*)attr, uid, gid));
+}
+
 extern "C" int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
 			    const char *name, struct stat *attr,
 			    int uid, int gid)
 {
   return (client->ll_link(obj, newparrent, name, attr, uid, gid));
+}
+
+extern "C" int ceph_ll_link_precise(vinodeno_t obj, vinodeno_t newparrent,
+				    const char *name, struct stat_precise *attr,
+				    int uid, int gid)
+{
+  return (client->ll_link_precise(obj, newparrent, name, (Client::stat_precise*)attr, uid, gid));
 }
 
 extern "C" int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid,
