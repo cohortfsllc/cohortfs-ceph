@@ -6000,6 +6000,55 @@ int Client::ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t s
   return _getxattr(in, name, value, size, uid, gid);
 }
 
+int Client::ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+
+  Inode *in = _ll_get_inode(vino);
+  int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
+
+  if (r == 0) {
+    map<string,bufferptr>::iterator p;
+    int r=-ENOENT;
+    if (in->xattrs.size() > idx) {
+      for (p = in->xattrs.begin();
+	   idx > 0;
+	   idx--)
+	{ ; }
+
+      r=p->second.length();
+    }
+  }
+  return r;
+}
+
+int Client::ll_getxattr_by_idx(vinodeno_t vino, unsigned idx, void *value, size_t size, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+
+  Inode *in = _ll_get_inode(vino);
+  int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
+
+  if (r == 0) {
+    map<string,bufferptr>::iterator p;
+    int r=-ENOENT;
+    if (in->xattrs.size() > idx) {
+      for (p = in->xattrs.begin();
+	   idx > 0;
+	   idx--)
+	{ ; }
+
+      r=p->second.length();
+      if ((unsigned) r > size) {
+	r=-ERANGE;
+      } else {
+	memcpy(value, p->second.c_str(), r);
+      }
+    }
+  }
+  return r;
+}
+
 int Client::_listxattr(Inode *in, char *name, size_t size, int uid, int gid)
 {
   int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
@@ -6039,6 +6088,89 @@ int Client::ll_listxattr(vinodeno_t vino, char *names, size_t size, int uid, int
   return _listxattr(in, names, size, uid, gid);
 }
 
+/* Cookie is a pointer to an integer.  If NULL, we assume that we should start
+   from the beginning.  if it is a valid pointer, that number is taken
+   to be the number of the attribute last returned.  if eol is
+   non-null, it is set to 1 if the last attribute has been returned
+   and 0 otherwise.
+
+   The buffer consists of zero-terminated strings interlarded with
+   values of type uint64_t giving the length of the attribute data. */
+
+int Client::ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
+				int *cookie, int *eol, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_listxattr_chunks " << vino << " size " << size << dendl;
+  tout << "ll_listxattr_chunks" << std::endl;
+  tout << vino.ino.val << std::endl;
+  tout << size << std::endl;  
+
+  Inode *in = _ll_get_inode(vino);
+
+
+  int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
+  int count=0;
+
+  eol && (*eol=0);
+  
+  if (r == 0) {
+    map<string,bufferptr>::iterator p = in->xattrs.begin();
+
+    for (int s = (cookie ? *cookie : 0);
+	 (s != 0) && in->xattrs.begin() != in->xattrs.end(); s--, p++)
+      {
+      }
+
+    if (size != 0) {
+      char* nptr=names;
+      for (map<string,bufferptr>::iterator p = in->xattrs.begin();
+	   p != in->xattrs.end();
+	   p++) {
+	if (((nptr-names)-(size+sizeof(uint64_t))) < p->first.length()) {
+	  return count;
+	} else {
+	  memcpy(nptr, p->first.c_str(), p->first.length());
+	  nptr += p->first.length();
+	  *nptr = '\0';
+	  nptr++;
+	  *((uint64_t *) nptr)=p->second.length();
+	  nptr+=sizeof(uint64_t);
+	  cookie && cookie++;
+	  count++;
+	}
+      }
+      eol && (*eol=1);
+    }
+  }
+  return r;
+}
+  
+int Client::ll_getxattridx(vinodeno_t vino, const char *name, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+
+  Inode *in = _ll_get_inode(vino);
+
+
+  int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
+
+  if (r == 0) {
+    string n(name);
+    r=-ENOENT;
+    if (in->xattrs.count(n)) {
+      map<string,bufferptr>::iterator p = in->xattrs.begin();
+      for (int s = 0; p != in->xattrs.end(); s++, p++) {
+	if (p->first == n) {
+	  r=s;
+	  break;
+	}
+      }
+    }
+  }
+  return r;
+}
+
 int Client::_setxattr(Inode *in, const char *name, const void *value, size_t size, int flags,
 		      int uid, int gid)
 {
@@ -6065,8 +6197,38 @@ int Client::_setxattr(Inode *in, const char *name, const void *value, size_t siz
   return res;
 }
 
-int Client::ll_setxattr(vinodeno_t vino, const char *name, const void *value, size_t size, int flags,
-			int uid, int gid)
+int Client::ll_setxattr_by_idx(vinodeno_t vino, unsigned int idx, const void *value,
+			       size_t size, int flags, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_setxattr_by_idx " << vino << " " << idx << " size " << size << dendl;
+  tout << "ll_setxattr_by_idx" << std::endl;
+  tout << vino.ino.val << std::endl;
+
+  Inode *in = _ll_get_inode(vino);
+
+  if (in->snapid != CEPH_NOSNAP) {
+    return -EROFS;
+  }
+
+  string n;
+  int r=-ENOENT;
+  if (in->xattrs.size() > idx) {
+    map<string,bufferptr>::iterator p;
+    for (p = in->xattrs.begin();
+	 idx > 0;
+	 idx--)
+      { ; }
+    n=p->first;
+  } else {
+    return r;
+  }
+
+  return _setxattr(in, n.c_str(), value, size, flags, uid, gid);
+}
+
+int Client::ll_setxattr(vinodeno_t vino, const char *name, const void *value,
+			size_t size, int flags, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "ll_setxattr " << vino << " " << name << " size " << size << dendl;
@@ -6102,6 +6264,24 @@ int Client::_removexattr(Inode *in, const char *name, int uid, int gid)
   return res;
 }
 
+int Client::ll_removexattr_by_idx(vinodeno_t vino, unsigned int idx, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  Inode *in = _ll_get_inode(vino);
+
+  int r=-ENOENT;
+  map<string,bufferptr>::iterator p;
+  if (in->xattrs.size() > idx) {
+    for (p = in->xattrs.begin();
+	 idx > 0;
+	 idx--)
+      { }
+  } else {
+    return r;
+  }
+
+  return _removexattr(in, p->first.c_str(), uid, gid);
+}
 
 int Client::ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid)
 {

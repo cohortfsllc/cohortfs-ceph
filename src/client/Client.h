@@ -633,9 +633,17 @@ public:
   int ll_getattr(vinodeno_t vino, struct stat *st, int uid = -1, int gid = -1);
   int ll_setattr(vinodeno_t vino, struct stat *st, int mask, int uid = -1, int gid = -1);
   int ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid=-1, int gid=-1);
+  int ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid);
+  int ll_getxattridx(vinodeno_t vino, const char *name, int uid, int gid);
+  int ll_getxattr_by_idx(vinodeno_t vino, unsigned idx, void *value, size_t size, int uid, int gid);
+  int ll_setxattr_by_idx(vinodeno_t vino, unsigned int idx, const void *value,
+			 size_t size, int flags, int uid, int gid);
   int ll_setxattr(vinodeno_t vino, const char *name, const void *value, size_t size, int flags, int uid=-1, int gid=-1);
   int ll_removexattr(vinodeno_t vino, const char *name, int uid=-1, int gid=-1);
+  int ll_removexattr_by_idx(vinodeno_t vino, unsigned int idx, int uid=-1, int gid=-1);
   int ll_listxattr(vinodeno_t vino, char *list, size_t size, int uid=-1, int gid=-1);
+  int ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
+			  int *cookie, int *eol, int uid, int gid);
   int ll_opendir(vinodeno_t vino, void **dirpp, int uid = -1, int gid = -1);
   void ll_releasedir(void *dirp);
   int ll_readlink(vinodeno_t vino, const char **value, int uid = -1, int gid = -1);
