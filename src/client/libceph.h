@@ -160,6 +160,21 @@ loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence);
 int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf);
 int ceph_ll_write(Fh* filehandle, int64_t off, uint64_t len, const char *data);
 int ceph_ll_close(Fh* filehandle);
+int ceph_ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid, int gid);
+int ceph_ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid);
+int ceph_ll_getxattr_by_idx(vinodeno_t vino, int idx, void *value,
+			    size_t size, int uid, int gid);
+int ceph_ll_getxattridx(vinodeno_t vino, const char *name, int uid,
+			int gid);
+int ceph_ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
+			     int *cookie, int *eol, int uid, int gid);
+int ceph_ll_setxattr(vinodeno_t vino, const char *name,
+		     const void *value, size_t size,
+		     int flags, int uid, int gid);
+int ceph_ll_setxattr_by_idx(vinodeno_t vino, int idx, const void *value,
+			    size_t size, int flags, int uid, int gid);
+int ceph_ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid);
+int ceph_ll_removexattr_by_idx(vinodeno_t vino, int idx, int uid, int gid);
 int ceph_ll_create(vinodeno_t parent, const char *name, mode_t mode,
 		   int flags, Fh **filehandle, struct stat *attr, int uid, int gid);
 int ceph_ll_mkdir(vinodeno_t parent, const char *name,

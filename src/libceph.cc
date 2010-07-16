@@ -547,3 +547,56 @@ extern "C" int ceph_ll_rmdir(vinodeno_t vino, const char *name,
 {
   return (client->ll_rmdir(vino, name, uid, gid));
 }
+
+extern "C" int ceph_ll_getxattr_by_idx(vinodeno_t vino, int idx,
+				       void *value, size_t size,
+				       int uid, int gid)
+{
+  return (client->ll_getxattr_by_idx(vino, idx, value, size, uid, gid));
+}
+
+extern "C" int ceph_ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid)
+{
+  return (client->ll_lenxattr_by_idx(vino, idx, uid, gid));
+}
+
+extern "C" int ceph_ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid, int gid)
+{
+  return (client->ll_getxattr(vino, name, value, size, uid, gid));
+}
+extern "C" int ceph_ll_setxattr(vinodeno_t vino, const char *name,
+				const void *value, size_t size,
+				int flags, int uid, int gid)
+{
+  return (client->ll_setxattr(vino, name, value, size, flags, uid, gid));
+}
+
+extern "C" int ceph_ll_setxattr_by_idx(vinodeno_t vino, int idx,
+				       const void *value, size_t size,
+				       int flags, int uid, int gid)
+{
+  return (client->ll_setxattr_by_idx(vino, idx, value, size, flags, uid, gid));
+}
+
+extern "C" int ceph_ll_getxattridx(vinodeno_t vino, const char *name, int uid,
+				   int gid)
+{
+  return (client->ll_getxattridx(vino, name, uid, gid));
+}
+
+extern "C" int ceph_ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid)
+{
+  return (client->ll_removexattr(vino, name, uid, gid));
+}
+
+extern "C" int ceph_ll_removexattr_by_idx(vinodeno_t vino, int idx, int uid, int gid)
+{
+  return (client->ll_removexattr_by_idx(vino, idx, uid, gid));
+}
+
+extern "C" int ceph_ll_listxattr_chunks(vinodeno_t vino, char *names,
+					size_t size, int *cookie, int *eol,
+					int uid, int gid)
+{
+  return (client->ll_listxattr_chunks(vino, names, size, cookie, eol, uid, gid));
+}
