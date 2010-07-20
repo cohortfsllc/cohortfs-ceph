@@ -203,31 +203,7 @@ int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
 int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
 int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
 int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
-int ceph_ll_symlink_precise(vinodeno_t vino, const char *name, const char *value, struct stat_precise *attr, int uid, int gid);
-int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
-int ceph_ll_mkdir(vinodeno_t parent, const char *name,
-		  mode_t mode, struct stat *attr, int uid, int gid);
-int ceph_ll_mkdir_precise(vinodeno_t parent, const char *name,
-			  mode_t mode, struct stat_precise *attr,
-			  int uid, int gid);
-int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
-		 const char *name, struct stat *attr,
-		 int uid, int gid);
-int ceph_ll_link_precise(vinodeno_t obj, vinodeno_t newparrent,
-			 const char *name, struct stat_precise *attr,
-			 int uid, int gid);
-int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid, int gid);
-int ceph_ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid);
-void ceph_ll_releasedir(DIR* dir);
-int ceph_ll_rename(vinodeno_t parent, const char *name,
-		   vinodeno_t newparent, const char *newname,
-		   int uid, int gid);
-int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
-int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
-int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
-int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
-int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const
-			    char *value, struct stat_precise *attr, int uid, int gid);
+int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid);
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
 
 #ifdef __cplusplus

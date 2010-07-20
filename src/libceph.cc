@@ -590,11 +590,9 @@ extern "C" int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *
   return (client->ll_symlink(parent, name, value, attr, uid, gid));
 }
 
-extern "C" int ceph_ll_symlink_precise(vinodeno_t vino, const char *name,
-				       const char *value, struct stat_precise *attr,
-				       int uid, int gid)
+extern "C" int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid)
 {
-  return (ceph_ll_symlink_precise(vino, name, value, attr, uid, gid));
+  return (client->ll_symlink_precise(parent, name, value, (Client::stat_precise*)attr, uid, gid));
 }
 
 extern "C" int ceph_ll_rmdir(vinodeno_t vino, const char *name,
