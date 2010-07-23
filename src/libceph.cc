@@ -653,3 +653,8 @@ extern "C" int ceph_ll_listxattr_chunks(vinodeno_t vino, char *names,
 {
   return (client->ll_listxattr_chunks(vino, names, size, cookie, eol, uid, gid));
 }
+
+extern "C" int ceph_ll_fetch(vinodeno_t vi)
+{
+  return (client->ll_fetch(vi));
+}

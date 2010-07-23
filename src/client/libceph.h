@@ -205,7 +205,7 @@ int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
 int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
 int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid);
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
-
+int ceph_ll_fetch(vinodeno_t vi);
 #ifdef __cplusplus
 }
 #endif
