@@ -628,6 +628,7 @@ public:
   // low-level interface
   int ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, int uid = -1, int gid = -1);
   int ll_lookup_precise(vinodeno_t parent, const char *name, struct stat_precise *attr, int uid = -1, int gid = -1);
+  int ll_fetch(vinodeno_t vi);
   int ll_walk(const char* name, struct stat *attr);
   int ll_walk_precise(const char* name, struct stat_precise *attr);
   bool ll_forget(vinodeno_t vino, int count);

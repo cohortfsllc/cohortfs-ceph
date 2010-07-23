@@ -5717,6 +5717,27 @@ Inode *Client::open_snapdir(Inode *diri)
   return in;
 }
 
+int Client::ll_fetch(vinodeno_t vi)
+{
+  vi.ino=1;
+  vi.snapid=CEPH_NOSNAP;
+  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
+  // Inode in(vi, NULL);
+  Inode *in = _ll_get_inode(vi);
+  filepath path;
+
+  in->make_nosnap_relative_path(path);
+
+  req->set_filepath(path);
+  req->inode = NULL;
+  req->head.args.getattr.mask = CEPH_STAT_CAP_INODE_ALL;
+  int res = make_request(req, 0, 0);
+
+  cout << "make_request had result " << res << std::endl;
+
+  return in->mode;
+}
+
 int Client::ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
