@@ -742,7 +742,7 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
     // fake it for snap lookup
     vinodeno_t vino = ist.vino;
     vino.snapid = CEPH_SNAPDIR;
-    assert(inode_map.count(vino));
+    _ensure(vino);
     Inode *diri = inode_map[vino];
     
     string dname = request->path.last_dentry();
@@ -5717,24 +5717,6 @@ Inode *Client::open_snapdir(Inode *diri)
   return in;
 }
 
-int Client::ll_fetch(vinodeno_t vi)
-{
-  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
-  Inode in(vi, NULL);
-  filepath path;
-
-  in.make_nosnap_relative_path(path);
-
-  req->set_filepath(path);
-  req->inode = &in;
-  req->head.args.getattr.mask = CEPH_STAT_CAP_INODE_ALL;
-  int res = make_request(req, 0, 0);
-
-  cout << "make_request had result " << res << std::endl;
-
-  return in.mode;
-}
-
 int Client::ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
@@ -5938,7 +5920,7 @@ bool Client::ll_forget(vinodeno_t vino, int num)
 
 Inode *Client::_ll_get_inode(vinodeno_t vino)
 {
-  assert(inode_map.count(vino));
+  _ensure(vino);
   return inode_map[vino];
 }
 
