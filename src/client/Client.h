@@ -54,6 +54,7 @@ enum {
 #include <set>
 #include <map>
 #include <fstream>
+#include <exception>
 using std::set;
 using std::map;
 using std::fstream;
@@ -662,15 +663,27 @@ struct Fh {
 	 last_pos(0), consec_read_bytes(0), nr_consec_read(0) {}
 };
 
-
-
+class fetch_exception : public std::exception {
+public:
+  fetch_exception(int _e, vinodeno_t _v) : errorcode(_e), vi(_v) {
+    snprintf(msg, 256, "Failed to fetch inode %lld, snapid %lld with error %d.",
+	     (long long int)vi.ino.val, (long long int)vi.snapid.val, _e);
+  }
+  int errorcode;
+  vinodeno_t vi;
+  const char* what(void) const throw() {
+    return msg;
+  }
+private:
+  char msg[256];
+};
 
 
 // ========================================================
 // client interface
 
 class Client : public Dispatcher {
- public:
+  public:
   
   /* getdir result */
   struct DirEntry {
@@ -680,6 +693,31 @@ class Client : public Dispatcher {
     DirEntry(const string &s) : d_name(s), stmask(0) {}
     DirEntry(const string &n, struct stat& s, int stm) : d_name(n), st(s), stmask(stm) {}
   };
+
+  void _ensure(vinodeno_t vi) throw (fetch_exception) {
+    if (!inode_map.count(vi)) {
+      filepath path;
+      MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
+      Inode in(vi, NULL);
+      Inode *target=NULL;
+      
+      in.make_nosnap_relative_path(path);
+      
+      req->set_filepath(path);
+      req->inode = &in;
+      req->head.args.getattr.mask = CEPH_STAT_CAP_INODE_ALL;
+      int r = make_request(req, 0, 0, &target);
+      if (r==0 && target) {
+	inode_map[vi]=target;
+	if (target->ll_ref == 0) 
+	  target->get();
+	target->ll_get();
+      } else {
+	fetch_exception e(r, vi);
+	throw e;
+      }
+    }
+  }
 
   struct DirResult {
     static const int SHIFT = 28;
@@ -1253,7 +1291,6 @@ public:
   // low-level interface
   int ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, int uid = -1, int gid = -1);
   int ll_lookup_precise(vinodeno_t parent, const char *name, struct stat_precise *attr, int uid = -1, int gid = -1);
-  int ll_fetch(vinodeno_t vi);
   int ll_walk(const char* name, struct stat *attr);
   int ll_walk_precise(const char* name, struct stat_precise *attr);
   bool ll_forget(vinodeno_t vino, int count);

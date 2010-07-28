@@ -391,69 +391,156 @@ extern "C" int ceph_get_file_stripe_address(int fh, loff_t offset, char *buf, in
 extern "C" int ceph_ll_lookup(vinodeno_t parent, const char *name,
 			      struct stat *attr, int uid, int gid)
 {
-  return (client->ll_lookup(parent, name, attr, uid, gid));
+  try
+    {
+      return (client->ll_lookup(parent, name, attr, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_lookup_precise(vinodeno_t parent, const char *name,
 				      struct stat_precise *attr, int uid,
 				      int gid)
 {
-  return (client->ll_lookup_precise(parent, name, (Client::stat_precise*)attr, uid, gid));
+  try
+    {
+      return (client->ll_lookup_precise(parent, name,
+					(Client::stat_precise*)attr, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 bool ceph_ll_forget(vinodeno_t vino, int count)
 {
-  return (client->ll_forget(vino, count));
+  try
+    {
+      return (client->ll_forget(vino, count));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_walk(const char *name, struct stat *attr)
 {
-  return(client->ll_walk(name, attr));
+  try
+    {
+      return(client->ll_walk(name, attr));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
     
 extern "C" int ceph_ll_walk_precise(const char *name,
 				    struct stat_precise *attr)
 {
-  return(client->ll_walk_precise(name, (Client::stat_precise*)attr));
+  try
+    {
+      return(client->ll_walk_precise(name,
+				     (Client::stat_precise*)attr));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
   
 extern "C" int ceph_ll_getattr(vinodeno_t vi, struct stat *attr,
 			       int uid, int gid)
 {
-  return (client->ll_getattr(vi, attr, uid, gid));
+  try
+    {
+      return (client->ll_getattr(vi, attr, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_setattr(vinodeno_t vi, struct stat *st,
 			       int mask, int uid, int gid)
 {
-  return (client->ll_setattr(vi, st, mask, uid, gid));
+  try
+    {
+      return (client->ll_setattr(vi, st, mask, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_getattr_precise(vinodeno_t vi,
 				       struct stat_precise *attr,
 				       int uid, int gid)
 {
-  return (client->ll_getattr_precise(vi, (Client::stat_precise*)attr, uid, gid));
+  try
+    {
+      return (client->ll_getattr_precise(vi,
+					 (Client::stat_precise*)attr,
+					 uid,
+					 gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_setattr_precise(vinodeno_t vi, struct stat_precise *st,
 				       int mask, int uid, int gid)
 {
-  return (client->ll_setattr_precise(vi, (Client::stat_precise*)st, mask, uid, gid));
+  try
+    {
+      return (client->ll_setattr_precise(vi,
+					 (Client::stat_precise*)st,
+					 mask,
+					 uid,
+					 gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
   
 extern "C" int ceph_ll_open(vinodeno_t vi, int flags,
 			    Fh **filehandle, int uid, int gid)
 {
-  return (client->ll_open(vi, flags, filehandle, uid, gid));
+  try
+    {
+      return (client->ll_open(vi, flags, filehandle, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf)
 {
   Mutex::Locker lock(ceph_client_mutex);
   bufferlist bl;
+  int r;
 
-  int r=client->ll_read(filehandle, off, len, &bl);
+  try
+    {
+      client->ll_read(filehandle, off, len, &bl);
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
   if (r >= 0)
     {
       bl.copy(0, bl.length(), buf);
@@ -464,29 +551,47 @@ extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf
 
 extern "C" loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence)
 {
-  Mutex::Locker lock(ceph_client_mutex);
-  return (client->ll_lseek(filehandle, offset, whence));
+  try
+    {
+      return (client->ll_lseek(filehandle, offset, whence));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_write(Fh* filehandle, int64_t off, uint64_t len,
 			     const char *data)
 {
-  Mutex::Locker lock(ceph_client_mutex);
-  return (client->ll_write(filehandle, off, len, data));
+  try
+    {
+      return (client->ll_write(filehandle, off, len, data));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_close(Fh* filehandle)
 {
-  ceph_client_mutex.Lock();
+  Mutex::Locker lock(ceph_client_mutex);
   int rc;
 
   if (filehandle->inode) {
-       rc=client->ll_release(filehandle);
-       filehandle->inode=NULL;
+    try
+      {
+	rc=client->ll_release(filehandle);
+      }
+    catch (fetch_exception &e)
+      {
+	filehandle->inode=NULL;
+	return -ESTALE;
+      }
   } else {
     rc=-EBADF;
   }
-  ceph_client_mutex.Unlock();
   return rc;
 }
 
@@ -496,8 +601,15 @@ extern "C" int ceph_ll_create(vinodeno_t parent, const char* name,
 			      struct stat *attr, int uid,
 			      int gid)
 {
-  return (client->ll_create(parent, name, mode, flags, attr, filehandle,
-			    uid, gid));
+  try
+    {
+      return (client->ll_create(parent, name, mode, flags, attr,
+				filehandle, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_create_precise(vinodeno_t parent,
@@ -507,36 +619,76 @@ extern "C" int ceph_ll_create_precise(vinodeno_t parent,
 				      struct stat_precise *attr,
 				      int uid, int gid)
 {
-  return (client->ll_create_precise(parent, name, mode, flags, (Client::stat_precise*)attr, filehandle,
-				    uid, gid));
+  try
+    {
+      return (client->ll_create_precise(parent, name, mode, flags,
+					(Client::stat_precise*)attr,
+					filehandle, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_mkdir(vinodeno_t parent, const char *name,
 			     mode_t mode, struct stat *attr,
 			     int uid, int gid)
 {
-  return (client->ll_mkdir(parent, name, mode, attr, uid, gid));
+  try
+    {
+      return (client->ll_mkdir(parent, name, mode, attr, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_mkdir_precise(vinodeno_t parent, const char *name,
 				     mode_t mode, struct stat_precise *attr,
 				     int uid, int gid)
 {
-  return (client->ll_mkdir_precise(parent, name, mode, (Client::stat_precise*)attr, uid, gid));
+  try
+    {
+      return (client->ll_mkdir_precise(parent, name, mode,
+				       (Client::stat_precise*)attr,
+				       uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
 			    const char *name, struct stat *attr,
 			    int uid, int gid)
 {
-  return (client->ll_link(obj, newparrent, name, attr, uid, gid));
+  try
+    {
+      return (client->ll_link(obj, newparrent, name, attr, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_link_precise(vinodeno_t obj, vinodeno_t newparrent,
 				    const char *name, struct stat_precise *attr,
 				    int uid, int gid)
 {
-  return (client->ll_link_precise(obj, newparrent, name, (Client::stat_precise*)attr, uid, gid));
+  try
+    {
+      return (client->ll_link_precise(obj, newparrent, name,
+				      (Client::stat_precise*)attr,
+				      uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid,
@@ -545,116 +697,248 @@ extern "C" int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid,
   Mutex::Locker lock(ceph_client_mutex);
   struct stat st;
   st.st_size=length;
-  
-  return(client->ll_setattr(obj, &st, CEPH_SETATTR_SIZE, uid, gid));
+
+  try
+    {
+      return(client->ll_setattr(obj, &st, CEPH_SETATTR_SIZE, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
   
 extern "C" int ceph_ll_opendir(vinodeno_t vino, void **dirpp,
 			       int uid, int gid)
 {
-  return(client->ll_opendir(vino, dirpp, uid, gid));
+  try
+    {
+      return(client->ll_opendir(vino, dirpp, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
-extern "C" void ceph_ll_releasedir(DIR* dir)
+extern "C" int ceph_ll_releasedir(DIR* dir)
 {
-  client->ll_releasedir((void*)dir);
+  try
+    {
+      client->ll_releasedir((void*)dir);
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+  return 0;
 }
 
 extern "C" int ceph_ll_rename(vinodeno_t parent, const char *name,
 			  vinodeno_t newparent, const char *newname,
 			  int uid, int gid)
 {
-  return (client->ll_rename(parent, name, newparent, newname, uid,
-			    gid)); 
+  try
+    {
+      return (client->ll_rename(parent, name, newparent, newname, uid,
+				gid)); 
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_unlink(vinodeno_t vino, const char *name,
 			      int uid, int gid) 
 {
-  return (client->ll_unlink(vino, name, uid, gid));
+  try
+    {
+      return (client->ll_unlink(vino, name, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf)
 {
-  return (client->ll_statfs(vino, stbuf));
+  try
+    {
+      return (client->ll_statfs(vino, stbuf));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid)
 {
-  return (client->ll_readlink(vino, value, uid, gid));
+  try
+    {
+      return (client->ll_readlink(vino, value, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 
 extern "C" int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid)
 {
-  return (client->ll_symlink(parent, name, value, attr, uid, gid));
+  try
+    {
+      return (client->ll_symlink(parent, name, value, attr, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid)
 {
-  return (client->ll_symlink_precise(parent, name, value, (Client::stat_precise*)attr, uid, gid));
+  try
+    {
+      return (client->ll_symlink_precise(parent, name, value,
+					 (Client::stat_precise*)attr,
+					 uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_rmdir(vinodeno_t vino, const char *name,
 			     int uid, int gid)
 {
-  return (client->ll_rmdir(vino, name, uid, gid));
+  try
+    {
+      return (client->ll_rmdir(vino, name, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_getxattr_by_idx(vinodeno_t vino, int idx,
 				       void *value, size_t size,
 				       int uid, int gid)
 {
-  return (client->ll_getxattr_by_idx(vino, idx, value, size, uid, gid));
+  try
+    {
+      return (client->ll_getxattr_by_idx(vino, idx, value, size, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid)
 {
-  return (client->ll_lenxattr_by_idx(vino, idx, uid, gid));
+  try
+    {
+      return (client->ll_lenxattr_by_idx(vino, idx, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid, int gid)
 {
-  return (client->ll_getxattr(vino, name, value, size, uid, gid));
+  try
+    {
+      return (client->ll_getxattr(vino, name, value, size, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
+
 extern "C" int ceph_ll_setxattr(vinodeno_t vino, const char *name,
 				const void *value, size_t size,
 				int flags, int uid, int gid)
 {
-  return (client->ll_setxattr(vino, name, value, size, flags, uid, gid));
+  try
+    {
+      return (client->ll_setxattr(vino, name, value, size, flags, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_setxattr_by_idx(vinodeno_t vino, int idx,
 				       const void *value, size_t size,
 				       int flags, int uid, int gid)
 {
-  return (client->ll_setxattr_by_idx(vino, idx, value, size, flags, uid, gid));
+  try
+    {
+      return (client->ll_setxattr_by_idx(vino, idx, value, size, flags, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_getxattridx(vinodeno_t vino, const char *name, int uid,
 				   int gid)
 {
-  return (client->ll_getxattridx(vino, name, uid, gid));
+  try
+    {
+      return (client->ll_getxattridx(vino, name, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid)
 {
-  return (client->ll_removexattr(vino, name, uid, gid));
+  try
+    {
+      return (client->ll_removexattr(vino, name, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_removexattr_by_idx(vinodeno_t vino, int idx, int uid, int gid)
 {
-  return (client->ll_removexattr_by_idx(vino, idx, uid, gid));
+  try
+    {
+      return (client->ll_removexattr_by_idx(vino, idx, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }
 
 extern "C" int ceph_ll_listxattr_chunks(vinodeno_t vino, char *names,
 					size_t size, int *cookie, int *eol,
 					int uid, int gid)
 {
-  return (client->ll_listxattr_chunks(vino, names, size, cookie, eol, uid, gid));
-}
-
-extern "C" int ceph_ll_fetch(vinodeno_t vi)
-{
-  return (client->ll_fetch(vi));
+  try
+    {
+      return (client->ll_listxattr_chunks(vino, names, size, cookie, eol, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }

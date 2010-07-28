@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <stdint.h>
+#include <errno.h>
 
 #define CEPH_SETATTR_MODE   1
 #define CEPH_SETATTR_UID    2
@@ -195,7 +196,7 @@ int ceph_ll_link_precise(vinodeno_t obj, vinodeno_t newparrent,
 			 int uid, int gid);
 int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid, int gid);
 int ceph_ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid);
-void ceph_ll_releasedir(DIR* dir);
+int ceph_ll_releasedir(DIR* dir);
 int ceph_ll_rename(vinodeno_t parent, const char *name,
 		   vinodeno_t newparent, const char *newname,
 		   int uid, int gid);
@@ -205,7 +206,6 @@ int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
 int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
 int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid);
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
-int ceph_ll_fetch(vinodeno_t vi);
 #ifdef __cplusplus
 }
 #endif
