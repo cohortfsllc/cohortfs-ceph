@@ -161,6 +161,7 @@ int ceph_ll_setattr_precise(vinodeno_t vi, struct stat_precise *st, int mask, in
 int ceph_ll_open(vinodeno_t vi, int flags, Fh **filehandle, int uid, int gid);
 loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence);
 int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf);
+int ceph_ll_fsync(Fh *fh, int syncdataonly);
 int ceph_ll_write(Fh* filehandle, int64_t off, uint64_t len, const char *data);
 int ceph_ll_close(Fh* filehandle);
 int ceph_ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid, int gid);
@@ -202,7 +203,7 @@ int ceph_ll_rename(vinodeno_t parent, const char *name,
 		   int uid, int gid);
 int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
 int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
-int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid);
+int ceph_ll_readlink(vinodeno_t vino, char **value, int uid, int gid);
 int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
 int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid);
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);

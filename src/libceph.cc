@@ -531,11 +531,11 @@ extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf
 {
   Mutex::Locker lock(ceph_client_mutex);
   bufferlist bl;
-  int r;
+  int r=0;
 
   try
     {
-      client->ll_read(filehandle, off, len, &bl);
+      r=(client->ll_read(filehandle, off, len, &bl));
     }
   catch (fetch_exception &e)
     {
@@ -547,6 +547,21 @@ extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf
       r = bl.length();
     }
   return r;
+}
+
+
+
+extern "C" int ceph_ll_fsync(Fh *fh, int syncdataonly)
+{
+  try
+    {
+      return (client->ll_fsync(fh, syncdataonly));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+  
 }
 
 extern "C" loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence)
@@ -774,11 +789,11 @@ extern "C" int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf)
     }
 }
 
-extern "C" int ceph_ll_readlink(vinodeno_t vino, const char **value, int uid, int gid)
+extern "C" int ceph_ll_readlink(vinodeno_t vino, char **value, int uid, int gid)
 {
   try
     {
-      return (client->ll_readlink(vino, value, uid, gid));
+      return (client->ll_readlink(vino, (const char**) value, uid, gid));
     }
   catch (fetch_exception &e)
     {
