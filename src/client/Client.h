@@ -649,6 +649,10 @@ public:
   int ll_listxattr(vinodeno_t vino, char *list, size_t size, int uid=-1, int gid=-1);
   int ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
 			  int *cookie, int *eol, int uid, int gid);
+  uint32_t ll_stripe_unit(vinodeno_t vino);
+  int ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno);
+  int ll_num_osds(void);
+  int ll_osdaddr(int osd, char* buf, size_t size);
   int ll_opendir(vinodeno_t vino, void **dirpp, int uid = -1, int gid = -1);
   void ll_releasedir(void *dirp);
   int ll_readlink(vinodeno_t vino, const char **value, int uid = -1, int gid = -1);

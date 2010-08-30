@@ -7003,6 +7003,64 @@ int Client::ll_link_precise(vinodeno_t vino, vinodeno_t newparent, const char *n
   return r;
 }
 
+int Client::ll_num_osds(void)
+{
+  return osdmap->get_num_osds();
+}
+
+int Client::ll_osdaddr(int osd, char* buf, size_t size)
+{
+  entity_addr_t g = osdmap->get_addr(osd);
+  uint32_t addr = (g.in4_addr()).sin_addr.s_addr;
+  
+  if (!(osdmap->exists(osd))) {
+    return -1;
+  }
+  return snprintf(buf, size, "%hhu.%hhu.%hhu.%hhu",
+		  (addr & 0x000000ff),
+		  ((addr & 0x0000ff00) >> 0x08),
+		  ((addr & 0x00ff0000) >> 0x10),
+		  ((addr & 0xff000000) >> 0x18));
+}
+
+uint32_t Client::ll_stripe_unit(vinodeno_t vino)
+{
+  Inode *in = _ll_get_inode(vino);
+  return in->layout.fl_stripe_unit;
+}
+
+
+/* Currently we cannot take advantage of redundancy in reads, since we
+   would have to go through all possible placement groups (a
+   potentially quite large number determined by a hash), and use CRUSH
+   to calculate the papropriate set of OSDs for each placement group,
+   then index into that.  An array with one entry per OSD is much more
+   tractable and works for demonstration purposes. */
+
+int Client::ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno)
+{
+  Inode *in = _ll_get_inode(vino);
+  inodeno_t ino = vino.ino;
+  ceph_file_layout *layout=&(in->layout);
+  uint32_t object_size = layout->fl_object_size;
+  uint32_t su = layout->fl_stripe_unit;
+  uint32_t stripe_count = layout->fl_stripe_count;
+  uint64_t stripes_per_object = object_size / su;
+
+  uint64_t stripeno = blockno / stripe_count;    // which horizontal stripe        (Y)
+  uint64_t stripepos = blockno % stripe_count;   // which object in the object set (X)
+  uint64_t objectsetno = stripeno / stripes_per_object;       // which object set
+  uint64_t objectno = objectsetno * stripe_count + stripepos;  // object id
+    
+  object_t oid = file_object_t(ino, objectno);
+  ceph_object_layout olayout
+    = objecter->osdmap->file_to_object_layout(oid, *layout);
+  
+  pg_t pg = (pg_t)olayout.ol_pgid;
+  vector<int> osds;
+  return osdmap->pg_to_osds(pg, osds);
+}
+
 int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
