@@ -957,3 +957,37 @@ extern "C" int ceph_ll_listxattr_chunks(vinodeno_t vino, char *names,
       return -ESTALE;
     }
 }
+
+extern "C" uint32_t ceph_ll_stripe_unit(vinodeno_t vino)
+{
+  try
+    {
+      return (client->ll_stripe_unit(vino));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
+extern "C" int ceph_ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno)
+{
+  try
+    {
+      return (client->ll_get_stripe_osd(vino, blockno));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
+extern "C" int ceph_ll_num_osds(void)
+{
+  return (client->ll_num_osds());
+}
+
+extern "C" int ceph_ll_osdaddr(int osd, char* buf, size_t size)
+{
+  return (client->ll_osdaddr(osd, buf, size));
+}

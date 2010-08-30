@@ -1,11 +1,12 @@
 #ifndef CEPH_LIB_H
 #define CEPH_LIB_H
+#define __USE_UNIX98 1
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <sys/statvfs.h>
 #include <utime.h>
-#include <sys/stat.h>
 #include <stdbool.h>
-#include <sys/types.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <stdint.h>
@@ -207,6 +208,10 @@ int ceph_ll_readlink(vinodeno_t vino, char **value, int uid, int gid);
 int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
 int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid);
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
+uint32_t ceph_ll_stripe_unit(vinodeno_t vino);
+int ceph_ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno);
+int ceph_ll_num_osds(void);
+int ceph_ll_osdaddr(int osd, char* buf, size_t size);
 #ifdef __cplusplus
 }
 #endif
