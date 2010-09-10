@@ -651,6 +651,7 @@ public:
 			  int *cookie, int *eol, int uid, int gid);
   uint32_t ll_stripe_unit(vinodeno_t vino);
   int ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno);
+  uint64_t ll_get_internal_offset(vinodeno_t vino, uint64_t blockno);
   int ll_num_osds(void);
   int ll_osdaddr(int osd, char* buf, size_t size);
   int ll_opendir(vinodeno_t vino, void **dirpp, int uid = -1, int gid = -1);
@@ -670,6 +671,8 @@ public:
   int ll_create(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat *attr, Fh **fh, int uid = -1, int gid = -1);
   int ll_create_precise(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat_precise *attr, Fh **fh, int uid = -1, int gid = -1);
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
+  uint64_t ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl,
+			 uint64_t offset, uint64_t length);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
   loff_t ll_lseek(Fh *fh, loff_t offset, int whence);
   int ll_flush(Fh *fh);

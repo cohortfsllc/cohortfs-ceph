@@ -7033,7 +7033,7 @@ uint32_t Client::ll_stripe_unit(vinodeno_t vino)
 /* Currently we cannot take advantage of redundancy in reads, since we
    would have to go through all possible placement groups (a
    potentially quite large number determined by a hash), and use CRUSH
-   to calculate the papropriate set of OSDs for each placement group,
+   to calculate the appropriate set of OSDs for each placement group,
    then index into that.  An array with one entry per OSD is much more
    tractable and works for demonstration purposes. */
 
@@ -7059,6 +7059,20 @@ int Client::ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno)
   pg_t pg = (pg_t)olayout.ol_pgid;
   vector<int> osds;
   return osdmap->pg_to_osds(pg, osds);
+}
+
+/* Return the offset of the block, internal to the object */
+
+uint64_t Client::ll_get_internal_offset(vinodeno_t vino, uint64_t blockno)
+{
+  Inode *in = _ll_get_inode(vino);
+  inodeno_t ino = vino.ino;
+  ceph_file_layout *layout=&(in->layout);
+  uint32_t object_size = layout->fl_object_size;
+  uint32_t su = layout->fl_stripe_unit;
+  uint64_t stripes_per_object = object_size / su;
+
+  return (blockno % stripes_per_object) * su;
 }
 
 int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
@@ -7195,6 +7209,41 @@ int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
   tout(cct) << len << std::endl;
 
   return _read(fh, off, len, bl);
+}
+
+/* TODO: Once this works, reimplement it to take arguments and require
+   nothing from class Inode (DS reads/writes should not need to
+   contact the metadata server in the normal case.) */
+
+uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl,
+		       uint64_t offset, uint64_t length)
+
+{
+  Mutex flock("Client::_read_sync flock");
+  Cond cond;
+  Inode* in = _ll_get_inode(vino);
+  ceph_file_layout *layout=&(in->layout);
+  object_t oid = file_object_t(vino.ino, blockid);
+  ceph_object_layout olayout
+    = objecter->osdmap->file_to_object_layout(oid, *layout);
+  int r = 0;
+  bool done = false;
+  Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
+  bufferlist tbl;
+
+  objecter->read_trunc(oid, olayout, offset, length, vino.snapid,
+		       bl, 0, in->truncate_size, in->truncate_seq,
+		       onfinish);
+    
+  while (!done)
+    cond.Wait(client_lock);
+  
+  if (r < 0)
+    return r;
+  else if (tbl.length()) {
+    r = tbl.length();
+  }
+  return r;
 }
 
 int Client::ll_write(Fh *fh, loff_t off, loff_t len, const char *data)
