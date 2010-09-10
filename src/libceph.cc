@@ -549,7 +549,28 @@ extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf
   return r;
 }
 
+uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, char* buf,
+			    uint64_t offset, uint64_t length)
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  bufferlist bl;
+  int r=0;
 
+  try
+    {
+      r=(client->ll_read_block(vino, blockid, &bl, offset, length));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+  if (r >= 0)
+    {
+      bl.copy(0, bl.length(), buf);
+      r = bl.length();
+    }
+  return r;
+}
 
 extern "C" int ceph_ll_fsync(Fh *fh, int syncdataonly)
 {
@@ -990,4 +1011,16 @@ extern "C" int ceph_ll_num_osds(void)
 extern "C" int ceph_ll_osdaddr(int osd, char* buf, size_t size)
 {
   return (client->ll_osdaddr(osd, buf, size));
+}
+
+extern "C" uint64_t ceph_ll_get_internal_offset(vinodeno_t vino, uint64_t blockno)
+{
+  try
+    {
+      return (client->ll_get_internal_offset(vino, blockno));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
 }

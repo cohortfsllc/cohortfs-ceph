@@ -212,6 +212,9 @@ uint32_t ceph_ll_stripe_unit(vinodeno_t vino);
 int ceph_ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno);
 int ceph_ll_num_osds(void);
 int ceph_ll_osdaddr(int osd, char* buf, size_t size);
+uint64_t ceph_ll_get_internal_offset(vinodeno_t vino, uint64_t blockno);
+uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl,
+			    uint64_t offset, uint64_t length);
 #ifdef __cplusplus
 }
 #endif
