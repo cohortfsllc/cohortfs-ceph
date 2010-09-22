@@ -572,6 +572,23 @@ uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, char* buf,
   return r;
 }
 
+int ceph_ll_write_block(vinodeno_t vino, uint64_t blockid,
+			char* buf, uint64_t offset,
+			uint64_t length)
+{
+  int r=0;
+
+  try
+    {
+      r=(client->ll_write_block(vino, blockid, buf, offset, length));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+  return r;
+}
+
 extern "C" int ceph_ll_fsync(Fh *fh, int syncdataonly)
 {
   try
