@@ -673,6 +673,9 @@ public:
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
   uint64_t ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl,
 			 uint64_t offset, uint64_t length);
+  int ll_write_block(vinodeno_t vino, uint64_t blockid,
+			 char* buf, uint64_t offset,
+			 uint64_t length);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
   loff_t ll_lseek(Fh *fh, loff_t offset, int whence);
   int ll_flush(Fh *fh);
