@@ -7029,6 +7029,19 @@ uint32_t Client::ll_stripe_unit(vinodeno_t vino)
   return in->layout.fl_stripe_unit;
 }
 
+uint64_t Client::ll_snap_seq(vinodeno_t vino)
+{
+  Inode *in = _ll_get_inode(vino);
+  return in->snaprealm->seq;
+}
+
+uint32_t Client::ll_file_layout(vinodeno_t vino, ceph_file_layout *layout)
+{
+  Inode *in = _ll_get_inode(vino);
+  *layout = in->layout;
+  return 0;
+}
+
 
 /* Currently we cannot take advantage of redundancy in reads, since we
    would have to go through all possible placement groups (a
@@ -7037,11 +7050,9 @@ uint32_t Client::ll_stripe_unit(vinodeno_t vino)
    then index into that.  An array with one entry per OSD is much more
    tractable and works for demonstration purposes. */
 
-int Client::ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno)
+int Client::ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno, ceph_file_layout* layout)
 {
-  Inode *in = _ll_get_inode(vino);
   inodeno_t ino = vino.ino;
-  ceph_file_layout *layout=&(in->layout);
   uint32_t object_size = layout->fl_object_size;
   uint32_t su = layout->fl_stripe_unit;
   uint32_t stripe_count = layout->fl_stripe_count;
@@ -7216,15 +7227,14 @@ int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
    nothing from class Inode (DS reads/writes should not need to
    contact the metadata server in the normal case.) */
 
-uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl,
-			       uint64_t offset, uint64_t length)
+uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl,
+			       uint64_t offset, uint64_t length,
+			       ceph_file_layout* layout)
 
 {
   Mutex::Locker lock(client_lock);
   Mutex flock("Client::ll_read_block flock");
   Cond cond;
-  Inode* in = _ll_get_inode(vino);
-  ceph_file_layout *layout=&(in->layout);
   object_t oid = file_object_t(vino.ino, blockid);
   ceph_object_layout olayout
     = objecter->osdmap->file_to_object_layout(oid, *layout);
@@ -7233,9 +7243,8 @@ uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
   bufferlist tbl;
 
-  objecter->read_trunc(oid, olayout, offset, length, vino.snapid,
-		       bl, 0, in->truncate_size, in->truncate_seq,
-		       onfinish);
+  objecter->read_full(oid, olayout, vino.snapid,
+		      &tbl, 0, onfinish);
     
   while (!done)
     cond.Wait(client_lock);
@@ -7243,7 +7252,14 @@ uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl
   if (r < 0)
     return r;
 
-  return tbl.length();
+  if (offset >= tbl.length())
+    return 0;
+  else if (offset + length > tbl.length())
+    length = tbl.length() - offset;
+
+  tbl.copy(offset, length, bl);
+
+  return length;
 }
 
 /* It appears that the OSD never returns the amount written, so I
@@ -7252,32 +7268,44 @@ uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl
 
 int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
 			   char* buf, uint64_t offset,
-			   uint64_t length)
+			   uint64_t length, ceph_file_layout* layout,
+			   uint64_t snapseq)
 {
   Mutex::Locker lock(client_lock);
   Mutex flock("Client::ll_write_block flock");
   Cond cond;
   bool done = false;
-  int r=0;
+  int r = 0;
   Context *onsafe = new C_SafeCond(&flock, &cond, &done, &r);
   Context *dontcare = new C_NoopContext;
-  Inode* in = _ll_get_inode(vino);
-  ceph_file_layout *layout = &(in->layout);
-  uint32_t su = layout->fl_stripe_unit;
-
   object_t oid = file_object_t(vino.ino, blockid);
   ceph_object_layout olayout
     = objecter->osdmap->file_to_object_layout(oid, *layout);
   bufferptr bp;
   if (length > 0) bp = buffer::copy(buf, length);
-  bufferlist bl;
-  bl.push_back( bp );
+  bufferlist rbl;
+  bufferlist wbl;
+  SnapContext fakesnap;
+  Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
 
-  objecter->write_trunc(oid, olayout, offset, length,
-			in->snaprealm->get_snap_context(),
-			bl, g_clock.real_now(), 0,
-			in->truncate_size, in->truncate_seq, dontcare,
-			onsafe);
+  fakesnap.seq = snapseq;
+
+  objecter->read_full(oid, olayout, vino.snapid,
+		      &rbl, 0, onfinish);
+
+  while (!done)
+    cond.Wait(client_lock);
+
+  done = false;
+
+  rbl.copy(0, offset, wbl);
+  wbl.push_back(bp);
+  if (offset + length < rbl.length())
+    rbl.copy(offset + length, rbl.length() - (offset + length), wbl);
+  
+  objecter->write_full(oid, olayout, fakesnap,
+		       wbl, g_clock.real_now(), 0,
+		       dontcare, onsafe);
 			
 			
   while (!done)

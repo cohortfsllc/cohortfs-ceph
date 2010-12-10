@@ -650,7 +650,9 @@ public:
   int ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
 			  int *cookie, int *eol, int uid, int gid);
   uint32_t ll_stripe_unit(vinodeno_t vino);
-  int ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno);
+  uint32_t ll_file_layout(vinodeno_t vino, ceph_file_layout *layout);
+  uint64_t ll_snap_seq(vinodeno_t vino);
+  int ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno, ceph_file_layout* layout);
   uint64_t ll_get_internal_offset(vinodeno_t vino, uint64_t blockno);
   int ll_num_osds(void);
   int ll_osdaddr(int osd, char* buf, size_t size);
@@ -671,11 +673,13 @@ public:
   int ll_create(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat *attr, Fh **fh, int uid = -1, int gid = -1);
   int ll_create_precise(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat_precise *attr, Fh **fh, int uid = -1, int gid = -1);
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
-  uint64_t ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist* bl,
-			 uint64_t offset, uint64_t length);
+  uint64_t ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl,
+			 uint64_t offset, uint64_t length,
+			 ceph_file_layout* layout);
   int ll_write_block(vinodeno_t vino, uint64_t blockid,
-			 char* buf, uint64_t offset,
-			 uint64_t length);
+		     char* buf, uint64_t offset,
+		     uint64_t length, ceph_file_layout* layout,
+		     uint64_t snapseq);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
   loff_t ll_lseek(Fh *fh, loff_t offset, int whence);
   int ll_flush(Fh *fh);
