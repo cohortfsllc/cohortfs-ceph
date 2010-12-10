@@ -549,8 +549,10 @@ extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf
   return r;
 }
 
-uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, char* buf,
-			    uint64_t offset, uint64_t length)
+extern "C" uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid,
+				       char* buf, uint64_t offset,
+				       uint64_t length,
+				       struct ceph_file_layout* layout)
 {
   Mutex::Locker lock(ceph_client_mutex);
   bufferlist bl;
@@ -558,7 +560,7 @@ uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, char* buf,
 
   try
     {
-      r=(client->ll_read_block(vino, blockid, &bl, offset, length));
+      r=(client->ll_read_block(vino, blockid, bl, offset, length, layout));
     }
   catch (fetch_exception &e)
     {
@@ -572,15 +574,16 @@ uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, char* buf,
   return r;
 }
 
-int ceph_ll_write_block(vinodeno_t vino, uint64_t blockid,
-			char* buf, uint64_t offset,
-			uint64_t length)
+extern "C" int ceph_ll_write_block(vinodeno_t vino, uint64_t blockid,
+				   char* buf, uint64_t offset,
+				   uint64_t length, ceph_file_layout* layout,
+				   uint64_t snapseq)
 {
   int r=0;
 
   try
     {
-      r=(client->ll_write_block(vino, blockid, buf, offset, length));
+      r=(client->ll_write_block(vino, blockid, buf, offset, length, layout, snapseq));
     }
   catch (fetch_exception &e)
     {
@@ -1008,11 +1011,36 @@ extern "C" uint32_t ceph_ll_stripe_unit(vinodeno_t vino)
     }
 }
 
-extern "C" int ceph_ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno)
+extern "C" uint32_t ceph_ll_file_layout(vinodeno_t vino, struct ceph_file_layout *layout)
 {
   try
     {
-      return (client->ll_get_stripe_osd(vino, blockno));
+      return (client->ll_file_layout(vino, layout));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
+uint64_t ceph_ll_snap_seq(vinodeno_t vino)
+{
+  try
+    {
+      return (client->ll_snap_seq(vino));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
+extern "C" int ceph_ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno,
+				      struct ceph_file_layout* layout)
+{
+  try
+    {
+      return (client->ll_get_stripe_osd(vino, blockno, layout));
     }
   catch (fetch_exception &e)
     {

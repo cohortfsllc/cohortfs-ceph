@@ -50,6 +50,24 @@ struct stat_precise {
 #include "Client.h"
 #else /* !__cplusplus */
 
+struct ceph_file_layout {
+	/* file -> object mapping */
+	uint32_t fl_stripe_unit;     /* stripe unit, in bytes.  must be multiple
+				      of page size. */
+	uint32_t fl_stripe_count;    /* over this many objects */
+	uint32_t fl_object_size;     /* until objects are this big, then move to
+				      new objects */
+	uint32_t fl_cas_hash;        /* 0 = none; 1 = sha256 */
+
+	/* pg -> disk layout */
+	uint32_t fl_object_stripe_unit;  /* for per-object parity, if any */
+
+	/* object -> pg layout */
+	uint32_t fl_pg_preferred; /* preferred primary for pg (-1 for none) */
+	uint32_t fl_pg_pool;      /* namespace, crush ruleset, rep level */
+} __attribute__ ((packed));
+
+
 typedef struct _inodeno_t {
   uint64_t val;
 } inodeno_t;
@@ -209,15 +227,20 @@ int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, stru
 int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid);
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
 uint32_t ceph_ll_stripe_unit(vinodeno_t vino);
-int ceph_ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno);
+uint32_t ceph_ll_file_layout(vinodeno_t vino, struct ceph_file_layout *layout);
+uint64_t ceph_ll_snap_seq(vinodeno_t vino);
+int ceph_ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno,
+			     struct ceph_file_layout* layout);
 int ceph_ll_num_osds(void);
 int ceph_ll_osdaddr(int osd, char* buf, size_t size);
 uint64_t ceph_ll_get_internal_offset(vinodeno_t vino, uint64_t blockno);
-uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, char* buf,
-			    uint64_t offset, uint64_t length);
+uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, char* bl,
+		       uint64_t offset, uint64_t length,
+		       struct ceph_file_layout* layout);
 int ceph_ll_write_block(vinodeno_t vino, uint64_t blockid,
-			    char* buf, uint64_t offset,
-			    uint64_t length);
+			char* buf, uint64_t offset,
+			uint64_t length, struct ceph_file_layout* layout,
+			uint64_t snapseq);
 #ifdef __cplusplus
 }
 #endif
