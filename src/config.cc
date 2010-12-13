@@ -104,8 +104,8 @@ void env_to_vec(std::vector<const char*>& args)
   char *p = getenv("CEPH_ARGS");
   if (!p) return;
   
-  int len = MIN(strlen(p), 1000);  // bleh.
   static char buf[1000];  
+  int len = MIN(strlen(p), sizeof(buf)-1);  // bleh.
   memcpy(buf, p, len);
   buf[len] = 0;
   //cout << "CEPH_ARGS='" << p << ";" << endl;
@@ -127,8 +127,8 @@ void env_to_deq(std::deque<const char*>& args)
   char *p = getenv("CEPH_ARGS");
   if (!p) return;
   
-  int len = MIN(strlen(p), 1000);  // bleh.
   static char buf[1000];  
+  int len = MIN(strlen(p), sizeof(buf)-1);  // bleh.
   memcpy(buf, p, len);
   buf[len] = 0;
 
@@ -178,9 +178,15 @@ bool parse_ip_port_vec(const char *s, vector<entity_addr_t>& vec)
   const char *end = p + strlen(p);
   while (p < end) {
     entity_addr_t a;
-    if (!a.parse(p, &p))
+    //cout << " parse at '" << p << "'" << std::endl;
+    if (!a.parse(p, &p)) {
+      //dout(0) << " failed to parse address '" << p << "'" << dendl;
       return false;
+    }
+    //cout << " got " << a << ", rest is '" << p << "'" << std::endl;
     vec.push_back(a);
+    while (*p == ',' || *p == ' ')
+      p++;
   }
   return true;
 }
@@ -341,8 +347,8 @@ static struct config_option config_optionsp[] = {
 	OPTION(auth_nonce_len, 0, OPT_INT, 16),
 	OPTION(mon_client_hunt_interval, 0, OPT_DOUBLE, 3.0),   // try new mon every N seconds until we connect
 	OPTION(mon_client_ping_interval, 0, OPT_DOUBLE, 10.0),  // ping every N seconds
-	OPTION(client_cache_size, 0, OPT_INT, 1000),
-	OPTION(client_cache_mid, 0, OPT_FLOAT, .5),
+	OPTION(client_cache_size, 0, OPT_INT, 16384),
+	OPTION(client_cache_mid, 0, OPT_FLOAT, .75),
 	OPTION(client_cache_stat_ttl, 0, OPT_INT, 0), // seconds until cached stat results become invalid
 	OPTION(client_cache_readdir_ttl, 0, OPT_INT, 1),  // 1 second only
 	OPTION(client_use_random_mds, 0, OPT_BOOL, false),

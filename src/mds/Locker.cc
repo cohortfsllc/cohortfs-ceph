@@ -388,6 +388,14 @@ void Locker::drop_locks(Mutation *mut)
     wrlock_finish(*mut->wrlocks.begin(), mut);
 }
 
+void Locker::drop_non_rdlocks(Mutation *mut)
+{
+  while (!mut->xlocks.empty()) 
+    xlock_finish(*mut->xlocks.begin(), mut);
+  while (!mut->wrlocks.empty()) 
+    wrlock_finish(*mut->wrlocks.begin(), mut);
+}
+
 void Locker::drop_rdlocks(Mutation *mut)
 {
   while (!mut->rdlocks.empty()) 
@@ -1824,7 +1832,7 @@ void Locker::handle_client_caps(MClientCaps *m)
       break;
     
     // next!
-    in = mdcache->pick_inode_snap(in, in->last);
+    in = mdcache->pick_inode_snap(head_in, in->last);
     cap = in->get_client_cap(client);
     assert(cap);    
   }

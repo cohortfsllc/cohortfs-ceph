@@ -1701,7 +1701,6 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops,
 	      << " " << ceph_osd_op_name(op.op)
 	      << dendl;
       result = -EOPNOTSUPP;
-      assert(0);  // for now
     }
 
     if ((is_modify) &&
@@ -1863,9 +1862,8 @@ void ReplicatedPG::make_writeable(OpContext *ctx)
     ctx->clone_obc = new ObjectContext(coid);
     ctx->clone_obc->obs.oi.version = ctx->at_version;
     ctx->clone_obc->obs.oi.prior_version = oi.version;
-    ctx->clone_obc->obs.oi.last_reqid = oi.last_reqid;
-    ctx->clone_obc->obs.oi.mtime = oi.mtime;
     ctx->clone_obc->obs.oi.snaps = snaps;
+    ctx->clone_obc->obs.oi.copy_user_bits(oi);
     ctx->clone_obc->obs.exists = true;
     ctx->clone_obc->get();
 
@@ -1873,6 +1871,7 @@ void ReplicatedPG::make_writeable(OpContext *ctx)
       register_object_context(ctx->clone_obc);
     
     _make_clone(t, soid, coid, &ctx->clone_obc->obs.oi);
+
     
     // add to snap bound collections
     coll_t fc = make_snap_collection(t, snaps[0]);
@@ -3378,14 +3377,28 @@ void ReplicatedPG::sub_op_pull(MOSDSubOp *op)
 
   struct stat st;
   int r = osd->store->stat(coll_t::build_pg_coll(info.pgid), soid, &st);
-  assert(r == 0);
-  uint64_t size = st.st_size;
+  if (r != 0) {
+    stringstream ss;
+    char buf[80];
+    ss << op->get_source() << " tried to pull " << soid << " in " << info.pgid
+       << " but got " << strerror_r(-r, buf, sizeof(buf));
+    osd->logclient.log(LOG_ERROR, ss);
 
-  bool complete = false;
-  if (!op->data_subset.empty() && op->data_subset.end() >= size)
-    complete = true;
+    // FIXME: do something more intelligent.. mark the pg as needing repair?
 
-  send_push_op(soid, op->get_source().num(), size, op->first, complete, op->data_subset, op->clone_subsets);
+  } else {
+    uint64_t size = st.st_size;
+
+    bool complete = false;
+    if (!op->data_subset.empty() && op->data_subset.end() >= size)
+      complete = true;
+
+    // complete==true implies we are definitely complete.
+    // complete==false means nothing.  we don't know because the primary may
+    // not be pulling the entire object.
+
+    send_push_op(soid, op->get_source().num(), size, op->first, complete, op->data_subset, op->clone_subsets);
+  }
   op->put();
 }
 
@@ -3479,6 +3492,10 @@ void ReplicatedPG::sub_op_push(MOSDSubOp *op)
   pull_info_t *pi = 0;
   bool first = op->first;
   bool complete = op->complete;
+
+  // op->complete == true means we reached the end of the object (file size)
+  // op->complete == false means nothing; we may not have asked for the whole thing.
+
   if (is_primary()) {
     if (pulling.count(soid) == 0) {
       dout(10) << " not pulling, ignoring" << dendl;
@@ -3504,13 +3521,12 @@ void ReplicatedPG::sub_op_push(MOSDSubOp *op)
       interval_set<uint64_t> data_needed;
       calc_clone_subsets(ssc->snapset, soid, missing, data_needed, clone_subsets);
       put_snapset_context(ssc);
+
+      interval_set<uint64_t> overlap;
+      overlap.intersection_of(data_subset, data_needed);
       
-      dout(10) << "sub_op_push need " << data_needed << ", got " << data_subset << dendl;
-      if (!data_needed.subset_of(data_subset)) {
-	dout(0) << "sub_op_push we did not get enough of " << soid << " object data" << dendl;
-	op->put();
-	return;
-      }
+      dout(10) << "sub_op_push need " << data_needed << ", got " << data_subset
+	       << ", overlap " << overlap << dendl;
 
       // did we get more data than we need?
       if (!data_subset.subset_of(data_needed)) {
@@ -3541,17 +3557,24 @@ void ReplicatedPG::sub_op_push(MOSDSubOp *op)
 	data.claim(result);
 	dout(20) << " new data len is " << data.length() << dendl;
       }
+
+      // did we get everything we wanted?
+      if (pi->data_subset.empty()) {
+	complete = true;
+      } else {
+	complete = pi->data_subset.end() == data_subset.end();
+      }
+
+      if (op->complete && !complete) {
+	dout(0) << " uh oh, we reached EOF on peer before we got everything we wanted" << dendl;
+	op->put();
+	return;
+      }
+
     } else {
       // head|unversioned. for now, primary will _only_ pull full copies of the head.
       assert(op->clone_subsets.empty());
     }
-
-    if (pi->data_subset.empty()) {
-      complete = true;
-    } else {
-      complete = pi->data_subset.end() == data_subset.end();
-    }
-    assert(complete == op->complete);
   }
   dout(15) << " data_subset " << data_subset
 	   << " clone_subsets " << clone_subsets
@@ -3879,6 +3902,7 @@ int ReplicatedPG::recover_primary(int max)
       soid = p->second;
     }
     Missing::item& item = missing.missing[p->second];
+    p++;
 
     sobject_t head = soid;
     head.snap = CEPH_NOSNAP;
@@ -3909,9 +3933,8 @@ int ReplicatedPG::recover_primary(int max)
 	    object_info_t oi(soid);
 	    oi.version = latest->version;
 	    oi.prior_version = latest->prior_version;
-	    oi.last_reqid = headobc->obs.oi.last_reqid;
-	    oi.mtime = headobc->obs.oi.mtime;
 	    ::decode(oi.snaps, latest->snaps);
+	    oi.copy_user_bits(headobc->obs.oi);
 	    _make_clone(*t, head, soid, &oi);
 
 	    put_object_context(headobc);
@@ -3934,8 +3957,6 @@ int ReplicatedPG::recover_primary(int max)
       }
     }
     
-    p++;
-
     // only advance last_requested if we haven't skipped anything
     if (!skipped)
       log.last_requested = v;

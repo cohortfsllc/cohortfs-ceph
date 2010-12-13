@@ -1221,6 +1221,7 @@ int MDCache::num_subtrees_fullnonauth()
 CInode *MDCache::pick_inode_snap(CInode *in, snapid_t follows)
 {
   dout(10) << "pick_inode_snap follows " << follows << " on " << *in << dendl;
+  assert(in->last == CEPH_NOSNAP);
 
   SnapRealm *realm = in->find_snaprealm();
   const set<snapid_t>& snaps = realm->get_snaps();
@@ -1320,6 +1321,7 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
       dn->first = follows+1;
       CDentry *olddn = dn->dir->add_remote_dentry(dn->name, in->ino(),  in->d_type(),
 						  oldfirst, follows);
+      olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
       metablob->add_remote_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
@@ -1357,6 +1359,7 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
       if (pcow_inode)
 	*pcow_inode = oldin;
       CDentry *olddn = dn->dir->add_primary_dentry(dn->name, oldin, oldfirst, follows);
+      oldin->inode.version = olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
       metablob->add_primary_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
@@ -1364,6 +1367,7 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
       assert(dnl->is_remote());
       CDentry *olddn = dn->dir->add_remote_dentry(dn->name, dnl->get_remote_ino(), dnl->get_remote_d_type(),
 						  oldfirst, follows);
+      olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
       metablob->add_remote_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
@@ -3899,7 +3903,7 @@ void MDCache::rejoin_gather_finish()
   }
   
   process_imported_caps();
-  process_reconnected_caps();
+  choose_lock_states_and_reconnect_caps();
 
   vector<CInode*> recover_q, check_q;
   identify_files_to_recover(rejoin_recover_q, rejoin_check_q);
@@ -3969,18 +3973,17 @@ void MDCache::check_realm_past_parents(SnapRealm *realm)
 /*
  * choose lock states based on reconnected caps
  */
-void MDCache::process_reconnected_caps()
+void MDCache::choose_lock_states_and_reconnect_caps()
 {
-  dout(10) << "process_reconnected_caps" << dendl;
+  dout(10) << "choose_lock_states_and_reconnect_caps" << dendl;
 
   map<client_t,MClientSnap*> splits;
 
-  // adjust lock states appropriately
-  map<CInode*,map<client_t,inodeno_t> >::iterator p = reconnected_caps.begin();
-  while (p != reconnected_caps.end()) {
-    CInode *in = p->first;
-    p++;
-
+  for (hash_map<vinodeno_t,CInode*>::iterator i = inode_map.begin();
+       i != inode_map.end();
+       ++i) {
+    CInode *in = i->second;
+ 
     in->choose_lock_states();
     dout(15) << " chose lock states on " << *in << dendl;
 
@@ -3988,21 +3991,25 @@ void MDCache::process_reconnected_caps()
 
     check_realm_past_parents(realm);
 
-    // also, make sure client's cap is in the correct snaprealm.
-    for (map<client_t,inodeno_t>::iterator q = p->second.begin();
-	 q != p->second.end();
-	 q++) {
-      if (q->second == realm->inode->ino()) {
-	dout(15) << "  client" << q->first << " has correct realm " << q->second << dendl;
-      } else {
-	dout(15) << "  client" << q->first << " has wrong realm " << q->second
-		 << " != " << realm->inode->ino() << dendl;
-	if (realm->have_past_parents_open()) {
-	  // ok, include in a split message _now_.
-	  prepare_realm_split(realm, q->first, in->ino(), splits);
+    map<CInode*,map<client_t,inodeno_t> >::iterator p = reconnected_caps.find(in);
+    if (p != reconnected_caps.end()) {
+
+      // also, make sure client's cap is in the correct snaprealm.
+      for (map<client_t,inodeno_t>::iterator q = p->second.begin();
+	   q != p->second.end();
+	   q++) {
+	if (q->second == realm->inode->ino()) {
+	  dout(15) << "  client" << q->first << " has correct realm " << q->second << dendl;
 	} else {
-	  // send the split later.
-	  missing_snap_parents[realm->inode][q->first].insert(in->ino());
+	  dout(15) << "  client" << q->first << " has wrong realm " << q->second
+		   << " != " << realm->inode->ino() << dendl;
+	  if (realm->have_past_parents_open()) {
+	    // ok, include in a split message _now_.
+	    prepare_realm_split(realm, q->first, in->ino(), splits);
+	  } else {
+	    // send the split later.
+	    missing_snap_parents[realm->inode][q->first].insert(in->ino());
+	  }
 	}
       }
     }
@@ -5771,6 +5778,14 @@ Context *MDCache::_get_waiter(MDRequest *mdr, Message *req)
   }
 }
 
+/*
+ * Returns 0 on success, >0 if request has been put on hold or otherwise dealt with,
+ * <0 if there's been a failure the caller needs to clean up from.
+ *
+ * on succes, @pdnvec points to a vector of dentries we traverse.  
+ * on failure, @pdnvec it is either the full trace, up to and
+ *             including the final null dn, or empty.
+ */
 int MDCache::path_traverse(MDRequest *mdr, Message *req,     // who
 			   const filepath& path,                   // what
                            vector<CDentry*> *pdnvec,         // result
@@ -6001,26 +6016,33 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req,     // who
       if (curdir->is_complete()) {
         // file not found
 	if (pdnvec) {
-	  // instantiate a null dn
-	  if (dn) {
+	  // instantiate a null dn?
+	  if (depth < path.depth()-1){
+	    dout(20) << " didn't traverse full path; not returning pdnvec" << dendl;
+	    dn = NULL;
+	  } else if (dn) {
 	    dout(20) << " had null " << *dn << dendl;
 	    assert(dnl->is_null());
-	  } else if (!curdir->is_frozen()) {
+	  } else if (curdir->is_frozen()) {
+	    dout(20) << " not adding null to frozen dir " << dendl;
+	  } else if (snapid < CEPH_MAXSNAP) {
+	    dout(20) << " not adding null for snapid " << snapid << dendl;
+	  } else {
 	    // create a null dentry
 	    dn = curdir->add_null_dentry(path[depth]);
 	    dout(20) << " added null " << *dn << dendl;
-	  } else {
-	    dout(20) << " not adding null to frozen dir " << dendl;
 	  }
 	  if (dn)
 	    pdnvec->push_back(dn);
+	  else
+	    pdnvec->clear();   // do not confuse likes of rdlock_path_pin_ref();
 	}
         return -ENOENT;
       } else {
 	// directory isn't complete; reload
         dout(7) << "traverse: incomplete dir contents for " << *cur << ", fetching" << dendl;
         touch_inode(cur);
-        curdir->fetch(_get_waiter(mdr, req));
+        curdir->fetch(_get_waiter(mdr, req), path[depth]);
 	if (mds->logger) mds->logger->inc(l_mds_tdirf);
         return 1;
       }
@@ -6906,10 +6928,11 @@ void MDCache::_snaprealm_create_finish(MDRequest *mdr, Mutation *mut, CInode *in
   mut->apply();
   mds->locker->drop_locks(mut);
   mut->cleanup();
-  delete mut;
 
   // tell table we've committed
   mds->snapclient->commit(mdr->more()->stid, mut->ls);
+
+  delete mut;
 
   // create
   bufferlist::iterator p = mdr->more()->snapidbl.begin();

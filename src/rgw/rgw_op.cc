@@ -216,7 +216,7 @@ void RGWListBucket::execute()
     goto done;
   }
 
-  prefix = s->args.get("prefix");
+  url_decode(s->args.get("prefix"), prefix);
   marker = s->args.get("marker");
   max_keys = s->args.get("max-keys");
  if (!max_keys.empty()) {
@@ -224,7 +224,7 @@ void RGWListBucket::execute()
   } else {
     max = -1;
   }
-  delimiter = s->args.get("delimiter");
+  url_decode(s->args.get("delimiter"), delimiter);
   ret = rgwstore->list_objects(s->user.user_id, s->bucket_str, max, prefix, delimiter, marker, objs, common_prefixes);
 done:
   send_response();
@@ -435,7 +435,6 @@ int RGWCopyObj::init_common()
   RGWAccessControlPolicy dest_policy;
   bool ret;
   bufferlist aclbl;
-  map<string, bufferlist> attrs;
   bufferlist bl;
   RGWAccessControlPolicy src_policy;
   string empty_str;
