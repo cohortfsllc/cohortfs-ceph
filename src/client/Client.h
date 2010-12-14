@@ -1184,6 +1184,8 @@ private:
   int _readdir_get_frag(DirResult *dirp);
   void _closedir(DirResult *dirp);
   void _ll_get(Inode *in);
+  int _ll_readdir_fetchone(DirResult* dirp, struct dirent* de, struct stat* st,
+			   uint32_t& off, frag_t& fg);
   int _ll_put(Inode *in, int num);
   void _ll_drop_pins();
 
@@ -1354,6 +1356,7 @@ public:
   int ll_num_osds(void);
   int ll_osdaddr(int osd, char* buf, size_t size);
   int ll_opendir(vinodeno_t vino, void **dirpp, int uid = -1, int gid = -1);
+  int ll_readdir(DIR* d, struct dirent *de, struct stat *st);
   void ll_releasedir(void *dirp);
   int ll_readlink(vinodeno_t vino, const char **value, int uid = -1, int gid = -1);
   int ll_mknod(vinodeno_t vino, const char *name, mode_t mode, dev_t rdev, struct stat *attr, int uid = -1, int gid = -1);

@@ -777,6 +777,18 @@ extern "C" int ceph_ll_opendir(vinodeno_t vino, void **dirpp,
     }
 }
 
+extern "C" int ceph_ll_readdir(DIR* d, struct dirent* de, struct stat* st)
+{
+  try
+    {
+      return(client->ll_readdir(d, de, st));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
 extern "C" int ceph_ll_releasedir(DIR* dir)
 {
   try

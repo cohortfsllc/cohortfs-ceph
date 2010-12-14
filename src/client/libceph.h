@@ -216,6 +216,7 @@ int ceph_ll_link_precise(vinodeno_t obj, vinodeno_t newparrent,
 			 int uid, int gid);
 int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid, int gid);
 int ceph_ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid);
+int ceph_ll_readdir(DIR* d, struct dirent *de, struct stat *st);
 int ceph_ll_releasedir(DIR* dir);
 int ceph_ll_rename(vinodeno_t parent, const char *name,
 		   vinodeno_t newparent, const char *newname,
