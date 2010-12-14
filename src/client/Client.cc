@@ -7110,6 +7110,107 @@ int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
   return r;
 }
 
+// The callback based readdir function seems to lack a reasonable way
+// to read a single dirent and be signalled at end of directory byt he
+// return code.  The supplied readdirplus_r does not work.  This
+// return 0 on end of directory and 1 on success.  Return code is
+// negative on error.
+
+// Helper function, return 1 on fetch, 0 on not-fetch, negative on error
+
+int Client::_ll_readdir_fetchone(DirResult* dirp, struct dirent* de, struct stat* st,
+				 uint32_t& off, frag_t& fg)
+{
+  int r;
+  
+  if (dirp->at_end()) {
+    return 0;
+  }
+  
+  if (dirp->buffer_frag != dirp->frag() || dirp->buffer == NULL) {
+    Mutex::Locker lock(client_lock);
+    int r = _readdir_get_frag(dirp);
+    if (r)
+      return r;
+  }
+
+  if (off - dirp->this_offset >= 0 &&
+      off - dirp->this_offset < dirp->buffer->size()) {
+    uint64_t pos = DirResult::make_fpos(fg, off);
+    DirEntry& ent = (*dirp->buffer)[off - dirp->this_offset];
+    
+    fill_dirent(de, ent.d_name.c_str(), ent.st.st_mode, ent.st.st_ino, dirp->offset + 1);
+    *st = ent.st;
+    if (r < 0)
+      return r;
+    off++;
+    dirp->offset = pos + 1;
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
+int Client::ll_readdir(DIR* d, struct dirent* de, struct stat* st)
+{
+  DirResult *dirp = (DirResult*)d;
+
+  memset(de, 0, sizeof(*de));
+  memset(st, 0, sizeof(*st));
+
+  frag_t fg = dirp->frag();
+  uint32_t off = dirp->fragpos();
+
+  Inode *diri = dirp->inode;
+
+  if (dirp->offset == 0) {
+    uint64_t next_off = diri->dn ? 1 : 2;
+
+    fill_dirent(de, ".", S_IFDIR, diri->ino, next_off);
+    fill_stat(diri, st);
+
+    dirp->offset = next_off;
+
+    return 1;
+  }
+
+  if (dirp->offset == 1) {
+    assert(diri->dn);
+    Inode *in = diri->dn->inode;
+    fill_dirent(de, "..", S_IFDIR, in->ino, 2);
+
+    fill_stat(diri, st);
+
+    dirp->offset = 2;
+    return 1;
+  }
+
+  int r = 0;
+  if (r = _ll_readdir_fetchone(dirp, de, st, off, fg))
+    return r;
+  if (dirp->last_name.length()) {
+    delete dirp->buffer;
+    dirp->buffer = NULL;
+    if (r = _ll_readdir_fetchone(dirp, de, st, off, fg))
+      return r;
+  }
+
+  if (!fg.is_rightmost()) {
+    dirp->next_frag();
+    fg = dirp->frag();
+    off = 0;
+    if (r = _ll_readdir_fetchone(dirp, de, st, off, fg))
+      return r;
+  }
+
+  dirp->set_end();
+  
+  if (diri->dir && diri->dir->release_count == dirp->release_count)
+    diri->flags |= I_COMPLETE;
+
+  return 0;
+}
+
 void Client::ll_releasedir(void *dirp)
 {
   Mutex::Locker lock(client_lock);
