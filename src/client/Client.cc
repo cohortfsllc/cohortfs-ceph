@@ -6655,6 +6655,30 @@ loff_t Client::ll_lseek(Fh *fh, loff_t offset, int whence)
   return _lseek(fh, offset, whence);
 }
 
+uint64_t Client::ll_get_crc32(vinodeno_t vino, uint64_t blockid, uint32_t* crc32,
+			      ceph_file_layout* layout)
+
+{
+  Mutex::Locker lock(client_lock);
+  Mutex flock("Client::ll_read_block flock");
+  Cond cond;
+  object_t oid = file_object_t(vino.ino, blockid);
+  ceph_object_layout olayout
+    = objecter->osdmap->file_to_object_layout(oid, *layout);
+  int r = 0;
+  bool done = false;
+  Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
+  bufferlist tbl;
+
+  objecter->get_crc32(oid, olayout, vino.snapid,
+		      crc32, 0, onfinish);
+    
+  while (!done)
+    cond.Wait(client_lock);
+  
+  return r;
+}
+
 int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
 {
   Mutex::Locker lock(client_lock);
@@ -6666,10 +6690,6 @@ int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
 
   return _read(fh, off, len, bl);
 }
-
-/* TODO: Once this works, reimplement it to take arguments and require
-   nothing from class Inode (DS reads/writes should not need to
-   contact the metadata server in the normal case.) */
 
 uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl,
 			       uint64_t offset, uint64_t length,

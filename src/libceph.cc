@@ -549,6 +549,25 @@ extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf
   return r;
 }
 
+extern "C" uint64_t ceph_ll_get_crc32(vinodeno_t vino, uint64_t blockid,
+				      uint32_t* crc32,
+				      ceph_file_layout* layout)
+{
+  Mutex::Locker lock(ceph_client_mutex);
+  bufferlist bl;
+  int r=0;
+
+  try
+    {
+      r = client->ll_get_crc32(vino, blockid, crc32, layout);
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+  return r;
+}
+
 extern "C" uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid,
 				       char* buf, uint64_t offset,
 				       uint64_t length,

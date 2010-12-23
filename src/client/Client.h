@@ -1373,6 +1373,8 @@ public:
   int ll_create(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat *attr, Fh **fh, int uid = -1, int gid = -1);
   int ll_create_precise(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat_precise *attr, Fh **fh, int uid = -1, int gid = -1);
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
+  uint64_t ll_get_crc32(vinodeno_t vino, uint64_t blockid, uint32_t* crc32,
+			ceph_file_layout* layout);
   uint64_t ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl,
 			 uint64_t offset, uint64_t length,
 			 ceph_file_layout* layout);

@@ -241,6 +241,21 @@ public:
     }
   };
 
+  struct C_CRC32 : public Context {
+    bufferlist bl;
+    Context* fin;
+    uint32_t* crc;
+    C_CRC32(Context *c) :
+      fin(c) {}
+    void finish(int r) {
+      if (r >= 0) {
+	bl.copy(0, sizeof(uint32_t), (char*) crc);
+      }
+      fin->finish(r);
+      delete fin;
+    }
+  };
+
   struct C_Stat : public Context {
     bufferlist bl;
     uint64_t *psize;
@@ -479,6 +494,18 @@ private:
     ops[0].op.op = CEPH_OSD_OP_STAT;
     C_Stat *fin = new C_Stat(psize, pmtime, onfinish);
     Op *o = new Op(oid, ol, ops, flags, fin, 0);
+    o->snapid = snap;
+    o->outbl = &fin->bl;
+    return op_submit(o);
+  }
+
+  tid_t get_crc32(const object_t& oid, ceph_object_layout ol, 
+		  snapid_t snap, uint32_t *crc32, int flags,
+		  Context *onfinish) {
+    vector<OSDOp> ops(1);
+    C_CRC32* fin = new C_CRC32(onfinish);
+    ops[0].op.op = CEPH_OSD_OP_CRC32;
+    Op *o = new Op(oid, ol, ops, flags, onfinish, 0);
     o->snapid = snap;
     o->outbl = &fin->bl;
     return op_submit(o);
