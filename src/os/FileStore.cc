@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #ifndef __CYGWIN__
 # include <sys/xattr.h>
 #endif
@@ -45,6 +46,7 @@
 #endif // DARWIN
 
 #include <sstream>
+#include <zlib.h>
 
 
 #define ATTR_MAX 80
@@ -1430,6 +1432,11 @@ int FileStore::_write(coll_t cid, const sobject_t& oid,
 {
   char fn[PATH_MAX];
   get_coname(cid, oid, fn, sizeof(fn));
+  void* filecontent = NULL;
+  struct stat st;
+  uLong crc = crc32(0L, Z_NULL, 0);
+  char attrname[] = "user.cohortfs.crc32";
+  char attrval[9];
 
   dout(15) << "write " << fn << " " << offset << "~" << len << dendl;
   int r;
@@ -1462,6 +1469,34 @@ int FileStore::_write(coll_t cid, const sobject_t& oid,
   r = bl.write_fd(fd);
   if (r == 0)
     r = bl.length();
+
+  /* Calculate CRC32 */
+
+  if (::fstat(fd, &st) != 0) {
+    r = -errno;
+    goto out;
+  }
+ 
+  filecontent = ::mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+  if (!filecontent) {
+    r = -errno;
+    goto out;
+  }
+
+  crc = crc32(crc, (const Bytef*) filecontent, st.st_size);
+
+  if (munmap(filecontent, st.st_size) != 0) {
+    r = -errno;
+    goto out;
+  }
+
+  /* Store CRC32 in designated attribute */
+
+  snprintf(attrval, 9, "%08lx", crc);
+  r = do_setxattr(fn, attrname, attrval, 8);
+  if (r != 0) {
+    goto out;
+  }
 
   // flush?
 #ifdef HAVE_SYNC_FILE_RANGE

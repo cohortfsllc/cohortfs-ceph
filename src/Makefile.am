@@ -425,6 +425,10 @@ libmds_a_SOURCES = \
 	mds/SessionMap.cc \
 	mds/MDLog.cc
 
+libos_a_CFLAGS = $(ZLIB_CFLAGS)
+libcrush_la_CXXFLAGS = $(ZLIB_CFLAGS)
+libcrush_la_LDFLAGS = $(ZLIB_LIBS)
+
 libos_a_SOURCES = \
 	os/FileJournal.cc \
 	os/FileStore.cc \
