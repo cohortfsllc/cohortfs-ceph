@@ -1113,6 +1113,46 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops,
       }
       break;
 
+    case CEPH_OSD_OP_CRC32:
+      {
+	// Read the CRC into a buffer
+	bufferlist bl;
+	int r = osd->store->read(coll_t::build_pg_coll(info.pgid), soid, op.extent.offset, op.extent.length, bl);
+	if (odata.length() == 0)
+	  ctx->data_off = op.extent.offset;
+	odata.claim(bl);
+	if (r >= 0) 
+	  op.extent.length = r;
+	else {
+	  result = r;
+	  op.extent.length = 0;
+	}
+	info.stats.num_rd_kb += SHIFT_ROUND_UP(op.extent.length, 10);
+	info.stats.num_rd++;
+	dout(10) << " read got " << r << " / " << op.extent.length << " bytes from obj " << soid << dendl;
+
+	__u32 seq = oi.truncate_seq;
+	// are we beyond truncate_size?
+	if ( (seq < op.extent.truncate_seq) &&
+	     (op.extent.offset + op.extent.length > op.extent.truncate_size) ) {
+
+	  // truncated portion of the read
+	  unsigned from = MAX(op.extent.offset, op.extent.truncate_size);  // also end of data
+	  unsigned to = op.extent.offset + op.extent.length;
+	  unsigned trim = to-from;
+
+	  op.extent.length = op.extent.length - trim;
+
+	  bufferlist keep;
+
+	  // keep first part of odata; trim at truncation point
+	  dout(10) << " obj " << soid << " seq " << seq
+	           << ": trimming overlap " << from << "~" << trim << dendl;
+	  keep.substr_of(odata, 0, odata.length() - trim);
+          odata.claim(keep);
+	}
+      }
+
     case CEPH_OSD_OP_CALL:
       {
 	bufferlist indata;

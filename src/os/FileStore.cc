@@ -1410,6 +1410,9 @@ int FileStore::_truncate(coll_t cid, const sobject_t& oid, uint64_t size)
 int FileStore::_touch(coll_t cid, const sobject_t& oid)
 {
   char fn[PATH_MAX];
+  uLong crc = crc32(0L, Z_NULL, 0);
+  char attrname[] = "user.cohortfs.crc32";
+  char attrval[9];
   get_coname(cid, oid, fn, sizeof(fn));
 
   dout(15) << "touch " << fn << dendl;
@@ -1422,6 +1425,14 @@ int FileStore::_touch(coll_t cid, const sobject_t& oid)
     r = 0;
   } else
     r = -errno;
+
+  snprintf(attrval, 9, "%08lx", crc);
+  r = do_setxattr(fn, attrname, attrval, 8);
+  if (r != 0) {
+    goto out;
+  }
+
+ out:
   dout(10) << "touch " << fn << " = " << r << dendl;
   return r;
 }
@@ -1527,6 +1538,12 @@ int FileStore::_zero(coll_t cid, const sobject_t& oid, uint64_t offset, size_t l
 int FileStore::_clone(coll_t cid, const sobject_t& oldoid, const sobject_t& newoid)
 {
   char ofn[PATH_MAX], nfn[PATH_MAX];
+  struct stat st;
+  uLong crc = crc32(0L, Z_NULL, 0);
+  char attrname[] = "user.cohortfs.crc32";
+  char attrval[9];
+  void* filecontent;
+
   get_coname(cid, oldoid, ofn, sizeof(ofn));
   get_coname(cid, newoid, nfn, sizeof(nfn));
 
@@ -1550,7 +1567,6 @@ int FileStore::_clone(coll_t cid, const sobject_t& oldoid, const sobject_t& newo
   ;
 #endif /* DARWIN */
   else {
-    struct stat st;
     ::fstat(o, &st);
     dout(10) << "clone " << ofn << " -> " << nfn << " READ+WRITE" << dendl;
     r = _do_clone_range(o, n, 0, st.st_size);
@@ -1558,12 +1574,45 @@ int FileStore::_clone(coll_t cid, const sobject_t& oldoid, const sobject_t& newo
   if (r < 0)
     r = -errno;
 
+  /* Calculate CRC32 */
+
+  if (!(::fstat(n, &st) == 0))
+    {
+      r = -errno;
+      goto out0;
+    }
+
+  filecontent = ::mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, n, 0);
+  if (!filecontent) {
+    r = -errno;
+    goto out0;
+  }
+
+  crc = crc32(crc, (const Bytef*) filecontent, st.st_size);
+
+  if (munmap(filecontent, st.st_size) != 0) {
+    r = -errno;
+    goto out0;
+  }
+
+  /* Store CRC32 in designated attribute */
+
+  snprintf(attrval, 9, "%08lx", crc);
+  r = do_setxattr(nfn, attrname, attrval, 8);
+  if (r != 0) {
+    goto out0;
+  }
+
+ out0:
+  
   ::close(n);
+  
  out:
+
   ::close(o);
  out2:
   dout(10) << "clone " << ofn << " -> " << nfn << " = " << r << dendl;
-  return 0;
+  return r;
 }
 
 int FileStore::_do_clone_range(int from, int to, uint64_t off, uint64_t len)
@@ -1622,6 +1671,11 @@ int FileStore::_do_clone_range(int from, int to, uint64_t off, uint64_t len)
 int FileStore::_clone_range(coll_t cid, const sobject_t& oldoid, const sobject_t& newoid, uint64_t off, uint64_t len)
 {
   char ofn[PATH_MAX], nfn[PATH_MAX];
+  struct stat st;
+  uLong crc = crc32(0L, Z_NULL, 0);
+  char attrname[] = "user.cohortfs.crc32";
+  char attrval[9];
+  void* filecontent;
   get_coname(cid, oldoid, ofn, sizeof(ofn));
   get_coname(cid, newoid, nfn, sizeof(ofn));
 
@@ -1640,6 +1694,37 @@ int FileStore::_clone_range(coll_t cid, const sobject_t& oldoid, const sobject_t
     goto out;
   }
   r = _do_clone_range(o, n, off, len);
+
+  /* Calculate CRC32 */
+
+  if (!(::fstat(n, &st) == 0))
+    {
+      r = -errno;
+      goto out0;
+    }
+
+  filecontent = ::mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, n, 0);
+  if (!filecontent) {
+    r = -errno;
+    goto out0;
+  }
+
+  crc = crc32(crc, (const Bytef*) filecontent, st.st_size);
+
+  if (munmap(filecontent, st.st_size) != 0) {
+    r = -errno;
+    goto out0;
+  }
+
+  /* Store CRC32 in designated attribute */
+
+  snprintf(attrval, 9, "%08lx", crc);
+  r = do_setxattr(nfn, attrname, attrval, 8);
+  if (r != 0) {
+    goto out0;
+  }
+
+ out0:
   ::close(n);
  out:
   ::close(o);
