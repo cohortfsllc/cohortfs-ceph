@@ -6464,8 +6464,6 @@ int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
 int Client::_ll_readdir_fetchone(DirResult* dirp, struct dirent* de, struct stat* st,
 				 uint32_t& off, frag_t& fg)
 {
-  int r;
-  
   if (dirp->at_end()) {
     return 0;
   }
@@ -6484,8 +6482,7 @@ int Client::_ll_readdir_fetchone(DirResult* dirp, struct dirent* de, struct stat
     
     fill_dirent(de, ent.d_name.c_str(), ent.st.st_mode, ent.st.st_ino, dirp->offset + 1);
     *st = ent.st;
-    if (r < 0)
-      return r;
+
     off++;
     dirp->offset = pos + 1;
     return 1;
@@ -6529,12 +6526,12 @@ int Client::ll_readdir(DIR* d, struct dirent* de, struct stat* st)
   }
 
   int r = 0;
-  if (r = _ll_readdir_fetchone(dirp, de, st, off, fg))
+  if ((r = _ll_readdir_fetchone(dirp, de, st, off, fg)))
     return r;
-  if (dirp->last_name.length()) {
+  if ((dirp->last_name.length())) {
     delete dirp->buffer;
     dirp->buffer = NULL;
-    if (r = _ll_readdir_fetchone(dirp, de, st, off, fg))
+    if ((r = _ll_readdir_fetchone(dirp, de, st, off, fg)))
       return r;
   }
 
@@ -6542,7 +6539,7 @@ int Client::ll_readdir(DIR* d, struct dirent* de, struct stat* st)
     dirp->next_frag();
     fg = dirp->frag();
     off = 0;
-    if (r = _ll_readdir_fetchone(dirp, de, st, off, fg))
+    if ((r = _ll_readdir_fetchone(dirp, de, st, off, fg)))
       return r;
   }
 

@@ -1477,7 +1477,7 @@ int FileStore::_write(coll_t cid, const sobject_t& oid,
   int64_t actual;
 
   char buf[80];
-  int flags = O_WRONLY|O_CREAT;
+  int flags = O_RDWR|O_CREAT;
   int fd = ::open(fn, flags, 0644);
   if (fd < 0) {
     derr(0) << "write couldn't open " << fn << " flags " << flags << " errno " << errno << " " << strerror_r(errno, buf, sizeof(buf)) << dendl;
@@ -1511,7 +1511,7 @@ int FileStore::_write(coll_t cid, const sobject_t& oid,
   }
  
   filecontent = ::mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-  if (!filecontent) {
+  if (filecontent == MAP_FAILED) {
     r = -errno;
     goto out;
   }
@@ -1577,7 +1577,7 @@ int FileStore::_clone(coll_t cid, const sobject_t& oldoid, const sobject_t& newo
     r = -errno;
     goto out2;
   }
-  n = ::open(nfn, O_CREAT|O_TRUNC|O_WRONLY, 0644);
+  n = ::open(nfn, O_CREAT|O_TRUNC|O_RDWR, 0644);
   if (n < 0) {
     r = -errno;
     goto out;
@@ -1605,7 +1605,7 @@ int FileStore::_clone(coll_t cid, const sobject_t& oldoid, const sobject_t& newo
     }
 
   filecontent = ::mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, n, 0);
-  if (!filecontent) {
+  if (filecontent == MAP_FAILED) {
     r = -errno;
     goto out0;
   }
@@ -1710,7 +1710,7 @@ int FileStore::_clone_range(coll_t cid, const sobject_t& oldoid, const sobject_t
     r = -errno;
     goto out2;
   }
-  n = ::open(nfn, O_CREAT|O_WRONLY, 0644);
+  n = ::open(nfn, O_CREAT|O_RDWR, 0644);
   if (n < 0) {
     r = -errno;
     goto out;
@@ -1726,7 +1726,7 @@ int FileStore::_clone_range(coll_t cid, const sobject_t& oldoid, const sobject_t
     }
 
   filecontent = ::mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, n, 0);
-  if (!filecontent) {
+  if (filecontent == MAP_FAILED) {
     r = -errno;
     goto out0;
   }
