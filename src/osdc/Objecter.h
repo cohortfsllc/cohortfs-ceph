@@ -247,9 +247,10 @@ public:
     uint32_t* crc;
     C_CRC32(Context *c) :
       fin(c) {}
+
     void finish(int r) {
       if (r >= 0) {
-	bl.copy(0, sizeof(uint32_t), (char*) crc);
+	decode(*crc, bl);
       }
       fin->finish(r);
       delete fin;

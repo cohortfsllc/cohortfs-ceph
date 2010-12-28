@@ -220,7 +220,7 @@ class FileStore : public JournalingObjectStore {
   bool exists(coll_t cid, const sobject_t& oid);
   int stat(coll_t cid, const sobject_t& oid, struct stat *st);
   int read(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len, bufferlist& bl);
-
+  int get_crc32(coll_t cid, const sobject_t& oid, uint32_t& crc32);
   int _touch(coll_t cid, const sobject_t& oid);
   int _write(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len, const bufferlist& bl);
   int _zero(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len);

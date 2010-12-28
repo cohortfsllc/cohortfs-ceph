@@ -545,6 +545,7 @@ public:
   // objects
   virtual bool exists(coll_t cid, const sobject_t& oid) = 0;                   // useful?
   virtual int stat(coll_t cid, const sobject_t& oid, struct stat *st) = 0;     // struct stat?
+  virtual int get_crc32(coll_t cid, const sobject_t& oid, uint32_t& crc32) = 0;
   virtual int read(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len, bufferlist& bl) = 0;
 
   /*

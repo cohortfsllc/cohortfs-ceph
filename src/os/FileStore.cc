@@ -1382,6 +1382,28 @@ int FileStore::read(coll_t cid, const sobject_t& oid,
   return r;
 }
 
+int FileStore::get_crc32(coll_t cid, const sobject_t& oid, uint32_t& crc32)
+{
+  char fn[PATH_MAX];
+  get_coname(cid, oid, fn, sizeof(fn));
+  char attrname[] = "user.cohortfs.crc32";
+  char attrval[9];
+  int r;
+
+  dout(15) << "get_crc32 " << fn << dendl;
+
+  r = do_getxattr(fn, attrname, attrval, 9);
+  if (r != 0) {
+    goto out;
+  }
+
+  attrval[9] = '\0';
+  crc32 = strtoul(attrval, NULL, 16);
+
+ out:
+  dout(10) << "get_crc32 " << fn << " " << crc32 << " = " << r << dendl;
+  return r;
+}
 
 
 int FileStore::_remove(coll_t cid, const sobject_t& oid) 
