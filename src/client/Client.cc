@@ -4305,7 +4305,7 @@ Fh *Client::_create_fh(Inode *in, int flags, int cmode)
   return f;
 }
 
-int Client::_open(Inode *in, int flags, mode_t mode, Fh **fhp, int uid, int gid) 
+int Client::_open(Inode *in, int flags, mode_t mode, Fh **fhp, int uid, int gid, inodeno_t si) 
 {
   int cmode = ceph_flags_to_mode(flags);
   int want = ceph_caps_for_mode(cmode);
@@ -4328,6 +4328,7 @@ int Client::_open(Inode *in, int flags, mode_t mode, Fh **fhp, int uid, int gid)
     req->set_filepath(path); 
     req->head.args.open.flags = flags & ~O_CREAT;
     req->head.args.open.mode = mode;
+    (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
     req->inode = in;
     result = make_request(req, uid, gid);
   }
@@ -5821,7 +5822,8 @@ int Client::ll_readlink(vinodeno_t vino, const char **value, int uid, int gid)
   return r;
 }
 
-int Client::_mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev, int uid, int gid) 
+int Client::_mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev, int uid, int gid,
+		   inodeno_t si)
 { 
   dout(3) << "_mknod(" << dir->ino << " " << name << ", 0" << oct << mode << dec << ", " << rdev
 	  << ", uid " << uid << ", gid " << gid << ")" << dendl;
@@ -5842,6 +5844,7 @@ int Client::_mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev, int ui
   req->inode = dir;
   req->head.args.mknod.mode = mode;
   req->head.args.mknod.rdev = rdev;
+  (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
@@ -5882,7 +5885,7 @@ int Client::ll_mknod(vinodeno_t parent, const char *name, mode_t mode, dev_t rde
   return r;
 }
 
-int Client::_create(Inode *dir, const char *name, int flags, mode_t mode, Inode **inp, Fh **fhp, int uid, int gid) 
+int Client::_create(Inode *dir, const char *name, int flags, mode_t mode, Inode **inp, Fh **fhp, int uid, int gid, inodeno_t si) 
 { 
   dout(3) << "_create(" << dir->ino << " " << name << ", 0" << oct << mode << dec << ")" << dendl;
   
@@ -5907,6 +5910,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode, Inode 
   req->head.args.open.object_size = object_size;
   req->head.args.open.file_replication = file_replication;
   req->head.args.open.preferred = preferred_pg;
+  (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
@@ -5938,7 +5942,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode, Inode 
 }
 
 
-int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid)
+int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid, inodeno_t si)
 {
   dout(3) << "_mkdir(" << dir->ino << " " << name << ", 0" << oct << mode << dec
 	  << ", uid " << uid << ", gid " << gid << ")" << dendl;
@@ -5959,6 +5963,7 @@ int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid)
   req->head.args.mkdir.mode = mode;
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL; 
+  (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
 
   int res = get_or_create(dir, name, &req->dentry);
   if (res < 0)
@@ -5974,7 +5979,8 @@ int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid)
   return res;
 }
 
-int Client::ll_mkdir(vinodeno_t parent, const char *name, mode_t mode, struct stat *attr, int uid, int gid)
+int Client::ll_mkdir(vinodeno_t parent, const char *name, mode_t mode, struct stat *attr, int uid,
+		     int gid, inodeno_t si)
 {
   Mutex::Locker lock(client_lock);
   dout(3) << "ll_mkdir " << parent << " " << name << dendl;
@@ -5985,7 +5991,7 @@ int Client::ll_mkdir(vinodeno_t parent, const char *name, mode_t mode, struct st
 
   Inode *diri = _ll_get_inode(parent);
 
-  int r = _mkdir(diri, name, mode, uid, gid);
+  int r = _mkdir(diri, name, mode, uid, gid, si);
   if (r == 0) {
     string dname(name);
     Inode *in = diri->dir->dentries[dname]->inode;
@@ -5998,7 +6004,7 @@ int Client::ll_mkdir(vinodeno_t parent, const char *name, mode_t mode, struct st
   return r;
 }
 
-int Client::ll_mkdir_precise(vinodeno_t parent, const char *name, mode_t mode, struct stat_precise *attr, int uid, int gid)
+int Client::ll_mkdir_precise(vinodeno_t parent, const char *name, mode_t mode, struct stat_precise *attr, int uid, int gid, inodeno_t si)
 {
   Mutex::Locker lock(client_lock);
   dout(3) << "ll_mkdir_precise " << parent << " " << name << dendl;
@@ -6009,7 +6015,7 @@ int Client::ll_mkdir_precise(vinodeno_t parent, const char *name, mode_t mode, s
 
   Inode *diri = _ll_get_inode(parent);
 
-  int r = _mkdir(diri, name, mode, uid, gid);
+  int r = _mkdir(diri, name, mode, uid, gid, si);
   if (r == 0) {
     string dname(name);
     Inode *in = diri->dir->dentries[dname]->inode;
@@ -6022,7 +6028,7 @@ int Client::ll_mkdir_precise(vinodeno_t parent, const char *name, mode_t mode, s
   return r;
 }
 
-int Client::_symlink(Inode *dir, const char *name, const char *target, int uid, int gid)
+int Client::_symlink(Inode *dir, const char *name, const char *target, int uid, int gid, inodeno_t si)
 {
   dout(3) << "_symlink(" << dir->ino << " " << name << ", " << target
 	  << ", uid " << uid << ", gid " << gid << ")" << dendl;
@@ -6044,6 +6050,7 @@ int Client::_symlink(Inode *dir, const char *name, const char *target, int uid, 
   req->set_string2(target); 
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
+  (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
 
   int res = get_or_create(dir, name, &req->dentry);
   if (res < 0)
@@ -6056,7 +6063,7 @@ int Client::_symlink(Inode *dir, const char *name, const char *target, int uid, 
   return res;
 }
 
-int Client::ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid)
+int Client::ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid, inodeno_t si)
 {
   Mutex::Locker lock(client_lock);
   dout(3) << "ll_symlink " << parent << " " << name << " -> " << value << dendl;
@@ -6066,7 +6073,7 @@ int Client::ll_symlink(vinodeno_t parent, const char *name, const char *value, s
   tout << value << std::endl;
 
   Inode *diri = _ll_get_inode(parent);
-  int r = _symlink(diri, name, value, uid, gid);
+  int r = _symlink(diri, name, value, uid, gid, si);
   if (r == 0) {
     string dname(name);
     Inode *in = diri->dir->dentries[dname]->inode;
@@ -6079,7 +6086,7 @@ int Client::ll_symlink(vinodeno_t parent, const char *name, const char *value, s
   return r;
 }
 
-int Client::ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid)
+int Client::ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid, inodeno_t si)
 {
   Mutex::Locker lock(client_lock);
   dout(3) << "ll_symlink_precise " << parent << " " << name << " -> " << value << dendl;
@@ -6089,7 +6096,7 @@ int Client::ll_symlink_precise(vinodeno_t parent, const char *name, const char *
   tout << value << std::endl;
 
   Inode *diri = _ll_get_inode(parent);
-  int r = _symlink(diri, name, value, uid, gid);
+  int r = _symlink(diri, name, value, uid, gid, si);
   if (r == 0) {
     string dname(name);
     Inode *in = diri->dir->dentries[dname]->inode;
@@ -6560,7 +6567,7 @@ void Client::ll_releasedir(void *dirp)
   _closedir((DirResult*)dirp);
 }
 
-int Client::ll_open(vinodeno_t vino, int flags, Fh **fhp, int uid, int gid)
+int Client::ll_open(vinodeno_t vino, int flags, Fh **fhp, int uid, int gid, inodeno_t si)
 {
   Mutex::Locker lock(client_lock);
   dout(3) << "ll_open " << vino << " " << flags << dendl;
@@ -6569,7 +6576,7 @@ int Client::ll_open(vinodeno_t vino, int flags, Fh **fhp, int uid, int gid)
   tout << flags << std::endl;
 
   Inode *in = _ll_get_inode(vino);
-  int r = _open(in, flags, 0, fhp, uid, gid);
+  int r = _open(in, flags, 0, fhp, uid, gid, si);
 
   tout << (unsigned long)*fhp << std::endl;
   dout(3) << "ll_open " << vino << " " << flags << " = " << r << " (" << *fhp << ")" << dendl;
@@ -6577,7 +6584,7 @@ int Client::ll_open(vinodeno_t vino, int flags, Fh **fhp, int uid, int gid)
 }
 
 int Client::ll_create(vinodeno_t parent, const char *name, mode_t mode, int flags, 
-		      struct stat *attr, Fh **fhp, int uid, int gid)
+		      struct stat *attr, Fh **fhp, int uid, int gid, inodeno_t si)
 {
   Mutex::Locker lock(client_lock);
   dout(3) << "ll_create " << parent << " " << name << " 0" << oct << mode << dec << " " << flags << ", uid " << uid << ", gid " << gid << dendl;
@@ -6588,13 +6595,13 @@ int Client::ll_create(vinodeno_t parent, const char *name, mode_t mode, int flag
   tout << flags << std::endl;
 
   Inode *dir = _ll_get_inode(parent);
-  int r = _mknod(dir, name, mode, 0, uid, gid);
+  int r = _mknod(dir, name, mode, 0, uid, gid, si);
   if (r < 0)
     return r;
   Dentry *dn = dir->dir->dentries[name];
   Inode *in = dn->inode;
 
-  r = _open(in, flags, mode, fhp, uid, gid);
+  r = _open(in, flags, mode, fhp, uid, gid, si);
   if (r >= 0) {
     Inode *in = (*fhp)->inode;
     fill_stat(in, attr);
@@ -6610,7 +6617,7 @@ int Client::ll_create(vinodeno_t parent, const char *name, mode_t mode, int flag
 }
 
 int Client::ll_create_precise(vinodeno_t parent, const char *name, mode_t mode, int flags, 
-			      struct stat_precise *attr, Fh **fhp, int uid, int gid)
+			      struct stat_precise *attr, Fh **fhp, int uid, int gid, inodeno_t si)
 {
   Mutex::Locker lock(client_lock);
   dout(3) << "ll_create_precise " << parent << " " << name << " 0" << oct << mode << dec << " " << flags << ", uid " << uid << ", gid " << gid << dendl;
@@ -6621,13 +6628,13 @@ int Client::ll_create_precise(vinodeno_t parent, const char *name, mode_t mode, 
   tout << flags << std::endl;
 
   Inode *dir = _ll_get_inode(parent);
-  int r = _mknod(dir, name, mode, 0, uid, gid);
+  int r = _mknod(dir, name, mode, 0, uid, gid, si);
   if (r < 0)
     return r;
   Dentry *dn = dir->dir->dentries[name];
   Inode *in = dn->inode;
 
-  r = _open(in, flags, mode, fhp, uid, gid);
+  r = _open(in, flags, mode, fhp, uid, gid, si);
   if (r >= 0) {
     Inode *in = (*fhp)->inode;
     fill_stat_precise(in, attr);

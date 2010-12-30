@@ -79,7 +79,7 @@ typedef struct _snapid_t {
 typedef struct __vinodeno {
   inodeno_t ino;
   snapid_t snapid;
-  } vinodeno_t;
+} vinodeno_t;
 
 typedef struct Fh Fh;
 #endif /* __cplusplus */
@@ -178,6 +178,8 @@ int ceph_ll_setattr(vinodeno_t vi, struct stat *st, int mask, int uid, int gid);
 int ceph_ll_getattr_precise(vinodeno_t vi, struct stat_precise *attr, int uid, int gid);
 int ceph_ll_setattr_precise(vinodeno_t vi, struct stat_precise *st, int mask, int uid, int gid);
 int ceph_ll_open(vinodeno_t vi, int flags, Fh **filehandle, int uid, int gid);
+int ceph_ll_open_speci(vinodeno_t vi, int flags, Fh **filehandle,
+		       int uid, int gid, inodeno_t si);
 loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence);
 int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf);
 int ceph_ll_fsync(Fh *fh, int syncdataonly);
@@ -200,11 +202,21 @@ int ceph_ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid);
 int ceph_ll_removexattr_by_idx(vinodeno_t vino, int idx, int uid, int gid);
 int ceph_ll_create(vinodeno_t parent, const char *name, mode_t mode,
 		   int flags, Fh **filehandle, struct stat *attr, int uid, int gid);
+int ceph_ll_create_speci(vinodeno_t parent, const char *name, mode_t mode,
+			 int flags, Fh **filehandle, struct stat *attr,
+			 int uid, int gid, inodeno_t si);
 int ceph_ll_create_precise(vinodeno_t parent, const char *name, mode_t mode,
 			   int flags, Fh **filehandle,
 			   struct stat_precise *attr, int uid, int gid);
+int ceph_ll_create_precise_speci(vinodeno_t parent, const char *name, mode_t mode,
+				 int flags, Fh **filehandle,
+				 struct stat_precise *attr, int uid,
+				 int gid, inodeno_t si);
 int ceph_ll_mkdir(vinodeno_t parent, const char *name,
 		  mode_t mode, struct stat *attr, int uid, int gid);
+int ceph_ll_mkdir_speci(vinodeno_t parent, const char *name,
+			mode_t mode, struct stat *attr, int uid,
+			int gid, inodeno_t si);
 int ceph_ll_mkdir_precise(vinodeno_t parent, const char *name,
 			  mode_t mode, struct stat_precise *attr,
 			  int uid, int gid);
@@ -224,8 +236,17 @@ int ceph_ll_rename(vinodeno_t parent, const char *name,
 int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
 int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
 int ceph_ll_readlink(vinodeno_t vino, char **value, int uid, int gid);
-int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
-int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid);
+int ceph_ll_symlink(vinodeno_t parent, const char *name,
+		    const char *value, struct stat *attr, int uid, int gid); 
+int ceph_ll_symlink_speci(vinodeno_t parent, const char *name, const
+			  char *value, struct stat *attr, int uid,
+			  int gid, inodeno_t si);
+int ceph_ll_symlink_precise(vinodeno_t parent, const char *name,
+			    const char *value, struct stat_precise *attr, int
+			    uid, int gid);
+int ceph_ll_symlink_precise_speci(vinodeno_t parent, const char *name,
+				  const char *value, struct stat_precise *attr, int
+				  uid, int gid, inodeno_t si);
 int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
 uint32_t ceph_ll_stripe_unit(vinodeno_t vino);
 uint32_t ceph_ll_file_layout(vinodeno_t vino, struct ceph_file_layout *layout);

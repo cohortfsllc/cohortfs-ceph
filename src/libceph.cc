@@ -527,6 +527,20 @@ extern "C" int ceph_ll_open(vinodeno_t vi, int flags,
     }
 }
 
+extern "C" int ceph_ll_open_speci(vinodeno_t vi, int flags,
+				  Fh **filehandle, int uid, int gid,
+				  inodeno_t si)
+{
+  try
+    {
+      return (client->ll_open(vi, flags, filehandle, uid, gid, si));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
 extern "C" int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf)
 {
   Mutex::Locker lock(ceph_client_mutex);
@@ -687,6 +701,23 @@ extern "C" int ceph_ll_create(vinodeno_t parent, const char* name,
     }
 }
 
+extern "C" int ceph_ll_create_speci(vinodeno_t parent, const char* name,
+				    mode_t mode, int flags,
+				    Fh **filehandle,
+				    struct stat *attr, int uid,
+				    int gid, inodeno_t si)
+{
+  try
+    {
+      return (client->ll_create(parent, name, mode, flags, attr,
+				filehandle, uid, gid, si));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
 extern "C" int ceph_ll_create_precise(vinodeno_t parent,
 				      const char* name,
 				      mode_t mode, int flags,
@@ -699,6 +730,25 @@ extern "C" int ceph_ll_create_precise(vinodeno_t parent,
       return (client->ll_create_precise(parent, name, mode, flags,
 					(Client::stat_precise*)attr,
 					filehandle, uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
+extern "C" int ceph_ll_create_precise_speci(vinodeno_t parent,
+					    const char* name,
+					    mode_t mode, int flags,
+					    Fh **filehandle,
+					    struct stat_precise *attr,
+					    int uid, int gid, inodeno_t si)
+{
+  try
+    {
+      return (client->ll_create_precise(parent, name, mode, flags,
+					(Client::stat_precise*)attr,
+					filehandle, uid, gid, si));
     }
   catch (fetch_exception &e)
     {
@@ -720,6 +770,20 @@ extern "C" int ceph_ll_mkdir(vinodeno_t parent, const char *name,
     }
 }
 
+extern "C" int ceph_ll_mkdir_speci(vinodeno_t parent, const char *name,
+				   mode_t mode, struct stat *attr,
+				   int uid, int gid, inodeno_t si)
+{
+  try
+    {
+      return (client->ll_mkdir(parent, name, mode, attr, uid, gid, si));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
 extern "C" int ceph_ll_mkdir_precise(vinodeno_t parent, const char *name,
 				     mode_t mode, struct stat_precise *attr,
 				     int uid, int gid)
@@ -729,6 +793,22 @@ extern "C" int ceph_ll_mkdir_precise(vinodeno_t parent, const char *name,
       return (client->ll_mkdir_precise(parent, name, mode,
 				       (Client::stat_precise*)attr,
 				       uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
+extern "C" int ceph_ll_mkdir_precise_speci(vinodeno_t parent, const char *name,
+					   mode_t mode, struct stat_precise *attr,
+					   int uid, int gid, inodeno_t si)
+{
+  try
+    {
+      return (client->ll_mkdir_precise(parent, name, mode,
+				       (Client::stat_precise*)attr,
+				       uid, gid, si));
     }
   catch (fetch_exception &e)
     {
@@ -886,6 +966,18 @@ extern "C" int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *
     }
 }
 
+extern "C" int ceph_ll_symlink_speci(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid, inodeno_t si)
+{
+  try
+    {
+      return (client->ll_symlink(parent, name, value, attr, uid, gid, si));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
 extern "C" int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid)
 {
   try
@@ -893,6 +985,25 @@ extern "C" int ceph_ll_symlink_precise(vinodeno_t parent, const char *name, cons
       return (client->ll_symlink_precise(parent, name, value,
 					 (Client::stat_precise*)attr,
 					 uid, gid));
+    }
+  catch (fetch_exception &e)
+    {
+      return -ESTALE;
+    }
+}
+
+extern "C" int ceph_ll_symlink_precise_speci(vinodeno_t parent,
+					     const char *name,
+					     const char *value,
+					     struct stat_precise *attr,
+					     int uid, int gid,
+					     inodeno_t si)
+{
+  try
+    {
+      return (client->ll_symlink_precise(parent, name, value,
+					 (Client::stat_precise*)attr,
+					 uid, gid, si));
     }
   catch (fetch_exception &e)
     {
