@@ -4328,7 +4328,7 @@ int Client::_open(Inode *in, int flags, mode_t mode, Fh **fhp, int uid, int gid,
     req->set_filepath(path); 
     req->head.args.open.flags = flags & ~O_CREAT;
     req->head.args.open.mode = mode;
-    (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
+    req->head.ino = si;
     req->inode = in;
     result = make_request(req, uid, gid);
   }
@@ -5844,7 +5844,7 @@ int Client::_mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev, int ui
   req->inode = dir;
   req->head.args.mknod.mode = mode;
   req->head.args.mknod.rdev = rdev;
-  (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
+  req->head.ino = si;
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
@@ -5910,7 +5910,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode, Inode 
   req->head.args.open.object_size = object_size;
   req->head.args.open.file_replication = file_replication;
   req->head.args.open.preferred = preferred_pg;
-  (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
+  req->head.ino = si;
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
@@ -5963,7 +5963,7 @@ int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid, 
   req->head.args.mkdir.mode = mode;
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL; 
-  (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
+  req->head.ino = si;
 
   int res = get_or_create(dir, name, &req->dentry);
   if (res < 0)
@@ -6050,7 +6050,7 @@ int Client::_symlink(Inode *dir, const char *name, const char *target, int uid, 
   req->set_string2(target); 
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
-  (req->head.ino = si) && (req->head.flags = CEPH_MDS_FLAG_REPLAY);
+  req->head.ino = si;
 
   int res = get_or_create(dir, name, &req->dentry);
   if (res < 0)

@@ -32,7 +32,6 @@ AC_PROG_LIBTOOL
 # Checks for libraries.
 AC_CHECK_LIB([m], [pow], [true], AC_MSG_FAILURE([libm not found]))
 AC_CHECK_LIB([pthread], [pthread_create], [true], AC_MSG_FAILURE([libpthread not found]))
-PKG_CHECK_MODULES([zlib], [zlib >= 1], [true], AC_MSG_FAILURE([zlib not found]))
 
 # debug crap?
 AC_ARG_WITH([debug],

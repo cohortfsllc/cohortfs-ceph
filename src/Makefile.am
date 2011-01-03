@@ -16,12 +16,12 @@ bin_PROGRAMS += cmon
 # osd
 cosd_SOURCES = cosd.cc msg/SimpleMessenger.cc objclass/class_debug.cc \
 	       objclass/class_api.cc
-cosd_LDADD = libosd.a libos.a libcrush.a libcommon.a -ldl -lpthread -lm -lcrypto
+cosd_LDADD = libosd.a libos.a libcrush.a libcommon.a -ldl -lpthread -lm -lcrypto -lz
 bin_PROGRAMS += cosd
 
 # mds
 cmds_SOURCES = cmds.cc msg/SimpleMessenger.cc
-cmds_LDADD = libmds.a libosdc.a libcrush.a libcommon.a -lpthread -lm -lcrypto
+cmds_LDADD = libmds.a libosdc.a libcrush.a libcommon.a -lpthread -lm -lcrypto -lz
 bin_PROGRAMS += cmds
 
 # admin tools
@@ -46,7 +46,7 @@ noinst_PROGRAMS = mount.ceph
 
 # synthetic client
 csyn_SOURCES = csyn.cc msg/SimpleMessenger.cc
-csyn_LDADD = libclient.a libosdc.a libcrush.a libcommon.a -lpthread -lm -lcrypto
+csyn_LDADD = libclient.a libosdc.a libcrush.a libcommon.a -lpthread -lm -lcrypto -lz
 bin_PROGRAMS += csyn
 
 core: cmon cosd cmds ceph cconf monmaptool osdmaptool crushtool csyn
@@ -55,7 +55,7 @@ core: cmon cosd cmds ceph cconf monmaptool osdmaptool crushtool csyn
 # fuse targets?
 if WITH_FUSE
 cfuse_SOURCES = cfuse.cc msg/SimpleMessenger.cc client/fuse.cc client/fuse_ll.cc
-cfuse_LDADD = -lfuse libclient.a libosdc.a libcrush.a libcommon.a -lpthread -lm -lcrypto
+cfuse_LDADD = -lfuse libclient.a libosdc.a libcrush.a libcommon.a -lpthread -lm -lcrypto -lz
 bin_PROGRAMS += cfuse
 
 #if WITH_DEBUG
@@ -82,15 +82,15 @@ test_ioctls_SOURCES = client/test_ioctls.c
 bin_PROGRAMS += test_ioctls
 
 dumpjournal_SOURCES = dumpjournal.cc msg/SimpleMessenger.cc
-dumpjournal_LDADD = libosdc.a libcrush.a libcommon.a -lpthread -lm -lcrypto
+dumpjournal_LDADD = libosdc.a libcrush.a libcommon.a -lpthread -lm -lcrypto -lz
 dupstore_SOURCES = dupstore.cc
-dupstore_LDADD = libos.a libcommon.a -lpthread -lm -lcrypto
+dupstore_LDADD = libos.a libcommon.a -lpthread -lm -lcrypto -lz
 streamtest_SOURCES = streamtest.cc
-streamtest_LDADD = libos.a libcommon.a -lpthread -lm -lcrypto
+streamtest_LDADD = libos.a libcommon.a -lpthread -lm -lcrypto -lz
 bin_PROGRAMS += dumpjournal dupstore streamtest
 
 test_trans_SOURCES = test_trans.cc
-test_trans_LDADD = libos.a libcommon.a -lpthread -lm -lcrypto
+test_trans_LDADD = libos.a libcommon.a -lpthread -lm -lcrypto -lz
 bin_PROGRAMS += test_trans
 
 
@@ -424,10 +424,6 @@ libmds_a_SOURCES = \
 	mds/snap.cc \
 	mds/SessionMap.cc \
 	mds/MDLog.cc
-
-libos_a_CFLAGS = $(ZLIB_CFLAGS)
-libcrush_la_CXXFLAGS = $(ZLIB_CFLAGS)
-libcrush_la_LDFLAGS = $(ZLIB_LIBS)
 
 libos_a_SOURCES = \
 	os/FileJournal.cc \
