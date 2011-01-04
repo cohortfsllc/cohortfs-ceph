@@ -46,14 +46,18 @@ inodeno_t InoTable::project_alloc_id(inodeno_t id)
   assert(is_active());
   if (!id)
     id = projected_free.start();
-  projected_free.erase(id);
-  ++projected_version;
+  if (projected_free.contains(id)) {
+    projected_free.erase(id);
+    ++projected_version;
+  }
   return id;
 }
 void InoTable::apply_alloc_id(inodeno_t id)
 {
   dout(10) << "apply_alloc_id " << id << " to " << projected_free << "/" << free << dendl;
-  free.erase(id);
+  if (free.contains(id)) {
+    free.erase(id);
+  }
   ++version;
 }
 
