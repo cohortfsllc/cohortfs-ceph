@@ -103,8 +103,6 @@ public:
     if (ino) {
       if (prealloc_inos.contains(ino))
 	prealloc_inos.erase(ino);
-      else
-	ino = 0;
     }
     if (!ino) {
       ino = prealloc_inos.start();
