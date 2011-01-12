@@ -1393,12 +1393,13 @@ int FileStore::get_crc32(coll_t cid, const sobject_t& oid, uint32_t& crc32)
   dout(15) << "get_crc32 " << fn << dendl;
 
   r = do_getxattr(fn, attrname, attrval, 9);
-  if (r != 0) {
+  if (r < 0) {
     goto out;
   }
 
   attrval[9] = '\0';
   crc32 = strtoul(attrval, NULL, 16);
+  r = 0;
 
  out:
   dout(10) << "get_crc32 " << fn << " " << crc32 << " = " << r << dendl;
