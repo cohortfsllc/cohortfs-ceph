@@ -7057,6 +7057,7 @@ int Client::ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
 int Client::ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
 			     uint32_t parent_hash)
 {
+    Mutex::Locker lock(client_lock);
     int r = 0;
     
     if (inode_map.count(*vino)) {
