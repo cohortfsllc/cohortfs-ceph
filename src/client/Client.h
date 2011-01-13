@@ -696,26 +696,8 @@ class Client : public Dispatcher {
 
   void _ensure(vinodeno_t vi) throw (fetch_exception) {
     if (!inode_map.count(vi)) {
-      filepath path;
-      MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
-      Inode in(vi, NULL);
-      Inode *target=NULL;
-      
-      in.make_nosnap_relative_path(path);
-      
-      req->set_filepath(path);
-      req->inode = &in;
-      req->head.args.getattr.mask = CEPH_STAT_CAP_INODE_ALL;
-      int r = make_request(req, 0, 0, &target);
-      if (r==0 && target) {
-	inode_map[vi]=target;
-	if (target->ll_ref == 0) 
-	  target->get();
-	target->ll_get();
-      } else {
-	fetch_exception e(r, vi);
-	throw e;
-      }
+      fetch_exception e(-ESTALE, vi);
+      throw e;
     }
   }
 
@@ -1225,6 +1207,32 @@ private:
 
   int get_or_create(Inode *dir, const char* name,
 		    Dentry **pdn, bool expect_null=false);
+  /* partial hash update function. Assume roughly 4 bits per character */
+  inline unsigned long partial_name_hash(unsigned long c, unsigned long prevhash)
+  {
+    return (prevhash + (c << 4) + (c >> 4)) * 11;
+  }
+
+  /*
+   * Finally: cut down the number of bits to a int value (and try to avoid
+   * losing bits)
+   */
+  inline static unsigned long end_name_hash(unsigned long hash)
+  {
+    return (unsigned int) hash;
+  }
+
+  /* Compute the hash for a name string. */
+  inline unsigned int full_name_hash(const string name)
+  {
+    unsigned long len = name.length();
+    unsigned long pos = 0;
+    unsigned long hash;
+    while (len--) {
+      hash = partial_name_hash(name[pos++], hash);
+    }
+    return end_name_hash(hash);
+  }
 
 public:
   int mount(const char *mount_root = NULL);
@@ -1389,6 +1397,10 @@ public:
   int ll_fsync(Fh *fh, bool syncdataonly);
   int ll_release(Fh *fh);
   int ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
+  int ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
+		       uint32_t* parent_hash);
+  int ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
+		       uint32_t parent_hash);
 };
 
 #endif

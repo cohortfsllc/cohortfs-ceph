@@ -1211,3 +1211,16 @@ extern "C" uint64_t ceph_ll_get_internal_offset(vinodeno_t vino, uint64_t blockn
       return -ESTALE;
     }
 }
+
+extern "C" int ceph_ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
+				     uint32_t* parent_hash)
+{
+  client->ll_connectable_x(vino, parent_ino, parent_hash);
+}
+
+extern "C" int ceph_ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
+				     uint32_t parent_hash)
+{
+  client->ll_connectable_m(vino, parent_ino, parent_hash);
+}
+

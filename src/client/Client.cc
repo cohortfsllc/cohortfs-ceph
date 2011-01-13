@@ -7020,3 +7020,64 @@ bool Client::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool 
   *authorizer = monclient->auth->build_authorizer(dest_type);
   return true;
 }
+
+int Client::ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
+			     uint32_t* parent_hash)
+{
+    int r = 0;
+    
+    if (vino.ino.val == 1) {
+	*parent_ino = 0;
+	*parent_hash = 0;
+	r = 0;
+    } else if (vino.snapid.val != CEPH_NOSNAP) {
+	r = -EINVAL;
+    } else {
+	Inode *in = _ll_get_inode(vino);
+	
+	if ((!in->dn) || (!in->dn->dir->parent_inode))
+	    r = -ENOLINK;
+	else {
+	    *parent_ino = in->dn->dir->parent_inode->ino.val;
+	    *parent_hash =
+		full_name_hash(in->dn->dir->parent_inode->dn->name);
+	    r = 0;
+	}
+    }
+    return r;
+}
+
+int Client::ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
+			     uint32_t parent_hash)
+{
+    int r = 0;
+    
+    if (inode_map.count(*vino)) {
+	r = 0;
+    } else if (vino->snapid.val != CEPH_NOSNAP) {
+	r = -ESTALE;
+    } else {
+	MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
+	Inode *target = NULL;
+	char hashstring[10];
+
+	snprintf(hashstring, 10, "%lu", (long unsigned int) parent_hash);
+	
+	req->set_filepath(filepath(vino->ino));
+	req->set_filepath2(filepath(hashstring, inodeno_t(parent_ino)));
+	req->head.args.getattr.mask = 0;
+
+	r = make_request(req, 0, 0, &target);
+
+	if (r == 0) {
+	    if (!target) {
+		r = -ESTALE;
+	    }
+	    else {
+		target->ll_get();
+	    }
+	}
+    }
+    return r;
+}
+
