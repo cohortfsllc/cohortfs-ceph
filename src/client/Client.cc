@@ -7039,9 +7039,16 @@ int Client::ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
 	    r = -ENOLINK;
 	else {
 	    *parent_ino = in->dn->dir->parent_inode->ino.val;
-	    *parent_hash =
-		full_name_hash(in->dn->dir->parent_inode->dn->name);
-	    r = 0;
+	    if (*parent_ino == 1) {
+		*parent_hash =
+		    full_name_hash(string(""));
+	    } else if (!in->dn->dir->parent_inode->dn) {
+		r = -ESTALE;
+	    } else {
+		*parent_hash =
+		    full_name_hash(in->dn->dir->parent_inode->dn->name);
+		r = 0;
+	    }
 	}
     }
     return r;

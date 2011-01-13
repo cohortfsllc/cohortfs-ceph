@@ -1227,7 +1227,7 @@ private:
   {
     unsigned long len = name.length();
     unsigned long pos = 0;
-    unsigned long hash;
+    unsigned long hash = 0;
     while (len--) {
       hash = partial_name_hash(name[pos++], hash);
     }
