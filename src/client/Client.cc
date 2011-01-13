@@ -7064,7 +7064,7 @@ int Client::ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
     } else if (vino->snapid.val != CEPH_NOSNAP) {
 	r = -ESTALE;
     } else {
-	MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
+	MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPHASH);
 	Inode *target = NULL;
 	char hashstring[10];
 
