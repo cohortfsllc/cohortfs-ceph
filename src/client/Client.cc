@@ -7064,17 +7064,17 @@ int Client::ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
     } else if (vino->snapid.val != CEPH_NOSNAP) {
 	r = -ESTALE;
     } else {
-	MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPHASH);
+	MetaRequest *hashreq = new MetaRequest(CEPH_MDS_OP_LOOKUPHASH);
 	Inode *target = NULL;
 	char hashstring[10];
 
 	snprintf(hashstring, 10, "%lu", (long unsigned int) parent_hash);
 	
-	req->set_filepath(filepath(vino->ino));
-	req->set_filepath2(filepath(hashstring, inodeno_t(parent_ino)));
-	req->head.args.getattr.mask = 0;
+	hashreq->set_filepath(filepath(vino->ino));
+	hashreq->set_filepath2(filepath(hashstring, inodeno_t(parent_ino)));
+	hashreq->head.args.getattr.mask = 0;
 
-	r = make_request(req, 0, 0, &target);
+	r = make_request(hashreq, 0, 0, &target);
 
 	if (r == 0) {
 	    if (!target) {
@@ -7082,6 +7082,19 @@ int Client::ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
 	    }
 	    else {
 		target->ll_get();
+		MetaRequest *lookupreq
+		  = new MetaRequest(CEPH_MDS_OP_LOOKUP);
+		filepath parentpath;
+		Inode* dummy = NULL;
+		
+		target->dn->dir->parent_inode
+		  ->make_nosnap_relative_path(parentpath);
+		parentpath.push_dentry(target->dn->name);
+		lookupreq->set_filepath(parentpath);
+		lookupreq->inode = target->dn->dir->parent_inode;
+		lookupreq->head.args.getattr.mask = 0;
+		
+		r = make_request(lookupreq, 0, 0, &dummy);
 	    }
 	}
     }
