@@ -1228,8 +1228,10 @@ private:
     unsigned long len = name.length();
     unsigned long pos = 0;
     unsigned long hash = 0;
-    while (len--) {
-      hash = partial_name_hash(name[pos++], hash);
+    while (len) {
+      hash = partial_name_hash(name[pos], hash);
+      ++pos;
+      --len;
     }
     return end_name_hash(hash);
   }

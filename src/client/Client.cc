@@ -7040,8 +7040,7 @@ int Client::ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
 	else {
 	    *parent_ino = in->dn->dir->parent_inode->ino.val;
 	    if (*parent_ino == 1) {
-		*parent_hash =
-		    full_name_hash(string(""));
+		*parent_hash = 0;
 	    } else if (!in->dn->dir->parent_inode->dn) {
 		r = -ESTALE;
 	    } else {
