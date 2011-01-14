@@ -250,7 +250,7 @@ public:
 
     void finish(int r) {
       if (r >= 0) {
-	::decode(*crc, bl);
+	bl.copy(0, sizeof(uint32_t), (char*)crc);
       }
       fin->finish(r);
       delete fin;
