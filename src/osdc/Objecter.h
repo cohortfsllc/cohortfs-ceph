@@ -245,12 +245,12 @@ public:
     bufferlist bl;
     Context* fin;
     uint32_t* crc;
-    C_CRC32(Context *c) :
-      fin(c) {}
+    C_CRC32(Context* c, uint32_t* target) :
+      fin(c), crc(target) {}
 
     void finish(int r) {
       if (r >= 0) {
-	decode(*crc, bl);
+	::decode(*crc, bl);
       }
       fin->finish(r);
       delete fin;
@@ -504,11 +504,11 @@ private:
 		  snapid_t snap, uint32_t *crc32, int flags,
 		  Context *onfinish) {
     vector<OSDOp> ops(1);
-    C_CRC32* fin = new C_CRC32(onfinish);
+    C_CRC32* decodercontext = new C_CRC32(onfinish, crc32);
     ops[0].op.op = CEPH_OSD_OP_CRC32;
-    Op *o = new Op(oid, ol, ops, flags, onfinish, 0);
+    Op *o = new Op(oid, ol, ops, flags, decodercontext, 0);
     o->snapid = snap;
-    o->outbl = &fin->bl;
+    o->outbl = &decodercontext->bl;
     return op_submit(o);
   }
 
