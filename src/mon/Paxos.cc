@@ -19,14 +19,13 @@
 #include "messages/MMonPaxos.h"
 #include "messages/MMonObserveNotify.h"
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS paxos
 #undef dout_prefix
-#define dout_prefix _prefix(mon, whoami, machine_name, state, last_committed)
-static ostream& _prefix(Monitor *mon, int whoami, const char *machine_name, int state, version_t last_committed) {
-  return *_dout << dbeginl
-		<< "mon" << whoami
+#define dout_prefix _prefix(mon, mon->name, mon->rank, machine_name, state, last_committed)
+static ostream& _prefix(Monitor *mon, const string& name, int rank, const char *machine_name, int state, version_t last_committed) {
+  return *_dout << "mon." << name << "@" << rank
 		<< (mon->is_starting() ?
 		    (const char*)"(starting)" :
 		    (mon->is_leader() ?
@@ -87,7 +86,7 @@ void Paxos::collect(version_t oldpn)
   for (set<int>::const_iterator p = mon->get_quorum().begin();
        p != mon->get_quorum().end();
        ++p) {
-    if (*p == whoami) continue;
+    if (*p == mon->rank) continue;
     
     MMonPaxos *collect = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_COLLECT, machine_id);
     collect->last_committed = last_committed;
@@ -336,7 +335,7 @@ void Paxos::begin(bufferlist& v)
   
   // accept it ourselves
   accepted.clear();
-  accepted.insert(whoami);
+  accepted.insert(mon->rank);
   new_value = v;
   mon->store->put_bl_sn(new_value, machine_name, last_committed+1);
 
@@ -356,7 +355,7 @@ void Paxos::begin(bufferlist& v)
   for (set<int>::const_iterator p = mon->get_quorum().begin();
        p != mon->get_quorum().end();
        ++p) {
-    if (*p == whoami) continue;
+    if (*p == mon->rank) continue;
     
     dout(10) << " sending begin to mon" << *p << dendl;
     MMonPaxos *begin = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_BEGIN, machine_id);
@@ -478,13 +477,14 @@ void Paxos::commit()
 
   // commit locally
   last_committed++;
+  last_commit_time = g_clock.now();
   mon->store->put_int(last_committed, machine_name, "last_committed");
 
   // tell everyone
   for (set<int>::const_iterator p = mon->get_quorum().begin();
        p != mon->get_quorum().end();
        ++p) {
-    if (*p == whoami) continue;
+    if (*p == mon->rank) continue;
 
     dout(10) << " sending commit to mon" << *p << dendl;
     MMonPaxos *commit = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_COMMIT, machine_id);
@@ -528,7 +528,7 @@ void Paxos::extend_lease()
   lease_expire = g_clock.now();
   lease_expire += g_conf.mon_lease;
   acked_lease.clear();
-  acked_lease.insert(whoami);
+  acked_lease.insert(mon->rank);
 
   dout(7) << "extend_lease now+" << g_conf.mon_lease << " (" << lease_expire << ")" << dendl;
 
@@ -536,7 +536,7 @@ void Paxos::extend_lease()
   for (set<int>::const_iterator p = mon->get_quorum().begin();
        p != mon->get_quorum().end();
        ++p) {
-    if (*p == whoami) continue;
+    if (*p == mon->rank) continue;
     MMonPaxos *lease = new MMonPaxos(mon->get_epoch(), MMonPaxos::OP_LEASE, machine_id);
     lease->last_committed = last_committed;
     lease->lease_timestamp = lease_expire;
@@ -556,9 +556,27 @@ void Paxos::extend_lease()
   utime_t at = lease_expire;
   at -= g_conf.mon_lease;
   at += g_conf.mon_lease_renew_interval;
-  mon->timer.add_event_at(at, lease_renew_event);	
+  mon->timer.add_event_at(at, lease_renew_event);
 }
 
+void Paxos::warn_on_future_time(utime_t t, entity_name_t from)
+{
+  utime_t now = g_clock.now();
+  if (t > now) {
+    utime_t diff = t - now;
+    if (diff > g_conf.mon_clock_drift_allowed) {
+      utime_t warn_diff = now - last_clock_drift_warn;
+      if (warn_diff >
+	  pow(g_conf.mon_clock_drift_warn_backoff, clock_drift_warned)) {
+	mon->clog.warn() << "message from " << from << " was stamped " << diff
+			 << "s in the future, clocks not synchronized";
+	last_clock_drift_warn = g_clock.now();
+	++clock_drift_warned;
+      }
+    }
+  }
+
+}
 
 // peon
 void Paxos::handle_lease(MMonPaxos *lease)
@@ -571,14 +589,7 @@ void Paxos::handle_lease(MMonPaxos *lease)
     return;
   }
 
-  if (lease->sent_timestamp > g_clock.now() + g_conf.mon_lease_wiggle_room) {
-    stringstream ss;
-    ss << "lease_expire from mon" << lease->get_source().num()
-       << " was sent from future time " << lease->sent_timestamp
-       << ", clocks not synchronized"
-       << std::endl;
-    mon->get_logclient()->log(LOG_WARN, ss);
-  }
+  warn_on_future_time(lease->sent_timestamp, lease->get_source());
 
   // extend lease
   if (lease_expire < lease->lease_timestamp) {
@@ -641,13 +652,8 @@ void Paxos::handle_lease_ack(MMonPaxos *ack)
 	     << " dup (lagging!), ignoring" << dendl;
   }
 
-  if (ack->sent_timestamp > g_clock.now() + g_conf.mon_lease_wiggle_room) {
-    stringstream ss;
-    ss << "lease_ack from mon" << from
-       << " was sent from future time " << ack->sent_timestamp
-       << ", clocks not synchronized." << std::endl;
-    mon->get_logclient()->log(LOG_WARN, ss);
-  }
+  warn_on_future_time(ack->sent_timestamp, ack->get_source());
+
   ack->put();
 }
 
@@ -714,7 +720,7 @@ version_t Paxos::get_new_proposal_number(version_t gt)
   last_pn /= 100;
   last_pn++;
   last_pn *= 100;
-  last_pn += (version_t)whoami;
+  last_pn += (version_t)mon->rank;
   
   // write
   mon->store->put_int(last_pn, machine_name, "last_pn");

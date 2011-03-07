@@ -12,13 +12,15 @@
  * 
  */
 
-#include "config.h"
+#include "common/config.h"
+#include "osdc/Journaler.h"
 #include "events/EString.h"
 #include "events/ESubtreeMap.h"
 #include "events/ESession.h"
 #include "events/ESessions.h"
 
 #include "events/EMetaBlob.h"
+#include "events/EResetJournal.h"
 
 #include "events/EUpdate.h"
 #include "events/ESlaveUpdate.h"
@@ -49,13 +51,13 @@
 #include "Locker.h"
 
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS mds
 #undef DOUT_COND
 #define DOUT_COND(l) l<=g_conf.debug_mds || l <= g_conf.debug_mds_log || l <= g_conf.debug_mds_log_expire
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "mds" << mds->get_nodeid() << ".journal "
+#define dout_prefix *_dout << "mds" << mds->get_nodeid() << ".journal "
 
 
 // -----------------------
@@ -358,9 +360,35 @@ void EMetaBlob::update_segment(LogSegment *ls)
     //    ls->last_client_tid[client_reqs.rbegin()->client] = client_reqs.rbegin()->tid);
 }
 
+void EMetaBlob::fullbit::update_inode(MDS *mds, CInode *in)
+{
+  in->inode = inode;
+  in->xattrs = xattrs;
+  if (in->inode.is_dir()) {
+    if (!(in->dirfragtree == dirfragtree)) {
+      dout(10) << "EMetaBlob::fullbit::update_inode dft " << in->dirfragtree << " -> "
+	       << dirfragtree << " on " << *in << dendl;
+      in->dirfragtree = dirfragtree;
+      in->force_dirfrags();
+    }
+
+    delete in->default_layout;
+    in->default_layout = dir_layout;
+    dir_layout = NULL;
+    /*
+     * we can do this before linking hte inode bc the split_at would
+     * be a no-op.. we have no children (namely open snaprealms) to
+     * divy up 
+     */
+    in->decode_snap_blob(snapbl);  
+  } else if (in->inode.is_symlink()) {
+    in->symlink = symlink;
+  }
+}
+
 void EMetaBlob::replay(MDS *mds, LogSegment *logseg)
 {
-  dout(10) << "EMetaBlob.replay " << lump_map.size() << " dirlumps" << dendl;
+  dout(10) << "EMetaBlob.replay " << lump_map.size() << " dirlumps by " << client_name << dendl;
 
   assert(logseg);
 
@@ -369,18 +397,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg)
     bool isnew = in ? false:true;
     if (!in)
       in = new CInode(mds->mdcache, true);
-    in->inode = root->inode;
-    in->xattrs = root->xattrs;
-    if (in->inode.is_dir()) {
-      in->dirfragtree = root->dirfragtree;
-      /*
-       * we can do this before linking hte inode bc the split_at would
-       * be a no-op.. we have no children (namely open snaprealms) to
-       * divy up 
-       */
-      in->decode_snap_blob(root->snapbl);  
-    }
-    if (in->inode.is_symlink()) in->symlink = root->symlink;
+    root->update_inode(mds, in);
     if (isnew)
       mds->mdcache->add_inode(in);
     if (root->dirty) in->_mark_dirty(logseg);
@@ -395,7 +412,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg)
     dirlump &lump = lump_map[*lp];
 
     // the dir 
-    CDir *dir = mds->mdcache->get_dirfrag(*lp);
+    CDir *dir = mds->mdcache->get_force_dirfrag(*lp);
     if (!dir) {
       // hmm.  do i have the inode?
       CInode *diri = mds->mdcache->get_inode((*lp).ino);
@@ -465,18 +482,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg)
       CInode *in = mds->mdcache->get_inode(p->inode.ino, p->dnlast);
       if (!in) {
 	in = new CInode(mds->mdcache, true, p->dnfirst, p->dnlast);
-	in->inode = p->inode;
-	in->xattrs = p->xattrs;
-	if (in->inode.is_dir()) {
-	  in->dirfragtree = p->dirfragtree;
-	  /*
-	   * we can do this before linking hte inode bc the split_at would
-	   * be a no-op.. we have no children (namely open snaprealms) to
-	   * divy up 
-	   */
-	  in->decode_snap_blob(p->snapbl);  
-	}
-	if (in->inode.is_symlink()) in->symlink = p->symlink;
+	p->update_inode(mds, in);
 	mds->mdcache->add_inode(in);
 	if (!dn->get_linkage()->is_null()) {
 	  if (dn->get_linkage()->is_primary()) {
@@ -485,10 +491,10 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg)
 	    ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
 	        << " " << *old_in
 	        << " should be " << p->inode.ino;
-	    dout(-10) << ss << dendl;
-	    mds->logclient.log(LOG_WARN, ss);
+	    dout(0) << ss.str() << dendl;
+	    mds->clog.warn(ss);
 	    dir->unlink_inode(dn);
-	    mds->mdcache->remove_inode(old_in);
+	    mds->mdcache->remove_inode_recursive(old_in);
 
 	    //assert(0); // hrm!  fallout from sloppy unlink?  or?  hmmm FIXME investigate further
 	  }
@@ -503,13 +509,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg)
 	}
 	if (in->get_parent_dn() && in->inode.anchored != p->inode.anchored)
 	  in->get_parent_dn()->adjust_nested_anchors( (int)p->inode.anchored - (int)in->inode.anchored );
-	in->inode = p->inode;
-	in->xattrs = p->xattrs;
-	if (in->inode.is_dir()) {
-	  in->dirfragtree = p->dirfragtree;
-	  in->decode_snap_blob(p->snapbl);
-	}
-	if (in->inode.is_symlink()) in->symlink = p->symlink;
+	p->update_inode(mds, in);
 	if (p->dirty) in->_mark_dirty(logseg);
 	if (dn->get_linkage()->get_inode() != in) {
 	  if (!dn->get_linkage()->is_null())  // note: might be remote.  as with stray reintegration.
@@ -607,9 +607,8 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg)
 
       // [repair bad inotable updates]
       if (inotablev > mds->inotable->get_version()) {
-	stringstream ss;
-	ss << "journal replay inotablev mismatch " << mds->inotable->get_version() << " -> " << inotablev;
-	mds->logclient.log(LOG_ERROR, ss);
+	mds->clog.error() << "journal replay inotablev mismatch "
+	    << mds->inotable->get_version() << " -> " << inotablev << "\n";
 	mds->inotable->force_replay_version(inotablev);
       }
 
@@ -630,15 +629,19 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg)
       assert(session);
       dout(20) << " (session prealloc " << session->prealloc_inos << ")" << dendl;
       if (used_preallocated_ino) {
-	inodeno_t next = session->next_ino();
-	inodeno_t i = session->take_ino(used_preallocated_ino);
-	if (next != i) {
-	  stringstream ss;
-	  ss << " replayed op " << client_reqs << " used ino " << i << " but session next is " << next;
-	  mds->logclient.log(LOG_WARN, ss);
+	if (session->prealloc_inos.empty()) {
+	  // HRM: badness in the journal
+	  mds->clog.warn() << " replayed op " << client_reqs << " on session for " << client_name
+			   << " with empty prealloc_inos\n";
+	} else {
+	  inodeno_t next = session->next_ino();
+	  inodeno_t i = session->take_ino(used_preallocated_ino);
+	  if (next != i)
+	    mds->clog.warn() << " replayed op " << client_reqs << " used ino " << i
+			     << " but session next is " << next << "\n";
+	  assert(i == used_preallocated_ino);
+	  session->used_inos.clear();
 	}
-	assert(i == used_preallocated_ino);
-	session->used_inos.clear();
 	mds->sessionmap.projected = ++mds->sessionmap.version;
       }
       if (preallocated_inos.size()) {
@@ -713,21 +716,22 @@ void ESession::replay(MDS *mds)
 	     << " >= " << cmapv << ", noop" << dendl;
   } else {
     dout(10) << "ESession.replay sessionmap " << mds->sessionmap.version
-	     << " < " << cmapv << " " << (open ? "open":"close") << dendl;
+	     << " < " << cmapv << " " << (open ? "open":"close") << " " << client_inst << dendl;
     mds->sessionmap.projected = ++mds->sessionmap.version;
     assert(mds->sessionmap.version == cmapv);
+    Session *session;
     if (open) {
-      Session *session = mds->sessionmap.get_or_add_session(client_inst);
+      session = mds->sessionmap.get_or_add_session(client_inst);
       if (session->is_closed())
 	mds->sessionmap.set_state(session, Session::STATE_OPEN);
-      dout(10) << "session " << session << " state " << session->get_state() << dendl;
     } else {
-      Session *session = mds->sessionmap.get_session(client_inst.name);
+      session = mds->sessionmap.get_session(client_inst.name);
       if (session->is_closed())
 	mds->sessionmap.remove_session(session);
       else
 	session->clear();    // the client has reconnected; keep the Session, but reset
     }
+    dout(10) << "session " << session << " state " << session->get_state() << dendl;
   }
 
   if (inos.size() && inotablev) {
@@ -983,6 +987,8 @@ void ESlaveUpdate::replay(MDS *mds)
 
 void ESubtreeMap::replay(MDS *mds) 
 {
+  if (expire_pos && expire_pos > mds->mdlog->journaler->get_expire_pos())
+    mds->mdlog->journaler->set_expire_pos(expire_pos);
   // suck up the subtree map?
   if (mds->mdcache->is_subtrees()) {
     dout(10) << "ESubtreeMap.replay -- ignoring, already have import map" << dendl;
@@ -1013,16 +1019,33 @@ void ESubtreeMap::replay(MDS *mds)
 
 void EFragment::replay(MDS *mds)
 {
-  dout(10) << "EFragment.replay " << ino << " " << basefrag << " by " << bits << dendl;
-  
+  dout(10) << "EFragment.replay " << op_name(op) << " " << ino << " " << basefrag << " by " << bits << dendl;
   CInode *in = mds->mdcache->get_inode(ino);
-  assert(in);
+  if (in) {
+    list<CDir*> resultfrags;
+    list<Context*> waiters;
 
-  list<CDir*> resultfrags;
-  list<Context*> waiters;
-  mds->mdcache->adjust_dir_fragments(in, basefrag, bits, resultfrags, waiters, true);
+    pair<dirfrag_t,int> desc(dirfrag_t(ino,basefrag), bits);
 
+    switch (op) {
+    case OP_PREPARE:
+      mds->mdcache->uncommitted_fragments.insert(desc);
+    case OP_ONESHOT:
+      mds->mdcache->adjust_dir_fragments(in, basefrag, bits, resultfrags, waiters, true);
+      break;
+
+    case OP_COMMIT:
+      mds->mdcache->uncommitted_fragments.erase(desc);
+      break;
+
+    case OP_ROLLBACK:
+      mds->mdcache->adjust_dir_fragments(in, basefrag, -bits, resultfrags, waiters, true);
+      break;
+    }
+  }
   metablob.replay(mds, _segment);
+  if (in && g_conf.mds_debug_frag)
+    in->verify_dirfrags();
 }
 
 
@@ -1054,6 +1077,7 @@ void EExport::replay(MDS *mds)
 
   // adjust auth away
   mds->mdcache->adjust_bounded_subtree_auth(dir, realbounds, pair<int,int>(CDIR_AUTH_UNKNOWN, CDIR_AUTH_UNKNOWN));
+  mds->mdcache->trim_non_auth_subtree(dir);
   mds->mdcache->try_subtree_merge(dir);
 }
 
@@ -1113,5 +1137,24 @@ void EImportFinish::replay(MDS *mds)
 
 
 
+// ------------------------
+// EResetJournal
 
+void EResetJournal::replay(MDS *mds)
+{
+  dout(1) << "EResetJournal" << dendl;
+
+  mds->sessionmap.wipe();
+  mds->inotable->replay_reset();
+
+  if (mds->mdsmap->get_root() == mds->whoami) {
+    CDir *rootdir = mds->mdcache->get_root()->get_or_open_dirfrag(mds->mdcache, frag_t());
+    mds->mdcache->adjust_subtree_auth(rootdir, mds->whoami);   
+  }
+
+  CDir *mydir = mds->mdcache->get_myin()->get_or_open_dirfrag(mds->mdcache, frag_t());
+  mds->mdcache->adjust_subtree_auth(mydir, mds->whoami);   
+
+  mds->mdcache->show_subtrees();
+}
 

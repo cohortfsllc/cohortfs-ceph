@@ -17,7 +17,7 @@
 #include <string>
 using namespace std;
 
-#include "config.h"
+#include "common/config.h"
 
 #include "mon/MonMap.h"
 #include "mon/MonClient.h"
@@ -26,6 +26,7 @@ using namespace std;
 
 #include "common/Timer.h"
 #include "common/common_init.h"
+#include "common/ceph_argparse.h"
 
 #ifndef DARWIN
 #include <envz.h>
@@ -69,13 +70,11 @@ int main(int argc, const char **argv, const char *envp[]) {
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  common_set_defaults(false);
-  common_init(args, NULL, false);
+  common_init(args, NULL, STARTUP_FLAG_FORCE_FG_LOGGING);
 
   vec_to_argv(args, argc, argv);
 
-  int whoami = atoi(args[0]);
-  dout(0) << "i am mon" << whoami << dendl;
+  dout(0) << "i am mon " << args[0] << dendl;
 
   // get monmap
   MonClient mc;
@@ -83,7 +82,9 @@ int main(int argc, const char **argv, const char *envp[]) {
     return -1;
   
   // start up network
-  g_my_addr = mc.get_mon_addr(whoami);
+  int whoami = mc.monmap.get_rank(args[0]);
+  assert(whoami >= 0);
+  g_conf.public_addr = mc.monmap.get_addr(whoami);
   SimpleMessenger *rank = new SimpleMessenger();
   int err = rank->bind();
   if (err < 0)

@@ -113,15 +113,18 @@ struct InodeStat {
 
   version_t xattr_version;
   bufferlist xattrbl;
+
+  ceph_dir_layout dir_layout;
+
   //map<string, bufferptr> xattrs;
 
  public:
   InodeStat() {}
-  InodeStat(bufferlist::iterator& p) {
-    decode(p);
+  InodeStat(bufferlist::iterator& p, int features) {
+    decode(p, features);
   }
 
-  void decode(bufferlist::iterator &p) {
+  void decode(bufferlist::iterator &p, int features) {
     struct ceph_mds_reply_inode e;
     ::decode(e, p);
     vino.ino = inodeno_t(e.ino);
@@ -160,6 +163,11 @@ struct InodeStat {
     }
     ::decode(symlink, p);
     
+    if (features & CEPH_FEATURE_DIRLAYOUTHASH)
+      ::decode(dir_layout, p);
+    else
+      memset(&dir_layout, 0, sizeof(dir_layout));
+
     xattr_version = e.xattr_version;
     ::decode(xattrbl, p);
   }
@@ -173,7 +181,7 @@ class MClientReply : public Message {
 public:
   struct ceph_mds_reply_head head;
   bufferlist trace_bl;
-  bufferlist dir_bl;
+  bufferlist extra_bl;
   bufferlist snapbl;
 
  public:
@@ -225,24 +233,24 @@ public:
     bufferlist::iterator p = payload.begin();
     ::decode(head, p);
     ::decode(trace_bl, p);
-    ::decode(dir_bl, p);
+    ::decode(extra_bl, p);
     ::decode(snapbl, p);
     assert(p.end());
   }
   virtual void encode_payload() {
     ::encode(head, payload);
     ::encode(trace_bl, payload);
-    ::encode(dir_bl, payload);
+    ::encode(extra_bl, payload);
     ::encode(snapbl, payload);
   }
 
 
   // dir contents
-  void set_dir_bl(bufferlist& bl) {
-    dir_bl.claim(bl);
+  void set_extra_bl(bufferlist& bl) {
+    extra_bl.claim(bl);
   }
-  bufferlist &get_dir_bl() {
-    return dir_bl;
+  bufferlist &get_extra_bl() {
+    return extra_bl;
   }
 
   // trace

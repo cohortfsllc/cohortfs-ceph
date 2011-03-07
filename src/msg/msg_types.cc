@@ -18,7 +18,7 @@ bool entity_addr_t::parse(const char *s, const char **end)
     ipv6 = true;
   }
   
-  char buf[32];
+  char buf[39];
   char *o = buf;
 
   while (o < buf + sizeof(buf) &&
@@ -60,6 +60,15 @@ bool entity_addr_t::parse(const char *s, const char **end)
     p++;
     int port = atoi(p);
     set_port(port);
+    while (*p && *p >= '0' && *p <= '9')
+      p++;
+  }
+
+  if (*p == '/') {
+    // parse nonce, too
+    p++;
+    int nonce = atoi(p);
+    set_nonce(nonce);
     while (*p && *p >= '0' && *p <= '9')
       p++;
   }

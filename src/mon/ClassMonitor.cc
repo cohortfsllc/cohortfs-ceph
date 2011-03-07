@@ -27,15 +27,14 @@
 #include "osd/osd_types.h"
 #include "osd/PG.h"  // yuck
 
-#include "config.h"
+#include "common/config.h"
 #include <sstream>
 
 #define DOUT_SUBSYS mon
 #undef dout_prefix
 #define dout_prefix _prefix(mon, paxos->get_version())
 static ostream& _prefix(Monitor *mon, version_t v) {
-  return *_dout << dbeginl
-		<< "mon" << mon->whoami
+  return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< (mon->is_starting() ? (const char*)"(starting)":(mon->is_leader() ? (const char*)"(leader)":(mon->is_peon() ? (const char*)"(peon)":(const char*)"(?\?)")))
 		<< ".class v" << v << " ";
 }
@@ -346,6 +345,8 @@ bool ClassMonitor::prepare_command(MMonCommand *m)
       }
       impl.stamp = g_clock.now();
 
+      bool in_map = list.library_map.find(name) != list.library_map.end();
+
       ClassVersionMap& map = list.library_map[name];
       ClassVersion cv(ver, arch);
       ClassInfo& info = map.m[cv];
@@ -356,7 +357,7 @@ bool ClassMonitor::prepare_command(MMonCommand *m)
       snprintf(store_name, len, "%s.%s.%s", name.c_str(), cv.str(), cv.arch());
       bufferlist prev_bin;
       bool should_store = true;
-      if (!overwrite_opt) {
+      if (!overwrite_opt && in_map) {
         bufferlist bl;
 
         int bin_len = mon->store->get_bl_ss(bl, "class_impl", store_name);
@@ -517,11 +518,11 @@ void ClassMonitor::handle_request(MClass *m)
     reply->info.push_back(*p);
     switch (m->action) {
     case CLASS_GET:
+      dout(10) << "CLASS_GET name='" << (*p).name << "' ver='" << (*p).version << "'" << dendl;
       if (list.get_ver((*p).name, (*p).version, &ver)) {
         int len = (*p).name.length() + 16;
         int bin_len;
         char store_name[len];
-        dout(10) << "got CLASS_GET name=" << (*p).name << " ver=" << (*p).version << dendl;
         snprintf(store_name, len, "%s.%s.%s", (*p).name.c_str(), ver.str(), ver.arch());
         bufferlist bl;
         bin_len = mon->store->get_bl_ss(bl, "class_impl", store_name);

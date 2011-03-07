@@ -68,7 +68,6 @@ class Paxos;
 // i am one state machine.
 class Paxos {
   Monitor *mon;
-  int whoami;
 
   // my state machine info
   int machine_id;
@@ -100,9 +99,9 @@ private:
   int state;
 
 public:
-  bool is_recovering() { return state == STATE_RECOVERING; }
-  bool is_active() { return state == STATE_ACTIVE; }
-  bool is_updating() { return state == STATE_UPDATING; }
+  bool is_recovering() const { return state == STATE_RECOVERING; }
+  bool is_active() const { return state == STATE_ACTIVE; }
+  bool is_updating() const { return state == STATE_UPDATING; }
 
 private:
   // recovery (phase 1)
@@ -110,6 +109,7 @@ private:
   version_t first_committed;
   version_t last_pn;
   version_t last_committed;
+  utime_t last_commit_time;
   version_t accepted_pn;
   version_t accepted_pn_from;
 
@@ -152,6 +152,10 @@ private:
     Observer(entity_inst_t& ei, version_t v) : inst(ei), last_version(v) { }
   };
   map<entity_inst_t, Observer *> observers;
+
+  //synchronization warnings
+  utime_t last_clock_drift_warn;
+  int clock_drift_warned;
 
 
   class C_CollectTimeout : public Context {
@@ -224,9 +228,11 @@ private:
 
   version_t get_new_proposal_number(version_t gt=0);
   
+  void warn_on_future_time(utime_t t, entity_name_t from);
+
 public:
-  Paxos(Monitor *m, int w,
-	int mid) : mon(m), whoami(w), 
+  Paxos(Monitor *m,
+	int mid) : mon(m),
 		   machine_id(mid), 
 		   machine_name(get_paxos_name(mid)),
 		   state(STATE_RECOVERING),
@@ -234,7 +240,8 @@ public:
 		   lease_renew_event(0),
 		   lease_ack_timeout_event(0),
 		   lease_timeout_event(0),
-		   accept_timeout_event(0) { }
+		   accept_timeout_event(0),
+		   clock_drift_warned(0) { }
 
   const char *get_machine_name() const {
     return machine_name;

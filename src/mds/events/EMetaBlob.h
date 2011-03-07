@@ -46,6 +46,15 @@ class EMetaBlob {
 
 public:
   /* fullbit - a regular dentry + inode
+   *
+   * We encode this one a bit weirdly, just because (also, it's marginally faster
+   * on multiple encodes, which I think can happen):
+   * Encode a bufferlist on struct creation with all data members, without a struct_v.
+   * When encode is called, encode struct_v and then append the bufferlist.
+   * Decode straight into the appropriate variables.
+   *
+   * So, if you add members, encode them in the constructor and then change
+   * the struct_v in the encode function!
    */
   struct fullbit {
     string  dn;         // dentry
@@ -57,15 +66,17 @@ public:
     string symlink;
     bufferlist snapbl;
     bool dirty;
+    struct default_file_layout *dir_layout;
 
     bufferlist _enc;
 
     fullbit(const string& d, snapid_t df, snapid_t dl, 
 	    version_t v, inode_t& i, fragtree_t &dft, 
-	    map<string,bufferptr> &xa, const string& sym, bufferlist &sbl, bool dr) :
+	    map<string,bufferptr> &xa, const string& sym,
+	    bufferlist &sbl, bool dr, default_file_layout *defl = NULL) :
       //dn(d), dnfirst(df), dnlast(dl), dnv(v), 
       //inode(i), dirfragtree(dft), xattrs(xa), symlink(sym), snapbl(sbl), dirty(dr) 
-      _enc(1024)
+      dir_layout(NULL), _enc(1024)
     {
       ::encode(d, _enc);
       ::encode(df, _enc);
@@ -78,32 +89,23 @@ public:
       if (i.is_dir()) {
 	::encode(dft, _enc);
 	::encode(sbl, _enc);
+	::encode((defl ? true : false), _enc);
+	if (defl)
+	  ::encode(*defl, _enc);
       }
       ::encode(dr, _enc);      
     }
-    fullbit(bufferlist::iterator &p) { decode(p); }
-    fullbit() {}
+    fullbit(bufferlist::iterator &p) : dir_layout(NULL) { decode(p); }
+    fullbit() : dir_layout(NULL) {}
+    ~fullbit() {
+      delete dir_layout;
+    }
 
     void encode(bufferlist& bl) const {
-      __u8 struct_v = 1;
+      __u8 struct_v = 2;
       ::encode(struct_v, bl);
       assert(_enc.length());
       bl.append(_enc); 
-      /*
-      ::encode(dn, bl);
-      ::encode(dnfirst, bl);
-      ::encode(dnlast, bl);
-      ::encode(dnv, bl);
-      ::encode(inode, bl);
-      ::encode(xattrs, bl);
-      if (inode.is_symlink())
-	::encode(symlink, bl);
-      if (inode.is_dir()) {
-	::encode(dirfragtree, bl);
-	::encode(snapbl, bl);
-      }
-      ::encode(dirty, bl);
-      */
     }
     void decode(bufferlist::iterator &bl) {
       __u8 struct_v;
@@ -119,9 +121,20 @@ public:
       if (inode.is_dir()) {
 	::decode(dirfragtree, bl);
 	::decode(snapbl, bl);
+	if (struct_v >= 2) {
+	  bool dir_layout_exists;
+	  ::decode(dir_layout_exists, bl);
+	  if (dir_layout_exists) {
+	    dir_layout = new default_file_layout;
+	    ::decode(*dir_layout, bl);
+	  }
+	}
       }
       ::decode(dirty, bl);
     }
+
+    void update_inode(MDS *mds, CInode *in);
+
     void print(ostream& out) {
       out << " fullbit dn " << dn << " [" << dnfirst << "," << dnlast << "] dnv " << dnv
 	  << " inode " << inode.ino
@@ -416,7 +429,7 @@ private:
 
   // soft stateadd
   off_t last_subtree_map;
-  off_t my_offset;
+  uint64_t my_offset;
 
   // for replay, in certain cases
   //LogSegment *_segment;
@@ -508,7 +521,7 @@ private:
 			      CInode *in=0, fragtree_t *pdft=0, bufferlist *psnapbl=0,
 			      map<string,bufferptr> *px=0) {
     return add_primary_dentry(add_dir(dn->get_dir(), false),
-			      dn, dirty, in, pdft, psnapbl, px);
+                              dn, dirty, in, pdft, psnapbl, px);
   }
   inode_t *add_primary_dentry(dirlump& lump, CDentry *dn, bool dirty, 
 			      CInode *in=0, fragtree_t *pdft=0, bufferlist *psnapbl=0,
@@ -521,6 +534,12 @@ private:
     //cout << "journaling " << in->inode.ino << " at " << my_offset << std::endl;
 
     inode_t *pi = in->get_projected_inode();
+    default_file_layout *default_layout = NULL;
+    if (in->is_dir())
+      default_layout = (in->get_projected_node() ?
+                           in->get_projected_node()->dir_layout :
+                           in->default_layout);
+
     if (!pdft)
       pdft = &in->dirfragtree;
     if (!px)
@@ -538,7 +557,7 @@ private:
 				       dn->get_projected_version(), 
 				       *pi, *pdft, *px,
 				       in->symlink, snapbl,
-				       dirty));
+				       dirty, default_layout));
     if (pi)
       lump.get_dfull().back().inode = *pi;
     return &lump.get_dfull().back().inode;
@@ -571,6 +590,12 @@ private:
     if (!pdft) pdft = &in->dirfragtree;
     if (!px) px = &in->xattrs;
 
+    default_file_layout *default_layout = NULL;
+    if (in->is_dir())
+      default_layout = (in->get_projected_node() ?
+                           in->get_projected_node()->dir_layout :
+                           in->default_layout);
+
     bufferlist snapbl;
     if (psnapbl)
       snapbl = *psnapbl;
@@ -584,7 +609,7 @@ private:
 		       0,
 		       *pi, *pdft, *px,
 		       in->symlink, snapbl,
-		       dirty);
+		       dirty, default_layout);
     return &root->inode;
   }
   

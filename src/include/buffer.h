@@ -60,11 +60,15 @@ void	*valloc(size_t);
 # include <assert.h>
 #endif
 
-
 //#define BUFFER_DEBUG
 
 #ifdef BUFFER_DEBUG
-#include "Spinlock.h"
+# include "Spinlock.h"
+#endif
+
+namespace ceph {
+
+#ifdef BUFFER_DEBUG
 extern Spinlock buffer_lock;
 # define bdout { buffer_lock.lock(); std::cout
 # define bendl std::endl; buffer_lock.unlock(); }
@@ -73,7 +77,6 @@ extern Spinlock buffer_lock;
 # define bendl std::endl; }
 #endif
 
-namespace ceph {
 
 extern atomic_t buffer_total_alloc;
 
@@ -84,15 +87,29 @@ class buffer {
 
 public:
   struct error : public std::exception{
-    const char *what() {
+    const char *what() const throw () {
       return "buffer::exception";
     }
   };
   struct bad_alloc : public error {
-    const char *what() { return "buffer::bad_alloc"; }
+    const char *what() const throw () {
+      return "buffer::bad_alloc";
+    }
   };
   struct end_of_buffer : public error {
-    const char *what() { return "buffer::end_of_buffer"; }
+    const char *what() const throw () {
+      return "buffer::end_of_buffer";
+    }
+  };
+  struct malformed_input : public error {
+    explicit malformed_input(const char *what) {
+      snprintf(buf, sizeof(buf), "buffer::malformed_input: %s", what);
+    }
+    const char *what() const throw () {
+      return buf;
+    }
+  private:
+    char buf[256];
   };
 
 
@@ -155,16 +172,16 @@ private:
       else
 	data = 0;
       inc_total_alloc(len);
-      bdout << "raw_char alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_char " << this << " alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
     }
     raw_char(unsigned l, char *b) : raw(b, l) {
       inc_total_alloc(len);
-      bdout << "raw_char alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_char " << this << " alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
     }
     ~raw_char() {
       delete[] data;
       dec_total_alloc(len);      
-      bdout << "raw_char free " << (void *)data << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_char " << this << " free " << (void *)data << " " << buffer_total_alloc.read() << bendl;
     }
     raw* clone_empty() {
       return new raw_char(len);
@@ -179,16 +196,16 @@ private:
       else
 	data = 0;
       inc_total_alloc(len);
-      bdout << "raw_malloc alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_malloc " << this << " alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
     }
     raw_malloc(unsigned l, char *b) : raw(b, l) {
       inc_total_alloc(len);
-      bdout << "raw_malloc alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_malloc " << this << " alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
     }
     ~raw_malloc() {
       free(data);
       dec_total_alloc(len);      
-      bdout << "raw_malloc free " << (void *)data << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_malloc " << this << " free " << (void *)data << " " << buffer_total_alloc.read() << bendl;
     }
     raw* clone_empty() {
       return new raw_malloc(len);
@@ -210,14 +227,14 @@ private:
     raw_mmap_pages(unsigned l) : raw(l) {
       data = (char*)::mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
       if (!data)
-	throw new bad_alloc;
+	throw bad_alloc();
       inc_total_alloc(len);
-      bdout << "raw_mmap alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_mmap " << this << " alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
     }
     ~raw_mmap_pages() {
       ::munmap(data, len);
       dec_total_alloc(len);
-      bdout << "raw_mmap free " << (void *)data << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_mmap " << this << " free " << (void *)data << " " << buffer_total_alloc.read() << bendl;
     }
     raw* clone_empty() {
       return new raw_mmap_pages(len);
@@ -233,17 +250,17 @@ private:
       data = 0;
       int r = ::posix_memalign((void**)(void*)&data, PAGE_SIZE, len);
       if (r)
-	throw new bad_alloc;
+	throw bad_alloc();
 #endif /* DARWIN */
       if (!data)
-	throw new bad_alloc;
+	throw bad_alloc();
       inc_total_alloc(len);
-      bdout << "raw_posix_aligned alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_posix_aligned " << this << " alloc " << (void *)data << " " << l << " " << buffer_total_alloc.read() << bendl;
     }
     ~raw_posix_aligned() {
       ::free((void*)data);
       dec_total_alloc(len);
-      bdout << "raw_posix_aligned free " << (void *)data << " " << buffer_total_alloc.read() << bendl;
+      bdout << "raw_posix_aligned " << this << " free " << (void *)data << " " << buffer_total_alloc.read() << bendl;
     }
     raw* clone_empty() {
       return new raw_posix_aligned(len);
@@ -326,29 +343,36 @@ public:
     ptr() : _raw(0), _off(0), _len(0) {}
     ptr(raw *r) : _raw(r), _off(0), _len(r->len) {   // no lock needed; this is an unref raw.
       r->nref.inc();
+      bdout << "ptr " << this << " get " << _raw << bendl;
     }
     ptr(unsigned l) : _off(0), _len(l) {
       _raw = create(l);
       _raw->nref.inc();
+      bdout << "ptr " << this << " get " << _raw << bendl;
     }
     ptr(const char *d, unsigned l) : _off(0), _len(l) {    // ditto.
       _raw = copy(d, l);
       _raw->nref.inc();
+      bdout << "ptr " << this << " get " << _raw << bendl;
     }
     ptr(const ptr& p) : _raw(p._raw), _off(p._off), _len(p._len) {
       if (_raw) {
 	_raw->nref.inc();
+	bdout << "ptr " << this << " get " << _raw << bendl;
       }
     }
     ptr(const ptr& p, unsigned o, unsigned l) : _raw(p._raw), _off(p._off + o), _len(l) {
       assert(o+l <= p._len);
       assert(_raw);
       _raw->nref.inc();
+      bdout << "ptr " << this << " get " << _raw << bendl;
     }
     ptr& operator= (const ptr& p) {
       // be careful -- we need to properly handle self-assignment.
-      if (p._raw)
+      if (p._raw) {
 	p._raw->nref.inc();                      // inc new
+	bdout << "ptr " << this << " get " << _raw << bendl;
+      }
       release();                                 // dec (+ dealloc) old (if any)
       if (p._raw) {
 	_raw = p._raw;
@@ -398,6 +422,7 @@ public:
 
     void release() {
       if (_raw) {
+	bdout << "ptr " << this << " release " << _raw << bendl;
         if (_raw->nref.dec() == 0) {
           //cout << "hosing raw " << (void*)_raw << " len " << _raw->len << std::endl;
           delete _raw;  // dealloc old (if any)
@@ -444,9 +469,8 @@ public:
 
     void copy_out(unsigned o, unsigned l, char *dest) const {
       assert(_raw);
-      if (!((o >= 0 && o <= _len) &&
-	    (l >= 0 && o+l <= _len)))
-	throw new end_of_buffer;
+      if (!((o <= _len) && (o+l <= _len)))
+	throw end_of_buffer();
       memcpy(dest, c_str()+o, l);
     }
 
@@ -488,8 +512,8 @@ public:
     
     void copy_in(unsigned o, unsigned l, const char *src) {
       assert(_raw);
-      assert(o >= 0 && o <= _len);
-      assert(l >= 0 && o+l <= _len);
+      assert(o <= _len);
+      assert(o+l <= _len);
       memcpy(c_str()+o, src, l);
     }
 
@@ -565,7 +589,7 @@ public:
 	p_off += o;
 	while (p_off > 0) {
 	  if (p == ls->end())
-	    throw new end_of_buffer;
+	    throw end_of_buffer();
 	  if (p_off >= p->length()) {
 	    // skip this buffer
 	    p_off -= p->length();
@@ -587,14 +611,20 @@ public:
 
       char operator*() {
 	if (p == ls->end())
-	  throw new end_of_buffer;
+	  throw end_of_buffer();
 	return (*p)[p_off];
       }
       iterator& operator++() {
 	if (p == ls->end())
-	  throw new end_of_buffer;
+	  throw end_of_buffer();
 	advance(1);
 	return *this;
+      }
+
+      ptr get_current_ptr() {
+	if (p == ls->end())
+	  throw end_of_buffer();
+	return ptr(*p, p_off, p->length() - p_off);
       }
 
       // copy data out.
@@ -604,7 +634,7 @@ public:
 	if (p == ls->end()) seek(off);
 	while (len > 0) {
 	  if (p == ls->end())
-	    throw new end_of_buffer;
+	    throw end_of_buffer();
 
 	  unsigned howmuch = p->length() - p_off;
 	  if (len < howmuch) howmuch = len;
@@ -625,7 +655,7 @@ public:
 	if (p == ls->end()) seek(off);
 	while (len > 0) {
 	  if (p == ls->end())
-	    throw new end_of_buffer;
+	    throw end_of_buffer();
 	  
 	  unsigned howmuch = p->length() - p_off;
 	  if (len < howmuch) howmuch = len;
@@ -640,11 +670,14 @@ public:
 	if (p == ls->end()) seek(off);
 	while (len > 0) {
 	  if (p == ls->end())
-	    throw new end_of_buffer;
+	    throw end_of_buffer();
 
 	  unsigned howmuch = p->length() - p_off;
+	  const char *c_str = p->c_str();
 	  if (len < howmuch) howmuch = len;
-	  dest.append(p->c_str() + p_off, howmuch);
+	  if (memchr(c_str + p_off, '\0', howmuch))
+	    throw malformed_input("embedded NULL in string!");
+	  dest.append(c_str + p_off, howmuch);
 
 	  len -= howmuch;
 	  advance(howmuch);
@@ -658,7 +691,7 @@ public:
 	if (p == ls->end()) seek(off);
 	while (len > 0) {
 	  if (p == ls->end())
-	    throw new end_of_buffer;
+	    throw end_of_buffer();
 
 	  unsigned howmuch = p->length() - p_off;
 	  if (len < howmuch) howmuch = len;
@@ -861,18 +894,16 @@ public:
     // data OUT
 
     void copy(unsigned off, unsigned len, char *dest) const {
-      assert(off >= 0);
       if (off + len > length())
-	throw new end_of_buffer;
+	throw end_of_buffer();
       if (last_p.get_off() != off) 
 	last_p.seek(off);
       last_p.copy(len, dest);
     }
 
     void copy(unsigned off, unsigned len, list &dest) const {
-      assert(off >= 0);
       if (off + len > length())
-	throw new end_of_buffer;
+	throw end_of_buffer();
       if (last_p.get_off() != off) 
 	last_p.seek(off);
       last_p.copy(len, dest);
@@ -885,9 +916,8 @@ public:
     }
     
     void copy_in(unsigned off, unsigned len, const char *src) {
-      assert(off >= 0);
       if (off + len > length())
-	throw new end_of_buffer;
+	throw end_of_buffer();
       
       if (last_p.get_off() != off) 
 	last_p.seek(off);
@@ -984,7 +1014,7 @@ public:
      */
     const char& operator[](unsigned n) const {
       if (n >= _len)
-	throw new end_of_buffer;
+	throw end_of_buffer();
 
       for (std::list<ptr>::const_iterator p = _buffers.begin();
 	   p != _buffers.end();
@@ -1012,7 +1042,7 @@ public:
 
     void substr_of(const list& other, unsigned off, unsigned len) {
       if (off + len > other.length())
-	throw new end_of_buffer;
+	throw end_of_buffer();
 
       clear();
       
@@ -1052,7 +1082,7 @@ public:
     // funky modifer
     void splice(unsigned off, unsigned len, list *claim_by=0 /*, bufferlist& replace_with */) {    // fixme?
       if (off >= length())
-	throw new end_of_buffer;
+	throw end_of_buffer();
 
       assert(len > 0);
       //cout << "splice off " << off << " len " << len << " ... mylen = " << length() << std::endl;
@@ -1072,7 +1102,6 @@ public:
 	  break;
 	}
       }
-      assert(off >= 0);
       
       if (off) {
 	// add a reference to the front bit

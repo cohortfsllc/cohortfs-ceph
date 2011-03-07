@@ -17,10 +17,9 @@
 #include <string>
 using namespace std;
 
-#include "config.h"
+#include "common/config.h"
 
 #include "client/Client.h"
-#include "client/fuse.h"
 #include "client/fuse_ll.h"
 
 #include "msg/SimpleMessenger.h"
@@ -28,7 +27,10 @@ using namespace std;
 #include "mon/MonClient.h"
 
 #include "common/Timer.h"
+#include "common/ceph_argparse.h"
 #include "common/common_init.h"
+#include "common/errno.h"
+#include "common/safe_io.h"
        
 #ifndef DARWIN
 #include <envz.h>
@@ -38,25 +40,40 @@ using namespace std;
 #include <sys/stat.h>
 #include <fcntl.h>
 
-int main(int argc, const char **argv, const char *envp[]) {
+void usage()
+{
+  cerr << "usage: cfuse [-m mon-ip-addr:mon-port] <mount point>" << std::endl;
+}
 
+int main(int argc, const char **argv, const char *envp[]) {
+  DEFINE_CONF_VARS(usage);
+  int filer_flags = 0;
   //cerr << "cfuse starting " << myrank << "/" << world << std::endl;
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  common_set_defaults(false);
   g_conf.daemonize = true;
+  g_conf.pid_file = 0;
   g_conf.log_per_instance = true;
-  common_init(args, "cfuse", true);
+  common_init(args, "cfuse", STARTUP_FLAG_INIT_KEYS);
+
+  vector<const char*> nargs;
+  FOR_EACH_ARG(args) {
+    if (CONF_ARG_EQ("localize-reads", '\0')) {
+      cerr << "setting CEPH_OSD_FLAG_LOCALIZE_READS" << std::endl;
+      filer_flags |= CEPH_OSD_FLAG_LOCALIZE_READS;
+    }
+    else {
+      nargs.push_back(args[i]);
+    }
+  }
 
   // args for fuse
-  vec_to_argv(args, argc, argv);
+  vec_to_argv(nargs, argc, argv);
 
   // FUSE will chdir("/"); be ready.
   g_conf.chdir = strdup("/");
-
-  if (g_conf.clock_tare) g_clock.tare();
 
   // check for 32-bit arch
   if (sizeof(long) == 4) {
@@ -68,13 +85,20 @@ int main(int argc, const char **argv, const char *envp[]) {
 
   // get monmap
   MonClient mc;
-  if (mc.build_initial_monmap() < 0)
+  int ret = mc.build_initial_monmap();
+  if (ret == -EINVAL)
+    usage();
+
+  if (ret < 0)
     return -1;
 
   // start up network
   SimpleMessenger *messenger = new SimpleMessenger();
   messenger->register_entity(entity_name_t::CLIENT());
   Client *client = new Client(messenger, &mc);
+  if (filer_flags) {
+    client->set_filer_flags(filer_flags);
+  }
 
   // we need to handle the forking ourselves.
   bool daemonize = g_conf.daemonize;
@@ -113,10 +137,7 @@ int main(int argc, const char **argv, const char *envp[]) {
     
     dout_create_rank_symlink(client->get_nodeid().v);
     cerr << "cfuse[" << getpid() << "]: starting fuse" << std::endl;
-    if (g_conf.fuse_ll)
-      r = ceph_fuse_ll_main(client, argc, argv, fd[1]);
-    else
-      r = ceph_fuse_main(client, argc, argv);
+    r = ceph_fuse_ll_main(client, argc, argv, fd[1]);
     cerr << "cfuse[" << getpid() << "]: fuse finished with error " << r << std::endl;
     
     client->unmount();
@@ -131,7 +152,13 @@ int main(int argc, const char **argv, const char *envp[]) {
 
     if (daemonize) {
       //cout << "child signalling parent with " << r << std::endl;
-      ::write(fd[1], &r, sizeof(r));
+      int32_t out = r;
+      int ret = safe_write(fd[1], &out, sizeof(out));
+      if (ret) {
+	derr << "cfuse[" << getpid() << "]: failed to write to fd[1]: "
+	     << cpp_strerror(ret) << dendl;
+	ceph_abort();
+      }
     }
 
     //cout << "child done" << std::endl;
@@ -142,16 +169,17 @@ int main(int argc, const char **argv, const char *envp[]) {
     ::close(fd[1]);
 
     int r = -1;
-    ::read(fd[0], &r, sizeof(r));
-    if (r == 0) {
+    int err = safe_read_exact(fd[0], &r, sizeof(r));
+    if (err == 0 && r == 0) {
       // close stdout, etc.
       //cout << "success" << std::endl;
       ::close(0);
       ::close(1);
       ::close(2);
-    } else {
+    } else if (err)
+      cerr << "cfuse[" << getpid() << "]: mount failed: " << strerror(-err) << std::endl;
+    else
       cerr << "cfuse[" << getpid() << "]: mount failed: " << strerror(-r) << std::endl;
-    }
     return r;
   }
 }

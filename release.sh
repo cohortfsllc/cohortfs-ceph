@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 set -e
 
@@ -6,9 +6,12 @@ vers=`grep AM_INIT_AUTOMAKE configure.ac | head -1 | cut '-d '  -f 2 | sed 's/)/
 echo vers $vers
 
 repo=$1
-force=$2
+debsubver=$2
+force=$3
 
-[ -z "$repo" ] && echo stable or testing or unstable && exit 1
+[ -z "$debsubver" ] && debsubver=1
+
+[ -z "$repo" ] && echo stable or testing or unstable or rc && exit 1
 
 if git diff --quiet ; then
     echo repository is clean
@@ -26,67 +29,72 @@ fi
 gitver=`git rev-parse HEAD 2>/dev/null | cut -c 1-8`
 echo gitver $gitver
 
-if [ "$repo" = "testing" ]; then
-    versuffix=`date "+%Y%m%d%H%M"`
-    finalvers="${vers}-testing${versuffix}-$gitver"
+if [ "$repo" = "stable" ]; then
+    cephver="$vers"
 else
-    if [ "$repo" = "unstable" ]; then
-	versuffix=`date "+%Y%m%d%H%M"`
-	finalvers="${vers}-unstable${versuffix}-$gitver"
-    else
-	finalvers="$vers"
-    fi
+    versuffix=`date "+%Y%m%d%H%M"`
+    cephver="${vers}-$repo${versuffix}-$gitver"
 fi
 
-echo final vers $finalvers
+echo final vers $cephver
 
-echo making sure .git_version is up to date
-cd src
-./check_version .git_version
-cd ..
+if [ -d "release/$cephver" ]; then
+    echo "release/$cephver already exists; reusing that release tarball"
+    cd release/$cephver
+    tar zxvf ceph_$cephver.orig.tar.gz
+else
+    echo making sure .git_version is up to date
+    cd src
+    ./check_version .git_version
+    cd ..
+    
+    echo building tarball
+    make dist
 
-echo building tarball
-make dist
+    echo extracting
+    mkdir -p release/$cephver
+    cd release/$cephver
 
-echo extracting
-mkdir -p release/$finalvers
-cd release/$finalvers
-
-tar zxf ../../ceph-$vers.tar.gz 
-[ "$vers" != "$finalvers" ] && mv ceph-$vers ceph-$finalvers
-tar zcf ceph_$finalvers.orig.tar.gz ceph-$finalvers
+    tar zxf ../../ceph-$vers.tar.gz 
+    [ "$vers" != "$cephver" ] && mv ceph-$vers ceph-$cephver
+    tar zcf ceph_$cephver.orig.tar.gz ceph-$cephver
+    cp -a ceph_$cephver.orig.tar.gz ceph-$cephver.tar.gz
+fi
 
 # add debian dir
-cp -a ../../debian ceph-$finalvers
+echo "copying latest debian dir"
+cp -a ../../debian ceph-$cephver
 
-for dist in sid squeeze lenny
+debver="$cephver-$debsubver"
+
+for dist in sid squeeze lenny maverick lucid
 do
     echo building $dist dsc
 #    mkdir $dist
 #    cd $dist
 
-    dvers="$finalvers-1"
-    [ "$dist" = "squeeze" ] && dvers="$dvers~bpo60+1"
-    [ "$dist" = "lenny" ] && dvers="$dvers~bpo50+1"
+    bpver=`../../debvers.sh $debver $dist`
 
     comment=""
+#    [ "$debsubver" != "1" ] && comment="package fixes "
     [ -n "$versuffix" ] && comment="git snapshot "
     [ "$dist" != "sid" ] && comment="${comment}$dist backport"
 
     if [ -n "$comment" ]; then
-	cd ceph-$finalvers
-	DEBEMAIL="sage@newdream.net" dch -D $dist --force-distribution -b -v "$dvers" "$comment"
+	cd ceph-$cephver
+	DEBEMAIL="sage@newdream.net" dch -D $dist --force-distribution -b -v "$bpver" "$comment"
 	cd ..
     fi
 
-    dpkg-source -b ceph-$finalvers
+    [ "$dist" = "lenny" ] && sed -i 's/, libgoogle-perftools-dev//' ceph-$cephver/debian/control
+
+    dpkg-source -b ceph-$cephver
 
 #    cd ..
 done
 
-rm -r ceph-$finalvers
-cp -a ceph_$finalvers.orig.tar.gz ceph-$finalvers.tar.gz
-echo finished release $finalvers
+rm -r ceph-$cephver
+echo finished release $debver
 
 cd ../..
-echo $finalvers > .last_release
+echo $cephver > .last_release

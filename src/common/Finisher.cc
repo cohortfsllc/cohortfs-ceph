@@ -1,11 +1,11 @@
 
-#include "config.h"
+#include "common/config.h"
 #include "Finisher.h"
 
 #include "common/debug.h"
 #define DOUT_SUBSYS finisher
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "finisher(" << this << ") "
+#define dout_prefix *_dout << "finisher(" << this << ") "
 
 void Finisher::start()
 {

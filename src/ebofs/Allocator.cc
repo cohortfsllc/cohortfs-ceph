@@ -14,14 +14,14 @@
 
 
 
-#include "config.h"
+#include "common/config.h"
 #include "Allocator.h"
 #include "Ebofs.h"
 
 
 #define DOUT_SUBSYS ebofs
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "ebofs(" << fs->dev.get_device_name() << ").allocator."
+#define dout_prefix *_dout << "ebofs(" << fs->dev.get_device_name() << ").allocator."
 
 
 void Allocator::dump_freelist()

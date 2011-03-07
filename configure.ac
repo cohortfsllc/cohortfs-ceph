@@ -3,16 +3,17 @@
 
 # Autoconf
 AC_PREREQ(2.59)
-AC_INIT([Ceph distributed file system], [.1], 
+AC_INIT([Ceph distributed file system], [0.25], 
 	      [Sage Weil <sage@newdream.net>],
 	      [ceph])
+AC_CONFIG_SUBDIRS([src/gtest])
 
 # Environment
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
 
 # Automake
-AM_INIT_AUTOMAKE(ceph, 0.21.3)
+AM_INIT_AUTOMAKE(ceph, 0.25)
 AM_PROG_CC_C_O
 AM_PROG_LIBTOOL
 
@@ -32,6 +33,8 @@ AC_PROG_LIBTOOL
 # Checks for libraries.
 AC_CHECK_LIB([m], [pow], [true], AC_MSG_FAILURE([libm not found]))
 AC_CHECK_LIB([pthread], [pthread_create], [true], AC_MSG_FAILURE([libpthread not found]))
+PKG_CHECK_MODULES([CRYPTOPP], [libcrypto++], [], [
+	AC_SEARCH_LIBS([_ZTIN8CryptoPP14CBC_EncryptionE], [crypto++ cryptopp], [true], AC_MSG_FAILURE([libcrypto++ not found]), [-lpthread])])
 
 # debug crap?
 AC_ARG_WITH([debug],
@@ -39,6 +42,8 @@ AC_ARG_WITH([debug],
             [with_debug=yes],
             [with_debug=no])
 AM_CONDITIONAL(WITH_DEBUG, test "$with_debug" = "yes")
+
+AC_DEFINE([DEBUG_GATHER], [1], [Define if you want C_Gather debugging])
 
 # radosgw?
 AC_ARG_WITH([radosgw],
@@ -79,6 +84,26 @@ AS_IF([test "x$with_fuse" != xno],
              ])])
 AM_CONDITIONAL(WITH_FUSE, [test "$HAVE_LIBFUSE" = "1"])
 
+# tcmalloc?
+AC_ARG_WITH([tcmalloc],
+	    [AS_HELP_STRING([--with--tcmalloc], [use tcmalloc instead of ptmallc])],
+	    [],
+	    [with_tcmalloc=check])
+TCMALLOC=
+AS_IF([test "x$with_tcmalloc" != xno],
+	    [AC_CHECK_LIB([tcmalloc], [malloc],
+	     [AC_SUBST([LIBTCMALLOC], ["-ltcmalloc"])
+	       AC_DEFINE([HAVE_LIBTCMALLOC], [1],
+	       		 [Define if you have tcmalloc])
+	       HAVE_LIBTCMALLOC=1
+	     ],
+	    [if test "x$with_tcmalloc" != xcheck; then
+	        AC_MSG_FAILURE(
+		  [--with-tcmalloc was given but test failed])
+	      fi
+	    ])])
+AM_CONDITIONAL(WITH_TCMALLOC, [test "$HAVE_LIBTCMALLOC" = "1"])
+
 # jni?
 AC_ARG_WITH([hadoop],
             [AS_HELP_STRING([--with-hadoop], [build hadoop client])],
@@ -93,6 +118,9 @@ AS_IF([test "x$with_hadoop" != xno],
                fi
              ])])
 AM_CONDITIONAL(WITH_HADOOPCLIENT, [test "$HAVE_JNI" = "1"])
+
+PKG_CHECK_MODULES([LIBEDIT], [libedit >= 2.11],
+                [], AC_MSG_FAILURE([No usable version of libedit found.]))
 
 #libatomic-ops? You want it!
 AC_ARG_WITH([libatomic-ops],
@@ -126,20 +154,18 @@ AC_HEADER_SYS_WAIT
 
 # spirit?
 AC_LANG([C++])
-AC_DEFINE([HAVE_BOOST_SPIRIT_CORE_HPP], [], [Description])
-AC_CHECK_HEADER([boost/spirit.hpp],
-                [AC_DEFINE([HAVE_BOOST_SPIRIT_CORE_HPP])],
-                [AC_MSG_ERROR([Sorry you need to install the Boost spirit parser library (libboost-dev on debian)])])
+
+AC_CHECK_HEADER([boost/spirit/include/classic_core.hpp], [],
+  [AC_CHECK_HEADER([boost/spirit.hpp], [use_bspirit_old_hdr=yes],
+    AC_MSG_FAILURE(["Can't find boost spirit headers"]))])
+AM_CONDITIONAL(USE_BOOST_SPIRIT_OLD_HDR, [test "$use_bspirit_old_hdr" = "yes"])
 
 AC_LANG([C])
 
-AC_CHECK_HEADER([histedit.h],
-	[],
-	[AC_MSG_ERROR([Sorry you need histedit.h (libedit-dev on debian)])])
-
-AC_CHECK_HEADER([openssl/md5.h],
-	[],
-	[AC_MSG_ERROR([Sorry you need openssl dev files (libssl-dev on debian)])])
+AC_CHECK_MEMBER([struct fiemap_extent.fe_logical],
+	[AC_DEFINE([HAVE_FIEMAP_H], [], [linux/fiemap.h was found, fiemap ioctl will be used])],
+	[AC_MSG_NOTICE([linux/fiemap.h was not found or not usable; using local Ceph copy])],
+	[[#include <linux/fiemap.h>]])
 
 AC_CHECK_HEADERS([sys/xattr.h arpa/inet.h netdb.h netinet/in.h sys/file.h sys/ioctl.h sys/mount.h sys/param.h sys/socket.h sys/statvfs.h sys/time.h sys/vfs.h syslog.h utime.h])
 
@@ -147,6 +173,7 @@ AC_CHECK_HEADERS([sys/xattr.h arpa/inet.h netdb.h netinet/in.h sys/file.h sys/io
 AC_CHECK_FUNC([sync_file_range],
 	[AC_DEFINE([HAVE_SYNC_FILE_RANGE], [], [sync_file_range(2) is supported])],
 	[])
+
 
 # Checks for typedefs, structures, and compiler characteristics.
 #AC_HEADER_STDBOOL
@@ -190,10 +217,25 @@ AC_CHECK_FUNC([sync_file_range],
 #AC_FUNC_UTIME_NULL
 #AC_CHECK_FUNCS([bzero fchdir fdatasync floor ftruncate getcwd gethostbyname gethostname gettimeofday inet_ntoa localtime_r memmove memset mkdir munmap pow rmdir select socket sqrt strcasecmp strchr strerror strstr utime])
 
+AC_ARG_WITH([gtk2],
+        [AS_HELP_STRING([--with-gtk2], [Build the graphical tools.  Default=yes.])],
+        [try_with_gtk2=$withval],
+        [])
+AS_IF([test "x$try_with_gtk2" != "xno"],
+        [PKG_CHECK_MODULES(GTKMM, [gtkmm-2.4 >= 1.0.0],
+                [AC_DEFINE([HAVE_GTK2], [1], [we have gtk2])],
+                [try_with_gtk2=no
+                 AC_MSG_RESULT([Sorry, a usable version of gtkmm was not found. We will build without it.])])])
+AM_CONDITIONAL(WITH_GTK2, [test "x$try_with_gtk2" != "xno"])
+
+AM_PATH_PYTHON([2.4],
+	[], [AC_MSG_FAILURE([Failed to find Python 2.4 or newer])])
+
 AC_CONFIG_HEADERS([src/acconfig.h])
 AC_CONFIG_FILES([Makefile
 	src/Makefile
 	man/Makefile
+	qa/Makefile
+	qa/workunits/Makefile
 	ceph.spec])
 AC_OUTPUT
-

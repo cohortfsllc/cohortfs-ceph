@@ -1,7 +1,8 @@
 #include <errno.h>
 #include <map>
 
-#include "config.h"
+#include "common/config.h"
+#include "common/debug.h"
 #include "include/str_list.h"
 
 #include "Crypto.h"
@@ -10,7 +11,7 @@
 
 #define DOUT_SUBSYS auth
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "auth: "
+#define dout_prefix *_dout << "auth: "
 
 
 bool RotatingKeyRing::need_new_secrets()

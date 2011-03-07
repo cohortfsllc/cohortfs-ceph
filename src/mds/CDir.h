@@ -20,7 +20,7 @@
 #include "include/types.h"
 #include "include/buffer.h"
 #include "mdstypes.h"
-#include "config.h"
+#include "common/config.h"
 #include "common/DecayCounter.h"
 
 #include <iostream>
@@ -38,6 +38,7 @@ class CDentry;
 class MDCache;
 class MDCluster;
 class Context;
+class bloom_filter;
 
 class ObjectOperation;
 
@@ -101,6 +102,7 @@ public:
   static const unsigned STATE_FRAGMENTING =   (1<<14);
   static const unsigned STATE_STICKY =        (1<<15);  // sticky pin due to inode stickydirs
   static const unsigned STATE_DNPINNEDFRAG =  (1<<16);  // dir is refragmenting
+  static const unsigned STATE_ASSIMRSTAT =    (1<<17);  // assimilating inode->frag rstats
 
   // common states
   static const unsigned STATE_CLEAN =  0;
@@ -166,6 +168,14 @@ public:
   snapid_t first;
   map<snapid_t,old_rstat_t> dirty_old_rstat;  // [value.first,key]
 
+  // my inodes with dirty rstat data
+  elist<CInode*> dirty_rstat_inodes;     
+
+  void resync_accounted_fragstat();
+  void resync_accounted_rstat();
+  void assimilate_dirty_rstat_inodes();
+  void assimilate_dirty_rstat_inodes_finish(Mutation *mut, EMetaBlob *blob);
+
 protected:
   version_t projected_version;
   list<fnode_t*> projected_fnode;
@@ -191,7 +201,7 @@ public:
   fnode_t *project_fnode();
 
   void pop_and_dirty_projected_fnode(LogSegment *ls);
-  bool is_projected() { return get_projected_version() > get_version(); }
+  bool is_projected() { return !projected_fnode.empty(); }
   version_t pre_dirty(version_t min=0);
   void _mark_dirty(LogSegment *ls);
   void _set_dirty_flag() {
@@ -210,7 +220,7 @@ public:
   typedef map<dentry_key_t, CDentry*> map_t;
 protected:
 
-  // contents
+  // contents of this directory
   map_t items;       // non-null AND null
   unsigned num_head_items;
   unsigned num_head_null;
@@ -263,6 +273,10 @@ protected:
 
   friend class CDirDiscover;
   friend class CDirExport;
+
+  bloom_filter *bloom;
+  /* If you set up the bloom filter, you must keep it accurate!
+   * It's deleted when you mark_complete() and is deliberately not serialized.*/
 
  public:
   CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth);
@@ -325,6 +339,10 @@ protected:
   void link_primary_inode( CDentry *dn, CInode *in );
   void unlink_inode( CDentry *dn );
   void try_remove_unlinked_dn(CDentry *dn);
+
+  void add_to_bloom(CDentry *dn);
+  bool is_in_bloom(const string& name);
+  bool has_bloom() { return (bloom ? true : false); }
 private:
   void link_inode_work( CDentry *dn, CInode *in );
   void unlink_inode_work( CDentry *dn );
@@ -336,7 +354,15 @@ public:
 
 public:
   void split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool replay);
-  void merge(int bits, list<Context*>& waiters, bool replay);
+  void merge(list<CDir*>& subs, list<Context*>& waiters, bool replay);
+
+  bool should_split() {
+    return (int)get_num_head_items() > g_conf.mds_bal_split_size;
+  }
+  bool should_merge() {
+    return (int)get_num_head_items() < g_conf.mds_bal_merge_size;
+  }
+
 private:
   void steal_dentry(CDentry *dn);  // from another dir.  used by merge/split.
   void purge_stolen(list<Context*>& waiters, bool replay);
@@ -445,10 +471,13 @@ private:
   map<version_t, list<Context*> > waiting_for_commit;
 
   void commit_to(version_t want);
-  void commit(version_t want, Context *c);
+  void commit(version_t want, Context *c, bool ignore_authpinnability=false);
   void _commit(version_t want);
-  void _commit_full(ObjectOperation& m, const set<snapid_t> *snaps);
-  void _commit_partial(ObjectOperation& m, const set<snapid_t> *snaps);
+  map_t::iterator _commit_full(ObjectOperation& m, const set<snapid_t> *snaps,
+                           unsigned max_write_size=-1);
+  map_t::iterator _commit_partial(ObjectOperation& m, const set<snapid_t> *snaps,
+                       unsigned max_write_size=-1,
+                       map_t::iterator last_committed_dn=map_t::iterator());
   void _encode_dentry(CDentry *dn, bufferlist& bl, const set<snapid_t> *snaps);
   void _committed(version_t v, version_t last_renamed_version);
   void wait_for_commit(Context *c, version_t v=0);
@@ -458,7 +487,7 @@ private:
   version_t get_committed_version() { return committed_version; }
   void set_committed_version(version_t v) { committed_version = v; }
 
-  void mark_complete() { state_set(STATE_COMPLETE); }
+  void mark_complete();
 
 
   // -- reference counting --
@@ -545,6 +574,8 @@ public:
       finish_waiting(WAIT_FROZEN);
     }
     if (nested_auth_pins != 0) 
+      return;
+    if (!is_subtree_root() && inode->is_frozen())
       return;
     if (state_test(STATE_FREEZINGTREE)) {
       _freeze_tree();

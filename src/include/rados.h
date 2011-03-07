@@ -12,9 +12,9 @@
  * osdmap encoding versions
  */
 #define CEPH_OSDMAP_INC_VERSION     5
-#define CEPH_OSDMAP_INC_VERSION_EXT 5
+#define CEPH_OSDMAP_INC_VERSION_EXT 6
 #define CEPH_OSDMAP_VERSION         5
-#define CEPH_OSDMAP_VERSION_EXT     5
+#define CEPH_OSDMAP_VERSION_EXT     6
 
 /*
  * fs id
@@ -161,6 +161,12 @@ struct ceph_eversion {
 #define CEPH_OSDMAP_PAUSEREC (1<<4)  /* pause recovery */
 
 /*
+ * The error code to return when an OSD can't handle a write
+ * because it is too large.
+ */
+#define OSD_WRITETOOBIG EMSGSIZE
+
+/*
  * osd ops
  */
 #define CEPH_OSD_OP_MODE       0xf000
@@ -181,9 +187,17 @@ enum {
 	/* read */
 	CEPH_OSD_OP_READ      = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 1,
 	CEPH_OSD_OP_STAT      = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 2,
+	CEPH_OSD_OP_MAPEXT    = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 3,
 
 	/* fancy read */
-	CEPH_OSD_OP_MASKTRUNC = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 4,
+	CEPH_OSD_OP_MASKTRUNC   = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 4,
+	CEPH_OSD_OP_SPARSE_READ = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 5,
+
+	CEPH_OSD_OP_NOTIFY    = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 6,
+	CEPH_OSD_OP_NOTIFY_ACK = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 7,
+
+	/* versioning */
+	CEPH_OSD_OP_ASSERT_VER = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 8,
 
 	/* write */
 	CEPH_OSD_OP_WRITE     = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 1,
@@ -205,6 +219,8 @@ enum {
 	CEPH_OSD_OP_CREATE  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 13,
 	CEPH_OSD_OP_ROLLBACK= CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 14,
 
+	CEPH_OSD_OP_WATCH   = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 15,
+
 	/** attrs **/
 	/* read */
 	CEPH_OSD_OP_GETXATTR  = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_ATTR | 1,
@@ -218,11 +234,15 @@ enum {
 	CEPH_OSD_OP_RMXATTR   = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_ATTR | 4,
 
 	/** subop **/
-	CEPH_OSD_OP_PULL           = CEPH_OSD_OP_MODE_SUB | 1,
-	CEPH_OSD_OP_PUSH           = CEPH_OSD_OP_MODE_SUB | 2,
-	CEPH_OSD_OP_BALANCEREADS   = CEPH_OSD_OP_MODE_SUB | 3,
-	CEPH_OSD_OP_UNBALANCEREADS = CEPH_OSD_OP_MODE_SUB | 4,
-	CEPH_OSD_OP_SCRUB          = CEPH_OSD_OP_MODE_SUB | 5,
+	CEPH_OSD_OP_PULL            = CEPH_OSD_OP_MODE_SUB | 1,
+	CEPH_OSD_OP_PUSH            = CEPH_OSD_OP_MODE_SUB | 2,
+	CEPH_OSD_OP_BALANCEREADS    = CEPH_OSD_OP_MODE_SUB | 3,
+	CEPH_OSD_OP_UNBALANCEREADS  = CEPH_OSD_OP_MODE_SUB | 4,
+	CEPH_OSD_OP_SCRUB           = CEPH_OSD_OP_MODE_SUB | 5,
+	CEPH_OSD_OP_SCRUB_RESERVE   = CEPH_OSD_OP_MODE_SUB | 6,
+	CEPH_OSD_OP_SCRUB_UNRESERVE = CEPH_OSD_OP_MODE_SUB | 7,
+	CEPH_OSD_OP_SCRUB_STOP      = CEPH_OSD_OP_MODE_SUB | 8,
+	CEPH_OSD_OP_SCRUB_MAP     = CEPH_OSD_OP_MODE_SUB | 9,
 
 	/** lock **/
 	CEPH_OSD_OP_WRLOCK    = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_LOCK | 1,
@@ -237,6 +257,7 @@ enum {
 
 	/** pg **/
 	CEPH_OSD_OP_PGLS      = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_PG | 1,
+	CEPH_OSD_OP_PGLS_FILTER = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_PG | 2,
 };
 
 static inline int ceph_osd_op_type_lock(int op)
@@ -303,6 +324,7 @@ enum {
 	CEPH_OSD_FLAG_PGOP = 1024,      /* pg op, no object */
 	CEPH_OSD_FLAG_EXEC = 2048,      /* op may exec */
 	CEPH_OSD_FLAG_EXEC_PUBLIC = 4096, /* op may exec (public) */
+	CEPH_OSD_FLAG_LOCALIZE_READS = 8192,  /* read from nearby replica, if any */
 };
 
 enum {
@@ -359,7 +381,12 @@ struct ceph_osd_op {
 	        struct {
 		        __le64 snapid;
 	        } __attribute__ ((packed)) snap;
-	};
+		struct {
+			__le64 cookie;
+			__le64 ver;
+			__u8 flag;	/* 0 = unwatch, 1 = watch */
+		} __attribute__ ((packed)) watch;
+};
 	__le32 payload_len;
 } __attribute__ ((packed));
 

@@ -17,11 +17,11 @@
 #include "SessionMap.h"
 #include "osdc/Filer.h"
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS mds
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "mds" << mds->get_nodeid() << ".sessionmap "
+#define dout_prefix *_dout << "mds" << mds->get_nodeid() << ".sessionmap "
 
 
 void SessionMap::dump()
@@ -69,10 +69,8 @@ void SessionMap::load(Context *onload)
   
   C_SM_Load *c = new C_SM_Load(this);
   object_t oid = get_object_name();
-  OSDMap *osdmap = mds->objecter->osdmap;
-  ceph_object_layout ol = osdmap->make_object_layout(oid,
-						     mds->mdsmap->get_metadata_pg_pool());
-  mds->objecter->read_full(oid, ol, CEPH_NOSNAP, &c->bl, 0, c);
+  object_locator_t oloc(mds->mdsmap->get_metadata_pg_pool());
+  mds->objecter->read_full(oid, oloc, CEPH_NOSNAP, &c->bl, 0, c);
 }
 
 void SessionMap::_load_finish(int r, bufferlist &bl)
@@ -121,11 +119,9 @@ void SessionMap::save(Context *onsave, version_t needv)
   committing = version;
   SnapContext snapc;
   object_t oid = get_object_name();
-  OSDMap *osdmap = mds->objecter->osdmap;
-  ceph_object_layout ol = osdmap->make_object_layout(oid,
-						     mds->mdsmap->get_metadata_pg_pool());
+  object_locator_t oloc(mds->mdsmap->get_metadata_pg_pool());
 
-  mds->objecter->write_full(oid, ol,
+  mds->objecter->write_full(oid, oloc,
 			    snapc,
 			    bl, g_clock.now(), 0,
 			    NULL, new C_SM_Save(this, version));
@@ -213,4 +209,32 @@ void SessionMap::decode(bufferlist::iterator& p)
       s->last_cap_renew = now;
     }
   }
+}
+
+
+
+void SessionMap::wipe()
+{
+  dout(1) << "wipe start" << dendl;
+  dump();
+  while (!session_map.empty()) {
+    Session *s = session_map.begin()->second;
+    remove_session(s);
+  }
+  version = ++projected;
+  dout(1) << "wipe result" << dendl;
+  dump();
+  dout(1) << "wipe done" << dendl;
+}
+
+void SessionMap::wipe_ino_prealloc()
+{
+  for (hash_map<entity_name_t,Session*>::iterator p = session_map.begin(); 
+       p != session_map.end(); 
+       ++p) {
+    p->second->pending_prealloc_inos.clear();
+    p->second->prealloc_inos.clear();
+    p->second->used_inos.clear();
+  }
+  projected = ++version;
 }

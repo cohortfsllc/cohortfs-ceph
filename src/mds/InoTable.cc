@@ -17,11 +17,11 @@
 
 #include "include/types.h"
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS mds
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "mds" << mds->get_nodeid() << "." << table_name << ": "
+#define dout_prefix *_dout << "mds" << mds->get_nodeid() << "." << table_name << ": "
 
 void InoTable::reset_state()
 {
@@ -45,7 +45,7 @@ inodeno_t InoTable::project_alloc_id(inodeno_t id)
   dout(10) << "project_alloc_id " << id << " to " << projected_free << "/" << free << dendl;
   assert(is_active());
   if (!id)
-    id = projected_free.start();
+    id = projected_free.range_start();
   projected_free.erase(id);
   ++projected_version;
   return id;
@@ -61,7 +61,7 @@ void InoTable::project_alloc_ids(interval_set<inodeno_t>& ids, int want)
 {
   assert(is_active());
   while (want > 0) {
-    inodeno_t start = projected_free.start();
+    inodeno_t start = projected_free.range_start();
     inodeno_t end = projected_free.end_after(start);
     inodeno_t num = end - start;
     if (num > (inodeno_t)want)
@@ -104,9 +104,8 @@ void InoTable::replay_alloc_id(inodeno_t id)
     free.erase(id);
     projected_free.erase(id);
   } else {
-    stringstream ss;
-    ss << "journal replay alloc " << id << " not in free " << free;
-    mds->logclient.log(LOG_ERROR, ss);
+    mds->clog.error() << "journal replay alloc " << id
+      << " not in free " << free << "\n";
   }
   projected_version = ++version;
 }
@@ -119,9 +118,8 @@ void InoTable::replay_alloc_ids(interval_set<inodeno_t>& ids)
     free.subtract(ids);
     projected_free.subtract(ids);
   } else {
-    stringstream ss;
-    ss << "journal replay alloc " << ids << ", only " << is << " is in free " << free;
-    mds->logclient.log(LOG_ERROR, ss);
+    mds->clog.error() << "journal replay alloc " << ids << ", only "
+	<< is << " is in free " << free << "\n";
     free.subtract(is);
     projected_free.subtract(is);
   }
@@ -135,3 +133,26 @@ void InoTable::replay_release_ids(interval_set<inodeno_t>& ids)
   projected_version = ++version;
 }
 
+
+void InoTable::replay_reset()
+{
+  dout(10) << "replay_reset " << free << dendl;
+  skip_inos(inodeno_t(10000000));  // a lot!
+  projected_free = free;
+  projected_version = ++version;
+}
+
+
+void InoTable::skip_inos(inodeno_t i)
+{
+  dout(10) << "skip_inos was " << free << dendl;
+  inodeno_t first = free.range_start();
+  inodeno_t last = first + i;
+  interval_set<inodeno_t> s;
+  s.insert(first, last);
+  s.intersection_of(free);
+  free.subtract(s);
+  projected_free = free;
+  projected_version = ++version;
+  dout(10) << "skip_inos now " << free << dendl;
+}

@@ -15,7 +15,7 @@
 #ifndef CEPH_KEYRING_H
 #define CEPH_KEYRING_H
 
-#include "config.h"
+#include "common/config.h"
 
 #include "auth/Crypto.h"
 #include "auth/Auth.h"
@@ -23,10 +23,12 @@
 class KeyRing {
   map<EntityName, EntityAuth> keys;
 
+  int set_modifier(const char *type, const char *val, EntityName& name, map<string, bufferlist>& caps);
+  void decode_plaintext(bufferlist::iterator& bl);
 public:
   map<EntityName, EntityAuth>& get_keys() { return keys; }  // yuck
 
-  bool load(const char *filename);
+  int load(const char *filename);
   void print(ostream& out);
 
   // accessors
@@ -58,6 +60,9 @@ public:
   void set_uid(EntityName& ename, uint64_t auid) {
     keys[ename].auid = auid;
   }
+  void set_key(EntityName& ename, CryptoKey& key) {
+    keys[ename].key = key;
+  }
   void import(KeyRing& other);
 
   // encoders
@@ -66,11 +71,7 @@ public:
     ::encode(struct_v, bl);
     ::encode(keys, bl);
   }
-  void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
-    ::decode(struct_v, bl);
-    ::decode(keys, bl);
-  }
+  void decode(bufferlist::iterator& bl);
 };
 WRITE_CLASS_ENCODER(KeyRing)
 

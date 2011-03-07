@@ -21,19 +21,7 @@ if [ `dirname $0` = "." ] && [ $PWD != "/etc/init.d" ]; then
 else
     BINDIR=@bindir@
     LIBDIR=@libdir@/ceph
-    # i hate autoconf:
-    if [ "@sysconfdir@" = "/usr/etc" ]; then
-	ETCDIR=/etc/ceph
-    else
-	ETCDIR=@sysconfdir@/ceph
-    fi
-fi
-
-# do lockfile, if RH
-if [ -d /var/lock/subsys ]; then
-    lockfile=/var/lock/subsys/ceph
-else
-    lockfile=""
+    ETCDIR=@sysconfdir@/ceph
 fi
 
 usage_exit() {
@@ -46,6 +34,7 @@ usage_exit() {
 
 . $LIBDIR/ceph_common.sh
 
+EXIT_STATUS=0
 
 signal_daemon() {
     name=$1
@@ -69,10 +58,11 @@ signal_daemon() {
 daemon_is_running() {
     name=$1
     daemon=$2
-    pidfile=$3
+    daemon_id=$3
+    pidfile=$4
     do_cmd "[ -e $pidfile ] || exit 1   # no pid, presumably not running
 	pid=\`cat $pidfile\`
-	[ -e /proc/\$pid ] && grep -q $daemon /proc/\$pid/cmdline && exit 0 # running
+	[ -e /proc/\$pid ] && grep -q $daemon /proc/\$pid/cmdline && grep -qwe -i.$daemon_id /proc/\$pid/cmdline && exit 0 # running
         exit 1  # pid is something else" "" "okfail"
 }
 
@@ -186,11 +176,16 @@ for name in $what; do
     check_host || continue
 
     get_conf pid_file "/var/run/ceph/$type.$id.pid" "pid file"
-    [ -n "$pid_file" ] && mkdir -p `dirname $pid_file`
+    [ -n "$pid_file" ] && do_cmd "mkdir -p "`dirname $pid_file`
+
+    get_conf log_dir "/var/log/ceph" "log dir"
+    get_conf log_sym_dir "" "log sym dir"
+    [ -n "$log_dir" ] && do_cmd "mkdir -p $log_dir"
+    [ -n "$log_sym_dir" ] && do_cmd "mkdir -p $log_sym_dir"
 
     # start, and already running?  (do this check early to avoid unnecessary work!)
     if [ "$command" = "start" ]; then
-	if daemon_is_running $name c$type $pid_file; then
+	if daemon_is_running $name c$type $id $pid_file; then
 	    echo "Starting Ceph $name on $host...already running"
 	    continue
 	fi
@@ -227,8 +222,26 @@ for name in $what; do
 	first_dev=`echo $btrfs_devs | cut '-d ' -f 1`
     fi
 
+    # do lockfile, if RH
+    get_conf lockfile "/var/lock/subsys/ceph" "lock file"
+    lockdir=`dirname $lockfile`
+    if [ ! -d "$lockdir" ]; then
+	lockfile=""
+    fi
+
     case "$command" in
 	start)
+            # Increase max_open_files, if the configuration calls for it.
+            get_conf max_open_files "0" "max open files"
+            if [ $max_open_files != "0" ]; then
+                # Note: Don't try to do math with these numbers, because POSIX shells
+                # can't do 64-bit math (natively). Just treat them as strings.
+                cur=`ulimit -n`
+                if [ "x$max_open_files" != "x$cur" ]; then
+                    ulimit -n $max_open_files
+                fi
+            fi
+
             # build final command
 	    wrap=""
 	    runmode=""
@@ -277,9 +290,12 @@ for name in $what; do
 	    ;;
 
 	status)
-	    pid=`cat $pid_file`
-	    ps $pid &> /dev/null
-	    exit $?
+	    if daemon_is_running $name c$type $id $pid_file; then
+                echo "running..."
+            else
+                echo "dead."
+                EXIT_STATUS=1
+            fi
 	    ;;
 	forcestop)
 	    get_conf pre_forcestop "" "pre forcestop command"
@@ -307,16 +323,16 @@ for name in $what; do
 
 	cleanlogs)
 	    echo removing logs
-	    get_conf log_dir "/var/log/ceph" "log dir"
-	    get_conf log_sym_dir "/var/log/ceph" "log sym dir"
-	    do_cmd "for f in $log_sym_dir/$name*; do rm -f \`readlink \$f\` ; rm -f \$f ; done"
+	    if [ -n "$log_sym_dir" ]; then
+		do_cmd "for f in $log_sym_dir/$type.$id.*; do rm -f \`readlink \$f\` ; rm -f \$f ; done ; rm -f $log_dir/$type.$id.*"
+	    fi
+	    [ -n "$log_dir" ] && do_cmd "rm -f $log_dir/$type.$id.*"
 	    ;;
 
 	cleanalllogs)
 	    echo removing all logs
-	    get_conf log_dir "/var/log/ceph" "log dir"
-	    get_conf log_sym_dir "/var/log/ceph" "log sym dir"
-	    do_cmd "rm -f $log_dir/* $log_sym_dir/* || true"
+	    [ -n "$log_sym_dir" ] && do_cmd "rm -f $log_sym_dir/* || true"
+	    [ -n "$log_dir" ] && do_cmd "rm -f $log_dir/* || true"
 	    ;;
 
 	*)
@@ -325,4 +341,4 @@ for name in $what; do
     esac
 done
 
-exit 0
+exit $EXIT_STATUS

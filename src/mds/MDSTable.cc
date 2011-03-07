@@ -21,12 +21,12 @@
 
 #include "include/types.h"
 
-#include "config.h"
+#include "common/config.h"
 
 
 #define DOUT_SUBSYS mds
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "mds" << mds->get_nodeid() << "." << table_name << ": "
+#define dout_prefix *_dout << "mds" << mds->get_nodeid() << "." << table_name << ": "
 
 
 class C_MT_Save : public Context {
@@ -63,11 +63,8 @@ void MDSTable::save(Context *onfinish, version_t v)
   // write (async)
   SnapContext snapc;
   object_t oid = get_object_name();
-  OSDMap *osdmap = mds->objecter->osdmap;
-  ceph_object_layout ol = osdmap->make_object_layout(oid,
-						     mds->mdsmap->get_metadata_pg_pool());
-
-  mds->objecter->write_full(oid, ol,
+  object_locator_t oloc(mds->mdsmap->get_metadata_pg_pool());
+  mds->objecter->write_full(oid, oloc,
 			    snapc,
 			    bl, g_clock.now(), 0,
 			    NULL, new C_MT_Save(this, version));
@@ -129,10 +126,8 @@ void MDSTable::load(Context *onfinish)
 
   C_MT_Load *c = new C_MT_Load(this, onfinish);
   object_t oid = get_object_name();
-  OSDMap *osdmap = mds->objecter->osdmap;
-  ceph_object_layout ol = osdmap->make_object_layout(oid,
-						     mds->mdsmap->get_metadata_pg_pool());
-  mds->objecter->read_full(oid, ol, CEPH_NOSNAP, &c->bl, 0, c);
+  object_locator_t oloc(mds->mdsmap->get_metadata_pg_pool());
+  mds->objecter->read_full(oid, oloc, CEPH_NOSNAP, &c->bl, 0, c);
 }
 
 void MDSTable::load_2(int r, bufferlist& bl, Context *onfinish)

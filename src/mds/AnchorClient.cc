@@ -20,16 +20,16 @@
 
 #include "messages/MMDSTableRequest.h"
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS mds
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "mds" << mds->get_nodeid() << ".anchorclient "
+#define dout_prefix *_dout << "mds" << mds->get_nodeid() << ".anchorclient "
 
 
 
 // LOOKUPS
-
+/* This function DOES NOT put the passed message before returning */
 void AnchorClient::handle_query_result(class MMDSTableRequest *m)
 {
   dout(10) << "handle_anchor_reply " << *m << dendl;

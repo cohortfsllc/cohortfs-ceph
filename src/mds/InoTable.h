@@ -40,6 +40,7 @@ class InoTable : public MDSTable {
   void replay_alloc_id(inodeno_t ino);
   void replay_alloc_ids(interval_set<inodeno_t>& inos);
   void replay_release_ids(interval_set<inodeno_t>& inos);
+  void replay_reset();
 
   void reset_state();
   void encode_state(bufferlist& bl) {
@@ -53,6 +54,8 @@ class InoTable : public MDSTable {
     ::decode(free, bl);
     projected_free = free;
   }
+
+  void skip_inos(inodeno_t i);
 };
 
 #endif

@@ -29,12 +29,11 @@
 #include "messages/MClientRequest.h"
 #include "messages/MMDSSlaveRequest.h"
 
-class Logger;
+class ProfLogger;
 
 class MDS;
 class Session;
 class Migrator;
-class Renamer;
 
 class Message;
 class Session;
@@ -245,10 +244,6 @@ inline ostream& operator<<(ostream& out, Mutation &mut)
 }
 
 
-enum {
-  MDS_INTERNAL_OP_FRAGMENT,
-};
-
 /** active_request_t
  * state we track for requests we are currently processing.
  * mostly information about locks held, so that we can drop them all
@@ -264,6 +259,7 @@ struct MDRequest : public Mutation {
 
   // store up to two sets of dn vectors, inode pointers, for request path1 and path2.
   vector<CDentry*> dn[2];
+  CDentry *straydn;
   CInode *in[2];
   snapid_t snapid;
 
@@ -316,19 +312,11 @@ struct MDRequest : public Mutation {
     Context *slave_commit;
     bufferlist rollback_bl;
 
-    // internal ops
-    CInode *fragment_in;
-    frag_t fragment_base;
-    list<CDir*> fragment_start;
-    list<CDir*> fragment_result;
-    int fragment_bits;
-
     More() : 
       src_reanchor_atid(0), dst_reanchor_atid(0), inode_import_v(0),
       destdn_was_remote_inode(0), was_link_merge(false),
       stid(0),
-      slave_commit(0),
-      fragment_in(0), fragment_bits(0) { }
+      slave_commit(0) { }
   } *_more;
 
 
@@ -336,7 +324,7 @@ struct MDRequest : public Mutation {
   MDRequest() : 
     ref(1),
     session(0), item_session_request(this),
-    client_request(0), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
+    client_request(0), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
     alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
     slave_request(0),
     internal_op(-1),
@@ -347,7 +335,7 @@ struct MDRequest : public Mutation {
     Mutation(ri),
     ref(1),
     session(0), item_session_request(this),
-    client_request(req), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
+    client_request(req), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
     alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
     slave_request(0),
     internal_op(-1),
@@ -358,7 +346,7 @@ struct MDRequest : public Mutation {
     Mutation(ri, by),
     ref(1),
     session(0), item_session_request(this),
-    client_request(0), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
+    client_request(0), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
     alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
     slave_request(0),
     internal_op(-1),
@@ -403,7 +391,6 @@ struct MDRequest : public Mutation {
     if (is_slave()) out << " slave_to mds" << slave_to_mds;
     if (client_request) out << " cr=" << client_request;
     if (slave_request) out << " sr=" << slave_request;
-    if (internal_op == MDS_INTERNAL_OP_FRAGMENT) out << " fragment";
     out << ")";
   }
 };
@@ -446,17 +433,30 @@ class MDCache {
   hash_map<vinodeno_t,CInode*> inode_map;  // map of inodes by ino
   CInode *root;                            // root inode
   CInode *myin;                            // .ceph/mds%d dir
-  CInode *stray;                           // my stray dir
+
+  CInode *strays[NUM_STRAY];         // my stray dir
+  int stray_index;
+
+  CInode *get_stray() {
+    return strays[stray_index];
+  }
+
   set<CInode*> base_inodes;
 
 public:
+  void advance_stray() {
+    stray_index = (stray_index+1)%NUM_STRAY;
+  }
+
   DecayRate decayrate;
 
   int num_inodes_with_caps;
   int num_caps;
 
+  unsigned max_dir_commit_size;
+
   ceph_file_layout default_file_layout;
-  ceph_file_layout default_dir_layout;
+  ceph_file_layout default_log_layout;
 
   // -- client leases --
 public:
@@ -473,18 +473,35 @@ public:
   // -- client caps --
   uint64_t              last_cap_id;
   
-  void remove_client_cap(CInode *in, client_t client);
 
 
   // -- discover --
+  struct discover_info_t {
+    tid_t tid;
+    int mds;
+    inodeno_t ino;
+    frag_t frag;
+    snapid_t snap;
+    filepath want_path;
+    inodeno_t want_ino;
+    bool want_base_dir;
+    bool want_xlocked;
+
+    discover_info_t() : tid(0), mds(-1), snap(CEPH_NOSNAP), want_base_dir(false), want_xlocked(false) {}
+  };
+
+  map<tid_t, discover_info_t> discovers;
+  tid_t discover_last_tid;
+
+  void _send_discover(discover_info_t& dis);
+  discover_info_t& _create_discover(int mds) {
+    discover_info_t& d = discovers[++discover_last_tid];
+    d.mds = mds;
+    return d;
+  }
+
   // waiters
   map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
-
-  // in process discovers, by mds.
-  //  this is just enough info to kick any waiters in the event of a failure.
-  //  FIXME: use pointers here instead of identifiers?
-  map<int, map<inodeno_t,int> > discover_dir;
-  map<int, map<dirfrag_t,int> > discover_dir_sub;
 
   void discover_base_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
   void discover_dir_frag(CInode *base, frag_t approx_fg, Context *onfinish,
@@ -591,8 +608,9 @@ public:
 			  CInode **pcow_inode=0);
   inode_t *journal_dirty_inode(Mutation *mut, EMetaBlob *metablob, CInode *in, snapid_t follows=CEPH_NOSNAP);
 
-  void project_rstat_inode_to_frag(inode_t& inode, snapid_t ofirst, snapid_t last,
-				   CDir *parent, int linkunlink=0);
+  void project_rstat_inode_to_frag(CInode *cur, CDir *parent, snapid_t first, int linkunlink);
+  void _project_rstat_inode_to_frag(inode_t& inode, snapid_t ofirst, snapid_t last,
+				    CDir *parent, int linkunlink=0);
   void project_rstat_frag_to_inode(nest_info_t& rstat, nest_info_t& accounted_rstat,
 				   snapid_t ofirst, snapid_t last, 
 				   CInode *pin, bool cow_head);
@@ -657,8 +675,9 @@ protected:
   void disambiguate_imports();
   void recalc_auth_bits();
   void trim_unlinked_inodes();
-  void remove_inode_recursive(CInode *in);
 public:
+  void remove_inode_recursive(CInode *in);
+
   void add_rollback(metareqid_t reqid) {
     need_resolve_rollback.insert(reqid);
   }
@@ -677,7 +696,7 @@ public:
   void cancel_ambiguous_import(dirfrag_t dirino);
   void finish_ambiguous_import(dirfrag_t dirino);
   void resolve_start();
-  void send_resolve(int who);
+  void send_resolves();
   void send_resolve_now(int who);
   void send_resolve_later(int who);
   void maybe_send_pending_resolves();
@@ -702,6 +721,7 @@ protected:
   
   set<CInode*> rejoin_undef_inodes;
   set<CInode*> rejoin_potential_updated_scatterlocks;
+  set<CDir*>   rejoin_undef_dirfrags;
 
   vector<CInode*> rejoin_recover_q, rejoin_check_q;
   list<Context*> rejoin_waiters;
@@ -710,8 +730,9 @@ protected:
   void handle_cache_rejoin(MMDSCacheRejoin *m);
   void handle_cache_rejoin_weak(MMDSCacheRejoin *m);
   CInode* rejoin_invent_inode(inodeno_t ino, snapid_t last);
+  CDir* rejoin_invent_dirfrag(dirfrag_t df);
   void handle_cache_rejoin_strong(MMDSCacheRejoin *m);
-  void rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack);
+  void rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack, set<vinodeno_t>& acked_inodes);
   void handle_cache_rejoin_ack(MMDSCacheRejoin *m);
   void handle_cache_rejoin_purge(MMDSCacheRejoin *m);
   void handle_cache_rejoin_missing(MMDSCacheRejoin *m);
@@ -774,12 +795,16 @@ public:
   void check_realm_past_parents(SnapRealm *realm);
   void open_snap_parents();
 
+  void open_undef_dirfrags();
+  void opened_undef_dirfrag(CDir *dir) {
+    rejoin_undef_dirfrags.erase(dir);
+  }
+
   void reissue_all_caps();
   
 
   friend class Locker;
   friend class Migrator;
-  friend class Renamer;
   friend class MDBalancer;
 
 
@@ -805,7 +830,6 @@ public:
 
   // subsystems
   Migrator *migrator;
-  Renamer *renamer;
 
  public:
   MDCache(MDS *m);
@@ -831,6 +855,7 @@ public:
 		  map<int,class MCacheExpire*>& expiremap);
   void send_expire_messages(map<int, MCacheExpire*>& expiremap);
   void trim_non_auth();      // trim out trimmable non-auth items
+  bool trim_non_auth_subtree(CDir *directory);
 
   void trim_client_leases();
   void check_memory_usage();
@@ -846,24 +871,33 @@ public:
   bool did_shutdown_log_cap;
 
   // inode_map
+  bool have_inode(vinodeno_t vino) {
+    return inode_map.count(vino) ? true:false;
+  }
   bool have_inode(inodeno_t ino, snapid_t snap=CEPH_NOSNAP) {
     return have_inode(vinodeno_t(ino, snap));
   }
-  bool have_inode(vinodeno_t vino) { return inode_map.count(vino) ? true:false; }
-
   CInode* get_inode(vinodeno_t vino) {
-    return get_inode(vino.ino, vino.snapid);
-  }
-  CInode* get_inode(inodeno_t ino, snapid_t s=CEPH_NOSNAP) {
-    vinodeno_t vino(ino, s);
     if (have_inode(vino))
       return inode_map[vino];
     return NULL;
+  }
+  CInode* get_inode(inodeno_t ino, snapid_t s=CEPH_NOSNAP) {
+    return get_inode(vinodeno_t(ino, s));
   }
 
   CDir* get_dirfrag(dirfrag_t df) {
     if (!have_inode(df.ino)) return NULL;
     return get_inode(df.ino)->get_dirfrag(df.frag);
+  }
+  CDir* get_force_dirfrag(dirfrag_t df) {
+    CInode *diri = get_inode(df.ino);
+    if (!diri)
+      return NULL;
+    CDir *dir = force_dir_fragment(diri, df.frag);
+    if (!dir)
+      dir = diri->get_dirfrag(df.frag);
+    return dir;
   }
 
   MDSCacheObject *get_object(MDSCacheObjectInfo &info);
@@ -939,6 +973,7 @@ public:
 
   void open_root_inode(Context *c);
   void open_root();
+  void open_mydir_inode(Context *c);
   void populate_mydir();
 
   void _create_system_file(CDir *dir, const char *name, CInode *in, Context *fin);
@@ -1016,7 +1051,7 @@ protected:
   friend class C_MDC_PurgeStrayLoggedTruncate;
   friend class C_MDC_PurgeStrayPurged;
   void reintegrate_stray(CDentry *dn, CDentry *rlink);
-  void migrate_stray(CDentry *dn, int src, int dest);
+  void migrate_stray(CDentry *dn, int dest);
 
 
   // == messages ==
@@ -1050,6 +1085,8 @@ public:
   CDir* forge_replica_dir(CInode *diri, frag_t fg, int from);
   CDentry *add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Context*>& finished);
   CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Context*>& finished);
+
+  void replicate_stray(CDentry *straydn, int who, bufferlist& bl);
   CDentry *add_replica_stray(bufferlist &bl, int from);
 
   // -- namespace --
@@ -1062,24 +1099,44 @@ protected:
 
 
   // -- fragmenting --
+public:
+  set< pair<dirfrag_t,int> > uncommitted_fragments;  // prepared but uncommitted refragmentations
+
 private:
   void adjust_dir_fragments(CInode *diri, frag_t basefrag, int bits,
 			    list<CDir*>& frags, list<Context*>& waiters, bool replay);
+  void adjust_dir_fragments(CInode *diri,
+			    list<CDir*>& srcfrags,
+			    frag_t basefrag, int bits,
+			    list<CDir*>& resultfrags, 
+			    list<Context*>& waiters,
+			    bool replay);
+  CDir *force_dir_fragment(CInode *diri, frag_t fg);
+  void get_force_dirfrag_bound_set(vector<dirfrag_t>& dfs, set<CDir*>& bounds);
+
+
   friend class EFragment;
+
+  bool can_fragment_lock(CInode *diri);
+  bool can_fragment(CInode *diri, list<CDir*>& dirs);
 
 public:
   void split_dir(CDir *dir, int byn);
+  void merge_dir(CInode *diri, frag_t fg);
 
 private:
-  void dispatch_fragment(MDRequest *mdr);
-  void fragment_mark_and_complete(MDRequest *mdr);
-  void fragment_go(MDRequest *mdr);
-  void fragment_stored(MDRequest *mdr);
-  void fragment_logged(MDRequest *mdr);
-  friend class C_MDC_FragmentGo;
+  void fragment_freeze_dirs(list<CDir*>& dirs, C_Gather *gather);
+  void fragment_mark_and_complete(list<CDir*>& dirs);
+  void fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits);
+  void fragment_unmark_unfreeze_dirs(list<CDir*>& dirs);
+  void fragment_logged_and_stored(Mutation *mut, list<CDir*>& resultfrags, frag_t basefrag, int bits);
+public:
+  void rollback_uncommitted_fragments();
+private:
+
+  friend class C_MDC_FragmentFrozen;
   friend class C_MDC_FragmentMarking;
-  friend class C_MDC_FragmentStored;
-  friend class C_MDC_FragmentLogged;
+  friend class C_MDC_FragmentLoggedAndStored;
 
   void handle_fragment_notify(MMDSFragmentNotify *m);
 

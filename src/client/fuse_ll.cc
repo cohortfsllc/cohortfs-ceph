@@ -23,9 +23,11 @@
 #include <unistd.h>
 
 // ceph
+#include "common/errno.h"
+#include "common/safe_io.h"
 #include "include/types.h"
 #include "Client.h"
-#include "config.h"
+#include "common/config.h"
 
 static Client *client;
 
@@ -434,8 +436,13 @@ static void do_init(void *foo, fuse_conn_info *bar)
 {
   if (fd_on_success) {
     //cout << "fuse init signaling on fd " << fd_on_success << std::endl;
-    int r = 0;
-    ::write(fd_on_success, &r, sizeof(r));
+    uint32_t r = 0;
+    int err = safe_write(fd_on_success, &r, sizeof(r));
+    if (err) {
+      derr << "fuse_ll: do_init: safe_write failed with error "
+	   << cpp_strerror(err) << dendl;
+      ceph_abort();
+    }
     //cout << "fuse init done signaling on fd " << fd_on_success << std::endl;
 
     // close stdout, etc.
@@ -445,7 +452,7 @@ static void do_init(void *foo, fuse_conn_info *bar)
   }
 }
 
-static struct fuse_lowlevel_ops ceph_ll_oper = {
+const static struct fuse_lowlevel_ops ceph_ll_oper = {
  init: do_init,
  destroy: 0,
  lookup: ceph_ll_lookup,

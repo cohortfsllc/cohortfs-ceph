@@ -135,6 +135,7 @@ int ceph_chmod(const char *path, mode_t mode);
 int ceph_chown(const char *path, uid_t uid, gid_t gid);
 int ceph_utime(const char *path, struct utimbuf *buf);
 int ceph_truncate(const char *path, loff_t size);
+int ceph_localize_reads(int val);
 
 // file ops
 #ifdef __cplusplus

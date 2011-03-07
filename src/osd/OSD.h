@@ -30,19 +30,18 @@
 #include "common/DecayCounter.h"
 #include "common/ClassHandler.h"
 
-#include "include/LogEntry.h"
 #include "include/CompatSet.h"
 
 #include "auth/KeyRing.h"
+#include "messages/MOSDRepScrub.h"
 
 #include <map>
+#include <memory>
 using namespace std;
 
 #include <ext/hash_map>
 #include <ext/hash_set>
 using namespace __gnu_cxx;
-
-
 
 
 enum {
@@ -91,27 +90,38 @@ enum {
 class Messenger;
 class Message;
 class MonClient;
-class Logger;
+class ProfLogger;
 class ObjectStore;
 class OSDMap;
 class MLog;
 class MClass;
+class MOSDPGMissing;
+
+class Watch;
+class Notification;
+class ObjectContext;
+class ReplicatedPG;
 
 extern const coll_t meta_coll;
 
 class OSD : public Dispatcher {
   /** OSD **/
 protected:
-  Mutex osd_lock;     // global lock
+  Mutex osd_lock;			// global lock
   SafeTimer timer;    // safe timer (osd_lock)
 
-  Messenger   *messenger; 
+  Messenger   *cluster_messenger;
+  Messenger   *client_messenger;
   MonClient   *monc;
-  Logger      *logger;
+  ProfLogger      *logger;
   bool         logger_started;
   ObjectStore *store;
 
-  LogClient   logclient;
+  // cover OSDMap update data when using multiple msgrs
+  Cond *map_in_progress_cond;
+  bool map_in_progress;
+
+  LogClient clog;
 
   int whoami;
   const char *dev_path, *journal_path;
@@ -125,7 +135,8 @@ protected:
     }
   };
 
-  bool dispatch_running;
+  Cond dispatch_cond;
+  int dispatch_running;
 
   void open_logger();
   void start_logger();
@@ -138,18 +149,26 @@ public:
   
   static sobject_t get_osdmap_pobject_name(epoch_t epoch) { 
     char foo[20];
-    sprintf(foo, "osdmap.%d", epoch);
+    snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
     return sobject_t(object_t(foo), 0); 
   }
   static sobject_t get_inc_osdmap_pobject_name(epoch_t epoch) { 
     char foo[20];
-    sprintf(foo, "inc_osdmap.%d", epoch);
+    snprintf(foo, sizeof(foo), "inc_osdmap.%d", epoch);
     return sobject_t(object_t(foo), 0); 
   }
 
   sobject_t make_pg_log_oid(pg_t pg) {
     stringstream ss;
     ss << "pglog_" << pg;
+    string s;
+    getline(ss, s);
+    return sobject_t(object_t(s.c_str()), 0);
+  }
+  
+  sobject_t make_pg_biginfo_oid(pg_t pg) {
+    stringstream ss;
+    ss << "pginfo_" << pg;
     string s;
     getline(ss, s);
     return sobject_t(object_t(s.c_str()), 0);
@@ -194,8 +213,20 @@ public:
     EntityName entity_name;
     OSDCaps caps;
     epoch_t last_sent_epoch;
+    Connection *con;
+    std::map<void *, pg_t> watches;
+    std::map<void *, entity_name_t> notifs;
 
-  Session() : last_sent_epoch(0) {}
+    Session() : last_sent_epoch(0), con(0) {}
+    ~Session() { if (con) con->put(); }
+    void add_notif(void *n, entity_name_t& name) {
+      notifs[n] = name;
+    }
+    void del_notif(void *n) {
+      std::map<void *, entity_name_t>::iterator iter = notifs.find(n);
+      if (iter != notifs.end())
+        notifs.erase(iter);
+    }
   };
 
 private:
@@ -354,6 +385,7 @@ private:
     finished_lock.Unlock();
   }
   void push_waiters(list<class Message*>& ls) {
+    assert(osd_lock.is_locked());   // currently, at least.  be careful if we change this (see #743)
     finished_lock.Lock();
     finished.splice(finished.begin(), ls);
     finished_lock.Unlock();
@@ -447,11 +479,14 @@ private:
   
   void send_incremental_map(epoch_t since, const entity_inst_t& inst, bool lazy=false);
 
+protected:
+  Watch *watch; /* notify-watch handler */
+
 
 protected:
   // -- classes --
   Mutex class_lock;
-  map<string, map<pg_t, list<Message*> > > waiting_for_missing_class;
+  map<string, list<Message*> > waiting_for_missing_class;
 
   int get_class(const string& cname, ClassVersion& version, pg_t pgid, Message *m, ClassHandler::ClassData **cls);
   void handle_class(MClass *m);
@@ -463,11 +498,10 @@ protected:
   // -- placement groups --
   map<int, PGPool*> pool_map;
   hash_map<pg_t, PG*> pg_map;
-  hash_map<pg_t, list<Message*> > waiting_for_pg;
+  map<pg_t, list<Message*> > waiting_for_pg;
 
-  PGPool *_lookup_pool(int id);
   PGPool *_get_pool(int id);
-  void _put_pool(int id);
+  void _put_pool(PGPool *p);
 
   bool  _have_pg(pg_t pgid);
   PG   *_lookup_lock_pg(pg_t pgid);
@@ -475,6 +509,9 @@ protected:
   PG   *_create_lock_pg(pg_t pg, ObjectStore::Transaction& t); // create new PG
   PG   *_create_lock_new_pg(pg_t pgid, vector<int>& acting, ObjectStore::Transaction& t);
   //void  _remove_unlock_pg(PG *pg);         // remove from store and memory
+
+  PG *lookup_lock_pg(pg_t pgid);
+  PG *lookup_lock_raw_pg(pg_t pgid);
 
   void load_pgs();
   void calc_priors_during(pg_t pgid, epoch_t start, epoch_t end, set<int>& pset);
@@ -488,7 +525,7 @@ protected:
     }
   }
   void wake_all_pg_waiters() {
-    for (hash_map<pg_t, list<Message*> >::iterator p = waiting_for_pg.begin();
+    for (map<pg_t, list<Message*> >::iterator p = waiting_for_pg.begin();
 	 p != waiting_for_pg.end();
 	 p++)
       take_waiters(p->second);
@@ -516,6 +553,7 @@ protected:
 
   // == monitor interaction ==
   utime_t last_mon_report;
+  utime_t last_pg_stats_sent;
 
   void do_mon_report();
 
@@ -541,18 +579,19 @@ protected:
   set<int> failure_queue;
   set<int> failure_pending;
 
+
   void queue_failure(int n) {
     failure_queue.insert(n);
   }
   void send_failures();
+  void send_still_alive(int osd);
 
   // -- pg stats --
   Mutex pg_stat_queue_lock;
   xlist<PG*> pg_stat_queue;
   bool osd_stat_updated;
-  bool osd_stat_pending;
 
-  void send_pg_stats();
+  void send_pg_stats(const utime_t &now);
   void handle_pg_stats_ack(class MPGStatsAck *ack);
 
   void handle_command(class MMonCommand *m);
@@ -611,6 +650,7 @@ protected:
   bool require_same_or_newer_map(Message *m, epoch_t e);
 
   void handle_pg_query(class MOSDPGQuery *m);
+  void handle_pg_missing(class MOSDPGMissing *m);
   void handle_pg_notify(class MOSDPGNotify *m);
   void handle_pg_log(class MOSDPGLog *m);
   void handle_pg_info(class MOSDPGInfo *m);
@@ -624,7 +664,8 @@ protected:
   void _process_pg_info(epoch_t epoch, int from,
 			PG::Info &info, 
 			PG::Log &log, 
-			PG::Missing &missing,
+			PG::Missing *missing,
+			map< int, map<pg_t,PG::Query> >& query_map,
 			map<int, MOSDPGInfo*>* info_map,
 			int& created);
 
@@ -679,7 +720,7 @@ protected:
   utime_t defer_recovery_until;
   int recovery_ops_active;
 #ifdef DEBUG_RECOVERY_OIDS
-  set<sobject_t> recovery_oids;
+  map<pg_t, set<sobject_t> > recovery_oids;
 #endif
 
   struct RecoveryWQ : public ThreadPool::WorkQueue<PG> {
@@ -787,9 +828,32 @@ protected:
     }
   } snap_trim_wq;
 
+  // -- scrub scheduling --
+  Mutex sched_scrub_lock;
+  int scrubs_pending;
+  int scrubs_active;
+  set< pair<utime_t,pg_t> > last_scrub_pg;
+
+  bool scrub_should_schedule();
+  void sched_scrub();
+
+  void reg_last_pg_scrub(pg_t pgid, utime_t t) {
+    Mutex::Locker l(sched_scrub_lock);
+    last_scrub_pg.insert(pair<utime_t,pg_t>(t, pgid));
+  }
+  void unreg_last_pg_scrub(pg_t pgid, utime_t t) {
+    Mutex::Locker l(sched_scrub_lock);
+    pair<utime_t,pg_t> p(t, pgid);
+    last_scrub_pg.erase(p);
+  }
+
+  bool inc_scrubs_pending();
+  void dec_scrubs_pending();
+  void dec_scrubs_active();
 
   // -- scrubbing --
   xlist<PG*> scrub_queue;
+
 
   struct ScrubWQ : public ThreadPool::WorkQueue<PG> {
     OSD *osd;
@@ -799,15 +863,17 @@ protected:
       return osd->scrub_queue.empty();
     }
     bool _enqueue(PG *pg) {
-      if (pg->scrub_item.is_on_list())
+      if (pg->scrub_item.is_on_list()) {
 	return false;
+      }
       pg->get();
       osd->scrub_queue.push_back(&pg->scrub_item);
       return true;
     }
     void _dequeue(PG *pg) {
-      if (pg->scrub_item.remove_myself())
+      if (pg->scrub_item.remove_myself()) {
 	pg->put();
+      }
     }
     PG *_dequeue() {
       if (osd->scrub_queue.empty())
@@ -818,7 +884,6 @@ protected:
     }
     void _process(PG *pg) {
       pg->scrub();
-      pg->get();
     }
     void _clear() {
       while (!osd->scrub_queue.empty()) {
@@ -828,6 +893,54 @@ protected:
       }
     }
   } scrub_wq;
+
+  struct RepScrubWQ : public ThreadPool::WorkQueue<MOSDRepScrub> {
+  private: 
+    OSD *osd;
+    list<MOSDRepScrub*> rep_scrub_queue;
+
+  public:
+    RepScrubWQ(OSD *o, ThreadPool *tp) : 
+      ThreadPool::WorkQueue<MOSDRepScrub>("OSD::RepScrubWQ", tp), osd(o) {}
+
+    bool _empty() {
+      return rep_scrub_queue.empty();
+    }
+    bool _enqueue(MOSDRepScrub *msg) {
+      rep_scrub_queue.push_back(msg);
+      return true;
+    }
+    void _dequeue(MOSDRepScrub *msg) {
+      assert(0); // Not applicable for this wq
+      return;
+    }
+    MOSDRepScrub *_dequeue() {
+      if (rep_scrub_queue.empty())
+	return NULL;
+      MOSDRepScrub *msg = rep_scrub_queue.front();
+      rep_scrub_queue.pop_front();
+      return msg;
+    }
+    void _process(MOSDRepScrub *msg) {
+      osd->osd_lock.Lock();
+      if (osd->_have_pg(msg->pgid)) {
+	PG *pg = osd->_lookup_lock_pg(msg->pgid);
+	osd->osd_lock.Unlock();
+	pg->replica_scrub(msg);
+	pg->unlock();
+      } else {
+	msg->put();
+	osd->osd_lock.Unlock();
+      }
+    }
+    void _clear() {
+      while (!rep_scrub_queue.empty()) {
+	MOSDRepScrub *msg = rep_scrub_queue.front();
+	rep_scrub_queue.pop_front();
+	msg->put();
+      }
+    }
+  } rep_scrub_wq;
 
   // -- removing --
   xlist<PG*> remove_queue;
@@ -876,11 +989,13 @@ protected:
 			    int protocol, bufferlist& authorizer, bufferlist& authorizer_reply,
 			    bool& isvalid);
   void ms_handle_connect(Connection *con);
-  bool ms_handle_reset(Connection *con) { return false; }
+  bool ms_handle_reset(Connection *con);
   void ms_handle_remote_reset(Connection *con) {}
 
  public:
-  OSD(int id, Messenger *m, Messenger *hbm, MonClient *mc,
+  /* internal and external can point to the same messenger, they will still
+   * be cleaned up properly*/
+  OSD(int id, Messenger *internal, Messenger *external, Messenger *hbm, MonClient *mc,
       const char *dev = 0, const char *jdev = 0);
   ~OSD();
 
@@ -917,6 +1032,7 @@ public:
   void reply_op_error(MOSDOp *op, int r);
   void handle_misdirected_op(PG *pg, MOSDOp *op);
 
+  void handle_rep_scrub(MOSDRepScrub *m);
   void handle_scrub(class MOSDScrub *m);
   void handle_osd_ping(class MOSDPing *m);
   void handle_op(class MOSDOp *m);
@@ -925,9 +1041,15 @@ public:
 
   void force_remount();
 
-  LogClient *get_logclient() { return &logclient; }
-
   void init_op_flags(MOSDOp *op);
+
+
+  void put_object_context(void *_obc, pg_t pgid);
+  void complete_notify(void *notif, void *obc);
+  void ack_notification(entity_name_t& peer_addr, void *notif, void *obc);
+  Mutex watch_lock;
+  SafeTimer watch_timer;
+  void handle_notify_timeout(void *notif);
 };
 
 //compatibility of the executable

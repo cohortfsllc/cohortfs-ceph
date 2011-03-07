@@ -12,24 +12,16 @@
  * 
  */
 
-
-
 #ifndef CEPH_CLOCK_H
 #define CEPH_CLOCK_H
 
-#include <iostream>
 #include <iomanip>
-
+#include <iostream>
 #include <sys/time.h>
 #include <time.h>
 
-#include "Mutex.h"
-
 #include "include/utime.h"
 
-
-
-// -- clock --
 class Clock {
  protected:
   //utime_t start_offset;
@@ -37,13 +29,9 @@ class Clock {
   utime_t last;
   utime_t zero;
 
-  Mutex lock;
-
  public:
-  Clock() : lock("Clock::lock") {
-    // set offset
-    //tare();
-  }
+  Clock();
+  ~Clock();
 
   // real time.
   utime_t real_now() {
@@ -53,15 +41,6 @@ class Clock {
     return realnow;
   }
 
-  // relative time (from startup)
-  void tare() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    zero.set_from_timeval(&tv);
-  }
-  void tare(utime_t z) {
-    zero = z;
-  }
   utime_t now() {
     //lock.Lock();  
     struct timeval tv;
@@ -69,7 +48,7 @@ class Clock {
     utime_t n(&tv);
     n -= zero;
     if (n < last) {
-      //std::cerr << "WARNING: clock jumped backwards from " << last << " to " << n << std::endl;
+      //derr << "WARNING: clock jumped backwards from " << last << " to " << n << dendl;
       n = last;    // clock jumped backwards!
     } else
       last = n;
@@ -92,8 +71,6 @@ class Clock {
     ts->tv_sec = real.sec();
     ts->tv_nsec = real.nsec();
   }
-
-
 
   // absolute time
   time_t gettime() {

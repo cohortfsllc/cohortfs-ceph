@@ -39,6 +39,7 @@
 
 #include "auth/cephx/CephxKeyServer.h"
 
+#include <memory>
 
 class MonitorStore;
 
@@ -57,24 +58,21 @@ class MForward;
 class Monitor : public Dispatcher {
 public:
   // me
-  int whoami;
+  string name;
+  int rank;
+  entity_addr_t myaddr;
   Messenger *messenger;
   Mutex lock;
+  SafeTimer timer;
 
   MonMap *monmap;
 
-  LogClient logclient;
-
-  // timer.
-  SafeTimer timer;
-  Context *tick_timer;
-  void cancel_tick();
-  void reset_tick();
-  friend class C_Mon_Tick;
-
+  LogClient clog;
   KeyServer key_server;
 
-
+private:
+  void new_tick();
+  friend class C_Mon_Tick;
 
   // -- local storage --
 public:
@@ -89,32 +87,31 @@ private:
   bool stopping;
 
 public:
-  bool is_starting() { return state == STATE_STARTING; }
-  bool is_leader() { return state == STATE_LEADER; }
-  bool is_peon() { return state == STATE_PEON; }
-  bool is_stopping() { return stopping; }
+  bool is_starting() const { return state == STATE_STARTING; }
+  bool is_leader() const { return state == STATE_LEADER; }
+  bool is_peon() const { return state == STATE_PEON; }
+  bool is_stopping() const { return stopping; }
 
+  const utime_t &get_leader_since() const;
 
   // -- elector --
 private:
   Elector elector;
   friend class Elector;
   
-  epoch_t  mon_epoch;    // monitor epoch (election instance)
   int leader;            // current leader (to best of knowledge)
   set<int> quorum;       // current active set of monitors (if !starting)
-  utime_t last_called_election;  // [starting] last time i called an election
+  utime_t leader_since;  // when this monitor became the leader, if it is the leader
   
 public:
-  epoch_t get_epoch() { return mon_epoch; }
+  epoch_t get_epoch();
   int get_leader() { return leader; }
   const set<int>& get_quorum() { return quorum; }
-  bool is_full_quorum() {
-    return quorum.size() == monmap->size();
-  }
 
   void call_election(bool is_new=true);  // initiate election
+  void starting_election();                              // start election (called by Elector)
   void win_election(epoch_t epoch, set<int>& q);         // end election (called by Elector)
+  void win_standalone_election();
   void lose_election(epoch_t epoch, set<int>& q, int l); // end election (called by Elector)
 
 
@@ -145,7 +142,7 @@ public:
   void check_subs();
   void check_sub(Subscription *sub);
 
-  void send_latest_monmap(entity_inst_t i);
+  void send_latest_monmap(Connection *con);
   
 
   // messages
@@ -176,10 +173,7 @@ public:
   void forward_request_leader(PaxosServiceMessage *req);
   void handle_forward(MForward *m);
   void try_send_message(Message *m, entity_inst_t to);
-  void send_reply(PaxosServiceMessage *req, Message *reply, entity_inst_t to);
-  void send_reply(PaxosServiceMessage *req, Message *reply) {
-    send_reply(req, reply, req->get_orig_source_inst());
-  }
+  void send_reply(PaxosServiceMessage *req, Message *reply);
   void resend_routed_requests();
   void remove_session(MonSession *s);
 
@@ -221,7 +215,7 @@ public:
   void ms_handle_remote_reset(Connection *con) {}
 
  public:
-  Monitor(int w, MonitorStore *s, Messenger *m, MonMap *map);
+  Monitor(string nm, MonitorStore *s, Messenger *m, MonMap *map);
   ~Monitor();
 
   void init();
@@ -232,8 +226,13 @@ public:
 
   int mkfs(bufferlist& osdmapbl);
 
-  LogClient *get_logclient() { return &logclient; }
+private:
+  // don't allow copying
+  Monitor(const Monitor& rhs);
+  Monitor& operator=(const Monitor &rhs);
 };
+
+int strict_strtol(const char *str, int base, std::string *err);
 
 #define CEPH_MON_FEATURE_INCOMPAT_BASE CompatSet::Feature (1, "initial feature set (~v.18)")
 extern const CompatSet::Feature ceph_mon_feature_compat[];

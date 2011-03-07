@@ -14,17 +14,35 @@
 
 using namespace std;
 
-#include "config.h"
+#include "common/config.h"
 
 #include "common/ConfUtils.h"
+#include "common/ceph_argparse.h"
 #include "common/common_init.h"
 #include "auth/Crypto.h"
 #include "auth/Auth.h"
 #include "auth/KeyRing.h"
 
+#include <sstream>
+
 void usage()
 {
-  cout << " usage: [--create-keyring] [--gen-key] [--name=<name>] [--set-uid=uid] [--caps=<filename>] [--list] [--print-key] <filename>" << std::endl;
+  cout << "usage: cauthtool keyringfile [OPTIONS]...\n"
+       << "where the options are:\n"
+       << "  -l, --list                    will list all keys and capabilities present in\n"
+       << "                                the keyring\n"
+       << "  -p, --print                   will print an encoded key for the specified\n"
+       << "                                entityname. This is suitable for the\n"
+       << "                                'mount -o secret=..' argument\n"
+       << "  -c, --create-keyring          will create a new keyring, overwriting any\n"
+       << "                                existing keyringfile\n"
+       << "  --gen-key                     will generate a new secret key for the\n"
+       << "                                specified entityname\n"
+       << "  --add-key                     will add an encoded key to the keyring\n"
+       << "  --cap subsystem capability    will set the capability for given subsystem\n"
+       << "  --caps capsfile               will set all of capabilities associated with a\n"
+       << "                                given key, for all subsystems\n"
+       << "  -b, --bin                     will create a binary formatted keyring" << std::endl;
   exit(1);
 }
 
@@ -35,8 +53,7 @@ int main(int argc, const char **argv)
   env_to_vec(args);
   DEFINE_CONF_VARS(usage);
 
-  common_set_defaults(false);
-  common_init(args, "cauthtool", false);
+  common_init(args, "cauthtool", STARTUP_FLAG_FORCE_FG_LOGGING);
 
   const char *me = argv[0];
 
@@ -52,6 +69,8 @@ int main(int argc, const char **argv)
   bool set_auid = false;
   uint64_t auid = CEPH_AUTH_UID_DEFAULT;
   const char *name = g_conf.name;
+  map<string,bufferlist> caps;
+  bool bin_keyring = false;
 
   FOR_EACH_ARG(args) {
     if (CONF_ARG_EQ("gen-key", 'g')) {
@@ -64,6 +83,11 @@ int main(int argc, const char **argv)
       CONF_SAFE_SET_ARG_VAL(&list, OPT_BOOL);
     } else if (CONF_ARG_EQ("caps", '\0')) {
       CONF_SAFE_SET_ARG_VAL(&caps_fn, OPT_STR);
+    } else if (CONF_ARG_EQ("cap", '\0')) {
+      const char *key, *val;
+      CONF_SAFE_SET_ARG_VAL(&key, OPT_STR);
+      CONF_SAFE_SET_ARG_VAL(&val, OPT_STR);
+      ::encode(val, caps[key]);
     } else if (CONF_ARG_EQ("print-key", 'p')) {
       CONF_SAFE_SET_ARG_VAL(&print_key, OPT_BOOL);
     } else if (CONF_ARG_EQ("create-keyring", 'c')) {
@@ -73,6 +97,8 @@ int main(int argc, const char **argv)
     } else if (CONF_ARG_EQ("set-uid", 'u')) {
       CONF_SAFE_SET_ARG_VAL(&auid, OPT_LONGLONG);
       set_auid = true;
+    } else if (CONF_ARG_EQ("bin", 'b')) {
+      CONF_SAFE_SET_ARG_VAL(&bin_keyring, OPT_BOOL);
     } else if (!fn) {
       fn = args[i];
     } else 
@@ -87,6 +113,7 @@ int main(int argc, const char **argv)
 	add_key ||
 	list ||
 	caps_fn ||
+	caps.size() ||
 	set_auid ||
 	print_key ||
 	create_keyring ||
@@ -98,7 +125,7 @@ int main(int argc, const char **argv)
     cerr << "can't both gen_key and add_key" << std::endl;
     usage();
   }	
-  if (caps_fn || add_key || gen_key || print_key || set_auid) {
+  if (caps_fn || caps.size() || add_key || gen_key || print_key || set_auid) {
     if (!name || !(*name)) {
       cerr << "must specify entity name" << std::endl;
       usage();
@@ -133,7 +160,7 @@ int main(int argc, const char **argv)
       try {
 	bufferlist::iterator iter = bl.begin();
 	::decode(keyring, iter);
-      } catch (buffer::error *err) {
+      } catch (const buffer::error &err) {
 	cerr << "error reading file " << fn << std::endl;
 	exit(1);
       }
@@ -152,7 +179,7 @@ int main(int argc, const char **argv)
       try {
 	bufferlist::iterator iter = obl.begin();
 	::decode(other, iter);
-      } catch (buffer::error *err) {
+      } catch (const buffer::error &err) {
 	cerr << "error reading file " << import_keyring << std::endl;
 	exit(1);
       }
@@ -181,7 +208,7 @@ int main(int argc, const char **argv)
     string ekey(add_key);
     try {
       eauth.key.decode_base64(ekey);
-    } catch (buffer::error *err) {
+    } catch (const buffer::error &err) {
       cerr << "can't decode key '" << add_key << "'" << std::endl;
       exit(1);
     }
@@ -211,6 +238,10 @@ int main(int argc, const char **argv)
     keyring.set_caps(ename, caps);
     modified = true;
   }
+  if (caps.size()) {
+    keyring.set_caps(ename, caps);
+    modified = true;
+  }
   if (set_auid) {
     if (!name) {
       cerr << "must specify a name to set a uid" << std::endl;
@@ -236,7 +267,14 @@ int main(int argc, const char **argv)
   // write result?
   if (modified) {
     bufferlist bl;
-    ::encode(keyring, bl);
+    if (bin_keyring) {
+      ::encode(keyring, bl);
+    } else {
+      std::ostringstream os;
+      keyring.print(os);
+      string str = os.str();
+      bl.append(str);
+    }
     r = bl.write_file(fn, 0600);
     if (r < 0) {
       cerr << "could not write " << fn << std::endl;

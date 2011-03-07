@@ -17,14 +17,14 @@
 using namespace std;
 
 
-#include "config.h"
+#include "common/config.h"
 #include "SyntheticClient.h"
 #include "osdc/Objecter.h"
 #include "osdc/Filer.h"
 
 
 #include "include/filepath.h"
-#include "common/Logger.h"
+#include "common/ProfLogger.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -34,11 +34,11 @@ using namespace std;
 #include <math.h>
 #include <sys/statvfs.h>
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS client
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "client" << (whoami >= 0 ? whoami:client->get_nodeid()) << " "
+#define dout_prefix *_dout << "client" << (whoami >= 0 ? whoami:client->get_nodeid()) << " "
 
 // traces
 //void trace_include(SyntheticClient *syn, Client *cl, string& prefix);
@@ -48,6 +48,7 @@ using namespace std;
 list<int> syn_modes;
 list<int> syn_iargs;
 list<string> syn_sargs;
+int syn_filer_flags = 0;
 
 void parse_syn_options(vector<const char*>& args)
 {
@@ -244,6 +245,10 @@ void parse_syn_options(vector<const char*>& args)
         cerr << "unknown syn arg " << args[i] << std::endl;
         assert(0);
       }
+    }
+    else if (strcmp(args[i], "localize_reads") == 0) {
+      cerr << "set CEPH_OSD_FLAG_LOCALIZE_READS" << std::endl;
+      syn_filer_flags |= CEPH_OSD_FLAG_LOCALIZE_READS;
     }
     else {
       nargs.push_back(args[i]);
@@ -770,7 +775,7 @@ int SyntheticClient::run()
 	snprintf(realtfile, sizeof(realtfile), tfile.c_str(), (int)client->get_nodeid().v);
 
         if (run_me()) {
-          dout(-2) << "trace " << tfile << " prefix=" << prefix << " count=" << iarg1 << " data=" << playdata << dendl;
+          dout(0) << "trace " << tfile << " prefix=" << prefix << " count=" << iarg1 << " data=" << playdata << dendl;
           
           Trace t(realtfile);
           
@@ -1359,10 +1364,10 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t ol = t.get_int();
       object_t oid = file_object_t(oh, ol);
       lock.Lock();
-      ceph_object_layout layout = client->osdmap->make_object_layout(oid, CEPH_CASDATA_RULE);
+      object_locator_t oloc(CEPH_CASDATA_RULE);
       uint64_t size;
       utime_t mtime;
-      client->objecter->stat(oid, layout, CEPH_NOSNAP, &size, &mtime, 0, new C_SafeCond(&lock, &cond, &ack));
+      client->objecter->stat(oid, oloc, CEPH_NOSNAP, &size, &mtime, 0, new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.Wait(lock);
       lock.Unlock();
     }
@@ -1372,10 +1377,10 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
+      object_locator_t oloc(CEPH_CASDATA_RULE);
       lock.Lock();
-      ceph_object_layout layout = client->osdmap->make_object_layout(oid, CEPH_CASDATA_RULE);
       bufferlist bl;
-      client->objecter->read(oid, layout, off, len, CEPH_NOSNAP, &bl, 0, new C_SafeCond(&lock, &cond, &ack));
+      client->objecter->read(oid, oloc, off, len, CEPH_NOSNAP, &bl, 0, new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.Wait(lock);
       lock.Unlock();
     }
@@ -1385,13 +1390,13 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
+      object_locator_t oloc(CEPH_CASDATA_RULE);
       lock.Lock();
-      ceph_object_layout layout = client->osdmap->make_object_layout(oid, CEPH_CASDATA_RULE);
       bufferptr bp(len);
       bufferlist bl;
       bl.push_back(bp);
       SnapContext snapc;
-      client->objecter->write(oid, layout, off, len, snapc, bl, g_clock.now(), 0,
+      client->objecter->write(oid, oloc, off, len, snapc, bl, g_clock.now(), 0,
 			      new C_SafeCond(&lock, &cond, &ack),
 			      safeg->new_sub());
       while (!ack) cond.Wait(lock);
@@ -1403,10 +1408,10 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
+      object_locator_t oloc(CEPH_CASDATA_RULE);
       lock.Lock();
-      ceph_object_layout layout = client->osdmap->make_object_layout(oid, CEPH_CASDATA_RULE);
       SnapContext snapc;
-      client->objecter->zero(oid, layout, off, len, snapc, g_clock.now(), 0,
+      client->objecter->zero(oid, oloc, off, len, snapc, g_clock.now(), 0,
 			     new C_SafeCond(&lock, &cond, &ack),
 			     safeg->new_sub());
       while (!ack) cond.Wait(lock);
@@ -1614,7 +1619,7 @@ int SyntheticClient::dump_placement(string& fn) {
   struct stat stbuf;
   int lstat_result = client->lstat(fn.c_str(), &stbuf);
   if (lstat_result < 0) {
-    derr(0) << "lstat error for file " << fn << dendl;
+    dout(0) << "lstat error for file " << fn << dendl;
     return lstat_result;
   }
     
@@ -1633,7 +1638,7 @@ int SyntheticClient::dump_placement(string& fn) {
   for (vector<ObjectExtent>::iterator i = extents.begin(); 
        i != extents.end(); ++i) {
     
-    int osd = client->osdmap->get_pg_primary(pg_t(i->layout.ol_pgid));
+    int osd = client->osdmap->get_pg_primary(client->osdmap->object_locator_to_pg(i->oid, i->oloc));
 
     // run through all the buffer extents
     for (map<__u32,__u32>::iterator j = i ->buffer_extents.begin();
@@ -1884,7 +1889,7 @@ int SyntheticClient::overload_osd_0(int n, int size, int wrsize) {
 
 
     // pull open a file
-    dout(-1) << "in OSD overload" << dendl;
+    dout(0) << "in OSD overload" << dendl;
     string filename = get_sarg(tried);
     dout(1) << "OSD Overload workload: trying file " << filename << dendl;
     int fd = client->open(filename.c_str(), O_RDWR|O_CREAT);
@@ -1914,7 +1919,8 @@ int SyntheticClient::overload_osd_0(int n, int size, int wrsize) {
 int SyntheticClient::check_first_primary(int fh) {
   vector<ObjectExtent> extents;
   client->enumerate_layout(fh, extents, 1, 0);  
-  return client->osdmap->get_pg_primary(pg_t((extents.begin())->layout.ol_pgid));
+  return client->osdmap->get_pg_primary(client->osdmap->object_locator_to_pg(extents.begin()->oid,
+									     extents.begin()->oloc));
 }
 
 int SyntheticClient::rm_file(string& fn)
@@ -2161,7 +2167,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     if (time_to_stop()) break;
 
     object_t oid = file_object_t(999, i);
-    ceph_object_layout layout = client->osdmap->make_object_layout(oid, CEPH_CASDATA_RULE);
+    object_locator_t oloc(CEPH_CASDATA_RULE);
     SnapContext snapc;
     
     if (i % inflight == 0) {
@@ -2171,7 +2177,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     
     starts.push_back(g_clock.now());
     client->client_lock.Lock();
-    client->objecter->write(oid, layout, 0, osize, snapc, bl, g_clock.now(), 0,
+    client->objecter->write(oid, oloc, 0, osize, snapc, bl, g_clock.now(), 0,
 			    new C_Ref(lock, cond, &unack),
 			    new C_Ref(lock, cond, &unsafe));
     client->client_lock.Unlock();
@@ -2200,7 +2206,6 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   lock.Unlock();
 
   dout(5) << "create_objects done" << dendl;
-  derr(0) << "create_objects done" << dendl;
   return 0;
 }
 
@@ -2263,8 +2268,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       o = (long)trunc(pow(r, rskew) * (double)nobj);  // exponentially skew towards 0
     }
     object_t oid = file_object_t(999, o);
-
-    ceph_object_layout layout = client->osdmap->make_object_layout(oid, CEPH_CASDATA_RULE);
+    object_locator_t oloc(CEPH_CASDATA_RULE);
     SnapContext snapc;
     
     client->client_lock.Lock();
@@ -2284,7 +2288,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
         op.op.op = CEPH_OSD_OP_STARTSYNC;
 	m.ops.push_back(op);
       }
-      client->objecter->mutate(oid, layout, m, snapc, g_clock.now(), 0,
+      client->objecter->mutate(oid, oloc, m, snapc, g_clock.now(), 0,
 			       NULL, new C_Ref(lock, cond, &unack));
       /*client->objecter->write(oid, layout, 0, osize, snapc, bl, 0,
 			      new C_Ref(lock, cond, &unack),
@@ -2292,7 +2296,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     } else {
       dout(10) << "read from " << oid << dendl;
       bufferlist inbl;
-      client->objecter->read(oid, layout, 0, osize, CEPH_NOSNAP, &inbl, 0,
+      client->objecter->read(oid, oloc, 0, osize, CEPH_NOSNAP, &inbl, 0,
 			     new C_Ref(lock, cond, &unack));
     }
     client->client_lock.Unlock();

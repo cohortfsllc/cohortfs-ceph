@@ -45,6 +45,7 @@ private:
 
   // [leader]
   OSDMap::Incremental pending_inc;
+  multimap<int, pair<int, int> > failed_notes; // <failed_osd, <reporter, #reports> >
   map<int,utime_t>    down_pending_out;  // osd down -> out
 
   map<int,double> osd_weight;
@@ -70,6 +71,8 @@ private:
   void send_incremental(PaxosServiceMessage *m, epoch_t first);
   void send_incremental(epoch_t first, entity_inst_t& dest);
 
+  void remove_redundant_pg_temp();
+  int reweight_by_utilization(int oload, std::string& out_str);
  
   bool preprocess_failure(class MOSDFailure *m);
   bool prepare_failure(class MOSDFailure *m);
@@ -155,9 +158,12 @@ private:
 
   void tick();  // check state, take actions
 
+  enum health_status_t get_health(std::ostream &ss) const;
   bool preprocess_command(MMonCommand *m);
   bool prepare_command(MMonCommand *m);
 
+  void handle_osd_timeouts(const utime_t &now,
+			   const std::map<int,utime_t> &last_osd_report);
   void mark_all_down();
 
   void send_latest(PaxosServiceMessage *m, epoch_t start=0);
@@ -165,7 +171,7 @@ private:
     send_incremental(m, start);
   }
 
-  void blacklist(entity_addr_t a, utime_t until);
+  epoch_t blacklist(entity_addr_t a, utime_t until);
 
   void check_subs();
   void check_sub(Subscription *sub);

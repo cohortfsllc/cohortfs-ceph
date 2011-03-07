@@ -1,12 +1,25 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+/*
+ * Ceph - scalable distributed file system
+ *
+ * Copyright (C) 2009-2011 New Dream Network
+ *
+ * This is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License version 2.1, as published by the Free Software
+ * Foundation.  See file COPYING.
+ *
+ */
 
 #include "CephxProtocol.h"
 #include "common/Clock.h"
-
-#include "config.h"
+#include "common/config.h"
+#include "common/debug.h"
 
 #define DOUT_SUBSYS auth
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "cephx: "
+#define dout_prefix *_dout << "cephx: "
 
 
 
@@ -429,7 +442,7 @@ bool CephXAuthorizer::verify_reply(bufferlist::iterator& indata)
       dout(0) << "verify_authorizer_reply coudln't decrypt with " << session_key << dendl;
       return false;
     }
-  } catch (buffer::error *e) {
+  } catch (const buffer::error &e) {
     dout(0) << "verify_authorizer_reply exception in decode_decrypt with " << session_key << dendl;
     return false;
   }

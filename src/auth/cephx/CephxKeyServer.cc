@@ -12,7 +12,7 @@
  * 
  */
 
-#include "config.h"
+#include "common/config.h"
 
 #include "CephxKeyServer.h"
 #include "common/Timer.h"
@@ -21,7 +21,7 @@
 
 #define DOUT_SUBSYS auth
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "cephx keyserverdata: "
+#define dout_prefix *_dout << "cephx keyserverdata: "
 
 bool KeyServerData::get_service_secret(uint32_t service_id, ExpiringCryptoKey& secret, uint64_t& secret_id)
 {
@@ -118,7 +118,7 @@ bool KeyServerData::get_caps(EntityName& name, string& type, AuthCapsInfo& caps_
 
 
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "cephx keyserver: "
+#define dout_prefix *_dout << "cephx keyserver: "
 
 
 KeyServer::KeyServer() : lock("KeyServer::lock")
@@ -181,10 +181,13 @@ int KeyServer::_rotate_secret(uint32_t service_id)
   while (r.need_new_secrets(now)) {
     ExpiringCryptoKey ek;
     generate_secret(ek.key);
-    if (r.empty())
+    if (r.empty()) {
       ek.expiration = now;
-    else
-      ek.expiration = MAX(now, r.next().expiration);
+    } else {
+      utime_t next_ttl = now;
+      next_ttl += ttl;
+      ek.expiration = MAX(next_ttl, r.next().expiration);
+    }
     ek.expiration += ttl;
     uint64_t secret_id = r.add(ek);
     dout(10) << "_rotate_secret adding " << ceph_entity_type_name(service_id)
@@ -372,7 +375,7 @@ int KeyServer::_build_session_auth_info(uint32_t service_id, CephXServiceTicketI
 int KeyServer::build_session_auth_info(uint32_t service_id, CephXServiceTicketInfo& auth_ticket_info,
 				       CephXSessionAuthInfo& info)
 {
-  if (get_service_secret(service_id, info.service_secret, info.secret_id) < 0) {
+  if (!get_service_secret(service_id, info.service_secret, info.secret_id)) {
     return -EPERM;
   }
 

@@ -17,16 +17,16 @@
 
 #include "common/Timer.h"
 #include "MonitorStore.h"
+#include "MonmapMonitor.h"
 #include "messages/MMonElection.h"
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS mon
 #undef dout_prefix
 #define dout_prefix _prefix(mon, epoch)
 static ostream& _prefix(Monitor *mon, epoch_t epoch) {
-  return *_dout << dbeginl
-		<< "mon" << mon->whoami
+  return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< (mon->is_starting() ? (const char*)"(starting)":(mon->is_leader() ? (const char*)"(leader)":(mon->is_peon() ? (const char*)"(peon)":(const char*)"(?\?)")))
 		<< ".elector(" << epoch << ") ";
 }
@@ -69,11 +69,13 @@ void Elector::start()
     bump_epoch(epoch+1);  // odd == election cycle
   start_stamp = g_clock.now();
   electing_me = true;
-  acked_me.insert(whoami);
+  acked_me.insert(mon->rank);
+
+  mon->starting_election();
   
   // bcast to everyone else
   for (unsigned i=0; i<mon->monmap->size(); ++i) {
-    if ((int)i == whoami) continue;
+    if ((int)i == mon->rank) continue;
     mon->messenger->send_message(new MMonElection(MMonElection::OP_PROPOSE, epoch, mon->monmap),
 				 mon->monmap->get_inst(i));
   }
@@ -151,7 +153,7 @@ void Elector::victory()
   for (set<int>::iterator p = quorum.begin();
        p != quorum.end();
        ++p) {
-    if (*p == whoami) continue;
+    if (*p == mon->rank) continue;
     MMonElection *m = new MMonElection(MMonElection::OP_VICTORY, epoch, mon->monmap);
     m->quorum = quorum;
     mon->messenger->send_message(m, mon->monmap->get_inst(*p));
@@ -186,7 +188,7 @@ void Elector::handle_propose(MMonElection *m)
     }
   }
 
-  if (whoami < from) {
+  if (mon->rank < from) {
     // i would win over them.
     if (leader_acked >= 0) {        // we already acked someone
       assert(leader_acked < from);  // and they still win, of course
@@ -250,7 +252,7 @@ void Elector::handle_victory(MMonElection *m)
   dout(5) << "handle_victory from " << m->get_source() << dendl;
   int from = m->get_source().num();
 
-  assert(from < whoami);
+  assert(from < mon->rank);
   assert(m->epoch % 2 == 0);  
 
   // i should have seen this election if i'm getting the victory.
@@ -290,18 +292,15 @@ void Elector::dispatch(Message *m)
 		<< " > my epoch " << mon->monmap->epoch 
 		<< ", taking it"
 		<< dendl;
-	delete mon->monmap;
-	mon->monmap = peermap;
-	mon->store->put_bl_sn(em->monmap_bl, "monmap", peermap->epoch);
-	mon->store->put_bl_ss(em->monmap_bl, "monmap", "latest");
-      } else {
-	if (peermap->epoch < mon->monmap->epoch) {
-	  dout(0) << m->get_source_inst() << " has older monmap epoch " << peermap->epoch
-		  << " < my epoch " << mon->monmap->epoch 
-		  << dendl;
-	}
-	delete peermap;
+	mon->monmap->decode(em->monmap_bl);
+	mon->store->put_bl_sn(em->monmap_bl, "monmap", mon->monmap->epoch);
+	mon->monmon()->paxos->stash_latest(mon->monmap->epoch, em->monmap_bl);
+      } else if (peermap->epoch < mon->monmap->epoch) {
+	dout(0) << m->get_source_inst() << " has older monmap epoch " << peermap->epoch
+		<< " < my epoch " << mon->monmap->epoch 
+		<< dendl;
       } 
+      delete peermap;
 
       switch (em->op) {
       case MMonElection::OP_PROPOSE:

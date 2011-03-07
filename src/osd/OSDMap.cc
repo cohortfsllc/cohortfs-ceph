@@ -14,22 +14,39 @@
 
 #include "OSDMap.h"
 
-#include "config.h"
+#include "common/config.h"
 
 
 
-void OSDMap::print(ostream& out)
+void OSDMap::print(ostream& out) const
 {
   out << "epoch " << get_epoch() << "\n"
       << "fsid " << get_fsid() << "\n"
       << "created " << get_created() << "\n"
-      << "modifed " << get_modified() << "\n"
-      << std::endl;
-  for (map<int,pg_pool_t>::iterator p = pools.begin(); p != pools.end(); p++) {
+      << "modifed " << get_modified() << "\n";
+
+  out << "flags";
+  if (test_flag(CEPH_OSDMAP_NEARFULL))
+    out << " nearfull";
+  if (test_flag(CEPH_OSDMAP_FULL))
+    out << " full";
+  if (test_flag(CEPH_OSDMAP_PAUSERD))
+    out << " pauserd";
+  if (test_flag(CEPH_OSDMAP_PAUSEWR))
+    out << " pausewr";
+  if (test_flag(CEPH_OSDMAP_PAUSEREC))
+    out << " pauserec";
+  out << "\n" << std::endl;
+ 
+  for (map<int,pg_pool_t>::const_iterator p = pools.begin(); p != pools.end(); ++p) {
+    std::string name("<unknown>");
+    map<int32_t,string>::const_iterator pni = pool_name.find(p->first);
+    if (pni != pool_name.end())
+      name = pni->second;
     out << "pg_pool " << p->first
-	<< " '" << pool_name[p->first]
+	<< " '" << name
 	<< "' " << p->second << "\n";
-    for (map<snapid_t,pool_snap_info_t>::iterator q = p->second.snaps.begin();
+    for (map<snapid_t,pool_snap_info_t>::const_iterator q = p->second.snaps.begin();
 	 q != p->second.snaps.end();
 	 q++)
       out << "\tsnap " << q->second.snapid << " '" << q->second.name << "' " << q->second.stamp << "\n";
@@ -42,28 +59,25 @@ void OSDMap::print(ostream& out)
   for (int i=0; i<get_max_osd(); i++) {
     if (exists(i)) {
       out << "osd" << i;
-      out << (is_in(i) ? " in":" out");
+      out << (is_up(i) ? " up  ":" down");
+      out << (is_in(i) ? " in ":" out");
       if (is_in(i))
 	out << " weight " << get_weightf(i);
-      out << (is_up(i) ? " up  ":" down");
-      osd_info_t& info = get_info(i);
-      out << " (up_from " << info.up_from
-	  << " up_thru " << info.up_thru
-	  << " down_at " << info.down_at
-	  << " last_clean " << info.last_clean_first << "-" << info.last_clean_last << ")";
+      const osd_info_t& info(get_info(i));
+      out << " " << info;
       if (is_up(i))
-	out << " " << get_addr(i) << " " << get_hb_addr(i);
+	out << " " << get_addr(i) << " " << get_cluster_addr(i) << " " << get_hb_addr(i);
       out << "\n";
     }
   }
   out << std::endl;
 
-  for (map<pg_t,vector<int> >::iterator p = pg_temp.begin();
+  for (map<pg_t,vector<int> >::const_iterator p = pg_temp.begin();
        p != pg_temp.end();
        p++)
     out << "pg_temp " << p->first << " " << p->second << "\n";
   
-  for (hash_map<entity_addr_t,utime_t>::iterator p = blacklist.begin();
+  for (hash_map<entity_addr_t,utime_t>::const_iterator p = blacklist.begin();
        p != blacklist.end();
        p++)
     out << "blacklist " << p->first << " expires " << p->second << "\n";
@@ -71,20 +85,17 @@ void OSDMap::print(ostream& out)
   // ignore pg_swap_primary
 }
 
-void OSDMap::print_summary(ostream& out)
+void OSDMap::print_summary(ostream& out) const
 {
   out << "e" << get_epoch() << ": "
       << get_num_osds() << " osds: "
       << get_num_up_osds() << " up, " 
       << get_num_in_osds() << " in";
-  if (blacklist.size())
-    out << " -- " << blacklist.size() << " blacklisted MDSes";
 }
 
 
 void OSDMap::build_simple(epoch_t e, ceph_fsid_t &fsid,
-			  int num_osd, int num_dom, int pg_bits, int lpg_bits,
-			  int mds_local_osd)
+			  int num_osd, int num_dom, int pg_bits, int pgp_bits, int lpg_bits)
 {
   dout(10) << "build_simple on " << num_osd
 	   << " osds with " << pg_bits << " pg bits per osd, "
@@ -94,6 +105,10 @@ void OSDMap::build_simple(epoch_t e, ceph_fsid_t &fsid,
   created = modified = g_clock.now();
 
   set_max_osd(num_osd);
+
+  // pgp_num <= pg_num
+  if (pgp_bits > pg_bits)
+    pgp_bits = pg_bits; 
   
   // crush map
   map<int, const char*> rulesets;
@@ -109,7 +124,7 @@ void OSDMap::build_simple(epoch_t e, ceph_fsid_t &fsid,
     pools[pool].v.crush_ruleset = p->first;
     pools[pool].v.object_hash = CEPH_STR_HASH_RJENKINS;
     pools[pool].v.pg_num = num_osd << pg_bits;
-    pools[pool].v.pgp_num = num_osd << pg_bits;
+    pools[pool].v.pgp_num = num_osd << pgp_bits;
     pools[pool].v.lpg_num = lpg_bits ? (1 << (lpg_bits-1)) : 0;
     pools[pool].v.lpgp_num = lpg_bits ? (1 << (lpg_bits-1)) : 0;
     pools[pool].v.last_change = epoch;
@@ -121,16 +136,6 @@ void OSDMap::build_simple(epoch_t e, ceph_fsid_t &fsid,
   for (int i=0; i<num_osd; i++) {
     set_state(i, 0);
     set_weight(i, CEPH_OSD_OUT);
-  }
-  
-  if (mds_local_osd) {
-    set_max_osd(mds_local_osd+num_osd);
-
-    // add mds local osds, but don't put them in the crush mapping func
-    for (int i=0; i<mds_local_osd; i++) {
-      set_state(i+num_osd, 0);
-      set_weight(i+num_osd, CEPH_OSD_OUT);
-    }
   }
 }
 
@@ -156,7 +161,7 @@ void OSDMap::build_simple_crush_map(CrushWrapper& crush, map<int, const char*>& 
     int rweights[ndom];
 
     int nper = ((num_osd - 1) / ndom) + 1;
-    derr(0) << ndom << " failure domains, " << nper << " osds each" << dendl;
+    dout(0) << ndom << " failure domains, " << nper << " osds each" << dendl;
     
     int o = 0;
     for (int i=0; i<ndom; i++) {

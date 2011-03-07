@@ -3,19 +3,25 @@
 #ifndef CEPH_MDSTYPES_H
 #define CEPH_MDSTYPES_H
 
+#ifndef __STDC_FORMAT_MACROS
+#define __STDC_FORMAT_MACROS
+#endif
 
+#include <inttypes.h>
 #include <math.h>
 #include <ostream>
 #include <set>
 #include <map>
 using namespace std;
 
-#include "config.h"
+#include "common/config.h"
 #include "common/DecayCounter.h"
 #include "include/Context.h"
 
 #include "include/frag.h"
 #include "include/xlist.h"
+
+#include "inode_backtrace.h"
 
 #include <boost/pool/pool.hpp>
 
@@ -32,6 +38,7 @@ using namespace std;
 
 
 #define MAX_MDS                   0x100
+#define NUM_STRAY                 10
 
 #define MDS_INO_ROOT              1
 #define MDS_INO_CEPH              2
@@ -43,14 +50,16 @@ using namespace std;
 #define MDS_INO_LOG_OFFSET        (2*MAX_MDS)
 #define MDS_INO_STRAY_OFFSET      (6*MAX_MDS)
 
-#define MDS_INO_SYSTEM_BASE       (10*MAX_MDS)
+#define MDS_INO_SYSTEM_BASE       ((6*MAX_MDS) + (MAX_MDS * NUM_STRAY))
 
-#define MDS_INO_STRAY(x)  (MDS_INO_STRAY_OFFSET+((unsigned)x))
+#define MDS_INO_STRAY(x,i)  (MDS_INO_STRAY_OFFSET+((((unsigned)(x))*NUM_STRAY)+((unsigned)(i))))
 #define MDS_INO_MDSDIR(x) (MDS_INO_MDSDIR_OFFSET+((unsigned)x))
 
-#define MDS_INO_IS_STRAY(i)  ((i) >= MDS_INO_STRAY_OFFSET  && (i) < (MDS_INO_STRAY_OFFSET+MAX_MDS))
+#define MDS_INO_IS_STRAY(i)  ((i) >= MDS_INO_STRAY_OFFSET  && (i) < (MDS_INO_STRAY_OFFSET+(MAX_MDS*NUM_STRAY)))
 #define MDS_INO_IS_MDSDIR(i) ((i) >= MDS_INO_MDSDIR_OFFSET && (i) < (MDS_INO_MDSDIR_OFFSET+MAX_MDS))
 #define MDS_INO_IS_BASE(i)   (MDS_INO_ROOT == (i) || MDS_INO_IS_MDSDIR(i))
+#define MDS_INO_STRAY_OWNER(i) (signed (((unsigned (i)) - MDS_INO_STRAY_OFFSET) / NUM_STRAY))
+#define MDS_INO_STRAY_INDEX(i) (((unsigned (i)) - MDS_INO_STRAY_OFFSET) % NUM_STRAY)
 
 #define MDS_TRAVERSE_FORWARD       1
 #define MDS_TRAVERSE_DISCOVER      2    // skips permissions checks etc.
@@ -101,16 +110,19 @@ inline string ccap_string(int cap)
 }
 
 
-
-struct frag_info_t {
+struct scatter_info_t {
   version_t version;
 
+  scatter_info_t() : version(0) {}
+};
+
+struct frag_info_t : public scatter_info_t {
   // this frag
   utime_t mtime;
   int64_t nfiles;        // files
   int64_t nsubdirs;      // subdirs
 
-  frag_info_t() : version(0), nfiles(0), nsubdirs(0) {}
+  frag_info_t() : nfiles(0), nsubdirs(0) {}
 
   int64_t size() const { return nfiles + nsubdirs; }
 
@@ -118,16 +130,14 @@ struct frag_info_t {
     *this = frag_info_t();
   }
 
-  // *this += cur - acc; acc = cur
-  void take_diff(const frag_info_t &cur, frag_info_t &acc, bool& touched_mtime) {
+  // *this += cur - acc;
+  void add_delta(const frag_info_t &cur, frag_info_t &acc, bool& touched_mtime) {
     if (!(cur.mtime == acc.mtime)) {
       mtime = cur.mtime;
       touched_mtime = true;
     }
     nfiles += cur.nfiles - acc.nfiles;
     nsubdirs += cur.nsubdirs - acc.nsubdirs;
-    acc = cur;
-    acc.version = version;
   }
 
   void encode(bufferlist &bl) const {
@@ -167,9 +177,7 @@ inline ostream& operator<<(ostream &out, const frag_info_t &f) {
   return out;
 }
 
-struct nest_info_t {
-  version_t version;
-
+struct nest_info_t : public scatter_info_t {
   // this frag + children
   utime_t rctime;
   int64_t rbytes;
@@ -180,8 +188,7 @@ struct nest_info_t {
   int64_t ranchors;  // for dirstat, includes inode's anchored flag.
   int64_t rsnaprealms;
 
-  nest_info_t() : version(0),
-		  rbytes(0), rfiles(0), rsubdirs(0),
+  nest_info_t() : rbytes(0), rfiles(0), rsubdirs(0),
 		  ranchors(0), rsnaprealms(0) {}
 
   void zero() {
@@ -201,8 +208,8 @@ struct nest_info_t {
     rsnaprealms += fac*other.rsnaprealms;
   }
 
-  // *this += cur - acc; acc = cur
-  void take_diff(const nest_info_t &cur, nest_info_t &acc) {
+  // *this += cur - acc;
+  void add_delta(const nest_info_t &cur, nest_info_t &acc) {
     if (cur.rctime > rctime)
       rctime = cur.rctime;
     rbytes += cur.rbytes - acc.rbytes;
@@ -210,8 +217,6 @@ struct nest_info_t {
     rsubdirs += cur.rsubdirs - acc.rsubdirs;
     ranchors += cur.ranchors - acc.ranchors;
     rsnaprealms += cur.rsnaprealms - acc.rsnaprealms;
-    acc = cur;
-    acc.version = version;
   }
 
   void encode(bufferlist &bl) const {
@@ -334,6 +339,35 @@ inline bool operator==(const byte_range_t& l, const byte_range_t& r) {
   return l.first == r.first && l.last == r.last;
 }
 
+
+struct client_writeable_range_t {
+  byte_range_t range;
+  snapid_t follows;     // aka "data+metadata flushed thru"
+
+  void encode(bufferlist &bl) const {
+    __u8 v = 1;
+    ::encode(v, bl);
+    ::encode(range, bl);
+    ::encode(follows, bl);
+  }
+  void decode(bufferlist::iterator& bl) {
+    __u8 v;
+    ::decode(v, bl);
+    ::decode(range, bl);
+    ::decode(follows, bl);
+  }
+};
+WRITE_CLASS_ENCODER(client_writeable_range_t)
+
+inline ostream& operator<<(ostream& out, const client_writeable_range_t& r)
+{
+  return out << r.range << "@" << r.follows;
+}
+inline bool operator==(const client_writeable_range_t& l, const client_writeable_range_t& r) {
+  return l.range == r.range && l.follows == r.follows;
+}
+
+
 struct inode_t {
   // base (immutable)
   inodeno_t ino;
@@ -352,6 +386,7 @@ struct inode_t {
   bool       anchored;          // auth only?
 
   // file (data access)
+  ceph_dir_layout  dir_layout;    // [dir only]
   ceph_file_layout layout;
   uint64_t   size;        // on directory, # dentries
   uint32_t   truncate_seq;
@@ -361,11 +396,12 @@ struct inode_t {
   utime_t    atime;   // file data access time.
   uint32_t   time_warp_seq;  // count of (potential) mtime/atime timewarps (i.e., utimes())
 
-  map<client_t,byte_range_t> client_ranges;  // client(s) can write to these ranges
+  map<client_t,client_writeable_range_t> client_ranges;  // client(s) can write to these ranges
 
   // dirfrag, recursive accountin
-  frag_info_t dirstat;
-  nest_info_t rstat, accounted_rstat;
+  frag_info_t dirstat;         // protected by my filelock
+  nest_info_t rstat;           // protected by my nestlock
+  nest_info_t accounted_rstat; // protected by parent's nestlock
  
   // special stuff
   version_t version;           // auth only
@@ -395,28 +431,40 @@ struct inode_t {
     return layout.fl_object_size * layout.fl_stripe_count;
   }
 
+  bool is_dirty_rstat() const { return !(rstat == accounted_rstat); }
+
   uint64_t get_max_size() const {
     uint64_t max = 0;
-      for (map<client_t,byte_range_t>::const_iterator p = client_ranges.begin();
+      for (map<client_t,client_writeable_range_t>::const_iterator p = client_ranges.begin();
 	   p != client_ranges.end();
 	   ++p)
-	if (p->second.last > max)
-	  max = p->second.last;
+	if (p->second.range.last > max)
+	  max = p->second.range.last;
       return max;
   }
   void set_max_size(uint64_t new_max) {
     if (new_max == 0) {
       client_ranges.clear();
     } else {
-      for (map<client_t,byte_range_t>::iterator p = client_ranges.begin();
+      for (map<client_t,client_writeable_range_t>::iterator p = client_ranges.begin();
 	   p != client_ranges.end();
 	   ++p)
-	p->second.last = new_max;
+	p->second.range.last = new_max;
+    }
+  }
+
+  void trim_client_ranges(snapid_t last) {
+    map<client_t, client_writeable_range_t>::iterator p = client_ranges.begin();
+    while (p != client_ranges.end()) {
+      if (p->second.follows >= last)
+	client_ranges.erase(p++);
+      else
+	p++;
     }
   }
 
   void encode(bufferlist &bl) const {
-    __u8 v = 2;
+    __u8 v = 4;
     ::encode(v, bl);
 
     ::encode(ino, bl);
@@ -430,6 +478,7 @@ struct inode_t {
     ::encode(nlink, bl);
     ::encode(anchored, bl);
 
+    ::encode(dir_layout, bl);
     ::encode(layout, bl);
     ::encode(size, bl);
     ::encode(truncate_seq, bl);
@@ -464,6 +513,10 @@ struct inode_t {
     ::decode(nlink, p);
     ::decode(anchored, p);
 
+    if (v >= 4)
+      ::decode(dir_layout, p);
+    else
+      memset(&dir_layout, 0, sizeof(dir_layout));
     ::decode(layout, p);
     ::decode(size, p);
     ::decode(truncate_seq, p);
@@ -472,7 +525,14 @@ struct inode_t {
     ::decode(mtime, p);
     ::decode(atime, p);
     ::decode(time_warp_seq, p);
-    ::decode(client_ranges, p);
+    if (v >= 3) {
+      ::decode(client_ranges, p);
+    } else {
+      map<client_t, byte_range_t> m;
+      ::decode(m, p);
+      for (map<client_t, byte_range_t>::iterator q = m.begin(); q != m.end(); q++)
+	client_ranges[q->first].range = q->second;
+    }
     
     ::decode(dirstat, p);
     ::decode(rstat, p);
@@ -586,10 +646,11 @@ struct dentry_key_t {
     __u32 l = strlen(name) + 1;
     char b[20];
     if (snapid != CEPH_NOSNAP) {
-      sprintf(b, "%llx", (long long unsigned)snapid);
+      uint64_t val(snapid);
+      snprintf(b, sizeof(b), "%" PRIx64, val);
       l += strlen(b);
     } else {
-      strcpy(b, "head");
+      snprintf(b, sizeof(b), "%s", "head");
       l += 4;
     }
     ::encode(l, bl);
@@ -729,19 +790,81 @@ namespace __gnu_cxx {
 // cap info for client reconnect
 struct cap_reconnect_t {
   string path;
-  ceph_mds_cap_reconnect capinfo;
+  mutable ceph_mds_cap_reconnect capinfo;
+  bufferlist flockbl;
 
   cap_reconnect_t() {}
-  cap_reconnect_t(uint64_t cap_id, inodeno_t pino, const string& p, int w, int i, uint64_t sz, utime_t mt, utime_t at, inodeno_t sr) : 
+  cap_reconnect_t(uint64_t cap_id, inodeno_t pino, const string& p, int w, int i, inodeno_t sr) : 
     path(p) {
     capinfo.cap_id = cap_id;
     capinfo.wanted = w;
     capinfo.issued = i;
-    capinfo.size = sz;
-    capinfo.mtime = mt;
-    capinfo.atime = at;
     capinfo.snaprealm = sr;
     capinfo.pathbase = pino;
+  }
+
+  void encode(bufferlist& bl) const {
+    ::encode(path, bl);
+    capinfo.flock_len = flockbl.length();
+    ::encode(capinfo, bl);
+    ::encode_nohead(flockbl, bl);
+  }
+  void decode(bufferlist::iterator& bl) {
+    decode_path(path, bl);
+    ::decode(capinfo, bl);
+    ::decode_nohead(capinfo.flock_len, flockbl, bl);
+  }
+private:
+  void decode_path(std::string &path, bufferlist::iterator& p) {
+    // Bypass the check for embedded NULLs by decoding into a raw byte buffer.
+    // We sometimes get paths with embedded NULLs from old kernel clients.
+    __u32 len;
+    ::decode(len, p);
+    if (len > PATH_MAX)
+      throw buffer::malformed_input("cap_reconnect_t::decode_path: PATH too long!");
+    char str[len + 1];
+    memset(str, 0, sizeof(str));
+    p.copy(len, str);
+    path = str;
+  }
+};
+WRITE_CLASS_ENCODER(cap_reconnect_t)
+
+
+// compat for pre-FLOCK feature
+struct old_ceph_mds_cap_reconnect {
+	__le64 cap_id;
+	__le32 wanted;
+	__le32 issued;
+  __le64 old_size;
+  struct ceph_timespec old_mtime, old_atime;
+	__le64 snaprealm;
+	__le64 pathbase;        /* base ino for our path to this ino */
+} __attribute__ ((packed));
+WRITE_RAW_ENCODER(old_ceph_mds_cap_reconnect)
+
+struct old_cap_reconnect_t {
+  string path;
+  old_ceph_mds_cap_reconnect capinfo;
+
+  const old_cap_reconnect_t& operator=(const cap_reconnect_t& n) {
+    path = n.path;
+    capinfo.cap_id = n.capinfo.cap_id;
+    capinfo.wanted = n.capinfo.wanted;
+    capinfo.issued = n.capinfo.issued;
+    capinfo.snaprealm = n.capinfo.snaprealm;
+    capinfo.pathbase = n.capinfo.pathbase;
+    return *this;
+  }
+  operator cap_reconnect_t() {
+    cap_reconnect_t n;
+    n.path = path;
+    n.capinfo.cap_id = capinfo.cap_id;
+    n.capinfo.wanted = capinfo.wanted;
+    n.capinfo.issued = capinfo.issued;
+    n.capinfo.snaprealm = capinfo.snaprealm;
+    n.capinfo.pathbase = capinfo.pathbase;
+    return n;
   }
 
   void encode(bufferlist& bl) const {
@@ -753,8 +876,7 @@ struct cap_reconnect_t {
     ::decode(capinfo, bl);
   }
 };
-WRITE_CLASS_ENCODER(cap_reconnect_t)
-
+WRITE_CLASS_ENCODER(old_cap_reconnect_t)
 
 
 // ================================================================
@@ -1138,6 +1260,8 @@ class MDSCacheObject {
   const static int STATE_AUTH      = (1<<30);
   const static int STATE_DIRTY     = (1<<29);
   const static int STATE_REJOINING = (1<<28);  // replica has not joined w/ primary copy
+  const static int STATE_REJOINUNDEF = (1<<27);  // contents undefined.
+
 
   // -- wait --
   const static uint64_t WAIT_SINGLEAUTH  = (1ull<<60);
@@ -1361,13 +1485,13 @@ protected:
 	ls.push_back(it->second);
 	pdout(10,g_conf.debug_mds) << (mdsco_db_line_prefix(this))
 				   << "take_waiting mask " << hex << mask << dec << " took " << it->second
-				   << " tag " << it->first
+				   << " tag " << hex << it->first << dec
 				   << " on " << *this
 				   << dendl;
 	waiting.erase(it++);
       } else {
 	pdout(10,g_conf.debug_mds) << "take_waiting mask " << hex << mask << dec << " SKIPPING " << it->second
-				   << " tag " << it->first
+				   << " tag " << hex << it->first << dec
 				   << " on " << *this 
 				   << dendl;
 	it++;
@@ -1395,7 +1519,6 @@ protected:
   virtual bool is_lock_waiting(int type, uint64_t mask) { assert(0); return false; }
 
   virtual void clear_dirty_scattered(int type) { assert(0); }
-  virtual void finish_scatter_gather_update(int type) { }
 
   // ---------------------------------------------
   // ordering

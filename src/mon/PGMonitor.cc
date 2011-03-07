@@ -35,29 +35,35 @@
 #include "osd/osd_types.h"
 #include "osd/PG.h"  // yuck
 
-#include "config.h"
+#include "common/config.h"
 #include <sstream>
 
 #define DOUT_SUBSYS mon
 #undef dout_prefix
 #define dout_prefix _prefix(mon, pg_map)
 static ostream& _prefix(Monitor *mon, PGMap& pg_map) {
-  return *_dout << dbeginl
-		<< "mon" << mon->whoami
+  return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< (mon->is_starting() ? (const char*)"(starting)":(mon->is_leader() ? (const char*)"(leader)":(mon->is_peon() ? (const char*)"(peon)":(const char*)"(?\?)")))
 		<< ".pg v" << pg_map.version << " ";
 }
 
-
 /*
  Tick function to update the map based on performance every N seconds
 */
+
+void PGMonitor::on_election_start()
+{
+  // clear leader state
+  last_sent_pg_create.clear();
+  last_osd_report.clear();
+}
 
 void PGMonitor::tick() 
 {
   if (!paxos->is_active()) return;
 
   update_from_paxos();
+  handle_osd_timeouts();
   dout(10) << pg_map << dendl;
 }
 
@@ -78,12 +84,22 @@ bool PGMonitor::update_from_paxos()
     version_t v = paxos->get_latest(latest);
     if (v) {
       dout(7) << "update_from_paxos startup: got latest latest full pgmap v" << v << dendl;
-      bufferlist::iterator p = latest.begin();
-      pg_map.decode(p);
+      try {
+	PGMap tmp_pg_map;
+	bufferlist::iterator p = latest.begin();
+	tmp_pg_map.decode(p);
+	pg_map = tmp_pg_map;
+      }
+      catch (const std::exception &e) {
+	dout(0) << "PGMonitor::update_from_paxos: error parsing update: "
+		<< e.what() << dendl;
+	return false;
+      }
     }
   } 
 
   // walk through incrementals
+  utime_t now(g_clock.now());
   while (paxosv > pg_map.version) {
     bufferlist bl;
     bool success = paxos->read(pg_map.version+1, bl);
@@ -91,8 +107,15 @@ bool PGMonitor::update_from_paxos()
 
     dout(7) << "update_from_paxos  applying incremental " << pg_map.version+1 << dendl;
     PGMap::Incremental inc;
-    bufferlist::iterator p = bl.begin();
-    inc.decode(p);
+    try {
+      bufferlist::iterator p = bl.begin();
+      inc.decode(p);
+    }
+    catch (const std::exception &e) {
+      dout(0) << "PGMonitor::update_from_paxos: error parsing "
+	      << "incremental update: " << e.what() << dendl;
+      return false;
+    }
     pg_map.apply_incremental(inc);
     
     dout(10) << pg_map << dendl;
@@ -118,13 +141,28 @@ bool PGMonitor::update_from_paxos()
     mon->store->put_bl_sn(d, "pgmap_dump", paxosv);
   }
 
+  unsigned max = 500;
   if (mon->is_leader() &&
-      paxosv > 10)
-    paxos->trim_to(paxosv - 10);
+      paxosv > max)
+    paxos->trim_to(paxosv - max);
 
   send_pg_creates();
 
   return true;
+}
+
+void PGMonitor::handle_osd_timeouts()
+{
+  if (!mon->is_leader())
+    return;
+  utime_t now(g_clock.now());
+  utime_t timeo(g_conf.mon_osd_report_timeout, 0);
+  if (now - mon->get_leader_since() < timeo) {
+    // We haven't been the leader for long enough to consider OSD timeouts
+    return;
+  }
+
+  mon->osdmon()->handle_osd_timeouts(now, last_osd_report);
 }
 
 void PGMonitor::create_pending()
@@ -263,49 +301,53 @@ bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
 
 bool PGMonitor::preprocess_pg_stats(MPGStats *stats)
 {
-  int from = stats->get_orig_source().num();
-  MPGStatsAck *ack;
-
   // check caps
   MonSession *session = stats->get_session();
-  if (!session)
-    goto out;
+  if (!session) {
+    derr << "PGMonitor::preprocess_pg_stats: no monitor session!" << dendl;
+    stats->put();
+    return true;
+  }
   if (!session->caps.check_privileges(PAXOS_PGMAP, MON_CAP_R)) {
-    dout(0) << "MPGStats received from entity with insufficient privileges "
-	    << session->caps << dendl;
-    goto out;
+    derr << "PGMonitor::preprocess_pg_stats: MPGStats received from entity "
+         << "with insufficient privileges " << session->caps << dendl;
+    stats->put();
+    return true;
   }
 
-  // first, just see if they need a new osdmap.  but 
+  // First, just see if they need a new osdmap. But
   // only if they've had the map for a while.
   if (stats->had_map_for > 30.0 && 
       mon->osdmon()->paxos->is_readable() &&
       stats->epoch < mon->osdmon()->osdmap.get_epoch())
     mon->osdmon()->send_latest_now_nodelete(stats, stats->epoch+1);
 
-  // any new osd or pg info?
-  if (!pg_map.osd_stat.count(from) ||
-      pg_map.osd_stat[from] != stats->osd_stat)
-    return false;  // new osd stat
+  // Always forward the PGStats to the leader, even if they are the same as
+  // the old PGStats. The leader will mark as down osds that haven't sent
+  // PGStats for a few minutes.
+  return false;
+}
 
-  for (map<pg_t,pg_stat_t>::iterator p = stats->pg_stat.begin();
-       p != stats->pg_stat.end();
-       p++) {
-    if (pg_map.pg_stat.count(p->first) == 0 ||
-	pg_map.pg_stat[p->first].reported != p->second.reported)
-      return false; // new pg stat(s)
+bool PGMonitor::pg_stats_have_changed(int from, const MPGStats *stats) const
+{
+  // any new osd info?
+  hash_map<int,osd_stat_t>::const_iterator s = pg_map.osd_stat.find(from);
+  if (s == pg_map.osd_stat.end())
+    return true;
+  if (s->second != stats->osd_stat)
+    return true;
+
+  // any new pg info?
+  for (map<pg_t,pg_stat_t>::const_iterator p = stats->pg_stat.begin();
+       p != stats->pg_stat.end(); ++p) {
+    hash_map<pg_t,pg_stat_t>::const_iterator t = pg_map.pg_stat.find(p->first);
+    if (t == pg_map.pg_stat.end())
+      return true;
+    if (t->second.reported != p->second.reported)
+      return true;
   }
-  
-  dout(10) << " message contains no new osd|pg stats" << dendl;
-  ack = new MPGStatsAck;
-  for (map<pg_t,pg_stat_t>::iterator p = stats->pg_stat.begin();
-       p != stats->pg_stat.end();
-       p++)
-    ack->pg_stat[p->first] = p->second.reported;
-  mon->send_reply(stats, ack);
- out:
-  stats->put();
-  return true;
+
+  return false;
 }
 
 bool PGMonitor::prepare_pg_stats(MPGStats *stats) 
@@ -318,6 +360,9 @@ bool PGMonitor::prepare_pg_stats(MPGStats *stats)
     stats->put();
     return false;
   }
+
+  last_osd_report[from] = g_clock.now();
+
   if (!stats->get_orig_source().is_osd() ||
       !mon->osdmon()->osdmap.is_up(from) ||
       stats->get_orig_source_inst() != mon->osdmon()->osdmap.get_inst(from)) {
@@ -326,6 +371,19 @@ bool PGMonitor::prepare_pg_stats(MPGStats *stats)
     return false;
   }
       
+  if (!pg_stats_have_changed(from, stats)) {
+    dout(10) << " message contains no new osd|pg stats" << dendl;
+    MPGStatsAck *ack = new MPGStatsAck;
+    for (map<pg_t,pg_stat_t>::const_iterator p = stats->pg_stat.begin();
+	 p != stats->pg_stat.end();
+	 ++p) {
+      ack->pg_stat[p->first] = p->second.reported;
+    }
+    mon->send_reply(stats, ack);
+    stats->put();
+    return false;
+  }
+
   // osd stat
   pending_inc.osd_stat_updates[from] = stats->osd_stat;
   
@@ -371,9 +429,8 @@ bool PGMonitor::prepare_pg_stats(MPGStats *stats)
 	       << " state " << pg_state_string(p->second.state)
 	       << " but DNE in pg_map!!"
 	       << dendl;
-      stringstream ss;
-      ss << "got " << pgid << " pg_stat from osd" << from << " but dne in pg_map";
-      mon->logclient.log(LOG_ERROR, ss);
+      mon->clog.error() << "got " << pgid << " pg_stat from osd" << from
+	    << " but dne in pg_map\n";
       continue;
     }
       
@@ -575,9 +632,20 @@ bool PGMonitor::register_new_pgs()
       pending_inc.pg_remove.insert(*p);
       removed++;
     }
-    if (NULL == mon->osdmon()->osdmap.get_pg_pool(p->pool())) {
+    if (!osdmap->have_pg_pool(p->pool())) {
       dout(20) << " removing creating_pg " << *p << " because containing pool deleted" << dendl;
       pending_inc.pg_remove.insert(*p);
+      ++removed;
+    }
+  }
+
+  // deleted pools?
+  for (hash_map<pg_t,pg_stat_t>::const_iterator p = pg_map.pg_stat.begin();
+       p != pg_map.pg_stat.end(); ++p) {
+    if (!osdmap->have_pg_pool(p->first.pool())) {
+      dout(20) << " removing creating_pg " << p->first << " because "
+	       << "containing pool deleted" << dendl;
+      pending_inc.pg_remove.insert(p->first);
       ++removed;
     }
   }
@@ -676,9 +744,12 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
       pg_t pgid;
       r = -EINVAL;
       if (pgid.parse(m->cmd[2].c_str())) {
-	vector<int> acting;
-	mon->osdmon()->osdmap.pg_to_acting_osds(pgid, acting);
-	ss << "osdmap e" << mon->osdmon()->osdmap.get_epoch() << " pg " << pgid << " -> " << acting;
+	vector<int> up, acting;
+	pg_t mpgid = mon->osdmon()->osdmap.raw_pg_to_pg(pgid);
+	mon->osdmon()->osdmap.pg_to_up_acting_osds(pgid, up, acting);
+	ss << "osdmap e" << mon->osdmon()->osdmap.get_epoch()
+	   << " pg " << pgid << " (" << mpgid << ")"
+	   << " -> up " << up << " acting " << acting;
 	r = 0;
       } else
 	ss << "invalid pgid '" << m->cmd[2] << "'";
@@ -707,6 +778,44 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
       } else
 	ss << "invalid pgid '" << m->cmd[2] << "'";
     }
+    else if ((m->cmd[1] == "debug") && (m->cmd.size() > 2)) {
+      if (m->cmd[2] == "unfound_objects_exist") {
+	bool unfound_objects_exist = false;
+	hash_map<pg_t,pg_stat_t>::const_iterator end = pg_map.pg_stat.end();
+	for (hash_map<pg_t,pg_stat_t>::const_iterator s = pg_map.pg_stat.begin();
+	     s != end; ++s)
+	{
+	  if (s->second.num_objects_unfound > 0) {
+	    unfound_objects_exist = true;
+	    break;
+	  }
+	}
+	if (unfound_objects_exist)
+	  ss << "TRUE";
+	else
+	  ss << "FALSE";
+
+	r = 0;
+      }
+      else if (m->cmd[2] == "degraded_pgs_exist") {
+	bool degraded_pgs_exist = false;
+	hash_map<pg_t,pg_stat_t>::const_iterator end = pg_map.pg_stat.end();
+	for (hash_map<pg_t,pg_stat_t>::const_iterator s = pg_map.pg_stat.begin();
+	     s != end; ++s)
+	{
+	  if (s->second.num_objects_degraded > 0) {
+	    degraded_pgs_exist = true;
+	    break;
+	  }
+	}
+	if (degraded_pgs_exist)
+	  ss << "TRUE";
+	else
+	  ss << "FALSE";
+
+	r = 0;
+      }
+    }
   }
 
   if (r != -1) {
@@ -731,4 +840,57 @@ bool PGMonitor::prepare_command(MMonCommand *m)
   getline(ss, rs);
   mon->reply_command(m, err, rs, paxos->get_version());
   return false;
+}
+
+enum health_status_t PGMonitor::get_health(std::ostream &ss) const
+{
+  enum health_status_t ret(HEALTH_OK);
+
+  const hash_map<pg_t,pg_stat_t> &pg_stat = pg_map.pg_stat;
+
+  hash_map<pg_t,pg_stat_t>::const_iterator p = pg_stat.begin();
+  hash_map<pg_t,pg_stat_t>::const_iterator p_end = pg_stat.end();
+  int seen = 0;
+  for (; p != p_end; ++p) {
+    seen |= p->second.state;
+  }
+
+  string prequel(" Some PGs are: ");
+  if (seen & PG_STATE_CRASHED) {
+    ss << prequel << "crashed";
+    prequel = ",";
+  }
+  if (seen & PG_STATE_DOWN) {
+    ss << prequel << "down";
+    prequel = ",";
+  }
+  if (seen & PG_STATE_REPLAY) {
+    ss << prequel << "replaying";
+    prequel = ",";
+  }
+  if (seen & PG_STATE_SPLITTING) {
+    ss << prequel << "splitting";
+    prequel = ",";
+  }
+  if (seen & PG_STATE_DEGRADED) {
+    ss << prequel << "degraded";
+    prequel = ",";
+  }
+  if (seen & PG_STATE_INCONSISTENT) {
+    ss << prequel << "inconsistent";
+    prequel = ",";
+  }
+  if (seen & PG_STATE_PEERING) {
+    ss << prequel << "peering";
+    prequel = ",";
+  }
+  if (seen & PG_STATE_REPAIR) {
+    ss << prequel << "repairing";
+    prequel = ",";
+  }
+  if (prequel == ",") {
+    if (ret > HEALTH_WARN)
+      ret = HEALTH_WARN;
+  }
+  return ret;
 }

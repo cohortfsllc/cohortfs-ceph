@@ -19,6 +19,8 @@
 #include <map>
 #include <list>
 #include <iostream>
+#include <stdio.h>
+
 #include "buffer.h"
 
 #include "ceph_frag.h"
@@ -132,11 +134,29 @@ class frag_t {
     assert(!is_rightmost());
     return frag_t(ceph_frag_next(_enc));
   }
+
+  // parse
+  bool parse(const char *s) {
+    int value, bits;
+    int r = sscanf(s, "%x/%d", &value, &bits);
+    if (r == 2) {
+      *this = frag_t(value, bits);
+      return true;
+    }
+    return false;
+  }
 };
 
 inline std::ostream& operator<<(std::ostream& out, frag_t hb)
 {
-  return out << std::hex << hb.value() << std::dec << "/" << hb.bits();
+  //out << std::hex << hb.value() << std::dec << "/" << hb.bits() << '=';
+  unsigned num = hb.bits();
+  if (num) {
+    unsigned val = hb.value();
+    for (unsigned bit = 23; num; num--, bit--) 
+      out << ((val & (1<<bit)) ? '1':'0');
+  }
+  return out << '*';
 }
 
 inline void encode(frag_t f, bufferlist& bl) { encode_raw(f._enc, bl); }
@@ -482,6 +502,13 @@ public:
 };
 WRITE_CLASS_ENCODER(fragtree_t)
 
+inline bool operator==(const fragtree_t& l, const fragtree_t& r) {
+  return l._splits == r._splits;
+}
+inline bool operator!=(const fragtree_t& l, const fragtree_t& r) {
+  return l._splits != r._splits;
+}
+
 inline std::ostream& operator<<(std::ostream& out, fragtree_t& ft)
 {
   out << "fragtree_t(";
@@ -500,10 +527,19 @@ inline std::ostream& operator<<(std::ostream& out, fragtree_t& ft)
       }
     }
   }
-  if (1) {
+  if (0) {
     std::list<frag_t> leaves;
     ft.get_leaves(leaves);
     out << leaves;
+  }
+  if (1) {
+    for (std::map<frag_t,int32_t>::const_iterator p = ft._splits.begin();
+	 p != ft._splits.end();
+	 p++) {
+      if (p != ft._splits.begin())
+	out << " ";
+      out << p->first << "^" << p->second;
+    }
   }
   return out << ")";
 }
@@ -516,7 +552,7 @@ class fragset_t {
   std::set<frag_t> _set;
 
 public:
-  std::set<frag_t> &get() { return _set; }
+  const std::set<frag_t> &get() const { return _set; }
   std::set<frag_t>::iterator begin() { return _set.begin(); }
   std::set<frag_t>::iterator end() { return _set.end(); }
 
@@ -556,7 +592,7 @@ public:
   }
 };
 
-inline std::ostream& operator<<(std::ostream& out, fragset_t& fs) 
+inline std::ostream& operator<<(std::ostream& out, const fragset_t& fs) 
 {
   return out << "fragset_t(" << fs.get() << ")";
 }

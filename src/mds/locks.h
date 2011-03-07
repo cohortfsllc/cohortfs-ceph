@@ -20,7 +20,7 @@ struct sm_state_t {
 };
 
 struct sm_t {
-  struct sm_state_t *states;
+  const struct sm_state_t *states;
   int allowed_ever_auth;
   int allowed_ever_replica;
   int careful;
@@ -30,13 +30,13 @@ struct sm_t {
 #define ANY  1 // auth or replica
 #define AUTH 2 // auth only
 #define XCL  3 // auth or exclusive client
-#define FW   4 // fw to auth, if replica
+//#define FW   4 // fw to auth, if replica
 #define REQ  5 // req state change from auth, if replica
 
-extern struct sm_t sm_simplelock;
-extern struct sm_t sm_filelock;
-extern struct sm_t sm_scatterlock;
-extern struct sm_t sm_locallock;
+extern const struct sm_t sm_simplelock;
+extern const struct sm_t sm_filelock;
+extern const struct sm_t sm_scatterlock;
+extern const struct sm_t sm_locallock;
 
 
 
@@ -86,7 +86,9 @@ extern struct sm_t sm_locallock;
 #define LOCK_SCAN     30
 #define LOCK_SCAN_LOCK 31
 
-#define LOCK_MAX      32
+#define LOCK_SNAP_SYNC 32
+
+#define LOCK_MAX      34
 
 // -------------------------
 // lock actions
@@ -95,6 +97,7 @@ extern struct sm_t sm_locallock;
 #define LOCK_AC_SYNC        -1
 #define LOCK_AC_MIX         -2
 #define LOCK_AC_LOCK        -3
+#define LOCK_AC_LOCKFLUSHED -4
 
 // for auth
 #define LOCK_AC_SYNCACK      1
@@ -115,6 +118,7 @@ static inline const char *get_lock_action_name(int a) {
   case LOCK_AC_SYNC: return "sync";
   case LOCK_AC_MIX: return "mix";
   case LOCK_AC_LOCK: return "lock";
+  case LOCK_AC_LOCKFLUSHED: return "lockflushed";
 
   case LOCK_AC_SYNCACK: return "syncack";
   case LOCK_AC_MIXACK: return "mixack";

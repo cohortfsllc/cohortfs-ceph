@@ -18,16 +18,18 @@
 
 #include "messages/MMonCommand.h"
 #include "common/Timer.h"
+#include "mon/MDSMonitor.h"
+#include "mon/OSDMonitor.h"
+#include "mon/PGMonitor.h"
 
 #include <sstream>
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS mon
 #undef dout_prefix
 #define dout_prefix _prefix(mon)
 static ostream& _prefix(Monitor *mon) {
-  return *_dout << dbeginl
-		<< "mon" << mon->whoami
+  return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< (mon->is_starting() ? (const char*)"(starting)":(mon->is_leader() ? (const char*)"(leader)":(mon->is_peon() ? (const char*)"(peon)":(const char*)"(?\?)")))
 		<< ".monmap v" << mon->monmap->epoch << " ";
 }
@@ -42,8 +44,8 @@ bool MonmapMonitor::update_from_paxos()
 {
   //check versions to see if there's an update
   version_t paxosv = paxos->get_version();
-  if (paxosv == mon->monmap->epoch) return true;
-  assert(paxosv >= mon->monmap->epoch);
+  if (paxosv <= mon->monmap->epoch) return true;
+  //assert(paxosv >= mon->monmap->epoch);
 
   dout(10) << "update_from_paxos paxosv " << paxosv
 	   << ", my v " << mon->monmap->epoch << dendl;
@@ -58,6 +60,26 @@ bool MonmapMonitor::update_from_paxos()
   //save the bufferlist version in the paxos instance as well
   paxos->stash_latest(paxosv, monmap_bl);
 
+  int rank = mon->monmap->get_rank(mon->name);
+  if (rank < 0) {
+    dout(10) << "Assuming temporary id=mon" << mon->monmap->size() << " for shutdown purposes" << dendl;
+    mon->messenger->set_myname(entity_name_t::MON(mon->monmap->size()));
+    mon->monmap->add(mon->name, mon->myaddr);
+    mon->shutdown();
+    return true;
+  }
+
+  if (rank != mon->rank) {
+    mon->messenger->set_myname(entity_name_t::MON(rank));
+    mon->rank = rank;
+  }
+
+  // call election?
+  if (mon->monmap->size() > 1) {
+    mon->call_election();
+  } else {
+    mon->win_standalone_election();
+  }
   return true;
 }
 
@@ -127,11 +149,36 @@ bool MonmapMonitor::preprocess_command(MMonCommand *m)
     }
     else if (m->cmd[1] == "add")
       return false;
+    else if (m->cmd[1] == "remove")
+      return false;
+  }
+  else if (m->cmd[0] == "health") {
+    ostringstream oss;
+    health_status_t overall = HEALTH_OK;
+    try {
+      health_status_t ret;
+      ret = mon->mdsmon()->get_health(oss);
+      if (ret < overall)
+	overall = ret;
+      ret = mon->osdmon()->get_health(oss);
+      if (ret < overall)
+	overall = ret;
+      ret = mon->pgmon()->get_health(oss);
+      if (ret < overall)
+	overall = ret;
+    }
+    catch (const std::exception &e) {
+      oss << " monmapmonitor: caught exception while "
+	  << "checking health: '" << e.what() << "'";
+    }
+    ss << overall << oss.str();
+    r = 0;
   }
 
   if (r != -1) {
     string rs;
     getline(ss, rs);
+
     mon->reply_command(m, r, rs, rdata, paxos->get_version());
     return true;
   } else
@@ -160,21 +207,45 @@ bool MonmapMonitor::prepare_command(MMonCommand *m)
   string rs;
   int err = -EINVAL;
   if (m->cmd.size() > 1) {
-    if (m->cmd.size() == 3 && m->cmd[1] == "add") {
+    if (m->cmd.size() == 4 && m->cmd[1] == "add") {
+      string name = m->cmd[2];
       entity_addr_t addr;
-      addr.parse(m->cmd[2].c_str());
       bufferlist rdata;
-      if (pending_map.contains(addr)) {
+
+      if (!addr.parse(m->cmd[3].c_str())) {
+	err = -EINVAL;
+	ss << "addr " << m->cmd[3] << "does not parse";
+	goto out;
+      }
+      if (pending_map.contains(addr) ||
+	  pending_map.contains(name)) {
 	err = -EEXIST;
-	ss << "mon " << addr << " already exists";
+	ss << "mon " << name << " " << addr << " already exists";
 	goto out;
       }
 
-      pending_map.add(addr);
+      pending_map.add(name, addr);
       pending_map.last_changed = g_clock.now();
-      ss << "added mon" << (pending_map.size()-1) << " at " << addr;
+      ss << "added mon." << name << " at " << addr;
       getline(ss, rs);
       paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      return true;
+    }
+    else if (m->cmd.size() == 3 && m->cmd[1] == "remove") {
+      string name = m->cmd[2];
+      if (!pending_map.contains(name)) {
+        err = -ENOENT;
+        ss << "mon " << name << " does not exist";
+        goto out;
+      }
+
+      entity_addr_t addr = pending_map.get_addr(name);
+      pending_map.remove(name);
+      pending_map.last_changed = g_clock.now();
+      ss << "removed mon." << name << " at " << addr << ", there are now " << pending_map.size() << " monitors" ;
+      getline(ss, rs);
+      // send reply immediately in case we get removed
+      mon->reply_command(m, 0, rs, paxos->get_version());
       return true;
     }
     else
@@ -203,3 +274,4 @@ void MonmapMonitor::tick()
 {
   update_from_paxos();
 }
+

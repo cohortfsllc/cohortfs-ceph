@@ -13,8 +13,6 @@
  */
 
 #include <iostream>
-using std::cout;
-using std::cerr;
 
 #include "MDSMap.h"
 
@@ -30,11 +28,11 @@ using std::cerr;
 
 #include "messages/MMDSTableRequest.h"
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS mds
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "mds" << mds->get_nodeid() << ".tableclient(" << get_mdstable_name(table) << ") "
+#define dout_prefix *_dout << "mds" << mds->get_nodeid() << ".tableclient(" << get_mdstable_name(table) << ") "
 
 
 void MDSTableClient::handle_request(class MMDSTableRequest *m)

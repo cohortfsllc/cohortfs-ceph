@@ -1,80 +1,35 @@
-ceph (0.21.3-1) unstable; urgency=low
+ceph (0.25-1) experimental; urgency=low
 
-  * cfuse: fixed readdir for large directories
-  * cfuse: fixed truncation (now passes fsx)
-  * radosgw: fixed information leakage between sessions
-  * radosgw: support wildcard dns for bucketname.domain/object access
-  * mds: fixed snap bug with directory renames
-  * mon: less log noise
-  * osdmap: allowed blacklisting of entire ips
-  * mds: fix journal replay bug with reconnecting clients
-  * mds: fix journal replay bug with inconsistent lock state, subsequent crash 
+  * New upstream release 
 
- -- Sage Weil <sage@newdream.net>  Fri, 17 Sep 2010 15:44:06 -0700
+ -- Sage Weil <sage@newdream.net>  Fri, 04 Mar 2011 14:39:54 -0800
 
-ceph (0.21.2-1) unstable; urgency=low
+ceph (0.24.3-1) experimental; urgency=low
 
-  * osd: less log noise
-  * osd: mark down old heartbeat peers
-  * filejournal: clean up init sequence, fewer confusing errors on startup
-  * msgr: fix throttler leak when closing connections (fixes deadlock)
-  * osdmaptool: don't crash on corrupt input
-  * crush: error out instead of crashing on ambiguous hierarchy
-  * mds: error to client on invalid op
-  * mds: fix ENOTEMPTY checks on rmdir
-  * osd: fix race between reads and cloned objects
-  * auth: fix keyring load search when $HOME not defined
-  * client: fix xattr cap writeback
-  * client: fix snap vs metadata writeback
-  * osd: fix journal, btrfs throttling
-  * msgr: fix memory leak on closed connections
+  * New upstream release 
 
- -- Sage Weil <sage@newdream.net>  Thu, 26 Aug 2010 15:22:42 -0700
+ -- Sage Weil <sage@newdream.net>  Thu, 10 Feb 2011 09:14:00 -0800
 
-ceph (0.21.1-1) unstable; urgency=high
+ceph (0.24.2-1) experimental; urgency=low
 
-  * ceph.spec: many fixes
-  * mds mds->client message crash
-  * monmaptool: man page typo
-  * rados: usage fix
-  * osd: fix heartbeat to/from node
-  * osd: fix replies to dup/already committed requests
-  * librados: hpp fix
-  * mds: fix cap/snaprealm behavior on readdir
-  * debian: fix fuse-utils depcs
-  * cclass: fix .so loading
-  * osd: fix crazy slowdown during recovery/repeering due to hadnle_osd_map
-  * cauthtool: fix man page example for fs clients
-  * mkcephfs to /sbin
-  * fix log rotation
+  * New upstream release. 
 
- -- Sage Weil <sage@fatty.ops.newdream.net>  Wed, 11 Aug 2010 14:55:25 -0700
+ -- Sage Weil <sage@newdream.net>  Mon, 24 Jan 2011 11:02:24 -0800
 
-ceph (0.21-1) unstable; urgency=low
+ceph (0.24.1-1) experimental; urgency=low
 
-  * improved logging infrastructure
-  * log rotation
-  * mkfs improvements
-  * rbd tool, class (rados block device)
-  * mds: return ENOTEMPTY when removing directory with snapshots
-  * mds: lazy io support
-  * msgr: send messages directly to connection handle (w/o looking up
-    destination address)
-  * faster atomic via libatomic-ops
-  * cfuse now stable
-  * mon: recovery improvements (e.g., when one mon is down for a long time)
-  * mon: warn on monitor clock drift
-  * osd: large object support 
-  * osd: heartbeat fixes
-  * osd: journaling fixes, improvements (bugs, better use of direct io)
-  * osd: snapshot rollback op (for rbd)
-  * radosgw fixes, improvements
-  * many memory leak fixes
+  * New upstream release. 
 
- -- Sage Weil <sage@newdream.net>  Tue, 27 Jul 2010 12:35:09 -0700
+ -- Sage Weil <sage@newdream.net>  Fri, 07 Jan 2011 16:49:48 -0800
 
-ceph (0.20.2-1) unstable; urgency=low
+ceph (0.24-1) experimental; urgency=low
+
+  * New upstream release.
+
+ -- Laszlo Boszormenyi (GCS) <gcs@debian.hu>  Wed, 01 Dec 2010 09:26:25 -0800
+
+ceph (0.23.1-1) experimental; urgency=low
 
   * Initial release (Closes: #506040)
 
- -- sage <sage@newdream.net>  Tue, 20 Jul 2010 19:40:44 -0800
+ -- Sage Weil <sage@newdream.net>  Sun, 21 Nov 2010 15:22:21 -0800

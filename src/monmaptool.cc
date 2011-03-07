@@ -22,13 +22,14 @@
 #include <string>
 using namespace std;
 
-#include "config.h"
-
+#include "common/config.h"
+#include "common/ceph_argparse.h"
+#include "common/common_init.h"
 #include "mon/MonMap.h"
 
 void usage()
 {
-  cout << " usage: [--print] [--create [--clobber]] [--add 1.2.3.4:567] [--rm 1.2.3.4:567] <mapfilename>" << std::endl;
+  cout << " usage: [--print] [--create [--clobber]] [--add name 1.2.3.4:567] [--rm name] <mapfilename>" << std::endl;
   exit(1);
 }
 
@@ -45,7 +46,8 @@ int main(int argc, const char **argv)
   bool create = false;
   bool clobber = false;
   bool modified = false;
-  list<entity_addr_t> add, rm;
+  map<string,entity_addr_t> add;
+  list<string> rm;
 
   FOR_EACH_ARG(args) {
     if (CONF_ARG_EQ("print", '\0')) {
@@ -54,9 +56,10 @@ int main(int argc, const char **argv)
       CONF_SAFE_SET_ARG_VAL(&create, OPT_BOOL);
     } else if (CONF_ARG_EQ("clobber", '\0')) {
       CONF_SAFE_SET_ARG_VAL(&clobber, OPT_BOOL);
-    } else if (CONF_ARG_EQ("add", '\0') ||
-               CONF_ARG_EQ("rm", '\0')) {
-      bool is_add=CONF_ARG_EQ("add", '\0');
+    } else if (CONF_ARG_EQ("add", '\0')) {
+      if (++i >= args.size())
+	usage();
+      string name = args[i];
       if (++i >= args.size())
 	usage();
       entity_addr_t addr;
@@ -64,11 +67,13 @@ int main(int argc, const char **argv)
 	cerr << me << ": invalid ip:port '" << args[i] << "'" << std::endl;
 	return -1;
       }
-      //inst.name = entity_name_t::MON(monmap.size());
-      if (is_add)
-	add.push_back(addr);
-      else 
-	rm.push_back(addr);
+      add[name] = addr;
+      modified = true;
+    } else if (CONF_ARG_EQ("rm", '\0')) {
+      if (++i >= args.size())
+	usage();
+      string name = args[i];
+      rm.push_back(name);
       modified = true;
     } else if (!fn)
       fn = args[i];
@@ -85,12 +90,18 @@ int main(int argc, const char **argv)
   cout << me << ": monmap file " << fn << std::endl;
 
   int r = 0;
-  if (!(create && clobber))
-    r = monmap.read(fn);
+  if (!(create && clobber)) {
+    try {
+      r = monmap.read(fn);
+    } catch (...) {
+      cerr << me << ": unable to read monmap file" << std::endl;
+      return -1;
+    }
+  }
 
   char buf[80];
   if (!create && r < 0) {
-    cerr << me << ": couldn't open " << fn << ": " << strerror_r(errno, buf, sizeof(buf)) << std::endl;
+    cerr << me << ": couldn't open " << fn << ": " << strerror_r(-r, buf, sizeof(buf)) << std::endl;
     return -1;
   }    
   else if (create && !clobber && r == 0) {
@@ -105,14 +116,24 @@ int main(int argc, const char **argv)
     modified++;
   }
 
-  for (list<entity_addr_t>::iterator p = add.begin(); p != add.end(); p++)
-    monmap.add(*p);
-  for (list<entity_addr_t>::iterator p = rm.begin(); p != rm.end(); p++) {
+  for (map<string,entity_addr_t>::iterator p = add.begin(); p != add.end(); p++) {
+    if (monmap.contains(p->first)) {
+      cerr << me << ": map already contains mon." << p->first << std::endl;
+      usage();
+    }
+    if (monmap.contains(p->second)) {
+      cerr << me << ": map already contains " << p->second << std::endl;
+      usage();
+    }
+    monmap.add(p->first, p->second);
+  }
+  for (list<string>::iterator p = rm.begin(); p != rm.end(); p++) {
     cout << me << ": removing " << *p << std::endl;
-    if (!monmap.remove(*p)) {
+    if (!monmap.contains(*p)) {
       cerr << me << ": map does not contain " << *p << std::endl;
       usage();
     }
+    monmap.remove(*p);
   }
 
   if (!print && !modified)

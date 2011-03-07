@@ -44,7 +44,7 @@ public:
     void clear() {
       start = block_size;
     }
-  } header;
+  } header __attribute__((__packed__, aligned(4)));
 
   struct entry_header_t {
     uint64_t seq;  // fs op seq #
@@ -63,7 +63,7 @@ public:
 	magic1 == (uint64_t)pos &&
 	magic2 == (fsid ^ seq ^ len);
     }
-  };
+  } __attribute__((__packed__, aligned(4)));
 
 private:
   string fn;
@@ -80,27 +80,36 @@ private:
 
   uint64_t last_committed_seq;
 
-  uint64_t full_commit_seq;  // don't write, wait for this seq to commit
-  uint64_t full_restart_seq; // start writing again with this seq
+  /*
+   * full states cycle at the beginnging of each commit epoch, when commit_start()
+   * is called.
+   *   FULL - we just filled up during this epoch.
+   *   WAIT - we filled up last epoch; now we have to wait until everything during
+   *          that epoch commits to the fs before we can start writing over it.
+   *   NOTFULL - all good, journal away.
+   */
+  enum {
+    FULL_NOTFULL = 0,
+    FULL_FULL = 1,
+    FULL_WAIT = 2,
+  } full_state;
 
   int fd;
 
   // in journal
   deque<pair<uint64_t, off64_t> > journalq;  // track seq offsets, so we can trim later.
+  deque<pair<uint64_t,Context*> > completions;  // queued, writing, waiting for commit.
 
-  // currently being journaled and awaiting callback.
-  //  or, awaiting callback bc journal was full.
-  deque<uint64_t> writing_seq;
-  deque<Context*> writing_fin;
+  uint64_t writing_seq, journaled_seq;
+  bool plug_journal_completions;
 
   // waiting to be journaled
   struct write_item {
     uint64_t seq;
     bufferlist bl;
     int alignment;
-    Context *fin;
-    write_item(uint64_t s, bufferlist& b, int al, Context *f) :
-      seq(s), alignment(al), fin(f) { 
+    write_item(uint64_t s, bufferlist& b, int al) :
+      seq(s), alignment(al) { 
       bl.claim(b);
     }
   };
@@ -117,6 +126,9 @@ private:
   Cond commit_cond;
 
   int _open(bool wr, bool create=false);
+  int _open_block_device();
+  void _check_disk_write_cache() const;
+  int _open_file(int64_t oldsize, blksize_t blksize, bool create);
   void print_header();
   int read_header();
   bufferptr prepare_header();
@@ -124,12 +136,14 @@ private:
   void stop_writer();
   void write_thread_entry();
 
+  void queue_completions_thru(uint64_t seq);
+
   int check_for_full(uint64_t seq, off64_t pos, off64_t size);
   int prepare_multi_write(bufferlist& bl, uint64_t& orig_ops, uint64_t& orig_bytee);
   int prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64_t& orig_ops, uint64_t& orig_bytes);
   void do_write(bufferlist& bl);
 
-  void write_bl(off64_t& pos, bufferlist& bl);
+  int write_bl(off64_t& pos, bufferlist& bl);
   void wrap_read_bl(off64_t& pos, int64_t len, bufferlist& bl);
 
   class Writer : public Thread {
@@ -155,8 +169,10 @@ private:
     writing(false), must_write_header(false),
     write_pos(0), read_pos(0),
     last_committed_seq(0), 
-    full_commit_seq(0), full_restart_seq(0),
+    full_state(FULL_NOTFULL),
     fd(-1),
+    writing_seq(0), journaled_seq(0),
+    plug_journal_completions(false),
     write_lock("FileJournal::write_lock"),
     write_stop(false),
     write_thread(this) { }
@@ -179,8 +195,11 @@ private:
 
   // writes
   void submit_entry(uint64_t seq, bufferlist& bl, int alignment, Context *oncommit);  // submit an item
+  void commit_start();
   void committed_thru(uint64_t seq);
-  bool is_full();
+  bool should_commit_now() {
+    return full_state != FULL_NOTFULL;
+  }
 
   void set_wait_on_full(bool b) { wait_on_full = b; }
 

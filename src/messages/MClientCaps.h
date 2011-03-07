@@ -23,6 +23,7 @@ class MClientCaps : public Message {
   struct ceph_mds_caps head;
   bufferlist snapbl;
   bufferlist xattrbl;
+  bufferlist flockbl;
 
   int      get_caps() { return head.caps; }
   int      get_wanted() { return head.wanted; }
@@ -109,8 +110,10 @@ public:
     out << "client_caps(" << ceph_cap_op_name(head.op)
 	<< " ino " << inodeno_t(head.ino)
 	<< " " << head.cap_id
-	<< " seq " << head.seq 
-	<< " caps=" << ccap_string(head.caps)
+	<< " seq " << head.seq;
+    if (get_tid())
+      out << " tid " << get_tid();
+    out << " caps=" << ccap_string(head.caps)
 	<< " dirty=" << ccap_string(head.dirty)
 	<< " wanted=" << ccap_string(head.wanted);
     out << " follows " << snapid_t(head.snap_follows);
@@ -138,6 +141,10 @@ public:
     assert(middle.length() == head.xattr_len);
     if (head.xattr_len)
       xattrbl = middle;
+
+    // conditionally decode flock metadata
+    if (header.version >= 2)
+      ::decode(flockbl, p);
   }
   void encode_payload() {
     head.snap_trace_len = snapbl.length();
@@ -146,6 +153,12 @@ public:
     ::encode_nohead(snapbl, payload);
 
     middle = xattrbl;
+
+    // conditionally include flock metadata
+    if (connection->has_feature(CEPH_FEATURE_FLOCK)) {
+      header.version = 2;
+      ::encode(flockbl, payload);
+    }
   }
 };
 

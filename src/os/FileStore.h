@@ -19,14 +19,13 @@
 #include "ObjectStore.h"
 #include "JournalingObjectStore.h"
 
+#include "common/Timer.h"
 #include "common/WorkQueue.h"
 
 #include "common/Mutex.h"
 
 #include "Fake.h"
 //#include "FakeStoreBDBCollections.h"
-
-#include <signal.h>
 
 #include <map>
 #include <deque>
@@ -39,8 +38,8 @@ using namespace __gnu_cxx;
 
 class FileStore : public JournalingObjectStore {
   string basedir, journalpath;
-  char current_fn[PATH_MAX];
-  char current_op_seq_fn[PATH_MAX];
+  std::string current_fn;
+  std::string current_op_seq_fn;
   uint64_t fsid;
   
   bool btrfs;
@@ -48,6 +47,9 @@ class FileStore : public JournalingObjectStore {
   bool btrfs_clone_range;
   bool btrfs_snap_create;
   bool btrfs_snap_destroy;
+  bool btrfs_snap_create_v2;
+  bool btrfs_wait_sync;
+  bool ioctl_fiemap;
   int fsid_fd, op_fd;
 
   int basedir_fd, current_fd;
@@ -69,14 +71,18 @@ class FileStore : public JournalingObjectStore {
   void get_cdir(coll_t cid, char *s, int len);
   void get_coname(coll_t cid, const sobject_t& oid, char *s, int len);
   bool parse_object(char *s, sobject_t& o);
-  bool parse_coll(char *s, coll_t& c);
   
   int lock_fsid();
 
   // sync thread
   Mutex lock;
+  bool force_sync;
   Cond sync_cond;
   uint64_t sync_epoch;
+
+  Mutex sync_entry_timeo_lock;
+  SafeTimer timer;
+
   list<Context*> sync_waiters;
   bool stop;
   void sync_entry();
@@ -98,11 +104,63 @@ class FileStore : public JournalingObjectStore {
     Context *onreadable, *onreadable_sync;
     uint64_t ops, bytes;
   };
-  struct OpSequencer {
-    Sequencer *parent;
+  class OpSequencer : public Sequencer_impl {
+    Mutex qlock; // to protect q, for benefit of flush (peek/dequeue also protected by lock)
     list<Op*> q;
-    Mutex lock;
-    OpSequencer() : lock("FileStore::OpSequencer::lock", false, false) {}
+    list<uint64_t> jq;
+    Cond cond;
+  public:
+    Sequencer *parent;
+    Mutex apply_lock;  // for apply mutual exclusion
+    
+    void queue_journal(uint64_t s) {
+      Mutex::Locker l(qlock);
+      jq.push_back(s);
+    }
+    void dequeue_journal() {
+      Mutex::Locker l(qlock);
+      jq.pop_front();
+      cond.Signal();
+    }
+    void queue(Op *o) {
+      Mutex::Locker l(qlock);
+      q.push_back(o);
+    }
+    Op *peek_queue() {
+      assert(apply_lock.is_locked());
+      return q.front();
+    }
+    Op *dequeue() {
+      assert(apply_lock.is_locked());
+      Mutex::Locker l(qlock);
+      Op *o = q.front();
+      q.pop_front();
+      cond.Signal();
+      return o;
+    }
+    void flush() {
+      Mutex::Locker l(qlock);
+
+      // get max for journal _or_ op queues
+      uint64_t seq = 0;
+      if (!q.empty())
+	seq = q.back()->op;
+      if (!jq.empty() && jq.back() > seq)
+	seq = jq.back();
+
+      if (seq) {
+	// everything prior to our watermark to drain through either/both queues
+	while ((!q.empty() && q.front()->op <= seq) ||
+	       (!jq.empty() && jq.front() <= seq))
+	  cond.Wait(qlock);
+      }
+    }
+
+    OpSequencer() : qlock("FileStore::OpSequencer::qlock", false, false),
+		    apply_lock("FileStore::OpSequencer::apply_lock", false, false) {}
+    ~OpSequencer() {
+      assert(q.empty());
+    }
   };
   Sequencer default_osr;
   deque<OpSequencer*> op_queue;
@@ -147,9 +205,9 @@ class FileStore : public JournalingObjectStore {
 
   void _do_op(OpSequencer *o);
   void _finish_op(OpSequencer *o);
-  void queue_op(Sequencer *osr, uint64_t op, list<Transaction*>& tls, Context *onreadable, Context *onreadable_sync);
+  void queue_op(OpSequencer *osr, uint64_t op, list<Transaction*>& tls, Context *onreadable, Context *onreadable_sync);
   void op_queue_throttle();
-  void _journaled_ahead(Sequencer *osr, uint64_t op, list<Transaction*> &tls,
+  void _journaled_ahead(OpSequencer *osr, uint64_t op, list<Transaction*> &tls,
 			Context *onreadable, Context *ondisk, Context *onreadable_sync);
   friend class C_JournaledAhead;
 
@@ -171,28 +229,14 @@ class FileStore : public JournalingObjectStore {
   int open_journal();
 
  public:
-  FileStore(const char *base, const char *jdev = 0) : 
-    basedir(base), journalpath(jdev ? jdev:""),
-    btrfs(false), btrfs_trans_start_end(false), btrfs_clone_range(false),
-    btrfs_snap_create(false),
-    btrfs_snap_destroy(false),
-    fsid_fd(-1), op_fd(-1),
-    attrs(this), fake_attrs(false), 
-    collections(this), fake_collections(false),
-    lock("FileStore::lock"),
-    sync_epoch(0), stop(false), sync_thread(this),
-    op_queue_len(0), op_queue_bytes(0), next_finish(0),
-    op_tp("FileStore::op_tp", g_conf.filestore_op_threads), op_wq(this, &op_tp),
-    flusher_queue_len(0), flusher_thread(this) {
-    // init current_fn
-    snprintf(current_fn, sizeof(current_fn), "%s/current", basedir.c_str());
-    snprintf(current_op_seq_fn, sizeof(current_op_seq_fn), "%s/current/commit_op_seq", basedir.c_str());
-  }
+  FileStore(const char *base, const char *jdev);
 
   int _detect_fs();
   int _sanity_check_fs();
   
   bool test_mount_in_use();
+  int read_op_seq(const char *fn, uint64_t *seq);
+  int write_op_seq(int, uint64_t seq);
   int mount();
   int umount();
   int wipe_subvol(const char *s);
@@ -220,6 +264,7 @@ class FileStore : public JournalingObjectStore {
   bool exists(coll_t cid, const sobject_t& oid);
   int stat(coll_t cid, const sobject_t& oid, struct stat *st);
   int read(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len, bufferlist& bl);
+  int fiemap(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len, bufferlist& bl);
 
   int _touch(coll_t cid, const sobject_t& oid);
   int _write(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len, const bufferlist& bl);
@@ -259,6 +304,7 @@ class FileStore : public JournalingObjectStore {
   int _collection_setattr(coll_t c, const char *name, const void *value, size_t size);
   int _collection_rmattr(coll_t c, const char *name);
   int _collection_setattrs(coll_t cid, map<string,bufferptr> &aset);
+  int _collection_rename(const coll_t &cid, const coll_t &ncid);
 
   // collections
   int list_collections(vector<coll_t>& ls);

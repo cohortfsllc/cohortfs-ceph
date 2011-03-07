@@ -3,10 +3,10 @@
 
 #include "ObjectStore.h"
 
-#include "config.h"
+#include "common/config.h"
 #include "common/Clock.h"
 
-#define dout(x) if (x < g_conf.debug) *_dout << dbeginl << g_clock.now() << " ager: " 
+#define dout_prefix *_dout << "ager: "
 
 object_t ObjectStore::age_get_oid() {
     if (!age_free_oids.empty()) {

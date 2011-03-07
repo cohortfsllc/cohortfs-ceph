@@ -17,7 +17,7 @@
 #include <string>
 using namespace std;
 
-#include "config.h"
+#include "common/config.h"
 
 #include "client/SyntheticClient.h"
 #include "client/Client.h"
@@ -28,6 +28,7 @@ using namespace std;
 
 #include "common/Timer.h"
 #include "common/common_init.h"
+#include "common/ceph_argparse.h"
 
 #ifndef DARWIN
 #include <envz.h>
@@ -37,20 +38,20 @@ using namespace std;
 #include <sys/stat.h>
 #include <fcntl.h>
 
+extern int syn_filer_flags;
+
 int main(int argc, const char **argv, char *envp[]) 
 {
   //cerr << "csyn starting" << std::endl;
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
 
-  common_set_defaults(false);
-  common_init(args, "csyn", true);
+  common_init(args, "csyn",
+	      STARTUP_FLAG_INIT_KEYS | STARTUP_FLAG_FORCE_FG_LOGGING);
 
   parse_syn_options(args);   // for SyntheticClient
 
   vec_to_argv(args, argc, argv);
-
-  if (g_conf.clock_tare) g_clock.tare();
 
   // get monmap
   MonClient mc;
@@ -70,6 +71,7 @@ int main(int argc, const char **argv, char *envp[])
     mclients[i] = new MonClient();
     mclients[i]->build_initial_monmap();
     Client *client = new Client(messengers[i], mclients[i]);
+    client->set_filer_flags(syn_filer_flags);
     SyntheticClient *syn = new SyntheticClient(client);
     clients.push_back(client);
     synclients.push_back(syn);

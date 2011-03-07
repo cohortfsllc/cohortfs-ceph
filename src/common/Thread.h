@@ -16,12 +16,14 @@
 #ifndef CEPH_THREAD_H
 #define CEPH_THREAD_H
 
-#include <pthread.h>
-#include <signal.h>
-#include <errno.h>
+#include "common/code_environment.h"
+#include "common/signal.h"
+#include "common/config.h"
 #include "include/atomic.h"
 
-extern atomic_t _num_threads;  // hack: in config.cc
+#include <errno.h>
+#include <pthread.h>
+#include <signal.h>
 
 class Thread {
  private:
@@ -37,16 +39,15 @@ class Thread {
  private:
   static void *_entry_func(void *arg) {
     void *r = ((Thread*)arg)->entry();
-    _num_threads.dec();
     return r;
   }
 
  public:
+  static int get_num_threads(void);
+
   pthread_t &get_thread_id() { return thread_id; }
   bool is_started() { return thread_id != 0; }
   bool am_self() { return (pthread_self() == thread_id); }
-
-  static int get_num_threads() { return _num_threads.read(); }
 
   int kill(int signal) {
     if (thread_id)
@@ -55,10 +56,6 @@ class Thread {
       return -EINVAL;
   }
   int create(size_t stacksize = 0) {
-    // mask signals in child's thread
-    sigset_t newmask, oldmask;
-    sigfillset(&newmask);
-    pthread_sigmask(SIG_BLOCK, &newmask, &oldmask);
 
     pthread_attr_t *thread_attr = NULL;
     stacksize &= PAGE_MASK;  // must be multiple of page
@@ -67,24 +64,38 @@ class Thread {
       pthread_attr_init(thread_attr);
       pthread_attr_setstacksize(thread_attr, stacksize);
     }
-    int r = pthread_create(&thread_id, thread_attr, _entry_func, (void*)this);
+
+    int r;
+
+    // The child thread will inherit our signal mask.  Set our signal mask to
+    // the set of signals we want to block.  (It's ok to block signals more
+    // signals than usual for a little while-- they will just be delivered to
+    // another thread or delieverd to this thread later.)
+    sigset_t old_sigset;
+    if (g_code_env == CODE_ENVIRONMENT_LIBRARY) {
+      block_signals(&old_sigset, NULL);
+    }
+    else {
+      int to_block[] = { SIGPIPE , 0 };
+      block_signals(&old_sigset, to_block);
+    }
+    r = pthread_create(&thread_id, thread_attr, _entry_func, (void*)this);
+    restore_sigset(&old_sigset);
 
     if (thread_attr) 
       free(thread_attr);
-    pthread_sigmask(SIG_SETMASK, &oldmask, 0);
 
     if (r) {
       char buf[80];
-      generic_derr(0) << "pthread_create failed with message: " << strerror_r(r, buf, sizeof(buf)) << dendl;
+      generic_dout(0) << "pthread_create failed with message: " << strerror_r(r, buf, sizeof(buf)) << dendl;
     } else {
-      _num_threads.inc();
       generic_dout(10) << "thread " << thread_id << " start" << dendl;
     }
     return r;
   }
   int join(void **prval = 0) {
     if (thread_id == 0) {
-      generic_derr(0) << "WARNING: join on thread that was never started" << dendl;
+      generic_dout(0) << "WARNING: join on thread that was never started" << dendl;
       assert(0);
       return -EINVAL;   // never started.
     }
@@ -93,17 +104,17 @@ class Thread {
     if (status != 0) {
       switch (status) {
       case -EINVAL:
-	generic_derr(0) << "thread " << thread_id << " join status = EINVAL" << dendl;
+	generic_dout(0) << "thread " << thread_id << " join status = EINVAL" << dendl;
 	break;
       case -ESRCH:
-	generic_derr(0) << "thread " << thread_id << " join status = ESRCH" << dendl;
+	generic_dout(0) << "thread " << thread_id << " join status = ESRCH" << dendl;
 	assert(0);
 	break;
       case -EDEADLK:
-	generic_derr(0) << "thread " << thread_id << " join status = EDEADLK" << dendl;
+	generic_dout(0) << "thread " << thread_id << " join status = EDEADLK" << dendl;
 	break;
       default:
-	generic_derr(0) << "thread " << thread_id << " join status = " << status << dendl;
+	generic_dout(0) << "thread " << thread_id << " join status = " << status << dendl;
       }
       assert(0); // none of these should happen.
     }

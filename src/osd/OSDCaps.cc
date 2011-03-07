@@ -1,9 +1,20 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+/*
+ * Ceph - scalable distributed file system
+ *
+ * Copyright (C) 2009-2011 New Dream Network
+ *
+ * This is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License version 2.1, as published by the Free Software
+ * Foundation.  See file COPYING.
+ *
+ */
 
 #include "OSDCaps.h"
-
-#include "config.h"
-
-
+#include "common/config.h"
+#include "common/debug.h"
 
 void PoolsMap::dump()
 {
@@ -94,7 +105,7 @@ bool OSDCaps::parse(bufferlist::iterator& iter)
   try {
     ::decode(s, iter);
 
-    generic_dout(0) << "decoded caps: " << s << dendl;
+    generic_dout(10) << "decoded caps: " << s << dendl;
 
     size_t pos = 0;
     string token;
@@ -192,11 +203,11 @@ do { \
         
       }
     }
-  } catch (buffer::error *err) {
+  } catch (const buffer::error &err) {
     return false;
   }
 
-  generic_dout(0) << "default allow=" << (int)default_allow << " default_deny=" << (int) default_deny << dendl;
+  generic_dout(10) << "default allow=" << (int)default_allow << " default_deny=" << (int) default_deny << dendl;
   pools_map.dump();
   return true;
 }

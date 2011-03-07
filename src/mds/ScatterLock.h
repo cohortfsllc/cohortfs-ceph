@@ -25,22 +25,24 @@ class ScatterLock : public SimpleLock {
     utime_t last_scatter;
     xlist<ScatterLock*>::item item_updated;
     utime_t update_stamp;
+    bool stale;
 
     more_bits_t(ScatterLock *lock) :
       dirty(false), flushing(false), scatter_wanted(false),
-      item_updated(lock)
+      item_updated(lock), stale(false)
     {}
 
-    bool empty() {
+    bool empty() const {
       return dirty == false &&
 	flushing == false &&
 	scatter_wanted == false &&
-	!item_updated.is_on_list();
+	!item_updated.is_on_list() &&
+	!stale;
     }
   };
   more_bits_t *_more;
 
-  bool have_more() { return _more ? true : false; }
+  bool have_more() const { return _more ? true : false; }
   void try_clear_more() {
     if (_more && _more->empty()) {
       delete _more;
@@ -64,8 +66,37 @@ public:
     }
   }
 
+  bool is_scatterlock() const {
+    return true;
+  }
+
+  bool is_sync_and_unlocked() const {
+    return
+      SimpleLock::is_sync_and_unlocked() && 
+      !is_dirty() &&
+      !is_flushing();
+  }
+
+  bool can_scatter_pin(client_t loner) {
+    /*
+      LOCK : NOT okay because it can MIX and force replicas to journal something
+      TSYN : also not okay for same reason
+      EXCL : also not okay
+
+      MIX  : okay, replica can stall before sending AC_SYNCACK
+      SYNC : okay, replica can stall before sending AC_MIXACK or AC_LOCKACK
+    */   
+    return
+      get_state() == LOCK_SYNC ||
+      get_state() == LOCK_MIX;
+  }
+
   xlist<ScatterLock*>::item *get_updated_item() { return &more()->item_updated; }
-  utime_t get_update_stamp() { return more()->update_stamp; }
+
+  utime_t get_update_stamp() {
+    return more()->update_stamp;
+  }
+
   void set_update_stamp(utime_t t) { more()->update_stamp = t; }
 
   void set_scatter_wanted() {
@@ -75,14 +106,14 @@ public:
     if (have_more())
       _more->scatter_wanted = false;
   }
-  bool get_scatter_wanted() {
+  bool get_scatter_wanted() const {
     return have_more() ? _more->scatter_wanted : false; 
   }
 
-  bool is_dirty() {
+  bool is_dirty() const {
     return have_more() ? _more->dirty : false;
   }
-  bool is_flushing() {
+  bool is_flushing() const {
     return have_more() ? _more->flushing : false;
   }
 
@@ -104,15 +135,18 @@ public:
 	parent->put(MDSCacheObject::PIN_DIRTYSCATTERED);
 	parent->clear_dirty_scattered(get_type());
       }
+      try_clear_more();
     }
   }
   void clear_dirty() {
     start_flush();
     finish_flush();
   }
-  
+
   void set_last_scatter(utime_t t) { more()->last_scatter = t; }
-  utime_t get_last_scatter() { return more()->last_scatter; }
+  utime_t get_last_scatter() {
+    return more()->last_scatter;
+  }
 
   void infer_state_from_strong_rejoin(int rstate, bool locktoo) {
     if (rstate == LOCK_MIX || 
@@ -124,7 +158,7 @@ public:
       state = LOCK_LOCK;
   }
 
-  void print(ostream& out) {
+  virtual void print(ostream& out) const {
     out << "(";
     _print(out);
     if (is_dirty())

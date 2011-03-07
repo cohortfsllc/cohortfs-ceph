@@ -14,7 +14,7 @@
 #include "RAID4PG.h"
 #include "OSD.h"
 
-#include "common/Logger.h"
+#include "common/ProfLogger.h"
 
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
@@ -22,14 +22,13 @@
 #include "messages/MOSDPGNotify.h"
 #include "messages/MOSDPGRemove.h"
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS osd
 #undef dout_prefix
 #define dout_prefix _prefix(this, osd->whoami, osd->osdmap)
 static ostream& _prefix(PG *pg, int whoami, OSDMap *osdmap) {
-  return *_dout << dbeginl
-		<< "osd" << whoami 
+  return *_dout << "osd" << whoami 
 		<< " " << (osdmap ? osdmap->get_epoch():0) << " "
 		<< *pg << " ";
 }

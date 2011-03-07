@@ -18,14 +18,13 @@
 
 
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS paxos
 #undef dout_prefix
 #define dout_prefix _prefix(mon, paxos, paxos->machine_id)
 static ostream& _prefix(Monitor *mon, Paxos *paxos, int machine_id) {
-  return *_dout << dbeginl
-		<< "mon" << mon->whoami
+  return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< (mon->is_starting() ? (const char*)"(starting)":(mon->is_leader() ? (const char*)"(leader)":(mon->is_peon() ? (const char*)"(peon)":(const char*)"(?\?)")))
 		<< ".paxosservice(" << get_paxos_name(machine_id) << ") ";
 }
@@ -94,8 +93,14 @@ bool PaxosService::should_propose(double& delay)
   // simple default policy: quick startup, then some damping.
   if (paxos->last_committed <= 1)
     delay = 0.0;
-  else
-    delay = g_conf.paxos_propose_interval;
+  else {
+    utime_t now = g_clock.now();
+    if ((now - paxos->last_commit_time) > g_conf.paxos_propose_interval)
+      delay = (double)g_conf.paxos_min_wait;
+    else
+      delay = (double)(g_conf.paxos_propose_interval + paxos->last_commit_time
+		       - now);
+  }
   return true;
 }
 

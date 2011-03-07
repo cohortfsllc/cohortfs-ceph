@@ -28,7 +28,7 @@
 
 #define DOUT_SUBSYS mds
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "mds" << dir->cache->mds->get_nodeid() << ".cache.den(" << dir->dirfrag() << " " << name << ") "
+#define dout_prefix *_dout << "mds" << dir->cache->mds->get_nodeid() << ".cache.den(" << dir->dirfrag() << " " << name << ") "
 
 
 ostream& CDentry::print_db_line_prefix(ostream& out) 
@@ -85,12 +85,17 @@ ostream& operator<<(ostream& out, CDentry& dn)
     out << ")";
   }
 
-  out << " " << dn.lock;
-  out << " " << dn.versionlock;
+  if (!dn.lock.is_sync_and_unlocked())
+    out << " " << dn.lock;
+  if (!dn.versionlock.is_sync_and_unlocked())
+    out << " " << dn.versionlock;
 
   if (dn.get_projected_version() != dn.get_version())
     out << " pv=" << dn.get_projected_version();
   out << " v=" << dn.get_version();
+
+  if (dn.is_auth_pinned())
+    out << " ap=" << dn.get_num_auth_pins() << "+" << dn.get_num_nested_auth_pins();
 
   out << " inode=" << dn.get_linkage()->get_inode();
 
@@ -189,7 +194,9 @@ void CDentry::mark_clean()
 {
   dout(10) << " mark_clean " << *this << dendl;
   assert(is_dirty());
-  assert(dir->get_version() == 0 || version <= dir->get_version());  // hmm?
+
+  // not always true for recalc_auth_bits during resolve finish
+  //assert(dir->get_version() == 0 || version <= dir->get_version());  // hmm?
 
   // state+pin
   state_clear(STATE_DIRTY);
@@ -257,7 +264,7 @@ void CDentry::make_anchor_trace(vector<Anchor>& trace, CInode *in)
     dir->inode->make_anchor_trace(trace);
 
   // add this inode (in my dirfrag) to the end
-  trace.push_back(Anchor(in->ino(), dir->ino(), name, 0, 0));
+  trace.push_back(Anchor(in->ino(), dir->ino(), get_hash(), 0, 0));
   dout(10) << "make_anchor_trace added " << trace.back() << dendl;
 }
 
@@ -290,8 +297,16 @@ void CDentry::unlink_remote(CDentry::linkage_t *dnl)
 
 void CDentry::push_projected_linkage(CInode *inode)
 {
+  // dirty rstat tracking is in the projected plane
+  bool dirty_rstat = inode->is_dirty_rstat();
+  if (dirty_rstat)
+    inode->clear_dirty_rstat();
+
   _project_linkage()->inode = inode;
   inode->push_projected_parent(this);
+
+  if (dirty_rstat)
+    inode->mark_dirty_rstat();
 }
 
 CDentry::linkage_t *CDentry::pop_projected_linkage()

@@ -15,7 +15,7 @@
 #ifndef CEPH_MDS_ESESSION_H
 #define CEPH_MDS_ESESSION_H
 
-#include "config.h"
+#include "common/config.h"
 #include "include/types.h"
 
 #include "../LogEvent.h"
@@ -47,8 +47,9 @@ class ESession : public LogEvent {
     inos(i), inotablev(iv) { }
 
   void encode(bufferlist &bl) const {
-    __u8 struct_v = 1;
+    __u8 struct_v = 2;
     ::encode(struct_v, bl);
+    ::encode(stamp, bl);
     ::encode(client_inst, bl);
     ::encode(open, bl);
     ::encode(cmapv, bl);
@@ -58,6 +59,8 @@ class ESession : public LogEvent {
   void decode(bufferlist::iterator &bl) {
     __u8 struct_v;
     ::decode(struct_v, bl);
+    if (struct_v >= 2)
+      ::decode(stamp, bl);
     ::decode(client_inst, bl);
     ::decode(open, bl);
     ::decode(cmapv, bl);

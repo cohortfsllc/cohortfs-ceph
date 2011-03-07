@@ -15,7 +15,9 @@
 #ifndef CEPH_OSD_TYPES_H
 #define CEPH_OSD_TYPES_H
 
+#include <sstream>
 #include <stdio.h>
+#include <stdexcept>
 
 #include "msg/msg_types.h"
 #include "include/types.h"
@@ -24,12 +26,13 @@
 
 
 
+
 #define CEPH_OSD_ONDISK_MAGIC "ceph osd volume v026"
 
-#define CEPH_OSD_NEARFULL_RATIO .8
-#define CEPH_OSD_FULL_RATIO .95
-
 #define CEPH_OSD_FEATURE_INCOMPAT_BASE CompatSet::Feature(1, "initial feature set(~v.18)")
+#define CEPH_OSD_FEATURE_INCOMPAT_PGINFO CompatSet::Feature(2, "pginfo object")
+#define CEPH_OSD_FEATURE_INCOMPAT_OLOC CompatSet::Feature(3, "object locator")
+#define CEPH_OSD_FEATURE_INCOMPAT_LEC  CompatSet::Feature(4, "last_epoch_clean")
 
 
 /* osdreqid_t - caller name + incarnation# + tid to unique identify this request
@@ -139,7 +142,7 @@ struct pg_t {
     return coll_t(u.pg64, sn);
     }*/
 
-  int print(char *o, int maxlen) {
+  int print(char *o, int maxlen) const {
     if (preferred() >= 0)
       return snprintf(o, maxlen, "%d.%xp%d", pool(), ps(), preferred());
     else
@@ -201,7 +204,7 @@ inline void decode(pg_t &pgid, bufferlist::iterator& p) {
 }
 
 
-inline ostream& operator<<(ostream& out, pg_t pg) 
+inline ostream& operator<<(ostream& out, const pg_t &pg)
 {
   out << pg.pool() << '.';
   out << hex << pg.ps() << dec;
@@ -227,162 +230,151 @@ namespace __gnu_cxx {
 
 // ----------------------
 
-struct coll_t {
-  enum type_t {
-    TYPE_META = 0,
-    TYPE_TEMP = 1,
-    TYPE_PG = 2
-  };
-  __u8 type;
-  pg_t pgid;
-  snapid_t snap;
+class coll_t {
+public:
+  const static coll_t META_COLL;
+  const static coll_t TEMP_COLL;
 
-  coll_t() : type(TYPE_META), snap(0) {}
-  coll_t(type_t t) : type(t), snap(0) {}
-  coll_t(type_t t, pg_t p, snapid_t s) : type(t), pgid(p), snap(s) {}
-  
-  static coll_t build_pg_coll(pg_t p) {
-    return coll_t(TYPE_PG, p, CEPH_NOSNAP);
-  }
-  static coll_t build_snap_pg_coll(pg_t p, snapid_t s) {
-    return coll_t(TYPE_PG, p, s);
+  coll_t()
+    : str("meta")
+  { }
+
+  explicit coll_t(const std::string &str_)
+    : str(str_)
+  { }
+
+  explicit coll_t(pg_t pgid, snapid_t snap = CEPH_NOSNAP)
+    : str(pg_and_snap_to_str(pgid, snap))
+  { }
+
+  const std::string& to_str() const {
+    return str;
   }
 
-  ostream& print(ostream& out) const {
-    switch (type) {
-    case TYPE_META:
-      return out << "meta";
-    case TYPE_TEMP:
-      return out << "temp";
-    case TYPE_PG:
-      out << pgid << "_" << snap;
-    default:
-      return out << "???";
-    }
+  const char* c_str() const {
+    return str.c_str();
   }
-  int print(char *o, int maxlen) {
-    switch (type) {
-    case TYPE_META:
-      return snprintf(o, maxlen, "meta");
-    case TYPE_TEMP:
-      return snprintf(o, maxlen, "temp");
-    case TYPE_PG:
-      {
-	int len = pgid.print(o, maxlen);
-	if (snap != CEPH_NOSNAP)
-	  len += snprintf(o + len, maxlen - len, "_%llx", (long long unsigned)snap);
-	else {
-	  strncat(o + len, "_head", maxlen - len);
-	  len += 5;
-	}
-	return len;
-      }
-    default:
-      return snprintf(o, maxlen, "???");
-    }
-  }
-  bool parse(char *s) {
-    if (strncmp(s, "meta", 4) == 0) {
-      type = TYPE_META;
-      pgid = pg_t();
-      snap = 0;
-      return true;
-    }
-    if (strncmp(s, "temp", 4) == 0) {
-      type = TYPE_TEMP;
-      pgid = pg_t();
-      snap = 0;
-      return true;
-    }
-    if (!pgid.parse(s))
+
+  bool is_pg(pg_t& pgid, snapid_t& snap) const {
+    const char *cstr(str.c_str());
+
+    if (!pgid.parse(cstr))
       return false;
-    char *sn = strchr(s, '_');
-    if (!sn)
+    const char *snap_start = strchr(cstr, '_');
+    if (!snap_start)
       return false;
-    if (strncmp(sn, "_head", 5) == 0)
+    if (strncmp(snap_start, "_head", 5) == 0)
       snap = CEPH_NOSNAP;
     else
-      snap = strtoull(sn+1, 0, 16);
-    type = TYPE_PG;
+      snap = strtoull(snap_start+1, 0, 16);
     return true;
   }
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 2;
+    __u8 struct_v = 3;
     ::encode(struct_v, bl);
-    ::encode(type, bl);
-    ::encode(pgid, bl);
-    ::encode(snap, bl);
+    ::encode(str, bl);
   }
+
   void decode(bufferlist::iterator& bl) {
     __u8 struct_v;
     ::decode(struct_v, bl);
-    if (struct_v >= 2)
-      ::decode(type, bl);
-    ::decode(pgid, bl);
-    ::decode(snap, bl);
-    if (struct_v < 2) {
-      // infer the type
-      if (pgid == pg_t() && snap == 0)
-	type = TYPE_META;
-      else
-	type = TYPE_PG;
+    switch (struct_v) {
+      case 1: {
+	pg_t pgid;
+	snapid_t snap;
+
+	::decode(pgid, bl);
+	::decode(snap, bl);
+	// infer the type
+	if (pgid == pg_t() && snap == 0)
+	  str = "meta";
+	else
+	  str = pg_and_snap_to_str(pgid, snap);
+	break;
+      }
+
+      case 2: {
+	__u8 type;
+	pg_t pgid;
+	snapid_t snap;
+
+	::decode(type, bl);
+	::decode(pgid, bl);
+	::decode(snap, bl);
+	switch (type) {
+	  case 0:
+	    str = "meta";
+	    break;
+	  case 1:
+	    str = "temp";
+	    break;
+	  case 2:
+	    str = pg_and_snap_to_str(pgid, snap);
+	    break;
+	  default: {
+	    ostringstream oss;
+	    oss << "coll_t::decode(): can't understand type " << type;
+	    throw std::domain_error(oss.str());
+	  }
+	}
+	break;
+      }
+
+      case 3:
+	::decode(str, bl);
+	break;
+
+      default: {
+	ostringstream oss;
+	oss << "coll_t::decode(): don't know how to decode verison "
+            << struct_v;
+	throw std::domain_error(oss.str());
+      }
     }
   }
+  inline bool operator==(const coll_t& rhs) const {
+    return str == rhs.str;
+  }
+  inline bool operator!=(const coll_t& rhs) const {
+    return str != rhs.str;
+  }
+
+private:
+  static std::string pg_and_snap_to_str(pg_t p, snapid_t s) {
+    std::ostringstream oss;
+    oss << p << "_" << s;
+    return oss.str();
+  }
+
+  std::string str;
 };
+
 WRITE_CLASS_ENCODER(coll_t)
 
 inline ostream& operator<<(ostream& out, const coll_t& c) {
-  return c.print(out);
-}
-
-#define TRIPLE_EQ(l, r, a, b, c) \
-  l.a == r.a && l.b == r.b && l.c == r.c;
-#define TRIPLE_NE(l, r, a, b, c) \
-  l.a != r.a && l.b != r.b && l.c != r.c;
-#define TRIPLE_LT(l, r, a, b, c)				\
-  l.a < r.a || (l.a == r.a && (l.b < r.b ||			\
-			       (l.b == r.b && l.c < r.c)));
-#define TRIPLE_LTE(l, r, a, b, c)				\
-  l.a < r.a || (l.a == r.a && (l.b < r.b ||			\
-			       (l.b == r.b && l.c <= r.c)));
-#define TRIPLE_GT(l, r, a, b, c)				\
-  l.a > r.a || (l.a == r.a && (l.b > r.b ||			\
-			       (l.b == r.b && l.c > r.c)));
-#define TRIPLE_GTE(l, r, a, b, c)				\
-  l.a > r.a || (l.a == r.a && (l.b > r.b ||			\
-			       (l.b == r.b && l.c >= r.c)));
-
-inline bool operator<(const coll_t& l, const coll_t& r) {
-  return TRIPLE_LT(l, r, type, pgid, snap);
-}
-inline bool operator<=(const coll_t& l, const coll_t& r) {
-  return TRIPLE_LTE(l, r, type, pgid, snap);
-}
-inline bool operator==(const coll_t& l, const coll_t& r) {
-  return TRIPLE_EQ(l, r, type, pgid, snap);
-}
-inline bool operator!=(const coll_t& l, const coll_t& r) {
-  return TRIPLE_NE(l, r, type, pgid, snap);
-}
-inline bool operator>(const coll_t& l, const coll_t& r) {
-  return TRIPLE_GT(l, r, type, pgid, snap);
-}
-inline bool operator>=(const coll_t& l, const coll_t& r) {
-  return TRIPLE_GTE(l, r, type, pgid, snap);
+  out << c.to_str();
+  return out;
 }
 
 namespace __gnu_cxx {
   template<> struct hash<coll_t> {
     size_t operator()(const coll_t &c) const { 
-      static hash<pg_t> H;
-      static rjhash<uint64_t> I;
-      return H(c.pgid) ^ I(c.snap + c.type);
+      size_t hash = 0;
+      string str(c.to_str());
+      std::string::const_iterator end(str.end());
+      for (std::string::const_iterator s = str.begin(); s != end; ++s) {
+	hash += *s;
+	hash += (hash << 10);
+	hash ^= (hash >> 6);
+      }
+      hash += (hash << 3);
+      hash ^= (hash >> 11);
+      hash += (hash << 15);
+      return hash;
     }
   };
 }
-
-
 
 inline ostream& operator<<(ostream& out, const ceph_object_layout &ol)
 {
@@ -557,28 +549,45 @@ inline ostream& operator<<(ostream& out, const osd_stat_t& s) {
 #define PG_STATE_REPAIR       (1<<13) // pg should repair on next scrub
 #define PG_STATE_SCANNING     (1<<14) // scanning content to generate backlog
 
-static inline std::string pg_state_string(int state) {
-  std::string st;
-  if (state & PG_STATE_CREATING) st += "creating+";
-  if (state & PG_STATE_ACTIVE) st += "active+";
-  if (state & PG_STATE_CLEAN) st += "clean+";
-  if (state & PG_STATE_CRASHED) st += "crashed+";
-  if (state & PG_STATE_DOWN) st += "down+";
-  if (state & PG_STATE_REPLAY) st += "replay+";
-  if (state & PG_STATE_STRAY) st += "stray+";
-  if (state & PG_STATE_SPLITTING) st += "splitting+";
-  if (state & PG_STATE_DEGRADED) st += "degraded+";
-  if (state & PG_STATE_SCRUBBING) st += "scrubbing+";
-  if (state & PG_STATE_SCRUBQ) st += "scrubq+";
-  if (state & PG_STATE_INCONSISTENT) st += "inconsistent+";
-  if (state & PG_STATE_PEERING) st += "peering+";
-  if (state & PG_STATE_REPAIR) st += "repair+";
-  if (state & PG_STATE_SCANNING) st += "scanning+";
-  if (!st.length()) 
-    st = "inactive";
-  else 
-    st.resize(st.length()-1);
-  return st;
+static inline std::string pg_state_string(int state)
+{
+  ostringstream oss;
+  if (state & PG_STATE_CREATING)
+    oss << "creating+";
+  if (state & PG_STATE_ACTIVE)
+    oss << "active+";
+  if (state & PG_STATE_CLEAN)
+    oss << "clean+";
+  if (state & PG_STATE_CRASHED)
+    oss << "crashed+";
+  if (state & PG_STATE_DOWN)
+    oss << "down+";
+  if (state & PG_STATE_REPLAY)
+    oss << "replay+";
+  if (state & PG_STATE_STRAY)
+    oss << "stray+";
+  if (state & PG_STATE_SPLITTING)
+    oss << "splitting+";
+  if (state & PG_STATE_DEGRADED)
+    oss << "degraded+";
+  if (state & PG_STATE_SCRUBBING)
+    oss << "scrubbing+";
+  if (state & PG_STATE_SCRUBQ)
+    oss << "scrubq+";
+  if (state & PG_STATE_INCONSISTENT)
+    oss << "inconsistent+";
+  if (state & PG_STATE_PEERING)
+    oss << "peering+";
+  if (state & PG_STATE_REPAIR)
+    oss << "repair+";
+  if (state & PG_STATE_SCANNING)
+    oss << "scanning+";
+  string ret(oss.str());
+  if (ret.length() > 0)
+    ret.resize(ret.length() - 1);
+  else
+    ret = "inactive";
+  return ret;
 }
 
 
@@ -789,7 +798,7 @@ struct pg_pool_t {
     __u8 struct_v = CEPH_PG_POOL_VERSION;
     ::encode(struct_v, bl);
     v.num_snaps = snaps.size();
-    v.num_removed_snap_intervals = removed_snaps.m.size();
+    v.num_removed_snap_intervals = removed_snaps.num_intervals();
     ::encode(v, bl);
     ::encode_nohead(snaps, bl);
     removed_snaps.encode_nohead(bl);
@@ -798,7 +807,7 @@ struct pg_pool_t {
     __u8 struct_v;
     ::decode(struct_v, bl);
     if (struct_v > CEPH_PG_POOL_VERSION)
-      throw new buffer::error;
+      throw buffer::error();
     ::decode(v, bl);
     ::decode_nohead(v.num_snaps, snaps, bl);
     removed_snaps.decode_nohead(v.num_removed_snap_intervals, bl);
@@ -849,13 +858,19 @@ struct pg_stat_t {
   uint64_t num_objects;
   uint64_t num_object_clones;
   uint64_t num_object_copies;  // num_objects * num_replicas
+
+  // The number of objects missing on the primary OSD
   uint64_t num_objects_missing_on_primary;
+
   uint64_t num_objects_degraded;
   uint64_t log_size;
   uint64_t ondisk_log_size;    // >= active_log_size
 
   uint64_t num_rd, num_rd_kb;
   uint64_t num_wr, num_wr_kb;
+
+  // The number of objects missing on the primary OSD
+  uint64_t num_objects_unfound;
   
   vector<int> up, acting;
 
@@ -865,11 +880,12 @@ struct pg_stat_t {
 		num_objects(0), num_object_clones(0), num_object_copies(0),
 		num_objects_missing_on_primary(0), num_objects_degraded(0),
 		log_size(0), ondisk_log_size(0),
-		num_rd(0), num_rd_kb(0), num_wr(0), num_wr_kb(0)
+		num_rd(0), num_rd_kb(0), num_wr(0), num_wr_kb(0),
+		num_objects_unfound(0)
   { }
 
   void encode(bufferlist &bl) const {
-    __u8 v = 3;
+    __u8 v = 4;
     ::encode(v, bl);
 
     ::encode(version, bl);
@@ -896,6 +912,7 @@ struct pg_stat_t {
     ::encode(num_wr, bl);
     ::encode(num_wr_kb, bl);
     ::encode(up, bl);
+    ::encode(num_objects_unfound, bl);
     ::encode(acting, bl);
   }
   void decode(bufferlist::iterator &bl) {
@@ -927,8 +944,12 @@ struct pg_stat_t {
       ::decode(num_wr, bl);
       ::decode(num_wr_kb, bl);
     }
-    if (v >= 3)
+    if (v >= 3) {
       ::decode(up, bl);
+    }
+    if (v >= 4) {
+      ::decode(num_objects_unfound, bl);
+    }
     ::decode(acting, bl);
   }
 
@@ -946,6 +967,7 @@ struct pg_stat_t {
     num_rd_kb += o.num_rd_kb;
     num_wr += o.num_wr;
     num_wr_kb += o.num_wr_kb;
+    num_objects_unfound += o.num_objects_unfound;
   }
   void sub(const pg_stat_t& o) {
     num_bytes -= o.num_bytes;
@@ -961,6 +983,7 @@ struct pg_stat_t {
     num_rd_kb -= o.num_rd_kb;
     num_wr -= o.num_wr;
     num_wr_kb -= o.num_wr_kb;
+    num_objects_unfound -= o.num_objects_unfound;
   }
 };
 WRITE_CLASS_ENCODER(pg_stat_t)
@@ -981,15 +1004,19 @@ struct pool_stat_t {
   uint64_t num_rd, num_rd_kb;
   uint64_t num_wr, num_wr_kb;
 
+  // The number of logical objects that are still unfound
+  uint64_t num_objects_unfound;
+
   pool_stat_t() : num_bytes(0), num_kb(0), 
 		  num_objects(0), num_object_clones(0), num_object_copies(0),
 		  num_objects_missing_on_primary(0), num_objects_degraded(0),
 		  log_size(0), ondisk_log_size(0),
-		  num_rd(0), num_rd_kb(0), num_wr(0), num_wr_kb(0)
+		  num_rd(0), num_rd_kb(0), num_wr(0), num_wr_kb(0),
+		  num_objects_unfound(0)
   { }
 
   void encode(bufferlist &bl) const {
-    __u8 v = 2;
+    __u8 v = 3;
     ::encode(v, bl);
     ::encode(num_bytes, bl);
     ::encode(num_kb, bl);
@@ -1004,6 +1031,7 @@ struct pool_stat_t {
     ::encode(num_rd_kb, bl);
     ::encode(num_wr, bl);
     ::encode(num_wr_kb, bl);
+    ::encode(num_objects_unfound, bl);
  }
   void decode(bufferlist::iterator &bl) {
     __u8 v;
@@ -1023,6 +1051,9 @@ struct pool_stat_t {
       ::decode(num_wr, bl);
       ::decode(num_wr_kb, bl);
     }
+    if (v >= 3) {
+      ::decode(num_objects_unfound, bl);
+    }
   }
 
   void add(const pg_stat_t& o) {
@@ -1039,6 +1070,7 @@ struct pool_stat_t {
     num_rd_kb += o.num_rd_kb;
     num_wr += o.num_wr;
     num_wr_kb += o.num_wr_kb;
+    num_objects_unfound += o.num_objects_unfound;
   }
   void sub(const pg_stat_t& o) {
     num_bytes -= o.num_bytes;
@@ -1054,6 +1086,7 @@ struct pool_stat_t {
     num_rd_kb -= o.num_rd_kb;
     num_wr -= o.num_wr;
     num_wr_kb -= o.num_wr_kb;
+    num_objects_unfound -= o.num_objects_unfound;
   }
 };
 WRITE_CLASS_ENCODER(pool_stat_t)
@@ -1097,7 +1130,7 @@ class ObjectExtent {
   __u32      offset;    // in object
   __u32      length;    // in object
 
-  ceph_object_layout layout;   // object layout (pgid, etc.)
+  object_locator_t oloc;   // object locator (pool etc)
 
   map<__u32, __u32>  buffer_extents;  // off -> len.  extents in buffer being mapped (may be fragmented bc of striping!)
   
@@ -1105,10 +1138,10 @@ class ObjectExtent {
   ObjectExtent(object_t o, __u32 off=0, __u32 l=0) : oid(o), offset(off), length(l) { }
 };
 
-inline ostream& operator<<(ostream& out, ObjectExtent &ex)
+inline ostream& operator<<(ostream& out, const ObjectExtent &ex)
 {
   return out << "extent(" 
-             << ex.oid << " in " << ex.layout
+             << ex.oid << " in " << ex.oloc
              << " " << ex.offset << "~" << ex.length
              << ")";
 }
@@ -1179,7 +1212,7 @@ public:
 };
 WRITE_CLASS_ENCODER(OSDSuperblock)
 
-inline ostream& operator<<(ostream& out, OSDSuperblock& sb)
+inline ostream& operator<<(ostream& out, const OSDSuperblock& sb)
 {
   return out << "sb(" << sb.fsid
              << " osd" << sb.whoami
@@ -1250,14 +1283,47 @@ inline ostream& operator<<(ostream& out, const SnapSet& cs) {
 #define OI_ATTR "_"
 #define SS_ATTR "snapset"
 
+struct watch_info_t {
+  uint64_t cookie;
+  uint32_t timeout_seconds;
+  void encode(bufferlist& bl) const {
+    const __u8 v = 2;
+    ::encode(v, bl);
+    ::encode(cookie, bl);
+    ::encode(timeout_seconds, bl);
+  }
+  void decode(bufferlist::iterator& bl) {
+    __u8 v;
+    ::decode(v, bl);
+    ::decode(cookie, bl);
+    if (v < 2) {
+      uint64_t ver;
+      ::decode(ver, bl);
+    }
+    ::decode(timeout_seconds, bl);
+ }
+};
+WRITE_CLASS_ENCODER(watch_info_t)
+
+static inline bool operator==(const watch_info_t& l, const watch_info_t& r) {
+  return l.cookie == r.cookie && l.timeout_seconds == r.timeout_seconds;
+}
+
+static inline ostream& operator<<(ostream& out, const watch_info_t& w) {
+  return out << "watch(cookie " << w.cookie << " " << w.timeout_seconds << "s)";
+}
+
 struct object_info_t {
   sobject_t soid;
+  object_locator_t oloc;
 
   eversion_t version, prior_version;
+  eversion_t user_version;
   osd_reqid_t last_reqid;
 
   uint64_t size;
   utime_t mtime;
+  bool lost;
 
   osd_reqid_t wrlock_by;   // [head]
   vector<snapid_t> snaps;  // [clone]
@@ -1271,12 +1337,16 @@ struct object_info_t {
     last_reqid = other.last_reqid;
     truncate_seq = other.truncate_seq;
     truncate_size = other.truncate_size;
+    lost = other.lost;
   }
 
+  map<entity_name_t, watch_info_t> watchers;
+
   void encode(bufferlist& bl) const {
-    const __u8 v = 1;
+    const __u8 v = 4;
     ::encode(v, bl);
     ::encode(soid, bl);
+    ::encode(oloc, bl);
     ::encode(version, bl);
     ::encode(prior_version, bl);
     ::encode(last_reqid, bl);
@@ -1288,11 +1358,16 @@ struct object_info_t {
       ::encode(snaps, bl);
     ::encode(truncate_seq, bl);
     ::encode(truncate_size, bl);
+    ::encode(lost, bl);
+    ::encode(watchers, bl);
+    ::encode(user_version, bl);
   }
   void decode(bufferlist::iterator& bl) {
     __u8 v;
     ::decode(v, bl);
     ::decode(soid, bl);
+    if (v >= 2)
+      ::decode(oloc, bl);
     ::decode(version, bl);
     ::decode(prior_version, bl);
     ::decode(last_reqid, bl);
@@ -1304,14 +1379,24 @@ struct object_info_t {
       ::decode(snaps, bl);
     ::decode(truncate_seq, bl);
     ::decode(truncate_size, bl);
+    if (v >= 3)
+      ::decode(lost, bl);
+    else
+      lost = false;
+    if (v >= 4) {
+      ::decode(watchers, bl);
+      ::decode(user_version, bl);
+    }
   }
   void decode(bufferlist& bl) {
     bufferlist::iterator p = bl.begin();
     decode(p);
   }
 
-  object_info_t(sobject_t s) : soid(s), size(0),
-                               truncate_seq(0), truncate_size(0) {}
+  object_info_t(const sobject_t& s, const object_locator_t& o)
+    : soid(s), oloc(o), size(0),
+      lost(false), truncate_seq(0), truncate_size(0) {}
+
   object_info_t(bufferlist& bl) {
     decode(bl);
   }
@@ -1326,6 +1411,8 @@ inline ostream& operator<<(ostream& out, const object_info_t& oi) {
     out << " wrlock_by=" << oi.wrlock_by;
   else
     out << " " << oi.snaps;
+  if (oi.lost)
+    out << " LOST";
   out << ")";
   return out;
 }
@@ -1337,30 +1424,55 @@ inline ostream& operator<<(ostream& out, const object_info_t& oi) {
  */
 struct ScrubMap {
   struct object {
-    sobject_t poid;
     uint64_t size;
+    bool negative;
     map<string,bufferptr> attrs;
+
+    object(): size(0),negative(0),attrs() {}
 
     void encode(bufferlist& bl) const {
       __u8 struct_v = 1;
       ::encode(struct_v, bl);
-      ::encode(poid, bl);
       ::encode(size, bl);
+      ::encode(negative, bl);
       ::encode(attrs, bl);
     }
     void decode(bufferlist::iterator& bl) {
       __u8 struct_v;
       ::decode(struct_v, bl);
-      ::decode(poid, bl);
       ::decode(size, bl);
+      ::decode(negative, bl);
       ::decode(attrs, bl);
     }
   };
   WRITE_CLASS_ENCODER(object)
 
-  vector<object> objects;
+  map<sobject_t,object> objects;
   map<string,bufferptr> attrs;
   bufferlist logbl;
+  eversion_t valid_through;
+  eversion_t incr_since;
+
+  void merge_incr(const ScrubMap &l) {
+    assert(valid_through == l.incr_since);
+    attrs = l.attrs;
+    logbl = l.logbl;
+    valid_through = l.valid_through;
+
+    for (map<sobject_t,object>::const_iterator p = l.objects.begin();
+         p != l.objects.end();
+         p++){
+      if (p->second.negative) {
+        map<sobject_t,object>::iterator q = objects.find(p->first);
+        if (q != objects.end()) {
+          objects.erase(q);
+        }
+      } else {
+        objects[p->first] = p->second;
+      }
+    }
+  }
+          
 
   void encode(bufferlist& bl) const {
     __u8 struct_v = 1;
@@ -1368,6 +1480,8 @@ struct ScrubMap {
     ::encode(objects, bl);
     ::encode(attrs, bl);
     ::encode(logbl, bl);
+    ::encode(valid_through, bl);
+    ::encode(incr_since, bl);
   }
   void decode(bufferlist::iterator& bl) {
     __u8 struct_v;
@@ -1375,6 +1489,8 @@ struct ScrubMap {
     ::decode(objects, bl);
     ::decode(attrs, bl);
     ::decode(logbl, bl);
+    ::decode(valid_through, bl);
+    ::decode(incr_since, bl);
   }
 };
 WRITE_CLASS_ENCODER(ScrubMap::object)

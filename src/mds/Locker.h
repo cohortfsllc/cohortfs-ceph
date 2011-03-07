@@ -79,6 +79,8 @@ protected:
   // -- locks --
 public:
   void include_snap_rdlocks(set<SimpleLock*>& rdlocks, CInode *in);
+  void include_snap_rdlocks_wlayout(set<SimpleLock*>& rdlocks, CInode *in,
+                                    ceph_file_layout **layout);
 
   bool acquire_locks(MDRequest *mdr,
 		     set<SimpleLock*> &rdlocks,
@@ -90,7 +92,7 @@ public:
   void drop_non_rdlocks(Mutation *mut);
   void drop_rdlocks(Mutation *mut);
 
-  void eval_gather(SimpleLock *lock, bool first=false, bool *need_issue=0);
+  void eval_gather(SimpleLock *lock, bool first=false, bool *need_issue=0, list<Context*> *pfinishers=0);
   void eval(SimpleLock *lock, bool *need_issue=0);
   void eval_any(SimpleLock *lock, bool *need_issue=0) {
     if (!lock->is_stable())
@@ -99,6 +101,20 @@ public:
       eval(lock, need_issue);
   }
 
+  class C_EvalScatterGathers : public Context {
+    Locker *locker;
+    CInode *in;
+  public:
+    C_EvalScatterGathers(Locker *l, CInode *i) : locker(l), in(i) {
+      in->get(CInode::PIN_PTRWAITER);    
+    }
+    void finish(int r) {
+      in->put(CInode::PIN_PTRWAITER);
+      locker->eval_scatter_gathers(in);
+    }
+  };
+  void eval_scatter_gathers(CInode *in);
+
   void eval_cap_gather(CInode *in);
 
   bool eval(CInode *in, int mask);
@@ -106,8 +122,12 @@ public:
 
   bool _rdlock_kick(SimpleLock *lock);
   bool rdlock_try(SimpleLock *lock, client_t client, Context *c);
-  bool rdlock_start(SimpleLock *lock, MDRequest *mut);
+  bool rdlock_start(SimpleLock *lock, MDRequest *mut, bool as_anon=false);
   void rdlock_finish(SimpleLock *lock, Mutation *mut);
+  bool can_rdlock_set(set<SimpleLock*>& locks);
+  bool rdlock_try_set(set<SimpleLock*>& locks);
+  void rdlock_take_set(set<SimpleLock*>& locks);
+  void rdlock_finish_set(set<SimpleLock*>& locks);
 
   void wrlock_force(SimpleLock *lock, Mutation *mut);
   bool wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait=false);
@@ -131,10 +151,6 @@ protected:
   void simple_excl(SimpleLock *lock, bool *need_issue=0);
   void simple_xlock(SimpleLock *lock);
 
-public:
-  bool dentry_can_rdlock_trace(vector<CDentry*>& trace);
-  void dentry_anon_rdlock_trace_start(vector<CDentry*>& trace);
-  void dentry_anon_rdlock_trace_finish(vector<CDentry*>& trace);
 
   // scatter
 public:
@@ -168,16 +184,30 @@ public:
   void mark_updated_scatterlock(ScatterLock *lock);
 
 
+  void handle_reqrdlock(SimpleLock *lock);
+
+
+
   // caps
-  void process_cap_update(MDRequest *mdr, client_t client,
-			  inodeno_t ino, uint64_t cap_id, int caps, int wanted,
-			  int seq, int issue_seq, int mseq,
-			  const string& dname);
+
+  // when to defer processing client cap release or writeback due to being
+  // frozen.  the condition must be consistent across handle_client_caps and
+  // process_request_cap_release to preserve ordering.
+  bool should_defer_client_cap_frozen(CInode *in);
+
+  void process_request_cap_release(MDRequest *mdr, client_t client, const ceph_mds_request_release& r,
+				   const string &dname);
+
   void kick_cap_releases(MDRequest *mdr);
+
+  void remove_client_cap(CInode *in, client_t client);
 
  protected:
   void adjust_cap_wanted(Capability *cap, int wanted, int issue_seq);
   void handle_client_caps(class MClientCaps *m);
+  void _update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *pi);
+  void _do_snap_update(CInode *in, snapid_t snap, int dirty, snapid_t follows, client_t client, MClientCaps *m, MClientCaps *ack);
+  void _do_null_snapflush(CInode *head_in, client_t client, snapid_t follows);
   bool _do_cap_update(CInode *in, Capability *cap, int dirty, snapid_t follows, MClientCaps *m,
 		      MClientCaps *ack=0);
   void handle_client_cap_release(class MClientCapRelease *m);
@@ -198,7 +228,7 @@ public:
   void file_eval(ScatterLock *lock, bool *need_issue);
 protected:
   void handle_file_lock(ScatterLock *lock, MLock *m);
-  void file_mixed(ScatterLock *lock, bool *need_issue=0);
+  void scatter_mix(ScatterLock *lock, bool *need_issue=0);
   void file_excl(ScatterLock *lock, bool *need_issue=0);
 
 public:
@@ -227,7 +257,7 @@ protected:
   void file_update_finish(CInode *in, Mutation *mut, bool share, client_t client, Capability *cap,
 			  MClientCaps *ack);
 public:
-  void calc_new_client_ranges(CInode *in, uint64_t size, map<client_t,byte_range_t>& new_ranges);
+  void calc_new_client_ranges(CInode *in, uint64_t size, map<client_t, client_writeable_range_t>& new_ranges);
   bool check_inode_max_size(CInode *in, bool force_wrlock=false, bool update_size=false, uint64_t newsize=0,
 			    utime_t mtime=utime_t());
   void share_inode_max_size(CInode *in);

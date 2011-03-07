@@ -21,7 +21,7 @@
 #include <string>
 using namespace std;
 
-#include "config.h"
+#include "common/config.h"
 
 #include "mon/MonMap.h"
 #include "mon/Monitor.h"
@@ -31,6 +31,7 @@ using namespace std;
 
 #include "include/CompatSet.h"
 
+#include "common/ceph_argparse.h"
 #include "common/Timer.h"
 #include "common/common_init.h"
 
@@ -60,8 +61,7 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  common_set_defaults(true);
-  common_init(args, "mon", true);
+  common_init(args, "mon", STARTUP_FLAG_INIT_KEYS | STARTUP_FLAG_DAEMON);
 
   FOR_EACH_ARG(args) {
     if (CONF_ARG_EQ("mkfs", '\0')) {
@@ -73,10 +73,9 @@ int main(int argc, const char **argv)
   }
 
   // whoami
-  char *end;
-  int whoami = strtol(g_conf.id, &end, 10);
-  if (*end || end == g_conf.id || whoami < 0) {
-    cerr << "must specify '-i #' where # is the mon number" << std::endl;
+  string name = g_conf.id;
+  if (name.length() == 0) {
+    cerr << "must specify '-i id' where id is the mon name" << std::endl;
     usage();
   }
 
@@ -113,15 +112,13 @@ int main(int argc, const char **argv)
 
     // go
     MonitorStore store(g_conf.mon_data);
-    Monitor mon(whoami, &store, 0, &monmap);
+    Monitor mon(name, &store, 0, &monmap);
     mon.mkfs(osdmapbl);
     cout << argv[0] << ": created monfs at " << g_conf.mon_data 
-	 << " for mon" << whoami
+	 << " for mon." << name
 	 << std::endl;
     return 0;
   }
-
-  if (g_conf.clock_tare) g_clock.tare();
 
   CompatSet mon_features(ceph_mon_feature_compat,
 			 ceph_mon_feature_ro_compat,
@@ -191,38 +188,40 @@ int main(int argc, const char **argv)
     assert(v == monmap.get_epoch());
   }
 
-  if ((unsigned)whoami >= monmap.size() || whoami < 0) {
-    cerr << "mon" << whoami << " does not exist in monmap" << std::endl;
+  if (!monmap.contains(name)) {
+    cerr << "mon." << name << " does not exist in monmap" << std::endl;
     exit(1);
   }
 
-  entity_addr_t ipaddr = monmap.get_inst(whoami).addr;
+  entity_addr_t ipaddr = monmap.get_addr(name);
   entity_addr_t conf_addr;
   char *mon_addr_str;
 
   if (conf_read_key(NULL, "mon addr", OPT_STR, &mon_addr_str, NULL) &&
       conf_addr.parse(mon_addr_str) &&
       ipaddr != conf_addr)
-    cerr << "WARNING: 'mon addr' config option does not match monmap file" << std::endl
+    cerr << "WARNING: 'mon addr' config option " << conf_addr << " does not match monmap file" << std::endl
 	 << "         continuing with monmap configuration" << std::endl;
 
   // bind
   SimpleMessenger *messenger = new SimpleMessenger();
 
-  cout << "starting mon" << whoami 
-       << " at " << monmap.get_inst(whoami).addr
+  int rank = monmap.get_rank(name);
+
+  cout << "starting mon." << name << " rank " << rank
+       << " at " << monmap.get_addr(name)
        << " mon_data " << g_conf.mon_data
        << " fsid " << monmap.get_fsid()
        << std::endl;
-  g_my_addr = monmap.get_inst(whoami).addr;
+  g_conf.public_addr = monmap.get_addr(name);
   err = messenger->bind();
   if (err < 0)
     return 1;
 
   // start monitor
-  messenger->register_entity(entity_name_t::MON(whoami));
+  messenger->register_entity(entity_name_t::MON(rank));
   messenger->set_default_send_priority(CEPH_MSG_PRIO_HIGH);
-  Monitor *mon = new Monitor(whoami, &store, messenger, &monmap);
+  Monitor *mon = new Monitor(name, &store, messenger, &monmap);
 
   messenger->start();  // may daemonize
 
@@ -244,8 +243,9 @@ int main(int argc, const char **argv)
   // cd on exit, so that gmon.out (if any) goes into a separate directory for each node.
   char s[20];
   snprintf(s, sizeof(s), "gmon/%d", getpid());
-  if (mkdir(s, 0755) == 0)
-    chdir(s);
+  if ((mkdir(s, 0755) == 0) && (chdir(s) == 0)) {
+    dout(0) << "cmon: gmon.out should be in " << s << dendl;
+  }
 
   return 0;
 }

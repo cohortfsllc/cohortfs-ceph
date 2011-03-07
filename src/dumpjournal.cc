@@ -17,7 +17,7 @@
 #include <string>
 using namespace std;
 
-#include "config.h"
+#include "common/config.h"
 
 #include "mon/MonMap.h"
 #include "mon/MonClient.h"
@@ -29,6 +29,7 @@ using namespace std;
 
 #include "common/Timer.h"
 #include "common/common_init.h"
+#include "common/ceph_argparse.h"
 
 #ifndef DARWIN
 #include <envz.h>
@@ -46,6 +47,8 @@ Cond cond;
 Messenger *messenger = 0;
 Objecter *objecter = 0;
 Journaler *journaler = 0;
+SafeTimer *obj_timer = 0;
+SafeTimer *jnl_timer = 0;
 
 class Dumper : public Dispatcher {
   bool ms_dispatch(Message *m) {
@@ -78,8 +81,7 @@ int main(int argc, const char **argv, const char *envp[])
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  common_set_defaults(false);
-  common_init(args, "dumpjournal", false);
+  common_init(args, "dumpjournal", STARTUP_FLAG_FORCE_FG_LOGGING);
 
   vec_to_argv(args, argc, argv);
 
@@ -101,8 +103,10 @@ int main(int argc, const char **argv, const char *envp[])
   inodeno_t ino = MDS_INO_LOG_OFFSET + mds;
   unsigned pg_pool = CEPH_METADATA_RULE;
 
-  objecter = new Objecter(messenger, &mc, &osdmap, lock);
-  journaler = new Journaler(ino, pg_pool, CEPH_FS_ONDISK_MAGIC, objecter, 0, 0,  &lock);
+  obj_timer = new SafeTimer(lock);
+  jnl_timer = new SafeTimer(lock);
+  objecter = new Objecter(messenger, &mc, &osdmap, lock, *obj_timer);
+  journaler = new Journaler(ino, pg_pool, CEPH_FS_ONDISK_MAGIC, objecter, 0, 0,  jnl_timer);
 
   objecter->set_client_incarnation(0);
 

@@ -23,6 +23,8 @@
 #define EVENT_IMPORTFINISH 5
 #define EVENT_FRAGMENT     6
 
+#define EVENT_RESETJOURNAL 9
+
 #define EVENT_SESSION      10
 #define EVENT_SESSIONS     11
 
@@ -51,6 +53,9 @@ class LogEvent {
   __u32 _type;
   loff_t _start_off,_end_off;
 
+protected:
+  utime_t stamp;
+
   friend class MDLog;
 
  public:
@@ -63,12 +68,19 @@ class LogEvent {
   int get_type() { return _type; }
   loff_t get_start_off() { return _start_off; }
   loff_t get_end_off() { return _end_off; }
+  utime_t get_stamp() const { return stamp; }
+
+  void set_stamp(utime_t t) { stamp = t; }
 
   // encoding
   virtual void encode(bufferlist& bl) const = 0;
   virtual void decode(bufferlist::iterator &bl) = 0;
   static LogEvent *decode(bufferlist &bl);
 
+  void encode_with_header(bufferlist& bl) {
+    ::encode(_type, bl);
+    encode(bl);
+  }
 
   virtual void print(ostream& out) { 
     out << "event(" << _type << ")";

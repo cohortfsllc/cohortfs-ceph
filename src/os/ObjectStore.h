@@ -74,11 +74,19 @@ public:
   };
   
 
+  struct Sequencer_impl {
+    virtual void flush() = 0;
+    virtual ~Sequencer_impl() {}
+  };
   struct Sequencer {
-    void *p;
+    Sequencer_impl *p;
     Sequencer() : p(NULL) {}
     ~Sequencer() {
-      assert(p == NULL);
+      delete p;
+    }
+    void flush() {
+      if (p)
+	p->flush();
     }
   };
   
@@ -88,6 +96,7 @@ public:
    */
   class Transaction {
   public:
+    static const int OP_NOP =          0;
     static const int OP_TOUCH =        9;   // cid, oid
     static const int OP_WRITE =        10;  // cid, oid, offset, len, bl
     static const int OP_ZERO =         11;  // cid, oid, offset, len
@@ -112,6 +121,7 @@ public:
     static const int OP_STARTSYNC =    27;  // start a sync 
 
     static const int OP_RMATTRS =      28;  // cid, oid
+    static const int OP_COLL_RENAME =       29;  // cid, newcid
 
   private:
     uint64_t ops;
@@ -260,6 +270,11 @@ public:
 
     void start_sync() {
       __u32 op = OP_STARTSYNC;
+      ::encode(op, tbl);
+      ops++;
+    }
+    void nop() {
+      __u32 op = OP_NOP;
       ::encode(op, tbl);
       ops++;
     }
@@ -446,6 +461,13 @@ public:
       ::encode(aset, tbl);
       ops++;
     }
+    void collection_rename(coll_t cid, coll_t ncid) {
+      __u32 op = OP_COLL_RENAME;
+      ::encode(op, tbl);
+      ::encode(cid, tbl);
+      ::encode(ncid, tbl);
+      ops++;
+    }
 
 
     // etc.
@@ -546,6 +568,7 @@ public:
   virtual bool exists(coll_t cid, const sobject_t& oid) = 0;                   // useful?
   virtual int stat(coll_t cid, const sobject_t& oid, struct stat *st) = 0;     // struct stat?
   virtual int read(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len, bufferlist& bl) = 0;
+  virtual int fiemap(coll_t cid, const sobject_t& oid, uint64_t offset, size_t len, bufferlist& bl) = 0;
 
   /*
   virtual int _remove(coll_t cid, sobject_t oid) = 0;

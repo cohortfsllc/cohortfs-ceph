@@ -26,6 +26,9 @@ const struct CompatSet::Feature feature_compat[] = {
 };
 const struct CompatSet::Feature feature_incompat[] = {
   MDS_FEATURE_INCOMPAT_BASE,
+  MDS_FEATURE_INCOMPAT_CLIENTRANGES,
+  MDS_FEATURE_INCOMPAT_FILELAYOUT,
+  MDS_FEATURE_INCOMPAT_DIRINODE,
   END_FEATURE
 };
 const struct CompatSet::Feature feature_ro_compat[] = {
@@ -57,14 +60,16 @@ CompatSet mdsmap_compat_base(feature_compat_base,
 
 void MDSMap::print(ostream& out) 
 {
-  out << "epoch " << epoch << std::endl;
-  out << "\nclient_epoch " << client_epoch << std::endl;
+  out << "epoch " << epoch << "\n";
+  out << "flags " << hex << flags << dec << "\n";
   out << "created " << created << std::endl;
   out << "modified " << modified << std::endl;
   out << "tableserver " << tableserver << std::endl;
   out << "root " << root << std::endl;
   out << "session_timeout " << session_timeout << "\n"
       << "session_autoclose " << session_autoclose << "\n";
+  out << "last_failure " << last_failure << "\n"
+      << "last_failure_osd_epoch" << last_failure_osd_epoch << "\n";
 
   out << "\ncompat\t" << compat << std::endl;
   out << "\nmax_mds\t" << max_mds << std::endl;
@@ -93,12 +98,12 @@ void MDSMap::print(ostream& out)
 	<< " seq " << info.state_seq;
     if (info.laggy())
       out << " laggy since " << info.laggy_since;
-    if (info.standby_for_rank >= 0 ||
-	info.standby_for_rank >= 0) {
+    if (info.standby_for_rank != -1 ||
+	!info.standby_for_name.empty()) {
       out << " (standby for";
-      if (info.standby_for_rank >= 0) 
+      //if (info.standby_for_rank >= 0)
 	out << " rank " << info.standby_for_rank;
-      if (info.standby_for_name.length())
+      if (!info.standby_for_name.empty())
 	out << " '" << info.standby_for_name << "'";
       out << ")";
     }
@@ -139,6 +144,45 @@ void MDSMap::print_summary(ostream& out)
   
   if (failed.size())
     out << ", " << failed.size() << " failed";
-  if (stopped.size())
-    out << ", " << stopped.size() << " stopped";
+  //if (stopped.size())
+  //out << ", " << stopped.size() << " stopped";
+}
+
+enum health_status_t MDSMap::
+get_health(std::ostream &ss) const
+{
+  health_status_t ret(HEALTH_OK);
+  std::ostringstream oss;
+
+  if (!failed.empty()) {
+    oss << " There are failed MDSes: ";
+    string sep("");
+    for (set<int32_t>::const_iterator f = failed.begin();
+	 f != failed.end(); ++f) {
+      oss << sep << "rank " << *f;
+      sep = ", ";
+    }
+    oss << ".";
+    if (ret > HEALTH_ERR)
+      ret = HEALTH_ERR;
+  }
+
+  map<int32_t,uint64_t>::const_iterator u = up.begin();
+  map<int32_t,uint64_t>::const_iterator u_end = up.end();
+  map<uint64_t,mds_info_t>::const_iterator m_end = mds_info.end();
+  string prefix(" There are lagging MDSes: ");
+  for (; u != u_end; ++u) {
+    map<uint64_t,mds_info_t>::const_iterator m = mds_info.find(u->second);
+    assert(m != m_end);
+    const mds_info_t &mds_info(m->second);
+    if (mds_info.laggy()) {
+      oss << prefix << mds_info.name << "(rank " << mds_info.rank << ")" ;
+      prefix = ", ";
+      if (ret > HEALTH_WARN)
+	ret = HEALTH_WARN;
+    }
+  }
+  dout(0) << "get_health: " << oss.str() << " (ret = " << ret << ")" << dendl;
+  ss << oss.str();
+  return ret;
 }

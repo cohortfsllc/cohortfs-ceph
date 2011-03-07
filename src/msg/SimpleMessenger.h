@@ -52,7 +52,13 @@ using namespace __gnu_cxx;
  */
 
 // default feature(s) everyone gets
-#define MSGR_FEATURES_SUPPORTED  CEPH_FEATURE_NOSRCADDR|CEPH_FEATURE_SUBSCRIBE2
+#define MSGR_FEATURES_SUPPORTED  \
+  CEPH_FEATURE_NOSRCADDR |	 \
+  CEPH_FEATURE_SUBSCRIBE2 |	 \
+  CEPH_FEATURE_MONNAMES |        \
+  CEPH_FEATURE_FLOCK |           \
+  CEPH_FEATURE_RECONNECT_SEQ |   \
+  CEPH_FEATURE_DIRLAYOUTHASH
 
 class SimpleMessenger : public Messenger {
 public:
@@ -97,7 +103,8 @@ private:
     
     void *entry();
     void stop();
-    int bind(int64_t force_nonce);
+    int bind(int64_t force_nonce, entity_addr_t &bind_addr, int avoid_port1=0, int avoid_port2=0);
+    int rebind(int avoid_port);
     int start();
   } accepter;
 
@@ -139,10 +146,11 @@ private:
     map<int, list<Message*> > out_q;  // priority queue for outbound msgs
     map<int, list<Message*> > in_q; // and inbound ones
     int in_qlen;
-    map<int, xlist<Pipe *>::item* > queue_items; // _map_ protected by pipe_lock, *item protected by q.lock
+    map<int, xlist<Pipe *>::item* > queue_items; // protected by pipe_lock AND q.lock
     list<Message*> sent;
     Cond cond;
     bool keepalive;
+    bool halt_delivery; //if a pipe's queue is destroyed, stop adding to it
     
     __u32 connect_seq, peer_global_seq;
     uint64_t out_seq;
@@ -165,6 +173,20 @@ private:
 
     void was_session_reset();
 
+    /* Clean up sent list */
+    void handle_ack(uint64_t seq) {
+      dout(15) << "reader got ack seq " << seq << dendl;
+      // trim sent list
+      while (!sent.empty() &&
+          sent.front()->get_seq() <= seq) {
+        Message *m = sent.front();
+        sent.pop_front();
+        dout(10) << "reader got ack seq "
+            << seq << " >= " << m->get_seq() << " on " << m << " " << *m << dendl;
+        m->put();
+      }
+    }
+
     // threads
     class Reader : public Thread {
       Pipe *pipe;
@@ -185,28 +207,32 @@ private:
   public:
     Pipe(SimpleMessenger *r, int st) : 
       messenger(r),
-      sd(-1), peer_type(-1),
+      sd(-1),
+      peer_type(-1),
       pipe_lock("SimpleMessenger::Pipe::pipe_lock"),
       state(st), 
       connection_state(new Connection),
       reader_running(false), reader_joining(false), writer_running(false),
-      in_qlen(0), keepalive(false),
+      in_qlen(0), keepalive(false), halt_delivery(false),
       connect_seq(0), peer_global_seq(0),
       out_seq(0), in_seq(0), in_seq_acked(0),
       reader_thread(this), writer_thread(this) {
       connection_state->pipe = get();
+      messenger->timeout = g_conf.ms_tcp_read_timeout * 1000; //convert to ms
+      if (messenger->timeout == 0)
+        messenger->timeout = -1;
     }
     ~Pipe() {
       for (map<int, xlist<Pipe *>::item* >::iterator i = queue_items.begin();
 	   i != queue_items.end();
 	   ++i) {
-	if (i->second->is_on_list())
-	  i->second->remove_myself();
+	assert(!i->second->is_on_list());
 	delete i->second;
       }
       assert(out_q.empty());
       assert(sent.empty());
-      connection_state->put();
+      if (connection_state)
+        connection_state->put();
     }
 
 
@@ -239,41 +265,9 @@ private:
     static const Pipe& Server(int s);
     static const Pipe& Client(const entity_addr_t& pi);
 
-    //callers make sure it's not already enqueued or you'll just
-    //push it to the back of the line!
-    //Also, call with pipe_lock held or bad things happen
-    void enqueue_me(int priority) {
-      if (!queue_items.count(priority))
-	queue_items[priority] = new xlist<Pipe *>::item(this);
-      pipe_lock.Unlock();
-      messenger->dispatch_queue.lock.Lock();
-      if (messenger->dispatch_queue.queued_pipes.empty())
-	messenger->dispatch_queue.cond.Signal();
-      messenger->dispatch_queue.queued_pipes[priority].push_back(queue_items[priority]);
-      messenger->dispatch_queue.lock.Unlock();
-      pipe_lock.Lock();
-    }
-
     //we have two queue_received's to allow local signal delivery
     // via Message * (that doesn't actually point to a Message)
-    //Don't call while holding pipe_lock!
-    void queue_received(Message *m, int priority) {
-      list<Message *>& queue = in_q[priority];
-
-      pipe_lock.Lock();
-      bool was_empty = queue.empty();
-      queue.push_back(m);
-      if (was_empty) //this pipe isn't on the endpoint queue
-	enqueue_me(priority);
-
-      //increment queue length counters
-      in_qlen++;
-      messenger->dispatch_queue.qlen_lock.lock();
-      ++messenger->dispatch_queue.qlen;
-      messenger->dispatch_queue.qlen_lock.unlock();
-
-      pipe_lock.Unlock();
-    }
+    void queue_received(Message *m, int priority);
     
     void queue_received(Message *m) {
       m->set_recv_stamp(g_clock.now());
@@ -344,11 +338,14 @@ private:
       return m;
     }
 
-    void requeue_sent();
+    /* Remove all messages from the sent queue. Add those with seq > max_acked
+     * to the highest priority outgoing queue. */
+    void requeue_sent(uint64_t max_acked=0);
     void discard_queue();
 
-    void force_close() {
-      if (sd >= 0) ::close(sd);
+    void shutdown_socket() {
+      if (sd >= 0)
+        ::shutdown(sd, SHUT_RDWR);
     }
   };
 
@@ -370,9 +367,11 @@ private:
 
     Pipe *local_pipe;
     void local_delivery(Message *m, int priority) {
+      local_pipe->pipe_lock.Lock();
       if ((unsigned long)m > 10)
 	m->set_connection(local_pipe->connection_state->get());
       local_pipe->queue_received(m, priority);
+      local_pipe->pipe_lock.Unlock();
     }
 
     int get_queue_len() {
@@ -382,12 +381,6 @@ private:
       return l;
     }
     
-    void local_delivery(Message *m) {
-      if ((unsigned long)m > 10)
-	m->set_connection(local_pipe->connection_state->get());
-      local_pipe->queue_received(m);
-    }
-
     void queue_connect(Connection *con) {
       lock.Lock();
       connect_q.push_back(con);
@@ -478,6 +471,8 @@ private:
   const entity_addr_t &get_ms_addr() { return ms_addr; }
 
   void mark_down(const entity_addr_t& addr);
+  void mark_down(Connection *con);
+  void mark_down_all();
 
   // reaper
   class ReaperThread : public Thread {
@@ -519,6 +514,7 @@ private:
   void prepare_dest(const entity_inst_t& inst);
   int send_message(Message *m, const entity_inst_t& dest);
   int send_message(Message *m, Connection *con);
+  Connection *get_connection(const entity_inst_t& dest);
   int lazy_send_message(Message *m, const entity_inst_t& dest);
   int lazy_send_message(Message *m, Connection *con) {
     return send_message(m, con);
@@ -542,6 +538,7 @@ private:
   void dispatch_entry();
 
   SimpleMessenger *messenger; //hack to make dout macro work, will fix
+  int timeout;
 
 public:
   SimpleMessenger() :
@@ -562,9 +559,14 @@ public:
 
   //void set_listen_addr(tcpaddr_t& a);
 
-  int bind(int64_t force_nonce = -1);
+  int bind(entity_addr_t& bind_addr, int64_t force_nonce = -1);
+  int bind(int64_t force_nonce = -1) { return bind(g_conf.public_addr, force_nonce); }
   int start(bool nodaemon = false);
   void wait();
+
+  int write_pid_file(int pid);
+
+  int rebind(int avoid_port);
 
   __u32 get_global_seq(__u32 old=0) {
     Mutex::Locker l(global_seq_lock);
@@ -584,7 +586,7 @@ public:
 		      
   int send_keepalive(const entity_inst_t& addr);
 
-  void learned_addr(entity_addr_t peer_addr_for_me);
+  void learned_addr(const entity_addr_t& peer_addr_for_me);
   void init_local_pipe();
 
 } ;

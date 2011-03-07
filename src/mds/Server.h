@@ -17,7 +17,7 @@
 
 #include "MDS.h"
 
-class Logger;
+class ProfLogger;
 class LogEvent;
 class MDRequest;
 class Mutation;
@@ -41,7 +41,7 @@ class Server {
   MDCache *mdcache;
   MDLog *mdlog;
   Messenger *messenger;
-  Logger *logger;
+  ProfLogger *logger;
 
 public:
   int failed_reconnects;
@@ -82,11 +82,13 @@ public:
   void terminate_sessions();
   void find_idle_sessions();
   void kill_session(Session *session);
+  void journal_close_session(Session *session, int state);
   void reconnect_clients();
   void handle_client_reconnect(class MClientReconnect *m);
   //void process_reconnect_cap(CInode *in, int from, ceph_mds_cap_reconnect& capinfo);
   void reconnect_gather_finish();
   void reconnect_tick();
+  void recover_filelocks(CInode *in, bufferlist locks, int64_t client);
 
   void recall_client_state(float ratio);
 
@@ -122,9 +124,11 @@ public:
   void apply_allocated_inos(MDRequest *mdr);
 
   CInode* rdlock_path_pin_ref(MDRequest *mdr, int n, set<SimpleLock*>& rdlocks, bool want_auth,
-			      bool no_want_auth=false);
+			      bool no_want_auth=false,
+			      ceph_file_layout **layout=NULL);
   CDentry* rdlock_path_xlock_dentry(MDRequest *mdr, int n, set<SimpleLock*>& rdlocks, set<SimpleLock*>& wrlocks, 
-				    set<SimpleLock*>& xlocks, bool okexist, bool mustexist, bool alwaysxlock);
+				    set<SimpleLock*>& xlocks, bool okexist, bool mustexist, bool alwaysxlock,
+				    ceph_file_layout **layout=NULL);
 
   CDir* try_open_auth_dirfrag(CInode *diri, frag_t fg, MDRequest *mdr);
 
@@ -134,9 +138,12 @@ public:
   void handle_client_lookup_parent(MDRequest *mdr);
   void handle_client_lookup_hash(MDRequest *mdr);
   void handle_client_readdir(MDRequest *mdr);
+  void handle_client_file_setlock(MDRequest *mdr);
+  void handle_client_file_readlock(MDRequest *mdr);
 
   void handle_client_setattr(MDRequest *mdr);
   void handle_client_setlayout(MDRequest *mdr);
+  void handle_client_setdirlayout(MDRequest *mdr);
   void handle_client_setxattr(MDRequest *mdr);
   void handle_client_removexattr(MDRequest *mdr);
 
@@ -210,7 +217,23 @@ public:
 
 };
 
-
-
+inline ostream& operator<<(ostream& out, ceph_lock_state_t& l) {
+  out << "ceph_lock_state_t. held_locks.size()=" << l.held_locks.size()
+      << ", waiting_locks.size()=" << l.waiting_locks.size()
+      << ", client_held_lock_counts -- " << l.client_held_lock_counts
+      << "\n client_waiting_lock_counts -- " << l.client_waiting_lock_counts
+      << "\n held_locks -- ";
+    for (multimap<uint64_t, ceph_filelock>::iterator iter = l.held_locks.begin();
+	 iter != l.held_locks.end();
+	 ++iter)
+      out << iter->second;
+    out << "\n waiting_locks -- ";
+    for (multimap<uint64_t, ceph_filelock>::iterator iter =l.waiting_locks.begin();
+	 iter != l.waiting_locks.end();
+	 ++iter)
+      out << iter->second << "\n";
+    out << std::endl;
+  return out;
+}
 
 #endif

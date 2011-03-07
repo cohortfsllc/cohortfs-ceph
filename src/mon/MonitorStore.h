@@ -18,6 +18,7 @@
 #include "include/types.h"
 #include "include/buffer.h"
 
+#include <iosfwd>
 #include <string.h>
 
 class MonitorStore {
@@ -25,7 +26,20 @@ class MonitorStore {
   int lock_fd;
 
   int write_bl_ss(bufferlist& bl, const char *a, const char *b, bool append, bool sync=true);
+
 public:
+  class Error : public std::exception
+  {
+  public:
+    static Error FromErrno(const char *prefix,
+				  const char *prefix2, int errno_);
+    Error(const std::string &str_);
+    virtual ~Error() throw ();
+    const char *what() const throw ();
+  private:
+    std::string str;
+  };
+
   MonitorStore(const char *d) : dir(d) { }
   ~MonitorStore() { }
 
@@ -51,24 +65,24 @@ public:
   }
   bool exists_bl_sn(const char *a, version_t b) {
     char bs[20];
-    sprintf(bs, "%llu", (unsigned long long)b);
+    snprintf(bs, sizeof(bs), "%llu", (unsigned long long)b);
     return exists_bl_ss(a, bs);
   }
   int get_bl_sn(bufferlist& bl, const char *a, version_t b) {
     char bs[20];
-    sprintf(bs, "%llu", (unsigned long long)b);
+    snprintf(bs, sizeof(bs), "%llu", (unsigned long long)b);
     return get_bl_ss(bl, a, bs);
   }
   int put_bl_sn(bufferlist& bl, const char *a, version_t b, bool sync=true) {
     char bs[20];
-    sprintf(bs, "%llu", (unsigned long long)b);
+    snprintf(bs, sizeof(bs), "%llu", (unsigned long long)b);
     return put_bl_ss(bl, a, bs, sync);
   }
 
   int erase_ss(const char *a, const char *b);
   int erase_sn(const char *a, version_t b) {
     char bs[20];
-    sprintf(bs, "%llu", (unsigned long long)b);
+    snprintf(bs, sizeof(bs), "%llu", (unsigned long long)b);
     return erase_ss(a, bs);
   }
 

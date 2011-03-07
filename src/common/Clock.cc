@@ -13,9 +13,14 @@
  */
 
 
-#include "config.h"
+#include "common/config.h"
 #include "Clock.h"
 
 // public
 Clock g_clock;
 
+Clock::Clock() {
+}
+
+Clock::~Clock() {
+}

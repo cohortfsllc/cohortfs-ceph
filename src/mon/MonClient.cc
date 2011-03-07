@@ -21,6 +21,7 @@
 #include "messages/MMonSubscribe.h"
 #include "messages/MMonSubscribeAck.h"
 #include "common/ConfUtils.h"
+#include "common/ceph_argparse.h"
 
 #include "MonClient.h"
 #include "MonMap.h"
@@ -29,13 +30,14 @@
 #include "auth/KeyRing.h"
 
 #include "include/str_list.h"
+#include "include/addr_parsing.h"
 
-#include "config.h"
+#include "common/config.h"
 
 
 #define DOUT_SUBSYS monc
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "monclient" << (hunting ? "(hunting)":"") << ": "
+#define dout_prefix *_dout << "monclient" << (hunting ? "(hunting)":"") << ": "
 
 
 /*
@@ -49,11 +51,18 @@ int MonClient::build_initial_monmap()
   // file?
   if (g_conf.monmap) {
     const char *monmap_fn = g_conf.monmap;
-    int r = monmap.read(monmap_fn);
+    int r;
+    try {
+      r = monmap.read(monmap_fn);
+    }
+    catch (const buffer::error &e) {
+      r = -EINVAL;
+    }
     if (r >= 0)
       return 0;
     char buf[80];
-    cerr << "unable to read monmap from " << monmap_fn << ": " << strerror_r(errno, buf, sizeof(buf)) << std::endl;
+    cerr << "unable to read/decode monmap from " << monmap_fn << ": " << strerror_r(-r, buf, sizeof(buf)) << std::endl;
+    return r;
   }
 
   // -m foo?
@@ -61,12 +70,35 @@ int MonClient::build_initial_monmap()
     vector<entity_addr_t> addrs;
     if (parse_ip_port_vec(g_conf.mon_host, addrs)) {
       for (unsigned i=0; i<addrs.size(); i++) {
-	entity_inst_t inst;
-	inst.name = entity_name_t::MON(i);
-	inst.addr = addrs[i];
-	monmap.add_mon(inst);
+	char n[2];
+	n[0] = 'a' + i;
+	n[1] = 0;
+	if (addrs[i].get_port() == 0)
+	  addrs[i].set_port(CEPH_MON_PORT);
+	monmap.add(n, addrs[i]);
       }
       return 0;
+    } else { //maybe they passed us a DNS-resolvable name
+      char *hosts = NULL;
+      char *old_addrs = new char[strlen(g_conf.mon_host)+1];
+      strcpy(old_addrs, g_conf.mon_host);
+      hosts = mount_resolve_dest(old_addrs);
+      delete [] old_addrs;
+      if (!hosts)
+        return -EINVAL;
+      bool success = parse_ip_port_vec(hosts, addrs);
+      free(hosts);
+      if (success) {
+        for (unsigned i=0; i<addrs.size(); i++) {
+          char n[2];
+          n[0] = 'a' + i;
+          n[1] = 0;
+          if (addrs[i].get_port() == 0)
+            addrs[i].set_port(CEPH_MON_PORT);
+          monmap.add(n, addrs[i]);
+        }
+        return 0;
+      } else cerr << "couldn't parse_ip_port_vec on " << hosts << std::endl;
     }
     cerr << "unable to parse addrs in '" << g_conf.mon_host << "'" << std::endl;
   }
@@ -79,24 +111,30 @@ int MonClient::build_initial_monmap()
     for (list<string>::iterator p = ls.begin(); p != ls.end(); p++) {
       ConfFile c(p->c_str());
       if (c.parse()) {
-	static string monstr;
-	for (int i=0; i<15; i++) {
-	  char monname[20];
-	  char *val = 0;
-	  snprintf(monname, sizeof(monname), "mon%d", i);
-	  c.read(monname, "mon addr", &val, 0);
-	  if (!val || !val[0])
-	    break;
-	  
-	  entity_inst_t inst;
-	  if (!inst.addr.parse(val)) {
-	    cerr << "unable to parse conf's addr for " << monname << " (" << val << ")" << std::endl;
-	    continue;
+	for (list<ConfSection*>::const_iterator q = c.get_section_list().begin();
+	     q != c.get_section_list().end();
+	     q++) {
+	  const char *section = (*q)->get_name().c_str();
+	  if (strncmp(section, "mon", 3) == 0) {
+	    const char *name = section + 3;
+	    if (name[0] == '.')
+	      name++;
+	    char *val = 0;
+	    c.read(section, "mon addr", &val, 0);
+	    if (!val || !val[0]) {
+	      delete val;
+	      continue;
+	    }
+	    entity_addr_t addr;
+	    if (!addr.parse(val)) {
+	      cerr << "unable to " << *p << " mon addr for " << section << " (" << val << ")" << std::endl;
+	      delete val;
+	      continue;
+	    }
+	    monmap.add(name, addr);
 	  }
-	  inst.name = entity_name_t::MON(monmap.mon_inst.size());
-	  monmap.add_mon(inst);
 	}
-	break;
+        break;
       }
     }
     if (monmap.size())
@@ -116,7 +154,7 @@ int MonClient::get_monmap()
   Mutex::Locker l(monc_lock);
   
   _sub_want("monmap", 0, 0);
-  if (cur_mon < 0)
+  if (cur_mon.empty())
     _reopen_session();
 
   while (want_monmap)
@@ -142,20 +180,22 @@ int MonClient::get_monmap_privately()
   }
   
   int attempt = 10;
-  int i = 0;
   
   dout(10) << "have " << monmap.epoch << dendl;
   
   while (monmap.epoch == 0) {
-    i = rand() % monmap.mon_inst.size();
-    dout(10) << "querying " << monmap.mon_inst[i] << dendl;
-    messenger->send_message(new MMonGetMap, monmap.mon_inst[i]);
+    cur_mon = monmap.pick_random_mon();
+    dout(10) << "querying mon." << cur_mon << " " << monmap.get_inst(cur_mon) << dendl;
+    messenger->send_message(new MMonGetMap, monmap.get_inst(cur_mon));
     
     if (--attempt == 0)
       break;
     
     utime_t interval(1, 0);
     map_cond.WaitInterval(monc_lock, interval);
+
+    if (monmap.epoch == 0)
+      messenger->mark_down(monmap.get_addr(cur_mon));  // nope, clean that connection up
   }
 
   if (temp_msgr) {
@@ -168,6 +208,7 @@ int MonClient::get_monmap_privately()
   }
  
   hunting = true;  // reset this to true!
+  cur_mon.clear();
 
   if (monmap.epoch)
     return 0;
@@ -200,23 +241,40 @@ bool MonClient::ms_dispatch(Message *m)
 
 void MonClient::handle_monmap(MMonMap *m)
 {
+  Mutex::Locker lock(monc_lock);
   dout(10) << "handle_monmap " << *m << dendl;
-  monc_lock.Lock();
+
+  assert(!cur_mon.empty());
+  entity_addr_t cur_mon_addr = monmap.get_addr(cur_mon);
 
   bufferlist::iterator p = m->monmapbl.begin();
   ::decode(monmap, p);
 
-  dout(10) << " got monmap " << monmap.epoch << dendl;
+  dout(10) << " got monmap " << monmap.epoch
+	   << ", mon." << cur_mon << " is now rank " << monmap.get_rank(cur_mon)
+	   << " at " << monmap.get_inst(cur_mon)
+	   << dendl;
+  dout(10) << "dump:\n";
+  monmap.print(*_dout);
+  *_dout << dendl;
 
   _sub_got("monmap", monmap.get_epoch());
 
   map_cond.Signal();
   want_monmap = false;
 
-  if (cur_mon >= 0)
+  if (!cur_mon.empty()) {
+    if (!monmap.get_addr_name(cur_mon_addr, cur_mon)) {
+      dout(10) << "mon." << cur_mon << " went away" << dendl;
+      cur_mon.clear();
+    }
+  }
+
+  if (cur_mon.empty())
+    _pick_new_mon();  // can't find the mon we were talking to (above)
+  else
     _finish_hunting();
 
-  monc_lock.Unlock();
   m->put();
 }
 
@@ -225,11 +283,13 @@ void MonClient::handle_monmap(MMonMap *m)
 void MonClient::init()
 {
   dout(10) << "init" << dendl;
+
   messenger->add_dispatcher_head(this);
 
   entity_name = *g_conf.entity_name;
   
   Mutex::Locker l(monc_lock);
+  timer.init();
   schedule_tick();
 
   // seed rng so we choose a different monitor each time
@@ -254,7 +314,9 @@ void MonClient::init()
 
 void MonClient::shutdown()
 {
-  timer.cancel_all_events();
+  monc_lock.Lock();
+  timer.shutdown();
+  monc_lock.Unlock();
 }
 
 int MonClient::authenticate(double timeout)
@@ -267,7 +329,7 @@ int MonClient::authenticate(double timeout)
   }
 
   _sub_want("monmap", monmap.get_epoch() ? monmap.get_epoch() + 1 : 0, 0);
-  if (cur_mon < 0)
+  if (cur_mon.empty())
     _reopen_session();
 
   utime_t until = g_clock.now();
@@ -294,6 +356,8 @@ int MonClient::authenticate(double timeout)
 
 void MonClient::handle_auth(MAuthReply *m)
 {
+  Mutex::Locker lock(monc_lock);
+
   bufferlist::iterator p = m->result_bl.begin();
   if (state == MC_STATE_NEGOTIATING) {
     if (!auth || (int)m->protocol != auth->get_protocol()) {
@@ -351,9 +415,11 @@ void MonClient::handle_auth(MAuthReply *m)
 
 void MonClient::_send_mon_message(Message *m, bool force)
 {
-  assert(cur_mon >= 0);
+  assert(monc_lock.is_locked());
+  assert(!cur_mon.empty());
   if (force || state == MC_STATE_HAVE_SESSION) {
-    messenger->send_message(m, monmap.mon_inst[cur_mon]);
+    dout(10) << "_send_mon_message to mon." << cur_mon << " at " << monmap.get_inst(cur_mon) << dendl;
+    messenger->send_message(m, monmap.get_inst(cur_mon));
   } else {
     waiting_for_session.push_back(m);
   }
@@ -361,23 +427,23 @@ void MonClient::_send_mon_message(Message *m, bool force)
 
 void MonClient::_pick_new_mon()
 {
-  if (cur_mon >= 0)
-    messenger->mark_down(monmap.get_inst(cur_mon).addr);
+  assert(monc_lock.is_locked());
+  if (!cur_mon.empty())
+    messenger->mark_down(monmap.get_addr(cur_mon));
 
-  if (cur_mon >= 0 && monmap.size() > 1) {
+  if (!cur_mon.empty() && monmap.size() > 1) {
     // pick a _different_ mon
-    int n = rand() % (monmap.size() - 1);
-    if (n >= cur_mon)
-      n++;
-    cur_mon = n;
+    cur_mon = monmap.pick_random_mon_not(cur_mon);
   } else {
-    cur_mon = rand() % monmap.size();
+    cur_mon = monmap.pick_random_mon();
   }
-  dout(10) << "_pick_new_mon picked mon" << cur_mon << dendl;
+  dout(10) << "_pick_new_mon picked mon." << cur_mon << dendl;
 }
+
 
 void MonClient::_reopen_session()
 {
+  assert(monc_lock.is_locked());
   dout(10) << "_reopen_session" << dendl;
 
   _pick_new_mon();
@@ -410,7 +476,7 @@ bool MonClient::ms_handle_reset(Connection *con)
   Mutex::Locker lock(monc_lock);
 
   if (con->get_peer_type() == CEPH_ENTITY_TYPE_MON) {
-    if (cur_mon < 0 || con->get_peer_addr() != monmap.get_inst(cur_mon).addr) {
+    if (cur_mon.empty() || con->get_peer_addr() != monmap.get_addr(cur_mon)) {
       dout(10) << "ms_handle_reset stray mon " << con->get_peer_addr() << dendl;
       return true;
     } else {
@@ -428,8 +494,9 @@ bool MonClient::ms_handle_reset(Connection *con)
 
 void MonClient::_finish_hunting()
 {
+  assert(monc_lock.is_locked());
   if (hunting) {
-    dout(1) << "found mon" << cur_mon << dendl;
+    dout(1) << "found mon." << cur_mon << dendl; 
     hunting = false;
   }
 }
@@ -443,13 +510,13 @@ void MonClient::tick()
   if (hunting) {
     dout(1) << "continuing hunt" << dendl;
     _reopen_session();
-  } else if (cur_mon >= 0) {
+  } else if (!cur_mon.empty()) {
     // just renew as needed
     utime_t now = g_clock.now();
     if (now > sub_renew_after)
       _renew_subs();
 
-    messenger->send_keepalive(monmap.mon_inst[cur_mon]);
+    messenger->send_keepalive(monmap.get_inst(cur_mon));
   }
 
   if (auth)
@@ -471,13 +538,14 @@ void MonClient::schedule_tick()
 
 void MonClient::_renew_subs()
 {
+  assert(monc_lock.is_locked());
   if (sub_have.empty()) {
     dout(10) << "renew_subs - empty" << dendl;
     return;
   }
 
   dout(10) << "renew_subs" << dendl;
-  if (cur_mon < 0)
+  if (cur_mon.empty())
     _reopen_session();
   else {
     if (sub_renew_sent == utime_t())
@@ -491,6 +559,8 @@ void MonClient::_renew_subs()
 
 void MonClient::handle_subscribe_ack(MMonSubscribeAck *m)
 {
+  Mutex::Locker lock(monc_lock);
+  
   _finish_hunting();
 
   if (sub_renew_sent != utime_t()) {
@@ -507,6 +577,7 @@ void MonClient::handle_subscribe_ack(MMonSubscribeAck *m)
 
 int MonClient::_check_auth_tickets()
 {
+  assert(monc_lock.is_locked());
   if (state == MC_STATE_HAVE_SESSION && auth) {
     if (auth->need_tickets()) {
       dout(10) << "_check_auth_tickets getting new tickets!" << dendl;
@@ -523,6 +594,7 @@ int MonClient::_check_auth_tickets()
 
 int MonClient::_check_auth_rotating()
 {
+  assert(monc_lock.is_locked());
   if (!rotating_secrets ||
       !auth_principal_needs_rotating_keys(entity_name)) {
     dout(20) << "_check_auth_rotating not needed by " << entity_name << dendl;

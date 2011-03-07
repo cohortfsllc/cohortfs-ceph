@@ -1,6 +1,7 @@
 #include "auth/Crypto.h"
+#include "common/Clock.h"
 
-#include "config.h"
+#include "common/config.h"
 
 
 #define AES_KEY_LEN	16
@@ -22,7 +23,7 @@ int main(int argc, char *argv[])
 
   bufferlist enc_out;
   if (key.encrypt(enc_in, enc_out) < 0) {
-    derr(0) << "couldn't encode!" << dendl;
+    dout(0) << "couldn't encode!" << dendl;
     exit(1);
   }
 
@@ -38,7 +39,7 @@ int main(int argc, char *argv[])
   dec_in = enc_out;
 
   if (key.decrypt(dec_in, dec_out) < 0) {
-    derr(0) << "couldn't decode!" << dendl;
+    dout(0) << "couldn't decode!" << dendl;
   }
 
   dout(0) << "decoded len: " << dec_out.length() << dendl;

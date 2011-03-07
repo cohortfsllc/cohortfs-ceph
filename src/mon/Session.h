@@ -36,6 +36,7 @@ struct Subscription {
 };
 
 struct MonSession : public RefCountedObject {
+  Connection *con;
   entity_inst_t inst;
   utime_t until;
   bool closed;
@@ -49,9 +50,18 @@ struct MonSession : public RefCountedObject {
 
   AuthServiceHandler *auth_handler;
 
-  MonSession(entity_inst_t i) : inst(i), closed(false), item(this),
-			     global_id(0), notified_global_id(0), auth_handler(NULL) {}
+  Connection *proxy_con;
+  uint64_t proxy_tid;
+
+  MonSession(entity_inst_t i, Connection *c) :
+    con(c->get()), inst(i), closed(false), item(this),
+    global_id(0), notified_global_id(0), auth_handler(NULL),
+    proxy_con(NULL), proxy_tid(0) {}
   ~MonSession() {
+    if (con)
+      con->put();
+    if (proxy_con)
+      proxy_con->put();
     //generic_dout(0) << "~MonSession " << this << dendl;
     // we should have been removed before we get destructed; see MonSessionMap::remove_session()
     assert(!item.is_on_list());
@@ -68,8 +78,10 @@ struct MonSessionMap {
 
   void remove_session(MonSession *s) {
     assert(!s->closed);
-    for (map<string,Subscription*>::iterator p = s->sub_map.begin(); p != s->sub_map.end(); ++p)
+    for (map<string,Subscription*>::iterator p = s->sub_map.begin(); p != s->sub_map.end(); ++p) {
       p->second->type_item.remove_myself();
+      delete p->second;
+    }
     s->sub_map.clear();
     s->item.remove_myself();
     if (s->inst.name.is_osd()) {
@@ -85,8 +97,8 @@ struct MonSessionMap {
     s->put();
   }
 
-  MonSession *new_session(entity_inst_t i) {
-    MonSession *s = new MonSession(i);
+  MonSession *new_session(entity_inst_t i, Connection *c) {
+    MonSession *s = new MonSession(i, c);
     sessions.push_back(&s->item);
     if (i.name.is_osd())
       by_osd.insert(pair<int,MonSession*>(i.name.num(), s));

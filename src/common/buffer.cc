@@ -13,13 +13,17 @@
  */
 
 
-#include "config.h"
-#include "include/types.h"
 #include "armor.h"
+#include "common/debug.h"
+#include "common/errno.h"
+#include "common/safe_io.h"
+#include "common/config.h"
 #include "include/Spinlock.h"
+#include "include/types.h"
 
 #include <errno.h>
 #include <fstream>
+#include <sstream>
 #include <sys/uio.h>
 #include <limits.h>
 
@@ -31,15 +35,21 @@ atomic_t buffer_total_alloc;
 void buffer::list::encode_base64(buffer::list& o)
 {
   bufferptr bp(length() * 4 / 3 + 3);
-  int l = ceph_armor(bp.c_str(), c_str(), c_str() + length());
+  int l = ceph_armor(bp.c_str(), bp.c_str() + bp.length(), c_str(), c_str() + length());
   bp.set_length(l);
   o.push_back(bp);
 }
 
 void buffer::list::decode_base64(buffer::list& e)
 {
-  bufferptr bp(e.length() * 3 / 4 + 4);
-  int l = ceph_unarmor(bp.c_str(), e.c_str(), e.c_str() + e.length());
+  bufferptr bp(4 + ((e.length() * 3) / 4));
+  int l = ceph_unarmor(bp.c_str(), bp.c_str() + bp.length(), e.c_str(), e.c_str() + e.length());
+  if (l < 0) {
+    std::ostringstream oss;
+    oss << "decode_base64: decoding failed:\n";
+    hexdump(oss);
+    throw buffer::malformed_input(oss.str().c_str());
+  }
   assert(l <= (int)bp.length());
   bp.set_length(l);
   push_back(bp);
@@ -85,68 +95,72 @@ void buffer::list::rebuild_page_aligned()
 
 int buffer::list::read_file(const char *fn, bool silent)
 {
-  struct stat st;
-  int fd = ::open(fn, O_RDONLY);
+  int fd = TEMP_FAILURE_RETRY(::open(fn, O_RDONLY));
   if (fd < 0) {
+    int err = errno;
     if (!silent) {
-      char buf[80];
-      cerr << "can't open " << fn << ": " << strerror_r(errno, buf, sizeof(buf)) << std::endl;
+      derr << "can't open " << fn << ": " << cpp_strerror(err) << dendl;
     }
-    return -errno;
+    return -err;
   }
+
+  struct stat st;
+  memset(&st, 0, sizeof(st));
   ::fstat(fd, &st);
+
   int s = ROUND_UP_TO(st.st_size, PAGE_SIZE);
   bufferptr bp = buffer::create_page_aligned(s);
-  int left = st.st_size;
-  int got = 0;
-  while (left > 0) {
-    int r = ::read(fd, (void *)(bp.c_str() + got), left);
-    if (r <= 0)
-      break;
-    got += r;
-    left -= r;
+
+  ssize_t ret = safe_read(fd, (void*)bp.c_str(), st.st_size);
+  if (ret < 0) {
+      if (!silent) {
+	derr << "bufferlist::read_file(" << fn << "): read error:"
+	     << cpp_strerror(ret) << dendl;
+      }
+      TEMP_FAILURE_RETRY(::close(fd));
+      return ret;
   }
-  ::close(fd);
-  bp.set_length(got);
+  else if (ret != st.st_size) {
+      // Premature EOF.
+      // Perhaps the file changed between stat() and read()?
+      if (!silent) {
+	derr << "bufferlist::read_file(" << fn << "): warning: got premature "
+	     << "EOF:" << dendl;
+      }
+  }
+  TEMP_FAILURE_RETRY(::close(fd));
+  bp.set_length(ret);
   append(bp);
   return 0;
 }
 
 int buffer::list::write_file(const char *fn, int mode)
 {
-  int fd = ::open(fn, O_WRONLY|O_CREAT|O_TRUNC, mode);
+  int fd = TEMP_FAILURE_RETRY(::open(fn, O_WRONLY|O_CREAT|O_TRUNC, mode));
   if (fd < 0) {
-    char buf[80];
-    cerr << "can't write " << fn << ": " << strerror_r(errno, buf, sizeof(buf)) << std::endl;
-    return -errno;
+    int err = errno;
+    cerr << "bufferlist::write_file(" << fn << "): failed to open file: "
+	 << cpp_strerror(err) << std::endl;
+    return -err;
   }
-  int err = write_fd(fd);
-  ::close(fd);
-  return err;
+  int ret = write_fd(fd);
+  if (ret) {
+    cerr << "bufferlist::write_fd(" << fn << "): write_fd error: "
+	 << cpp_strerror(ret) << std::endl;
+    TEMP_FAILURE_RETRY(::close(fd));
+    return ret;
+  }
+  if (TEMP_FAILURE_RETRY(::close(fd))) {
+    int err = errno;
+    cerr << "bufferlist::write_file(" << fn << "): close error: "
+	 << cpp_strerror(err) << std::endl;
+    return -err;
+  }
+  return 0;
 }
 
 int buffer::list::write_fd(int fd) const
 {
-  // write buffer piecewise
-  if (false) {
-    for (std::list<ptr>::const_iterator it = _buffers.begin(); 
-	 it != _buffers.end(); 
-	 it++) {
-      int left = it->length();
-      if (!left)
-        continue;
-      const char *c = it->c_str();
-      while (left > 0) {
-	int r = ::write(fd, c, left);
-	if (r < 0)
-	  return -errno;
-	c += r;
-	left -= r;
-      }
-    }
-    return 0;
-  }
-
   // use writev!
   iovec iov[IOV_MAX];
   int iovlen = 0;
@@ -169,8 +183,12 @@ int buffer::list::write_fd(int fd) const
       ssize_t wrote;
     retry:
       wrote = ::writev(fd, start, num);
-      if (wrote < 0)
-	return -errno;
+      if (wrote < 0) {
+	int err = errno;
+	if (err == EINTR)
+	  goto retry;
+	return -err;
+      }
       if (wrote < bytes) {
 	// partial write, recover!
 	while ((size_t)wrote >= start[0].iov_len) {

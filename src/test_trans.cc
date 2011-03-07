@@ -14,11 +14,12 @@
 
 #include <iostream>
 //#include "ebofs/Ebofs.h"
+#include "common/ceph_argparse.h"
 #include "os/FileStore.h"
 #include "common/common_init.h"
 
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl
+#define dout_prefix *_dout
 
 struct Foo : public Thread {
   void *entry() {
@@ -35,8 +36,7 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  common_set_defaults(false);
-  common_init(args, NULL, false);
+  common_init(args, NULL, STARTUP_FLAG_FORCE_FG_LOGGING);
 
   // args
   if (args.size() < 2) return -1;
@@ -46,7 +46,7 @@ int main(int argc, const char **argv)
   cout << "#dev " << filename << std::endl;
   cout << "#mb " << mb << std::endl;
 
-  ObjectStore *fs = new FileStore(filename);
+  ObjectStore *fs = new FileStore(filename, NULL);
   if (fs->mount() < 0) {
     cout << "mount failed" << std::endl;
     return -1;
@@ -60,7 +60,7 @@ int main(int argc, const char **argv)
 
   for (int i=0; i<mb; i++) {
     char f[30];
-    sprintf(f, "foo%d\n", i);
+    snprintf(f, sizeof(f), "foo%d\n", i);
     sobject_t soid(f, CEPH_NOSNAP);
     t.write(coll_t(), soid, 0, bl.length(), bl);
   }

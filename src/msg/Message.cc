@@ -56,7 +56,9 @@ using namespace std;
 #include "messages/MOSDPGInfo.h"
 #include "messages/MOSDPGCreate.h"
 #include "messages/MOSDPGTrim.h"
+#include "messages/MOSDPGMissing.h"
 #include "messages/MOSDScrub.h"
+#include "messages/MOSDRepScrub.h"
 
 #include "messages/MRemoveSnaps.h"
 
@@ -124,7 +126,9 @@ using namespace std;
 #include "messages/MClass.h"
 #include "messages/MClassAck.h"
 
-#include "config.h"
+#include "messages/MWatchNotify.h"
+
+#include "common/config.h"
 
 #define DEBUGLVL  10    // debug level of output
 
@@ -152,14 +156,14 @@ Message *decode_message(ceph_msg_header& header, ceph_msg_footer& footer,
 
     if (front_crc != footer.front_crc) {
       dout(0) << "bad crc in front " << front_crc << " != exp " << footer.front_crc << dendl;
-      dout(20);
+      dout(20) << " ";
       front.hexdump(*_dout);
       *_dout << dendl;
       return 0;
     }
     if (middle_crc != footer.middle_crc) {
       dout(0) << "bad crc in middle " << middle_crc << " != exp " << footer.middle_crc << dendl;
-      dout(20);
+      dout(20) << " ";
       middle.hexdump(*_dout);
       *_dout << dendl;
       return 0;
@@ -169,7 +173,7 @@ Message *decode_message(ceph_msg_header& header, ceph_msg_footer& footer,
       __u32 data_crc = data.crc32c(0);
       if (data_crc != footer.data_crc) {
 	dout(0) << "bad crc in data " << data_crc << " != exp " << footer.data_crc << dendl;
-	dout(20);
+	dout(20) << " ";
 	data.hexdump(*_dout);
 	*_dout << dendl;
 	return 0;
@@ -285,6 +289,10 @@ Message *decode_message(ceph_msg_header& header, ceph_msg_footer& footer,
     m = new MOSDMap;
     break;
 
+  case CEPH_MSG_WATCH_NOTIFY:
+    m = new MWatchNotify;
+    break;
+
   case MSG_OSD_PG_NOTIFY:
     m = new MOSDPGNotify;
     break;
@@ -310,11 +318,15 @@ Message *decode_message(ceph_msg_header& header, ceph_msg_footer& footer,
   case MSG_OSD_SCRUB:
     m = new MOSDScrub;
     break;
-
   case MSG_REMOVE_SNAPS:
     m = new MRemoveSnaps;
     break;
-
+  case MSG_OSD_PG_MISSING:
+    m = new MOSDPGMissing;
+    break;
+  case MSG_OSD_REP_SCRUB:
+    m = new MOSDRepScrub;
+    break;
    // auth
   case CEPH_MSG_AUTH:
     m = new MAuth;
@@ -513,11 +525,10 @@ Message *decode_message(ceph_msg_header& header, ceph_msg_footer& footer,
   try {
     m->decode_payload();
   }
-  catch (buffer::error *e) {
+  catch (const buffer::error &e) {
     dout(0) << "failed to decode message of type " << type
 	    << " v" << header.version
-	    << ": " << *e << dendl;
-    delete e;
+	    << ": " << e.what() << dendl;
     if (g_conf.ms_die_on_bad_msg)
       assert(0);
     return 0;

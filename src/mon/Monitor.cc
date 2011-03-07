@@ -12,8 +12,6 @@
  * 
  */
 
-// TODO: missing run() method, which creates the two main timers, refreshTimer and readTimer
-
 #include "Monitor.h"
 
 #include "osd/OSDMap.h"
@@ -41,8 +39,10 @@
 
 #include "messages/MAuthReply.h"
 
+#include "common/ceph_argparse.h"
 #include "common/Timer.h"
 #include "common/Clock.h"
+#include "include/color.h"
 
 #include "OSDMonitor.h"
 #include "MDSMonitor.h"
@@ -56,14 +56,18 @@
 
 #include "auth/AuthSupported.h"
 
-#include "config.h"
+#include "common/config.h"
+
+#include <errno.h>
+#include <limits.h>
+#include <sstream>
+#include <stdlib.h>
 
 #define DOUT_SUBSYS mon
 #undef dout_prefix
 #define dout_prefix _prefix(this)
 static ostream& _prefix(Monitor *mon) {
-  return *_dout << dbeginl
-		<< "mon" << mon->whoami
+  return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< (mon->is_starting() ?
 		    (const char*)"(starting)" : 
 		    (mon->is_leader() ?
@@ -82,23 +86,25 @@ const CompatSet::Feature ceph_mon_feature_ro_compat[] =
 const CompatSet::Feature ceph_mon_feature_incompat[] =
   { CEPH_MON_FEATURE_INCOMPAT_BASE , CompatSet::Feature(0, "")};
 
-Monitor::Monitor(int w, MonitorStore *s, Messenger *m, MonMap *map) :
-  whoami(w), 
+Monitor::Monitor(string nm, MonitorStore *s, Messenger *m, MonMap *map) :
+  name(nm),
+  rank(-1), 
   messenger(m),
   lock("Monitor::lock"),
+  timer(lock),
   monmap(map),
-  logclient(messenger, monmap),
-  timer(lock), tick_timer(0),
+  clog(messenger, monmap, NULL, LogClient::FLAG_SYNC),
   store(s),
   
   state(STATE_STARTING), stopping(false),
   
-  elector(this, w),
-  mon_epoch(0), 
+  elector(this),
   leader(0),
   paxos(PAXOS_NUM), paxos_service(PAXOS_NUM),
   routed_request_tid(0)
 {
+  rank = map->get_rank(name);
+
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, add_paxos(PAXOS_MDSMAP));
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, add_paxos(PAXOS_MONMAP));
   paxos_service[PAXOS_OSDMAP] = new OSDMonitor(this, add_paxos(PAXOS_OSDMAP));
@@ -110,11 +116,12 @@ Monitor::Monitor(int w, MonitorStore *s, Messenger *m, MonMap *map) :
   mon_caps = new MonCaps();
   mon_caps->set_allow_all(true);
   mon_caps->text = "allow *";
+  myaddr = map->get_addr(name);
 }
 
 Paxos *Monitor::add_paxos(int type)
 {
-  Paxos *p = new Paxos(this, whoami, type);
+  Paxos *p = new Paxos(this, type);
   paxos[type] = p;
   return p;
 }
@@ -154,23 +161,19 @@ void Monitor::init()
   for (vector<PaxosService*>::iterator ps = paxos_service.begin(); ps != paxos_service.end(); ps++)
     (*ps)->init();
 
-  logclient.set_synchronous(true);
-  
   // i'm ready!
   messenger->add_dispatcher_tail(this);
-  messenger->add_dispatcher_head(&logclient);
+  messenger->add_dispatcher_head(&clog);
   
   // start ticker
-  reset_tick();
-  
+  timer.init();
+  new_tick();
+
   // call election?
   if (monmap->size() > 1) {
     call_election();
   } else {
-    // we're standalone.
-    set<int> q;
-    q.insert(whoami);
-    win_election(1, q);
+    win_standalone_election();
   }
   
   lock.Unlock();
@@ -186,10 +189,7 @@ void Monitor::shutdown()
   for (vector<PaxosService*>::iterator p = paxos_service.begin(); p != paxos_service.end(); p++)
     (*p)->shutdown();
 
-  // cancel all events
-  cancel_tick();
-  timer.cancel_all();
-  timer.join();  
+  timer.shutdown();
 
   // die.
   messenger->shutdown();
@@ -198,38 +198,65 @@ void Monitor::shutdown()
 
 void Monitor::call_election(bool is_new)
 {
-  if (monmap->size() == 1) return;
+  if (monmap->size() == 1)
+    return;
+
+  rank = monmap->get_rank(name);
   
   if (is_new) {
-    stringstream ss;
-    ss << "mon" << whoami << " calling new monitor election";
-    logclient.log(LOG_INFO, ss);
+    clog.info() << "mon." << name << " calling new monitor election\n";
   }
 
   dout(10) << "call_election" << dendl;
-  state = STATE_STARTING;
-  
-  // tell paxos
-  for (vector<Paxos*>::iterator p = paxos.begin(); p != paxos.end(); p++)
-    (*p)->election_starting();
-  for (vector<PaxosService*>::iterator p = paxos_service.begin(); p != paxos_service.end(); p++)
-    (*p)->election_starting();
 
   // call a new election
   elector.call_election();
 }
 
+void Monitor::win_standalone_election()
+{
+  dout(1) << "win_standalone_election" << dendl;
+  rank = monmap->get_rank(name);
+  assert(rank == 0);
+  set<int> q;
+  q.insert(rank);
+  win_election(1, q);
+}
+
+void Monitor::starting_election()
+{
+  dout(10) << "starting_election " << get_epoch() << dendl;
+  state = STATE_STARTING;
+  leader_since = utime_t();
+
+  // tell paxos
+  for (vector<Paxos*>::iterator p = paxos.begin(); p != paxos.end(); p++)
+    (*p)->election_starting();
+  for (vector<PaxosService*>::iterator p = paxos_service.begin(); p != paxos_service.end(); p++)
+    (*p)->election_starting();
+}
+
+const utime_t& Monitor::get_leader_since() const
+{
+  assert(state == STATE_LEADER);
+  return leader_since;
+}
+
+epoch_t Monitor::get_epoch()
+{
+  return elector.get_epoch();
+}
+
 void Monitor::win_election(epoch_t epoch, set<int>& active) 
 {
   state = STATE_LEADER;
-  leader = whoami;
-  mon_epoch = epoch;
+  leader_since = g_clock.now();
+  leader = rank;
   quorum = active;
-  dout(10) << "win_election, epoch " << mon_epoch << " quorum is " << quorum << dendl;
+  dout(10) << "win_election, epoch " << epoch << " quorum is " << quorum << dendl;
 
-  stringstream ss;
-  ss << "mon" << whoami << " won leader election with quorum " << quorum;
-  logclient.log(LOG_INFO, ss);
+  clog.info() << "mon." << name << "@" << rank
+		<< " won leader election with quorum " << quorum << "\n";
   
   for (vector<Paxos*>::iterator p = paxos.begin(); p != paxos.end(); p++)
     (*p)->leader_init();
@@ -242,10 +269,10 @@ void Monitor::win_election(epoch_t epoch, set<int>& active)
 void Monitor::lose_election(epoch_t epoch, set<int> &q, int l) 
 {
   state = STATE_PEON;
-  mon_epoch = epoch;
+  leader_since = utime_t();
   leader = l;
   quorum = q;
-  dout(10) << "lose_election, epoch " << mon_epoch << " leader is mon" << leader
+  dout(10) << "lose_election, epoch " << epoch << " leader is mon" << leader
 	   << " quorum is " << quorum << dendl;
   
   for (vector<Paxos*>::iterator p = paxos.begin(); p != paxos.end(); p++)
@@ -276,6 +303,7 @@ void Monitor::handle_command(MMonCommand *m)
   bufferlist rdata;
   string rs;
   int r = -EINVAL;
+  rs = "unrecognized subsystem";
   if (!m->cmd.empty()) {
     if (m->cmd[0] == "mds") {
       mdsmon()->dispatch(m);
@@ -317,7 +345,10 @@ void Monitor::handle_command(MMonCommand *m)
       authmon()->dispatch(m);
       return;
     }
-    rs = "unrecognized subsystem";
+    if (m->cmd[0] == "health") {
+      monmon()->dispatch(m);
+      return;
+    }
   } else 
     rs = "no command";
 
@@ -359,24 +390,14 @@ void Monitor::forward_request_leader(PaxosServiceMessage *req)
   } else if (session && !session->closed) {
     RoutedRequest *rr = new RoutedRequest;
     rr->tid = ++routed_request_tid;
-
-    dout(10) << "forward_request " << rr->tid << " request " << *req << dendl;
-
-    dout(10) << " noting that i mon" << whoami << " own this requests's session" << dendl;
-    //set forwarding variables; clear payload so it re-encodes properly
-    req->session_mon = whoami;
-    req->session_mon_tid = rr->tid;
-    req->clear_payload();
-    //of course, the need to forward does give it an effectively lower priority
-    
-    //encode forward message and insert into routed_requests
     encode_message(req, rr->request_bl);
     rr->session = (MonSession *)session->get();
     routed_requests[rr->tid] = rr;
-
     session->routed_request_tids.insert(rr->tid);
     
-    MForward *forward = new MForward(req);
+    dout(10) << "forward_request " << rr->tid << " request " << *req << dendl;
+
+    MForward *forward = new MForward(rr->tid, req, rr->session->caps);
     forward->set_priority(req->get_priority());
     messenger->send_message(forward, monmap->get_inst(mon));
   } else {
@@ -399,13 +420,15 @@ void Monitor::handle_forward(MForward *m)
     dout(0) << "forward from entity with insufficient caps! " 
 	    << session->caps << dendl;
   } else {
-
-    MonSession *s = new MonSession(m->client);
-    s->caps = m->client_caps;
     Connection *c = new Connection;
+    MonSession *s = new MonSession(m->msg->get_source_inst(), c);
     c->set_priv(s);
     c->set_peer_addr(m->client.addr);
     c->set_peer_type(m->client.name.type());
+
+    s->caps = m->client_caps;
+    s->proxy_con = m->get_connection()->get();
+    s->proxy_tid = m->tid;
 
     PaxosServiceMessage *req = m->msg;
     m->msg = NULL;  // so ~MForward doesn't delete it
@@ -429,28 +452,30 @@ void Monitor::try_send_message(Message *m, entity_inst_t to)
   messenger->send_message(m, to);
 
   for (int i=0; i<(int)monmap->size(); i++) {
-    if (i != whoami)
-      messenger->send_message(new MRoute(0, bl, to),
-			      monmap->get_inst(i));
+    if (i != rank)
+      messenger->send_message(new MRoute(bl, to), monmap->get_inst(i));
   }
 }
 
-void Monitor::send_reply(PaxosServiceMessage *req, Message *reply, entity_inst_t to)
+void Monitor::send_reply(PaxosServiceMessage *req, Message *reply)
 {
-  if (req->session_mon >= 0) {
-    if (req->session_mon < (int)monmap->size()) {
-      dout(15) << "send_reply routing reply to " << to << " via mon" << req->session_mon
-	       << " for request " << *req << dendl;
-      messenger->send_message(new MRoute(req->session_mon_tid, reply, to),
-			      monmap->get_inst(req->session_mon));
-    } else {
-      dout(2) << "send_reply mon" << req->session_mon << " dne, dropping reply " << *reply
-	      << " to " << *req << " for " << to << dendl;
-      reply->put();
-    }
-  } else {
-    messenger->send_message(reply, to);
+  MonSession *session = (MonSession*)req->get_connection()->get_priv();
+  if (!session) {
+    dout(2) << "send_reply no session, dropping reply " << *reply
+	    << " to " << req << " " << *req << dendl;
+    reply->put();
+    return;
   }
+  if (session->proxy_con) {
+    dout(15) << "send_reply routing reply to " << req->get_connection()->get_peer_addr()
+	     << " via mon" << req->session_mon
+	     << " for request " << *req << dendl;
+    messenger->send_message(new MRoute(session->proxy_tid, reply),
+			    session->proxy_con);    
+  } else {
+    messenger->send_message(reply, session->con);
+  }
+  session->put();
 }
 
 void Monitor::handle_route(MRoute *m)
@@ -467,21 +492,25 @@ void Monitor::handle_route(MRoute *m)
   dout(10) << "handle_route " << *m->msg << " to " << m->dest << dendl;
   
   // look it up
-  if (routed_requests.count(m->session_mon_tid)) {
-    RoutedRequest *rr = routed_requests[m->session_mon_tid];
-    messenger->send_message(m->msg, rr->session->inst);
-    m->msg = NULL;
-    routed_requests.erase(m->session_mon_tid);
-    rr->session->routed_request_tids.insert(rr->tid);
-    delete rr;
+  if (m->session_mon_tid) {
+    if (routed_requests.count(m->session_mon_tid)) {
+      RoutedRequest *rr = routed_requests[m->session_mon_tid];
+      messenger->send_message(m->msg, rr->session->inst);
+      m->msg = NULL;
+      routed_requests.erase(m->session_mon_tid);
+      rr->session->routed_request_tids.insert(rr->tid);
+      delete rr;
+    } else {
+      dout(10) << " don't have routed request tid " << m->session_mon_tid << dendl;
+    }
   } else {
-    dout(10) << " don't have routed request tid " << m->session_mon_tid
-	     << ", trying to send anyway" << dendl;
+    dout(10) << " not a routed request, trying to send anyway" << dendl;
     messenger->lazy_send_message(m->msg, m->dest);
     m->msg = NULL;
   }
   m->put();
-  if (session) session->put();
+  if (session)
+    session->put();
 }
 
 void Monitor::resend_routed_requests()
@@ -497,7 +526,7 @@ void Monitor::resend_routed_requests()
     PaxosServiceMessage *req = (PaxosServiceMessage *)decode_message(q);
 
     dout(10) << " resend to mon" << mon << " tid " << rr->tid << " " << *req << dendl;
-    MForward *forward = new MForward(req, rr->session->caps);
+    MForward *forward = new MForward(rr->tid, req, rr->session->caps);
     forward->set_priority(req->get_priority());
     messenger->send_message(forward, monmap->get_inst(mon));
   }  
@@ -598,7 +627,7 @@ bool Monitor::_ms_dispatch(Message *m)
     }
     if (!s) {
       dout(10) << "do not have session, making new one" << dendl;
-      s = session_map.new_session(m->get_source_inst());
+      s = session_map.new_session(m->get_source_inst(), m->get_connection());
       m->get_connection()->set_priv(s->get());
       dout(10) << "ms_dispatch new session " << s << " for " << s->inst << dendl;
 
@@ -704,9 +733,9 @@ bool Monitor::_ms_dispatch(Message *m)
 	MMonPaxos *pm = (MMonPaxos*)m;
 
 	// sanitize
-	if (pm->epoch > mon_epoch) 
+	if (pm->epoch > get_epoch()) 
 	  call_election();
-	if (pm->epoch != mon_epoch) {
+	if (pm->epoch != get_epoch()) {
 	  pm->put();
 	  break;
 	}
@@ -806,6 +835,8 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
 
 bool Monitor::ms_handle_reset(Connection *con)
 {
+  dout(10) << "ms_handle_reset " << con << " " << con->get_peer_addr() << dendl;
+
   // ignore lossless monitor sessions
   if (con->get_peer_type() == CEPH_ENTITY_TYPE_MON)
     return false;
@@ -841,7 +872,7 @@ void Monitor::check_sub(Subscription *sub)
 {
   dout(10) << "check_sub monmap next " << sub->next << " have " << monmap->get_epoch() << dendl;
   if (sub->next <= monmap->get_epoch()) {
-    send_latest_monmap(sub->session->inst);
+    send_latest_monmap(sub->session->con);
     if (sub->onetime)
       session_map.remove_sub(sub);
     else
@@ -852,17 +883,20 @@ void Monitor::check_sub(Subscription *sub)
 
 // -----
 
-void Monitor::send_latest_monmap(entity_inst_t i)
+void Monitor::send_latest_monmap(Connection *con)
 {
   bufferlist bl;
-  monmap->encode(bl);
-  messenger->send_message(new MMonMap(bl), i);
+  if (!con->has_feature(CEPH_FEATURE_MONNAMES))
+    monmap->encode_v1(bl);
+  else
+    monmap->encode(bl);
+  messenger->send_message(new MMonMap(bl), con);
 }
 
 void Monitor::handle_mon_get_map(MMonGetMap *m)
 {
   dout(10) << "handle_mon_get_map" << dendl;
-  send_latest_monmap(m->get_orig_source_inst());
+  send_latest_monmap(m->get_connection());
   m->put();
 }
 
@@ -883,25 +917,14 @@ public:
   }
 };
 
-void Monitor::cancel_tick()
+void Monitor::new_tick()
 {
-  if (tick_timer) timer.cancel_event(tick_timer);
+  C_Mon_Tick *ctx = new C_Mon_Tick(this);
+  timer.add_event_after(g_conf.mon_tick_interval, ctx);
 }
-
-void Monitor::reset_tick()
-{
-  cancel_tick();
-  tick_timer = new C_Mon_Tick(this);
-  timer.add_event_after(g_conf.mon_tick_interval, tick_timer);
-}
-
 
 void Monitor::tick()
 {
-  tick_timer = 0;
-
-  _dout_check_log();
-
   // ok go.
   dout(11) << "tick" << dendl;
   
@@ -927,13 +950,8 @@ void Monitor::tick()
     }
   }
 
-  // next tick!
-  reset_tick();
+  new_tick();
 }
-
-
-
-
 
 /*
  * this is the closest thing to a traditional 'mkfs' for ceph.
@@ -943,16 +961,24 @@ int Monitor::mkfs(bufferlist& osdmapbl)
 {
   // create it
   int err = store->mkfs();
-  if (err < 0) {
-    char buf[80];
-    cerr << "error " << err << " " << strerror_r(err, buf, sizeof(buf)) << std::endl;
+  if (err) {
+    dout(0) << TEXT_RED << "** ERROR: store->mkfs failed with error code "
+	    << err << ". Aborting." << dendl;
     exit(1);
   }
-  
+
   bufferlist magicbl;
   magicbl.append(CEPH_MON_ONDISK_MAGIC);
   magicbl.append("\n");
-  store->put_bl_ss(magicbl, "magic", 0);
+  try {
+    store->put_bl_ss(magicbl, "magic", 0);
+  }
+  catch (const MonitorStore::Error &e) {
+    dout(0) << TEXT_RED << "** ERROR: initializing cmon failed: couldn't "
+              << "initialize the monitor state machine: "
+	      << e.what() << TEXT_NORMAL << dendl;
+    exit(1);
+  }
 
   bufferlist features;
   CompatSet mon_features(ceph_mon_feature_compat,
@@ -1112,3 +1138,50 @@ bool Monitor::ms_verify_authorizer(Connection *con, int peer_type,
   return true;
 };
 
+static long long strict_strtoll(const char *str, int base, std::string *err)
+{
+  char *endptr;
+  errno = 0; /* To distinguish success/failure after call (see man page) */
+  long long ret = strtoll(str, &endptr, base);
+
+  if ((errno == ERANGE && (ret == LLONG_MAX || ret == LLONG_MIN))
+      || (errno != 0 && ret == 0)) {
+    ostringstream oss;
+    oss << "strict_strtoll: integer underflow or overflow parsing '" << str << "'";
+    *err = oss.str();
+    return 0;
+  }
+  if (endptr == str) {
+    ostringstream oss;
+    oss << "strict_strtoll: expected integer, got: '" << str << "'";
+    *err = oss.str();
+    return 0;
+  }
+  if (*endptr != '\0') {
+    ostringstream oss;
+    oss << "strict_strtoll: garbage at end of string. got: '" << str << "'";
+    *err = oss.str();
+    return 0;
+  }
+  return ret;
+}
+
+int strict_strtol(const char *str, int base, std::string *err)
+{
+  long long ret = strict_strtoll(str, base, err);
+  if (!err->empty())
+    return 0;
+  if (ret <= INT_MIN) {
+    ostringstream oss;
+    oss << "strict_strtol: integer underflow parsing '" << str << "'";
+    *err = oss.str();
+    return 0;
+  }
+  if (ret >= INT_MAX) {
+    ostringstream oss;
+    oss << "strict_strtol: integer overflow parsing '" << str << "'";
+    *err = oss.str();
+    return 0;
+  }
+  return static_cast<int>(ret);
+}

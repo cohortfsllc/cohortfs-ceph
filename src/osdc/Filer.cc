@@ -24,12 +24,11 @@
 
 #include "include/Context.h"
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS filer
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << objecter->messenger->get_myname() << ".filer "
-
+#define dout_prefix *_dout << objecter->messenger->get_myname() << ".filer "
 
 class Filer::C_Probe : public Context {
 public:
@@ -40,7 +39,15 @@ public:
   utime_t mtime;
   C_Probe(Filer *f, Probe *p, object_t o) : filer(f), probe(p), oid(o), size(0) {}
   void finish(int r) {
-    filer->_probed(probe, oid, size, mtime);    
+    if (r == -ENOENT) {
+      r = 0;
+      assert(size == 0);
+    }
+
+    // TODO: handle this error.
+    assert(r == 0);
+
+    filer->_probed(probe, oid, size, mtime);
   }  
 };
 
@@ -100,7 +107,7 @@ void Filer::_probe(Probe *probe)
        p++) {
     dout(10) << "_probe  probing " << p->oid << dendl;
     C_Probe *c = new C_Probe(this, probe, p->oid);
-    probe->ops[p->oid] = objecter->stat(p->oid, p->layout, probe->snapid, &c->size, &c->mtime, probe->flags, c);
+    probe->ops[p->oid] = objecter->stat(p->oid, p->oloc, probe->snapid, &c->size, &c->mtime, probe->flags, c);
   }
 }
 
@@ -140,12 +147,6 @@ void Filer::_probed(Probe *probe, const object_t& oid, uint64_t size, utime_t mt
 	     << " should be " << shouldbe
 	     << ", actual is " << probe->known_size[p->oid]
 	     << dendl;
-
-    // error?
-    if (probe->known_size[p->oid] < 0) {
-      probe->err = probe->known_size[p->oid];
-      break;
-    }
 
     if (!probe->found_size) {
       assert(probe->known_size[p->oid] <= shouldbe);
@@ -236,8 +237,8 @@ int Filer::purge_range(inodeno_t ino,
   // single object?  easy!
   if (num_obj == 1) {
     object_t oid = file_object_t(ino, first_obj);
-    ceph_object_layout ol = objecter->osdmap->file_to_object_layout(oid, *layout);
-    objecter->remove(oid, ol, snapc, mtime, flags, NULL, oncommit);
+    object_locator_t oloc = objecter->osdmap->file_to_object_locator(*layout);
+    objecter->remove(oid, oloc, snapc, mtime, flags, NULL, oncommit);
     return 0;
   }
 
@@ -282,8 +283,8 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
   int max = 10 - pr->uncommitted;
   while (pr->num > 0 && max > 0) {
     object_t oid = file_object_t(pr->ino, pr->first);
-    ceph_object_layout ol = objecter->osdmap->file_to_object_layout(oid, pr->layout);
-    objecter->remove(oid, ol, pr->snapc, pr->mtime, pr->flags,
+    object_locator_t oloc = objecter->osdmap->file_to_object_locator(pr->layout);
+    objecter->remove(oid, oloc, pr->snapc, pr->mtime, pr->flags,
 		     NULL, new C_PurgeRange(this, pr));
     pr->uncommitted++;
     pr->first++;
@@ -335,7 +336,7 @@ void Filer::file_to_extents(inodeno_t ino, ceph_file_layout *layout,
     else {
       ex = &object_extents[oid];
       ex->oid = oid;
-      ex->layout = objecter->osdmap->file_to_object_layout( oid, *layout );
+      ex->oloc = objecter->osdmap->file_to_object_locator(*layout);
     }
     
     // map range into object
@@ -362,7 +363,7 @@ void Filer::file_to_extents(inodeno_t ino, ceph_file_layout *layout,
     }
     ex->buffer_extents[cur-offset] = x_len;
         
-    dout(15) << "file_to_extents  " << *ex << " in " << ex->layout << dendl;
+    dout(15) << "file_to_extents  " << *ex << " in " << ex->oloc << dendl;
     //dout(0) << "map: ino " << ino << " oid " << ex.oid << " osd " << ex.osd << " offset " << ex.offset << " len " << ex.len << " ... left " << left << dendl;
     
     left -= x_len;

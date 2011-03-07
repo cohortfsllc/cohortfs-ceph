@@ -12,154 +12,302 @@
  * 
  */
 
-#include "config.h"
+#include "common/config.h"
+#include "common/errno.h"
+#include "common/safe_io.h"
 #include "FileJournal.h"
 #include "include/color.h"
 
+#include <fcntl.h>
+#include <sstream>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
-#include <fcntl.h>
 
 
 #define DOUT_SUBSYS journal
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "journal "
+#define dout_prefix *_dout << "journal "
 
+const static int64_t ONE_MEG(1 << 20);
 
 int FileJournal::_open(bool forwrite, bool create)
 {
-  char buf[80];
-  int flags;
+  int flags, ret;
 
   if (forwrite) {
     flags = O_RDWR;
-    if (directio) flags |= O_DIRECT | O_SYNC;
+    if (directio)
+      flags |= O_DIRECT | O_SYNC;
   } else {
     flags = O_RDONLY;
   }
   if (create)
     flags |= O_CREAT;
   
-  if (fd >= 0) 
-    ::close(fd);
-  fd = ::open(fn.c_str(), flags, 0644);
+  if (fd >= 0) {
+    if (TEMP_FAILURE_RETRY(::close(fd))) {
+      int err = errno;
+      derr << "FileJournal::_open: error closing old fd: "
+	   << cpp_strerror(err) << dendl;
+    }
+  }
+  fd = TEMP_FAILURE_RETRY(::open(fn.c_str(), flags, 0644));
   if (fd < 0) {
-    dout(2) << "_open failed " << errno << " " << strerror_r(errno, buf, sizeof(buf)) << dendl;
-    cerr << "unable to open journal " << fn << ": " << strerror_r(errno, buf, sizeof(buf)) << std::endl;
-    return -errno;
+    int err = errno;
+    derr << "FileJournal::_open : unable to open journal: open() "
+	 << "failed: " << cpp_strerror(err) << dendl;
+    return -err;
   }
 
-  // get size
   struct stat st;
-  int r = ::fstat(fd, &st);
-  if (r < 0) {
-    dout(2) << "_open failed to fstat! " << errno << " " << strerror_r(errno, buf, sizeof(buf)) << dendl;
-    return -errno; // wtf
+  ret = ::fstat(fd, &st);
+  if (ret) {
+    int err = errno;
+    derr << "FileJournal::_open: unable to fstat journal: "
+         << cpp_strerror(err) << dendl;
+    return -err;
   }
 
-  if (max_size == 0) {
-    // hmm, is this a raw block device?
-#ifdef BLKGETSIZE64
-    // ioctl block device
-    uint64_t bytes;
-    r = ::ioctl(fd, BLKGETSIZE64, &bytes);
-    max_size = bytes;
-#else
-# ifdef BLKGETSIZE
-    // hrm, try the 32 bit ioctl?
-    unsigned long sectors = 0;
-    r = ::ioctl(fd, BLKGETSIZE, &sectors);
-    max_size = sectors * 512ULL;
-# endif
-#endif
-    if (r == 0) {
-      is_bdev = true;
-      block_size = PAGE_SIZE;
-    }
-  }
+  if (S_ISBLK(st.st_mode))
+    ret = _open_block_device();
+  else
+    ret = _open_file(st.st_size, st.st_blksize, create);
 
-  if (!is_bdev) {
-    if (create && st.st_size < (g_conf.osd_journal_size << 20)) {
-      uint64_t newsize = g_conf.osd_journal_size << 20;
-      dout(10) << "_open extending to " << newsize << " bytes" << dendl;
-      r = ::ftruncate(fd, newsize);
-      if (r < 0) {
-	dout(0) << "_open unable to extend journal to " << newsize << " bytes" << dendl;
-	cerr << "unable to extend journal to " << newsize << " bytes" << std::endl;
-	return -errno;
-      }
-      r = ::fstat(fd, &st);
-    }
-    max_size = st.st_size;
-    block_size = MAX(st.st_blksize, PAGE_SIZE);
-  }
+  if (ret)
+    return ret;
 
+  /* We really want max_size to be a multiple of block_size. */
   max_size -= max_size % block_size;
 
-  // try to check if the disk write cache is on
-  if (is_bdev) {
-    if (geteuid() == 0) {
-      char cmd[4096];
-      snprintf(cmd, sizeof(cmd), "/sbin/hdparm -W %s > /tmp/out.%d", fn.c_str(), getpid());
-      int r = system(cmd);
-      if (r == 0) {
-	snprintf(cmd, sizeof(cmd), "/tmp/out.%d", getpid());
-	FILE *f = fopen(cmd, "r");
-	if (f) {
-	  while (!feof(f)) {
-	    char s[100];
-	    fgets(s, sizeof(s), f);
-	    int on;
-	    if (sscanf(s, " write-caching =  %d", &on) == 1) {
-	      if (on) {
-		dout(0) << "WARNING: disk write cache is ON; journaling will not be reliable" << dendl;
-		dout(0) << "         on kernels prior to 2.6.33 (recent kernels are safe)" << dendl;
-		dout(0) << "         disable with 'hdparm -W 0 " << fn << "'" << dendl;
-		cout << TEXT_RED
-		     << " ** WARNING: disk write cache is ON on " << fn << ".\n"
-		     << "    Journaling will not be reliable on kernels prior to 2.6.33\n"
-		     << "    (recent kernels are safe).  You can disable the write cache with\n"
-		     << "    'hdparm -W 0 " << fn << "'"
-		     << TEXT_NORMAL
-		     << std::endl;
-	      } else {
-		dout(10) << "_open disk write cache is off (good) on " << fn << dendl;
-	      }
-	      break;
-	    }
-	  }
-	  fclose(f);
-	}
-	::unlink(cmd);
-      } else
-	dout(10) << "_open failed to run '" << cmd << "', NOT checking disk write cache on " << fn << dendl;      
-    } else
-      dout(10) << "_open not root, NOT checking disk write cache on " << fn << dendl;
-  } else
-    dout(10) << "_open journal is not a block device, NOT checking disk write cache on " << fn << dendl;
-
   // static zeroed buffer for alignment padding
+  delete [] zero_buf;
   zero_buf = new char[header.alignment];
   memset(zero_buf, 0, header.alignment);
 
-  dout(2) << "_open " << fn << " fd " << fd 
+  dout(1) << "_open " << fn << " fd " << fd
 	  << ": " << max_size 
 	  << " bytes, block size " << block_size
 	  << " bytes, directio = " << directio << dendl;
+  return 0;
+}
+
+int FileJournal::_open_block_device()
+{
+  int ret = 0;
+  int64_t bdev_sz = 0;
+#ifdef BLKGETSIZE64
+  // ioctl block device
+  ret = ::ioctl(fd, BLKGETSIZE64, &bdev_sz);
+#elif BLKGETSIZE
+  // hrm, try the 32 bit ioctl?
+  unsigned long sectors = 0;
+  ret = ::ioctl(fd, BLKGETSIZE, &sectors);
+  bdev_sz = sectors * 512ULL;
+#else
+#error "Compile error: we don't know how to get the size of a raw block device."
+#endif
+  if (ret) {
+    dout(0) << __func__ << ": failed to read block device size." << dendl;
+    return -EIO;
+  }
+
+  /* Check for bdev_sz too small */
+  if (bdev_sz < ONE_MEG) {
+    dout(0) << __func__ << ": your block device must be at least "
+      << ONE_MEG << " bytes to be used for a Ceph journal." << dendl;
+    return -EINVAL;
+  }
+
+  int64_t conf_journal_sz(g_conf.osd_journal_size);
+  conf_journal_sz <<= 20;
+  if (bdev_sz < conf_journal_sz) {
+    dout(0) << __func__ << ": you have configured a journal of size "
+      << conf_journal_sz << ", but the block device " << fn << " is only "
+      << bdev_sz << " bytes in size." << dendl;
+    return -EINVAL;
+  }
+
+  if (conf_journal_sz == 0) {
+    dout(10) << __func__ << ": no journal size specified in configuration. "
+      << "We'll use the entire block device (size: " << bdev_sz << ")" << dendl;
+    max_size = bdev_sz;
+  }
+  else {
+    dout(10) << __func__ << ": using " << conf_journal_sz << " bytes "
+             << "of a " << bdev_sz << " byte block device." << dendl;
+    max_size = conf_journal_sz;
+  }
+
+  /* block devices have to write in blocks of PAGE_SIZE */
+  block_size = PAGE_SIZE;
+
+  _check_disk_write_cache();
+  return 0;
+}
+
+static int get_kernel_version(int *a, int *b, int *c)
+{
+  int ret;
+  char buf[128];
+  memset(buf, 0, sizeof(buf));
+  int fd = TEMP_FAILURE_RETRY(::open("/proc/version", O_RDONLY));
+  if (fd < 0) {
+    ret = errno;
+    derr << "get_kernel_version: failed to open /proc/version: "
+	 << cpp_strerror(ret) << dendl;
+    goto out;
+  }
+  ret = safe_read(fd, buf, sizeof(buf) - 1);
+  if (ret < 0) {
+    derr << "get_kernel_version: failed to read from /proc/version: "
+	 << cpp_strerror(ret) << dendl;
+    goto close_fd;
+  }
+
+  if (sscanf(buf, "Linux version %d.%d.%d", a, b, c) != 3) {
+    derr << "get_kernel_version: failed to parse string: '"
+	 << buf << "'" << dendl;
+    ret = EIO;
+    goto close_fd;
+  }
+
+  dout(0) << " kernel version is " << *a <<"." << *b << "." << *c << dendl;
+  ret = 0;
+
+close_fd:
+  TEMP_FAILURE_RETRY(::close(fd));
+out:
+  return ret;
+}
+
+void FileJournal::_check_disk_write_cache() const
+{
+  ostringstream hdparm_cmd;
+  FILE *fp = NULL;
+  int a, b, c;
+
+  if (geteuid() != 0) {
+    dout(10) << "_check_disk_write_cache: not root, NOT checking disk write "
+      << "cache on raw block device " << fn << dendl;
+    goto done;
+  }
+
+  hdparm_cmd << "/sbin/hdparm -W " << fn;
+  fp = popen(hdparm_cmd.str().c_str(), "r");
+  if (!fp) {
+    dout(10) << "_check_disk_write_cache: failed to run /sbin/hdparm: NOT "
+      << "checking disk write cache on raw block device " << fn << dendl;
+    goto done;
+  }
+
+  while (true) {
+    char buf[256];
+    memset(buf, 0, sizeof(buf));
+    char *line = fgets(buf, sizeof(buf) - 1, fp);
+    if (!line) {
+      if (ferror(fp)) {
+	int ret = -errno;
+	derr << "_check_disk_write_cache: fgets error: " << cpp_strerror(ret)
+	     << dendl;
+	goto close_f;
+      }
+      else {
+	// EOF.
+	break;
+      }
+    }
+
+    int on;
+    if (sscanf(line, " write-caching =  %d", &on) != 1)
+      continue;
+    if (!on) {
+      dout(10) << "_check_disk_write_cache: disk write cache is off (good) on "
+	       << fn << dendl;
+      break;
+    }
+
+    // is our kernel new enough?
+    if (get_kernel_version(&a, &b, &c)) {
+      dout(10) << "_check_disk_write_cache: failed to get kernel version."
+	       << dendl;
+    }
+    else if (a >= 2 && b >= 6 && c >= 33) {
+      dout(20) << "_check_disk_write_cache: disk write cache is on, but your "
+	       << "kernel is new enough to handle it correctly. (fn:"
+	       << fn << ")" << dendl;
+      break;
+    }
+    derr << TEXT_RED
+	 << " ** WARNING: disk write cache is ON on " << fn << ".\n"
+	 << "    Journaling will not be reliable on kernels prior to 2.6.33\n"
+	 << "    (recent kernels are safe).  You can disable the write cache with\n"
+	 << "    'hdparm -W 0 " << fn << "'"
+	 << TEXT_NORMAL
+	 << dendl;
+    break;
+  }
+
+close_f:
+  if (::fclose(fp)) {
+    int ret = -errno;
+    derr << "_check_disk_write_cache: fclose error: " << cpp_strerror(ret)
+	 << dendl;
+  }
+done:
+  ;
+}
+
+int FileJournal::_open_file(int64_t oldsize, blksize_t blksize,
+			    bool create)
+{
+  int ret;
+  int64_t conf_journal_sz(g_conf.osd_journal_size);
+  conf_journal_sz <<= 20;
+
+  if ((g_conf.osd_journal_size == 0) && (oldsize < ONE_MEG)) {
+    derr << "I'm sorry, I don't know how large of a journal to create."
+	 << "Please specify a block device to use as the journal OR "
+	 << "set osd_journal_size in your ceph.conf" << dendl;
+    return -EINVAL;
+  }
+
+  if (create && (oldsize < conf_journal_sz)) {
+    uint64_t newsize(g_conf.osd_journal_size);
+    newsize <<= 20;
+    dout(10) << "_open extending to " << newsize << " bytes" << dendl;
+    ret = ::ftruncate(fd, newsize);
+    if (ret < 0) {
+      int err = errno;
+      derr << "FileJournal::_open_file : unable to extend journal to "
+	   << newsize << " bytes: " << cpp_strerror(err) << dendl;
+      return -err;
+    }
+    max_size = newsize;
+  }
+  else {
+    max_size = oldsize;
+  }
+  block_size = MAX(blksize, (blksize_t)PAGE_SIZE);
+
+  dout(10) << "_open journal is not a block device, NOT checking disk "
+           << "write cache on '" << fn << "'" << dendl;
 
   return 0;
 }
 
 int FileJournal::create()
 {
-  char buf[80];
+  void *buf = 0;
+  int64_t needed_space;
+  int ret;
+  buffer::ptr bp;
   dout(2) << "create " << fn << dendl;
 
-  int err = _open(true, true);
-  if (err < 0)
-    return err;
+  ret = _open(true, true);
+  if (ret < 0)
+    goto done;
 
   // write empty header
   memset(&header, 0, sizeof(header));
@@ -174,22 +322,54 @@ int FileJournal::create()
   header.start = get_top();
   print_header();
 
-  buffer::ptr bp = prepare_header();
-  int r = ::pwrite(fd, bp.c_str(), bp.length(), 0);
-  if (r < 0) {
-    dout(0) << "create write header error " << errno << " " << strerror_r(errno, buf, sizeof(buf)) << dendl;
-    return -errno;
+  bp = prepare_header();
+  if (TEMP_FAILURE_RETRY(::pwrite(fd, bp.c_str(), bp.length(), 0)) < 0) {
+    ret = errno;
+    derr << "FileJournal::create : create write header error "
+         << cpp_strerror(ret) << dendl;
+    goto close_fd;
   }
 
   // zero first little bit, too.
-  char z[block_size];
-  memset(z, 0, block_size);
-  ::pwrite(fd, z, block_size, get_top());
+  ret = posix_memalign(&buf, block_size, block_size);
+  if (ret) {
+    derr << "FileJournal::create: failed to allocate " << block_size
+	 << " bytes of memory: " << cpp_strerror(ret) << dendl;
+    goto close_fd;
+  }
+  memset(buf, 0, block_size);
+  if (TEMP_FAILURE_RETRY(::pwrite(fd, buf, block_size, get_top())) < 0) {
+    ret = errno;
+    derr << "FileJournal::create: error zeroing first " << block_size
+	 << " bytes " << cpp_strerror(ret) << dendl;
+    goto free_buf;
+  }
 
-  ::close(fd);
-  fd = -1;
+  needed_space = g_conf.osd_max_write_size << 20;
+  needed_space += (2 * sizeof(entry_header_t)) + get_top();
+  if (header.max_size - header.start < needed_space) {
+    derr << "FileJournal::create: OSD journal is not large enough to hold "
+	 << "osd_max_write_size bytes!" << dendl;
+    ret = -ENOSPC;
+    goto free_buf;
+  }
+
   dout(2) << "create done" << dendl;
-  return 0;
+  ret = 0;
+
+free_buf:
+  free(buf);
+  buf = 0;
+close_fd:
+  if (TEMP_FAILURE_RETRY(::close(fd)) < 0) {
+    ret = errno;
+    derr << "FileJournal::create: error closing fd: " << cpp_strerror(ret)
+	 << dendl;
+    goto done;
+  }
+done:
+  fd = -1;
+  return ret;
 }
 
 int FileJournal::open(uint64_t next_seq)
@@ -212,34 +392,33 @@ int FileJournal::open(uint64_t next_seq)
     //<< " vs expected fsid = " << fsid 
 	   << dendl;
   if (header.fsid != fsid) {
-    dout(2) << "open fsid doesn't match, invalid (someone else's?) journal" << dendl;
-    err = -EINVAL;
-  } 
+    derr << "FileJournal::open: open fsid doesn't match, invalid "
+         << "(someone else's?) journal" << dendl;
+    return -EINVAL;
+  }
   if (header.max_size > max_size) {
     dout(2) << "open journal size " << header.max_size << " > current " << max_size << dendl;
-    err = -EINVAL;
+    return -EINVAL;
   }
   if (header.block_size != block_size) {
     dout(2) << "open journal block size " << header.block_size << " != current " << block_size << dendl;
-    err = -EINVAL;
+    return -EINVAL;
   }
   if (header.max_size % header.block_size) {
     dout(2) << "open journal max size " << header.max_size
 	    << " not a multiple of block size " << header.block_size << dendl;
-    err = -EINVAL;
+    return -EINVAL;
   }
   if (header.alignment != block_size && directio) {
-    derr(0) << "open journal alignment " << header.alignment << " does not match block size " 
+    dout(0) << "open journal alignment " << header.alignment << " does not match block size " 
 	    << block_size << " (required for direct_io journal mode)" << dendl;
-    err = -EINVAL;
+    return -EINVAL;
   }
   if ((header.alignment % PAGE_SIZE) && directio) {
-    derr(0) << "open journal alignment " << header.alignment << " is not multiple of page size " << PAGE_SIZE
+    dout(0) << "open journal alignment " << header.alignment << " is not multiple of page size " << PAGE_SIZE
 	    << " (required for direct_io journal mode)" << dendl;
-    err = -EINVAL;
+    return -EINVAL;
   }
-  if (err)
-    return err;
 
   // looks like a valid header.
   write_pos = 0;  // not writeable yet
@@ -255,8 +434,12 @@ int FileJournal::open(uint64_t next_seq)
       break;
     }
     if (seq > next_seq) {
-      dout(10) << "open entry " << seq << " len " << bl.length() << " > next_seq " << next_seq << dendl;
+      dout(10) << "open entry " << seq << " len " << bl.length() << " > next_seq " << next_seq
+	       << ", ignoring journal contents"
+	       << dendl;
       read_pos = -1;
+      last_committed_seq = 0;
+      seq = 0;
       return 0;
     }
     if (seq == next_seq) {
@@ -279,8 +462,8 @@ void FileJournal::close()
 
   // close
   assert(writeq.empty());
-  assert(fd > 0);
-  ::close(fd);
+  assert(fd >= 0);
+  TEMP_FAILURE_RETRY(::close(fd));
   fd = -1;
 }
 
@@ -349,7 +532,7 @@ bufferptr FileJournal::prepare_header()
 int FileJournal::check_for_full(uint64_t seq, off64_t pos, off64_t size)
 {
   // already full?
-  if (full_commit_seq || full_restart_seq)
+  if (full_state != FULL_NOTFULL)
     return -ENOSPC;
 
   // take 1 byte off so that we only get pos == header.start on EMPTY, never on FULL.
@@ -386,22 +569,6 @@ int FileJournal::check_for_full(uint64_t seq, off64_t pos, off64_t size)
   if (size > max)
     dout(0) << "JOURNAL TOO SMALL: item " << size << " > journal " << max << " (usable)" << dendl;
 
-  if (wait_on_full)
-    return -ENOSPC;
-
-  // throw out what we have so far
-  full_commit_seq = seq;
-  full_restart_seq = seq+1;
-  while (!writeq.empty()) {
-    if (writeq.front().fin) {
-      writing_seq.push_back(writeq.front().seq);
-      writing_fin.push_back(writeq.front().fin);
-    }
-    throttle_ops.put(1);
-    throttle_bytes.put(writeq.front().bl.length());
-    writeq.pop_front();
-  }  
-  print_header();
   return -ENOSPC;
 }
 
@@ -413,7 +580,7 @@ int FileJournal::prepare_multi_write(bufferlist& bl, uint64_t& orig_ops, uint64_
   int eleft = g_conf.journal_max_write_entries;
   unsigned bmax = g_conf.journal_max_write_bytes;
 
-  if (full_commit_seq || full_restart_seq)
+  if (full_state != FULL_NOTFULL)
     return -ENOSPC;
   
   while (!writeq.empty()) {
@@ -421,7 +588,23 @@ int FileJournal::prepare_multi_write(bufferlist& bl, uint64_t& orig_ops, uint64_
     if (r == -ENOSPC) {
       if (orig_ops)
 	break;         // commit what we have
-      dout(20) << "prepare_multi_write full on first entry, need to wait" << dendl;
+
+      if (wait_on_full) {
+	dout(20) << "prepare_multi_write full on first entry, need to wait" << dendl;
+      } else {
+	dout(20) << "prepare_multi_write full on first entry, restarting journal" << dendl;
+
+	// throw out what we have so far
+	full_state = FULL_FULL;
+	while (!writeq.empty()) {
+	  dout(30) << "XXX throttle put " << writeq.front().bl.length() << dendl;
+	  throttle_ops.put(1);
+	  throttle_bytes.put(writeq.front().bl.length());
+	  writeq.pop_front();
+	}  
+	print_header();
+      }
+
       return -ENOSPC;  // hrm, full on first op
     }
 
@@ -442,6 +625,36 @@ int FileJournal::prepare_multi_write(bufferlist& bl, uint64_t& orig_ops, uint64_
   dout(20) << "prepare_multi_write queue_pos now " << queue_pos << dendl;
   //assert(write_pos + bl.length() == queue_pos);
   return 0;
+}
+
+/*
+void FileJournal::queue_write_fin(uint64_t seq, Context *fin)
+{
+  writing_seq.push_back(seq);
+  if (!waiting_for_notfull.empty()) {
+    // make sure previously unjournaled stuff waiting for UNFULL triggers
+    // _before_ newly journaled stuff does
+    dout(10) << "queue_write_fin will defer seq " << seq << " callback " << fin
+	     << " until after UNFULL" << dendl;
+    C_Gather *g = new C_Gather(writeq.front().fin);
+    writing_fin.push_back(g->new_sub());
+    waiting_for_notfull.push_back(g->new_sub());
+  } else {
+    writing_fin.push_back(writeq.front().fin);
+    dout(20) << "queue_write_fin seq " << seq << " callback " << fin << dendl;
+  }
+}
+*/
+
+void FileJournal::queue_completions_thru(uint64_t seq)
+{
+  while (!completions.empty() &&
+	 completions.front().first <= seq) {
+    dout(10) << "queue_completions_thru seq " << seq << " queueing seq " << completions.front().first
+	     << " " << completions.front().second << dendl;
+    finisher->queue(completions.front().second);
+    completions.pop_front();
+  }
 }
 
 int FileJournal::prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64_t& orig_ops, uint64_t& orig_bytes)
@@ -493,15 +706,11 @@ int FileJournal::prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64
     bl.push_back(bp);
   }
   bl.append((const char*)&h, sizeof(h));
-   
-  if (writeq.front().fin) {
-    writing_seq.push_back(seq);
-    writing_fin.push_back(writeq.front().fin);
-  }
 
   // pop from writeq
   writeq.pop_front();
   journalq.push_back(pair<uint64_t,off64_t>(seq, queue_pos));
+  writing_seq = seq;
 
   queue_pos += size;
   if (queue_pos > header.max_size)
@@ -510,7 +719,7 @@ int FileJournal::prepare_single_write(bufferlist& bl, off64_t& queue_pos, uint64
   return 0;
 }
 
-void FileJournal::write_bl(off64_t& pos, bufferlist& bl)
+int FileJournal::write_bl(off64_t& pos, bufferlist& bl)
 {
   // make sure list segments are page aligned
   if (directio && (!bl.is_page_aligned() ||
@@ -524,13 +733,14 @@ void FileJournal::write_bl(off64_t& pos, bufferlist& bl)
   }
 
   ::lseek64(fd, pos, SEEK_SET);
-  int err = bl.write_fd(fd);
-  if (err) {
-    char buf[80];
-    derr(0) << "write_bl failed with " << err << " " << strerror_r(-err, buf, sizeof(buf)) 
-	    << dendl;
+  int ret = bl.write_fd(fd);
+  if (ret) {
+    derr << "FileJournal::write_bl : write_fd failed: "
+	 << cpp_strerror(ret) << dendl;
+    return ret;
   }
   pos += bl.length();
+  return 0;
 }
 
 void FileJournal::do_write(bufferlist& bl)
@@ -571,7 +781,11 @@ void FileJournal::do_write(bufferlist& bl)
     dout(10) << "do_write wrapping, first bit at " << pos << " len " << first.length()
 	     << " second bit len " << second.length() << " (orig len " << bl.length() << ")" << dendl;
 
-    write_bl(pos, first);
+    if (write_bl(pos, first)) {
+      derr << "FileJournal::do_write: write_bl(pos=" << pos
+	   << ") failed" << dendl;
+      ceph_abort();
+    }
     assert(pos == header.max_size);
     if (hbp.length()) {
       // be sneaky: include the header in the second fragment
@@ -579,13 +793,28 @@ void FileJournal::do_write(bufferlist& bl)
       pos = 0;          // we included the header
     } else
       pos = get_top();  // no header, start after that
-    write_bl(pos, second);
+    if (write_bl(pos, second)) {
+      derr << "FileJournal::do_write: write_bl(pos=" << pos
+	   << ") failed" << dendl;
+      ceph_abort();
+    }
   } else {
     // header too?
-    if (hbp.length())
-      ::pwrite(fd, hbp.c_str(), hbp.length(), 0);
+    if (hbp.length()) {
+      if (TEMP_FAILURE_RETRY(::pwrite(fd, hbp.c_str(), hbp.length(), 0)) < 0) {
+	int err = errno;
+	derr << "FileJournal::do_write: pwrite(fd=" << fd
+	     << ", hbp.length=" << hbp.length() << ") failed :"
+	     << cpp_strerror(err) << dendl;
+	ceph_abort();
+      }
+    }
 
-    write_bl(pos, bl);
+    if (write_bl(pos, bl)) {
+      derr << "FileJournal::do_write: write_bl(pos=" << pos
+	   << ") failed" << dendl;
+      ceph_abort();
+    }
   }
 
   if (!directio) {
@@ -623,15 +852,21 @@ void FileJournal::do_write(bufferlist& bl)
   write_pos = pos;
   assert(write_pos % header.alignment == 0);
 
+  journaled_seq = writing_seq;
+
   // kick finisher?  
   //  only if we haven't filled up recently!
-  if (full_commit_seq || full_restart_seq) {
-    dout(10) << "do_write NOT queueing finisher seq " << writing_seq.front()
+  if (full_state != FULL_NOTFULL) {
+    dout(10) << "do_write NOT queueing finisher seq " << journaled_seq
 	     << ", full_commit_seq|full_restart_seq" << dendl;
   } else {
-    dout(20) << "do_write queueing finishers " << writing_fin << dendl;
-    writing_seq.clear();
-    finisher->queue(writing_fin);
+    if (plug_journal_completions) {
+      dout(20) << "do_write NOT queueing finishers through seq " << journaled_seq
+	       << " due to completion plug" << dendl;
+    } else {
+      dout(20) << "do_write queueing finishers through seq " << journaled_seq << dendl;
+      queue_completions_thru(journaled_seq);
+    }
   }
 }
 
@@ -679,6 +914,7 @@ void FileJournal::write_thread_entry()
     assert(r == 0);
     do_write(bl);
     
+    dout(30) << "XXX throttle put " << orig_bytes << dendl;
     uint64_t new_ops = throttle_ops.put(orig_ops);
     uint64_t new_bytes = throttle_bytes.put(orig_bytes);
     dout(10) << "write_thread throttle finished " << orig_ops << " ops and " 
@@ -701,29 +937,44 @@ void FileJournal::submit_entry(uint64_t seq, bufferlist& e, int alignment, Conte
 	   << " len " << e.length()
 	   << " (" << oncommit << ")" << dendl;
 
-  throttle_ops.take(1);
-  throttle_bytes.take(e.length());
-  
-  if (!full_commit_seq && full_restart_seq && 
-      seq >= full_restart_seq) {
-    dout(1) << " seq " << seq << " >= full_restart_seq " << full_restart_seq 
-	     << ", restarting journal" << dendl;
-    full_restart_seq = 0;
-  }
-  if (!full_commit_seq && !full_restart_seq) {
-    writeq.push_back(write_item(seq, e, alignment, oncommit));
-    write_cond.Signal(); // kick writer thread
+  if (oncommit)
+    completions.push_back(pair<uint64_t,Context*>(seq, oncommit));
+
+  if (full_state == FULL_NOTFULL) {
+    // queue and kick writer thread
+    dout(30) << "XXX throttle take " << e.length() << dendl;
+    throttle_ops.take(1);
+    throttle_bytes.take(e.length());
+
+    writeq.push_back(write_item(seq, e, alignment));
+    write_cond.Signal();
   } else {
     // not journaling this.  restart writing no sooner than seq + 1.
-    full_restart_seq = seq+1;
-    dout(10) << " journal is/was full, will restart no sooner than seq " << full_restart_seq << dendl;
-    if (oncommit) {
-      writing_seq.push_back(seq);
-      writing_fin.push_back(oncommit);
-    }
+    dout(10) << " journal is/was full" << dendl;
   }
 }
 
+void FileJournal::commit_start()
+{
+  dout(10) << "commit_start" << dendl;
+
+  // was full?
+  switch (full_state) {
+  case FULL_NOTFULL:
+    break; // all good
+
+  case FULL_FULL:
+    dout(1) << " FULL_FULL -> FULL_WAIT.  last commit epoch committed, waiting for a new one to start." << dendl;
+    full_state = FULL_WAIT;
+    break;
+
+  case FULL_WAIT:
+    dout(1) << " FULL_WAIT -> FULL_NOTFULL.  journal now active, setting completion plug." << dendl;
+    full_state = FULL_NOTFULL;
+    plug_journal_completions = true;
+    break;
+  }
+}
 
 void FileJournal::committed_thru(uint64_t seq)
 {
@@ -742,13 +993,6 @@ void FileJournal::committed_thru(uint64_t seq)
   dout(10) << "committed_thru " << seq << " (last_committed_seq " << last_committed_seq << ")" << dendl;
   last_committed_seq = seq;
 
-  // was full?
-  if (full_commit_seq && seq >= full_commit_seq) {
-    dout(1) << " seq " << seq << " >= full_commit_seq " << full_commit_seq 
-	     << ", prior journal contents are now fully committed.  resetting journal." << dendl;
-    full_commit_seq = 0;
-  }
-
   // adjust start pointer
   while (!journalq.empty() && journalq.front().first <= seq) {
     journalq.pop_front();
@@ -760,23 +1004,21 @@ void FileJournal::committed_thru(uint64_t seq)
   }
   must_write_header = true;
   print_header();
-  
-  // committed but writing
-  while (!writing_seq.empty() && writing_seq.front() <= seq) {
-    dout(15) << " finishing committed but writing|waiting seq " << writing_seq.front() << dendl;
-    finisher->queue(writing_fin.front());
-    writing_seq.pop_front();
-    writing_fin.pop_front();
+
+  // completions!
+  queue_completions_thru(seq);
+  if (plug_journal_completions) {
+    dout(10) << " removing completion plug, queuing completions thru journaled_seq " << journaled_seq << dendl;
+    plug_journal_completions = false;
+    queue_completions_thru(journaled_seq);
   }
-  
+
   // committed but unjournaled items
   while (!writeq.empty() && writeq.front().seq <= seq) {
     dout(15) << " dropping committed but unwritten seq " << writeq.front().seq 
 	     << " len " << writeq.front().bl.length()
-	     << " (" << writeq.front().fin << ")"
 	     << dendl;
-    if (writeq.front().fin)
-      finisher->queue(writeq.front().fin);
+    dout(30) << "XXX throttle put " << writeq.front().bl.length() << dendl;
     throttle_ops.put(1);
     throttle_bytes.put(writeq.front().bl.length());
     writeq.pop_front();  
@@ -821,8 +1063,12 @@ void FileJournal::wrap_read_bl(off64_t& pos, int64_t olen, bufferlist& bl)
 #endif
     
     bufferptr bp = buffer::create(len);
-    int r = ::read(fd, bp.c_str(), len);
-    assert(r == len);
+    int r = safe_read_exact(fd, bp.c_str(), len);
+    if (r) {
+      derr << "FileJournal::wrap_read_bl: safe_read_exact returned "
+	   << r << dendl;
+      ceph_abort();
+    }
     bl.push_back(bp);
     pos += len;
     olen -= len;

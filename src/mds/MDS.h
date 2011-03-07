@@ -24,7 +24,7 @@
 #include "include/types.h"
 #include "include/Context.h"
 #include "common/DecayCounter.h"
-#include "common/Logger.h"
+#include "common/ProfLogger.h"
 #include "common/Mutex.h"
 #include "common/Cond.h"
 #include "common/Timer.h"
@@ -146,11 +146,12 @@ class MDS : public Dispatcher {
   int whoami;
   int incarnation;
 
-  CompatSet mds_features;
-  
   int standby_for_rank;
+  int standby_type;
   string standby_for_name;
-  int standby_replay_for;
+  bool continue_replay; /* set to true by replay_start if we're a hot standby,
+                           remains true until leader MDS fails and we need to
+                           take over*/
 
   Messenger    *messenger;
   MonClient    *monc;
@@ -158,7 +159,7 @@ class MDS : public Dispatcher {
   OSDMap       *osdmap;
   Objecter     *objecter;
   Filer        *filer;       // for reading/writing to/from osds
-  LogClient    logclient;
+  LogClient    clog;
 
   // sub systems
   Server       *server;
@@ -178,8 +179,10 @@ class MDS : public Dispatcher {
   MDSTableClient *get_table_client(int t);
   MDSTableServer *get_table_server(int t);
 
-  Logger       *logger, *mlogger;
+  ProfLogger       *logger, *mlogger;
 
+  int orig_argc;
+  const char **orig_argv;
 
  protected:
   // -- MDS state --
@@ -219,6 +222,7 @@ class MDS : public Dispatcher {
   bool is_starting() { return state == MDSMap::STATE_STARTING; }
   bool is_standby()  { return state == MDSMap::STATE_STANDBY; }
   bool is_replay()   { return state == MDSMap::STATE_REPLAY; }
+  bool is_standby_replay() { return state == MDSMap::STATE_STANDBY_REPLAY; }
   bool is_resolve()  { return state == MDSMap::STATE_RESOLVE; }
   bool is_reconnect() { return state == MDSMap::STATE_RECONNECT; }
   bool is_rejoin()   { return state == MDSMap::STATE_REJOIN; }
@@ -226,7 +230,9 @@ class MDS : public Dispatcher {
   bool is_active()   { return state == MDSMap::STATE_ACTIVE; }
   bool is_stopping() { return state == MDSMap::STATE_STOPPING; }
 
-  bool is_standby_replay()   { return state == MDSMap::STATE_STANDBY_REPLAY; }
+  bool is_oneshot_replay()   { return state == MDSMap::STATE_ONESHOT_REPLAY; }
+  bool is_any_replay() { return (is_replay() || is_standby_replay() ||
+                                 is_oneshot_replay()); }
 
   bool is_stopped()  { return mdsmap->is_stopped(whoami); }
 
@@ -339,7 +345,7 @@ class MDS : public Dispatcher {
   void send_message(Message *m, Connection *c);
 
   // start up, shutdown
-  int init();
+  int init(int wanted_state=MDSMap::STATE_BOOT);
 
   void open_logger();
 
@@ -348,10 +354,18 @@ class MDS : public Dispatcher {
   void boot_create();             // i am new mds.
   void boot_start(int step=0, int r=0);    // starting|replay
 
+  void calc_recovery_set();
+
   void replay_start();
   void creating_done();
   void starting_done();
   void replay_done();
+  void standby_replay_restart();
+  void standby_trim_segments();
+  class C_MDS_StandbyReplayRestart;
+  class C_MDS_StandbyReplayRestartFinish;
+
+  void reopen_log();
 
   void resolve_start();
   void resolve_done();
@@ -366,7 +380,9 @@ class MDS : public Dispatcher {
   void active_start();
   void stopping_start();
   void stopping_done();
+
   void suicide();
+  void respawn();
 
   void tick();
   
@@ -389,7 +405,9 @@ class MDS : public Dispatcher {
 };
 
 
-
+/* This expects to be given a reference which it is responsible for.
+ * The finish function calls functions which
+ * will put the Message exactly once.*/
 class C_MDS_RetryMessage : public Context {
   Message *m;
   MDS *mds;

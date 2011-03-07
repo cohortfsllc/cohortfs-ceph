@@ -20,6 +20,10 @@ const char *ceph_osd_op_name(int op)
 	switch (op) {
 	case CEPH_OSD_OP_READ: return "read";
 	case CEPH_OSD_OP_STAT: return "stat";
+	case CEPH_OSD_OP_MAPEXT: return "mapext";
+	case CEPH_OSD_OP_SPARSE_READ: return "sparse-read";
+	case CEPH_OSD_OP_NOTIFY: return "notify";
+	case CEPH_OSD_OP_NOTIFY_ACK: return "notify-ack";
 
 	case CEPH_OSD_OP_MASKTRUNC: return "masktrunc";
 
@@ -38,6 +42,7 @@ const char *ceph_osd_op_name(int op)
 	case CEPH_OSD_OP_TMAPUP: return "tmapup";
 	case CEPH_OSD_OP_TMAPGET: return "tmapget";
 	case CEPH_OSD_OP_TMAPPUT: return "tmapput";
+	case CEPH_OSD_OP_WATCH: return "watch";
 
 	case CEPH_OSD_OP_GETXATTR: return "getxattr";
 	case CEPH_OSD_OP_GETXATTRS: return "getxattrs";
@@ -52,6 +57,10 @@ const char *ceph_osd_op_name(int op)
 	case CEPH_OSD_OP_BALANCEREADS: return "balance-reads";
 	case CEPH_OSD_OP_UNBALANCEREADS: return "unbalance-reads";
 	case CEPH_OSD_OP_SCRUB: return "scrub";
+	case CEPH_OSD_OP_SCRUB_RESERVE: return "scrub-reserve";
+	case CEPH_OSD_OP_SCRUB_UNRESERVE: return "scrub-unreserve";
+	case CEPH_OSD_OP_SCRUB_STOP: return "scrub-stop";
+	case CEPH_OSD_OP_SCRUB_MAP: return "scrub-map";
 
 	case CEPH_OSD_OP_WRLOCK: return "wrlock";
 	case CEPH_OSD_OP_WRUNLOCK: return "wrunlock";
@@ -63,6 +72,7 @@ const char *ceph_osd_op_name(int op)
 	case CEPH_OSD_OP_CALL: return "call";
 
 	case CEPH_OSD_OP_PGLS: return "pgls";
+	case CEPH_OSD_OP_PGLS_FILTER: return "pgls-filter";
 	}
 	return "???";
 }
@@ -77,6 +87,7 @@ const char *ceph_mds_state_name(int s)
 	case CEPH_MDS_STATE_BOOT:       return "up:boot";
 	case CEPH_MDS_STATE_STANDBY:    return "up:standby";
 	case CEPH_MDS_STATE_STANDBY_REPLAY:    return "up:standby-replay";
+	case CEPH_MDS_STATE_REPLAYONCE: return "up:oneshot-replay";
 	case CEPH_MDS_STATE_CREATING:   return "up:creating";
 	case CEPH_MDS_STATE_STARTING:   return "up:starting";
 		/* up and in */
@@ -116,6 +127,8 @@ const char *ceph_mds_op_name(int op)
 	case CEPH_MDS_OP_SETXATTR: return "setxattr";
 	case CEPH_MDS_OP_SETATTR: return "setattr";
 	case CEPH_MDS_OP_RMXATTR: return "rmxattr";
+	case CEPH_MDS_OP_SETLAYOUT: return "setlayou";
+	case CEPH_MDS_OP_SETDIRLAYOUT: return "setdirlayout";
 	case CEPH_MDS_OP_READDIR: return "readdir";
 	case CEPH_MDS_OP_MKNOD: return "mknod";
 	case CEPH_MDS_OP_LINK: return "link";
@@ -130,6 +143,8 @@ const char *ceph_mds_op_name(int op)
 	case CEPH_MDS_OP_LSSNAP: return "lssnap";
 	case CEPH_MDS_OP_MKSNAP: return "mksnap";
 	case CEPH_MDS_OP_RMSNAP: return "rmsnap";
+	case CEPH_MDS_OP_SETFILELOCK: return "setfilelock";
+	case CEPH_MDS_OP_GETFILELOCK: return "getfilelock";
 	}
 	return "???";
 }

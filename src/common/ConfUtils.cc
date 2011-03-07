@@ -12,6 +12,7 @@
 #include <list>
 #include <string>
 
+#include "common/safe_io.h"
 #include "ConfUtils.h"
 #include "dyn_snprintf.h"
 
@@ -341,7 +342,9 @@ int parse_line(char *line, ConfLine *parsed)
 			goto out;
 		case '[':
 			parsed->set_suffix(p);
-			return _parse_section(p, parsed);
+			ret = _parse_section(p, parsed);
+			free(dup);
+			return ret;
 	}
 
 	parsed->set_var(get_next_name(p, 1, &p), false);
@@ -471,6 +474,33 @@ ConfLine::~ConfLine()
 		free(section);
 }
 
+void ConfFile::common_init()
+{
+  filename = NULL;
+  pbl = NULL;
+  buf_pos = 0;
+  post_process_func = NULL;
+  default_global = true;
+}
+
+ConfFile::ConfFile(const char *fname)
+  : parse_lock("ConfFile::parse_lock", false, false, false)
+{
+  common_init();
+
+  if (fname)
+    filename = strdup(fname);
+  else
+    filename = NULL;
+}
+
+ConfFile::ConfFile(ceph::bufferlist *_pbl)
+  : parse_lock("ConfFile::parse_lock", false, false, false)
+{
+  common_init();
+  pbl =  _pbl;
+}
+
 ConfFile::~ConfFile()
 {
 	SectionList::iterator sec_iter, sec_end;
@@ -513,11 +543,12 @@ int ConfLine::output(char *line, int max_len)
 void ConfFile::_dump(int fd)
 {
 	SectionList::iterator sec_iter, sec_end;
-	 ConfLine *cl;
+	ConfLine *cl;
 	char *line;
 	size_t max_line = MAX_LINE;
 	size_t len;
 	char *p;
+	int r;
 
 	line = (char *)malloc(max_line);
 
@@ -546,8 +577,12 @@ void ConfFile::_dump(int fd)
 
 					len = cl->output(line, max_line);
 				} while (len == max_line);
-				::write(fd, line, strlen(line));
-				::write(fd, "\n", 1);
+				r = safe_write(fd, line, strlen(line));
+				if (r < 0)
+					return;
+				r = safe_write(fd, "\n", 1);
+				if (r < 0)
+					return;
 			}
 		}
 	}
@@ -588,7 +623,49 @@ ConfSection *ConfFile::_add_section(const char *section, ConfLine *cl)
 	return sec;
 }
 
-bool ConfFile::_parse(char *filename, ConfSection **psection)
+int ConfFile::_open()
+{
+	if (filename)
+		return open(filename, O_RDONLY);
+
+	if (!pbl)
+		return -EINVAL;
+
+	buf_pos = 0;
+
+	return 0;
+}
+
+int ConfFile::_read(int fd, char *buf, size_t size)
+{
+	if (filename)
+		return safe_read(fd, buf, size);
+
+	if (!pbl)
+		return -EINVAL;
+
+	size_t left = min(pbl->length() - buf_pos, size);
+
+	if (left) {
+		memcpy(buf, pbl->c_str() + buf_pos, left);
+		buf_pos += left;
+	}
+
+	return left;
+}
+
+int ConfFile::_close(int fd)
+{
+	if (filename)
+		return close(fd);
+
+	if (!pbl)
+		return -EINVAL;
+
+	return 0;
+}
+
+bool ConfFile::_parse(const char *filename, ConfSection **psection)
 {
 	char *buf;
 	int len, i, l;
@@ -598,18 +675,23 @@ bool ConfFile::_parse(char *filename, ConfSection **psection)
 	int fd;
 	int max_line = MAX_LINE;
 	int eof = 0;
+	bool ret = true;
+
+	fd = _open();
+	if (fd < 0)
+		return false;
 
 	line = (char *)malloc(max_line);
-
-	fd = open(filename, O_RDONLY);
-	if (fd < 0)
-		return 0;
-
 	l = 0;
 
 	buf = (char *)malloc(BUF_SIZE);
 	do {
-		len = ::read(fd, buf, BUF_SIZE);
+		len = _read(fd, buf, BUF_SIZE);
+		if (len < 0) {
+			ret = false;
+			goto done;
+		}
+
 		if (len < BUF_SIZE) {
 			eof = 1;
 			buf[len] = '\0';
@@ -631,11 +713,19 @@ bool ConfFile::_parse(char *filename, ConfSection **psection)
 				parse_line(line, cl);
 				if (cl->get_var()) {
 					if (strcmp(cl->get_var(), "include") == 0) {
+						if (!filename) { // don't allow including if we're not using files
+							ret = false;
+							goto done;
+						}
 						if (!_parse(cl->get_val(), &section)) {
 							printf("error parsing %s\n", cl->get_val());
 						}
 					} else {
 						char *norm_var = cl->get_norm_var();
+						if (!section) {
+							ret = false;
+							goto done;
+						}
 						section->conf_map[norm_var] = cl;
 						free(norm_var);
 						global_list.push_back(cl);
@@ -658,25 +748,31 @@ bool ConfFile::_parse(char *filename, ConfSection **psection)
 			}
 		}
 	} while (!eof);
-
+done:
 	free(buf);
 
 	*psection = section;
-	close(fd);
+	_close(fd);
 	free(line);
 
-	return 1;
+	return ret;
 }
 
 bool ConfFile::parse()
 {
-	ConfSection *section;
+	ConfSection *section = NULL;
 
-	section = new ConfSection("global");
-	sections["global"] = section;
-	sections_list.push_back(section);
+	parse_lock.Lock();
 
-	return _parse(filename, &section);
+	if (default_global) {
+		section = new ConfSection("global");
+		sections["global"] = section;
+		sections_list.push_back(section);
+	}
+
+	bool res = _parse(filename, &section);
+	parse_lock.Unlock();
+	return res;
 }
 
 int ConfFile::flush()
@@ -931,9 +1027,6 @@ int ConfFile::_read(const char *section, const char *var, T *val, T def_val)
 notfound:
 	_conf_copy<T>(val, def_val);
 
-	if (auto_update)
-		_write<T>(section, var, def_val);
-
 	return 0;
 }
 
@@ -1073,8 +1166,6 @@ int main(int argc, char *argv[])
 	cf.dump();
 
 
-
-	cf.set_auto_update(true);
 
 	cf.read("core", "repositoryformatversion", &val, 12);
 	cf.read("foo", "lala1", &val, 10);

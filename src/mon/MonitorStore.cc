@@ -14,14 +14,17 @@
 
 #include "MonitorStore.h"
 #include "common/Clock.h"
-
-#include "config.h"
+#include "common/debug.h"
+#include "common/errno.h"
+#include "common/run_cmd.h"
+#include "common/safe_io.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS mon
 #undef dout_prefix
 #define dout_prefix _prefix(dir)
 static ostream& _prefix(const string& dir) {
-  return *_dout << dbeginl << "store(" << dir << ") ";
+  return *_dout << "store(" << dir << ") ";
 }
 
 
@@ -31,7 +34,30 @@ static ostream& _prefix(const string& dir) {
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sstream>
 #include <sys/file.h>
+
+MonitorStore::Error MonitorStore::Error::
+FromErrno(const char *prefix, const char *prefix2, int errno_)
+{
+  char buf[128];
+  const char *b2 = strerror_r(errno_, buf, sizeof(buf));
+  ostringstream oss;
+  oss << prefix << prefix2 << ": " << b2 << " (" << errno_ << ")";
+  return MonitorStore::Error(oss.str());
+}
+
+MonitorStore::Error::
+Error(const std::string &str_) : str(str_) { }
+
+MonitorStore::Error::
+~Error() throw () { }
+
+const char *MonitorStore::Error::
+what() const throw ()
+{
+  return str.c_str();
+}
 
 int MonitorStore::mount()
 {
@@ -41,7 +67,7 @@ int MonitorStore::mount()
   // verify dir exists
   DIR *d = ::opendir(dir.c_str());
   if (!d) {
-    derr(1) << "basedir " << dir << " dne" << dendl;
+    dout(1) << "basedir " << dir << " dne" << dendl;
     return -ENOENT;
   }
   ::closedir(d);
@@ -59,16 +85,16 @@ int MonitorStore::mount()
   l.l_len = 0;
   int r = ::fcntl(lock_fd, F_SETLK, &l);
   if (r < 0) {
-    derr(0) << "failed to lock " << t << ", is another cmon still running?" << dendl;
+    dout(0) << "failed to lock " << t << ", is another cmon still running?" << dendl;
     return -errno;
   }
 
   if (g_conf.chdir && g_conf.chdir[0] && dir[0] != '/') {
     // combine it with the cwd, in case fuse screws things up (i.e. fakefuse)
     string old = dir;
-    char cwd[1024];
-    getcwd(cwd, sizeof(cwd));
-    dir = cwd;
+    char cwd[PATH_MAX];
+    char *p = getcwd(cwd, sizeof(cwd));
+    dir = p;
     dir += "/";
     dir += old;
   }
@@ -83,13 +109,22 @@ int MonitorStore::umount()
 
 int MonitorStore::mkfs()
 {
-  dout(1) << "mkfs" << dendl;
+  int ret = run_cmd("rm", "-rf", dir.c_str(), NULL);
+  if (ret) {
+    derr << "MonitorStore::mkfs: failed to remove " << dir
+	 << ": rm returned " << ret << dendl;
+    return ret;
+  }
 
-  char cmd[1024];
-  snprintf(cmd, sizeof(cmd), "test -d %s && /bin/rm -rf %s ; mkdir -p %s", dir.c_str(), dir.c_str(), dir.c_str());
-  dout(1) << cmd << dendl;
-  int r = system(cmd);
-  return r;
+  ret = run_cmd("mkdir", "-p", dir.c_str(), NULL);
+  if (ret) {
+    derr << "MonitorStore::mkfs: failed to mkdir -p " << dir
+	 << ": mkdir returned " << ret << dendl;
+    return ret;
+  }
+
+  dout(0) << "created monfs at " << dir.c_str() << " for " << g_conf.id << dendl;
+  return 0;
 }
 
 void MonitorStore::sync()
@@ -106,13 +141,28 @@ version_t MonitorStore::get_int(const char *a, const char *b)
   else
     snprintf(fn, sizeof(fn), "%s/%s", dir.c_str(), a);
   
-  FILE *f = ::fopen(fn, "r");
-  if (!f) 
+  int fd = ::open(fn, O_RDONLY);
+  if (fd < 0) {
+    int err = errno;
+    if (err == ENOENT) {
+      // Non-existent files are treated as containing 0.
+      return 0;
+    }
+    derr << "MonitorStore::get_int: failed to open '" << fn << "': "
+	 << cpp_strerror(err) << dendl;
     return 0;
+  }
   
   char buf[20];
-  ::fgets(buf, 20, f);
-  ::fclose(f);
+  memset(buf, 0, sizeof(buf));
+  int r = safe_read(fd, buf, sizeof(buf) - 1);
+  if (r < 0) {
+    derr << "MonitorStore::get_int: failed to read '" << fn << "': "
+	 << cpp_strerror(r) << dendl;
+    TEMP_FAILURE_RETRY(::close(fd));
+    return 0;
+  }
+  TEMP_FAILURE_RETRY(::close(fd));
   
   version_t val = atoi(buf);
   
@@ -143,13 +193,32 @@ void MonitorStore::put_int(version_t val, const char *a, const char *b, bool syn
   char tfn[1024];
   snprintf(tfn, sizeof(tfn), "%s.new", fn);
 
-  int fd = ::open(tfn, O_WRONLY|O_CREAT, 0644);
-  assert(fd >= 0);
-  ::write(fd, vs, strlen(vs));
+  int fd = TEMP_FAILURE_RETRY(::open(tfn, O_WRONLY|O_CREAT, 0644));
+  if (fd < 0) {
+    int err = errno;
+    derr << "MonitorStore::put_int: failed to open '" << tfn << "': "
+	 << cpp_strerror(err) << dendl;
+    ceph_abort();
+  }
+  int r = safe_write(fd, vs, strlen(vs));
+  if (r) {
+    derr << "MonitorStore::put_int: failed to write to '" << tfn << "': "
+	 << cpp_strerror(r) << dendl;
+    ceph_abort();
+  }
   if (sync)
     ::fsync(fd);
-  ::close(fd);
-  ::rename(tfn, fn);
+  if (TEMP_FAILURE_RETRY(::close(fd))) {
+    derr << "MonitorStore::put_int: failed to close fd for '" << tfn << "': "
+	 << cpp_strerror(r) << dendl;
+    ceph_abort();
+  }
+  if (::rename(tfn, fn)) {
+    int err = errno;
+    derr << "MonitorStore::put_int: failed to rename '" << tfn << "' to "
+	 << "'" << fn << "': " << cpp_strerror(err) << dendl;
+    ceph_abort();
+  }
 }
 
 
@@ -222,7 +291,7 @@ int MonitorStore::get_bl_ss(bufferlist& bl, const char *a, const char *b)
     int r = ::read(fd, bp.c_str()+off, len-off);
     if (r < 0) {
       char buf[80];
-      derr(0) << "errno on read " << strerror_r(errno, buf, sizeof(buf)) << dendl;
+      dout(0) << "errno on read " << strerror_r(errno, buf, sizeof(buf)) << dendl;
     }
     assert(r>0);
     off += r;
@@ -256,11 +325,14 @@ int MonitorStore::write_bl_ss(bufferlist& bl, const char *a, const char *b, bool
   int fd;
   if (append) {
     fd = ::open(fn, O_WRONLY|O_CREAT|O_APPEND, 0644);
+    if (fd < 0)
+      throw Error::FromErrno("failed to open for append: ", fn, errno);
   } else {
     snprintf(tfn, sizeof(tfn), "%s.new", fn);
     fd = ::open(tfn, O_WRONLY|O_CREAT, 0644);
+    if (fd < 0)
+      throw Error::FromErrno("failed to open: ", tfn, errno);
   }
-  assert(fd >= 0);
   
   err = bl.write_fd(fd);
 

@@ -62,6 +62,9 @@ class MDSMonitor : public PaxosService {
   };
 
 
+  void create_new_fs(MDSMap &m, int metadata_pool, int data_pool);
+
+
   // service methods
   void create_initial(bufferlist& bl);
   bool update_from_paxos();
@@ -82,6 +85,10 @@ class MDSMonitor : public PaxosService {
 
   bool preprocess_offload_targets(MMDSLoadTargets *m);
   bool prepare_offload_targets(MMDSLoadTargets *m);
+
+  enum health_status_t get_health(std::ostream &ss) const;
+  int fail_mds(std::ostream &ss, const std::string &arg);
+  int cluster_fail(std::ostream &ss);
 
   bool preprocess_command(MMonCommand *m);
   bool prepare_command(MMonCommand *m);

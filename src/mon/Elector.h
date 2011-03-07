@@ -32,7 +32,6 @@ class Monitor;
 class Elector {
  private:
   Monitor *mon;
-  int whoami;
 
   Context *expire_event;
 
@@ -71,7 +70,7 @@ class Elector {
   void handle_victory(class MMonElection *m);
   
  public:  
-  Elector(Monitor *m, int w) : mon(m), whoami(w),
+  Elector(Monitor *m) : mon(m),
 			       expire_event(0),
 			       epoch(0),
 			       electing_me(false),
@@ -79,6 +78,8 @@ class Elector {
 
   void init();
   void shutdown();
+
+  epoch_t get_epoch() { return epoch; }
 
   void dispatch(Message *m);
 

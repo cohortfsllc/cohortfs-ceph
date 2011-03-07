@@ -81,6 +81,8 @@ protected:
   // export fun
   map<CDir*,int>               export_state;
   map<CDir*,int>               export_peer;
+  map<CDir*,set<SimpleLock*> > export_locks;
+
   //map<CDir*,list<bufferlist> > export_data;   // only during EXPORTING state
   map<CDir*,set<int> >         export_warning_ack_waiting;
   map<CDir*,set<int> >         export_notify_ack_waiting;
@@ -165,6 +167,7 @@ public:
   }
 
 
+
   // -- misc --
   void handle_mds_failure_or_stop(int who);
 
@@ -182,6 +185,8 @@ public:
     export_queue.clear();
   }
   
+  void get_export_lock_set(CDir *dir, set<SimpleLock*>& locks);
+
   void encode_export_inode(CInode *in, bufferlist& bl, 
 			   map<client_t,entity_inst_t>& exported_client_map);
   void encode_export_inode_caps(CInode *in, bufferlist& bl,
@@ -212,6 +217,7 @@ public:
   void handle_export_ack(MExportDirAck *m);
   void export_logged_finish(CDir *dir);
   void handle_export_notify_ack(MExportDirNotifyAck *m);
+  void export_unlock(CDir *dir);
   void export_finish(CDir *dir);
 
   void handle_export_caps_ack(MExportCapsAck *m);

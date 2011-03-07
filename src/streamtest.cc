@@ -16,9 +16,10 @@
 //#include "ebofs/Ebofs.h"
 #include "os/FileStore.h"
 #include "common/common_init.h"
+#include "common/ceph_argparse.h"
 
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl
+#define dout_prefix *_dout
 
 struct io {
   utime_t start, ack, commit;
@@ -96,8 +97,8 @@ int main(int argc, const char **argv)
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  common_set_defaults(false);
-  common_init(args, NULL, true);
+  common_init(args, NULL,
+	      STARTUP_FLAG_FORCE_FG_LOGGING | STARTUP_FLAG_INIT_KEYS);
 
   // args
   if (args.size() < 3) return -1;

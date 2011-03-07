@@ -6,10 +6,17 @@
 
 #include "BackTrace.h"
 
+#include "ceph_ver.h"
+#include "acconfig.h"
+
+#define _STR(x) #x
+#define STRINGIFY(x) _STR(x)
+
 namespace ceph {
 
 void BackTrace::print(std::ostream& out)
 {
+  out << " ceph version " << VERSION << " (commit:" << STRINGIFY(CEPH_GIT_VER) << ")" << std::endl;
   for (size_t i = skip; i < size; i++) {
     //      out << " " << (i-skip+1) << ": " << strings[i] << std::endl;
 
@@ -43,7 +50,6 @@ void BackTrace::print(std::ostream& out)
 	function[sz-1] = 0;
       }
       out << " " << (i-skip+1) << ": (" << function << end << std::endl;
-      free(foo);
       //fprintf(out, "    %s:%s\n", stack.strings[i], function);
     } else {
       // didn't find the mangled name, just print the whole line

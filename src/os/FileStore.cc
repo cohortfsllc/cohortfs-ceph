@@ -15,6 +15,7 @@
 
 
 #include "FileStore.h"
+#include "common/BackTrace.h"
 #include "include/types.h"
 
 #include "FileJournal.h"
@@ -24,7 +25,12 @@
 #include "include/color.h"
 
 #include "common/Timer.h"
+#include "common/errno.h"
+#include "common/run_cmd.h"
+#include "common/safe_io.h"
 
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -35,6 +41,10 @@
 #include <errno.h>
 #include <dirent.h>
 #include <sys/ioctl.h>
+#include <linux/fs.h>
+
+#include "include/fiemap.h"
+
 #ifndef __CYGWIN__
 # include <sys/xattr.h>
 #endif
@@ -46,8 +56,8 @@
 
 #include <sstream>
 
-
-#define ATTR_MAX 80
+#define ATTR_MAX_NAME_LEN  128
+#define ATTR_MAX_BLOCK_LEN 2048
 
 #define COMMIT_SNAP_ITEM "snap_%lld"
 
@@ -60,62 +70,334 @@
 # endif
 #endif
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS filestore
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl << "filestore(" << basedir << ") "
+#define dout_prefix *_dout << "filestore(" << basedir << ") "
 
 #include "include/buffer.h"
 
 #include <map>
 
-
-/*
- * xattr portability stupidity.  hide errno, while we're at it.
- */ 
-
-int do_getxattr(const char *fn, const char *name, void *val, size_t size) {
 #ifdef DARWIN
+static int sys_getxattr(const char *fn, const char *name, void *val, size_t size)
+{
   int r = ::getxattr(fn, name, val, size, 0, 0);
-#else
-  int r = ::getxattr(fn, name, val, size);
-#endif
-  return r < 0 ? -errno:r;
+  return (r < 0 ? -errno : r);
 }
-int do_setxattr(const char *fn, const char *name, const void *val, size_t size) {
-#ifdef DARWIN
+
+static int sys_setxattr(const char *fn, const char *name, const void *val, size_t size)
+{
   int r = ::setxattr(fn, name, val, size, 0, 0);
-#else
-  int r = ::setxattr(fn, name, val, size, 0);
-#endif
-  return r < 0 ? -errno:r;
+  return (r < 0 ? -errno : r);
 }
-int do_removexattr(const char *fn, const char *name) {
-#ifdef DARWIN
+
+static int sys_removexattr(const char *fn, const char *name)
+{
   int r = ::removexattr(fn, name, 0);
-#else
-  int r = ::removexattr(fn, name);
-#endif
-  return r < 0 ? -errno:r;
+  return (r < 0 ? -errno : r);
 }
-int do_listxattr(const char *fn, char *names, size_t len) {
-#ifdef DARWIN
+
+
+static int sys_removexattr(const char *fn, const char *name)
+{
+  int r = ::removexattr(fn, name, 0);
+  return (r < 0 ? -errno : r);
+}
+
+static int sys_listxattr(const char *fn, char *names, size_t len)
+{
   int r = ::listxattr(fn, names, len, 0);
+  return (r < 0 ? -errno : r);
+}
 #else
-  int r = ::listxattr(fn, names, len);
-#endif
-  return r < 0 ? -errno:r;
+
+static int sys_getxattr(const char *fn, const char *name, void *val, size_t size)
+{
+  int r = ::getxattr(fn, name, val, size);
+  return (r < 0 ? -errno : r);
 }
 
+static int sys_setxattr(const char *fn, const char *name, const void *val, size_t size)
+{
+  int r = ::setxattr(fn, name, val, size, 0);
+  return (r < 0 ? -errno : r);
+}
 
-// .............
+static int sys_removexattr(const char *fn, const char *name)
+{
+  int r = ::removexattr(fn, name);
+  return (r < 0 ? -errno : r);
+}
 
+int sys_listxattr(const char *fn, char *names, size_t len)
+{
+  int r = ::listxattr(fn, names, len);
+  return (r < 0 ? -errno : r);
+}
+#endif
+
+static void get_raw_xattr_name(const char *name, int i, char *raw_name, int raw_len)
+{
+  int r;
+  int pos = 0;
+
+  while (*name) {
+    switch (*name) {
+    case '@': /* escape it */
+      pos += 2;
+      assert (pos < raw_len - 1);
+      *raw_name = '@';
+      raw_name++;
+      *raw_name = '@';
+      break;
+    default:
+      pos++;
+      assert(pos < raw_len - 1);
+      *raw_name = *name;
+      break;
+    }
+    name++;
+    raw_name++;
+  }
+
+  if (!i) {
+    *raw_name = '\0';
+  } else {
+    r = snprintf(raw_name, raw_len, "@%d", i);
+    assert(r < raw_len - pos);
+  }
+}
+
+static int translate_raw_name(const char *raw_name, char *name, int name_len, bool *is_first)
+{
+  int pos = 0;
+
+  generic_dout(10) << "translate_raw_name raw_name=" << raw_name << dendl;
+  const char *n = name;
+
+  *is_first = true;
+  while (*raw_name) {
+    switch (*raw_name) {
+    case '@': /* escape it */
+      raw_name++;
+      if (!*raw_name)
+        break;
+      if (*raw_name != '@') {
+        *is_first = false;
+        goto done;
+      }
+
+    /* fall through */
+    default:
+      *name = *raw_name;
+      break;
+    }
+    pos++;
+    assert(pos < name_len);
+    name++;
+    raw_name++;
+  }
+done:
+  *name = '\0';
+  generic_dout(10) << "translate_raw_name name=" << n << dendl;
+  return pos;
+}
+
+int do_getxattr_len(const char *fn, const char *name)
+{
+  int i = 0, total = 0;
+  char raw_name[ATTR_MAX_NAME_LEN * 2 + 16];
+  int r;
+
+  do {
+    get_raw_xattr_name(name, i, raw_name, sizeof(raw_name));
+    r = sys_getxattr(fn, raw_name, 0, 0);
+    if (!i && r < 0) {
+      return r;
+    }
+    if (r < 0)
+      break;
+    total += r;
+    i++;
+  } while (r == ATTR_MAX_BLOCK_LEN);
+
+  return total;
+}
+
+int do_getxattr(const char *fn, const char *name, void *val, size_t size)
+{
+  int i = 0, pos = 0;
+  char raw_name[ATTR_MAX_NAME_LEN * 2 + 16];
+  int ret = 0;
+  int r;
+  size_t chunk_size;
+
+  if (!size)
+    return do_getxattr_len(fn, name);
+
+  do {
+    chunk_size = (size < ATTR_MAX_BLOCK_LEN ? size : ATTR_MAX_BLOCK_LEN);
+    get_raw_xattr_name(name, i, raw_name, sizeof(raw_name));
+    size -= chunk_size;
+
+    r = sys_getxattr(fn, raw_name, (char *)val + pos, chunk_size);
+    if (r < 0) {
+      ret = r;
+      break;
+    }
+
+    if (r > 0)
+      pos += r;
+
+    i++;
+  } while (size && r == ATTR_MAX_BLOCK_LEN);
+
+  if (r >= 0) {
+    ret = pos;
+    /* is there another chunk? that can happen if the last read size span over
+       exactly one block */
+    if (chunk_size == ATTR_MAX_BLOCK_LEN) {
+      get_raw_xattr_name(name, i, raw_name, sizeof(raw_name));
+      r = sys_getxattr(fn, raw_name, 0, 0);
+      if (r > 0) { // there's another chunk.. the original buffer was too small
+        ret = -ERANGE;
+      }
+    }
+  }
+  return ret;
+}
+
+int do_setxattr(const char *fn, const char *name, const void *val, size_t size) {
+  int i = 0, pos = 0;
+  char raw_name[ATTR_MAX_NAME_LEN * 2 + 16];
+  int ret = 0;
+  size_t chunk_size;
+
+  do {
+    chunk_size = (size < ATTR_MAX_BLOCK_LEN ? size : ATTR_MAX_BLOCK_LEN);
+    get_raw_xattr_name(name, i, raw_name, sizeof(raw_name));
+    size -= chunk_size;
+
+    int r = sys_setxattr(fn, raw_name, (char *)val + pos, chunk_size);
+    if (r < 0) {
+      ret = r;
+      break;
+    }
+    pos  += chunk_size;
+    ret = pos;
+    i++;
+  } while (size);
+
+  /* if we're exactly at a chunk size, remove the next one (if wasn't removed
+     before) */
+  if (ret >= 0 && chunk_size == ATTR_MAX_BLOCK_LEN) {
+    get_raw_xattr_name(name, i, raw_name, sizeof(raw_name));
+    sys_removexattr(fn, raw_name);
+  }
+  
+  return ret;
+}
+
+int do_removexattr(const char *fn, const char *name) {
+  int i = 0;
+  char raw_name[ATTR_MAX_NAME_LEN * 2 + 16];
+  int r;
+
+  do {
+    get_raw_xattr_name(name, i, raw_name, sizeof(raw_name));
+    r = sys_removexattr(fn, raw_name);
+    if (!i && r < 0) {
+      return r;
+    }
+    i++;
+  } while (r >= 0);
+  return 0;
+}
+
+int do_listxattr(const char *fn, char *names, size_t len) {
+  int r;
+
+  if (!len)
+   return sys_listxattr(fn, names, len);
+
+  r = sys_listxattr(fn, 0, 0);
+  if (r < 0)
+    return r;
+
+  size_t total_len = r  * 2; // should be enough
+  char *full_buf = (char *)malloc(total_len * 2);
+  if (!full_buf)
+    return -ENOMEM;
+
+  r = sys_listxattr(fn, full_buf, total_len);
+  if (r < 0)
+    return r;
+
+  char *p = full_buf;
+  char *end = full_buf + r;
+  char *dest = names;
+  char *dest_end = names + len;
+
+  while (p < end) {
+    char name[ATTR_MAX_NAME_LEN * 2 + 16];
+    int attr_len = strlen(p);
+    bool is_first;
+    int name_len = translate_raw_name(p, name, sizeof(name), &is_first);
+    if (is_first)  {
+      if (dest + name_len > dest_end) {
+        r = -ERANGE;
+        goto done;
+      }
+      strcpy(dest, name);
+      dest += name_len + 1;
+    }
+    p += attr_len + 1;
+  }
+  r = dest - names;
+
+done:
+  free(full_buf);
+  return r;
+}
+
+FileStore::FileStore(const char *base, const char *jdev) :
+  basedir(base), journalpath(jdev ? jdev:""),
+  fsid(0),
+  btrfs(false), btrfs_trans_start_end(false), btrfs_clone_range(false),
+  btrfs_snap_create(false),
+  btrfs_snap_destroy(false),
+  btrfs_snap_create_v2(false),
+  btrfs_wait_sync(false),
+  ioctl_fiemap(false),
+  fsid_fd(-1), op_fd(-1),
+  basedir_fd(-1), current_fd(-1),
+  attrs(this), fake_attrs(false),
+  collections(this), fake_collections(false),
+  lock("FileStore::lock"),
+  force_sync(false), sync_epoch(0),
+  sync_entry_timeo_lock("sync_entry_timeo_lock"),
+  timer(sync_entry_timeo_lock),
+  stop(false), sync_thread(this),
+  op_queue_len(0), op_queue_bytes(0), next_finish(0),
+  op_tp("FileStore::op_tp", g_conf.filestore_op_threads), op_wq(this, &op_tp),
+  flusher_queue_len(0), flusher_thread(this)
+{
+  ostringstream oss;
+  oss << basedir << "/current";
+  current_fn = oss.str();
+
+  ostringstream sss;
+  sss << basedir << "/current/commit_op_seq";
+  current_op_seq_fn = sss.str();
+}
 
 static void get_attrname(const char *name, char *buf, int len)
 {
   snprintf(buf, len, "user.ceph.%s", name);
 }
+
 bool parse_attrname(char **name)
 {
   if (strncmp(*name, "user.ceph.", 10) == 0) {
@@ -125,6 +407,53 @@ bool parse_attrname(char **name)
   return false;
 }
 
+static int do_fiemap(int fd, off_t start, size_t len, struct fiemap **pfiemap)
+{
+  struct fiemap *fiemap = NULL;
+  int size;
+  int ret;
+
+  fiemap = (struct fiemap*)calloc(sizeof(struct fiemap), 1);
+  if (!fiemap)
+    return -ENOMEM;
+
+  fiemap->fm_start = start;
+  fiemap->fm_length = len;
+
+  fsync(fd); /* flush extents to disk if needed */
+
+  if (ioctl(fd, FS_IOC_FIEMAP, fiemap) < 0) {
+    ret = -errno;
+    goto done_err;
+  }
+
+  size = sizeof(struct fiemap_extent) * (fiemap->fm_mapped_extents);
+
+  fiemap = (struct fiemap *)realloc(fiemap, sizeof(struct fiemap) +
+                                    size);
+  if (!fiemap) {
+    ret = -ENOMEM;
+    goto done_err;
+  }
+
+  memset(fiemap->fm_extents, 0, size);
+
+  fiemap->fm_extent_count = fiemap->fm_mapped_extents;
+  fiemap->fm_mapped_extents = 0;
+
+  if (ioctl(fd, FS_IOC_FIEMAP, fiemap) < 0) {
+    ret = -errno;
+    goto done_err;
+  }
+  *pfiemap = fiemap;
+
+  return 0;
+
+done_err:
+  *pfiemap = NULL;
+  free(fiemap);
+  return ret;
+}
 
 int FileStore::statfs(struct statfs *buf)
 {
@@ -214,19 +543,10 @@ bool FileStore::parse_object(char *s, sobject_t& o)
   // 012345678901234567890123456789012
   // pppppppppppppppp.ssssssssssssssss
 
-bool FileStore::parse_coll(char *s, coll_t& c)
-{
-  bool r = c.parse(s);
-  dout(0) << "parse " << s << " -> " << c << " = " << r << dendl;
-  return r;
-}
-
 void FileStore::get_cdir(coll_t cid, char *s, int len) 
 {
-  int ret = snprintf(s, len, "%s/current/", basedir.c_str());
-  s += ret;
-  len -= ret;
-  s += cid.print(s, len);
+  const string &cid_str(cid.to_str());
+  snprintf(s, len, "%s/current/%s", basedir.c_str(), cid_str.c_str());
 }
 
 void FileStore::get_coname(coll_t cid, const sobject_t& oid, char *s, int len) 
@@ -250,152 +570,248 @@ int FileStore::wipe_subvol(const char *s)
   memset(&volargs, 0, sizeof(volargs));
   strcpy(volargs.name, s);
   int fd = ::open(basedir.c_str(), O_RDONLY);
-  if (fd < 0)
-    return fd;
+  if (fd < 0) {
+    int err = errno;
+    derr << "FileStore::wipe_subvol: failed to open " << basedir << ": "
+	 << cpp_strerror(err) << dendl;
+    return -err;
+  }
   int r = ::ioctl(fd, BTRFS_IOC_SNAP_DESTROY, &volargs);
-  ::close(fd);
+  TEMP_FAILURE_RETRY(::close(fd));
   if (r == 0) {
     dout(0) << "mkfs  removed old subvol " << s << dendl;
-    return r;
+    return 0;
   }
 
   dout(0) << "mkfs  removing old directory " << s << dendl;
-  char cmd[PATH_MAX];
-  snprintf(cmd, sizeof(cmd), "rm -r %s/%s", basedir.c_str(), s);
-  system(cmd);
-  return 0;
-}
-
-int FileStore::mkfs()
-{
-  char cmd[PATH_MAX];
-  if (g_conf.filestore_dev) {
-    dout(0) << "mounting" << dendl;
-    snprintf(cmd, sizeof(cmd), "mount %s", g_conf.filestore_dev);
-    system(cmd);
+  ostringstream old_dir;
+  old_dir << basedir << "/" << s;
+  DIR *dir = ::opendir(old_dir.str().c_str());
+  if (!dir) {
+    int err = errno;
+    derr << "FileStore::wipe_subvol: failed to opendir " << old_dir << ": "
+	 << cpp_strerror(err) << dendl;
+    return -err;
   }
-
-  dout(1) << "mkfs in " << basedir << dendl;
-
-  char fn[PATH_MAX];
-  snprintf(fn, sizeof(fn), "%s/fsid", basedir.c_str());
-  fsid_fd = ::open(fn, O_CREAT|O_RDWR, 0644);
-  if (fsid_fd < 0)
-    return -errno;
-  if (lock_fsid() < 0)
-    return -EBUSY;
-
-  // wipe
-  DIR *dir = ::opendir(basedir.c_str());
-  if (!dir)
-    return -errno;
-  struct dirent sde, *de;
-  while (::readdir_r(dir, &sde, &de) == 0) {
+  struct dirent *de;
+  char buf[PATH_MAX];
+  while (::readdir_r(dir, (struct dirent*)buf, &de) == 0) {
     if (!de)
       break;
     if (strcmp(de->d_name, ".") == 0 ||
 	strcmp(de->d_name, "..") == 0)
       continue;
+    ostringstream oss;
+    oss << old_dir.str().c_str() << "/" << de->d_name;
+    int ret = run_cmd("rm", "-rf", oss.str().c_str(), NULL);
+    if (ret) {
+      derr << "FileStore::wipe_subvol: failed to remove " << oss.str() << ": "
+	   << "error " << ret << dendl;
+      ::closedir(dir);
+      return ret;
+    }
+  }
+  ::closedir(dir);
+  return 0;
+}
+
+int FileStore::mkfs()
+{
+  int ret = 0;
+  char buf[PATH_MAX];
+  DIR *dir;
+  struct dirent *de;
+  int basedir_fd;
+  struct btrfs_ioctl_vol_args volargs;
+
+  if (g_conf.filestore_dev) {
+    dout(0) << "mounting" << dendl;
+    ret = run_cmd("mount", g_conf.filestore_dev, NULL);
+    if (ret) {
+      derr << "FileStore::mkfs: failed to mount g_conf.filestore_dev "
+	   << "'" << g_conf.filestore_dev << "'. Error code " << ret << dendl;
+      goto out;
+    }
+  }
+
+  dout(1) << "mkfs in " << basedir << dendl;
+
+  snprintf(buf, sizeof(buf), "%s/fsid", basedir.c_str());
+  fsid_fd = ::open(buf, O_CREAT|O_WRONLY, 0644);
+  if (fsid_fd < 0) {
+    ret = -errno;
+    derr << "FileStore::mkfs: failed to open " << buf << ": "
+	 << cpp_strerror(ret) << dendl;
+    goto out;
+  }
+  if (lock_fsid() < 0) {
+    ret = -EBUSY;
+    goto close_fsid_fd;
+  }
+
+  // wipe
+  dir = ::opendir(basedir.c_str());
+  if (!dir) {
+    ret = -errno;
+    derr << "FileStore::mkfs: failed to opendir " << basedir << dendl;
+    goto close_fsid_fd;
+  }
+  while (::readdir_r(dir, (struct dirent*)buf, &de) == 0) {
+    if (!de)
+      break;
+    if (strcmp(de->d_name, ".") == 0 ||
+	strcmp(de->d_name, "..") == 0)
+      continue;
+    if (strcmp(de->d_name, "fsid") == 0)
+      continue;
 
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/%s", basedir.c_str(), de->d_name);
     struct stat st;
-    int r = ::stat(path, &st);
-    if (S_ISDIR(st.st_mode)) 
-      r = wipe_subvol(de->d_name);
+    if (::stat(path, &st)) {
+      ret = -errno;
+      derr << "FileStore::mkfs: failed to stat " << de->d_name << dendl;
+      goto close_dir;
+    }
+    if (S_ISDIR(st.st_mode)) {
+      ret = wipe_subvol(de->d_name);
+      if (ret)
+	goto close_dir;
+    }
     else {
-      r = ::unlink(path);
+      if (::unlink(path)) {
+	ret = -errno;
+	derr << "FileStore::mkfs: failed to remove old file "
+	     << de->d_name << dendl;
+	goto close_dir;
+      }
       dout(0) << "mkfs  removing old file " << de->d_name << dendl;
     }
-    if (r < 0) {
-      char buf[100];
-      dout(0) << "problem wiping out " << de->d_name << ": " << strerror_r(errno, buf, sizeof(buf)) << dendl;
-      return -errno;
-    }
   }
-  ::closedir(dir);
- 
-  
+
   // fsid
   srand(time(0) + getpid());
   fsid = rand();
-
-  ::close(fsid_fd);
-  fsid_fd = ::open(fn, O_CREAT|O_RDWR, 0644);
-  if (fsid_fd < 0)
-    return -errno;
-  if (lock_fsid() < 0)
-    return -EBUSY;
-  ::write(fsid_fd, &fsid, sizeof(fsid));
-  ::close(fsid_fd);
+  ret = safe_write(fsid_fd, &fsid, sizeof(fsid));
+  if (ret) {
+    derr << "FileStore::mkfs: failed to write fsid: "
+	 << cpp_strerror(ret) << dendl;
+    goto close_fsid_fd;
+  }
+  if (TEMP_FAILURE_RETRY(::close(fsid_fd))) {
+    ret = errno;
+    derr << "FileStore::mkfs: close failed: can't write fsid: "
+	 << cpp_strerror(ret) << dendl;
+    fsid_fd = -1;
+    goto close_fsid_fd;
+  }
+  fsid_fd = -1;
   dout(10) << "mkfs fsid is " << fsid << dendl;
 
   // current
-  struct btrfs_ioctl_vol_args volargs;
   memset(&volargs, 0, sizeof(volargs));
-  int fd = ::open(basedir.c_str(), O_RDONLY);
+  basedir_fd = ::open(basedir.c_str(), O_RDONLY);
   volargs.fd = 0;
   strcpy(volargs.name, "current");
-  int r = ::ioctl(fd, BTRFS_IOC_SUBVOL_CREATE, (unsigned long int)&volargs);
-  if (r == 0) {
-    // yay
-    dout(2) << " created btrfs subvol " << current_fn << dendl;
-    ::chmod(current_fn, 0755);
-  } else if (errno == EEXIST) {
-    dout(2) << " current already exists" << dendl;
-    r = 0;
-  } else if (errno == EOPNOTSUPP || errno == ENOTTY) {
-    dout(2) << " BTRFS_IOC_SUBVOL_CREATE ioctl failed, trying mkdir " << current_fn << dendl;
-    r = ::mkdir(current_fn, 0755);
-    if (errno == EEXIST)
-      r = 0;
+  if (::ioctl(basedir_fd, BTRFS_IOC_SUBVOL_CREATE, (unsigned long int)&volargs)) {
+    ret = errno;
+    if (ret == EEXIST) {
+      dout(2) << " current already exists" << dendl;
+      // not fatal
+    }
+    else if (ret == EOPNOTSUPP || ret == ENOTTY) {
+      dout(2) << " BTRFS_IOC_SUBVOL_CREATE ioctl failed, trying mkdir "
+	      << current_fn << dendl;
+      if (::mkdir(current_fn.c_str(), 0755)) {
+	ret = errno;
+	if (ret != EEXIST) {
+	  derr << "FileStore::mkfs: mkdir " << current_fn << " failed: "
+	       << cpp_strerror(ret) << dendl;
+	  goto close_basedir_fd;
+	}
+      }
+    }
+    else {
+      derr << "FileStore::mkfs: BTRFS_IOC_SUBVOL_CREATE failed with error "
+	   << cpp_strerror(ret) << dendl;
+      goto close_basedir_fd;
+    }
   }
-  ::close(fd);
-  if (r < 0) {
-    char err[80];
-    dout(0) << "failed to create current: " << strerror_r(errno, err, sizeof(err)) << dendl;
-    return -errno;
+  else {
+    // ioctl succeeded. yay
+    dout(2) << " created btrfs subvol " << current_fn << dendl;
+    if (::chmod(current_fn.c_str(), 0755)) {
+      ret = -errno;
+      derr << "FileStore::mkfs: failed to chmod " << current_fn << " to 0755: "
+	   << cpp_strerror(ret) << dendl;
+      goto close_basedir_fd;
+    }
   }
 
   // journal?
-  int err = mkjournal();
-  if (err)
-    return err;
+  ret = mkjournal();
+  if (ret)
+    goto close_basedir_fd;
 
   if (g_conf.filestore_dev) {
-    char cmd[PATH_MAX];
     dout(0) << "umounting" << dendl;
-    snprintf(cmd, sizeof(cmd), "umount %s", g_conf.filestore_dev);
+    snprintf(buf, sizeof(buf), "umount %s", g_conf.filestore_dev);
     //system(cmd);
   }
 
   dout(1) << "mkfs done in " << basedir << dendl;
-  return 0;
+  ret = 0;
+
+close_basedir_fd:
+  TEMP_FAILURE_RETRY(::close(basedir_fd));
+close_dir:
+  ::closedir(dir);
+close_fsid_fd:
+  if (fsid_fd != -1) {
+    TEMP_FAILURE_RETRY(::close(fsid_fd));
+    fsid_fd = -1;
+  }
+out:
+  return ret;
 }
 
 int FileStore::mkjournal()
 {
   // read fsid
+  int ret;
   char fn[PATH_MAX];
   snprintf(fn, sizeof(fn), "%s/fsid", basedir.c_str());
   int fd = ::open(fn, O_RDONLY, 0644);
-  if (fd < 0)
-    return -errno;
-  ::read(fd, &fsid, sizeof(fsid));
-  ::close(fd);
+  if (fd < 0) {
+    int err = errno;
+    derr << "FileStore::mkjournal: open error: " << cpp_strerror(err) << dendl;
+    return -err;
+  }
+  ret = safe_read(fd, &fsid, sizeof(fsid));
+  if (ret < 0) {
+    derr << "FileStore::mkjournal: read error: " << cpp_strerror(ret) << dendl;
+    TEMP_FAILURE_RETRY(::close(fd));
+    return ret;
+  }
+  if (TEMP_FAILURE_RETRY(::close(fd))) {
+    int err = errno;
+    derr << "FileStore::mkjournal: close error: " << cpp_strerror(err) << dendl;
+    return -err;
+  }
+
+  ret = 0;
 
   open_journal();
   if (journal) {
-    int err = journal->create();
-    if (err < 0) {
+    ret = journal->create();
+    if (ret)
       dout(0) << "mkjournal error creating journal on " << journalpath << dendl;
-    } else {
+    else
       dout(0) << "mkjournal created journal on " << journalpath << dendl;
-    }
     delete journal;
     journal = 0;
   }
-  return 0;
+  return ret;
 }
 
 
@@ -410,7 +826,7 @@ int FileStore::lock_fsid()
   int r = ::fcntl(fsid_fd, F_SETLK, &l);
   if (r < 0) {
     char buf[80];
-    derr(0) << "lock_fsid failed to lock " << basedir << "/fsid, is another cosd still running? " << strerror_r(errno, buf, sizeof(buf)) << dendl;
+    dout(0) << "lock_fsid failed to lock " << basedir << "/fsid, is another cosd still running? " << strerror_r(errno, buf, sizeof(buf)) << dendl;
     return -errno;
   }
   return 0;
@@ -459,20 +875,34 @@ int FileStore::_detect_fs()
 	     << " " << strerror(errno)
 	     << dendl;*/
     if (x != y) {
-      derr(0) << "xattrs don't appear to work (" << strerror_r(errno, buf, sizeof(buf))
+      dout(0) << "xattrs don't appear to work (" << strerror_r(errno, buf, sizeof(buf))
 	      << ") on " << fn << ", be sure to mount underlying file system with 'user_xattr' option" << dendl;
       return -errno;
     }
   }
 
-  // btrfs?
   int fd = ::open(basedir.c_str(), O_RDONLY);
   if (fd < 0)
     return -errno;
 
+  // fiemap?
+  struct fiemap *fiemap;
+  int r = do_fiemap(fd, 0, 1, &fiemap);
+  if (r == -EOPNOTSUPP) {
+    dout(0) << "mount FIEMAP ioctl is NOT supported" << dendl;
+    ioctl_fiemap = false;
+  } else {
+    dout(0) << "mount FIEMAP ioctl is supported" << dendl;
+    ioctl_fiemap = true;
+  }
+
   struct statfs st;
-  int r = ::fstatfs(fd, &st);
-  if (r == 0 && st.f_type == 0x9123683E) {
+  r = ::fstatfs(fd, &st);
+  if (r < 0)
+    return -errno;
+
+  static const __SWORD_TYPE BTRFS_F_TYPE(0x9123683E);
+  if (st.f_type == BTRFS_F_TYPE) {
     dout(0) << "mount detected btrfs" << dendl;      
     btrfs = true;
 
@@ -512,13 +942,80 @@ int FileStore::_detect_fs()
 
     if (g_conf.filestore_btrfs_snap && !btrfs_snap_destroy) {
       dout(0) << "mount btrfs snaps enabled, but no SNAP_DESTROY ioctl (from kernel 2.6.32+)" << dendl;
-      cerr << TEXT_RED
-	   << " ** ERROR: 'filestore btrfs snap' is enabled (for safe transactions, rollback),\n"
-	   << "           but btrfs does not support the SNAP_DESTROY ioctl (added in\n"
-	   << "           Linux 2.6.32).\n"
+      cerr << TEXT_YELLOW
+	   << " ** WARNING: 'filestore btrfs snap' was enabled (for safe transactions, rollback),\n"
+	   << "             but btrfs does not support the SNAP_DESTROY ioctl (added in\n"
+	   << "             Linux 2.6.32).  Disabling.\n"
 	   << TEXT_NORMAL;
-      return -ENOTTY;
+      g_conf.filestore_btrfs_snap = false;
     }
+
+    // start_sync?
+    __u64 transid = 0;
+    r = ::ioctl(fd, BTRFS_IOC_START_SYNC, &transid);
+    dout(0) << "mount btrfs START_SYNC got " << r << " " << strerror_r(-r, buf, sizeof(buf)) << dendl;
+    if (r == 0 && transid > 0) {
+      dout(0) << "mount btrfs START_SYNC is supported (transid " << transid << ")" << dendl;
+
+      // do we have wait_sync too?
+      r = ::ioctl(fd, BTRFS_IOC_WAIT_SYNC, &transid);
+      if (r == 0 || r == -ERANGE) {
+	dout(0) << "mount btrfs WAIT_SYNC is supported" << dendl;
+	btrfs_wait_sync = true;
+      } else {
+	dout(0) << "mount btrfs WAIT_SYNC is NOT supported: " << strerror_r(-r, buf, sizeof(buf)) << dendl;
+      }
+    } else {
+      dout(0) << "mount btrfs START_SYNC is NOT supported: " << strerror_r(-r, buf, sizeof(buf)) << dendl;
+    }
+
+    if (btrfs_wait_sync) {
+      // async snap creation?
+      struct btrfs_ioctl_vol_args vol_args;
+      vol_args.fd = 0;
+      strcpy(vol_args.name, "async_snap_test");
+
+      struct btrfs_ioctl_vol_args_v2 async_args;
+      async_args.fd = fd;
+      async_args.flags = BTRFS_SUBVOL_CREATE_ASYNC;
+      strcpy(async_args.name, "async_snap_test");
+
+      // remove old one, first
+      struct stat st;
+      if (::fstatat(fd, vol_args.name, &st, 0) == 0) {
+	dout(0) << "mount btrfs removing old async_snap_test" << dendl;
+	r = ::ioctl(fd, BTRFS_IOC_SNAP_DESTROY, &vol_args);
+	if (r != 0)
+	  dout(0) << "mount  failed to remove old async_snap_test: " << strerror_r(-r, buf, sizeof(buf)) << dendl;
+      }
+
+      r = ::ioctl(fd, BTRFS_IOC_SNAP_CREATE_V2, &async_args);
+      dout(0) << "mount btrfs SNAP_CREATE_V2 got " << r << " " << strerror_r(-r, buf, sizeof(buf)) << dendl;
+      if (r == 0 || errno == EEXIST) {
+	dout(0) << "mount btrfs SNAP_CREATE_V2 is supported" << dendl;
+	btrfs_snap_create_v2 = true;
+      
+	// clean up
+	r = ::ioctl(fd, BTRFS_IOC_SNAP_DESTROY, &vol_args);
+	if (r != 0) {
+	  dout(0) << "mount btrfs SNAP_DESTROY failed: " << strerror_r(-r, buf, sizeof(buf)) << dendl;
+	}
+      } else {
+	dout(0) << "mount btrfs SNAP_CREATE_V2 is NOT supported: "
+		<< strerror_r(-r, buf, sizeof(buf)) << dendl;
+      }
+    }
+
+    if (g_conf.filestore_btrfs_snap && !btrfs_snap_create_v2) {
+      dout(0) << "mount WARNING: btrfs snaps enabled, but no SNAP_CREATE_V2 ioctl (from kernel 2.6.37+)" << dendl;
+      cerr << TEXT_YELLOW
+	   << " ** WARNING: 'filestore btrfs snap' is enabled (for safe transactions,\n"	 
+	   << "             rollback), but btrfs does not support the SNAP_CREATE_V2 ioctl\n"
+	   << "             (added in Linux 2.6.37).  Expect slow btrfs sync/commit\n"
+	   << "             performance.\n"
+	   << TEXT_NORMAL;
+    }
+
   } else {
     dout(0) << "mount did NOT detect btrfs" << dendl;
     btrfs = false;
@@ -530,6 +1027,18 @@ int FileStore::_detect_fs()
 int FileStore::_sanity_check_fs()
 {
   // sanity check(s)
+
+  if ((int)g_conf.filestore_journal_writeahead +
+      (int)g_conf.filestore_journal_parallel +
+      (int)g_conf.filestore_journal_trailing > 1) {
+    dout(0) << "mount ERROR: more than one of filestore journal {writeahead,parallel,trailing} enabled" << dendl;
+    cerr << TEXT_RED 
+	 << " ** WARNING: more than one of 'filestore journal {writeahead,parallel,trailing}'\n"
+	 << "             is enabled in ceph.conf.  You must choose a single journal mode."
+	 << std::endl;
+    return -EINVAL;
+  }
+
   if (!btrfs) {
     if (!journal || !g_conf.filestore_journal_writeahead) {
       dout(0) << "mount WARNING: no btrfs, and no journal in writeahead mode; data may be lost" << dendl;
@@ -570,55 +1079,108 @@ int FileStore::_sanity_check_fs()
   return 0;
 }
 
+
+int FileStore::read_op_seq(const char *fn, uint64_t *seq)
+{
+  int op_fd = ::open(current_op_seq_fn.c_str(), O_CREAT|O_RDWR, 0644);
+  if (op_fd < 0)
+    return -errno;
+  char s[40];
+  memset(s, 0, sizeof(s));
+  int ret = safe_read(op_fd, s, sizeof(s) - 1);
+  if (ret < 0) {
+    derr << "error reading " << current_op_seq_fn << ": "
+	 << cpp_strerror(ret) << dendl;
+    TEMP_FAILURE_RETRY(::close(op_fd));
+    return ret;
+  }
+  *seq = atoll(s);
+  return op_fd;
+}
+
+int FileStore::write_op_seq(int fd, uint64_t seq)
+{
+  char s[30];
+  int ret;
+  snprintf(s, sizeof(s), "%" PRId64 "\n", seq);
+  ret = TEMP_FAILURE_RETRY(::pwrite(fd, s, strlen(s), 0));
+  return ret;
+}
+
 int FileStore::mount() 
 {
-  char buf[80];
+  int ret;
+  char buf[PATH_MAX];
+  uint64_t initial_op_seq;
 
   if (g_conf.filestore_dev) {
     dout(0) << "mounting" << dendl;
-    char cmd[100];
-    snprintf(cmd, sizeof(cmd), "mount %s", g_conf.filestore_dev);
-    //system(cmd);
+    //run_cmd("mount", g_conf.filestore_dev, NULL);
   }
 
   dout(5) << "basedir " << basedir << " journal " << journalpath << dendl;
   
   // make sure global base dir exists
-  struct stat st;
-  int r = ::stat(basedir.c_str(), &st);
-  if (r != 0) {
-    derr(0) << "unable to stat basedir " << basedir << ", " << strerror_r(errno, buf, sizeof(buf)) << dendl;
-    return -errno;
+  if (::access(basedir.c_str(), R_OK | W_OK)) {
+    ret = -errno;
+    derr << "FileStore::mount: unable to access basedir '" << basedir << "': "
+	    << cpp_strerror(ret) << dendl;
+    goto done;
   }
-  
+
   // test for btrfs, xattrs, etc.
-  r = _detect_fs();
-  if (r < 0)
-    return r;
+  ret = _detect_fs();
+  if (ret)
+    goto done;
 
   // get fsid
-  char fn[PATH_MAX];
-  snprintf(fn, sizeof(fn), "%s/fsid", basedir.c_str());
-  fsid_fd = ::open(fn, O_RDWR|O_CREAT, 0644);
-  ::read(fsid_fd, &fsid, sizeof(fsid));
+  snprintf(buf, sizeof(buf), "%s/fsid", basedir.c_str());
+  fsid_fd = ::open(buf, O_RDWR|O_CREAT, 0644);
+  if (fsid_fd < 0) {
+    ret = -errno;
+    derr << "FileStore::mount: error opening '" << buf << "': "
+	 << cpp_strerror(ret) << dendl;
+    goto done;
+  }
 
-  if (lock_fsid() < 0)
-    return -EBUSY;
+  fsid = 0;
+  ret = safe_read_exact(fsid_fd, &fsid, sizeof(fsid));
+  if (ret) {
+    derr << "FileStore::mount: error reading fsid_fd: " << cpp_strerror(ret)
+	 << dendl;
+    goto close_fsid_fd;
+  }
+
+  if (lock_fsid() < 0) {
+    derr << "FileStore::mount: lock_fsid failed" << dendl;
+    ret = -EBUSY;
+    goto close_fsid_fd;
+  }
 
   dout(10) << "mount fsid is " << fsid << dendl;
 
   // open some dir handles
   basedir_fd = ::open(basedir.c_str(), O_RDONLY);
+  if (basedir_fd < 0) {
+    ret = -errno;
+    derr << "FileStore::mount: failed to open " << basedir << ": "
+	 << cpp_strerror(ret) << dendl;
+    basedir_fd = -1;
+    goto close_fsid_fd;
+  }
 
-  // roll back?
-  if (true) {
+  {
     // get snap list
     DIR *dir = ::opendir(basedir.c_str());
-    if (!dir)
-      return -errno;
+    if (!dir) {
+      ret = -errno;
+      derr << "FileStore::mount: opendir '" << basedir << "' failed: "
+	   << cpp_strerror(ret) << dendl;
+      goto close_basedir_fd;
+    }
 
-    struct dirent sde, *de;
-    while (::readdir_r(dir, &sde, &de) == 0) {
+    struct dirent *de;
+    while (::readdir_r(dir, (struct dirent *)buf, &de) == 0) {
       if (!de)
 	break;
       long long unsigned c;
@@ -626,10 +1188,16 @@ int FileStore::mount()
 	snaps.push_back(c);
     }
     
-    ::closedir(dir);
+    if (::closedir(dir) < 0) {
+      ret = -errno;
+      derr << "FileStore::closedir(basedir) failed: error " << cpp_strerror(ret)
+	   << dendl;
+      goto close_basedir_fd;
+    }
 
     dout(0) << "mount found snaps " << snaps << dendl;
   }
+
   if (btrfs && g_conf.filestore_btrfs_snap) {
     if (snaps.empty()) {
       dout(0) << "mount WARNING: no consistent snaps found, store may be in inconsistent state" << dendl;
@@ -637,87 +1205,180 @@ int FileStore::mount()
       dout(0) << "mount WARNING: not btrfs, store may be in inconsistent state" << dendl;
     } else {
       uint64_t cp = snaps.back();
-      btrfs_ioctl_vol_args snapargs;
+      uint64_t curr_seq;
+
+      {
+	int fd = read_op_seq(current_op_seq_fn.c_str(), &curr_seq);
+	assert(fd >= 0);
+	TEMP_FAILURE_RETRY(::close(fd));
+      }
+      dout(10) << "*** curr_seq=" << curr_seq << " cp=" << cp << dendl;
+     
+      if (cp != curr_seq && !g_conf.osd_use_stale_snap) { 
+        derr << TEXT_RED
+	     << " ** ERROR: current volume data version is not equal to snapshotted version\n"
+	     << "           which can lead to data inconsistency. \n"
+	     << "           Current version=" << curr_seq << " snapshot version=" << cp << "\n"
+	     << "           Startup with snapshotted version can be forced using the\n"
+             <<"            'osd use stale snap = true' config option.\n"
+	     << TEXT_NORMAL << dendl;
+	ret = -ENOTSUP;
+	goto close_basedir_fd;
+      }
+
+      if (cp != curr_seq) {
+        dout(0) << "WARNING: user forced start with data sequence mismatch: curr=" << curr_seq << " snap_seq=" << cp << dendl;
+        cerr << TEXT_YELLOW
+	     << " ** WARNING: forcing the use of stale snapshot data\n" << TEXT_NORMAL;
+      }
 
       // drop current
-      snapargs.fd = 0;
-      strcpy(snapargs.name, "current");
-      int r = ::ioctl(basedir_fd, BTRFS_IOC_SNAP_DESTROY, &snapargs);
-      if (r) {
-	char buf[80];
-	dout(0) << "error removing old current subvol: " << strerror_r(errno, buf, sizeof(buf)) << dendl;
+      btrfs_ioctl_vol_args vol_args;
+      vol_args.fd = 0;
+      strcpy(vol_args.name, "current");
+      ret = ::ioctl(basedir_fd,
+		      BTRFS_IOC_SNAP_DESTROY,
+		      &vol_args);
+      if (ret) {
+	ret = errno;
+	derr << "FileStore::mount: error removing old current subvol: "
+	     << cpp_strerror(ret) << dendl;
 	char s[PATH_MAX];
 	snprintf(s, sizeof(s), "%s/current.remove.me.%d", basedir.c_str(), rand());
-	r = ::rename(current_fn, s);
-	if (r) {
-	  dout(0) << "error renaming old current subvol: " << strerror_r(errno, buf, sizeof(buf)) << dendl;
-	  return -errno;
+	if (::rename(current_fn.c_str(), s)) {
+	  ret = -errno;
+	  derr << "FileStore::mount: error renaming old current subvol: "
+	       << cpp_strerror(ret) << dendl;
+	  goto close_basedir_fd;
 	}
       }
-      assert(r == 0);
-      
+
       // roll back
       char s[PATH_MAX];
       snprintf(s, sizeof(s), "%s/" COMMIT_SNAP_ITEM, basedir.c_str(), (long long unsigned)cp);
-      snapargs.fd = ::open(s, O_RDONLY);
-      r = ::ioctl(basedir_fd, BTRFS_IOC_SNAP_CREATE, &snapargs);
-      assert(r == 0);
-      ::close(snapargs.fd);
+      vol_args.fd = ::open(s, O_RDONLY);
+      if (vol_args.fd < 0) {
+	ret = -errno;
+	derr << "FileStore::mount: error opening '" << s << "': "
+	     << cpp_strerror(ret) << dendl;
+	goto close_basedir_fd;
+      }
+      if (::ioctl(basedir_fd, BTRFS_IOC_SNAP_CREATE, &vol_args)) {
+	ret = -errno;
+	derr << "FileStore::mount: error ioctl(BTRFS_IOC_SNAP_CREATE) failed: "
+	     << cpp_strerror(ret) << dendl;
+	TEMP_FAILURE_RETRY(::close(vol_args.fd));
+	goto close_basedir_fd;
+      }
+      TEMP_FAILURE_RETRY(::close(vol_args.fd));
       dout(10) << "mount rolled back to consistent snap " << cp << dendl;
       snaps.pop_back();
+
+      if (cp != curr_seq) {
+        int fd = read_op_seq(current_op_seq_fn.c_str(), &curr_seq);
+	assert(fd >= 0);
+        /* we'll use the higher version from now on */
+        curr_seq = cp;
+        write_op_seq(fd, curr_seq);
+	TEMP_FAILURE_RETRY(::close(fd));
+      }
     }
   }
+  initial_op_seq = 0;
 
-  current_fd = ::open(current_fn, O_RDONLY);
+  current_fd = ::open(current_fn.c_str(), O_RDONLY);
+  if (current_fd < 0) {
+    derr << "FileStore::mount: error opening: " << current_fn << ": "
+	 << cpp_strerror(ret) << dendl;
+    goto close_basedir_fd;
+  }
+
   assert(current_fd >= 0);
 
-  // init op_seq
-  op_fd = ::open(current_op_seq_fn, O_CREAT|O_RDWR, 0644);
-  assert(op_fd >= 0);
-
-  uint64_t initial_op_seq = 0;
-  {
-    char s[40];
-    int l = ::read(op_fd, s, sizeof(s));
-    if (l >= 0) {
-      s[l] = 0;
-      initial_op_seq = atoll(s);
-    } else {
-      char buf[80];
-      dout(0) << "mount error reading " << current_op_seq_fn << ": "
-	      << strerror_r(errno, buf, sizeof(buf)) << dendl;
-    }
+  op_fd = read_op_seq(current_op_seq_fn.c_str(), &initial_op_seq);
+  if (op_fd < 0) {
+    derr << "FileStore::mount: read_op_seq failed" << dendl;
+    goto close_current_fd;
   }
+
   dout(5) << "mount op_seq is " << initial_op_seq << dendl;
 
   // journal
   open_journal();
-  r = journal_replay(initial_op_seq);
-  if (r < 0) {
-    char buf[40];
-    dout(0) << "mount failed to open journal " << journalpath << ": "
-	    << strerror_r(-r, buf, sizeof(buf)) << dendl;
-    cerr << "mount failed to open journal " << journalpath << ": "
-	 << strerror_r(-r, buf, sizeof(buf)) << std::endl;
-    if (r == -ENOTTY)
-      cerr << "maybe journal is not pointing to a block device and its size wasn't configured?" << std::endl;
 
-    return r;
+  // select journal mode?
+  if (journal) {
+    if (!g_conf.filestore_journal_writeahead &&
+	!g_conf.filestore_journal_parallel &&
+	!g_conf.filestore_journal_trailing) {
+      if (!btrfs) {
+	g_conf.filestore_journal_writeahead = true;
+	dout(0) << "mount: enabling WRITEAHEAD journal mode: btrfs not detected" << dendl;
+      } else if (!g_conf.filestore_btrfs_snap) {
+	g_conf.filestore_journal_writeahead = true;
+	dout(0) << "mount: enabling WRITEAHEAD journal mode: 'filestore btrfs snap' mode is not enabled" << dendl;
+      } else if (!btrfs_snap_create_v2) {
+	g_conf.filestore_journal_writeahead = true;
+	dout(0) << "mount: enabling WRITEAHEAD journal mode: btrfs SNAP_CREATE_V2 ioctl not detected (v2.6.37+)" << dendl;
+      } else {
+	g_conf.filestore_journal_parallel = true;
+	dout(0) << "mount: enabling PARALLEL journal mode: btrfs, SNAP_CREATE_V2 detected and 'filestore btrfs snap' mode is enabled" << dendl;
+      }
+    } else {
+      if (g_conf.filestore_journal_writeahead)
+	dout(0) << "mount: WRITEAHEAD journal mode explicitly enabled in conf" << dendl;
+      if (g_conf.filestore_journal_parallel)
+	dout(0) << "mount: PARALLEL journal mode explicitly enabled in conf" << dendl;
+      if (g_conf.filestore_journal_trailing)
+	dout(0) << "mount: TRAILING journal mode explicitly enabled in conf" << dendl;
+    }
+    if (g_conf.filestore_journal_writeahead)
+      journal->set_wait_on_full(true);
   }
+
+  ret = _sanity_check_fs();
+  if (ret) {
+    derr << "FileStore::mount: _sanity_check_fs failed with error "
+	 << ret << dendl;
+    goto close_current_fd;
+  }
+
+  ret = journal_replay(initial_op_seq);
+  if (ret < 0) {
+    derr << "mount failed to open journal " << journalpath << ": "
+	 << cpp_strerror(ret) << dendl;
+    if (ret == -ENOTTY) {
+      derr << "maybe journal is not pointing to a block device and its size "
+	   << "wasn't configured?" << dendl;
+    }
+    goto close_current_fd;
+  }
+
   journal_start();
+
   sync_thread.create();
   op_tp.start();
   flusher_thread.create();
   op_finisher.start();
   ondisk_finisher.start();
 
-  if (journal && g_conf.filestore_journal_writeahead)
-    journal->set_wait_on_full(true);
-
-  _sanity_check_fs();
+  timer.init();
 
   // all okay.
   return 0;
+
+close_current_fd:
+  TEMP_FAILURE_RETRY(::close(current_fd));
+  current_fd = -1;
+close_basedir_fd:
+  TEMP_FAILURE_RETRY(::close(basedir_fd));
+  basedir_fd = -1;
+close_fsid_fd:
+  fsid = 0;
+  TEMP_FAILURE_RETRY(::close(fsid_fd));
+  fsid_fd = -1;
+done:
+  return ret;
 }
 
 int FileStore::umount() 
@@ -740,16 +1401,31 @@ int FileStore::umount()
   op_finisher.stop();
   ondisk_finisher.stop();
 
-  ::close(fsid_fd);
-  ::close(op_fd);
-  ::close(current_fd);
-  ::close(basedir_fd);
+  if (fsid_fd >= 0) {
+    TEMP_FAILURE_RETRY(::close(fsid_fd));
+    fsid_fd = -1;
+  }
+  if (op_fd >= 0) {
+    TEMP_FAILURE_RETRY(::close(op_fd));
+    op_fd = -1;
+  }
+  if (current_fd >= 0) {
+    TEMP_FAILURE_RETRY(::close(current_fd));
+    current_fd = -1;
+  }
+  if (basedir_fd >= 0) {
+    TEMP_FAILURE_RETRY(::close(basedir_fd));
+    basedir_fd = -1;
+  }
 
   if (g_conf.filestore_dev) {
-    char cmd[PATH_MAX];
     dout(0) << "umounting" << dendl;
-    snprintf(cmd, sizeof(cmd), "umount %s", g_conf.filestore_dev);
-    //system(cmd);
+    //run_cmd("umount", g_conf.filestore_dev, NULL);
+  }
+
+  {
+    Mutex::Locker l(sync_entry_timeo_lock);
+    timer.shutdown();
   }
 
   // nothing
@@ -759,7 +1435,7 @@ int FileStore::umount()
 
 /// -----------------------------
 
-void FileStore::queue_op(Sequencer *posr, uint64_t op_seq, list<Transaction*>& tls,
+void FileStore::queue_op(OpSequencer *osr, uint64_t op_seq, list<Transaction*>& tls,
 			 Context *onreadable, Context *onreadable_sync)
 {
   uint64_t bytes = 0, ops = 0;
@@ -777,7 +1453,7 @@ void FileStore::queue_op(Sequencer *posr, uint64_t op_seq, list<Transaction*>& t
   // mark apply start _now_, because we need to drain the entire apply
   // queue during commit in order to put the store in a consistent
   // state.
-  op_apply_start(op_seq);
+  _op_apply_start(op_seq);
 
   Op *o = new Op;
   o->op = op_seq;
@@ -789,27 +1465,7 @@ void FileStore::queue_op(Sequencer *posr, uint64_t op_seq, list<Transaction*>& t
 
   op_tp.lock();
 
-  OpSequencer *osr;
-  if (!posr)
-    posr = &default_osr;
-  if (posr->p) {
-    osr = (OpSequencer *)posr->p;
-    dout(10) << "queue_op existing osr " << osr << "/" << osr->parent << dendl; //<< " w/ q " << osr->q << dendl;
-  } else {
-    osr = new OpSequencer;
-    osr->parent = posr;
-    posr->p = (void *)osr;
-    dout(10) << "queue_op new osr " << osr << "/" << osr->parent << dendl;
-  }
-  osr->q.push_back(o);
-
-  while ((g_conf.filestore_queue_max_ops && op_queue_len >= (unsigned)g_conf.filestore_queue_max_ops) ||
-	 (g_conf.filestore_queue_max_bytes && op_queue_bytes >= (unsigned)g_conf.filestore_queue_max_bytes)) {
-    dout(2) << "queue_op " << o << " throttle: "
-	     << op_queue_len << " > " << g_conf.filestore_queue_max_ops << " ops || "
-	     << op_queue_bytes << " > " << g_conf.filestore_queue_max_bytes << dendl;
-    op_tp.wait(op_throttle_cond);
-  }
+  osr->queue(o);
 
   op_queue_len++;
   op_queue_bytes += bytes;
@@ -837,8 +1493,8 @@ void FileStore::op_queue_throttle()
 
 void FileStore::_do_op(OpSequencer *osr)
 {
-  osr->lock.Lock();
-  Op *o = osr->q.front();
+  osr->apply_lock.Lock();
+  Op *o = osr->peek_queue();
 
   dout(10) << "_do_op " << o << " " << o->op << " osr " << osr << "/" << osr->parent << " start" << dendl;
   int r = do_transactions(o->tls, o->op);
@@ -853,18 +1509,10 @@ void FileStore::_do_op(OpSequencer *osr)
 
 void FileStore::_finish_op(OpSequencer *osr)
 {
-  Op *o = osr->q.front();
-  osr->q.pop_front();
+  Op *o = osr->dequeue();
   
-  if (osr->q.empty()) {
-    dout(10) << "_finish_op last op " << o << " on osr " << osr << "/" << osr->parent << dendl;
-    osr->parent->p = NULL;
-    osr->lock.Unlock();  // locked in _do_op
-    delete osr;
-  } else {
-    dout(10) << "_finish_op on osr " << osr << "/" << osr->parent << dendl; // << " q now " << osr->q << dendl;
-    osr->lock.Unlock();  // locked in _do_op
-  }
+  dout(10) << "_finish_op on osr " << osr << "/" << osr->parent << dendl;
+  osr->apply_lock.Unlock();  // locked in _do_op
 
   // called with tp lock held
   op_queue_len--;
@@ -906,13 +1554,13 @@ void FileStore::_finish_op(OpSequencer *osr)
 
 struct C_JournaledAhead : public Context {
   FileStore *fs;
-  ObjectStore::Sequencer *osr;
+  FileStore::OpSequencer *osr;
   uint64_t op;
   list<ObjectStore::Transaction*> tls;
   Context *onreadable, *onreadable_sync;
   Context *ondisk;
 
-  C_JournaledAhead(FileStore *f, ObjectStore::Sequencer *os, uint64_t o, list<ObjectStore::Transaction*>& t,
+  C_JournaledAhead(FileStore *f, FileStore::OpSequencer *os, uint64_t o, list<ObjectStore::Transaction*>& t,
 		   Context *onr, Context *ond, Context *onrsync) :
     fs(f), osr(os), op(o), tls(t), onreadable(onr), onreadable_sync(onrsync), ondisk(ond) { }
   void finish(int r) {
@@ -927,24 +1575,43 @@ int FileStore::queue_transaction(Sequencer *osr, Transaction *t)
   return queue_transactions(osr, tls, new C_DeleteTransaction(t));
 }
 
-int FileStore::queue_transactions(Sequencer *osr, list<Transaction*> &tls,
+int FileStore::queue_transactions(Sequencer *posr, list<Transaction*> &tls,
 				  Context *onreadable, Context *ondisk,
 				  Context *onreadable_sync)
 {
+  // set up the sequencer
+  OpSequencer *osr;
+  if (!posr)
+    posr = &default_osr;
+  if (posr->p) {
+    osr = (OpSequencer *)posr->p;
+    dout(10) << "queue_transactions existing osr " << osr << "/" << osr->parent << dendl; //<< " w/ q " << osr->q << dendl;
+  } else {
+    osr = new OpSequencer;
+    osr->parent = posr;
+    posr->p = osr;
+    dout(10) << "queue_transactions new osr " << osr << "/" << osr->parent << dendl;
+  }
+
   if (journal && journal->is_writeable()) {
     if (g_conf.filestore_journal_parallel) {
 
-      journal->throttle();   // make sure we're note ahead of the jouranl
+      // FIXME: these throttle blocks can build up many threads, and
+      // then let them all (too many!)  through when some space is
+      // available.
 
-      uint64_t op = op_journal_start(0);
+      journal->throttle();   // make sure we're not ahead of the jouranl
+      op_queue_throttle();   // make sure the journal isn't getting ahead of our op queue.
+
+      uint64_t op = op_submit_start();
       dout(10) << "queue_transactions (parallel) " << op << " " << tls << dendl;
       
-      journal_transactions(tls, op, ondisk);
+      _op_journal_transactions(tls, op, ondisk);
       
       // queue inside journal lock, to preserve ordering
-      queue_op(osr, op, tls, onreadable, onreadable_sync);  // this throttles on the op_queue
+      queue_op(osr, op, tls, onreadable, onreadable_sync);
       
-      op_journal_finish();
+      op_submit_finish(op);
       return 0;
     }
     else if (g_conf.filestore_journal_writeahead) {
@@ -952,24 +1619,24 @@ int FileStore::queue_transactions(Sequencer *osr, list<Transaction*> &tls,
       journal->throttle();   // make sure we're not ahead of the journal
       op_queue_throttle();   // make sure the journal isn't getting ahead of our op queue.
 
-      uint64_t op = op_journal_start(0);
+      uint64_t op = op_submit_start();
       dout(10) << "queue_transactions (writeahead) " << op << " " << tls << dendl;
-      journal_transactions(tls, op,
-			   new C_JournaledAhead(this, osr, op, tls, onreadable, ondisk, onreadable_sync));
-      op_journal_finish();
+      osr->queue_journal(op);
+      _op_journal_transactions(tls, op,
+			       new C_JournaledAhead(this, osr, op, tls, onreadable, ondisk, onreadable_sync));
+      op_submit_finish(op);
       return 0;
     }
   }
 
-  uint64_t op_seq = op_apply_start(0);
-  dout(10) << "queue_transactions (trailing journal) " << op_seq << " " << tls << dendl;
-  int r = do_transactions(tls, op_seq);
-  op_apply_finish(op_seq);
+  uint64_t op = op_submit_start();
+  dout(10) << "queue_transactions (trailing journal) " << op << " " << tls << dendl;
+
+  _op_apply_start(op);
+  int r = do_transactions(tls, op);
     
   if (r >= 0) {
-    op_journal_start(op_seq);
-    journal_transactions(tls, op_seq, ondisk);
-    op_journal_finish();
+    _op_journal_transactions(tls, op, ondisk);
   } else {
     delete ondisk;
   }
@@ -982,17 +1649,28 @@ int FileStore::queue_transactions(Sequencer *osr, list<Transaction*> &tls,
   }
   op_finisher.queue(onreadable, r);
 
+  op_submit_finish(op);
+  op_apply_finish(op);
+
   return r;
 }
 
-void FileStore::_journaled_ahead(Sequencer *osr, uint64_t op,
+void FileStore::_journaled_ahead(OpSequencer *osr, uint64_t op,
 				 list<Transaction*> &tls,
 				 Context *onreadable, Context *ondisk,
 				 Context *onreadable_sync)
 {
   dout(10) << "_journaled_ahead " << op << " " << tls << dendl;
+
+  op_queue_throttle();
+
+
   // this should queue in order because the journal does it's completions in order.
+  journal_lock.Lock();
   queue_op(osr, op, tls, onreadable, onreadable_sync);
+  journal_lock.Unlock();
+
+  osr->dequeue_journal();
 
   // do ondisk completions async, to prevent any onreadable_sync completions
   // getting blocked behind an ondisk completion.
@@ -1042,37 +1720,21 @@ unsigned FileStore::apply_transaction(Transaction &t,
 unsigned FileStore::apply_transactions(list<Transaction*> &tls,
 				       Context *ondisk)
 {
+  // use op pool
+  Cond my_cond;
+  Mutex my_lock("FileStore::apply_transaction::my_lock");
   int r = 0;
-
-  if (journal && journal->is_writeable() &&
-      (g_conf.filestore_journal_parallel || g_conf.filestore_journal_writeahead)) {
-    // use op pool
-    Cond my_cond;
-    Mutex my_lock("FileStore::apply_transaction::my_lock");
-    bool done;
-    C_SafeCond *onreadable = new C_SafeCond(&my_lock, &my_cond, &done, &r);
-
-    dout(10) << "apply queued" << dendl;
-    queue_transactions(NULL, tls, onreadable, ondisk);
-    
-    my_lock.Lock();
-    while (!done)
-      my_cond.Wait(my_lock);
-    my_lock.Unlock();
-    dout(10) << "apply done r = " << r << dendl;
-  } else {
-    uint64_t op_seq = op_apply_start(0);
-    r = do_transactions(tls, op_seq);
-    op_apply_finish(op_seq);
-
-    if (r >= 0) {
-      op_journal_start(op_seq);
-      journal_transactions(tls, op_seq, ondisk);
-      op_journal_finish();
-    } else {
-      delete ondisk;
-    }
-  }
+  bool done;
+  C_SafeCond *onreadable = new C_SafeCond(&my_lock, &my_cond, &done, &r);
+  
+  dout(10) << "apply queued" << dendl;
+  queue_transactions(NULL, tls, onreadable, ondisk);
+  
+  my_lock.Lock();
+  while (!done)
+    my_cond.Wait(my_lock);
+  my_lock.Unlock();
+  dout(10) << "apply done r = " << r << dendl;
   return r;
 }
 
@@ -1091,14 +1753,14 @@ int FileStore::_transaction_start(uint64_t bytes, uint64_t ops)
   char buf[80];
   int fd = ::open(basedir.c_str(), O_RDONLY);
   if (fd < 0) {
-    derr(0) << "transaction_start got " << strerror_r(errno, buf, sizeof(buf))
+    dout(0) << "transaction_start got " << strerror_r(errno, buf, sizeof(buf))
  	    << " from btrfs open" << dendl;
     assert(0);
   }
 
   int r = ::ioctl(fd, BTRFS_IOC_TRANS_START);
   if (r < 0) {
-    derr(0) << "transaction_start got " << strerror_r(errno, buf, sizeof(buf))
+    dout(0) << "transaction_start got " << strerror_r(errno, buf, sizeof(buf))
  	    << " from btrfs ioctl" << dendl;    
     ::close(fd);
     return -errno;
@@ -1138,12 +1800,15 @@ unsigned FileStore::_do_transaction(Transaction& t)
 
   while (t.have_op()) {
     int op = t.get_op();
+    int r = 0;
     switch (op) {
+    case Transaction::OP_NOP:
+      break;
     case Transaction::OP_TOUCH:
       {
 	coll_t cid = t.get_cid();
 	sobject_t oid = t.get_oid();
-	_touch(cid, oid);
+	r = _touch(cid, oid);
       }
       break;
       
@@ -1155,7 +1820,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	uint64_t len = t.get_length();
 	bufferlist bl;
 	t.get_bl(bl);
-	_write(cid, oid, off, len, bl);
+	r = _write(cid, oid, off, len, bl);
       }
       break;
       
@@ -1165,7 +1830,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	sobject_t oid = t.get_oid();
 	uint64_t off = t.get_length();
 	uint64_t len = t.get_length();
-	_zero(cid, oid, off, len);
+	r = _zero(cid, oid, off, len);
       }
       break;
       
@@ -1184,7 +1849,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	coll_t cid = t.get_cid();
 	sobject_t oid = t.get_oid();
 	uint64_t off = t.get_length();
-	_truncate(cid, oid, off);
+	r = _truncate(cid, oid, off);
       }
       break;
       
@@ -1192,7 +1857,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
       {
 	coll_t cid = t.get_cid();
 	sobject_t oid = t.get_oid();
-	_remove(cid, oid);
+	r = _remove(cid, oid);
       }
       break;
       
@@ -1203,7 +1868,10 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	string name = t.get_attrname();
 	bufferlist bl;
 	t.get_bl(bl);
-	_setattr(cid, oid, name.c_str(), bl.c_str(), bl.length());
+	r = _setattr(cid, oid, name.c_str(), bl.c_str(), bl.length());
+	if (r == -ENOSPC)
+	  dout(0) << " ENOSPC on setxattr on " << cid << "/" << oid
+		  << " name " << name << " size " << bl.length() << dendl;
       }
       break;
       
@@ -1213,8 +1881,10 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	sobject_t oid = t.get_oid();
 	map<string, bufferptr> aset;
 	t.get_attrset(aset);
-	_setattrs(cid, oid, aset);
-      }
+	r = _setattrs(cid, oid, aset);
+  	if (r == -ENOSPC)
+	  dout(0) << " ENOSPC on setxattrs on " << cid << "/" << oid << dendl;
+    }
       break;
 
     case Transaction::OP_RMATTR:
@@ -1222,7 +1892,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	coll_t cid = t.get_cid();
 	sobject_t oid = t.get_oid();
 	string name = t.get_attrname();
-	_rmattr(cid, oid, name.c_str());
+	r = _rmattr(cid, oid, name.c_str());
       }
       break;
 
@@ -1230,7 +1900,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
       {
 	coll_t cid = t.get_cid();
 	sobject_t oid = t.get_oid();
-	_rmattrs(cid, oid);
+	r = _rmattrs(cid, oid);
       }
       break;
       
@@ -1239,7 +1909,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	coll_t cid = t.get_cid();
 	sobject_t oid = t.get_oid();
 	sobject_t noid = t.get_oid();
-	_clone(cid, oid, noid);
+	r = _clone(cid, oid, noid);
       }
       break;
 
@@ -1250,21 +1920,21 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	sobject_t noid = t.get_oid();
  	uint64_t off = t.get_length();
 	uint64_t len = t.get_length();
-	_clone_range(cid, oid, noid, off, len);
+	r = _clone_range(cid, oid, noid, off, len);
       }
       break;
 
     case Transaction::OP_MKCOLL:
       {
 	coll_t cid = t.get_cid();
-	_create_collection(cid);
+	r = _create_collection(cid);
       }
       break;
 
     case Transaction::OP_RMCOLL:
       {
 	coll_t cid = t.get_cid();
-	_destroy_collection(cid);
+	r = _destroy_collection(cid);
       }
       break;
 
@@ -1273,7 +1943,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	coll_t ocid = t.get_cid();
 	coll_t ncid = t.get_cid();
 	sobject_t oid = t.get_oid();
-	_collection_add(ocid, ncid, oid);
+	r = _collection_add(ocid, ncid, oid);
       }
       break;
 
@@ -1281,7 +1951,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
        {
 	coll_t cid = t.get_cid();
 	sobject_t oid = t.get_oid();
-	_collection_remove(cid, oid);
+	r = _collection_remove(cid, oid);
        }
       break;
 
@@ -1291,7 +1961,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
 	string name = t.get_attrname();
 	bufferlist bl;
 	t.get_bl(bl);
-	_collection_setattr(cid, name.c_str(), bl.c_str(), bl.length());
+	r = _collection_setattr(cid, name.c_str(), bl.c_str(), bl.length());
       }
       break;
 
@@ -1299,7 +1969,7 @@ unsigned FileStore::_do_transaction(Transaction& t)
       {
 	coll_t cid = t.get_cid();
 	string name = t.get_attrname();
-	_collection_rmattr(cid, name.c_str());
+	r = _collection_rmattr(cid, name.c_str());
       }
       break;
 
@@ -1307,9 +1977,32 @@ unsigned FileStore::_do_transaction(Transaction& t)
       _start_sync();
       break;
 
+    case Transaction::OP_COLL_RENAME:
+      {
+	coll_t cid(t.get_cid());
+	coll_t ncid(t.get_cid());
+	r = _collection_rename(cid, ncid);
+      }
+      break;
+
     default:
       cerr << "bad op " << op << std::endl;
       assert(0);
+    }
+
+    if (r == -ENOSPC) {
+      // For now, if we hit _any_ ENOSPC, crash, before we do any damage
+      // by partially applying transactions.
+
+      // XXX HACK: if it was an setxattr op, silently fail, until we have a better workaround XXX
+      if (op == Transaction::OP_SETATTR || op == Transaction::OP_SETATTRS)
+	dout(0) << "WARNING: ignoring setattr ENOSPC failure, until we implement a workaround for extN"
+		<< " xattr limitations" << dendl;
+      else
+	assert(0 == "ENOSPC handling not implemented");
+    }
+    if (r == -EIO) {
+      assert(0 == "EIO handling not implemented");
     }
   }
   
@@ -1344,12 +2037,66 @@ int FileStore::stat(coll_t cid, const sobject_t& oid, struct stat *st)
 }
 
 int FileStore::read(coll_t cid, const sobject_t& oid, 
-                    uint64_t offset, size_t len,
-                    bufferlist& bl) {
+                    uint64_t offset, size_t len, bufferlist& bl)
+{
+  size_t got;
   char fn[PATH_MAX];
   get_coname(cid, oid, fn, sizeof(fn));
 
   dout(15) << "read " << fn << " " << offset << "~" << len << dendl;
+
+  int fd = ::open(fn, O_RDONLY);
+  if (fd < 0) {
+    int err = errno;
+    dout(10) << "FileStore::read(" << fn << "): open error "
+	     << cpp_strerror(err) << dendl;
+    return err;
+  }
+
+  if (len == 0) {
+    struct stat st;
+    memset(&st, 0, sizeof(struct stat));
+    ::fstat(fd, &st);
+    len = st.st_size;
+  }
+
+  bufferptr bptr(len);  // prealloc space for entire read
+  got = safe_pread(fd, bptr.c_str(), len, offset);
+  if (got < 0) {
+    dout(10) << "FileStore::read(" << fn << "): pread error "
+	     << cpp_strerror(got) << dendl;
+    TEMP_FAILURE_RETRY(::close(fd));
+    return got;
+  }
+  bptr.set_length(got);   // properly size the buffer
+  bl.push_back(bptr);   // put it in the target bufferlist
+  TEMP_FAILURE_RETRY(::close(fd));
+
+  dout(10) << "FileStore::read " << fn << " " << offset << "~"
+	   << got << "/" << len << dendl;
+  return got;
+}
+
+int FileStore::fiemap(coll_t cid, const sobject_t& oid,
+                    uint64_t offset, size_t len,
+                    bufferlist& bl)
+{
+
+  if (!ioctl_fiemap) {
+    map<off_t, size_t> m;
+    m[offset] = len;
+    ::encode(m, bl);
+    return 0;
+  }
+
+
+  char fn[PATH_MAX];
+  struct fiemap *fiemap = NULL;
+  map<off_t, size_t> extmap;
+
+  get_coname(cid, oid, fn, sizeof(fn));
+
+  dout(15) << "fiemap " << fn << " " << offset << "~" << len << dendl;
 
   int r;
   int fd = ::open(fn, O_RDONLY);
@@ -1358,28 +2105,56 @@ int FileStore::read(coll_t cid, const sobject_t& oid,
     dout(10) << "read couldn't open " << fn << " errno " << errno << " " << strerror_r(errno, buf, sizeof(buf)) << dendl;
     r = -errno;
   } else {
-    uint64_t actual = ::lseek64(fd, offset, SEEK_SET);
-    size_t got = 0;
-    
-    if (len == 0) {
-      struct stat st;
-      ::fstat(fd, &st);
-      len = st.st_size;
+    uint64_t i;
+
+    r = do_fiemap(fd, offset, len, &fiemap);
+    if (r < 0)
+      goto done;
+
+    if (fiemap->fm_mapped_extents == 0)
+      goto done;
+
+    struct fiemap_extent *extent = &fiemap->fm_extents[0];
+
+    /* start where we were asked to start */
+    if (extent->fe_logical < offset) {
+      extent->fe_length -= offset - extent->fe_logical;
+      extent->fe_logical = offset;
     }
-    
-    if (actual == offset) {
-      bufferptr bptr(len);  // prealloc space for entire read
-      got = ::read(fd, bptr.c_str(), len);
-      bptr.set_length(got);   // properly size the buffer
-      if (got > 0) bl.push_back( bptr );   // put it in the target bufferlist
+
+    i = 0;
+
+    while (i < fiemap->fm_mapped_extents) {
+      struct fiemap_extent *next = extent + 1;
+
+      dout(10) << "FileStore::fiemap() fm_mapped_extents=" << fiemap->fm_mapped_extents
+	       << " fe_logical=" << extent->fe_logical << " fe_length=" << extent->fe_length << dendl;
+
+      /* try to merge extents */
+      while ((i < fiemap->fm_mapped_extents - 1) &&
+             (extent->fe_logical + extent->fe_length == next->fe_logical)) {
+          next->fe_length += extent->fe_length;
+          next->fe_logical = extent->fe_logical;
+          extent = next;
+          next = extent + 1;
+          i++;
+      }
+
+      if (extent->fe_logical + extent->fe_length > offset + len)
+        extent->fe_length = offset + len - extent->fe_logical;
+      extmap[extent->fe_logical] = extent->fe_length;
+      i++;
     }
-    ::close(fd);
-    r = got;
   }
-  dout(10) << "read " << fn << " " << offset << "~" << len << " = " << r << dendl;
+
+done:
+  if (r >= 0)
+    ::encode(extmap, bl);
+
+  dout(10) << "fiemap " << fn << " " << offset << "~" << len << " = " << r << " num extents=" << extmap.size() << dendl;
+  free(fiemap);
   return r;
 }
-
 
 
 int FileStore::_remove(coll_t cid, const sobject_t& oid) 
@@ -1440,7 +2215,7 @@ int FileStore::_write(coll_t cid, const sobject_t& oid,
   int flags = O_WRONLY|O_CREAT;
   int fd = ::open(fn, flags, 0644);
   if (fd < 0) {
-    derr(0) << "write couldn't open " << fn << " flags " << flags << " errno " << errno << " " << strerror_r(errno, buf, sizeof(buf)) << dendl;
+    dout(0) << "write couldn't open " << fn << " flags " << flags << " errno " << errno << " " << strerror_r(errno, buf, sizeof(buf)) << dendl;
     r = -errno;
     goto out;
   }
@@ -1556,30 +2331,35 @@ int FileStore::_do_clone_range(int from, int to, uint64_t off, uint64_t len)
     int l = MIN(end-pos, buflen);
     r = ::read(from, buf, l);
     dout(25) << "  read from " << from << "~" << l << " got " << r << dendl;
-    if (r < 0)
+    if (r < 0) {
+      r = -errno;
+      derr << "FileStore::_do_clone_range: read error at " << from << "~" << len
+	   << ", " << cpp_strerror(r) << dendl;
       break;
+    }
     if (r == 0) {
       // hrm, bad source range, wtf.
-      dout(0) << "_do_clone_range got short read result at " << from << " of " << from << "~" << len << dendl;
       r = -ERANGE;
+      derr << "FileStore::_do_clone_range got short read result at " << from
+	      << " of " << from << "~" << len << dendl;
       break;
     }
     int op = 0;
     while (op < r) {
-      int r2 = ::write(to, buf+op, r-op);
+      int r2 = safe_write(to, buf+op, r-op);
       dout(25) << " write to " << to << "~" << (r-op) << " got " << r2 << dendl;      
       if (r2 < 0) {
 	r = r2;
+	derr << "FileStore::_do_clone_range: write error at " << to << "~" << r-op
+	     << ", " << cpp_strerror(r) << dendl;
 	break;
       }
-      op += r2;
+      op += (r-op);
     }
     if (r < 0)
       break;
     pos += r;
   }
-  if (r < 0)
-    r = -errno;
   dout(20) << "_do_clone_range " << off << "~" << len << " = " << r << dendl;
   return r;
 }
@@ -1685,10 +2465,23 @@ void FileStore::flusher_entry()
   lock.Unlock();
 }
 
+class SyncEntryTimeout : public Context {
+public:
+  SyncEntryTimeout() { }
+
+  void finish(int r) {
+    BackTrace *bt = new BackTrace(1);
+    generic_dout(-1) << "FileStore: sync_entry timed out after "
+	   << g_conf.filestore_commit_timeout << " seconds.\n";
+    bt->print(*_dout);
+    *_dout << dendl;
+    delete bt;
+    ceph_abort();
+  }
+};
+
 void FileStore::sync_entry()
 {
-  Cond othercond;
-
   lock.Lock();
   while (!stop) {
     utime_t max_interval;
@@ -1696,21 +2489,29 @@ void FileStore::sync_entry()
     utime_t min_interval;
     min_interval.set_from_double(g_conf.filestore_min_sync_interval);
 
-    dout(20) << "sync_entry waiting for max_interval " << max_interval << dendl;
     utime_t startwait = g_clock.now();
+    if (!force_sync) {
+      dout(20) << "sync_entry waiting for max_interval " << max_interval << dendl;
+      sync_cond.WaitInterval(lock, max_interval);
+    } else {
+      dout(20) << "sync_entry not waiting, force_sync set" << dendl;
+    }
 
-    sync_cond.WaitInterval(lock, max_interval);
-
-    // wait for at least the min interval
-    utime_t woke = g_clock.now();
-    woke -= startwait;
-    dout(20) << "sync_entry woke after " << woke << dendl;
-    if (woke < min_interval) {
-      utime_t t = min_interval;
-      t -= woke;
-      dout(20) << "sync_entry waiting for another " << t 
-	       << " to reach min interval " << min_interval << dendl;
-      othercond.WaitInterval(lock, t);
+    if (force_sync) {
+      dout(20) << "sync_entry force_sync set" << dendl;
+      force_sync = false;
+    } else {
+      // wait for at least the min interval
+      utime_t woke = g_clock.now();
+      woke -= startwait;
+      dout(20) << "sync_entry woke after " << woke << dendl;
+      if (woke < min_interval) {
+	utime_t t = min_interval;
+	t -= woke;
+	dout(20) << "sync_entry waiting for another " << t 
+		 << " to reach min interval " << min_interval << dendl;
+	sync_cond.WaitInterval(lock, t);
+      }
     }
 
     list<Context*> fin;
@@ -1722,43 +2523,77 @@ void FileStore::sync_entry()
       utime_t start = g_clock.now();
       uint64_t cp = committing_seq;
 
+      SyncEntryTimeout *sync_entry_timeo = new SyncEntryTimeout();
+      sync_entry_timeo_lock.Lock();
+      timer.add_event_after(g_conf.filestore_commit_timeout, sync_entry_timeo);
+      sync_entry_timeo_lock.Unlock();
+
       // make flusher stop flushing previously queued stuff
       sync_epoch++;
 
       dout(15) << "sync_entry committing " << cp << " sync_epoch " << sync_epoch << dendl;
-      char s[30];
-      sprintf(s, "%lld\n", (long long unsigned)cp);
-      ::pwrite(op_fd, s, strlen(s), 0);
+      write_op_seq(op_fd, cp);
 
       bool do_snap = btrfs && g_conf.filestore_btrfs_snap;
 
       if (do_snap) {
-	btrfs_ioctl_vol_args snapargs;
-	snapargs.fd = current_fd;
-	snprintf(snapargs.name, sizeof(snapargs.name), COMMIT_SNAP_ITEM, (long long unsigned)cp);
-	dout(10) << "taking snap '" << snapargs.name << "'" << dendl;
-	int r = ::ioctl(basedir_fd, BTRFS_IOC_SNAP_CREATE, &snapargs);
-	if (r) {
+
+	if (btrfs_snap_create_v2) {
+	  // be smart!
+	  struct btrfs_ioctl_vol_args_v2 async_args;
+	  async_args.fd = current_fd;
+	  async_args.flags = BTRFS_SUBVOL_CREATE_ASYNC;
+	  snprintf(async_args.name, sizeof(async_args.name), COMMIT_SNAP_ITEM,
+		   (long long unsigned)cp);
+
+	  dout(10) << "taking async snap '" << async_args.name << "'" << dendl;
+	  int r = ::ioctl(basedir_fd, BTRFS_IOC_SNAP_CREATE_V2, &async_args);
 	  char buf[100];
-	  dout(0) << "snap create '" << snapargs.name << "' got " << r
-		  << " " << strerror_r(r < 0 ? errno : 0, buf, sizeof(buf)) << dendl;
+	  dout(20) << "async snap create '" << async_args.name
+		   << "' transid " << async_args.transid
+		   << " got " << r << " " << strerror_r(r < 0 ? errno : 0, buf, sizeof(buf)) << dendl;
 	  assert(r == 0);
+	  snaps.push_back(cp);
+
+	  commit_started();
+
+	  // wait for commit
+	  dout(20) << " waiting for transid " << async_args.transid << " to complete" << dendl;
+	  ::ioctl(op_fd, BTRFS_IOC_WAIT_SYNC, &async_args.transid);
+	  dout(20) << " done waiting for transid " << async_args.transid << " to complete" << dendl;
+
+	} else {
+	  // the synchronous snap create does a sync.
+	  struct btrfs_ioctl_vol_args vol_args;
+	  vol_args.fd = current_fd;
+	  snprintf(vol_args.name, sizeof(vol_args.name), COMMIT_SNAP_ITEM,
+		   (long long unsigned)cp);
+
+	  dout(10) << "taking snap '" << vol_args.name << "'" << dendl;
+	  int r = ::ioctl(basedir_fd, BTRFS_IOC_SNAP_CREATE, &vol_args);
+	  char buf[100];
+	  dout(20) << "snap create '" << vol_args.name << "' got " << r
+		   << " " << strerror_r(r < 0 ? errno : 0, buf, sizeof(buf)) << dendl;
+	  assert(r == 0);
+	  snaps.push_back(cp);
+	  
+	  commit_started();
 	}
-	snaps.push_back(cp);
-      }
+      } else {
+	commit_started();
 
-      commit_started();
-
-      if (!do_snap) {
 	if (btrfs) {
-	  dout(15) << "sync_entry doing btrfs sync" << dendl;
+	  dout(15) << "sync_entry doing btrfs SYNC" << dendl;
 	  // do a full btrfs commit
 	  ::ioctl(op_fd, BTRFS_IOC_SYNC);
-	} else {
+	} else if (g_conf.filestore_fsync_flushes_journal_data) {
 	  dout(15) << "sync_entry doing fsync on " << current_op_seq_fn << dendl;
 	  // make the file system's journal commit.
 	  //  this works with ext3, but NOT ext4
 	  ::fsync(op_fd);  
+	} else {
+	  dout(15) << "sync_entry doing a full sync (!)" << dendl;
+	  ::sync();
 	}
       }
       
@@ -1770,21 +2605,27 @@ void FileStore::sync_entry()
       // remove old snaps?
       if (do_snap) {
 	while (snaps.size() > 2) {
-	  btrfs_ioctl_vol_args snapargs;
-	  snapargs.fd = 0;
-	  snprintf(snapargs.name, sizeof(snapargs.name), COMMIT_SNAP_ITEM, (long long unsigned)snaps.front());
+	  btrfs_ioctl_vol_args vol_args;
+	  vol_args.fd = 0;
+	  snprintf(vol_args.name, sizeof(vol_args.name), COMMIT_SNAP_ITEM,
+		   (long long unsigned)snaps.front());
+
 	  snaps.pop_front();
-	  dout(10) << "removing snap '" << snapargs.name << "'" << dendl;
-	  int r = ::ioctl(basedir_fd, BTRFS_IOC_SNAP_DESTROY, &snapargs);
+	  dout(10) << "removing snap '" << vol_args.name << "'" << dendl;
+	  int r = ::ioctl(basedir_fd, BTRFS_IOC_SNAP_DESTROY, &vol_args);
 	  if (r) {
 	    char buf[100];
-	    dout(20) << "unable to destroy snap '" << snapargs.name << "' got " << r
+	    dout(20) << "unable to destroy snap '" << vol_args.name << "' got " << r
 		     << " " << strerror_r(r < 0 ? errno : 0, buf, sizeof(buf)) << dendl;
 	  }
 	}
       }
 
       dout(15) << "sync_entry committed to op_seq " << cp << dendl;
+
+      sync_entry_timeo_lock.Lock();
+      timer.cancel_event(sync_entry_timeo);
+      sync_entry_timeo_lock.Unlock();
     }
     
     lock.Lock();
@@ -1792,6 +2633,10 @@ void FileStore::sync_entry()
     fin.clear();
     if (!sync_waiters.empty()) {
       dout(10) << "sync_entry more waiters, committing again" << dendl;
+      goto again;
+    }
+    if (journal && journal->should_commit_now()) {
+      dout(10) << "sync_entry journal says we should commit again (probably is/was full)" << dendl;
       goto again;
     }
   }
@@ -1811,6 +2656,7 @@ void FileStore::_start_sync()
 void FileStore::start_sync()
 {
   Mutex::Locker l(lock);
+  force_sync = true;
   sync_cond.Signal();
 }
 
@@ -1970,8 +2816,8 @@ int FileStore::getattr(coll_t cid, const sobject_t& oid, const char *name,
   char fn[PATH_MAX];
   get_coname(cid, oid, fn, sizeof(fn));
   dout(15) << "getattr " << fn << " '" << name << "' len " << size << dendl;
-  char n[ATTR_MAX];
-  get_attrname(name, n, ATTR_MAX);
+  char n[ATTR_MAX_NAME_LEN];
+  get_attrname(name, n, ATTR_MAX_NAME_LEN);
   int r = do_getxattr(fn, n, value, size);
   dout(10) << "getattr " << fn << " '" << name << "' len " << size << " = " << r << dendl;
   return r;
@@ -1984,8 +2830,8 @@ int FileStore::getattr(coll_t cid, const sobject_t& oid, const char *name, buffe
   char fn[PATH_MAX];
   get_coname(cid, oid, fn, sizeof(fn));
   dout(15) << "getattr " << fn << " '" << name << "'" << dendl;
-  char n[ATTR_MAX];
-  get_attrname(name, n, ATTR_MAX);
+  char n[ATTR_MAX_NAME_LEN];
+  get_attrname(name, n, ATTR_MAX_NAME_LEN);
   int r = _getattr(fn, n, bp);
   dout(10) << "getattr " << fn << " '" << name << "' = " << r << dendl;
   return r;
@@ -2015,8 +2861,8 @@ int FileStore::_setattr(coll_t cid, const sobject_t& oid, const char *name,
   char fn[PATH_MAX];
   get_coname(cid, oid, fn, sizeof(fn));
   dout(15) << "setattr " << fn << " '" << name << "' len " << size << dendl;
-  char n[ATTR_MAX];
-  get_attrname(name, n, ATTR_MAX);
+  char n[ATTR_MAX_NAME_LEN];
+  get_attrname(name, n, ATTR_MAX_NAME_LEN);
   int r = do_setxattr(fn, n, value, size);
   dout(10) << "setattr " << fn << " '" << name << "' len " << size << " = " << r << dendl;
   return r;
@@ -2033,17 +2879,17 @@ int FileStore::_setattrs(coll_t cid, const sobject_t& oid, map<string,bufferptr>
   for (map<string,bufferptr>::iterator p = aset.begin();
        p != aset.end();
        ++p) {
-    char n[ATTR_MAX];
-    get_attrname(p->first.c_str(), n, ATTR_MAX);
+    char n[ATTR_MAX_NAME_LEN];
+    get_attrname(p->first.c_str(), n, ATTR_MAX_NAME_LEN);
     const char *val;
     if (p->second.length())
       val = p->second.c_str();
     else
       val = "";
+    // ??? Why do we skip setting all the other attrs if one fails?
     r = do_setxattr(fn, n, val, p->second.length());
     if (r < 0) {
-      char buf[80];
-      cerr << "error setxattr " << strerror_r(errno, buf, sizeof(buf)) << std::endl;
+      derr << "FileStore::_setattrs: do_setxattr returned " << r << dendl;
       break;
     }
   }
@@ -2059,8 +2905,8 @@ int FileStore::_rmattr(coll_t cid, const sobject_t& oid, const char *name)
   char fn[PATH_MAX];
   get_coname(cid, oid, fn, sizeof(fn));
   dout(15) << "rmattr " << fn << " '" << name << "'" << dendl;
-  char n[ATTR_MAX];
-  get_attrname(name, n, ATTR_MAX);
+  char n[ATTR_MAX_NAME_LEN];
+  get_attrname(name, n, ATTR_MAX_NAME_LEN);
   int r = do_removexattr(fn, n);
   dout(10) << "rmattr " << fn << " '" << name << "' = " << r << dendl;
   return r;
@@ -2079,8 +2925,8 @@ int FileStore::_rmattrs(coll_t cid, const sobject_t& oid)
   int r = _getattrs(fn, aset);
   if (r >= 0) {
     for (map<string,bufferptr>::iterator p = aset.begin(); p != aset.end(); p++) {
-      char n[ATTR_MAX];
-      get_attrname(p->first.c_str(), n, ATTR_MAX);
+      char n[ATTR_MAX_NAME_LEN];
+      get_attrname(p->first.c_str(), n, ATTR_MAX_NAME_LEN);
       r = do_removexattr(fn, n);
       if (r < 0)
 	break;
@@ -2189,7 +3035,16 @@ int FileStore::_collection_setattrs(coll_t cid, map<string,bufferptr>& aset)
   return r;
 }
 
-
+int FileStore::_collection_rename(const coll_t &cid, const coll_t &ncid)
+{
+  int ret = 0;
+  if (::rename(cid.c_str(), ncid.c_str())) {
+    ret = errno;
+  }
+  dout(10) << "collection_rename '" << cid << "' to '" << ncid << "'"
+	   << ": ret = " << ret << dendl;
+  return ret;
+}
 
 // --------------------------
 // collections
@@ -2211,9 +3066,14 @@ int FileStore::list_collections(vector<coll_t>& ls)
   while (::readdir_r(dir, &sde, &de) == 0) {
     if (!de)
       break;
-    coll_t c;
-    if (parse_coll(de->d_name, c))
-      ls.push_back(c);
+    if (!S_ISDIR(de->d_type << 12))
+      continue;
+    if (de->d_name[0] == '.' &&
+	(de->d_name[1] == '\0' ||
+	 (de->d_name[1] == '.' &&
+	  de->d_name[2] == '\0')))
+      continue;
+    ls.push_back(coll_t(de->d_name));
   }
   
   ::closedir(dir);
@@ -2245,17 +3105,17 @@ bool FileStore::collection_empty(coll_t c)
 {  
   if (fake_collections) return collections.collection_empty(c);
 
-  char fn[PATH_MAX];
-  get_cdir(c, fn, sizeof(fn));
-  dout(15) << "collection_empty " << fn << dendl;
+  char buf[PATH_MAX];
+  get_cdir(c, buf, sizeof(buf));
+  dout(15) << "collection_empty " << buf << dendl;
 
-  DIR *dir = ::opendir(fn);
+  DIR *dir = ::opendir(buf);
   if (!dir)
     return -errno;
 
   bool empty = true;
-  struct dirent sde, *de;
-  while (::readdir_r(dir, &sde, &de) == 0) {
+  struct dirent *de;
+  while (::readdir_r(dir, (struct dirent*)buf, &de) == 0) {
     if (!de)
       break;
     // parse
@@ -2269,7 +3129,7 @@ bool FileStore::collection_empty(coll_t c)
   }
   
   ::closedir(dir);
-  dout(10) << "collection_empty " << fn << " = " << empty << dendl;
+  dout(10) << "collection_empty " << c << " = " << empty << dendl;
   return empty;
 }
 
@@ -2278,18 +3138,20 @@ int FileStore::collection_list_partial(coll_t c, snapid_t seq, vector<sobject_t>
 {  
   if (fake_collections) return collections.collection_list(c, ls);
 
-  char fn[PATH_MAX];
-  get_cdir(c, fn, sizeof(fn));
+  char buf[PATH_MAX];
+  get_cdir(c, buf, sizeof(buf));
 
   DIR *dir = NULL;
-  struct dirent sde, *de;
+
+  struct dirent *de;
   bool end;
   
-  dir = ::opendir(fn);
+  dir = ::opendir(buf);
 
   if (!dir) {
-    dout(0) << "error opening directory " << fn << dendl;
-    return -errno;
+    int err = -errno;
+    dout(0) << "error opening directory " << buf << dendl;
+    return err;
   }
 
   if (handle && *handle) {
@@ -2301,10 +3163,12 @@ int FileStore::collection_list_partial(coll_t c, snapid_t seq, vector<sobject_t>
   while (i < max_count) {
     errno = 0;
     end = false;
-    ::readdir_r(dir, &sde, &de);
-    if (!de && errno) {
-      dout(0) << "error reading directory " << fn << dendl;
-      return -errno;
+    ::readdir_r(dir, (struct dirent*)buf, &de);
+    int err = errno;
+    if (!de && err) {
+      dout(0) << "error reading directory for " << c << dendl;
+      ::closedir(dir);
+      return -err;
     }
     if (!de) {
       end = true;
@@ -2330,7 +3194,7 @@ int FileStore::collection_list_partial(coll_t c, snapid_t seq, vector<sobject_t>
 
   ::closedir(dir);
 
-  dout(10) << "collection_list " << fn << " = 0 (" << ls.size() << " objects)" << dendl;
+  dout(10) << "collection_list " << c << " = 0 (" << ls.size() << " objects)" << dendl;
   return 0;
 }
 
@@ -2339,19 +3203,19 @@ int FileStore::collection_list(coll_t c, vector<sobject_t>& ls)
 {  
   if (fake_collections) return collections.collection_list(c, ls);
 
-  char fn[PATH_MAX];
-  get_cdir(c, fn, sizeof(fn));
-  dout(10) << "collection_list " << fn << dendl;
+  char buf[PATH_MAX];
+  get_cdir(c, buf, sizeof(buf));
+  dout(10) << "collection_list " << buf << dendl;
 
-  DIR *dir = ::opendir(fn);
+  DIR *dir = ::opendir(buf);
   if (!dir)
     return -errno;
   
   // first, build (ino, object) list
   vector< pair<ino_t,sobject_t> > inolist;
 
-  struct dirent sde, *de;
-  while (::readdir_r(dir, &sde, &de) == 0) {
+  struct dirent *de;
+  while (::readdir_r(dir, (struct dirent*)buf, &de) == 0) {
     if (!de)
       break;
     // parse
@@ -2366,7 +3230,7 @@ int FileStore::collection_list(coll_t c, vector<sobject_t>& ls)
   }
 
   // sort
-  dout(10) << "collection_list " << fn << " sorting " << inolist.size() << " objects" << dendl;
+  dout(10) << "collection_list " << c << " sorting " << inolist.size() << " objects" << dendl;
   sort(inolist.begin(), inolist.end());
 
   // build final list
@@ -2375,7 +3239,7 @@ int FileStore::collection_list(coll_t c, vector<sobject_t>& ls)
   for (vector< pair<ino_t,sobject_t> >::iterator p = inolist.begin(); p != inolist.end(); p++)
     ls[i++].swap(p->second);
   
-  dout(10) << "collection_list " << fn << " = 0 (" << ls.size() << " objects)" << dendl;
+  dout(10) << "collection_list " << c << " = 0 (" << ls.size() << " objects)" << dendl;
   ::closedir(dir);
   return 0;
 }
@@ -2402,9 +3266,6 @@ int FileStore::_destroy_collection(coll_t c)
   get_cdir(c, fn, sizeof(fn));
   dout(15) << "_destroy_collection " << fn << dendl;
   int r = ::rmdir(fn);
-  //char cmd[PATH_MAX];
-  //snprintf(cmd, sizeof(cmd), "test -d %s && rm -r %s", fn, fn);
-  //system(cmd);
   if (r < 0) r = -errno;
   dout(10) << "_destroy_collection " << fn << " = " << r << dendl;
   return r;

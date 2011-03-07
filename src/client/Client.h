@@ -37,6 +37,7 @@ enum {
 #include "msg/Messenger.h"
 
 #include "messages/MClientReply.h"
+#include "messages/MClientRequest.h"
 
 #include "include/types.h"
 #include "include/lru.h"
@@ -76,8 +77,8 @@ class Filer;
 class Objecter;
 class ObjectCacher;
 
-extern class LogType client_logtype;
-extern class Logger  *client_logger;
+extern class ProfLogType client_logtype;
+extern class ProfLogger  *client_logger;
 
 
 // ============================================
@@ -95,6 +96,15 @@ struct InodeCap;
 class Inode;
 class Dentry;
 
+/* getdir result */
+struct DirEntry {
+  string d_name;
+  struct stat st;
+  int stmask;
+  DirEntry(const string &s) : d_name(s), stmask(0) {}
+  DirEntry(const string &n, struct stat& s, int stm) : d_name(n), st(s), stmask(stm) {}
+};
+
 struct MetaRequest {
   uint64_t tid;
   ceph_mds_request_head head;
@@ -105,6 +115,7 @@ struct MetaRequest {
   int old_inode_drop, old_inode_unless;
   int dentry_drop, dentry_unless;
   int old_dentry_drop, old_dentry_unless;
+  vector<MClientRequest::Release> cap_releases;
   Inode *inode;
   Inode *old_inode;
   Dentry *dentry; //associated with path
@@ -123,6 +134,16 @@ struct MetaRequest {
   MClientReply *reply;         // the reply
   bool kick;
   
+  // readdir result
+  frag_t readdir_frag;
+  string readdir_start;  // starting _after_ this name
+  uint64_t readdir_offset;
+
+  vector<pair<string,Inode*> > readdir_result;
+  bool readdir_end;
+  int readdir_num;
+  string readdir_last_name;
+
   //possible responses
   bool got_safe;
   bool got_unsafe;
@@ -234,6 +255,7 @@ class Dentry : public LRUObject {
   Dir     *dir;
   Inode   *inode;
   int     ref;                       // 1 if there's a dir beneath me.
+  uint64_t offset;
   int lease_mds;
   utime_t lease_ttl;
   uint64_t lease_gen;
@@ -249,16 +271,18 @@ class Dentry : public LRUObject {
     //cout << "dentry.put on " << this << " " << name << " now " << ref << std::endl;
   }
   
-  Dentry() : dir(0), inode(0), ref(0), lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) { }
+  Dentry() : dir(0), inode(0), ref(0), offset(0), lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) { }
 };
 
 class Dir {
  public:
   Inode    *parent_inode;  // my inode
   hash_map<string, Dentry*> dentries;
+  map<string, Dentry*> dentry_map;
   uint64_t release_count;
+  uint64_t max_offset;
 
-  Dir(Inode* in) : release_count(0) { parent_inode = in; }
+  Dir(Inode* in) : release_count(0), max_offset(2) { parent_inode = in; }
 
   bool is_empty() {  return dentries.empty(); }
 };
@@ -366,6 +390,7 @@ class Inode {
   int32_t    nlink;  
 
   // file (data access)
+  ceph_dir_layout dir_layout;
   ceph_file_layout layout;
   uint64_t   size;        // on directory, # dentries
   uint32_t   truncate_seq;
@@ -425,7 +450,7 @@ class Inode {
   int       ref;      // ref count. 1 for each dentry, fh that links to me.
   int       ll_ref;   // separate ref count for ll client
   Dir       *dir;     // if i'm a dir.
-  Dentry    *dn;      // if i'm linked to a dentry.
+  set<Dentry*> dn_set;      // if i'm linked to a dentry.
   string    symlink;  // symlink content, if it's a symlink
   fragtree_t dirfragtree;
   map<string,bufferptr> xattrs;
@@ -434,15 +459,13 @@ class Inode {
   list<Cond*>       waitfor_caps;
   list<Cond*>       waitfor_commit;
 
-  // <hack>
-  bool hack_balance_reads;
-  // </hack>
+#define dentry_of(a) (*(a->dn_set.begin()))
 
   void make_long_path(filepath& p) {
-    if (dn) {
-      assert(dn->dir && dn->dir->parent_inode);
-      dn->dir->parent_inode->make_long_path(p);
-      p.push_dentry(dn->name);
+    if (!dn_set.empty()) {
+      assert((*dn_set.begin())->dir && (*dn_set.begin())->dir->parent_inode);
+      (*dn_set.begin())->dir->parent_inode->make_long_path(p);
+      p.push_dentry((*dn_set.begin())->name);
     } else if (snapdir_parent) {
       snapdir_parent->make_nosnap_relative_path(p);
       string empty;
@@ -463,10 +486,10 @@ class Inode {
       snapdir_parent->make_nosnap_relative_path(p);
       string empty;
       p.push_dentry(empty);
-    } else if (dn) {
-      assert(dn->dir && dn->dir->parent_inode);
-      dn->dir->parent_inode->make_nosnap_relative_path(p);
-      p.push_dentry(dn->name);
+    } else if (!dn_set.empty()) {
+      assert((*dn_set.begin())->dir && (*dn_set.begin())->dir->parent_inode);
+      (*dn_set.begin())->dir->parent_inode->make_nosnap_relative_path(p);
+      p.push_dentry((*dn_set.begin())->name);
     } else {
       p = filepath(ino);
     }
@@ -492,7 +515,7 @@ class Inode {
 
   Inode(vinodeno_t vino, ceph_file_layout *layout) : 
     ino(vino.ino), snapid(vino.snapid),
-    rdev(0), mode(0), uid(0), gid(0), nlink(0), size(0), truncate_seq(0), truncate_size(0),
+    rdev(0), mode(0), uid(0), gid(0), nlink(0), size(0), truncate_seq(1), truncate_size(-1),
     time_warp_seq(0), max_size(0), version(0), xattr_version(0),
     flags(0),
     dir_hashed(false), dir_replicated(false), auth_cap(NULL),
@@ -501,11 +524,10 @@ class Inode {
     exporting_issued(0), exporting_mds(-1), exporting_mseq(0),
     cap_item(this), flushing_cap_item(this), last_flush_tid(0),
     snaprealm(0), snaprealm_item(this), snapdir_parent(0),
-    oset((void *)this, ino),
+    oset((void *)this, layout->fl_pg_pool, ino),
     reported_size(0), wanted_max_size(0), requested_max_size(0),
     ref(0), ll_ref(0), 
-    dir(0), dn(0),
-    hack_balance_reads(false)
+    dir(0), dn_set()
   {
     memset(&flushing_cap_tid, 0, sizeof(__u16)*CEPH_CAP_BITS);
   }
@@ -628,7 +650,8 @@ class Inode {
   // open Dir for an inode.  if it's not open, allocated it (and pin dentry in memory).
   Dir *open_dir() {
     if (!dir) {
-      if (dn) dn->get();      // pin dentry
+      assert(dn_set.size() < 2); // dirs can't be hard-linked
+      if (!dn_set.empty()) (*dn_set.begin())->get();      // pin dentry
       get();                  // pin inode
       dir = new Dir(this);
     }
@@ -685,15 +708,6 @@ private:
 class Client : public Dispatcher {
   public:
   
-  /* getdir result */
-  struct DirEntry {
-    string d_name;
-    struct stat st;
-    int stmask;
-    DirEntry(const string &s) : d_name(s), stmask(0) {}
-    DirEntry(const string &n, struct stat& s, int stm) : d_name(n), st(s), stmask(stm) {}
-  };
-
   void _ensure(vinodeno_t vi) throw (fetch_exception) {
     if (!inode_map.count(vi)) {
       filepath path;
@@ -746,7 +760,9 @@ class Client : public Dispatcher {
     uint64_t release_count;
 
     frag_t buffer_frag;
-    vector<DirEntry> *buffer;
+    vector<pair<string,Inode*> > *buffer;
+
+    string at_cache_name;  // last entry we successfully returned
 
     DirResult(Inode *in) : inode(in), offset(0), next_offset(2),
 			   release_count(0),
@@ -851,11 +867,11 @@ public:
 		   //MClientRequest *req, int uid, int gid,
 		   Inode **ptarget = 0,
 		   int use_mds=-1, bufferlist *pdirbl=0);
-  void encode_cap_releases(MetaRequest *request, MClientRequest *m, int mds);
-  int encode_inode_release(Inode *in, MClientRequest *req,
+  void encode_cap_releases(MetaRequest *request, int mds);
+  int encode_inode_release(Inode *in, MetaRequest *req,
 			   int mds, int drop,
 			   int unless,int force=0);
-  void encode_dentry_release(Dentry *dn, MClientRequest *req,
+  void encode_dentry_release(Dentry *dn, MetaRequest *req,
 			     int mds, int drop, int unless);
   int choose_target_mds(MetaRequest *req);
   void connect_mds_targets(int mds);
@@ -930,7 +946,7 @@ protected:
   hash_map<int, Fh*> fd_map;
   
   int get_fd() {
-    int fd = free_fd_set.start();
+    int fd = free_fd_set.range_start();
     free_fd_set.erase(fd, 1);
     return fd;
   }
@@ -941,6 +957,8 @@ protected:
   // global client lock
   //  - protects Client and buffer cache both!
   Mutex                  client_lock;
+
+  int filer_flags;
 
   // helpers
   void wake_inode_waiters(int mds);
@@ -956,7 +974,8 @@ protected:
     assert(dir->is_empty());
     
     Inode *in = dir->parent_inode;
-    if (in->dn) in->dn->put();   // unpin dentry
+    assert (in->dn_set.size() < 2); //dirs can't be hard-linked
+    if (!in->dn_set.empty()) dentry_of(in)->put();   // unpin dentry
     
     delete in->dir;
     in->dir = 0;
@@ -980,13 +999,16 @@ protected:
       dn->dir = dir;
       //cout << "link dir " << dir->parent_inode->ino << " '" << name << "' -> inode " << in->ino << endl;
       dir->dentries[dn->name] = dn;
+      dir->dentry_map[dn->name] = dn;
       lru.lru_insert_mid(dn);    // mid or top?
     }
 
     if (in) {    // link to inode
       dn->inode = in;
-      assert(in->dn == 0);
-      in->dn = dn;
+      if(!in->dn_set.empty())
+        dout(5) << "adding new hard link to " << in->vino()
+                << " from " << dn << dendl;
+      in->dn_set.insert(dn);
       in->get();
       
       if (in->dir) dn->get();  // dir -> dn pin
@@ -1000,15 +1022,15 @@ protected:
 
     // unlink from inode
     if (in) {
-      assert(in->dn == dn);
       if (in->dir) dn->put();        // dir -> dn pin
       dn->inode = 0;
-      in->dn = 0;
+      in->dn_set.erase(dn);
       put_inode(in);
     }
         
     // unlink from dir
     dn->dir->dentries.erase(dn->name);
+    dn->dir->dentry_map.erase(dn->name);
     if (dn->dir->is_empty() && !keepdir) 
       close_dir(dn->dir);
     dn->dir = 0;
@@ -1018,8 +1040,10 @@ protected:
     delete dn;
   }
 
-  Dentry *relink_inode(Dir *dir, const string& name, Inode *in, Dentry *newdn=NULL) {
-    Dentry *olddn = in->dn;
+  /* If an inode's been moved from one dentry to another
+   * (via rename, for instance), call this function to move it */
+  Dentry *relink_inode(Dir *dir, const string& name, Inode *in, Dentry *olddn,
+                       Dentry *newdn=NULL) {
     Dir *olddir = olddn->dir;  // note: might == dir!
     bool made_new = false;
 
@@ -1033,7 +1057,8 @@ protected:
       assert(newdn->inode == NULL);
     }
     newdn->inode = in;
-    in->dn = newdn;
+    in->dn_set.erase(olddn);
+    in->dn_set.insert(newdn);
 
     if (in->dir) { // dir -> dn pin
       newdn->get();
@@ -1042,6 +1067,7 @@ protected:
 
     // unlink old dn from dir
     olddir->dentries.erase(olddn->name);
+    olddir->dentry_map.erase(olddn->name);
     olddn->inode = 0;
     olddn->dir = 0;
     lru.lru_remove(olddn);
@@ -1049,6 +1075,7 @@ protected:
     
     // link new dn to dir
     dir->dentries[name] = newdn;
+    dir->dentry_map[name] = newdn;
     if (made_new)
       lru.lru_insert_mid(newdn);
     else
@@ -1091,6 +1118,9 @@ protected:
 
 
  public:
+  void set_filer_flags(int flags);
+  void clear_filer_flags(int flags);
+
   Client(Messenger *m, MonClient *mc);
   ~Client();
   void tear_down_cache();   
@@ -1165,8 +1195,9 @@ protected:
 			      uint64_t time_warp_seq, utime_t ctime, utime_t mtime, utime_t atime,
 			      int issued);
   Inode *add_update_inode(InodeStat *st, utime_t ttl, int mds);
-  void insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dlease, 
-			   Inode *in, utime_t from, int mds);
+  Dentry *insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dlease, 
+			      Inode *in, utime_t from, int mds, bool set_offset,
+			      Dentry *old_dentry = NULL);
 
 
   // ----------------------
@@ -1175,14 +1206,19 @@ private:
 
   void fill_dirent(struct dirent *de, const char *name, int type, uint64_t ino, loff_t next_off);
 
-  // some helpers
+  // some readdir helpers
+  typedef int (*add_dirent_cb_t)(void *p, struct dirent *de, struct stat *st, int stmask, off_t off);
+
   int _opendir(Inode *in, DirResult **dirpp, int uid=-1, int gid=-1);
-  void _readdir_add_dirent(DirResult *dirp, const string& name, Inode *in);
+  void _readdir_drop_dirp_buffer(DirResult *dirp);
   bool _readdir_have_frag(DirResult *dirp);
   void _readdir_next_frag(DirResult *dirp);
   void _readdir_rechoose_frag(DirResult *dirp);
   int _readdir_get_frag(DirResult *dirp);
+  int _readdir_cache_cb(DirResult *dirp, add_dirent_cb_t cb, void *p);
   void _closedir(DirResult *dirp);
+
+  // other helpers
   void _ll_get(Inode *in);
   int _ll_readdir_fetchone(DirResult* dirp, struct dirent* de, struct stat* st,
 			   uint32_t& off, frag_t& fg);
@@ -1240,7 +1276,6 @@ public:
   int opendir(const char *name, DIR **dirpp);
   int closedir(DIR *dirp);
 
-  typedef int (*add_dirent_cb_t)(void *p, struct dirent *de, struct stat *st, int stmask, off_t off);
   int readdir_r_cb(DIR *dirp, add_dirent_cb_t cb, void *p);
 
   int readdir_r(DIR *dirp, struct dirent *de);

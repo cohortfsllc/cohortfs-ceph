@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <iostream>
 
+#include "common/ceph_argparse.h"
 #include "common/Mutex.h"
 #include "messages/MMonMap.h"
 #include "common/common_init.h"
@@ -42,9 +43,7 @@ extern "C" int ceph_initialize(int argc, const char **argv)
     //create everything to start a client
     vector<const char*> args;
     argv_to_vec(argc, argv, args);
-    common_set_defaults(false);
-    common_init(args, "libceph", true);
-    if (g_conf.clock_tare) g_clock.tare();
+    common_init(args, "libceph", STARTUP_FLAG_INIT_KEYS);
     //monmap
     monclient = new MonClient();
     if (monclient->build_initial_monmap() < 0) {
@@ -1080,4 +1079,15 @@ extern "C" uint64_t ceph_ll_get_internal_offset(vinodeno_t vino, uint64_t blockn
     {
       return -ESTALE;
     }
+}
+
+extern "C" int ceph_localize_reads(int val)
+{
+  if (!client)
+    return -ENOENT;
+  if (!val)
+    client->clear_filer_flags(CEPH_OSD_FLAG_LOCALIZE_READS);
+  else
+    client->set_filer_flags(CEPH_OSD_FLAG_LOCALIZE_READS);
+  return 0;
 }

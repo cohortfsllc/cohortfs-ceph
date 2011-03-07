@@ -96,6 +96,7 @@ public:
 
 public:
   string name;
+  __u32 hash;
   snapid_t first, last;
 
   dentry_key_t key() { 
@@ -114,7 +115,7 @@ public:
     // inode ptr is required for primary, optional for remote, undefined for null
     bool is_primary() { return remote_ino == 0 && inode != 0; }
     bool is_remote() { return remote_ino > 0; }
-    bool is_null() { return (remote_ino == 0 && inode == 0) ? true:false; }
+    bool is_null() { return remote_ino == 0 && inode == 0; }
 
     CInode *get_inode() { return inode; }
     inodeno_t get_remote_ino() { return remote_ino; }
@@ -163,9 +164,9 @@ public:
 
  public:
   // cons
-  CDentry(const string& n, 
+  CDentry(const string& n, __u32 h,
 	  snapid_t f, snapid_t l) :
-    name(n),
+    name(n), hash(h),
     first(f), last(l),
     dir(0),
     version(0), projected_version(0),
@@ -176,9 +177,9 @@ public:
     g_num_dn++;
     g_num_dna++;
   }
-  CDentry(const string& n, inodeno_t ino, unsigned char dt,
+  CDentry(const string& n, __u32 h, inodeno_t ino, unsigned char dt,
 	  snapid_t f, snapid_t l) :
-    name(n),
+    name(n), hash(h),
     first(f), last(l),
     dir(0),
     version(0), projected_version(0),
@@ -200,20 +201,9 @@ public:
   CDir *get_dir() const { return dir; }
   const string& get_name() const { return name; }
 
-  /*
-  CInode *get_inode() const { return linkage.inode; }
-  inodeno_t get_remote_ino() { return linkage.remote_ino; }
-  unsigned char get_remote_d_type() { return linkage.remote_d_type; }
+  __u32 get_hash() const { return hash; }
 
-  // dentry type is primary || remote || null
-  // inode ptr is required for primary, optional for remote, undefined for null
-  bool is_primary() { return linkage.is_primary(); }
-  bool is_remote() { return linkage.is_remote(); }
-  bool is_null() { return linkage.is_null(); }
-
-  inodeno_t get_ino();
-  */
-
+  // linkage
   linkage_t *get_linkage() { return &linkage; }
 
   linkage_t *_project_linkage() {
@@ -264,6 +254,9 @@ public:
   void auth_unpin(void *by);
   void adjust_nested_auth_pins(int by, int dirby);
   bool is_frozen();
+  bool is_auth_pinned() { return auth_pins || nested_auth_pins; }
+  int get_num_auth_pins() { return auth_pins; }
+  int get_num_nested_auth_pins() { return nested_auth_pins; }
   
   void adjust_nested_anchors(int by);
 

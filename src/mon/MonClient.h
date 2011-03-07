@@ -27,6 +27,8 @@
 
 #include "messages/MMonSubscribe.h"
 
+#include <memory>
+
 class MonMap;
 class MMonMap;
 class MMonSubscribeAck;
@@ -49,7 +51,7 @@ private:
 
   Messenger *messenger;
 
-  int cur_mon;
+  string cur_mon;
 
   EntityName entity_name;
 
@@ -161,7 +163,7 @@ public:
  public:
   MonClient(RotatingKeyRing *rkeys=0) :
     state(MC_STATE_NONE),
-    messenger(NULL), cur_mon(-1),
+    messenger(NULL),
     monc_lock("MonClient::monc_lock"),
     timer(monc_lock),
     hunting(true),
@@ -170,8 +172,8 @@ public:
     authenticate_err(0),
     auth(NULL),
     rotating_secrets(rkeys) { }
+
   ~MonClient() {
-    timer.cancel_all_events();
   }
 
   void init();
@@ -190,7 +192,9 @@ public:
     _reopen_session();
   }
 
-  entity_addr_t get_my_addr() { return my_addr; }
+  entity_addr_t get_my_addr() const {
+    return my_addr;
+  }
 
   const ceph_fsid_t& get_fsid() {
     return monmap.fsid;
@@ -199,13 +203,13 @@ public:
   entity_addr_t get_mon_addr(unsigned i) {
     Mutex::Locker l(monc_lock);
     if (i < monmap.size())
-      return monmap.mon_inst[i].addr;
+      return monmap.get_addr(i);
     return entity_addr_t();
   }
   entity_inst_t get_mon_inst(unsigned i) {
     Mutex::Locker l(monc_lock);
     if (i < monmap.size())
-      return monmap.mon_inst[i];
+      return monmap.get_inst(i);
     return entity_inst_t();
   }
   int get_num_mon() {
@@ -213,7 +217,9 @@ public:
     return monmap.size();
   }
 
-  uint64_t get_global_id() { return global_id; }
+  uint64_t get_global_id() const {
+    return global_id;
+  }
 
   void set_messenger(Messenger *m) { messenger = m; }
 

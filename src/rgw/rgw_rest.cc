@@ -19,8 +19,9 @@ struct errno_http {
   const char *default_code;
 };
 
-static struct errno_http hterrs[] = {
+const static struct errno_http hterrs[] = {
     { 0, "200", "" },
+    { 204, "204", "NoContent" },
     { 206, "206", "" },
     { EINVAL, "400", "InvalidArgument" },
     { EACCES, "403", "AccessDenied" },
@@ -30,7 +31,7 @@ static struct errno_http hterrs[] = {
     { EEXIST, "409", "BucketAlreadyExists" },
     { ENOTEMPTY, "409", "BucketNotEmpty" },
     { ERANGE, "416", "InvalidRange" },
-    { 0, NULL }};
+    { 0, NULL, NULL }};
 
 void dump_errno(struct req_state *s, int err, struct rgw_err *rgwerr)
 {
@@ -81,9 +82,11 @@ void close_section(struct req_state *s, const char *name)
   CGI_PRINTF(s->fcgx->out, "</%s>", name);
 }
 
-static void dump_content_length(struct req_state *s, int len)
+static void dump_content_length(struct req_state *s, size_t len)
 {
-  CGI_PRINTF(s->fcgx->out, "Content-Length: %d\n", len);
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%lu", len);
+  CGI_PRINTF(s->fcgx->out, "Content-Length: %s\n", buf);
   CGI_PRINTF(s->fcgx->out, "Accept-Ranges: %s\n", "bytes");
 }
 
@@ -195,6 +198,12 @@ void abort_early(struct req_state *s, int err)
 {
   dump_errno(s, err);
   end_header(s);
+}
+
+void dump_continue(struct req_state *s)
+{
+  dump_status(s, "100");
+  FCGX_FFlush(s->fcgx->out);
 }
 
 void dump_range(struct req_state *s, off_t ofs, off_t end)
@@ -338,7 +347,11 @@ void RGWCreateBucket_REST::send_response()
 
 void RGWDeleteBucket_REST::send_response()
 {
-  dump_errno(s, ret);
+  int r = ret;
+  if (!r)
+    r = 204;
+
+  dump_errno(s, r);
   end_header(s);
 }
 
@@ -371,13 +384,18 @@ int RGWPutObj_REST::get_data()
 
 void RGWPutObj_REST::send_response()
 {
+  dump_etag(s, etag.c_str());
   dump_errno(s, ret, &err);
   end_header(s);
 }
 
 void RGWDeleteObj_REST::send_response()
 {
-  dump_errno(s, ret);
+  int r = ret;
+  if (!r)
+    r = 204;
+
+  dump_errno(s, r);
   end_header(s);
 }
 
@@ -603,6 +621,16 @@ static void init_auth_info(struct req_state *s)
   }
 }
 
+static int str_to_bool(const char *s, int def_val)
+{
+  if (!s)
+    return def_val;
+
+  return (strcasecmp(s, "on") == 0 ||
+          strcasecmp(s, "yes") == 0 ||
+          strcasecmp(s, "1"));
+}
+
 void RGWHandler_REST::provider_init_state()
 {
   s->path_name = FCGX_GetParam("SCRIPT_NAME", s->fcgx->envp);
@@ -640,6 +668,12 @@ void RGWHandler_REST::provider_init_state()
 
   s->copy_source = FCGX_GetParam("HTTP_X_AMZ_COPY_SOURCE", s->fcgx->envp);
   s->http_auth = FCGX_GetParam("HTTP_AUTHORIZATION", s->fcgx->envp);
+
+  const char *cgi_env_continue = FCGX_GetParam("RGW_PRINT_CONTINUE", s->fcgx->envp);
+  if (str_to_bool(cgi_env_continue, 0)) {
+    const char *expect = FCGX_GetParam("HTTP_EXPECT", s->fcgx->envp);
+    s->expect_cont = (expect && !strcasecmp(expect, "100-continue"));
+  }
 }
 
 static bool is_acl_op(struct req_state *s)

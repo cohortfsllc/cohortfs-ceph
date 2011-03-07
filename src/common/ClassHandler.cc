@@ -10,16 +10,17 @@
 
 #include <map>
 
-#include "config.h"
+#include "common/config.h"
 
 #define DOUT_SUBSYS osd
 #undef dout_prefix
-#define dout_prefix *_dout << dbeginl
+#define dout_prefix *_dout
 
 static ClassHandler::ClassData null_cls_data;
 
-void ClassHandler::_load_class(ClassData &cls)
+int ClassHandler::_load_class(ClassData &cls)
 {
+  int ret;
   dout(10) << "load_class " << cls.name << dendl;
 
   cls_deps_t *(*cls_deps)();
@@ -28,6 +29,10 @@ void ClassHandler::_load_class(ClassData &cls)
   snprintf(fname, sizeof(fname), "%s/class-XXXXXX", g_conf.osd_class_tmp);
 
   int fd = mkstemp(fname);
+  if (fd < 0) {
+   dout(0) << "could not create temp file " << fname << dendl;
+   return -errno;
+  }
   cls.impl.binary.write_fd(fd);
   close(fd);
 
@@ -35,6 +40,7 @@ void ClassHandler::_load_class(ClassData &cls)
 
   if (!cls.handle) {
     dout(0) << "could not open class (dlopen failed): " << dlerror() << dendl;
+    ret = -EIO;
     goto done;
   }
   cls_deps = (cls_deps_t *(*)())dlsym(cls.handle, "class_deps");
@@ -47,22 +53,26 @@ void ClassHandler::_load_class(ClassData &cls)
       deps++;
     }
   }
-  cls.load();
+  ret = cls.load();
 done:
   unlink(fname);
-  return;
+  return ret;
 }
 
-void ClassHandler::load_class(const string& cname)
+int ClassHandler::load_class(const string& cname)
 {
+  int ret;
+
   ClassData& cls = get_obj(cname);
   if (&cls == &null_cls_data) {
     dout(0) << "ERROR: can't load null class data" << dendl;
-    return;
+    return -EINVAL;
   }
   cls.mutex->Lock();
-  _load_class(cls);
+  ret = _load_class(cls);
   cls.mutex->Unlock();
+
+  return ret;
 }
 
 ClassHandler::ClassData& ClassHandler::get_obj(const string& cname)
@@ -88,35 +98,36 @@ ClassHandler::ClassData& ClassHandler::get_obj(const string& cname)
 
 ClassHandler::ClassData *ClassHandler::get_class(const string& cname, ClassVersion& version)
 {
-  ClassHandler::ClassData *ret = NULL;
-  ClassData *class_data = &get_obj(cname);
-  if (class_data == &null_cls_data)
+  ClassData *ret = NULL;
+  ClassData *cls = &get_obj(cname);
+  if (cls == &null_cls_data)
     return NULL;
 
-  Mutex::Locker lock(*class_data->mutex);
+  Mutex::Locker lock(*cls->mutex);
 
-  switch (class_data->status) {
-  case ClassData::CLASS_INVALID:
+  switch (cls->status) {
   case ClassData::CLASS_LOADED:
-    if (class_data->cache_timed_out()) {
+  case ClassData::CLASS_ERROR:
+  case ClassData::CLASS_INVALID:
+    if (cls->cache_timed_out()) {
       dout(0) << "class timed out going to send request for " << cname.c_str() << " v" << version << dendl;
-      ret = class_data;
+      ret = cls;
       goto send;
     }
-    return class_data;
+    return cls;
+
   case ClassData::CLASS_REQUESTED:
     return NULL;
-    break;
 
   case ClassData::CLASS_UNKNOWN:
-    class_data->set_status(ClassData::CLASS_REQUESTED);
+    cls->set_status(ClassData::CLASS_REQUESTED);
     break;
 
   default:
     assert(0);
   }
 
-  class_data->version = version;
+  cls->version = version;
 send:
   osd->send_class_request(cname.c_str(), version);
   return ret;
@@ -133,22 +144,26 @@ void ClassHandler::handle_class(MClass *m)
        ++info_iter, ++add_iter) {
     ClassData& data = get_obj(info_iter->name);
     if (&data == &null_cls_data) {
-      dout(0) << "couldn't get class, out of memory? continuing" << dendl;
+      dout(1) << "couldn't get class, out of memory? continuing" << dendl;
       continue;
     }
-    dout(0) << "handle_class " << info_iter->name << dendl;
+    dout(10) << "handle_class " << info_iter->name << dendl;
     data.mutex->Lock();
     
     if (*add_iter) {
-        data.set_status(ClassData::CLASS_REQUESTED);
-	dout(10) << "added class '" << info_iter->name << "'" << dendl;
-	data.impl = *impl_iter;
-	++impl_iter;
-	_load_class(data);
+      data.set_status(ClassData::CLASS_REQUESTED);
+      dout(10) << "added class '" << info_iter->name << "'" << dendl;
+      data.impl = *impl_iter;
+      ++impl_iter;
+      int ret = _load_class(data);
+      if (ret < 0) {
+	data.set_status(ClassData::CLASS_ERROR);
+	osd->got_class(info_iter->name);
+      }
     } else {
-	dout(10) << "response of an invalid class '" << info_iter->name << "'" << dendl;
-        data.set_status(ClassData::CLASS_INVALID);
-        osd->got_class(info_iter->name);
+      dout(10) << "response of an invalid class '" << info_iter->name << "'" << dendl;
+      data.set_status(ClassData::CLASS_INVALID);
+      osd->got_class(info_iter->name);
     }
     data.mutex->Unlock();
   }
@@ -194,12 +209,23 @@ void ClassHandler::unregister_class(ClassHandler::ClassData *cls)
 }
 
 
-void ClassHandler::ClassData::load()
+int ClassHandler::ClassData::load()
 {
-  if (status == CLASS_INVALID) {
+  int ret;
+  switch (status) {
+    case CLASS_INVALID:
+      ret = -EINVAL;
+      break;
+    case CLASS_ERROR:
+      ret = -EIO;
+      break;
+    default:
+      ret = 0;
+  }
+  if (ret) {
     /* if we're invalid, we should just notify osd */
     osd->got_class(name);
-    return;
+    return ret;
   }
 
   if (!has_missing_deps()) {
@@ -214,6 +240,8 @@ void ClassHandler::ClassData::load()
     ClassData *cls = *iter;
     cls->satisfy_dependency(this);
   }
+
+  return 0;
 }
 
 void ClassHandler::ClassData::init()
@@ -250,9 +278,10 @@ bool ClassHandler::ClassData::_add_dependency(cls_deps_t *dep)
   }
   cls_dep._add_dependent(*this);
 
-  if (cls_dep.status == CLASS_INVALID) {
-    dout(0) << "ouch! depending on invalid class" << dendl;
-    set_status(CLASS_INVALID); /* we have an invalid dependency, we're invalid */
+  if ((cls_dep.status == CLASS_INVALID) ||
+      (cls_dep.status == CLASS_ERROR))  {
+    dout(0) << "ouch! depending on bad class" << dendl;
+    set_status(cls_dep.status); /* we have an invalid dependency, we're invalid */
   }
 
   return true;
@@ -338,26 +367,29 @@ void ClassHandler::ClassData::set_status(ClassHandler::ClassData::Status _status
 {
   status = _status;
 
+  utime_t e = g_clock.now();
   switch (status) {
+    case CLASS_ERROR:
     case CLASS_INVALID:
-    case CLASS_LOADED:
-      set_timeout();
+      e += g_conf.osd_class_error_timeout;
+      expires = e;
       break;
+
+    case CLASS_LOADED:
+      e += g_conf.osd_class_timeout;
+      expires = e;
+      break;
+
     default:
       break;
   }
 }
 
-void ClassHandler::ClassData::set_timeout()
-{
-  timeout = g_clock.now();
-  timeout += g_conf.osd_class_timeout;
-}
-
 bool ClassHandler::ClassData::cache_timed_out()
 {
-  dout(0) << "timeout=" << timeout << " g_clock.now()=" << g_clock.now() << dendl;
-  return (timeout && g_clock.now() >= timeout);
+  utime_t now = g_clock.now();
+  dout(0) << "expires " << expires << " now " << now << dendl;
+  return expires != utime_t() && now > expires;
 }
 
 void ClassHandler::ClassMethod::unregister()

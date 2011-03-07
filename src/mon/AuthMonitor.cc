@@ -31,15 +31,14 @@
 #include "osd/osd_types.h"
 #include "osd/PG.h"  // yuck
 
-#include "config.h"
+#include "common/config.h"
 #include <sstream>
 
 #define DOUT_SUBSYS mon
 #undef dout_prefix
 #define dout_prefix _prefix(mon, paxos->get_version())
 static ostream& _prefix(Monitor *mon, version_t v) {
-  return *_dout << dbeginl
-		<< "mon" << mon->whoami
+  return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< (mon->is_starting() ? (const char*)"(starting)":(mon->is_leader() ? (const char*)"(leader)":(mon->is_peon() ? (const char*)"(peon)":(const char*)"(?\?)")))
 		<< ".auth v" << v << " ";
 }
@@ -93,30 +92,10 @@ void AuthMonitor::on_active()
 void AuthMonitor::create_initial(bufferlist& bl)
 {
   dout(10) << "create_initial -- creating initial map" << dendl;
-  if (g_conf.keyring) {
-    dout(10) << "reading initial keyring " << dendl;
-    bufferlist bl;
 
-    string k = g_conf.keyring;
-    list<string> ls;
-    get_str_list(k, ls);
-    int r = -1;
-    for (list<string>::iterator p = ls.begin(); p != ls.end(); p++)
-      if ((r = bl.read_file(g_conf.keyring)) >= 0)
-	break;
-    if (r >= 0) {
-      KeyRing keyring;
-      bool read_ok = false;
-      try {
-        bufferlist::iterator iter = bl.begin();
-        ::decode(keyring, iter);
-        read_ok = true;
-      } catch (buffer::error *err) {
-        cerr << "error reading file " << g_conf.keyring << std::endl;
-      }
-      if (read_ok)
-	import_keyring(keyring);
-    }
+  KeyRing keyring;
+  if (keyring.load(g_conf.keyring) == 0) {
+    import_keyring(keyring);
   }
 
   max_global_id = MIN_GLOBAL_ID;
@@ -313,7 +292,7 @@ void AuthMonitor::election_finished()
 uint64_t AuthMonitor::assign_global_id(MAuth *m, bool should_increase_max)
 {
   int total_mon = mon->monmap->size();
-  dout(10) << "AuthMonitor::assign_global_id m=" << *m << " mon=" << mon->whoami << "/" << total_mon
+  dout(10) << "AuthMonitor::assign_global_id m=" << *m << " mon=" << mon->rank << "/" << total_mon
 	   << " last_allocated=" << last_allocated_id << " max_global_id=" <<  max_global_id << dendl;
 
   uint64_t next_global_id = last_allocated_id + 1;
@@ -322,7 +301,7 @@ uint64_t AuthMonitor::assign_global_id(MAuth *m, bool should_increase_max)
     int remainder = next_global_id % total_mon;
     if (remainder)
       remainder = total_mon - remainder;
-    next_global_id += remainder + mon->whoami;
+    next_global_id += remainder + mon->rank;
     dout(10) << "next_global_id should be " << next_global_id << dendl;
   }
 
@@ -380,7 +359,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       ::decode(supported, indata);
       ::decode(entity_name, indata);
       ::decode(s->global_id, indata);
-    } catch (buffer::error *e) {
+    } catch (const buffer::error &e) {
       dout(10) << "failed to decode initial auth message" << dendl;
       ret = -EINVAL;
       goto reply;
@@ -436,14 +415,14 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       s->caps.parse(iter);
       s->caps.set_auid(auid);
     }
-  } catch (buffer::error *err) {
+  } catch (const buffer::error &err) {
     ret = -EINVAL;
     dout(0) << "caught error when trying to handle auth request, probably malformed request" << dendl;
   }
 
 reply:
   reply = new MAuthReply(proto, &response_bl, ret, s->global_id);
-  mon->messenger->send_message(reply, m->get_orig_source_inst());
+  mon->send_reply(m, reply);
   m->put();
 done:
   s->put();
@@ -562,7 +541,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
       KeyRing keyring;
       try {
         ::decode(keyring, iter);
-      } catch (buffer::error *err) {
+      } catch (const buffer::error &err) {
         ss << "error decoding keyring";
         rs = -EINVAL;
         goto done;
@@ -589,7 +568,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
       KeyRing keyring;
       try {
         ::decode(keyring, iter);
-      } catch (buffer::error *err) {
+      } catch (const buffer::error &err) {
         ss << "error decoding keyring";
         rs = -EINVAL;
         goto done;

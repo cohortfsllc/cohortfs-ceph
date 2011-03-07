@@ -5,12 +5,13 @@
 
 using namespace std;
 
-#include "config.h"
+#include "common/config.h"
 
-#include <openssl/rand.h>
+#include <cryptopp/osrng.h>
+#include "common/ceph_argparse.h"
 #include "common/common_init.h"
 
-#include "common/base64.h"
+#include "common/armor.h"
 #include "rgw_user.h"
 #include "rgw_access.h"
 #include "rgw_acl.h"
@@ -25,12 +26,12 @@ void usage()
   cerr << "options:" << std::endl;
   cerr << "   --uid=<id> (S3 uid)" << std::endl;
   cerr << "   --auth_uid=<auid> (librados uid)" << std::endl;
-  cerr << "   --key=<key>" << std::endl;
+  cerr << "   --secret=<key>" << std::endl;
   cerr << "   --email=<email>" << std::endl;
   cerr << "   --display-name=<name>" << std::endl;
   cerr << "   --bucket=<bucket>" << std::endl;
   cerr << "   --object=<object>" << std::endl;
-  generic_usage();
+  generic_client_usage();
   exit(1);
 }
 
@@ -39,17 +40,16 @@ int gen_rand_base64(char *dest, int size) /* size should be the required string 
   unsigned char buf[size];
   char tmp_dest[size + 4]; /* so that there's space for the extra '=' characters, and some */
 
-  int ret = RAND_bytes(buf, sizeof(buf));
-  if (!ret) {
-    cerr << "RAND_bytes failed, entropy problem?" << std::endl;
-    return -1;
-  }
+  CryptoPP::AutoSeededRandomPool rng;
+  rng.GenerateBlock(buf, sizeof(buf));
 
-  ret = encode_base64((const char *)buf, ((size - 1) * 3 + 4 - 1) / 4, tmp_dest, sizeof(tmp_dest));
+  int ret = ceph_armor(tmp_dest, &tmp_dest[sizeof(tmp_dest)],
+		   (const char *)buf, ((const char *)buf) + ((size - 1) * 3 + 4 - 1) / 4);
   if (ret < 0) {
-    cerr << "encode_base64 failed" << std::endl;
+    cerr << "ceph_armor failed" << std::endl;
     return -1;
   }
+  tmp_dest[ret] = '\0';
   memcpy(dest, tmp_dest, size);
   dest[size] = '\0';
 
@@ -60,11 +60,8 @@ static const char alphanum_table[]="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 int gen_rand_alphanumeric(char *dest, int size) /* size should be the required string size + 1 */
 {
-  int ret = RAND_bytes((unsigned char *)dest, size);
-  if (!ret) {
-    cerr << "RAND_bytes failed, entropy problem?" << std::endl;
-    return -1;
-  }
+  CryptoPP::AutoSeededRandomPool rng;
+  rng.GenerateBlock((unsigned char *)dest, size);
 
   int i;
   for (i=0; i<size - 1; i++) {
@@ -86,8 +83,8 @@ int main(int argc, char **argv)
   argv_to_vec(argc, (const char **)argv, args);
   env_to_vec(args);
 
-  common_set_defaults(true);
-  common_init(args, "rgw", true);
+  common_init(args, "rgw",
+	      STARTUP_FLAG_FORCE_FG_LOGGING | STARTUP_FLAG_INIT_KEYS);
 
   const char *user_id = 0;
   const char *secret_key = 0;
@@ -104,8 +101,6 @@ int main(int argc, char **argv)
   uint64_t auid = 0;
   RGWUserInfo info;
   RGWAccess *store;
-
-  if (g_conf.clock_tare) g_clock.tare();
 
   FOR_EACH_ARG(args) {
     if (CONF_ARG_EQ("user-gen", 'g')) {

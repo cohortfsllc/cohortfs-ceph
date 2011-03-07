@@ -65,7 +65,7 @@ using namespace __gnu_cxx;
 #include "utime.h"
 #include "intarith.h"
 
-#include "../acconfig.h"
+#include "acconfig.h"
 
 // DARWIN compatibility
 #ifdef DARWIN
@@ -211,10 +211,12 @@ struct ltstr
 
 WRITE_RAW_ENCODER(ceph_fsid)
 WRITE_RAW_ENCODER(ceph_file_layout)
+WRITE_RAW_ENCODER(ceph_dir_layout)
 WRITE_RAW_ENCODER(ceph_pg_pool)
 WRITE_RAW_ENCODER(ceph_mds_session_head)
 WRITE_RAW_ENCODER(ceph_mds_request_head)
 WRITE_RAW_ENCODER(ceph_mds_request_release)
+WRITE_RAW_ENCODER(ceph_filelock)
 WRITE_RAW_ENCODER(ceph_mds_caps)
 WRITE_RAW_ENCODER(ceph_mds_cap_release)
 WRITE_RAW_ENCODER(ceph_mds_cap_item)
@@ -292,7 +294,7 @@ struct inodeno_t {
   inodeno_t(_inodeno_t v) : val(v) {}
   inodeno_t operator+=(inodeno_t o) { val += o.val; return *this; }
   operator _inodeno_t() const { return val; }
-};
+} __attribute__ ((__may_alias__));
 
 inline void encode(inodeno_t i, bufferlist &bl) { encode(i.val, bl); }
 inline void decode(inodeno_t &i, bufferlist::iterator &p) { decode(i.val, p); }
@@ -422,7 +424,7 @@ inline ostream& operator<<(ostream& out, const SnapContext& snapc) {
 
 inline ostream& operator<<(ostream& out, const ceph_fsid& f) {
   char b[37];
-  sprintf(b, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+  snprintf(b, sizeof(b), "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 	  f.fsid[0], f.fsid[1], f.fsid[2], f.fsid[3], f.fsid[4], f.fsid[5], f.fsid[6], f.fsid[7],
 	  f.fsid[8], f.fsid[9], f.fsid[10], f.fsid[11], f.fsid[12], f.fsid[13], f.fsid[14], f.fsid[15]);
   return out << b;
@@ -475,5 +477,28 @@ inline ostream& operator<<(ostream& out, const ceph_mon_subscribe_item& i)
   return out << i.start
 	     << ((i.flags & CEPH_SUBSCRIBE_ONETIME) ? "" : "+");
 }
+
+enum health_status_t {
+  HEALTH_ERR = 0,
+  HEALTH_WARN = 1,
+  HEALTH_OK = 2,
+};
+
+#ifdef __cplusplus
+inline ostream& operator<<(ostream &oss, health_status_t status) {
+  switch (status) {
+    case HEALTH_ERR:
+      oss << "HEALTH_ERR";
+      break;
+    case HEALTH_WARN:
+      oss << "HEALTH_WARN";
+      break;
+    case HEALTH_OK:
+      oss << "HEALTH_OK";
+      break;
+  }
+  return oss;
+};
+#endif
 
 #endif

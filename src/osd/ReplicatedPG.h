@@ -16,13 +16,48 @@
 
 
 #include "PG.h"
+#include "OSD.h"
+#include "Watch.h"
 
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
 class MOSDSubOp;
 class MOSDSubOpReply;
 
+class PGLSFilter {
+protected:
+  string xattr;
+public:
+  PGLSFilter() {}
+  virtual bool filter(bufferlist& xattr_data, bufferlist& outdata) = 0;
+  virtual string& get_xattr() { return xattr; }
+};
+
+class PGLSPlainFilter : public PGLSFilter {
+  string val;
+public:
+  PGLSPlainFilter(bufferlist::iterator& params) {
+    ::decode(xattr, params);
+    ::decode(val, params);
+  }
+  virtual ~PGLSPlainFilter() {}
+  virtual bool filter(bufferlist& xattr_data, bufferlist& outdata);
+};
+
+class PGLSParentFilter : public PGLSFilter {
+  inodeno_t parent_ino;
+public:
+  PGLSParentFilter(bufferlist::iterator& params) {
+    xattr = "_parent";
+    ::decode(parent_ino, params);
+    generic_dout(0) << "parent_ino=" << parent_ino << dendl;
+  }
+  virtual ~PGLSParentFilter() {}
+  virtual bool filter(bufferlist& xattr_data, bufferlist& outdata);
+};
+
 class ReplicatedPG : public PG {
+  friend class OSD;
 public:  
 
   /*
@@ -72,7 +107,8 @@ public:
     bool exists;
     SnapSetContext *ssc;  // may be null
 
-    ObjectState(const sobject_t& s) : oi(s), exists(false), ssc(NULL) {}
+    ObjectState(const object_info_t &oi_, bool exists_, SnapSetContext *ssc_)
+      : oi(oi_), exists(exists_), ssc(ssc_) {}
   };
 
 
@@ -232,8 +268,17 @@ public:
     Cond cond;
     int unstable_writes, readers, writers_waiting, readers_waiting;
 
-    ObjectContext(const sobject_t& s) :
-      ref(0), registered(false), obs(s),
+    // any entity in obs.oi.watchers MUST be in either watchers or unconnected_watchers.
+    map<entity_name_t, OSD::Session *> watchers;
+    map<entity_name_t, utime_t> unconnected_watchers;
+    map<Watch::Notification *, bool> notifs;
+
+    /*    ObjectContext(const sobject_t& s, const object_locator_t& ol) :
+      ref(0), registered(false), obs(s, ol),
+      lock("ReplicatedPG::ObjectContext::lock"),
+      unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0) {}*/
+    ObjectContext(const object_info_t &oi_, bool exists_, SnapSetContext *ssc_)
+      : ref(0), registered(false), obs(oi_, exists_, ssc_),
       lock("ReplicatedPG::ObjectContext::lock"),
       unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0) {}
 
@@ -293,10 +338,12 @@ public:
     utime_t mtime;
     SnapContext snapc;           // writer snap context
     eversion_t at_version;       // pg's current version pointer
+    eversion_t reply_version;    // the version that we report the client (depends on the op)
 
     ObjectStore::Transaction op_t, local_t;
     vector<PG::Log::Entry> log;
 
+    ObjectContext *obc;
     ObjectContext *clone_obc;    // if we created a clone
     ObjectContext *snapset_obc;  // if we created/deleted a snapdir
 
@@ -310,7 +357,7 @@ public:
 	      ObjectState *_obs, ReplicatedPG *_pg) :
       op(_op), reqid(_reqid), ops(_ops), obs(_obs),
       bytes_written(0),
-      clone_obc(0), snapset_obc(0), data_off(0), reply(NULL), pg(_pg) {}
+      obc(0), clone_obc(0), snapset_obc(0), data_off(0), reply(NULL), pg(_pg) {}
     ~OpContext() {
       assert(!clone_obc);
       if (reply)
@@ -416,7 +463,8 @@ protected:
     }
     return NULL;
   }
-  ObjectContext *get_object_context(const sobject_t& soid, bool can_create=true);
+  ObjectContext *get_object_context(const sobject_t& soid, const object_locator_t& oloc,
+				    bool can_create);
   void register_object_context(ObjectContext *obc) {
     if (!obc->registered) {
       obc->registered = true;
@@ -426,7 +474,9 @@ protected:
       register_snapset_context(obc->obs.ssc);
   }
   void put_object_context(ObjectContext *obc);
-  int find_object_context(const object_t& oid, snapid_t snapid, ObjectContext **pobc, bool can_create);
+  int find_object_context(const object_t& oid, const object_locator_t& oloc,
+			  snapid_t snapid, ObjectContext **pobc,
+			  bool can_create, snapid_t *psnapid=NULL);
 
   SnapSetContext *get_snapset_context(const object_t& oid, bool can_create);
   void register_snapset_context(SnapSetContext *ssc) {
@@ -441,10 +491,6 @@ protected:
     return !object_contexts.empty();
   }
 
-  // load balancing
-  set<sobject_t> balancing_reads;
-  set<sobject_t> unbalancing_reads;
-  hash_map<sobject_t, list<Message*> > waiting_for_unbalanced_reads;  // i.e. primary-lock
 
   
   // pull
@@ -465,7 +511,7 @@ protected:
   };
   map<sobject_t, map<int, push_info_t> > pushing;
 
-  int recover_object_replicas(const sobject_t& soid);
+  int recover_object_replicas(const sobject_t& soid, eversion_t v);
   void calc_head_subsets(SnapSet& snapset, const sobject_t& head,
 			 Missing& missing,
 			 interval_set<uint64_t>& data_subset,
@@ -479,12 +525,13 @@ protected:
 		  uint64_t size, eversion_t version,
 		  interval_set<uint64_t> &data_subset,
 		  map<sobject_t, interval_set<uint64_t> >& clone_subsets);
-  void send_push_op(const sobject_t& oid, int dest,
-		    uint64_t size, bool first, bool complete,
-		    interval_set<uint64_t>& data_subset, 
-		    map<sobject_t, interval_set<uint64_t> >& clone_subsets);
+  int send_push_op(const sobject_t& oid, eversion_t version, int dest,
+		   uint64_t size, bool first, bool complete,
+		   interval_set<uint64_t>& data_subset, 
+		   map<sobject_t, interval_set<uint64_t> >& clone_subsets);
+  void send_push_op_blank(const sobject_t& soid, int peer);
 
-  bool pull(const sobject_t& oid);
+  int pull(const sobject_t& oid);
   void send_pull_op(const sobject_t& soid, eversion_t v, bool first, const interval_set<uint64_t>& data_subset, int fromosd);
 
 
@@ -510,6 +557,9 @@ protected:
   int start_recovery_ops(int max);
   int recover_primary(int max);
   int recover_replicas(int max);
+
+  void dump_watchers(ObjectContext *obc);
+  void do_complete_notify(Watch::Notification *notif, ObjectContext *obc);
 
   struct RepModify {
     ReplicatedPG *pg;
@@ -569,6 +619,7 @@ protected:
   void sub_op_modify_reply(MOSDSubOpReply *reply);
   void _wrote_pushed_object(ObjectStore::Transaction *t, ObjectContext *obc);
   void sub_op_push(MOSDSubOp *op);
+  void _failed_push(MOSDSubOp *op);
   void sub_op_push_reply(MOSDSubOpReply *reply);
   void sub_op_pull(MOSDSubOp *op);
 
@@ -586,13 +637,20 @@ protected:
   int do_xattr_cmp_u64(int op, __u64 v1, bufferlist& xattr);
   int do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr);
 
+  int prepare_call(MOSDOp *osd_op, ceph_osd_op& op,
+		   string& cname, string& mname,
+		   bufferlist::iterator& bp,
+		   ClassHandler::ClassMethod **pmethod);
+
+  bool pgls_filter(PGLSFilter *filter, sobject_t& sobj, bufferlist& outdata);
+  int get_pgls_filter(bufferlist::iterator& iter, PGLSFilter **pfilter);
+
 public:
-  ReplicatedPG(OSD *o, PGPool *_pool, pg_t p, const sobject_t& oid) : 
-    PG(o, _pool, p, oid)
+  ReplicatedPG(OSD *o, PGPool *_pool, pg_t p, const sobject_t& oid, const sobject_t& ioid) : 
+    PG(o, _pool, p, oid, ioid)
   { }
   ~ReplicatedPG() {}
 
-  bool preprocess_op(MOSDOp *op, utime_t now);
   void do_op(MOSDOp *op);
   void do_pg_op(MOSDOp *op);
   void do_sub_op(MOSDSubOp *op);

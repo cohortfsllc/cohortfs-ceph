@@ -28,6 +28,7 @@
 #include "common/DecayCounter.h"
 
 #include <list>
+#include <memory>
 #include <string>
 using namespace std;
 
@@ -79,7 +80,19 @@ struct PGPool {
 
 class PG {
 public:
-  
+  /* Exceptions */
+  class read_log_error : public buffer::error {
+  public:
+    explicit read_log_error(const char *what) {
+      snprintf(buf, sizeof(buf), "read_log_error: %s", what);
+    }
+    const char *what() const throw () {
+      return buf;
+    }
+  private:
+    char buf[512];
+  };
+
   /*
    * PG::Info - summary of PG statistics.
    *
@@ -104,51 +117,71 @@ public:
     struct History {
       epoch_t epoch_created;       // epoch in which PG was created
       epoch_t last_epoch_started;  // lower bound on last epoch started (anywhere, not necessarily locally)
+      epoch_t last_epoch_clean;    // lower bound on last epoch the PG was completely clean.
       epoch_t last_epoch_split;    // as parent
 
       epoch_t same_up_since;       // same acting set since
       epoch_t same_acting_since;   // same acting set since
       epoch_t same_primary_since;  // same primary at least back through this epoch.
+
+      eversion_t last_scrub;
+      utime_t last_scrub_stamp;
+
       History() : 	      
 	epoch_created(0),
-	last_epoch_started(0), last_epoch_split(0),
+	last_epoch_started(0), last_epoch_clean(0), last_epoch_split(0),
 	same_up_since(0), same_acting_since(0), same_primary_since(0) {}
 
       void merge(const History &other) {
+	// Here, we only update the fields which cannot be calculated from the OSDmap.
 	if (epoch_created < other.epoch_created)
 	  epoch_created = other.epoch_created;
 	if (last_epoch_started < other.last_epoch_started)
 	  last_epoch_started = other.last_epoch_started;
 	if (last_epoch_split < other.last_epoch_started)
 	  last_epoch_split = other.last_epoch_started;
+	if (other.last_scrub > last_scrub)
+	  last_scrub = other.last_scrub;
+	if (other.last_scrub_stamp > last_scrub_stamp)
+	  last_scrub_stamp = other.last_scrub_stamp;
       }
 
       void encode(bufferlist &bl) const {
-	__u8 struct_v = 1;
+	__u8 struct_v = 3;
 	::encode(struct_v, bl);
 	::encode(epoch_created, bl);
 	::encode(last_epoch_started, bl);
+	::encode(last_epoch_clean, bl);
 	::encode(last_epoch_split, bl);
 	::encode(same_acting_since, bl);
 	::encode(same_up_since, bl);
 	::encode(same_primary_since, bl);
+	::encode(last_scrub, bl);
+	::encode(last_scrub_stamp, bl);
       }
       void decode(bufferlist::iterator &bl) {
 	__u8 struct_v;
 	::decode(struct_v, bl);
 	::decode(epoch_created, bl);
 	::decode(last_epoch_started, bl);
+	if (struct_v >= 3)
+	  ::decode(last_epoch_clean, bl);
+	else
+	  last_epoch_clean = last_epoch_started;  // careful, it's a lie!
 	::decode(last_epoch_split, bl);
 	::decode(same_acting_since, bl);
 	::decode(same_up_since, bl);
 	::decode(same_primary_since, bl);
+	if (struct_v >= 2) {
+	  ::decode(last_scrub, bl);
+	  ::decode(last_scrub_stamp, bl);
+	}
       }
     } history;
     
     Info() : log_backlog(false) {}
     Info(pg_t p) : pgid(p), log_backlog(false) { }
 
-    bool is_uptodate() const { return last_update == last_complete; }
     bool is_empty() const { return last_update.version == 0; }
     bool dne() const { return history.epoch_created == 0; }
 
@@ -238,15 +271,15 @@ public:
     /** Entry
      */
     struct Entry {
-      const static int LOST = 0;
+      const static int LOST = 0;        // lost new version, now deleted
       const static int MODIFY = 1;
       const static int CLONE = 2;  
       const static int DELETE = 3;
       const static int BACKLOG = 4;  // event invented by generate_backlog
+      const static int LOST_REVERT = 5; // lost new version, reverted to old
 
-      __s32      op;   // write, zero, trunc, remove
+      __s32      op;
       sobject_t  soid;
-      snapid_t   snap;
       eversion_t version, prior_version;
       osd_reqid_t reqid;  // caller+tid to uniquely identify request
       utime_t     mtime;  // this is the _user_ mtime, mind you
@@ -264,10 +297,12 @@ public:
       bool is_clone() const { return op == CLONE; }
       bool is_modify() const { return op == MODIFY; }
       bool is_backlog() const { return op == BACKLOG; }
-      bool is_update() const { return is_clone() || is_modify() || is_backlog(); }
+      bool is_lost() const { return op == LOST; }
+      bool is_lost_revert() const { return op == LOST_REVERT; }
+      bool is_update() const { return is_clone() || is_modify() || is_backlog() || is_lost_revert(); }
 
       bool reqid_is_indexed() const {
-	return reqid != osd_reqid_t() && op != BACKLOG && op != CLONE;
+	return reqid != osd_reqid_t() && op != BACKLOG && op != CLONE && op != LOST && op != LOST_REVERT;
       }
 
       void encode(bufferlist &bl) const {
@@ -303,8 +338,8 @@ public:
      *          complete negative information.  
      * i.e. we can infer pg contents for any store whose last_update >= tail.
      */
-    eversion_t head;    // newest entry (update|delete)
-    eversion_t tail;    // version prior to oldest (update|delete) 
+    eversion_t head;    // newest entry
+    eversion_t tail;    // version prior to oldest
 
     /*
      * backlog - true if log is a complete summary of pg contents.
@@ -414,7 +449,10 @@ public:
            i != log.end();
            i++) {
         objects[i->soid] = &(*i);
-        caller_ops[i->reqid] = &(*i);
+	if (i->reqid_is_indexed()) {
+	  //assert(caller_ops.count(i->reqid) == 0);  // divergent merge_log indexes new before unindexing old
+	  caller_ops[i->reqid] = &(*i);
+	}
       }
     }
 
@@ -422,8 +460,10 @@ public:
       if (objects.count(e.soid) == 0 || 
           objects[e.soid]->version < e.version)
         objects[e.soid] = &e;
-      if (e.reqid_is_indexed())
+      if (e.reqid_is_indexed()) {
+	//assert(caller_ops.count(i->reqid) == 0);  // divergent merge_log indexes new before unindexing old
 	caller_ops[e.reqid] = &e;
+      }
     }
     void unindex() {
       objects.clear();
@@ -433,10 +473,10 @@ public:
       // NOTE: this only works if we remove from the _tail_ of the log!
       if (objects.count(e.soid) && objects[e.soid]->version == e.version)
         objects.erase(e.soid);
-      if (e.reqid_is_indexed()) {
-	assert(caller_ops.count(e.reqid));
+      if (e.reqid_is_indexed() &&
+	  caller_ops.count(e.reqid) &&  // divergent merge_log indexes new before unindexing old
+	  caller_ops[e.reqid] == &e)
 	caller_ops.erase(e.reqid);
-      }
     }
 
 
@@ -479,6 +519,7 @@ public:
     // ok
     uint64_t tail;                     // first byte of log. 
     uint64_t head;                        // byte following end of log.
+    bool has_checksums;
     map<uint64_t,eversion_t> block_map;  // offset->version of _last_ entry with _any_ bytes in each block
 
     OndiskLog() : tail(0), head(0) {}
@@ -493,7 +534,7 @@ public:
     }
 
     void encode(bufferlist& bl) const {
-      __u8 struct_v = 1;
+      __u8 struct_v = 2;
       ::encode(struct_v, bl);
       ::encode(tail, bl);
       ::encode(head, bl);
@@ -501,6 +542,7 @@ public:
     void decode(bufferlist::iterator& bl) {
       __u8 struct_v;
       ::decode(struct_v, bl);
+      has_checksums = (struct_v >= 2);
       ::decode(tail, bl);
       ::decode(head, bl);
     }
@@ -533,107 +575,35 @@ public:
     map<sobject_t, item> missing;         // oid -> (need v, have v)
     map<eversion_t, sobject_t> rmissing;  // v -> oid
 
-    unsigned num_missing() const { return missing.size(); }
-
-    void swap(Missing& o) {
-      missing.swap(o.missing);
-      rmissing.swap(o.rmissing);
-    }
-
-    bool is_missing(const sobject_t& oid) {
-      return missing.count(oid);
-    }
-    bool is_missing(const sobject_t& oid, eversion_t v) {
-      return missing.count(oid) && missing[oid].need <= v;
-    }
-    eversion_t have_old(const sobject_t& oid) {
-      return missing.count(oid) ? missing[oid].have : eversion_t();
-    }
-    
-    /*
-     * this needs to be called in log order as we extend the log.  it
-     * assumes missing is accurate up through the previous log entry.
-     */
-    void add_next_event(Log::Entry& e) {
-      if (e.is_update()) {
-	if (e.prior_version == eversion_t()) {
-	  // new object.
-	  //assert(missing.count(e.soid) == 0);  // might already be missing divergent item.
-	  if (missing.count(e.soid))  // already missing divergent item
-	    rmissing.erase(missing[e.soid].need);
-	  missing[e.soid] = item(e.version, eversion_t());  // .have = nil
-	} else if (missing.count(e.soid)) {
-	  // already missing (prior).
-	  //assert(missing[e.soid].need == e.prior_version);
-	  rmissing.erase(missing[e.soid].need);
-	  missing[e.soid].need = e.version;  // leave .have unchanged.
-	} else {
-	  // not missing, we must have prior_version (if any)
-	  missing[e.soid] = item(e.version, e.prior_version);
-	}
-	rmissing[e.version] = e.soid;
-      } else
-	rm(e.soid, e.version);
-    }
-
-    void add_event(Log::Entry& e) {
-      if (e.is_update()) {
-	if (missing.count(e.soid)) {
-	  if (missing[e.soid].need >= e.version)
-	    return;   // already missing same or newer.
-	  // missing older, revise need
-	  rmissing.erase(missing[e.soid].need);
-	  missing[e.soid].need = e.version;
-	} else 
-	  // not missing => have prior_version (if any)
-	  missing[e.soid] = item(e.version, e.prior_version);
-	rmissing[e.version] = e.soid;
-      } else
-	rm(e.soid, e.version);
-    }
-
-    void revise_need(sobject_t oid, eversion_t need) {
-      if (missing.count(oid)) {
-	rmissing.erase(missing[oid].need);
-	missing[oid].need = need;            // no not adjust .have
-      } else {
-	missing[oid] = item(need, eversion_t());
-      }
-      rmissing[need] = oid;
-    }
-
-    void add(const sobject_t& oid, eversion_t need, eversion_t have) {
-      missing[oid] = item(need, have);
-      rmissing[need] = oid;
-    }
-    
-    void rm(const sobject_t& oid, eversion_t when) {
-      if (missing.count(oid) && missing[oid].need < when) {
-        rmissing.erase(missing[oid].need);
-        missing.erase(oid);
-      }
-    }
-    void got(const sobject_t& oid, eversion_t v) {
-      assert(missing.count(oid));
-      assert(missing[oid].need <= v);
-      rmissing.erase(missing[oid].need);
-      missing.erase(oid);
-    }
+    unsigned int num_missing() const;
+    bool have_missing() const;
+    void swap(Missing& o);
+    bool is_missing(const sobject_t& oid) const;
+    bool is_missing(const sobject_t& oid, eversion_t v) const;
+    eversion_t have_old(const sobject_t& oid) const;
+    void add_next_event(Log::Entry& e);
+    void add_event(Log::Entry& e);
+    void revise_need(sobject_t oid, eversion_t need);
+    void add(const sobject_t& oid, eversion_t need, eversion_t have);
+    void rm(const sobject_t& oid, eversion_t when);
+    void got(const sobject_t& oid, eversion_t v);
+    void got(const std::map<sobject_t, Missing::item>::iterator &m);
 
     void encode(bufferlist &bl) const {
       __u8 struct_v = 1;
       ::encode(struct_v, bl);
       ::encode(missing, bl);
     }
+
     void decode(bufferlist::iterator &bl) {
       __u8 struct_v;
       ::decode(struct_v, bl);
       ::decode(missing, bl);
 
       for (map<sobject_t,item>::iterator it = missing.begin();
-           it != missing.end();
-           it++) 
-        rmissing[it->second.need] = it->first;
+	   it != missing.end();
+	   ++it)
+	rmissing[it->second.need] = it->first;
     }
   };
   WRITE_CLASS_ENCODER(Missing)
@@ -665,6 +635,10 @@ public:
   void unlock() {
     //generic_dout(0) << this << " " << info.pgid << " unlock" << dendl;
     _lock.Unlock();
+  }
+  void assert_locked() {
+    //generic_dout(0) << this << " " << info.pgid << " unlock" << dendl;
+    assert(_lock.is_locked());
   }
   void wait() {
     assert(_lock.is_locked());
@@ -720,13 +694,15 @@ public:
 
   // pg state
   Info        info;
+  const coll_t coll;
   IndexedLog  log;
   sobject_t    log_oid;
+  sobject_t    biginfo_oid;
   OndiskLog   ondisklog;
   Missing     missing;
   map<sobject_t, set<int> > missing_loc;
   
-  set<snapid_t> snap_collections;
+  interval_set<snapid_t> snap_collections;
   map<epoch_t,Interval> past_intervals;
 
   interval_set<snapid_t> snap_trimq;
@@ -747,6 +723,7 @@ protected:
 public:
   eversion_t  last_update_ondisk;    // last_update that has committed; ONLY DEFINED WHEN is_active()
   eversion_t  last_complete_ondisk;  // last_complete that has committed.
+  eversion_t  last_update_applied;
 
   // primary state
  public:
@@ -758,39 +735,49 @@ public:
   // [primary only] content recovery state
   bool        have_master_log;
  protected:
-  set<int>    prior_set;   // current+prior OSDs, as defined by info.history.last_epoch_started.
-  set<int>    prior_set_down;          // down osds exluded from prior_set
-  map<int,epoch_t> prior_set_up_thru;  // osds whose up_thru we care about
+  bool prior_set_built;
+  struct PgPriorSet {
+    set<int>    cur;   // current+prior OSDs, as defined by info.history.last_epoch_started.
+    set<int>    down;  // down osds normally exluded from cur
+    set<int>    lost;  // osds in the prior set which are lost
+    map<int,epoch_t> up_thru;  // osds whose up_thru we care about
+  };
+
+  friend std::ostream& operator<<(std::ostream& oss,
+				  const struct PgPriorSet &prior);
+
+  std::auto_ptr < PgPriorSet > prior_set;
+
   bool        need_up_thru;
   set<int>    stray_set;   // non-acting osds that have PG data.
-  set<int>    uptodate_set;  // current OSDs that are uptodate
   eversion_t  oldest_update; // acting: lowest (valid) last_update in active set
   map<int,Info>        peer_info;   // info from peers (stray or prior)
   set<int>             peer_info_requested;
   map<int, Missing>    peer_missing;
   set<int>             peer_log_requested;  // logs i've requested (and start stamps)
-  set<int>             peer_summary_requested;
+  set<int>             peer_backlog_requested;
+  set<int>             peer_missing_requested;
   set<int>             stray_purged;  // i deleted these strays; ignore racing PGInfo from them
+
+  // primary-only, recovery-only state
+  set<int>             might_have_unfound;  // These osds might have objects on them
+					    // which are unfound on the primary
   friend class OSD;
 
 
   // pg waiters
   list<class Message*>            waiting_for_active;
-  hash_map<sobject_t, 
-           list<class Message*> > waiting_for_missing_object, waiting_for_degraded_object;   
+  map<sobject_t, list<class Message*> > waiting_for_missing_object,
+                                        waiting_for_degraded_object;
   map<eversion_t,list<Message*> > waiting_for_ondisk;
   map<eversion_t,class MOSDOp*>   replay_queue;
 
-  void take_object_waiters(hash_map<sobject_t, list<Message*> >& m);
+  void take_object_waiters(map<sobject_t, list<Message*> >& m);
   
-  hash_map<sobject_t, list<Message*> > waiting_for_wr_unlock; 
-
   bool block_if_wrlocked(MOSDOp* op, object_info_t& oi);
 
 
   // stats
-  hash_map<sobject_t, DecayCounter> stat_object_temp_rd;
-
   Mutex pg_stats_lock;
   bool pg_stats_valid;
   pg_stat_t pg_stats_stable;
@@ -815,16 +802,19 @@ public:
       if (up[i] == osd) return true;
     return false;
   }
-  bool is_prior(int osd) const { return prior_set.count(osd); }
-  bool is_stray(int osd) const { return stray_set.count(osd); }
   
-  bool is_all_uptodate() const { return uptodate_set.size() == acting.size() && up == acting; }
+  bool is_all_uptodate() const;
 
   void generate_past_intervals();
   void trim_past_intervals();
   void build_prior();
   void clear_prior();
-  bool prior_set_affected(OSDMap *map);
+  bool prior_set_affected(const OSDMap *map) const;
+
+  bool all_unfound_are_lost(const OSDMap* osdmap) const;
+  void mark_obj_as_lost(ObjectStore::Transaction& t,
+			const sobject_t &lost_soid);
+  void mark_all_unfound_as_lost(ObjectStore::Transaction& t);
 
   bool calc_min_last_complete_ondisk() {
     eversion_t min = last_complete_ondisk;
@@ -843,12 +833,18 @@ public:
 
   virtual void calc_trim_to() = 0;
 
-  void proc_replica_log(ObjectStore::Transaction& t, Info &oinfo, Log &olog, Missing& omissing, int from);
+  void proc_replica_log(ObjectStore::Transaction& t, Info &oinfo, Log &olog,
+			Missing& omissing, int from);
   bool merge_old_entry(ObjectStore::Transaction& t, Log::Entry& oe);
-  void merge_log(ObjectStore::Transaction& t, Info &oinfo, Log &olog, Missing& omissing, int from);
-  void search_for_missing(Log &olog, Missing &omissing, int fromosd);
+  void merge_log(ObjectStore::Transaction& t, Info &oinfo, Log &olog, int from);
+  void search_for_missing(const Info &oinfo, const Missing *omissing,
+			  int fromosd);
 
   void check_for_lost_objects();
+  void forget_lost_objects();
+
+  void discover_all_missing(std::map< int, map<pg_t,PG::Query> > &query_map,
+			    bool desperate=false);
   
   bool build_backlog_map(map<eversion_t,Log::Entry>& omap);
   void assemble_backlog(map<eversion_t,Log::Entry>& omap);
@@ -857,12 +853,23 @@ public:
   void trim_write_ahead();
 
   bool choose_acting(int newest_update_osd);
-  bool recover_master_log(map< int, map<pg_t,Query> >& query_map);
-  void peer(ObjectStore::Transaction& t, list<Context*>& tfin,
-	    map< int, map<pg_t,Query> >& query_map,
-	    map<int, MOSDPGInfo*> *activator_map=0);
+  bool recover_master_log(map< int, map<pg_t,Query> >& query_map,
+			    eversion_t &oldest_update);
+  eversion_t calc_oldest_known_update() const;
+  void do_peer(ObjectStore::Transaction& t, list<Context*>& tfin,
+	      map< int, map<pg_t,Query> >& query_map,
+	      map<int, MOSDPGInfo*> *activator_map=0);
+  void build_might_have_unfound();
   void activate(ObjectStore::Transaction& t, list<Context*>& tfin,
+		map< int, map<pg_t,Query> >& query_map,
 		map<int, MOSDPGInfo*> *activator_map=0);
+
+  bool have_unfound() const { 
+    return missing.num_missing() > missing_loc.size();
+  }
+  int get_num_unfound() const {
+    return missing.num_missing() - missing_loc.size();
+  }
 
   virtual void clean_up_local(ObjectStore::Transaction& t) = 0;
 
@@ -889,23 +896,37 @@ public:
 
 
   // -- scrub --
+  set<int> scrub_reserved_peers;
   map<int,ScrubMap> peer_scrub_map;
+  bool finalizing_scrub; 
+  bool scrub_reserved, scrub_reserve_failed;
 
-  void repair_object(ScrubMap::object *po, int bad_peer, int ok_peer);
+  void repair_object(const sobject_t& soid, ScrubMap::object *po, int bad_peer, int ok_peer);
   void scrub();
+  void _scan_list(ScrubMap &map, vector<sobject_t> &ls);
+  void _request_scrub_map(int replica, eversion_t version);
   void build_scrub_map(ScrubMap &map);
+  void build_inc_scrub_map(ScrubMap &map, eversion_t v);
   virtual int _scrub(ScrubMap &map, int& errors, int& fixed) { return 0; }
+  void clear_scrub_reserved();
+  void scrub_reserve_replicas();
+  void scrub_unreserve_replicas();
+  bool scrub_all_replicas_reserved() const;
+  bool sched_scrub();
 
-  void sub_op_scrub(class MOSDSubOp *op);
-  void sub_op_scrub_reply(class MOSDSubOpReply *op);
-
+  void replica_scrub(class MOSDRepScrub *op);
+  void sub_op_scrub_map(class MOSDSubOp *op);
+  void sub_op_scrub_reserve(class MOSDSubOp *op);
+  void sub_op_scrub_reserve_reply(class MOSDSubOpReply *op);
+  void sub_op_scrub_unreserve(class MOSDSubOp *op);
+  void sub_op_scrub_stop(class MOSDSubOp *op);
 
  public:  
-  PG(OSD *o, PGPool *_pool, pg_t p, const sobject_t& oid) : 
+  PG(OSD *o, PGPool *_pool, pg_t p, const sobject_t& loid, const sobject_t& ioid) : 
     osd(o), pool(_pool),
     _lock("PG::_lock"),
     ref(0), deleting(false), dirty_info(false), dirty_log(false),
-    info(p), log_oid(oid),
+    info(p), coll(p), log_oid(loid), biginfo_oid(ioid),
     recovery_item(this), backlog_item(this), scrub_item(this), snap_trim_item(this), remove_item(this), stat_queue_item(this),
     recovery_ops_active(0),
     generate_backlog_epoch(0),
@@ -915,7 +936,9 @@ public:
     need_up_thru(false),
     pg_stats_lock("PG::pg_stats_lock"),
     pg_stats_valid(false),
-    finish_sync_event(NULL)
+    finish_sync_event(NULL),
+    finalizing_scrub(false),
+    scrub_reserved(false), scrub_reserve_failed(false)
   {
     pool->get();
   }
@@ -923,6 +946,12 @@ public:
     pool->put();
   }
   
+ private:
+  // Prevent copying
+  PG(const PG& rhs);
+  PG& operator=(const PG& rhs);
+
+ public:
   pg_t       get_pgid() const { return info.pgid; }
   int        get_nrep() const { return acting.size(); }
 
@@ -947,7 +976,6 @@ public:
   bool       is_crashed() const { return state_test(PG_STATE_CRASHED); }
   bool       is_down() const { return state_test(PG_STATE_DOWN); }
   bool       is_replay() const { return state_test(PG_STATE_REPLAY); }
-  //bool       is_complete()    { return state_test(PG_STATE_COMPLETE); }
   bool       is_clean() const { return state_test(PG_STATE_CLEAN); }
   bool       is_degraded() const { return state_test(PG_STATE_DEGRADED); }
   bool       is_stray() const { return state_test(PG_STATE_STRAY); }
@@ -955,8 +983,6 @@ public:
   bool       is_scrubbing() const { return state_test(PG_STATE_SCRUBBING); }
 
   bool  is_empty() const { return info.last_update == eversion_t(0,0); }
-
-  //bool is_complete_pg() { return acting.size() == info.pgid.size(); }
 
   void add_log_entry(Log::Entry& e, bufferlist& log_bl);
 
@@ -971,15 +997,18 @@ public:
   void trim_ondisklog_to(ObjectStore::Transaction& t, eversion_t v);
   void trim_peers();
 
+  std::string get_corrupt_pg_log_name() const;
   void read_state(ObjectStore *store);
   coll_t make_snap_collection(ObjectStore::Transaction& t, snapid_t sn);
+  void adjust_local_snaps(ObjectStore::Transaction &t, interval_set<snapid_t> &to_check);
 
   void queue_snap_trim();
+  bool queue_scrub();
 
-
+  void share_pg_info();
+  void share_pg_log(const eversion_t &oldver);
 
   // abstract bits
-  virtual bool preprocess_op(MOSDOp *op, utime_t now) { return false; } 
   virtual void do_op(MOSDOp *op) = 0;
   virtual void do_sub_op(MOSDSubOp *op) = 0;
   virtual void do_sub_op_reply(MOSDSubOpReply *op) = 0;
@@ -1047,7 +1076,9 @@ inline ostream& operator<<(ostream& out, const PG::Log::Entry& e)
 		 (e.is_clone() ? " c ":
 		  (e.is_modify() ? " m ":
 		   (e.is_backlog() ? " b ":
-		    " ? "))))
+		    (e.is_lost() ? " L ":
+		     (e.is_lost_revert() ? " R " :
+		      " ? "))))))
              << e.soid << " by " << e.reqid << " " << e.mtime;
 }
 
@@ -1083,72 +1114,6 @@ inline ostream& operator<<(ostream& out, const PG::Interval& i)
   return out;
 }
 
-inline ostream& operator<<(ostream& out, const PG& pg)
-{
-  out << "pg[" << pg.info
-      << " " << pg.up;
-  if (pg.acting != pg.up)
-    out << "/" << pg.acting;
-  out << " r=" << pg.get_role();
-  
-  if (pg.is_active() &&
-      pg.last_update_ondisk != pg.info.last_update)
-    out << " luod=" << pg.last_update_ondisk;
-
-  if (pg.recovery_ops_active)
-    out << " rops=" << pg.recovery_ops_active;
-
-  if (pg.log.tail != pg.info.log_tail ||
-      pg.log.head != pg.info.last_update)
-    out << " (info mismatch, " << pg.log << ")";
-
-  if (pg.log.log.empty()) {
-    // shoudl it be?
-    if (pg.log.head.version - pg.log.tail.version != 0) {
-      out << " (log bound mismatch, empty)";
-    }
-  } else {
-    if (((pg.log.log.begin()->version.version <= pg.log.tail.version) &&  // sloppy check
-         !pg.log.backlog) ||
-        (pg.log.log.rbegin()->version.version != pg.log.head.version)) {
-      out << " (log bound mismatch, actual=["
-	  << pg.log.log.begin()->version << ","
-	  << pg.log.log.rbegin()->version << "]";
-      //out << "len=" << pg.log.log.size();
-      out << ")";
-    }
-  }
-
-  if (pg.last_complete_ondisk != pg.info.last_complete)
-    out << " lcod " << pg.last_complete_ondisk;
-
-  if (pg.get_role() == 0) {
-    out << " mlcod " << pg.min_last_complete_ondisk;
-    if (!pg.have_master_log)
-      out << " !hml";
-  }
-
-  out << " " << pg_state_string(pg.get_state());
-
-  //out << " (" << pg.log.tail << "," << pg.log.head << "]";
-  if (pg.missing.num_missing())
-    out << " m=" << pg.missing.num_missing();
-  if (pg.is_primary()) {
-    int lost = pg.missing.num_missing() - pg.missing_loc.size();
-    if (lost)
-      out << " l=" << lost;
-  }
-  if (pg.snap_trimq.size())
-    out << " snaptrimq=" << pg.snap_trimq;
-
-  if (pg.deleting)
-    out << " DELETING";
-  out << "]";
-
-
-  return out;
-}
-
-
+ostream& operator<<(ostream& out, const PG& pg);
 
 #endif
