@@ -1990,6 +1990,9 @@ unsigned FileStore::_do_transaction(Transaction& t)
       assert(0);
     }
 
+    if (r == -ENOTEMPTY) {
+      assert(0 == "ENOTEMPTY suggests garbage data in osd data dir");
+    }
     if (r == -ENOSPC) {
       // For now, if we hit _any_ ENOSPC, crash, before we do any damage
       // by partially applying transactions.
@@ -2039,7 +2042,7 @@ int FileStore::stat(coll_t cid, const sobject_t& oid, struct stat *st)
 int FileStore::read(coll_t cid, const sobject_t& oid, 
                     uint64_t offset, size_t len, bufferlist& bl)
 {
-  size_t got;
+  int got;
   char fn[PATH_MAX];
   get_coname(cid, oid, fn, sizeof(fn));
 

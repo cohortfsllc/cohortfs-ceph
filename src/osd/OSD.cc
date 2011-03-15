@@ -1144,7 +1144,8 @@ void OSD::project_pg_history(pg_t pgid, PG::Info::History& h, epoch_t from,
            << ", start " << h
            << dendl;
 
-  for (epoch_t e = osdmap->get_epoch();
+  epoch_t e;
+  for (e = osdmap->get_epoch();
        e > from;
        e--) {
     // verify during intermediate epoch (e-1)
@@ -1175,6 +1176,17 @@ void OSD::project_pg_history(pg_t pgid, PG::Info::History& h, epoch_t from,
 
     if (h.same_acting_since >= e && h.same_up_since >= e && h.same_primary_since >= e)
       break;
+  }
+
+  // base case: these floors should be the creation epoch if we didn't
+  // find any changes.
+  if (e == h.epoch_created) {
+    if (!h.same_acting_since)
+      h.same_acting_since = e;
+    if (!h.same_up_since)
+      h.same_up_since = e;
+    if (!h.same_primary_since)
+      h.same_primary_since = e;
   }
 
   dout(15) << "project_pg_history end " << h << dendl;
@@ -3890,6 +3902,8 @@ void OSD::handle_pg_create(MOSDPGCreate *m)
 
     // figure history
     PG::Info::History history;
+    history.epoch_created = created;
+    history.last_epoch_clean = created;
     project_pg_history(pgid, history, created, up, acting);
     
     // register.
@@ -4102,6 +4116,7 @@ void OSD::handle_pg_notify(MOSDPGNotify *m)
     } else {
       dout(10) << *pg << " got osd" << from << " info " << *it << dendl;
       pg->peer_info[from] = *it;
+      pg->might_have_unfound.insert(from);
 
       unreg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
       pg->info.history.merge(it->history);
@@ -4944,7 +4959,7 @@ void OSD::do_recovery(PG *pg)
      */
     if (!started && pg->have_unfound()) {
       map< int, map<pg_t,PG::Query> > query_map;
-      pg->discover_all_missing(query_map, true);
+      pg->discover_all_missing(query_map);
       if (query_map.size())
 	do_queries(query_map);
       else {
