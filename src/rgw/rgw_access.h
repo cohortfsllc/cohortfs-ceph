@@ -2,19 +2,23 @@
 #define CEPH_RGW_ACCESS_H
 
 #include <time.h>
+#include <errno.h>
 #include <string>
 #include <vector>
 #include <include/types.h>
 
 #include "rgw_common.h"
 
+struct md_config_t;
+
 /**
  * Abstract class defining the interface for storage devices used by RGW.
  */
 class RGWAccess {
 public:
+  virtual ~RGWAccess();
   /** do all necessary setup of the storage device */
-  virtual int initialize(int argc, char *argv[]) { return 0; }
+  virtual int initialize(md_config_t *conf) { return 0; }
   /** prepare a listing of all buckets. */
   virtual int list_buckets_init(std::string& id, RGWAccessHandle *handle) = 0;
   /** get the next bucket in the provided listing context. */
@@ -35,7 +39,8 @@ public:
    *     here.
    */
   virtual int list_objects(std::string& id, std::string& bucket, int max, std::string& prefix, std::string& delim,
-                           std::string& marker, std::vector<RGWObjEnt>& result, map<string, bool>& common_prefixes) = 0;
+                           std::string& marker, std::vector<RGWObjEnt>& result, map<string, bool>& common_prefixes,
+                           bool get_content_type) = 0;
 
   /** Create a new bucket*/
   virtual int create_bucket(std::string& id, std::string& bucket, map<std::string, bufferlist>& attrs, uint64_t auid=0) = 0;
@@ -133,6 +138,11 @@ public:
   virtual void finish_get_obj(void **handle) = 0;
 
   /**
+   * a simple object read without keeping state
+   */
+  virtual int read(std::string& bucket, std::string& oid, off_t ofs, size_t size, bufferlist& bl) = 0;
+
+  /**
    * Get the attributes for an object.
    * bucket: name of the bucket holding the object.
    * obj: name of the object
@@ -153,11 +163,26 @@ public:
   virtual int set_attr(std::string& bucket, std::string& obj,
                        const char *name, bufferlist& bl) = 0;
 
-  /** 
+ /**
+  * stat an object
+  */
+  virtual int obj_stat(std::string& bucket, std::string& obj, uint64_t *psize, time_t *pmtime) = 0;
+
+  virtual bool supports_tmap() { return false; }
+
+  virtual int tmap_set(std::string& bucket, std::string& obj, std::string& key, bufferlist& bl) { return -ENOTSUP; }
+  virtual int tmap_del(std::string& bucket, std::string& obj, std::string& key) { return -ENOTSUP; }
+
+  virtual int update_containers_stats(map<string, RGWBucketEnt>& m) { return -ENOTSUP; }
+
+  virtual int append_async(std::string& bucket, std::string& oid, size_t size, bufferlist& bl) { return -ENOTSUP; }
+
+
+ /** 
    * Given the name of the storage provider, initialize it
    * with the given arguments.
    */
-  static RGWAccess *init_storage_provider(const char *type, int argc, char *argv[]);
+  static RGWAccess *init_storage_provider(const char *type, md_config_t *conf);
   static RGWAccess *store;
 };
 

@@ -59,6 +59,14 @@ static const int LOAD_HYBRID     = 3;
 // Blank object locator
 static const object_locator_t OLOC_BLANK;
 
+PGLSFilter::PGLSFilter()
+{
+}
+
+PGLSFilter::~PGLSFilter()
+{
+}
+
 // =======================
 // pg changes
 
@@ -1799,6 +1807,18 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops,
 	      }
 	      break;
 	      
+	    case CEPH_OSD_TMAP_CREATE: // create (new) key
+	      {
+		::decode(key, bp);
+		bufferlist data;
+		::decode(data, bp);
+		if (m.count(key))
+		  return -EEXIST;
+		m[key] = data;
+		changed = true;
+	      }
+	      break;
+
 	    case CEPH_OSD_TMAP_RM: // remove key
 	      ::decode(key, bp);
 	      if (m.count(key)) {
@@ -1862,8 +1882,8 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops,
 	    dout(10) << "tmapup op " << (int)op << " key " << key << dendl;
 
 	    // skip existing intervening keys
-	    bool stop = false;
-	    while (have_next && !stop) {
+	    bool key_exists = false;
+	    while (have_next && !key_exists) {
 	      dout(20) << "  (have_next=" << have_next << " nextkey=" << nextkey << ")" << dendl;
 	      if (nextkey > key)
 		break;
@@ -1875,7 +1895,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops,
 	      } else {
 		// don't copy; discard old value.  and stop.
 		dout(20) << "  drop " << nextkey << " " << nextval.length() << dendl;
-		stop = true;
+		key_exists = true;
 		nkeys--;
 	      }	      
 	      if (!ip.end()) {
@@ -1891,6 +1911,15 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops,
 	      ::encode(key, newkeydata);
 	      ::encode(val, newkeydata);
 	      dout(20) << "   set " << key << " " << val.length() << dendl;
+	      nkeys++;
+	    } else if (op == CEPH_OSD_TMAP_CREATE) {
+	      if (key_exists)
+		return -EEXIST;
+	      bufferlist val;
+	      ::decode(val, bp);
+	      ::encode(key, newkeydata);
+	      ::encode(val, newkeydata);
+	      dout(20) << "   create " << key << " " << val.length() << dendl;
 	      nkeys++;
 	    } else if (op == CEPH_OSD_TMAP_RM) {
 	      // do nothing.
@@ -2394,7 +2423,8 @@ void ReplicatedPG::op_applied(RepGather *repop)
 
   last_update_applied = repop->v;
   if (last_update_applied == info.last_update && finalizing_scrub) {
-    kick();
+    dout(10) << "requeueing scrub for cleanup" << dendl;
+    osd->scrub_wq.queue(this);
   }
   update_stats();
 
@@ -3005,7 +3035,7 @@ void ReplicatedPG::sub_op_modify_applied(RepModify *rm)
     // send ack to acker only if we haven't sent a commit already
     MOSDSubOpReply *ack = new MOSDSubOpReply(rm->op, 0, osd->osdmap->get_epoch(), CEPH_OSD_FLAG_ACK);
     ack->set_peer_stat(osd->get_my_stat_for(g_clock.now(), rm->ackerosd));
-    ack->set_priority(CEPH_MSG_PRIO_HIGH);
+    ack->set_priority(CEPH_MSG_PRIO_HIGH); // this better match commit priority!
     osd->cluster_messenger->
       send_message(ack, osd->osdmap->get_cluster_inst(rm->ackerosd));
   }
@@ -3015,7 +3045,10 @@ void ReplicatedPG::sub_op_modify_applied(RepModify *rm)
 
   last_update_applied = rm->op->version;
   if (last_update_applied == info.last_update && finalizing_scrub) {
-    kick();
+    assert(active_rep_scrub);
+    osd->rep_scrub_wq.queue(active_rep_scrub);
+    active_rep_scrub->put();
+    active_rep_scrub = 0;
   }
 
   unlock();
@@ -3043,6 +3076,7 @@ void ReplicatedPG::sub_op_modify_commit(RepModify *rm)
     last_complete_ondisk = rm->last_complete;
     MOSDSubOpReply *commit = new MOSDSubOpReply(rm->op, 0, osd->osdmap->get_epoch(), CEPH_OSD_FLAG_ONDISK);
     commit->set_last_complete_ondisk(rm->last_complete);
+    commit->set_priority(CEPH_MSG_PRIO_HIGH); // this better match ack priority!
     commit->set_peer_stat(osd->get_my_stat_for(g_clock.now(), rm->ackerosd));
     osd->cluster_messenger->
       send_message(commit, osd->osdmap->get_cluster_inst(rm->ackerosd));
@@ -3291,6 +3325,7 @@ int ReplicatedPG::pull(const sobject_t& soid)
 
   // take note
   assert(pulling.count(soid) == 0);
+  pull_from_peer[fromosd].insert(soid);
   pull_info_t& p = pulling[soid];
   p.version = v;
   p.from = fromosd;
@@ -3933,6 +3968,7 @@ void ReplicatedPG::sub_op_push(MOSDSubOp *op)
     if (complete) {
       // close out pull op
       pulling.erase(soid);
+      pull_from_peer[pi->from].erase(soid);
       finish_recovery_op(soid);
       
       update_stats();
@@ -4003,6 +4039,7 @@ void ReplicatedPG::_failed_push(MOSDSubOp *op)
   }
 
   finish_recovery_op(soid);  // close out this attempt,
+  pull_from_peer[from].erase(soid);
   pulling.erase(soid);
 
   op->put();
@@ -4058,6 +4095,14 @@ void ReplicatedPG::on_change()
   // clear reserved scrub state
   clear_scrub_reserved();
 
+  // clear scrub state
+  if (finalizing_scrub) {
+    scrub_clear_state();
+  } else if (is_scrubbing()) {
+    state_clear(PG_STATE_SCRUBBING);
+    state_clear(PG_STATE_REPAIR);
+  }
+
   // take object waiters
   take_object_waiters(waiting_for_missing_object);
   take_object_waiters(waiting_for_degraded_object);
@@ -4065,6 +4110,7 @@ void ReplicatedPG::on_change()
   // clear pushing/pulling maps
   pushing.clear();
   pulling.clear();
+  pull_from_peer.clear();
 }
 
 void ReplicatedPG::on_role_change()
@@ -4090,8 +4136,33 @@ void ReplicatedPG::_clear_recovery_state()
 #endif
   pulling.clear();
   pushing.clear();
+  pull_from_peer.clear();
 }
 
+void ReplicatedPG::check_recovery_op_pulls(const OSDMap *osdmap)
+{
+  for (map<int, set<sobject_t> >::iterator j = pull_from_peer.begin();
+       j != pull_from_peer.end();
+       ) {
+    if (osdmap->is_up(j->first)) {
+      ++j;
+      continue;
+    }
+    dout(10) << "Reseting pulls from osd" << j->first
+	     << ", osdmap has it marked down" << dendl;
+    
+    for (set<sobject_t>::iterator i = j->second.begin();
+	 i != j->second.end();
+	 ++i) {
+      assert(pulling.count(*i) == 1);
+      pulling.erase(*i);
+      finish_recovery_op(*i);
+    }
+    log.last_requested = eversion_t();
+    pull_from_peer.erase(j++);
+  }
+}
+  
 
 int ReplicatedPG::start_recovery_ops(int max)
 {

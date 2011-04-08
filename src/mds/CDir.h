@@ -43,9 +43,13 @@ class bloom_filter;
 class ObjectOperation;
 
 ostream& operator<<(ostream& out, class CDir& dir);
-
-
 class CDir : public MDSCacheObject {
+  /*
+   * This class uses a boost::pool to handle allocation. This is *not*
+   * thread-safe, so don't do allocations from multiple threads!
+   *
+   * Alternatively, switch the pool to use a boost::singleton_pool.
+   */
 private:
   static boost::pool<> pool;
 public:
@@ -304,6 +308,8 @@ protected:
   unsigned get_num_snap_null() { return num_snap_null; }
   unsigned get_num_any() { return num_head_items + num_head_null + num_snap_items + num_snap_null; }
   
+  bool check_rstats();
+
   void inc_num_dirty() { num_dirty++; }
   void dec_num_dirty() { 
     assert(num_dirty > 0);

@@ -37,7 +37,11 @@
 // </macro hackery>
 
 
-#define _BACKWARD_BACKWARD_WARNING_H   /* make gcc 4.3 shut up about hash_*. */
+#ifdef __cplusplus
+#ifndef _BACKWARD_BACKWARD_WARNING_H
+#define _BACKWARD_BACKWARD_WARNING_H   // make gcc 4.3 shut up about hash_*
+#endif
+#endif
 
 extern "C" {
 #include <stdint.h>
@@ -228,7 +232,6 @@ WRITE_RAW_ENCODER(ceph_mds_reply_inode)
 WRITE_RAW_ENCODER(ceph_mds_cap_reconnect)
 WRITE_RAW_ENCODER(ceph_mds_snaprealm_reconnect)
 WRITE_RAW_ENCODER(ceph_frag_tree_split)
-WRITE_RAW_ENCODER(ceph_osd_request_head)
 WRITE_RAW_ENCODER(ceph_osd_reply_head)
 WRITE_RAW_ENCODER(ceph_osd_op)
 WRITE_RAW_ENCODER(ceph_msg_header)

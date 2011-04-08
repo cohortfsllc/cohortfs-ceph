@@ -79,6 +79,7 @@ extern Spinlock buffer_lock;
 
 
 extern atomic_t buffer_total_alloc;
+extern bool buffer_track_alloc;
 
 class buffer {
   /*
@@ -117,10 +118,12 @@ private:
  
   /* hack for memory utilization debugging. */
   static void inc_total_alloc(unsigned len) {
-    buffer_total_alloc.add(len);
+    if (buffer_track_alloc)
+      buffer_total_alloc.add(len);
   }
   static void dec_total_alloc(unsigned len) {
-    buffer_total_alloc.sub(len);
+    if (buffer_track_alloc)
+      buffer_total_alloc.sub(len);
   }
 
  
@@ -635,6 +638,7 @@ public:
 	while (len > 0) {
 	  if (p == ls->end())
 	    throw end_of_buffer();
+	  assert(p->length() > 0); 
 
 	  unsigned howmuch = p->length() - p_off;
 	  if (len < howmuch) howmuch = len;
@@ -787,22 +791,22 @@ public:
       last_p = begin();
     }
     void push_front(ptr& bp) {
+      if (bp.length() == 0) return;
       _buffers.push_front(bp);
       _len += bp.length();
     }
     void push_front(raw *r) {
       ptr bp(r);
-      _buffers.push_front(bp);
-      _len += bp.length();
+      push_front(bp);
     }
     void push_back(const ptr& bp) {
+      if (bp.length() == 0) return;
       _buffers.push_back(bp);
       _len += bp.length();
     }
     void push_back(raw *r) {
       ptr bp(r);
-      _buffers.push_back(bp);
-      _len += bp.length();
+      push_back(bp);
     }
     void zero() {
       for (std::list<ptr>::iterator it = _buffers.begin();

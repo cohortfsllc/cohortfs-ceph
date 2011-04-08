@@ -1,6 +1,11 @@
 %define with_radosgw %{?_with_radosgw: 1} %{!?_with_radosgw: 0}
 %define with_gtk2 %{?_with_gtk2: 1} %{!?_with_gtk2: 0}
 
+%if ! (0%{?fedora} > 12 || 0%{?rhel} > 5)
+%{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
+%{!?python_sitearch: %global python_sitearch %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1))")}
+%endif
+
 Name:          ceph
 Version:       @VERSION@
 Release:       4%{?dist}
@@ -12,10 +17,10 @@ URL:           http://ceph.newdream.net/
 Source:        http://ceph.newdream.net/download/%{name}-%{version}.tar.gz
 BuildRequires: fuse-devel, libtool, libtool-ltdl-devel, boost-devel, 
 BuildRequires: libedit-devel, fuse-devel, git, perl, gdbm,
-BuildRequires: cryptopp-devel, libatomic_ops-devel, google-perftools-devel
-BuildRequires: pkgconfig
+BuildRequires: nss-devel, libatomic_ops-devel
+BuildRequires: pkgconfig, python
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-Requires(post): chkconfig, binutils, libedit, google-perftools
+Requires(post): chkconfig, binutils, libedit
 Requires(preun): chkconfig
 Requires(preun): initscripts
 
@@ -103,11 +108,6 @@ mkdir -p $RPM_BUILD_ROOT%{_localstatedir}/lib/ceph/tmp/
 mkdir -p $RPM_BUILD_ROOT%{_localstatedir}/log/ceph/
 mkdir -p $RPM_BUILD_ROOT%{_localstatedir}/log/ceph/stat
 
-# To avoid that libcls_rbd.so.1.0.0 is beeing stiped by find-debuginfo.sh
-# we petend that the debug symbols have already been extracted
-mkdir -p $RPM_BUILD_ROOT/usr/lib/debug/%{_libdir}/rados-classes/
-touch $RPM_BUILD_ROOT/usr/lib/debug/%{_libdir}/rados-classes/libcls_rbd.so.1.0.0.debug
-
 %clean
 rm -rf $RPM_BUILD_ROOT
 
@@ -144,6 +144,8 @@ fi
 %{_bindir}/cmon
 %{_bindir}/cmds
 %{_bindir}/cosd
+%{_bindir}/crbdnamer
+%{_bindir}/librados-config
 %{_bindir}/rados
 %{_bindir}/rbd
 %{_bindir}/cdebugpack
@@ -180,6 +182,9 @@ fi
 %{_mandir}/man8/cdebugpack.8*
 %{_mandir}/man8/cclass.8.gz
 %{_mandir}/man8/cclsinfo.8.gz
+%{python_sitelib}/rados.py
+%{python_sitelib}/rados.pyc
+%{python_sitelib}/rados.pyo
 %dir %{_localstatedir}/lib/ceph/
 %dir %{_localstatedir}/lib/ceph/tmp/
 %dir %{_localstatedir}/log/ceph/

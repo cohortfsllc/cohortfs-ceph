@@ -660,7 +660,7 @@ void Journaler::_finish_read(int r)
 	   << ", read pointers " << read_pos << "/" << received_pos << "/" << requested_pos
 	   << dendl;
   
-  if (is_readable()) { // NOTE: this check may read more
+  if (is_readable() || read_pos == write_pos) { // NOTE: this check may read more
     // readable!
     dout(10) << "_finish_read now readable" << dendl;
     if (on_readable) {
@@ -811,6 +811,8 @@ bool Journaler::is_readable()
     if (write_pos > read_pos)
       junk_tail_pos = write_pos; // note old tail
     write_pos = flush_pos = ack_pos = safe_pos = read_pos;
+    requested_pos = received_pos = read_pos;
+    read_buf.clear();
     assert(write_buf.length() == 0);
 
     // truncate?

@@ -46,8 +46,8 @@ int main(int argc, const char **argv, char *envp[])
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
 
-  common_init(args, "csyn",
-	      STARTUP_FLAG_INIT_KEYS | STARTUP_FLAG_FORCE_FG_LOGGING);
+  common_init(args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  keyring_init(&g_conf);
 
   parse_syn_options(args);   // for SyntheticClient
 
@@ -67,7 +67,7 @@ int main(int argc, const char **argv, char *envp[])
   for (int i=0; i<g_conf.num_client; i++) {
     messengers[i] = new SimpleMessenger();
     messengers[i]->register_entity(entity_name_t(entity_name_t::TYPE_CLIENT,-1));
-    messengers[i]->bind();
+    messengers[i]->bind(i * 1000000 + getpid());
     mclients[i] = new MonClient();
     mclients[i]->build_initial_monmap();
     Client *client = new Client(messengers[i], mclients[i]);
@@ -75,7 +75,7 @@ int main(int argc, const char **argv, char *envp[])
     SyntheticClient *syn = new SyntheticClient(client);
     clients.push_back(client);
     synclients.push_back(syn);
-    messengers[i]->start();
+    messengers[i]->start(false); // do not daemonize
   }
 
   for (list<SyntheticClient*>::iterator p = synclients.begin(); 

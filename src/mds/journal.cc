@@ -281,24 +281,6 @@ C_Gather *LogSegment::try_to_expire(MDS *mds)
   // FIXME client requests...?
   // audit handling of anchor transactions?
 
-  // once we are otherwise trimmable, make sure journal is fully safe on disk.
-  if (!gather) {
-    if (!trimmable_at)
-      trimmable_at = mds->mdlog->get_write_pos();
-
-    if (trimmable_at <= mds->mdlog->get_safe_pos()) {
-      dout(6) << "LogSegment(" << offset << ").try_to_expire trimmable at " << trimmable_at
-	      << " <= " << mds->mdlog->get_safe_pos() << dendl;
-    } else {
-      dout(6) << "LogSegment(" << offset << ").try_to_expire trimmable at " << trimmable_at
-	      << " > " << mds->mdlog->get_safe_pos()
-	      << ", waiting for safe journal flush" << dendl;
-      if (!gather) gather = new C_Gather;
-      mds->mdlog->wait_for_safe(gather->new_sub());
-      mds->mdlog->flush();
-    }
-  }
-
   if (gather) {
     dout(6) << "LogSegment(" << offset << ").try_to_expire waiting" << dendl;
     assert(!gather->empty());
@@ -722,18 +704,20 @@ void ESession::replay(MDS *mds)
     Session *session;
     if (open) {
       session = mds->sessionmap.get_or_add_session(client_inst);
-      if (session->is_closed())
-	mds->sessionmap.set_state(session, Session::STATE_OPEN);
+      mds->sessionmap.set_state(session, Session::STATE_OPEN);
+      dout(10) << " opened session " << session->inst << dendl;
     } else {
       session = mds->sessionmap.get_session(client_inst.name);
-      if (session->is_closed())
+      if (session->connection == NULL) {
 	mds->sessionmap.remove_session(session);
-      else
+	dout(10) << " removed session " << session->inst << dendl;
+      } else {
 	session->clear();    // the client has reconnected; keep the Session, but reset
+	dout(10) << " reset session " << session->inst << " (they reconnected)" << dendl;
+      }
     }
-    dout(10) << "session " << session << " state " << session->get_state() << dendl;
   }
-
+  
   if (inos.size() && inotablev) {
     if (mds->inotable->get_version() >= inotablev) {
       dout(10) << "ESession.replay inotable " << mds->inotable->get_version()
@@ -1039,7 +1023,7 @@ void EFragment::replay(MDS *mds)
       break;
 
     case OP_ROLLBACK:
-      mds->mdcache->adjust_dir_fragments(in, basefrag, -bits, resultfrags, waiters, true);
+      mds->mdcache->adjust_dir_fragments(in, basefrag, bits, resultfrags, waiters, true);
       break;
     }
   }

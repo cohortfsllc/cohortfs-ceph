@@ -347,7 +347,8 @@ public:
 	 ++p) {
       if (p->second.rank == -1 &&
 	  (p->second.standby_for_rank == MDS_NO_STANDBY_PREF ||
-	   p->second.standby_for_rank == MDS_MATCHED_ACTIVE) &&
+	   p->second.standby_for_rank == MDS_MATCHED_ACTIVE ||
+	   (p->second.standby_for_rank == MDS_STANDBY_ANY && g_conf.mon_force_standby_active)) &&
 	  p->second.state == MDSMap::STATE_STANDBY &&
 	  !p->second.laggy()) {
 	return p->first;
@@ -456,6 +457,11 @@ public:
     if (up.count(m)) 
       return mds_info[up[m]].inc;
     return 0;
+  }
+  int get_inc_gid(uint64_t gid) {
+    if (mds_info.count(gid))
+      return mds_info[gid].inc;
+    return -1;
   }
 
 

@@ -23,6 +23,7 @@
 using namespace std;
 
 #include "common/config.h"
+#include "include/str_list.h"
 
 #include "mon/MonMap.h"
 #include "mds/MDS.h"
@@ -48,6 +49,9 @@ using namespace std;
 #define DOUT_SUBSYS rados
 #undef dout_prefix
 #define dout_prefix *_dout << "librados: "
+
+
+static atomic_t rados_instance;
 
 
 /*
@@ -105,11 +109,13 @@ struct librados::IoCtxImpl {
   void set_snap_read(snapid_t s) {
     if (!s)
       s = CEPH_NOSNAP;
+    dout(10) << "set snap read " << snap_seq << " -> " << s << dendl;
     snap_seq = s;
   }
 
   int set_snap_write_context(snapid_t seq, vector<snapid_t>& snaps) {
     ::SnapContext n;
+    dout(10) << "set snap write context: seq = " << seq << " and snaps = " << snaps << dendl;
     n.seq = seq;
     n.snaps = snaps;
     if (!n.is_valid())
@@ -128,6 +134,10 @@ struct librados::IoCtxImpl {
   }
 };
 
+librados::WatchCtx::
+~WatchCtx()
+{
+}
 
 struct librados::AioCompletionImpl {
   Mutex lock;
@@ -304,6 +314,7 @@ public:
   // io
   int create(IoCtxImpl& io, const object_t& oid, bool exclusive);
   int write(IoCtxImpl& io, const object_t& oid, bufferlist& bl, size_t len, uint64_t off);
+  int append(IoCtxImpl& io, const object_t& oid, bufferlist& bl, size_t len);
   int write_full(IoCtxImpl& io, const object_t& oid, bufferlist& bl);
   int read(IoCtxImpl& io, const object_t& oid, bufferlist& bl, size_t len, uint64_t off);
   int mapext(IoCtxImpl& io, const object_t& oid, uint64_t off, size_t len, std::map<uint64_t,uint64_t>& m);
@@ -430,6 +441,8 @@ public:
 		    bufferlist *data_bl, size_t len, uint64_t off);
   int aio_write(IoCtxImpl& io, const object_t &oid, AioCompletionImpl *c,
 		const bufferlist& bl, size_t len, uint64_t off);
+  int aio_append(IoCtxImpl& io, const object_t &oid, AioCompletionImpl *c,
+		 const bufferlist& bl, size_t len);
   int aio_write_full(IoCtxImpl& io, const object_t &oid, AioCompletionImpl *c,
 		     const bufferlist& bl);
 
@@ -452,11 +465,9 @@ public:
     uint64_t cookie;
     uint64_t ver;
     librados::WatchCtx *ctx;
-    ObjectOperation *op;
     uint64_t linger_id;
 
-    WatchContext(IoCtxImpl *io_ctx_impl_, const object_t& _oc, librados::WatchCtx *_ctx,
-                 ObjectOperation *_op) : io_ctx_impl(io_ctx_impl_), oid(_oc), ctx(_ctx), op(_op), linger_id(0) {
+    WatchContext(IoCtxImpl *io_ctx_impl_, const object_t& _oc, librados::WatchCtx *_ctx) : io_ctx_impl(io_ctx_impl_), oid(_oc), ctx(_ctx), linger_id(0) {
       io_ctx_impl->get();
     }
     ~WatchContext() {
@@ -475,7 +486,9 @@ public:
     Cond *cond;
     bool *done;
 
-    C_NotifyComplete(Mutex *_l, Cond *_c, bool *_d) : lock(_l), cond(_c), done(_d) {}
+    C_NotifyComplete(Mutex *_l, Cond *_c, bool *_d) : lock(_l), cond(_c), done(_d) {
+      *done = false;
+    }
 
     void notify(uint8_t opcode, uint64_t ver) {
       if (opcode != WATCH_NOTIFY_COMPLETE)
@@ -494,9 +507,9 @@ public:
   }
 
   void register_watcher(IoCtxImpl& io, const object_t& oid, librados::WatchCtx *ctx,
-			ObjectOperation *op, uint64_t *cookie, WatchContext **pwc = NULL) {
+			uint64_t *cookie, WatchContext **pwc = NULL) {
     assert(lock.is_locked());
-    WatchContext *wc = new WatchContext(&io, oid, ctx, op);
+    WatchContext *wc = new WatchContext(&io, oid, ctx);
     *cookie = ++max_watch_cookie;
     watchers[*cookie] = wc;
     if (pwc)
@@ -560,7 +573,11 @@ connect()
 
   messenger->add_dispatcher_head(this);
 
-  messenger->start(1);
+  uint64_t nonce;
+  rados_instance.inc();
+  nonce = getpid() + (1000000 * (uint64_t)rados_instance.read());
+
+  messenger->start(false, nonce); // do not daemonize
   messenger->add_dispatcher_head(this);
 
   dout(1) << "setting wanted keys" << dendl;
@@ -570,7 +587,7 @@ connect()
 
   int err = monclient.authenticate(g_conf.client_mount_timeout);
   if (err) {
-    dout(0) << *g_conf.entity_name << " authentication error " << strerror(-err) << dendl;
+    dout(0) << *g_conf.name << " authentication error " << strerror(-err) << dendl;
     shutdown();
     return err;
   }
@@ -600,7 +617,8 @@ shutdown()
 {
   lock.Lock();
   monclient.shutdown();
-  objecter->shutdown();
+  if (objecter)
+    objecter->shutdown();
   timer.shutdown();
   lock.Unlock();
   if (messenger) {
@@ -615,6 +633,8 @@ librados::RadosClient::
 {
   if (messenger)
     messenger->destroy();
+  if (objecter)
+    delete objecter;
 }
 
 
@@ -1031,7 +1051,7 @@ create(IoCtxImpl& io, const object_t& oid, bool exclusive)
 
   /* can't write to a snapshot */
   if (io.snap_seq != CEPH_NOSNAP)
-    return -EINVAL;
+    return -EROFS;
 
   Mutex mylock("RadosClient::create::mylock");
   Cond cond;
@@ -1064,7 +1084,7 @@ write(IoCtxImpl& io, const object_t& oid, bufferlist& bl, size_t len, uint64_t o
 
   /* can't write to a snapshot */
   if (io.snap_seq != CEPH_NOSNAP)
-    return -EINVAL;
+    return -EROFS;
 
   Mutex mylock("RadosClient::write::mylock");
   Cond cond;
@@ -1101,13 +1121,56 @@ write(IoCtxImpl& io, const object_t& oid, bufferlist& bl, size_t len, uint64_t o
 }
 
 int librados::RadosClient::
+append(IoCtxImpl& io, const object_t& oid, bufferlist& bl, size_t len)
+{
+  utime_t ut = g_clock.now();
+
+  /* can't write to a snapshot */
+  if (io.snap_seq != CEPH_NOSNAP)
+    return -EROFS;
+
+  Mutex mylock("RadosClient::append::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
+  eversion_t ver;
+
+  ObjectOperation op, *pop = NULL;
+  if (io.assert_ver) {
+    op.assert_version(io.assert_ver);
+    io.assert_ver = 0;
+    pop = &op;
+  }
+
+  lock.Lock();
+  objecter->append(oid, io.oloc,
+		  len, io.snapc, bl, ut, 0,
+		  onack, NULL, &ver, pop);
+  lock.Unlock();
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  set_sync_op_version(io, ver);
+
+  if (r < 0)
+    return r;
+
+  return len;
+}
+
+int librados::RadosClient::
 write_full(IoCtxImpl& io, const object_t& oid, bufferlist& bl)
 {
   utime_t ut = g_clock.now();
 
   /* can't write to a snapshot */
   if (io.snap_seq != CEPH_NOSNAP)
-    return -EINVAL;
+    return -EROFS;
 
   Mutex mylock("RadosClient::write_full::mylock");
   Cond cond;
@@ -1200,6 +1263,10 @@ aio_write(IoCtxImpl& io, const object_t &oid, AioCompletionImpl *c,
 {
   utime_t ut = g_clock.now();
 
+  /* can't write to a snapshot */
+  if (io.snap_seq != CEPH_NOSNAP)
+    return -EROFS;
+
   Context *onack = new C_aio_Ack(c);
   Context *onsafe = new C_aio_Safe(c);
 
@@ -1212,10 +1279,35 @@ aio_write(IoCtxImpl& io, const object_t &oid, AioCompletionImpl *c,
 }
 
 int librados::RadosClient::
+aio_append(IoCtxImpl& io, const object_t &oid, AioCompletionImpl *c,
+          const bufferlist& bl, size_t len)
+{
+  utime_t ut = g_clock.now();
+
+  /* can't write to a snapshot */
+  if (io.snap_seq != CEPH_NOSNAP)
+    return -EROFS;
+
+  Context *onack = new C_aio_Ack(c);
+  Context *onsafe = new C_aio_Safe(c);
+
+  Mutex::Locker l(lock);
+  objecter->append(oid, io.oloc,
+		  len, io.snapc, bl, ut, 0,
+		  onack, onsafe, &c->objver);
+
+  return 0;
+}
+
+int librados::RadosClient::
 aio_write_full(IoCtxImpl& io, const object_t &oid,
 		AioCompletionImpl *c, const bufferlist& bl)
 {
   utime_t ut = g_clock.now();
+
+  /* can't write to a snapshot */
+  if (io.snap_seq != CEPH_NOSNAP)
+    return -EROFS;
 
   Context *onack = new C_aio_Ack(c);
   Context *onsafe = new C_aio_Safe(c);
@@ -1233,6 +1325,10 @@ remove(IoCtxImpl& io, const object_t& oid)
 {
   ::SnapContext snapc;
   utime_t ut = g_clock.now();
+
+  /* can't write to a snapshot */
+  if (io.snap_seq != CEPH_NOSNAP)
+    return -EROFS;
 
   Mutex mylock("RadosClient::remove::mylock");
   Cond cond;
@@ -1271,7 +1367,7 @@ trunc(IoCtxImpl& io, const object_t& oid, uint64_t size)
 
   /* can't write to a snapshot */
   if (io.snap_seq != CEPH_NOSNAP)
-    return -EINVAL;
+    return -EROFS;
 
   Mutex mylock("RadosClient::write_full::mylock");
   Cond cond;
@@ -1309,6 +1405,10 @@ int librados::RadosClient::
 tmap_update(IoCtxImpl& io, const object_t& oid, bufferlist& cmdbl)
 {
   utime_t ut = g_clock.now();
+
+  /* can't write to a snapshot */
+  if (io.snap_seq != CEPH_NOSNAP)
+    return -EROFS;
 
   Mutex mylock("RadosClient::tmap_update::mylock");
   Cond cond;
@@ -1568,7 +1668,7 @@ rmxattr(IoCtxImpl& io, const object_t& oid, const char *name)
 
   /* can't write to a snapshot */
   if (io.snap_seq != CEPH_NOSNAP)
-    return -EINVAL;
+    return -EROFS;
 
   Mutex mylock("RadosClient::rmxattr::mylock");
   Cond cond;
@@ -1610,7 +1710,7 @@ setxattr(IoCtxImpl& io, const object_t& oid, const char *name, bufferlist& bl)
 
   /* can't write to a snapshot */
   if (io.snap_seq != CEPH_NOSNAP)
-    return -EINVAL;
+    return -EROFS;
 
   Mutex mylock("RadosClient::setxattr::mylock");
   Cond cond;
@@ -1649,10 +1749,6 @@ int librados::RadosClient::
 getxattrs(IoCtxImpl& io, const object_t& oid, map<std::string, bufferlist>& attrset)
 {
   utime_t ut = g_clock.now();
-
-  /* can't write to a snapshot */
-  if (io.snap_seq != CEPH_NOSNAP)
-    return -EINVAL;
 
   Mutex mylock("RadosClient::getexattrs::mylock");
   Cond cond;
@@ -1714,10 +1810,7 @@ watch(IoCtxImpl& io, const object_t& oid, uint64_t ver,
 {
   utime_t ut = g_clock.now();
 
-  ObjectOperation *rd = new ObjectOperation();
-  if (!rd)
-    return -ENOMEM;
-
+  ObjectOperation rd;
   Mutex mylock("RadosClient::watch::mylock");
   Cond cond;
   bool done;
@@ -1728,15 +1821,15 @@ watch(IoCtxImpl& io, const object_t& oid, uint64_t ver,
   lock.Lock();
 
   WatchContext *wc;
-  register_watcher(io, oid, ctx, rd, cookie, &wc);
+  register_watcher(io, oid, ctx, cookie, &wc);
 
   if (io.assert_ver) {
-    rd->assert_version(io.assert_ver);
+    rd.assert_version(io.assert_ver);
     io.assert_ver = 0;
   }
-  rd->watch(*cookie, ver, 1);
+  rd.watch(*cookie, ver, 1);
   bufferlist bl;
-  wc->linger_id = objecter->linger(oid, io.oloc, *rd, io.snap_seq, bl, NULL, 0, onack, NULL, &objver);
+  wc->linger_id = objecter->linger(oid, io.oloc, rd, io.snap_seq, bl, NULL, 0, onack, NULL, &objver);
   lock.Unlock();
 
   mylock.Lock();
@@ -1834,7 +1927,7 @@ notify(IoCtxImpl& io, const object_t& oid, uint64_t ver)
     io.assert_ver = 0;
   }
   lock.Lock();
-  register_watcher(io, oid, ctx, &rd, &cookie);
+  register_watcher(io, oid, ctx, &cookie);
   uint32_t prot_ver = 1;
   uint32_t timeout = io.notify_timeout;
   ::encode(prot_ver, inbl);
@@ -1990,6 +2083,7 @@ release()
 {
   AioCompletionImpl *c = (AioCompletionImpl *)pc;
   c->release();
+  delete this;
 }
 
 ///////////////////////////// IoCtx //////////////////////////////
@@ -2060,6 +2154,13 @@ write(const std::string& oid, bufferlist& bl, size_t len, uint64_t off)
 {
   object_t obj(oid);
   return io_ctx_impl->client->write(*io_ctx_impl, obj, bl, len, off);
+}
+
+int librados::IoCtx::
+append(const std::string& oid, bufferlist& bl, size_t len)
+{
+  object_t obj(oid);
+  return io_ctx_impl->client->append(*io_ctx_impl, obj, bl, len);
 }
 
 int librados::IoCtx::
@@ -2225,6 +2326,15 @@ selfmanaged_snap_remove(uint64_t snapid)
   return io_ctx_impl->client->selfmanaged_snap_remove(io_ctx_impl, snapid);
 }
 
+int librados::IoCtx::
+selfmanaged_snap_rollback(const std::string& oid, uint64_t snapid)
+{
+  return io_ctx_impl->client->selfmanaged_snap_rollback_object(io_ctx_impl,
+							       oid,
+							       io_ctx_impl->snapc,
+							       snapid);
+}
+
 librados::ObjectIterator librados::IoCtx::
 objects_begin()
 {
@@ -2268,7 +2378,14 @@ int librados::IoCtx::
 aio_write(const std::string& oid, librados::AioCompletion *c, const bufferlist& bl,
 	  size_t len, uint64_t off)
 {
-  return io_ctx_impl->client->aio_write(*io_ctx_impl, oid, c->pc, bl, len, off );
+  return io_ctx_impl->client->aio_write(*io_ctx_impl, oid, c->pc, bl, len, off);
+}
+
+int librados::IoCtx::
+aio_append(const std::string& oid, librados::AioCompletion *c, const bufferlist& bl,
+	  size_t len)
+{
+  return io_ctx_impl->client->aio_append(*io_ctx_impl, oid, c->pc, bl, len);
 }
 
 int librados::IoCtx::
@@ -2355,8 +2472,17 @@ init(const char * const id)
 }
 
 int librados::Rados::
+init_with_config(md_config_t *conf)
+{
+  return rados_create_with_config((rados_t *)&client, conf);
+}
+
+int librados::Rados::
 connect()
 {
+  int ret = keyring_init(&g_conf);
+  if (ret)
+    return ret;
   return client->connect();
 }
 
@@ -2505,44 +2631,41 @@ aio_create_completion(void *cb_arg, callback_t cb_complete, callback_t cb_safe)
 static Mutex rados_init_mutex("rados_init");
 static int rados_initialized = 0;
 
-static void rados_set_conf_defaults(md_config_t *conf)
-{
-  /* Default configuration values for rados clients.
-   * These can be overridden by using rados_conf_set or rados_conf_read.
-   */
-  free((void*)conf->log_file);
-  conf->log_file = NULL;
-
-  free((void*)conf->log_dir);
-  conf->log_dir = NULL;
-
-  free((void*)conf->log_sym_dir);
-  conf->log_sym_dir = NULL;
-
-  conf->log_sym_history = 0;
-
-  conf->log_to_stderr = LOG_TO_STDERR_SOME;
-
-  conf->log_to_syslog = false;
-
-  conf->log_per_instance = false;
-}
-
 extern "C" int rados_create(rados_t *pcluster, const char * const id)
 {
   rados_init_mutex.Lock();
   if (!rados_initialized) {
-    // parse environment
-    vector<const char*> args;
-    env_to_vec(args);
+    CephInitParameters iparams(CEPH_ENTITY_TYPE_CLIENT, CEPH_CONF_FILE_DEFAULT);
+    iparams.conf_file = "";
+    if (id) {
+      iparams.name.set(CEPH_ENTITY_TYPE_CLIENT, id);
+    }
 
-    if (id)
-      g_conf.id = strdup(id);
-    common_init(args, "librados", STARTUP_FLAG_INIT_KEYS | STARTUP_FLAG_LIBRARY);
+    // TODO: store this conf pointer in the RadosClient and use it as our
+    // configuration
+    md_config_t *conf = common_preinit(iparams, CODE_ENVIRONMENT_LIBRARY, 0);
+    conf->parse_env(); // environment variables override
 
     ++rados_initialized;
+  }
+  rados_init_mutex.Unlock();
+  librados::RadosClient *radosp = new librados::RadosClient;
+  *pcluster = (void *)radosp;
+  return 0;
+}
 
-    rados_set_conf_defaults(&g_conf);
+/* This function is intended for use by Ceph daemons. These daemons have
+ * already called common_init and want to use that particular configuration for
+ * their cluster.
+ */
+extern "C" int rados_create_with_config(rados_t *pcluster, md_config_t *conf)
+{
+  rados_init_mutex.Lock();
+  if (!rados_initialized) {
+    ++rados_initialized;
+    /* This is a no-op now. g_conf is still global and we can't actually do
+     * anything useful with the provided conf pointer.
+     */
   }
   rados_init_mutex.Unlock();
   librados::RadosClient *radosp = new librados::RadosClient;
@@ -2552,6 +2675,9 @@ extern "C" int rados_create(rados_t *pcluster, const char * const id)
 
 extern "C" int rados_connect(rados_t cluster)
 {
+  int ret = keyring_init(&g_conf);
+  if (ret)
+    return ret;
   librados::RadosClient *radosp = (librados::RadosClient *)cluster;
   return radosp->connect();
 }
@@ -2577,15 +2703,15 @@ extern "C" void rados_version(int *major, int *minor, int *extra)
 // -- config --
 extern "C" int rados_conf_read_file(rados_t cluster, const char *path)
 {
-  // TODO: don't call common_init again.
-  // Split out the config-reading part of common_init from the rest of it
-  vector<const char*> args;
-  args.push_back("-c");
-  args.push_back(path);
-  args.push_back("-i");
-  args.push_back(g_conf.id);
-  common_init(args, "librados", STARTUP_FLAG_INIT_KEYS | STARTUP_FLAG_LIBRARY);
+  if (!path)
+    path = CEPH_CONF_FILE_DEFAULT;
 
+  std::list<std::string> conf_files;
+  get_str_list(path, conf_files);
+  int ret = g_conf.parse_config_files(conf_files);
+  if (ret)
+    return ret;
+  g_conf.parse_env(); // environment variables override
   return 0;
 }
 
@@ -2619,7 +2745,7 @@ extern "C" int rados_conf_get(rados_t cluster, const char *option, char *buf, si
   return g_conf.get_val(option, &tmp, len);
 }
 
-extern "C" int rados_ioctx_lookup(rados_t cluster, const char *name)
+extern "C" int rados_pool_lookup(rados_t cluster, const char *name)
 {
   librados::RadosClient *radosp = (librados::RadosClient *)cluster;
   return radosp->lookup_pool(name);
@@ -2726,6 +2852,15 @@ extern "C" int rados_write(rados_ioctx_t io, const char *o, const char *buf, siz
   bufferlist bl;
   bl.append(buf, len);
   return ctx->client->write(*ctx, oid, bl, len, off);
+}
+
+extern "C" int rados_append(rados_ioctx_t io, const char *o, const char *buf, size_t len)
+{
+  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
+  object_t oid(o);
+  bufferlist bl;
+  bl.append(buf, len);
+  return ctx->client->append(*ctx, oid, bl, len);
 }
 
 extern "C" int rados_write_full(rados_ioctx_t io, const char *o, const char *buf, size_t len, uint64_t off)
@@ -2864,6 +2999,14 @@ extern "C" int rados_ioctx_selfmanaged_snap_remove(rados_ioctx_t io,
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   return ctx->client->selfmanaged_snap_remove(ctx, snapid);
+}
+
+extern "C" int rados_ioctx_selfmanaged_snap_rollback(rados_ioctx_t io,
+						     const char *oid,
+						     uint64_t snapid)
+{
+  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
+  return ctx->client->selfmanaged_snap_rollback_object(ctx, oid, ctx->snapc, snapid);
 }
 
 extern "C" int rados_ioctx_snap_list(rados_ioctx_t io, rados_snap_t *snaps,
@@ -3085,6 +3228,18 @@ extern "C" int rados_aio_write(rados_ioctx_t io, const char *o,
   bl.append(buf, len);
   return ctx->client->aio_write(*ctx, oid,
 	      (librados::AioCompletionImpl*)completion, bl, len, off);
+}
+
+extern "C" int rados_aio_append(rados_ioctx_t io, const char *o,
+				rados_completion_t completion,
+				const char *buf, size_t len)
+{
+  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
+  object_t oid(o);
+  bufferlist bl;
+  bl.append(buf, len);
+  return ctx->client->aio_append(*ctx, oid,
+	      (librados::AioCompletionImpl*)completion, bl, len);
 }
 
 extern "C" int rados_aio_write_full(rados_ioctx_t io, const char *o,

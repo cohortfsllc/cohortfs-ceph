@@ -56,27 +56,24 @@ int main(int argc, const char **argv)
 
   bool mkfs = false;
   const char *osdmapfn = 0;
+  const char *inject_monmap = 0;
 
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
 
-  common_init(args, "mon", STARTUP_FLAG_INIT_KEYS | STARTUP_FLAG_DAEMON);
+  common_init(args, CEPH_ENTITY_TYPE_MON, CODE_ENVIRONMENT_DAEMON, 0);
+  keyring_init(&g_conf);
 
   FOR_EACH_ARG(args) {
     if (CONF_ARG_EQ("mkfs", '\0')) {
       mkfs = true;
     } else if (CONF_ARG_EQ("osdmap", '\0')) {
       CONF_SAFE_SET_ARG_VAL(&osdmapfn, OPT_STR);
+    } else if (CONF_ARG_EQ("inject_monmap", '\0')) {
+      CONF_SAFE_SET_ARG_VAL(&inject_monmap, OPT_STR);
     } else
       usage();
-  }
-
-  // whoami
-  string name = g_conf.id;
-  if (name.length() == 0) {
-    cerr << "must specify '-i id' where id is the mon name" << std::endl;
-    usage();
   }
 
   if (!g_conf.mon_data) {
@@ -112,11 +109,10 @@ int main(int argc, const char **argv)
 
     // go
     MonitorStore store(g_conf.mon_data);
-    Monitor mon(name, &store, 0, &monmap);
+    Monitor mon(g_conf.name->get_id(), &store, 0, &monmap);
     mon.mkfs(osdmapbl);
     cout << argv[0] << ": created monfs at " << g_conf.mon_data 
-	 << " for mon." << name
-	 << std::endl;
+	 << " for " << *g_conf.name << std::endl;
     return 0;
   }
 
@@ -170,6 +166,43 @@ int main(int argc, const char **argv)
   }
 
 
+  // inject new monmap?
+  if (inject_monmap) {
+    bufferlist bl;
+    int r = bl.read_file(inject_monmap);
+    if (r) {
+      cerr << "unable to read monmap from " << inject_monmap << std::endl;
+      exit(1);
+    }
+
+    // get next version
+    version_t v = store.get_int("monmap", "last_committed");
+    cout << "last committed monmap epoch is " << v << ", injected map will be " << (v+1) << std::endl;
+    v++;
+
+    // set the version
+    MonMap tmp;
+    tmp.decode(bl);
+    if (tmp.get_epoch() != v) {
+      cout << "changing monmap epoch from " << tmp.get_epoch() << " to " << v << std::endl;
+      tmp.set_epoch(v);
+    }
+    bufferlist mapbl;
+    tmp.encode(mapbl);
+    bufferlist final;
+    ::encode(v, final);
+    ::encode(mapbl, final);
+
+    // save it
+    store.put_bl_sn(mapbl, "monmap", v);
+    store.put_bl_ss(final, "monmap", "latest");
+    store.put_int(v, "monmap", "last_committed");
+
+    cout << "done." << std::endl;
+    exit(0);
+  }
+
+
   // monmap?
   MonMap monmap;
   {
@@ -188,12 +221,12 @@ int main(int argc, const char **argv)
     assert(v == monmap.get_epoch());
   }
 
-  if (!monmap.contains(name)) {
-    cerr << "mon." << name << " does not exist in monmap" << std::endl;
+  if (!monmap.contains(g_conf.name->get_id())) {
+    cerr << *g_conf.name << " does not exist in monmap" << std::endl;
     exit(1);
   }
 
-  entity_addr_t ipaddr = monmap.get_addr(name);
+  entity_addr_t ipaddr = monmap.get_addr(g_conf.name->get_id());
   entity_addr_t conf_addr;
   char *mon_addr_str;
 
@@ -206,24 +239,23 @@ int main(int argc, const char **argv)
   // bind
   SimpleMessenger *messenger = new SimpleMessenger();
 
-  int rank = monmap.get_rank(name);
+  int rank = monmap.get_rank(g_conf.name->get_id());
 
-  cout << "starting mon." << name << " rank " << rank
-       << " at " << monmap.get_addr(name)
+  cout << "starting " << *g_conf.name << " rank " << rank
+       << " at " << monmap.get_addr(g_conf.name->get_id())
        << " mon_data " << g_conf.mon_data
        << " fsid " << monmap.get_fsid()
        << std::endl;
-  g_conf.public_addr = monmap.get_addr(name);
-  err = messenger->bind();
+  err = messenger->bind(monmap.get_addr(g_conf.name->get_id()), 0);
   if (err < 0)
     return 1;
 
   // start monitor
   messenger->register_entity(entity_name_t::MON(rank));
   messenger->set_default_send_priority(CEPH_MSG_PRIO_HIGH);
-  Monitor *mon = new Monitor(name, &store, messenger, &monmap);
+  Monitor *mon = new Monitor(g_conf.name->get_id(), &store, messenger, &monmap);
 
-  messenger->start();  // may daemonize
+  messenger->start(g_conf.daemonize);
 
   uint64_t supported =
     CEPH_FEATURE_UID |

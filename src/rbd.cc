@@ -200,7 +200,7 @@ static int do_rollback_snap(librbd::Image& image, const char *snapname)
 
 static int export_read_cb(uint64_t ofs, size_t len, const char *buf, void *arg)
 {
-  int ret;
+  ssize_t ret;
   int fd = *(int *)arg;
 
   if (!buf) /* a hole */
@@ -219,7 +219,7 @@ static int export_read_cb(uint64_t ofs, size_t len, const char *buf, void *arg)
 
 static int do_export(librbd::Image& image, const char *path)
 {
-  int r;
+  int64_t r;
   librbd::image_info_t info;
   bufferlist bl;
   int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
@@ -582,8 +582,8 @@ int main(int argc, const char **argv)
   env_to_vec(args);
 
   int opt_cmd = OPT_NO_CMD;
-  common_init(args, "rbd",
-	      STARTUP_FLAG_FORCE_FG_LOGGING | STARTUP_FLAG_INIT_KEYS);
+  common_init(args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
+  keyring_init(&g_conf);
 
   const char *poolname = NULL;
   uint64_t size = 0;

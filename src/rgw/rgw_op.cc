@@ -5,15 +5,17 @@
 #include <sstream>
 
 #include "common/armor.h"
+#include "common/Clock.h"
 
 #include "rgw_access.h"
 #include "rgw_op.h"
 #include "rgw_rest.h"
 #include "rgw_acl.h"
 #include "rgw_user.h"
+#include "rgw_log.h"
 
 using namespace std;
-using namespace CryptoPP::Weak;
+using ceph::crypto::MD5;
 
 static int parse_range(const char *range, off_t& ofs, off_t& end)
 {
@@ -81,7 +83,7 @@ void get_request_metadata(struct req_state *s, map<string, bufferlist>& attrs)
  * object: name of the object to get the ACL for.
  * Returns: 0 on success, -ERR# otherwise.
  */
-int read_acls(RGWAccessControlPolicy *policy, string& bucket, string& object)
+static int get_policy_from_attr(RGWAccessControlPolicy *policy, string& bucket, string& object)
 {
   bufferlist bl;
   int ret = 0;
@@ -99,6 +101,27 @@ int read_acls(RGWAccessControlPolicy *policy, string& bucket, string& object)
         RGW_LOG(15) << endl;
       }
     }
+  }
+
+  return ret;
+}
+
+int read_acls(struct req_state *s, RGWAccessControlPolicy *policy, string& bucket, string& object)
+{
+  int ret = get_policy_from_attr(policy, bucket, object);
+  if (ret == -ENOENT && object.size()) {
+    /* object does not exist checking the bucket's ACL to make sure
+       that we send a proper error code */
+    RGWAccessControlPolicy bucket_policy;
+    string no_object;
+    ret = get_policy_from_attr(&bucket_policy, bucket, no_object);
+    if (ret < 0)
+      return ret;
+
+    if (!verify_permission(&bucket_policy, s->user.user_id, RGW_PERM_READ))
+      ret = -EACCES;
+    else
+      ret = -ENOENT;
   }
 
   return ret;
@@ -126,7 +149,7 @@ int read_acls(struct req_state *s, bool only_bucket)
   if (!only_bucket)
     obj_str = s->object_str;
 
-  ret = read_acls(s->acl, s->bucket_str, obj_str);
+  ret = read_acls(s, s->acl, s->bucket_str, obj_str);
 
   return ret;
 }
@@ -159,9 +182,11 @@ void RGWGetObj::execute()
     if (ret < 0) {
       goto done;
     }
+    len = ret;
+    ofs += len;
+    ret = 0;
 
     send_response(handle);
-    ofs += ret;
     free(data);
   }
 
@@ -197,13 +222,42 @@ int RGWGetObj::init_common()
 
 void RGWListBuckets::execute()
 {
-  ret = rgw_get_user_buckets(s->user.user_id, buckets);
+  ret = rgw_read_user_buckets(s->user.user_id, buckets, !!(s->prot_flags & RGW_REST_OPENSTACK));
   if (ret < 0) {
     /* hmm.. something wrong here.. the user was authenticated, so it
        should exist, just try to recreate */
     RGW_LOG(10) << "WARNING: failed on rgw_get_user_buckets uid=" << s->user.user_id << endl;
+
+    /*
+
+    on a second thought, this is probably a bug and we should fail
+
     rgw_put_user_buckets(s->user.user_id, buckets);
     ret = 0;
+
+    */
+  }
+
+  send_response();
+}
+
+void RGWStatBucket::execute()
+{
+  RGWUserBuckets buckets;
+  bucket.name = s->bucket;
+  buckets.add(bucket);
+  map<string, RGWBucketEnt>& m = buckets.get_buckets();
+  ret = rgwstore->update_containers_stats(m);
+  if (!ret)
+    ret = -EEXIST;
+  if (ret > 0) {
+    ret = 0;
+    map<string, RGWBucketEnt>::iterator iter = m.find(bucket.name);
+    if (iter != m.end()) {
+      bucket = iter->second;
+    } else {
+      ret = -EINVAL;
+    }
   }
 
   send_response();
@@ -218,14 +272,28 @@ void RGWListBucket::execute()
 
   url_decode(s->args.get("prefix"), prefix);
   marker = s->args.get("marker");
-  max_keys = s->args.get("max-keys");
- if (!max_keys.empty()) {
+  max_keys = s->args.get(limit_opt_name);
+  if (!max_keys.empty()) {
     max = atoi(max_keys.c_str());
   } else {
-    max = -1;
+    max = default_max;
   }
   url_decode(s->args.get("delimiter"), delimiter);
-  ret = rgwstore->list_objects(s->user.user_id, s->bucket_str, max, prefix, delimiter, marker, objs, common_prefixes);
+
+  if (s->prot_flags & RGW_REST_OPENSTACK) {
+    string path_args = s->args.get("path");
+    if (!path_args.empty()) {
+      if (!delimiter.empty() || !prefix.empty()) {
+        ret = -EINVAL;
+        goto done;
+      }
+      url_decode(path_args, prefix);
+      delimiter="/";
+    }
+  }
+
+  ret = rgwstore->list_objects(s->user.user_id, s->bucket_str, max, prefix, delimiter, marker, objs, common_prefixes,
+                               !!(s->prot_flags & RGW_REST_OPENSTACK));
 done:
   send_response();
 }
@@ -248,27 +316,8 @@ void RGWCreateBucket::execute()
   ret = rgwstore->create_bucket(s->user.user_id, s->bucket_str, attrs,
 				s->user.auid);
 
-  if (ret == 0) {
-    RGWUserBuckets buckets;
-
-    int r = rgw_get_user_buckets(s->user.user_id, buckets);
-    RGWObjEnt new_bucket;
-
-    switch (r) {
-    case 0:
-    case -ENOENT:
-    case -ENODATA:
-      new_bucket.name = s->bucket_str;
-      new_bucket.size = 0;
-      time(&new_bucket.mtime);
-      buckets.add(new_bucket);
-      ret = rgw_put_user_buckets(s->user.user_id, buckets);
-      break;
-    default:
-      RGW_LOG(10) << "rgw_get_user_buckets returned " << ret << endl;
-      break;
-    }
-  }
+  if (ret == 0)
+    ret = rgw_add_bucket(s->user.user_id, s->bucket_str);
 done:
   send_response();
 }
@@ -286,14 +335,7 @@ void RGWDeleteBucket::execute()
     ret = rgwstore->delete_bucket(s->user.user_id, s->bucket_str);
 
     if (ret == 0) {
-      RGWUserBuckets buckets;
-
-      int r = rgw_get_user_buckets(s->user.user_id, buckets);
-
-      if (r == 0 || r == -ENOENT) {
-        buckets.remove(s->bucket_str);
-        ret = rgw_put_user_buckets(s->user.user_id, buckets);
-      }
+      rgw_remove_bucket(s->user.user_id, s->bucket_str);
     }
   }
 
@@ -303,7 +345,6 @@ void RGWDeleteBucket::execute()
 void RGWPutObj::execute()
 {
   ret = -EINVAL;
-  struct rgw_err err;
   if (!s->object) {
     goto done;
   } else {
@@ -325,23 +366,23 @@ void RGWPutObj::execute()
        goto done;
     }
 
-    char supplied_md5_bin[MD5::DIGESTSIZE + 1];
-    char supplied_md5[MD5::DIGESTSIZE * 2 + 1];
-    char calc_md5[MD5::DIGESTSIZE * 2 + 1];
-    unsigned char m[MD5::DIGESTSIZE];
+    char supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1];
+    char supplied_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+    char calc_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+    unsigned char m[CEPH_CRYPTO_MD5_DIGESTSIZE];
 
     if (supplied_md5_b64) {
       RGW_LOG(15) << "supplied_md5_b64=" << supplied_md5_b64 << endl;
-      ret = ceph_unarmor(supplied_md5_bin, &supplied_md5_bin[MD5::DIGESTSIZE + 1], 
+      ret = ceph_unarmor(supplied_md5_bin, &supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1],
 			     supplied_md5_b64, supplied_md5_b64 + strlen(supplied_md5_b64));
       RGW_LOG(15) << "ceph_armor ret=" << ret << endl;
-      if (ret != MD5::DIGESTSIZE) {
+      if (ret != CEPH_CRYPTO_MD5_DIGESTSIZE) {
         err.code = "InvalidDigest";
         ret = -EINVAL;
         goto done;
       }
 
-      buf_to_hex((const unsigned char *)supplied_md5_bin, MD5::DIGESTSIZE, supplied_md5);
+      buf_to_hex((const unsigned char *)supplied_md5_bin, CEPH_CRYPTO_MD5_DIGESTSIZE, supplied_md5);
       RGW_LOG(15) << "supplied_md5=" << supplied_md5 << endl;
     }
 
@@ -360,7 +401,7 @@ void RGWPutObj::execute()
 
     hash.Final(m);
 
-    buf_to_hex(m, MD5::DIGESTSIZE, calc_md5);
+    buf_to_hex(m, CEPH_CRYPTO_MD5_DIGESTSIZE, calc_md5);
 
     if (supplied_md5_b64 && strcmp(calc_md5, supplied_md5)) {
        err.code = "BadDigest";
@@ -460,7 +501,7 @@ int RGWCopyObj::init_common()
      return ret;
   }
   /* just checking the bucket's permission */
-  ret = read_acls(&src_policy, src_bucket, empty_str);
+  ret = read_acls(s, &src_policy, src_bucket, empty_str);
   if (ret < 0)
     return ret;
 
@@ -562,12 +603,13 @@ static int rebuild_policy(RGWAccessControlPolicy& src, RGWAccessControlPolicy& d
     ACLGrant new_grant;
     bool grant_ok = false;
     string id;
+    RGWUserInfo grant_user;
     switch (type.get_type()) {
     case ACL_TYPE_EMAIL_USER:
       {
         string email = src_grant->get_id();
         RGW_LOG(10) << "grant user email=" << email << endl;
-        if (rgw_get_uid_by_email(email, id) < 0) {
+        if (rgw_get_uid_by_email(email, id, grant_user) < 0) {
           RGW_LOG(10) << "grant user email not found or other error" << endl;
           break;
         }
@@ -577,8 +619,7 @@ static int rebuild_policy(RGWAccessControlPolicy& src, RGWAccessControlPolicy& d
         if (type.get_type() == ACL_TYPE_CANON_USER)
           id = src_grant->get_id();
     
-        RGWUserInfo grant_user;
-        if (rgw_get_user_info(id, grant_user) < 0) {
+        if (grant_user.user_id.empty() && rgw_get_user_info(id, grant_user) < 0) {
           RGW_LOG(10) << "grant user does not exist:" << id << endl;
         } else {
           ACLPermission& perm = src_grant->get_permission();
@@ -682,8 +723,6 @@ done:
 
 void RGWHandler::init_state(struct req_state *s, struct fcgx_state *fcgx)
 {
-  this->s = s;
-
   /* Retrieve the loglevel from the CGI envirioment (if set) */
   const char *cgi_env_level = FCGX_GetParam("RGW_LOG_LEVEL", fcgx->envp);
   if (cgi_env_level != NULL) {
@@ -693,6 +732,9 @@ void RGWHandler::init_state(struct req_state *s, struct fcgx_state *fcgx)
     }
   }
 
+  const char *cgi_should_log = FCGX_GetParam("RGW_SHOULD_LOG", fcgx->envp);
+  s->should_log = rgw_str_to_bool(cgi_should_log, RGW_SHOULD_LOG_DEFAULT);
+
   if (rgw_log_level >= 20) {
     char *p;
     for (int i=0; (p = fcgx->envp[i]); ++i) {
@@ -701,8 +743,8 @@ void RGWHandler::init_state(struct req_state *s, struct fcgx_state *fcgx)
   }
   s->fcgx = fcgx;
   s->content_started = false;
-  s->indent = 0;
   s->err_exist = false;
+  s->format = 0;
   memset(&s->err, 0, sizeof(s->err));
   if (s->acl) {
      delete s->acl;
@@ -711,7 +753,13 @@ void RGWHandler::init_state(struct req_state *s, struct fcgx_state *fcgx)
   s->canned_acl.clear();
   s->expect_cont = false;
 
-  provider_init_state();
+  free(s->os_user);
+  free(s->os_groups);
+  s->os_auth_token = NULL;
+  s->os_user = NULL;
+  s->os_groups = NULL;
+  s->time = g_clock.now();
+  s->user.clear();
 }
 
 int RGWHandler::do_read_permissions(bool only_bucket)

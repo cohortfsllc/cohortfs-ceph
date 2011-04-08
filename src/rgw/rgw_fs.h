@@ -14,7 +14,8 @@ public:
   int list_buckets_next(std::string& id, RGWObjEnt& obj, RGWAccessHandle *handle);
 
   int list_objects(std::string& id, std::string& bucket, int max, std::string& prefix, std::string& delim,
-                   std::string& marker, std::vector<RGWObjEnt>& result, map<string, bool>& common_prefixes);
+                   std::string& marker, std::vector<RGWObjEnt>& result, map<string, bool>& common_prefixes,
+                   bool get_content_type);
 
   int create_bucket(std::string& id, std::string& bucket, map<std::string, bufferlist>& attrs, uint64_t auid=0);
   int put_obj_meta(std::string& id, std::string& bucket, std::string& obj, time_t *mtime,
@@ -40,7 +41,7 @@ public:
   int set_attr(std::string& bucket, std::string& obj,
                        const char *name, bufferlist& bl);
 
- int prepare_get_obj(std::string& bucket, std::string& obj, 
+  int prepare_get_obj(std::string& bucket, std::string& obj, 
             off_t ofs, off_t *end,
 	    map<std::string, bufferlist> *attrs,
             const time_t *mod_ptr,
@@ -52,10 +53,12 @@ public:
             void **handle,
             struct rgw_err *err);
 
- int get_obj(void **handle, std::string& bucket, std::string& obj, 
+  int get_obj(void **handle, std::string& bucket, std::string& obj, 
             char **data, off_t ofs, off_t end);
 
- void finish_get_obj(void **handle);
+  void finish_get_obj(void **handle);
+  int read(std::string& bucket, std::string& oid, off_t ofs, size_t size, bufferlist& bl);
+  int obj_stat(string& bucket, string& obj, uint64_t *psize, time_t *pmtime);
 };
 
 #endif

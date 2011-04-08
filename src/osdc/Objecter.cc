@@ -56,6 +56,11 @@ void Objecter::init()
 
 void Objecter::shutdown() 
 {
+  map<int,OSDSession*>::iterator p;
+  while (!osd_sessions.empty()) {
+    p = osd_sessions.begin();
+    close_session(p->second);
+  }
 }
 
 void Objecter::send_linger(LingerOp *info)
@@ -655,12 +660,8 @@ void Objecter::send_op(Op *op)
   op->incarnation = op->session->incarnation;
   op->stamp = g_clock.now();
 
-  ceph_object_layout ol;
-  ol.ol_pgid = op->pgid.v;
-  ol.ol_stripe_unit = 0;
-
-  MOSDOp *m = new MOSDOp(client_inc, op->tid,
-			 op->oid, ol, osdmap->get_epoch(),
+  MOSDOp *m = new MOSDOp(client_inc, op->tid, 
+			 op->oid, op->oloc, op->pgid, osdmap->get_epoch(),
 			 flags);
 
   m->set_snapid(op->snapid);
@@ -1092,10 +1093,8 @@ void Objecter::handle_pool_op_reply(MPoolOpReply *m)
   if (pool_ops.count(tid)) {
     PoolOp *op = pool_ops[tid];
     dout(10) << "have request " << tid << " at " << op << " Op: " << ceph_pool_op_name(op->pool_op) << dendl;
-    if (op->blp) {
-      op->blp->claim(*m->response_data);
-      m->response_data = NULL;
-    }
+    if (op->blp)
+      op->blp->claim(m->response_data);
     if (m->version > last_seen_osdmap_version)
       last_seen_osdmap_version = m->version;
     if (m->replyCode == 0 && osdmap->get_epoch() < m->epoch) {

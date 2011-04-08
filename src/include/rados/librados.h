@@ -12,18 +12,21 @@ extern "C" {
 #ifndef CEPH_OSD_TMAP_SET
 #define CEPH_OSD_TMAP_HDR 'h'
 #define CEPH_OSD_TMAP_SET 's'
+#define CEPH_OSD_TMAP_CREATE 'c'
 #define CEPH_OSD_TMAP_RM  'r'
 #endif
 
 #define LIBRADOS_VER_MAJOR 0
-#define LIBRADOS_VER_MINOR 25
-#define LIBRADOS_VER_EXTRA 1
+#define LIBRADOS_VER_MINOR 27
+#define LIBRADOS_VER_EXTRA 0
 
 #define LIBRADOS_VERSION(maj, min, extra) ((maj << 16) + (min << 8) + extra)
 
 #define LIBRADOS_VERSION_CODE LIBRADOS_VERSION(LIBRADOS_VER_MAJOR, LIBRADOS_VER_MINOR, LIBRADOS_VER_EXTRA)
 
 #define LIBRADOS_SUPPORTS_WATCH 1
+
+struct md_config_t;
 
 typedef void *rados_t;
 typedef void *rados_ioctx_t;
@@ -51,6 +54,9 @@ void rados_version(int *major, int *minor, int *extra);
 
 /* initialization */
 int rados_create(rados_t *cluster, const char * const id);
+
+/* initialize rados with an existing configuration. */
+int rados_create_with_config(rados_t *cluster, struct md_config_t *conf);
 
 /* Connect to the cluster */
 int rados_connect(rados_t cluster);
@@ -102,10 +108,10 @@ int rados_pool_list(rados_t cluster, char *buf, size_t len);
 
 int rados_ioctx_create(rados_t cluster, const char *pool_name, rados_ioctx_t *ioctx);
 void rados_ioctx_destroy(rados_ioctx_t io);
-int rados_ioctx_lookup(rados_t cluster, const char *pool_name);
 
 int rados_ioctx_pool_stat(rados_ioctx_t io, struct rados_pool_stat_t *stats);
 
+int rados_pool_lookup(rados_t cluster, const char *pool_name);
 int rados_pool_create(rados_t cluster, const char *pool_name);
 int rados_pool_create_with_auid(rados_t cluster, const char *pool_name, uint64_t auid);
 int rados_pool_create_with_crush_rule(rados_t cluster, const char *pool_name,
@@ -130,6 +136,7 @@ int rados_rollback(rados_ioctx_t io, const char *oid,
 void rados_ioctx_snap_set_read(rados_ioctx_t io, rados_snap_t snap);
 int rados_ioctx_selfmanaged_snap_create(rados_ioctx_t io, uint64_t *snapid);
 int rados_ioctx_selfmanaged_snap_remove(rados_ioctx_t io, uint64_t snapid);
+int rados_ioctx_selfmanaged_snap_rollback(rados_ioctx_t io, const char *oid, uint64_t snapid);
 int rados_ioctx_selfmanaged_snap_set_write_ctx(rados_ioctx_t io, rados_snap_t seq, rados_snap_t *snaps, int num_snaps);
 
 int rados_ioctx_snap_list(rados_ioctx_t io, rados_snap_t *snaps, int maxlen);
@@ -142,6 +149,7 @@ uint64_t rados_get_last_version(rados_ioctx_t io);
 
 int rados_write(rados_ioctx_t io, const char *oid, const char *buf, size_t len, uint64_t off);
 int rados_write_full(rados_ioctx_t io, const char *oid, const char *buf, size_t len, uint64_t off);
+int rados_append(rados_ioctx_t io, const char *oid, const char *buf, size_t len);
 int rados_read(rados_ioctx_t io, const char *oid, char *buf, size_t len, uint64_t off);
 int rados_remove(rados_ioctx_t io, const char *oid);
 int rados_trunc(rados_ioctx_t io, const char *oid, uint64_t size);
@@ -173,6 +181,9 @@ void rados_aio_release(rados_completion_t c);
 int rados_aio_write(rados_ioctx_t io, const char *oid,
 		    rados_completion_t completion,
 		    const char *buf, size_t len, uint64_t off);
+int rados_aio_append(rados_ioctx_t io, const char *oid,
+		     rados_completion_t completion,
+		     const char *buf, size_t len);
 int rados_aio_write_full(rados_ioctx_t io, const char *oid,
 			 rados_completion_t completion,
 			 const char *buf, size_t len);

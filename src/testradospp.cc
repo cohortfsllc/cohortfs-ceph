@@ -52,7 +52,7 @@ int main(int argc, const char **argv)
      exit(1);
   }
 
-  if (rados.conf_read_file("/etc/ceph/ceph.conf")) {
+  if (rados.conf_read_file(NULL)) {
      cerr << "couldn't read configuration file." << std::endl;
      exit(1);
   }
@@ -145,6 +145,8 @@ int main(int argc, const char **argv)
   cout << "io_ctx.write returned " << r << std::endl;
   r = io_ctx.write(oid, bl, bl.length() - 3, 0);
   cout << "rados.write returned " << r << std::endl;
+  r = io_ctx.append(oid, bl, bl.length());
+  cout << "rados.write returned " << r << std::endl;
   r = io_ctx.write_full(oid, blf);
   cout << "rados.write_full returned " << r << std::endl;
   r = io_ctx.read(oid, bl, bl.length(), 0);
@@ -205,7 +207,7 @@ int main(int argc, const char **argv)
   for (it = attrset.begin(); it != attrset.end(); ++it) {
     cout << "xattr: " << it->first << std::endl;
   }
-  
+
   r = io_ctx.remove(oid);
   cout << "remove result=" << r << std::endl;
   rados.shutdown();

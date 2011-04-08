@@ -3,6 +3,10 @@
 #include "rgw_common.h"
 #include "rgw_acl.h"
 
+#include "common/ceph_crypto.h"
+
+using namespace ceph::crypto;
+
 /* Loglevel of the gateway */
 int rgw_log_level = 20;
 
@@ -16,6 +20,27 @@ int parse_time(const char *time_str, time_t *time)
   *time = mktime(&tm);
 
   return 0;
+}
+
+/*
+ * calculate the sha1 value of a given msg and key
+ */
+void calc_hmac_sha1(const char *key, int key_len,
+                    const char *msg, int msg_len, char *dest)
+/* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
+{
+  char key_buf[CEPH_CRYPTO_HMACSHA1_DIGESTSIZE];
+  memset(key_buf, 0, CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
+  memcpy(key_buf, key, key_len);
+
+  HMACSHA1 hmac((const unsigned char *)key, key_len);
+  hmac.Update((const unsigned char *)msg, msg_len);
+  hmac.Final((unsigned char *)dest);
+  
+  char hex_str[(CEPH_CRYPTO_HMACSHA1_DIGESTSIZE * 2) + 1];
+  buf_to_hex((unsigned char *)dest, CEPH_CRYPTO_HMACSHA1_DIGESTSIZE, hex_str);
+
+  RGW_LOG(15) << "hmac=" << hex_str << endl;
 }
 
 int NameVal::parse()
@@ -124,6 +149,8 @@ bool url_decode(string& src_str, string& dest_str)
   int pos = 0;
   char c;
 
+  RGW_LOG(10) << "src=" << (void *)src << std::endl;
+
   while (*src) {
     if (*src != '%') {
       if (*src != '+') {
@@ -151,4 +178,75 @@ bool url_decode(string& src_str, string& dest_str)
   return true;
 }
 
+void RGWFormatter::write_data(const char *fmt, ...)
+{
+#define LARGE_ENOUGH_LEN 128
+  int n, size = LARGE_ENOUGH_LEN;
+  char s[size];
+  char *p, *np;
+  bool p_on_stack;
+  va_list ap;
+  int pos;
 
+  p = s;
+  p_on_stack = true;
+
+  while (1) {
+    va_start(ap, fmt);
+    n = vsnprintf(p, size, fmt, ap);
+    va_end(ap);
+
+    if (n > -1 && n < size)
+      goto done;
+    /* Else try again with more space. */
+    if (n > -1)    /* glibc 2.1 */
+      size = n+1; /* precisely what is needed */
+    else           /* glibc 2.0 */
+      size *= 2;  /* twice the old size */
+    if (p_on_stack)
+      np = (char *)malloc(size);
+    else
+      np = (char *)realloc(p, size);
+    if (!np)
+      goto done_free;
+    p = np;
+    p_on_stack = false;
+  }
+done:
+#define LARGE_ENOUGH_BUF 4096
+  if (!buf) {
+    max_len = max(LARGE_ENOUGH_BUF, size);
+    buf = (char *)malloc(max_len);
+  }
+
+  if (len + size > max_len) {
+    max_len = len + size + LARGE_ENOUGH_BUF;
+    buf = (char *)realloc(buf, max_len);
+  }
+  if (!buf) {
+    RGW_LOG(0) << "RGWFormatter::write_data: failed allocating " << max_len << " bytes" << std::endl;
+    goto done_free;
+  }
+  pos = len;
+  if (len)
+    pos--; // squash null termination
+  strcpy(buf + pos, p);
+  len = pos + strlen(p) + 1;
+  RGW_LOG(0) << "RGWFormatter::write_data: len= " << len << " bytes" << std::endl;
+done_free:
+  if (!p_on_stack)
+    free(p);
+}
+
+void RGWFormatter::flush()
+{
+  if (!buf)
+    return;
+
+  RGW_LOG(0) << "flush(): buf='" << buf << "'  strlen(buf)=" << strlen(buf) << std::endl;
+  FCGX_PutStr(buf, len - 1, s->fcgx->out);
+  free(buf);
+  buf = NULL;
+  len = 0;
+  max_len = 0;
+}

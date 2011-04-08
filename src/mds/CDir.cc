@@ -197,7 +197,61 @@ CDir::CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth) :
   //dir_rep = REP_ALL;      // hack: to wring out some bugs! FIXME FIXME
 }
 
+/**
+ * Check the recursive statistics on size for consistency.
+ * If mds_debug_scatterstat is enabled, assert for correctness,
+ * otherwise just print out the mismatch and continue.
+ */
+bool CDir::check_rstats()
+{
+  dout(25) << "check_rstats on " << this << dendl;
+  if (!is_complete()) {
+    dout(10) << "check_rstats bailing out -- incomplete dir!" << dendl;
+    return true;
+  }
+  // first, check basic counts
+  dout(20) << "get_num_head_items() = " << get_num_head_items()
+           << "; fnode.fragstat.nfiles=" << fnode.fragstat.nfiles
+           << " fnode.fragstat.nsubdirs=" << fnode.fragstat.nsubdirs << dendl;
+  if(!(get_num_head_items()==
+      (fnode.fragstat.nfiles + fnode.fragstat.nsubdirs))) {
+    dout(1) << "mismatch between head items and fnode.fragstat! printing dentries" << dendl;
+    for (map_t::iterator i = items.begin(); i != items.end(); ++i) {
+      //if (i->second->get_linkage()->is_primary())
+        dout(1) << *(i->second) << dendl;
+    }
+    assert(!g_conf.mds_debug_scatterstat ||
+           (get_num_head_items() ==
+            (fnode.fragstat.nfiles + fnode.fragstat.nsubdirs)));
+  }
 
+  nest_info_t sub_info;
+  for (map_t::iterator i = items.begin(); i != items.end(); ++i) {
+    if (i->second->get_linkage()->is_primary()) {
+      sub_info.add(i->second->get_linkage()->inode->inode.accounted_rstat);
+    }
+  }
+
+  dout(25) << "total of child dentrys: " << sub_info << dendl;
+  dout(25) << "my rstats:              " << fnode.rstat << dendl;
+  if ((!(sub_info.rbytes == fnode.rstat.rbytes)) ||
+      (!(sub_info.rfiles == fnode.rstat.rfiles)) ||
+      (!(sub_info.rsubdirs == fnode.rstat.rsubdirs))) {
+    dout(1) << "mismatch between child accounted_rstats and my rstats!" << dendl;
+    for (map_t::iterator i = items.begin(); i != items.end(); ++i) {
+      if (i->second->get_linkage()->is_primary()) {
+        dout(1) << *(i->second) << " "
+                << i->second->get_linkage()->inode->inode.accounted_rstat
+                << dendl;
+      }
+    }
+  }
+  assert(!g_conf.mds_debug_scatterstat || sub_info.rbytes == fnode.rstat.rbytes);
+  assert(!g_conf.mds_debug_scatterstat || sub_info.rfiles == fnode.rstat.rfiles);
+  assert(!g_conf.mds_debug_scatterstat || sub_info.rsubdirs == fnode.rstat.rsubdirs);
+  dout(10) << "check_rstats complete on " << this << dendl;
+  return true;
+}
 
 
 CDentry *CDir::lookup(const char *name, snapid_t snap)
@@ -1121,7 +1175,7 @@ void CDir::log_mark_dirty()
 {
   MDLog *mdlog = inode->mdcache->mds->mdlog;
   version_t pv = pre_dirty();
-  mdlog->wait_for_sync(new C_Dir_Dirty(this, pv, mdlog->get_current_segment()));
+  mdlog->wait_for_safe(new C_Dir_Dirty(this, pv, mdlog->get_current_segment()));
 }
 
 void CDir::mark_complete() {
@@ -1607,6 +1661,11 @@ CDir::map_t::iterator CDir::_commit_full(ObjectOperation& m, const set<snapid_t>
  * last dentry as encoded.)
  *
  * If we're passed a last_committed_dn, skip to the next dentry after that.
+ * Also, don't encode the header again -- we don't want to update it
+ * on-disk until all the updates have made it through, so keep the header
+ * in only the first changeset -- our caller is responsible for making sure
+ * that changeset doesn't go through until after all the others do, if it's
+ * necessary.
  */
 CDir::map_t::iterator CDir::_commit_partial(ObjectOperation& m,
                                   const set<snapid_t> *snaps,
@@ -1617,10 +1676,12 @@ CDir::map_t::iterator CDir::_commit_partial(ObjectOperation& m,
   bufferlist finalbl;
 
   // header
-  bufferlist header;
-  ::encode(fnode, header);
-  finalbl.append(CEPH_OSD_TMAP_HDR);
-  ::encode(header, finalbl);
+  if (last_committed_dn == map_t::iterator()) {
+    bufferlist header;
+    ::encode(fnode, header);
+    finalbl.append(CEPH_OSD_TMAP_HDR);
+    ::encode(header, finalbl);
+  }
 
   // updated dentries
   map_t::iterator p = items.begin();
@@ -1776,7 +1837,7 @@ void CDir::_commit(version_t want)
 
   ObjectOperation m;
   map_t::iterator committed_dn;
-  unsigned max_write_size = -1;
+  unsigned max_write_size = cache->max_dir_commit_size;
 
   // update parent pointer while we're here.
   //  NOTE: the pointer is ONLY required to be valid for the first frag.  we put the xattr
@@ -1805,14 +1866,24 @@ void CDir::_commit(version_t want)
   else { // send in a different Context
     C_Gather *gather = new C_Gather(new C_Dir_Committed(this, get_version(),
                                          inode->inode.last_renamed_version));
-    cache->mds->objecter->mutate(oid, oloc, m, snapc, g_clock.now(), 0, NULL,
-                                gather->new_sub());
     while (committed_dn != items.end()) {
-      m = ObjectOperation();
-      committed_dn = _commit_partial(m, snaps, max_write_size, committed_dn);
-      cache->mds->objecter->mutate(oid, oloc, m, snapc, g_clock.now(), 0, NULL,
+      ObjectOperation n = ObjectOperation();
+      committed_dn = _commit_partial(n, snaps, max_write_size, committed_dn);
+      cache->mds->objecter->mutate(oid, oloc, n, snapc, g_clock.now(), 0, NULL,
                                   gather->new_sub());
     }
+    /*
+     * save the original object for last -- it contains the new header,
+     * which will be committed on-disk. If we were to send it off before
+     * the other commits, but die before sending them all, we'd think
+     * that the on-disk state was fully committed even though it wasn't!
+     * However, since the messages are strictly ordered between the MDS and
+     * the OSD, and since messages to a given PG are strictly ordered, if
+     * we simply send the message containing the header off last, we cannot
+     * get our header into an incorrect state.
+     */
+    cache->mds->objecter->mutate(oid, oloc, m, snapc, g_clock.now(), 0, NULL,
+                                gather->new_sub());
   }
 }
 

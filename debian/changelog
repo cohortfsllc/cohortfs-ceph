@@ -1,3 +1,23 @@
+ceph (0.26-1) experimental; urgency=low
+
+  * New upstream release.
+  * Make Ceph Linux only and build on all Linux archs (closes: #614890),
+    but only build-depend google-perftools on x86 and x64 archs only.
+  * Correct section of libcrush1, librados1, librbd1 and libceph1 to libs.
+  * Make Ceph cross buildable (closes: #618939), thanks to Hector Oron.
+  * Disable libatomic-ops on ARMv4t (armel) archs to prevent FTBFS
+    (closes: #615235), thanks go to Hector Oron again.
+  * Rename librados1{,-dbg,-dev} packages to librados2{,-dbg,-dev} ones;
+    conflict with and replace the former ones.
+
+ -- Laszlo Boszormenyi (GCS) <gcs@debian.hu>  Fri, 01 Apr 2011 16:28:11 +0100
+
+ceph (0.25.2-1) experimental; urgency=low
+
+  * New upstream release 
+
+ -- Sage Weil <sage@newdream.net>  Sun, 20 Mar 2011 21:07:38 -0700
+
 ceph (0.25.1-1) experimental; urgency=low
 
   * New upstream release 

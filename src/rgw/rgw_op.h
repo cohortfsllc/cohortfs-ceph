@@ -37,7 +37,7 @@ protected:
   struct rgw_err err;
 public:
   RGWOp() {}
-  ~RGWOp() {}
+  virtual ~RGWOp() {}
 
   virtual void init(struct req_state *s) {
     this->s = s;
@@ -70,7 +70,6 @@ protected:
   int init_common();
 public:
   RGWGetObj() {}
-  ~RGWGetObj() {}
 
   virtual void init(struct req_state *s) {
     RGWOp::init(s);
@@ -114,7 +113,6 @@ public:
     buckets.clear();
   }
   RGWListBuckets() {}
-  ~RGWListBuckets() {}
 
   void execute();
 
@@ -132,9 +130,11 @@ protected:
   vector<RGWObjEnt> objs;
   map<string, bool> common_prefixes;
 
+  string limit_opt_name;
+  int default_max;
+
 public:
   RGWListBucket() {}
-  ~RGWListBucket() {}
 
   virtual void init(struct req_state *s) {
     RGWOp::init(s);
@@ -152,13 +152,31 @@ public:
   virtual void send_response() = 0;
 };
 
+class RGWStatBucket : public RGWOp {
+protected:
+  int ret;
+  RGWBucketEnt bucket;
+
+public:
+  virtual void init(struct req_state *s) {
+    RGWOp::init(s);
+    ret = 0;
+    bucket.clear();
+  }
+  RGWStatBucket() {}
+  ~RGWStatBucket() {}
+
+  void execute();
+
+  virtual void send_response() = 0;
+};
+
 class RGWCreateBucket : public RGWOp {
 protected:
   int ret;
 
 public:
   RGWCreateBucket() {}
-  ~RGWCreateBucket() {}
 
   void execute();
   virtual void init(struct req_state *s) {
@@ -174,7 +192,6 @@ protected:
 
 public:
   RGWDeleteBucket() {}
-  ~RGWDeleteBucket() {}
 
   virtual void init(struct req_state *s) {
     RGWOp::init(s);
@@ -196,7 +213,6 @@ protected:
 
 public:
   RGWPutObj() {}
-  ~RGWPutObj() {}
 
   virtual void init(struct req_state *s) {
     RGWOp::init(s);
@@ -220,7 +236,6 @@ protected:
 
 public:
   RGWDeleteObj() {}
-  ~RGWDeleteObj() {}
 
   virtual void init(struct req_state *s) {
     RGWOp::init(s);
@@ -251,7 +266,6 @@ protected:
   int init_common();
 public:
   RGWCopyObj() {}
-  ~RGWCopyObj() {}
 
   virtual void init(struct req_state *s) {
     RGWOp::init(s);
@@ -283,7 +297,6 @@ protected:
 
 public:
   RGWGetACLs() {}
-  ~RGWGetACLs() {}
 
   virtual void init(struct req_state *s) {
     RGWOp::init(s);
@@ -303,7 +316,6 @@ protected:
 
 public:
   RGWPutACLs() {}
-  ~RGWPutACLs() {}
 
   virtual void init(struct req_state *s) {
     RGWOp::init(s);
@@ -321,14 +333,17 @@ class RGWHandler {
 protected:
   struct req_state *s;
 
-  virtual void provider_init_state() = 0;
   int do_read_permissions(bool only_bucket);
 public:
   RGWHandler() {}
   virtual ~RGWHandler() {}
-  void init_state(struct req_state *s, struct fcgx_state *fcgx);
-  RGWOp *get_op();
+  static void init_state(struct req_state *s, struct fcgx_state *fcgx);
+
+  void set_state(struct req_state *_s) { s = _s; }
+
+  virtual RGWOp *get_op() = 0;
   virtual int read_permissions() = 0;
+  virtual bool authorize(struct req_state *s) = 0;
 };
 
 #endif

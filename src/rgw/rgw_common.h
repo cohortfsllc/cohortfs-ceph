@@ -15,18 +15,18 @@
 #ifndef CEPH_RGW_COMMON_H
 #define CEPH_RGW_COMMON_H
 
+#include "common/ceph_crypto.h"
 #include "fcgiapp.h"
 
 #include <string.h>
-#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-#include <cryptopp/md5.h>
 #include <string>
 #include <map>
 #include "include/types.h"
+#include "include/utime.h"
 
 using namespace std;
 
-#define SERVER_NAME "RGWFS"
+using ceph::crypto::MD5;
 
 #define RGW_ATTR_PREFIX  "user.rgw."
 
@@ -36,12 +36,28 @@ using namespace std;
 #define RGW_ATTR_META_PREFIX	RGW_ATTR_PREFIX "x-amz-meta-"
 #define RGW_ATTR_CONTENT_TYPE	RGW_ATTR_PREFIX "content_type"
 
-#define USER_INFO_VER 2
+#define RGW_BUCKETS_OBJ_PREFIX ".buckets"
+
+#define USER_INFO_VER 4
 
 #define RGW_MAX_CHUNK_SIZE	(4*1024*1024)
 
 #define RGW_LOG_BEGIN "RADOS S3 Gateway:"
 #define RGW_LOG(x) if ((x) <= rgw_log_level) cout << RGW_LOG_BEGIN << " "
+
+#define RGW_FORMAT_XML          1
+#define RGW_FORMAT_JSON         2
+
+#define RGW_REST_OPENSTACK      0x1
+#define RGW_REST_OPENSTACK_AUTH 0x2
+
+#define CGI_PRINTF(state, format, ...) do { \
+   int __ret = FCGX_FPrintF(state->fcgx->out, format, __VA_ARGS__); \
+   if (state->header_ended) \
+     state->bytes_sent = __ret; \
+   printf(">" format, __VA_ARGS__); \
+} while (0)
+
 
 typedef void *RGWAccessHandle;
 
@@ -118,6 +134,8 @@ struct RGWUserInfo
   string secret_key;
   string display_name;
   string user_email;
+  string openstack_name;
+  string openstack_key;
 
   RGWUserInfo() : auid(0) {}
 
@@ -129,6 +147,8 @@ struct RGWUserInfo
      ::encode(secret_key, bl);
      ::encode(display_name, bl);
      ::encode(user_email, bl);
+     ::encode(openstack_name, bl);
+     ::encode(openstack_key, bl);
   }
   void decode(bufferlist::iterator& bl) {
      __u32 ver;
@@ -139,6 +159,8 @@ struct RGWUserInfo
     ::decode(secret_key, bl);
     ::decode(display_name, bl);
     ::decode(user_email, bl);
+    if (ver >= 3) ::decode(openstack_name, bl);
+    if (ver >= 4) ::decode(openstack_key, bl);
   }
 
   void clear() {
@@ -151,12 +173,45 @@ struct RGWUserInfo
 };
 WRITE_CLASS_ENCODER(RGWUserInfo)
 
+struct req_state;
+
+class RGWFormatter {
+protected:
+  struct req_state *s;
+  char *buf;
+  int len;
+  int max_len;
+
+  virtual void formatter_init() = 0;
+public:
+  RGWFormatter() : buf(NULL), len(0), max_len(0) {}
+  virtual ~RGWFormatter() {}
+  void init(struct req_state *_s) {
+    s = _s;
+    if (buf)
+      free(buf);
+    buf = NULL;
+    len = 0;
+    max_len = 0;
+    formatter_init();
+  }
+  void write_data(const char *fmt, ...);
+  virtual void flush();
+  virtual int get_len() { return (len ? len - 1 : 0); } // don't include null termination in length
+  virtual void open_array_section(const char *name) = 0;
+  virtual void open_obj_section(const char *name) = 0;
+  virtual void close_section(const char *name) = 0;
+  virtual void dump_value_int(const char *name, const char *fmt, ...) = 0;
+  virtual void dump_value_str(const char *name, const char *fmt, ...) = 0;
+};
+
 /** Store all the state necessary to complete and respond to an HTTP request*/
 struct req_state {
    struct fcgx_state *fcgx;
    http_op op;
    bool content_started;
-   int indent;
+   int format;
+   RGWFormatter *formatter;
    const char *path_name;
    string path_name_url;
    const char *host;
@@ -166,7 +221,11 @@ struct req_state {
    const char *content_type;
    bool err_exist;
    struct rgw_err err;
+   const char *status;
    bool expect_cont;
+   bool header_ended;
+   uint64_t bytes_sent; // bytes sent as a response, excluding header
+   bool should_log;
 
    XMLArgs args;
 
@@ -189,7 +248,15 @@ struct req_state {
    const char *copy_source;
    const char *http_auth;
 
-   req_state() : acl(NULL) {}
+   int prot_flags;
+
+   char *os_auth_token;
+   char *os_user;
+   char *os_groups;
+
+   utime_t time;
+
+   req_state() : acl(NULL), os_auth_token(NULL), os_user(NULL), os_groups(NULL) {}
 };
 
 /** Store basic data on an object */
@@ -197,16 +264,28 @@ struct RGWObjEnt {
   std::string name;
   size_t size;
   time_t mtime;
-  char etag[CryptoPP::Weak::MD5::DIGESTSIZE * 2 + 1];
+  // two md5 digests and a terminator
+  char etag[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+  string content_type;
+};
+
+/** Store basic data on an object */
+struct RGWBucketEnt {
+  std::string name;
+  size_t size;
+  time_t mtime;
+  char etag[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+  uint64_t count;
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    __u8 struct_v = 2;
     ::encode(struct_v, bl);
     uint64_t s = size;
     __u32 mt = mtime;
     ::encode(name, bl);
     ::encode(s, bl);
     ::encode(mt, bl);
+    ::encode(count, bl);
   }
   void decode(bufferlist::iterator& bl) {
     __u8 struct_v;
@@ -218,9 +297,18 @@ struct RGWObjEnt {
     ::decode(mt, bl);
     size = s;
     mtime = mt;
+    if (struct_v >= 2)
+      ::decode(count, bl);
+  }
+  void clear() {
+    name="";
+    size = 0;
+    mtime = 0;
+    memset(etag, 0, sizeof(etag));
+    count = 0;
   }
 };
-WRITE_CLASS_ENCODER(RGWObjEnt)
+WRITE_CLASS_ENCODER(RGWBucketEnt)
 
 static inline void buf_to_hex(const unsigned char *buf, int len, char *str)
 {
@@ -229,6 +317,16 @@ static inline void buf_to_hex(const unsigned char *buf, int len, char *str)
   for (i = 0; i < len; i++) {
     sprintf(&str[i*2], "%02x", (int)buf[i]);
   }
+}
+
+static inline int rgw_str_to_bool(const char *s, int def_val)
+{
+  if (!s)
+    return def_val;
+
+  return (strcasecmp(s, "on") == 0 ||
+          strcasecmp(s, "yes") == 0 ||
+          strcasecmp(s, "1") == 0);
 }
 
 /** */
@@ -241,6 +339,10 @@ extern bool verify_permission(struct req_state *s, int perm);
 /** Convert an input URL into a sane object name
  * by converting %-escaped strings into characters, etc*/
 extern bool url_decode(string& src_str, string& dest_str);
+
+extern void calc_hmac_sha1(const char *key, int key_len,
+                          const char *msg, int msg_len, char *dest);
+/* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 
 /* loglevel of the gateway */
 extern int rgw_log_level;

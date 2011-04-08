@@ -80,7 +80,7 @@ void Server::open_logger()
   }
 
   char name[80];
-  snprintf(name, sizeof(name), "mds.%s.server.log", g_conf.id);
+  snprintf(name, sizeof(name), "mds.%s.server.log", g_conf.name->get_id().c_str());
   logger = new ProfLogger(name, &mdserver_logtype);
   logger_add(logger);
 }
@@ -753,8 +753,7 @@ void Server::journal_and_reply(MDRequest *mdr, CInode *in, CDentry *dn, LogEvent
   early_reply(mdr, in, dn);
   
   mdr->committing = true;
-  mdlog->submit_entry(le, fin,
-		      mdr->did_ino_allocation());
+  mdlog->submit_entry(le, fin);
   
   if (mdr->client_request && mdr->client_request->is_replay()) {
     if (mds->queue_one_replay()) {
@@ -4620,7 +4619,9 @@ void Server::handle_client_rename(MDRequest *mdr)
     if (oldin->is_dir())
       rdlocks.insert(&oldin->filelock);
   }
-  if (srcdnl->is_primary() && srci->is_dir())
+  if (srcdnl->is_primary() && srci->is_dir())  
+    // FIXME: this should happen whenever we are renamning between
+    // realms, regardless of the file type
     xlocks.insert(&srci->snaplock);  // FIXME: an auth bcast could be sufficient?
   else
     rdlocks.insert(&srci->snaplock);
@@ -5046,9 +5047,7 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
   
   // target inode
   if (oldin) {
-    bool dest_primary = false;
     if (destdnl->is_primary()) {
-      dest_primary = true;
       assert(straydn);
       dout(10) << "straydn is " << *straydn << dendl;
       destdn->get_dir()->unlink_inode(destdn);
@@ -5060,15 +5059,18 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
 
       mdcache->touch_dentry_bottom(straydn);  // drop dn as quickly as possible.
 
+      // nlink-- targeti
+      if (oldin->is_auth()) {
+	bool hadrealm = (oldin->snaprealm ? true : false);
+	oldin->pop_and_dirty_projected_inode(mdr->ls);
+	if (oldin->snaprealm && !hadrealm)
+	  mdcache->do_realm_invalidate_and_update_notify(oldin, CEPH_SNAP_OP_SPLIT);
+      } else {
+	// FIXME this snaprealm is not filled out correctly
+	//oldin->open_snaprealm();  might be sufficient..	
+      }
     } else {
       destdn->get_dir()->unlink_inode(destdn);
-    }
-    // nlink-- targeti
-    if (oldin->is_auth() && dest_primary) {
-      bool hadrealm = (oldin->snaprealm ? true : false);
-      oldin->pop_and_dirty_projected_inode(mdr->ls);
-      if (oldin->snaprealm && !hadrealm)
-        mdcache->do_realm_invalidate_and_update_notify(oldin, CEPH_SNAP_OP_SPLIT);
     }
   }
 
@@ -5086,8 +5088,6 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
       destdn->mark_dirty(mdr->more()->pvmap[destdn], mdr->ls);
     if (destdnl->get_inode()->is_auth())
       destdnl->get_inode()->pop_and_dirty_projected_inode(mdr->ls);
-    else
-      destdnl->get_inode()->open_snaprealm();
   } else {
     srcdn->get_dir()->unlink_inode(srcdn);
     if (destdn->is_auth())
@@ -5118,6 +5118,8 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
 	desti->state_set(CInode::STATE_DIRTYPARENT);
 	dout(10) << "added dir to logsegment renamed_files list " << *desti << dendl;
       }
+    } else {
+      // FIXME: fix up snaprealm!
     }
   }
 

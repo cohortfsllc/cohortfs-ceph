@@ -11,6 +11,8 @@
 
 #include "librados.h"
 
+struct md_config_t;
+
 namespace librados
 {
   using ceph::bufferlist;
@@ -69,6 +71,7 @@ namespace librados
 
   class WatchCtx {
   public:
+    virtual ~WatchCtx();
     virtual void notify(uint8_t opcode, uint64_t ver) = 0;
   };
 
@@ -118,6 +121,7 @@ namespace librados
     int create(const std::string& oid, bool exclusive);
 
     int write(const std::string& oid, bufferlist& bl, size_t len, uint64_t off);
+    int append(const std::string& oid, bufferlist& bl, size_t len);
     int write_full(const std::string& oid, bufferlist& bl);
     int read(const std::string& oid, bufferlist& bl, size_t len, uint64_t off);
     int remove(const std::string& oid);
@@ -160,6 +164,8 @@ namespace librados
 
     int selfmanaged_snap_remove(uint64_t snapid);
 
+    int selfmanaged_snap_rollback(const std::string& oid, uint64_t snapid);
+
     ObjectIterator objects_begin();
     const ObjectIterator& objects_end() const;
 
@@ -172,6 +178,8 @@ namespace librados
 			size_t len, uint64_t off);
     int aio_write(const std::string& oid, AioCompletion *c, const bufferlist& bl,
 		  size_t len, uint64_t off);
+    int aio_append(const std::string& oid, AioCompletion *c, const bufferlist& bl,
+		  size_t len);
     int aio_write_full(const std::string& oid, AioCompletion *c, const bufferlist& bl);
 
     // watch/notify
@@ -205,6 +213,7 @@ namespace librados
     ~Rados();
 
     int init(const char * const id);
+    int init_with_config(md_config_t * conf);
     int connect();
     void shutdown();
     int conf_read_file(const char * const path) const;

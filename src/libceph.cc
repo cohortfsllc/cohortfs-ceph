@@ -11,6 +11,8 @@
 #include "msg/SimpleMessenger.h"
 #include "client/Client.h"
 
+#include "common/version.h"
+
 /* ************* ************* ************* *************
  * C interface
  */
@@ -18,14 +20,15 @@
 extern "C" const char *ceph_version(int *pmajor, int *pminor, int *ppatch)
 {
   int major, minor, patch;
-
-  sscanf(VERSION, "%d.%d.%d", &major, &minor, &patch);
+  const char *v = ceph_version_to_str();
+  
+  int n = sscanf(v, "%d.%d.%d", &major, &minor, &patch);
   if (pmajor)
-    *pmajor = major;
+    *pmajor = (n >= 1) ? major : 0;
   if (pminor)
-    *pminor = minor;
+    *pminor = (n >= 2) ? minor : 0;
   if (ppatch)
-    *ppatch = patch;
+    *ppatch = (n >= 3) ? patch : 0;
   return VERSION;
 }
 
@@ -35,6 +38,7 @@ static int client_mount = 0;
 static Client *client = NULL;
 static MonClient *monclient = NULL;
 static SimpleMessenger *messenger = NULL;
+static int instance = 0;
 
 extern "C" int ceph_initialize(int argc, const char **argv)
 {
@@ -43,7 +47,11 @@ extern "C" int ceph_initialize(int argc, const char **argv)
     //create everything to start a client
     vector<const char*> args;
     argv_to_vec(argc, argv, args);
-    common_init(args, "libceph", STARTUP_FLAG_INIT_KEYS);
+    // The libceph API needs to be fixed so that we don't have to call
+    // common_init here. Libraries should never call common_init.
+    common_init(args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_LIBRARY, 0);
+    keyring_init(&g_conf);
+
     //monmap
     monclient = new MonClient();
     if (monclient->build_initial_monmap() < 0) {
@@ -57,7 +65,8 @@ extern "C" int ceph_initialize(int argc, const char **argv)
     //at last the client
     client = new Client(messenger, monclient);
 
-    messenger->start();
+    uint64_t nonce = (uint64_t)++instance * 1000000ull + (uint64_t)getpid();
+    messenger->start(false, nonce); // do not daemonize
 
     client->init();
   }

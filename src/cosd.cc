@@ -37,6 +37,8 @@ using namespace std;
 #include "include/color.h"
 #include "common/errno.h"
 
+#include "perfglue/heap_profiler.h"
+
 void usage() 
 {
   derr << "usage: cosd -i osdid [--osd-data=path] [--osd-journal=path] "
@@ -45,37 +47,17 @@ void usage()
   generic_server_usage();
 }
 
-#ifdef HAVE_LIBTCMALLOC
-/* Adjust the return type */
-static bool isHeapProfilerRunning(void) {
-  return IsHeapProfilerRunning();
-}
-#endif //HAVE_LIBTCMALLOC
-
 int main(int argc, const char **argv) 
 {
   DEFINE_CONF_VARS(usage);
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
-  int startup_flags = STARTUP_FLAG_INIT_KEYS | STARTUP_FLAG_DAEMON;
   vector<const char *>::iterator args_iter;
 
-  for (args_iter = args.begin(); args_iter != args.end(); ++args_iter) {
-    if (strcmp(*args_iter, "--mkfs") == 0) {
-      startup_flags &= ~STARTUP_FLAG_INIT_KEYS;
-      break;
-    } 
-  }
-
-#ifdef HAVE_LIBTCMALLOC
-  g_conf.profiler_start = HeapProfilerStart;
-  g_conf.profiler_running = isHeapProfilerRunning;
-  g_conf.profiler_stop = HeapProfilerStop;
-  g_conf.profiler_dump = HeapProfilerDump;
-  g_conf.tcmalloc_have = true;
-#endif //HAVE_LIBTCMALLOC
-  common_init(args, "osd", startup_flags);
+  common_init(args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_DAEMON, 0);
+  
+  ceph_heap_profiler_init();
 
   // osd specific args
   bool mkfs = false;
@@ -96,6 +78,9 @@ int main(int argc, const char **argv)
       ARGS_USAGE();
     }
   }
+
+  if (!mkfs)
+    keyring_init(&g_conf);
 
   if (dump_pg_log) {
     bufferlist bl;
@@ -122,8 +107,9 @@ int main(int argc, const char **argv)
 
   // whoami
   char *end;
-  int whoami = strtol(g_conf.id, &end, 10);
-  if (*end || end == g_conf.id || whoami < 0) {
+  const char *id = g_conf.name->get_id().c_str();
+  int whoami = strtol(id, &end, 10);
+  if (*end || end == id || whoami < 0) {
     derr << "must specify '-i #' where # is the osd number" << dendl;
     usage();
   }
@@ -160,7 +146,7 @@ int main(int argc, const char **argv)
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error creating fresh journal " << g_conf.osd_journal
 	   << " for object store " << g_conf.osd_data
-	   << ": " << cpp_strerror(-err) << dendl;
+	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
       exit(1);
     }
     derr << "created new journal " << g_conf.osd_journal
@@ -172,7 +158,7 @@ int main(int argc, const char **argv)
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error flushing journal " << g_conf.osd_journal
 	   << " for object store " << g_conf.osd_data
-	   << ": " << cpp_strerror(-err) << dendl;
+	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
       exit(1);
     }
     derr << "flushed journal " << g_conf.osd_journal
@@ -221,22 +207,14 @@ int main(int argc, const char **argv)
   SimpleMessenger *cluster_messenger = new SimpleMessenger();
   SimpleMessenger *messenger_hb = new SimpleMessenger();
 
-  if (client_addr_set)
-    client_messenger->bind(g_conf.public_addr);
-  else
-    client_messenger->bind();
+  client_messenger->bind(g_conf.public_addr, getpid());
+  cluster_messenger->bind(g_conf.cluster_addr, getpid());
 
-  entity_addr_t hb_addr;  // hb should bind to same ip ad cluster_addr (if specified)
-
-  if (cluster_addr_set) {
-    cluster_messenger->bind(g_conf.cluster_addr);
-    hb_addr = g_conf.cluster_addr;
+  // hb should bind to same ip as cluster_addr (if specified)
+  entity_addr_t hb_addr = g_conf.cluster_addr;
+  if (!hb_addr.is_blank_addr())
     hb_addr.set_port(0);
-  } else {
-    cluster_messenger->bind();
-  }
-
-  messenger_hb->bind(hb_addr);
+  messenger_hb->bind(hb_addr, getpid());
 
   cout << "starting osd" << whoami
        << " at " << client_messenger->get_ms_addr() 
@@ -283,9 +261,9 @@ int main(int argc, const char **argv)
     return 1;
   }
 
-  client_messenger->start();
-  messenger_hb->start(true);  // only need to daemon() once
-  cluster_messenger->start(true);
+  client_messenger->start(g_conf.daemonize);
+  messenger_hb->start(false);  // do not daemonize (only need to daemonize once)
+  cluster_messenger->start(false); // do not daemonize (only need to daemonize once)
 
   // start osd
   err = osd->init();

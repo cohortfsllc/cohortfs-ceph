@@ -81,6 +81,8 @@
 #include "common/Timer.h"
 #include "common/LogClient.h"
 #include "common/safe_io.h"
+#include "perfglue/cpu_profiler.h"
+#include "perfglue/heap_profiler.h"
 
 #include "common/ClassHandler.h"
 
@@ -434,7 +436,7 @@ OSD::OSD(int id, Messenger *internal_messenger, Messenger *external_messenger, M
   op_wq(this, &op_tp),
   osdmap(NULL),
   map_lock("OSD::map_lock"),
-  map_cache_lock("OSD::map_cache_lock"),
+  map_cache_lock("OSD::map_cache_lock"), map_cache_keep_from(0),
   class_lock("OSD::class_lock"),
   up_thru_wanted(0), up_thru_pending(0),
   pg_stat_queue_lock("OSD::pg_stat_queue_lock"),
@@ -451,6 +453,7 @@ OSD::OSD(int id, Messenger *internal_messenger, Messenger *external_messenger, M
   scrubs_pending(0),
   scrubs_active(0),
   scrub_wq(this, &disk_tp),
+  scrub_finalize_wq(this, &op_tp),
   rep_scrub_wq(this, &disk_tp),
   remove_wq(this, &disk_tp),
   watch_lock("OSD::watch_lock"),
@@ -477,7 +480,6 @@ OSD::~OSD()
 {
   delete map_in_progress_cond;
   delete class_handler;
-  delete osdmap;
   logger_remove(logger);
   delete logger;
   delete store;
@@ -557,12 +559,7 @@ int OSD::init()
     derr << "OSD::init: unable to read current osdmap" << dendl;
     return -1;
   }
-  osdmap = new OSDMap;
-  if (superblock.current_epoch) {
-    bufferlist bl;
-    get_map_bl(superblock.current_epoch, bl);
-    osdmap->decode(bl);
-  }
+  osdmap = get_map(superblock.current_epoch);
 
   clear_temp();
 
@@ -703,6 +700,9 @@ void OSD::start_logger()
   logger_tare(osdmap->get_created());
   logger_start();
   logger_started = true;
+
+  // start the objectstore logger too
+  store->start_logger(whoami, osdmap->get_created());
 }
 
 int OSD::shutdown()
@@ -817,6 +817,9 @@ int OSD::shutdown()
   monc->shutdown();
 
   delete watch;
+
+  clear_map_cache();
+  osdmap = 0;
 
   return r;
 }
@@ -1051,6 +1054,7 @@ PG *OSD::lookup_lock_raw_pg(pg_t pgid)
   return pg;
 }
 
+
 void OSD::load_pgs()
 {
   assert(osd_lock.is_locked());
@@ -1097,6 +1101,94 @@ void OSD::load_pgs()
   dout(10) << "load_pgs done" << dendl;
 }
  
+
+/*
+ * look up a pg.  if we have it, great.  if not, consider creating it IF the pg mapping
+ * hasn't changed since the given epoch and we are the primary.
+ */
+PG *OSD::get_or_create_pg(const PG::Info& info, epoch_t epoch, int from, int& created,
+			  bool primary,
+			  ObjectStore::Transaction **pt,
+			  C_Contexts **pfin)
+{
+  PG *pg;
+
+  if (!_have_pg(info.pgid)) {
+    // same primary?
+    vector<int> up, acting;
+    osdmap->pg_to_up_acting_osds(info.pgid, up, acting);
+    int role = osdmap->calc_pg_role(whoami, acting, acting.size());
+
+    PG::Info::History history = info.history;
+    project_pg_history(info.pgid, history, epoch, up, acting);
+
+    if (epoch < history.same_acting_since) {
+      dout(10) << "get_or_create_pg " << info.pgid << " acting changed in "
+	       << history.same_acting_since << " (msg from " << epoch << ")" << dendl;
+      return NULL;
+    }
+
+    bool create = false;
+    if (primary) {
+      assert(role == 0);  // otherwise, probably bug in project_pg_history.
+
+      // DNE on source?
+      if (info.dne()) {
+	// is there a creation pending on this pg?
+	if (creating_pgs.count(info.pgid)) {
+	  creating_pgs[info.pgid].prior.erase(from);
+	  if (!can_create_pg(info.pgid))
+	    return NULL;
+	  create = true;
+	} else {
+	  dout(10) << "get_or_create_pg " << info.pgid
+		   << " DNE on source, but creation probe, ignoring" << dendl;
+	  return NULL;
+	}
+      }
+      creating_pgs.erase(info.pgid);
+    } else {
+      assert(role != 0);    // i should be replica
+      assert(!info.dne());  // and pg exists if we are hearing about it
+    }
+
+    // ok, create PG locally using provided Info and History
+    *pt = new ObjectStore::Transaction;
+    *pfin = new C_Contexts;
+    if (create) {
+      pg = _create_lock_new_pg(info.pgid, acting, **pt);
+    } else {
+      pg = _create_lock_pg(info.pgid, **pt);
+      pg->acting.swap(acting);
+      pg->up.swap(up);
+      pg->set_role(role);
+      pg->info.history = history;
+      reg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
+      pg->clear_primary_state();  // yep, notably, set hml=false
+      pg->write_info(**pt);
+      pg->write_log(**pt);
+    }
+      
+    created++;
+    dout(10) << *pg << " is new" << dendl;
+    
+    // kick any waiters
+    wake_pg_waiters(pg->info.pgid);
+  } else {
+    // already had it.  did the mapping change?
+    pg = _lookup_lock_pg(info.pgid);
+    if (epoch < pg->info.history.same_acting_since) {
+      dout(10) << *pg << " get_or_create_pg acting changed in "
+	       << pg->info.history.same_acting_since
+	       << " (msg from " << epoch << ")" << dendl;
+      pg->unlock();
+      return NULL;
+    }
+    *pt = new ObjectStore::Transaction;
+    *pfin = new C_Contexts;
+  }
+  return pg;
+}
 
 
 /*
@@ -1500,7 +1592,9 @@ void OSD::heartbeat_entry()
     double wait = .5 + ((float)(rand() % 10)/10.0) * (float)g_conf.osd_heartbeat_interval;
     utime_t w;
     w.set_from_double(wait);
+    dout(30) << "heartbeat_entry sleeping for " << wait << dendl;
     heartbeat_cond.WaitInterval(heartbeat_lock, w);
+    dout(30) << "heartbeat_entry woke up" << dendl;
   }
   heartbeat_lock.Unlock();
 }
@@ -1531,6 +1625,8 @@ void OSD::heartbeat()
 {
   utime_t now = g_clock.now();
 
+  dout(30) << "heartbeat" << dendl;
+
   if (got_sigterm) {
     derr << "got SIGTERM, shutting down" << dendl;
     Message *m = new MGenericMessage(CEPH_MSG_SHUTDOWN);
@@ -1556,6 +1652,8 @@ void OSD::heartbeat()
     derr << "heartbeat: failed to read /proc/loadavg" << dendl;
   }
 
+  dout(30) << "heartbeat checking stats" << dendl;
+
   // calc my stats
   Mutex::Locker lock(peer_stat_lock);
   _refresh_my_stat(now);
@@ -1567,7 +1665,8 @@ void OSD::heartbeat()
   //load_calc.set_size(stat_ops);
 
   bool map_locked = map_lock.try_get_read();
-  
+  dout(30) << "heartbeat map_locked=" << map_locked << dendl;
+
   // send heartbeats
   for (map<int, epoch_t>::iterator i = heartbeat_to.begin();
        i != heartbeat_to.end();
@@ -1575,23 +1674,30 @@ void OSD::heartbeat()
     int peer = i->first;
     if (heartbeat_inst.count(peer)) {
       my_stat_on_peer[peer] = my_stat;
+      dout(30) << "heartbeat allocating ping for osd" << peer << dendl;
       Message *m = new MOSDPing(osdmap->get_fsid(),
 				map_locked ? osdmap->get_epoch():0, 
 				i->second,
 				my_stat);
       m->set_priority(CEPH_MSG_PRIO_HIGH);
+      dout(30) << "heartbeat sending ping to osd" << peer << dendl;
       heartbeat_messenger->send_message(m, heartbeat_inst[peer]);
     }
   }
 
-  if (map_locked)
+  if (map_locked) {
+    dout(30) << "heartbeat check" << dendl;
     heartbeat_check();
+  } else {
+    dout(30) << "heartbeat no map_lock, no check" << dendl;
+  }
 
   if (logger) logger->set(l_osd_hbto, heartbeat_to.size());
   if (logger) logger->set(l_osd_hbfrom, heartbeat_from.size());
 
   
   // hmm.. am i all alone?
+  dout(30) << "heartbeat lonely?" << dendl;
   if (heartbeat_from.empty() || heartbeat_to.empty()) {
     if (now - last_mon_heartbeat > g_conf.osd_mon_heartbeat_interval) {
       last_mon_heartbeat = now;
@@ -1601,8 +1707,11 @@ void OSD::heartbeat()
     }
   }
 
-  if (map_locked)
+  if (map_locked) {
+    dout(30) << "heartbeat put map_lock" << dendl;
     map_lock.put_read();
+  }
+  dout(30) << "heartbeat done" << dendl;
 }
 
 
@@ -2090,37 +2199,12 @@ void OSD::handle_command(MMonCommand *m)
     logger_reset_all();
   } else if (m->cmd.size() == 2 && m->cmd[0] == "logger" && m->cmd[1] == "reopen") {
     logger_reopen_all();
-  } else if (m->cmd.size() == 1 && m->cmd[0] == "heapdump") {
-    if (g_conf.tcmalloc_have) {
-      if (!g_conf.profiler_running()) {
-	clog.info() << "can't dump heap: profiler not running\n";
-      } else {
-        clog.info() << g_conf.name << "dumping heap profile now\n";
-        g_conf.profiler_dump("admin request");
-      }
-    } else {
-      clog.info() << g_conf.name << " does not have tcmalloc, "
-	"can't use profiler\n";
-    }
-  } else if (m->cmd.size() == 1 && m->cmd[0] == "enable_profiler_options") {
-    char val[sizeof(int)*8+1];
-    snprintf(val, sizeof(val), "%i", g_conf.profiler_allocation_interval);
-    setenv("HEAP_PROFILE_ALLOCATION_INTERVAL", val, g_conf.profiler_allocation_interval);
-    snprintf(val, sizeof(val), "%i", g_conf.profiler_highwater_interval);
-    setenv("HEAP_PROFILE_INUSE_INTERVAL", val, g_conf.profiler_highwater_interval);
-    clog.info() << g_conf.name << " set heap variables from current config";
-  } else if (m->cmd.size() == 1 && m->cmd[0] == "start_profiler") {
-    char location[PATH_MAX];
-    snprintf(location, sizeof(location),
-	     "%s/%s", g_conf.log_dir, g_conf.name);
-    g_conf.profiler_start(location);
-    clog.info() << g_conf.name << " started profiler with output "
-      << location << "\n";
-  } else if (m->cmd.size() == 1 && m->cmd[0] == "stop_profiler") {
-    g_conf.profiler_stop();
-    clog.info() << g_conf.name << " stopped profiler\n";
-  }
-  else if (m->cmd.size() > 1 && m->cmd[0] == "debug") {
+  } else if (m->cmd[0] == "heap") {
+    if (ceph_using_tcmalloc())
+      ceph_heap_profiler_handle_command(m->cmd, clog);
+    else
+      clog.info() << "could not issue heap profiler command -- not using tcmalloc!\n";
+  } else if (m->cmd.size() > 1 && m->cmd[0] == "debug") {
     if (m->cmd.size() == 3 && m->cmd[1] == "dump_missing") {
       const string &file_name(m->cmd[2]);
       std::ofstream fout(file_name.c_str());
@@ -2172,6 +2256,9 @@ void OSD::handle_command(MMonCommand *m)
       defer_recovery_until += g_conf.osd_recovery_delay_start;
       recovery_wq.kick();
     }
+  }
+  else if (m->cmd[0] == "cpu_profiler") {
+    cpu_profiler_handle_command(m->cmd, clog);
   }
   else dout(0) << "unrecognized command! " << m->cmd << dendl;
 
@@ -2741,19 +2828,10 @@ void OSD::handle_osd_map(MOSDMap *m)
   if (session)
     session->put();
 
-  if (osdmap) {
-    dout(3) << "handle_osd_map epochs [" 
-            << m->get_first() << "," << m->get_last() 
-            << "], i have " << osdmap->get_epoch()
-            << dendl;
-  } else {
-    dout(3) << "handle_osd_map epochs [" 
-            << m->get_first() << "," << m->get_last() 
-            << "], i have none"
-            << dendl;
-    osdmap = new OSDMap;
-  }
-
+  dout(3) << "handle_osd_map epochs [" 
+	  << m->get_first() << "," << m->get_last() 
+	  << "], i have " << osdmap->get_epoch()
+	  << dendl;
 
   // make sure there is something new, here, before we bother flushing the queues and such
   if (m->get_last() <= osdmap->get_epoch()) {
@@ -2762,8 +2840,14 @@ void OSD::handle_osd_map(MOSDMap *m)
     return;
   }
 
-  // pause, requeue op queue
-  //wait_for_no_ops();
+  // missing some?
+  if (m->get_first() > osdmap->get_epoch() + 1) {
+    dout(10) << "handle_osd_map message skips epoch " << osdmap->get_epoch() + 1 << dendl;
+    monc->sub_want("osdmap", osdmap->get_epoch()+1, CEPH_SUBSCRIBE_ONETIME);
+    monc->renew_subs();
+    m->put();
+    return;
+  }
 
   if (map_in_progress_cond) {
     if (map_in_progress) {
@@ -2803,201 +2887,120 @@ void OSD::handle_osd_map(MOSDMap *m)
 
   recovery_tp.pause();
   disk_tp.pause_new();   // _process() may be waiting for a replica message
-  
+
+  // flush here so that the peering code can re-read any pg data off
+  // disk that it needs to... say for backlog generation.  (hmm, is
+  // this really needed?)
   osd_lock.Unlock();
   store->flush();
   osd_lock.Lock();
 
   assert(osd_lock.is_locked());
 
-  ObjectStore::Transaction t;
-  C_Contexts *fin = new C_Contexts;
-  
   logger->inc(l_osd_map);
 
-  // store them?
-  for (map<epoch_t,bufferlist>::iterator p = m->maps.begin();
-       p != m->maps.end();
-       p++) {
-    sobject_t poid = get_osdmap_pobject_name(p->first);
-    if (store->exists(coll_t::META_COLL, poid)) {
-      dout(10) << "handle_osd_map already had full map epoch " << p->first << dendl;
-      logger->inc(l_osd_mapfdup);
-      bufferlist bl;
-      get_map_bl(p->first, bl);
-      dout(10) << " .. it is " << bl.length() << " bytes" << dendl;
+  ObjectStore::Transaction t;
+
+  // store new maps: queue for disk and put in the osdmap cache
+  for (epoch_t e = osdmap->get_epoch() + 1; e <= m->get_last(); e++) {
+    map<epoch_t,bufferlist>::iterator p;
+    p = m->maps.find(e);
+    if (p != m->maps.end()) {
+      dout(10) << "handle_osd_map  got full map for epoch " << e << dendl;
+      OSDMap *o = new OSDMap;
+      bufferlist& bl = p->second;
+      
+      o->decode(bl);
+      add_map(o);
+
+      sobject_t fulloid = get_osdmap_pobject_name(e);
+      t.write(coll_t::META_COLL, fulloid, 0, bl.length(), bl);
+      add_map_bl(e, bl);
       continue;
     }
 
-    dout(10) << "handle_osd_map got full map epoch " << p->first << dendl;
-    ObjectStore::Transaction *ft = new ObjectStore::Transaction;
-    ft->write(coll_t::META_COLL, poid, 0, p->second.length(), p->second);  // store _outside_ transaction; activate_map reads it.
-    int r = store->queue_transaction(NULL, ft);
-    assert(r == 0);
+    p = m->incremental_maps.find(e);
+    if (p != m->incremental_maps.end()) {
+      dout(10) << "handle_osd_map  got inc map for epoch " << e << dendl;
+      bufferlist& bl = p->second;
+      sobject_t oid = get_inc_osdmap_pobject_name(e);
+      t.write(coll_t::META_COLL, oid, 0, bl.length(), bl);
+      add_map_inc_bl(e, bl);
 
-    if (p->first > superblock.newest_map)
-      superblock.newest_map = p->first;
-    if (p->first < superblock.oldest_map ||
-        superblock.oldest_map == 0)
-      superblock.oldest_map = p->first;
+      OSDMap *o = new OSDMap;
+      if (e > 1) {
+	bufferlist obl;
+	OSDMap *prev = get_map(e - 1);
+	prev->encode(obl);
+	o->decode(obl);
+      }
 
-    logger->inc(l_osd_mapf);
-  }
-  for (map<epoch_t,bufferlist>::iterator p = m->incremental_maps.begin();
-       p != m->incremental_maps.end();
-       p++) {
-    sobject_t poid = get_inc_osdmap_pobject_name(p->first);
-    if (store->exists(coll_t::META_COLL, poid)) {
-      dout(10) << "handle_osd_map already had incremental map epoch " << p->first << dendl;
-      logger->inc(l_osd_mapidup);
-      bufferlist bl;
-      get_inc_map_bl(p->first, bl);
-      dout(10) << " .. it is " << bl.length() << " bytes" << dendl;
+      OSDMap::Incremental inc;
+      bufferlist::iterator p = bl.begin();
+      inc.decode(p);
+      if (o->apply_incremental(inc) < 0) {
+	derr << "ERROR: bad fsid?  i have " << osdmap->get_fsid() << " and inc has " << inc.fsid << dendl;
+	assert(0 == "bad fsid");
+      }
+
+      add_map(o);
+
+      bufferlist fbl;
+      o->encode(fbl);
+
+      sobject_t fulloid = get_osdmap_pobject_name(e);
+      t.write(coll_t::META_COLL, fulloid, 0, fbl.length(), fbl);
+      add_map_bl(e, fbl);
       continue;
     }
 
-    dout(10) << "handle_osd_map got incremental map epoch " << p->first << dendl;
-    ObjectStore::Transaction *ft = new ObjectStore::Transaction;
-    ft->write(coll_t::META_COLL, poid, 0, p->second.length(), p->second);  // store _outside_ transaction; activate_map reads it.
-    int r = store->queue_transaction(NULL, ft);
-    assert(r == 0);
-
-    if (p->first > superblock.newest_map)
-      superblock.newest_map = p->first;
-    if (p->first < superblock.oldest_map ||
-        superblock.oldest_map == 0)
-      superblock.oldest_map = p->first;
-
-    logger->inc(l_osd_mapi);
+    assert(0 == "MOSDMap lied about what maps it had?");
   }
+  if (!superblock.oldest_map)
+    superblock.oldest_map = m->get_first();
+  superblock.newest_map = m->get_last();
 
-  // flush new maps (so they are readable)
-  osd_lock.Unlock();
-  store->flush();
-  osd_lock.Lock();
-
+ 
   // finally, take map_lock _after_ we do this flush, to avoid deadlock
   map_lock.get_write();
 
-  // advance if we can
-  bool advanced = false;
-  
-  epoch_t cur = superblock.current_epoch;
-  while (cur < superblock.newest_map) {
-    dout(10) << "cur " << cur << " < newest " << superblock.newest_map << dendl;
+  // advance through the new maps
+  for (epoch_t cur = superblock.current_epoch + 1; cur <= superblock.newest_map; cur++) {
+    dout(10) << " advance to epoch " << cur << " (<= newest " << superblock.newest_map << ")" << dendl;
 
-    OSDMap::Incremental inc;
+    OSDMap *newmap = get_map(cur);
+    assert(newmap);  // we just cached it above!
 
-    if (m->incremental_maps.count(cur+1) ||
-        store->exists(coll_t::META_COLL, get_inc_osdmap_pobject_name(cur+1))) {
-      dout(10) << "handle_osd_map decoding inc map epoch " << cur+1 << dendl;
-      
-      bufferlist bl;
-      if (m->incremental_maps.count(cur+1)) {
-	dout(10) << " using provided inc map" << dendl;
-        bl = m->incremental_maps[cur+1];
-      } else {
-	dout(10) << " using my locally stored inc map" << dendl;
-        get_inc_map_bl(cur+1, bl);
-      }
-
-      bufferlist::iterator p = bl.begin();
-      inc.decode(p);
-      if (osdmap->apply_incremental(inc)) {
-	//error out!
-	dout(0) << "ERROR: Got non-matching FSID from trusted source!" << dendl;
-	session->put();
-	m->put();
-	shutdown();
-      }
-
-      // archive the full map
-      bl.clear();
-      osdmap->encode(bl);
-      ObjectStore::Transaction ft;
-      ft.write(coll_t::META_COLL, get_osdmap_pobject_name(cur+1), 0, bl.length(), bl);
-      int r = store->apply_transaction(ft);
-      assert(r == 0);
-
-      // notify messenger
-      for (map<int32_t,uint8_t>::iterator i = inc.new_down.begin();
-           i != inc.new_down.end();
-           i++) {
-        int osd = i->first;
-        if (osd == whoami) continue;
-	note_down_osd(i->first);
-      }
-      for (map<int32_t,entity_addr_t>::iterator i = inc.new_up_client.begin();
-           i != inc.new_up_client.end();
-           i++) {
-        if (i->first == whoami) continue;
-	note_up_osd(i->first);
-      }
-    }
-    else if (m->maps.count(cur+1) ||
-             store->exists(coll_t::META_COLL, get_osdmap_pobject_name(cur+1))) {
-      dout(10) << "handle_osd_map decoding full map epoch " << cur+1 << dendl;
-      bufferlist bl;
-      if (m->maps.count(cur+1))
-        bl = m->maps[cur+1];
-      else
-        get_map_bl(cur+1, bl);
-
-      OSDMap *newmap = new OSDMap;
-      newmap->decode(bl);
-
-      // kill connections to newly down osds
-      set<int> old;
-      osdmap->get_all_osds(old);
-      for (set<int>::iterator p = old.begin(); p != old.end(); p++)
-	if (osdmap->have_inst(*p) && (!newmap->exists(*p) || !newmap->is_up(*p))) 
-	  note_down_osd(*p);
-      // NOTE: note_up_osd isn't called at all for full maps... FIXME?
-      delete osdmap;
-      osdmap = newmap;
-    }
-    else {
-      dout(10) << "handle_osd_map missing epoch " << cur+1 << dendl;
-      monc->sub_want("osdmap", cur+1, CEPH_SUBSCRIBE_ONETIME);
-      monc->renew_subs();
-      break;
-    }
-
+    // kill connections to newly down osds
+    set<int> old;
+    osdmap->get_all_osds(old);
+    for (set<int>::iterator p = old.begin(); p != old.end(); p++)
+      if (*p != whoami &&
+	  osdmap->have_inst(*p) &&                        // in old map
+	  (!newmap->exists(*p) || !newmap->is_up(*p)))    // but not the new one
+	note_down_osd(*p);
+    
     if (!logger_started)
       start_logger();
 
-    cur++;
+    osdmap = newmap;
+
     superblock.current_epoch = cur;
     advance_map(t);
-    advanced = true;
     had_map_since = g_clock.now();
   }
 
-  // all the way?
-  if (advanced && cur == superblock.newest_map) {
-    if (osdmap->is_up(whoami) &&
-	osdmap->get_addr(whoami) == client_messenger->get_myaddr()) {
+  C_Contexts *fin = new C_Contexts;
+  if (osdmap->is_up(whoami) &&
+      osdmap->get_addr(whoami) == client_messenger->get_myaddr()) {
 
-      if (is_booting()) {
-	dout(1) << "state: booting -> active" << dendl;
-	state = STATE_ACTIVE;
-      }
-      
-      // yay!
-      activate_map(t, fin->contexts);
-
-      // process waiters
-      take_waiters(waiting_for_osdmap);
+    if (is_booting()) {
+      dout(1) << "state: booting -> active" << dendl;
+      state = STATE_ACTIVE;
     }
-  }
-
-  // write updated pg state to store
-  for (hash_map<pg_t,PG*>::iterator i = pg_map.begin();
-       i != pg_map.end();
-       i++) {
-    PG *pg = i->second;
-    if (pg->dirty_info)
-      pg->write_info(t);
+      
+    // yay!
+    activate_map(t, fin->contexts);
   }
 
   bool do_shutdown = false;
@@ -3046,11 +3049,29 @@ void OSD::handle_osd_map(MOSDMap *m)
     }
   }
 
+  // process waiters
+  take_waiters(waiting_for_osdmap);
+
+  // write updated pg state to store
+  for (hash_map<pg_t,PG*>::iterator i = pg_map.begin();
+       i != pg_map.end();
+       i++) {
+    PG *pg = i->second;
+    if (pg->dirty_info)
+      pg->write_info(t);
+  }
+
   // note in the superblock that we were clean thru the prior epoch
   if (boot_epoch && boot_epoch >= superblock.mounted) {
     superblock.mounted = boot_epoch;
     superblock.clean_thru = osdmap->get_epoch();
   }
+
+  // completion
+  Mutex ulock("OSD::handle_osd_map() ulock");
+  Cond ucond;
+  bool udone;
+  fin->add(new C_SafeCond(&ulock, &ucond, &udone));
 
   // superblock and commit
   write_superblock(t);
@@ -3062,22 +3083,37 @@ void OSD::handle_osd_map(MOSDMap *m)
     shutdown();
     return;
   }
-  store->sync();
 
   map_lock.put_write();
 
+  /*
+   * wait for this to be stable.
+   *
+   * NOTE: This is almost certainly overkill.  The important things
+   * that need to be stable to make the peering/recovery stuff correct
+   * include:
+   *
+   *   - last_epoch_started, since that bounds how far back in time we
+   *     check old peers
+   *   - ???
+   */
   osd_lock.Unlock();
-  store->flush();
+  ulock.Lock();
+  while (!udone)
+    ucond.Wait(ulock);
+  ulock.Unlock();
   osd_lock.Lock();
+
+  // everything through current epoch now on disk; keep anything after
+  // that in cache
+  keep_map_from(osdmap->get_epoch()+1);
+  trim_map_bl_cache(osdmap->get_epoch()+1);
 
   op_tp.unpause();
   recovery_tp.unpause();
   disk_tp.unpause();
 
-  //if (osdmap->get_epoch() == 1) store->sync();     // in case of early death, blah
-
   m->put();
-
 
   if (do_restart)
     send_boot();
@@ -3100,7 +3136,7 @@ void OSD::advance_map(ObjectStore::Transaction& t)
 {
   assert(osd_lock.is_locked());
 
-  dout(7) << "advance_map epoch " << osdmap->get_epoch() 
+  dout(7) << "advance_map epoch " << osdmap->get_epoch()
           << "  " << pg_map.size() << " pgs"
           << dendl;
 
@@ -3235,8 +3271,9 @@ void OSD::advance_map(ObjectStore::Transaction& t)
 
       if (i.acting.size())
 	i.maybe_went_rw = 
-	  lastmap->get_up_thru(i.acting[0]) >= i.first &&
-	  lastmap->get_up_from(i.acting[0]) <= i.first;
+	  (lastmap->get_up_thru(i.acting[0]) >= i.first &&
+	   lastmap->get_up_from(i.acting[0]) <= i.first) ||
+	  i.first == pg->info.history.epoch_created;
       else
 	i.maybe_went_rw = 0;
 
@@ -3362,12 +3399,15 @@ void OSD::activate_map(ObjectStore::Transaction& t, list<Context*>& tfin)
   
   int num_pg_primary = 0, num_pg_replica = 0, num_pg_stray = 0;
 
+  epoch_t oldest_last_clean = osdmap->get_epoch();
+
   // scan pg's
   for (hash_map<pg_t,PG*>::iterator it = pg_map.begin();
        it != pg_map.end();
        it++) {
     PG *pg = it->second;
     pg->lock();
+    pg->check_recovery_op_pulls(osdmap);
 
     if (pg->is_primary())
       num_pg_primary++;
@@ -3376,6 +3416,9 @@ void OSD::activate_map(ObjectStore::Transaction& t, list<Context*>& tfin)
     else
       num_pg_stray++;
 
+    if (pg->is_primary() && pg->info.history.last_epoch_clean < oldest_last_clean)
+      oldest_last_clean = pg->info.history.last_epoch_clean;
+    
     if (g_conf.osd_check_for_log_corruption)
       pg->check_log_for_corruption(store);
 
@@ -3402,7 +3445,7 @@ void OSD::activate_map(ObjectStore::Transaction& t, list<Context*>& tfin)
     else if (pg->is_primary() &&
 	     !pg->is_active()) {
       // i am (inactive) primary
-      if (!pg->is_peering() || 
+      if ((!pg->is_peering() && !pg->is_replay()) || 
 	  (pg->need_up_thru && up_thru >= pg->info.history.same_acting_since))
 	pg->do_peer(t, tfin, query_map, &info_map);
     }
@@ -3427,8 +3470,7 @@ void OSD::activate_map(ObjectStore::Transaction& t, list<Context*>& tfin)
   logger->set(l_osd_numpg_stray, num_pg_stray);
 
   wake_all_pg_waiters();   // the pg mapping may have shifted
-
-  clear_map_cache();  // we're done with it
+  trim_map_cache(oldest_last_clean);
   update_heartbeat_peers();
 
   send_pg_temp();
@@ -3467,62 +3509,117 @@ void OSD::send_incremental_map(epoch_t since, const entity_inst_t& inst, bool la
 
 bool OSD::get_map_bl(epoch_t e, bufferlist& bl)
 {
+  {
+    Mutex::Locker l(map_cache_lock);
+    map<epoch_t,bufferlist>::iterator p = map_bl.find(e);
+    if (p != map_bl.end()) {
+      bl = p->second;
+      return true;
+    }
+  }
   return store->read(coll_t::META_COLL, get_osdmap_pobject_name(e), 0, 0, bl) >= 0;
 }
 
 bool OSD::get_inc_map_bl(epoch_t e, bufferlist& bl)
 {
+  {
+    Mutex::Locker l(map_cache_lock);
+    map<epoch_t,bufferlist>::iterator p = map_inc_bl.find(e);
+    if (p != map_inc_bl.end()) {
+      bl = p->second;
+      return true;
+    }
+  }
   return store->read(coll_t::META_COLL, get_inc_osdmap_pobject_name(e), 0, 0, bl) >= 0;
+}
+
+void OSD::add_map(OSDMap *o)
+{
+  Mutex::Locker l(map_cache_lock);
+  epoch_t e = o->get_epoch();
+  if (map_cache.count(e) == 0) {
+    dout(10) << "add_map " << e << " " << o << dendl;
+    map_cache[e] = o;
+  } else {
+    dout(10) << "add_map " << e << " already have it" << dendl;
+  }
+}
+
+void OSD::add_map_bl(epoch_t e, bufferlist& bl)
+{
+  Mutex::Locker l(map_cache_lock);
+  dout(10) << "add_map_bl " << e << " " << bl.length() << " bytes" << dendl;
+  map_bl[e] = bl;
+}
+void OSD::add_map_inc_bl(epoch_t e, bufferlist& bl)
+{
+  Mutex::Locker l(map_cache_lock);
+  dout(10) << "add_map_inc_bl " << e << " " << bl.length() << " bytes" << dendl;
+  map_inc_bl[e] = bl;
 }
 
 OSDMap *OSD::get_map(epoch_t epoch)
 {
-  Mutex::Locker l(map_cache_lock);
-
-  if (map_cache.count(epoch)) {
-    dout(30) << "get_map " << epoch << " - cached" << dendl;
-    return map_cache[epoch];
-  }
-
-  dout(25) << "get_map " << epoch << " - loading and decoding" << dendl;
-  OSDMap *map = new OSDMap;
-
-  // find a complete map
-  list<OSDMap::Incremental> incs;
-  epoch_t e;
-  for (e = epoch; e > 0; e--) {
-    bufferlist bl;
-    if (get_map_bl(e, bl)) {
-      dout(30) << "get_map " << epoch << " full " << e << dendl;
-      map->decode(bl);
-      break;
-    } else {
-      OSDMap::Incremental inc;
-      bool got = get_inc_map(e, inc);
-      assert(got);
-      incs.push_front(inc);
+  {
+    Mutex::Locker l(map_cache_lock);
+    map<epoch_t,OSDMap*>::iterator p = map_cache.find(epoch);
+    if (p != map_cache.end()) {
+      dout(30) << "get_map " << epoch << " - cached " << p->second << dendl;
+      return p->second;
     }
   }
 
-  // apply incrementals
-  for (e++; e <= epoch; e++) {
-    dout(30) << "get_map " << epoch << " inc " << e << dendl;
-    map->apply_incremental( incs.front() );
-    incs.pop_front();
+  OSDMap *map = new OSDMap;
+  if (epoch > 0) {
+    dout(20) << "get_map " << epoch << " - loading and decoding " << map << dendl;
+    bufferlist bl;
+    get_map_bl(epoch, bl);
+    map->decode(bl);
+  } else {
+    dout(20) << "get_map " << epoch << " - return initial " << map << dendl;
   }
-
-  map_cache[epoch] = map;
+  add_map(map);
   return map;
+}
+
+void OSD::keep_map_from(epoch_t from)
+{
+  Mutex::Locker l(map_cache_lock);
+  dout(10) << "keep_map_from " << from << dendl;
+  map_cache_keep_from = from;
+}
+
+void OSD::trim_map_bl_cache(epoch_t oldest)
+{
+  Mutex::Locker l(map_cache_lock);
+  dout(10) << "trim_map_bl_cache up to " << oldest << dendl;
+  while (!map_inc_bl.empty() && map_inc_bl.begin()->first < oldest)
+    map_inc_bl.erase(map_inc_bl.begin());
+  while (!map_bl.empty() && map_bl.begin()->first < oldest)
+    map_bl.erase(map_bl.begin());
+}
+
+void OSD::trim_map_cache(epoch_t oldest)
+{
+  Mutex::Locker l(map_cache_lock);
+  dout(10) << "trim_map_cache up to MIN(" << oldest << "," << map_cache_keep_from << ")" << dendl;
+  while (!map_cache.empty() &&
+	 map_cache.begin()->first < oldest) {
+    epoch_t e = map_cache.begin()->first;
+    OSDMap *o = map_cache.begin()->second;
+    dout(10) << "trim_map_cache " << e << " " << o << dendl;
+    delete o;
+    map_cache.erase(map_cache.begin());
+  }
 }
 
 void OSD::clear_map_cache()
 {
-  Mutex::Locker l(map_cache_lock);
-  for (map<epoch_t,OSDMap*>::iterator p = map_cache.begin();
-       p != map_cache.end();
-       p++)
-    delete p->second;
-  map_cache.clear();
+  while (!map_cache.empty()) {
+    OSDMap *o = map_cache.begin()->second;
+    delete o;
+    map_cache.erase(map_cache.begin());
+  }
 }
 
 bool OSD::get_inc_map(epoch_t e, OSDMap::Incremental &inc)
@@ -4033,77 +4130,9 @@ void OSD::handle_pg_notify(MOSDPGNotify *m)
 
     ObjectStore::Transaction *t;
     C_Contexts *fin;
-  
-    if (!_have_pg(pgid)) {
-      // same primary?
-      vector<int> up, acting;
-      osdmap->pg_to_up_acting_osds(pgid, up, acting);
-      int role = osdmap->calc_pg_role(whoami, acting, acting.size());
-
-      PG::Info::History history = it->history;
-      project_pg_history(pgid, history, m->get_epoch(), up, acting);
-
-      if (m->get_epoch() < history.same_acting_since) {
-        dout(10) << "handle_pg_notify pg " << pgid << " acting changed in "
-                 << history.same_acting_since << " (msg from " << m->get_epoch() << ")" << dendl;
-        continue;
-      }
-
-      assert(role == 0);  // otherwise, probably bug in project_pg_history.
-      
-      // DNE on source?
-      bool create = false;
-      if (it->dne()) {  
-	// is there a creation pending on this pg?
-	if (creating_pgs.count(pgid)) {
-	  creating_pgs[pgid].prior.erase(from);
-
-	  if (!can_create_pg(pgid))
-	    continue;
-	  create = true;
-	} else {
-	  dout(10) << "handle_pg_notify pg " << pgid
-		   << " DNE on source, but creation probe, ignoring" << dendl;
-	  continue;
-	}
-      }
-      creating_pgs.erase(pgid);
-
-      // ok, create PG locally using provided Info and History
-      t = new ObjectStore::Transaction;
-      fin = new C_Contexts;
-      if (create) {
-	pg = _create_lock_new_pg(pgid, acting, *t);
-      } else {
-	pg = _create_lock_pg(pgid, *t);
-	pg->acting.swap(acting);
-	pg->up.swap(up);
-	pg->set_role(role);
-	pg->info.history = history;
-	reg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
-	pg->clear_primary_state();  // yep, notably, set hml=false
-	pg->write_info(*t);
-	pg->write_log(*t);
-      }
-      
-      created++;
-      dout(10) << *pg << " is new" << dendl;
-    
-      // kick any waiters
-      wake_pg_waiters(pg->info.pgid);
-    } else {
-      // already had it.  am i (still) the primary?
-      pg = _lookup_lock_pg(pgid);
-      if (m->get_epoch() < pg->info.history.same_acting_since) {
-        dout(10) << *pg << " handle_pg_notify acting changed in "
-                 << pg->info.history.same_acting_since
-                 << " (msg from " << m->get_epoch() << ")" << dendl;
-        pg->unlock();
-        continue;
-      }
-      t = new ObjectStore::Transaction;
-      fin = new C_Contexts;
-    }
+    pg = get_or_create_pg(*it, m->get_epoch(), from, created, true, &t, &fin);
+    if (!pg)
+      continue;
 
     if (pg->peer_info.count(from) &&
 	pg->peer_info[from].last_update == it->last_update) {
@@ -4173,45 +4202,13 @@ void OSD::_process_pg_info(epoch_t epoch, int from,
 			   map<int, MOSDPGInfo*>* info_map,
 			   int& created)
 {
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
-  C_Contexts *fin = new C_Contexts;
-  
-  PG *pg = 0;
-  if (!_have_pg(info.pgid)) {
-    vector<int> up, acting;
-    osdmap->pg_to_up_acting_osds(info.pgid, up, acting);
-    int role = osdmap->calc_pg_role(whoami, acting, acting.size());
+  ObjectStore::Transaction *t;
+  C_Contexts *fin;  
+  PG *pg;
 
-    project_pg_history(info.pgid, info.history, epoch, up, acting);
-    if (epoch < info.history.same_acting_since) {
-      dout(10) << "got old info " << info << " on non-existent pg, ignoring" << dendl;
-      return;
-    }
-
-    // create pg!
-    assert(role != 0);
-    assert(!info.dne());
-    pg = _create_lock_pg(info.pgid, *t);
-    dout(10) << " got info on new pg, creating" << dendl;
-    pg->acting.swap(acting);
-    pg->up.swap(up);
-    pg->set_role(role);
-    pg->info.history = info.history;
-    reg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
-    pg->write_info(*t);
-    pg->write_log(*t);
-    created++;
-  } else {
-    pg = _lookup_lock_pg(info.pgid);
-    if (epoch < pg->info.history.same_acting_since) {
-      // The peering stuff resets when the acting set changes, so ignore any messges sent
-      // before that.
-      dout(10) << *pg << " got old info " << info << ", ignoring" << dendl;
-      pg->unlock();
-      return;
-    }
-  }
-  assert(pg);
+  pg = get_or_create_pg(info, epoch, from, created, false, &t, &fin);
+  if (!pg)
+    return;
 
   dout(10) << *pg << ": " << __func__ << " info: " << info << ", ";
   if (log.empty())
@@ -4225,9 +4222,21 @@ void OSD::_process_pg_info(epoch_t epoch, int from,
     *_dout << "missing: " << *missing;
   *_dout << dendl;
 
-  unreg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
-  pg->info.history.merge(info.history);
-  reg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
+  // don't update history (yet) if we are active and primary; the replica
+  // may be telling us they have activated (and committed) but we can't
+  // share that until _everyone_ does the same.
+  if (pg->is_active() && pg->is_primary() && pg->is_acting(from) &&
+      pg->info.history.last_epoch_started < pg->info.history.same_acting_since &&
+      info.history.last_epoch_started >= pg->info.history.same_acting_since) {
+    dout(10) << " peer osd" << from << " activated and committed" << dendl;
+    pg->peer_activated.insert(from);
+    if (pg->peer_activated.size() == pg->acting.size())
+      pg->all_activated_and_committed();
+  } else {
+    unreg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
+    pg->info.history.merge(info.history);
+    reg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
+  }
 
   // dump log
   dout(15) << *pg << " my log = ";
@@ -4876,24 +4885,18 @@ void OSD::activate_pg(pg_t pgid, utime_t activate_at)
 {
   assert(osd_lock.is_locked());
 
-  map< int, map<pg_t,PG::Query> > query_map;    // peer -> PG -> get_summary_since
-
+  dout(10) << "activate_pg" << dendl;
   if (pg_map.count(pgid)) {
     PG *pg = _lookup_lock_pg(pgid);
-    if (pg->is_crashed() &&
+    if (pg->is_active() &&
 	pg->is_replay() &&
 	pg->get_role() == 0 &&
 	pg->replay_until == activate_at) {
-      ObjectStore::Transaction *t = new ObjectStore::Transaction;
-      C_Contexts *fin = new C_Contexts;
-      pg->activate(*t, fin->contexts, query_map);
-      int tr = store->queue_transaction(&pg->osr, t, new ObjectStore::C_DeleteTransaction(t), fin);
-      assert(tr == 0);
+
+      pg->replay_queued_ops();
     }
     pg->unlock();
   }
-
-  do_queries(query_map);
 
   // wake up _all_ pg waiters; raw pg -> actual pg mapping may have shifted
   wake_all_pg_waiters();
@@ -5167,22 +5170,17 @@ void OSD::handle_op(MOSDOp *op)
 
  
   // pg must be active.
-  if (!pg->is_active()) {
-    // replay?
+  if (pg->is_replay()) {
     if (op->get_version().version > 0) {
-      if (op->get_version() > pg->info.last_update) {
-	dout(7) << *pg << " queueing replay at " << op->get_version()
-		<< " for " << *op << dendl;
-	pg->replay_queue[op->get_version()] = op;
-	pg->unlock();
-	return;
-      } else {
-	dout(7) << *pg << " replay at " << op->get_version() << " <= " << pg->info.last_update 
-		<< " for " << *op
-		<< ", will queue for WRNOOP" << dendl;
-      }
+      dout(7) << *pg << " queueing replay at " << op->get_version()
+	      << " for " << *op << dendl;
+      pg->replay_queue[op->get_version()] = op;
+      pg->unlock();
+      return;
     }
-    
+  }
+	
+  if (!pg->is_active()) {
     dout(7) << *pg << " not active (yet)" << dendl;
     pg->waiting_for_active.push_back(op);
     pg->unlock();
