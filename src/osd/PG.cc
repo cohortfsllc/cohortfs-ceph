@@ -257,7 +257,7 @@ void PG::proc_replica_log(ObjectStore::Transaction& t, Info &oinfo, Log &olog, M
   }
 
   peer_info[from] = oinfo;
-  dout(10) << " peer osd" << from << " now " << oinfo << dendl;
+  dout(10) << " peer osd" << from << " now " << oinfo << " " << omissing << dendl;
   might_have_unfound.insert(from);
 
   search_for_missing(oinfo, &omissing, from);
@@ -2331,13 +2331,6 @@ void PG::write_log(ObjectStore::Transaction& t)
       // we reached a new block. *p was the last entry with bytes in previous block
       ondisklog.block_map[startoff] = p->version;
     }
-
-    /*
-    if (g_conf.osd_pad_pg_log) {  // pad to 4k, until i fix ebofs reallocation crap.  FIXME.
-      bufferptr bp(4096 - sizeof(*p));
-      bl.push_back(bp);
-    }
-    */
   }
   ondisklog.head = bl.length();
   ondisklog.has_checksums = true;
@@ -3406,8 +3399,6 @@ bool PG::_compare_scrub_objects(ScrubMap::object &auth,
       errorstream << "extra attr " << i->first;
     }
   }
-  if (ok)
-    errorstream << " is ok!";
   return ok;
 }
 
@@ -3442,14 +3433,14 @@ void PG::_compare_scrubmaps(const map<int,ScrubMap*> &maps,
 	  auth = j;
 	} else {
 	  // Compare 
-	  errorstream << info.pgid << " osd" << acting[j->first]
-		      << ": soid " << *k;
+	  stringstream ss;
 	  if (!_compare_scrub_objects(auth->second->objects[*k],
 				      j->second->objects[*k],
-				      errorstream)) {
+				      ss)) {
 	    cur_inconsistent.insert(j->first);
+	    errorstream << info.pgid << " osd" << acting[j->first]
+			<< ": soid " << *k << ss.str() << std::endl;
 	  }
-	  errorstream << std::endl;
 	}
       } else {
 	cur_missing.insert(j->first);

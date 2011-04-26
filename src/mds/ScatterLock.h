@@ -116,6 +116,9 @@ public:
   bool is_flushing() const {
     return have_more() ? _more->flushing : false;
   }
+  bool is_dirty_or_flushing() const {
+    return have_more() ? (_more->dirty || _more->flushing) : false;
+  }
 
   void mark_dirty() { 
     if (!more()->dirty) {

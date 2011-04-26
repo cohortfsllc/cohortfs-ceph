@@ -122,6 +122,8 @@ int read_acls(struct req_state *s, RGWAccessControlPolicy *policy, string& bucke
       ret = -EACCES;
     else
       ret = -ENOENT;
+  } else if (ret == -ENOENT) {
+      ret = -ERR_NO_SUCH_BUCKET;
   }
 
   return ret;
@@ -170,7 +172,7 @@ void RGWGetObj::execute()
   init_common();
 
   ret = rgwstore->prepare_get_obj(s->bucket_str, s->object_str, ofs, &end, &attrs, mod_ptr,
-                                  unmod_ptr, &lastmod, if_match, if_nomatch, &total_len, &handle, &err);
+                                  unmod_ptr, &lastmod, if_match, if_nomatch, &total_len, &handle, &s->err);
   if (ret < 0)
     goto done;
 
@@ -300,11 +302,21 @@ done:
 
 void RGWCreateBucket::execute()
 {
-  RGWAccessControlPolicy policy;
+  RGWAccessControlPolicy policy, old_policy;
   map<string, bufferlist> attrs;
   bufferlist aclbl;
+  bool existed;
+  bool pol_ret;
 
-  bool pol_ret = policy.create_canned(s->user.user_id, s->user.display_name, s->canned_acl);
+  int r = get_policy_from_attr(&old_policy, rgw_root_bucket, s->bucket_str);
+  if (r >= 0)  {
+    if (old_policy.get_owner().get_id().compare(s->user.user_id) != 0) {
+      ret = -EEXIST;
+      goto done;
+    }
+  }
+
+  pol_ret = policy.create_canned(s->user.user_id, s->user.display_name, s->canned_acl);
   if (!pol_ret) {
     ret = -EINVAL;
     goto done;
@@ -313,11 +325,22 @@ void RGWCreateBucket::execute()
 
   attrs[RGW_ATTR_ACL] = aclbl;
 
+  ret = rgw_add_bucket(s->user.user_id, s->bucket_str);
+  /* continue if EEXIST and create_bucket will fail below.  this way we can recover
+   * from a partial create by retrying it. */
+  if (ret && ret != -EEXIST)   
+    goto done;
+
+  existed = (ret == -EEXIST);
+
   ret = rgwstore->create_bucket(s->user.user_id, s->bucket_str, attrs,
 				s->user.auid);
+  if (ret && !existed && ret != -EEXIST)   /* if it exists (or previously existed), don't remove it! */
+    rgw_remove_bucket(s->user.user_id, s->bucket_str);
 
-  if (ret == 0)
-    ret = rgw_add_bucket(s->user.user_id, s->bucket_str);
+  if (ret == -EEXIST)
+    ret = 0;
+
 done:
   send_response();
 }
@@ -361,7 +384,6 @@ void RGWPutObj::execute()
 
     ret = policy.create_canned(s->user.user_id, s->user.display_name, s->canned_acl);
     if (!ret) {
-       err.code = "InvalidArgument";
        ret = -EINVAL;
        goto done;
     }
@@ -377,8 +399,7 @@ void RGWPutObj::execute()
 			     supplied_md5_b64, supplied_md5_b64 + strlen(supplied_md5_b64));
       RGW_LOG(15) << "ceph_armor ret=" << ret << endl;
       if (ret != CEPH_CRYPTO_MD5_DIGESTSIZE) {
-        err.code = "InvalidDigest";
-        ret = -EINVAL;
+        ret = -ERR_INVALID_DIGEST;
         goto done;
       }
 
@@ -391,7 +412,11 @@ void RGWPutObj::execute()
       get_data();
       if (len > 0) {
         hash.Update((unsigned char *)data, len);
-        ret = rgwstore->put_obj_data(s->user.user_id, s->bucket_str, s->object_str, data, ofs, len, NULL);
+	// For the first call to put_obj_data, pass -1 as the offset to
+	// do a write_full.
+        ret = rgwstore->put_obj_data(s->user.user_id, s->bucket_str,
+				     s->object_str, data,
+				     ((ofs == 0) ? -1 : ofs), len, NULL);
         free(data);
         if (ret < 0)
           goto done;
@@ -404,8 +429,7 @@ void RGWPutObj::execute()
     buf_to_hex(m, CEPH_CRYPTO_MD5_DIGESTSIZE, calc_md5);
 
     if (supplied_md5_b64 && strcmp(calc_md5, supplied_md5)) {
-       err.code = "BadDigest";
-       ret = -EINVAL;
+       ret = -ERR_BAD_DIGEST;
        goto done;
     }
     bufferlist aclbl;
@@ -471,7 +495,6 @@ static bool parse_copy_source(const char *src, string& bucket, string& object)
 
 int RGWCopyObj::init_common()
 {
-  struct rgw_err err;
   RGWAccessControlPolicy dest_policy;
   bufferlist aclbl;
   bufferlist bl;
@@ -489,14 +512,12 @@ int RGWCopyObj::init_common()
 
   ret = dest_policy.create_canned(s->user.user_id, s->user.display_name, s->canned_acl);
   if (!ret) {
-     err.code = "InvalidArgument";
      ret = -EINVAL;
      return ret;
   }
 
   ret = parse_copy_source(s->copy_source, src_bucket, src_object);
   if (!ret) {
-     err.code = "InvalidArgument";
      ret = -EINVAL;
      return ret;
   }
@@ -551,7 +572,7 @@ void RGWCopyObj::execute()
                         unmod_ptr,
                         if_match,
                         if_nomatch,
-                        attrs, &err);
+                        attrs, &s->err);
 
 done:
   send_response();
@@ -585,7 +606,7 @@ static int rebuild_policy(RGWAccessControlPolicy& src, RGWAccessControlPolicy& d
     return -EINVAL;
 
   RGWUserInfo owner_info;
-  if (rgw_get_user_info(owner->get_id(), owner_info) < 0) {
+  if (rgw_get_user_info_by_uid(owner->get_id(), owner_info) < 0) {
     RGW_LOG(10) << "owner info does not exist" << endl;
     return -EINVAL;
   }
@@ -609,17 +630,18 @@ static int rebuild_policy(RGWAccessControlPolicy& src, RGWAccessControlPolicy& d
       {
         string email = src_grant->get_id();
         RGW_LOG(10) << "grant user email=" << email << endl;
-        if (rgw_get_uid_by_email(email, id, grant_user) < 0) {
+        if (rgw_get_user_info_by_email(email, grant_user) < 0) {
           RGW_LOG(10) << "grant user email not found or other error" << endl;
           break;
         }
+        id = grant_user.user_id;
       }
     case ACL_TYPE_CANON_USER:
       {
         if (type.get_type() == ACL_TYPE_CANON_USER)
           id = src_grant->get_id();
     
-        if (grant_user.user_id.empty() && rgw_get_user_info(id, grant_user) < 0) {
+        if (grant_user.user_id.empty() && rgw_get_user_info_by_uid(id, grant_user) < 0) {
           RGW_LOG(10) << "grant user does not exist:" << id << endl;
         } else {
           ACLPermission& perm = src_grant->get_permission();
@@ -655,9 +677,13 @@ void RGWPutACLs::execute()
 {
   bufferlist bl;
 
-  RGWAccessControlPolicy *policy;
+  RGWAccessControlPolicy *policy = NULL;
   RGWXMLParser parser;
   RGWAccessControlPolicy new_policy;
+  stringstream ss;
+  char *orig_data = data;
+  char *new_data = NULL;
+  ACLOwner owner;
 
   if (!verify_permission(s, RGW_PERM_WRITE_ACP)) {
     ret = -EACCES;
@@ -677,12 +703,34 @@ void RGWPutACLs::execute()
        ret = -ENOMEM;
        goto done;
      }
+     owner.set_id(s->user.user_id);
+     owner.set_name(s->user.display_name);
+  } else {
+     owner = s->acl->get_owner();
   }
 
   if (get_params() < 0)
     goto done;
 
-  RGW_LOG(15) << "read data=" << data << " len=" << len << endl;
+  RGW_LOG(15) << "read len=" << len << " data=" << (data ? data : "") << endl;
+
+  if (!s->canned_acl.empty() && len) {
+    ret = -EINVAL;
+    goto done;
+  }
+  if (!s->canned_acl.empty()) {
+    RGWAccessControlPolicy canned_policy;
+    bool r = canned_policy.create_canned(owner.get_id(), owner.get_display_name(), s->canned_acl);
+    if (!r) {
+      ret = -EINVAL;
+      goto done;
+    }
+    canned_policy.to_xml(ss);
+    new_data = strdup(ss.str().c_str());
+    data = new_data;
+    len = ss.str().size();
+  }
+
 
   if (!parser.parse(data, len, 1)) {
     ret = -EACCES;
@@ -693,9 +741,10 @@ void RGWPutACLs::execute()
     ret = -EINVAL;
     goto done;
   }
+
   if (rgw_log_level >= 15) {
     RGW_LOG(15) << "Old AccessControlPolicy" << endl;
-    policy->to_xml(cerr);
+    policy->to_xml(cout);
     RGW_LOG(15) << endl;
   }
 
@@ -705,7 +754,7 @@ void RGWPutACLs::execute()
 
   if (rgw_log_level >= 15) {
     RGW_LOG(15) << "New AccessControlPolicy" << endl;
-    new_policy.to_xml(cerr);
+    new_policy.to_xml(cout);
     RGW_LOG(15) << endl;
   }
 
@@ -714,7 +763,8 @@ void RGWPutACLs::execute()
                        RGW_ATTR_ACL, bl);
 
 done:
-  free(data);
+  free(orig_data);
+  free(new_data);
 
   send_response();
   return;
@@ -743,9 +793,8 @@ void RGWHandler::init_state(struct req_state *s, struct fcgx_state *fcgx)
   }
   s->fcgx = fcgx;
   s->content_started = false;
-  s->err_exist = false;
+  s->err.clear();
   s->format = 0;
-  memset(&s->err, 0, sizeof(s->err));
   if (s->acl) {
      delete s->acl;
      s->acl = new RGWAccessControlPolicy;

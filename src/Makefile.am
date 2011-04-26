@@ -10,6 +10,7 @@ bin_PROGRAMS =
 sbin_PROGRAMS =
 sbin_SCRIPTS =
 bin_SCRIPTS = crun cclass $(srcdir)/cclsinfo cdebugpack crbdnamer
+dist_bin_SCRIPTS =
 # C/C++ tests to build will be appended to this
 check_PROGRAMS =
 # tests to actually run on "make check"; if you need extra, non-test,
@@ -96,7 +97,8 @@ osdmaptool_SOURCES = osdmaptool.cc
 osdmaptool_LDADD = libcrush.a libcommon.a -lpthread -lm $(CRYPTO_LIBS) $(EXTRALIBS)
 bin_PROGRAMS += monmaptool crushtool osdmaptool
 
-mount_ceph_SOURCES = mount/mount.ceph.c
+mount_ceph_SOURCES = mount/mount.ceph.c common/armor.c
+mount_ceph_LDADD = -lkeyutils
 sbin_PROGRAMS += mount.ceph
 
 # user tools
@@ -148,6 +150,10 @@ if WITH_DEBUG
 psim_SOURCES = psim.cc
 psim_LDADD = libcrush.a libcommon.a -lpthread -lm $(CRYPTO_LIBS) $(EXTRALIBS)
 bin_PROGRAMS += psim
+
+test_mutate_SOURCES = test/test_mutate.cc msg/SimpleMessenger.cc
+test_mutate_LDADD = librados.la -lpthread -lm $(CRYPTO_LIBS) $(EXTRALIBS)
+bin_PROGRAMS += test_mutate
 
 testmsgr_SOURCES = testmsgr.cc msg/SimpleMessenger.cc
 testmsgr_LDADD = libcommon.a -lpthread -lm $(CRYPTO_LIBS) $(EXTRALIBS)
@@ -403,7 +409,7 @@ unittest_librados_CXXFLAGS = ${AM_CXXFLAGS} ${UNITTEST_CXXFLAGS}
 check_PROGRAMS += unittest_librados
 
 unittest_bufferlist_SOURCES = test/bufferlist.cc
-unittest_bufferlist_LDADD = ${UNITTEST_LDADD}
+unittest_bufferlist_LDADD = ${UNITTEST_LDADD} libcommon.a
 unittest_bufferlist_CXXFLAGS = ${AM_CXXFLAGS} ${UNITTEST_CXXFLAGS}
 check_PROGRAMS += unittest_bufferlist
 
@@ -432,6 +438,18 @@ unittest_rgw_escape_LDFLAGS = -pthread ${AM_LDFLAGS}
 unittest_rgw_escape_LDADD = libcommon.a ${UNITTEST_LDADD}
 unittest_rgw_escape_CXXFLAGS = ${AM_CXXFLAGS} ${UNITTEST_CXXFLAGS}
 check_PROGRAMS += unittest_rgw_escape
+
+unittest_strtol_SOURCES = test/strtol.cc
+unittest_strtol_LDFLAGS = -pthread ${AM_LDFLAGS}
+unittest_strtol_LDADD = libcommon.a ${UNITTEST_LDADD}
+unittest_strtol_CXXFLAGS = ${AM_CXXFLAGS} ${UNITTEST_CXXFLAGS}
+check_PROGRAMS += unittest_strtol
+
+unittest_confutils_SOURCES = test/confutils.cc
+unittest_confutils_LDFLAGS = -pthread ${AM_LDFLAGS}
+unittest_confutils_LDADD = libcommon.a ${UNITTEST_LDADD}
+unittest_confutils_CXXFLAGS = ${AM_CXXFLAGS} ${UNITTEST_CXXFLAGS}
+check_PROGRAMS += unittest_confutils
 
 # shell scripts
 editpaths = sed \
@@ -468,6 +486,7 @@ AM_CXXFLAGS += -DUSE_BOOST_SPIRIT_OLD_HDR
 endif
 
 AM_CFLAGS = -Wall -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -rdynamic
+AM_CXXFLAGS += -Wno-invalid-offsetof
 AM_LDFLAGS = -Wl,--as-needed
 
 if WITH_LIBATOMIC
@@ -515,11 +534,8 @@ rados_include_DATA = \
 	$(srcdir)/include/rados/librados.h \
 	$(srcdir)/include/rados/librados.hpp \
 	$(srcdir)/include/buffer.h \
-	$(srcdir)/include/atomic.h \
 	$(srcdir)/include/page.h \
-	$(srcdir)/include/crc32c.h \
-	$(srcdir)/include/Spinlock.h  \
-	$(srcdir)/include/assert.h
+	$(srcdir)/include/crc32c.h
 
 crush_includedir = $(includedir)/crush
 crush_include_DATA = \
@@ -599,6 +615,7 @@ libcommon_files = \
 	include/ceph_frag.cc \
 	common/config.cc \
 	common/utf8.c \
+	common/strtol.cc \
 	common/page.cc \
 	common/lockdep.cc \
 	common/DoutStreambuf.cc \
@@ -606,7 +623,8 @@ libcommon_files = \
 	common/version.cc \
 	common/hex.cc \
 	common/entity_name.cc \
-	common/ceph_crypto.cc
+	common/ceph_crypto.cc \
+	common/pidfile.cc
 
 if WITH_PROFILER
 libcommon_files += perfglue/cpu_profiler.cc
@@ -678,7 +696,6 @@ libosd_a_SOURCES = \
 	osd/OSDCaps.cc \
 	osd/Watch.cc \
         common/ClassHandler.cc
-#	osd/RAID4PG.cc
 
 libosdc_a_SOURCES = \
 	osdc/Objecter.cc \
@@ -695,6 +712,10 @@ dist-hook:
 	$(srcdir)/check_version $(srcdir)/.git_version
 
 python_PYTHON = pybind/rados.py
+
+if WITH_DEBUG
+dist_bin_SCRIPTS += test/ceph-pybind-test.py
+endif
 
 # headers... and everything else we want to include in a 'make dist' 
 # that autotools doesn't magically identify.
@@ -766,6 +787,8 @@ noinst_HEADERS = \
         common/config.h\
 	common/ceph_crypto.h\
 	common/utf8.h\
+	common/strtol.h\
+	common/static_assert.h\
         crush/CrushWrapper.h\
         crush/CrushWrapper.i\
         crush/builder.h\
@@ -825,7 +848,6 @@ noinst_HEADERS = \
         include/xlist.h\
 	include/rados/librados.h\
 	include/rados/librados.hpp\
-	include/rados/atomic.h\
 	include/rados/page.h\
 	include/rados/crc32c.h\
 	include/rados/buffer.h\
@@ -926,6 +948,8 @@ noinst_HEADERS = \
         messages/MMDSBeacon.h\
         messages/MMDSCacheRejoin.h\
 	messages/MMDSLoadTargets.h\
+	messages/MMDSFindIno.h\
+	messages/MMDSFindInoReply.h\
         messages/MMDSFragmentNotify.h\
         messages/MMDSMap.h\
         messages/MMDSResolve.h\
@@ -1004,15 +1028,12 @@ noinst_HEADERS = \
         msg/tcp.h\
 	objclass/objclass.h\
 	os/btrfs_ioctl.h\
-        os/BDBMap.h\
         os/Fake.h\
-        os/FakeStoreBDBCollections.h\
         os/FileJournal.h\
         os/FileStore.h\
         os/Journal.h\
         os/JournalingObjectStore.h\
         os/ObjectStore.h\
-        osbdb/OSBDB.h\
         osd/Ager.h\
         osd/OSD.h\
         osd/OSDCaps.h\
@@ -1020,7 +1041,6 @@ noinst_HEADERS = \
         osd/ObjectVersioner.h\
         osd/PG.h\
         osd/PGLS.h\
-        osd/RAID4PG.h\
         osd/ReplicatedPG.h\
         osd/Watch.h\
         osd/osd_types.h\
@@ -1052,7 +1072,9 @@ noinst_HEADERS = \
 	tools/common.h\
 	tools/gui.h\
 	tools/gui_resources.h\
-	test/osd/RadosModel.h
+	test/osd/RadosModel.h\
+	common/pidfile.h\
+	common/sync_filesystem.h
 
 all_sources = $(cmon_SOURCES) $(ceph_SOURCES) $(cephfs_SOURCES) $(librados_config_SOURCES) $(cauthtool_SOURCES) $(monmaptool_SOURCES) \
 	$(crushtool_SOURCES) $(osdmaptool_SOURCES) $(cconf_SOURCES) $(mount_ceph_SOURCES) $(cmds_SOURCES) \

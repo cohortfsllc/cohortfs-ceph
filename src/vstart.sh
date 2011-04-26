@@ -215,7 +215,12 @@ if [ "$localhost" -eq 1 ]; then
 else
     HOSTNAME=`hostname`
     echo hostname $HOSTNAME
-    IP=`hostname --ip-address`
+    RAW_IP=`hostname --ip-address`
+    # filter out IPv6 and localhost addresses
+    IP="$(echo "$RAW_IP"|tr ' ' '\012'|grep -v :|grep -v '^127\.'|head -n1)"
+    # if that left nothing, then try to use the raw thing, it might work
+    if [ -z "IP" ]; then IP="$RAW_IP"; fi
+    echo ip $IP
 fi
 echo "ip $IP"
 
@@ -246,7 +251,7 @@ do
 done
 
 DAEMONOPTS="
-	log dir = out
+	log file = out/\$host
 	log per instance = true
 	log sym history = 100
         profiling logger = true
@@ -320,7 +325,7 @@ EOF
 			if [ $overwrite_conf -eq 1 ]; then
 				cat <<EOF >> $conf
 [mon.$f]
-        mon data = "dev/mon.$f"
+        mon data = dev/mon.$f
         mon addr = $IP:$(($CEPH_PORT+$count))
 EOF
 			fi
@@ -363,7 +368,7 @@ if [ "$start_osd" -eq 1 ]; then
 	if [ "$new" -eq 1 ]; then
 	    if [ $overwrite_conf -eq 1 ]; then
 		    cat <<EOF >> $conf
-[osd$osd]
+[osd.$osd]
         osd data = dev/osd$osd
         osd journal = dev/osd$osd/journal
         osd journal size = 100

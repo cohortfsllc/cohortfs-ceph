@@ -26,6 +26,7 @@
 #include "include/color.h"
 
 #include <errno.h>
+#include <deque>
 #include <syslog.h>
 
 int keyring_init(md_config_t *conf)
@@ -33,25 +34,21 @@ int keyring_init(md_config_t *conf)
   if (!is_supported_auth(CEPH_AUTH_CEPHX))
     return 0;
 
-  const char *filename = conf->keyring;
-  string keyring_search = conf->keyring;
-  string new_keyring;
-  if (ceph_resolve_file_search(keyring_search, new_keyring)) {
-    filename = new_keyring.c_str();
+  int ret = 0;
+  string filename;
+  if (ceph_resolve_file_search(conf->keyring, filename)) {
+    ret = g_keyring.load(filename);
   }
 
-  int ret = g_keyring.load(filename);
-
-  if (conf->key && conf->key[0]) {
-    string k = conf->key;
+  if (!conf->key.empty()) {
     EntityAuth ea;
-    ea.key.decode_base64(k);
-    g_keyring.add(*conf->name, ea);
+    ea.key.decode_base64(conf->key);
+    g_keyring.add(conf->name, ea);
 
     ret = 0;
-  } else if (conf->keyfile && conf->keyfile[0]) {
+  } else if (!conf->keyfile.empty()) {
     char buf[100];
-    int fd = ::open(conf->keyfile, O_RDONLY);
+    int fd = ::open(conf->keyfile.c_str(), O_RDONLY);
     if (fd < 0) {
       int err = errno;
       derr << "unable to open " << conf->keyfile << ": "
@@ -73,16 +70,14 @@ int keyring_init(md_config_t *conf)
     EntityAuth ea;
     ea.key.decode_base64(k);
 
-    g_keyring.add(*conf->name, ea);
+    g_keyring.add(conf->name, ea);
 
     ret = 0;
   }
 
-  if (ret) {
+  if (ret)
     derr << "keyring_init: failed to load " << filename << dendl;
-    return ret;
-  }
-  return 0;
+  return ret;
 }
 
 md_config_t *common_preinit(const CephInitParameters &iparams,
@@ -96,15 +91,15 @@ md_config_t *common_preinit(const CephInitParameters &iparams,
   md_config_t *conf = &g_conf; //new md_config_t();
 
   // Set up our entity name.
-  conf->name = new EntityName(iparams.name);
+  conf->name = iparams.name;
 
   // Set some defaults based on code type
   switch (code_env) {
     case CODE_ENVIRONMENT_DAEMON:
       conf->daemonize = true;
       if (!(flags & CINIT_FLAG_UNPRIVILEGED_DAEMON_DEFAULTS)) {
-	conf->log_dir = strdup("/var/log/ceph");
-	conf->pid_file = strdup("/var/run/ceph/$type.$id.pid");
+	conf->log_dir = "/var/log/ceph";
+	conf->pid_file = "/var/run/ceph/$type.$id.pid";
       }
       conf->log_to_stderr = LOG_TO_STDERR_SOME;
       break;
@@ -116,6 +111,26 @@ md_config_t *common_preinit(const CephInitParameters &iparams,
   return conf;
 }
 
+void complain_about_parse_errors(std::deque<std::string> *parse_errors)
+{
+  if (parse_errors->empty())
+    return;
+  derr << "Errors while parsing config file!" << dendl;
+  int cur_err = 0;
+  static const int MAX_PARSE_ERRORS = 20;
+  for (std::deque<std::string>::const_iterator p = parse_errors->begin();
+       p != parse_errors->end(); ++p)
+  {
+    derr << *p << dendl;
+    if (cur_err == MAX_PARSE_ERRORS) {
+      derr << "Suppressed " << (parse_errors->size() - MAX_PARSE_ERRORS)
+	   << " more errors." << dendl;
+      break;
+    }
+    ++cur_err;
+  }
+}
+
 void common_init(std::vector < const char* >& args,
 	       uint32_t module_type, code_environment_t code_env, int flags)
 {
@@ -123,7 +138,8 @@ void common_init(std::vector < const char* >& args,
     ceph_argparse_early_args(args, module_type, flags);
   md_config_t *conf = common_preinit(iparams, code_env, flags);
 
-  int ret = conf->parse_config_files(iparams.get_conf_files());
+  std::deque<std::string> parse_errors;
+  int ret = conf->parse_config_files(iparams.get_conf_files(), &parse_errors);
   if (ret == -EDOM) {
     derr << "common_init: error parsing config file." << dendl;
     _exit(1);
@@ -148,9 +164,11 @@ void common_init(std::vector < const char* >& args,
     conf->log_per_instance = false;
   }
 
+  conf->expand_all_meta();
+
   if (conf->log_to_syslog || conf->clog_to_syslog) {
     closelog();
-    openlog(g_conf.name->to_cstr(), LOG_ODELAY | LOG_PID, LOG_USER);
+    openlog(g_conf.name.to_cstr(), LOG_ODELAY | LOG_PID, LOG_USER);
   }
 
   {
@@ -158,6 +176,9 @@ void common_init(std::vector < const char* >& args,
     DoutLocker _dout_locker;
     _dout_open_log();
   }
+
+  // Now we're ready to complain about config file parse errors
+  complain_about_parse_errors(&parse_errors);
 
   // signal stuff
   int siglist[] = { SIGPIPE, 0 };

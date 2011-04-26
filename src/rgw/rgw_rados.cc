@@ -17,9 +17,6 @@ using namespace std;
 
 Rados *rados = NULL;
 
-#define ROOT_BUCKET ".rgw" //keep this synced to rgw_user.cc::root_bucket!
-
-static string root_bucket(ROOT_BUCKET);
 static librados::IoCtx root_pool_ctx;
 
 /** 
@@ -52,13 +49,13 @@ int RGWRados::initialize(md_config_t *conf)
  */
 int RGWRados::open_root_pool_ctx()
 {
-  int r = rados->ioctx_create(root_bucket.c_str(), root_pool_ctx);
+  int r = rados->ioctx_create(RGW_ROOT_BUCKET, root_pool_ctx);
   if (r == -ENOENT) {
-    r = rados->pool_create(root_bucket.c_str());
+    r = rados->pool_create(RGW_ROOT_BUCKET);
     if (r < 0)
       return r;
 
-    r = rados->ioctx_create(root_bucket.c_str(), root_pool_ctx);
+    r = rados->ioctx_create(RGW_ROOT_BUCKET, root_pool_ctx);
   }
 
   return r;
@@ -209,25 +206,20 @@ int RGWRados::list_objects(string& id, string& bucket, int max, string& prefix, 
  */
 int RGWRados::create_bucket(std::string& id, std::string& bucket, map<std::string, bufferlist>& attrs, uint64_t auid)
 {
-  int ret = root_pool_ctx.create(bucket, true);
+  librados::ObjectOperation op;
+  op.create(true);
+
+  for (map<string, bufferlist>::iterator iter = attrs.begin(); iter != attrs.end(); ++iter)
+    op.setxattr(iter->first.c_str(), iter->second);
+
+  bufferlist outbl;
+  int ret = root_pool_ctx.operate(bucket, &op, &outbl);
   if (ret < 0)
     return ret;
 
-  map<string, bufferlist>::iterator iter;
-  for (iter = attrs.begin(); iter != attrs.end(); ++iter) {
-    string name = iter->first;
-    bufferlist& bl = iter->second;
-    
-    if (bl.length()) {
-      ret = root_pool_ctx.setxattr(bucket, name.c_str(), bl);
-      if (ret < 0) {
-        delete_bucket(id, bucket);
-        return ret;
-      }
-    }
-  }
-
   ret = rados->pool_create(bucket.c_str(), auid);
+  if (ret)
+    root_pool_ctx.remove(bucket);
 
   return ret;
 }
@@ -279,13 +271,15 @@ int RGWRados::put_obj_meta(std::string& id, std::string& bucket, std::string& oi
  * bucket: the bucket to store the object in
  * obj: the object name/key
  * data: the object contents/value
+ * offset: the offet to write to in the object
+ *         If this is -1, we will overwrite the whole object.
  * size: the amount of data to write (data must be this long)
  * mtime: if non-NULL, writes the given mtime to the bucket storage
  * attrs: all the given attrs are written to bucket storage for the given object
  * Returns: 0 on success, -ERR# otherwise.
  */
-int RGWRados::put_obj_data(std::string& id, std::string& bucket, std::string& oid, const char *data, off_t ofs, size_t len,
-                  time_t *mtime)
+int RGWRados::put_obj_data(std::string& id, std::string& bucket, std::string& oid,
+			   const char *data, off_t ofs, size_t len, time_t *mtime)
 {
   librados::IoCtx io_ctx;
 
@@ -295,7 +289,15 @@ int RGWRados::put_obj_data(std::string& id, std::string& bucket, std::string& oi
 
   bufferlist bl;
   bl.append(data, len);
-  r = io_ctx.write(oid, bl, len, ofs);
+  if (ofs == -1) {
+    // write_full wants to write the complete bufferlist, not part of it
+    assert(bl.length() == len);
+
+    r = io_ctx.write_full(oid, bl);
+  }
+  else {
+    r = io_ctx.write(oid, bl, len, ofs);
+  }
   if (r < 0)
     return r;
 
@@ -332,7 +334,7 @@ int RGWRados::copy_obj(std::string& id, std::string& dest_bucket, std::string& d
 {
   int ret, r;
   char *data;
-  off_t ofs = 0, end = -1;
+  off_t end = -1;
   size_t total_len;
   time_t lastmod;
   map<string, bufferlist>::iterator iter;
@@ -342,18 +344,22 @@ int RGWRados::copy_obj(std::string& id, std::string& dest_bucket, std::string& d
   void *handle = NULL;
 
   map<string, bufferlist> attrset;
-  ret = prepare_get_obj(src_bucket, src_obj, ofs, &end, &attrset,
+  ret = prepare_get_obj(src_bucket, src_obj, 0, &end, &attrset,
                 mod_ptr, unmod_ptr, &lastmod, if_match, if_nomatch, &total_len, &handle, err);
 
   if (ret < 0)
     return ret;
 
+  off_t ofs = 0;
   do {
     ret = get_obj(&handle, src_bucket, src_obj, &data, ofs, end);
     if (ret < 0)
       return ret;
 
-    r = put_obj_data(id, dest_bucket, dest_obj, data, ofs, ret, NULL);
+    // In the first call to put_obj_data, we pass ofs == -1 so that it will do
+    // a write_full, wiping out whatever was in the object before this
+    r = put_obj_data(id, dest_bucket, dest_obj, data,
+		     ((ofs == 0) ? -1 : ofs), ret, NULL);
     free(data);
     if (r < 0)
       goto done_err;
@@ -389,7 +395,7 @@ int RGWRados::delete_bucket(std::string& id, std::string& bucket)
     return r;
 
   librados::IoCtx io_ctx;
-  r = rados->ioctx_create(ROOT_BUCKET, io_ctx);
+  r = rados->ioctx_create(RGW_ROOT_BUCKET, io_ctx);
   if (r < 0) {
     RGW_LOG(0) << "WARNING: failed to create context in delete_bucket, bucket object leaked" << std::endl;
     return r;
@@ -440,7 +446,7 @@ int RGWRados::get_attr(std::string& bucket, std::string& obj,
 
   if (actual_obj.size() == 0) {
     actual_obj = bucket;
-    actual_bucket = root_bucket;
+    actual_bucket = rgw_root_bucket;
   }
 
   int r = rados->ioctx_create(actual_bucket.c_str(), io_ctx);
@@ -471,7 +477,7 @@ int RGWRados::set_attr(std::string& bucket, std::string& oid,
 
   if (actual_obj.size() == 0) {
     actual_obj = bucket;
-    actual_bucket = root_bucket;
+    actual_bucket = rgw_root_bucket;
   }
 
   int r = rados->ioctx_create(actual_bucket.c_str(), io_ctx);
@@ -564,8 +570,9 @@ int RGWRados::prepare_get_obj(std::string& bucket, std::string& oid,
   if (mod_ptr) {
     RGW_LOG(10) << "If-Modified-Since: " << *mod_ptr << " Last-Modified: " << ctime << endl;
     if (ctime < *mod_ptr) {
-      err->num = "304";
-      err->code = "NotModified";
+      err->http_ret = 304;
+      err->s3_code = "NotModified";
+
       goto done_err;
     }
   }
@@ -573,8 +580,8 @@ int RGWRados::prepare_get_obj(std::string& bucket, std::string& oid,
   if (unmod_ptr) {
     RGW_LOG(10) << "If-UnModified-Since: " << *unmod_ptr << " Last-Modified: " << ctime << endl;
     if (ctime > *unmod_ptr) {
-      err->num = "412";
-      err->code = "PreconditionFailed";
+      err->http_ret = 412;
+      err->s3_code = "PreconditionFailed";
       goto done_err;
     }
   }
@@ -587,8 +594,8 @@ int RGWRados::prepare_get_obj(std::string& bucket, std::string& oid,
     if (if_match) {
       RGW_LOG(10) << "ETag: " << etag.c_str() << " " << " If-Match: " << if_match << endl;
       if (strcmp(if_match, etag.c_str())) {
-        err->num = "412";
-        err->code = "PreconditionFailed";
+        err->http_ret = 412;
+        err->s3_code = "PreconditionFailed";
         goto done_err;
       }
     }
@@ -596,8 +603,8 @@ int RGWRados::prepare_get_obj(std::string& bucket, std::string& oid,
     if (if_nomatch) {
       RGW_LOG(10) << "ETag: " << etag.c_str() << " " << " If-NoMatch: " << if_nomatch << endl;
       if (strcmp(if_nomatch, etag.c_str()) == 0) {
-        err->num = "304";
-        err->code = "NotModified";
+        err->http_ret = 304;
+        err->s3_code = "NotModified";
         goto done_err;
       }
     }
@@ -693,7 +700,28 @@ int RGWRados::tmap_set(std::string& bucket, std::string& obj, std::string& key, 
   ::encode(c, cmdbl);
   ::encode(key, cmdbl);
   ::encode(bl, cmdbl);
-  // ::encode(emptybl, cmdbl);
+
+RGW_LOG(0) << "tmap_set bucket=" << bucket << " obj=" << obj << " key=" << key << std::endl;
+
+  librados::IoCtx io_ctx;
+  int r = rados->ioctx_create(bucket.c_str(), io_ctx);
+  if (r < 0)
+    return r;
+  r = io_ctx.tmap_update(obj, cmdbl);
+RGW_LOG(0) << "tmap_set done" << std::endl;
+
+  return r;
+}
+
+int RGWRados::tmap_create(std::string& bucket, std::string& obj, std::string& key, bufferlist& bl)
+{
+  bufferlist cmdbl, emptybl;
+  __u8 c = CEPH_OSD_TMAP_CREATE;
+
+  ::encode(c, cmdbl);
+  ::encode(key, cmdbl);
+  ::encode(bl, cmdbl);
+
   librados::IoCtx io_ctx;
   int r = rados->ioctx_create(bucket.c_str(), io_ctx);
   if (r < 0)

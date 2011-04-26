@@ -55,7 +55,7 @@ int main(int argc, const char **argv)
 
   common_init(args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY,
 	      CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
-  EntityName ename(*g_conf.name);
+  EntityName ename(g_conf.name);
 
   const char *me = argv[0];
 
@@ -74,32 +74,32 @@ int main(int argc, const char **argv)
   bool bin_keyring = false;
 
   FOR_EACH_ARG(args) {
-    if (CONF_ARG_EQ("gen-key", 'g')) {
-      CONF_SAFE_SET_ARG_VAL(&gen_key, OPT_BOOL);
-    } else if (CONF_ARG_EQ("gen-print-key", '\0')) {
-      CONF_SAFE_SET_ARG_VAL(&gen_print_key, OPT_BOOL);
-    } else if (CONF_ARG_EQ("add-key", 'a')) {
-      CONF_SAFE_SET_ARG_VAL(&add_key, OPT_STR);
-    } else if (CONF_ARG_EQ("list", 'l')) {
-      CONF_SAFE_SET_ARG_VAL(&list, OPT_BOOL);
-    } else if (CONF_ARG_EQ("caps", '\0')) {
-      CONF_SAFE_SET_ARG_VAL(&caps_fn, OPT_STR);
-    } else if (CONF_ARG_EQ("cap", '\0')) {
+    if (CEPH_ARGPARSE_EQ("gen-key", 'g')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&gen_key, OPT_BOOL);
+    } else if (CEPH_ARGPARSE_EQ("gen-print-key", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&gen_print_key, OPT_BOOL);
+    } else if (CEPH_ARGPARSE_EQ("add-key", 'a')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&add_key, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("list", 'l')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&list, OPT_BOOL);
+    } else if (CEPH_ARGPARSE_EQ("caps", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&caps_fn, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("cap", '\0')) {
       const char *key, *val;
-      CONF_SAFE_SET_ARG_VAL(&key, OPT_STR);
-      CONF_SAFE_SET_ARG_VAL(&val, OPT_STR);
+      CEPH_ARGPARSE_SET_ARG_VAL(&key, OPT_STR);
+      CEPH_ARGPARSE_SET_ARG_VAL(&val, OPT_STR);
       ::encode(val, caps[key]);
-    } else if (CONF_ARG_EQ("print-key", 'p')) {
-      CONF_SAFE_SET_ARG_VAL(&print_key, OPT_BOOL);
-    } else if (CONF_ARG_EQ("create-keyring", '\0')) {
-      CONF_SAFE_SET_ARG_VAL(&create_keyring, OPT_BOOL);
-    } else if (CONF_ARG_EQ("import-keyring", '\0')) {
-      CONF_SAFE_SET_ARG_VAL(&import_keyring, OPT_STR);
-    } else if (CONF_ARG_EQ("set-uid", 'u')) {
-      CONF_SAFE_SET_ARG_VAL(&auid, OPT_LONGLONG);
+    } else if (CEPH_ARGPARSE_EQ("print-key", 'p')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&print_key, OPT_BOOL);
+    } else if (CEPH_ARGPARSE_EQ("create-keyring", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&create_keyring, OPT_BOOL);
+    } else if (CEPH_ARGPARSE_EQ("import-keyring", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&import_keyring, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("set-uid", 'u')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&auid, OPT_LONGLONG);
       set_auid = true;
-    } else if (CONF_ARG_EQ("bin", 'b')) {
-      CONF_SAFE_SET_ARG_VAL(&bin_keyring, OPT_BOOL);
+    } else if (CEPH_ARGPARSE_EQ("bin", 'b')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&bin_keyring, OPT_BOOL);
     } else if (!fn) {
       fn = args[i];
     } else 
@@ -202,22 +202,22 @@ int main(int argc, const char **argv)
     cout << "added entity " << ename << " auth " << eauth << std::endl;
   }
   if (caps_fn) {
-    ConfFile *cf = new ConfFile(caps_fn);
-    if (cf->parse() != 0) {
+    ConfFile cf;
+    std::deque<std::string> parse_errors;
+    if (cf.parse_file(caps_fn, &parse_errors) != 0) {
       cerr << "could not parse caps file " << caps_fn << std::endl;
       exit(1);
     }
+    complain_about_parse_errors(&parse_errors);
     map<string, bufferlist> caps;
     const char *key_names[] = { "mon", "osd", "mds", NULL };
     for (int i=0; key_names[i]; i++) {
-      char *val;
-      cf->read("global", key_names[i], &val, NULL);
-      if (val) {
+      std::string val;
+      if (cf.read("global", key_names[i], val) == 0) {
         bufferlist bl;
         ::encode(val, bl);
         string s(key_names[i]);
         caps[s] = bl; 
-        free(val);
       }
     }
     keyring.set_caps(ename, caps);

@@ -25,6 +25,12 @@
 #define CEPH_NOSNAP  ((uint64_t)(-2))
 #endif /* __cplusplus */
 
+#ifdef __cplusplus
+# define CEPH_DEFAULT_ARG(v) =v
+#else
+# define CEPH_DEFAULT_ARG(v)
+#endif
+
 struct stat_precise {
   ino_t st_ino;
   dev_t st_dev;
@@ -44,7 +50,7 @@ struct stat_precise {
   time_t st_ctime_micro;
 };
 
-/* Import these definitions into the land of C */
+/* Make these definitions available to C code */
 
 #ifdef __cplusplus
 #include "Client.h"
@@ -92,6 +98,17 @@ const char *ceph_version(int *major, int *minor, int *patch);
 
 int ceph_initialize(int argc, const char **argv);
 void ceph_deinitialize();
+
+/* Sets a configuration value from a string.
+ * Returns 0 on success, error code otherwise. */
+int ceph_conf_set(const char *option, const char *value);
+
+/* Returns a configuration value as a string.
+ * If len is positive, that is the maximum number of bytes we'll write into the
+ * buffer. If len == -1, we'll call malloc() and set *buf.
+ * Returns 0 on success, error code otherwise. Returns ENAMETOOLONG if the
+ * buffer is too short. */
+int ceph_conf_get(const char *option, char *buf, size_t len);
 
 int ceph_mount();
 int ceph_umount();
@@ -242,6 +259,8 @@ int ceph_ll_write_block(vinodeno_t vino, uint64_t blockid,
 			char* buf, uint64_t offset,
 			uint64_t length, struct ceph_file_layout* layout,
 			uint64_t snapseq);
+int ceph_localize_reads(int val);
+
 #ifdef __cplusplus
 }
 #endif

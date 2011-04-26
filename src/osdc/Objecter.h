@@ -51,10 +51,11 @@ struct ObjectOperation {
 
   ObjectOperation() : flags(0), priority(0) {}
 
-  void add_op(int op) {
+  OSDOp& add_op(int op) {
     int s = ops.size();
     ops.resize(s+1);
     ops[s].op.op = op;
+    return ops[s];
   }
   void add_data(int op, uint64_t off, uint64_t len, bufferlist& bl) {
     int s = ops.size();
@@ -125,20 +126,32 @@ struct ObjectOperation {
     flags |= CEPH_OSD_FLAG_PGOP;
   }
 
+  void create(bool excl) {
+    OSDOp& o = add_op(CEPH_OSD_OP_CREATE);
+    o.op.flags = (excl ? CEPH_OSD_OP_FLAG_EXCL : 0);
+  }
+
   // object data
   void read(uint64_t off, uint64_t len) {
     bufferlist bl;
     add_data(CEPH_OSD_OP_READ, off, len, bl);
   }
-  void write(uint64_t off, uint64_t len, bufferlist& bl) {
-    add_data(CEPH_OSD_OP_WRITE, off, len, bl);
+  void write(uint64_t off, bufferlist& bl) {
+    add_data(CEPH_OSD_OP_WRITE, off, bl.length(), bl);
   }
   void write_full(bufferlist& bl) {
     add_data(CEPH_OSD_OP_WRITEFULL, 0, bl.length(), bl);
   }
+  void append(bufferlist& bl) {
+    add_data(CEPH_OSD_OP_APPEND, 0, bl.length(), bl);
+  }
   void zero(uint64_t off, uint64_t len) {
     bufferlist bl;
     add_data(CEPH_OSD_OP_ZERO, off, len, bl);
+  }
+  void truncate(uint64_t off) {
+    bufferlist bl;
+    add_data(CEPH_OSD_OP_TRUNCATE, off, 0, bl);
   }
   void remove() {
     bufferlist bl;

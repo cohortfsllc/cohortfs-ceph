@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_CONFIG_H
@@ -20,18 +20,19 @@ extern struct ceph_file_layout g_default_file_layout;
 #include <vector>
 #include <map>
 
-#include "include/assert.h"
-
+#include "common/ConfUtils.h"
+#include "common/entity_name.h"
 #include "common/Mutex.h"
+#include "include/assert.h"
+#include "msg/msg_types.h"
 
 #define OSD_REP_PRIMARY 0
 #define OSD_REP_SPLAY   1
 #define OSD_REP_CHAIN   2
 
+class config_option;
 
-#include "msg/msg_types.h"
-
-struct EntityName;
+extern const char *CEPH_CONF_FILE_DEFAULT;
 
 enum log_to_stderr_t {
   LOG_TO_STDERR_NONE = 0,
@@ -39,31 +40,67 @@ enum log_to_stderr_t {
   LOG_TO_STDERR_ALL = 2,
 };
 
-struct ConfFile;
-
-extern const char *CEPH_CONF_FILE_DEFAULT;
-
 struct md_config_t
 {
+public:
   md_config_t();
   ~md_config_t();
-  int parse_config_files(const std::list<std::string> &conf_files);
+
+  // Parse a config file
+  int parse_config_files(const std::list<std::string> &conf_files,
+			 std::deque<std::string> *parse_errors);
+
+  // Absorb config settings from the environment
   void parse_env();
+
+  // Absorb config settings from argv
   void parse_argv_part2(std::vector<const char*>& args);
   void parse_argv(std::vector<const char*>& args);
-  int get_val(const char *key, char **buf, int len);
+
+  // Set a configuration value.
+  // Metavariables will be expanded.
   int set_val(const char *key, const char *val);
 
-  ConfFile *cf;
+  // Get a configuration value.
+  // No metavariables will be returned (they will have already been expanded)
+  int get_val(const char *key, char **buf, int len) const;
 
-  char *host;
+  // Return a list of all the sections that the current entity is a member of.
+  void get_my_sections(std::vector <std::string> &sections);
+
+  // Return a list of all sections
+  int get_all_sections(std::vector <std::string> &sections);
+
+  // Get a value from the configuration file that we read earlier.
+  // Metavariables will be expanded if emeta is true.
+  int get_val_from_conf_file(const std::vector <std::string> &sections,
+		   const char *key, std::string &out, bool emeta) const;
+
+  // Perform metavariable expansion on all the data members of md_config_t.
+  void expand_all_meta();
+
+  // Expand metavariables in the provided string.
+  // Returns true if any metavariables were found and expanded.
+  bool expand_meta(std::string &val) const;
+
+private:
+  // Private function for setting a default for a config option
+  void set_val_from_default(const config_option *opt);
+
+  int set_val_impl(const char *val, const config_option *opt);
+
+  // The configuration file we read, or NULL if we haven't read one.
+  ConfFile cf;
+
+public:
+  std::string host;
 
   int num_client;
 
   //bool mkfs;
-  
-  const char *monmap;
-  const char *mon_host;
+
+  std::string monmap;
+  std::string mon_host;
   bool daemonize;
 
   //profiling
@@ -75,12 +112,12 @@ struct md_config_t
   bool profiling_logger;
   int profiling_logger_interval;
   bool profiling_logger_calc_variance;
-  const char *profiling_logger_subdir;
-  const char *profiling_logger_dir;
+  std::string profiling_logger_subdir;
+  std::string profiling_logger_dir;
 
-  const char *log_file;
-  const char *log_dir;
-  const char *log_sym_dir;
+  std::string log_file;
+  std::string log_dir;
+  std::string log_sym_dir;
   int log_sym_history;
 
   int log_to_stderr;
@@ -91,11 +128,9 @@ struct md_config_t
   bool clog_to_monitors;
   bool clog_to_syslog;
 
-  const char *pid_file;
+  std::string pid_file;
 
-  const char *chdir;
-
-  int kill_after;
+  std::string chdir;
 
   long long max_open_files;
 
@@ -117,7 +152,6 @@ struct md_config_t
   int debug_objectcacher;
   int debug_client;
   int debug_osd;
-  int debug_ebofs;
   int debug_filestore;
   int debug_journal;
   int debug_bdev;
@@ -130,9 +164,9 @@ struct md_config_t
   int debug_finisher;
 
   // auth
-  char *key;
-  char *keyfile;
-  char *keyring;
+  std::string key;
+  std::string keyfile;
+  std::string keyring;
 
   // buffer
   bool buffer_track_alloc;
@@ -162,7 +196,7 @@ struct md_config_t
   uint64_t ms_inject_socket_failures;
 
   // mon
-  const char *mon_data;
+  std::string mon_data;
   int mon_tick_interval;
   double mon_subscribe_interval;
   int mon_osd_down_out_interval;
@@ -185,10 +219,10 @@ struct md_config_t
   double paxos_observer_timeout;
 
   // auth
-  char *auth_supported;
+  std::string auth_supported;
   double auth_mon_ticket_ttl;
   double auth_service_ticket_ttl;
-  EntityName *name;
+  EntityName name;
 
   double mon_client_hunt_interval;
   double mon_client_ping_interval;
@@ -202,19 +236,19 @@ struct md_config_t
   double   client_mount_timeout;
   double   client_unmount_timeout;
   double   client_tick_interval;
-  const char *client_trace;
+  std::string client_trace;
   long long client_readahead_min;
   long long client_readahead_max_bytes;
   long long client_readahead_max_periods;
-  const char *client_snapdir;
-  const char *client_mountpoint;
+  std::string client_snapdir;
+  std::string client_mountpoint;
 
   // objectcacher
   bool     client_oc;
   int      client_oc_size;
   int      client_oc_max_dirty;
   int      client_oc_target_dirty;
-  long long unsigned   client_oc_max_sync_write;
+  uint64_t client_oc_max_sync_write;
 
   int      client_notify_timeout;
 
@@ -226,13 +260,11 @@ struct md_config_t
 
   // journaler
   bool  journaler_allow_split_entries;
-  bool  journaler_safe;
   int   journaler_write_head_interval;
-  bool  journaler_cache;
   int   journaler_prefetch_periods;
   double journaler_batch_interval;
-  long long unsigned journaler_batch_max;
-  
+  uint64_t journaler_batch_max;
+
   // mds
   uint64_t mds_max_file_size;
   int   mds_cache_size;
@@ -240,7 +272,7 @@ struct md_config_t
   int   mds_mem_max;
   float mds_dir_commit_ratio;
   int   mds_dir_max_commit_size;
-  
+
   float mds_decay_halflife;
 
   float mds_beacon_interval;
@@ -268,8 +300,8 @@ struct md_config_t
   int mds_log_max_segments;
   int mds_log_max_expiring;
   int mds_log_eopen_size;
-  
-  float mds_bal_sample_interval;  
+
+  float mds_bal_sample_interval;
   float mds_bal_replicate_threshold;
   float mds_bal_unreplicate_threshold;
   bool mds_bal_frag;
@@ -321,12 +353,12 @@ struct md_config_t
   int max_mds;
 
   int mds_standby_for_rank;
-  char* mds_standby_for_name;
+  std::string mds_standby_for_name;
   bool mds_standby_replay;
 
   // osd
-  const char *osd_data;
-  const char *osd_journal;
+  std::string osd_data;
+  std::string osd_journal;
   int osd_journal_size;  // in mb
   int osd_max_write_size; // in MB
   bool osd_balance_reads;
@@ -363,8 +395,8 @@ struct md_config_t
 
   float   osd_age;
   int   osd_age_time;
-  int   osd_heartbeat_interval;  
-  int   osd_mon_heartbeat_interval;  
+  int   osd_heartbeat_interval;
+  int   osd_mon_heartbeat_interval;
   int   osd_heartbeat_grace;
   int   osd_mon_report_interval_max;
   int   osd_mon_report_interval_min;
@@ -383,7 +415,7 @@ struct md_config_t
 
   double osd_class_error_timeout;
   double osd_class_timeout;
-  const char *osd_class_tmp;
+  std::string osd_class_tmp;
 
   int osd_max_scrubs;
   float osd_scrub_load_threshold;
@@ -402,7 +434,7 @@ struct md_config_t
   double   filestore_min_sync_interval;
   bool  filestore_fake_attrs;
   bool  filestore_fake_collections;
-  const char  *filestore_dev;
+  std::string filestore_dev;
   bool filestore_btrfs_trans;
   bool filestore_btrfs_snap;
   bool filestore_btrfs_clone_range;
@@ -419,20 +451,7 @@ struct md_config_t
   int filestore_queue_committing_max_bytes;
   int filestore_op_threads;
   float filestore_commit_timeout;
-  
-  // ebofs
-  bool  ebofs;
-  bool  ebofs_cloneable;
-  bool  ebofs_verify;
-  int   ebofs_commit_ms;
-  int   ebofs_oc_size;
-  int   ebofs_cc_size;
-  unsigned long long ebofs_bc_size;
-  unsigned long long ebofs_bc_max_dirty;
-  unsigned ebofs_max_prefetch;
-  bool  ebofs_realloc;
-  bool ebofs_verify_csum_on_read;
-  
+
   // journal
   bool journal_dio;
   bool journal_block_align;
@@ -446,7 +465,7 @@ struct md_config_t
   bool  bdev_lock;
   int   bdev_iothreads;
   int   bdev_idle_kick_after_ms;
-  int   bdev_el_fw_max_ms;  
+  int   bdev_el_fw_max_ms;
   int   bdev_el_bw_max_ms;
   bool  bdev_el_bidir;
   int   bdev_iov_max;
@@ -454,76 +473,33 @@ struct md_config_t
   int   bdev_fake_mb;
   int   bdev_fake_max_mb;
 
-#ifdef USE_OSBDB
-  bool bdbstore;
-  int debug_bdbstore;
-  bool bdbstore_btree;
-  int bdbstore_ffactor;
-  int bdbstore_nelem;
-  int bdbstore_pagesize;
-  int bdbstore_cachesize;
-  bool bdbstore_transactional;
-#endif // USE_OSBDB
 };
 
-extern md_config_t g_conf;     
+extern md_config_t g_conf;
 
 typedef enum {
 	OPT_NONE, OPT_INT, OPT_LONGLONG, OPT_STR, OPT_DOUBLE, OPT_FLOAT, OPT_BOOL,
-	OPT_ADDR, OPT_U32
+	OPT_ADDR, OPT_U32, OPT_U64
 } opt_type_t;
 
-char *conf_post_process_val(const char *val);
-int conf_read_key(const char *alt_section, const char *key, opt_type_t type, void *out, void *def, bool free_old_val = false);
-bool conf_set_conf_val(void *field, opt_type_t type, const char *val);
-bool conf_cmd_equals(const char *cmd, const char *opt, char char_opt, unsigned int *val_pos);
-
-bool ceph_resolve_file_search(string& filename_list, string& result);
-
-#define CONF_NEXT_VAL (val_pos ? &args[i][val_pos] : args[++i])
-
-#define CONF_SET_ARG_VAL(dest, type) \
-	conf_set_conf_val(dest, type, CONF_NEXT_VAL)
-
-#define CONF_VAL args[i]
-
-#define CONF_SAFE_SET_ARG_VAL_USAGE(dest, type, show_usage) \
-	do { \
-          __isarg = i+1 < args.size(); \
-          if (__isarg && !val_pos && \
-              args[i+1][0] == '-' && args[i+1][1] != '\0') \
-              __isarg = false; \
-          if (type == OPT_BOOL) { \
-		if (val_pos) { \
-			CONF_SET_ARG_VAL(dest, type); \
-		} else \
-			conf_set_conf_val(dest, type, "true"); \
-          } else if (__isarg || val_pos) { \
-		CONF_SET_ARG_VAL(dest, type); \
-	  } else if (show_usage && args_usage) \
-		args_usage(); \
-	} while (0)
-
-#define CONF_SAFE_SET_ARG_VAL(dest, type) CONF_SAFE_SET_ARG_VAL_USAGE(dest, type, true)
-
-#define CONF_SET_BOOL_ARG_VAL(dest) \
-	conf_set_conf_val(dest, OPT_BOOL, (val_pos ? &args[i][val_pos] : "true"))
-
-#define CONF_ARG_EQ(str_cmd, char_cmd) \
-	conf_cmd_equals(args[i], str_cmd, char_cmd, &val_pos)
+bool ceph_resolve_file_search(const std::string& filename_list,
+			      std::string& result);
 
 struct config_option {
-  const char *section;
-  const char *conf_name;
   const char *name;
-  void *val_ptr;
+  size_t md_conf_off;
 
   const char *def_str;
   long long def_longlong;
   double def_double;
 
   opt_type_t type;
-  char char_option;  // if any
+
+  // Given a configuration, return a pointer to this option inside
+  // that configuration.
+  void *conf_ptr(md_config_t *conf) const;
+
+  const void *conf_ptr(const md_config_t *conf) const;
 };
 
 #include "common/debug.h"

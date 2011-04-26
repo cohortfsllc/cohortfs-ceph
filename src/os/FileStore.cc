@@ -29,6 +29,7 @@
 #include "common/run_cmd.h"
 #include "common/safe_io.h"
 #include "common/ProfLogger.h"
+#include "common/sync_filesystem.h"
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -363,8 +364,8 @@ done:
   return r;
 }
 
-FileStore::FileStore(const char *base, const char *jdev) :
-  basedir(base), journalpath(jdev ? jdev:""),
+FileStore::FileStore(const std::string &base, const std::string &jdev) :
+  basedir(base), journalpath(jdev),
   fsid(0),
   btrfs(false), btrfs_trans_start_end(false), btrfs_clone_range(false),
   btrfs_snap_create(false),
@@ -605,7 +606,7 @@ int FileStore::wipe_subvol(const char *s)
       continue;
     ostringstream oss;
     oss << old_dir.str().c_str() << "/" << de->d_name;
-    int ret = run_cmd("rm", "-rf", oss.str().c_str(), NULL);
+    int ret = run_cmd("rm", "-rf", oss.str().c_str(), (char*)NULL);
     if (ret) {
       derr << "FileStore::wipe_subvol: failed to remove " << oss.str() << ": "
 	   << "error " << ret << dendl;
@@ -626,9 +627,9 @@ int FileStore::mkfs()
   int basedir_fd;
   struct btrfs_ioctl_vol_args volargs;
 
-  if (g_conf.filestore_dev) {
+  if (!g_conf.filestore_dev.empty()) {
     dout(0) << "mounting" << dendl;
-    ret = run_cmd("mount", g_conf.filestore_dev, NULL);
+    ret = run_cmd("mount", g_conf.filestore_dev.c_str(), (char*)NULL);
     if (ret) {
       derr << "FileStore::mkfs: failed to mount g_conf.filestore_dev "
 	   << "'" << g_conf.filestore_dev << "'. Error code " << ret << dendl;
@@ -640,6 +641,7 @@ int FileStore::mkfs()
 
   snprintf(buf, sizeof(buf), "%s/fsid", basedir.c_str());
   fsid_fd = ::open(buf, O_CREAT|O_WRONLY, 0644);
+
   if (fsid_fd < 0) {
     ret = -errno;
     derr << "FileStore::mkfs: failed to open " << buf << ": "
@@ -755,9 +757,9 @@ int FileStore::mkfs()
   if (ret)
     goto close_basedir_fd;
 
-  if (g_conf.filestore_dev) {
+  if (!g_conf.filestore_dev.empty()) {
     dout(0) << "umounting" << dendl;
-    snprintf(buf, sizeof(buf), "umount %s", g_conf.filestore_dev);
+    snprintf(buf, sizeof(buf), "umount %s", g_conf.filestore_dev.c_str());
     //system(cmd);
   }
 
@@ -851,6 +853,7 @@ bool FileStore::test_mount_in_use()
   return inuse;
 }
 
+
 int FileStore::_detect_fs()
 {
   char buf[80];
@@ -870,16 +873,16 @@ int FileStore::_detect_fs()
     int x = rand();
     int y = x+1;
     snprintf(fn, sizeof(fn), "%s/fsid", basedir.c_str());
-    do_setxattr(fn, "user.test", &x, sizeof(x));
-    do_getxattr(fn, "user.test", &y, sizeof(y));
-    /*dout(10) << "x = " << x << "   y = " << y 
-	     << "  r1 = " << r1 << "  r2 = " << r2
-	     << " " << strerror(errno)
-	     << dendl;*/
-    if (x != y) {
-      dout(0) << "xattrs don't appear to work (" << strerror_r(errno, buf, sizeof(buf))
-	      << ") on " << fn << ", be sure to mount underlying file system with 'user_xattr' option" << dendl;
-      return -errno;
+    int ret = do_setxattr(fn, "user.test", &x, sizeof(x));
+    if (ret >= 0)
+      ret = do_getxattr(fn, "user.test", &y, sizeof(y));
+    if ((ret < 0) || (x != y)) {
+      derr << "Extended attributes don't appear to work. ";
+      if (ret)
+	*_dout << "Got error " + cpp_strerror(ret) + ". ";
+      *_dout << "If you are using ext3 or ext4, be sure to mount the underlying "
+	     << "file system with the 'user_xattr' option." << dendl;
+      return -ENOTSUP;
     }
   }
 
@@ -1115,9 +1118,9 @@ int FileStore::mount()
   char buf[PATH_MAX];
   uint64_t initial_op_seq;
 
-  if (g_conf.filestore_dev) {
+  if (!g_conf.filestore_dev.empty()) {
     dout(0) << "mounting" << dendl;
-    //run_cmd("mount", g_conf.filestore_dev, NULL);
+    //run_cmd("mount", g_conf.filestore_dev, (char*)NULL);
   }
 
   dout(5) << "basedir " << basedir << " journal " << journalpath << dendl;
@@ -1229,7 +1232,7 @@ int FileStore::mount()
       }
 
       if (cp != curr_seq) {
-        dout(0) << "WARNING: user forced start with data sequence mismatch: curr=" << curr_seq << " snap_seq=" << cp << dendl;
+        derr << "WARNING: user forced start with data sequence mismatch: curr=" << curr_seq << " snap_seq=" << cp << dendl;
         cerr << TEXT_YELLOW
 	     << " ** WARNING: forcing the use of stale snapshot data\n" << TEXT_NORMAL;
       }
@@ -1421,9 +1424,9 @@ int FileStore::umount()
     basedir_fd = -1;
   }
 
-  if (g_conf.filestore_dev) {
+  if (!g_conf.filestore_dev.empty()) {
     dout(0) << "umounting" << dendl;
-    //run_cmd("umount", g_conf.filestore_dev, NULL);
+    //run_cmd("umount", g_conf.filestore_dev, (char*)NULL);
   }
 
   {
@@ -1433,6 +1436,22 @@ int FileStore::umount()
 
   // nothing
   return 0;
+}
+
+
+int FileStore::get_max_object_name_length()
+{
+  lock.Lock();
+  int ret = pathconf(basedir.c_str(), _PC_NAME_MAX);
+  if (ret < 0) {
+    int err = errno;
+    lock.Unlock();
+    if (err == 0)
+      return -EDOM;
+    return -err;
+  }
+  lock.Unlock();
+  return ret;
 }
 
 
@@ -1471,7 +1490,8 @@ void FileStore::start_logger(int whoami, utime_t tare)
   char name[80];
   snprintf(name, sizeof(name), "osd.%d.fs.log", whoami);
   logger = new ProfLogger(name, (ProfLogType*)&fs_logtype);
-  journal->logger = logger;
+  if (journal)
+    journal->logger = logger;
   logger_add(logger);  
   logger_tare(tare);
   logger_start();
@@ -1481,7 +1501,8 @@ void FileStore::stop_logger()
 {
   dout(10) << "stop_logger" << dendl;
   if (logger) {
-    journal->logger = NULL;
+    if (journal)
+      journal->logger = NULL;
     logger_remove(logger);
     delete logger;
     logger = NULL;
@@ -2690,7 +2711,7 @@ void FileStore::sync_entry()
 	  ::fsync(op_fd);  
 	} else {
 	  dout(15) << "sync_entry doing a full sync (!)" << dendl;
-	  ::sync();
+	  sync_filesystem(basedir_fd);
 	}
       }
       

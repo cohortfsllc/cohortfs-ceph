@@ -77,7 +77,7 @@ void MDLog::open_logger()
 
   // logger
   char name[80];
-  snprintf(name, sizeof(name), "mds.%s.log", g_conf.name->get_id().c_str());
+  snprintf(name, sizeof(name), "mds.%s.log", g_conf.name.get_id().c_str());
   logger = new ProfLogger(name, &mdlog_logtype);
   logger_add(logger);
 }
@@ -200,7 +200,7 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
   unflushed++;
 
   if (c)
-    journaler->wait_for_flush(0, c);
+    journaler->wait_for_flush(c);
   
   // start a new segment?
   //  FIXME: should this go elsewhere?
@@ -220,7 +220,7 @@ void MDLog::wait_for_safe(Context *c)
 {
   if (g_conf.mds_log) {
     // wait
-    journaler->wait_for_flush(0, c);
+    journaler->wait_for_flush(c);
   } else {
     // hack: bypass.
     c->finish(0);

@@ -177,7 +177,18 @@ int main(int argc, const char **argv)
   }
 
   int size = io_ctx.read(oid, bl2, 128, 0);
-  cout << "read result=" << bl2.c_str() << std::endl;
+  if (size <= 0) {
+    cout << "failed to read oid " << oid << "." << std::endl;
+    exit(1);
+  }
+  if (size > 4096) {
+    cout << "read too many bytes from oid " << oid << "." << std::endl;
+    exit(1);
+  }
+  char rbuf[size + 1];
+  memcpy(rbuf, bl2.c_str(), size);
+  rbuf[size] = '\0';
+  cout << "read result='" << rbuf << "'" << std::endl;
   cout << "size=" << size << std::endl;
 
   const char *oid2 = "jjj10.rbd";
@@ -191,6 +202,13 @@ int main(int argc, const char **argv)
     for (int i=0; i<r; i++, s += strlen(s) + 1)
       cout << s << std::endl;
   }
+
+  cout << "compound operation..." << std::endl;
+  ObjectOperation o;
+  o.write(0, bl);
+  o.setxattr("foo", bl2);
+  r = io_ctx.operate(oid, &o, &bl2);
+  cout << "operate result=" << r << std::endl;
 
   cout << "iterating over objects..." << std::endl;
   int num_objs = 0;

@@ -275,13 +275,13 @@ void MDS::open_logger()
   // open loggers
   char name[80];
   snprintf(name, sizeof(name), "mds.%s.%llu.log",
-	   g_conf.name->get_id().c_str(),
+	   g_conf.name.get_id().c_str(),
            (unsigned long long) monc->get_global_id());
   logger = new ProfLogger(name, (ProfLogType*)&mds_logtype);
   logger_add(logger);
 
   snprintf(name, sizeof(name), "mds.%s.%llu.mem.log",
-	   g_conf.name->get_id().c_str(),
+	   g_conf.name.get_id().c_str(),
            (unsigned long long) monc->get_global_id());
   mlogger = new ProfLogger(name, (ProfLogType*)&mdm_logtype);
   logger_add(mlogger);
@@ -477,7 +477,7 @@ int MDS::init(int wanted_state)
     g_conf.mds_standby_replay = true;
     if ( wanted_state == MDSMap::STATE_ONESHOT_REPLAY &&
         (g_conf.mds_standby_for_rank == -1) &&
-        !g_conf.mds_standby_for_name) {
+        g_conf.mds_standby_for_name.empty()) {
       // uh-oh, must specify one or the other!
       dout(0) << "Specified oneshot replay mode but not an MDS!" << dendl;
       suicide();
@@ -781,9 +781,9 @@ void MDS::handle_command(MMonCommand *m)
 	CInode *in = mdcache->cache_traverse(fp);
 	if (in) {
 	  CDir *dir = in->get_dirfrag(frag_t());
-	  if (dir) {
+	  if (dir && dir->is_auth()) {
 	    mdcache->migrator->export_dir(dir, target);
-	  } else dout(0) << "bad migrate_dir path dirfrag frag_t()" << dendl;
+	  } else dout(0) << "bad migrate_dir path dirfrag frag_t() or dir not auth" << dendl;
 	} else dout(0) << "bad migrate_dir path" << dendl;
       } else dout(0) << "bad migrate_dir target syntax" << dendl;
     } else dout(0) << "bad migrate_dir syntax" << dendl;
@@ -905,10 +905,16 @@ void MDS::handle_mds_map(MMDSMap *m)
   if (oldwhoami != whoami)
     dout_create_rank_symlink(whoami);
   
-  if (oldwhoami != whoami) {
+  if (oldwhoami != whoami || oldstate != state) {
     // update messenger.
-    dout(1) << "handle_mds_map i am now mds" << whoami << "." << incarnation << dendl;
-    messenger->set_myname(entity_name_t::MDS(whoami));
+    if (state == MDSMap::STATE_STANDBY_REPLAY || state == MDSMap::STATE_ONESHOT_REPLAY) {
+      dout(1) << "handle_mds_map i am now mds" << monc->get_global_id() << "." << incarnation
+	      << "replaying mds" << whoami << "." << incarnation << dendl;
+      messenger->set_myname(entity_name_t::MDS(monc->get_global_id()));
+    } else {
+      dout(1) << "handle_mds_map i am now mds" << whoami << "." << incarnation << dendl;
+      messenger->set_myname(entity_name_t::MDS(whoami));
+    }
   }
 
   // tell objecter my incarnation
@@ -1391,10 +1397,6 @@ void MDS::standby_trim_segments()
 void MDS::reopen_log()
 {
   dout(1) << "reopen_log" << dendl;
-
-  // start new segment
-  mdlog->start_new_segment(0);
-
   mdcache->rollback_uncommitted_fragments();
 }
 
@@ -1938,7 +1940,7 @@ bool MDS::_dispatch(Message *m)
     mlogger->inc(l_mdm_capa, g_num_capa);  g_num_capa = 0;
     mlogger->inc(l_mdm_caps, g_num_caps);  g_num_caps = 0;
 
-    mlogger->set(l_mdm_buf, buffer_total_alloc.read());
+    mlogger->set(l_mdm_buf, buffer::get_total_alloc());
 
   }
 

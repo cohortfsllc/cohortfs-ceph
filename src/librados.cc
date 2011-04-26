@@ -134,6 +134,75 @@ struct librados::IoCtxImpl {
   }
 };
 
+
+void librados::ObjectOperation::create(bool exclusive)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  o->create(exclusive);
+}
+
+void librados::ObjectOperation::write(uint64_t off, const bufferlist& bl)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  bufferlist c = bl;
+  o->write(off, c);
+}
+
+void librados::ObjectOperation::write_full(const bufferlist& bl)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  bufferlist c = bl;
+  o->write_full(c);
+}
+
+void librados::ObjectOperation::append(const bufferlist& bl)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  bufferlist c = bl;
+  o->append(c);
+}
+
+void librados::ObjectOperation::remove()
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  o->remove();
+}
+
+void librados::ObjectOperation::truncate(uint64_t off)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  o->truncate(off);
+}
+
+void librados::ObjectOperation::zero(uint64_t off, uint64_t len)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  o->zero(off, len);
+}
+
+void librados::ObjectOperation::rmxattr(const char *name)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  o->rmxattr(name);
+}
+
+void librados::ObjectOperation::setxattr(const char *name, const bufferlist& v)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  o->setxattr(name, v);
+}
+
+void librados::ObjectOperation::tmap_update(const bufferlist& cmdbl)
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  bufferlist c = cmdbl;
+  o->tmap_update(c);
+}
+
+
+
+
+
 librados::WatchCtx::
 ~WatchCtx()
 {
@@ -341,6 +410,9 @@ public:
   int pool_change_auid(rados_ioctx_t io, unsigned long long auid);
 
   int list(Objecter::ListContext *context, int max_entries);
+
+  int operate(IoCtxImpl& io, const object_t& oid, ::ObjectOperation *o, bufferlist *pbl);
+  int aio_operate(IoCtxImpl& io, const object_t& oid, ::ObjectOperation *o, AioCompletionImpl *c, bufferlist *pbl);
 
   struct C_aio_Ack : public Context {
     AioCompletionImpl *c;
@@ -587,7 +659,7 @@ connect()
 
   int err = monclient.authenticate(g_conf.client_mount_timeout);
   if (err) {
-    dout(0) << *g_conf.name << " authentication error " << strerror(-err) << dendl;
+    dout(0) << g_conf.name << " authentication error " << strerror(-err) << dendl;
     shutdown();
     return err;
   }
@@ -1094,7 +1166,7 @@ write(IoCtxImpl& io, const object_t& oid, bufferlist& bl, size_t len, uint64_t o
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1137,7 +1209,7 @@ append(IoCtxImpl& io, const object_t& oid, bufferlist& bl, size_t len)
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1180,7 +1252,7 @@ write_full(IoCtxImpl& io, const object_t& oid, bufferlist& bl)
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
 
   eversion_t ver;
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1201,6 +1273,56 @@ write_full(IoCtxImpl& io, const object_t& oid, bufferlist& bl)
   set_sync_op_version(io, ver);
 
   return r;
+}
+
+int librados::RadosClient::
+operate(IoCtxImpl& io, const object_t& oid, ::ObjectOperation *o, bufferlist *pbl)
+{
+  utime_t ut = g_clock.now();
+
+  /* can't write to a snapshot */
+  if (io.snap_seq != CEPH_NOSNAP)
+    return -EINVAL;
+
+  Mutex mylock("RadosClient::mutate::mylock");
+  Cond cond;
+  bool done;
+  int r;
+  eversion_t ver;
+
+  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock.Lock();
+  objecter->mutate(oid, io.oloc,
+	           *o, io.snapc, ut, 0,
+	           onack, NULL, &ver);
+  lock.Unlock();
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  set_sync_op_version(io, ver);
+
+  return r;
+}
+
+int librados::RadosClient::
+aio_operate(IoCtxImpl& io, const object_t& oid, ::ObjectOperation *o, AioCompletionImpl *c,
+	    bufferlist *pbl)
+{
+  utime_t ut = g_clock.now();
+  Context *onack = new C_aio_Ack(c);
+  Context *oncommit = new C_aio_Safe(c);
+
+  /* can't write to a snapshot */
+  if (io.snap_seq != CEPH_NOSNAP)
+    return -EINVAL;
+
+  objecter->mutate(oid, io.oloc, *o, io.snapc, ut, 0, onack, oncommit, &c->objver);
+
+  return 0;
 }
 
 int librados::RadosClient::
@@ -1337,7 +1459,7 @@ remove(IoCtxImpl& io, const object_t& oid)
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1377,7 +1499,7 @@ trunc(IoCtxImpl& io, const object_t& oid, uint64_t size)
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1421,7 +1543,7 @@ tmap_update(IoCtxImpl& io, const object_t& oid, bufferlist& cmdbl)
 
   lock.Lock();
   ::SnapContext snapc;
-  ObjectOperation wr;
+  ::ObjectOperation wr;
   if (io.assert_ver) {
     wr.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1456,7 +1578,7 @@ exec(IoCtxImpl& io, const object_t& oid, const char *cls, const char *method,
 
 
   lock.Lock();
-  ObjectOperation rd;
+  ::ObjectOperation rd;
   if (io.assert_ver) {
     rd.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1486,7 +1608,7 @@ RadosClient::read(IoCtxImpl& io, const object_t& oid,
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1598,7 +1720,7 @@ stat(IoCtxImpl& io, const object_t& oid, uint64_t *psize, time_t *pmtime)
   if (!psize)
     psize = &size;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1635,7 +1757,7 @@ getxattr(IoCtxImpl& io, const object_t& oid, const char *name, bufferlist& bl)
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1678,7 +1800,7 @@ rmxattr(IoCtxImpl& io, const object_t& oid, const char *name)
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1720,7 +1842,7 @@ setxattr(IoCtxImpl& io, const object_t& oid, const char *name, bufferlist& bl)
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1756,7 +1878,7 @@ getxattrs(IoCtxImpl& io, const object_t& oid, map<std::string, bufferlist>& attr
   int r;
   eversion_t ver;
 
-  ObjectOperation op, *pop = NULL;
+  ::ObjectOperation op, *pop = NULL;
   if (io.assert_ver) {
     op.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1810,7 +1932,7 @@ watch(IoCtxImpl& io, const object_t& oid, uint64_t ver,
 {
   utime_t ut = g_clock.now();
 
-  ObjectOperation rd;
+  ::ObjectOperation rd;
   Mutex mylock("RadosClient::watch::mylock");
   Cond cond;
   bool done;
@@ -1859,7 +1981,7 @@ _notify_ack(IoCtxImpl& io, const object_t& oid, uint64_t notify_id, uint64_t ver
   Cond cond;
   eversion_t objver;
 
-  ObjectOperation rd;
+  ::ObjectOperation rd;
   if (io.assert_ver) {
     rd.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1886,7 +2008,7 @@ unwatch(IoCtxImpl& io, const object_t& oid, uint64_t cookie)
 
   unregister_watcher(cookie);
 
-  ObjectOperation rd;
+  ::ObjectOperation rd;
   if (io.assert_ver) {
     rd.assert_version(io.assert_ver);
     io.assert_ver = 0;
@@ -1920,7 +2042,7 @@ notify(IoCtxImpl& io, const object_t& oid, uint64_t ver)
   eversion_t objver;
   uint64_t cookie;
   C_NotifyComplete *ctx = new C_NotifyComplete(&mylock_all, &cond_all, &done_all);
-  ObjectOperation rd;
+  ::ObjectOperation rd;
 
   if (io.assert_ver) {
     rd.assert_version(io.assert_ver);
@@ -2255,6 +2377,19 @@ tmap_update(const std::string& oid, bufferlist& cmdbl)
   object_t obj(oid);
   return io_ctx_impl->client->tmap_update(*io_ctx_impl, obj, cmdbl);
 }
+
+int librados::IoCtx::operate(const std::string& oid, librados::ObjectOperation *o, bufferlist *pbl)
+{
+  object_t obj(oid);
+  return io_ctx_impl->client->operate(*io_ctx_impl, obj, (::ObjectOperation*)o->impl, pbl);
+}
+
+int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c, librados::ObjectOperation *o, bufferlist *pbl)
+{
+  object_t obj(oid);
+  return io_ctx_impl->client->aio_operate(*io_ctx_impl, obj, (::ObjectOperation*)o->impl, c->pc, pbl);
+}
+
 
 void librados::IoCtx::
 snap_set_read(snap_t seq)
@@ -2627,6 +2762,19 @@ aio_create_completion(void *cb_arg, callback_t cb_complete, callback_t cb_safe)
   return new AioCompletion(c);
 }
 
+
+librados::ObjectOperation::ObjectOperation()
+{
+  impl = (ObjectOperationImpl *)new ::ObjectOperation;
+}
+
+librados::ObjectOperation::~ObjectOperation()
+{
+  ::ObjectOperation *o = (::ObjectOperation *)impl;
+  delete o;
+}
+
+
 ///////////////////////////// C API //////////////////////////////
 static Mutex rados_init_mutex("rados_init");
 static int rados_initialized = 0;
@@ -2645,6 +2793,7 @@ extern "C" int rados_create(rados_t *pcluster, const char * const id)
     // configuration
     md_config_t *conf = common_preinit(iparams, CODE_ENVIRONMENT_LIBRARY, 0);
     conf->parse_env(); // environment variables override
+    conf->expand_all_meta(); // future proofing
 
     ++rados_initialized;
   }
@@ -2679,6 +2828,7 @@ extern "C" int rados_connect(rados_t cluster)
   if (ret)
     return ret;
   librados::RadosClient *radosp = (librados::RadosClient *)cluster;
+
   return radosp->connect();
 }
 
@@ -2708,10 +2858,15 @@ extern "C" int rados_conf_read_file(rados_t cluster, const char *path)
 
   std::list<std::string> conf_files;
   get_str_list(path, conf_files);
-  int ret = g_conf.parse_config_files(conf_files);
+  std::deque<std::string> parse_errors;
+  int ret = g_conf.parse_config_files(conf_files, &parse_errors);
   if (ret)
     return ret;
   g_conf.parse_env(); // environment variables override
+  g_conf.expand_all_meta(); // handle metavariables in the config
+
+  complain_about_parse_errors(&parse_errors);
+
   return 0;
 }
 

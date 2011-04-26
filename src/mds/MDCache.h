@@ -51,6 +51,8 @@ class MDirUpdate;
 class MDentryLink;
 class MDentryUnlink;
 class MLock;
+class MMDSFindIno;
+class MMDSFindInoReply;
 
 class Message;
 class MClientRequest;
@@ -409,7 +411,9 @@ struct MDSlaveUpdate {
     list.push_back(&item);
   }
   ~MDSlaveUpdate() {
-    if (waiter) waiter->finish(0);
+    item.remove_myself();
+    if (waiter)
+      waiter->finish(0);
     delete waiter;
   }
 };
@@ -546,7 +550,7 @@ public:
   }
   void map_dirfrag_set(list<dirfrag_t>& dfs, set<CDir*>& result);
   void try_subtree_merge(CDir *root);
-  void try_subtree_merge_at(CDir *root);
+  void try_subtree_merge_at(CDir *root, bool do_eval=true);
   void subtree_merge_writebehind_finish(CInode *in, Mutation *mut);
   void eval_subtree_root(CInode *diri);
   CDir *get_subtree_root(CDir *dir);
@@ -561,7 +565,8 @@ public:
   void verify_subtree_bounds(CDir *root, const set<CDir*>& bounds);
   void verify_subtree_bounds(CDir *root, const list<dirfrag_t>& bounds);
 
-  void adjust_subtree_after_rename(CInode *diri, CDir *olddir);
+  void adjust_subtree_after_rename(CInode *diri, CDir *olddir,
+                                   bool imported = false);
 
   void get_auth_subtrees(set<CDir*>& s);
   void get_fullauth_subtrees(set<CDir*>& s);
@@ -594,7 +599,8 @@ public:
   void request_finish(MDRequest *mdr);
   void request_forward(MDRequest *mdr, int mds, int port=0);
   void dispatch_request(MDRequest *mdr);
-  void request_forget_foreign_locks(MDRequest *mdr);
+  void request_drop_foreign_locks(MDRequest *mdr);
+  void request_drop_non_rdlocks(MDRequest *r);
   void request_drop_locks(MDRequest *r);
   void request_cleanup(MDRequest *r);
   
@@ -689,10 +695,14 @@ public:
   }
 
   // ambiguous imports
-  void add_ambiguous_import(dirfrag_t base, vector<dirfrag_t>& bounds);
+  void add_ambiguous_import(dirfrag_t base, const vector<dirfrag_t>& bounds);
   void add_ambiguous_import(CDir *base, const set<CDir*>& bounds);
   bool have_ambiguous_import(dirfrag_t base) {
     return my_ambiguous_imports.count(base);
+  }
+  void get_ambiguous_import_bounds(dirfrag_t base, vector<dirfrag_t>& bounds) {
+    assert(my_ambiguous_imports.count(base));
+    bounds = my_ambiguous_imports[base];
   }
   void cancel_ambiguous_import(dirfrag_t dirino);
   void finish_ambiguous_import(dirfrag_t dirino);
@@ -857,6 +867,7 @@ public:
   void send_expire_messages(map<int, MCacheExpire*>& expiremap);
   void trim_non_auth();      // trim out trimmable non-auth items
   bool trim_non_auth_subtree(CDir *directory);
+  void try_trim_non_auth_subtree(CDir *dir);
 
   void trim_client_leases();
   void check_memory_usage();
@@ -978,13 +989,13 @@ public:
   void populate_mydir();
 
   void _create_system_file(CDir *dir, const char *name, CInode *in, Context *fin);
-  void _create_system_file_finish(Mutation *mut, CDentry *dn, Context *fin);
+  void _create_system_file_finish(Mutation *mut, CDentry *dn, version_t dpv, Context *fin);
 
   void open_foreign_mdsdir(inodeno_t ino, Context *c);
   CDentry *get_or_create_stray_dentry(CInode *in);
 
-  Context *_get_waiter(MDRequest *mdr, Message *req);
-  int path_traverse(MDRequest *mdr, Message *req, const filepath& path,
+  Context *_get_waiter(MDRequest *mdr, Message *req, Context *fin);
+  int path_traverse(MDRequest *mdr, Message *req, Context *c, const filepath& path,
 		    vector<CDentry*> *pdnvec, CInode **pin, int onfail);
   bool path_is_mine(filepath& path);
   bool path_is_mine(string& p) {
@@ -1011,6 +1022,36 @@ public:
 
   void make_trace(vector<CDentry*>& trace, CInode *in);
   
+  // -- find_ino_peer --
+  struct find_ino_peer_info_t {
+    inodeno_t ino;
+    tid_t tid;
+    Context *fin;
+    int hint;
+    int checking;
+    set<int> checked;
+
+    find_ino_peer_info_t() : tid(0), fin(NULL), hint(-1), checking(-1) {}
+  };
+
+  map<tid_t, find_ino_peer_info_t> find_ino_peer;
+  tid_t find_ino_peer_last_tid;
+
+  void find_ino_peers(inodeno_t ino, Context *c, int hint=-1);
+  void _do_find_ino_peer(find_ino_peer_info_t& fip);
+  void handle_find_ino(MMDSFindIno *m);
+  void handle_find_ino_reply(MMDSFindInoReply *m);
+  void kick_find_ino_peers(int who);
+
+  // -- find_ino_dir --
+  struct find_ino_dir_info_t {
+    inodeno_t ino;
+    Context *fin;
+  };
+
+  void find_ino_dir(inodeno_t ino, Context *c);
+  void _find_ino_dir(inodeno_t ino, Context *c, bufferlist& bl, int r);
+
   // -- anchors --
 public:
   void anchor_create_prep_locks(MDRequest *mdr, CInode *in, set<SimpleLock*>& rdlocks,

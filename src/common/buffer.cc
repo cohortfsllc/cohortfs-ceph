@@ -20,6 +20,7 @@
 #include "common/config.h"
 #include "include/Spinlock.h"
 #include "include/types.h"
+#include "include/atomic.h"
 
 #include <errno.h>
 #include <fstream>
@@ -32,6 +33,315 @@ namespace ceph {
 Spinlock buffer_lock("buffer_lock");
 atomic_t buffer_total_alloc;
 bool buffer_track_alloc = true;
+
+  void buffer::inc_total_alloc(unsigned len) {
+    if (buffer_track_alloc)
+      buffer_total_alloc.add(len);
+  }
+  void buffer::dec_total_alloc(unsigned len) {
+    if (buffer_track_alloc)
+      buffer_total_alloc.sub(len);
+  }
+  int buffer::get_total_alloc() {
+    return buffer_total_alloc.read();
+  }
+
+  class buffer::raw {
+  public:
+    char *data;
+    unsigned len;
+    atomic_t nref;
+
+    raw(unsigned l) : len(l), nref(0)
+    { }
+    raw(char *c, unsigned l) : data(c), len(l), nref(0)
+    { }
+    virtual ~raw() {};
+
+    // no copying.
+    raw(const raw &other);
+    const raw& operator=(const raw &other);
+
+    virtual raw* clone_empty() = 0;
+    raw *clone() {
+      raw *c = clone_empty();
+      memcpy(c->data, data, len);
+      return c;
+    }
+
+    bool is_page_aligned() {
+      return ((long)data & ~PAGE_MASK) == 0;
+    }
+    bool is_n_page_sized() {
+      return (len & ~PAGE_MASK) == 0;
+    }
+  };
+
+  class buffer::raw_malloc : public buffer::raw {
+  public:
+    raw_malloc(unsigned l) : raw(l) {
+      if (len)
+	data = (char *)malloc(len);
+      else
+	data = 0;
+      inc_total_alloc(len);
+      bdout << "raw_malloc " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
+    }
+    raw_malloc(unsigned l, char *b) : raw(b, l) {
+      inc_total_alloc(len);
+      bdout << "raw_malloc " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
+    }
+    ~raw_malloc() {
+      free(data);
+      dec_total_alloc(len);
+      bdout << "raw_malloc " << this << " free " << (void *)data << " " << buffer::get_total_alloc() << bendl;
+    }
+    raw* clone_empty() {
+      return new raw_malloc(len);
+    }
+  };
+
+#ifndef __CYGWIN__
+  class buffer::raw_mmap_pages : public buffer::raw {
+  public:
+    raw_mmap_pages(unsigned l) : raw(l) {
+      data = (char*)::mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
+      if (!data)
+	throw bad_alloc();
+      inc_total_alloc(len);
+      bdout << "raw_mmap " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
+    }
+    ~raw_mmap_pages() {
+      ::munmap(data, len);
+      dec_total_alloc(len);
+      bdout << "raw_mmap " << this << " free " << (void *)data << " " << buffer::get_total_alloc() << bendl;
+    }
+    raw* clone_empty() {
+      return new raw_mmap_pages(len);
+    }
+  };
+
+  class buffer::raw_posix_aligned : public buffer::raw {
+  public:
+    raw_posix_aligned(unsigned l) : raw(l) {
+#ifdef DARWIN
+      data = (char *) valloc (len);
+#else
+      data = 0;
+      int r = ::posix_memalign((void**)(void*)&data, PAGE_SIZE, len);
+      if (r)
+	throw bad_alloc();
+#endif /* DARWIN */
+      if (!data)
+	throw bad_alloc();
+      inc_total_alloc(len);
+      bdout << "raw_posix_aligned " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
+    }
+    ~raw_posix_aligned() {
+      ::free((void*)data);
+      dec_total_alloc(len);
+      bdout << "raw_posix_aligned " << this << " free " << (void *)data << " " << buffer::get_total_alloc() << bendl;
+    }
+    raw* clone_empty() {
+      return new raw_posix_aligned(len);
+    }
+  };
+#endif
+
+#ifdef __CYGWIN__
+  class buffer::raw_hack_aligned : public buffer::raw {
+    char *realdata;
+  public:
+    raw_hack_aligned(unsigned l) : raw(l) {
+      realdata = new char[len+PAGE_SIZE-1];
+      unsigned off = ((unsigned)realdata) & ~PAGE_MASK;
+      if (off)
+	data = realdata + PAGE_SIZE - off;
+      else
+	data = realdata;
+      inc_total_alloc(len+PAGE_SIZE-1);
+      //cout << "hack aligned " << (unsigned)data
+      //<< " in raw " << (unsigned)realdata
+      //<< " off " << off << std::endl;
+      assert(((unsigned)data & (PAGE_SIZE-1)) == 0);
+    }
+    ~raw_hack_aligned() {
+      delete[] realdata;
+      dec_total_alloc(len+PAGE_SIZE-1);
+    }
+    raw* clone_empty() {
+      return new raw_hack_aligned(len);
+    }
+  };
+#endif
+
+  /*
+   * primitive buffer types
+   */
+  class buffer::raw_char : public buffer::raw {
+  public:
+    raw_char(unsigned l) : raw(l) {
+      if (len)
+	data = new char[len];
+      else
+	data = 0;
+      inc_total_alloc(len);
+      bdout << "raw_char " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
+    }
+    raw_char(unsigned l, char *b) : raw(b, l) {
+      inc_total_alloc(len);
+      bdout << "raw_char " << this << " alloc " << (void *)data << " " << l << " " << buffer::get_total_alloc() << bendl;
+    }
+    ~raw_char() {
+      delete[] data;
+      dec_total_alloc(len);
+      bdout << "raw_char " << this << " free " << (void *)data << " " << buffer::get_total_alloc() << bendl;
+    }
+    raw* clone_empty() {
+      return new raw_char(len);
+    }
+  };
+
+  class buffer::raw_static : public buffer::raw {
+  public:
+    raw_static(const char *d, unsigned l) : raw((char*)d, l) { }
+    ~raw_static() {}
+    raw* clone_empty() {
+      return new buffer::raw_char(len);
+    }
+  };
+
+  buffer::raw* buffer::copy(const char *c, unsigned len) {
+    raw* r = new raw_char(len);
+    memcpy(r->data, c, len);
+    return r;
+  }
+  buffer::raw* buffer::create(unsigned len) {
+    return new raw_char(len);
+  }
+  buffer::raw* buffer::claim_char(unsigned len, char *buf) {
+    return new raw_char(len, buf);
+  }
+  buffer::raw* buffer::create_malloc(unsigned len) {
+    return new raw_malloc(len);
+  }
+  buffer::raw* buffer::claim_malloc(unsigned len, char *buf) {
+    return new raw_malloc(len, buf);
+  }
+  buffer::raw* buffer::create_static(unsigned len, char *buf) {
+    return new raw_static(buf, len);
+  }
+  buffer::raw* buffer::create_page_aligned(unsigned len) {
+#ifndef __CYGWIN__
+    //return new raw_mmap_pages(len);
+    return new raw_posix_aligned(len);
+#else
+    return new raw_hack_aligned(len);
+#endif
+  }
+
+  buffer::ptr::ptr(raw *r) : _raw(r), _off(0), _len(r->len) {   // no lock needed; this is an unref raw.
+    r->nref.inc();
+    bdout << "ptr " << this << " get " << _raw << bendl;
+  }
+  buffer::ptr::ptr(unsigned l) : _off(0), _len(l) {
+    _raw = create(l);
+    _raw->nref.inc();
+    bdout << "ptr " << this << " get " << _raw << bendl;
+  }
+  buffer::ptr::ptr(const char *d, unsigned l) : _off(0), _len(l) {    // ditto.
+    _raw = copy(d, l);
+    _raw->nref.inc();
+    bdout << "ptr " << this << " get " << _raw << bendl;
+  }
+  buffer::ptr::ptr(const ptr& p) : _raw(p._raw), _off(p._off), _len(p._len) {
+    if (_raw) {
+      _raw->nref.inc();
+      bdout << "ptr " << this << " get " << _raw << bendl;
+    }
+  }
+  buffer::ptr::ptr(const ptr& p, unsigned o, unsigned l) : _raw(p._raw), _off(p._off + o), _len(l) {
+    assert(o+l <= p._len);
+    assert(_raw);
+    _raw->nref.inc();
+    bdout << "ptr " << this << " get " << _raw << bendl;
+  }
+  buffer::ptr& buffer::ptr::operator= (const ptr& p) {
+    // be careful -- we need to properly handle self-assignment.
+    if (p._raw) {
+      p._raw->nref.inc();                      // inc new
+      bdout << "ptr " << this << " get " << _raw << bendl;
+    }
+    release();                                 // dec (+ dealloc) old (if any)
+    if (p._raw) {
+      _raw = p._raw;
+      _off = p._off;
+      _len = p._len;
+    } else {
+      _off = _len = 0;
+    }
+    return *this;
+  }
+
+  buffer::raw *buffer::ptr::clone() {
+    return _raw->clone();
+  }
+
+  void buffer::ptr::clone_in_place() {
+    raw *newraw = _raw->clone();
+    release();
+    newraw->nref.inc();
+    _raw = newraw;
+  }
+  bool buffer::ptr::do_cow() {
+    if (_raw->nref.read() > 1) {
+      //std::cout << "doing cow on " << _raw << " len " << _len << std::endl;
+      clone_in_place();
+      return true;
+    } else
+      return false;
+  }
+
+  void buffer::ptr::release() {
+    if (_raw) {
+      bdout << "ptr " << this << " release " << _raw << bendl;
+      if (_raw->nref.dec() == 0) {
+	//cout << "hosing raw " << (void*)_raw << " len " << _raw->len << std::endl;
+	delete _raw;  // dealloc old (if any)
+      }
+      _raw = 0;
+    }
+  }
+
+  bool buffer::ptr::at_buffer_tail() const { return _off + _len == _raw->len; }
+
+  const char *buffer::ptr::c_str() const { assert(_raw); return _raw->data + _off; }
+  char *buffer::ptr::c_str() { assert(_raw); return _raw->data + _off; }
+  unsigned buffer::ptr::unused_tail_length() const {
+    if (_raw)
+      return _raw->len - (_off+_len);
+    else
+      return 0;
+  }
+  const char& buffer::ptr::operator[](unsigned n) const {
+    assert(_raw);
+    assert(n < _len);
+    return _raw->data[_off + n];
+  }
+  char& buffer::ptr::operator[](unsigned n) {
+    assert(_raw);
+    assert(n < _len);
+    return _raw->data[_off + n];
+  }
+
+  const char *buffer::ptr::raw_c_str() const { assert(_raw); return _raw->data; }
+  unsigned buffer::ptr::raw_length() const { assert(_raw); return _raw->len; }
+  int buffer::ptr::raw_nref() const { assert(_raw); return _raw->nref.read(); }
+
+  unsigned buffer::ptr::wasted() {
+    assert(_raw);
+    return _raw->len - _len;
+  }
 
 void buffer::list::encode_base64(buffer::list& o)
 {
@@ -242,5 +552,10 @@ void buffer::list::hexdump(std::ostream &out) const
   }
   out.unsetf(std::ios::right);
 }
+
+std::ostream& operator<<(std::ostream& out, const buffer::raw &r) {
+  return out << "buffer::raw(" << (void*)r.data << " len " << r.len << " nref " << r.nref.read() << ")";
+}
+
 
 }

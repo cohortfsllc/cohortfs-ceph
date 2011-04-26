@@ -30,10 +30,12 @@ void usage()
   cerr << "  user info                  get user info\n";
   cerr << "  user rm                    remove user\n";
   cerr << "  buckets list               list buckets\n";
+  cerr << "  bucket unlink              unlink bucket from specified user\n";
   cerr << "  policy                     read bucket/object policy\n";
   cerr << "  log show                   dump a log from specific bucket, date\n";
   cerr << "options:\n";
-  cerr << "   --uid=<id>                S3 uid\n";
+  cerr << "   --uid=<id>                user id\n";
+  cerr << "   --access-key=<id>         S3 access key\n";
   cerr << "   --os-user=<group:name>    OpenStack user\n";
   cerr << "   --email=<email>\n";
   cerr << "   --auth_uid=<auid>         librados uid\n";
@@ -54,6 +56,7 @@ enum {
   OPT_USER_MODIFY,
   OPT_USER_RM,
   OPT_BUCKETS_LIST,
+  OPT_BUCKET_UNLINK,
   OPT_POLICY,
   OPT_LOG_SHOW,
 };
@@ -63,6 +66,7 @@ static int get_cmd(const char *cmd, const char *prev_cmd, bool *need_more)
   *need_more = false;
   if (strcmp(cmd, "user") == 0 ||
       strcmp(cmd, "buckets") == 0 ||
+      strcmp(cmd, "bucket") == 0 ||
       strcmp(cmd, "log") == 0) {
     *need_more = true;
     return 0;
@@ -86,6 +90,9 @@ static int get_cmd(const char *cmd, const char *prev_cmd, bool *need_more)
   } else if (strcmp(prev_cmd, "buckets") == 0) {
     if (strcmp(cmd, "list") == 0)
       return OPT_BUCKETS_LIST;
+  } else if (strcmp(prev_cmd, "bucket") == 0) {
+    if (strcmp(cmd, "unlink") == 0)
+      return OPT_BUCKET_UNLINK;
   } else if (strcmp(prev_cmd, "log") == 0) {
     if (strcmp(cmd, "show") == 0)
       return OPT_LOG_SHOW;
@@ -172,6 +179,7 @@ int main(int argc, char **argv)
   keyring_init(&g_conf);
 
   const char *user_id = 0;
+  const char *access_key = 0;
   const char *secret_key = 0;
   const char *user_email = 0;
   const char *display_name = 0;
@@ -188,46 +196,48 @@ int main(int argc, char **argv)
   bool need_more;
 
   FOR_EACH_ARG(args) {
-    if (CONF_ARG_EQ("uid", 'i')) {
-      CONF_SAFE_SET_ARG_VAL(&user_id, OPT_STR);
-    } else if (CONF_ARG_EQ("secret", 's')) {
-      CONF_SAFE_SET_ARG_VAL(&secret_key, OPT_STR);
-    } else if (CONF_ARG_EQ("email", 'e')) {
-      CONF_SAFE_SET_ARG_VAL(&user_email, OPT_STR);
-    } else if (CONF_ARG_EQ("display-name", 'n')) {
-      CONF_SAFE_SET_ARG_VAL(&display_name, OPT_STR);
-    } else if (CONF_ARG_EQ("bucket", 'b')) {
-      CONF_SAFE_SET_ARG_VAL(&bucket, OPT_STR);
-    } else if (CONF_ARG_EQ("object", 'o')) {
-      CONF_SAFE_SET_ARG_VAL(&object, OPT_STR);
-    } else if (CONF_ARG_EQ("auth-uid", 'a')) {
-      CONF_SAFE_SET_ARG_VAL(&auid, OPT_LONGLONG);
-    } else if (CONF_ARG_EQ("os-user", '\0')) {
-      CONF_SAFE_SET_ARG_VAL(&openstack_user, OPT_STR);
-    } else if (CONF_ARG_EQ("os-secret", '\0')) {
-      CONF_SAFE_SET_ARG_VAL(&openstack_key, OPT_STR);
-    } else if (CONF_ARG_EQ("date", '\0')) {
-      CONF_SAFE_SET_ARG_VAL(&date, OPT_STR);
+    if (CEPH_ARGPARSE_EQ("uid", 'i')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&user_id, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("access-key", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&access_key, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("secret", 's')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&secret_key, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("email", 'e')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&user_email, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("display-name", 'n')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&display_name, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("bucket", 'b')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&bucket, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("object", 'o')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&object, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("auth-uid", 'a')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&auid, OPT_LONGLONG);
+    } else if (CEPH_ARGPARSE_EQ("os-user", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&openstack_user, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("os-secret", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&openstack_key, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("date", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&date, OPT_STR);
     } else {
       if (!opt_cmd) {
-        opt_cmd = get_cmd(CONF_VAL, prev_cmd, &need_more);
+        opt_cmd = get_cmd(CEPH_ARGPARSE_VAL, prev_cmd, &need_more);
         if (opt_cmd < 0) {
           cerr << "unrecognized arg " << args[i] << std::endl;
-          ARGS_USAGE();
+          usage();
         }
         if (need_more) {
-          prev_cmd = CONF_VAL;
+          prev_cmd = CEPH_ARGPARSE_VAL;
           continue;
         }
       } else {
         cerr << "unrecognized arg " << args[i] << std::endl;
-        ARGS_USAGE();
+        usage();
       }
     }
   }
 
   if (opt_cmd == OPT_NO_CMD)
-    ARGS_USAGE();
+    usage();
 
   store = RGWAccess::init_storage_provider("rados", &g_conf);
   if (!store) {
@@ -235,40 +245,49 @@ int main(int argc, char **argv)
     return 5; //EIO
   }
 
-  string user_id_str;
-
   if (opt_cmd != OPT_USER_CREATE && opt_cmd != OPT_LOG_SHOW && !user_id) {
     bool found = false;
     string s;
     if (user_email) {
       s = user_email;
-      if (rgw_get_uid_by_email(s, user_id_str, info) >= 0) {
+      if (rgw_get_user_info_by_email(s, info) >= 0) {
 	found = true;
       } else {
 	cerr << "could not find user by specified email" << std::endl;
       }
     }
+    if (!found && access_key) {
+      s = access_key;
+      if (rgw_get_user_info_by_access_key(s, info) >= 0) {
+	found = true;
+      } else {
+	cerr << "could not find user by specified access key" << std::endl;
+      }
+    }
     if (!found && openstack_user) {
       s = openstack_user;
-      if (rgw_get_uid_by_openstack(s, user_id_str, info) >= 0) {
+      if (rgw_get_user_info_by_openstack(s, info) >= 0) {
 	found = true;
       } else
         cerr << "could not find user by specified openstack username" << std::endl;
     }
     if (found)
-      user_id = user_id_str.c_str();
+      user_id = info.user_id.c_str();
   }
 
 
-  if (opt_cmd == OPT_USER_MODIFY || opt_cmd == OPT_USER_INFO) {
+  if (opt_cmd == OPT_USER_CREATE || opt_cmd == OPT_USER_MODIFY ||
+      opt_cmd == OPT_USER_INFO || opt_cmd == OPT_BUCKET_UNLINK) {
     if (!user_id) {
       cerr << "user_id was not specified, aborting" << std::endl;
-      return 0;
+      usage();
     }
 
     string user_id_str = user_id;
 
-    if (info.user_id.empty() && rgw_get_user_info(user_id_str, info) < 0) {
+    if (opt_cmd != OPT_USER_CREATE &&
+        info.user_id.empty() &&
+        rgw_get_user_info_by_uid(user_id_str, info) < 0) {
       cerr << "error reading user info, aborting" << std::endl;
       exit(1);
     }
@@ -292,7 +311,7 @@ int main(int argc, char **argv)
       }
       secret_key = secret_key_buf;
     }
-    if (!user_id) {
+    if (!access_key) {
       RGWUserInfo duplicate_check;
       string duplicate_check_id;
       do {
@@ -301,9 +320,9 @@ int main(int argc, char **argv)
 	  cerr << "aborting" << std::endl;
 	  exit(1);
 	}
-	user_id = public_id_buf;
-	duplicate_check_id = user_id;
-      } while (!rgw_get_user_info(duplicate_check_id, duplicate_check));
+	access_key = public_id_buf;
+	duplicate_check_id = access_key;
+      } while (!rgw_get_user_info_by_access_key(duplicate_check_id, duplicate_check));
     }
   }
 
@@ -314,6 +333,8 @@ int main(int argc, char **argv)
   case OPT_USER_MODIFY:
     if (user_id)
       info.user_id = user_id;
+    if (access_key)
+      info.access_key = access_key;
     if (secret_key)
       info.secret_key = secret_key;
     if (display_name)
@@ -336,6 +357,7 @@ int main(int argc, char **argv)
 
   case OPT_USER_INFO:
     cout << "User ID: " << info.user_id << std::endl;
+    cout << "Access Key: " << info.access_key << std::endl;
     cout << "Secret Key: " << info.secret_key << std::endl;
     cout << "Display Name: " << info.display_name << std::endl;
     cout << "OpenStack User: " << (info.openstack_name.size() ? info.openstack_name : "<undefined>")<< std::endl;
@@ -393,13 +415,25 @@ int main(int argc, char **argv)
     }
   }
 
+  if (opt_cmd == OPT_BUCKET_UNLINK) {
+    if (!bucket) {
+      cerr << "bucket name was not specified" << std::endl;
+      usage();
+    }
+    string bucket_str(bucket);
+    int r = rgw_remove_bucket(user_id, bucket_str);
+    if (r < 0)
+      cerr << "error unlinking bucket " <<  cpp_strerror(-r) << std::endl;
+    return -r;
+  }
+
   if (opt_cmd == OPT_LOG_SHOW) {
     if (!date || !bucket) {
       if (!date)
         cerr << "date was not specified" << std::endl;
       if (!bucket)
         cerr << "bucket was not specified" << std::endl;
-      ARGS_USAGE();
+      usage();
     }
 
     string log_bucket = RGW_LOG_BUCKET_NAME;

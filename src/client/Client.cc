@@ -65,7 +65,7 @@ using namespace std;
 #undef dout_prefix
 #define dout_prefix *_dout << "client" << whoami << " "
 
-#define  tout       if (g_conf.client_trace) traceout
+#define  tout       if (!g_conf.client_trace.empty()) traceout
 
 
 // static logger
@@ -1570,6 +1570,12 @@ void Client::send_reconnect(int mds)
       in->exporting_mds = -1;
       in->exporting_issued = 0;
       in->exporting_mseq = 0;
+      if (!in->is_any_caps()) {
+	dout(10) << "  removing last cap, closing snaprealm" << dendl;
+	put_snap_realm(in->snaprealm);
+	in->snaprealm = 0;
+	in->snaprealm_item.remove_myself();
+      }
     }
   }
   
@@ -2945,7 +2951,7 @@ void Client::handle_cap_grant(Inode *in, int mds, InodeCap *cap, MClientCaps *m)
 // -------------------
 // MOUNT
 
-int Client::mount(const char *mount_root)
+int Client::mount(const std::string &mount_root)
 {
   Mutex::Locker lock(client_lock);
 
@@ -2978,7 +2984,8 @@ int Client::mount(const char *mount_root)
   //  fuse assumes it's always there.
   MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETATTR);
   filepath fp(CEPH_INO_ROOT);
-  if (mount_root) fp = filepath(mount_root);
+  if (!mount_root.empty())
+    fp = filepath(mount_root.c_str());
   req->set_filepath(fp);
   req->head.args.getattr.mask = CEPH_STAT_CAP_INODE_ALL;
   int res = make_request(req, -1, -1);
@@ -2990,8 +2997,8 @@ int Client::mount(const char *mount_root)
   _ll_get(root);
 
   // trace?
-  if (g_conf.client_trace) {
-    traceout.open(g_conf.client_trace);
+  if (!g_conf.client_trace.empty()) {
+    traceout.open(g_conf.client_trace.c_str());
     if (traceout.is_open()) {
       dout(1) << "opened trace file '" << g_conf.client_trace << "'" << dendl;
     } else {
@@ -3034,7 +3041,7 @@ int Client::unmount()
 
   if (cwd)
     put_inode(cwd);
-  cwd = 0;
+  cwd = NULL;
 
   // NOTE: i'm assuming all caches are already flushing (because all files are closed).
 
@@ -3105,7 +3112,7 @@ int Client::unmount()
   }
 
   // stop tracing
-  if (g_conf.client_trace) {
+  if (!g_conf.client_trace.empty()) {
     dout(1) << "closing trace file '" << g_conf.client_trace << "'" << dendl;
     traceout.close();
   }
@@ -4515,6 +4522,41 @@ int Client::open(const char *relpath, int flags, mode_t mode)
  out:
   tout << r << std::endl;
   dout(3) << "open exit(" << path << ", " << flags << ") = " << r << dendl;
+  return r;
+}
+
+int Client::lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "lookup_hash enter(" << ino << ", #" << dirino << "/" << name << ") = " << dendl;
+
+  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPHASH);
+  filepath path(ino);
+  req->set_filepath(path);
+
+  uint32_t h = ceph_str_hash(CEPH_STR_HASH_RJENKINS, name, strlen(name));
+  char f[30];
+  sprintf(f, "%u", h);
+  filepath path2(dirino);
+  path2.push_dentry(string(f));
+  req->set_filepath2(path2);
+
+  int r = make_request(req, -1, -1, NULL, rand() % mdsmap->get_num_mds());
+  dout(3) << "lookup_hash exit(" << ino << ", #" << dirino << "/" << name << ") = " << r << dendl;
+  return r;
+}
+
+int Client::lookup_ino(inodeno_t ino)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "lookup_ino enter(" << ino << ") = " << dendl;
+
+  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPINO);
+  filepath path(ino);
+  req->set_filepath(path);
+
+  int r = make_request(req, -1, -1, NULL, rand() % mdsmap->get_num_mds());
+  dout(3) << "lookup_ino exit(" << ino << ") = " << r << dendl;
   return r;
 }
 
@@ -5970,8 +6012,8 @@ int Client::ll_setxattr(vinodeno_t vino, const char *name, const void *value,
   tout << vino.ino.val << std::endl;
   tout << name << std::endl;
 
-  // only user xattrs, for now
-  if (strncmp(name, "user.", 5))
+  // same xattrs supported by kernel client
+  if (strncmp(name, "user.", 5) && strncmp(name, "security.", 9) && strncmp(name, "trusted.", 8))
     return -EOPNOTSUPP;
 
   Inode *in = _ll_get_inode(vino);

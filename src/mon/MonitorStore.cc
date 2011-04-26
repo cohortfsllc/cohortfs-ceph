@@ -20,6 +20,7 @@
 #include "common/run_cmd.h"
 #include "common/safe_io.h"
 #include "common/config.h"
+#include "common/sync_filesystem.h"
 
 #define DOUT_SUBSYS mon
 #undef dout_prefix
@@ -90,7 +91,7 @@ int MonitorStore::mount()
     return -errno;
   }
 
-  if (g_conf.chdir && g_conf.chdir[0] && dir[0] != '/') {
+  if ((!g_conf.chdir.empty()) && (dir[0] != '/')) {
     // combine it with the cwd, in case fuse screws things up (i.e. fakefuse)
     string old = dir;
     char cwd[PATH_MAX];
@@ -110,14 +111,14 @@ int MonitorStore::umount()
 
 int MonitorStore::mkfs()
 {
-  int ret = run_cmd("rm", "-rf", dir.c_str(), NULL);
+  int ret = run_cmd("rm", "-rf", dir.c_str(), (char*)NULL);
   if (ret) {
     derr << "MonitorStore::mkfs: failed to remove " << dir
 	 << ": rm returned " << ret << dendl;
     return ret;
   }
 
-  ret = run_cmd("mkdir", "-p", dir.c_str(), NULL);
+  ret = run_cmd("mkdir", "-p", dir.c_str(), (char*)NULL);
   if (ret) {
     derr << "MonitorStore::mkfs: failed to mkdir -p " << dir
 	 << ": mkdir returned " << ret << dendl;
@@ -125,14 +126,14 @@ int MonitorStore::mkfs()
   }
 
   dout(0) << "created monfs at " << dir.c_str() << " for "
-	  << g_conf.name->get_id() << dendl;
+	  << g_conf.name.get_id() << dendl;
   return 0;
 }
 
 void MonitorStore::sync()
 {
   dout(10) << "sync" << dendl;
-  ::sync();
+  sync_filesystem(lock_fd);
 }
 
 version_t MonitorStore::get_int(const char *a, const char *b)

@@ -28,65 +28,61 @@ static void dump_status(struct req_state *s, const char *status)
   CGI_PRINTF(s,"Status: %s\n", status);
 }
 
-struct errno_http {
-  int err;
-  const char *http_str;
-  const char *default_code;
+struct rgw_html_errors {
+  int err_no;
+  int http_ret;
+  const char *s3_code;
 };
 
-#define INVALID_BUCKET_NAME 2000
-#define INVALID_OBJECT_NAME 2001
+const static struct rgw_html_errors RGW_HTML_ERRORS[] = {
+    { 0, 200, "" },
+    { 201, 201, "Created" },
+    { 204, 204, "NoContent" },
+    { 206, 206, "" },
+    { EINVAL, 400, "InvalidArgument" },
+    { ERR_INVALID_DIGEST, 500, "InvalidDigest" },
+    { ERR_BAD_DIGEST, 500, "BadDigest" },
+    { ERR_INVALID_BUCKET_NAME, 400, "InvalidBucketName" },
+    { ERR_INVALID_OBJECT_NAME, 400, "InvalidObjectName" },
+    { EACCES, 403, "AccessDenied" },
+    { EPERM, 403, "AccessDenied" },
+    { ENOENT, 404, "NoSuchKey" },
+    { ERR_NO_SUCH_BUCKET, 404, "NoSuchBucket" },
+    { ERR_METHOD_NOT_ALLOWED, 405, "MethodNotAllowed" },
+    { ETIMEDOUT, 408, "RequestTimeout" },
+    { EEXIST, 409, "BucketAlreadyExists" },
+    { ENOTEMPTY, 409, "BucketNotEmpty" },
+    { ERANGE, 416, "InvalidRange" },
+};
 
-const static struct errno_http hterrs[] = {
-    { 0, "200", "" },
-    { 201, "201", "Created" },
-    { 204, "204", "NoContent" },
-    { 206, "206", "" },
-    { EINVAL, "400", "InvalidArgument" },
-    { INVALID_BUCKET_NAME, "400", "InvalidBucketName" },
-    { INVALID_OBJECT_NAME, "400", "InvalidObjectName" },
-    { EACCES, "403", "AccessDenied" },
-    { EPERM, "403", "AccessDenied" },
-    { ENOENT, "404", "NoSuchKey" },
-    { ETIMEDOUT, "408", "RequestTimeout" },
-    { EEXIST, "409", "BucketAlreadyExists" },
-    { ENOTEMPTY, "409", "BucketNotEmpty" },
-    { ERANGE, "416", "InvalidRange" },
-    { 0, NULL, NULL }};
-
-void dump_errno(struct req_state *s, int err, struct rgw_err *rgwerr)
+void set_req_state_err(struct req_state *s, int err_no)
 {
-  int orig_err = err;
-  const char *err_str;
-  const char *code = (rgwerr ? rgwerr->code : NULL);
-
-  if (!rgwerr || !rgwerr->num) {  
-    err_str = "500";
-
-    if (err < 0)
-      err = -err;
-
-    int i=0;
-    while (hterrs[i].http_str) {
-      if (err == hterrs[i].err) {
-        err_str = hterrs[i].http_str;
-        if (!code)
-          code = hterrs[i].default_code;
-        break;
-      }
-
-      i++;
+  if (err_no < 0)
+    err_no = -err_no;
+  for (size_t i = 0; i < sizeof(RGW_HTML_ERRORS)/sizeof(RGW_HTML_ERRORS[0]); ++i) {
+    const struct rgw_html_errors *r = RGW_HTML_ERRORS + i;
+    if (err_no == r->err_no) {
+      s->err.http_ret = r->http_ret;
+      s->err.s3_code = r->s3_code;
+      return;
     }
-  } else {
-    err_str = rgwerr->num;
   }
+  s->err.http_ret = 500;
+  s->err.s3_code = "UnknownError";
+}
 
-  dump_status(s, err_str);
-  if (orig_err < 0) {
-    s->err_exist = true;
-    s->err.code = code;
-    s->err.message = (rgwerr ? rgwerr->message : NULL);
-  }
+void dump_errno(struct req_state *s)
+{
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d", s->err.http_ret);
+  dump_status(s, buf);
+}
+
+void dump_errno(struct req_state *s, int err)
+{
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d", err);
+  dump_status(s, buf);
 }
 
 void dump_content_length(struct req_state *s, size_t len)
@@ -157,7 +153,7 @@ void dump_start(struct req_state *s)
 
 void end_header(struct req_state *s, const char *content_type)
 {
-  if (!content_type) {
+  if (!content_type || s->err.is_err()) {
     switch (s->format) {
     case RGW_FORMAT_XML:
       content_type = "application/xml";
@@ -170,23 +166,25 @@ void end_header(struct req_state *s, const char *content_type)
       break;
     }
   }
-  CGI_PRINTF(s,"Content-type: %s\r\n\r\n", content_type);
-  if (s->err_exist) {
+  if (s->err.is_err()) {
     dump_start(s);
-    struct rgw_err &err = s->err;
     s->formatter->open_obj_section("Error");
-    if (err.code)
-      s->formatter->dump_value_int("Code", "%s", err.code);
-    if (err.message)
-      s->formatter->dump_value_str("Message", err.message);
+    if (!s->err.s3_code.empty())
+      s->formatter->dump_value_int("Code", "%s", s->err.s3_code.c_str());
+    if (!s->err.message.empty())
+      s->formatter->dump_value_str("Message", s->err.message.c_str());
     s->formatter->close_section("Error");
+    dump_content_length(s, s->formatter->get_len());
   }
+  CGI_PRINTF(s,"Content-type: %s\r\n\r\n", content_type);
+  s->formatter->flush();
   s->header_ended = true;
 }
 
-void abort_early(struct req_state *s, int err)
+void abort_early(struct req_state *s, int err_no)
 {
-  dump_errno(s, err);
+  set_req_state_err(s, err_no);
+  dump_errno(s);
   end_header(s);
   s->formatter->flush();
 }
@@ -309,7 +307,6 @@ void init_entities_from_header(struct req_state *s)
   s->object_str = "";
 
   s->status = NULL;
-  s->err_exist = false;
   s->header_ended = false;
   s->bytes_sent = 0;
 
@@ -551,16 +548,16 @@ static int validate_bucket_name(const char *bucket)
       return 0;
     }
     // Name too short
-    return INVALID_BUCKET_NAME;
+    return ERR_INVALID_BUCKET_NAME;
   }
   else if (len > 255) {
     // Name too long
-    return INVALID_BUCKET_NAME;
+    return ERR_INVALID_BUCKET_NAME;
   }
 
   if (!(isalpha(bucket[0]) || isdigit(bucket[0]))) {
     // bucket names must start with a number or letter
-    return INVALID_BUCKET_NAME;
+    return ERR_INVALID_BUCKET_NAME;
   }
 
   for (const char *s = bucket; *s; ++s) {
@@ -572,11 +569,11 @@ static int validate_bucket_name(const char *bucket)
     if ((c == '-') || (c == '_'))
       continue;
     // Invalid character
-    return INVALID_BUCKET_NAME;
+    return ERR_INVALID_BUCKET_NAME;
   }
 
   if (looks_like_ip_address(bucket))
-    return INVALID_BUCKET_NAME;
+    return ERR_INVALID_BUCKET_NAME;
   return 0;
 }
 
@@ -589,12 +586,12 @@ static int validate_object_name(const char *object)
   int len = strlen(object);
   if (len > 1024) {
     // Name too long
-    return INVALID_OBJECT_NAME;
+    return ERR_INVALID_OBJECT_NAME;
   }
 
   if (check_utf8(object, len)) {
     // Object names must be valid UTF-8.
-    return INVALID_OBJECT_NAME;
+    return ERR_INVALID_OBJECT_NAME;
   }
   return 0;
 }
@@ -630,16 +627,12 @@ int RGWHandler_REST::init_rest(struct req_state *s, struct fcgx_state *fcgx)
     s->op = OP_UNKNOWN;
 
   init_entities_from_header(s);
-  if (!s->bucket_str.empty()) {
-    ret = validate_bucket_name(s->bucket_str.c_str());
-    if (ret)
-      return ret;
-  }
-  if (!s->object_str.empty()) {
-    ret = validate_object_name(s->object_str.c_str());
-    if (ret)
-      return ret;
-  }
+  ret = validate_bucket_name(s->bucket_str.c_str());
+  if (ret)
+    return ret;
+  ret = validate_object_name(s->object_str.c_str());
+  if (ret)
+    return ret;
   RGW_LOG(10) << "s->object=" << (s->object ? s->object : "<NULL>") << " s->bucket=" << (s->bucket ? s->bucket : "<NULL>") << endl;
 
   init_auth_info(s);
@@ -670,12 +663,12 @@ int RGWHandler_REST::read_permissions()
     break;
   case OP_PUT:
     /* is it a 'create bucket' request? */
-    if (s->object_str.size() == 0)
-      return 0;
     if (is_acl_op(s)) {
       only_bucket = false;
       break;
     }
+    if (s->object_str.size() == 0)
+      return 0;
   case OP_DELETE:
     only_bucket = true;
     break;

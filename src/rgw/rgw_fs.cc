@@ -233,12 +233,17 @@ int RGWFS::put_obj_data(std::string& id, std::string& bucket, std::string& obj, 
   snprintf(buf, len, "%s/%s/%s", DIR_NAME, bucket.c_str(), obj.c_str());
   int fd;
 
-  fd = open(buf, O_CREAT | O_WRONLY, 0755);
+  int open_flags = O_CREAT | O_WRONLY;
+  if (ofs == -1) {
+    open_flags |= O_TRUNC;
+    ofs = 0;
+  }
+
+  fd = open(buf, open_flags, 0755);
   if (fd < 0)
     return -errno;
 
   int r;
-
   r = lseek(fd, ofs, SEEK_SET);
   if (r < 0)
     goto done_err;
@@ -475,16 +480,16 @@ int RGWFS::prepare_get_obj(std::string& bucket, std::string& obj,
   r = -ECANCELED;
   if (mod_ptr) {
     if (st.st_mtime < *mod_ptr) {
-      err->num = "304";
-      err->code = "NotModified";
+      err->http_ret = 304;
+      err->s3_code = "NotModified";
       goto done_err;
     }
   }
 
   if (unmod_ptr) {
     if (st.st_mtime >= *unmod_ptr) {
-      err->num = "412";
-      err->code = "PreconditionFailed";
+      err->http_ret = 412;
+      err->s3_code = "PreconditionFailed";
       goto done_err;
     }
   }
@@ -497,8 +502,8 @@ int RGWFS::prepare_get_obj(std::string& bucket, std::string& obj,
     if (if_match) {
       RGW_LOG(10) << "ETag: " << etag << " " << " If-Match: " << if_match << endl;
       if (strcmp(if_match, etag)) {
-        err->num = "412";
-        err->code = "PreconditionFailed";
+        err->http_ret = 412;
+        err->s3_code = "PreconditionFailed";
         goto done_err;
       }
     }
@@ -506,8 +511,8 @@ int RGWFS::prepare_get_obj(std::string& bucket, std::string& obj,
     if (if_nomatch) {
       RGW_LOG(10) << "ETag: " << etag << " " << " If_NoMatch: " << if_nomatch << endl;
       if (strcmp(if_nomatch, etag) == 0) {
-        err->num = "412";
-        err->code = "PreconditionFailed";
+        err->http_ret = 412;
+        err->s3_code = "PreconditionFailed";
         goto done_err;
       }
     }

@@ -27,6 +27,7 @@ const char *ceph_osd_op_name(int op)
 
 	case CEPH_OSD_OP_MASKTRUNC: return "masktrunc";
 
+	case CEPH_OSD_OP_CREATE: return "create";
 	case CEPH_OSD_OP_WRITE: return "write";
 	case CEPH_OSD_OP_DELETE: return "delete";
 	case CEPH_OSD_OP_TRUNCATE: return "truncate";
@@ -123,6 +124,7 @@ const char *ceph_mds_op_name(int op)
 	case CEPH_MDS_OP_LOOKUP:  return "lookup";
 	case CEPH_MDS_OP_LOOKUPHASH:  return "lookuphash";
 	case CEPH_MDS_OP_LOOKUPPARENT:  return "lookupparent";
+	case CEPH_MDS_OP_LOOKUPINO:  return "lookupino";
 	case CEPH_MDS_OP_GETATTR:  return "getattr";
 	case CEPH_MDS_OP_SETXATTR: return "setxattr";
 	case CEPH_MDS_OP_SETATTR: return "setattr";

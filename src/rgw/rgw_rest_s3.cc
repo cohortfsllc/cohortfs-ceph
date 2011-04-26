@@ -34,6 +34,9 @@ int RGWGetObj_REST_S3::send_response(void *handle)
   const char *content_type = NULL;
   int orig_ret = ret;
 
+  if (ret)
+    goto done;
+
   if (sent_header)
     goto send_data;
 
@@ -66,13 +69,14 @@ int RGWGetObj_REST_S3::send_response(void *handle)
 
   if (range_str && !ret)
     ret = 206; /* partial content */
+done:
+  if (orig_ret)
+    set_req_state_err(s, ret);
 
-  dump_errno(s, ret, &err);
+  dump_errno(s);
   if (!content_type)
     content_type = "binary/octet-stream";
   end_header(s, content_type);
-  s->formatter->flush();
- 
   sent_header = true;
 
 send_data:
@@ -85,7 +89,9 @@ send_data:
 
 void RGWListBuckets_REST_S3::send_response()
 {
-  dump_errno(s, ret);
+  if (ret)
+    set_req_state_err(s, ret);
+  dump_errno(s);
   dump_start(s);
 
   list_all_buckets_start(s);
@@ -108,7 +114,9 @@ void RGWListBuckets_REST_S3::send_response()
 
 void RGWListBucket_REST_S3::send_response()
 {
-  dump_errno(s, (ret < 0 ? ret : 0));
+  if (ret < 0)
+    set_req_state_err(s, ret);
+  dump_errno(s);
 
   end_header(s, "application/xml");
   dump_start(s);
@@ -154,9 +162,10 @@ void RGWListBucket_REST_S3::send_response()
 
 void RGWCreateBucket_REST_S3::send_response()
 {
-  dump_errno(s, ret);
+  if (ret)
+    set_req_state_err(s, ret);
+  dump_errno(s);
   end_header(s);
-  s->formatter->flush();
 }
 
 void RGWDeleteBucket_REST_S3::send_response()
@@ -165,17 +174,18 @@ void RGWDeleteBucket_REST_S3::send_response()
   if (!r)
     r = 204;
 
-  dump_errno(s, r);
+  set_req_state_err(s, r);
+  dump_errno(s);
   end_header(s);
-  s->formatter->flush();
 }
 
 void RGWPutObj_REST_S3::send_response()
 {
   dump_etag(s, etag.c_str());
-  dump_errno(s, ret, &err);
+  if (ret)
+    set_req_state_err(s, ret);
+  dump_errno(s);
   end_header(s);
-  s->formatter->flush();
 }
 
 void RGWDeleteObj_REST_S3::send_response()
@@ -184,14 +194,16 @@ void RGWDeleteObj_REST_S3::send_response()
   if (!r)
     r = 204;
 
-  dump_errno(s, r);
+  set_req_state_err(s, r);
+  dump_errno(s);
   end_header(s);
-  s->formatter->flush();
 }
 
 void RGWCopyObj_REST_S3::send_response()
 {
-  dump_errno(s, ret, &err);
+  if (ret)
+    set_req_state_err(s, ret);
+  dump_errno(s);
 
   end_header(s, "binary/octet-stream");
   if (ret == 0) {
@@ -206,25 +218,27 @@ void RGWCopyObj_REST_S3::send_response()
       }
     }
     s->formatter->close_section("CopyObjectResult");
+    s->formatter->flush();
   }
-  s->formatter->flush();
 }
 
 void RGWGetACLs_REST_S3::send_response()
 {
-  dump_errno(s, ret);
+  if (ret)
+    set_req_state_err(s, ret);
+  dump_errno(s);
   end_header(s, "application/xml");
   dump_start(s);
-  s->formatter->flush();
   FCGX_PutStr(acls.c_str(), acls.size(), s->fcgx->out); 
 }
 
 void RGWPutACLs_REST_S3::send_response()
 {
-  dump_errno(s, ret);
+  if (ret)
+    set_req_state_err(s, ret);
+  dump_errno(s);
   end_header(s, "application/xml");
   dump_start(s);
-  s->formatter->flush();
 }
 
 RGWOp *RGWHandler_REST_S3::get_retrieve_obj_op(struct req_state *s, bool get_data)
@@ -400,7 +414,7 @@ bool RGWHandler_REST_S3::authorize(struct req_state *s)
   }
 
   /* first get the user info */
-  if (rgw_get_user_info(auth_id, s->user) < 0) {
+  if (rgw_get_user_info_by_access_key(auth_id, s->user) < 0) {
     RGW_LOG(5) << "error reading user info, uid=" << auth_id << " can't authenticate" << endl;
     return false;
   }

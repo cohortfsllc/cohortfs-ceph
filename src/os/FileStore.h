@@ -25,7 +25,6 @@
 #include "common/Mutex.h"
 
 #include "Fake.h"
-//#include "FakeStoreBDBCollections.h"
 
 #include <map>
 #include <deque>
@@ -240,7 +239,7 @@ public:
   void stop_logger();
 
  public:
-  FileStore(const char *base, const char *jdev);
+  FileStore(const std::string &base, const std::string &jdev);
 
   int _detect_fs();
   int _sanity_check_fs();
@@ -250,6 +249,7 @@ public:
   int write_op_seq(int, uint64_t seq);
   int mount();
   int umount();
+  int get_max_object_name_length();
   int wipe_subvol(const char *s);
   int mkfs();
   int mkjournal();

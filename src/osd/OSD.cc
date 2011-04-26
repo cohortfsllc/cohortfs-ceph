@@ -23,13 +23,7 @@
 #include "common/ceph_argparse.h"
 #include "os/FileStore.h"
 
-#ifdef USE_OSBDB
-#include "osbdb/OSBDB.h"
-#endif // USE_OSBDB
-
-
 #include "ReplicatedPG.h"
-//#include "RAID4PG.h"
 
 #include "Ager.h"
 
@@ -81,6 +75,7 @@
 #include "common/Timer.h"
 #include "common/LogClient.h"
 #include "common/safe_io.h"
+#include "include/color.h"
 #include "perfglue/cpu_profiler.h"
 #include "perfglue/heap_profiler.h"
 
@@ -130,14 +125,13 @@ const struct CompatSet::Feature ceph_osd_feature_ro_compat[] = {
 
 
 
-ObjectStore *OSD::create_object_store(const char *dev, const char *jdev)
+ObjectStore *OSD::
+create_object_store(const std::string &dev, const std::string &jdev)
 {
   struct stat st;
-  if (::stat(dev, &st) != 0)
+  if (::stat(dev.c_str(), &st) != 0)
     return 0;
 
-  //if (g_conf.ebofs) 
-  //return new Ebofs(dev, jdev);
   if (g_conf.filestore)
     return new FileStore(dev, jdev);
 
@@ -145,13 +139,29 @@ ObjectStore *OSD::create_object_store(const char *dev, const char *jdev)
     return new FileStore(dev, jdev);
   else
     return 0;
-  //return new Ebofs(dev, jdev);
 }
 
 #undef dout_prefix
 #define dout_prefix *_dout
 
-int OSD::mkfs(const char *dev, const char *jdev, ceph_fsid_t fsid, int whoami)
+/* Complain about flaky object stores.
+ */
+void OSD::validate_max_object_name_length(ObjectStore *store)
+{
+  int len = store->get_max_object_name_length();
+  if (len <= 0) {
+    derr << "store->get_max_object_name_length failed with error " << len << dendl;
+    return;
+  }
+  else if (len < MAX_CEPH_OBJECT_NAME_LEN) {
+    derr << TEXT_RED << " ** ERROR: error: object store can only handle objects "
+         << "whose names are no more than " << len << " bytes.\n"
+	 << "** Please use an object store that can handle object names of at least "
+	 << MAX_CEPH_OBJECT_NAME_LEN << " bytes for safety." << TEXT_NORMAL << dendl;
+  }
+}
+
+int OSD::mkfs(const std::string &dev, const std::string &jdev, ceph_fsid_t fsid, int whoami)
 {
   int ret;
   ObjectStore *store = NULL;
@@ -175,6 +185,8 @@ int OSD::mkfs(const char *dev, const char *jdev, ceph_fsid_t fsid, int whoami)
       derr << "OSD::mkfs: couldn't mount FileStore: error " << ret << dendl;
       goto free_store;
     }
+    validate_max_object_name_length(store);
+
     ret = write_meta(dev, fsid, whoami);
     if (ret) {
       derr << "OSD::mkfs: failed to write fsid file: error " << ret << dendl;
@@ -258,7 +270,7 @@ out:
   return ret;
 }
 
-int OSD::mkjournal(const char *dev, const char *jdev)
+int OSD::mkjournal(const std::string &dev, const std::string &jdev)
 {
   ObjectStore *store = create_object_store(dev, jdev);
   if (!store)
@@ -266,7 +278,7 @@ int OSD::mkjournal(const char *dev, const char *jdev)
   return store->mkjournal();
 }
 
-int OSD::flushjournal(const char *dev, const char *jdev)
+int OSD::flushjournal(const std::string &dev, const std::string &jdev)
 {
   ObjectStore *store = create_object_store(dev, jdev);
   if (!store)
@@ -280,13 +292,14 @@ int OSD::flushjournal(const char *dev, const char *jdev)
   return err;
 }
 
-int OSD::write_meta(const char *base, const char *file, const char *val, size_t vallen)
+int OSD::write_meta(const std::string &base, const std::string &file,
+		    const char *val, size_t vallen)
 {
   int ret;
   char fn[PATH_MAX];
   int fd;
 
-  snprintf(fn, sizeof(fn), "%s/%s", base, file);
+  snprintf(fn, sizeof(fn), "%s/%s", base.c_str(), file.c_str());
   fd = ::open(fn, O_WRONLY|O_CREAT|O_TRUNC, 0644);
   if (fd < 0) {
     ret = errno;
@@ -310,12 +323,13 @@ int OSD::write_meta(const char *base, const char *file, const char *val, size_t 
   return 0;
 }
 
-int OSD::read_meta(const char *base, const char *file, char *val, size_t vallen)
+int OSD::read_meta(const  std::string &base, const std::string &file,
+		   char *val, size_t vallen)
 {
   char fn[PATH_MAX];
   int fd, len;
 
-  snprintf(fn, sizeof(fn), "%s/%s", base, file);
+  snprintf(fn, sizeof(fn), "%s/%s", base.c_str(), file.c_str());
   fd = ::open(fn, O_RDONLY);
   if (fd < 0) {
     int err = errno;
@@ -340,7 +354,7 @@ int OSD::read_meta(const char *base, const char *file, char *val, size_t vallen)
 		(f)->fsid[8], (f)->fsid[9], (f)->fsid[10], (f)->fsid[11],  \
 		(f)->fsid[12], (f)->fsid[13], (f)->fsid[14], (f)->fsid[15]
 
-int OSD::write_meta(const char *base, ceph_fsid_t& fsid, int whoami)
+int OSD::write_meta(const std::string &base, ceph_fsid_t& fsid, int whoami)
 {
   char val[80];
   
@@ -356,7 +370,8 @@ int OSD::write_meta(const char *base, ceph_fsid_t& fsid, int whoami)
   return 0;
 }
 
-int OSD::peek_meta(const char *dev, string& magic, ceph_fsid_t& fsid, int& whoami)
+int OSD::peek_meta(const std::string &dev, std::string& magic,
+		   ceph_fsid_t& fsid, int& whoami)
 {
   char val[80] = { 0 };
 
@@ -401,7 +416,9 @@ int OSD::peek_meta(const char *dev, string& magic, ceph_fsid_t& fsid, int& whoam
 
 // cons/des
 
-OSD::OSD(int id, Messenger *internal_messenger, Messenger *external_messenger, Messenger *hbm, MonClient *mc, const char *dev, const char *jdev) :
+OSD::OSD(int id, Messenger *internal_messenger, Messenger *external_messenger,
+	 Messenger *hbm, MonClient *mc,
+	 const std::string &dev, const std::string &jdev) :
   osd_lock("OSD::osd_lock"),
   timer(osd_lock),
   cluster_messenger(internal_messenger),
@@ -528,7 +545,8 @@ int OSD::init()
   watch = new Watch();
 
   // mount.
-  dout(2) << "mounting " << dev_path << " " << (journal_path ? journal_path : "(no journal)") << dendl;
+  dout(2) << "mounting " << dev_path << " "
+	  << (journal_path.empty() ? "(no journal)" : journal_path) << dendl;
   assert(store);  // call pre_init() first!
 
   int r = store->mount();
@@ -536,6 +554,8 @@ int OSD::init()
     derr << "OSD:init: unable to mount object store" << dendl;
     return r;
   }
+
+  validate_max_object_name_length(store);
 
   dout(2) << "boot" << dendl;
 
@@ -710,7 +730,6 @@ int OSD::shutdown()
   g_conf.debug_osd = 100;
   g_conf.debug_journal = 100;
   g_conf.debug_filestore = 100;
-  g_conf.debug_ebofs = 100;
   g_conf.debug_ms = 100;
   
   derr << "OSD::shutdown" << dendl;
@@ -958,8 +977,6 @@ PG *OSD::_open_lock_pg(pg_t pgid, bool no_lockdep_check)
   sobject_t infooid = make_pg_biginfo_oid(pgid);
   if (osdmap->get_pg_type(pgid) == CEPH_PG_TYPE_REP)
     pg = new ReplicatedPG(this, pool, pgid, logoid, infooid);
-  //else if (pgid.is_raid4())
-  //pg = new RAID4PG(this, pgid);
   else 
     assert(0);
 
@@ -1722,7 +1739,7 @@ void OSD::tick()
   assert(osd_lock.is_locked());
   dout(5) << "tick" << dendl;
 
-  logger->set(l_osd_buf, buffer_total_alloc.read());
+  logger->set(l_osd_buf, buffer::get_total_alloc());
 
   if (got_sigterm) {
     derr << "got SIGTERM, shutting down" << dendl;
@@ -2490,7 +2507,7 @@ void OSD::_dispatch(Message *m)
     }
   }
 
-  logger->set(l_osd_buf, buffer_total_alloc.read());
+  logger->set(l_osd_buf, buffer::get_total_alloc());
 
   switch (m->get_type()) {
 
@@ -2596,7 +2613,7 @@ void OSD::_dispatch(Message *m)
     }
   }
 
-  logger->set(l_osd_buf, buffer_total_alloc.read());
+  logger->set(l_osd_buf, buffer::get_total_alloc());
 
 }
 
@@ -4263,7 +4280,7 @@ void OSD::_process_pg_info(epoch_t epoch, int from,
 	queue_for_recovery(pg);  // in case we found something.
       }
     }
-    else if ((!log.empty()) && missing) {
+    else if (missing) {
       // PG is INACTIVE
       pg->proc_replica_log(*t, info, log, *missing, from);
       
@@ -4885,19 +4902,20 @@ void OSD::activate_pg(pg_t pgid, utime_t activate_at)
 {
   assert(osd_lock.is_locked());
 
-  dout(10) << "activate_pg" << dendl;
   if (pg_map.count(pgid)) {
     PG *pg = _lookup_lock_pg(pgid);
+    dout(10) << "activate_pg " << *pg << dendl;
     if (pg->is_active() &&
 	pg->is_replay() &&
 	pg->get_role() == 0 &&
 	pg->replay_until == activate_at) {
-
       pg->replay_queued_ops();
     }
     pg->unlock();
+  } else {
+    dout(10) << "activate_pg pgid " << pgid << " (not found)" << dendl;
   }
-
+  
   // wake up _all_ pg waiters; raw pg -> actual pg mapping may have shifted
   wake_all_pg_waiters();
 }
@@ -5081,6 +5099,14 @@ void OSD::handle_op(MOSDOp *op)
   if (!require_same_or_newer_map(op, op->get_map_epoch()))
     return;
 
+  // object name too long?
+  if (op->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
+    dout(4) << "handle_op '" << op->get_oid().name << "' is longer than "
+	    << MAX_CEPH_OBJECT_NAME_LEN << " bytes!" << dendl;
+    reply_op_error(op, -ENAMETOOLONG);
+    return;
+  }
+
   // blacklisted?
   if (osdmap->is_blacklisted(op->get_source_addr())) {
     dout(4) << "handle_op " << op->get_source_addr() << " is blacklisted" << dendl;
@@ -5252,6 +5278,7 @@ void OSD::handle_op(MOSDOp *op)
     stat_rd_ops_in_queue++;
   }
 
+  pg->get();
   if (g_conf.osd_op_threads < 1) {
     // do it now.
     if (op->get_type() == CEPH_MSG_OSD_OP)
@@ -5266,8 +5293,8 @@ void OSD::handle_op(MOSDOp *op)
     // queue for worker threads
     enqueue_op(pg, op);         
   }
-  
   pg->unlock();
+  pg->put();
 }
 
 
@@ -5374,8 +5401,6 @@ void OSD::enqueue_op(PG *pg, Message *op)
   pending_ops++;
   logger->set(l_osd_opq, pending_ops);
   
-  // add pg to threadpool queue
-  pg->get();   // we're exposing the pointer, here.
   op_wq.queue(pg);
 }
 

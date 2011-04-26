@@ -7,6 +7,43 @@
 
 using namespace ceph::crypto;
 
+rgw_err::
+rgw_err()
+{
+  clear();
+}
+
+rgw_err::
+rgw_err(int http, const std::string& s3)
+    : http_ret(http), s3_code(s3)
+{
+}
+
+void rgw_err::
+clear()
+{
+  http_ret = 200;
+  s3_code.clear();
+}
+
+bool rgw_err::
+is_clear() const
+{
+  return (http_ret == 200);
+}
+
+bool rgw_err::
+is_err() const
+{
+  return (http_ret != 200 && http_ret != 204);
+}
+
+std::ostream& operator<<(std::ostream& oss, const rgw_err &err)
+{
+  oss << "rgw_err(http_ret=" << err.http_ret << ", s3='" << err.s3_code << "') ";
+  return oss;
+}
+
 /* Loglevel of the gateway */
 int rgw_log_level = 20;
 
@@ -29,10 +66,6 @@ void calc_hmac_sha1(const char *key, int key_len,
                     const char *msg, int msg_len, char *dest)
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 {
-  char key_buf[CEPH_CRYPTO_HMACSHA1_DIGESTSIZE];
-  memset(key_buf, 0, CEPH_CRYPTO_HMACSHA1_DIGESTSIZE);
-  memcpy(key_buf, key, key_len);
-
   HMACSHA1 hmac((const unsigned char *)key, key_len);
   hmac.Update((const unsigned char *)msg, msg_len);
   hmac.Final((unsigned char *)dest);

@@ -219,7 +219,7 @@ public:
   }
   snapid_t get_oldest_snap();
 
-  loff_t last_journaled;       // log offset for the last time i was journaled
+  uint64_t last_journaled;       // log offset for the last time i was journaled
   //loff_t last_open_journaled;  // log offset for the last journaled EOpen
   utime_t last_dirstat_prop;
 
@@ -550,6 +550,8 @@ private:
   void name_stray_dentry(string& dname);
 
 
+  static object_t get_object_name(inodeno_t ino, frag_t fg, const char *suffix);
+
   
   // -- dirtyness --
   version_t get_version() { return inode.version; }
@@ -724,6 +726,8 @@ public:
   void _finish_frag_update(CDir *dir, Mutation *mut);
 
   void clear_dirty_scattered(int type);
+  bool is_dirty_scattered();
+  void clear_scatter_dirty();  // on rejoin ack
 
   void start_scatter(ScatterLock *lock);
   void finish_scatter_update(ScatterLock *lock, CDir *dir,
@@ -820,17 +824,21 @@ public:
     int shift = lock->get_cap_shift();
     int issued = (allissued >> shift) & lock->get_cap_mask();
     if (is_auth()) {
-      if (issued & CEPH_CAP_GEXCL)
-	lock->set_state(LOCK_EXCL);
-      else if (issued & CEPH_CAP_GWR)
-	lock->set_state(LOCK_MIX);
-      else if (lock->is_dirty()) {
-	if (is_replicated())
+      if (lock->is_xlocked()) {
+	// do nothing here
+      } else {
+	if (issued & CEPH_CAP_GEXCL)
+	  lock->set_state(LOCK_EXCL);
+	else if (issued & CEPH_CAP_GWR)
 	  lock->set_state(LOCK_MIX);
-	else
-	  lock->set_state(LOCK_LOCK);
-      } else
-	lock->set_state(LOCK_SYNC);
+	else if (lock->is_dirty()) {
+	  if (is_replicated())
+	    lock->set_state(LOCK_MIX);
+	  else
+	    lock->set_state(LOCK_LOCK);
+	} else
+	  lock->set_state(LOCK_SYNC);
+      }
     } else {
       // our states have already been chosen during rejoin.
       if (lock->is_xlocked())
@@ -1076,6 +1084,8 @@ public:
   bool is_frozen_dir();
   bool is_freezing();
 
+  /* Freeze the inode. auth_pin_allowance lets the caller account for any
+   * auth_pins it is itself holding/responsible for. */
   bool freeze_inode(int auth_pin_allowance=0);
   void unfreeze_inode(list<Context*>& finished);
 

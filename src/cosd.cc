@@ -65,17 +65,17 @@ int main(int argc, const char **argv)
   bool flushjournal = false;
   char *dump_pg_log = 0;
   FOR_EACH_ARG(args) {
-    if (CONF_ARG_EQ("mkfs", '\0')) {
+    if (CEPH_ARGPARSE_EQ("mkfs", '\0')) {
       mkfs = true;
-    } else if (CONF_ARG_EQ("mkjournal", '\0')) {
+    } else if (CEPH_ARGPARSE_EQ("mkjournal", '\0')) {
       mkjournal = true;
-    } else if (CONF_ARG_EQ("flush-journal", '\0')) {
+    } else if (CEPH_ARGPARSE_EQ("flush-journal", '\0')) {
       flushjournal = true;
-    } else if (CONF_ARG_EQ("dump-pg-log", '\0')) {
-      CONF_SAFE_SET_ARG_VAL(&dump_pg_log, OPT_STR);
+    } else if (CEPH_ARGPARSE_EQ("dump-pg-log", '\0')) {
+      CEPH_ARGPARSE_SET_ARG_VAL(&dump_pg_log, OPT_STR);
     } else {
       derr << "unrecognized arg " << args[i] << dendl;
-      ARGS_USAGE();
+      usage();
     }
   }
 
@@ -107,14 +107,14 @@ int main(int argc, const char **argv)
 
   // whoami
   char *end;
-  const char *id = g_conf.name->get_id().c_str();
+  const char *id = g_conf.name.get_id().c_str();
   int whoami = strtol(id, &end, 10);
   if (*end || end == id || whoami < 0) {
     derr << "must specify '-i #' where # is the osd number" << dendl;
     usage();
   }
 
-  if (!g_conf.osd_data) {
+  if (g_conf.osd_data.empty()) {
     derr << "must specify '--osd-data=foo' data path" << dendl;
     usage();
   }
@@ -136,7 +136,7 @@ int main(int argc, const char **argv)
       exit(1);
     }
     derr << "created object store " << g_conf.osd_data;
-    if (g_conf.osd_journal)
+    if (!g_conf.osd_journal.empty())
       *_dout << " journal " << g_conf.osd_journal;
     *_dout << " for osd" << whoami << " fsid " << mc.monmap.fsid << dendl;
     exit(0);
@@ -219,7 +219,8 @@ int main(int argc, const char **argv)
   cout << "starting osd" << whoami
        << " at " << client_messenger->get_ms_addr() 
        << " osd_data " << g_conf.osd_data
-       << " " << ((g_conf.osd_journal && g_conf.osd_journal[0]) ? g_conf.osd_journal:"(no journal)")
+       << " " << ((g_conf.osd_journal.empty()) ?
+		    "(no journal)" : g_conf.osd_journal)
        << std::endl;
 
   client_messenger->register_entity(entity_name_t::OSD(whoami));
@@ -252,7 +253,8 @@ int main(int argc, const char **argv)
 
 
 
-  OSD *osd = new OSD(whoami, cluster_messenger, client_messenger, messenger_hb, &mc, g_conf.osd_data, g_conf.osd_journal);
+  OSD *osd = new OSD(whoami, cluster_messenger, client_messenger, messenger_hb, &mc,
+		     g_conf.osd_data, g_conf.osd_journal);
 
   int err = osd->pre_init();
   if (err < 0) {

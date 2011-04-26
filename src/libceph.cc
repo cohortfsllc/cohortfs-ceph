@@ -93,12 +93,23 @@ extern "C" void ceph_deinitialize()
   ceph_client_mutex.Unlock();
 }
 
+extern "C" int ceph_conf_set(const char *option, const char *value)
+{
+  return g_conf.set_val(option, value);
+}
+
+extern "C" int ceph_conf_get(const char *option, char *buf, size_t len)
+{
+  char *tmp = buf;
+  return g_conf.get_val(option, &tmp, len);
+}
+
 extern "C" int ceph_mount()
 {
   int ret;
   Mutex::Locker lock(ceph_client_mutex);
   if(!client_mount) {
-     ret = client->mount();
+     ret = client->mount("");
      if (ret!=0)
        return ret;
   }

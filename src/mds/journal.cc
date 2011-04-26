@@ -317,6 +317,83 @@ EMetaBlob::EMetaBlob(MDLog *mdlog) : root(NULL),
 				     my_offset(mdlog ? mdlog->get_write_pos() : 0) //, _segment(0)
 { }
 
+void EMetaBlob::add_dir_context(CDir *dir, int mode)
+{
+  MDS *mds = dir->cache->mds;
+
+  list<CDentry*> parents;
+
+  // it may be okay not to include the maybe items, if
+  //  - we journaled the maybe child inode in this segment
+  //  - that subtree turns out to be unambiguously auth
+  list<CDentry*> maybe;
+  bool maybenot = false;
+
+  while (true) {
+    // already have this dir?  (we must always add in order)
+    if (lump_map.count(dir->dirfrag())) {
+      dout(20) << "EMetaBlob::add_dir_context(" << dir << ") have lump " << dir->dirfrag() << dendl;
+      break;
+    }
+      
+    // stop at root/stray
+    CInode *diri = dir->get_inode();
+    CDentry *parent = diri->get_projected_parent_dn();
+
+    if (!parent)
+      break;
+
+    if (mode == TO_AUTH_SUBTREE_ROOT) {
+      // subtree root?
+      if (dir->is_subtree_root()) {
+	if (dir->is_auth() && !dir->is_ambiguous_auth()) {
+	  // it's an auth subtree, we don't need maybe (if any), and we're done.
+	  dout(20) << "EMetaBlob::add_dir_context(" << dir << ") reached unambig auth subtree, don't need " << maybe
+		   << " at " << *dir << dendl;
+	  maybe.clear();
+	  break;
+	} else {
+	  dout(20) << "EMetaBlob::add_dir_context(" << dir << ") reached ambig or !auth subtree, need " << maybe
+		   << " at " << *dir << dendl;
+	  // we need the maybe list after all!
+	  parents.splice(parents.begin(), maybe);
+	  maybenot = false;
+	}
+      }
+      
+      // was the inode journaled in this blob?
+      if (my_offset && diri->last_journaled == my_offset) {
+	dout(20) << "EMetaBlob::add_dir_context(" << dir << ") already have diri this blob " << *diri << dendl;
+	break;
+      }
+
+      // have we journaled this inode since the last subtree map?
+      if (!maybenot && last_subtree_map && diri->last_journaled >= last_subtree_map) {
+	dout(20) << "EMetaBlob::add_dir_context(" << dir << ") already have diri in this segment (" 
+		 << diri->last_journaled << " >= " << last_subtree_map << "), setting maybenot flag "
+		 << *diri << dendl;
+	maybenot = true;
+      }
+    }
+
+    if (maybenot) {
+      dout(25) << "EMetaBlob::add_dir_context(" << dir << ")      maybe " << *parent << dendl;
+      maybe.push_front(parent);
+    } else {
+      dout(25) << "EMetaBlob::add_dir_context(" << dir << ") definitely " << *parent << dendl;
+      parents.push_front(parent);
+    }
+    
+    dir = parent->get_dir();
+  }
+  
+  parents.splice(parents.begin(), maybe);
+
+  dout(20) << "EMetaBlob::add_dir_context final: " << parents << dendl;
+  for (list<CDentry*>::iterator p = parents.begin(); p != parents.end(); p++)
+    add_dentry(*p, false);
+}
+
 void EMetaBlob::update_segment(LogSegment *ls)
 {
   // atids?
@@ -990,7 +1067,15 @@ void ESubtreeMap::replay(MDS *mds)
        p != subtrees.end();
        ++p) {
     CDir *dir = mds->mdcache->get_dirfrag(p->first);
-    mds->mdcache->adjust_bounded_subtree_auth(dir, p->second, mds->get_nodeid());
+    if (ambiguous_subtrees.count(p->first)) {
+      // ambiguous!
+      mds->mdcache->add_ambiguous_import(p->first, p->second);
+      mds->mdcache->adjust_bounded_subtree_auth(dir, p->second,
+						pair<int,int>(mds->get_nodeid(), mds->get_nodeid()));
+    } else {
+      // not ambiguous
+      mds->mdcache->adjust_bounded_subtree_auth(dir, p->second, mds->get_nodeid());
+    }
   }
   
   mds->mdcache->show_subtrees();
@@ -1061,9 +1146,10 @@ void EExport::replay(MDS *mds)
 
   // adjust auth away
   mds->mdcache->adjust_bounded_subtree_auth(dir, realbounds, pair<int,int>(CDIR_AUTH_UNKNOWN, CDIR_AUTH_UNKNOWN));
-  mds->mdcache->trim_non_auth_subtree(dir);
-  mds->mdcache->try_subtree_merge(dir);
+
+  mds->mdcache->try_trim_non_auth_subtree(dir);
 }
+
 
 
 // -----------------------
@@ -1076,12 +1162,16 @@ void EImportStart::update_segment()
 
 void EImportStart::replay(MDS *mds)
 {
-  dout(10) << "EImportStart.replay " << base << dendl;
+  dout(10) << "EImportStart.replay " << base << " bounds " << bounds << dendl;
   //metablob.print(*_dout);
   metablob.replay(mds, _segment);
 
   // put in ambiguous import list
   mds->mdcache->add_ambiguous_import(base, bounds);
+
+  // set auth partially to us so we don't trim it
+  CDir *dir = mds->mdcache->get_dirfrag(base);
+  mds->mdcache->adjust_bounded_subtree_auth(dir, bounds, pair<int,int>(mds->get_nodeid(), mds->get_nodeid()));
 
   // open client sessions?
   if (mds->sessionmap.version >= cmapv) {
@@ -1109,13 +1199,19 @@ void EImportFinish::replay(MDS *mds)
     dout(10) << "EImportFinish.replay " << base << " success=" << success << dendl;
     if (success) 
       mds->mdcache->finish_ambiguous_import(base);
-    else
+    else {
+      CDir *dir = mds->mdcache->get_dirfrag(base);
+      vector<dirfrag_t> bounds;
+      mds->mdcache->get_ambiguous_import_bounds(base, bounds);
+      mds->mdcache->adjust_bounded_subtree_auth(dir, bounds, pair<int,int>(CDIR_AUTH_UNKNOWN, CDIR_AUTH_UNKNOWN));
       mds->mdcache->cancel_ambiguous_import(base);
+      mds->mdcache->try_trim_non_auth_subtree(dir);
+    }
   } else {
     dout(10) << "EImportFinish.replay " << base << " success=" << success
-	     << ", predates my subtree_map start point, ignoring" 
+	     << " on subtree not marked as ambiguous" 
 	     << dendl;
-    // verify that?
+    assert(0 == "this shouldn't happen unless this is an old journal");
   }
 }
 

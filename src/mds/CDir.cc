@@ -205,17 +205,17 @@ CDir::CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth) :
 bool CDir::check_rstats()
 {
   dout(25) << "check_rstats on " << this << dendl;
-  if (!is_complete()) {
-    dout(10) << "check_rstats bailing out -- incomplete dir!" << dendl;
+  if (!is_complete() || !is_auth() || is_frozen()) {
+    dout(10) << "check_rstats bailing out -- incomplete or non-auth or frozen dir!" << dendl;
     return true;
   }
   // first, check basic counts
-  dout(20) << "get_num_head_items() = " << get_num_head_items()
-           << "; fnode.fragstat.nfiles=" << fnode.fragstat.nfiles
-           << " fnode.fragstat.nsubdirs=" << fnode.fragstat.nsubdirs << dendl;
   if(!(get_num_head_items()==
       (fnode.fragstat.nfiles + fnode.fragstat.nsubdirs))) {
     dout(1) << "mismatch between head items and fnode.fragstat! printing dentries" << dendl;
+    dout(1) << "get_num_head_items() = " << get_num_head_items()
+             << "; fnode.fragstat.nfiles=" << fnode.fragstat.nfiles
+             << " fnode.fragstat.nsubdirs=" << fnode.fragstat.nsubdirs << dendl;
     for (map_t::iterator i = items.begin(); i != items.end(); ++i) {
       //if (i->second->get_linkage()->is_primary())
         dout(1) << *(i->second) << dendl;
@@ -223,6 +223,10 @@ bool CDir::check_rstats()
     assert(!g_conf.mds_debug_scatterstat ||
            (get_num_head_items() ==
             (fnode.fragstat.nfiles + fnode.fragstat.nsubdirs)));
+  } else {
+    dout(20) << "get_num_head_items() = " << get_num_head_items()
+             << "; fnode.fragstat.nfiles=" << fnode.fragstat.nfiles
+             << " fnode.fragstat.nsubdirs=" << fnode.fragstat.nsubdirs << dendl;
   }
 
   nest_info_t sub_info;
@@ -232,12 +236,12 @@ bool CDir::check_rstats()
     }
   }
 
-  dout(25) << "total of child dentrys: " << sub_info << dendl;
-  dout(25) << "my rstats:              " << fnode.rstat << dendl;
   if ((!(sub_info.rbytes == fnode.rstat.rbytes)) ||
       (!(sub_info.rfiles == fnode.rstat.rfiles)) ||
       (!(sub_info.rsubdirs == fnode.rstat.rsubdirs))) {
     dout(1) << "mismatch between child accounted_rstats and my rstats!" << dendl;
+    dout(1) << "total of child dentrys: " << sub_info << dendl;
+    dout(1) << "my rstats:              " << fnode.rstat << dendl;
     for (map_t::iterator i = items.begin(); i != items.end(); ++i) {
       if (i->second->get_linkage()->is_primary()) {
         dout(1) << *(i->second) << " "
@@ -245,7 +249,11 @@ bool CDir::check_rstats()
                 << dendl;
       }
     }
+  } else {
+    dout(25) << "total of child dentrys: " << sub_info << dendl;
+    dout(25) << "my rstats:              " << fnode.rstat << dendl;
   }
+
   assert(!g_conf.mds_debug_scatterstat || sub_info.rbytes == fnode.rstat.rbytes);
   assert(!g_conf.mds_debug_scatterstat || sub_info.rfiles == fnode.rstat.rfiles);
   assert(!g_conf.mds_debug_scatterstat || sub_info.rsubdirs == fnode.rstat.rsubdirs);
@@ -2434,7 +2442,9 @@ bool CDir::freeze_dir()
 void CDir::_freeze_dir()
 {
   dout(10) << "_freeze_dir " << *this << dendl;
-  assert(is_freezeable_dir(true));
+  //assert(is_freezeable_dir(true));
+  // not always true during split because the original fragment may have frozen a while
+  // ago and we're just now getting around to breaking it up.
 
   state_clear(STATE_FREEZINGDIR);
   state_set(STATE_FROZENDIR);

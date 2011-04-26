@@ -7,7 +7,7 @@ AC_PREREQ(2.59)
 # NOTE: This version is _only_ used for naming the tarball.  The
 # VERSION define is not used by the code.  It gets a version string
 # from 'git describe'; see src/ceph_ver.[ch]
-AC_INIT([ceph], [0.26], [ceph-devel@vger.kernel.org])
+AC_INIT([ceph], [0.27], [ceph-devel@vger.kernel.org])
 
 AC_CONFIG_SUBDIRS([src/gtest])
 
@@ -36,6 +36,8 @@ AC_PROG_LIBTOOL
 # Checks for libraries.
 AC_CHECK_LIB([m], [pow], [true], AC_MSG_FAILURE([libm not found]))
 AC_CHECK_LIB([pthread], [pthread_create], [true], AC_MSG_FAILURE([libpthread not found]))
+AC_CHECK_LIB([keyutils], [add_key], [true], AC_MSG_FAILURE([libkeyutils not found]))
+AC_CHECK_FUNCS([syncfs], AC_DEFINE([HAVE_SYS_SYNCFS], [1], [we have syncfs]), [])
 
 # Find some crypto library for us to use, while letting user to decide which one to use.
 AC_ARG_WITH([cryptopp],
@@ -161,9 +163,9 @@ AM_CONDITIONAL(WITH_FUSE, [test "$HAVE_LIBFUSE" = "1"])
 
 # tcmalloc?
 AC_ARG_WITH([tcmalloc],
-	    [AS_HELP_STRING([--with--tcmalloc], [use tcmalloc instead of ptmallc])],
+	    [AS_HELP_STRING([--without-tcmalloc], [disable tcmalloc for memory allocations])],
 	    [],
-	    [with_tcmalloc=check])
+	    [with_tcmalloc=yes])
 TCMALLOC=
 AS_IF([test "x$with_tcmalloc" != xno],
 	    [AC_CHECK_LIB([tcmalloc], [malloc],
@@ -172,11 +174,8 @@ AS_IF([test "x$with_tcmalloc" != xno],
 	       		 [Define if you have tcmalloc])
 	       HAVE_LIBTCMALLOC=1
 	     ],
-	    [if test "x$with_tcmalloc" != xcheck; then
-	        AC_MSG_FAILURE(
-		  [--with-tcmalloc was given but test failed])
-	      fi
-	    ])])
+	    [AC_MSG_FAILURE(
+		  [no tcmalloc found (use --without-tcmalloc to disable)])])])
 AM_CONDITIONAL(WITH_TCMALLOC, [test "$HAVE_LIBTCMALLOC" = "1"])
 
 # jni?

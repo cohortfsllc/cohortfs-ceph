@@ -22,6 +22,7 @@
 #include "messages/MMonSubscribeAck.h"
 #include "common/ConfUtils.h"
 #include "common/ceph_argparse.h"
+#include "common/errno.h"
 
 #include "MonClient.h"
 #include "MonMap.h"
@@ -54,26 +55,25 @@ int MonClient::build_initial_monmap()
   dout(10) << "build_initial_monmap" << dendl;
 
   // file?
-  if (g_conf.monmap) {
-    const char *monmap_fn = g_conf.monmap;
+  if (!g_conf.monmap.empty()) {
     int r;
     try {
-      r = monmap.read(monmap_fn);
+      r = monmap.read(g_conf.monmap.c_str());
     }
     catch (const buffer::error &e) {
       r = -EINVAL;
     }
     if (r >= 0)
       return 0;
-    char buf[80];
-    cerr << "unable to read/decode monmap from " << monmap_fn << ": " << strerror_r(-r, buf, sizeof(buf)) << std::endl;
+    cerr << "unable to read/decode monmap from " << g_conf.monmap
+	 << ": " << cpp_strerror(-r) << std::endl;
     return r;
   }
 
   // -m foo?
-  if (g_conf.mon_host) {
+  if (!g_conf.mon_host.empty()) {
     vector<entity_addr_t> addrs;
-    if (parse_ip_port_vec(g_conf.mon_host, addrs)) {
+    if (parse_ip_port_vec(g_conf.mon_host.c_str(), addrs)) {
       for (unsigned i=0; i<addrs.size(); i++) {
 	char n[2];
 	n[0] = 'a' + i;
@@ -85,8 +85,8 @@ int MonClient::build_initial_monmap()
       return 0;
     } else { //maybe they passed us a DNS-resolvable name
       char *hosts = NULL;
-      char *old_addrs = new char[strlen(g_conf.mon_host)+1];
-      strcpy(old_addrs, g_conf.mon_host);
+      char *old_addrs = new char[g_conf.mon_host.size() + 1];
+      strcpy(old_addrs, g_conf.mon_host.c_str());
       hosts = mount_resolve_dest(old_addrs);
       delete [] old_addrs;
       if (!hosts)
@@ -108,35 +108,49 @@ int MonClient::build_initial_monmap()
     cerr << "unable to parse addrs in '" << g_conf.mon_host << "'" << std::endl;
   }
 
-  // config file?
-  if (!g_conf.cf) {
+  // What monitors are in the config file?
+  std::vector <std::string> sections;
+  int ret = g_conf.get_all_sections(sections);
+  if (ret) {
     cerr << "Unable to find any monitors in the configuration "
-         << "file, because there is no configuration file. "
-	 << "Please specify monitors via -m monaddr or -c ceph.conf" << std::endl;
+         << "file, because there was an error listing the sections. error "
+	 << ret << std::endl;
     return -ENOENT;
   }
-  for (list<ConfSection*>::const_iterator q = g_conf.cf->get_section_list().begin();
-       q != g_conf.cf->get_section_list().end(); ++q) {
-    const char *section = (*q)->get_name().c_str();
-    if (strncmp(section, "mon", 3) == 0) {
-      const char *name = section + 3;
-      if (name[0] == '.')
-	name++;
-      char *val = 0;
-      g_conf.cf->read(section, "mon addr", &val, 0);
-      if (!val || !val[0]) {
-	delete val;
-	continue;
-      }
-      entity_addr_t addr;
-      if (!addr.parse(val)) {
-	cerr << "unable to parse mon addr for " << section << " (" << val << ")" << std::endl;
-	delete val;
-	continue;
-      }
-      monmap.add(name, addr);
+  std::vector <std::string> mon_names;
+  for (std::vector <std::string>::const_iterator s = sections.begin();
+       s != sections.end(); ++s) {
+    if ((s->substr(0, 4) == "mon.") && (s->size() > 4)) {
+      mon_names.push_back(s->substr(4));
     }
   }
+
+  // Find an address for each monitor in the config file.
+  for (std::vector <std::string>::const_iterator m = mon_names.begin();
+       m != mon_names.end(); ++m) {
+    std::vector <std::string> sections;
+    std::string m_name("mon");
+    m_name += ".";
+    m_name += *m;
+    sections.push_back(m_name);
+    sections.push_back("mon");
+    sections.push_back("global");
+    std::string val;
+    int res = g_conf.get_val_from_conf_file(sections, "mon addr", val, true);
+    if (res) {
+      cerr << "failed to get an address for mon." << *m << ": error "
+	   << res << std::endl;
+      continue;
+    }
+    entity_addr_t addr;
+    if (!addr.parse(val.c_str())) {
+      cerr << "unable to parse address for mon." << *m
+	   << ": addr='" << val << "'" << std::endl;
+      continue;
+    }
+    monmap.add(m->c_str(), addr);
+  }
+
   if (monmap.size() == 0) {
     cerr << "unable to find any monitors in conf. "
 	 << "please specify monitors via -m monaddr or -c ceph.conf" << std::endl;
@@ -284,7 +298,7 @@ void MonClient::init()
 
   messenger->add_dispatcher_head(this);
 
-  entity_name = *g_conf.name;
+  entity_name = g_conf.name;
   
   Mutex::Locker l(monc_lock);
   timer.init();

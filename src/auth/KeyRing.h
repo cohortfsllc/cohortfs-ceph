@@ -28,7 +28,7 @@ class KeyRing {
 public:
   map<EntityName, EntityAuth>& get_keys() { return keys; }  // yuck
 
-  int load(const char *filename);
+  int load(const std::string &filename);
   void print(ostream& out);
 
   // accessors
@@ -47,7 +47,7 @@ public:
     return false;
   }
   void get_master(CryptoKey& dest) {
-    get_secret(*g_conf.name, dest);
+    get_secret(g_conf.name, dest);
   }
 
   // modifiers

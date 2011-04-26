@@ -110,7 +110,8 @@ public:
     string standby_for_name;
     set<int32_t> export_targets;
 
-    mds_info_t() : global_id(0), rank(-1), inc(0), state(STATE_STANDBY), state_seq(0) { }
+    mds_info_t() : global_id(0), rank(-1), inc(0), state(STATE_STANDBY), state_seq(0),
+		   standby_for_rank(MDS_NO_STANDBY_PREF) { }
 
     bool laggy() const { return !(laggy_since == utime_t()); }
     void clear_laggy() { laggy_since = utime_t(); }
@@ -395,6 +396,15 @@ public:
   bool is_active(int m)   { return get_state(m) == STATE_ACTIVE; }
   bool is_stopping(int m) { return get_state(m) == STATE_STOPPING; }
   bool is_clientreplay_or_active_or_stopping(int m)   { return is_clientreplay(m) || is_active(m) || is_stopping(m); }
+
+  bool is_followable(int m) {
+    return (is_resolve(m) ||
+	    is_replay(m) ||
+	    is_rejoin(m) ||
+	    is_clientreplay(m) ||
+	    is_active(m) ||
+	    is_stopping(m));
+  }
 
   bool is_laggy_gid(uint64_t gid) { return mds_info.count(gid) && mds_info[gid].laggy(); }
 

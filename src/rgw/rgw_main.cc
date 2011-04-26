@@ -63,7 +63,7 @@ int main(int argc, const char **argv)
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
   env_to_vec(args);
-  common_init(args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_DAEMON, 0);
+  common_init(args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
 
 
   if (!RGWAccess::init_storage_provider("rados", &g_conf)) {
@@ -93,18 +93,6 @@ int main(int argc, const char **argv)
       abort_early(&s, -EPERM);
       goto done;
     }
-
-    ret = read_acls(&s);
-    if (ret < 0) {
-      switch (ret) {
-      case -ENOENT:
-        break;
-      default:
-        RGW_LOG(10) << "could not read acls" << " ret=" << ret << std::endl;
-        abort_early(&s, ret);
-        goto done;
-      }
-    }
     ret = handler->read_permissions();
     if (ret < 0) {
       abort_early(&s, ret);
@@ -116,6 +104,8 @@ int main(int argc, const char **argv)
     op = handler->get_op();
     if (op) {
       op->execute();
+    } else {
+      abort_early(&s, -ERR_METHOD_NOT_ALLOWED);
     }
 done:
     rgw_log_op(&s);

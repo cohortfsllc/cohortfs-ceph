@@ -54,8 +54,9 @@ public:
   int put_obj(std::string& id, std::string& bucket, std::string& obj, const char *data, size_t len,
               time_t *mtime, map<std::string, bufferlist>& attrs) {
     int ret = put_obj_meta(id, bucket, obj, NULL, attrs);
-    if (ret >= 0)
-      ret = put_obj_data(id, bucket, obj, data, 0, len, mtime);
+    if (ret >= 0) {
+      ret = put_obj_data(id, bucket, obj, data, -1, len, mtime);
+    }
     return ret;
   }
 
@@ -171,6 +172,7 @@ public:
   virtual bool supports_tmap() { return false; }
 
   virtual int tmap_set(std::string& bucket, std::string& obj, std::string& key, bufferlist& bl) { return -ENOTSUP; }
+  virtual int tmap_create(std::string& bucket, std::string& obj, std::string& key, bufferlist& bl) { return -ENOTSUP; }
   virtual int tmap_del(std::string& bucket, std::string& obj, std::string& key) { return -ENOTSUP; }
 
   virtual int update_containers_stats(map<string, RGWBucketEnt>& m) { return -ENOTSUP; }

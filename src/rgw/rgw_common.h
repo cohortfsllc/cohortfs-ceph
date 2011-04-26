@@ -28,6 +28,10 @@ using namespace std;
 
 using ceph::crypto::MD5;
 
+extern string rgw_root_bucket;
+
+#define RGW_ROOT_BUCKET ".rgw"
+
 #define RGW_ATTR_PREFIX  "user.rgw."
 
 #define RGW_ATTR_ACL		RGW_ATTR_PREFIX "acl"
@@ -38,7 +42,7 @@ using ceph::crypto::MD5;
 
 #define RGW_BUCKETS_OBJ_PREFIX ".buckets"
 
-#define USER_INFO_VER 4
+#define USER_INFO_VER 5
 
 #define RGW_MAX_CHUNK_SIZE	(4*1024*1024)
 
@@ -59,15 +63,27 @@ using ceph::crypto::MD5;
 } while (0)
 
 
+#define ERR_INVALID_BUCKET_NAME 2000
+#define ERR_INVALID_OBJECT_NAME 2001
+#define ERR_NO_SUCH_BUCKET      2002
+#define ERR_METHOD_NOT_ALLOWED  2003
+#define ERR_INVALID_DIGEST      2004
+#define ERR_BAD_DIGEST		2005
+
 typedef void *RGWAccessHandle;
 
 /** Store error returns for output at a different point in the program */
 struct rgw_err {
-  const char *num;
-  const char *code;
-  const char *message;
+  rgw_err();
+  rgw_err(int http, const std::string &s3);
+  void clear();
+  bool is_clear() const;
+  bool is_err() const;
+  friend std::ostream& operator<<(std::ostream& oss, const rgw_err &err);
 
-  rgw_err() : num(NULL), code(NULL), message(NULL) {}
+  int http_ret;
+  std::string s3_code;
+  std::string message;
 };
 
 /* Helper class used for XMLArgs parsing */
@@ -131,6 +147,7 @@ struct RGWUserInfo
 {
   uint64_t auid;
   string user_id;
+  string access_key;
   string secret_key;
   string display_name;
   string user_email;
@@ -143,28 +160,34 @@ struct RGWUserInfo
      __u32 ver = USER_INFO_VER;
      ::encode(ver, bl);
      ::encode(auid, bl);
-     ::encode(user_id, bl);
+     ::encode(access_key, bl);
      ::encode(secret_key, bl);
      ::encode(display_name, bl);
      ::encode(user_email, bl);
      ::encode(openstack_name, bl);
      ::encode(openstack_key, bl);
+     ::encode(user_id, bl);
   }
   void decode(bufferlist::iterator& bl) {
      __u32 ver;
     ::decode(ver, bl);
      if (ver >= 2) ::decode(auid, bl);
      else auid = CEPH_AUTH_UID_DEFAULT;
-    ::decode(user_id, bl);
+    ::decode(access_key, bl);
     ::decode(secret_key, bl);
     ::decode(display_name, bl);
     ::decode(user_email, bl);
     if (ver >= 3) ::decode(openstack_name, bl);
     if (ver >= 4) ::decode(openstack_key, bl);
+    if (ver >= 5)
+      ::decode(user_id, bl);
+    else
+      user_id = access_key;
   }
 
   void clear() {
     user_id.clear();
+    access_key.clear();
     secret_key.clear();
     display_name.clear();
     user_email.clear();
@@ -219,7 +242,6 @@ struct req_state {
    const char *query;
    const char *length;
    const char *content_type;
-   bool err_exist;
    struct rgw_err err;
    const char *status;
    bool expect_cont;

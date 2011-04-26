@@ -235,7 +235,7 @@ public:
 
 public:
   void decode_import_inode(CDentry *dn, bufferlist::iterator& blp, int oldauth, 
-			   LogSegment *ls,
+			   LogSegment *ls, uint64_t log_offset,
 			   map<CInode*, map<client_t,Capability::Export> >& cap_imports,
 			   list<ScatterLock*>& updated_scatterlocks);
   void decode_import_inode_caps(CInode *in,
@@ -253,6 +253,9 @@ public:
 public:
   void import_reverse(CDir *dir);
 protected:
+  void import_reverse_discovering(dirfrag_t df);
+  void import_reverse_discovered(dirfrag_t df, CInode *diri);
+  void import_reverse_prepping(CDir *dir);
   void import_remove_pins(CDir *dir, set<CDir*>& bounds);
   void import_reverse_unfreeze(CDir *dir);
   void import_reverse_final(CDir *dir);

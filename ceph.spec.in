@@ -18,7 +18,7 @@ Source:        http://ceph.newdream.net/download/%{name}-%{version}.tar.gz
 BuildRequires: fuse-devel, libtool, libtool-ltdl-devel, boost-devel, 
 BuildRequires: libedit-devel, fuse-devel, git, perl, gdbm,
 BuildRequires: nss-devel, libatomic_ops-devel
-BuildRequires: pkgconfig, python
+BuildRequires: pkgconfig, python, keyutils-libs-devel
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 Requires(post): chkconfig, binutils, libedit
 Requires(preun): chkconfig
@@ -206,11 +206,8 @@ fi
 %{_includedir}/rados/librados.h
 %{_includedir}/rados/librados.hpp
 %{_includedir}/rados/buffer.h
-%{_includedir}/rados/atomic.h
 %{_includedir}/rados/page.h
 %{_includedir}/rados/crc32c.h
-%{_includedir}/rados/Spinlock.h
-%{_includedir}/rados/assert.h
 %{_includedir}/rbd/librbd.h
 %{_includedir}/rbd/librbd.hpp
 %{_libdir}/libceph.so

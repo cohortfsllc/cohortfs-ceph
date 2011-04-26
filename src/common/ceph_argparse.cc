@@ -43,14 +43,89 @@
 #undef generic_dout
 #undef dendl
 
-void env_override(char **ceph_var, const char * const env_var)
+static bool cmd_is_char(const char *cmd)
 {
-  char *e = getenv(env_var);
-  if (!e)
-    return;
-  if (*ceph_var)
-    free(*ceph_var);
-  *ceph_var = strdup(e);
+  return ((cmd[0] == '-') &&
+    cmd[1] && !cmd[2]);
+}
+
+bool ceph_argparse_cmd_equals(const char *cmd, const char *opt, char char_opt,
+			      unsigned int *val_pos)
+{
+  unsigned int i;
+  unsigned int len = strlen(opt);
+
+  *val_pos = 0;
+
+  if (!*cmd)
+    return false;
+
+  if (char_opt && cmd_is_char(cmd))
+    return (char_opt == cmd[1]);
+
+  if ((cmd[0] != '-') || (cmd[1] != '-'))
+    return false;
+
+  for (i=0; i<len; i++) {
+    if ((opt[i] == '_') || (opt[i] == '-')) {
+      switch (cmd[i+2]) {
+      case '-':
+      case '_':
+        continue;
+      default:
+        break;
+      }
+    }
+
+    if (cmd[i+2] != opt[i])
+      return false;
+  }
+
+  if (cmd[i+2] == '=')
+    *val_pos = i+3;
+  else if (cmd[i+2])
+    return false;
+
+  return true;
+}
+
+bool ceph_argparse_cmdline_val(void *field, int type, const char *val)
+{
+  switch (type) {
+  case OPT_BOOL:
+    if (strcasecmp(val, "false") == 0)
+      *(bool *)field = false;
+    else if (strcasecmp(val, "true") == 0)
+      *(bool *)field = true;
+    else
+      *(bool *)field = (bool)atoi(val);
+    break;
+  case OPT_INT:
+    *(int *)field = atoi(val);
+    break;
+  case OPT_LONGLONG:
+    *(long long *)field = atoll(val);
+    break;
+  case OPT_STR:
+    if (val)
+      *(char **)field = strdup(val);
+    else
+      *(char **)field = NULL;
+    break;
+  case OPT_FLOAT:
+    *(float *)field = atof(val);
+    break;
+  case OPT_DOUBLE:
+    *(double *)field = strtod(val, NULL);
+    break;
+  case OPT_ADDR:
+    ((entity_addr_t *)field)->parse(val);
+    break;
+  default:
+    return false;
+  }
+
+  return true;
 }
 
 void env_to_vec(std::vector<const char*>& args)
@@ -179,10 +254,34 @@ get_conf_files() const
   return ret;
 }
 
+static void dashes_to_underscores(const char *input, char *output)
+{
+  char c = 0;
+  char *o = output;
+  const char *i = input;
+  // first two characters are copied as-is
+  *o = *i++;
+  if (*o++ == '\0')
+    return;
+  *o = *i++;
+  if (*o++ == '\0')
+    return;
+  for (; ((c = *i)); ++i) {
+     if (c == '-')
+       *o++ = '_';
+     else
+       *o++ = c;
+  }
+  *o++ = '\0';
+}
+
 bool ceph_argparse_flag(std::vector<const char*> &args,
 	std::vector<const char*>::iterator &i, ...)
 {
   const char *first = *i;
+  char tmp[strlen(first)+1];
+  dashes_to_underscores(first, tmp);
+  first = tmp;
   const char *a;
   va_list ap;
 
@@ -202,6 +301,9 @@ bool ceph_argparse_witharg(std::vector<const char*> &args,
 	std::vector<const char*>::iterator &i, std::string *ret, ...)
 {
   const char *first = *i;
+  char tmp[strlen(first)+1];
+  dashes_to_underscores(first, tmp);
+  first = tmp;
   const char *a;
   va_list ap;
   int strlen_a;
@@ -222,7 +324,7 @@ bool ceph_argparse_witharg(std::vector<const char*> &args,
       else if (first[strlen_a] == '\0') {
 	// find second part (or not)
 	if (i+1 == args.end()) {
-	  std::cerr << "Option " << *i << " requires an argument." << std::endl;
+	  cerr << "Option " << *i << " requires an argument." << std::endl;
 	  _exit(1);
 	}
 	i = args.erase(i);
@@ -244,24 +346,25 @@ CephInitParameters ceph_argparse_early_args
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (strcmp(*i, "--") == 0)
       break;
-    else if (ceph_argparse_flag(args, i, "--version", "-v", NULL)) {
+    else if (ceph_argparse_flag(args, i, "--version", "-v", (char*)NULL)) {
       cout << pretty_version_to_str() << std::endl;
       _exit(0);
     }
-    else if (ceph_argparse_witharg(args, i, &val, "--conf", "-c", NULL)) {
+    else if (ceph_argparse_witharg(args, i, &val, "--conf", "-c", (char*)NULL)) {
       iparams.conf_file = val;
     }
     else if ((module_type != CEPH_ENTITY_TYPE_CLIENT) &&
-	     (ceph_argparse_witharg(args, i, &val, "-i", NULL))) {
+	     (ceph_argparse_witharg(args, i, &val, "-i", (char*)NULL))) {
       iparams.name.set_id(val);
     }
-    else if (ceph_argparse_witharg(args, i, &val, "--id", NULL)) {
+    else if (ceph_argparse_witharg(args, i, &val, "--id", (char*)NULL)) {
       iparams.name.set_id(val);
     }
-    else if (ceph_argparse_witharg(args, i, &val, "--name", "-n", NULL)) {
+    else if (ceph_argparse_witharg(args, i, &val, "--name", "-n", (char*)NULL)) {
       if (!iparams.name.from_str(val)) {
-	std::cerr << "You must pass a string of the form ID.TYPE to "
-	  "the --name option." << std::endl;
+	cerr << "You must pass a string of the form TYPE.ID to "
+	  << "the --name option. Valid types are: "
+	  << EntityName::get_valid_types_as_str() << std::endl;
 	_exit(1);
       }
     }

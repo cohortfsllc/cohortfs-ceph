@@ -386,13 +386,14 @@ void CInode::pop_projected_snaprealm(sr_t *next_snaprealm)
   dout(10) << "pop_projected_snaprealm " << next_snaprealm
           << " seq" << next_snaprealm->seq << dendl;
   bool invalidate_cached_snaps = false;
-  if (!snaprealm)
+  if (!snaprealm) {
     open_snaprealm();
-  else if (next_snaprealm->past_parents.size() !=
-           snaprealm->srnode.past_parents.size()) {
+  } else if (next_snaprealm->past_parents.size() !=
+	     snaprealm->srnode.past_parents.size()) {
     invalidate_cached_snaps = true;
 
     // update parent pointer
+    assert(snaprealm->open);
     assert(snaprealm->parent);   // had a parent before
     SnapRealm *new_parent = get_parent_inode()->find_snaprealm();
     assert(new_parent);
@@ -407,6 +408,10 @@ void CInode::pop_projected_snaprealm(sr_t *next_snaprealm)
   }
   snaprealm->srnode = *next_snaprealm;
   delete next_snaprealm;
+
+  // we should be able to open these up (or have them already be open).
+  bool ok = snaprealm->_open_parents(NULL);
+  assert(ok);
 
   if (invalidate_cached_snaps)
     snaprealm->invalidate_cached_snaps();
@@ -935,6 +940,13 @@ struct C_Inode_Stored : public Context {
   }
 };
 
+object_t CInode::get_object_name(inodeno_t ino, frag_t fg, const char *suffix)
+{
+  char n[60];
+  snprintf(n, sizeof(n), "%llx.%08llx%s", (long long unsigned)ino, (long long unsigned)fg, suffix ? suffix : "");
+  return object_t(n);
+}
+
 void CInode::store(Context *fin)
 {
   dout(10) << "store " << get_version() << dendl;
@@ -951,9 +963,7 @@ void CInode::store(Context *fin)
   ObjectOperation m;
   m.write_full(bl);
 
-  char n[30];
-  snprintf(n, sizeof(n), "%llx.%08llx.inode", (long long unsigned)ino(), (long long unsigned)frag_t());
-  object_t oid(n);
+  object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
   object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pg_pool());
 
   mdcache->mds->objecter->mutate(oid, oloc, m, snapc, g_clock.now(), 0,
@@ -987,9 +997,7 @@ void CInode::fetch(Context *fin)
   C_Inode_Fetched *c = new C_Inode_Fetched(this, fin);
   C_Gather *gather = new C_Gather(c);
 
-  char n[30];
-  snprintf(n, sizeof(n), "%llx.%08llx", (long long unsigned)ino(), (long long unsigned)frag_t());
-  object_t oid(n);
+  object_t oid = CInode::get_object_name(ino(), frag_t(), "");
   object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pg_pool());
 
   ObjectOperation rd;
@@ -998,8 +1006,7 @@ void CInode::fetch(Context *fin)
   mdcache->mds->objecter->read(oid, oloc, rd, CEPH_NOSNAP, &c->bl, 0, gather->new_sub());
 
   // read from separate object too
-  snprintf(n, sizeof(n), "%llx.%08llx.inode", (long long unsigned)ino(), (long long unsigned)frag_t());
-  object_t oid2(n);
+  object_t oid2 = CInode::get_object_name(ino(), frag_t(), ".inode");
   mdcache->mds->objecter->read(oid2, oloc, 0, 0, CEPH_NOSNAP, &c->bl2, 0, gather->new_sub());
 }
 
@@ -1081,9 +1088,7 @@ void CInode::store_parent(Context *fin)
   // write it.
   SnapContext snapc;
 
-  char n[30];
-  snprintf(n, sizeof(n), "%llx.%08llx", (long long unsigned)ino(), (long long unsigned)frag_t());
-  object_t oid(n);
+  object_t oid = get_object_name(ino(), frag_t(), "");
   object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pg_pool());
 
   mdcache->mds->objecter->mutate(oid, oloc, m, snapc, g_clock.now(), 0,
@@ -1504,6 +1509,20 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 }
 
 
+bool CInode::is_dirty_scattered()
+{
+  return
+    filelock.is_dirty_or_flushing() ||
+    nestlock.is_dirty_or_flushing() ||
+    dirfragtreelock.is_dirty_or_flushing();
+}
+
+void CInode::clear_scatter_dirty()
+{
+  filelock.clear_dirty();
+  nestlock.clear_dirty();
+  dirfragtreelock.clear_dirty();
+}
 
 void CInode::clear_dirty_scattered(int type)
 {
@@ -1781,7 +1800,8 @@ void CInode::finish_scatter_gather_update(int type)
 	       q++)
 	    mdcache->project_rstat_frag_to_inode(q->second.rstat, q->second.accounted_rstat,
 						 q->second.first, q->first, this, true);
-	  dir->check_rstats();
+	  if (update)  // dir contents not valid if frozen or non-auth
+	    dir->check_rstats();
 	} else {
 	  dout(20) << fg << " skipping STALE accounted_rstat " << pf->accounted_rstat << dendl;
 	}
@@ -1806,7 +1826,8 @@ void CInode::finish_scatter_gather_update(int type)
 	    assert(!"unmatched rstat rbytes" == g_conf.mds_verify_scatter);
 	  }
 	}
-	dir->check_rstats();
+	if (update)
+	  dir->check_rstats();
       }
       dout(20) << " final rstat " << pi->rstat << dendl;
 

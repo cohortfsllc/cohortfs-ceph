@@ -4,6 +4,11 @@
 #include <netdb.h>
 #include <errno.h>
 #include <sys/mount.h>
+#include <keyutils.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include "common/armor.h"
 
 #ifndef MS_RELATIME
 # define MS_RELATIME (1<<21)
@@ -13,6 +18,9 @@
 
 int verboseflag = 0;
 static const char * const EMPTY_STRING = "";
+
+/* TODO duplicates logic from kernel */
+#define CEPH_AUTH_NAME_DEFAULT "guest"
 
 #include "mtab.c"
 
@@ -182,6 +190,8 @@ static char *parse_options(const char *data, int *filesys_flags)
 	int pos = 0;
 	char *newdata = 0;
 	char secret[1000];
+	char *saw_name = NULL;
+	char *saw_secret = NULL;
 
 	if(verboseflag)
 		printf("parsing options: %s\n", data);
@@ -242,7 +252,7 @@ static char *parse_options(const char *data, int *filesys_flags)
 		} else if (strncmp(data, "_netdev", 7) == 0) {
 			skip = 1;  /* ignore */
 
-		} else if (strncmp(data, "secretfile", 7) == 0) {
+		} else if (strncmp(data, "secretfile", 10) == 0) {
 			char *fn = value;
 			char *end = fn;
 			int fd;
@@ -273,8 +283,39 @@ static char *parse_options(const char *data, int *filesys_flags)
 
 			if (verboseflag)
 				printf("read secret of len %d from %s\n", len, fn);
-			data = "secret";
-			value = secret;
+
+			/* see comment for "secret" */
+			saw_secret = secret;
+			skip = 1;
+		} else if (strncmp(data, "secret", 6) == 0) {
+			if (!value || !*value) {
+				printf("mount option secret requires a value.\n");
+				return NULL;
+			}
+
+			/* secret is only added to kernel options as
+			   backwards compatilbity, if add_key doesn't
+			   recognize our keytype; hence, it is skipped
+			   here and appended to options on add_key
+			   failure */
+			strncpy(secret, value, sizeof(secret));
+			saw_secret = secret;
+			skip = 1;
+		} else if (strncmp(data, "name", 4) == 0) {
+			if (!value || !*value) {
+				printf("mount option name requires a value.\n");
+				return NULL;
+			}
+
+			/* take a copy of the name, to be used for
+			   naming the keys that we add to kernel;
+			   ignore memleak as mount.ceph is
+			   short-lived */
+			saw_name = strdup(value);
+			if (!saw_name) {
+				printf("out of memory.\n");
+				return NULL;
+			}
 			skip = 0;
 		} else {
 			skip = 0;
@@ -302,6 +343,50 @@ static char *parse_options(const char *data, int *filesys_flags)
 		}
 		data = next_keyword;
 	} while (data);
+
+	if (saw_secret) {
+		/* try to submit key to kernel via the keys api */
+		key_serial_t serial;
+		int ret;
+		int secret_len = strlen(saw_secret);
+		char payload[((secret_len * 3) / 4) + 4];
+		char *name = NULL;
+		int name_len = 0;
+		int name_pos = 0;
+
+		ret = ceph_unarmor(payload, payload+sizeof(payload), saw_secret, saw_secret+secret_len);
+		if (ret < 0) {
+			printf("secret is not valid base64: %s.\n", strerror(-ret));
+			return NULL;
+		}
+
+		name_pos = safe_cat(&name, &name_len, name_pos, "client.");
+		if (!saw_name) {
+			name_pos = safe_cat(&name, &name_len, name_pos, CEPH_AUTH_NAME_DEFAULT);
+		} else {
+			name_pos = safe_cat(&name, &name_len, name_pos, saw_name);
+		}
+		serial = add_key("ceph", name, payload, sizeof(payload), KEY_SPEC_USER_KEYRING);
+		if (serial < 0) {
+			if (errno == ENODEV || errno == ENOSYS) {
+				/* running against older kernel; fall back to secret= in options */
+				if (pos)
+					pos = safe_cat(&out, &out_len, pos, ",");
+				pos = safe_cat(&out, &out_len, pos, "secret=");
+				pos = safe_cat(&out, &out_len, pos, saw_secret);
+			} else {
+				perror("adding ceph secret key to kernel failed");
+			}
+		} else {
+			if (verboseflag)
+				printf("added key %s with serial %d\n", name, serial);
+			/* add key= option to identify key to use */
+			if (pos)
+				pos = safe_cat(&out, &out_len, pos, ",");
+			pos = safe_cat(&out, &out_len, pos, "key=");
+			pos = safe_cat(&out, &out_len, pos, name);
+		}
+	}
 
 	if (!out)
 		return strdup(EMPTY_STRING);
@@ -352,6 +437,30 @@ static int parse_arguments(int argc, char *const *const argv,
 	return 0;
 }
 
+/* modprobe failing doesn't necessarily prevent from working, so this
+   returns void */
+static void modprobe(void) {
+	int status;
+	status = system("modprobe ceph");
+	if (status < 0) {
+		fprintf(stderr, "mount.ceph: cannot run modprobe: %s\n", strerror(errno));
+	} else if (WIFEXITED(status)) {
+		status = WEXITSTATUS(status);
+		if (status != 0) {
+			fprintf(stderr,
+				"mount.ceph: modprobe failed, exit status %d\n",
+				status);
+		}
+	} else if (WIFSIGNALED(status)) {
+		fprintf(stderr,
+			"mount.ceph: modprobe failed with signal %d\n",
+			WTERMSIG(status));
+	} else {
+		fprintf(stderr, "mount.ceph: weird status from modprobe: %d\n",
+			status);
+	}
+}
+
 static void usage(const char *prog_name)
 {
 	printf("usage: %s [src] [mount-point] [-v] [-o ceph-options]\n",
@@ -382,6 +491,8 @@ int main(int argc, char *argv[])
 		printf("failed to resolve source\n");
 		exit(1);
 	}
+
+	modprobe();
 
 	popts = parse_options(opts, &flags);
 	if (!popts) {
