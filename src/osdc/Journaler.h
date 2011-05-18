@@ -224,7 +224,7 @@ private:
 public:
   Journaler(inodeno_t ino_, int pool, const char *mag, Objecter *obj, ProfLogger *l, int lkey, SafeTimer *tim) : 
     last_written(mag), last_committed(mag),
-    ino(ino_), pg_pool(pool), readonly(false), magic(mag),
+    ino(ino_), pg_pool(pool), readonly(true), magic(mag),
     objecter(obj), filer(objecter), logger(l), logger_key_lat(lkey),
     timer(tim), delay_flush_event(0),
     state(STATE_UNDEF), error(0),
@@ -239,7 +239,7 @@ public:
 
   void reset() {
     assert(state == STATE_ACTIVE);
-    readonly = false;
+    readonly = true;
     delay_flush_event = 0;
     state = STATE_UNDEF;
     error = 0;
@@ -276,8 +276,8 @@ public:
 
   void set_layout(ceph_file_layout *l);
 
-  void set_readonly() { readonly = true; }
-  void set_writeable() { readonly = false; }
+  void set_readonly();
+  void set_writeable();
   bool is_readonly() { return readonly; }
 
   bool is_active() { return state == STATE_ACTIVE; }
@@ -312,17 +312,13 @@ public:
   void set_write_pos(int64_t p) { 
     write_pos = flush_pos = safe_pos = p;
   }
-  void set_expire_trimmed_pos(int64_t p) { 
-    expire_pos = trimming_pos = trimmed_pos = p;
-  }
 
   bool truncate_tail_junk(Context *fin);
 
   // trim
   void set_expire_pos(int64_t ep) { expire_pos = ep; }
+  void set_trimmed_pos(int64_t p) { trimming_pos = trimmed_pos = p; }
   void trim();
-  //bool is_trimmable() { return trimming_pos < expire_pos; }
-  //void trim(int64_t trim_to=0, Context *c=0);
 };
 WRITE_CLASS_ENCODER(Journaler::Header)
 
