@@ -15,6 +15,8 @@
 #ifndef CEPH_LIB_H
 #define CEPH_LIB_H
 
+#define __USE_UNIX98 1 /* XXX stat members */
+
 #include <utime.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -22,6 +24,58 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define CEPH_SETATTR_MODE   1
+#define CEPH_SETATTR_UID    2
+#define CEPH_SETATTR_GID    4
+#define CEPH_SETATTR_MTIME  8
+#define CEPH_SETATTR_ATIME 16
+#define CEPH_SETATTR_SIZE  32
+#define CEPH_SETATTR_CTIME 64
+
+#ifndef __cplusplus
+/* 
+ * XXXX redeclarations from ceph_fs.h, rados.h, etc.  We need more of this
+ * in the interface, but shouldn't be re-typing it (and using different
+ * C data types).
+ */
+#define CEPH_INO_ROOT  1
+#define CEPH_NOSNAP  ((uint64_t)(-2))
+
+struct ceph_file_layout {
+	/* file -> object mapping */
+	uint32_t fl_stripe_unit;     /* stripe unit, in bytes.  must be multiple
+				      of page size. */
+	uint32_t fl_stripe_count;    /* over this many objects */
+	uint32_t fl_object_size;     /* until objects are this big, then move to
+				      new objects */
+	uint32_t fl_cas_hash;        /* 0 = none; 1 = sha256 */
+
+	/* pg -> disk layout */
+	uint32_t fl_object_stripe_unit;  /* for per-object parity, if any */
+
+	/* object -> pg layout */
+	uint32_t fl_pg_preferred; /* preferred primary for pg (-1 for none) */
+	uint32_t fl_pg_pool;      /* namespace, crush ruleset, rep level */
+} __attribute__ ((packed));
+
+
+typedef struct _inodeno_t {
+  uint64_t val;
+} inodeno_t;
+
+typedef struct _snapid_t {
+  uint64_t val;
+} snapid_t;
+
+typedef struct __vinodeno {
+  inodeno_t ino;
+  snapid_t snapid;
+  } vinodeno_t;
+
+typedef struct Fh Fh;
+
+#endif /* __cplusplus */ 
 
 #ifndef __USE_FILE_OFFSET64
 # error libceph: must define __USE_FILE_OFFSET64 or readdir results will be corrupted
@@ -161,6 +215,71 @@ int ceph_get_local_osd(struct ceph_mount_info *cmount);
 
 /* Get the CephContext of this mount */
 struct CephContext *ceph_get_mount_context(struct ceph_mount_info *cmount);
+
+/* Low Level */
+
+/* XXXX ceph_mount_info? */
+
+int ceph_ll_lookup(vinodeno_t parent, const char *name,
+		   struct stat *attr, int uid, int gid);
+bool ceph_ll_forget(vinodeno_t vino, int count);
+int ceph_ll_walk(const char *name, struct stat *attr);
+int ceph_ll_getattr(vinodeno_t vi, struct stat *attr, int uid, int gid);
+int ceph_ll_setattr(vinodeno_t vi, struct stat *st, int mask, int uid, int gid);
+int ceph_ll_open(vinodeno_t vi, int flags, Fh **filehandle, int uid, int gid);
+loff_t ceph_ll_lseek(Fh* filehandle, loff_t offset, int whence);
+int ceph_ll_read(Fh* filehandle, int64_t off, uint64_t len, char* buf);
+int ceph_ll_fsync(Fh *fh, int syncdataonly);
+int ceph_ll_write(Fh* filehandle, int64_t off, uint64_t len, const char *data);
+int ceph_ll_close(Fh* filehandle);
+int ceph_ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid, int gid);
+int ceph_ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid);
+int ceph_ll_getxattr_by_idx(vinodeno_t vino, int idx, void *value,
+			    size_t size, int uid, int gid);
+int ceph_ll_getxattridx(vinodeno_t vino, const char *name, int uid,
+			int gid);
+int ceph_ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
+			     int *cookie, int *eol, int uid, int gid);
+int ceph_ll_setxattr(vinodeno_t vino, const char *name,
+		     const void *value, size_t size,
+		     int flags, int uid, int gid);
+int ceph_ll_setxattr_by_idx(vinodeno_t vino, int idx, const void *value,
+			    size_t size, int flags, int uid, int gid);
+int ceph_ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid);
+int ceph_ll_removexattr_by_idx(vinodeno_t vino, int idx, int uid, int gid);
+int ceph_ll_create(vinodeno_t parent, const char *name, mode_t mode,
+		   int flags, Fh **filehandle, struct stat *attr, int uid, int gid);
+int ceph_ll_mkdir(vinodeno_t parent, const char *name,
+		  mode_t mode, struct stat *attr, int uid, int gid);
+int ceph_ll_link(vinodeno_t obj, vinodeno_t newparrent,
+		 const char *name, struct stat *attr,
+		 int uid, int gid);
+int ceph_ll_truncate(vinodeno_t obj, uint64_t length, int uid, int gid);
+int ceph_ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid);
+int ceph_ll_releasedir(DIR* dir);
+int ceph_ll_rename(vinodeno_t parent, const char *name,
+		   vinodeno_t newparent, const char *newname,
+		   int uid, int gid);
+int ceph_ll_unlink(vinodeno_t vino, const char *name, int uid, int gid);
+int ceph_ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
+int ceph_ll_readlink(vinodeno_t vino, char **value, int uid, int gid);
+int ceph_ll_symlink(vinodeno_t parent, const char *name, const char *value, struct stat *attr, int uid, int gid);
+int ceph_ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid);
+uint32_t ceph_ll_stripe_unit(vinodeno_t vino);
+uint32_t ceph_ll_file_layout(vinodeno_t vino, struct ceph_file_layout *layout);
+uint64_t ceph_ll_snap_seq(vinodeno_t vino);
+int ceph_ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno,
+			     struct ceph_file_layout* layout);
+int ceph_ll_num_osds(void);
+int ceph_ll_osdaddr(int osd, char* buf, size_t size);
+uint64_t ceph_ll_get_internal_offset(vinodeno_t vino, uint64_t blockno);
+uint64_t ceph_ll_read_block(vinodeno_t vino, uint64_t blockid, char* bl,
+		       uint64_t offset, uint64_t length,
+		       struct ceph_file_layout* layout);
+int ceph_ll_write_block(vinodeno_t vino, uint64_t blockid,
+			char* buf, uint64_t offset,
+			uint64_t length, struct ceph_file_layout* layout,
+			uint64_t snapseq);
 
 #ifdef __cplusplus
 }

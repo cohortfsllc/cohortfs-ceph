@@ -741,7 +741,7 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
     // fake it for snap lookup
     vinodeno_t vino = ist.vino;
     vino.snapid = CEPH_SNAPDIR;
-    assert(inode_map.count(vino));
+    _ensure(vino);
     Inode *diri = inode_map[vino];
     
     string dname = request->path.last_dentry();
@@ -4414,6 +4414,8 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
 
     prev_name = dn->name;
     dirp->offset = next_off;
+    if (r > 0)
+      return r;
   }
 
   ldout(cct, 10) << "_readdir_cache_cb " << dirp << " on " << dirp->inode->ino << " at end" << dendl;
@@ -4458,6 +4460,8 @@ int Client::readdir_r_cb(dir_result_t *d, add_dirent_cb_t cb, void *p)
 
     dirp->offset = next_off;
     off = next_off;
+    if (r > 0)
+      return r;
   }
   if (dirp->offset == 1) {
     ldout(cct, 15) << " including .." << dendl;
@@ -4473,6 +4477,8 @@ int Client::readdir_r_cb(dir_result_t *d, add_dirent_cb_t cb, void *p)
 
     dirp->offset = 2;
     off = 2;
+    if (r > 0)
+      return r;
   }
 
   // can we read from our cache?
@@ -4524,6 +4530,8 @@ int Client::readdir_r_cb(dir_result_t *d, add_dirent_cb_t cb, void *p)
       
       off++;
       dirp->offset = pos + 1;
+      if (r > 0)
+	return r;
     }
 
     if (dirp->last_name.length()) {
@@ -4592,7 +4600,7 @@ static int _readdir_single_dirent_cb(void *p, struct dirent *de, struct stat *st
   if (c->stmask)
     *c->stmask = stmask;
   c->full = true;
-  return 0;  
+  return 1;  
 }
 
 struct dirent * Client::readdir(dir_result_t *d)
@@ -5760,6 +5768,99 @@ int Client::ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, in
   return r;
 }
 
+int Client::ll_lookup_precise(vinodeno_t parent, const char *name, struct stat_precise *attr, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_lookup_precise " << parent << " " << name << dendl;
+  tout << "ll_lookup_precise" << std::endl;
+  tout << parent.ino.val << std::endl;
+  tout << name << std::endl;
+
+  string dname = name;
+  Inode *diri = 0;
+  Inode *in = 0;
+  int r = 0;
+  utime_t now = g_clock.now();
+
+  if (inode_map.count(parent) == 0) {
+    dout(1) << "ll_lookup " << parent << " " << name << " -> ENOENT (parent DNE... WTF)" << dendl;
+    r = -ENOENT;
+    attr->st_ino = 0;
+    goto out;
+  }
+  diri = inode_map[parent];
+  if (!diri->is_dir()) {
+    dout(1) << "ll_lookup " << parent << " " << name << " -> ENOTDIR (parent not a dir... WTF)" << dendl;
+    r = -ENOTDIR;
+    attr->st_ino = 0;
+    goto out;
+  }
+
+  r = _lookup(diri, dname.c_str(), &in);
+  if (r < 0) {
+    attr->st_ino = 0;
+    goto out;
+  }
+
+  assert(in);
+  fill_stat_precise(in, attr);
+  _ll_get(in);
+
+ out:
+  dout(3) << "ll_lookup " << parent << " " << name
+	  << " -> " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
+  tout << attr->st_ino << std::endl;
+  return r;
+}
+
+int Client::ll_walk(const char* name, struct stat *attr)
+{
+  Mutex::Locker lock(client_lock);
+  filepath fp(name, 0);
+  Inode *destination=0;
+  int rc;
+
+  dout(3) << "ll_walk" << name << dendl;
+  tout << "ll_walk" << std::endl;
+  tout << name << std::endl;
+
+  rc=path_walk(fp, &destination, false);
+  if (rc < 0)
+    {
+      attr->st_ino=0;
+      return rc;
+    }
+  else
+    {
+      fill_stat(destination, attr);
+      return 0;
+    }
+}
+
+int Client::ll_walk_precise(const char* name, struct stat_precise *attr)
+{
+  Mutex::Locker lock(client_lock);
+  filepath fp(name, 0);
+  Inode *destination=0;
+  int rc;
+
+  dout(3) << "ll_walk" << name << dendl;
+  tout << "ll_walk" << std::endl;
+  tout << name << std::endl;
+
+  rc=path_walk(fp, &destination, false);
+  if (rc < 0)
+    {
+      attr->st_ino=0;
+      return rc;
+    }
+  else
+    {
+      fill_stat_precise(destination, attr);
+      return 0;
+    }
+}
+
 void Client::_ll_get(Inode *in)
 {
   if (in->ll_ref == 0) 
@@ -5826,7 +5927,7 @@ bool Client::ll_forget(vinodeno_t vino, int num)
 
 Inode *Client::_ll_get_inode(vinodeno_t vino)
 {
-  assert(inode_map.count(vino));
+  _ensure(vino);
   return inode_map[vino];
 }
 
@@ -5847,6 +5948,25 @@ int Client::ll_getattr(vinodeno_t vino, struct stat *attr, int uid, int gid)
   if (res == 0)
     fill_stat(in, attr);
   ldout(cct, 3) << "ll_getattr " << vino << " = " << res << dendl;
+  return res;
+}
+
+int Client::ll_getattr_precise(vinodeno_t vino, struct stat_precise *attr, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_getattr_precise " << vino << dendl;
+  tout << "ll_getattr_precise" << std::endl;
+  tout << vino.ino.val << std::endl;
+
+  Inode *in = _ll_get_inode(vino);
+  int res;
+  if (vino.snapid < CEPH_NOSNAP)
+    res = 0;
+  else
+    res = _getattr(in, CEPH_STAT_CAP_INODE_ALL, uid, gid);
+  if (res == 0)
+    fill_stat_precise(in, attr);
+  dout(3) << "ll_getattr " << vino << " = " << res << dendl;
   return res;
 }
 
@@ -5872,6 +5992,29 @@ int Client::ll_setattr(vinodeno_t vino, struct stat *attr, int mask, int uid, in
   return res;
 }
 
+int Client::ll_setattr_precise(vinodeno_t vino, struct stat_precise *attr, int mask, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_setattr_precise " << vino << " mask " << hex << mask << dec << dendl;
+  tout << "ll_setattr_precise" << std::endl;
+  tout << vino.ino.val << std::endl;
+  tout << attr->st_mode << std::endl;
+  tout << attr->st_uid << std::endl;
+  tout << attr->st_gid << std::endl;
+  tout << attr->st_size << std::endl;
+  tout << attr->st_mtime_sec << std::endl;
+  tout << attr->st_mtime_micro << std::endl;
+  tout << attr->st_atime_sec << std::endl;
+  tout << attr->st_atime_micro << std::endl;
+  tout << mask << std::endl;
+
+  Inode *in = _ll_get_inode(vino);
+  int res = _setattr(in, attr, mask, uid, gid);
+  if (res == 0)
+    fill_stat_precise(in, attr);
+  dout(3) << "ll_setattr_precise " << vino << " = " << res << dendl;
+  return res;
+}
 
 // ----------
 // xattrs
@@ -5974,6 +6117,55 @@ int Client::ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t s
   return _getxattr(in, name, value, size, uid, gid);
 }
 
+int Client::ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+
+  Inode *in = _ll_get_inode(vino);
+  int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
+
+  if (r == 0) {
+    map<string,bufferptr>::iterator p;
+    int r=-ENOENT;
+    if (in->xattrs.size() > idx) {
+      for (p = in->xattrs.begin();
+	   idx > 0;
+	   idx--)
+	{ ; }
+
+      r=p->second.length();
+    }
+  }
+  return r;
+}
+
+int Client::ll_getxattr_by_idx(vinodeno_t vino, unsigned idx, void *value, size_t size, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+
+  Inode *in = _ll_get_inode(vino);
+  int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
+
+  if (r == 0) {
+    map<string,bufferptr>::iterator p;
+    int r=-ENOENT;
+    if (in->xattrs.size() > idx) {
+      for (p = in->xattrs.begin();
+	   idx > 0;
+	   idx--)
+	{ ; }
+
+      r=p->second.length();
+      if ((unsigned) r > size) {
+	r=-ERANGE;
+      } else {
+	memcpy(value, p->second.c_str(), r);
+      }
+    }
+  }
+  return r;
+}
+
 int Client::_listxattr(Inode *in, char *name, size_t size, int uid, int gid)
 {
   int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
@@ -6013,6 +6205,89 @@ int Client::ll_listxattr(vinodeno_t vino, char *names, size_t size, int uid, int
   return _listxattr(in, names, size, uid, gid);
 }
 
+/* Cookie is a pointer to an integer.  If NULL, we assume that we should start
+   from the beginning.  if it is a valid pointer, that number is taken
+   to be the number of the attribute last returned.  if eol is
+   non-null, it is set to 1 if the last attribute has been returned
+   and 0 otherwise.
+
+   The buffer consists of zero-terminated strings interlarded with
+   values of type uint64_t giving the length of the attribute data. */
+
+int Client::ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
+				int *cookie, int *eol, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_listxattr_chunks " << vino << " size " << size << dendl;
+  tout << "ll_listxattr_chunks" << std::endl;
+  tout << vino.ino.val << std::endl;
+  tout << size << std::endl;  
+
+  Inode *in = _ll_get_inode(vino);
+
+
+  int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
+  int count=0;
+
+  eol && (*eol=0);
+  
+  if (r == 0) {
+    map<string,bufferptr>::iterator p = in->xattrs.begin();
+
+    for (int s = (cookie ? *cookie : 0);
+	 (s != 0) && in->xattrs.begin() != in->xattrs.end(); s--, p++)
+      {
+      }
+
+    if (size != 0) {
+      char* nptr=names;
+      for (map<string,bufferptr>::iterator p = in->xattrs.begin();
+	   p != in->xattrs.end();
+	   p++) {
+	if (((nptr-names)-(size+sizeof(uint64_t))) < p->first.length()) {
+	  return count;
+	} else {
+	  memcpy(nptr, p->first.c_str(), p->first.length());
+	  nptr += p->first.length();
+	  *nptr = '\0';
+	  nptr++;
+	  *((uint64_t *) nptr)=p->second.length();
+	  nptr+=sizeof(uint64_t);
+	  cookie && cookie++;
+	  count++;
+	}
+      }
+      eol && (*eol=1);
+    }
+  }
+  return r;
+}
+  
+int Client::ll_getxattridx(vinodeno_t vino, const char *name, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+
+  Inode *in = _ll_get_inode(vino);
+
+
+  int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
+
+  if (r == 0) {
+    string n(name);
+    r=-ENOENT;
+    if (in->xattrs.count(n)) {
+      map<string,bufferptr>::iterator p = in->xattrs.begin();
+      for (int s = 0; p != in->xattrs.end(); s++, p++) {
+	if (p->first == n) {
+	  r=s;
+	  break;
+	}
+      }
+    }
+  }
+  return r;
+}
+
 int Client::_setxattr(Inode *in, const char *name, const void *value, size_t size, int flags,
 		      int uid, int gid)
 {
@@ -6039,8 +6314,38 @@ int Client::_setxattr(Inode *in, const char *name, const void *value, size_t siz
   return res;
 }
 
-int Client::ll_setxattr(vinodeno_t vino, const char *name, const void *value, size_t size, int flags,
-			int uid, int gid)
+int Client::ll_setxattr_by_idx(vinodeno_t vino, unsigned int idx, const void *value,
+			       size_t size, int flags, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_setxattr_by_idx " << vino << " " << idx << " size " << size << dendl;
+  tout << "ll_setxattr_by_idx" << std::endl;
+  tout << vino.ino.val << std::endl;
+
+  Inode *in = _ll_get_inode(vino);
+
+  if (in->snapid != CEPH_NOSNAP) {
+    return -EROFS;
+  }
+
+  string n;
+  int r=-ENOENT;
+  if (in->xattrs.size() > idx) {
+    map<string,bufferptr>::iterator p;
+    for (p = in->xattrs.begin();
+	 idx > 0;
+	 idx--)
+      { ; }
+    n=p->first;
+  } else {
+    return r;
+  }
+
+  return _setxattr(in, n.c_str(), value, size, flags, uid, gid);
+}
+
+int Client::ll_setxattr(vinodeno_t vino, const char *name, const void *value,
+			size_t size, int flags, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "ll_setxattr " << vino << " " << name << " size " << size << dendl;
@@ -6076,6 +6381,24 @@ int Client::_removexattr(Inode *in, const char *name, int uid, int gid)
   return res;
 }
 
+int Client::ll_removexattr_by_idx(vinodeno_t vino, unsigned int idx, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  Inode *in = _ll_get_inode(vino);
+
+  int r=-ENOENT;
+  map<string,bufferptr>::iterator p;
+  if (in->xattrs.size() > idx) {
+    for (p = in->xattrs.begin();
+	 idx > 0;
+	 idx--)
+      { }
+  } else {
+    return r;
+  }
+
+  return _removexattr(in, p->first.c_str(), uid, gid);
+}
 
 int Client::ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid)
 {
@@ -6311,6 +6634,30 @@ int Client::ll_mkdir(vinodeno_t parent, const char *name, mode_t mode, struct st
   return r;
 }
 
+int Client::ll_mkdir_precise(vinodeno_t parent, const char *name, mode_t mode, struct stat_precise *attr, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_mkdir_precise " << parent << " " << name << dendl;
+  tout << "ll_mkdir_precise" << std::endl;
+  tout << parent.ino.val << std::endl;
+  tout << name << std::endl;
+  tout << mode << std::endl;
+
+  Inode *diri = _ll_get_inode(parent);
+
+  int r = _mkdir(diri, name, mode, uid, gid);
+  if (r == 0) {
+    string dname(name);
+    Inode *in = diri->dir->dentries[dname]->inode;
+    fill_stat_precise(in, attr);
+    _ll_get(in);
+  }
+  tout << attr->st_ino << std::endl;
+  dout(3) << "ll_mkdir " << parent << " " << name
+	  << " = " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
+  return r;
+}
+
 int Client::_symlink(Inode *dir, const char *name, const char *target, int uid, int gid)
 {
   ldout(cct, 3) << "_symlink(" << dir->ino << " " << name << ", " << target
@@ -6369,6 +6716,29 @@ int Client::ll_symlink(vinodeno_t parent, const char *name, const char *value, s
   }
   tout(cct) << attr->st_ino << std::endl;
   ldout(cct, 3) << "ll_symlink " << parent << " " << name
+	  << " = " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
+  return r;
+}
+
+int Client::ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_symlink_precise " << parent << " " << name << " -> " << value << dendl;
+  tout << "ll_symlink_precise" << std::endl;
+  tout << parent.ino.val << std::endl;
+  tout << name << std::endl;
+  tout << value << std::endl;
+
+  Inode *diri = _ll_get_inode(parent);
+  int r = _symlink(diri, name, value, uid, gid);
+  if (r == 0) {
+    string dname(name);
+    Inode *in = diri->dir->dentries[dname]->inode;
+    fill_stat_precise(in, attr);
+    _ll_get(in);
+  }
+  tout << attr->st_ino << std::endl;
+  dout(3) << "ll_symlink " << parent << " " << name
 	  << " = " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
   return r;
 }
@@ -6619,6 +6989,111 @@ int Client::ll_link(vinodeno_t vino, vinodeno_t newparent, const char *newname, 
   return r;
 }
 
+int Client::ll_link_precise(vinodeno_t vino, vinodeno_t newparent, const char *newname, struct stat_precise *attr, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_link_precise " << vino << " to " << newparent << " " << newname << dendl;
+  tout << "ll_link_precise" << std::endl;
+  tout << vino.ino.val << std::endl;
+  tout << newparent << std::endl;
+  tout << newname << std::endl;
+
+  Inode *old = _ll_get_inode(vino);
+  Inode *diri = _ll_get_inode(newparent);
+
+  int r = _link(old, diri, newname, uid, gid);
+  if (r == 0) {
+    Inode *in = _ll_get_inode(vino);
+    fill_stat_precise(in, attr);
+    _ll_get(in);
+  }
+  return r;
+}
+
+int Client::ll_num_osds(void)
+{
+  return osdmap->get_num_osds();
+}
+
+int Client::ll_osdaddr(int osd, char* buf, size_t size)
+{
+  entity_addr_t g = osdmap->get_addr(osd);
+  uint32_t addr = (g.in4_addr()).sin_addr.s_addr;
+  
+  if (!(osdmap->exists(osd))) {
+    return -1;
+  }
+  return snprintf(buf, size, "%hhu.%hhu.%hhu.%hhu",
+		  (addr & 0x000000ff),
+		  ((addr & 0x0000ff00) >> 0x08),
+		  ((addr & 0x00ff0000) >> 0x10),
+		  ((addr & 0xff000000) >> 0x18));
+}
+
+uint32_t Client::ll_stripe_unit(vinodeno_t vino)
+{
+  Inode *in = _ll_get_inode(vino);
+  return in->layout.fl_stripe_unit;
+}
+
+uint64_t Client::ll_snap_seq(vinodeno_t vino)
+{
+  Inode *in = _ll_get_inode(vino);
+  return in->snaprealm->seq;
+}
+
+uint32_t Client::ll_file_layout(vinodeno_t vino, ceph_file_layout *layout)
+{
+  Inode *in = _ll_get_inode(vino);
+  *layout = in->layout;
+  return 0;
+}
+
+
+/* Currently we cannot take advantage of redundancy in reads, since we
+   would have to go through all possible placement groups (a
+   potentially quite large number determined by a hash), and use CRUSH
+   to calculate the appropriate set of OSDs for each placement group,
+   then index into that.  An array with one entry per OSD is much more
+   tractable and works for demonstration purposes. */
+
+int Client::ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno, ceph_file_layout* layout)
+{
+  inodeno_t ino = vino.ino;
+  uint32_t object_size = layout->fl_object_size;
+  uint32_t su = layout->fl_stripe_unit;
+  uint32_t stripe_count = layout->fl_stripe_count;
+  uint64_t stripes_per_object = object_size / su;
+
+  uint64_t stripeno = blockno / stripe_count;    // which horizontal stripe        (Y)
+  uint64_t stripepos = blockno % stripe_count;   // which object in the object set (X)
+  uint64_t objectsetno = stripeno / stripes_per_object;       // which object set
+  uint64_t objectno = objectsetno * stripe_count + stripepos;  // object id
+    
+  object_t oid = file_object_t(ino, objectno);
+  ceph_object_layout olayout
+    = objecter->osdmap->file_to_object_layout(oid, *layout);
+  
+  pg_t pg = (pg_t)olayout.ol_pgid;
+  vector<int> osds;
+  osdmap->pg_to_osds(pg, osds);
+  return osds[0];
+}
+
+/* Return the offset of the block, internal to the object */
+
+uint64_t Client::ll_get_internal_offset(vinodeno_t vino, uint64_t blockno)
+{
+  Inode *in = _ll_get_inode(vino);
+  inodeno_t ino = vino.ino;
+  ceph_file_layout *layout=&(in->layout);
+  uint32_t object_size = layout->fl_object_size;
+  uint32_t su = layout->fl_stripe_unit;
+  uint64_t stripes_per_object = object_size / su;
+
+  return (blockno % stripes_per_object) * su;
+}
+
 int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
@@ -6700,6 +7175,49 @@ int Client::ll_create(vinodeno_t parent, const char *name, mode_t mode, int flag
   return 0;
 }
 
+int Client::ll_create_precise(vinodeno_t parent, const char *name, mode_t mode, int flags, 
+			      struct stat_precise *attr, Fh **fhp, int uid, int gid)
+{
+  Mutex::Locker lock(client_lock);
+  dout(3) << "ll_create_precise " << parent << " " << name << " 0" << oct << mode << dec << " " << flags << ", uid " << uid << ", gid " << gid << dendl;
+  tout << "ll_create_precise" << std::endl;
+  tout << parent.ino.val << std::endl;
+  tout << name << std::endl;
+  tout << mode << std::endl;
+  tout << flags << std::endl;
+
+  Inode *dir = _ll_get_inode(parent);
+  int r = _mknod(dir, name, mode, 0, uid, gid);
+  if (r < 0)
+    return r;
+  Dentry *dn = dir->dir->dentries[name];
+  Inode *in = dn->inode;
+
+  r = _open(in, flags, mode, fhp, uid, gid);
+  if (r >= 0) {
+    Inode *in = (*fhp)->inode;
+    fill_stat_precise(in, attr);
+    _ll_get(in);
+  } else {
+    attr->st_ino = 0;
+  }
+  tout << (unsigned long)*fhp << std::endl;
+  tout << attr->st_ino << std::endl;
+  dout(3) << "ll_create " << parent << " " << name << " 0" << oct << mode << dec << " " << flags
+	  << " = " << r << " (" << *fhp << " " << hex << attr->st_ino << dec << ")" << dendl;
+  return 0;
+}
+
+loff_t Client::ll_lseek(Fh *fh, loff_t offset, int whence)
+{
+  Mutex::Locker lock(client_lock);
+  tout << "ll_lseek" << std::endl;
+  tout << offset << std::endl;
+  tout << whence << std::endl;
+
+  return _lseek(fh, offset, whence);
+}
+
 int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
 {
   Mutex::Locker lock(client_lock);
@@ -6710,6 +7228,97 @@ int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
   tout(cct) << len << std::endl;
 
   return _read(fh, off, len, bl);
+}
+
+/* TODO: Once this works, reimplement it to take arguments and require
+   nothing from class Inode (DS reads/writes should not need to
+   contact the metadata server in the normal case.) */
+
+uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl,
+			       uint64_t offset, uint64_t length,
+			       ceph_file_layout* layout)
+
+{
+  Mutex::Locker lock(client_lock);
+  Mutex flock("Client::ll_read_block flock");
+  Cond cond;
+  object_t oid = file_object_t(vino.ino, blockid);
+  ceph_object_layout olayout
+    = objecter->osdmap->file_to_object_layout(oid, *layout);
+  int r = 0;
+  bool done = false;
+  Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
+  bufferlist tbl;
+
+  objecter->read_full(oid, object_locator_t(layout->fl_pg_pool, layout->fl_pg_preferred), vino.snapid,
+		      &tbl, 0, onfinish);
+    
+  while (!done)
+    cond.Wait(client_lock);
+  
+  if (r < 0)
+    return r;
+
+  if (offset >= tbl.length())
+    return 0;
+  else if (offset + length > tbl.length())
+    length = tbl.length() - offset;
+
+  tbl.copy(offset, length, bl);
+
+  return length;
+}
+
+/* It appears that the OSD never returns the amount written, so I
+   believe we can assume that success indicates that the full amount
+   requested was written. */
+
+int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
+			   char* buf, uint64_t offset,
+			   uint64_t length, ceph_file_layout* layout,
+			   uint64_t snapseq)
+{
+  Mutex::Locker lock(client_lock);
+  Mutex flock("Client::ll_write_block flock");
+  Cond cond;
+  bool done = false;
+  int r = 0;
+  Context *onsafe = new C_SafeCond(&flock, &cond, &done, &r);
+  Context *dontcare = new C_NoopContext;
+  object_t oid = file_object_t(vino.ino, blockid);
+  ceph_object_layout olayout
+    = objecter->osdmap->file_to_object_layout(oid, *layout);
+  bufferptr bp;
+  if (length > 0) bp = buffer::copy(buf, length);
+  bufferlist rbl;
+  bufferlist wbl;
+  SnapContext fakesnap;
+  Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
+
+  fakesnap.seq = snapseq;
+
+  objecter->read_full(oid, object_locator_t(layout->fl_pg_pool, layout->fl_pg_preferred), vino.snapid,
+		      &rbl, 0, onfinish);
+
+  while (!done)
+    cond.Wait(client_lock);
+
+  done = false;
+
+  rbl.copy(0, offset, wbl);
+  wbl.push_back(bp);
+  if (offset + length < rbl.length())
+    rbl.copy(offset + length, rbl.length() - (offset + length), wbl);
+  
+  objecter->write_full(oid, object_locator_t(layout->fl_pg_pool, layout->fl_pg_preferred), fakesnap,
+		       wbl, g_clock.real_now(), 0,
+		       dontcare, onsafe);
+			
+			
+  while (!done)
+    cond.Wait(client_lock);
+
+  return r;
 }
 
 int Client::ll_write(Fh *fh, loff_t off, loff_t len, const char *data)

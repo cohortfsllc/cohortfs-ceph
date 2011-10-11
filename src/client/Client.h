@@ -23,6 +23,7 @@
 #include <set>
 #include <map>
 #include <fstream>
+#include <exception>
 using std::set;
 using std::map;
 using std::fstream;
@@ -614,14 +615,32 @@ public:
 
   // low-level interface
   int ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, int uid = -1, int gid = -1);
+  int ll_walk(const char* name, struct stat *attr);
   bool ll_forget(vinodeno_t vino, int count);
   Inode *_ll_get_inode(vinodeno_t vino);
   int ll_getattr(vinodeno_t vino, struct stat *st, int uid = -1, int gid = -1);
   int ll_setattr(vinodeno_t vino, struct stat *st, int mask, int uid = -1, int gid = -1);
   int ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid=-1, int gid=-1);
+  int ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid);
+  int ll_getxattridx(vinodeno_t vino, const char *name, int uid, int gid);
+  int ll_getxattr_by_idx(vinodeno_t vino, unsigned idx, void *value,
+			 size_t size, int uid, int gid);
+  int ll_setxattr_by_idx(vinodeno_t vino, unsigned int idx, const void *value,
+			 size_t size, int flags, int uid, int gid);
   int ll_setxattr(vinodeno_t vino, const char *name, const void *value, size_t size, int flags, int uid=-1, int gid=-1);
   int ll_removexattr(vinodeno_t vino, const char *name, int uid=-1, int gid=-1);
+  int ll_removexattr_by_idx(vinodeno_t vino, unsigned int idx, int uid=-1, int gid=-1);
   int ll_listxattr(vinodeno_t vino, char *list, size_t size, int uid=-1, int gid=-1);
+
+  int ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
+			  int *cookie, int *eol, int uid, int gid);
+  uint32_t ll_stripe_unit(vinodeno_t vino);
+  uint32_t ll_file_layout(vinodeno_t vino, ceph_file_layout *layout);
+  uint64_t ll_snap_seq(vinodeno_t vino);
+  int ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno, ceph_file_layout* layout);
+  uint64_t ll_get_internal_offset(vinodeno_t vino, uint64_t blockno);
+  int ll_num_osds(void);
+  int ll_osdaddr(int osd, char* buf, size_t size);
   int ll_opendir(vinodeno_t vino, void **dirpp, int uid = -1, int gid = -1);
   void ll_releasedir(void *dirp);
   int ll_readlink(vinodeno_t vino, const char **value, int uid = -1, int gid = -1);
@@ -636,6 +655,14 @@ public:
   int ll_create(vinodeno_t parent, const char *name, mode_t mode, int flags, struct stat *attr, Fh **fh, int uid = -1, int gid = -1);
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
+  uint64_t ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl,
+			 uint64_t offset, uint64_t length,
+			 ceph_file_layout* layout);
+  int ll_write_block(vinodeno_t vino, uint64_t blockid,
+		     char* buf, uint64_t offset,
+		     uint64_t length, ceph_file_layout* layout,
+		     uint64_t snapseq);
+  loff_t ll_lseek(Fh *fh, loff_t offset, int whence);
   int ll_flush(Fh *fh);
   int ll_fsync(Fh *fh, bool syncdataonly);
   int ll_release(Fh *fh);
