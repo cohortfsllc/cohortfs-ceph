@@ -13,7 +13,14 @@
  */
 
 #include "common/errno.h"
+
+#include "mds/mdstypes.h" /* XXXX */
+#include "mds/CDir.h"
+#include "Dir.h"
+
+
 #include "include/cephfs/libcephfs.h"
+
 #include <stdlib.h>
 
 #include <errno.h>

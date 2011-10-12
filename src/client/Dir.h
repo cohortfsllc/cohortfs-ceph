@@ -3,7 +3,7 @@
 
 class Inode;
 
-class Dir {
+struct Dir { /* XXX should rename */
  public:
   Inode    *parent_inode;  // my inode
   hash_map<string, Dentry*> dentries;
