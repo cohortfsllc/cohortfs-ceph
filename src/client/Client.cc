@@ -741,7 +741,6 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
     // fake it for snap lookup
     vinodeno_t vino = ist.vino;
     vino.snapid = CEPH_SNAPDIR;
-    _ensure(vino);
     Inode *diri = inode_map[vino];
     
     string dname = request->path.last_dentry();
@@ -5768,51 +5767,6 @@ int Client::ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, in
   return r;
 }
 
-int Client::ll_lookup_precise(vinodeno_t parent, const char *name, struct stat_precise *attr, int uid, int gid)
-{
-  Mutex::Locker lock(client_lock);
-  dout(3) << "ll_lookup_precise " << parent << " " << name << dendl;
-  tout << "ll_lookup_precise" << std::endl;
-  tout << parent.ino.val << std::endl;
-  tout << name << std::endl;
-
-  string dname = name;
-  Inode *diri = 0;
-  Inode *in = 0;
-  int r = 0;
-  utime_t now = g_clock.now();
-
-  if (inode_map.count(parent) == 0) {
-    dout(1) << "ll_lookup " << parent << " " << name << " -> ENOENT (parent DNE... WTF)" << dendl;
-    r = -ENOENT;
-    attr->st_ino = 0;
-    goto out;
-  }
-  diri = inode_map[parent];
-  if (!diri->is_dir()) {
-    dout(1) << "ll_lookup " << parent << " " << name << " -> ENOTDIR (parent not a dir... WTF)" << dendl;
-    r = -ENOTDIR;
-    attr->st_ino = 0;
-    goto out;
-  }
-
-  r = _lookup(diri, dname.c_str(), &in);
-  if (r < 0) {
-    attr->st_ino = 0;
-    goto out;
-  }
-
-  assert(in);
-  fill_stat_precise(in, attr);
-  _ll_get(in);
-
- out:
-  dout(3) << "ll_lookup " << parent << " " << name
-	  << " -> " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
-  tout << attr->st_ino << std::endl;
-  return r;
-}
-
 int Client::ll_walk(const char* name, struct stat *attr)
 {
   Mutex::Locker lock(client_lock);
@@ -5821,8 +5775,8 @@ int Client::ll_walk(const char* name, struct stat *attr)
   int rc;
 
   dout(3) << "ll_walk" << name << dendl;
-  tout << "ll_walk" << std::endl;
-  tout << name << std::endl;
+  tout(cct) << "ll_walk" << std::endl;
+  tout(cct) << name << std::endl;
 
   rc=path_walk(fp, &destination, false);
   if (rc < 0)
@@ -5833,30 +5787,6 @@ int Client::ll_walk(const char* name, struct stat *attr)
   else
     {
       fill_stat(destination, attr);
-      return 0;
-    }
-}
-
-int Client::ll_walk_precise(const char* name, struct stat_precise *attr)
-{
-  Mutex::Locker lock(client_lock);
-  filepath fp(name, 0);
-  Inode *destination=0;
-  int rc;
-
-  dout(3) << "ll_walk" << name << dendl;
-  tout << "ll_walk" << std::endl;
-  tout << name << std::endl;
-
-  rc=path_walk(fp, &destination, false);
-  if (rc < 0)
-    {
-      attr->st_ino=0;
-      return rc;
-    }
-  else
-    {
-      fill_stat_precise(destination, attr);
       return 0;
     }
 }
@@ -5927,8 +5857,7 @@ bool Client::ll_forget(vinodeno_t vino, int num)
 
 Inode *Client::_ll_get_inode(vinodeno_t vino)
 {
-  _ensure(vino);
-  return inode_map[vino];
+  return (inode_map[vino]);
 }
 
 
@@ -5951,25 +5880,6 @@ int Client::ll_getattr(vinodeno_t vino, struct stat *attr, int uid, int gid)
   return res;
 }
 
-int Client::ll_getattr_precise(vinodeno_t vino, struct stat_precise *attr, int uid, int gid)
-{
-  Mutex::Locker lock(client_lock);
-  dout(3) << "ll_getattr_precise " << vino << dendl;
-  tout << "ll_getattr_precise" << std::endl;
-  tout << vino.ino.val << std::endl;
-
-  Inode *in = _ll_get_inode(vino);
-  int res;
-  if (vino.snapid < CEPH_NOSNAP)
-    res = 0;
-  else
-    res = _getattr(in, CEPH_STAT_CAP_INODE_ALL, uid, gid);
-  if (res == 0)
-    fill_stat_precise(in, attr);
-  dout(3) << "ll_getattr " << vino << " = " << res << dendl;
-  return res;
-}
-
 int Client::ll_setattr(vinodeno_t vino, struct stat *attr, int mask, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
@@ -5989,30 +5899,6 @@ int Client::ll_setattr(vinodeno_t vino, struct stat *attr, int mask, int uid, in
   if (res == 0)
     fill_stat(in, attr);
   ldout(cct, 3) << "ll_setattr " << vino << " = " << res << dendl;
-  return res;
-}
-
-int Client::ll_setattr_precise(vinodeno_t vino, struct stat_precise *attr, int mask, int uid, int gid)
-{
-  Mutex::Locker lock(client_lock);
-  dout(3) << "ll_setattr_precise " << vino << " mask " << hex << mask << dec << dendl;
-  tout << "ll_setattr_precise" << std::endl;
-  tout << vino.ino.val << std::endl;
-  tout << attr->st_mode << std::endl;
-  tout << attr->st_uid << std::endl;
-  tout << attr->st_gid << std::endl;
-  tout << attr->st_size << std::endl;
-  tout << attr->st_mtime_sec << std::endl;
-  tout << attr->st_mtime_micro << std::endl;
-  tout << attr->st_atime_sec << std::endl;
-  tout << attr->st_atime_micro << std::endl;
-  tout << mask << std::endl;
-
-  Inode *in = _ll_get_inode(vino);
-  int res = _setattr(in, attr, mask, uid, gid);
-  if (res == 0)
-    fill_stat_precise(in, attr);
-  dout(3) << "ll_setattr_precise " << vino << " = " << res << dendl;
   return res;
 }
 
@@ -6108,7 +5994,9 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
 int Client::ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t size, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
-  ldout(cct, 3) << "ll_getxattr " << vino << " " << name << " size " << size << dendl;
+
+  ldout(cct, 3) << "ll_getxattr " << vino << " " << name << " size " << 
+    size << dendl;
   tout(cct) << "ll_getxattr" << std::endl;
   tout(cct) << vino.ino.val << std::endl;
   tout(cct) << name << std::endl;
@@ -6219,9 +6107,9 @@ int Client::ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
 {
   Mutex::Locker lock(client_lock);
   dout(3) << "ll_listxattr_chunks " << vino << " size " << size << dendl;
-  tout << "ll_listxattr_chunks" << std::endl;
-  tout << vino.ino.val << std::endl;
-  tout << size << std::endl;  
+  tout(cct) << "ll_listxattr_chunks" << std::endl;
+  tout(cct) << vino.ino.val << std::endl;
+  tout(cct) << size << std::endl;  
 
   Inode *in = _ll_get_inode(vino);
 
@@ -6266,10 +6154,7 @@ int Client::ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
 int Client::ll_getxattridx(vinodeno_t vino, const char *name, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
-
   Inode *in = _ll_get_inode(vino);
-
-
   int r = _getattr(in, CEPH_STAT_CAP_XATTR, uid, gid);
 
   if (r == 0) {
@@ -6314,13 +6199,16 @@ int Client::_setxattr(Inode *in, const char *name, const void *value, size_t siz
   return res;
 }
 
-int Client::ll_setxattr_by_idx(vinodeno_t vino, unsigned int idx, const void *value,
-			       size_t size, int flags, int uid, int gid)
+int Client::ll_setxattr_by_idx(vinodeno_t vino, unsigned int idx,
+			       const void *value, size_t size, int flags,
+			       int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
-  dout(3) << "ll_setxattr_by_idx " << vino << " " << idx << " size " << size << dendl;
-  tout << "ll_setxattr_by_idx" << std::endl;
-  tout << vino.ino.val << std::endl;
+
+  dout(3) << "ll_setxattr_by_idx " << vino << " " << idx << " size " <<
+    size << dendl;
+  tout(cct) << "ll_setxattr_by_idx" << std::endl;
+  tout(cct) << vino.ino.val << std::endl;
 
   Inode *in = _ll_get_inode(vino);
 
@@ -6634,30 +6522,6 @@ int Client::ll_mkdir(vinodeno_t parent, const char *name, mode_t mode, struct st
   return r;
 }
 
-int Client::ll_mkdir_precise(vinodeno_t parent, const char *name, mode_t mode, struct stat_precise *attr, int uid, int gid)
-{
-  Mutex::Locker lock(client_lock);
-  dout(3) << "ll_mkdir_precise " << parent << " " << name << dendl;
-  tout << "ll_mkdir_precise" << std::endl;
-  tout << parent.ino.val << std::endl;
-  tout << name << std::endl;
-  tout << mode << std::endl;
-
-  Inode *diri = _ll_get_inode(parent);
-
-  int r = _mkdir(diri, name, mode, uid, gid);
-  if (r == 0) {
-    string dname(name);
-    Inode *in = diri->dir->dentries[dname]->inode;
-    fill_stat_precise(in, attr);
-    _ll_get(in);
-  }
-  tout << attr->st_ino << std::endl;
-  dout(3) << "ll_mkdir " << parent << " " << name
-	  << " = " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
-  return r;
-}
-
 int Client::_symlink(Inode *dir, const char *name, const char *target, int uid, int gid)
 {
   ldout(cct, 3) << "_symlink(" << dir->ino << " " << name << ", " << target
@@ -6716,29 +6580,6 @@ int Client::ll_symlink(vinodeno_t parent, const char *name, const char *value, s
   }
   tout(cct) << attr->st_ino << std::endl;
   ldout(cct, 3) << "ll_symlink " << parent << " " << name
-	  << " = " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
-  return r;
-}
-
-int Client::ll_symlink_precise(vinodeno_t parent, const char *name, const char *value, struct stat_precise *attr, int uid, int gid)
-{
-  Mutex::Locker lock(client_lock);
-  dout(3) << "ll_symlink_precise " << parent << " " << name << " -> " << value << dendl;
-  tout << "ll_symlink_precise" << std::endl;
-  tout << parent.ino.val << std::endl;
-  tout << name << std::endl;
-  tout << value << std::endl;
-
-  Inode *diri = _ll_get_inode(parent);
-  int r = _symlink(diri, name, value, uid, gid);
-  if (r == 0) {
-    string dname(name);
-    Inode *in = diri->dir->dentries[dname]->inode;
-    fill_stat_precise(in, attr);
-    _ll_get(in);
-  }
-  tout << attr->st_ino << std::endl;
-  dout(3) << "ll_symlink " << parent << " " << name
 	  << " = " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
   return r;
 }
@@ -6989,27 +6830,6 @@ int Client::ll_link(vinodeno_t vino, vinodeno_t newparent, const char *newname, 
   return r;
 }
 
-int Client::ll_link_precise(vinodeno_t vino, vinodeno_t newparent, const char *newname, struct stat_precise *attr, int uid, int gid)
-{
-  Mutex::Locker lock(client_lock);
-  dout(3) << "ll_link_precise " << vino << " to " << newparent << " " << newname << dendl;
-  tout << "ll_link_precise" << std::endl;
-  tout << vino.ino.val << std::endl;
-  tout << newparent << std::endl;
-  tout << newname << std::endl;
-
-  Inode *old = _ll_get_inode(vino);
-  Inode *diri = _ll_get_inode(newparent);
-
-  int r = _link(old, diri, newname, uid, gid);
-  if (r == 0) {
-    Inode *in = _ll_get_inode(vino);
-    fill_stat_precise(in, attr);
-    _ll_get(in);
-  }
-  return r;
-}
-
 int Client::ll_num_osds(void)
 {
   return osdmap->get_num_osds();
@@ -7175,45 +6995,12 @@ int Client::ll_create(vinodeno_t parent, const char *name, mode_t mode, int flag
   return 0;
 }
 
-int Client::ll_create_precise(vinodeno_t parent, const char *name, mode_t mode, int flags, 
-			      struct stat_precise *attr, Fh **fhp, int uid, int gid)
-{
-  Mutex::Locker lock(client_lock);
-  dout(3) << "ll_create_precise " << parent << " " << name << " 0" << oct << mode << dec << " " << flags << ", uid " << uid << ", gid " << gid << dendl;
-  tout << "ll_create_precise" << std::endl;
-  tout << parent.ino.val << std::endl;
-  tout << name << std::endl;
-  tout << mode << std::endl;
-  tout << flags << std::endl;
-
-  Inode *dir = _ll_get_inode(parent);
-  int r = _mknod(dir, name, mode, 0, uid, gid);
-  if (r < 0)
-    return r;
-  Dentry *dn = dir->dir->dentries[name];
-  Inode *in = dn->inode;
-
-  r = _open(in, flags, mode, fhp, uid, gid);
-  if (r >= 0) {
-    Inode *in = (*fhp)->inode;
-    fill_stat_precise(in, attr);
-    _ll_get(in);
-  } else {
-    attr->st_ino = 0;
-  }
-  tout << (unsigned long)*fhp << std::endl;
-  tout << attr->st_ino << std::endl;
-  dout(3) << "ll_create " << parent << " " << name << " 0" << oct << mode << dec << " " << flags
-	  << " = " << r << " (" << *fhp << " " << hex << attr->st_ino << dec << ")" << dendl;
-  return 0;
-}
-
 loff_t Client::ll_lseek(Fh *fh, loff_t offset, int whence)
 {
   Mutex::Locker lock(client_lock);
-  tout << "ll_lseek" << std::endl;
-  tout << offset << std::endl;
-  tout << whence << std::endl;
+  tout(cct) << "ll_lseek" << std::endl;
+  tout(cct) << offset << std::endl;
+  tout(cct) << whence << std::endl;
 
   return _lseek(fh, offset, whence);
 }
@@ -7310,11 +7097,12 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
   if (offset + length < rbl.length())
     rbl.copy(offset + length, rbl.length() - (offset + length), wbl);
   
-  objecter->write_full(oid, object_locator_t(layout->fl_pg_pool, layout->fl_pg_preferred), fakesnap,
-		       wbl, g_clock.real_now(), 0,
+  objecter->write_full(oid,
+		       object_locator_t(
+			 layout->fl_pg_pool,
+			 layout->fl_pg_preferred),
+		       fakesnap, wbl, ceph_clock_now(cct), 0,
 		       dontcare, onsafe);
-			
-			
   while (!done)
     cond.Wait(client_lock);
 
