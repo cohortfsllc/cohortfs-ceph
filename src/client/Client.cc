@@ -7144,7 +7144,6 @@ int Client::ll_fsync(Fh *fh, bool syncdataonly)
   return _fsync(fh, syncdataonly);
 }
 
-
 int Client::ll_release(Fh *fh)
 {
   Mutex::Locker lock(client_lock);
@@ -7156,7 +7155,93 @@ int Client::ll_release(Fh *fh)
   return 0;
 }
 
+int Client::ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
+			     uint32_t* parent_name_hash)
+{
+    Inode *in, *parent_inode;
+    Dentry *dentry;
+    int r = 0;
 
+    if (vino.ino.val == 1) {
+	*parent_ino = 0;
+	*parent_name_hash = 0;
+	r = 0;
+    } else if (vino.snapid.val != CEPH_NOSNAP) {
+	r = -EINVAL;
+    } else {
+        in  = _ll_get_inode(vino);
+	if ( in->dn_set.empty())
+	    r = -ENOLINK;
+	else {
+	    dentry = in->get_first_parent();
+	    parent_inode = dentry->dir->parent_inode;
+	    *parent_ino = parent_inode->ino.val;
+	    if (*parent_ino == 1) {
+	        *parent_name_hash = 0;
+	    } else if (parent_inode->dn_set.empty()) {
+		r = -ESTALE;
+	    } else {
+	      *parent_name_hash = ceph_str_hash(CEPH_STR_HASH_RJENKINS,
+						dentry->name.c_str(),
+						dentry->name.length());
+		r = 0;
+	    }
+	}
+    }
+    return r;
+}
+
+int Client::ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
+			     uint32_t parent_hash)
+{
+    Mutex::Locker lock(client_lock);
+    int r = 0;
+    
+    if (inode_map.count(*vino)) {
+	r = 0;
+    } else if (vino->snapid.val != CEPH_NOSNAP) {
+	r = -ESTALE;
+    } else {
+	MetaRequest *hashreq = new MetaRequest(CEPH_MDS_OP_LOOKUPHASH);
+	Inode *target = NULL;
+	char hashstring[10];
+
+	snprintf(hashstring, 10, "%lu", (long unsigned int) parent_hash);
+	
+	hashreq->set_filepath(filepath(vino->ino));
+	hashreq->set_filepath2(filepath(hashstring, inodeno_t(parent_ino)));
+	hashreq->head.args.getattr.mask = 0;
+
+	r = make_request(hashreq, -1, -1, NULL, rand() % mdsmap->get_num_mds());
+
+	if (r == 0) {
+	    if (!target) {
+		r = -ESTALE;
+	    }
+	    else {
+		target->ll_get();
+		MetaRequest *lookupreq = new MetaRequest(CEPH_MDS_OP_LOOKUP);
+		filepath parentpath;
+		Inode *parent_inode, *dummy = NULL;
+                Dentry *dentry = target->get_first_parent();
+		if ((! dentry) || (! dentry->dir->parent_inode))
+		  r = -ESTALE;
+		else {
+		  parent_inode = dentry->dir->parent_inode;
+		  parent_inode->make_nosnap_relative_path(parentpath);
+		  parentpath.push_dentry(dentry->name);
+
+		  lookupreq->set_filepath(parentpath);
+		  lookupreq->inode = parent_inode;
+		  lookupreq->head.args.getattr.mask = 0;
+
+		  r = make_request(lookupreq, 0, 0, &dummy);
+		}
+	    }
+	}
+    }
+    return r;
+}
 
 
 

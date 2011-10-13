@@ -689,7 +689,10 @@ public:
   int ll_fsync(Fh *fh, bool syncdataonly);
   int ll_release(Fh *fh);
   int ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
-
+  int ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
+		       uint32_t* parent_hash);
+  int ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
+		       uint32_t parent_hash);
   void ll_register_ino_invalidate_cb(client_ino_callback_t cb, void *handle);
 };
 
