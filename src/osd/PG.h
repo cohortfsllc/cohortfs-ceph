@@ -733,8 +733,10 @@ public:
     _lock.Unlock();
   }
   void assert_locked() {
-    //generic_dout(0) << this << " " << info.pgid << " unlock" << dendl;
     assert(_lock.is_locked());
+  }
+  bool is_locked() {
+    return _lock.is_locked();
   }
   void wait() {
     assert(_lock.is_locked());
@@ -1643,7 +1645,7 @@ public:
     recovery_state.handle_loaded(rctx);
   }
 
-
+  void on_removal();
   // abstract bits
   virtual void do_op(MOSDOp *op) = 0;
   virtual void do_sub_op(MOSDSubOp *op) = 0;

@@ -361,6 +361,7 @@ private:
   
   void wait_for_no_ops();
   void enqueue_op(PG *pg, Message *op);
+  void requeue_ops(PG *pg, list<Message*>& ls);
   void dequeue_op(PG *pg);
   static void static_dequeueop(OSD *o, PG *pg) {
     o->dequeue_op(pg);
@@ -740,11 +741,13 @@ protected:
     bool _enqueue(PG *pg) {
       if (pg->snap_trim_item.is_on_list())
 	return false;
+      pg->get();
       osd->snap_trim_queue.push_back(&pg->snap_trim_item);
       return true;
     }
     void _dequeue(PG *pg) {
-      pg->snap_trim_item.remove_myself();
+      if (pg->snap_trim_item.remove_myself())
+	pg->put();
     }
     PG *_dequeue() {
       if (osd->snap_trim_queue.empty())
@@ -1025,6 +1028,16 @@ public:
   void handle_sub_op(class MOSDSubOp *m);
   void handle_sub_op_reply(class MOSDSubOpReply *m);
 
+private:
+  /*
+   * these locked helpers assume pg is locked, and will do fina
+   * checks before enqueuing the given operation.
+   */
+  void _handle_op(PG *pg, class MOSDOp *m);
+  void _handle_sub_op(PG *pg, class MOSDSubOp *m);
+  void _handle_sub_op_reply(PG *pg, class MOSDSubOpReply *m);
+
+public:
   void force_remount();
 
   int init_op_flags(MOSDOp *op);

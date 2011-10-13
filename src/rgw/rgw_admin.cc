@@ -56,15 +56,14 @@ void _usage()
   cerr << "                             specified date (and optional time)\n";
   cerr << "options:\n";
   cerr << "   --uid=<id>                user id\n";
+  cerr << "   --auth-uid=<auid>         librados uid\n";
   cerr << "   --subuser=<name>          subuser name\n";
   cerr << "   --access-key=<key>        S3 access key\n";
-  cerr << "   --swift-user=<group:name> Swift user\n";
   cerr << "   --email=<email>\n";
-  cerr << "   --auth_uid=<auid>         librados uid\n";
-  cerr << "   --secret=<key>            S3 key\n";
-  cerr << "   --swift-secret=<key>      Swift key\n";
-  cerr << "   --gen-access-key          generate random access key\n";
+  cerr << "   --secret=<key>            specify secret key\n";
+  cerr << "   --gen-access-key          generate random access key (for S3)\n";
   cerr << "   --gen-secret              generate random secret key\n";
+  cerr << "   --key-type=<type>         key type, options are: swift, s3\n";
   cerr << "   --access=<access>         Set access permissions for sub-user, should be one\n";
   cerr << "                             of read, write, readwrite, full\n";
   cerr << "   --display-name=<name>\n";
@@ -291,9 +290,21 @@ static void show_user_info(RGWUserInfo& info, Formatter *formatter)
   formatter->dump_int("rados_uid", info.auid);
   formatter->dump_string("display_name", info.display_name.c_str());
   formatter->dump_string("email", info.user_email.c_str());
-  formatter->dump_string("swift_user", info.swift_name.c_str());
-  formatter->dump_string("swift_key", info.swift_key.c_str());
   formatter->dump_int("suspended", (int)info.suspended);
+
+  // subusers
+  formatter->open_array_section("subusers");
+  for (uiter = info.subusers.begin(); uiter != info.subusers.end(); ++uiter) {
+    RGWSubUser& u = uiter->second;
+    formatter->open_object_section("user");
+    formatter->dump_format("id", "%s:%s", info.user_id.c_str(), u.name.c_str());
+    char buf[256];
+    perm_to_str(u.perm_mask, buf, sizeof(buf));
+    formatter->dump_string("permissions", buf);
+    formatter->close_section();
+    formatter->flush(cout);
+  }
+  formatter->close_section();
 
   // keys
   formatter->open_array_section("keys");
@@ -309,17 +320,15 @@ static void show_user_info(RGWUserInfo& info, Formatter *formatter)
   }
   formatter->close_section();
 
-  // subusers
-  formatter->open_array_section("subusers");
-  for (uiter = info.subusers.begin(); uiter != info.subusers.end(); ++uiter) {
-    RGWSubUser& u = uiter->second;
-    formatter->open_object_section("user");
-    formatter->dump_format("id", "%s:%s", info.user_id.c_str(), u.name.c_str());
-    char buf[256];
-    perm_to_str(u.perm_mask, buf, sizeof(buf));
-    formatter->dump_string("permissions", buf);
+  formatter->open_array_section("swift_keys");
+  for (kiter = info.swift_keys.begin(); kiter != info.swift_keys.end(); ++kiter) {
+    RGWAccessKey& k = kiter->second;
+    const char *sep = (k.subuser.empty() ? "" : ":");
+    const char *subuser = (k.subuser.empty() ? "" : k.subuser.c_str());
+    formatter->open_object_section("key");
+    formatter->dump_format("user", "%s%s%s", info.user_id.c_str(), sep, subuser);
+    formatter->dump_string("secret_key", k.key);
     formatter->close_section();
-    formatter->flush(cout);
   }
   formatter->close_section();
 
@@ -391,12 +400,16 @@ static void remove_old_indexes(RGWUserInfo& old_info, RGWUserInfo new_info)
     }
   }
 
-  if (!old_info.swift_name.empty() &&
-      old_info.swift_name.compare(new_info.swift_name) != 0) {
-    ret = rgw_remove_swift_name_index(new_info.user_id, old_info.swift_name);
-    if (ret < 0 && ret != -ENOENT) {
-      cerr << "ERROR: could not remove index for swift_name " << old_info.swift_name << " return code: " << ret << std::endl;
-      success = false;
+  map<string, RGWAccessKey>::iterator old_iter;
+  for (old_iter = old_info.swift_keys.begin(); old_iter != old_info.swift_keys.end(); ++old_iter) {
+    RGWAccessKey& swift_key = old_iter->second;
+    map<string, RGWAccessKey>::iterator new_iter = new_info.swift_keys.find(swift_key.id);
+    if (new_iter == new_info.swift_keys.end()) {
+      ret = rgw_remove_swift_name_index(new_info.user_id, swift_key.id);
+      if (ret < 0 && ret != -ENOENT) {
+        cerr << "ERROR: could not remove index for swift_name " << swift_key.id << " return code: " << ret << std::endl;
+        success = false;
+      }
     }
   }
 
@@ -443,6 +456,11 @@ int bucket_stats(rgw_bucket& bucket, Formatter *formatter)
   return 0;
 }
 
+enum KeyType {
+  KEY_TYPE_SWIFT,
+  KEY_TYPE_S3,
+};
+
 int main(int argc, char **argv) 
 {
   vector<const char*> args;
@@ -453,8 +471,10 @@ int main(int argc, char **argv)
   common_init_finish(g_ceph_context);
 
   std::string user_id, access_key, secret_key, user_email, display_name;
-  std::string bucket_name, pool_name, object, swift_user, swift_key;
+  std::string bucket_name, pool_name, object;
   std::string date, time, subuser, access, format;
+  std::string key_type_str;
+  KeyType key_type = KEY_TYPE_S3;
   rgw_bucket bucket;
   uint32_t perm_mask = 0;
   uint64_t auid = -1;
@@ -500,6 +520,16 @@ int main(int argc, char **argv)
       pool_name = val;
     } else if (ceph_argparse_witharg(args, i, &val, "-o", "--object", (char*)NULL)) {
       object = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "--key-type", (char*)NULL)) {
+      key_type_str = val;
+      if (key_type_str.compare("swift") == 0) {
+        key_type = KEY_TYPE_SWIFT;
+      } else if (key_type_str.compare("s3") == 0) {
+        key_type = KEY_TYPE_S3;
+      } else {
+        cerr << "bad key type: " << key_type_str << std::endl;
+        return usage();
+      }
     } else if (ceph_argparse_flag(args, i, "--gen-access-key", (char*)NULL)) {
       gen_key = true;
     } else if (ceph_argparse_flag(args, i, "--gen-secret", (char*)NULL)) {
@@ -510,10 +540,6 @@ int main(int argc, char **argv)
 	exit(EXIT_FAILURE);
       }
       auid = tmp;
-    } else if (ceph_argparse_witharg(args, i, &val, "--swift-user", (char*)NULL)) {
-      swift_user = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--swift-secret", (char*)NULL)) {
-      swift_key = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--date", (char*)NULL)) {
       date = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--time", (char*)NULL)) {
@@ -594,7 +620,7 @@ int main(int argc, char **argv)
     free(suser);
   }
 
-  if (opt_cmd == OPT_KEY_RM && access_key.empty()) {
+  if (opt_cmd == OPT_KEY_RM && key_type == KEY_TYPE_S3 && access_key.empty()) {
     cerr << "error: access key was not specified" << std::endl;
     return usage();
   }
@@ -630,13 +656,6 @@ int main(int argc, char **argv)
       } else {
 	cerr << "could not find user by specified access key" << std::endl;
       }
-    }
-    if (!found && (!swift_user.empty())) {
-      s = swift_user;
-      if (rgw_get_user_info_by_swift(s, info) >= 0) {
-	found = true;
-      } else
-        cerr << "could not find user by specified swift username" << std::endl;
     }
     if (found)
       user_id = info.user_id.c_str();
@@ -760,15 +779,26 @@ int main(int argc, char **argv)
   case OPT_KEY_CREATE:
     if (!user_id.empty())
       info.user_id = user_id;
+    if (key_type == KEY_TYPE_SWIFT) {
+      access_key = info.user_id;
+      access_key.append(":");
+      access_key.append(subuser);
+    }
     if ((!access_key.empty()) && (!secret_key.empty())) {
       RGWAccessKey k;
       k.id = access_key;
       k.key = secret_key;
       if (!subuser.empty())
         k.subuser = subuser;
-      info.access_keys[access_key] = k;
+      if (key_type == KEY_TYPE_SWIFT)
+        info.swift_keys[access_key] = k;
+      else
+        info.access_keys[access_key] = k;
    } else if ((!access_key.empty()) || (!secret_key.empty())) {
-      cerr << "access key modification requires both access key and secret key" << std::endl;
+      if (key_type == KEY_TYPE_SWIFT)
+        cerr << "swift key modification requires both subuser and secret key" << std::endl;
+      else
+        cerr << "access key modification requires both access key and secret key" << std::endl;
       return 1;
     }
     if (!display_name.empty())
@@ -777,10 +807,6 @@ int main(int argc, char **argv)
       info.user_email = user_email;
     if (auid != (uint64_t)-1)
       info.auid = auid;
-    if (!swift_user.empty())
-      info.swift_name = swift_user;
-    if (!swift_key.empty())
-      info.swift_key = swift_key;
     if (!subuser.empty()) {
       RGWSubUser u;
       u.name = subuser;
@@ -810,15 +836,26 @@ int main(int argc, char **argv)
     break;
 
   case OPT_KEY_RM:
-    kiter = info.access_keys.find(access_key);
-    if (kiter == info.access_keys.end()) {
-      cerr << "key not found" << std::endl;
-    } else {
-      rgw_remove_key_index(kiter->second);
-      info.access_keys.erase(kiter);
-      if ((err = rgw_store_user_info(info)) < 0) {
-        cerr << "error storing user info: " << cpp_strerror(-err) << std::endl;
-        break;
+    {
+      map<string, RGWAccessKey> *keys_map;
+      if (key_type == KEY_TYPE_SWIFT) {
+        access_key = info.user_id;
+        access_key.append(":");
+        access_key.append(subuser);
+        keys_map = &info.swift_keys;
+      } else {
+        keys_map = &info.access_keys;
+      }
+      kiter = keys_map->find(access_key);
+      if (kiter == keys_map->end()) {
+        cerr << "key not found" << std::endl;
+      } else {
+        rgw_remove_key_index(kiter->second);
+        keys_map->erase(kiter);
+        if ((err = rgw_store_user_info(info)) < 0) {
+          cerr << "error storing user info: " << cpp_strerror(-err) << std::endl;
+          break;
+        }
       }
     }
     show_user_info(info, formatter);
