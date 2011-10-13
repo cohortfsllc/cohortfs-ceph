@@ -319,6 +319,10 @@ int ceph_ll_write_block(struct ceph_mount_info *cmount, struct vinodeno_t vino,
 			uint64_t blockid, char* buf, uint64_t offset,
 			uint64_t length, struct ceph_file_layout* layout,
 			uint64_t snapseq);
+int ceph_ll_connectable_x(vinodeno_t vino, uint64_t* parent_ino,
+		     uint32_t* parent_hash);
+int ceph_ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
+		     uint32_t parent_hash);
 
 #ifdef __cplusplus
 }
