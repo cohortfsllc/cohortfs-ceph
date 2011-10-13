@@ -14,12 +14,13 @@
 
 #include "common/errno.h"
 
-#include "mds/mdstypes.h" /* XXXX */
+#include "common/config.h" /* XXX review new includes */
+#include "client/Client.h"
+#include "client/Dir.h"
 
 #include "include/cephfs/libcephfs.h"
 
 #include <stdlib.h>
-
 #include <errno.h>
 #include <dirent.h>
 #include <iostream>

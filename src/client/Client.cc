@@ -87,8 +87,6 @@ using namespace std;
 
 #define  tout(cct)       if (!cct->_conf->client_trace.empty()) traceout
 
-
-
 // static logger
 Mutex client_logger_lock("client_logger_lock");
 PerfCounters  *client_counters = 0;
@@ -5775,7 +5773,7 @@ int Client::ll_walk(const char* name, struct stat *attr)
   Inode *destination=0;
   int rc;
 
-  dout(3) << "ll_walk" << name << dendl;
+  ldout(cct, 3) << "ll_walk" << name << dendl;
   tout(cct) << "ll_walk" << std::endl;
   tout(cct) << name << std::endl;
 
@@ -6107,7 +6105,7 @@ int Client::ll_listxattr_chunks(vinodeno_t vino, char *names, size_t size,
 				int *cookie, int *eol, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
-  dout(3) << "ll_listxattr_chunks " << vino << " size " << size << dendl;
+  ldout(cct,3) << "ll_listxattr_chunks " << vino << " size " << size << dendl;
   tout(cct) << "ll_listxattr_chunks" << std::endl;
   tout(cct) << vino.ino.val << std::endl;
   tout(cct) << size << std::endl;  
@@ -6196,7 +6194,8 @@ int Client::_setxattr(Inode *in, const char *name, const void *value, size_t siz
   int res = make_request(req, uid, gid);
 
   trim_cache();
-  ldout(cct, 3) << "_setxattr(" << in->ino << ", \"" << name << "\") = " << res << dendl;
+  ldout(cct, 3) << "_setxattr(" << in->ino << ", \"" << name << "\") = " << 
+    res << dendl;
   return res;
 }
 
@@ -6206,7 +6205,7 @@ int Client::ll_setxattr_by_idx(vinodeno_t vino, unsigned int idx,
 {
   Mutex::Locker lock(client_lock);
 
-  dout(3) << "ll_setxattr_by_idx " << vino << " " << idx << " size " <<
+  ldout(cct,3) << "ll_setxattr_by_idx " << vino << " " << idx << " size " <<
     size << dendl;
   tout(cct) << "ll_setxattr_by_idx" << std::endl;
   tout(cct) << vino.ino.val << std::endl;
@@ -6869,7 +6868,6 @@ uint32_t Client::ll_file_layout(vinodeno_t vino, ceph_file_layout *layout)
   *layout = in->layout;
   return 0;
 }
-
 
 /* Currently we cannot take advantage of redundancy in reads, since we
    would have to go through all possible placement groups (a
