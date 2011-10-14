@@ -82,10 +82,10 @@ typedef struct _snapid_t {
   uint64_t val;
 } snapid_t;
 
-typedef struct __vinodeno {
+typedef struct vinodeno_t {
   inodeno_t ino;
   snapid_t snapid;
-  } vinodeno_t;
+} vinodeno_t;
 
 typedef struct Fh Fh;
 
