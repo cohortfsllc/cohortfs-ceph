@@ -630,7 +630,7 @@ extern "C" int ceph_ll_lookup(struct ceph_mount_info *cmount,
   return (cmount->get_client()->ll_lookup(parent, name, attr, uid, gid));
 }
 
-bool ceph_ll_forget(struct ceph_mount_info *cmount, vinodeno_t vino, int count)
+int ceph_ll_forget(struct ceph_mount_info *cmount, vinodeno_t vino, int count)
 {
   return (cmount->get_client()->ll_forget(vino, count));
 }
