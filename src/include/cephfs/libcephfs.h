@@ -223,7 +223,7 @@ struct CephContext *ceph_get_mount_context(struct ceph_mount_info *cmount);
 int ceph_ll_lookup(struct ceph_mount_info *cmount, struct vinodeno_t parent,
 		   const char *name, struct stat *attr, int uid, int gid);
 
-bool ceph_ll_forget(struct ceph_mount_info *cmount, struct vinodeno_t vino,
+int ceph_ll_forget(struct ceph_mount_info *cmount, struct vinodeno_t vino,
 		    int count);
 int ceph_ll_walk(struct ceph_mount_info *cmount, const char *name,
 		 struct stat *attr);
