@@ -943,3 +943,19 @@ extern "C" uint64_t ceph_ll_get_internal_offset(struct ceph_mount_info *cmount,
 {
   return (cmount->get_client()->ll_get_internal_offset(vino, blockno));
 }
+
+extern "C" int ceph_ll_connectable_x(struct ceph_mount_info *cmount,
+				     vinodeno_t vino, uint64_t* parent_ino,
+				     uint32_t* parent_hash)
+{
+  return (cmount->get_client()->ll_connectable_x(vino, parent_ino,
+						 parent_hash));
+}
+
+extern "C" int ceph_ll_connectable_m(struct ceph_mount_info *cmount,
+				     vinodeno_t* vino, uint64_t parent_ino,
+				     uint32_t parent_hash)
+{
+  return (cmount->get_client()->ll_connectable_m(vino, parent_ino,
+						 parent_hash));
+}
