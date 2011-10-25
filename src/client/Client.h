@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -658,9 +658,8 @@ public:
   uint64_t ll_get_internal_offset(vinodeno_t vino, uint64_t blockno);
   int ll_num_osds(void);
   int ll_osdaddr(int osd, char* buf, size_t size);
-  int ll_opendir(vinodeno_t vino, void **dirpp, int uid = -1, int gid = -1);
-  int ll_readdir(DIR* d, struct dirent *de, struct stat *st);
-  void ll_releasedir(void *dirp);
+  int ll_opendir(vinodeno_t vino, dir_result_t **dirpp, int uid = -1, int gid = -1);
+  void ll_releasedir(dir_result_t *dirp);
   int ll_readlink(vinodeno_t vino, const char **value, int uid = -1, int gid = -1);
   int ll_mknod(vinodeno_t vino, const char *name, mode_t mode, dev_t rdev, struct stat *attr, int uid = -1, int gid = -1);
   int ll_mkdir(vinodeno_t vino, const char *name, mode_t mode, struct stat *attr, int uid = -1, int gid = -1);

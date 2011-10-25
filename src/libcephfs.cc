@@ -768,18 +768,20 @@ extern "C" int ceph_ll_truncate(struct ceph_mount_info *cmount,
   return(cmount->get_client()->ll_setattr(obj, &st, CEPH_SETATTR_SIZE, uid,
 					gid));
 }
-  
+
 extern "C" int ceph_ll_opendir(struct ceph_mount_info *cmount,
-			       vinodeno_t vino, void **dirpp,
+			       vinodeno_t vino,
+			       struct ceph_dir_result** dirpp,
 			       int uid, int gid)
 {
-  return (cmount->get_client()->ll_opendir(vino, dirpp, uid, gid));
+  return (cmount->get_client()->ll_opendir(vino, (dir_result_t **)dirpp,
+					   uid, gid));
 }
 
 extern "C" int ceph_ll_releasedir(struct ceph_mount_info *cmount,
-				  DIR* dir)
+				  ceph_dir_result* dir)
 {
-  (void) cmount->get_client()->ll_releasedir((void*)dir);
+  (void) cmount->get_client()->ll_releasedir((dir_result_t*) dir);
   return (0);
 }
 

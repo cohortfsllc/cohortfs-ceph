@@ -290,8 +290,9 @@ int ceph_ll_link(struct ceph_mount_info *cmount, struct vinodeno_t obj,
 int ceph_ll_truncate(struct ceph_mount_info *cmount, struct vinodeno_t obj,
 		     uint64_t length, int uid, int gid);
 int ceph_ll_opendir(struct ceph_mount_info *cmount, struct vinodeno_t vino,
-		    void **dirpp, int uid, int gid);
-int ceph_ll_releasedir(struct ceph_mount_info *cmount, DIR* dir);
+		    struct ceph_dir_result **dirpp, int uid, int gid);
+int ceph_ll_releasedir(struct ceph_mount_info *cmount,
+		       struct ceph_dir_result* dir);
 int ceph_ll_rename(struct ceph_mount_info *cmount, struct vinodeno_t parent,
 		   const char *name, struct vinodeno_t newparent,
 		   const char *newname, int uid, int gid);

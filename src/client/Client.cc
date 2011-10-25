@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -6913,13 +6913,14 @@ uint64_t Client::ll_get_internal_offset(vinodeno_t vino, uint64_t blockno)
   return (blockno % stripes_per_object) * su;
 }
 
-int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
+int Client::ll_opendir(vinodeno_t vino, dir_result_t** dirpp,
+		       int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "ll_opendir " << vino << dendl;
   tout(cct) << "ll_opendir" << std::endl;
   tout(cct) << vino.ino.val << std::endl;
-  
+
   Inode *diri = inode_map[vino];
   assert(diri);
 
@@ -6927,7 +6928,7 @@ int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
   if (vino.snapid == CEPH_SNAPDIR) {
     *dirpp = new dir_result_t(diri);
   } else {
-    r = _opendir(diri, (dir_result_t**)dirpp);
+    r = _opendir(diri, dirpp);
   }
 
   tout(cct) << (unsigned long)*dirpp << std::endl;
@@ -6936,13 +6937,13 @@ int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
   return r;
 }
 
-void Client::ll_releasedir(void *dirp)
+void Client::ll_releasedir(dir_result_t* dirp)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "ll_releasedir " << dirp << dendl;
   tout(cct) << "ll_releasedir" << std::endl;
   tout(cct) << (unsigned long)dirp << std::endl;
-  _closedir((dir_result_t*)dirp);
+  _closedir((dir_result_t*) dirp);
 }
 
 int Client::ll_open(vinodeno_t vino, int flags, Fh **fhp, int uid, int gid)
