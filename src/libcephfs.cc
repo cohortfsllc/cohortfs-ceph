@@ -934,9 +934,9 @@ extern "C" int ceph_ll_num_osds(struct ceph_mount_info *cmount)
 }
 
 extern "C" int ceph_ll_osdaddr(struct ceph_mount_info *cmount,
-			       int osd, char* buf, size_t size)
+			       int osd, uint32_t *addr)
 {
-  return (cmount->get_client()->ll_osdaddr(osd, buf, size));
+  return (cmount->get_client()->ll_osdaddr(osd, addr));
 }
 
 extern "C" uint64_t ceph_ll_get_internal_offset(struct ceph_mount_info *cmount,

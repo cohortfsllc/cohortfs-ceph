@@ -6835,19 +6835,16 @@ int Client::ll_num_osds(void)
   return osdmap->get_num_osds();
 }
 
-int Client::ll_osdaddr(int osd, char* buf, size_t size)
+int Client::ll_osdaddr(int osd, uint32_t *addr)
 {
   entity_addr_t g = osdmap->get_addr(osd);
-  uint32_t addr = (g.in4_addr()).sin_addr.s_addr;
-  
+  uint32_t nb_addr = (g.in4_addr()).sin_addr.s_addr;
+
   if (!(osdmap->exists(osd))) {
     return -1;
   }
-  return snprintf(buf, size, "%hhu.%hhu.%hhu.%hhu",
-		  (addr & 0x000000ff),
-		  ((addr & 0x0000ff00) >> 0x08),
-		  ((addr & 0x00ff0000) >> 0x10),
-		  ((addr & 0xff000000) >> 0x18));
+
+  *addr = ntohl(nb_addr);
 }
 
 uint32_t Client::ll_stripe_unit(vinodeno_t vino)

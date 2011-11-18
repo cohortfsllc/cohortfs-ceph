@@ -657,6 +657,7 @@ public:
   int ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno, ceph_file_layout* layout);
   uint64_t ll_get_internal_offset(vinodeno_t vino, uint64_t blockno);
   int ll_num_osds(void);
+  int ll_osdaddr(int osd, uint32_t *addr);
   int ll_osdaddr(int osd, char* buf, size_t size);
   int ll_opendir(vinodeno_t vino, dir_result_t **dirpp, int uid = -1, int gid = -1);
   void ll_releasedir(dir_result_t *dirp);

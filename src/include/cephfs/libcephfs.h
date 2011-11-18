@@ -319,8 +319,8 @@ int ceph_ll_get_stripe_osd(struct ceph_mount_info *cmount,
 			   uint64_t blockno,
 			   struct ceph_file_layout* layout);
 int ceph_ll_num_osds(struct ceph_mount_info *cmount);
-int ceph_ll_osdaddr(struct ceph_mount_info *cmount, int osd, char* buf,
-		    size_t size);
+int ceph_ll_osdaddr(struct ceph_mount_info *cmount,
+		    int osd, uint32_t *addr);
 uint64_t ceph_ll_get_internal_offset(struct ceph_mount_info *cmount,
 				     struct vinodeno_t vino, uint64_t blockno);
 uint64_t ceph_ll_read_block(struct ceph_mount_info *cmount,
