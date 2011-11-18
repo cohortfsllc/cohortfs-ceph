@@ -6013,14 +6013,14 @@ int Client::ll_lenxattr_by_idx(vinodeno_t vino, unsigned idx, int uid, int gid)
 
   if (r == 0) {
     map<string,bufferptr>::iterator p;
-    int r=-ENOENT;
+    r = -ENOENT;
     if (in->xattrs.size() > idx) {
       for (p = in->xattrs.begin();
 	   idx > 0;
 	   idx--)
 	{ ; }
 
-      r=p->second.length();
+      r = p->second.length();
     }
   }
   return r;
@@ -6845,6 +6845,8 @@ int Client::ll_osdaddr(int osd, uint32_t *addr)
   }
 
   *addr = ntohl(nb_addr);
+
+  return 0;
 }
 
 uint32_t Client::ll_stripe_unit(vinodeno_t vino)
@@ -6901,7 +6903,6 @@ int Client::ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno, ceph_file_layou
 uint64_t Client::ll_get_internal_offset(vinodeno_t vino, uint64_t blockno)
 {
   Inode *in = _ll_get_inode(vino);
-  inodeno_t ino = vino.ino;
   ceph_file_layout *layout=&(in->layout);
   uint32_t object_size = layout->fl_object_size;
   uint32_t su = layout->fl_stripe_unit;
@@ -7027,8 +7028,6 @@ uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl
   Mutex flock("Client::ll_read_block flock");
   Cond cond;
   object_t oid = file_object_t(vino.ino, blockid);
-  ceph_object_layout olayout
-    = objecter->osdmap->file_to_object_layout(oid, *layout);
   int r = 0;
   bool done = false;
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
@@ -7070,8 +7069,6 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
   Context *onsafe = new C_SafeCond(&flock, &cond, &done, &r);
   Context *dontcare = new C_NoopContext;
   object_t oid = file_object_t(vino.ino, blockid);
-  ceph_object_layout olayout
-    = objecter->osdmap->file_to_object_layout(oid, *layout);
   bufferptr bp;
   if (length > 0) bp = buffer::copy(buf, length);
   bufferlist rbl;
