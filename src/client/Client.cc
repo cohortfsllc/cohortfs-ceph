@@ -145,7 +145,7 @@ Client::Client(Messenger *m, MonClient *mc)
   file_replication = 0;
   preferred_pg = -1;
 
-  // 
+  //
   root = 0;
 
   num_flushing_caps = 0;
@@ -171,15 +171,15 @@ Client::Client(Messenger *m, MonClient *mc)
 }
 
 
-Client::~Client() 
+Client::~Client()
 {
   assert(!client_lock.is_locked());
 
   tear_down_cache();
 
-  if (objectcacher) { 
-    delete objectcacher; 
-    objectcacher = 0; 
+  if (objectcacher) {
+    delete objectcacher;
+    objectcacher = 0;
   }
 
   if (filer) { delete filer; filer = 0; }
@@ -1915,7 +1915,7 @@ int Client::get_caps(Inode *in, int need, int want, int *got, loff_t endoff)
       in->wanted_max_size = endoff;
       check_caps(in, false);
     }
-    
+
     if (endoff >= 0 && endoff > (loff_t)in->max_size) {
       ldout(cct, 10) << "waiting on max_size, endoff " << endoff << " max_size " << in->max_size << dendl;
     } else if (!in->cap_snaps.empty() && in->cap_snaps.rbegin()->second->writing) {
@@ -2046,7 +2046,7 @@ void Client::check_caps(Inode *in, bool is_delayed)
     else
       retain |= CEPH_CAP_ANY_SHARED;
   }
-  
+
   ldout(cct, 10) << "check_caps on " << *in
 	   << " wanted " << ccap_string(wanted)
 	   << " used " << ccap_string(used)
@@ -2055,13 +2055,13 @@ void Client::check_caps(Inode *in, bool is_delayed)
 
   if (in->snapid != CEPH_NOSNAP)
     return; //snap caps last forever, can't write
-  
+
   if (in->caps.empty())
     return;   // guard if at end of func
 
   if (in->cap_snaps.size())
     flush_snaps(in);
-  
+
   if (!is_delayed)
     cap_delay_requeue(in);
   else
@@ -2780,14 +2780,14 @@ inodeno_t Client::update_snap_trace(bufferlist& bl, bool flush)
 	  SnapRealm *realm = q.front();
 	  q.pop_front();
 	  ldout(cct, 10) << " flushing caps on " << *realm << dendl;
-	  
+
 	  xlist<Inode*>::iterator p = realm->inodes_with_caps.begin();
 	  while (!p.end()) {
 	    Inode *in = *p;
 	    ++p;
 	    queue_cap_snap(in, realm->get_snap_context().seq);
 	  }
-	  
+
 	  for (set<SnapRealm*>::iterator p = realm->pchildren.begin(); 
 	       p != realm->pchildren.end(); 
 	       p++)
@@ -3354,7 +3354,7 @@ void Client::unmount()
   if (!cct->_conf->client_oc) {
     while (unsafe_sync_write > 0) {
       ldout(cct, 0) << unsafe_sync_write << " unsafe_sync_writes, waiting" 
-              << dendl;
+		    << dendl;
       mount_cond.Wait(client_lock);
     }
   }
@@ -3365,7 +3365,7 @@ void Client::unmount()
     traceout.close();
   }
 
-  
+
   // send session closes!
   for (map<int,MetaSession*>::iterator p = mds_sessions.begin();
        p != mds_sessions.end();
@@ -3375,7 +3375,7 @@ void Client::unmount()
     if (!p->second->closing) {
       p->second->closing = true;
       messenger->send_message(new MClientSession(CEPH_SESSION_REQUEST_CLOSE, p->second->seq),
-                              mdsmap->get_inst(p->first));
+			      mdsmap->get_inst(p->first));
     }
   }
 
@@ -4956,7 +4956,7 @@ loff_t Client::_lseek(Fh *f, loff_t offset, int whence)
   int r;
 
   switch (whence) {
-  case SEEK_SET: 
+  case SEEK_SET:
     f->pos = offset;
     break;
 
@@ -4974,7 +4974,7 @@ loff_t Client::_lseek(Fh *f, loff_t offset, int whence)
   default:
     assert(0);
   }
-  
+
   ldout(cct, 3) << "_lseek(" << f << ", " << offset << ", " << whence << ") = " << f->pos << dendl;
   return f->pos;
 }
@@ -4994,7 +4994,7 @@ void Client::lock_fh_pos(Fh *f)
     assert(f->pos_waiters.front() == &cond);
     f->pos_waiters.pop_front();
   }
-  
+
   f->pos_locked = true;
 }
 
@@ -5005,11 +5005,11 @@ void Client::unlock_fh_pos(Fh *f)
 }
 
 
-// 
+//
 
 // blocking osd interface
 
-int Client::read(int fd, char *buf, loff_t size, loff_t offset) 
+int Client::read(int fd, char *buf, loff_t size, loff_t offset)
 {
   Mutex::Locker lock(client_lock);
   tout(cct) << "read" << std::endl;
@@ -5182,7 +5182,7 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl)
     bool done = false;
     Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
     bufferlist tbl;
-    
+
     int wanted = left;
     filer->read_trunc(in->ino, &in->layout, in->snapid,
 		      pos, left, &tbl, filer_flags,
@@ -5290,14 +5290,14 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
   // use/adjust fd pos?
   if (offset < 0) {
     lock_fh_pos(f);
-    /* 
+    /*
      * FIXME: this is racy in that we may block _after_ this point waiting for caps, and size may
      * change out from under us.
      */
     if (f->append)
       _lseek(f, 0, SEEK_END);
     offset = f->pos;
-    f->pos = offset+size;    
+    f->pos = offset+size;
     unlock_fh_pos(f);
   }
 
@@ -5307,7 +5307,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
 
   // time it.
   utime_t start = ceph_clock_now(cct);
-    
+
   // copy into fresh buffer (since our write may be resub, async)
   bufferptr bp;
   if (size > 0) bp = buffer::copy(buf, size);
@@ -5331,7 +5331,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
 
     // wait? (this may block!)
     objectcacher->wait_for_write(size, client_lock);
-    
+
     // async, caching, non-blocking.
     objectcacher->file_write(&in->oset, &in->layout, in->snaprealm->get_snap_context(),
 			     offset, size, bl, ceph_clock_now(cct), 0);
@@ -5352,12 +5352,12 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
 
     unsafe_sync_write++;
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
-    
+
     filer->write_trunc(in->ino, &in->layout, in->snaprealm->get_snap_context(),
 		       offset, size, bl, ceph_clock_now(cct), filer_flags,
 		       in->truncate_size, in->truncate_seq,
 		       onfinish, onsafe);
-    
+
     while (!done)
       cond.Wait(client_lock);
   }
@@ -5366,19 +5366,19 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
   utime_t lat = ceph_clock_now(cct);
   lat -= start;
   client_counters->finc(l_c_wrlat,(double)lat);
-    
+
   // assume success for now.  FIXME.
   uint64_t totalwritten = size;
-  
+
   // extend file?
   if (totalwritten + offset > in->size) {
     in->size = totalwritten + offset;
     mark_caps_dirty(in, CEPH_CAP_FILE_WR);
-    
+
     if ((in->size << 1) >= in->max_size &&
 	(in->reported_size << 1) < in->max_size)
       check_caps(in, false);
-      
+
     ldout(cct, 7) << "wrote to " << totalwritten+offset << ", extending file size" << dendl;
   } else {
     ldout(cct, 7) << "wrote to " << totalwritten+offset << ", leaving file size at " << in->size << dendl;
@@ -5389,9 +5389,9 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
   mark_caps_dirty(in, CEPH_CAP_FILE_WR);
 
   put_cap_ref(in, CEPH_CAP_FILE_WR);
-  
+
   // ok!
-  return totalwritten;  
+  return totalwritten;
 }
 
 int Client::_flush(Fh *f)
@@ -7015,14 +7015,11 @@ int Client::ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl)
   return _read(fh, off, len, bl);
 }
 
-/* TODO: Once this works, reimplement it to take arguments and require
-   nothing from class Inode (DS reads/writes should not need to
-   contact the metadata server in the normal case.) */
-
-uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl,
-			       uint64_t offset, uint64_t length,
-			       ceph_file_layout* layout)
-
+int Client::ll_read_block(vinodeno_t vino, uint64_t blockid,
+			  char *buf,
+			  uint64_t offset,
+			  uint64_t length,
+			  ceph_file_layout* layout)
 {
   Mutex::Locker lock(client_lock);
   Mutex flock("Client::ll_read_block flock");
@@ -7031,30 +7028,31 @@ uint64_t Client::ll_read_block(vinodeno_t vino, uint64_t blockid, bufferlist& bl
   int r = 0;
   bool done = false;
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
-  bufferlist tbl;
+  bufferlist bl;
 
-  objecter->read_full(oid, object_locator_t(layout->fl_pg_pool, layout->fl_pg_preferred), vino.snapid,
-		      &tbl, 0, onfinish);
-    
+  objecter->read(oid,
+		 object_locator_t(layout->fl_pg_pool,
+				  layout->fl_pg_preferred),
+		 offset,
+		 length,
+		 vino.snapid,
+		 &bl,
+		 CEPH_OSD_FLAG_READ,
+		 onfinish);
+
   while (!done)
     cond.Wait(client_lock);
-  
-  if (r < 0)
-    return r;
 
-  if (offset >= tbl.length())
-    return 0;
-  else if (offset + length > tbl.length())
-    length = tbl.length() - offset;
+  if (r >= 0) {
+    bl.copy(0, bl.length(), buf);
+    r = bl.length();
+  }
 
-  tbl.copy(offset, length, bl);
-
-  return length;
+  return r;
 }
 
-/* It appears that the OSD never returns the amount written, so I
-   believe we can assume that success indicates that the full amount
-   requested was written. */
+/* It appears that the OSD doesn't return success unless the entire
+   buffer was written, return the write length on success. */
 
 int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
 			   char* buf, uint64_t offset,
@@ -7069,38 +7067,34 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
   Context *onsafe = new C_SafeCond(&flock, &cond, &done, &r);
   Context *dontcare = new C_NoopContext;
   object_t oid = file_object_t(vino.ino, blockid);
+  SnapContext fakesnap;
   bufferptr bp;
   if (length > 0) bp = buffer::copy(buf, length);
-  bufferlist rbl;
-  bufferlist wbl;
-  SnapContext fakesnap;
-  Context *onfinish = new C_SafeCond(&flock, &cond, &done, &r);
+  bufferlist bl;
+  bl.push_back(bp);
 
   fakesnap.seq = snapseq;
 
-  objecter->read_full(oid, object_locator_t(layout->fl_pg_pool, layout->fl_pg_preferred), vino.snapid,
-		      &rbl, 0, onfinish);
+  objecter->write(oid,
+		  object_locator_t(layout->fl_pg_pool,
+				   layout->fl_pg_preferred),
+		  offset,
+		  length,
+		  fakesnap,
+		  bl,
+		  ceph_clock_now(cct),
+		  0,
+		  dontcare,
+		  onsafe);
 
   while (!done)
     cond.Wait(client_lock);
 
-  done = false;
-
-  rbl.copy(0, offset, wbl);
-  wbl.push_back(bp);
-  if (offset + length < rbl.length())
-    rbl.copy(offset + length, rbl.length() - (offset + length), wbl);
-  
-  objecter->write_full(oid,
-		       object_locator_t(
-			 layout->fl_pg_pool,
-			 layout->fl_pg_preferred),
-		       fakesnap, wbl, ceph_clock_now(cct), 0,
-		       dontcare, onsafe);
-  while (!done)
-    cond.Wait(client_lock);
-
-  return r;
+  if (r < 0) {
+    return r;
+  } else {
+    return length;
+  }
 }
 
 int Client::ll_write(Fh *fh, loff_t off, loff_t len, const char *data)
@@ -7127,7 +7121,7 @@ int Client::ll_flush(Fh *fh)
   return _flush(fh);
 }
 
-int Client::ll_fsync(Fh *fh, bool syncdataonly) 
+int Client::ll_fsync(Fh *fh, bool syncdataonly)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "ll_fsync " << fh << " " << fh->inode->ino << " " << dendl;

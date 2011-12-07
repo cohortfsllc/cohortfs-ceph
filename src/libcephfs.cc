@@ -654,7 +654,7 @@ extern "C" int ceph_ll_setattr(struct ceph_mount_info *cmount,
 {
   return (cmount->get_client()->ll_setattr(vi, st, mask, uid, gid));
 }
-  
+
 extern "C" int ceph_ll_open(struct ceph_mount_info *cmount, vinodeno_t vi,
 			    int flags, Fh **filehandle, int uid, int gid)
 {
@@ -676,24 +676,15 @@ extern "C" int ceph_ll_read(struct ceph_mount_info *cmount, Fh* filehandle,
   return r;
 }
 
-extern "C" uint64_t ceph_ll_read_block(struct ceph_mount_info *cmount,
-				       vinodeno_t vino, uint64_t blockid,
-				       char* buf, uint64_t offset,
-				       uint64_t length,
-				       struct ceph_file_layout* layout)
+extern "C" int ceph_ll_read_block(struct ceph_mount_info *cmount,
+				  vinodeno_t vino, uint64_t blockid,
+				  char* buf, uint64_t offset,
+				  uint64_t length,
+				  struct ceph_file_layout* layout)
 {
 
-  bufferlist bl;
-  int r = 0;
-
-  r = cmount->get_client()->ll_read_block(vino, blockid, bl, offset, length,
-					layout);
-  if (r >= 0)
-    {
-      bl.copy(0, bl.length(), buf);
-      r = bl.length();
-    }
-  return r;
+  return (cmount->get_client()->ll_read_block(vino, blockid, buf,
+					      offset, length, layout));
 }
 
 extern "C" int ceph_ll_write_block(struct ceph_mount_info *cmount,
