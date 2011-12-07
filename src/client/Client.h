@@ -465,8 +465,6 @@ private:
 
   // other helpers
   void _ll_get(Inode *in);
-  int _ll_readdir_fetchone(DirResult* dirp, struct dirent* de, struct stat* st,
-			   uint32_t& off, frag_t& fg);
   int _ll_put(Inode *in, int num);
   void _ll_drop_pins();
 
