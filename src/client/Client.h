@@ -315,6 +315,7 @@ protected:
   void close_dir(Dir *dir);
 
   friend class C_Client_PutInode; // calls put_inode()
+  friend class C_Block_Sync; // Calls block map and protected helpers
 
   //int get_cache_size() { return lru.lru_get_size(); }
   //void set_cache_size(int m) { lru.lru_set_max(m); }
@@ -679,10 +680,14 @@ public:
 		    uint64_t offset,
 		    uint64_t length,
 		    ceph_file_layout* layout);
+
+
+  map<pair<uint64_t, uint64_t>, pair<uint32_t, list<Cond*> > > outstanding_block_writes;
   int ll_write_block(vinodeno_t vino, uint64_t blockid,
 		     char* buf, uint64_t offset,
 		     uint64_t length, ceph_file_layout* layout,
-		     uint64_t snapseq);
+		     uint64_t snapseq, uint32_t sync);
+  int ll_commit_block(vinodeno_t vino, uint64_t blockid);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
   loff_t ll_lseek(Fh *fh, loff_t offset, int whence);
   int ll_flush(Fh *fh);

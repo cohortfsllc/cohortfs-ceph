@@ -116,7 +116,7 @@ Client::Client(Messenger *m, MonClient *mc)
   : Dispatcher(m->cct), cct(m->cct), timer(m->cct, client_lock), 
     ino_invalidate_cb(NULL),
     client_lock("Client::client_lock"),
-  filer_flags(0)
+    filer_flags(0)
 {
   // which client am i?
   whoami = m->get_myname().num();
@@ -4491,7 +4491,7 @@ int Client::readdir_r_cb(dir_result_t *d, add_dirent_cb_t cb, void *p)
     int err = _readdir_cache_cb(dirp, cb, p);
     if (err != -EAGAIN)
       return err;
-  }					    
+  }
   if (dirp->at_cache_name.length()) {
     dirp->last_name = dirp->at_cache_name;
     dirp->at_cache_name.clear();
@@ -7041,15 +7041,49 @@ int Client::ll_read_block(vinodeno_t vino, uint64_t blockid,
 		 onfinish);
 
   while (!done)
-    cond.Wait(client_lock);
+      cond.Wait(client_lock);
 
   if (r >= 0) {
-    bl.copy(0, bl.length(), buf);
-    r = bl.length();
+      bl.copy(0, bl.length(), buf);
+      r = bl.length();
   }
 
   return r;
 }
+
+/*
+ * we keep count of uncommitted sync writes on the inode, so that
+ * fsync can DDRT.
+ */
+class C_Block_Sync : public Context {
+    Client *cl;
+    pair<uint64_t, uint64_t> object;
+public:
+    C_Block_Sync(Client *c, uint64_t inode,
+		 uint64_t block) : cl(c), object(inode, block) {
+
+	std::cout << "C_Block_Sync for "
+		  << inode << "." << block
+		  << std::endl;
+	cl->outstanding_block_writes[object].first++;
+    }
+    void finish(int) {
+	std::cout << "C_Block_Sync::finish() for "
+		  << object.first << "." << object.second
+		  << std::endl;
+	std::cout << "There are "
+		  << cl->outstanding_block_writes[object].first
+		  << " transactions waiting to confirm and "
+		  << cl->outstanding_block_writes[object].second.size()
+		  << " waiters." << std::endl;
+
+	cl->outstanding_block_writes[object].first--;
+	cl->signal_cond_list(cl->outstanding_block_writes[object].second);
+	if (cl->outstanding_block_writes[object].first == 0) {
+	    cl->outstanding_block_writes.erase(object);
+	}
+    }
+};
 
 /* It appears that the OSD doesn't return success unless the entire
    buffer was written, return the write length on success. */
@@ -7057,21 +7091,32 @@ int Client::ll_read_block(vinodeno_t vino, uint64_t blockid,
 int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
 			   char* buf, uint64_t offset,
 			   uint64_t length, ceph_file_layout* layout,
-			   uint64_t snapseq)
+			   uint64_t snapseq, uint32_t sync)
 {
   Mutex::Locker lock(client_lock);
   Mutex flock("Client::ll_write_block flock");
   Cond cond;
   bool done = false;
   int r = 0;
-  Context *onsafe = new C_SafeCond(&flock, &cond, &done, &r);
-  Context *dontcare = new C_NoopContext;
+  Context *onack;
+  Context *onsafe;
+  if (sync) {
+      onack = new C_NoopContext;
+      onsafe = new C_SafeCond(&flock, &cond, &done, &r);
+  } else {
+      onack = new C_SafeCond(&flock, &cond, &done, &r);
+      onsafe = new C_Block_Sync(this, vino.ino, blockid);
+  }
   object_t oid = file_object_t(vino.ino, blockid);
   SnapContext fakesnap;
   bufferptr bp;
   if (length > 0) bp = buffer::copy(buf, length);
   bufferlist bl;
   bl.push_back(bp);
+
+  std::cout << "ll_block_write for "
+	    << vino.ino << "." << blockid
+	    << std::endl;
 
   fakesnap.seq = snapseq;
 
@@ -7084,17 +7129,36 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
 		  bl,
 		  ceph_clock_now(cct),
 		  0,
-		  dontcare,
+		  onack,
 		  onsafe);
 
   while (!done)
-    cond.Wait(client_lock);
+      cond.Wait(client_lock);
 
   if (r < 0) {
-    return r;
+      return r;
   } else {
-    return length;
+      return length;
   }
+}
+
+int Client::ll_commit_block(vinodeno_t vino, uint64_t blockid)
+{
+    Mutex::Locker lock(client_lock);
+    Cond cond;
+    pair <uint64_t, uint64_t> object(vino.ino, blockid);
+
+    std::cout << "ll_commit_block for "
+	      << vino.ino << "." << blockid
+	      << std::endl;
+
+    if ((outstanding_block_writes.count(object) != 0) &&
+	(outstanding_block_writes[object].first != 0)) {
+	outstanding_block_writes[object].second.push_back(&cond);
+	cond.Wait(client_lock);
+    }
+
+    return 0;
 }
 
 int Client::ll_write(Fh *fh, loff_t off, loff_t len, const char *data)

@@ -327,16 +327,19 @@ int ceph_ll_read_block(struct ceph_mount_info *cmount,
 		       struct vinodeno_t vino, uint64_t blockid,
 		       char* bl, uint64_t offset, uint64_t length,
 		       struct ceph_file_layout* layout);
-int ceph_ll_write_block(struct ceph_mount_info *cmount, struct vinodeno_t vino,
-			uint64_t blockid, char* buf, uint64_t offset,
+int ceph_ll_write_block(struct ceph_mount_info *cmount,
+			vinodeno_t vino, uint64_t blockid,
+			char* buf, uint64_t offset,
 			uint64_t length, struct ceph_file_layout* layout,
-			uint64_t snapseq);
-  int ceph_ll_connectable_x(struct ceph_mount_info *cmount,
-			    vinodeno_t vino, uint64_t* parent_ino,
-			    uint32_t* parent_hash);
-  int ceph_ll_connectable_m(struct ceph_mount_info *cmount,
-			    vinodeno_t* vino, uint64_t parent_ino,
-			    uint32_t parent_hash);
+			uint64_t snapseq, uint32_t sync);
+int ceph_ll_commit_block(struct ceph_mount_info *cmount,
+			 vinodeno_t vino, uint64_t blockid);
+int ceph_ll_connectable_x(struct ceph_mount_info *cmount,
+			  vinodeno_t vino, uint64_t* parent_ino,
+			  uint32_t* parent_hash);
+int ceph_ll_connectable_m(struct ceph_mount_info *cmount,
+			  vinodeno_t* vino, uint64_t parent_ino,
+			  uint32_t parent_hash);
 #ifdef __cplusplus
 }
 #endif

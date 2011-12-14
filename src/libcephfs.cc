@@ -690,11 +690,18 @@ extern "C" int ceph_ll_read_block(struct ceph_mount_info *cmount,
 extern "C" int ceph_ll_write_block(struct ceph_mount_info *cmount,
 				   vinodeno_t vino, uint64_t blockid,
 				   char* buf, uint64_t offset,
-				   uint64_t length, ceph_file_layout* layout,
-				   uint64_t snapseq)
+				   uint64_t length,
+				   struct ceph_file_layout* layout,
+				   uint64_t snapseq, uint32_t sync)
 {
   return (cmount->get_client()->ll_write_block(vino, blockid, buf, offset,
-					     length, layout, snapseq));
+					       length, layout, snapseq, sync));
+}
+
+extern "C" int ceph_ll_commit_block(struct ceph_mount_info *cmount,
+				    vinodeno_t vino, uint64_t blockid)
+{
+  return (cmount->get_client()->ll_commit_block(vino, blockid));
 }
 
 extern "C" int ceph_ll_fsync(struct ceph_mount_info *cmount,
