@@ -332,8 +332,8 @@ int ceph_ll_write_block(struct ceph_mount_info *cmount,
 			char* buf, uint64_t offset,
 			uint64_t length, struct ceph_file_layout* layout,
 			uint64_t snapseq, uint32_t sync);
-int ceph_ll_commit_block(struct ceph_mount_info *cmount,
-			 vinodeno_t vino, uint64_t blockid);
+int ceph_ll_commit_blocks(struct ceph_mount_info *cmount,
+			  vinodeno_t vino, uint64_t offset, uint64_t range);
 int ceph_ll_connectable_x(struct ceph_mount_info *cmount,
 			  vinodeno_t vino, uint64_t* parent_ino,
 			  uint32_t* parent_hash);

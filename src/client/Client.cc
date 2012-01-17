@@ -7053,34 +7053,32 @@ int Client::ll_read_block(vinodeno_t vino, uint64_t blockid,
 
 /*
  * we keep count of uncommitted sync writes on the inode, so that
- * fsync can DDRT.
+ * ll_commit_blocks can do the right thing.
+ *
+ * This is just a hacked copy of Ceph's sync callback.
  */
 class C_Block_Sync : public Context {
     Client *cl;
-    pair<uint64_t, uint64_t> object;
+    uint64_t inode;
 public:
-    C_Block_Sync(Client *c, uint64_t inode,
-		 uint64_t block) : cl(c), object(inode, block) {
-
+    C_Block_Sync(Client *c, uint64_t i) : cl(c), inode(i) {
 	std::cout << "C_Block_Sync for "
-		  << inode << "." << block
-		  << std::endl;
-	cl->outstanding_block_writes[object].first++;
+		  << inode << std::endl;
+	cl->outstanding_block_writes[inode].first++;
     }
     void finish(int) {
 	std::cout << "C_Block_Sync::finish() for "
-		  << object.first << "." << object.second
-		  << std::endl;
+		  << inode << std::endl;
 	std::cout << "There are "
-		  << cl->outstanding_block_writes[object].first
+		  << cl->outstanding_block_writes[inode].first
 		  << " transactions waiting to confirm and "
-		  << cl->outstanding_block_writes[object].second.size()
+		  << cl->outstanding_block_writes[inode].second.size()
 		  << " waiters." << std::endl;
 
-	cl->outstanding_block_writes[object].first--;
-	cl->signal_cond_list(cl->outstanding_block_writes[object].second);
-	if (cl->outstanding_block_writes[object].first == 0) {
-	    cl->outstanding_block_writes.erase(object);
+	cl->outstanding_block_writes[inode].first--;
+	cl->signal_cond_list(cl->outstanding_block_writes[inode].second);
+	if (cl->outstanding_block_writes[inode].first == 0) {
+	    cl->outstanding_block_writes.erase(inode);
 	}
     }
 };
@@ -7105,7 +7103,7 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
       onsafe = new C_SafeCond(&flock, &cond, &done, &r);
   } else {
       onack = new C_SafeCond(&flock, &cond, &done, &r);
-      onsafe = new C_Block_Sync(this, vino.ino, blockid);
+      onsafe = new C_Block_Sync(this, vino.ino);
   }
   object_t oid = file_object_t(vino.ino, blockid);
   SnapContext fakesnap;
@@ -7142,19 +7140,24 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
   }
 }
 
-int Client::ll_commit_block(vinodeno_t vino, uint64_t blockid)
+/* For now, just commit the whole file and ignore the range in
+   preparation for Matt adding barriers and making other changes. */
+
+int Client::ll_commit_blocks(vinodeno_t vino,
+			     uint64_t offset __attribute__((unused)),
+			     uint64_t range __attribute__((unused)))
 {
     Mutex::Locker lock(client_lock);
     Cond cond;
-    pair <uint64_t, uint64_t> object(vino.ino, blockid);
+    uint64_t inode = vino.ino;
 
-    std::cout << "ll_commit_block for "
-	      << vino.ino << "." << blockid
-	      << std::endl;
+    std::cout << "ll_commit_blocks for "
+	      << vino.ino << " from " << offset
+	      << " to " << range << std::endl;
 
-    if ((outstanding_block_writes.count(object) != 0) &&
-	(outstanding_block_writes[object].first != 0)) {
-	outstanding_block_writes[object].second.push_back(&cond);
+    if ((outstanding_block_writes.count(inode) != 0) &&
+	(outstanding_block_writes[inode].first != 0)) {
+	outstanding_block_writes[inode].second.push_back(&cond);
 	cond.Wait(client_lock);
     }
 

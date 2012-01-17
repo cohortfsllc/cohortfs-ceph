@@ -682,12 +682,12 @@ public:
 		    ceph_file_layout* layout);
 
 
-  map<pair<uint64_t, uint64_t>, pair<uint32_t, list<Cond*> > > outstanding_block_writes;
+  map<uint64_t, pair<uint32_t, list<Cond*> > > outstanding_block_writes;
   int ll_write_block(vinodeno_t vino, uint64_t blockid,
 		     char* buf, uint64_t offset,
 		     uint64_t length, ceph_file_layout* layout,
 		     uint64_t snapseq, uint32_t sync);
-  int ll_commit_block(vinodeno_t vino, uint64_t blockid);
+  int ll_commit_blocks(vinodeno_t vino, uint64_t offset, uint64_t length);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
   loff_t ll_lseek(Fh *fh, loff_t offset, int whence);
   int ll_flush(Fh *fh);
