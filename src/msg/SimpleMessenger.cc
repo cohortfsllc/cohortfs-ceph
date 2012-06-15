@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "SimpleMessenger.h"
@@ -1722,7 +1722,7 @@ void SimpleMessenger::Pipe::writer()
 	continue;
       }
     }
-    
+
     if (state == STATE_CLOSING) {
       // write close tag
       ldout(msgr->cct,20) << "writer writing CLOSE tag" << dendl;
@@ -1749,7 +1749,7 @@ void SimpleMessenger::Pipe::writer()
 	if (rc < 0) {
 	  ldout(msgr->cct,2) << "writer couldn't write keepalive, " << strerror_r(errno, buf, sizeof(buf)) << dendl;
 	  fault();
- 	  continue;
+	  continue;
 	}
 	keepalive = false;
       }
@@ -1774,12 +1774,12 @@ void SimpleMessenger::Pipe::writer()
 	m->set_seq(++out_seq);
 	if (!policy.lossy || close_on_empty) {
 	  // put on sent list
-	  sent.push_back(m); 
+	  sent.push_back(m);
 	  m->get();
 	}
 	pipe_lock.Unlock();
 
-        ldout(msgr->cct,20) << "writer encoding " << m->get_seq() << " " << m << " " << *m << dendl;
+	ldout(msgr->cct,20) << "writer encoding " << m->get_seq() << " " << m << " " << *m << dendl;
 
 	// associate message with Connection (for benefit of encode_payload)
 	m->set_connection(connection_state->get());
@@ -1787,20 +1787,20 @@ void SimpleMessenger::Pipe::writer()
 	// encode and copy out of *m
 	m->encode(connection_state->get_features(), !msgr->cct->_conf->ms_nocrc);
 
-        ldout(msgr->cct,20) << "writer sending " << m->get_seq() << " " << m << dendl;
+	ldout(msgr->cct,20) << "writer sending " << m->get_seq() << " " << m << dendl;
 	int rc = write_message(m);
 
 	pipe_lock.Lock();
 	if (rc < 0) {
-          ldout(msgr->cct,1) << "writer error sending " << m << ", "
+	  ldout(msgr->cct,1) << "writer error sending " << m << ", "
 		  << errno << ": " << strerror_r(errno, buf, sizeof(buf)) << dendl;
 	  fault();
-        }
+	}
 	m->put();
       }
       continue;
     }
-    
+
     if (sent.empty() && close_on_empty) {
       // this is slightly hacky
       ldout(msgr->cct,10) << "writer out and sent queues empty, closing" << dendl;
@@ -1813,7 +1813,7 @@ void SimpleMessenger::Pipe::writer()
     ldout(msgr->cct,20) << "writer sleeping" << dendl;
     cond.Wait(pipe_lock);
   }
-  
+
   ldout(msgr->cct,20) << "writer finishing" << dendl;
 
   // reap?
@@ -1862,8 +1862,8 @@ int SimpleMessenger::Pipe::read_message(Message **pm)
   int ret = -1;
   // envelope
   //ldout(msgr->cct,10) << "receiver.read_message from sd " << sd  << dendl;
-  
-  ceph_msg_header header; 
+
+  ceph_msg_header header;
   ceph_msg_footer footer;
   __u32 header_crc;
   

@@ -881,12 +881,16 @@ AM_COMMON_FLAGS = -Wall -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT \
 ${WARN_TYPE_LIMITS} ${WARN_IGNORED_QUALIFIERS} -Winit-self -Wpointer-arith \
 -fno-strict-aliasing
 
-AM_CFLAGS = $(AM_COMMON_FLAGS)
+AM_CFLAGS = $(AM_COMMON_FLAGS) \
+	-I/usr/include/nss3 \
+	-I/usr/include/nspr4
 AM_CXXFLAGS = $(AM_COMMON_FLAGS) \
 	-DCEPH_LIBDIR=\"${libdir}\" \
 	-Wnon-virtual-dtor \
 	-Wno-invalid-offsetof \
-	-Wstrict-null-sentinel
+	-Wstrict-null-sentinel \
+	-I/usr/include/nss3 \
+	-I/usr/include/nspr4
 AM_LDFLAGS = -Wl,--as-needed
 
 if USE_BOOST_SPIRIT_OLD_HDR
