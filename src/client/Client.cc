@@ -124,8 +124,7 @@ Client::Client(Messenger *m, MonClient *mc)
     file_stripe_count(0),
     object_size(0),
     file_replication(0),
-    client_lock("Client::client_lock"),
-    filer_flags(0)
+    client_lock("Client::client_lock")
 {
   monclient->set_messenger(m);
 
@@ -133,12 +132,6 @@ Client::Client(Messenger *m, MonClient *mc)
   last_flush_seq = 0;
 
   cwd = NULL;
-
-  file_stripe_unit = 0;
-  file_stripe_count = 0;
-  object_size = 0;
-  file_replication = 0;
-  preferred_pg = -1;
 
   //
   root = 0;
@@ -5342,9 +5335,6 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
 
     get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
-    // wait? (this may block!)
-    objectcacher->wait_for_write(size, client_lock);
-
     // async, caching, non-blocking.
     objectcacher->file_write(&in->oset, &in->layout, in->snaprealm->get_snap_context(),
 			     offset, size, bl, ceph_clock_now(cct), 0,
@@ -7039,8 +7029,7 @@ int Client::ll_read_block(vinodeno_t vino, uint64_t blockid,
   bufferlist bl;
 
   objecter->read(oid,
-		 object_locator_t(layout->fl_pg_pool,
-				  layout->fl_pg_preferred),
+		 object_locator_t(layout->fl_pg_pool),
 		 offset,
 		 length,
 		 vino.snapid,
@@ -7127,8 +7116,7 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
   fakesnap.seq = snapseq;
 
   objecter->write(oid,
-		  object_locator_t(layout->fl_pg_pool,
-				   layout->fl_pg_preferred),
+		  object_locator_t(layout->fl_pg_pool),
 		  offset,
 		  length,
 		  fakesnap,
@@ -7274,7 +7262,7 @@ int Client::ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
 	hashreq->set_filepath2(filepath(hashstring, inodeno_t(parent_ino)));
 	hashreq->head.args.getattr.mask = 0;
 
-	r = make_request(hashreq, -1, -1, NULL, rand() % mdsmap->get_num_mds());
+	r = make_request(hashreq, -1, -1, NULL, rand() % mdsmap->get_num_in_mds());
 
 	if (r == 0) {
 	    if (!target) {
