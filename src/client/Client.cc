@@ -89,8 +89,6 @@ using namespace std;
 
 // static logger
 Mutex client_logger_lock("client_logger_lock");
-PerfCounters  *client_counters = 0;
-
 
 void client_flush_set_callback(void *p, ObjectCacher::ObjectSet *oset)
 {
@@ -5365,7 +5363,6 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
   utime_t lat = ceph_clock_now(cct);
   lat -= start;
   logger->finc(l_c_wrlat,(double)lat);
-  client_counters->finc(l_c_wrlat,(double)lat);
 
   // assume success for now.  FIXME.
   uint64_t totalwritten = size;
