@@ -1406,6 +1406,7 @@ libcommon_files = \
 	mon/MonMap.cc \
 	msg/Accepter.cc \
 	msg/DispatchQueue.cc \
+	mon/VolMap.cc \
 	msg/Message.cc \
 	common/RefCountedObj.cc \
 	msg/Messenger.cc \
@@ -1474,6 +1475,7 @@ libmon_a_SOURCES = \
 	mon/MonmapMonitor.cc \
 	mon/PGMonitor.cc \
 	mon/PGMap.cc \
+	mon/VolMonitor.cc \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
 	mon/Elector.cc \
@@ -1999,6 +2001,8 @@ noinst_HEADERS = \
         mon/PaxosService.h\
 	mon/QuorumService.h\
         mon/Session.h\
+        mon/VolMonitor.h\
+        mon/VolMap.h\
         mon/mon_types.h\
 	mount/canonicalize.c\
 	mount/mtab.c\

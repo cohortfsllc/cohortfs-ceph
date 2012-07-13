@@ -1243,12 +1243,17 @@ public:
     return (class LogMonitor*) paxos_service[PAXOS_LOG];
   }
 
+  class VolMonitor *volmon() {
+    return (class VolMonitor *)paxos_service[PAXOS_VOLMAP];
+  }
+
   friend class Paxos;
   friend class OSDMonitor;
   friend class MDSMonitor;
   friend class MonmapMonitor;
   friend class PGMonitor;
   friend class LogMonitor;
+  friend class VolMonitor;
 
   QuorumService *health_monitor;
   QuorumService *config_key_service;

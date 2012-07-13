@@ -68,6 +68,7 @@
 #include "MDSMonitor.h"
 #include "MonmapMonitor.h"
 #include "PGMonitor.h"
+#include "VolMonitor.h"
 #include "LogMonitor.h"
 #include "AuthMonitor.h"
 #include "mon/QuorumService.h"
@@ -172,6 +173,7 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   paxos_service[PAXOS_PGMAP] = new PGMonitor(this, paxos, "pgmap");
   paxos_service[PAXOS_LOG] = new LogMonitor(this, paxos, "logm");
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, paxos, "auth");
+  paxos_service[PAXOS_VOLMAP] = new VolMonitor(this, paxos, "volmap");
 
   health_monitor = new HealthMonitor(this);
   config_key_service = new ConfigKeyService(this, paxos);
@@ -193,6 +195,8 @@ PaxosService *Monitor::get_paxos_service_by_name(const string& name)
     return paxos_service[PAXOS_OSDMAP];
   if (name == "pgmap")
     return paxos_service[PAXOS_PGMAP];
+  if (name == "volmap")
+    return paxos_service[PAXOS_VOLMAP];
   if (name == "logm")
     return paxos_service[PAXOS_LOG];
   if (name == "auth")
@@ -2627,6 +2631,10 @@ void Monitor::handle_command(MMonCommand *m)
     pgmon()->dispatch(m);
     return;
   }
+  if (module == "vol") {
+    volmon()->dispatch(m);
+    return;
+  }
   if (module == "mon") {
     monmon()->dispatch(m);
     return;
@@ -2674,7 +2682,7 @@ void Monitor::handle_command(MMonCommand *m)
     rs = oss.str();
     r = 0;
   }
-  else if (prefix == "injectargs") {
+  if (prefix == "injectargs") {
     if (!access_all) {
       r = -EACCES;
       rs = "access denied";

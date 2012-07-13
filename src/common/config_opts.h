@@ -159,6 +159,7 @@ OPTION(mon_osd_report_timeout, OPT_INT, 900)    // grace period before declaring
 OPTION(mon_force_standby_active, OPT_BOOL, true) // should mons force standby-replay mds to be active
 OPTION(mon_min_osdmap_epochs, OPT_INT, 500)
 OPTION(mon_max_pgmap_epochs, OPT_INT, 500)
+OPTION(mon_max_volmap_epochs, OPT_INT, 500)
 OPTION(mon_max_log_epochs, OPT_INT, 500)
 OPTION(mon_max_osd, OPT_INT, 10000)
 OPTION(mon_probe_timeout, OPT_DOUBLE, 2.0)
