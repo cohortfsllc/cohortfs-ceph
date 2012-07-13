@@ -1106,6 +1106,7 @@ libmon_a_SOURCES = \
 	mon/MonmapMonitor.cc \
 	mon/PGMonitor.cc \
 	mon/PGMap.cc \
+	mon/VolMonitor.cc \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
 	mon/Elector.cc \
@@ -1556,6 +1557,7 @@ noinst_HEADERS = \
         mon/Paxos.h\
         mon/PaxosService.h\
         mon/Session.h\
+        mon/VolMonitor.h\
         mon/mon_types.h\
 	mount/canonicalize.c\
 	mount/mtab.c\

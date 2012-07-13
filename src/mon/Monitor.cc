@@ -60,6 +60,7 @@
 #include "MDSMonitor.h"
 #include "MonmapMonitor.h"
 #include "PGMonitor.h"
+#include "VolMonitor.h"
 #include "LogMonitor.h"
 #include "AuthMonitor.h"
 
@@ -123,6 +124,7 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorStore *s, Messenger *m, Mo
   paxos_service[PAXOS_PGMAP] = new PGMonitor(this, add_paxos(PAXOS_PGMAP));
   paxos_service[PAXOS_LOG] = new LogMonitor(this, add_paxos(PAXOS_LOG));
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, add_paxos(PAXOS_AUTH));
+  paxos_service[PAXOS_VOLMAP] = new VolMonitor(this, add_paxos(PAXOS_VOLMAP));
 
   mon_caps = new MonCaps();
   mon_caps->set_allow_all(true);
