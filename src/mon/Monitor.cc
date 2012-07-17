@@ -1161,6 +1161,10 @@ void Monitor::handle_command(MMonCommand *m)
       pgmon()->dispatch(m);
       return;
     }
+    if (m->cmd[0] == "vol") {
+      volmon()->dispatch(m);
+      return;
+    }
     if (m->cmd[0] == "mon") {
       monmon()->dispatch(m);
       return;

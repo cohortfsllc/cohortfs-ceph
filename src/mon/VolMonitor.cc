@@ -44,8 +44,10 @@ void VolMonitor::encode_pending(bufferlist &bl)
 
 bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
 {
+  return true;
 }
 
 bool VolMonitor::prepare_update(PaxosServiceMessage *m)
 {
+  return true;
 }

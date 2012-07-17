@@ -96,9 +96,12 @@ License:
   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
   OTHER DEALINGS IN THE SOFTWARE.
 
+
 Files:
     src/mon/VolMonitor.h
     src/mon/VolMonitor.cc
+    src/vol/VolMap.h
+    src/vol/VolMap.cc
 Copyright:
     Copyright (C) 2012, CohortFS, LLC <info@cohortfs.com>
 License:

@@ -100,6 +100,8 @@ int MonCaps::get_service_id(string& token)
     return PAXOS_MONMAP;
   } else if (token.compare("osdmap") == 0) {
     return PAXOS_OSDMAP;
+  } else if (token.compare("volmap") == 0) {
+    return PAXOS_VOLMAP;
   } else if (token.compare("log") == 0) {
     return PAXOS_LOG;
   } else if (token.compare("auth") == 0) {

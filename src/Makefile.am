@@ -1054,6 +1054,7 @@ libcommon_files = \
 	osd/OSDMap.cc \
 	osd/osd_types.cc \
 	mds/MDSMap.cc \
+	vol/VolMap.cc \
 	common/blkdev.cc \
 	common/common_init.cc \
 	common/pipe.c \
@@ -1643,7 +1644,8 @@ noinst_HEADERS = \
 	os/ObjectMap.h \
 	os/DBObjectMap.h \
 	os/KeyValueDB.h \
-	os/LevelDBStore.h
+	os/LevelDBStore.h \
+        vol/VolMap.h
 
 if ENABLE_COVERAGE
 COV_DIR = $(DESTDIR)$(libdir)/ceph/coverage
