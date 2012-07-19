@@ -18,18 +18,26 @@
 #ifndef CEPH_VOLMONITOR_H
 #define CEPH_VOLMONITOR_H
 
-// #include <map>
-// #include <set>
+
 using namespace std;
 
 
 #include "PaxosService.h"
 #include "Session.h"
 
+#include "vol/VolMap.h"
+
+
+class MMonCommand;
+
 
 class VolMonitor : public PaxosService {
 
  public:
+
+  VolMap volmap;          // current
+  VolMap pending_volmap;  // current + pending updates
+
   VolMonitor(Monitor *mn, Paxos *p)
     : PaxosService(mn, p)
   {
@@ -43,6 +51,7 @@ class VolMonitor : public PaxosService {
   void encode_pending(bufferlist &bl);  // propose pending update to peers
   bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
   bool prepare_update(PaxosServiceMessage *m);
+  bool preprocess_command(MMonCommand *m);
 
  private:
   // no copying allowed

@@ -17,14 +17,18 @@
 
 #include "common/strtol.h"
 #include "common/ceph_argparse.h"
+/* #include "common/debug.h" */
+#include "common/config.h"
 
-// #include "messages/MMDSMap.h"
-// #include "messages/MMDSBeacon.h"
-// #include "messages/MMDSLoadTargets.h"
-// #include "messages/MMonCommand.h"
+#include "messages/MMonCommand.h"
 
 
-  // pure firtual functions defined in PaxosService
+#define dout_subsys ceph_subsys_mon
+
+
+/*
+ * pure virtual functions defined in PaxosService
+ */
 
 void VolMonitor::create_initial()
 {
@@ -44,10 +48,81 @@ void VolMonitor::encode_pending(bufferlist &bl)
 
 bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
 {
-  return true;
+  dout(10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
+
+  switch (m->get_type()) {
+    
+  case MSG_MON_COMMAND:
+    return preprocess_command((MMonCommand *) m);
+
+    /* ERIC REMOVE
+
+  case MSG_MDS_BEACON:
+    return preprocess_beacon((MMDSBeacon*)m);
+    
+  case MSG_MDS_OFFLOAD_TARGETS:
+    return preprocess_offload_targets((MMDSLoadTargets*)m);
+    */
+
+  default:
+    assert(0);
+    m->put();
+    return true;
+  }
 }
 
 bool VolMonitor::prepare_update(PaxosServiceMessage *m)
 {
   return true;
+}
+
+/*
+ * other member functions
+ */
+
+/*
+ * create <name> <crush_map_entry>
+ * add <uuid> <name> <crush_map_entry>
+ * list
+ * lookup <uuid>|<name>
+ */
+
+bool VolMonitor::preprocess_command(MMonCommand *m)
+{
+  int r = -EINVAL;
+  stringstream ss;
+  bufferlist rdata;
+
+  if (m->cmd.size() > 1) {
+    if (m->cmd[1] == "list"  && m->cmd.size() == 2) {
+      ss << "got list command" << std::endl;
+      ss << "    1. fake entry" << std::endl;
+      ss << "    2. false entry" << std::endl;
+      r = -ENOSYS;
+    } else if (m->cmd[1] == "lookup" && m->cmd.size() == 3) {
+      ss << "got lookup command";
+      r = -ENOSYS;
+    } else if (m->cmd[1] == "create" && m->cmd.size() == 4) {
+      ss << "got create command";
+      r = -ENOSYS;
+    } else if (m->cmd[1] == "add" && m->cmd.size() == 5) {
+      ss << "got add command";
+      r = -ENOSYS;
+    }
+  }
+
+  if (r == -EINVAL) 
+    ss << "unrecognized command";
+  string rs;
+  getline(ss, rs);
+
+  if (r >= 0) {
+    // success.. delay reply
+    // paxos->wait_for_commit(new Monitor::C_Command(mon, m, r, rs, paxos->get_version()));
+    return true;
+  } else {
+    // reply immediately
+    mon->reply_command(m, r, rs, rdata, paxos->get_version());
+    return false;
+  }
 }
