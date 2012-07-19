@@ -117,12 +117,7 @@ public:
     ::encode(vol_info_by_uuid, bl);
   }
 
-  void decode(bufferlist::iterator& p) {
-    __u16 v;
-    ::decode(v, p);
-    ::decode(epoch, p);
-    ::decode(vol_info_by_uuid, p);
-  }
+  void decode(bufferlist::iterator& p);
 
   void decode(bufferlist& bl) {
     bufferlist::iterator p = bl.begin();

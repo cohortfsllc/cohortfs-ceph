@@ -19,6 +19,22 @@
 using std::stringstream;
 
 
+void VolMap::decode(bufferlist::iterator& p) {
+    __u16 v;
+    ::decode(v, p);
+    ::decode(epoch, p);
+    ::decode(vol_info_by_uuid, p);
+    vol_info_by_name.clear();
+
+    // build name map from uuid map (only uuid map is encoded)
+    for(map<uuid_d,vol_info_t>::const_iterator i = vol_info_by_uuid.begin();
+	i != vol_info_by_uuid.end();
+	++i) {
+      vol_info_by_name[i->second.name] = i->second;
+    }
+  }
+
+
 int VolMap::create_volume(string name, uint16_t crush_map_entry) {
   uuid_d uuid;
   uuid.generate_random();
