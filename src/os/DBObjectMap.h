@@ -436,9 +436,8 @@ private:
   class RemoveOnDelete {
   public:
     DBObjectMap *db;
-    uint64_t seq;
     RemoveOnDelete(DBObjectMap *db) :
-      db(db), seq(seq) {}
+      db(db) {}
     void operator() (_Header *header) {
       Mutex::Locker l(db->header_lock);
       db->in_use.erase(header->seq);
