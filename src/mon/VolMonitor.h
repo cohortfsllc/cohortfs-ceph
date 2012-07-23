@@ -36,7 +36,8 @@ class VolMonitor : public PaxosService {
  public:
 
   VolMap volmap;          // current
-  VolMap pending_volmap;  // current + pending updates
+  // VolMap pending_volmap;  // current + pending updates
+  VolMap::Incremental pending_inc;  // increments
 
   VolMonitor(Monitor *mn, Paxos *p)
     : PaxosService(mn, p)
@@ -54,9 +55,10 @@ class VolMonitor : public PaxosService {
 
   // support functions
   bool preprocess_command(MMonCommand *m);
-
+  bool prepare_command(MMonCommand *m);
 
  private:
+
   // no copying allowed
   VolMonitor(const VolMonitor &rhs);
   VolMonitor &operator=(const VolMonitor &rhs);

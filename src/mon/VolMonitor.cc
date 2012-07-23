@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -30,20 +30,62 @@
  * pure virtual functions defined in PaxosService
  */
 
+
 void VolMonitor::create_initial()
 {
+  dout(10) << "create_initial -- creating initial map" << dendl;
 }
+
 
 void VolMonitor::update_from_paxos()
 {
+  version_t paxosv = paxos->get_version();
+  if (paxosv == volmap.version) {
+    return;
+  }
+  assert(paxosv >= volmap.version);
+
+  if (volmap.version != paxos->get_stashed_version()) {
+    bufferlist latest;
+    version_t v = paxos->get_stashed(latest);
+    dout(7) << "update_from_paxos loading latest full volmap v" << v << dendl;
+    try {
+      VolMap tmp_volmap;
+      bufferlist::iterator p = latest.begin();
+      tmp_volmap.decode(p);
+      volmap = tmp_volmap;
+    } catch (const std::exception &e) {
+      dout(0) << "update_from_paxos: error parsing update: "
+	      << e.what() << dendl;
+      assert(0 == "update_from_paxos: error parsing update");
+      return;
+    }
+  }
+
+#if 0
+  // walk through incrementals
+#endif
 }
 
 void VolMonitor::create_pending()
 {
+  pending_inc = VolMap::Incremental();
+  pending_inc.version = volmap.version + 1;
+
+  // pending_volmap = volmap;
+  // pending_volmap.epoch++;
+  dout(10) << "create_pending v" << pending_inc.version << dendl;
 }
 
 void VolMonitor::encode_pending(bufferlist &bl)
 {
+  dout(10) << "encode_pending v" << pending_inc.version << dendl;
+
+  //print_map(pending_volmap);
+
+  // apply to paxos
+  assert(paxos->get_version() + 1 == pending_inc.version);
+  pending_inc.encode(bl);
 }
 
 bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
@@ -51,7 +93,7 @@ bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
   dout(10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
 
   switch (m->get_type()) {
-    
+
   case MSG_MON_COMMAND:
     return preprocess_command((MMonCommand *) m);
 
@@ -59,7 +101,7 @@ bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
 
   case MSG_MDS_BEACON:
     return preprocess_beacon((MMDSBeacon*)m);
-    
+
   case MSG_MDS_OFFLOAD_TARGETS:
     return preprocess_offload_targets((MMDSLoadTargets*)m);
     */
@@ -73,7 +115,27 @@ bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
 
 bool VolMonitor::prepare_update(PaxosServiceMessage *m)
 {
-  return true;
+  dout(10) << "prepare_upate " << *m << " from " << m->get_orig_source_inst() << dendl;
+
+  switch (m->get_type()) {
+
+  case MSG_MON_COMMAND:
+    return prepare_command((MMonCommand *) m);
+
+    /* ERIC REMOVE
+
+  case MSG_MDS_BEACON:
+    return preprocess_beacon((MMDSBeacon*)m);
+
+  case MSG_MDS_OFFLOAD_TARGETS:
+    return preprocess_offload_targets((MMDSLoadTargets*)m);
+    */
+
+  default:
+    assert(0);
+    m->put();
+    return true;
+  }
 }
 
 /*
@@ -81,8 +143,6 @@ bool VolMonitor::prepare_update(PaxosServiceMessage *m)
  */
 
 /*
- * create <name> <crush_map_entry>
- * add <uuid> <name> <crush_map_entry>
  * list
  * lookup <uuid>|<name>
  */
@@ -112,8 +172,43 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
     } else if (m->cmd[1] == "lookup" && m->cmd.size() == 3) {
       ss << "got lookup command";
       r = -ENOSYS;
-    } else if (m->cmd[1] == "create" && m->cmd.size() == 4) {
-      ss << "got create command";
+    }
+  }
+
+  string rs;
+  getline(ss, rs);
+
+  if (r != -1) {
+    mon->reply_command(m, r, rs, rdata, paxos->get_version());
+    return true;
+  } else {
+    return false;
+  }
+}
+
+
+/*
+ * create <name> <crush_map_entry>
+ * add <uuid> <name> <crush_map_entry>
+ * remove <uuid> <name> <crush_map_entry>
+ * rename <uuid> <name>
+ * ? recrush <uuid> <crush_map_entry>
+ */
+
+bool VolMonitor::prepare_command(MMonCommand *m)
+{
+  int r = -1;
+  stringstream ss;
+  bufferlist rdata;
+
+  if (m->cmd.size() > 1) {
+    if (m->cmd[1] == "create" && m->cmd.size() == 4) {
+      VolMap::vol_info_t vol_info;
+      vol_info.uuid.generate_random();
+      vol_info.name = m->cmd[2];
+      vol_info.crush_map_entry = (uint16_t) atoi(m->cmd[3].c_str());
+      // pending_inc.include_addition(vol_info);
+      ss << "creating volume " << vol_info;
       r = -ENOSYS;
     } else if (m->cmd[1] == "add" && m->cmd.size() == 5) {
       ss << "got add command";
@@ -121,7 +216,8 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
     }
   }
 
-  if (r == -EINVAL) {
+  if (r == -1) {
+    r = -EINVAL;
     ss << "unrecognized command";
   }
   string rs;

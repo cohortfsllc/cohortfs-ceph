@@ -22,15 +22,18 @@
 // #include "common/Clock.h"
 #include "msg/Message.h"
 
-#include <set>
-#include <map>
 #include <string>
-using namespace std;
+#include <map>
+#include <vector>
 
 #include "common/config.h"
 
 // #include "include/CompatSet.h"
 #include "common/Formatter.h"
+
+
+using namespace std;
+
 
 class CephContext;
 
@@ -58,29 +61,75 @@ public:
       // empty
     }
     
-    void encode(bufferlist& bl) const {
-      __u8 v = 1;
-      ::encode(v, bl);
-      ::encode(uuid, bl);
-      ::encode(name, bl);
-      ::encode(crush_map_entry, bl);
-    }
-
-    void decode(bufferlist::iterator& bl) {
-      __u8 v;
-      ::decode(v, bl);
-      ::decode(uuid, bl);
-      ::decode(name, bl);
-      ::decode(crush_map_entry, bl);
-    }
-
+    void encode(bufferlist& bl) const;
+    void decode(bufferlist::iterator& bl);
+    void decode(bufferlist& bl);
     void dump(Formatter *f) const;
   }; // vol_info_t
+
+
+  class Incremental {
+
+  public:
+
+    struct inc_add {
+      uint16_t sequence;
+      vol_info_t vol_info;
+
+      void encode(bufferlist& bl) const;
+      void decode(bufferlist::iterator& bl);
+      void decode(bufferlist& bl);
+    };
+    typedef inc_add inc_update;
+
+    struct inc_remove {
+      uint16_t sequence;
+      uuid_d uuid;
+
+      void encode(bufferlist& bl) const;
+      void decode(bufferlist::iterator& bl);
+      void decode(bufferlist& bl);
+    };
+
+    version_t version;
+    uint16_t next_sequence;
+    vector<inc_add> additions;
+    vector<inc_remove> removals;
+    vector<inc_update> updates;
+
+  public:
+
+    void include_addition(const vol_info_t &vol_info) {
+      inc_add increment;
+      increment.sequence = next_sequence++;
+      increment.vol_info = vol_info;
+      additions.push_back(increment);
+    }
+
+    void include_removal(const uuid_d &uuid) {
+      inc_remove increment;
+      increment.sequence = next_sequence++;
+      increment.uuid = uuid;
+      removals.push_back(increment);
+    }
+
+    void include_update(const vol_info_t &vol_info) {
+      inc_update increment;
+      increment.sequence = next_sequence++;
+      increment.vol_info = vol_info;
+      updates.push_back(increment);
+    }
+
+    void encode(bufferlist& bl) const;
+    void decode(bufferlist::iterator& bl);
+    void decode(bufferlist& bl);
+  };
 
 
 protected:
   // base map
   epoch_t epoch;
+  version_t version;
   map<uuid_d,vol_info_t> vol_info_by_uuid;
   map<string,vol_info_t> vol_info_by_name;
 
@@ -146,12 +195,24 @@ public:
   void dump(Formatter *f) const;
 }; // class VolMap
 
-WRITE_CLASS_ENCODER(VolMap::vol_info_t)
-WRITE_CLASS_ENCODER(VolMap)
+
+WRITE_CLASS_ENCODER(VolMap::vol_info_t);
+WRITE_CLASS_ENCODER(VolMap::Incremental);
+WRITE_CLASS_ENCODER(VolMap::Incremental::inc_add);
+WRITE_CLASS_ENCODER(VolMap::Incremental::inc_remove);
+WRITE_CLASS_ENCODER(VolMap);
+
 
 inline ostream& operator<<(ostream& out, VolMap& m) {
   m.print_summary(out);
   return out;
 }
+
+inline ostream& operator<<(ostream& out, VolMap::vol_info_t& vol_info) {
+  out << "vol u:" << vol_info.uuid << " cm: " << vol_info.crush_map_entry
+      << " n:" << vol_info.name;
+  return out;
+}
+
 
 #endif // CEPH_VOLMAP_H

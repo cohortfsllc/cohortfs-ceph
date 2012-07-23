@@ -73,7 +73,7 @@ void VolMap::vol_info_t::dump(Formatter *f) const
   f->dump_string("uuid", uuid_str);
 
   f->dump_string("name", name);
-  f->dump_int("crush_map_entry", (int64_t)crush_map_entry);
+  f->dump_int("crush_map_entry", (int64_t) crush_map_entry);
 }
 
 void VolMap::dump(Formatter *f) const
@@ -126,3 +126,93 @@ void VolMap::print_summary(ostream& out)
   }
 } // VolMap::print_summary
 
+
+void VolMap::vol_info_t::encode(bufferlist& bl) const {
+  __u8 v = 1;
+  ::encode(v, bl);
+  ::encode(uuid, bl);
+  ::encode(name, bl);
+  ::encode(crush_map_entry, bl);
+}
+
+
+void VolMap::vol_info_t::decode(bufferlist::iterator& bl) {
+  __u8 v;
+  ::decode(v, bl);
+  ::decode(uuid, bl);
+  ::decode(name, bl);
+  ::decode(crush_map_entry, bl);
+}
+
+void VolMap::vol_info_t::decode(bufferlist& bl) {
+  bufferlist::iterator p = bl.begin();
+  decode(p);
+}
+
+
+void VolMap::Incremental::inc_add::encode(bufferlist& bl) const {
+  __u16 v = 1;
+  ::encode(v, bl);
+  ::encode(sequence, bl);
+  ::encode(vol_info, bl);
+}
+
+
+void VolMap::Incremental::inc_add::decode(bufferlist::iterator& bl) {
+  __u8 v;
+  ::decode(v, bl);
+  ::decode(sequence, bl);
+  ::decode(vol_info, bl);
+}
+
+
+void VolMap::Incremental::inc_add::decode(bufferlist& bl) {
+  bufferlist::iterator p = bl.begin();
+  decode(p);
+}
+
+
+void VolMap::Incremental::inc_remove::encode(bufferlist& bl) const {
+  __u16 v = 1;
+  ::encode(v, bl);
+  ::encode(sequence, bl);
+  ::encode(uuid, bl);
+}
+
+
+void VolMap::Incremental::inc_remove::decode(bufferlist::iterator& bl) {
+  __u8 v;
+  ::decode(v, bl);
+  ::decode(sequence, bl);
+  ::decode(uuid, bl);
+}
+
+
+void VolMap::Incremental::inc_remove::decode(bufferlist& bl) {
+  bufferlist::iterator p = bl.begin();
+  decode(p);
+}
+
+
+void VolMap::Incremental::encode(bufferlist& bl) const {
+  ::encode(version, bl);
+  ::encode(next_sequence, bl);
+  ::encode(additions, bl);
+  ::encode(removals, bl);
+  ::encode(updates, bl);
+}
+
+
+void VolMap::Incremental::decode(bufferlist::iterator& bl) {
+  ::decode(version, bl);
+  ::decode(next_sequence, bl);
+  ::decode(additions, bl);
+  ::decode(removals, bl);
+  ::decode(updates, bl);
+}
+
+
+void VolMap::Incremental::decode(bufferlist& bl) {
+  bufferlist::iterator p = bl.begin();
+  decode(p);
+}
