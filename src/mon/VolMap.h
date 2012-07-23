@@ -110,6 +110,22 @@ public:
     return vol_info_by_name[name];
   }
 
+  map<string,vol_info_t>::const_iterator begin() const {
+    return vol_info_by_name.begin();
+  }
+
+  map<string,vol_info_t>::const_iterator end() const {
+    return vol_info_by_name.end();
+  }
+
+  bool empty() const {
+    return vol_info_by_name.empty();
+  }
+
+  size_t size() const {
+    return vol_info_by_name.size();
+  }
+
   void encode(bufferlist& bl) const {
     __u16 v = 1;
     ::encode(v, bl);

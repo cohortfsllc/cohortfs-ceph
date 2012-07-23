@@ -89,16 +89,26 @@ bool VolMonitor::prepare_update(PaxosServiceMessage *m)
 
 bool VolMonitor::preprocess_command(MMonCommand *m)
 {
-  int r = -EINVAL;
+  int r = -1;
   stringstream ss;
   bufferlist rdata;
 
   if (m->cmd.size() > 1) {
     if (m->cmd[1] == "list"  && m->cmd.size() == 2) {
-      ss << "got list command" << std::endl;
-      ss << "    1. fake entry" << std::endl;
-      ss << "    2. false entry" << std::endl;
-      r = -ENOSYS;
+      if (volmap.empty()) {
+	ss << "volmap is empty" << std::endl;
+      } else {
+	ss << "volmap has " << volmap.size() << " entries" << std::endl;
+	stringstream ds;
+	for (map<string,VolMap::vol_info_t>::const_iterator i = volmap.begin();
+	     i != volmap.end();
+	     ++i) {
+	  ds << i->second.uuid << " " << i->second.crush_map_entry
+	     << " " << i->first << std::endl;
+	}
+	rdata.append(ds);
+      }
+      r = 0;
     } else if (m->cmd[1] == "lookup" && m->cmd.size() == 3) {
       ss << "got lookup command";
       r = -ENOSYS;
@@ -111,18 +121,18 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
     }
   }
 
-  if (r == -EINVAL) 
+  if (r == -EINVAL) {
     ss << "unrecognized command";
+  }
   string rs;
   getline(ss, rs);
 
-  if (r >= 0) {
+  if (r != -1) {
     // success.. delay reply
     // paxos->wait_for_commit(new Monitor::C_Command(mon, m, r, rs, paxos->get_version()));
+    mon->reply_command(m, r, rs, rdata, paxos->get_version());
     return true;
   } else {
-    // reply immediately
-    mon->reply_command(m, r, rs, rdata, paxos->get_version());
     return false;
   }
 }
