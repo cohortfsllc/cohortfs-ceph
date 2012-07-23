@@ -1045,6 +1045,7 @@ libcommon_files = \
 	mon/MonCaps.cc \
 	mon/MonClient.cc \
 	mon/MonMap.cc \
+	mon/VolMap.cc \
 	msg/Message.cc \
 	msg/Messenger.cc \
 	msg/SimpleMessenger.cc \
@@ -1054,7 +1055,6 @@ libcommon_files = \
 	osd/OSDMap.cc \
 	osd/osd_types.cc \
 	mds/MDSMap.cc \
-	vol/VolMap.cc \
 	common/blkdev.cc \
 	common/common_init.cc \
 	common/pipe.c \
@@ -1559,6 +1559,7 @@ noinst_HEADERS = \
         mon/PaxosService.h\
         mon/Session.h\
         mon/VolMonitor.h\
+        mon/VolMap.h\
         mon/mon_types.h\
 	mount/canonicalize.c\
 	mount/mtab.c\
@@ -1644,8 +1645,7 @@ noinst_HEADERS = \
 	os/ObjectMap.h \
 	os/DBObjectMap.h \
 	os/KeyValueDB.h \
-	os/LevelDBStore.h \
-        vol/VolMap.h
+	os/LevelDBStore.h
 
 if ENABLE_COVERAGE
 COV_DIR = $(DESTDIR)$(libdir)/ceph/coverage
