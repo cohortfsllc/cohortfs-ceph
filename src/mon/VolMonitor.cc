@@ -14,10 +14,10 @@
 
 #include "VolMonitor.h"
 #include "Monitor.h"
+#include "MonitorStore.h"
 
 #include "common/strtol.h"
 #include "common/ceph_argparse.h"
-/* #include "common/debug.h" */
 #include "common/config.h"
 
 #include "messages/MMonCommand.h"
@@ -62,9 +62,58 @@ void VolMonitor::update_from_paxos()
     }
   }
 
-#if 0
   // walk through incrementals
-#endif
+  utime_t now(ceph_clock_now(g_ceph_context));
+  while (paxosv > volmap.version) {
+    bufferlist bl;
+    bool success = paxos->read(volmap.version+1, bl);
+    assert(success);
+
+    dout(7) << "update_from_paxos applying incremental " << volmap.version+1 << dendl;
+    VolMap::Incremental inc;
+    try {
+      bufferlist::iterator p = bl.begin();
+      inc.decode(p);
+    }
+    catch (const std::exception &e) {
+      dout(0) << "update_from_paxos: error parsing "
+	      << "incremental update: " << e.what() << dendl;
+      assert(0 == "update_from_paxos: error parsing incremental update");
+      return;
+    }
+
+    volmap.apply_incremental(inc);
+
+    dout(10) << volmap << dendl;
+  }
+
+  assert(paxosv == volmap.version);
+
+  // save latest
+  bufferlist bl;
+  volmap.encode(bl);
+  paxos->stash_latest(paxosv, bl);
+
+  // dump pgmap summaries?  (useful for debugging)
+  if (0) {
+    stringstream ds;
+    volmap.dump(ds);
+    bufferlist d;
+    d.append(ds);
+    mon->store->put_bl_sn(d, "volmap_dump", paxosv);
+  }
+
+  unsigned max = g_conf->mon_max_volmap_epochs;
+  if (mon->is_leader() &&
+      paxosv > max) {
+    paxos->trim_to(paxosv - max);
+  }
+
+  // ERIC : NEEDED?
+  // send_vol_creates();
+
+  // ERIC : NEEDED?
+  // update_logger();
 }
 
 void VolMonitor::create_pending()

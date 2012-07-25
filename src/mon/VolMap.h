@@ -144,10 +144,12 @@ public:
   epoch_t get_epoch() const { return epoch; }
   void inc_epoch() { epoch++; }
 
-  int create_volume(string name, uint16_t crush_map_entry);
+  int create_volume(string name, uint16_t crush_map_entry, uuid_d &out);
   int add_volume(uuid_d uuid, string name, uint16_t crush_map_entry);
+  int update_volume(uuid_d uuid, string name, uint16_t crush_map_entry);
   int remove_volume(uuid_d uuid);
-  int remove_volume(string name);
+
+  void apply_incremental(const VolMap::Incremental& inc);
 
   const vol_info_t& get_vol_info_uuid(const uuid_d& uuid) {
     assert(vol_info_by_uuid.count(uuid));
@@ -189,10 +191,11 @@ public:
     decode(p);
   }
 
-  void print(ostream& out);
-  void print_summary(ostream& out);
+  void print(ostream& out) const;
+  void print_summary(ostream& out) const;
 
   void dump(Formatter *f) const;
+  void dump(ostream& ss) const;
 }; // class VolMap
 
 
@@ -203,12 +206,12 @@ WRITE_CLASS_ENCODER(VolMap::Incremental::inc_remove);
 WRITE_CLASS_ENCODER(VolMap);
 
 
-inline ostream& operator<<(ostream& out, VolMap& m) {
+inline ostream& operator<<(ostream& out, const VolMap& m) {
   m.print_summary(out);
   return out;
 }
 
-inline ostream& operator<<(ostream& out, VolMap::vol_info_t& vol_info) {
+inline ostream& operator<<(ostream& out, const VolMap::vol_info_t& vol_info) {
   out << "vol u:" << vol_info.uuid << " cm: " << vol_info.crush_map_entry
       << " n:" << vol_info.name;
   return out;

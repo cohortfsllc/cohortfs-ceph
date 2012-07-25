@@ -16,36 +16,47 @@
 #include "VolMap.h"
 
 #include <sstream>
+
+
+#define dout_subsys ceph_subsys_mon
+
+
 using std::stringstream;
 
 
 void VolMap::decode(bufferlist::iterator& p) {
-    __u16 v;
-    ::decode(v, p);
-    ::decode(epoch, p);
-    ::decode(vol_info_by_uuid, p);
-    vol_info_by_name.clear();
+  __u16 v;
+  ::decode(v, p);
+  ::decode(epoch, p);
+  ::decode(vol_info_by_uuid, p);
+  vol_info_by_name.clear();
 
-    // build name map from uuid map (only uuid map is encoded)
-    for(map<uuid_d,vol_info_t>::const_iterator i = vol_info_by_uuid.begin();
-	i != vol_info_by_uuid.end();
-	++i) {
-      vol_info_by_name[i->second.name] = i->second;
-    }
+  // build name map from uuid map (only uuid map is encoded)
+  for(map<uuid_d,vol_info_t>::const_iterator i = vol_info_by_uuid.begin();
+      i != vol_info_by_uuid.end();
+      ++i) {
+    vol_info_by_name[i->second.name] = i->second;
   }
+}
 
 
-int VolMap::create_volume(string name, uint16_t crush_map_entry) {
-  uuid_d uuid;
-  uuid.generate_random();
-  return add_volume(uuid, name, crush_map_entry);
+/*
+ * Generates a UUID for the new volume and tries to add it to the
+ * DB. Returns the uuid generated in the uuid_out parameter.
+ */
+int VolMap::create_volume(string name, uint16_t crush_map_entry, uuid_d& uuid_out) {
+  uuid_out.generate_random();
+  return add_volume(uuid_out, name, crush_map_entry);
 }
 
 
 int VolMap::add_volume(uuid_d uuid, string name, uint16_t crush_map_entry) {
-  if (vol_info_by_uuid.count(uuid) > 0 ||
-      vol_info_by_name.count(name) > 0) {
-    return -EINVAL;
+  if (vol_info_by_uuid.count(uuid) > 0) {
+    dout(0) << "attempt to add volume with existing uuid " << uuid << dendl;
+    return -EEXIST;
+  } else if (vol_info_by_name.count(name) > 0) {
+    dout(0) << "attempt to add volume with existing name \"" << name << "\"" << dendl;
+    return -EEXIST;
   }
     
   vol_info_t vi(uuid, name, crush_map_entry);
@@ -55,13 +66,61 @@ int VolMap::add_volume(uuid_d uuid, string name, uint16_t crush_map_entry) {
 }
   
 
-int VolMap::remove_volume(uuid_d uuid) {
-  return -ENOENT;
+/*
+ * Starting with the uuid as the invariant, find the entry in each map
+ * that is associated with that uuid and update (if necessary) the
+ * name and crush_map_entry.
+ */
+int VolMap::update_volume(uuid_d uuid, string name, uint16_t crush_map_entry) {
+  if (vol_info_by_uuid.count(uuid) <= 0) {
+    dout(0) << "attempt to update volume with non-existing uuid " << uuid << dendl;
+    return -ENOENT;
+  }
+
+  vol_info_t vinfo = vol_info_by_uuid[uuid];
+  bool modified = false;
+
+  if (vinfo.crush_map_entry != crush_map_entry) {
+    vinfo.crush_map_entry = crush_map_entry;
+    modified = true;
+  }
+
+  if (vinfo.name != name) {
+    if (vol_info_by_name.count(name) > 0) {
+      dout(0) << "attempt to update volume " << uuid << " with new name of \""
+	      << name << "\", however that volume name is already used" << dendl;
+      return -EEXIST;
+    }
+
+    vol_info_by_name.erase(vinfo.name);
+    vinfo.name = name;
+    modified = true;
+  }
+
+  if (modified) {
+    vol_info_by_uuid[uuid] = vinfo;
+    vol_info_by_name[name] = vinfo;
+    dout(10) << "updated volume " << vinfo << dendl;
+  } else {
+    dout(10) << "updated volume " << uuid << " without changes" << dendl;
+  }
+
+  return 0;
 }
+  
 
+int VolMap::remove_volume(uuid_d uuid) {
+  if (vol_info_by_uuid.count(uuid) <= 0) {
+    dout(0) << "attempt to remove volume with non-existing uuid " << uuid << dendl;
+    return -ENOENT;
+  }
 
-int VolMap::remove_volume(string name) {
-  return -ENOENT;
+  vol_info_t vinfo = vol_info_by_uuid[uuid];
+
+  vol_info_by_name.erase(vinfo.name);
+  vol_info_by_uuid.erase(uuid);
+
+  return 0;
 }
 
 
@@ -93,7 +152,7 @@ void VolMap::dump(Formatter *f) const
   f->close_section();
 }
 
-void VolMap::print(ostream& out) 
+void VolMap::print(ostream& out) const
 {
     out << "epoch\t" << epoch << "\n";
     for(map<uuid_d,vol_info_t>::const_iterator i = vol_info_by_uuid.begin();
@@ -107,7 +166,9 @@ void VolMap::print(ostream& out)
 } // VolMap::print
 
 
-void VolMap::print_summary(ostream& out) 
+/* TODO: if the volume map is very big, perhaps the summary should
+   simply list how many entries there are or somesuch. */
+void VolMap::print_summary(ostream& out) const
 {
   out << "e" << epoch << ": ";
 
@@ -125,6 +186,14 @@ void VolMap::print_summary(ostream& out)
 	<< i->second.crush_map_entry;
   }
 } // VolMap::print_summary
+
+
+/* TODO: consider doing something different in dump and print_summary;
+   see comment on print_summary. */
+void VolMap::dump(ostream& out) const
+{
+  print_summary(out);
+}
 
 
 void VolMap::vol_info_t::encode(bufferlist& bl) const {
@@ -215,4 +284,31 @@ void VolMap::Incremental::decode(bufferlist::iterator& bl) {
 void VolMap::Incremental::decode(bufferlist& bl) {
   bufferlist::iterator p = bl.begin();
   decode(p);
+}
+
+
+void VolMap::apply_incremental(const VolMap::Incremental& inc) {
+  uint16_t sequence = 0;
+  vector<Incremental::inc_add>::const_iterator add_cursor = inc.additions.begin();
+  vector<Incremental::inc_remove>::const_iterator rem_cursor = inc.removals.begin();
+  vector<Incremental::inc_update>::const_iterator upd_cursor = inc.updates.begin();
+
+  while (add_cursor != inc.additions.end()
+	 && rem_cursor != inc.removals.end()
+	 && upd_cursor != inc.updates.end()) {
+    if (add_cursor != inc.additions.end() && add_cursor->sequence == sequence) {
+      add_volume(add_cursor->vol_info.uuid,
+		 add_cursor->vol_info.name,
+		 add_cursor->vol_info.crush_map_entry);
+    } else if (rem_cursor != inc.removals.end() && rem_cursor->sequence == sequence) {
+      remove_volume(rem_cursor->uuid);
+    } else if (upd_cursor != inc.updates.end() && upd_cursor->sequence == sequence) {
+      update_volume(upd_cursor->vol_info.uuid,
+		 upd_cursor->vol_info.name,
+		 upd_cursor->vol_info.crush_map_entry);
+    } else {
+      assert(0 == "couldn't find next update in sequence");
+    }
+    ++sequence;
+  }
 }
