@@ -35,9 +35,9 @@ class VolMonitor : public PaxosService {
 
  public:
 
-  VolMap volmap;          // current
-  // VolMap pending_volmap;  // current + pending updates
-  VolMap::Incremental pending_inc;  // increments
+  VolMap volmap;                    // current
+  VolMap pending_volmap;            // current + pending updates
+  VolMap::Incremental pending_inc;  // increments to go from current to pending
 
   VolMonitor(Monitor *mn, Paxos *p)
     : PaxosService(mn, p)

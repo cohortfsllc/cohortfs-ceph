@@ -106,6 +106,12 @@ public:
       additions.push_back(increment);
     }
 
+    void include_addition(const uuid_d& uuid,
+			  const string& name,
+			  const uint16_t crush_map_entry) {
+      include_addition(vol_info_t(uuid, name, crush_map_entry));
+    }
+
     void include_removal(const uuid_d &uuid) {
       inc_remove increment;
       increment.sequence = next_sequence++;
@@ -170,22 +176,15 @@ public:
   }
 
   bool empty() const {
-    return vol_info_by_name.empty();
+    return vol_info_by_uuid.empty();
   }
 
   size_t size() const {
-    return vol_info_by_name.size();
+    return vol_info_by_uuid.size();
   }
 
-  void encode(bufferlist& bl) const {
-    __u16 v = 1;
-    ::encode(v, bl);
-    ::encode(epoch, bl);
-    ::encode(vol_info_by_uuid, bl);
-  }
-
+  void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& p);
-
   void decode(bufferlist& bl) {
     bufferlist::iterator p = bl.begin();
     decode(p);

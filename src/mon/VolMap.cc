@@ -24,10 +24,20 @@
 using std::stringstream;
 
 
+void VolMap::encode(bufferlist& bl) const {
+  __u8 v = 1;
+  ::encode(v, bl);
+  ::encode(epoch, bl);
+  ::encode(version, bl);
+  ::encode(vol_info_by_uuid, bl);
+}
+
+
 void VolMap::decode(bufferlist::iterator& p) {
-  __u16 v;
+  __u8 v;
   ::decode(v, p);
   ::decode(epoch, p);
+  ::decode(version, p);
   ::decode(vol_info_by_uuid, p);
   vol_info_by_name.clear();
 
@@ -220,7 +230,7 @@ void VolMap::vol_info_t::decode(bufferlist& bl) {
 
 
 void VolMap::Incremental::inc_add::encode(bufferlist& bl) const {
-  __u16 v = 1;
+  __u8 v = 1;
   ::encode(v, bl);
   ::encode(sequence, bl);
   ::encode(vol_info, bl);
@@ -242,7 +252,7 @@ void VolMap::Incremental::inc_add::decode(bufferlist& bl) {
 
 
 void VolMap::Incremental::inc_remove::encode(bufferlist& bl) const {
-  __u16 v = 1;
+  __u8 v = 1;
   ::encode(v, bl);
   ::encode(sequence, bl);
   ::encode(uuid, bl);
@@ -294,21 +304,26 @@ void VolMap::apply_incremental(const VolMap::Incremental& inc) {
   vector<Incremental::inc_update>::const_iterator upd_cursor = inc.updates.begin();
 
   while (add_cursor != inc.additions.end()
-	 && rem_cursor != inc.removals.end()
-	 && upd_cursor != inc.updates.end()) {
+	 || rem_cursor != inc.removals.end()
+	 || upd_cursor != inc.updates.end()) {
     if (add_cursor != inc.additions.end() && add_cursor->sequence == sequence) {
       add_volume(add_cursor->vol_info.uuid,
 		 add_cursor->vol_info.name,
 		 add_cursor->vol_info.crush_map_entry);
+      ++add_cursor;
     } else if (rem_cursor != inc.removals.end() && rem_cursor->sequence == sequence) {
       remove_volume(rem_cursor->uuid);
+      ++rem_cursor;
     } else if (upd_cursor != inc.updates.end() && upd_cursor->sequence == sequence) {
       update_volume(upd_cursor->vol_info.uuid,
 		 upd_cursor->vol_info.name,
 		 upd_cursor->vol_info.crush_map_entry);
+      ++upd_cursor;
     } else {
       assert(0 == "couldn't find next update in sequence");
     }
     ++sequence;
   }
+
+  version = inc.version;
 }

@@ -66,7 +66,7 @@ void VolMonitor::update_from_paxos()
   utime_t now(ceph_clock_now(g_ceph_context));
   while (paxosv > volmap.version) {
     bufferlist bl;
-    bool success = paxos->read(volmap.version+1, bl);
+    const bool success = paxos->read(volmap.version+1, bl);
     assert(success);
 
     dout(7) << "update_from_paxos applying incremental " << volmap.version+1 << dendl;
@@ -74,8 +74,7 @@ void VolMonitor::update_from_paxos()
     try {
       bufferlist::iterator p = bl.begin();
       inc.decode(p);
-    }
-    catch (const std::exception &e) {
+    } catch (const std::exception &e) {
       dout(0) << "update_from_paxos: error parsing "
 	      << "incremental update: " << e.what() << dendl;
       assert(0 == "update_from_paxos: error parsing incremental update");
@@ -109,22 +108,25 @@ void VolMonitor::update_from_paxos()
     paxos->trim_to(paxosv - max);
   }
 
-  // ERIC : NEEDED?
+  // TODO : NEEDED?
   // send_vol_creates();
 
-  // ERIC : NEEDED?
+  // TODO : NEEDED?
   // update_logger();
 }
 
+
 void VolMonitor::create_pending()
 {
+  pending_volmap = volmap;
+  pending_volmap.epoch++;
+
   pending_inc = VolMap::Incremental();
   pending_inc.version = volmap.version + 1;
 
-  // pending_volmap = volmap;
-  // pending_volmap.epoch++;
   dout(10) << "create_pending v" << pending_inc.version << dendl;
 }
+
 
 void VolMonitor::encode_pending(bufferlist &bl)
 {
@@ -136,6 +138,7 @@ void VolMonitor::encode_pending(bufferlist &bl)
   assert(paxos->get_version() + 1 == pending_inc.version);
   pending_inc.encode(bl);
 }
+
 
 bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
 {
@@ -162,6 +165,7 @@ bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
   }
 }
 
+
 bool VolMonitor::prepare_update(PaxosServiceMessage *m)
 {
   dout(10) << "prepare_upate " << *m << " from " << m->get_orig_source_inst() << dendl;
@@ -187,15 +191,16 @@ bool VolMonitor::prepare_update(PaxosServiceMessage *m)
   }
 }
 
+
 /*
  * other member functions
  */
 
 /*
- * list
- * lookup <uuid>|<name>
+ * Commands handled:
+ *     list
+ *     lookup <uuid>|<name>
  */
-
 bool VolMonitor::preprocess_command(MMonCommand *m)
 {
   int r = -1;
@@ -237,11 +242,12 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
 
 
 /*
- * create <name> <crush_map_entry>
- * add <uuid> <name> <crush_map_entry>
- * remove <uuid> <name> <crush_map_entry>
- * rename <uuid> <name>
- * ? recrush <uuid> <crush_map_entry>
+ * Commands handled:
+ *     create <name> <crush_map_entry>
+ *     add <uuid> <name> <crush_map_entry>
+ *     remove <uuid> <name> <crush_map_entry>
+ *     rename <uuid> <name>
+ *     ? recrush <uuid> <crush_map_entry>
  */
 
 bool VolMonitor::prepare_command(MMonCommand *m)
@@ -252,13 +258,19 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 
   if (m->cmd.size() > 1) {
     if (m->cmd[1] == "create" && m->cmd.size() == 4) {
-      VolMap::vol_info_t vol_info;
-      vol_info.uuid.generate_random();
-      vol_info.name = m->cmd[2];
-      vol_info.crush_map_entry = (uint16_t) atoi(m->cmd[3].c_str());
-      // pending_inc.include_addition(vol_info);
-      ss << "creating volume " << vol_info;
-      r = -ENOSYS;
+      const string name = m->cmd[2];
+      const uint16_t crush_map_entry = (uint16_t) atoi(m->cmd[3].c_str());
+      uuid_d uuid;
+
+      r = pending_volmap.create_volume(name, crush_map_entry, uuid);
+      if (r == 0) {
+	ss << "volume " << uuid << " created with name \"" << name << "\"";
+	pending_inc.include_addition(uuid, name, crush_map_entry);
+      } else if (r == -EEXIST) {
+	ss << "volume with name \"" << name << "\" already exists";
+      } else {
+	ss << "volume could not be created due to error code " << -r;
+      }
     } else if (m->cmd[1] == "add" && m->cmd.size() == 5) {
       ss << "got add command";
       r = -ENOSYS;
