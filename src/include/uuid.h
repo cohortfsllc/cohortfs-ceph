@@ -49,11 +49,11 @@ struct uuid_d {
       return uuid_compare(this->uuid, r.uuid) < 0;
   }
 
-    operator std::string() const {
-        char buf[char_rep_buf_size];
-        print(buf);
-        return std::string(buf);
-    }
+  operator std::string() const {
+      char buf[char_rep_buf_size];
+      print(buf);
+      return std::string(buf);
+  }
 }; // uuid_d
 
 WRITE_CLASS_ENCODER(uuid_d)
