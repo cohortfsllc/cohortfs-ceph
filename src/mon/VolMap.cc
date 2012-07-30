@@ -134,6 +134,39 @@ int VolMap::remove_volume(uuid_d uuid) {
 }
 
 
+vector<VolMap::vol_info_t> VolMap::search_vol_info(const string& searchKey, size_t max) {
+  size_t count = 0;
+  vector<VolMap::vol_info_t> result;
+
+  uuid_d uuid;
+  const bool canBeUuid = uuid.parse(searchKey.c_str());
+
+  // TODO : if searchKey could be a *partial* uuid, search for all
+  // volumes w/ uuids that begin with that partial.
+
+  if (canBeUuid) {
+    VolMap::vol_info_t vol_info;
+    const bool found = get_vol_info_uuid(uuid, vol_info);
+    if (found) {
+      result.push_back(vol_info);
+      ++count;
+    }
+  }
+
+  if (count < max) {
+    VolMap::vol_info_t vol_info;
+    const bool found = get_vol_info_name(searchKey, vol_info);
+    if (found) {
+      result.push_back(vol_info);
+      ++count;
+    }
+  }
+
+  return result;
+}
+
+
+
 void VolMap::vol_info_t::dump(Formatter *f) const
 {
   char uuid_buf[uuid_d::uuid_d::char_rep_buf_size];

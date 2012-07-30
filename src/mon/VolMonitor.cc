@@ -93,7 +93,7 @@ void VolMonitor::update_from_paxos()
   volmap.encode(bl);
   paxos->stash_latest(paxosv, bl);
 
-  // dump pgmap summaries?  (useful for debugging)
+  // dump volmap summaries?  (useful for debugging)
   if (0) {
     stringstream ds;
     volmap.dump(ds);
@@ -102,7 +102,7 @@ void VolMonitor::update_from_paxos()
     mon->store->put_bl_sn(d, "volmap_dump", paxosv);
   }
 
-  unsigned max = g_conf->mon_max_volmap_epochs;
+  const unsigned max = g_conf->mon_max_volmap_epochs;
   if (mon->is_leader() &&
       paxosv > max) {
     paxos->trim_to(paxosv - max);
@@ -175,14 +175,7 @@ bool VolMonitor::prepare_update(PaxosServiceMessage *m)
   case MSG_MON_COMMAND:
     return prepare_command((MMonCommand *) m);
 
-    /* ERIC REMOVE
-
-  case MSG_MDS_BEACON:
-    return preprocess_beacon((MMDSBeacon*)m);
-
-  case MSG_MDS_OFFLOAD_TARGETS:
-    return preprocess_offload_targets((MMDSLoadTargets*)m);
-    */
+  // case OTHER TYPES OF COMMANDS?
 
   default:
     assert(0);
@@ -208,7 +201,7 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
   bufferlist rdata;
 
   if (m->cmd.size() > 1) {
-    if (m->cmd[1] == "list"  && m->cmd.size() == 2) {
+    if (m->cmd[1] == "list" && m->cmd.size() == 2) {
       if (volmap.empty()) {
 	ss << "volmap is empty" << std::endl;
       } else {
@@ -217,15 +210,39 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
 	for (map<string,VolMap::vol_info_t>::const_iterator i = volmap.begin();
 	     i != volmap.end();
 	     ++i) {
+	  ds << i->second << std::endl;
+	  /* TODO REMOVE
 	  ds << i->second.uuid << " " << i->second.crush_map_entry
 	     << " " << i->first << std::endl;
+	  */
 	}
 	rdata.append(ds);
       }
       r = 0;
     } else if (m->cmd[1] == "lookup" && m->cmd.size() == 3) {
-      ss << "got lookup command";
-      r = -ENOSYS;
+      const string& searchKey = m->cmd[2];
+      const size_t maxResults = 100;
+      const vector<VolMap::vol_info_t> results = volmap.search_vol_info(searchKey, maxResults);
+      if (results.empty()) {
+	ss << "no volmap entries match \"" << searchKey << "\"";
+	r = -EEXIST;
+      } else {
+	if (results.size() == 1) {
+	  ss << "matching volmap entry";
+	} else if (results.size() == maxResults) {
+	  ss << "maximum matching volmap entries; could be more";
+	} else {
+	  ss << "matching volmap entries";
+	}
+	stringstream ds;
+	for (vector<VolMap::vol_info_t>::const_iterator i = results.begin();
+	     i != results.end();
+	     ++i) {
+	  ds << *i << std::endl;
+	}
+	rdata.append(ds);
+	r = 0;
+      }
     }
   }
 

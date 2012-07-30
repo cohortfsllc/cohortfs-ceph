@@ -133,6 +133,7 @@ public:
 
 
 protected:
+
   // base map
   epoch_t epoch;
   version_t version;
@@ -141,9 +142,10 @@ protected:
 
 public:
 
+  const static size_t DEFAULT_MAX_SEARCH_RESULTS = 128;
+
   friend class VolMonitor;
 
-public:
   VolMap() 
     : epoch(0) { }
 
@@ -166,6 +168,27 @@ public:
     assert(vol_info_by_name.count(name));
     return vol_info_by_name[name];
   }
+
+  bool get_vol_info_uuid(const uuid_d& uuid, vol_info_t& vol_info) {
+    if (vol_info_by_uuid.count(uuid) > 0) {
+      vol_info = vol_info_by_uuid[uuid];
+      return true;
+    }
+    return false;
+  }
+
+  bool get_vol_info_name(const string& name, vol_info_t& vol_info) {
+    if (vol_info_by_name.count(name) > 0) {
+      vol_info = vol_info_by_name[name];
+      return true;
+    }
+    return false;
+  }
+
+  /*
+   * Will search the entries by both name and uuid returning a vector of up to max entries.
+   */
+  vector<vol_info_t> search_vol_info(const string& name, size_t max = DEFAULT_MAX_SEARCH_RESULTS);
 
   map<string,vol_info_t>::const_iterator begin() const {
     return vol_info_by_name.begin();
@@ -211,8 +234,14 @@ inline ostream& operator<<(ostream& out, const VolMap& m) {
 }
 
 inline ostream& operator<<(ostream& out, const VolMap::vol_info_t& vol_info) {
+#if 0
   out << "vol u:" << vol_info.uuid << " cm: " << vol_info.crush_map_entry
       << " n:" << vol_info.name;
+#else
+  out << vol_info.uuid
+      << " " << setw(4) << right << vol_info.crush_map_entry 
+      << " " << vol_info.name;
+#endif
   return out;
 }
 
