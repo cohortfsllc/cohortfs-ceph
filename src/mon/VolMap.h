@@ -126,6 +126,12 @@ public:
       updates.push_back(increment);
     }
 
+    void include_update(const uuid_d& uuid,
+			const string& name,
+			const uint16_t crush_map_entry) {
+      include_update(vol_info_t(uuid, name, crush_map_entry));
+    }
+
     void encode(bufferlist& bl) const;
     void decode(bufferlist::iterator& bl);
     void decode(bufferlist& bl);
@@ -142,6 +148,7 @@ protected:
 
 public:
 
+  const static string EMPTY_STRING;
   const static size_t DEFAULT_MAX_SEARCH_RESULTS = 128;
 
   friend class VolMonitor;
@@ -149,13 +156,22 @@ public:
   VolMap() 
     : epoch(0) { }
 
+  static bool is_valid_volume_name(const string& name, string& error);
+  static bool is_valid_crush_map_entry(uint16_t crush_map_entry,
+				       string& error);
+
   epoch_t get_epoch() const { return epoch; }
   void inc_epoch() { epoch++; }
 
-  int create_volume(string name, uint16_t crush_map_entry, uuid_d &out);
+  int create_volume(const string& name, uint16_t crush_map_entry, uuid_d &out);
   int add_volume(uuid_d uuid, string name, uint16_t crush_map_entry);
-  int update_volume(uuid_d uuid, string name, uint16_t crush_map_entry);
-  int remove_volume(uuid_d uuid);
+  int remove_volume(uuid_d uuid, const string& name_verifier = EMPTY_STRING);
+  int rename_volume(uuid_d uuid, const string& name,
+		    vol_info_t& out_vinfo);
+  int recrush_volume(uuid_d uuid, uint16_t crush_map_entry,
+		     vol_info_t& out_vinfo);
+  int update_volume(uuid_d uuid, string name, uint16_t crush_map_entry,
+		    vol_info_t& out_vinfo);
 
   void apply_incremental(const VolMap::Incremental& inc);
 

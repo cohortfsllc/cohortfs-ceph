@@ -142,7 +142,8 @@ void VolMonitor::encode_pending(bufferlist &bl)
 
 bool VolMonitor::preprocess_query(PaxosServiceMessage *m)
 {
-  dout(10) << "preprocess_query " << *m << " from " << m->get_orig_source_inst() << dendl;
+  dout(10) << "preprocess_query " << *m << " from "
+	   << m->get_orig_source_inst() << dendl;
 
   switch (m->get_type()) {
 
@@ -211,10 +212,6 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
 	     i != volmap.end();
 	     ++i) {
 	  ds << i->second << std::endl;
-	  /* TODO REMOVE
-	  ds << i->second.uuid << " " << i->second.crush_map_entry
-	     << " " << i->first << std::endl;
-	  */
 	}
 	rdata.append(ds);
       }
@@ -225,7 +222,7 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
       const vector<VolMap::vol_info_t> results = volmap.search_vol_info(searchKey, maxResults);
       if (results.empty()) {
 	ss << "no volmap entries match \"" << searchKey << "\"";
-	r = -EEXIST;
+	r = -ENOENT;
       } else {
 	if (results.size() == 1) {
 	  ss << "matching volmap entry";
@@ -261,10 +258,9 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
 /*
  * Commands handled:
  *     create <name> <crush_map_entry>
- *     add <uuid> <name> <crush_map_entry>
- *     remove <uuid> <name> <crush_map_entry>
+ *     remove <uuid> <name> # force user to type both to minimize odds of mistakes
  *     rename <uuid> <name>
- *     ? recrush <uuid> <crush_map_entry>
+ *     recrush <uuid> <crush_map_entry>
  */
 
 bool VolMonitor::prepare_command(MMonCommand *m)
@@ -275,22 +271,96 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 
   if (m->cmd.size() > 1) {
     if (m->cmd[1] == "create" && m->cmd.size() == 4) {
-      const string name = m->cmd[2];
+      const string& name = m->cmd[2];
       const uint16_t crush_map_entry = (uint16_t) atoi(m->cmd[3].c_str());
       uuid_d uuid;
+      string error_message;
 
-      r = pending_volmap.create_volume(name, crush_map_entry, uuid);
-      if (r == 0) {
-	ss << "volume " << uuid << " created with name \"" << name << "\"";
-	pending_inc.include_addition(uuid, name, crush_map_entry);
-      } else if (r == -EEXIST) {
-	ss << "volume with name \"" << name << "\" already exists";
+      if (!VolMap::is_valid_volume_name(name, error_message)) {
+	ss << error_message;
+	r = -EINVAL;
       } else {
-	ss << "volume could not be created due to error code " << -r;
+	r = pending_volmap.create_volume(name, crush_map_entry, uuid);
+	if (r == 0) {
+	  ss << "volume " << uuid << " created with name \"" << name << "\"";
+	  pending_inc.include_addition(uuid, name, crush_map_entry);
+	} else if (r == -EEXIST) {
+	  ss << "volume with name \"" << name << "\" already exists";
+	} else {
+	  ss << "volume could not be created due to error code " << -r;
+	}
       }
-    } else if (m->cmd[1] == "add" && m->cmd.size() == 5) {
-      ss << "got add command";
-      r = -ENOSYS;
+    } else if (m->cmd[1] == "remove" && m->cmd.size() == 4) {
+      const string& uuid_str = m->cmd[2];
+      const string& name = m->cmd[3];
+      string error_message;
+
+      if (VolMap::is_valid_volume_name(name, error_message)) {
+	uuid_d uuid;
+	const bool is_uuid = uuid.parse(uuid_str.c_str());
+	if (is_uuid) {
+	  r = pending_volmap.remove_volume(uuid, name);
+	  if (r == 0) {
+	      ss << "removed volume " << uuid << " \"" << name << "\"";
+	      pending_inc.include_removal(uuid);
+	  } else if (r == -ENOENT) {
+	    ss << "no volume with provided uuid " << uuid << " exists";
+	  } else if (r == -EINVAL) {
+	    ss << "volume name \"" << name << "\" does not match volume with uuid " << uuid;
+	  } else {
+	    ss << "volume could not be removed due to error code " << -r;
+	  }
+	} else {
+	  ss << "provided volume uuid " << uuid << " is not a valid uuid";
+	  r = -EINVAL;
+	}
+      } else {
+	ss << error_message;
+	r = -EINVAL;
+      }
+    } else if (m->cmd[1] == "rename" && m->cmd.size() == 4) {
+      const string& uuid_str = m->cmd[2];
+      const string& name = m->cmd[3];
+      uuid_d uuid;
+      const bool is_uuid = uuid.parse(uuid_str.c_str());
+      if (is_uuid) {
+	VolMap::vol_info_t vinfo;
+	r = pending_volmap.rename_volume(uuid, name, vinfo);
+	if (r == 0) {
+	  pending_inc.include_update(vinfo);
+	  ss << "volume " << uuid << " renamed to " << name;
+	} else if (r == -EINVAL) {
+	  ss << "volume name is invalid";
+	} else if (r == -EEXIST) {
+	  ss << "volume with name \"" << name << "\" already exists";
+	} else {
+	  ss << "volume could not be renamed due to error code " << -r;
+	}
+      } else {
+	ss << "provided volume uuid \"" << uuid << "\" is not a valid uuid";
+	r = -EINVAL;
+      }
+    } else if (m->cmd[1] == "recrush" && m->cmd.size() == 4) {
+      const string& uuid_str = m->cmd[2];
+      const uint16_t crush_map_entry = (uint16_t) atoi(m->cmd[3].c_str());
+      uuid_d uuid;
+      const bool is_uuid = uuid.parse(uuid_str.c_str());
+      if (is_uuid) {
+	VolMap::vol_info_t vinfo;
+	r = pending_volmap.recrush_volume(uuid,
+					  crush_map_entry,
+					  vinfo);
+	if (r == 0) {
+	  pending_inc.include_update(vinfo);
+	  ss << "volume " << uuid << " had crush map entry changed to "
+	     << crush_map_entry;
+	} else if (r == -EINVAL) {
+	  ss << "invalid crush map entry";
+	}
+      } else {
+	ss << "provided volume uuid \"" << uuid << "\" is not a valid uuid";
+	r = -EINVAL;
+      }
     }
   }
 

@@ -16,12 +16,16 @@
 #include "VolMap.h"
 
 #include <sstream>
+#include <ctype.h>
 
 
 #define dout_subsys ceph_subsys_mon
 
 
 using std::stringstream;
+
+
+const string VolMap::EMPTY_STRING = "";
 
 
 void VolMap::encode(bufferlist& bl) const {
@@ -54,24 +58,107 @@ void VolMap::decode(bufferlist::iterator& p) {
  * Generates a UUID for the new volume and tries to add it to the
  * DB. Returns the uuid generated in the uuid_out parameter.
  */
-int VolMap::create_volume(string name, uint16_t crush_map_entry, uuid_d& uuid_out) {
+int VolMap::create_volume(const string& name,
+			  uint16_t crush_map_entry,
+			  uuid_d& uuid_out) {
   uuid_out.generate_random();
   return add_volume(uuid_out, name, crush_map_entry);
 }
 
 
 int VolMap::add_volume(uuid_d uuid, string name, uint16_t crush_map_entry) {
+  string error_message;
+  if (!is_valid_volume_name(name, error_message)) {
+    dout(0) << "attempt to add volume with invalid (" << error_message
+	    << ") name \"" << name << "\"" << dendl;
+    return -EINVAL;
+  }
+
   if (vol_info_by_uuid.count(uuid) > 0) {
     dout(0) << "attempt to add volume with existing uuid " << uuid << dendl;
     return -EEXIST;
-  } else if (vol_info_by_name.count(name) > 0) {
-    dout(0) << "attempt to add volume with existing name \"" << name << "\"" << dendl;
+  }
+
+  if (vol_info_by_name.count(name) > 0) {
+    dout(0) << "attempt to add volume with existing name \"" << name
+	    << "\"" << dendl;
     return -EEXIST;
   }
     
   vol_info_t vi(uuid, name, crush_map_entry);
   vol_info_by_uuid[uuid] = vi;
   vol_info_by_name[name] = vi;
+  return 0;
+}
+
+
+int VolMap::rename_volume(uuid_d uuid,
+			  const string& name,
+			  vol_info_t& vinfo) {
+ if (vol_info_by_uuid.count(uuid) <= 0) {
+    dout(0) << "attempt to update volume with non-existing uuid "
+	    << uuid << dendl;
+    return -ENOENT;
+  }
+
+  vinfo = vol_info_by_uuid[uuid];
+
+  if (vinfo.name != name) {
+    string error_message;
+    if (!is_valid_volume_name(name, error_message)) {
+      dout(0) << "attempt to rename volume using invalid ("
+	      << error_message << ") name" << dendl;
+      return -EINVAL;
+    } if (vol_info_by_name.count(name) > 0) {
+      dout(0) << "attempt to update volume " << uuid << " with new name of \""
+	      << name << "\", however that volume name is already used"
+	      << dendl;
+      return -EEXIST;
+    }
+
+    vol_info_by_name.erase(vinfo.name);
+    vinfo.name = name;
+    vol_info_by_uuid[uuid] = vinfo;
+    vol_info_by_name[name] = vinfo;
+
+    dout(10) << "updated volume " << vinfo << dendl;
+  } else {
+    dout(10) << "no changes provided to update name of volume "
+	     << uuid << dendl;
+  }
+
+  return 0;
+}
+
+
+int VolMap::recrush_volume(uuid_d uuid,
+			   uint16_t crush_map_entry,
+			   vol_info_t& vinfo) {
+ if (vol_info_by_uuid.count(uuid) <= 0) {
+    dout(0) << "attempt to update volume with non-existing uuid "
+	    << uuid << dendl;
+    return -ENOENT;
+  }
+
+  vinfo = vol_info_by_uuid[uuid];
+
+  if (vinfo.crush_map_entry != crush_map_entry) {
+    string error_message;
+    if (!is_valid_crush_map_entry(crush_map_entry, error_message)) {
+      dout(0) << "attempt to recrush volume using invalid ("
+	      << error_message << ") crush map entry" << dendl;
+      return -EINVAL;
+    } 
+    vinfo.crush_map_entry = crush_map_entry;
+
+    vol_info_by_uuid[uuid] = vinfo;
+    vol_info_by_name[vinfo.name] = vinfo;
+    dout(10) << "updated volume " << vinfo << dendl;
+  } else {
+    dout(10) << "no changes provided to update crush map entry of volume "
+	     << uuid << dendl;
+  }
+
   return 0;
 }
   
@@ -81,51 +168,31 @@ int VolMap::add_volume(uuid_d uuid, string name, uint16_t crush_map_entry) {
  * that is associated with that uuid and update (if necessary) the
  * name and crush_map_entry.
  */
-int VolMap::update_volume(uuid_d uuid, string name, uint16_t crush_map_entry) {
-  if (vol_info_by_uuid.count(uuid) <= 0) {
-    dout(0) << "attempt to update volume with non-existing uuid " << uuid << dendl;
-    return -ENOENT;
-  }
-
-  vol_info_t vinfo = vol_info_by_uuid[uuid];
-  bool modified = false;
-
-  if (vinfo.crush_map_entry != crush_map_entry) {
-    vinfo.crush_map_entry = crush_map_entry;
-    modified = true;
-  }
-
-  if (vinfo.name != name) {
-    if (vol_info_by_name.count(name) > 0) {
-      dout(0) << "attempt to update volume " << uuid << " with new name of \""
-	      << name << "\", however that volume name is already used" << dendl;
-      return -EEXIST;
-    }
-
-    vol_info_by_name.erase(vinfo.name);
-    vinfo.name = name;
-    modified = true;
-  }
-
-  if (modified) {
-    vol_info_by_uuid[uuid] = vinfo;
-    vol_info_by_name[name] = vinfo;
-    dout(10) << "updated volume " << vinfo << dendl;
+int VolMap::update_volume(uuid_d uuid, string name, uint16_t crush_map_entry,
+			  vol_info_t& vinfo) {
+  int result = rename_volume(uuid, name, vinfo);
+  if (result != 0) {
+    return result;
   } else {
-    dout(10) << "updated volume " << uuid << " without changes" << dendl;
+    return recrush_volume(uuid, crush_map_entry, vinfo);
   }
-
-  return 0;
 }
   
 
-int VolMap::remove_volume(uuid_d uuid) {
+int VolMap::remove_volume(uuid_d uuid, const string& name_verifier) {
   if (vol_info_by_uuid.count(uuid) <= 0) {
     dout(0) << "attempt to remove volume with non-existing uuid " << uuid << dendl;
     return -ENOENT;
   }
 
   vol_info_t vinfo = vol_info_by_uuid[uuid];
+
+  if (!name_verifier.empty() && name_verifier != vinfo.name) {
+    dout(0) << "attempt to remove volume " << uuid
+	    << " with non-matching volume name verifier (\"" << name_verifier
+	    << "\" instead of \"" << vinfo.name << "\"" << dendl;
+    return -EINVAL;
+  }
 
   vol_info_by_name.erase(vinfo.name);
   vol_info_by_uuid.erase(uuid);
@@ -348,9 +415,11 @@ void VolMap::apply_incremental(const VolMap::Incremental& inc) {
       remove_volume(rem_cursor->uuid);
       ++rem_cursor;
     } else if (upd_cursor != inc.updates.end() && upd_cursor->sequence == sequence) {
+      vol_info_t out_vinfo;
       update_volume(upd_cursor->vol_info.uuid,
-		 upd_cursor->vol_info.name,
-		 upd_cursor->vol_info.crush_map_entry);
+		    upd_cursor->vol_info.name,
+		    upd_cursor->vol_info.crush_map_entry,
+		    out_vinfo);
       ++upd_cursor;
     } else {
       assert(0 == "couldn't find next update in sequence");
@@ -359,4 +428,42 @@ void VolMap::apply_incremental(const VolMap::Incremental& inc) {
   }
 
   version = inc.version;
+}
+
+
+bool VolMap::is_valid_volume_name(const string& name, string& error) {
+  if (name.empty()) {
+    error = "volume name may not be empty";
+    return false;
+  }
+
+  if (isspace(name[0])) {
+    error = "volume name may not begin with whitespace";
+    return false;
+  }
+
+  if (isspace(name[name.size() - 1])) {
+    error = "volume name may not end with whitespace";
+    return false;
+  }
+
+  for (string::const_iterator c = name.begin(); c != name.end(); ++c) {
+    if (!isgraph(*c) && *c != ' ') {
+      error = "volume name can only contain printable characters";
+      return false;
+    }
+  }
+
+  if (isspace(name[name.size() - 1])) {
+    error = "volume name may not end with whitespace";
+    return false;
+  }
+
+  return true;
+}
+
+// TODO: any logic needed here?
+bool VolMap::is_valid_crush_map_entry(uint16_t crush_map_entry,
+				      string& error) {
+  return true;
 }
