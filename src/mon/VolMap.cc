@@ -16,7 +16,16 @@
 #include "VolMap.h"
 
 #include <sstream>
+
+#ifdef USING_UNICODE
+#include <unicode/uchar.h>
+#define L_IS_WHITESPACE(c) (u_isUWhiteSpace(c))
+#define L_IS_PRINTABLE(c) (u_hasBinaryProperty((c), UCHAR_POSIX_PRINT))
+#else
 #include <ctype.h>
+#define L_IS_WHITESPACE(c) (isspace(c))
+#define L_IS_PRINTABLE(c) (isprint(c))
+#endif
 
 
 #define dout_subsys ceph_subsys_mon
@@ -201,7 +210,8 @@ int VolMap::remove_volume(uuid_d uuid, const string& name_verifier) {
 }
 
 
-vector<VolMap::vol_info_t> VolMap::search_vol_info(const string& searchKey, size_t max) {
+vector<VolMap::vol_info_t> VolMap::search_vol_info(const string& searchKey,
+						   size_t max) {
   size_t count = 0;
   vector<VolMap::vol_info_t> result;
 
@@ -437,18 +447,18 @@ bool VolMap::is_valid_volume_name(const string& name, string& error) {
     return false;
   }
 
-  if (isspace(name[0])) {
-    error = "volume name may not begin with whitespace";
+  if (L_IS_WHITESPACE(*name.begin())) {
+    error = "volume name may not begin with space characters";
     return false;
   }
 
-  if (isspace(name[name.size() - 1])) {
-    error = "volume name may not end with whitespace";
+  if (L_IS_WHITESPACE(*name.rbegin())) {
+    error = "volume name may not end with space characters";
     return false;
   }
 
   for (string::const_iterator c = name.begin(); c != name.end(); ++c) {
-    if (!isgraph(*c) && *c != ' ') {
+    if (!L_IS_PRINTABLE(*c)) {
       error = "volume name can only contain printable characters";
       return false;
     }
