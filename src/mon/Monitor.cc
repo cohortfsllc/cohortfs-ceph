@@ -161,6 +161,8 @@ PaxosService *Monitor::get_paxos_service_by_name(const string& name)
     return paxos_service[PAXOS_OSDMAP];
   if (name == "pgmap")
     return paxos_service[PAXOS_PGMAP];
+  if (name == "volmap")
+    return paxos_service[PAXOS_VOLMAP];
   if (name == "logm")
     return paxos_service[PAXOS_LOG];
   if (name == "auth")
