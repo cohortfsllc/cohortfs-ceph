@@ -297,7 +297,7 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 
       if (VolMap::is_valid_volume_name(name, error_message)) {
 	uuid_d uuid;
-	const bool is_uuid = uuid.parse(uuid_str.c_str());
+	const bool is_uuid = uuid.parse(uuid_str);
 	if (is_uuid) {
 	  r = pending_volmap.remove_volume(uuid, name);
 	  if (r == 0) {
@@ -319,33 +319,33 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 	r = -EINVAL;
       }
     } else if (m->cmd[1] == "rename" && m->cmd.size() == 4) {
-      const string& uuid_str = m->cmd[2];
-      const string& name = m->cmd[3];
+      const string& volspec = m->cmd[2];
+      const string& new_name = m->cmd[3];
       uuid_d uuid;
-      const bool is_uuid = uuid.parse(uuid_str.c_str());
-      if (is_uuid) {
-	VolMap::vol_info_t vinfo;
-	r = pending_volmap.rename_volume(uuid, name, vinfo);
+      const bool is_unique = pending_volmap.get_vol_uuid(volspec, uuid);
+      if (is_unique) {
+	VolMap::vol_info_t vinfo_out;
+	r = pending_volmap.rename_volume(uuid, new_name, vinfo_out);
 	if (r == 0) {
-	  pending_inc.include_update(vinfo);
-	  ss << "volume " << uuid << " renamed to " << name;
+	  pending_inc.include_update(vinfo_out);
+	  ss << "volume " << uuid << " renamed to " << new_name;
 	} else if (r == -EINVAL) {
 	  ss << "volume name is invalid";
 	} else if (r == -EEXIST) {
-	  ss << "volume with name \"" << name << "\" already exists";
+	  ss << "volume with name \"" << new_name << "\" already exists";
 	} else {
 	  ss << "volume could not be renamed due to error code " << -r;
 	}
       } else {
-	ss << "provided volume uuid \"" << uuid << "\" is not a valid uuid";
-	r = -EINVAL;
+	ss << "provided volume specifier \"" << volspec << "\" does not specify a unique volume";
+	r = -ENOENT;
       }
     } else if (m->cmd[1] == "recrush" && m->cmd.size() == 4) {
-      const string& uuid_str = m->cmd[2];
+      const string& volspec = m->cmd[2];
       const uint16_t crush_map_entry = (uint16_t) atoi(m->cmd[3].c_str());
       uuid_d uuid;
-      const bool is_uuid = uuid.parse(uuid_str.c_str());
-      if (is_uuid) {
+      const bool is_unique = pending_volmap.get_vol_uuid(volspec, uuid);
+      if (is_unique) {
 	VolMap::vol_info_t vinfo;
 	r = pending_volmap.recrush_volume(uuid,
 					  crush_map_entry,
@@ -358,8 +358,8 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 	  ss << "invalid crush map entry";
 	}
       } else {
-	ss << "provided volume uuid \"" << uuid << "\" is not a valid uuid";
-	r = -EINVAL;
+	ss << "provided volume specifier \"" << volspec << "\" does not specify a unique volume";
+	r = -ENOENT;
       }
     }
   }

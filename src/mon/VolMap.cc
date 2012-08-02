@@ -211,12 +211,14 @@ int VolMap::remove_volume(uuid_d uuid, const string& name_verifier) {
 
 
 vector<VolMap::vol_info_t> VolMap::search_vol_info(const string& searchKey,
-						   size_t max) {
+						   size_t max)
+  const
+{
   size_t count = 0;
   vector<VolMap::vol_info_t> result;
 
   uuid_d uuid;
-  const bool canBeUuid = uuid.parse(searchKey.c_str());
+  const bool canBeUuid = uuid.parse(searchKey);
 
   // TODO : if searchKey could be a *partial* uuid, search for all
   // volumes w/ uuids that begin with that partial.
@@ -242,6 +244,18 @@ vector<VolMap::vol_info_t> VolMap::search_vol_info(const string& searchKey,
   return result;
 }
 
+
+bool VolMap::get_vol_uuid(const string& volspec, uuid_d& uuid_out) const
+{
+  // vector<VolMap::vol_info_t> vols_found = search_vol_info(volspec, 2);
+  vector<vol_info_t> vols_found = search_vol_info(volspec, 2);
+  if (vols_found.size() == 1) {
+    uuid_out = vols_found[0].uuid;
+    return true;
+  } else {
+    return false;
+  }
+}
 
 
 void VolMap::vol_info_t::dump(Formatter *f) const
@@ -407,8 +421,14 @@ void VolMap::Incremental::decode(bufferlist& bl) {
 }
 
 
+/*
+ * Apply an Incremental to a VolMap. Apply each increment in the order
+ * it was given in case they interact. So we use three cursors going
+ * through the three vectors of the different types of increments and
+ * find the next one to apply.
+ */
 void VolMap::apply_incremental(const VolMap::Incremental& inc) {
-  uint16_t sequence = 0;
+  uint16_t sequence = 0; // current sequence number we're trying to apply
   vector<Incremental::inc_add>::const_iterator add_cursor = inc.additions.begin();
   vector<Incremental::inc_remove>::const_iterator rem_cursor = inc.removals.begin();
   vector<Incremental::inc_update>::const_iterator upd_cursor = inc.updates.begin();
@@ -441,6 +461,11 @@ void VolMap::apply_incremental(const VolMap::Incremental& inc) {
 }
 
 
+/*
+ * Returns true if the volume name provided is valid. Volume names
+ * cannot be empty, begin or end with whitespace, or be parseable as a
+ * UUID.
+ */
 bool VolMap::is_valid_volume_name(const string& name, string& error) {
   if (name.empty()) {
     error = "volume name may not be empty";
@@ -464,15 +489,19 @@ bool VolMap::is_valid_volume_name(const string& name, string& error) {
     }
   }
 
-  if (isspace(name[name.size() - 1])) {
-    error = "volume name may not end with whitespace";
+  uuid_d test_uuid;
+  if (test_uuid.parse(name)) {
+    error = "volume name cannot match the form of UUIDs";
     return false;
   }
 
   return true;
 }
 
-// TODO: any logic needed here?
+
+/*
+ * TODO: any logic needed here?
+ */
 bool VolMap::is_valid_crush_map_entry(uint16_t crush_map_entry,
 				      string& error) {
   return true;

@@ -185,26 +185,37 @@ public:
     return vol_info_by_name[name];
   }
 
-  bool get_vol_info_uuid(const uuid_d& uuid, vol_info_t& vol_info) {
-    if (vol_info_by_uuid.count(uuid) > 0) {
-      vol_info = vol_info_by_uuid[uuid];
+  bool get_vol_info_uuid(const uuid_d& uuid, vol_info_t& vol_info) const {
+    map<uuid_d,vol_info_t>::const_iterator i = vol_info_by_uuid.find(uuid);
+    if (i == vol_info_by_uuid.end()) {
+      return false;
+    } else {
+      vol_info = i->second;
       return true;
     }
-    return false;
   }
 
-  bool get_vol_info_name(const string& name, vol_info_t& vol_info) {
-    if (vol_info_by_name.count(name) > 0) {
-      vol_info = vol_info_by_name[name];
+  bool get_vol_info_name(const string& name, vol_info_t& vol_info) const {
+    map<string,vol_info_t>::const_iterator i = vol_info_by_name.find(name);
+    if (i == vol_info_by_name.end()) {
+      return false;
+    } else {
+      vol_info = i->second;
       return true;
     }
-    return false;
   }
 
   /*
    * Will search the entries by both name and uuid returning a vector of up to max entries.
    */
-  vector<vol_info_t> search_vol_info(const string& name, size_t max = DEFAULT_MAX_SEARCH_RESULTS);
+  vector<vol_info_t> search_vol_info(const string& name, size_t max = DEFAULT_MAX_SEARCH_RESULTS) const;
+
+  /*
+   * Will search for a unique volume specified by volspec (either by
+   * uuid or name) and will set the uuid and return true. If the
+   * specification is not unique, false is returned.
+   */
+  bool get_vol_uuid(const string& volspec, uuid_d& uuid_out) const;
 
   map<string,vol_info_t>::const_iterator begin() const {
     return vol_info_by_name.begin();
