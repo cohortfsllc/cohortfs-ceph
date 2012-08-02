@@ -36,6 +36,16 @@ struct uuid_d {
   void print(char *s) const {
     return uuid_unparse(uuid, s);
   }
+
+  // version of above functions using strings
+  bool parse(const std::string& s) {
+    return parse(s.c_str());
+  }
+  void print(std::string& s) const {
+    char buff[char_rep_buf_size];
+    print(buff);
+    s = buff;
+  }
   
   void encode(bufferlist& bl) const {
     ::encode_raw(uuid, bl);
