@@ -34,6 +34,8 @@ static const str_to_entity_type_t STR_TO_ENTITY_TYPE[] = {
   { CEPH_ENTITY_TYPE_OSD, "osd" },
   { CEPH_ENTITY_TYPE_MDS, "mds" },
   { CEPH_ENTITY_TYPE_CLIENT, "client" },
+  { CEPH_ENTITY_TYPE_HDEXCO, "hdexco" },
+  { CEPH_ENTITY_TYPE_HDEXD, "hdexd" },
 };
 
 EntityName::

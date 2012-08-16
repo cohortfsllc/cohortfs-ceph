@@ -55,8 +55,10 @@ struct ceph_entity_name {
 #define CEPH_ENTITY_TYPE_OSD    0x04
 #define CEPH_ENTITY_TYPE_CLIENT 0x08
 #define CEPH_ENTITY_TYPE_AUTH   0x20
+#define CEPH_ENTITY_TYPE_HDEXCO 0x100
+#define CEPH_ENTITY_TYPE_HDEXD  0x200
 
-#define CEPH_ENTITY_TYPE_ANY    0xFF
+#define CEPH_ENTITY_TYPE_ANY    0xFFF
 
 extern const char *ceph_entity_type_name(int type);
 

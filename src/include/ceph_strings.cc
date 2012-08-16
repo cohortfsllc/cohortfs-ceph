@@ -11,6 +11,8 @@ const char *ceph_entity_type_name(int type)
 	case CEPH_ENTITY_TYPE_MON: return "mon";
 	case CEPH_ENTITY_TYPE_CLIENT: return "client";
 	case CEPH_ENTITY_TYPE_AUTH: return "auth";
+	case CEPH_ENTITY_TYPE_HDEXD: return "hdexd";
+	case CEPH_ENTITY_TYPE_HDEXCO: return "hdexco";
 	default: return "unknown";
 	}
 }
