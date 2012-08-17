@@ -1,0 +1,95 @@
+#!/bin/sh
+
+this=`basename $0`
+cmd="hyperdex-daemon"
+startstop="/sbin/start-stop-daemon"
+
+do_shutdown() {
+  $startstop --stop --pidfile $1
+}
+
+help() {
+    echo "Usage: $this:"
+    echo "  -i=id                        identifier of instance"
+    echo "  --pidfile=path               path to file containing process id"
+    $cmd --help | grep -v "^Usage"
+}
+
+usage() {
+    echo "Usage: $this:"
+    echo "        [-i=id] [--pidfile=path]"
+    $cmd --usage | grep -v "^Usage"
+}
+
+args=`getopt --name "$this" --unquote \
+      -l subprocess,pidfile:,daemon,foreground,data:,host:,port:,threads:,bind-to:,incoming-port:outgoing-port:,help,usage \
+      -o i:dfD:h:p:t:b:i:o: \
+      -- $@`
+
+if [ $? != 0 ] ; then
+  help()
+  exit 1
+fi
+
+set -- $args
+
+while [ $# -gt 0 ] ; do
+    case "$1" in
+	--subprocess )
+	    SUBPROCESS=true ;;
+	-i )
+	    ID=$2 ; shift ;;
+	--pidfile )
+	    PIDFILE="$2" ; shift ;;
+#	-d | --daemon )
+#	    OPTDAEMON="--daemon" ;;
+#	-f | --foreground )
+#	    OPTFOREGROUND="--foreground" ;;
+	-D | --data )
+	    DATADIR="$2" ; OPTDATA="--data=$2" ; shift ;;
+	-h | --host )
+	    OPTHOST="--host=$2" ; shift ;;
+	-p | --port )
+	    OPTPORT="--port=$2" ; shift ;;
+	-t | --threads )
+	    OPTTHREADS="--threads=$2" ; shift ;;
+	-b | --bind-to )
+	    OPTBINDTO="--bind-to=$2" ; shift ;;
+	-i | --incoming-port )
+	    OPTINCOMING="--incoming-port=$2" ; shift ;;
+	-o | --outgoing-port )
+	    OPTOUTGOING="--outgoing-port=$2" ; shift ;;
+	--help )
+	    help ; exit 0 ;;
+	--usage )
+	    usage ; exit 0 ;;
+	-- )
+	    shift ; break ;;
+	\? )
+	    usage ; echo Error: $1 ; exit 1 ;;
+	* )
+	    usage ; echo Error: illegal argument $1 ; exit 1 ;;
+    esac
+    shift
+done
+
+if [ $# -gt 0 ] ;then
+    echo Error: extra arguments -- $*
+    echo $USAGE;
+    exit 1
+fi
+
+if [ -z "$SUBPROCESS" -a -z "$PIDFILE" ] ;then
+    echo Error: must supply --pidfile when not a subprocess
+    exit 1
+fi
+
+if [ -z "$SUBPROCESS" ] ;then
+    $startstop --pidfile=$PIDFILE --make-pidfile --background \
+	--startas $0 --start -- --subprocess $OPTDATA $OPTHOST $OPTPORT \
+	$OPTTHREADS $OPTBINDTO $OPTINCOMING $OPTOUTGOING
+else
+    # trap "do_shutdown $PIDFILE" TERM
+    $cmd --foreground $OPTDATA $OPTHOST $OPTPORT $OPTTHREADS \
+	$OPTBINDTO $OPTINCOMING $OPTOUTGOING
+fi

@@ -1,0 +1,97 @@
+#!/bin/sh
+
+this=`basename $0`
+cmd="/usr/local/bin/hyperdex-coordinator"
+ctrl="/usr/local/bin/hyperdex-coordinator-control"
+startstop="/sbin/start-stop-daemon"
+
+do_shutdown() {
+  local pidfile
+  pidfile=$1
+  $ctrl quiesce 2>&1 >> /tmp/co-log
+  $ctrl shutdown 2>&1 >> /tmp/co-log
+  sleep 2
+  $startstop --pidfile=$CTRLPIDFILE --stop
+  sleep 2
+  exit 0
+}
+
+help() {
+    echo "Usage: $this:"
+    echo "  -i=id                        identifier of instance"
+    echo "  --pidfile=path               path to file containing process id"
+    $cmd --help | grep -vi "^Usage"
+}
+
+usage() {
+    echo "Usage: $this:"
+    echo "        [-i=id] [--pidfile=path]"
+    $cmd --usage | grep -v "^Usage"
+}
+
+args=`getopt --name "$this" --unquote \
+      -l subprocess,pidfile:,help,control-port:,host-port:,logging:,state-file: \
+      -o i:hb:c:p:l:s: \
+      -- $@`
+
+if [ $? != 0 ] ; then
+  help()
+  exit 1
+fi
+
+set -- $args
+
+while [ $# -gt 0 ] ; do
+    case "$1" in
+	--subprocess )
+	    SUBPROCESS=true ;;
+	--pidfile )
+	    PIDFILE="$2" ; CTRLPIDFILE="$2.ctrl" ; shift ;;
+	-i )
+	    ID="$2" ; shift ;;
+	--help | -h )
+	    help ; exit 0 ;;
+	-b | --bindto )
+	    OPTBINDTO="--bindto=$2" ; shift ;;
+	-c | --control-port )
+	    OPTCONTROLPORT="--control-port=$2" ; shift ;;
+	-p | --host-port )
+	    OPTHOSTPORT="--host-port=$2" ; shift ;;
+	-l | --logging )
+	    OPTLOGGING="--logging=$2" ; shift ;;
+	-s | --state-file )
+	    OPTSTATEFILE="--state-file=$2" ; shift ;;
+	-- )
+	    shift ; break ;;
+	\? )
+	    usage ; echo Error: $1 ; exit 1 ;;
+	* )
+	    usage ; echo Error: illegal argument $1 ; exit 1 ;;
+    esac
+    shift
+done
+
+if [ $# -gt 0 ] ;then
+    echo Error: extra arguments -- $*
+    echo $USAGE;
+    exit 1
+fi
+
+if [ -z "$SUBPROCESS" -a -z "$PIDFILE" ] ;then
+    echo Error: must supply --pidfile when not a subprocess
+    exit 1
+fi
+
+if [ -z "$SUBPROCESS" ] ;then
+    $startstop --pidfile=$PIDFILE --make-pidfile --background \
+	--startas $0 --start -- --subprocess $OPTBINDTO $OPTCONTROLPORT $OPTHOSTPORT \
+	$OPTLOGGING $OPTSTATEFILE --pidfile=$PIDFILE
+else
+    trap "do_shutdown $PIDFILE" TERM
+set -x
+    $startstop --pidfile=$CTRLPIDFILE --make-pidfile --background --startas $cmd --start -- $OPTBINDTO $OPTCONTROLPORT $OPTHOSTPORT $OPTLOGGING $OPTSTATEFILE >> /tmp/command
+set +x
+    while true ; do
+	sleep 5
+    done
+fi
