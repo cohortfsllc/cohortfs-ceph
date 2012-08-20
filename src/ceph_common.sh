@@ -104,17 +104,19 @@ get_name_list() {
         # extract list of monitors, mdss, osds defined in startup.conf
 	what=`$CCONF -c $conf -l mon | egrep -v '^mon$' ; \
 	    $CCONF -c $conf -l mds | egrep -v '^mds$' ; \
-	    $CCONF -c $conf -l osd | egrep -v '^osd$'`
+	    $CCONF -c $conf -l osd | egrep -v '^osd$' ; \
+	    $CCONF -c $conf -l hdexco | egrep -v '^hdexco$' ; \
+	    $CCONF -c $conf -l hdexd | egrep -v '^hdexd$'`
 	return
     fi
 
     what=""
     for f in $orig; do
-	type=`echo $f | cut -c 1-3`   # e.g. 'mon', if $item is 'mon1'
-	id=`echo $f | cut -c 4- | sed 's/\\.//'`
+	type=`echo $name | sed 's/[0-9.][0-9.]*.*//'`  # e.g. 'mon', if $item is 'mon1'
+	id=`echo $name | sed 's/^[a-z]*//' | sed 's/\.//'`
 	all=`$CCONF -c $conf -l $type | egrep -v "^$type$" || true`
 	case $f in
-	    mon | osd | mds)
+	    mon | osd | mds | hdexd | hdexco )
 		what="$what $all"
 		;;
 	    *)
