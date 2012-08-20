@@ -1,7 +1,7 @@
 #!/bin/sh
 
 this=`basename $0`
-cmd="hyperdex-daemon"
+cmd="@bindir@/hyperdex-daemon"
 startstop="/sbin/start-stop-daemon"
 
 do_shutdown() {

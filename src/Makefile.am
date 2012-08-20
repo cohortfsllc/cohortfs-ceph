@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS = gnu
-SUBDIRS = ocf
-DIST_SUBDIRS = gtest ocf leveldb libs3
+SUBDIRS = ocf hyperdex
+DIST_SUBDIRS = gtest ocf leveldb libs3 hyperdex
 
 EXTRA_DIST = \
 	libs3/COPYING \

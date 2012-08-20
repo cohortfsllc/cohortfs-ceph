@@ -1,8 +1,8 @@
 #!/bin/sh
 
 this=`basename $0`
-cmd="/usr/local/bin/hyperdex-coordinator"
-ctrl="/usr/local/bin/hyperdex-coordinator-control"
+cmd="@bindir@/hyperdex-coordinator"
+ctrl="@bindir@/hyperdex-coordinator-control"
 startstop="/sbin/start-stop-daemon"
 
 do_shutdown() {
@@ -12,7 +12,6 @@ do_shutdown() {
   $ctrl shutdown 2>&1 >> /tmp/co-log
   sleep 2
   $startstop --pidfile=$CTRLPIDFILE --stop
-  sleep 2
   exit 0
 }
 

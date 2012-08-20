@@ -446,6 +446,7 @@ AC_CONFIG_FILES([Makefile
 	src/ocf/Makefile
 	src/ocf/ceph
 	src/ocf/rbd
+	src/hyperdex/Makefile
 	man/Makefile
 	ceph.spec])
 AC_OUTPUT
