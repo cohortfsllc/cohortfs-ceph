@@ -59,6 +59,8 @@ core
 *.generated.dot
 src/ocf/ceph
 src/ocf/rbd
+src/hyperdex/ceph-hdexco
+src/hyperdex/ceph-hdexd
 
 # temporary directory used by e.g. "make distcheck", e.g. ceph-0.42
 /ceph-[0-9]*/

@@ -297,6 +297,15 @@ AC_ARG_WITH([ocf],
             [with_ocf=no])
 AM_CONDITIONAL(WITH_OCF, [ test "$with_ocf" = "yes" ])
 
+
+# specify where Hyperdex binaries are located
+AC_ARG_WITH([hyperdex],
+            [AS_HELP_STRING([--with-hyperdex=bin_dir], [specify location of hyperdex binaries])],
+            ,
+            [with_hyperdex=/usr/local/bin])
+AC_SUBST(HYPERDEX_BINDIR, "$with_hyperdex")
+
+
 # use system leveldb?
 AC_ARG_WITH([system-leveldb],
 	[AS_HELP_STRING([--with-system-leveldb], [use system leveldb])],

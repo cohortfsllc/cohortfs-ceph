@@ -13,7 +13,8 @@ editpaths = sed \
 	-e 's|@sysconfdir[@]|$(sysconfdir)|g' \
 	-e 's|@datadir[@]|$(pkgdatadir)|g' \
 	-e 's|@prefix[@]|$(prefix)|g' \
-	-e 's|@@GCOV_PREFIX_STRIP[@][@]|$(GCOV_PREFIX_STRIP)|g'
+	-e 's|@@GCOV_PREFIX_STRIP[@][@]|$(GCOV_PREFIX_STRIP)|g' \
+	-e 's|@HYPERDEX_BINDIR[@]|$(HYPERDEX_BINDIR)|g'
 
 $(shell_scripts): %: %.in
 	rm -f $@ $@.tmp

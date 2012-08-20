@@ -1,8 +1,8 @@
 #!/bin/sh
 
 this=`basename $0`
-cmd="@bindir@/hyperdex-coordinator"
-ctrl="@bindir@/hyperdex-coordinator-control"
+cmd="@HYPERDEX_BINDIR@/hyperdex-coordinator"
+ctrl="@HYPERDEX_BINDIR@/hyperdex-coordinator-control"
 startstop="/sbin/start-stop-daemon"
 
 do_shutdown() {
