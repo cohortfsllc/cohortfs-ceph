@@ -3,6 +3,8 @@
 this=`basename $0`
 cmd="@HYPERDEX_BINDIR@/hyperdex-daemon"
 startstop="/sbin/start-stop-daemon"
+LIBDIR=@libdir@/ceph
+verbose=0
 
 do_shutdown() {
   $startstop --stop --pidfile $1
@@ -23,7 +25,7 @@ usage() {
 
 args=`getopt --name "$this" --unquote \
       -l subprocess,pidfile:,daemon,foreground,data:,host:,port:,threads:,bind-to:,incoming-port:outgoing-port:,help,usage \
-      -o i:dfD:h:p:t:b:i:o: \
+      -o i:D:h:p:t:b:i:o: \
       -- $@`
 
 if [ $? != 0 ] ; then
@@ -41,10 +43,6 @@ while [ $# -gt 0 ] ; do
 	    ID=$2 ; shift ;;
 	--pidfile )
 	    PIDFILE="$2" ; shift ;;
-#	-d | --daemon )
-#	    OPTDAEMON="--daemon" ;;
-#	-f | --foreground )
-#	    OPTFOREGROUND="--foreground" ;;
 	-D | --data )
 	    DATADIR="$2" ; OPTDATA="--data=$2" ; shift ;;
 	-h | --host )
@@ -86,10 +84,22 @@ fi
 
 if [ -z "$SUBPROCESS" ] ;then
     $startstop --pidfile=$PIDFILE --make-pidfile --background \
-	--startas $0 --start -- --subprocess $OPTDATA $OPTHOST $OPTPORT \
+	--startas $0 --start -- --subprocess -i $ID $OPTDATA $OPTHOST $OPTPORT \
 	$OPTTHREADS $OPTBINDTO $OPTINCOMING $OPTOUTGOING
 else
+    . $LIBDIR/ceph_common.sh
+    verify_conf
+
+    config_option OPTDATA "--data" "" "data"
+    config_option OPTHOST "--host" "" "coordinator host"
+    config_option OPTPORT "--port" "" "coordinator port"
+    config_option OPTTHREADS "--threads" "" "threads"
+    config_option OPTBINDTO "--bind-to" "" "bind-to"
+    config_option OPTINCOMING "--incoming-port" "" "incoming port"
+    config_option OPTOUTGOING "--outgoing-port" "" "outgoing port"
+
     # trap "do_shutdown $PIDFILE" TERM
-    $cmd --foreground $OPTDATA $OPTHOST $OPTPORT $OPTTHREADS \
+    echo $cmd --foreground $OPTDATA $OPTHOST $OPTPORT $OPTTHREADS \
 	$OPTBINDTO $OPTINCOMING $OPTOUTGOING
+    sleep 9000
 fi

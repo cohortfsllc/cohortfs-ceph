@@ -5,13 +5,21 @@ cmd="@HYPERDEX_BINDIR@/hyperdex-coordinator"
 ctrl="@HYPERDEX_BINDIR@/hyperdex-coordinator-control"
 startstop="/sbin/start-stop-daemon"
 
+BINDIR=@bindir@
+LIBDIR=@libdir@/ceph
+ETCDIR=@sysconfdir@/ceph
+verbose=1
+
 do_shutdown() {
   local pidfile
   pidfile=$1
+  date >> /tmp/co-log
+  echo $pidfile >> /tmp/co-log
+  cat $pidfile >> /tmp/co-log
   $ctrl quiesce 2>&1 >> /tmp/co-log
   $ctrl shutdown 2>&1 >> /tmp/co-log
   sleep 2
-  $startstop --pidfile=$CTRLPIDFILE --stop
+  $startstop --pidfile=$pidfile --stop
   exit 0
 }
 
@@ -24,12 +32,12 @@ help() {
 
 usage() {
     echo "Usage: $this:"
-    echo "        [-i=id] [--pidfile=path]"
+    echo "        [-i=id] [--pid-file=path]"
     $cmd --usage | grep -v "^Usage"
 }
 
 args=`getopt --name "$this" --unquote \
-      -l subprocess,pidfile:,help,control-port:,host-port:,logging:,state-file: \
+      -l subprocess,pid-file:,help,control-port:,host-port:,logging:,state-file: \
       -o i:hb:c:p:l:s: \
       -- $@`
 
@@ -44,7 +52,9 @@ while [ $# -gt 0 ] ; do
     case "$1" in
 	--subprocess )
 	    SUBPROCESS=true ;;
-	--pidfile )
+	-c )
+	    CONFIG="$2" ; CONFIGFILE="-c $2" ; shift ;;
+	--pid-file )
 	    PIDFILE="$2" ; CTRLPIDFILE="$2.ctrl" ; shift ;;
 	-i )
 	    ID="$2" ; shift ;;
@@ -52,7 +62,7 @@ while [ $# -gt 0 ] ; do
 	    help ; exit 0 ;;
 	-b | --bindto )
 	    OPTBINDTO="--bindto=$2" ; shift ;;
-	-c | --control-port )
+	--control-port )
 	    OPTCONTROLPORT="--control-port=$2" ; shift ;;
 	-p | --host-port )
 	    OPTHOSTPORT="--host-port=$2" ; shift ;;
@@ -84,13 +94,29 @@ fi
 if [ -z "$SUBPROCESS" ] ;then
     $startstop --pidfile=$PIDFILE --make-pidfile --background \
 	--startas $0 --start -- --subprocess $OPTBINDTO $OPTCONTROLPORT $OPTHOSTPORT \
-	$OPTLOGGING $OPTSTATEFILE --pidfile=$PIDFILE
+	$OPTLOGGING $OPTSTATEFILE --pid-file=$PIDFILE $CONFIGFILE -i $ID
 else
-    trap "do_shutdown $PIDFILE" TERM
-set -x
-    $startstop --pidfile=$CTRLPIDFILE --make-pidfile --background --startas $cmd --start -- $OPTBINDTO $OPTCONTROLPORT $OPTHOSTPORT $OPTLOGGING $OPTSTATEFILE >> /tmp/command
-set +x
+    type=hdexco
+    id=$ID
+    . $LIBDIR/ceph_common.sh
+    if [ -n "$CONFIG" ] ;then
+	conf="$CONFIG"
+    fi
+    verify_conf
+
+    echo "point a" >> /tmp/command
+    config_option OPTBINDTO "--bind-to" "" "bind-to"
+    echo "point b" >> /tmp/command
+    config_option OPTCONTROLPORT "--control-port" "" "ctrl port"
+    config_option OPTHOSTPORT "--host-port" "" "host port"
+    config_option OPTLOGGING "--logging" "" "logging"
+    config_option OPTSTATEFILE "--state-file" "" "state file"
+    echo "point c" >> /tmp/command
+p
+    trap "do_shutdown $CTRLPIDFILE" TERM
+
+    $startstop --pidfile=$CTRLPIDFILE --make-pidfile --background --startas $cmd --start -- $OPTBINDTO $OPTCONTROLPORT $OPTHOSTPORT $OPTLOGGING $OPTSTATEFILE
     while true ; do
 	sleep 5
     done
-fi
+fi > /tmp/out 2> /tmp/err

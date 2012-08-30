@@ -112,8 +112,8 @@ get_name_list() {
 
     what=""
     for f in $orig; do
-	type=`echo $name | sed 's/[0-9.][0-9.]*.*//'`  # e.g. 'mon', if $item is 'mon1'
-	id=`echo $name | sed 's/^[a-z]*//' | sed 's/\.//'`
+	type=`echo $f | sed 's/[0-9.][0-9.]*.*//'`  # e.g. 'mon', if $item is 'mon1'
+	id=`echo $f | sed 's/^[a-z]*//' | sed 's/\.//'`
 	all=`$CCONF -c $conf -l $type | egrep -v "^$type$" || true`
 	case $f in
 	    mon | osd | mds | hdexd | hdexco )
@@ -155,3 +155,22 @@ get_conf_bool() {
 	[ "$val" = "true" ] && export $1=1
 }
 
+config_option() {
+    local var opt def_val config cur_val t
+    var=$1
+    opt=$2
+    def_val=$3
+    config=$4
+
+    t="\$$var"
+    cur_val=`eval echo $t`
+
+    if [ -z "$cur_val" ] ;then
+	get_conf $var "$def_val" "$config"
+	t="\$$var"
+	cur_val=`eval echo $t`
+	if [ -n "$cur_val" ] ;then
+	    eval "${var}=\"$opt $cur_val\""
+	fi
+    fi
+}
