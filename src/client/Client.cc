@@ -6906,12 +6906,14 @@ public:
     if (! cl->barriers[ino]) {
       cl->barriers[ino] = new BarrierContext(cl, ino);
     }
+    /* but -this- is unique, we should probably pass "this" here */
     cl->barriers[ino]->write_barrier(iv);
   }
 
   void finish(int) {
     cldout(cl, 1) << "C_Block_Sync::finish() for " << ino << " "
 		  << iv.first << ", " << iv.second << dendl;
+    /* and here */
     cl->barriers[ino]->complete(iv);
   }
 

@@ -82,25 +82,24 @@ public:
     Mutex::Locker locker(lock);
     bool done = false;
 
-    if (! active_commit_interval.intersects(iv.first, iv.second)) {
-      outstanding_writes.push_back(iv);
-      return;
-    }
+    if (! active_commit_interval.intersects(iv.first, iv.second))
+      goto append_interval;
 
-    /* find blocking commit */
-    list<Barrier*>::iterator iter;
-    for (iter = active_commits.begin();
-	 !done && (iter != active_commits.end());
-	 ++iter) {
-      Barrier* barrier = *iter;
-      while (barrier->span.intersects(iv.first, iv.second)) {
-	/*  wait on this */
-	barrier->cond.Wait(lock);
-	done = true;
+    {/* find blocking commit */
+      list<Barrier*>::iterator iter;
+      for (iter = active_commits.begin();
+	   !done && (iter != active_commits.end());
+	   ++iter) {
+	Barrier* barrier = *iter;
+	while (barrier->span.intersects(iv.first, iv.second)) {
+	  /*  wait on this */
+	  barrier->cond.Wait(lock);
+	  done = true;
+	}
       }
     }
 
-    /* past the barrier, append interval */
+  append_interval:
     outstanding_writes.push_back(iv);
   }
 
