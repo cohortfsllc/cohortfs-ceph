@@ -1,25 +1,36 @@
 #!/bin/sh
 
+# Copyright (C) 2012, CohortFS, LLC <info@cohortfs.com>
+# All rights reserved.
+#
+# This file is licensed under what is commonly known as the New BSD
+# License (or the Modified BSD License, or the 3-Clause BSD
+# License). See file COPYING.
+
 this=`basename $0`
-cmd="@HYPERDEX_BINDIR@/hyperdex-coordinator"
-ctrl="@HYPERDEX_BINDIR@/hyperdex-coordinator-control"
 startstop="/sbin/start-stop-daemon"
 
+# hyperdex executables
+cmd="@HYPERDEX_BINDIR@/hyperdex-coordinator"
+ctrl="@HYPERDEX_BINDIR@/hyperdex-coordinator-control"
+
+# ceph-specific locations and variables
 BINDIR=@bindir@
 LIBDIR=@libdir@/ceph
 ETCDIR=@sysconfdir@/ceph
-verbose=1
 
 do_shutdown() {
+  # ignore TERM signals now, so we can finish shutdown
+  trap '' TERM 
+
   local pidfile
   pidfile=$1
-  date >> /tmp/co-log
-  echo $pidfile >> /tmp/co-log
-  cat $pidfile >> /tmp/co-log
-  $ctrl quiesce 2>&1 >> /tmp/co-log
-  $ctrl shutdown 2>&1 >> /tmp/co-log
-  sleep 2
+
+  # take down hyperdex-coordinator step-by-step
+  $ctrl quiesce
+  $ctrl shutdown
   $startstop --pidfile=$pidfile --stop
+
   exit 0
 }
 
@@ -27,12 +38,14 @@ help() {
     echo "Usage: $this:"
     echo "  -i=id                        identifier of instance"
     echo "  --pidfile=path               path to file containing process id"
+    # builds off of hyperdex-coordinator's help message
     $cmd --help | grep -vi "^Usage"
 }
 
 usage() {
     echo "Usage: $this:"
     echo "        [-i=id] [--pid-file=path]"
+    # builds off of hyperdex-coordinator's usage message
     $cmd --usage | grep -v "^Usage"
 }
 
@@ -87,36 +100,48 @@ if [ $# -gt 0 ] ;then
 fi
 
 if [ -z "$SUBPROCESS" -a -z "$PIDFILE" ] ;then
-    echo Error: must supply --pidfile when not a subprocess
+    echo Error: must supply --pid-file when not a subprocess
     exit 1
 fi
 
+# determine if this is the entry process or the sub-process
 if [ -z "$SUBPROCESS" ] ;then
+    # start this very same script again as a subprocess in the background,
+    # we can exit
     $startstop --pidfile=$PIDFILE --make-pidfile --background \
-	--startas $0 --start -- --subprocess $OPTBINDTO $OPTCONTROLPORT $OPTHOSTPORT \
-	$OPTLOGGING $OPTSTATEFILE --pid-file=$PIDFILE $CONFIGFILE -i $ID
+	--startas $0 --start -- --subprocess $OPTBINDTO $OPTCONTROLPORT \
+        $OPTHOSTPORT $OPTLOGGING $OPTSTATEFILE --pid-file=$PIDFILE \
+        $CONFIGFILE -i $ID
 else
+    # ceph_common.sh expects these to be set
     type=hdexco
     id=$ID
+    verbose=0
+
+    # load in ceph_common.sh library and verify config file
     . $LIBDIR/ceph_common.sh
     if [ -n "$CONFIG" ] ;then
 	conf="$CONFIG"
     fi
     verify_conf
 
-    echo "point a" >> /tmp/command
+    # for any options not set on command-line, use config file
     config_option OPTBINDTO "--bind-to" "" "bind-to"
-    echo "point b" >> /tmp/command
     config_option OPTCONTROLPORT "--control-port" "" "ctrl port"
     config_option OPTHOSTPORT "--host-port" "" "host port"
     config_option OPTLOGGING "--logging" "" "logging"
     config_option OPTSTATEFILE "--state-file" "" "state file"
-    echo "point c" >> /tmp/command
-p
+
+    # handle TERM signals w/ do_shutdown function above to gracefully
+    # bring down the hyperdex coordinator
     trap "do_shutdown $CTRLPIDFILE" TERM
 
-    $startstop --pidfile=$CTRLPIDFILE --make-pidfile --background --startas $cmd --start -- $OPTBINDTO $OPTCONTROLPORT $OPTHOSTPORT $OPTLOGGING $OPTSTATEFILE
+    $startstop --pidfile=$CTRLPIDFILE --make-pidfile --background --startas \
+               $cmd --start -- $OPTBINDTO $OPTCONTROLPORT $OPTHOSTPORT \
+               $OPTLOGGING $OPTSTATEFILE
+
+    # busy loop so script continues to run, waiting for TERM
     while true ; do
 	sleep 5
     done
-fi > /tmp/out 2> /tmp/err
+fi
