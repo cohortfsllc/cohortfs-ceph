@@ -1,14 +1,22 @@
 #!/bin/sh
 
-this=`basename $0`
-cmd="@HYPERDEX_BINDIR@/hyperdex-daemon"
-startstop="/sbin/start-stop-daemon"
-LIBDIR=@libdir@/ceph
-verbose=0
+# Copyright (C) 2012, CohortFS, LLC <info@cohortfs.com>
+# All rights reserved.
+#
+# This file is licensed under what is commonly known as the New BSD
+# License (or the Modified BSD License, or the 3-Clause BSD
+# License). See file COPYING.
 
-do_shutdown() {
-  $startstop --stop --pidfile $1
-}
+this=`basename $0`
+startstop="/sbin/start-stop-daemon"
+
+# hyperdex executables
+cmd="@HYPERDEX_BINDIR@/hyperdex-daemon"
+
+# ceph-specific locations and variables
+BINDIR=@bindir@
+LIBDIR=@libdir@/ceph
+ETCDIR=@sysconfdir@/ceph
 
 help() {
     echo "Usage: $this:"
@@ -24,8 +32,8 @@ usage() {
 }
 
 args=`getopt --name "$this" --unquote \
-      -l subprocess,pidfile:,daemon,foreground,data:,host:,port:,threads:,bind-to:,incoming-port:outgoing-port:,help,usage \
-      -o i:D:h:p:t:b:i:o: \
+      -l pid-file:,data:,host:,port:,threads:,bind-to:,incoming-port:outgoing-port:,help,usage \
+      -o i:c:D:h:p:t:b:i:o: \
       -- $@`
 
 if [ $? != 0 ] ; then
@@ -37,12 +45,12 @@ set -- $args
 
 while [ $# -gt 0 ] ; do
     case "$1" in
-	--subprocess )
-	    SUBPROCESS=true ;;
 	-i )
 	    ID=$2 ; shift ;;
-	--pidfile )
+	--pid-file )
 	    PIDFILE="$2" ; shift ;;
+	-c )
+	    CONFIG="$2" ; shift ;;
 	-D | --data )
 	    DATADIR="$2" ; OPTDATA="--data=$2" ; shift ;;
 	-h | --host )
@@ -77,29 +85,29 @@ if [ $# -gt 0 ] ;then
     exit 1
 fi
 
-if [ -z "$SUBPROCESS" -a -z "$PIDFILE" ] ;then
-    echo Error: must supply --pidfile when not a subprocess
-    exit 1
+# ceph_common.sh expects these to be set
+type=hdexd
+id=$ID
+verbose=0
+
+# load in ceph_common.sh library and verify config file
+. $LIBDIR/ceph_common.sh
+if [ -n "$CONFIG" ] ;then
+    conf="$CONFIG"
 fi
+verify_conf
 
-if [ -z "$SUBPROCESS" ] ;then
-    $startstop --pidfile=$PIDFILE --make-pidfile --background \
-	--startas $0 --start -- --subprocess -i $ID $OPTDATA $OPTHOST $OPTPORT \
-	$OPTTHREADS $OPTBINDTO $OPTINCOMING $OPTOUTGOING
-else
-    . $LIBDIR/ceph_common.sh
-    verify_conf
+# for any options not set on command-line, use config file
+config_option OPTDATA "--data" "" "data"
+config_option OPTHOST "--host" "" "coordinator host"
+config_option OPTPORT "--port" "" "coordinator port"
+config_option OPTTHREADS "--threads" "" "threads"
+config_option OPTBINDTO "--bind-to" "" "bind-to"
+config_option OPTINCOMING "--incoming-port" "" "incoming port"
+config_option OPTOUTGOING "--outgoing-port" "" "outgoing port"
 
-    config_option OPTDATA "--data" "" "data"
-    config_option OPTHOST "--host" "" "coordinator host"
-    config_option OPTPORT "--port" "" "coordinator port"
-    config_option OPTTHREADS "--threads" "" "threads"
-    config_option OPTBINDTO "--bind-to" "" "bind-to"
-    config_option OPTINCOMING "--incoming-port" "" "incoming port"
-    config_option OPTOUTGOING "--outgoing-port" "" "outgoing port"
+$startstop --pidfile=$PIDFILE --make-pidfile --background --startas \
+    $cmd --start -- --foreground $OPTDATA $OPTHOST $OPTPORT \
+    $OPTTHREADS $OPTBINDTO $OPTINCOMING $OPTOUTGOING
 
-    # trap "do_shutdown $PIDFILE" TERM
-    echo $cmd --foreground $OPTDATA $OPTHOST $OPTPORT $OPTTHREADS \
-	$OPTBINDTO $OPTINCOMING $OPTOUTGOING
-    sleep 9000
-fi
+exit $?

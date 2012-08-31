@@ -27,7 +27,7 @@ else
 fi
 
 usage_exit() {
-    echo "usage: $0 [options] {start|stop|restart} [mon|osd|mds]..."
+    echo "usage: $0 [options] {start|stop|restart} [mon|osd|mds|hdexco|hdexd]..."
     printf "\t-c ceph.conf\n"
     printf "\t--valgrind\trun via valgrind\n"
     printf "\t--hostname [hostname]\toverride hostname lookup\n"
@@ -68,9 +68,21 @@ daemon_is_running() {
         exit 1  # pid is something else" "" "okfail"
 }
 
+# Because some daemons' names aren't the name of the ultimate command to
+# be executed, this gives us the opportunity to fix the mapping. stop_daemon
+# tries to make sure it's stopping a process with the correct command.
+fix_daemon() {
+    case $1 in
+        ceph-hdexd)
+	    echo hyperdex-daemon ;;
+        *)
+            echo $1 ;;
+    esac
+}
+
 stop_daemon() {
     name=$1
-    daemon=$2
+    daemon=`fix_daemon $2`
     pidfile=$3
     signal=$4
     action=$5
