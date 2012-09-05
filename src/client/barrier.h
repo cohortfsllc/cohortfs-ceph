@@ -125,6 +125,7 @@ private:
     
 public:
   BarrierContext(Client *c, uint64_t ino);
+  bool idle();
   void write_nobarrier(C_Block_Sync &cbs);
   void write_barrier(C_Block_Sync &cbs);
   void commit_barrier(barrier_interval &civ);

@@ -52,10 +52,26 @@ C_Block_Sync::C_Block_Sync(Client *c, uint64_t i, barrier_interval iv) :
       cl->barriers[ino]->write_nobarrier(*this);
   }
 
-void C_Block_Sync::finish(int) {
+void C_Block_Sync::finish(int unused)
+{
+    BarrierContext *bctx = cl->barriers[ino];
+
     cldout(cl, 1) << "C_Block_Sync::finish() for " << ino << " "
 		  << iv.first << ", " << iv.second << dendl;
-    cl->barriers[ino]->complete(*this);
+
+    /* complete this event */
+    bctx->complete(*this);
+
+    /* XXX for now, dispose this inode's BarrierContext if it has no
+     * already submitted writes or commits */
+
+    { /* scoped mtx--must not hold client_lock across complete() call */
+        Mutex::Locker lock(cl->client_lock);
+	if (bctx->idle()) {
+	    cl->barriers[ino] = NULL;
+	    delete bctx;
+	}
+    }
 }
 
 /* Barrier */
@@ -69,6 +85,12 @@ Barrier::~Barrier()
 BarrierContext::BarrierContext(Client *c, uint64_t ino) : 
     cl(c), ino(ino), lock("BarrierContext")
 { };
+
+bool BarrierContext::idle()
+{
+  return ((active_commits.size() == 0) &&
+	  (outstanding_writes.size() == 0));
+}
 
 void BarrierContext::write_nobarrier(C_Block_Sync &cbs)
 {
