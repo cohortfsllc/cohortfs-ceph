@@ -129,6 +129,7 @@ MDCache::MDCache(MDS *m)
   migrator = new Migrator(mds, this);
   root = NULL;
   myin = NULL;
+  inode_container = NULL;
 
   stray_index = 0;
   for (int i = 0; i < NUM_STRAY; ++i) {
@@ -209,6 +210,8 @@ void MDCache::add_inode(CInode *in)
       root = in;
     else if (in->ino() == MDS_INO_MDSDIR(mds->get_nodeid()))
       myin = in;
+    else if (in->ino() == MDS_INO_INODES)
+      inode_container = in;
     else if (in->is_stray()) {
       if (MDS_INO_STRAY_OWNER(in->ino()) == mds->get_nodeid()) {
 	strays[MDS_INO_STRAY_INDEX(in->ino())] = in;
@@ -245,6 +248,7 @@ void MDCache::remove_inode(CInode *o)
   if (o->ino() < MDS_INO_SYSTEM_BASE) {
     if (o == root) root = 0;
     if (o == myin) myin = 0;
+    if (o == inode_container) inode_container = 0;
     if (o->is_stray()) {
       if (MDS_INO_STRAY_OWNER(o->ino()) == mds->get_nodeid()) {
 	strays[MDS_INO_STRAY_INDEX(o->ino())] = 0;
@@ -295,10 +299,10 @@ CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
   in->inode.accounted_rstat = in->inode.rstat;
 
   if (in->is_base()) {
-    if (in->is_root())
-      in->inode_auth = pair<int,int>(mds->whoami, CDIR_AUTH_UNKNOWN);
-    else
+    if (in->is_mdsdir())
       in->inode_auth = pair<int,int>(in->ino() - MDS_INO_MDSDIR_OFFSET, CDIR_AUTH_UNKNOWN);
+    else
+      in->inode_auth = pair<int,int>(mds->whoami, CDIR_AUTH_UNKNOWN);
     in->open_snaprealm();  // empty snaprealm
     in->snaprealm->srnode.seq = 1;
   }
@@ -335,9 +339,16 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   cephdir->dir_rep = CDir::REP_ALL;   //NONE;
 
   ceph->inode.dirstat = cephdir->fnode.fragstat;
+  rootdir->fnode.fragstat.nsubdirs++;
+  rootdir->fnode.rstat.add(ceph->inode.rstat);
 
-  rootdir->fnode.fragstat.nsubdirs = 1;
-  rootdir->fnode.rstat = ceph->inode.rstat;
+  // create inodes dir
+  CInode *inodes = create_system_inode(MDS_INO_INODES, S_IFDIR);
+  CDir *inodesdir = inodes->get_or_open_dirfrag(this, frag_t());
+  adjust_subtree_auth(inodesdir, mds->whoami);
+  inodesdir->dir_rep = CDir::REP_ALL;
+  inodes->inode.dirstat = inodesdir->fnode.fragstat;
+
   rootdir->fnode.accounted_fragstat = rootdir->fnode.fragstat;
   rootdir->fnode.accounted_rstat = rootdir->fnode.rstat;
 
@@ -348,6 +359,10 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   cephdir->mark_complete();
   cephdir->mark_dirty(cephdir->pre_dirty(), mds->mdlog->get_current_segment());
   cephdir->commit(0, gather->new_sub());
+
+  inodesdir->mark_complete();
+  inodesdir->mark_dirty(inodesdir->pre_dirty(), mds->mdlog->get_current_segment());
+  inodesdir->commit(0, gather->new_sub());
 
   rootdir->mark_complete();
   rootdir->mark_dirty(rootdir->pre_dirty(), mds->mdlog->get_current_segment());
@@ -531,6 +546,26 @@ void MDCache::open_mydir_inode(Context *c)
   in->fetch(c);
 }
 
+static void pin_stray(CInode *in)
+{
+  assert(in);
+  if (!in->state_test(CInode::STATE_STRAYPINNED)) {
+    in->get(CInode::PIN_STRAY);
+    in->state_set(CInode::STATE_STRAYPINNED);
+    in->get_stickydirs();
+  }
+}
+
+static void unpin_stray(CInode *in)
+{
+  assert(in);
+  if (in->state_test(CInode::STATE_STRAYPINNED)) {
+    in->state_clear(CInode::STATE_STRAYPINNED);
+    in->put(CInode::PIN_STRAY);
+    in->put_stickydirs();
+  }
+}
+
 void MDCache::open_root()
 {
   dout(10) << "open_root" << dendl;
@@ -555,7 +590,13 @@ void MDCache::open_root()
     if (!rootdir) {
       discover_dir_frag(root, frag_t(), new C_MDS_RetryOpenRoot(this));
       return;
-    }    
+    }
+    if (inode_container == NULL) {
+      discover_base_ino(MDS_INO_INODES, new C_MDS_RetryOpenRoot(this),
+                        mds->mdsmap->get_root());
+      return;
+    }
+    pin_stray(inode_container);
   }
 
   if (!myin) {
@@ -601,11 +642,7 @@ void MDCache::populate_mydir()
     assert(straydn);
     assert(strays[i]);
     // we make multiple passes through this method; make sure we only pin each stray once.
-    if (!strays[i]->state_test(CInode::STATE_STRAYPINNED)) {
-      strays[i]->get(CInode::PIN_STRAY);
-      strays[i]->state_set(CInode::STATE_STRAYPINNED);
-      strays[i]->get_stickydirs();
-    }
+    pin_stray(strays[i]);
     dout(20) << " stray num " << i << " is " << *strays[i] << dendl;
 
     // open all frags
@@ -6204,7 +6241,6 @@ void MDCache::shutdown_start()
 }
 
 
-
 bool MDCache::shutdown_pass()
 {
   dout(7) << "shutdown_pass" << dendl;
@@ -6239,14 +6275,13 @@ bool MDCache::shutdown_pass()
   }
   
   // drop our reference to our stray dir inode
-  for (int i = 0; i < NUM_STRAY; ++i) {
-    if (strays[i] &&
-	strays[i]->state_test(CInode::STATE_STRAYPINNED)) {
-      strays[i]->state_clear(CInode::STATE_STRAYPINNED);
-      strays[i]->put(CInode::PIN_STRAY);
-      strays[i]->put_stickydirs();
-    }
-  }
+  for (int i = 0; i < NUM_STRAY; ++i)
+    if (strays[i])
+      unpin_stray(strays[i]);
+
+  // drop the reference to inode container
+  if (inode_container)
+    unpin_stray(inode_container);
 
   // trim cache
   trim(0);
@@ -9064,10 +9099,10 @@ CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Co
     in = new CInode(this, false, 1, last);
     in->decode_replica(p, true);
     add_inode(in);
-    if (in->ino() == MDS_INO_ROOT)
-      in->inode_auth.first = 0;
-    else if (in->is_mdsdir())
+    if (in->is_mdsdir())
       in->inode_auth.first = in->ino() - MDS_INO_MDSDIR_OFFSET;
+    else if (in->is_base())
+      in->inode_auth.first = 0;
     dout(10) << "add_replica_inode added " << *in << dendl;
     if (dn) {
       assert(dn->get_linkage()->is_null());
@@ -10086,6 +10121,8 @@ void MDCache::show_subtrees(int dbl)
 
     if (dir->ino() == MDS_INO_ROOT)
       assert(dir->inode == root);
+    if (dir->ino() == MDS_INO_INODES)
+      assert(dir->inode == inode_container);
     if (dir->ino() == MDS_INO_MDSDIR(mds->get_nodeid()))
       assert(dir->inode == myin);
     if (dir->inode->is_stray() && (MDS_INO_STRAY_OWNER(dir->ino()) == mds->get_nodeid()))

@@ -84,6 +84,7 @@ class MDCache {
   hash_map<vinodeno_t,CInode*> inode_map;  // map of inodes by ino
   CInode *root;                            // root inode
   CInode *myin;                            // .ceph/mds%d dir
+  CInode *inode_container;                 // inode container dir
 
   CInode *strays[NUM_STRAY];         // my stray dir
   int stray_index;
@@ -509,6 +510,7 @@ public:
   // root inode
   CInode *get_root() { return root; }
   CInode *get_myin() { return myin; }
+  CInode *get_inode_container() { return inode_container; }
 
   // cache
   void set_cache_size(size_t max) { lru.lru_set_max(max); }
