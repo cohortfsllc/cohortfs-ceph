@@ -521,7 +521,7 @@ private:
   bool is_root() { return inode.ino == MDS_INO_ROOT; }
   bool is_stray() { return MDS_INO_IS_STRAY(inode.ino); }
   bool is_mdsdir() { return MDS_INO_IS_MDSDIR(inode.ino); }
-  bool is_base() { return is_root() || is_mdsdir(); }
+  bool is_base() { return MDS_INO_IS_BASE(inode.ino); }
   bool is_system() { return inode.ino < MDS_INO_SYSTEM_BASE; }
 
   bool is_head() { return last == CEPH_NOSNAP; }

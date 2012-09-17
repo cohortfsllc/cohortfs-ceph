@@ -84,6 +84,7 @@ class MDCache {
   hash_map<vinodeno_t,CInode*> inode_map;  // map of inodes by ino
   CInode *root;                            // root inode
   CInode *myin;                            // .ceph/mds%d dir
+  CInode *container;                 // inode container dir
 
   CInode *strays[NUM_STRAY];         // my stray dir
   int stray_index;
@@ -624,13 +625,6 @@ protected:
   void start_recovered_truncates();
 
 
- public:
-  CDir *get_auth_container(CDir *in);
-  CDir *get_export_container(CDir *dir);
-  void find_nested_exports(CDir *dir, set<CDir*>& s);
-  void find_nested_exports_under(CDir *import, CDir *dir, set<CDir*>& s);
-
-
 private:
   bool opening_root, open;
   list<Context*> waiting_for_open;
@@ -658,6 +652,12 @@ public:
 
   void open_foreign_mdsdir(inodeno_t ino, Context *c);
   CDentry *get_or_create_stray_dentry(CInode *in);
+
+  // inode container
+  CInode* get_container() { return container; }
+  CInode* create_container();
+  void open_container(Context *c);
+
 
   Context *_get_waiter(MDRequest *mdr, Message *req, Context *fin);
 

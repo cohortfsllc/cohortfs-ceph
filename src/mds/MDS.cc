@@ -1213,6 +1213,7 @@ void MDS::boot_start(int step, int r)
       if (is_starting() ||
 	  whoami == mdsmap->get_root()) {  // load root inode off disk if we are auth
 	mdcache->open_root_inode(gather.new_sub());
+        mdcache->open_container(gather.new_sub());
       } else {
 	// replay.  make up fake root inode to start with
 	mdcache->create_root_inode();
