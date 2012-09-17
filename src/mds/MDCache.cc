@@ -129,6 +129,7 @@ MDCache::MDCache(MDS *m)
   migrator = new Migrator(mds, this);
   root = NULL;
   myin = NULL;
+  inode_container = NULL;
 
   stray_index = 0;
   for (int i = 0; i < NUM_STRAY; ++i) {
@@ -209,6 +210,8 @@ void MDCache::add_inode(CInode *in)
       root = in;
     else if (in->ino() == MDS_INO_MDSDIR(mds->get_nodeid()))
       myin = in;
+    else if (in->ino() == MDS_INO_INODES)
+      inode_container = in;
     else if (in->is_stray()) {
       if (MDS_INO_STRAY_OWNER(in->ino()) == mds->get_nodeid()) {
 	strays[MDS_INO_STRAY_INDEX(in->ino())] = in;
@@ -335,9 +338,20 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   cephdir->dir_rep = CDir::REP_ALL;   //NONE;
 
   ceph->inode.dirstat = cephdir->fnode.fragstat;
+  rootdir->fnode.fragstat.nsubdirs++;
+  rootdir->fnode.rstat.add(ceph->inode.rstat);
 
-  rootdir->fnode.fragstat.nsubdirs = 1;
-  rootdir->fnode.rstat = ceph->inode.rstat;
+  // create inodes dir
+  CInode *inodes = create_system_inode(MDS_INO_INODES, S_IFDIR);
+  CDentry *inodesdn = rootdir->add_primary_dentry(".inodes", inodes);
+  inodesdn->_mark_dirty(mds->mdlog->get_current_segment());
+
+  CDir *inodesdir = ceph->get_or_open_dirfrag(this, frag_t());
+
+  inodes->inode.dirstat = inodesdir->fnode.fragstat;
+  rootdir->fnode.fragstat.nsubdirs++;
+  rootdir->fnode.rstat.add(inodes->inode.rstat);
+
   rootdir->fnode.accounted_fragstat = rootdir->fnode.fragstat;
   rootdir->fnode.accounted_rstat = rootdir->fnode.rstat;
 
@@ -348,6 +362,10 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   cephdir->mark_complete();
   cephdir->mark_dirty(cephdir->pre_dirty(), mds->mdlog->get_current_segment());
   cephdir->commit(0, gather->new_sub());
+
+  inodesdir->mark_complete();
+  inodesdir->mark_dirty(inodesdir->pre_dirty(), mds->mdlog->get_current_segment());
+  inodesdir->commit(0, gather->new_sub());
 
   rootdir->mark_complete();
   rootdir->mark_dirty(rootdir->pre_dirty(), mds->mdlog->get_current_segment());
