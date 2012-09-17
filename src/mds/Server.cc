@@ -1771,6 +1771,27 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino, u
   return in;
 }
 
+static void inode_container_wrlock(MDCache *cache, std::set<SimpleLock*> &wrlocks)
+{
+  CInode *container = cache->get_inode_container();
+  wrlocks.insert(&container->filelock);
+  wrlocks.insert(&container->nestlock);
+}
+
+static void inode_container_link(MDCache *mdcache, CInode *inode)
+{
+  // name primary dentry by inode number
+  std::string dname;
+  inode->name_stray_dentry(dname);
+
+  // add a primary link to the associated directory fragment
+  CInode *container = mdcache->get_inode_container();
+  frag_t frag = container->pick_dirfrag(dname);
+  CDir *containerdir = container->get_or_open_dirfrag(mdcache, frag);
+  assert(containerdir->is_auth()); // choose an inode number that will be placed here!
+  containerdir->add_primary_dentry(dname, inode);
+}
+
 void Server::journal_allocated_inos(MDRequest *mdr, EMetaBlob *blob)
 {
   dout(20) << "journal_allocated_inos sessionmapv " << mds->sessionmap.projected
@@ -2506,24 +2527,25 @@ void Server::handle_client_open(MDRequest *mdr)
 }
 
 
-
 class C_MDS_openc_finish : public Context {
   MDS *mds;
   MDRequest *mdr;
   CDentry *dn;
+  version_t dv;
   CInode *newi;
+  version_t iv;
   snapid_t follows;
 public:
-  C_MDS_openc_finish(MDS *m, MDRequest *r, CDentry *d, CInode *ni, snapid_t f) :
-    mds(m), mdr(r), dn(d), newi(ni), follows(f) {}
+  C_MDS_openc_finish(MDS *m, MDRequest *r, CDentry *d, version_t dv, CInode *ni, version_t iv, snapid_t f) :
+    mds(m), mdr(r), dn(d), dv(dv), newi(ni), iv(iv), follows(f) {}
   void finish(int r) {
     assert(r == 0);
 
     dn->pop_projected_linkage();
 
     // dirty inode, dn, dir
-    newi->inode.version--;   // a bit hacky, see C_MDS_mknod_finish
-    newi->mark_dirty(newi->inode.version+1, mdr->ls);
+    newi->mark_dirty(iv, mdr->ls);
+    dn->mark_dirty(dv, mdr->ls);
 
     mdr->apply();
 
@@ -2582,6 +2604,7 @@ void Server::handle_client_openc(MDRequest *mdr)
     return;
   }
 
+  inode_container_wrlock(mdcache, wrlocks);
 
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
@@ -2610,14 +2633,19 @@ void Server::handle_client_openc(MDRequest *mdr)
   SnapRealm *realm = diri->find_snaprealm();   // use directory's realm; inode isn't attached yet.
   snapid_t follows = realm->get_newest_seq();
 
+  // it's a file.
   CInode *in = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
 				 req->head.args.open.mode | S_IFREG, &layout);
   assert(in);
-  
-  // it's a file.
-  dn->push_projected_linkage(in);
 
-  in->inode.version = dn->pre_dirty();
+  // add primary link to inode container
+  inode_container_link(mdcache, in);
+ 
+  // add remote link into filesystem
+  dn->push_projected_linkage(in->ino(), in->d_type());
+  version_t dv = dn->pre_dirty();
+  version_t iv = in->pre_dirty();
+
   if (cmode & CEPH_FILE_MODE_WR) {
     in->inode.client_ranges[client].range.first = 0;
     in->inode.client_ranges[client].range.last = in->inode.get_layout_size_increment();
@@ -2628,15 +2656,18 @@ void Server::handle_client_openc(MDRequest *mdr)
   if (follows >= dn->first)
     dn->first = follows+1;
   in->first = dn->first;
-  
+
   // prepare finisher
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "openc");
   mdlog->start_entry(le);
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, in, dn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-  le->metablob.add_primary_dentry(dn, true, in);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, in, in->get_parent_dir(),
+                                    PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, in, dn->get_dir(), PREDIRTY_DIR, 1);
+  le->metablob.add_primary_dentry(in->get_parent_dn(), true, in);
+  le->metablob.add_remote_dentry(dn, true);
 
   // do the open
   mds->locker->issue_new_caps(in, cmode, mdr->session, realm, req->is_replay());
@@ -2648,7 +2679,7 @@ void Server::handle_client_openc(MDRequest *mdr)
   LogSegment *ls = mds->mdlog->get_current_segment();
   ls->open_files.push_back(&in->item_open_file);
 
-  C_MDS_openc_finish *fin = new C_MDS_openc_finish(mds, mdr, dn, in, follows);
+  C_MDS_openc_finish *fin = new C_MDS_openc_finish(mds, mdr, dn, dv, in, iv, follows);
   journal_and_reply(mdr, in, dn, le, fin);
 }
 
@@ -3483,22 +3514,20 @@ class C_MDS_mknod_finish : public Context {
   MDS *mds;
   MDRequest *mdr;
   CDentry *dn;
+  version_t dv;
   CInode *newi;
+  version_t iv;
   snapid_t follows;
 public:
-  C_MDS_mknod_finish(MDS *m, MDRequest *r, CDentry *d, CInode *ni, snapid_t f) :
-    mds(m), mdr(r), dn(d), newi(ni), follows(f) {}
+  C_MDS_mknod_finish(MDS *m, MDRequest *r, CDentry *d, version_t dv, CInode *ni, version_t iv, snapid_t f) :
+    mds(m), mdr(r), dn(d), dv(dv), newi(ni), iv(iv), follows(f) {}
   void finish(int r) {
     assert(r == 0);
 
     // link the inode
     dn->pop_projected_linkage();
-    
-    // be a bit hacky with the inode version, here.. we decrement it
-    // just to keep mark_dirty() happen. (we didn't bother projecting
-    // a new version of hte inode since it's just been created)
-    newi->inode.version--; 
-    newi->mark_dirty(newi->inode.version + 1, mdr->ls);
+    dn->mark_dirty(dv, mdr->ls);
+    newi->mark_dirty(iv, mdr->ls);
 
     // mkdir?
     if (newi->inode.is_dir()) { 
@@ -3539,6 +3568,9 @@ void Server::handle_client_mknod(MDRequest *mdr)
     reply_request(mdr, -EROFS);
     return;
   }
+
+  inode_container_wrlock(mdcache, wrlocks);
+
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -3565,12 +3597,17 @@ void Server::handle_client_mknod(MDRequest *mdr)
 				   req->head.args.mknod.mode, &layout);
   assert(newi);
 
-  dn->push_projected_linkage(newi);
+  // add primary link to inode container
+  inode_container_link(mdcache, newi);
+ 
+  // add remote link into filesystem
+  dn->push_projected_linkage(newi->ino(), newi->d_type());
+  version_t dv = dn->pre_dirty();
+  version_t iv = newi->pre_dirty();
 
   newi->inode.rdev = req->head.args.mknod.rdev;
   if ((newi->inode.mode & S_IFMT) == 0)
     newi->inode.mode |= S_IFREG;
-  newi->inode.version = dn->pre_dirty();
   newi->inode.rstat.rfiles = 1;
 
   // if the client created a _regular_ file via MKNOD, it's highly likely they'll
@@ -3610,11 +3647,13 @@ void Server::handle_client_mknod(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
   
-  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
-				    PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-  le->metablob.add_primary_dentry(dn, true, newi);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, newi->get_parent_dir(),
+                                    PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_DIR, 1);
+  le->metablob.add_primary_dentry(newi->get_parent_dn(), true, newi);
+  le->metablob.add_remote_dentry(dn, true);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, dv, newi, iv, follows));
 }
 
 
@@ -3631,6 +3670,9 @@ void Server::handle_client_mkdir(MDRequest *mdr)
     reply_request(mdr, -EROFS);
     return;
   }
+
+  inode_container_wrlock(mdcache, wrlocks);
+
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -3641,16 +3683,20 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   snapid_t follows = realm->get_newest_seq();
   mdr->now = ceph_clock_now(g_ceph_context);
 
+  // it's a directory.
   unsigned mode = req->head.args.mkdir.mode;
   mode &= ~S_IFMT;
   mode |= S_IFDIR;
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);  
   assert(newi);
 
-  // it's a directory.
-  dn->push_projected_linkage(newi);
-
-  newi->inode.version = dn->pre_dirty();
+  // add primary link to inode container
+  inode_container_link(mdcache, newi);
+ 
+  // add remote link into filesystem
+  dn->push_projected_linkage(newi->ino(), newi->d_type());
+  version_t dv = dn->pre_dirty();
+  version_t iv = newi->pre_dirty();
   newi->inode.rstat.rsubdirs = 1;
 
   dout(12) << " follows " << follows << dendl;
@@ -3669,8 +3715,10 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   mdlog->start_entry(le);
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-  le->metablob.add_primary_dentry(dn, true, newi);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, newi->get_parent_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_DIR, 1);
+  le->metablob.add_primary_dentry(newi->get_parent_dn(), true, newi);
+  le->metablob.add_remote_dentry(dn, true);
   le->metablob.add_dir(newdir, true, true, true); // dirty AND complete AND new
   
   // issue a cap on the directory
@@ -3692,7 +3740,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   LogSegment *ls = mds->mdlog->get_current_segment();
   ls->open_files.push_back(&newi->item_open_file);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, dv, newi, iv, follows));
 }
 
 
@@ -3708,6 +3756,9 @@ void Server::handle_client_symlink(MDRequest *mdr)
     reply_request(mdr, -EROFS);
     return;
   }
+
+  inode_container_wrlock(mdcache, wrlocks);
+
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -3716,18 +3767,23 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdr->now = ceph_clock_now(g_ceph_context);
   snapid_t follows = dn->get_dir()->inode->find_snaprealm()->get_newest_seq();
 
+  // it's a symlink
   unsigned mode = S_IFLNK | 0777;
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);
   assert(newi);
 
-  // it's a symlink
-  dn->push_projected_linkage(newi);
+  // add primary link to inode container
+  inode_container_link(mdcache, newi);
+ 
+  // add remote link into filesystem
+  dn->push_projected_linkage(newi->ino(), newi->d_type());
+  version_t dv = dn->pre_dirty();
+  version_t iv = newi->pre_dirty();
 
   newi->symlink = req->get_path2();
   newi->inode.size = newi->symlink.length();
   newi->inode.rstat.rbytes = newi->inode.size;
   newi->inode.rstat.rfiles = 1;
-  newi->inode.version = dn->pre_dirty();
 
   if (follows >= dn->first)
     dn->first = follows + 1;
@@ -3739,10 +3795,13 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdlog->start_entry(le);
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-  le->metablob.add_primary_dentry(dn, true, newi);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, newi->get_parent_dir(),
+                                    PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_DIR, 1);
+  le->metablob.add_primary_dentry(newi->get_parent_dn(), true, newi);
+  le->metablob.add_remote_dentry(dn, true);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, dv, newi, iv, follows));
 }
 
 
