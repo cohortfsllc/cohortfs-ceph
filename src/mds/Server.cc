@@ -2633,13 +2633,19 @@ void Server::handle_client_openc(MDRequest *mdr)
   SnapRealm *realm = diri->find_snaprealm();   // use directory's realm; inode isn't attached yet.
   snapid_t follows = realm->get_newest_seq();
 
-  // it's a file.
-  CInode *in = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
-				 req->head.args.open.mode | S_IFREG, &layout);
-  assert(in);
+  CInode *in = mdr->in[0];
+  if (in == NULL) {
+    // it's a file.
+    in = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
+                           req->head.args.open.mode | S_IFREG, &layout);
+    assert(in);
+    mdr->in[0] = in; // store inode with mdr between retries
 
-  // add primary link to inode container
-  inode_container_link(mdcache, in);
+    // add primary link and anchor to inode container
+    inode_container_link(mdcache, in);
+    mdcache->anchor_create(mdr, in, new C_MDS_RetryRequest(mdcache, mdr));
+    return;
+  }
  
   // add remote link into filesystem
   dn->push_projected_linkage(in->ino(), in->d_type());
@@ -3593,13 +3599,19 @@ void Server::handle_client_mknod(MDRequest *mdr)
   snapid_t follows = realm->get_newest_seq();
   mdr->now = ceph_clock_now(g_ceph_context);
 
-  CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
-				   req->head.args.mknod.mode, &layout);
-  assert(newi);
+  CInode *newi = mdr->in[0];
+  if (newi == NULL) {
+    newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
+                             req->head.args.mknod.mode, &layout);
+    assert(newi);
+    mdr->in[0] = newi; // store inode with mdr between retries
 
-  // add primary link to inode container
-  inode_container_link(mdcache, newi);
- 
+    // add primary link and anchor to inode container
+    inode_container_link(mdcache, newi);
+    mdcache->anchor_create(mdr, newi, new C_MDS_RetryRequest(mdcache, mdr));
+    return;
+  }
+
   // add remote link into filesystem
   dn->push_projected_linkage(newi->ino(), newi->d_type());
   version_t dv = dn->pre_dirty();
@@ -3683,16 +3695,22 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   snapid_t follows = realm->get_newest_seq();
   mdr->now = ceph_clock_now(g_ceph_context);
 
-  // it's a directory.
-  unsigned mode = req->head.args.mkdir.mode;
-  mode &= ~S_IFMT;
-  mode |= S_IFDIR;
-  CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);  
-  assert(newi);
+  CInode *newi = mdr->in[0];
+  if (newi == NULL) {
+    // it's a directory.
+    unsigned mode = req->head.args.mkdir.mode;
+    mode &= ~S_IFMT;
+    mode |= S_IFDIR;
+    newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);  
+    assert(newi);
+    mdr->in[0] = newi; // store inode with mdr between retries
 
-  // add primary link to inode container
-  inode_container_link(mdcache, newi);
- 
+    // add primary link and anchor to inode container
+    inode_container_link(mdcache, newi);
+    mdcache->anchor_create(mdr, newi, new C_MDS_RetryRequest(mdcache, mdr));
+    return;
+  }
+
   // add remote link into filesystem
   dn->push_projected_linkage(newi->ino(), newi->d_type());
   version_t dv = dn->pre_dirty();
@@ -3767,14 +3785,20 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdr->now = ceph_clock_now(g_ceph_context);
   snapid_t follows = dn->get_dir()->inode->find_snaprealm()->get_newest_seq();
 
-  // it's a symlink
-  unsigned mode = S_IFLNK | 0777;
-  CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);
-  assert(newi);
+  CInode *newi = mdr->in[0];
+  if (newi == NULL) {
+    // it's a symlink
+    unsigned mode = S_IFLNK | 0777;
+    newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);
+    assert(newi);
+    mdr->in[0] = newi; // store inode with mdr between retries
 
-  // add primary link to inode container
-  inode_container_link(mdcache, newi);
- 
+    // add primary link and anchor to inode container
+    inode_container_link(mdcache, newi);
+    mdcache->anchor_create(mdr, newi, new C_MDS_RetryRequest(mdcache, mdr));
+    return;
+  }
+
   // add remote link into filesystem
   dn->push_projected_linkage(newi->ino(), newi->d_type());
   version_t dv = dn->pre_dirty();
