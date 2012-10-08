@@ -685,6 +685,6 @@ public:
   int ll_connectable_m(vinodeno_t* vino, uint64_t parent_ino,
 		       uint32_t parent_hash);
   void ll_register_ino_invalidate_cb(client_ino_callback_t cb, void *handle);
-};
+}; // class Client
 
 #endif

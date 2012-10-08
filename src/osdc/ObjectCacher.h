@@ -271,7 +271,7 @@ class ObjectCacher {
     
     void truncate(loff_t s);
     void discard(loff_t off, loff_t len);
-  };
+  }; // class Object
   
 
   struct ObjectSet {

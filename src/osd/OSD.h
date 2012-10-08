@@ -151,10 +151,11 @@ public:
       (*i)->complete(0);
     }
   }
-};
+}; // class DeletingState
 typedef std::tr1::shared_ptr<DeletingState> DeletingStateRef;
 
 class OSD;
+
 class OSDService {
 public:
   OSD *osd;
@@ -318,7 +319,9 @@ public:
   void pg_stat_queue_dequeue(PG *pg);
 
   OSDService(OSD *osd);
-};
+}; // class OSDService
+
+
 class OSD : public Dispatcher {
   /** OSD **/
 protected:
