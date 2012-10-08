@@ -17,26 +17,80 @@
 
 using namespace std;
 
-map<string,PlacementFunc::PlacementFuncPart*> PlacementFunc::PlacementFuncPart::partsMap;
+
+// STATIC VARIABLES
 
 
-void PlacementFunc::execute(const FileSystemLocator& locator, vector<int>& result) const {
+map<string,PlacementFuncPart*> PlacementFuncPart::partsMap;
+
+
+// PLACEMENTFUNC FUNCTIONS
+
+
+PlacementFunc::~PlacementFunc() {
+  for (vector<PlacementFuncPart*>::iterator it = algParts.begin();
+       it != algParts.end();
+       ++it) {
+    algParts.erase(it);
+    delete *it;
+  }
+}
+
+
+void PlacementFunc::addFuncPart(const string& name) {
+  if (0 == PlacementFuncPart::partsMap.count(name)) {
+    throw PlacementFuncException("tried to add unknown placement"
+				 " functional partial \"" + name + "\"");
+  } else {
+    PlacementFuncPart* part = PlacementFuncPart::partsMap[name];
+    if (algParts.empty() && !part->canStart()) {
+      throw PlacementFuncException("added placement algorithm part that"
+				   " cannot start the chain");
+    }
+    algParts.push_back(part);
+  }
+}
+
+
+bool PlacementFunc::isComplete() const {
+  if (algParts.empty()) {
+    return false;
+  }
+  return algParts.back()->canEnd();
+}
+
+
+void PlacementFunc::execute(const FileSystemLocator& locator,
+			    vector<int>& result) const {
   if (!isComplete()) {
-    throw PlacementFuncException("tried to execute an incomplete placement function");
+    throw PlacementFuncException("tried to execute an incomplete"
+				 " placement function");
   }
 
   if (algParts.size() == 1) {
     (*algParts.begin())->wholeStep(locator, result);
   } else {
-    vector<PlacementFuncPart*>::const_iterator it = algParts.begin();
-    PartialData* partial = (*it)->firstStep(locator);
+    vector<PlacementFuncPart*>::const_iterator it =
+      algParts.begin();
+    PlacementFuncPart::PartialData* partialResult =
+      (*it)->firstStep(locator);
     ++it;
     for ( ; *it != algParts.back(); ++it) {
-      PartialData* newPartial = (*it)->oneStep(partial);
-      delete partial;
-      partial = newPartial;
+      PlacementFuncPart::PartialData* tempPartialResult =
+	(*it)->oneStep(partialResult);
+      delete partialResult;
+      partialResult = tempPartialResult;
     }
-    (*it)->lastStep(partial, result);
-    delete partial;
+    (*it)->lastStep(partialResult, result);
+    delete partialResult;
   }
+}
+
+
+// PLACEMENTFUNCEXCEPTION FUNCTIONS
+
+
+ostream& operator<<(ostream& os, PlacementFuncException e) {
+  os << e.message;
+  return os;
 }
