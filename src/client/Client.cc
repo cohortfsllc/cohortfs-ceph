@@ -5096,7 +5096,6 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
   if (dirp->offset == 0) {
     ldout(cct, 15) << " including ." << dendl;
     assert(diri->dn_set.size() < 2); // can't have multiple hard-links to a dir
-    uint64_t next_off = 1;
 
     fill_dirent(&de, ".", S_IFDIR, diri->ino, 1);
 
