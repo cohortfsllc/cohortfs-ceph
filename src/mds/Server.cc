@@ -1731,36 +1731,35 @@ CDentry* Server::prepare_null_dentry(MDRequest *mdr, CDir *dir, const string& dn
   return dn;
 }
 
-
-/** prepare_new_inode
- *
- * create a new inode.  set c/m/atime.  hit dir pop.
- */
-CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino, unsigned mode,
-				  ceph_file_layout *layout) 
+// allocate an inode number for the given request
+inodeno_t Server::prepare_new_inodeno(MDRequest *mdr, inodeno_t useino)
 {
-  CInode *in = new CInode(mdcache);
-  
+  inodeno_t ino;
+
+  // already allocated for this request
+  if (mdr->used_prealloc_ino)
+    return mdr->used_prealloc_ino;
+  if (mdr->alloc_ino)
+    return mdr->alloc_ino;
+
   // assign ino
   if (mdr->session->prealloc_inos.size()) {
-    mdr->used_prealloc_ino = 
-      in->inode.ino = mdr->session->take_ino(useino);  // prealloc -> used
+    mdr->used_prealloc_ino = ino = mdr->session->take_ino(useino);  // prealloc -> used
     mds->sessionmap.projected++;
-    dout(10) << "prepare_new_inode used_prealloc " << mdr->used_prealloc_ino
+    dout(10) << "prepare_new_inodeno used_prealloc " << mdr->used_prealloc_ino
 	     << " (" << mdr->session->prealloc_inos
 	     << ", " << mdr->session->prealloc_inos.size() << " left)"
 	     << dendl;
   } else {
-    mdr->alloc_ino = 
-      in->inode.ino = mds->inotable->project_alloc_id();
-    dout(10) << "prepare_new_inode alloc " << mdr->alloc_ino << dendl;
+    mdr->alloc_ino = ino = mds->inotable->project_alloc_id();
+    dout(10) << "prepare_new_inodeno alloc " << mdr->alloc_ino << dendl;
   }
 
-  if (useino && useino != in->inode.ino) {
-    dout(0) << "WARNING: client specified " << useino << " and i allocated " << in->inode.ino << dendl;
+  if (useino && useino != ino) {
+    dout(0) << "WARNING: client specified " << useino << " and i allocated " << ino << dendl;
     mds->clog.error() << mdr->client_request->get_source()
        << " specified ino " << useino
-       << " but mds." << mds->whoami << " allocated " << in->inode.ino << "\n";
+       << " but mds." << mds->whoami << " allocated " << ino << "\n";
     //assert(0); // just for now.
   }
     
@@ -1770,9 +1769,23 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino, u
     assert(mdr->prealloc_inos.size());  // or else fix projected increment semantics
     mdr->session->pending_prealloc_inos.insert(mdr->prealloc_inos);
     mds->sessionmap.projected++;
-    dout(10) << "prepare_new_inode prealloc " << mdr->prealloc_inos << dendl;
+    dout(10) << "prepare_new_inodeno prealloc " << mdr->prealloc_inos << dendl;
   }
 
+  dout(10) << "prepare_new_inodeno " << ino << dendl;
+  return ino;
+}
+
+/** prepare_new_inode
+ *
+ * create a new inode.  set c/m/atime.  hit dir pop.
+ */
+CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino,
+                                  unsigned mode, ceph_file_layout *layout)
+{
+  CInode *in = new CInode(mdcache);
+
+  in->inode.ino = useino;
   in->inode.version = 1;
   in->inode.nlink = 1;   // FIXME
 
@@ -1796,6 +1809,7 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino, u
 
   dout(10) << oct << " dir mode 0" << diri->inode.mode << " new mode 0" << mode << dec << dendl;
 
+  MClientRequest *req = mdr->client_request;
   if (diri->inode.mode & S_ISGID) {
     dout(10) << " dir is sticky" << dendl;
     in->inode.gid = diri->inode.gid;
@@ -1804,13 +1818,12 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino, u
       in->inode.mode |= S_ISGID;
     }
   } else 
-    in->inode.gid = mdr->client_request->get_caller_gid();
+    in->inode.gid = req->get_caller_gid();
 
-  in->inode.uid = mdr->client_request->get_caller_uid();
+  in->inode.uid = req->get_caller_uid();
 
   in->inode.ctime = in->inode.mtime = in->inode.atime = mdr->now;   // now
 
-  MClientRequest *req = mdr->client_request;
   if (req->get_data().length()) {
     bufferlist::iterator p = req->get_data().begin();
 
@@ -1823,8 +1836,8 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino, u
     }
   }
 
-  mdcache->add_inode(in);  // add
   dout(10) << "prepare_new_inode " << *in << dendl;
+  mdcache->add_inode(in);  // add
   return in;
 }
 
@@ -2705,6 +2718,8 @@ void Server::handle_client_openc(MDRequest *mdr)
     return;
   }
 
+  const inodeno_t ino = prepare_new_inodeno(mdr, inodeno_t(req->head.ino));
+
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -2728,8 +2743,8 @@ void Server::handle_client_openc(MDRequest *mdr)
   SnapRealm *realm = diri->find_snaprealm();   // use directory's realm; inode isn't attached yet.
   snapid_t follows = realm->get_newest_seq();
 
-  CInode *in = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
-				 req->head.args.open.mode | S_IFREG, &layout);
+  const unsigned mode = req->head.args.open.mode | S_IFREG;
+  CInode *in = prepare_new_inode(mdr, dn->get_dir(), ino, mode, &layout);
   assert(in);
   
   // it's a file.
@@ -3925,6 +3940,9 @@ void Server::handle_client_mknod(MDRequest *mdr)
     reply_request(mdr, -EROFS);
     return;
   }
+
+  const inodeno_t ino = prepare_new_inodeno(mdr, inodeno_t(req->head.ino));
+
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -3947,8 +3965,8 @@ void Server::handle_client_mknod(MDRequest *mdr)
   snapid_t follows = realm->get_newest_seq();
   mdr->now = ceph_clock_now(g_ceph_context);
 
-  CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
-				   req->head.args.mknod.mode, &layout);
+  const unsigned mode = req->head.args.mknod.mode;
+  CInode *newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode, &layout);
   assert(newi);
 
   dn->push_projected_linkage(newi);
@@ -4017,6 +4035,9 @@ void Server::handle_client_mkdir(MDRequest *mdr)
     reply_request(mdr, -EROFS);
     return;
   }
+
+  const inodeno_t ino = prepare_new_inodeno(mdr, inodeno_t(req->head.ino));
+
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -4033,8 +4054,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
     unsigned mode = req->head.args.mkdir.mode;
     mode &= ~S_IFMT;
     mode |= S_IFDIR;
-    mdr->in[0] = newi = prepare_new_inode(mdr, dn->get_dir(),
-                                          inodeno_t(req->head.ino), mode);
+    mdr->in[0] = newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
 
     // issue a cap on the directory.  do this before initializing
     // stripes, so replicas get the correct lock state
@@ -4387,6 +4407,9 @@ void Server::handle_client_symlink(MDRequest *mdr)
     reply_request(mdr, -EROFS);
     return;
   }
+
+  const inodeno_t ino = prepare_new_inodeno(mdr, inodeno_t(req->head.ino));
+
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -4395,8 +4418,8 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdr->now = ceph_clock_now(g_ceph_context);
   snapid_t follows = diri->find_snaprealm()->get_newest_seq();
 
-  unsigned mode = S_IFLNK | 0777;
-  CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);
+  const unsigned mode = S_IFLNK | 0777;
+  CInode *newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
   assert(newi);
 
   // it's a symlink
