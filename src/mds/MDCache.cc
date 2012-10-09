@@ -82,6 +82,9 @@
 #include "messages/MMDSOpenIno.h"
 #include "messages/MMDSOpenInoReply.h"
 
+#include "messages/MMDSRestripe.h"
+#include "messages/MMDSRestripeAck.h"
+
 #include "messages/MClientRequest.h"
 #include "messages/MClientCaps.h"
 #include "messages/MClientSnap.h"
