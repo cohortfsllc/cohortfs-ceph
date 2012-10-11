@@ -1055,6 +1055,7 @@ libcommon_files = \
 	osd/OSDMap.cc \
 	osd/osd_types.cc \
 	osd/PlaceFunc.cc \
+	osd/PGPlaceFunc.cc \
 	mds/MDSMap.cc \
 	common/blkdev.cc \
 	common/common_init.cc \
@@ -1594,6 +1595,7 @@ noinst_HEADERS = \
         osd/ObjectVersioner.h\
 	osd/OpRequest.h\
         osd/PlaceFunc.h\
+	osd/PGPlaceFunc.h\
         osd/PG.h\
         osd/ReplicatedPG.h\
         osd/Watch.h\
