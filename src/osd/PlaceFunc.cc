@@ -18,17 +18,17 @@
 using namespace std;
 
 
-// STATIC VARIABLES
+// **************** PlaceFuncPart ****************
 
 
-map<string,PlacementFuncPart*> PlacementFuncPart::partsMap;
+map<string,PlaceFuncPart*> PlaceFuncPart::partsMap;
 
 
-// PLACEMENTFUNC FUNCTIONS
+// **************** PlaceFunc ****************
 
 
-PlacementFunc::~PlacementFunc() {
-  for (vector<PlacementFuncPart*>::iterator it = algParts.begin();
+PlaceFunc::~PlaceFunc() {
+  for (vector<PlaceFuncPart*>::iterator it = algParts.begin();
        it != algParts.end();
        ++it) {
     algParts.erase(it);
@@ -37,14 +37,14 @@ PlacementFunc::~PlacementFunc() {
 }
 
 
-void PlacementFunc::addFuncPart(const string& name) {
-  if (0 == PlacementFuncPart::partsMap.count(name)) {
-    throw PlacementFuncException("tried to add unknown placement"
+void PlaceFunc::addFuncPart(const string& name) {
+  if (0 == PlaceFuncPart::partsMap.count(name)) {
+    throw PlaceFuncException("tried to add unknown placement"
 				 " functional partial \"" + name + "\"");
   } else {
-    PlacementFuncPart* part = PlacementFuncPart::partsMap[name];
+    PlaceFuncPart* part = PlaceFuncPart::partsMap[name];
     if (algParts.empty() && !part->canStart()) {
-      throw PlacementFuncException("added placement algorithm part that"
+      throw PlaceFuncException("added placement algorithm part that"
 				   " cannot start the chain");
     }
     algParts.push_back(part);
@@ -52,7 +52,7 @@ void PlacementFunc::addFuncPart(const string& name) {
 }
 
 
-bool PlacementFunc::isComplete() const {
+bool PlaceFunc::isComplete() const {
   if (algParts.empty()) {
     return false;
   }
@@ -60,37 +60,50 @@ bool PlacementFunc::isComplete() const {
 }
 
 
-void PlacementFunc::execute(const FileSystemLocator& locator,
+/*
+ * Goes from a FileSystemLocator to a vector of OSD integer
+ * identifiers. Return code is 0 if all went well, non-zero indicates
+ * an error.
+ */
+int PlaceFunc::execute(const FileSystemLocator& locator,
 			    vector<int>& result) const {
   if (!isComplete()) {
-    throw PlacementFuncException("tried to execute an incomplete"
-				 " placement function");
+    return PlaceFunc::INCOMPLETE;
   }
 
   if (algParts.size() == 1) {
-    (*algParts.begin())->wholeStep(locator, result);
+    int errorCode = (*algParts.begin())->wholeStep(locator, result);
+    return errorCode;
   } else {
-    vector<PlacementFuncPart*>::const_iterator it =
+    vector<PlaceFuncPart*>::const_iterator it =
       algParts.begin();
-    PlacementFuncPart::PartialData* partialResult =
-      (*it)->firstStep(locator);
+    PlaceFuncPart::PartialData* partialData = NULL;
+    int errorCode = (*it)->firstStep(locator, partialData);
+    if (errorCode) goto early_out;
+      
     ++it;
     for ( ; *it != algParts.back(); ++it) {
-      PlacementFuncPart::PartialData* tempPartialResult =
-	(*it)->oneStep(partialResult);
-      delete partialResult;
-      partialResult = tempPartialResult;
+      PlaceFuncPart::PartialData* tempPartialData = NULL;
+      errorCode = (*it)->oneStep(partialData, tempPartialData);
+      delete partialData;
+      partialData = tempPartialData;
+      if (errorCode) goto early_out;
     }
-    (*it)->lastStep(partialResult, result);
-    delete partialResult;
+    errorCode = (*it)->lastStep(partialData, result);
+
+  early_out:
+    if (partialData) {
+      delete partialData;
+    }
+    return errorCode;
   }
 }
 
 
-// PLACEMENTFUNCEXCEPTION FUNCTIONS
+// **************** PlaceFuncException ****************
 
 
-ostream& operator<<(ostream& os, PlacementFuncException e) {
+ostream& operator<<(ostream& os, PlaceFuncException e) {
   os << e.message;
   return os;
 }

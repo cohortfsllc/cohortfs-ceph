@@ -27,17 +27,17 @@
 
 using namespace std;
 
-class PlacementFuncPart;
+class PlaceFuncPart;
 
 
-class PlacementFunc {
-
-
-private:
-
-  vector<PlacementFuncPart*> algParts;
+class PlaceFunc {
 
 public:
+
+  enum ResultCodes {
+    UNIMPLEMENTED = 11264, // find better starting point
+    INCOMPLETE,
+  };
 
   class FileSystemLocator {
   private:
@@ -56,26 +56,31 @@ public:
     */
   }; // class FileSystemLocator
 
+private:
 
-  PlacementFunc() {
+  vector<PlaceFuncPart*> algParts;
+
+public:
+
+  PlaceFunc() {
     // empty
   }
 
-  ~PlacementFunc();
+  ~PlaceFunc();
 
 
   bool isComplete() const;
-  void execute(const FileSystemLocator& locator, vector<int>& result) const;
+  int execute(const FileSystemLocator& locator, vector<int>& result) const;
 
   void addFuncPart(const string& name);
 
-}; // class PlacementFunc
+}; // class PlaceFunc
 
 
-class PlacementFuncException {
+class PlaceFuncException {
 
-  friend PlacementFunc;
-  friend ostream& operator<<(ostream&, PlacementFuncException);
+  friend PlaceFunc;
+  friend ostream& operator<<(ostream&, PlaceFuncException);
 
 private:
 
@@ -83,17 +88,19 @@ private:
 
 public:
 
-  PlacementFuncException(const string& message_p)
+  PlaceFuncException(const string& message_p)
   : message(message_p)
   {
     // empty
   }
-}; // class PlacementFuncException
+}; // class PlaceFuncException
 
 
-class PlacementFuncPart {
+class PlaceFuncPart {
 
-  friend PlacementFunc;
+  friend PlaceFunc;
+
+public:
 
   /*
    * Base class for all types of partials -- partially computed
@@ -143,17 +150,17 @@ private:
 
   const string name;
 
-  static map<string,PlacementFuncPart*> partsMap;
+  static map<string,PlaceFuncPart*> partsMap;
 
 public:
 
-  PlacementFuncPart(const string& name_p)
+  PlaceFuncPart(const string& name_p)
   : name(name_p)
   {
     partsMap[name_p] = this;
   }
 
-  virtual ~PlacementFuncPart() {
+  virtual ~PlaceFuncPart() {
     partsMap.erase(name);
   }
 
@@ -161,28 +168,27 @@ public:
   virtual bool canEnd() const = 0;
 
   // PartialData* returned will be deleted by caller
-  virtual PartialData* firstStep(const PlacementFunc::FileSystemLocator& locator) {
-    throw PlacementFuncException("unimplemented");
-    return NULL;
+  virtual int firstStep(const PlaceFunc::FileSystemLocator& locator,
+			PartialData*& resultData) {
+    return PlaceFunc::UNIMPLEMENTED;
   }
 
-  virtual void wholeStep(const PlacementFunc::FileSystemLocator& locator,
-			 vector<int>& result) {
-    throw PlacementFuncException("unimplemented");
+  virtual int wholeStep(const PlaceFunc::FileSystemLocator& locator,
+			vector<int>& result) {
+    return PlaceFunc::UNIMPLEMENTED;
   }
 
   // PartialData* returned will be deleted by caller as will
   // PartialData* passed in
-  virtual PartialData* oneStep(const PartialData* partial) {
-    throw PlacementFuncException("unimplemented");
-    return NULL;
+  virtual int oneStep(const PartialData* inData, PartialData*& outData) {
+    return PlaceFunc::UNIMPLEMENTED;
   }
 
   // PartialData* passed in will be deleted by caller
-  virtual void lastStep(const PartialData* partial, vector<int>& result) {
-    throw PlacementFuncException("unimplemented");
+  virtual int lastStep(const PartialData* partial, vector<int>& result) {
+    return PlaceFunc::UNIMPLEMENTED;
   }
-}; // PlacementFuncPart
+}; // PlaceFuncPart
 
 
 #endif // CEPH_PLACEALG_H
