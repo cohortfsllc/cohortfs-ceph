@@ -18,7 +18,11 @@
 #include <inttypes.h>
 
 #include "include/types.h"
+
 #include "mds/mdstypes.h"
+
+#include "osd/osd_types.h"
+// #include "osd/OSDMap.h"
 
 #include <string>
 #include <vector>
@@ -27,6 +31,8 @@
 
 using namespace std;
 
+
+class OSDMap;
 class PlaceFuncPart;
 
 
@@ -38,23 +44,6 @@ public:
     UNIMPLEMENTED = 11264, // find better starting point
     INCOMPLETE,
   };
-
-  class FileSystemLocator {
-  private:
-    int64_t volNum; // can also be pool number
-    object_t oid;
-  public:
-    FileSystemLocator(int64_t volNum_p, object_t oid_p)
-      : volNum(volNum_p), oid(oid_p)
-    { }
-    /*
-      FileSystemLocator(int64_t volNum_p,
-      inodeno_t inodeNo, frag_t frag, const char* suffix)
-      : volNum(volNum_p),
-      oid(CInode::get_object_name(inodeNo, frag, suffix))
-      { }
-    */
-  }; // class FileSystemLocator
 
 private:
 
@@ -70,7 +59,11 @@ public:
 
 
   bool isComplete() const;
-  int execute(const FileSystemLocator& locator, vector<int>& result) const;
+
+  int execute(const OSDMap& osdMap,
+	      const object_locator_t& locator,
+	      const object_t& oid,
+	      vector<int>& result) const;
 
   void addFuncPart(const string& name);
 
@@ -168,24 +161,33 @@ public:
   virtual bool canEnd() const = 0;
 
   // PartialData* returned will be deleted by caller
-  virtual int firstStep(const PlaceFunc::FileSystemLocator& locator,
+  virtual int firstStep(const OSDMap& osdMap,
+			const object_locator_t& locator,
+			const object_t& oid,
 			PartialData*& resultData) {
+			
     return PlaceFunc::UNIMPLEMENTED;
   }
 
-  virtual int wholeStep(const PlaceFunc::FileSystemLocator& locator,
+  virtual int wholeStep(const OSDMap& osdMap,
+			const object_locator_t& locator,
+			const object_t& oid,
 			vector<int>& result) {
     return PlaceFunc::UNIMPLEMENTED;
   }
 
   // PartialData* returned will be deleted by caller as will
   // PartialData* passed in
-  virtual int oneStep(const PartialData* inData, PartialData*& outData) {
+  virtual int oneStep(const OSDMap& osdMap,
+		      const PartialData* inData,
+		      PartialData*& outData) {
     return PlaceFunc::UNIMPLEMENTED;
   }
 
   // PartialData* passed in will be deleted by caller
-  virtual int lastStep(const PartialData* partial, vector<int>& result) {
+  virtual int lastStep(const OSDMap& osdMap,
+		       const PartialData* partial,
+		       vector<int>& result) {
     return PlaceFunc::UNIMPLEMENTED;
   }
 }; // PlaceFuncPart

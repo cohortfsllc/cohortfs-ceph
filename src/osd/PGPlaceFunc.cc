@@ -15,21 +15,16 @@
 
 #include "PGPlaceFunc.h"
 
+#include "osd/OSDMap.h"
+
+
 using namespace std;
 
 
 // **************** PGToCrushData ****************
 
 
-PGToCrushData::PGToCrushData()
-  : PlaceFuncPart::PartialData() {
-    // empty for now
-}
-
-
-PGToCrushData::~PGToCrushData() {
-    // empty for now
-}
+// empty for now....
 
 
 // **************** PGHashPlaceFunc ****************
@@ -38,9 +33,15 @@ PGToCrushData::~PGToCrushData() {
 const string PGHashPlaceFunc::name = "PGCrushPlaceFunc";
 
 
-int PGHashPlaceFunc::firstStep(const PlaceFunc::FileSystemLocator& locator,
+int PGHashPlaceFunc::firstStep(const OSDMap& osdMap,
+			       const object_locator_t& locator,
+			       const object_t& oid,
 			       PartialData*& outData) {
-  return PlaceFunc::UNIMPLEMENTED;
+  pg_t pgid;
+  int ret = osdMap.object_locator_to_pg(oid, locator, pgid);
+  if (ret) return ret;
+  outData = new PGToCrushData(pgid);
+  return 0;
 }
 
 
@@ -50,6 +51,8 @@ int PGHashPlaceFunc::firstStep(const PlaceFunc::FileSystemLocator& locator,
 const string PGCrushPlaceFunc::name = "PGCrushPlaceFunc";
 
 
-int PGCrushPlaceFunc::lastStep(const PartialData* inData, vector<int>& result) {
+int PGCrushPlaceFunc::lastStep(const OSDMap& osdMap,
+			       const PartialData* inData,
+			       vector<int>& result) {
   return PlaceFunc::UNIMPLEMENTED;
 }

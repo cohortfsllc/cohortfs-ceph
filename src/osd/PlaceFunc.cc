@@ -65,31 +65,38 @@ bool PlaceFunc::isComplete() const {
  * identifiers. Return code is 0 if all went well, non-zero indicates
  * an error.
  */
-int PlaceFunc::execute(const FileSystemLocator& locator,
-			    vector<int>& result) const {
+int PlaceFunc::execute(const OSDMap& osdMap,
+		       const object_locator_t& locator,
+		       const object_t& oid,
+		       vector<int>& result) const
+{
   if (!isComplete()) {
     return PlaceFunc::INCOMPLETE;
   }
 
   if (algParts.size() == 1) {
-    int errorCode = (*algParts.begin())->wholeStep(locator, result);
+    int errorCode = (*algParts.begin())->wholeStep(osdMap, locator, oid, result);
     return errorCode;
   } else {
     vector<PlaceFuncPart*>::const_iterator it =
       algParts.begin();
     PlaceFuncPart::PartialData* partialData = NULL;
-    int errorCode = (*it)->firstStep(locator, partialData);
+
+    // run first step
+    int errorCode = (*it)->firstStep(osdMap, locator, oid, partialData);
     if (errorCode) goto early_out;
       
-    ++it;
-    for ( ; *it != algParts.back(); ++it) {
+    // run intermediate steps
+    for (++it; *it != algParts.back(); ++it) {
       PlaceFuncPart::PartialData* tempPartialData = NULL;
-      errorCode = (*it)->oneStep(partialData, tempPartialData);
+      errorCode = (*it)->oneStep(osdMap, partialData, tempPartialData);
       delete partialData;
       partialData = tempPartialData;
       if (errorCode) goto early_out;
     }
-    errorCode = (*it)->lastStep(partialData, result);
+
+    // run final step
+    errorCode = (*it)->lastStep(osdMap, partialData, result);
 
   early_out:
     if (partialData) {

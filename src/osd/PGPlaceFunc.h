@@ -14,13 +14,15 @@
 
 
 #include "PlaceFunc.h"
+#include "osd_types.h"
 
 
 class PGToCrushData : public PlaceFuncPart::PartialData {
 
 public:
+  pg_t pgid;
 
-  PGToCrushData();
+  PGToCrushData(pg_t pgid_p) : pgid(pgid_p) { }
   ~PGToCrushData();
 
 }; // PGToCrushData
@@ -40,7 +42,10 @@ public:
   bool canBegin() { return true; }
   bool canEnd() { return false; }
 
-  int firstStep(const PlaceFunc::FileSystemLocator& locator, PartialData*& outData);
+  int firstStep(const OSDMap& osdMap,
+		const object_locator_t& locator,
+		const object_t& oid,
+		PartialData*& outData);
 
 }; // class PGHashPlaceFunc
 
@@ -58,6 +63,8 @@ public:
   bool canBegin() { return false; }
   bool canEnd() { return true; }
 
-  int lastStep(const PartialData* partial, vector<int>& result);
+  int lastStep(const OSDMap& osdMap,
+	       const PartialData* partial,
+	       vector<int>& result);
 
 }; // class PGCrushPlaceFunc
