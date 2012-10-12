@@ -31,6 +31,7 @@
 #include "include/ceph_features.h"
 
 #include "crush/CrushWrapper.h"
+#include "osd/PlaceFunc.h"
 
 #include "include/interval_set.h"
 
@@ -185,6 +186,7 @@ private:
 
  public:
   std::tr1::shared_ptr<CrushWrapper> crush;       // hierarchical map
+  std::tr1::shared_ptr<PlaceFunc> placeFunc;
 
   friend class OSDMonitor;
   friend class PGMonitor;
@@ -378,7 +380,13 @@ public:
   void decode(bufferlist::iterator& p);
 
 
-  /****   mapping facilities   ****/
+  /****   mapping facilities / placement   ****/
+
+  int getPlacement(const object_locator_t& loc, const object_t& oid,
+		   vector<int>& acting) const {
+    return placeFunc->execute(*this, loc, oid, acting);
+  }
+
   int object_locator_to_pg(const object_t& oid, const object_locator_t& loc, pg_t &pg) const;
   pg_t object_locator_to_pg(const object_t& oid, const object_locator_t& loc) const {
     pg_t pg;

@@ -1023,6 +1023,9 @@ int Objecter::recalc_op_target(Op *op)
   }
   osdmap->pg_to_acting_osds(pgid, acting);
 
+#warning integrate the following here
+  // int ret = osdmap->getPlacement(op->oloc, op->oid, acting);
+
   if (op->pgid != pgid || is_pg_changed(op->acting, acting, op->used_replica)) {
     op->pgid = pgid;
     op->acting = acting;
