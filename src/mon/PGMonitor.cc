@@ -21,17 +21,19 @@
 #include "OSDMonitor.h"
 #include "MonitorDBStore.h"
 
+#include "pg/PGOSDMap.h"
+
 #include "messages/MPGStats.h"
 #include "messages/MPGStatsAck.h"
 #include "messages/MGetPoolStats.h"
 #include "messages/MGetPoolStatsReply.h"
-
 #include "messages/MStatfs.h"
 #include "messages/MStatfsReply.h"
 #include "messages/MOSDPGCreate.h"
 #include "messages/MMonCommand.h"
 #include "messages/MOSDScrub.h"
 
+#include "common/Cond.h"
 #include "common/Timer.h"
 #include "common/Formatter.h"
 #include "common/ceph_argparse.h"
@@ -41,6 +43,8 @@
 #include "include/stringify.h"
 
 #include "osd/osd_types.h"
+
+#include "pg/pg_types.h"
 
 #include "common/config.h"
 #include "common/errno.h"
@@ -73,7 +77,7 @@ void PGMonitor::on_restart()
 void PGMonitor::on_active()
 {
   if (mon->is_leader()) {
-    check_osd_map(mon->osdmon()->osdmap.epoch);
+    check_osd_map(mon->osdmon()->osdmap->epoch);
     need_check_down_pgs = true;
   }
 
@@ -225,7 +229,7 @@ void PGMonitor::update_from_paxos(bool *need_bootstrap)
 
   update_trim();
 
-  if (mon->osdmon()->osdmap.get_epoch()) {
+  if (mon->osdmon()->osdmap->get_epoch()) {
     map_pg_creates();
     send_pg_creates();
   }
@@ -235,7 +239,7 @@ void PGMonitor::update_from_paxos(bool *need_bootstrap)
 
 void PGMonitor::init()
 {
-  if (mon->osdmon()->osdmap.get_epoch()) {
+  if (mon->osdmon()->osdmap->get_epoch()) {
     map_pg_creates();
   }
 }
@@ -388,8 +392,10 @@ void PGMonitor::handle_statfs(MStatfs *statfs)
 bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
 {
   MGetPoolStatsReply *reply;
-
   MonSession *session = m->get_session();
+  PGOSDMap* const l_osdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+
   if (!session)
     goto out;
   if (!session->is_capable("pg", MON_CAP_R)) {
@@ -399,7 +405,8 @@ bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
   }
 
   if (m->fsid != mon->monmap->fsid) {
-    dout(0) << "preprocess_getpoolstats on fsid " << m->fsid << " != " << mon->monmap->fsid << dendl;
+    dout(0) << "preprocess_getpoolstats on fsid " << m->fsid << " != " <<
+      mon->monmap->fsid << dendl;
     goto out;
   }
   
@@ -408,7 +415,7 @@ bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
   for (list<string>::iterator p = m->pools.begin();
        p != m->pools.end();
        ++p) {
-    int64_t poolid = mon->osdmon()->osdmap.lookup_pg_pool_name(p->c_str());
+    int64_t poolid = l_osdmap->lookup_pg_pool_name(p->c_str());
     if (poolid < 0)
       continue;
     if (pg_map.pg_pool_sum.count(poolid) == 0)
@@ -444,7 +451,7 @@ bool PGMonitor::preprocess_pg_stats(MPGStats *stats)
   // only if they've had the map for a while.
   if (stats->had_map_for > 30.0 && 
       mon->osdmon()->is_readable() &&
-      stats->epoch < mon->osdmon()->osdmap.get_epoch())
+      stats->epoch < mon->osdmon()->osdmap->get_epoch())
     mon->osdmon()->send_latest_now_nodelete(stats, stats->epoch+1);
 
   // Always forward the PGStats to the leader, even if they are the same as
@@ -489,8 +496,8 @@ bool PGMonitor::prepare_pg_stats(MPGStats *stats)
   last_osd_report[from] = ceph_clock_now(g_ceph_context);
 
   if (!stats->get_orig_source().is_osd() ||
-      !mon->osdmon()->osdmap.is_up(from) ||
-      stats->get_orig_source_inst() != mon->osdmon()->osdmap.get_inst(from)) {
+      !mon->osdmon()->osdmap->is_up(from) ||
+      stats->get_orig_source_inst() != mon->osdmon()->osdmap->get_inst(from)) {
     dout(1) << " ignoring stats from non-active osd." << dendl;
     stats->put();
     return false;
@@ -631,9 +638,9 @@ void PGMonitor::check_osd_map(epoch_t epoch)
     assert(err == 0);
 
     assert(bl.length());
-    OSDMap::Incremental inc(bl);
-    for (map<int32_t,uint32_t>::iterator p = inc.new_weight.begin();
-	 p != inc.new_weight.end();
+    auto_ptr<PGOSDMap::Incremental> inc(new PGOSDMap::Incremental(bl));
+    for (map<int32_t,uint32_t>::iterator p = inc->new_weight.begin();
+	 p != inc->new_weight.end();
 	 ++p)
       if (p->second == CEPH_OSD_OUT) {
 	dout(10) << "check_osd_map  osd." << p->first << " went OUT" << dendl;
@@ -645,8 +652,8 @@ void PGMonitor::check_osd_map(epoch_t epoch)
       }
 
     // this is conservative: we want to know if any osds (maybe) got marked down.
-    for (map<int32_t,uint8_t>::iterator p = inc.new_state.begin();
-	 p != inc.new_state.end();
+    for (map<int32_t,uint8_t>::iterator p = inc->new_state.begin();
+	 p != inc->new_state.end();
 	 ++p) {
       if (p->second & CEPH_OSD_UP) {   // true if marked up OR down, but we're too lazy to check which
 	need_check_down_pgs = true;
@@ -687,7 +694,7 @@ void PGMonitor::check_osd_map(epoch_t epoch)
   if (propose)
     propose_pending();
 
-  if (mon->osdmon()->osdmap.get_epoch()) {
+  if (mon->osdmon()->osdmap->get_epoch()) {
     map_pg_creates();
     send_pg_creates();
   }
@@ -733,11 +740,11 @@ void PGMonitor::register_pg(pg_pool_t& pool, pg_t pgid, epoch_t epoch, bool new_
 bool PGMonitor::register_new_pgs()
 {
   // iterate over crush mapspace
-  epoch_t epoch = mon->osdmon()->osdmap.get_epoch();
+  epoch_t epoch = mon->osdmon()->osdmap->get_epoch();
   dout(10) << "register_new_pgs checking pg pools for osdmap epoch " << epoch
 	   << ", last_pg_scan " << pg_map.last_pg_scan << dendl;
 
-  OSDMap *osdmap = &mon->osdmon()->osdmap;
+  PGOSDMap *osdmap = dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
 
   int created = 0;
   for (map<int64_t,pg_pool_t>::iterator p = osdmap->pools.begin();
@@ -815,6 +822,9 @@ void PGMonitor::map_pg_creates()
 {
   dout(10) << "map_pg_creates to " << pg_map.creating_pgs.size() << " pgs" << dendl;
 
+  PGOSDMap* const pgosdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+
   for (set<pg_t>::iterator p = pg_map.creating_pgs.begin();
        p != pg_map.creating_pgs.end();
        ++p) {
@@ -824,7 +834,7 @@ void PGMonitor::map_pg_creates()
     if (s.parent_split_bits)
       on = s.parent;
     vector<int> acting;
-    int nrep = mon->osdmon()->osdmap.pg_to_acting_osds(on, acting);
+    int nrep = pgosdmap->pg_to_acting_osds(on, acting);
 
     if (s.acting.size()) {
       pg_map.creating_pgs_by_osd[s.acting[0]].erase(pgid);
@@ -844,8 +854,8 @@ void PGMonitor::map_pg_creates()
     if (nrep) {
       pg_map.creating_pgs_by_osd[acting[0]].insert(pgid);
     } else {
-      dout(20) << "map_pg_creates  " << pgid << " -> no osds in epoch "
-	       << mon->osdmon()->osdmap.get_epoch() << ", skipping" << dendl;
+      dout(20) << "mon_pg_creates  " << pgid << " -> no osds in epoch "
+	       << pgosdmap->get_epoch() << ", skipping" << dendl;
       continue;  // blarney!
     }
   }
@@ -870,21 +880,24 @@ void PGMonitor::send_pg_creates()
     if (last_sent_pg_create.count(osd) &&
 	now - g_conf->mon_pg_create_interval < last_sent_pg_create[osd]) 
       continue;
-      
-    if (mon->osdmon()->osdmap.is_up(osd))
+
+    if (mon->osdmon()->osdmap->is_up(osd))
       send_pg_creates(osd, NULL);
   }
 }
 
 void PGMonitor::send_pg_creates(int osd, Connection *con)
 {
+  PGOSDMap* const pgosdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+
   map<int, set<pg_t> >::iterator p = pg_map.creating_pgs_by_osd.find(osd);
   if (p == pg_map.creating_pgs_by_osd.end())
     return;
   assert(p->second.size() > 0);
 
   dout(20) << "send_pg_creates osd." << osd << " pgs " << p->second << dendl;
-  MOSDPGCreate *m = new MOSDPGCreate(mon->osdmon()->osdmap.get_epoch());
+  MOSDPGCreate *m = new MOSDPGCreate(pgosdmap->get_epoch());
   for (set<pg_t>::iterator q = p->second.begin(); q != p->second.end(); ++q) {
     m->mkpg[*q] = pg_create_t(pg_map.pg_stat[*q].created,
 			      pg_map.pg_stat[*q].parent,
@@ -894,8 +907,8 @@ void PGMonitor::send_pg_creates(int osd, Connection *con)
   if (con) {
     mon->messenger->send_message(m, con);
   } else {
-    assert(mon->osdmon()->osdmap.is_up(osd));
-    mon->messenger->send_message(m, mon->osdmon()->osdmap.get_inst(osd));
+    assert(pgosdmap->is_up(osd));
+    mon->messenger->send_message(m, pgosdmap->get_inst(osd));
   }
   last_sent_pg_create[osd] = ceph_clock_now(g_ceph_context);
 }
@@ -904,7 +917,8 @@ bool PGMonitor::check_down_pgs()
 {
   dout(10) << "check_down_pgs" << dendl;
 
-  OSDMap *osdmap = &mon->osdmon()->osdmap;
+  PGOSDMap* const osdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
   bool ret = false;
 
   for (hash_map<pg_t,pg_stat_t>::iterator p = pg_map.pg_stat.begin();
@@ -988,13 +1002,15 @@ void PGMonitor::dump_pool_stats(stringstream &ss, Formatter *f, bool verbose)
     }
   }
 
-  OSDMap &osdmap = mon->osdmon()->osdmap;
-  for (map<int64_t,pg_pool_t>::const_iterator p = osdmap.get_pools().begin();
-       p != osdmap.get_pools().end(); ++p) {
+  PGOSDMap* const l_osdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+  for (map<int64_t,pg_pool_t>::const_iterator p
+	 = l_osdmap->get_pools().begin();
+       p != l_osdmap->get_pools().end(); ++p) {
     int64_t pool_id = p->first;
     if ((pool_id < 0) || (pg_map.pg_pool_sum.count(pool_id) == 0))
       continue;
-    string pool_name = osdmap.get_pool_name(pool_id);
+    string pool_name = l_osdmap->get_pool_name(pool_id);
     pool_stat_t &stat = pg_map.pg_pool_sum[pool_id];
 
     if (f) {
@@ -1093,6 +1109,10 @@ void PGMonitor::dump_info(Formatter *f)
 
 bool PGMonitor::preprocess_command(MMonCommand *m)
 {
+  PGOSDMap* const pgosdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+
+
   int r = -1;
   bufferlist rdata;
   stringstream ss, ds;
@@ -1212,14 +1232,14 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
       goto reply;
     }
     vector<int> up, acting;
-    if (!mon->osdmon()->osdmap.have_pg_pool(pgid.pool())) {
+    if (!pgosdmap->have_pg_pool(pgid.pool())) {
       r = -ENOENT;
       ss << "pg '" << pgidstr << "' does not exist";
       goto reply;
     }
-    pg_t mpgid = mon->osdmon()->osdmap.raw_pg_to_pg(pgid);
-    mon->osdmon()->osdmap.pg_to_up_acting_osds(pgid, up, acting);
-    ds << "osdmap e" << mon->osdmon()->osdmap.get_epoch()
+    pg_t mpgid = pgosdmap->raw_pg_to_pg(pgid);
+    pgosdmap->pg_to_up_acting_osds(pgid, up, acting);
+    ds << "osdmap e" << mon->osdmon()->osdmap->get_epoch()
        << " pg " << pgid << " (" << mpgid << ")"
        << " -> up " << up << " acting " << acting;
     r = 0;
@@ -1246,7 +1266,7 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
       goto reply;
     }
     int osd = pg_map.pg_stat[pgid].acting[0];
-    if (!mon->osdmon()->osdmap.is_up(osd)) {
+    if (!mon->osdmon()->osdmap->is_up(osd)) {
       ss << "pg " << pgid << " primary osd." << osd << " not up";
       r = -EAGAIN;
       goto reply;
@@ -1256,7 +1276,7 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
     mon->try_send_message(new MOSDScrub(mon->monmap->fsid, pgs,
 					scrubop == "repair",
 					scrubop == "deep-scrub"),
-			  mon->osdmon()->osdmap.get_inst(osd));
+			  mon->osdmon()->osdmap->get_inst(osd));
     ss << "instructing pg " << pgid << " on osd." << osd << " to " << scrubop;
     r = 0;
   } else if (prefix == "pg debug") {
@@ -1308,9 +1328,11 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
 
 bool PGMonitor::prepare_command(MMonCommand *m)
 {
+  PGOSDMap* const pgosdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
   stringstream ss;
   pg_t pgid;
-  epoch_t epoch = mon->osdmon()->osdmap.get_epoch();
+  epoch_t epoch = pgosdmap->get_epoch();
   int r = 0;
   string rs;
 
@@ -1518,9 +1540,11 @@ void PGMonitor::get_health(list<pair<health_status_t,string> >& summary,
 	  if (p->second.stats.sum.num_objects_unfound)
 	    ss << ", " << p->second.stats.sum.num_objects_unfound << " unfound";
 	  if (p->second.state & PG_STATE_INCOMPLETE) {
-	    const pg_pool_t *pi = mon->osdmon()->osdmap.get_pg_pool(p->first.pool());
+	    PGOSDMap* const l_osdmap =
+	      dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+	    const pg_pool_t *pi = l_osdmap->get_pg_pool(p->first.pool());
 	    if (pi && pi->min_size > 1) {
-	      ss << " (reducing pool " << mon->osdmon()->osdmap.get_pool_name(p->first.pool())
+	      ss << " (reducing pool " << l_osdmap->get_pool_name(p->first.pool())
 		 << " min_size from " << (int)pi->min_size << " may help; search ceph.com/docs for 'incomplete')";
 	    }
 	  }

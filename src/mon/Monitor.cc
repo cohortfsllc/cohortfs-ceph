@@ -12,7 +12,6 @@
  * 
  */
 
-
 #include <sstream>
 #include <stdlib.h>
 #include <signal.h>
@@ -68,7 +67,6 @@
 #include "MDSMonitor.h"
 #include "MonmapMonitor.h"
 #include "PGMonitor.h"
-#include "VolMonitor.h"
 #include "LogMonitor.h"
 #include "AuthMonitor.h"
 #include "mon/QuorumService.h"
@@ -81,6 +79,9 @@
 #include "common/config.h"
 #include "common/cmdparse.h"
 #include "include/assert.h"
+
+#include "VolMonitor.h"
+#include "osd/PlaceSystem.h"
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
@@ -169,7 +170,8 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
 
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, paxos, "mdsmap");
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, paxos, "monmap");
-  paxos_service[PAXOS_OSDMAP] = new OSDMonitor(this, paxos, "osdmap");
+  paxos_service[PAXOS_OSDMAP]
+    = OSDMonitorPlaceSystem::getSystem().newOSDMonitor(this, paxos, "osdmap");
   paxos_service[PAXOS_PGMAP] = new PGMonitor(this, paxos, "pgmap");
   paxos_service[PAXOS_LOG] = new LogMonitor(this, paxos, "logm");
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, paxos, "auth");
@@ -1055,8 +1057,8 @@ void Monitor::handle_sync_finish(MMonSync *m)
       dout(1) << __func__ << "  not on trim_timeouts" << dendl;
     if (!trim_entities_states.count(other))
       dout(1) << __func__ << "  not on trim_entities_states" << dendl;
-    else if (trim_entities_states[other] != SYNC_STATE_START)
-      dout(1) << __func__ << "  state " << trim_entities_states[other] << dendl;
+//  else if (trim_entities_states[other] != SYNC_STATE_START)
+//     dout(1) << __func__ << "  state " << trim_entities_states[other] << dendl;
     m->put();
     return;
   }
@@ -2508,7 +2510,7 @@ void Monitor::get_status(stringstream &ss, Formatter *f)
     f->dump_stream("election_epoch") << get_epoch();
     f->dump_stream("quorum") << get_quorum();
     f->dump_stream("quorum_names") << get_quorum_names();
-    f->dump_stream("osdmap") << osdmon()->osdmap;
+    f->dump_stream("osdmap") << *osdmon()->osdmap;
     f->dump_stream("pgmap") << pgmon()->pg_map;
     f->dump_stream("mdsmap") << mdsmon()->mdsmap;
     f->close_section();
@@ -2517,7 +2519,7 @@ void Monitor::get_status(stringstream &ss, Formatter *f)
     ss << "   health " << health << "\n";
     ss << "   monmap " << *monmap << ", election epoch " << get_epoch()
       << ", quorum " << get_quorum() << " " << get_quorum_names() << "\n";
-    ss << "   osdmap " << osdmon()->osdmap << "\n";
+    ss << "   osdmap " << *osdmon()->osdmap << "\n";
     ss << "    pgmap " << pgmon()->pg_map << "\n";
     ss << "   mdsmap " << mdsmon()->mdsmap << "\n";
   }
@@ -3894,7 +3896,7 @@ void Monitor::handle_get_version(MMonGetVersion *m)
     reply->version = mdsmon()->mdsmap.get_epoch();
     reply->oldest_version = mdsmon()->get_first_committed();
   } else if (m->what == "osdmap") {
-    reply->version = osdmon()->osdmap.get_epoch();
+    reply->version = osdmon()->osdmap->get_epoch();
     reply->oldest_version = osdmon()->get_first_committed();
   } else if (m->what == "monmap") {
     reply->version = monmap->get_epoch();
@@ -4124,8 +4126,8 @@ int Monitor::mkfs(bufferlist& osdmapbl)
   if (osdmapbl.length()) {
     // make sure it's a valid osdmap
     try {
-      OSDMap om;
-      om.decode(osdmapbl);
+      OSDMap* om = OSDMapPlaceSystem::getSystem().newOSDMap();;
+      om->decode(osdmapbl);
     }
     catch (buffer::error& e) {
       derr << "error decoding provided osdmap: " << e.what() << dendl;

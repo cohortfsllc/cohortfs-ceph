@@ -21,12 +21,15 @@
 #include "msg/Messenger.h"
 #include "include/Context.h"
 #include "common/Mutex.h"
+#include "common/config.h"
 
 enum WatcherState {
   WATCHER_PENDING,
   WATCHER_NOTIFIED,
 };
 
+class PGOSDService;
+typedef shared_ptr<PGOSDService> PGOSDServiceRef;
 class OSDService;
 class ReplicatedPG;
 void intrusive_ptr_add_ref(ReplicatedPG *pg);
@@ -66,7 +69,7 @@ class Notify {
   uint64_t notify_id;
   uint64_t version;
 
-  OSDService *osd;
+  OSDServiceRef osd;
   CancelableContext *cb;
   Mutex lock;
 
@@ -90,7 +93,7 @@ class Notify {
     uint64_t cookie,
     uint64_t notify_id,
     uint64_t version,
-    OSDService *osd);
+    OSDServiceRef osd);
 
   /// registers a timeout callback with the watch_timer
   void register_cb();
@@ -116,7 +119,7 @@ public:
     uint64_t cookie,
     uint64_t notify_id,
     uint64_t version,
-    OSDService *osd);
+    PGOSDServiceRef osd);
 
   /// Call after creation to initialize
   void init();
@@ -149,7 +152,7 @@ class Watch {
   ConnectionRef conn;
   CancelableContext *cb;
 
-  OSDService *osd;
+  PGOSDServiceRef osd;
   boost::intrusive_ptr<ReplicatedPG> pg;
   ObjectContext *obc;
 
@@ -164,7 +167,7 @@ class Watch {
   bool discarded;
 
   Watch(
-    ReplicatedPG *pg, OSDService *osd,
+    ReplicatedPG *pg, PGOSDServiceRef osd,
     ObjectContext *obc, uint32_t timeout,
     uint64_t cookie, entity_name_t entity,
     entity_addr_t addr);
@@ -186,7 +189,7 @@ public:
 
   string gen_dbg_prefix();
   static WatchRef makeWatchRef(
-    ReplicatedPG *pg, OSDService *osd,
+    ReplicatedPG *pg, PGOSDService *osd,
     ObjectContext *obc, uint32_t timeout, uint64_t cookie, entity_name_t entity, entity_addr_t addr);
   void set_self(WatchRef _self) {
     self = _self;

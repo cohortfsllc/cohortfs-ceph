@@ -16,8 +16,11 @@
 #ifndef CEPH_MOSDMAP_H
 #define CEPH_MOSDMAP_H
 
+#include <memory>
+
 #include "msg/Message.h"
 #include "osd/OSDMap.h"
+#include "osd/PlaceSystem.h"
 #include "include/ceph_features.h"
 
 class MOSDMap : public Message {
@@ -93,6 +96,8 @@ public:
       else
 	header.version = 2;  // old pg_pool_t
 
+      const OSDMapPlaceSystem& placeSystem = OSDMapPlaceSystem::getSystem();
+
       // reencode maps using old format
       //
       // FIXME: this can probably be done more efficiently higher up
@@ -101,26 +106,26 @@ public:
       for (map<epoch_t,bufferlist>::iterator p = incremental_maps.begin();
 	   p != incremental_maps.end();
 	   ++p) {
-	OSDMap::Incremental inc;
+	auto_ptr<OSDMap::Incremental> inc(placeSystem.newOSDMapIncremental());
 	bufferlist::iterator q = p->second.begin();
-	inc.decode(q);
+	inc->decode(q);
 	p->second.clear();
-	if (inc.fullmap.length()) {
+	if (inc->fullmap.length()) {
 	  // embedded full map?
-	  OSDMap m;
-	  m.decode(inc.fullmap);
-	  inc.fullmap.clear();
-	  m.encode(inc.fullmap, features);
+	  auto_ptr<OSDMap> m(placeSystem.newOSDMap());
+	  m->decode(inc->fullmap);
+	  inc->fullmap.clear();
+	  m->encode(inc->fullmap, features);
 	}
-	inc.encode(p->second, features);
+	inc->encode(p->second, features);
       }
       for (map<epoch_t,bufferlist>::iterator p = maps.begin();
 	   p != maps.end();
 	   ++p) {
-	OSDMap m;
-	m.decode(p->second);
+	auto_ptr<OSDMap> m(placeSystem.newOSDMap());
+	m->decode(p->second);
 	p->second.clear();
-	m.encode(p->second, features);
+	m->encode(p->second, features);
       }
     }
     ::encode(incremental_maps, payload);

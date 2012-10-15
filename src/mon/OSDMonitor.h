@@ -20,6 +20,8 @@
 
 #include <map>
 #include <set>
+#include <memory>
+
 using namespace std;
 
 #include "include/types.h"
@@ -33,7 +35,7 @@ using namespace std;
 class Monitor;
 #include "messages/MOSDBoot.h"
 #include "messages/MMonCommand.h"
-#include "messages/MOSDMap.h"
+class MOSDMap;
 #include "messages/MOSDFailure.h"
 #include "messages/MPoolOp.h"
 
@@ -115,15 +117,15 @@ struct failure_info_t {
 
 class OSDMonitor : public PaxosService {
 public:
-  OSDMap osdmap;
+  auto_ptr<OSDMap> osdmap;
 
-private:
+protected:
   map<epoch_t, list<PaxosServiceMessage*> > waiting_for_map;
 
   // [leader]
-  OSDMap::Incremental pending_inc;
+  auto_ptr<OSDMap::Incremental> pending_inc;
   map<int, failure_info_t> failure_info;
-  map<int,utime_t>    down_pending_out;  // osd down -> out
+  map<int,utime_t> down_pending_out;  // osd down -> out
 
   map<int,double> osd_weight;
 
@@ -141,17 +143,15 @@ private:
   int thrash_last_up_osd;
   bool thrash();
 
-  bool _have_pending_crush();
-  CrushWrapper &_get_stable_crush();
-  void _get_pending_crush(CrushWrapper& newcrush);
-
   // svc
-public:  
+public:
   void create_initial();
 private:
   void update_from_paxos(bool *need_bootstrap);
-  void create_pending();  // prepare a new pending
-  void encode_pending(MonitorDBStore::Transaction *t);
+protected:
+  void create_pending_super();  // prepare a new pending
+  virtual void create_pending() = 0;  // prepare a new pending
+  virtual void encode_pending(MonitorDBStore::Transaction *t);
   virtual void encode_full(MonitorDBStore::Transaction *t);
   void on_active();
 
@@ -163,10 +163,12 @@ private:
 
   void handle_query(PaxosServiceMessage *m);
   bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
+  virtual bool preprocess_query_sub(PaxosServiceMessage *m) = 0;  // true if processed.
   bool prepare_update(PaxosServiceMessage *m);
+  virtual bool prepare_update_sub(PaxosServiceMessage *m) = 0;
   bool should_propose(double &delay);
 
-  void update_trim();
+  virtual void update_trim() = 0;
   bool service_should_trim();
 
   bool can_mark_down(int o);
@@ -182,8 +184,6 @@ private:
   void send_incremental(PaxosServiceMessage *m, epoch_t first);
   void send_incremental(epoch_t first, entity_inst_t& dest, bool onetime);
 
-  void remove_redundant_pg_temp();
-  void remove_down_pg_temp();
   int reweight_by_utilization(int oload, std::string& out_str);
 
   bool check_source(PaxosServiceMessage *m, uuid_d fsid);
@@ -205,30 +205,8 @@ private:
   bool prepare_alive(class MOSDAlive *m);
   void _reply_map(PaxosServiceMessage *m, epoch_t e);
 
-  bool preprocess_pgtemp(class MOSDPGTemp *m);
-  bool prepare_pgtemp(class MOSDPGTemp *m);
-
-  int _prepare_remove_pool(uint64_t pool);
-  int _prepare_rename_pool(uint64_t pool, string newname);
-
-  bool preprocess_pool_op ( class MPoolOp *m);
-  bool preprocess_pool_op_create ( class MPoolOp *m);
-  bool prepare_pool_op (MPoolOp *m);
-  bool prepare_pool_op_create (MPoolOp *m);
-  bool prepare_pool_op_delete(MPoolOp *m);
-  int prepare_new_pool(string& name, uint64_t auid, int crush_rule,
-                       unsigned pg_num, unsigned pgp_num);
-  int prepare_new_pool(MPoolOp *m);
-
-  void update_pool_flags(int64_t pool_id, uint64_t flags);
-  bool update_pools_status();
-  void get_pools_health(list<pair<health_status_t,string> >& summary,
-                        list<pair<health_status_t,string> > *detail) const;
-
   bool prepare_set_flag(MMonCommand *m, int flag);
   bool prepare_unset_flag(MMonCommand *m, int flag);
-
-  void _pool_op_reply(MPoolOp *m, int ret, epoch_t epoch, bufferlist *blp=NULL);
 
   struct C_Booted : public Context {
     OSDMonitor *cmon;
@@ -262,46 +240,37 @@ private:
 	osdmon->dispatch(m);
       else
 	assert(0 == "bad C_ReplyMap return value");
-    }    
-  };
-  struct C_PoolOp : public Context {
-    OSDMonitor *osdmon;
-    MPoolOp *m;
-    int replyCode;
-    int epoch;
-    bufferlist reply_data;
-    C_PoolOp(OSDMonitor * osd, MPoolOp *m_, int rc, int e, bufferlist *rd=NULL) :
-      osdmon(osd), m(m_), replyCode(rc), epoch(e) {
-      if (rd)
-	reply_data = *rd;
-    }
-    void finish(int r) {
-      if (r >= 0)
-	osdmon->_pool_op_reply(m, replyCode, epoch, &reply_data);
-      else if (r == -ECANCELED)
-	m->put();
-      else if (r == -EAGAIN)
-	osdmon->dispatch(m);
-      else
-	assert(0 == "bad C_PoolOp return value");
     }
   };
 
   bool preprocess_remove_snaps(class MRemoveSnaps *m);
-  bool prepare_remove_snaps(class MRemoveSnaps *m);
+  virtual bool preprocess_remove_snaps_sub(class MRemoveSnaps *m) = 0;
+  virtual bool prepare_remove_snaps(class MRemoveSnaps *m) = 0;
+  virtual bool preprocess_command_sub(MMonCommand *m, int& r,
+				      stringstream& ss) = 0;
+  virtual bool prepare_command_sub(MMonCommand *m, int& err,
+				   stringstream& ss, string& rs) = 0;
 
  public:
   OSDMonitor(Monitor *mn, Paxos *p, string service_name)
   : PaxosService(mn, p, service_name),
     thrash_map(0), thrash_last_up_osd(-1) { }
 
+  virtual ~OSDMonitor() { };
+
+  virtual OSDMap* newOSDMap() const = 0;
+
   void tick();  // check state, take actions
+  virtual void tick_sub(bool& do_propose) = 0;
 
   int parse_osd_id(const char *s, stringstream *pss);
   void parse_loc_map(const vector<string>& args, map<string,string> *ploc);
 
   void get_health(list<pair<health_status_t,string> >& summary,
 		  list<pair<health_status_t,string> > *detail) const;
+  virtual void get_health_sub(
+    list<pair<health_status_t,string> >& summary,
+    list<pair<health_status_t,string> > *detail) const = 0;
   bool preprocess_command(MMonCommand *m);
   bool prepare_command(MMonCommand *m);
 
@@ -317,23 +286,24 @@ private:
   epoch_t blacklist(const entity_addr_t& a, utime_t until);
 
   void dump_info(Formatter *f);
+  virtual void dump_info_sub(Formatter *f) = 0;
 
   void check_subs();
   void check_sub(Subscription *sub);
 
   void add_flag(int flag) {
-    if (!(osdmap.flags & flag)) {
-      if (pending_inc.new_flags < 0)
-	pending_inc.new_flags = osdmap.flags;
-      pending_inc.new_flags |= flag;
+    if (!(osdmap->flags & flag)) {
+      if (pending_inc->new_flags < 0)
+	pending_inc->new_flags = osdmap->flags;
+      pending_inc->new_flags |= flag;
     }
   }
 
   void remove_flag(int flag) {
-    if(osdmap.flags & flag) {
-      if (pending_inc.new_flags < 0)
-	pending_inc.new_flags = osdmap.flags;
-      pending_inc.new_flags &= ~flag;
+    if(osdmap->flags & flag) {
+      if (pending_inc->new_flags < 0)
+	pending_inc->new_flags = osdmap->flags;
+      pending_inc->new_flags &= ~flag;
     }
   }
 };

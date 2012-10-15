@@ -72,7 +72,7 @@ int reply_rc;
 bufferlist reply_bl;
 entity_inst_t reply_from;
 
-OSDMap *osdmap = 0;
+PGOSDMap *osdmap = 0;
 
 Connection *command_con = NULL;
 Context *tick_event = 0;
@@ -206,8 +206,8 @@ static void handle_osd_map(CephToolCtx *ctx, MOSDMap *m)
   assert(m->maps.count(e));
   ctx->lock.Lock();
   delete osdmap;
-  osdmap = new OSDMap;
-  osdmap->decode(m->maps[e]);
+  osdmap = new PGOSDMap;
+#warning  osdmap->decode(m->maps[e]);
   if (cmd_waiting_for_osdmap) {
     cmd_waiting_for_osdmap = false;
     send_command(ctx);

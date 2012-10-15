@@ -22,6 +22,7 @@
 #include "mon/MonClient.h"
 #include "msg/Dispatcher.h"
 #include "osd/OSDMap.h"
+#include "pg/PGOSDMap.h"
 
 #include "IoCtxImpl.h"
 
@@ -46,7 +47,9 @@ private:
     CONNECTED,
   } state;
 
-  OSDMap osdmap;
+  /* should this be a auto_ptr<OSDMap> instead? */
+  PGOSDMap osdmap;
+
   MonClient monclient;
   SimpleMessenger *messenger;
 

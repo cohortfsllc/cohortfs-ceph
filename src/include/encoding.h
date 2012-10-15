@@ -20,7 +20,7 @@
 #include "inttypes.h"
 #include "byteorder.h"
 #include "buffer.h"
-#include "assert.h"
+#include "include/assert.h"
 
 using namespace ceph;
 

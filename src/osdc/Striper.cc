@@ -20,6 +20,7 @@
 
 #include "common/config.h"
 #include "common/debug.h"
+#include "pg/PGOSDMap.h"
 
 #define dout_subsys ceph_subsys_striper
 #undef dout_prefix
@@ -105,7 +106,7 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
       ex = &exv.back();
       ex->oid = oid;
       ex->objectno = objectno;
-      ex->oloc = OSDMap::file_to_object_locator(*layout);
+      ex->oloc = PGOSDMap::file_to_object_locator(*layout);
 
       ex->offset = x_offset;
       ex->length = x_len;

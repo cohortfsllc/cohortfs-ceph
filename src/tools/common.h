@@ -12,7 +12,7 @@
 #include "mon/MonClient.h"
 #include "mon/PGMap.h"
 #include "mds/MDSMap.h"
-#include "osd/OSDMap.h"
+#include "pg/PGOSDMap.h"
 #include "common/Timer.h"
 
 
@@ -79,7 +79,7 @@ public:
   CephContext *cct;
   PGMap pgmap;
   MDSMap mdsmap;
-  OSDMap osdmap;
+  PGOSDMap osdmap;
   MonClient mc;
 
   // Which aspects of the cluster have been updated recently?

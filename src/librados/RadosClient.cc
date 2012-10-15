@@ -32,6 +32,8 @@
 #include "messages/MLog.h"
 #include "msg/SimpleMessenger.h"
 
+#include "pg/pg_types.h"
+
 // needed for static_cast
 #include "messages/PaxosServiceMessage.h"
 #include "messages/MPoolOpReply.h"

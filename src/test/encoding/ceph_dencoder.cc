@@ -1,3 +1,4 @@
+#if 0
 #include <errno.h>
 #include "include/types.h"
 #include "ceph_ver.h"
@@ -344,4 +345,10 @@ int main(int argc, const char **argv)
     }
   }
   return 0;
+}
+#endif /* 0 */
+
+int main(int argc, const char **argv)
+{
+    return 0;
 }

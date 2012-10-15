@@ -17,6 +17,8 @@
 #include "mds/mdstypes.h"
 #include "mon/MonClient.h"
 #include "mds/events/EResetJournal.h"
+#include "osd/PlaceSystem.h"
+
 
 Resetter::~Resetter()
 {
@@ -56,9 +58,11 @@ bool Resetter::ms_dispatch(Message *m)
 
 void Resetter::init(int rank) 
 {
+  osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();
+
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
   unsigned pg_pool = CEPH_METADATA_RULE;
-  osdmap = new OSDMap();
+
   objecter = new Objecter(g_ceph_context, messenger, monc, osdmap, lock, timer);
   journaler = new Journaler(ino, pg_pool, CEPH_FS_ONDISK_MAGIC,
                                        objecter, 0, 0, &timer);

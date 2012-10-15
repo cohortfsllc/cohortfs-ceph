@@ -19,7 +19,7 @@
 
 // re-include our assert to clobber boost's
 #include "include/assert.h" 
-#include "osd_types.h"
+#include "osd/osd_types.h"
 #include "os/ObjectStore.h"
 #include <list>
 using namespace std;

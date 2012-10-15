@@ -3484,7 +3484,9 @@ int Server::parse_layout_vxattr(string name, string value, ceph_file_layout *lay
       try {
 	layout->fl_pg_pool = boost::lexical_cast<unsigned>(value);
       } catch (boost::bad_lexical_cast const&) {
-	int64_t pool = mds->osdmap->lookup_pg_pool_name(value);
+#warning Return to this point and fix me!
+//	int64_t pool = mds->osdmap->lookup_pg_pool_name(value);
+	int64_t pool = -1;
 	if (pool < 0) {
 	  dout(10) << " unknown pool " << value << dendl;
 	  return -ENOENT;

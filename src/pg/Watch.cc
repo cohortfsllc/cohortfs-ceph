@@ -1,13 +1,13 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
-#include "PG.h"
+#include "pg/PG.h"
+#include "pg/ReplicatedPG.h"
 
 #include "include/types.h"
 #include "messages/MWatchNotify.h"
 
 #include <map>
 
-#include "OSD.h"
-#include "ReplicatedPG.h"
+#include "PGOSD.h"
 #include "Watch.h"
 
 #include "common/config.h"
@@ -34,7 +34,7 @@ Notify::Notify(
   uint64_t cookie,
   uint64_t notify_id,
   uint64_t version,
-  OSDService *osd)
+  OSDServiceRef osd)
   : client(client),
     in_progress_watchers(num_watchers),
     complete(false),
@@ -56,7 +56,7 @@ NotifyRef Notify::makeNotifyRef(
   uint64_t cookie,
   uint64_t notify_id,
   uint64_t version,
-  OSDService *osd) {
+  PGOSDServiceRef osd) {
   NotifyRef ret(
     new Notify(
       client, num_watchers,
@@ -214,7 +214,7 @@ public:
   void complete(int) {
     dout(10) << "HandleWatchTimeout" << dendl;
     boost::intrusive_ptr<ReplicatedPG> pg(watch->pg);
-    OSDService *osd(watch->osd);
+    PGOSDServiceRef osd(watch->osd);
     osd->watch_lock.Unlock();
     pg->lock();
     watch->cb = NULL;
@@ -257,7 +257,7 @@ string Watch::gen_dbg_prefix() {
 
 Watch::Watch(
   ReplicatedPG *pg,
-  OSDService *osd,
+  PGOSDServiceRef osd,
   ObjectContext *obc,
   uint32_t timeout,
   uint64_t cookie,
@@ -327,7 +327,7 @@ void Watch::connect(ConnectionRef con)
 {
   dout(10) << "connecting" << dendl;
   conn = con;
-  OSD::Session* sessionref(static_cast<OSD::Session*>(con->get_priv()));
+  PGOSD::PGSession* sessionref(static_cast<PGOSD::PGSession*>(con->get_priv()));
   sessionref->wstate.addWatch(self.lock());
   sessionref->put();
   for (map<uint64_t, NotifyRef>::iterator i = in_progress_notifies.begin();
@@ -365,7 +365,8 @@ void Watch::discard_state()
   unregister_cb();
   discarded = true;
   if (conn) {
-    OSD::Session* sessionref(static_cast<OSD::Session*>(conn->get_priv()));
+    PGOSD::PGSession* sessionref(static_cast<PGOSD::PGSession*>(
+				   conn->get_priv()));
     sessionref->wstate.removeWatch(self.lock());
     sessionref->put();
     conn = ConnectionRef();
@@ -427,7 +428,7 @@ void Watch::notify_ack(uint64_t notify_id)
 }
 
 WatchRef Watch::makeWatchRef(
-  ReplicatedPG *pg, OSDService *osd,
+  ReplicatedPG *pg, PGOSDService *osd,
   ObjectContext *obc, uint32_t timeout, uint64_t cookie, entity_name_t entity, entity_addr_t addr)
 {
   WatchRef ret(new Watch(pg, osd, obc, timeout, cookie, entity, addr));

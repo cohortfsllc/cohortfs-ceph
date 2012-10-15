@@ -23,6 +23,7 @@
 using namespace std;
 
 #include "osd/OSD.h"
+#include "osd/PlaceSystem.h"
 #include "os/FileStore.h"
 #include "mon/MonClient.h"
 #include "include/ceph_features.h"
@@ -430,11 +431,13 @@ int main(int argc, const char **argv)
     return -1;
   global_init_chdir(g_ceph_context);
 
-  osd = new OSD(whoami, cluster_messenger, client_messenger,
-		messenger_hbclient, messenger_hb_front_server, messenger_hb_back_server,
-		&mc,
-		g_conf->osd_data, g_conf->osd_journal);
-
+  osd = OSDPlaceSystem::getSystem().newOSD(whoami, cluster_messenger,
+					   client_messenger,
+					   messenger_hbclient,
+					   messenger_hb_front_server,
+					   messenger_hb_back_server,
+					   &mc, g_conf->osd_data,
+					   g_conf->osd_journal);
   int err = osd->pre_init();
   if (err < 0) {
     derr << TEXT_RED << " ** ERROR: osd pre_init failed: " << cpp_strerror(-err)

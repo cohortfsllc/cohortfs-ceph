@@ -12,7 +12,6 @@
  * 
  */
 
-
 #ifndef CEPH_MGETPOOLSTATSREPLY_H
 #define CEPH_MGETPOOLSTATSREPLY_H
 

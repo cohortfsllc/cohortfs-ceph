@@ -14,7 +14,7 @@
 
 #define LARGE_SIZE 1024
 
-#include "assert.h"
+#include "include/assert.h"
 #include "Formatter.h"
 #include "common/escape.h"
 

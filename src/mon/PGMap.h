@@ -23,6 +23,7 @@
 
 #include "common/debug.h"
 #include "osd/osd_types.h"
+#include "pg/pg_types.h"
 #include "common/config.h"
 #include <sstream>
 

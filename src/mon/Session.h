@@ -126,48 +126,16 @@ struct MonSessionMap {
     return s;
   }
 
-  MonSession *get_random_osd_session(OSDMap *osdmap) {
+  MonSession *get_random_osd_session() {
     // ok, this isn't actually random, but close enough.
     if (by_osd.empty())
       return 0;
     int n = by_osd.rbegin()->first + 1;
     int r = rand() % n;
-
     multimap<int,MonSession*>::iterator p = by_osd.lower_bound(r);
     if (p == by_osd.end())
-      --p;
-
-    if (!osdmap) {
-      return p->second;
-    }
-
-    MonSession *s = NULL;
-
-    multimap<int,MonSession*>::iterator b = p, f = p;
-    bool backward = true, forward = true;
-    while (backward || forward) {
-      if (backward) {
-        if (osdmap->is_up(b->first)) {
-          s = b->second;
-          break;
-        }
-        if (b != by_osd.begin())
-          --b;
-        else
-          backward = false;
-      }
-
-      forward = (f != by_osd.end());
-      if (forward) {
-        if (osdmap->is_up(f->first)) {
-          s = f->second;
-          break;
-        }
-        ++f;
-      }
-    }
-
-    return s;
+      p--;
+    return p->second;
   }
 
   void add_update_sub(MonSession *s, const string& what, version_t start, bool onetime, bool incremental_onetime) {

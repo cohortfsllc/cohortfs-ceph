@@ -24,7 +24,7 @@ using namespace std;
 #include "common/config.h"
 
 #include "common/errno.h"
-#include "osd/OSDMap.h"
+#include "pg/PGOSDMap.h"
 #include "mon/MonMap.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"

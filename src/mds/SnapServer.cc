@@ -15,6 +15,7 @@
 #include "SnapServer.h"
 #include "MDS.h"
 #include "osd/OSDMap.h"
+#include "pg/PGOSDMap.h"
 #include "mon/MonClient.h"
 
 #include "include/types.h"
@@ -216,6 +217,8 @@ void SnapServer::handle_query(MMDSTableRequest *req)
 
 void SnapServer::check_osd_map(bool force)
 {
+  PGOSDMap* const pgosdmap = dynamic_cast<PGOSDMap*>(mds->osdmap);
+
   if (!force && version == last_checked_osdmap) {
     dout(10) << "check_osd_map - version unchanged" << dendl;
     return;
@@ -229,7 +232,7 @@ void SnapServer::check_osd_map(bool force)
        p != need_to_purge.end();
        ++p) {
     int id = p->first;
-    const pg_pool_t *pi = mds->osdmap->get_pg_pool(id);
+    const pg_pool_t *pi = pgosdmap->get_pg_pool(id);
     for (set<snapid_t>::iterator q = p->second.begin();
 	 q != p->second.end();
 	 ++q) {

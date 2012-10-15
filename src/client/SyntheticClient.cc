@@ -21,7 +21,7 @@ using namespace std;
 #include "SyntheticClient.h"
 #include "osdc/Objecter.h"
 #include "osdc/Filer.h"
-
+#include "pg/PGOSDMap.h"
 
 #include "include/filepath.h"
 #include "common/perf_counters.h"
@@ -1679,8 +1679,8 @@ int SyntheticClient::dump_placement(string& fn) {
   dout(0) << "(osd, start, length) tuples for file " << fn << dendl;
   for (vector<ObjectExtent>::iterator i = extents.begin(); 
        i != extents.end(); ++i) {
-    
-    int osd = client->osdmap->get_pg_primary(client->osdmap->object_locator_to_pg(i->oid, i->oloc));
+    PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(client->osdmap);
+    int osd = pgosdmap->get_pg_primary(pgosdmap->object_locator_to_pg(i->oid, i->oloc));
 
     // run through all the buffer extents
     for (vector<pair<uint64_t, uint64_t> >::iterator j = i->buffer_extents.begin();
@@ -1960,8 +1960,9 @@ int SyntheticClient::overload_osd_0(int n, int size, int wrsize) {
 int SyntheticClient::check_first_primary(int fh) {
   vector<ObjectExtent> extents;
   client->enumerate_layout(fh, extents, 1, 0);  
-  return client->osdmap->get_pg_primary(client->osdmap->object_locator_to_pg(extents.begin()->oid,
-									     extents.begin()->oloc));
+  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(client->osdmap);
+  return pgosdmap->get_pg_primary(pgosdmap->object_locator_to_pg(extents.begin()->oid,
+								 extents.begin()->oloc));
 }
 
 int SyntheticClient::rm_file(string& fn)

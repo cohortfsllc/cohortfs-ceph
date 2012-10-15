@@ -138,11 +138,11 @@ bin_DEBUGPROGRAMS += ceph-monstore-tool
 
 monmaptool_SOURCES = monmaptool.cc
 monmaptool_LDADD = $(LIBGLOBAL_LDA)
-crushtool_SOURCES = crushtool.cc
-crushtool_LDADD = $(LIBGLOBAL_LDA)
-osdmaptool_SOURCES = osdmaptool.cc
-osdmaptool_LDADD = $(LIBGLOBAL_LDA)
-bin_PROGRAMS += monmaptool crushtool osdmaptool
+#crushtool_SOURCES = crushtool.cc
+#crushtool_LDADD = $(LIBGLOBAL_LDA)
+#osdmaptool_SOURCES = osdmaptool.cc
+#osdmaptool_LDADD = $(LIBGLOBAL_LDA)
+bin_PROGRAMS += monmaptool #crushtool osdmaptool
 
 rgw_dencoder_src = rgw/rgw_dencoder.cc \
                    rgw/rgw_acl.cc \
@@ -178,9 +178,9 @@ base: ceph-mon ceph-osd ceph-mds \
 	cephfs \
 	ceph-syn \
 	rados radosgw librados-config \
-	ceph-conf monmaptool osdmaptool crushtool ceph-authtool \
+	ceph-conf monmaptool ceph-authtool \
 	init-ceph mkcephfs mon_store_converter
-
+#	osdmaptool crushtool 
 
 # fuse targets?
 if WITH_FUSE
@@ -1416,6 +1416,10 @@ libcommon_files = \
 	os/hobject.cc \
 	osd/OSDMap.cc \
 	osd/osd_types.cc \
+	osd/PlaceSystem.cc \
+	pg/pg_types.cc \
+	pg/PGOSDMap.cc \
+	pg/PGPlaceSystem.cc \
 	mds/MDSMap.cc \
 	mds/inode_backtrace.cc \
 	mds/mdstypes.cc \
@@ -1475,6 +1479,7 @@ libmon_a_SOURCES = \
 	mon/MonmapMonitor.cc \
 	mon/PGMonitor.cc \
 	mon/PGMap.cc \
+	mon/PGOSDMonitor.cc \
 	mon/VolMonitor.cc \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
@@ -1538,13 +1543,14 @@ libos_a_CXXFLAGS= ${AM_CXXFLAGS}
 noinst_LIBRARIES += libos.a
 
 libosd_a_SOURCES = \
-	osd/PG.cc \
-	osd/PGLog.cc \
-	osd/ReplicatedPG.cc \
+	pg/PG.cc \
+	pg/ReplicatedPG.cc \
+	pg/PGOSD.cc \
+	pg/Watch.cc \
+	pg/PGLog.cc \
 	osd/Ager.cc \
 	osd/OSD.cc \
 	osd/OSDCap.cc \
-	osd/Watch.cc \
 	osd/ClassHandler.cc \
 	osd/OpRequest.cc \
 	osd/SnapMapper.cc
@@ -1997,6 +2003,7 @@ noinst_HEADERS = \
         mon/OSDMonitor.h\
         mon/PGMap.h\
         mon/PGMonitor.h\
+        mon/PGOSDMonitor.h\
         mon/Paxos.h\
         mon/PaxosService.h\
 	mon/QuorumService.h\
@@ -2039,10 +2046,11 @@ noinst_HEADERS = \
         osd/ObjectVersioner.h\
 	osd/OpRequest.h\
 	osd/SnapMapper.h\
-        osd/PG.h\
-        osd/PGLog.h\
-        osd/ReplicatedPG.h\
-        osd/Watch.h\
+        pg/PG.h\
+        pg/PGLog.h\
+        pg/ReplicatedPG.h\
+        pg/Watch.h\
+	osd/PlaceSystem.h\
         osd/osd_types.h\
         osdc/Blinker.h\
         osdc/Filer.h\
@@ -2054,6 +2062,13 @@ noinst_HEADERS = \
         perfglue/cpu_profiler.h\
         perfglue/heap_profiler.h\
 	rgw/logrotate.conf\
+        pg/pg_types.h\
+        pg/PG.h\
+        pg/ReplicatedPG.h\
+        pg/PGOSD.h\
+        pg/PGOSDMap.h\
+	pg/PGPlaceSystem.h\
+        pg/Watch.h\
 	rgw/rgw_acl.h\
 	rgw/rgw_acl_s3.h\
 	rgw/rgw_acl_swift.h\

@@ -18,6 +18,7 @@
 #define CEPH_MOSDPGTEMP_H
 
 #include "messages/PaxosServiceMessage.h"
+#include "pg/pg_types.h"
 
 class MOSDPGTemp : public PaxosServiceMessage {
  public:

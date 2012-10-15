@@ -14,6 +14,7 @@
 #ifndef CEPH_OBJECTSTORE_H
 #define CEPH_OBJECTSTORE_H
 
+#include "pg/pg_types.h"
 #include "include/Context.h"
 #include "include/buffer.h"
 #include "include/types.h"

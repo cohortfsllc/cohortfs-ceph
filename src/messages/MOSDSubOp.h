@@ -18,6 +18,7 @@
 
 #include "msg/Message.h"
 #include "osd/osd_types.h"
+#include "pg/pg_types.h"
 
 /*
  * OSD sub op - for internal ops on pobjects between primary and replicas(/stripes/whatever)

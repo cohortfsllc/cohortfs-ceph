@@ -15,8 +15,8 @@
 #include "PG.h"
 #include "common/errno.h"
 #include "common/config.h"
-#include "OSD.h"
-#include "OpRequest.h"
+#include "PGOSD.h"
+#include "osd/OpRequest.h"
 
 #include "common/Timer.h"
 
@@ -118,7 +118,7 @@ void PG::dump_live_ids()
 }
 #endif
 
-void PGPool::update(OSDMapRef map)
+void PGPool::update(PGOSDMapRef map)
 {
   const pg_pool_t *pi = map->get_pg_pool(id);
   assert(pi);
@@ -135,7 +135,7 @@ void PGPool::update(OSDMapRef map)
   }
 }
 
-PG::PG(OSDService *o, OSDMapRef curmap,
+PG::PG(PGOSDServiceRef o, PGOSDMapRef curmap,
        const PGPool &_pool, pg_t p, const hobject_t& loid,
        const hobject_t& ioid) :
   osd(o),
@@ -555,7 +555,7 @@ void PG::generate_past_intervals()
     return;
   }
 
-  OSDMapRef last_map, cur_map;
+  PGOSDMapRef last_map, cur_map;
   vector<int> acting, up, old_acting, old_up;
 
   cur_map = osd->get_map(cur_epoch);
@@ -1091,9 +1091,9 @@ void PG::activate(ObjectStore::Transaction& t,
     state_set(PG_STATE_REPLAY);
 
     // TODOSAM: osd->osd-> is no good
-    osd->osd->replay_queue_lock.Lock();
-    osd->osd->replay_queue.push_back(pair<pg_t,utime_t>(info.pgid, replay_until));
-    osd->osd->replay_queue_lock.Unlock();
+    osd->pgosd()->replay_queue_lock.Lock();
+    osd->pgosd()->replay_queue.push_back(pair<pg_t,utime_t>(info.pgid, replay_until));
+    osd->pgosd()->replay_queue_lock.Unlock();
   }
 
   // twiddle pg state
@@ -1632,7 +1632,7 @@ void PG::start_recovery_op(const hobject_t& soid)
   recovering_oids.insert(soid);
 #endif
   // TODOSAM: osd->osd-> not good
-  osd->osd->start_recovery_op(this, soid);
+  osd->pgosd()->start_recovery_op(this, soid);
 }
 
 void PG::finish_recovery_op(const hobject_t& soid, bool dequeue)
@@ -1649,7 +1649,7 @@ void PG::finish_recovery_op(const hobject_t& soid, bool dequeue)
   recovering_oids.erase(soid);
 #endif
   // TODOSAM: osd->osd-> not good
-  osd->osd->finish_recovery_op(this, soid, dequeue);
+  osd->pgosd()->finish_recovery_op(this, soid, dequeue);
 }
 
 static void split_list(
@@ -2586,14 +2586,14 @@ bool PG::sched_scrub()
     info.history.last_deep_scrub_stamp + g_conf->osd_deep_scrub_interval);
  
   //NODEEP_SCRUB so ignore time initiated deep-scrub
-  if (osd->osd->get_osdmap()->test_flag(CEPH_OSDMAP_NODEEP_SCRUB))
+  if (osd->pgosd()->pgosdmap()->test_flag(CEPH_OSDMAP_NODEEP_SCRUB))
     time_for_deep = false;
 
   if (!scrubber.must_scrub) {
     assert(!scrubber.must_deep_scrub);
 
     //NOSCRUB so skip regular scrubs
-    if (osd->osd->get_osdmap()->test_flag(CEPH_OSDMAP_NOSCRUB) && !time_for_deep)
+    if (osd->pgosd()->pgosdmap()->test_flag(CEPH_OSDMAP_NOSCRUB) && !time_for_deep)
       return false;
   }
 
@@ -4336,7 +4336,7 @@ void PG::fulfill_log(int from, const pg_query_t &query, epoch_t query_epoch)
 
   ConnectionRef con = osd->get_con_osd_cluster(from, get_osdmap()->get_epoch());
   if (con) {
-    osd->osd->_share_map_outgoing(from, con.get(), get_osdmap());
+    osd->pgosd()->_share_map_outgoing(from, con.get(), get_osdmap());
     osd->send_message_osd_cluster(mlog, con.get());
   } else {
     mlog->put();
@@ -4421,7 +4421,7 @@ bool PG::may_need_replay(const OSDMapRef osdmap) const
   return crashed;
 }
 
-bool PG::is_split(OSDMapRef lastmap, OSDMapRef nextmap)
+bool PG::is_split(PGOSDMapRef lastmap, PGOSDMapRef nextmap)
 {
   return info.pgid.is_split(
     lastmap->get_pg_num(pool.id),
@@ -4484,11 +4484,11 @@ void PG::start_flush(ObjectStore::Transaction *t,
 }
 
 /* Called before initializing peering during advance_map */
-void PG::start_peering_interval(const OSDMapRef lastmap,
+void PG::start_peering_interval(const PGOSDMapRef lastmap,
 				const vector<int>& newup,
 				const vector<int>& newacting)
 {
-  const OSDMapRef osdmap = get_osdmap();
+  const PGOSDMapRef osdmap = get_osdmap();
 
   // -- there was a change! --
   kick();
@@ -4988,7 +4988,7 @@ void PG::queue_query(epoch_t msg_epoch,
 					 MQuery(from, q, query_epoch))));
 }
 
-void PG::handle_advance_map(OSDMapRef osdmap, OSDMapRef lastmap,
+void PG::handle_advance_map(PGOSDMapRef osdmap, PGOSDMapRef lastmap,
 			    vector<int>& newup, vector<int>& newacting,
 			    RecoveryCtx *rctx)
 {

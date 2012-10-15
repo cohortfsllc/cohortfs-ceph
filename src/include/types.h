@@ -71,7 +71,7 @@ using namespace __gnu_cxx;
 
 #include "acconfig.h"
 
-#include "assert.h"
+#include "include/assert.h"
 
 // DARWIN compatibility
 #ifdef DARWIN

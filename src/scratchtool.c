@@ -13,8 +13,8 @@
  */
 
 #include "include/rados/librados.h"
+#include "include/assert.h"
 
-#include <assert.h>
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>

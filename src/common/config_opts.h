@@ -373,6 +373,7 @@ OPTION(osd_backfill_retry_interval, OPT_DOUBLE, 10.0)
 
 OPTION(osd_uuid, OPT_UUID, uuid_d())
 OPTION(osd_data, OPT_STR, "/var/lib/ceph/osd/$cluster-$id")
+OPTION(osd_placement_system, OPT_STR, "pg+crush")
 OPTION(osd_journal, OPT_STR, "/var/lib/ceph/osd/$cluster-$id/journal")
 OPTION(osd_journal_size, OPT_INT, 5120)         // in mb
 OPTION(osd_max_write_size, OPT_INT, 90)

@@ -234,7 +234,7 @@ int librados::IoCtxImpl::rollback(const object_t& oid, const char *snapName)
 
   lock->Lock();
   snapid_t snap;
-  const map<int64_t, pg_pool_t>& pools = objecter->osdmap->get_pools();
+  const map<int64_t, pg_pool_t>& pools = get_pools();
   const pg_pool_t& pg_pool = pools.find(poolid)->second;
   map<snapid_t, pool_snap_info_t>::const_iterator p;
   for (p = pg_pool.snaps.begin();
@@ -304,7 +304,7 @@ int librados::IoCtxImpl::pool_change_auid_async(unsigned long long auid,
 int librados::IoCtxImpl::snap_list(vector<uint64_t> *snaps)
 {
   Mutex::Locker l(*lock);
-  const pg_pool_t *pi = objecter->osdmap->get_pg_pool(poolid);
+  const pg_pool_t *pi = get_pg_pool(poolid);
   for (map<snapid_t,pool_snap_info_t>::const_iterator p = pi->snaps.begin();
        p != pi->snaps.end();
        ++p)
@@ -315,7 +315,7 @@ int librados::IoCtxImpl::snap_list(vector<uint64_t> *snaps)
 int librados::IoCtxImpl::snap_lookup(const char *name, uint64_t *snapid)
 {
   Mutex::Locker l(*lock);
-  const pg_pool_t *pi = objecter->osdmap->get_pg_pool(poolid);
+  const pg_pool_t *pi = get_pg_pool(poolid);
   for (map<snapid_t,pool_snap_info_t>::const_iterator p = pi->snaps.begin();
        p != pi->snaps.end();
        ++p) {
@@ -330,7 +330,7 @@ int librados::IoCtxImpl::snap_lookup(const char *name, uint64_t *snapid)
 int librados::IoCtxImpl::snap_get_name(uint64_t snapid, std::string *s)
 {
   Mutex::Locker l(*lock);
-  const pg_pool_t *pi = objecter->osdmap->get_pg_pool(poolid);
+  const pg_pool_t *pi = get_pg_pool(poolid);
   map<snapid_t,pool_snap_info_t>::const_iterator p = pi->snaps.find(snapid);
   if (p == pi->snaps.end())
     return -ENOENT;
@@ -341,7 +341,7 @@ int librados::IoCtxImpl::snap_get_name(uint64_t snapid, std::string *s)
 int librados::IoCtxImpl::snap_get_stamp(uint64_t snapid, time_t *t)
 {
   Mutex::Locker l(*lock);
-  const pg_pool_t *pi = objecter->osdmap->get_pg_pool(poolid);
+  const pg_pool_t *pi = get_pg_pool(poolid);
   map<snapid_t,pool_snap_info_t>::const_iterator p = pi->snaps.find(snapid);
   if (p == pi->snaps.end())
     return -ENOENT;

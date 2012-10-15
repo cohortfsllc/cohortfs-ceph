@@ -32,8 +32,8 @@
 #include "os/FileStore.h"
 #include "common/perf_counters.h"
 #include "common/errno.h"
-#include "osd/PGLog.h"
-#include "osd/OSD.h"
+#include "pg/PG.h"
+#include "pg/PGOSD.h"
 
 namespace po = boost::program_options;
 using namespace std;
@@ -944,8 +944,8 @@ int do_import(ObjectStore *store)
   pgb.decode(ebliter);
   pg_t pgid = pgb.pgid;
   
-  log_oid = OSD::make_pg_log_oid(pgid);
-  biginfo_oid = OSD::make_pg_biginfo_oid(pgid);
+  log_oid = PGOSD::make_pg_log_oid(pgid);
+  biginfo_oid = PGOSD::make_pg_biginfo_oid(pgid);
 
   //Check for PG already present.
   coll_t coll(pgid);
@@ -1189,8 +1189,8 @@ int main(int argc, char **argv)
     goto out;
   }
 
-  log_oid = OSD::make_pg_log_oid(pgid);
-  biginfo_oid = OSD::make_pg_biginfo_oid(pgid);
+  log_oid = PGOSD::make_pg_log_oid(pgid);
+  biginfo_oid = PGOSD::make_pg_biginfo_oid(pgid);
 
   if (type == "remove") {
     uint64_t next_removal_seq = 0;	//My local seq
@@ -1245,7 +1245,7 @@ int main(int argc, char **argv)
 
     pg_info_t info(pgid);
     map<epoch_t,pg_interval_t> past_intervals;
-    hobject_t biginfo_oid = OSD::make_pg_biginfo_oid(pgid);
+    hobject_t biginfo_oid = PGOSD::make_pg_biginfo_oid(pgid);
     interval_set<snapid_t> snap_collections;
   
     __u8 struct_ver;

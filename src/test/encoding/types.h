@@ -26,8 +26,15 @@ TYPE(osd_xinfo_t)
 TYPEWITHSTRAYDATA(OSDMap)
 TYPEWITHSTRAYDATA(OSDMap::Incremental)
 
+#include "pg/PGOSDMap.h"
+TYPEWITHSTRAYDATA(PGOSDMap)
+TYPEWITHSTRAYDATA(PGOSDMap::Incremental)
+
 #include "crush/CrushWrapper.h"
 TYPE(CrushWrapper)
+
+#include "pg/PG.h"
+TYPE(PG::OndiskLog)
 
 #include "osd/osd_types.h"
 TYPE(osd_reqid_t)

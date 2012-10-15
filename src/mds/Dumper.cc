@@ -24,6 +24,8 @@
 #include "mds/mdstypes.h"
 #include "mon/MonClient.h"
 #include "osdc/Journaler.h"
+#include "osd/PlaceSystem.h"
+
 
 #define dout_subsys ceph_subsys_mds
 
@@ -48,9 +50,10 @@ bool Dumper::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
 
 void Dumper::init(int rank) 
 {
+  osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();;
+
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
   unsigned pg_pool = CEPH_METADATA_RULE;
-  osdmap = new OSDMap();
   objecter = new Objecter(g_ceph_context, messenger, monc, osdmap, lock, timer);
   journaler = new Journaler(ino, pg_pool, CEPH_FS_ONDISK_MAGIC,
                                        objecter, 0, 0, &timer);

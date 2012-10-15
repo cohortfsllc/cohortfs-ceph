@@ -16,6 +16,7 @@
 #include "Filer.h"
 #include "osd/OSDMap.h"
 #include "Striper.h"
+#include "pg/PGOSDMap.h"
 
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
@@ -248,7 +249,7 @@ int Filer::purge_range(inodeno_t ino,
   // single object?  easy!
   if (num_obj == 1) {
     object_t oid = file_object_t(ino, first_obj);
-    object_locator_t oloc = objecter->osdmap->file_to_object_locator(*layout);
+    object_locator_t oloc = PGOSDMap::file_to_object_locator(*layout);
     objecter->remove(oid, oloc, snapc, mtime, flags, NULL, oncommit);
     return 0;
   }
@@ -294,7 +295,7 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
   int max = 10 - pr->uncommitted;
   while (pr->num > 0 && max > 0) {
     object_t oid = file_object_t(pr->ino, pr->first);
-    object_locator_t oloc = objecter->osdmap->file_to_object_locator(pr->layout);
+    object_locator_t oloc = PGOSDMap::file_to_object_locator(pr->layout);
     objecter->remove(oid, oloc, pr->snapc, pr->mtime, pr->flags,
 		     NULL, new C_PurgeRange(this, pr));
     pr->uncommitted++;
@@ -303,5 +304,3 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
     max--;
   }
 }
-
-

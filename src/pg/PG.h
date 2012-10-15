@@ -15,6 +15,8 @@
 #ifndef CEPH_PG_H
 #define CEPH_PG_H
 
+#include <boost/intrusive_ptr.hpp>
+#include <tr1/memory>
 #include <boost/statechart/custom_reaction.hpp>
 #include <boost/statechart/event.hpp>
 #include <boost/statechart/simple_state.hpp>
@@ -30,15 +32,16 @@
 
 #include "include/types.h"
 #include "include/stringify.h"
-#include "osd_types.h"
+#include "pg/pg_types.h"
+#include "osd/osd_types.h"
 #include "include/buffer.h"
 #include "include/xlist.h"
 #include "include/atomic.h"
-#include "SnapMapper.h"
+#include "osd/SnapMapper.h"
 
 #include "PGLog.h"
-#include "OpRequest.h"
-#include "OSDMap.h"
+#include "osd/OpRequest.h"
+#include "PGOSDMap.h"
 #include "os/ObjectStore.h"
 #include "msg/Messenger.h"
 #include "messages/MOSDRepScrub.h"
@@ -58,8 +61,9 @@ using namespace __gnu_cxx;
 
 //#define DEBUG_RECOVERY_OIDS   // track set of recovering oids explicitly, to find counting bugs
 
-class OSD;
-class OSDService;
+class PGOSDService;
+typedef std::tr1::shared_ptr<PGOSDService> PGOSDServiceRef;
+
 class MOSDOp;
 class MOSDSubOp;
 class MOSDSubOpReply;
@@ -147,7 +151,7 @@ struct PGPool {
       name = _name;
   }
 
-  void update(OSDMapRef map);
+  void update(PGOSDMapRef map);
 };
 
 /** PG - Replica Placement Group
@@ -160,7 +164,7 @@ public:
 
   /*** PG ****/
 protected:
-  OSDService *osd;
+  PGOSDServiceRef osd;
   OSDriver osdriver;
   SnapMapper snap_mapper;
 public:
@@ -171,26 +175,26 @@ protected:
   // Ops waiting for map, should be queued at back
   Mutex map_lock;
   list<OpRequestRef> waiting_for_map;
-  OSDMapRef osdmap_ref;
-  OSDMapRef last_persisted_osdmap_ref;
+  PGOSDMapRef osdmap_ref;
+  PGOSDMapRef last_persisted_osdmap_ref;
   PGPool pool;
 
   void queue_op(OpRequestRef op);
   void take_op_map_waiters();
 
-  void update_osdmap_ref(OSDMapRef newmap) {
+  void update_osdmap_ref(PGOSDMapRef newmap) {
     assert(_lock.is_locked_by_me());
     Mutex::Locker l(map_lock);
     osdmap_ref = newmap;
   }
 
-  OSDMapRef get_osdmap_with_maplock() const {
+  PGOSDMapRef get_osdmap_with_maplock() const {
     assert(map_lock.is_locked());
     assert(osdmap_ref);
     return osdmap_ref;
   }
 
-  OSDMapRef get_osdmap() const {
+  PGOSDMapRef get_osdmap() const {
     assert(is_locked());
     assert(osdmap_ref);
     return osdmap_ref;
@@ -480,7 +484,7 @@ protected:
   bool backfill_reserved;
   bool backfill_reserving;
 
-  friend class OSD;
+  friend class PGOSD;
 
 public:
   int get_backfill_target() const {
@@ -969,10 +973,10 @@ public:
   };
 
   struct AdvMap : boost::statechart::event< AdvMap > {
-    OSDMapRef osdmap;
-    OSDMapRef lastmap;
+    PGOSDMapRef osdmap;
+    PGOSDMapRef lastmap;
     vector<int> newup, newacting;
-    AdvMap(OSDMapRef osdmap, OSDMapRef lastmap, vector<int>& newup, vector<int>& newacting):
+    AdvMap(PGOSDMapRef osdmap, PGOSDMapRef lastmap, vector<int>& newup, vector<int>& newacting):
       osdmap(osdmap), lastmap(lastmap), newup(newup), newacting(newacting) {}
     void print(std::ostream *out) const {
       *out << "AdvMap";
@@ -1603,7 +1607,7 @@ public:
 
 
  public:
-  PG(OSDService *o, OSDMapRef curmap,
+  PG(PGOSDServiceRef o, PGOSDMapRef curmap,
      const PGPool &pool, pg_t p, const hobject_t& loid, const hobject_t& ioid);
   virtual ~PG();
 
@@ -1701,7 +1705,7 @@ public:
   /// share new pg log entries after a pg is active
   void share_pg_log();
 
-  void start_peering_interval(const OSDMapRef lastmap,
+  void start_peering_interval(const PGOSDMapRef lastmap,
 			      const vector<int>& newup,
 			      const vector<int>& newacting);
   void start_flush(ObjectStore::Transaction *t,
@@ -1717,7 +1721,7 @@ public:
   void fulfill_info(int from, const pg_query_t &query, 
 		    pair<int, pg_info_t> &notify_info);
   void fulfill_log(int from, const pg_query_t &query, epoch_t query_epoch);
-  bool is_split(OSDMapRef lastmap, OSDMapRef nextmap);
+  bool is_split(PGOSDMapRef lastmap, PGOSDMapRef nextmap);
   bool acting_up_affected(const vector<int>& newup, const vector<int>& newacting);
 
   // OpRequest queueing
@@ -1759,7 +1763,7 @@ public:
 		   int from, const pg_query_t& q);
   void queue_null(epoch_t msg_epoch, epoch_t query_epoch);
   void queue_flushed(epoch_t started_at);
-  void handle_advance_map(OSDMapRef osdmap, OSDMapRef lastmap,
+  void handle_advance_map(PGOSDMapRef osdmap, PGOSDMapRef lastmap,
 			  vector<int>& newup, vector<int>& newacting,
 			  RecoveryCtx *rctx);
   void handle_activate_map(RecoveryCtx *rctx);

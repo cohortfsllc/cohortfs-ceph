@@ -52,6 +52,7 @@ using namespace std;
 
 #include "mds/MDSMap.h"
 #include "osd/OSDMap.h"
+#include "osd/PlaceSystem.h"
 #include "mon/MonMap.h"
 
 #include "osdc/Filer.h"
@@ -173,7 +174,7 @@ Client::Client(Messenger *m, MonClient *mc)
   messenger = m;
 
   // osd interfaces
-  osdmap = new OSDMap;     // initially blank.. see mount()
+  osdmap = OSDMapPlaceSystem::getSystem().newOSDMap(); // initially blank.. see mount()
   mdsmap = new MDSMap;
   objecter = new Objecter(cct, messenger, monclient, osdmap, client_lock, timer);
   objecter->set_client_incarnation(0);  // client always 0, for now.
@@ -6715,10 +6716,13 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
 		     (long unsigned)in->layout.fl_stripe_unit,
 		     (long unsigned)in->layout.fl_stripe_count,
 		     (long unsigned)in->layout.fl_object_size);
+#warning Hello, friend
+#if 0
 	if (osdmap->have_pg_pool(in->layout.fl_pg_pool))
 	  r += snprintf(buf + r, sizeof(buf) - r, "%s",
 			osdmap->get_pool_name(in->layout.fl_pg_pool));
 	else
+#endif /* 0 */
 	  r += snprintf(buf + r, sizeof(buf) - r, "%lu",
 			(long unsigned)in->layout.fl_pg_pool);
       } else if (rest == "layout.stripe_unit") {
@@ -6728,10 +6732,12 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
       } else if (rest == "layout.object_size") {
 	r = snprintf(buf, sizeof(buf), "%lu", (long unsigned)in->layout.fl_object_size);
       } else if (rest == "layout.pool") {
+#if 0
 	if (osdmap->have_pg_pool(in->layout.fl_pg_pool))
 	  r = snprintf(buf, sizeof(buf), "%s",
 		       osdmap->get_pool_name(in->layout.fl_pg_pool));
 	else
+#endif /* 0 */
 	  r = snprintf(buf, sizeof(buf), "%lu",
 		       (long unsigned)in->layout.fl_pg_pool);
       }
@@ -7022,6 +7028,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode, Inode 
     return -EINVAL;
 
   int64_t pool_id = -1;
+#if 0
   if (data_pool && *data_pool) {
     pool_id = osdmap->lookup_pg_pool_name(data_pool);
     if (pool_id < 0)
@@ -7029,6 +7036,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode, Inode 
     if (pool_id > 0xffffffffll)
       return -ERANGE;  // bummer!
   }
+#endif /* 0 */
 
   MetaRequest *req = new MetaRequest(CEPH_MDS_OP_CREATE);
 
@@ -7500,7 +7508,7 @@ int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
   ldout(cct, 3) << "ll_opendir " << vino << dendl;
   tout(cct) << "ll_opendir" << std::endl;
   tout(cct) << vino.ino.val << std::endl;
-  
+
   Inode *diri = inode_map[vino];
   assert(diri);
 
@@ -7720,6 +7728,7 @@ int Client::fdescribe_layout(int fd, ceph_file_layout *lp)
 
 // expose osdmap
 
+#if 0
 int64_t Client::get_pool_id(const char *pool_name)
 {
   Mutex::Locker lock(client_lock);
@@ -7785,10 +7794,11 @@ int Client::get_file_extent_osds(int fd, loff_t off, loff_t *len, vector<int>& o
 int Client::get_osd_crush_location(int id, vector<pair<string, string> >& path)
 {
   Mutex::Locker lock(client_lock);
-  return osdmap->crush->get_full_location_ordered(id, path);
+  return osdmap->get_pool_replication(pool);
 }
 
-int Client::get_file_stripe_address(int fd, loff_t offset, vector<entity_addr_t>& address)
+int Client::get_file_stripe_address(int fd, loff_t offset,
+				    vector<entity_addr_t>& address)
 {
   Mutex::Locker lock(client_lock);
 
@@ -7802,20 +7812,11 @@ int Client::get_file_stripe_address(int fd, loff_t offset, vector<entity_addr_t>
   Striper::file_to_extents(cct, in->ino, &in->layout, offset, 1, in->truncate_size, extents);
   assert(extents.size() == 1);
 
-  // now we have the object and its 'layout'
-  pg_t pg = osdmap->object_locator_to_pg(extents[0].oid, extents[0].oloc);
-  vector<int> osds;
-  osdmap->pg_to_acting_osds(pg, osds);
-  if (osds.empty())
-    return -EINVAL;
-
-  for (unsigned i = 0; i < osds.size(); i++) {
-    entity_addr_t addr = osdmap->get_addr(osds[i]);
-    address.push_back(addr);
-  }
+  osdmap->get_file_stripe_address(extents, address);
 
   return 0;
 }
+#endif /* 0 */
 
 int Client::get_osd_addr(int osd, entity_addr_t& addr)
 {

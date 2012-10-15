@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 /*
  * Ceph - scalable distributed file system
  *
@@ -6,9 +6,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_REPLICATEDPG_H
@@ -16,12 +16,13 @@
 
 #include <boost/optional.hpp>
 
-#include "include/assert.h" 
+#include "include/assert.h"
 
 #include "PG.h"
-#include "OSD.h"
+#include "osd/OSD.h"
+#include "osd/OpRequest.h"
 #include "Watch.h"
-#include "OpRequest.h"
+#include "PGOSD.h"
 
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
@@ -71,12 +72,13 @@ public:
   }
   virtual ~PGLSParentFilter() {}
   virtual bool filter(bufferlist& xattr_data, bufferlist& outdata);
-};
+}; // class PGLSFilter
+
 
 class ReplicatedPG : public PG {
-  friend class OSD;
+  friend class PGOSD;
   friend class Watch;
-public:  
+public:
 
   /*
     object access states:
@@ -822,11 +824,11 @@ protected:
     }
   };
   struct C_OSD_CompletedPushedObjectReplica : public Context {
-    OSDService *osd;
+    OSDServiceRef osd;
     Message *reply;
     ConnectionRef conn;
     C_OSD_CompletedPushedObjectReplica (
-      OSDService *osd,
+      OSDServiceRef osd,
       Message *reply,
       ConnectionRef conn) : osd(osd), reply(reply), conn(conn) {}
     void finish(int) {
@@ -896,12 +898,13 @@ protected:
   int get_pgls_filter(bufferlist::iterator& iter, PGLSFilter **pfilter);
 
 public:
-  ReplicatedPG(OSDService *o, OSDMapRef curmap,
+  ReplicatedPG(PGOSDServiceRef o, PGOSDMapRef curmap,
 	       const PGPool &_pool, pg_t p, const hobject_t& oid,
 	       const hobject_t& ioid);
   ~ReplicatedPG() {}
 
-  int do_command(vector<string>& cmd, ostream& ss, bufferlist& idata, bufferlist& odata);
+  int do_command(vector<string>& cmd, ostream& ss, bufferlist& idata,
+		 bufferlist& odata);
 
   void do_op(OpRequestRef op);
   bool pg_op_must_wait(MOSDOp *op);
