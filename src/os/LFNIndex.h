@@ -23,6 +23,7 @@
 #include <tr1/memory>
 
 #include "osd/osd_types.h"
+#include "pg/pg_types.h"
 #include "include/object.h"
 #include "common/ceph_crypto.h"
 

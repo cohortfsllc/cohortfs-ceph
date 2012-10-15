@@ -30,13 +30,13 @@
 
 #include "include/types.h"
 #include "include/stringify.h"
-#include "osd_types.h"
+#include "osd/osd_types.h"
 #include "include/buffer.h"
 #include "include/xlist.h"
 #include "include/atomic.h"
 
-#include "OpRequest.h"
-#include "OSDMap.h"
+#include "osd/OpRequest.h"
+#include "osd/OSDMap.h"
 #include "os/ObjectStore.h"
 #include "msg/Messenger.h"
 #include "messages/MOSDRepScrub.h"

@@ -24,6 +24,7 @@
 #include "common/config.h"
 #include "include/types.h"
 #include "osd_types.h"
+#include "pg/pg_types.h"
 #include "msg/Message.h"
 #include "common/Mutex.h"
 #include "common/Clock.h"
@@ -146,7 +147,7 @@ public:
     Incremental(bufferlist::iterator &p) {
       decode(p);
     }
-  };
+  }; // class OSDMap::Incremental
   
 private:
   uuid_d fsid;
@@ -532,7 +533,7 @@ public:
   void dump_json(ostream& out) const;
   void dump(Formatter *f) const;
   static void generate_test_instances(list<OSDMap*>& o);
-};
+}; // class OSDMap
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)
 WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
 

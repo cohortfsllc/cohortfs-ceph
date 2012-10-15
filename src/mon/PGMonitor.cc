@@ -23,7 +23,6 @@
 #include "messages/MPGStatsAck.h"
 #include "messages/MGetPoolStats.h"
 #include "messages/MGetPoolStatsReply.h"
-
 #include "messages/MStatfs.h"
 #include "messages/MStatfsReply.h"
 #include "messages/MOSDPGCreate.h"
@@ -36,6 +35,8 @@
 #include "common/perf_counters.h"
 
 #include "osd/osd_types.h"
+
+#include "pg/pg_types.h"
 
 #include "common/config.h"
 #include "common/errno.h"

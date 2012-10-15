@@ -1,12 +1,12 @@
 
-#include "PG.h"
+#include "pg/PG.h"
+#include "pg/ReplicatedPG.h"
 
 #include "include/types.h"
 
 #include <map>
 
 #include "OSD.h"
-#include "ReplicatedPG.h"
 #include "Watch.h"
 
 #include "common/config.h"

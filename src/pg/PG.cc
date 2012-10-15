@@ -14,8 +14,8 @@
 
 #include "PG.h"
 #include "common/config.h"
-#include "OSD.h"
-#include "OpRequest.h"
+#include "osd/OSD.h"
+#include "osd/OpRequest.h"
 
 #include "common/Timer.h"
 

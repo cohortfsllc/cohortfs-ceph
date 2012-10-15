@@ -17,7 +17,7 @@
 
 #include "boost/tuple/tuple.hpp"
 
-#include "PG.h"
+#include "pg/PG.h"
 
 #include "msg/Dispatcher.h"
 

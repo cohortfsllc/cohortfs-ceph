@@ -24,7 +24,8 @@
 #include <sys/mount.h>
 #endif // DARWIN || __FreeBSD__
 
-#include "osd/PG.h"
+#include "pg/PG.h"
+#include "pg/ReplicatedPG.h"
 
 #include "include/types.h"
 #include "include/compat.h"
@@ -36,8 +37,6 @@
 #include "common/ceph_argparse.h"
 #include "os/FileStore.h"
 #include "os/FileJournal.h"
-
-#include "ReplicatedPG.h"
 
 #include "Ager.h"
 

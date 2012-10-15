@@ -4,7 +4,7 @@
 #include "common/config.h"
 
 #include "objclass/objclass.h"
-#include "osd/ReplicatedPG.h"
+#include "pg/ReplicatedPG.h"
 
 #include "osd/ClassHandler.h"
 

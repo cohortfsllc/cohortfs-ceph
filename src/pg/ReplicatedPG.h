@@ -16,9 +16,9 @@
 
 
 #include "PG.h"
-#include "OSD.h"
-#include "Watch.h"
-#include "OpRequest.h"
+#include "osd/OSD.h"
+#include "osd/Watch.h"
+#include "osd/OpRequest.h"
 
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
@@ -56,7 +56,8 @@ public:
   }
   virtual ~PGLSParentFilter() {}
   virtual bool filter(bufferlist& xattr_data, bufferlist& outdata);
-};
+}; // class PGLSFilter
+
 
 class ReplicatedPG : public PG {
   friend class OSD;

@@ -1054,6 +1054,7 @@ libcommon_files = \
 	os/hobject.cc \
 	osd/OSDMap.cc \
 	osd/osd_types.cc \
+	pg/pg_types.cc \
 	mds/MDSMap.cc \
 	common/blkdev.cc \
 	common/common_init.cc \
@@ -1160,8 +1161,8 @@ libos_a_CXXFLAGS= ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS} $(LEVELDB_INCLUDE)
 noinst_LIBRARIES += libos.a
 
 libosd_a_SOURCES = \
-	osd/PG.cc \
-	osd/ReplicatedPG.cc \
+	pg/PG.cc \
+	pg/ReplicatedPG.cc \
 	osd/Ager.cc \
 	osd/OSD.cc \
 	osd/OSDCap.cc \
@@ -1592,8 +1593,6 @@ noinst_HEADERS = \
         osd/OSDMap.h\
         osd/ObjectVersioner.h\
 	osd/OpRequest.h\
-        osd/PG.h\
-        osd/ReplicatedPG.h\
         osd/Watch.h\
         osd/osd_types.h\
         osdc/Blinker.h\
@@ -1604,6 +1603,9 @@ noinst_HEADERS = \
 	osdc/WritebackHandler.h\
         perfglue/cpu_profiler.h\
         perfglue/heap_profiler.h\
+        pg/pg_types.h\
+        pg/PG.h\
+        pg/ReplicatedPG.h\
 	rgw/rgw_acl.h\
 	rgw/rgw_acl_s3.h\
 	rgw/rgw_acl_swift.h\

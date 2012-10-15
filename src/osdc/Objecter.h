@@ -870,7 +870,7 @@ public:
   enum recalc_op_target_result {
     RECALC_OP_TARGET_NO_ACTION = 0,
     RECALC_OP_TARGET_NEED_RESEND,
-    RECALC_OP_TARGET_POOL_DNE,
+    RECALC_OP_TARGET_POOL_DNE,		// DNE = does not exist(?)
   };
   int recalc_op_target(Op *op);
   bool recalc_linger_op_target(LingerOp *op);

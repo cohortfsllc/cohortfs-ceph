@@ -16,6 +16,7 @@
 #define CEPH_MPGSTATS_H
 
 #include "osd/osd_types.h"
+#include "pg/pg_types.h"
 #include "messages/PaxosServiceMessage.h"
 
 class MPGStats : public PaxosServiceMessage {

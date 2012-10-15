@@ -13,8 +13,9 @@
 
 #include "PG.h"
 #include "ReplicatedPG.h"
-#include "OSD.h"
-#include "OpRequest.h"
+#include "osd/OSD.h"
+#include "osd/OpRequest.h"
+#include "osd/Watch.h"
 
 #include "common/errno.h"
 #include "common/perf_counters.h"
@@ -33,8 +34,6 @@
 
 #include "messages/MOSDPing.h"
 #include "messages/MWatchNotify.h"
-
-#include "Watch.h"
 
 #include "mds/inode_backtrace.h" // Ugh
 
