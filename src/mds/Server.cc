@@ -5598,7 +5598,6 @@ version_t Server::_rename_prepare_import(MDRequest *mdr, CDentry *srcdn, bufferl
   bufferlist::iterator blp = mdr->more()->inode_import.begin();
 	  
   // imported caps
-  ::decode(mdr->more()->imported_client_map, blp);
   ::encode(mdr->more()->imported_client_map, *client_map_bl);
   prepare_force_open_sessions(mdr->more()->imported_client_map, mdr->more()->sseq_map);
 
@@ -6234,12 +6233,9 @@ void Server::_logged_slave_rename(MDRequest *mdr,
   // export srci?
   if (srcdn->is_auth() && srcdnl->is_primary()) {
     list<Context*> finished;
-    map<client_t,entity_inst_t> exported_client_map;
-    bufferlist inodebl;
-    mdcache->migrator->encode_export_inode(srcdnl->get_inode(), inodebl, 
-					   exported_client_map);
-    ::encode(exported_client_map, reply->inode_export);
-    reply->inode_export.claim_append(inodebl);
+    mdcache->migrator->encode_export_inode(srcdnl->get_inode(),
+                                           reply->inode_export, 
+					   reply->client_map);
     reply->inode_export_v = srcdnl->get_inode()->inode.version;
 
     // remove mdr auth pin
@@ -6590,6 +6586,7 @@ void Server::handle_slave_rename_prep_ack(MDRequest *mdr, MMDSSlaveRequest *ack)
   // srci import?
   if (ack->inode_export.length()) {
     dout(10) << " got srci import" << dendl;
+    mdr->more()->imported_client_map.swap(ack->client_map);
     mdr->more()->inode_import.claim(ack->inode_export);
     mdr->more()->inode_import_v = ack->inode_export_v;
   }

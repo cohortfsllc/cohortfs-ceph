@@ -97,6 +97,7 @@ class MMDSSlaveRequest : public Message {
   filepath srcdnpath;
   filepath destdnpath;
   set<__s32> witnesses;
+  map<client_t, entity_inst_t> client_map;
   bufferlist inode_export;
   version_t inode_export_v;
   bufferlist srci_replica;
@@ -138,6 +139,7 @@ public:
     ::encode(destdnpath, payload);
     ::encode(witnesses, payload);
     ::encode(now, payload);
+    ::encode(client_map, payload);
     ::encode(inode_export, payload);
     ::encode(inode_export_v, payload);
     ::encode(srci_replica, payload);
@@ -155,6 +157,7 @@ public:
     ::decode(destdnpath, p);
     ::decode(witnesses, p);
     ::decode(now, p);
+    ::decode(client_map, p);
     ::decode(inode_export, p);
     ::decode(inode_export_v, p);
     ::decode(srci_replica, p);
