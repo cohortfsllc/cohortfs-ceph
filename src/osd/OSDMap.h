@@ -122,8 +122,6 @@ public:
 
     string cluster_snapshot;
 
-    OSDMapPGBridge::Incremental* pgIncremental;
-
     int get_net_marked_out(const OSDMap *previous) const;
     int get_net_marked_down(const OSDMap *previous) const;
     int identify_osd(uuid_d u) const;
@@ -132,12 +130,10 @@ public:
     void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
     void decode(bufferlist::iterator &p);
     void dump(Formatter *f) const;
-    static void generate_test_instances(list<Incremental*>& o);
 
     Incremental(epoch_t e=0) :
       epoch(e), new_flags(-1),
-      new_max_osd(-1),
-      pgIncremental(new OSDMapPGBridge::Incremental())
+      new_max_osd(-1)
     {
       memset(&fsid, 0, sizeof(fsid));
     }
@@ -148,9 +144,12 @@ public:
     Incremental(bufferlist::iterator &p) {
       decode(p);
     }
+    virtual ~Incremental() {}
+
+    virtual OSDMap* newOSDMap() const = 0;
   }; // class OSDMap::Incremental
   
-private:
+protected:
   uuid_d fsid;
   epoch_t epoch;        // what epoch of the osd cluster descriptor is this
   utime_t created, modified; // epoch start time
@@ -181,7 +180,6 @@ private:
 
  public:
   std::tr1::shared_ptr<CrushWrapper> crush;       // hierarchical map
-  OSDMapPGBridge* pgBridge;
 
   friend class OSDMonitor;
   friend class PGMonitor;
@@ -194,11 +192,11 @@ private:
 	     osd_addrs(new addrs_s),
 	     osd_uuid(new vector<uuid_d>),
 	     cluster_snapshot_epoch(0),
-	     crush(new CrushWrapper),
-	     pgBridge(new OSDMapPGBridge(*this))
+	     crush(new CrushWrapper)
   {
     memset(&fsid, 0, sizeof(fsid));
   }
+  virtual ~OSDMap() { }
 
   // map info
   const uuid_d& get_fsid() const { return fsid; }
@@ -366,34 +364,36 @@ private:
     return -1;
   }
 
-  int apply_incremental(Incremental &inc);
+  int apply_incremental(Incremental& inc);
+
+  virtual int apply_incremental_subclass(Incremental& inc) = 0;
+
+  virtual void encode(bufferlist& bl,
+		      uint64_t features=CEPH_FEATURES_ALL) const = 0;
+  virtual void decode(bufferlist::iterator& p) = 0;
+  void decode(bufferlist& bl);
+
+protected:
+  void encodeOSDMap(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
+  void decodeOSDMap(bufferlist& bl, __u16 v);
+  void decodeOSDMap(bufferlist::iterator& p, __u16 v);
 
   /// try to re-use/reference addrs in oldmap from newmap
   static void dedup(const OSDMap *oldmap, OSDMap *newmap);
 
-  // serialize, unserialize
-private:
-  void encode_client_old(bufferlist& bl) const;
-public:
-  void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
-  void decode(bufferlist& bl);
-  void decode(bufferlist::iterator& p);
-
 private:
   void print_osd_line(int cur, ostream& out) const;
+
 public:
-  void print(ostream& out) const;
-  void print_summary(ostream& out) const;
-  void print_tree(ostream& out) const;
+  virtual void print(ostream& out) const;
+  virtual void print_summary(ostream& out) const;
+  virtual void print_tree(ostream& out) const;
+  virtual void dump_json(ostream& out) const;
+  virtual void dump(Formatter *f) const;
 
   string get_flag_string() const;
   static string get_flag_string(unsigned flags);
-  void dump_json(ostream& out) const;
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<OSDMap*>& o);
 }; // class OSDMap
-WRITE_CLASS_ENCODER_FEATURES(OSDMap)
-WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
 
 typedef std::tr1::shared_ptr<const OSDMap> OSDMapRef;
 

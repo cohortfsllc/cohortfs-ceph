@@ -1055,6 +1055,7 @@ libcommon_files = \
 	osd/OSDMap.cc \
 	osd/osd_types.cc \
 	pg/pg_types.cc \
+	pg/PGOSDMap.cc \
 	mds/MDSMap.cc \
 	common/blkdev.cc \
 	common/common_init.cc \
@@ -1606,6 +1607,7 @@ noinst_HEADERS = \
         pg/pg_types.h\
         pg/PG.h\
         pg/ReplicatedPG.h\
+        pg/PGOSDMap.h\
 	rgw/rgw_acl.h\
 	rgw/rgw_acl_s3.h\
 	rgw/rgw_acl_swift.h\

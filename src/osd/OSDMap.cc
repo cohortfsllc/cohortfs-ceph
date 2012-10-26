@@ -126,77 +126,8 @@ int OSDMap::Incremental::identify_osd(uuid_d u) const
   return -1;
 }
 
-void OSDMap::Incremental::encode_client_old(bufferlist& bl) const
-{
-  __u16 v = 5;
-  ::encode(v, bl);
-  ::encode(fsid, bl);
-  ::encode(epoch, bl);
-  ::encode(modified, bl);
-  int32_t new_t = pgIncremental->new_pool_max;
-  ::encode(new_t, bl);
-  ::encode(new_flags, bl);
-  ::encode(fullmap, bl);
-  ::encode(crush, bl);
-
-  ::encode(new_max_osd, bl);
-  // for ::encode(new_pools, bl);
-  __u32 n = pgIncremental->new_pools.size();
-  ::encode(n, bl);
-  for (map<int64_t,pg_pool_t>::const_iterator p =
-	 pgIncremental->new_pools.begin();
-       p != pgIncremental->new_pools.end();
-       ++p) {
-    n = p->first;
-    ::encode(n, bl);
-    ::encode(p->second, bl, 0);
-  }
-  // for ::encode(new_pool_names, bl);
-  n = pgIncremental->new_pool_names.size();
-  ::encode(n, bl);
-  for (map<int64_t, string>::const_iterator p =
-	 pgIncremental->new_pool_names.begin();
-       p != pgIncremental->new_pool_names.end();
-       ++p) {
-    n = p->first;
-    ::encode(n, bl);
-    ::encode(p->second, bl);
-  }
-  // for ::encode(old_pools, bl);
-  n = pgIncremental->old_pools.size();
-  ::encode(n, bl);
-  for (set<int64_t>::iterator p = pgIncremental->old_pools.begin();
-       p != pgIncremental->old_pools.end();
-       ++p) {
-    n = *p;
-    ::encode(n, bl);
-  }
-  ::encode(new_up_client, bl);
-  ::encode(new_state, bl);
-  ::encode(new_weight, bl);
-  // for ::encode(new_pg_temp, bl);
-  n = pgIncremental->new_pg_temp.size();
-  ::encode(n, bl);
-  for (map<pg_t,vector<int32_t> >::const_iterator p =
-	 pgIncremental->new_pg_temp.begin();
-       p != pgIncremental->new_pg_temp.end();
-       ++p) {
-    old_pg_t opg = p->first.get_old_pg();
-    ::encode(opg, bl);
-    ::encode(p->second, bl);
-  }
-}
-
 void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
 {
-  if ((features & CEPH_FEATURE_PGID64) == 0) {
-    encode_client_old(bl);
-    return;
-  }
-
-  // base
-  __u16 v = 7;
-  ::encode(v, bl);
   ::encode(fsid, bl);
   ::encode(epoch, bl);
   ::encode(modified, bl);
@@ -221,119 +152,40 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
   ::encode(new_up_internal, bl);
   ::encode(cluster_snapshot, bl);
   ::encode(new_uuid, bl);
-
-  // pgIncrement -- will eventually be more general
-  ::encode(*pgIncremental, bl, features);
 }
 
+// pre-condition -- the version has already been read and it is at
+// least 7
 void OSDMap::Incremental::decode(bufferlist::iterator &p)
 {
-  __u32 n, t;
-  // base
-  __u16 v;
-  ::decode(v, p);
   ::decode(fsid, p);
   ::decode(epoch, p);
   ::decode(modified, p);
-
-  if (v == 4 || v == 5) {
-    ::decode(n, p);
-    pgIncremental->new_pool_max = n;
-  } else if (v == 6) {
-    ::decode(pgIncremental->new_pool_max, p);
-  } else if (v >= 7) {
-    // loaded in call-out below
-  }
-
   ::decode(new_flags, p);
   ::decode(fullmap, p);
   ::decode(crush, p);
-
   ::decode(new_max_osd, p);
-  if (v < 6) {
-    pgIncremental->new_pools.clear();
-    ::decode(n, p);
-    while (n--) {
-      ::decode(t, p);
-      ::decode(pgIncremental->new_pools[t], p);
-    }
-  } else if (v == 6) {
-    ::decode(pgIncremental->new_pools, p);
-  } else if (v >= 7) {
-    // loaded in call-out below
-  }
-
-  if (v == 5) {
-    pgIncremental->new_pool_names.clear();
-    ::decode(n, p);
-    while (n--) {
-      ::decode(t, p);
-      ::decode(pgIncremental->new_pool_names[t], p);
-    }
-  } else if (v == 6) {
-    ::decode(pgIncremental->new_pool_names, p);
-  } else if (v >= 7) {
-    // loaded in call-out below
-  }
-
-  if (v < 6) {
-    pgIncremental->old_pools.clear();
-    ::decode(n, p);
-    while (n--) {
-      ::decode(t, p);
-      pgIncremental->old_pools.insert(t);
-    }
-  } else if (v == 6) {
-    ::decode(pgIncremental->old_pools, p);
-  } else if (v >= 7) {
-    // loaded in call-out below
-  }
-
   ::decode(new_up_client, p);
   ::decode(new_state, p);
   ::decode(new_weight, p);
 
-  if (v < 6) {
-    pgIncremental->new_pg_temp.clear();
-    ::decode(n, p);
-    while (n--) {
-      old_pg_t opg;
-      ::decode_raw(opg, p);
-      ::decode(pgIncremental->new_pg_temp[pg_t(opg)], p);
-    }
-  } else if (v == 6) {
-    ::decode(pgIncremental->new_pg_temp, p);
-  } else if (v >= 7) {
-    // loaded in call-out below
-  }
-
-  // decode short map, too.
-  if (v == 5 && p.end())
-    return;
-
   // extended
   __u16 ev = 0;
-  if (v >= 5)
-    ::decode(ev, p);
+  ::decode(ev, p);
+
   ::decode(new_hb_up, p);
-  if (v < 5)
-    ::decode(pgIncremental->new_pool_names, p);
   ::decode(new_up_thru, p);
   ::decode(new_last_clean_interval, p);
   ::decode(new_lost, p);
   ::decode(new_blacklist, p);
   ::decode(old_blacklist, p);
+
   if (ev >= 6)
     ::decode(new_up_internal, p);
   if (ev >= 7)
     ::decode(cluster_snapshot, p);
   if (ev >= 8)
     ::decode(new_uuid, p);
-
-  // pgIncremental call out
-  if (v >= 7) {
-    ::decode(*pgIncremental, p);
-  }
 }
 
 void OSDMap::Incremental::dump(Formatter *f) const
@@ -345,12 +197,13 @@ void OSDMap::Incremental::dump(Formatter *f) const
 
   if (fullmap.length()) {
     f->open_object_section("full_map");
-    OSDMap full;
+    OSDMap* full = newOSDMap();
     bufferlist fbl = fullmap;  // kludge around constness.
     bufferlist::iterator p = fbl.begin();
-    full.decode(p);
-    full.dump(f);
+    full->decode(p);
+    full->dump(f);
     f->close_section();
+    delete full;
   }
   if (crush.length()) {
     f->open_object_section("crush");
@@ -452,14 +305,9 @@ void OSDMap::Incremental::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
-
-  pgIncremental->dump(f);
 } // dump
 
-void OSDMap::Incremental::generate_test_instances(list<Incremental*>& o)
-{
-  o.push_back(new Incremental);
-}
+
 
 // ----------------------------------
 // OSDMap
@@ -467,7 +315,6 @@ void OSDMap::Incremental::generate_test_instances(list<Incremental*>& o)
 void OSDMap::set_epoch(epoch_t e)
 {
   epoch = e;
-  pgBridge->set_epoch(e);
 }
 
 bool OSDMap::is_blacklisted(const entity_addr_t& a) const
@@ -629,15 +476,15 @@ void OSDMap::dedup(const OSDMap *o, OSDMap *n)
     n->crush = o->crush;
   }
 
-  // handle page group deduplication
-  OSDMapPGBridge::dedup(o->pgBridge, n->pgBridge);
-
   // do uuids match?
   if (o->osd_uuid->size() == n->osd_uuid->size() &&
       *o->osd_uuid == *n->osd_uuid)
     n->osd_uuid = o->osd_uuid;
 }
 
+// calls virtual function apply_incremental_subclass to finish the
+// work; that way this code and do the initial error checks and
+// completeness checks and return early.
 int OSDMap::apply_incremental(Incremental &inc)
 {
   if (inc.epoch == 1)
@@ -748,7 +595,7 @@ int OSDMap::apply_incremental(Incremental &inc)
 
   calc_num_osds();
 
-  return pgBridge->apply_incremental(*inc.pgIncremental, epoch);
+  return apply_incremental_subclass(inc);
 } // OSDMap::apply_incremental
 
 
@@ -768,77 +615,9 @@ void OSDMap::_remove_nonexistent_osds(vector<int>& osds) const
     osds.resize(osds.size() - removed);
 }
 
-// serialize, unserialize
-void OSDMap::encode_client_old(bufferlist& bl) const
+
+void OSDMap::encodeOSDMap(bufferlist& bl, uint64_t features) const
 {
-  __u16 v = 5;
-  ::encode(v, bl);
-
-  // base
-  ::encode(fsid, bl);
-  ::encode(epoch, bl);
-  ::encode(created, bl);
-  ::encode(modified, bl);
-
-  // for ::encode(pools, bl);
-  __u32 n = pgBridge->pools.size();
-  ::encode(n, bl);
-  for (map<int64_t,pg_pool_t>::const_iterator p = pgBridge->pools.begin();
-       p != pgBridge->pools.end();
-       ++p) {
-    n = p->first;
-    ::encode(n, bl);
-    ::encode(p->second, bl, 0);
-  }
-  // for ::encode(pool_name, bl);
-  n = pgBridge->pool_name.size();
-  ::encode(n, bl);
-  for (map<int64_t, string>::const_iterator p = pgBridge->pool_name.begin();
-       p != pgBridge->pool_name.end();
-       ++p) {
-    n = p->first;
-    ::encode(n, bl);
-    ::encode(p->second, bl);
-  }
-  // for ::encode(pool_max, bl);
-  n = pgBridge->pool_max;
-  ::encode(n, bl);
-
-  ::encode(flags, bl);
-
-  ::encode(max_osd, bl);
-  ::encode(osd_state, bl);
-  ::encode(osd_weight, bl);
-  ::encode(osd_addrs->client_addr, bl);
-
-  // for ::encode(pg_temp, bl);
-  n = pgBridge->pg_temp->size();
-  ::encode(n, bl);
-  for (map<pg_t,vector<int32_t> >::const_iterator p =
-	 pgBridge->pg_temp->begin();
-       p != pgBridge->pg_temp->end();
-       ++p) {
-    old_pg_t opg = p->first.get_old_pg();
-    ::encode(opg, bl);
-    ::encode(p->second, bl);
-  }
-
-  // crush
-  bufferlist cbl;
-  crush->encode(cbl);
-  ::encode(cbl, bl);
-}
-
-void OSDMap::encode(bufferlist& bl, uint64_t features) const
-{
-  if ((features & CEPH_FEATURE_PGID64) == 0) {
-    encode_client_old(bl);
-    return;
-  }
-
-  __u16 v = 7;
-  ::encode(v, bl);
-
   // base
   ::encode(fsid, bl);
   ::encode(epoch, bl);
@@ -867,9 +646,8 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
   ::encode(cluster_snapshot_epoch, bl);
   ::encode(cluster_snapshot, bl);
   ::encode(*osd_uuid, bl);
-
-  ::encode(*pgBridge, bl, features);
 }
+
 
 void OSDMap::decode(bufferlist& bl)
 {
@@ -877,77 +655,19 @@ void OSDMap::decode(bufferlist& bl)
   decode(p);
 }
 
-void OSDMap::decode(bufferlist::iterator& p)
-{
-  __u32 n, t;
-  __u16 v;
-  ::decode(v, p);
 
+void OSDMap::decodeOSDMap(bufferlist::iterator& p, __u16 v)
+{
   // base
   ::decode(fsid, p);
   ::decode(epoch, p);
   ::decode(created, p);
   ::decode(modified, p);
-
-  if (v < 6) {
-    if (v < 4) {
-      int32_t max_pools = 0;
-      ::decode(max_pools, p);
-      pgBridge->pool_max = max_pools;
-    }
-    pgBridge->pools.clear();
-    ::decode(n, p);
-    while (n--) {
-      ::decode(t, p);
-      ::decode(pgBridge->pools[t], p);
-    }
-    if (v == 4) {
-      ::decode(n, p);
-      pgBridge->pool_max = n;
-    } else if (v == 5) {
-      pgBridge->pool_name.clear();
-      ::decode(n, p);
-      while (n--) {
-	::decode(t, p);
-	::decode(pgBridge->pool_name[t], p);
-      }
-      ::decode(n, p);
-      pgBridge->pool_max = n;
-    }
-  } else if (v == 6) {
-    ::decode(pgBridge->pools, p);
-    ::decode(pgBridge->pool_name, p);
-    ::decode(pgBridge->pool_max, p);
-  } else if (v >= 7) {
-    // see callout below
-  }
-
-  // kludge around some old bug that zeroed out pool_max (#2307)
-  if (pgBridge->pools.size() &&
-      pgBridge->pool_max < pgBridge->pools.rbegin()->first) {
-    pgBridge->pool_max = pgBridge->pools.rbegin()->first;
-  }
-
   ::decode(flags, p);
-
   ::decode(max_osd, p);
   ::decode(osd_state, p);
   ::decode(osd_weight, p);
   ::decode(osd_addrs->client_addr, p);
-
-  if (v <= 5) {
-    pgBridge->pg_temp->clear();
-    ::decode(n, p);
-    while (n--) {
-      old_pg_t opg;
-      ::decode_raw(opg, p);
-      ::decode((*pgBridge->pg_temp)[pg_t(opg)], p);
-    }
-  } else if (v == 6) {
-    ::decode(*pgBridge->pg_temp, p);
-  } else if (v >= 7) {
-    // see callout before
-  }
 
   // crush
   bufferlist cbl;
@@ -961,8 +681,6 @@ void OSDMap::decode(bufferlist::iterator& p)
     ::decode(ev, p);
   ::decode(osd_addrs->hb_addr, p);
   ::decode(osd_info, p);
-  if (v < 5)
-    ::decode(pgBridge->pool_name, p);
 
   ::decode(blacklist, p);
   if (ev >= 6)
@@ -981,20 +699,8 @@ void OSDMap::decode(bufferlist::iterator& p)
     osd_uuid->resize(max_osd);
   }
 
-  // index pool names
-  pgBridge->name_pool.clear();
-  for (map<int64_t,string>::iterator i = pgBridge->pool_name.begin();
-       i != pgBridge->pool_name.end();
-       ++i)
-    pgBridge->name_pool[i->second] = i->first;
-
   calc_num_osds();
-
-  if (v >= 7) {
-    ::decode(*pgBridge, p);
-  }
 }
-
 
 
 void OSDMap::dump_json(ostream& out) const
@@ -1049,9 +755,8 @@ void OSDMap::dump(Formatter *f) const
     f->dump_stream(ss.str().c_str()) << p->second;
   }
   f->close_section();
-
-  pgBridge->dump(f);
 }
+
 
 string OSDMap::get_flag_string(unsigned f)
 {
@@ -1113,7 +818,8 @@ void OSDMap::print(ostream& out) const
       out << " weight " << get_weightf(i);
       const osd_info_t& info(get_info(i));
       out << " " << info;
-      out << " " << get_addr(i) << " " << get_cluster_addr(i) << " " << get_hb_addr(i);
+      out << " " << get_addr(i) << " " << get_cluster_addr(i) << " " <<
+	get_hb_addr(i);
       set<string> st;
       get_state(i, st);
       out << " " << st;
@@ -1126,12 +832,9 @@ void OSDMap::print(ostream& out) const
 
   for (hash_map<entity_addr_t,utime_t>::const_iterator p = blacklist.begin();
        p != blacklist.end();
-       p++)
+       p++) {
     out << "blacklist " << p->first << " expires " << p->second << "\n";
-
-  // ignore pg_swap_primary
-
-  pgBridge->print(out);
+  }
 }
 
 void OSDMap::print_osd_line(int cur, ostream& out) const
