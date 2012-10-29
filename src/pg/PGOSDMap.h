@@ -46,7 +46,10 @@ public:
     void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
     void decode(bufferlist::iterator &p);
     void dump(Formatter *f) const;
+
+  private:
     void decode_pre7(bufferlist::iterator &p, __u16 v);
+    void encode_client_old(bufferlist& bl) const;
 
   public:
 
@@ -90,21 +93,22 @@ public:
 
   ~PGOSDMap() {}
 
+  // serialize, unserialize
+
   void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
   void decode(bufferlist::iterator &p);
   void dump(Formatter *f) const;
   void print(ostream& out) const;
 
+  void set_epoch(epoch_t e);
+
 private:
+
+  void encode_client_old(bufferlist& bl) const;
   void decode_pre7(bufferlist::iterator &p, __u16 v);
 
 public:
 
-  // serialize, unserialize
-private:
-  void encode_client_old(bufferlist& bl) const;
-
-public:
   /*
    * handy helpers to build simple maps...
    */

@@ -202,10 +202,9 @@ protected:
   const uuid_d& get_fsid() const { return fsid; }
   void set_fsid(uuid_d& f) { fsid = f; }
 
-  epoch_t get_epoch() const { return epoch; }
+  virtual void set_epoch(epoch_t e);
   void inc_epoch() { epoch++; }
-
-  void set_epoch(epoch_t e);
+  epoch_t get_epoch() const { return epoch; }
 
   /* stamps etc */
   const utime_t& get_created() const { return created; }

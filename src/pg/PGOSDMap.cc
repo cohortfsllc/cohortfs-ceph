@@ -14,6 +14,11 @@
 
 
 #include "PGOSDMap.h"
+#include "common/code_environment.h"
+
+
+#define dout_subsys ceph_subsys_osd
+
 
 
 // PGOSDMap::Incremental
@@ -597,6 +602,8 @@ void PGOSDMap::dedup(const PGOSDMap* o, PGOSDMap* n) {
 
 
 void PGOSDMap::set_epoch(epoch_t e) {
+  inherited::set_epoch(e);
+
   for (map<int64_t,pg_pool_t>::iterator p = pools.begin();
        p != pools.end();
        p++) {
@@ -687,25 +694,22 @@ int PGOSDMap::object_locator_to_pg(const object_t& oid,
 
 // building
 
-OSDMapRef PGOSDMap::build_simple(CephContext *cct,
-				       epoch_t e,
-				       uuid_d &fsid,
-				       int nosd,
-				       int pg_bits,
-				       int pgp_bits)
+void PGOSDMap::build_simple(CephContext *cct,
+			    epoch_t e,
+			    uuid_d &fsid,
+			    int nosd,
+			    int pg_bits,
+			    int pgp_bits)
 {
   ldout(cct, 10) << "build_simple on " << num_osd
 		 << " osds with " << pg_bits << " pg bits per osd, "
 		 << dendl;
 
-  OSDMapRef osdMapRef;
-  OSDMap* osdMap = osdMapRef.get();
+  epoch = e;
+  set_fsid(fsid);
+  created = modified = ceph_clock_now(cct);
 
-  osdMap->epoch = e;
-  osdMap->set_fsid(fsid);
-  osdMap->created = osdMap->modified = ceph_clock_now(cct);
-
-  osdMap->set_max_osd(nosd);
+  set_max_osd(nosd);
 
   // pgp_num <= pg_num
   if (pgp_bits > pg_bits)
@@ -968,17 +972,19 @@ PGOSDMap::build_simple_crush_map_from_conf(CephContext *cct,
 }
 
 
-void OSDMap::generate_test_instances(list<OSDMap*>& o)
+void PGOSDMap::generate_test_instances(list<OSDMap*>& o)
 {
-  o.push_back(new OSDMap);
+  o.push_back(new PGOSDMap);
 
+  PGOSDMap* map2 = new PGOSDMap;
   CephContext *cct = new CephContext(CODE_ENVIRONMENT_UTILITY);
-  o.push_back(new OSDMap);
+  o.push_back(map2);
   uuid_d fsid;
-  o.back()->build_simple(cct, 1, fsid, 16, 7, 8);
-  o.back()->created = o.back()->modified = utime_t(1, 2);  // fix timestamp
+  map2->build_simple(cct, 1, fsid, 16, 7, 8);
+  map2->created = map2->modified = utime_t(1, 2);  // fix timestamp
   cct->put();
 }
+
 
 void PGOSDMap::Incremental::encode_client_old(bufferlist& bl) const
 {
@@ -987,7 +993,7 @@ void PGOSDMap::Incremental::encode_client_old(bufferlist& bl) const
   ::encode(fsid, bl);
   ::encode(epoch, bl);
   ::encode(modified, bl);
-  int32_t new_t = pgIncremental->new_pool_max;
+  int32_t new_t = new_pool_max;
   ::encode(new_t, bl);
   ::encode(new_flags, bl);
   ::encode(fullmap, bl);
@@ -995,32 +1001,30 @@ void PGOSDMap::Incremental::encode_client_old(bufferlist& bl) const
 
   ::encode(new_max_osd, bl);
   // for ::encode(new_pools, bl);
-  __u32 n = pgIncremental->new_pools.size();
+  __u32 n = new_pools.size();
   ::encode(n, bl);
-  for (map<int64_t,pg_pool_t>::const_iterator p =
-	 pgIncremental->new_pools.begin();
-       p != pgIncremental->new_pools.end();
+  for (map<int64_t,pg_pool_t>::const_iterator p = new_pools.begin();
+       p != new_pools.end();
        ++p) {
     n = p->first;
     ::encode(n, bl);
     ::encode(p->second, bl, 0);
   }
   // for ::encode(new_pool_names, bl);
-  n = pgIncremental->new_pool_names.size();
+  n = new_pool_names.size();
   ::encode(n, bl);
-  for (map<int64_t, string>::const_iterator p =
-	 pgIncremental->new_pool_names.begin();
-       p != pgIncremental->new_pool_names.end();
+  for (map<int64_t, string>::const_iterator p = new_pool_names.begin();
+       p != new_pool_names.end();
        ++p) {
     n = p->first;
     ::encode(n, bl);
     ::encode(p->second, bl);
   }
   // for ::encode(old_pools, bl);
-  n = pgIncremental->old_pools.size();
+  n = old_pools.size();
   ::encode(n, bl);
-  for (set<int64_t>::iterator p = pgIncremental->old_pools.begin();
-       p != pgIncremental->old_pools.end();
+  for (set<int64_t>::iterator p = old_pools.begin();
+       p != old_pools.end();
        ++p) {
     n = *p;
     ::encode(n, bl);
@@ -1029,11 +1033,10 @@ void PGOSDMap::Incremental::encode_client_old(bufferlist& bl) const
   ::encode(new_state, bl);
   ::encode(new_weight, bl);
   // for ::encode(new_pg_temp, bl);
-  n = pgIncremental->new_pg_temp.size();
+  n = new_pg_temp.size();
   ::encode(n, bl);
-  for (map<pg_t,vector<int32_t> >::const_iterator p =
-	 pgIncremental->new_pg_temp.begin();
-       p != pgIncremental->new_pg_temp.end();
+  for (map<pg_t,vector<int32_t> >::const_iterator p = new_pg_temp.begin();
+       p != new_pg_temp.end();
        ++p) {
     old_pg_t opg = p->first.get_old_pg();
     ::encode(opg, bl);
