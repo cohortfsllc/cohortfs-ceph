@@ -167,6 +167,7 @@ public:
   void handle_client_mknod(MDRequest *mdr);
   void handle_client_mkdir(MDRequest *mdr);
   void handle_client_symlink(MDRequest *mdr);
+  void _mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn, CDentry *inodn);
 
   // link
   void handle_client_link(MDRequest *mdr);
