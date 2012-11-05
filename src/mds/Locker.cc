@@ -3669,7 +3669,7 @@ void Locker::scatter_eval(ScatterLock *lock, bool *need_issue)
   }
 
   CInode *in = (CInode*)lock->get_parent();
-  if (!in->has_subtree_root_dirfrag() || in->is_base()) {
+  if (!in->has_subtree_root_dirfrag() || in->is_root() || in->is_mdsdir()) {
     // i _should_ be sync.
     if (!lock->is_wrlocked() &&
 	!lock->is_xlocked() &&
