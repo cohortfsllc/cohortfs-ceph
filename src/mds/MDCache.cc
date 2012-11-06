@@ -7496,6 +7496,7 @@ void MDCache::request_forward(MDRequest *mdr, int who, int port)
   dout(7) << "request_forward " << *mdr << " to mds." << who << " req " << *mdr << dendl;
   
   mds->forward_message_mds(mdr->client_request, who);  
+  mds->server->rollback_allocated_inos(mdr);
   mdr->client_request = 0;
   request_cleanup(mdr);
 
