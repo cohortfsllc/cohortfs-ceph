@@ -1745,7 +1745,6 @@ inodeno_t Server::prepare_new_inodeno(MDRequest *mdr, inodeno_t useino)
   // assign ino
   if (mdr->session->prealloc_inos.size()) {
     mdr->used_prealloc_ino = ino = mdr->session->take_ino(useino);  // prealloc -> used
-    mds->sessionmap.projected++;
     dout(10) << "prepare_new_inodeno used_prealloc " << mdr->used_prealloc_ino
 	     << " (" << mdr->session->prealloc_inos
 	     << ", " << mdr->session->prealloc_inos.size() << " left)"
@@ -1768,7 +1767,6 @@ inodeno_t Server::prepare_new_inodeno(MDRequest *mdr, inodeno_t useino)
     mds->inotable->project_alloc_ids(mdr->prealloc_inos, got);
     assert(mdr->prealloc_inos.size());  // or else fix projected increment semantics
     mdr->session->pending_prealloc_inos.insert(mdr->prealloc_inos);
-    mds->sessionmap.projected++;
     dout(10) << "prepare_new_inodeno prealloc " << mdr->prealloc_inos << dendl;
   }
 
@@ -1843,6 +1841,10 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino,
 
 void Server::journal_allocated_inos(MDRequest *mdr, EMetaBlob *blob)
 {
+  if (mdr->used_prealloc_ino)
+    mds->sessionmap.projected++;
+  if (!mdr->prealloc_inos.empty())
+    mds->sessionmap.projected++;
   dout(20) << "journal_allocated_inos sessionmapv " << mds->sessionmap.projected
 	   << " inotablev " << mds->inotable->get_projected_version()
 	   << dendl;
@@ -1874,6 +1876,49 @@ void Server::apply_allocated_inos(MDRequest *mdr)
     session->used_inos.erase(mdr->used_prealloc_ino);
     mds->sessionmap.version++;
   }
+}
+
+struct C_MDS_RollbackAllocatedInos : public Context {
+  MDS *mds;
+  Server *server;
+  MDRequest *mdr;
+  C_MDS_RollbackAllocatedInos(MDS *mds, Server *server, MDRequest *mdr)
+      : mds(mds), server(server), mdr(mdr) {}
+  void finish(int r) {
+    server->apply_allocated_inos(mdr);
+    mdr->put();
+  }
+};
+
+void Server::rollback_allocated_inos(MDRequest *mdr)
+{
+  if (mdr->used_prealloc_ino) {
+    dout(10) << "rollback_allocated_inos used_prealloc_ino "
+        << mdr->used_prealloc_ino << dendl;
+    // return to prealloc_inos
+    mdr->session->used_inos.erase(mdr->used_prealloc_ino);
+    mdr->session->prealloc_inos.insert(mdr->used_prealloc_ino);
+    mdr->used_prealloc_ino = 0;
+    // we don't have to journal unless we preallocated more
+  }
+
+  if (mdr->alloc_ino) {
+    dout(10) << "rollback_allocated_inos alloc_ino "
+        << mdr->alloc_ino << dendl;
+    // must journal as a prealloc_ino
+    mdr->prealloc_inos.insert(mdr->alloc_ino);
+    mdr->alloc_ino = 0;
+  }
+  
+  if (mdr->prealloc_inos.empty()) {
+    // nothing to journal
+    dout(20) << "rollback_allocated_inos nothing to journal" << dendl;
+    return;
+  }
+
+  EUpdate *le = new EUpdate(mds->mdlog, "rollback_allocated_inos");
+  journal_allocated_inos(mdr, &le->metablob);
+  mds->mdlog->start_submit_entry(le, new C_MDS_RollbackAllocatedInos(mds, this, mdr->get()));
 }
 
 

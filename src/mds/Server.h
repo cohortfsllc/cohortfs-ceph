@@ -125,6 +125,7 @@ public:
 
   void journal_allocated_inos(MDRequest *mdr, EMetaBlob *blob);
   void apply_allocated_inos(MDRequest *mdr);
+  void rollback_allocated_inos(MDRequest *mdr);
 
   CInode* rdlock_path_pin_ref(MDRequest *mdr, int n, set<SimpleLock*>& rdlocks, bool want_auth,
 			      bool no_want_auth=false,

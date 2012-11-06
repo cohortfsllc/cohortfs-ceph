@@ -8014,6 +8014,7 @@ void MDCache::request_forward(MDRequest *mdr, int who, int port)
     dout(7) << "request_forward " << *mdr << " to mds." << who << " req "
             << *mdr->client_request << dendl;
     mds->forward_message_mds(mdr->client_request, who);
+    mds->server->rollback_allocated_inos(mdr);
     mdr->client_request = 0;
     if (mds->logger) mds->logger->inc(l_mds_fw);
   } else {
