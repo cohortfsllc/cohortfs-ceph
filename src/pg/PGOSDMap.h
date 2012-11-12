@@ -53,9 +53,11 @@ public:
 
   public:
 
-    Incremental() :
-      new_pool_max(-1) {
-      // empty for now
+    Incremental(epoch_t e=0) :
+      OSDMap::Incremental(e),
+      new_pool_max(-1)
+    {
+      // empty
     }
     Incremental(bufferlist &bl) {
       bufferlist::iterator p = bl.begin();

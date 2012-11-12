@@ -138,7 +138,8 @@ public:
     void dump(Formatter *f) const;
 
     Incremental(epoch_t e=0) :
-      epoch(e), new_flags(-1),
+      epoch(e),
+      new_flags(-1),
       new_max_osd(-1)
     {
       memset(&fsid, 0, sizeof(fsid));
@@ -188,6 +189,7 @@ protected:
   std::tr1::shared_ptr<CrushWrapper> crush;       // hierarchical map
 
   friend class OSDMonitor;
+  friend class PGOSDMonitor;
   friend class PGMonitor;
   friend class MDS;
 

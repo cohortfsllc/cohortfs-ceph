@@ -42,7 +42,7 @@ class OSDMonitor : public PaxosService {
 public:
   auto_ptr<OSDMap> osdmap;
 
-private:
+protected:
   map<epoch_t, list<PaxosServiceMessage*> > waiting_for_map;
 
   // [leader]
@@ -60,9 +60,10 @@ private:
   // svc
 public:  
   void create_initial();
-private:
+protected:
   void update_from_paxos();
-  void create_pending();  // prepare a new pending
+  void create_pending_super();  // prepare a new pending
+  virtual void create_pending() = 0;  // prepare a new pending
   void encode_pending(bufferlist &bl);
   void on_active();
 
@@ -72,7 +73,9 @@ private:
 
   void handle_query(PaxosServiceMessage *m);
   bool preprocess_query(PaxosServiceMessage *m);  // true if processed.
+  virtual bool preprocess_query_sub(PaxosServiceMessage *m) = 0;  // true if processed.
   bool prepare_update(PaxosServiceMessage *m);
+  virtual bool prepare_update_sub(PaxosServiceMessage *m) = 0;
   bool should_propose(double &delay);
 
   bool can_mark_down(int o);
@@ -88,7 +91,6 @@ private:
   void send_incremental(PaxosServiceMessage *m, epoch_t first);
   void send_incremental(epoch_t first, entity_inst_t& dest, bool onetime);
 
-  void remove_redundant_pg_temp();
   int reweight_by_utilization(int oload, std::string& out_str);
  
   bool preprocess_failure(class MOSDFailure *m);
@@ -102,27 +104,9 @@ private:
   bool preprocess_alive(class MOSDAlive *m);
   bool prepare_alive(class MOSDAlive *m);
   void _reply_map(PaxosServiceMessage *m, epoch_t e);
-
-  bool preprocess_pgtemp(class MOSDPGTemp *m);
-  bool prepare_pgtemp(class MOSDPGTemp *m);
-
-  int _prepare_remove_pool(uint64_t pool);
-  int _prepare_rename_pool(uint64_t pool, string newname);
-
-  bool preprocess_pool_op ( class MPoolOp *m);
-  bool preprocess_pool_op_create ( class MPoolOp *m);
-  bool prepare_pool_op (MPoolOp *m);
-  bool prepare_pool_op_create (MPoolOp *m);
-  bool prepare_pool_op_delete(MPoolOp *m);
-  bool prepare_pool_op_auid(MPoolOp *m);
-  int prepare_new_pool(string& name, uint64_t auid, int crush_rule,
-                       unsigned pg_num, unsigned pgp_num);
-  int prepare_new_pool(MPoolOp *m);
   
   bool prepare_set_flag(MMonCommand *m, int flag);
   bool prepare_unset_flag(MMonCommand *m, int flag);
-
-  void _pool_op_reply(MPoolOp *m, int ret, epoch_t epoch, bufferlist *blp=NULL);
 
   struct C_Booted : public Context {
     OSDMonitor *cmon;
@@ -159,26 +143,20 @@ private:
 	cmon->dispatch((PaxosServiceMessage*)m);
     }
   };
-  struct C_PoolOp : public Context {
-    OSDMonitor *osdmon;
-    MPoolOp *m;
-    int replyCode;
-    int epoch;
-    bufferlist *reply_data;
-    C_PoolOp(OSDMonitor * osd, MPoolOp *m_, int rc, int e, bufferlist *rd=NULL) : 
-      osdmon(osd), m(m_), replyCode(rc), epoch(e), reply_data(rd) {}
-    void finish(int r) {
-      osdmon->_pool_op_reply(m, replyCode, epoch, reply_data);
-    }
-  };
 
   bool preprocess_remove_snaps(class MRemoveSnaps *m);
-  bool prepare_remove_snaps(class MRemoveSnaps *m);
+  virtual bool preprocess_remove_snaps_sub(class MRemoveSnaps *m) = 0;
+  virtual bool prepare_remove_snaps(class MRemoveSnaps *m) = 0;
+  virtual void preprocess_command_sub(MMonCommand *m, int& r) = 0;
 
  public:
   OSDMonitor(Monitor *mn, Paxos *p);
+  virtual ~OSDMonitor() { };
+
+  virtual OSDMap* newOSDMap() const = 0;
 
   void tick();  // check state, take actions
+  virtual void tick_sub(bool& do_propose) = 0;
 
   void get_health(list<pair<health_status_t,string> >& summary,
 		  list<pair<health_status_t,string> > *detail) const;

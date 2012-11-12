@@ -1111,6 +1111,7 @@ libmon_a_SOURCES = \
 	mon/MonmapMonitor.cc \
 	mon/PGMonitor.cc \
 	mon/PGMap.cc \
+	mon/PGOSDMonitor.cc \
 	mon/VolMonitor.cc \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
@@ -1559,6 +1560,7 @@ noinst_HEADERS = \
         mon/OSDMonitor.h\
         mon/PGMap.h\
         mon/PGMonitor.h\
+        mon/PGOSDMonitor.h\
         mon/Paxos.h\
         mon/PaxosService.h\
         mon/Session.h\
