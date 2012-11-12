@@ -45,6 +45,10 @@ public:
 
     void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
     void decode(bufferlist::iterator &p);
+    void decode(bufferlist &bl) {
+      bufferlist::iterator p = bl.begin();
+      decode(p);
+    }
     void dump(Formatter *f) const;
 
   private:

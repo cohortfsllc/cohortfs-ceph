@@ -147,7 +147,8 @@ protected:
   bool preprocess_remove_snaps(class MRemoveSnaps *m);
   virtual bool preprocess_remove_snaps_sub(class MRemoveSnaps *m) = 0;
   virtual bool prepare_remove_snaps(class MRemoveSnaps *m) = 0;
-  virtual void preprocess_command_sub(MMonCommand *m, int& r) = 0;
+  virtual void preprocess_command_sub(MMonCommand *m, int& r, stringstream& ss) = 0;
+  virtual void prepare_command_sub(MMonCommand *m, int& err, stringstream& ss, string& rs) = 0;
 
  public:
   OSDMonitor(Monitor *mn, Paxos *p);

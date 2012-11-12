@@ -340,8 +340,9 @@ void PGMonitor::handle_statfs(MStatfs *statfs)
 bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
 {
   MGetPoolStatsReply *reply;
-
   MonSession *session = m->get_session();
+  PGOSDMap* const l_osdmap = dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+
   if (!session)
     goto out;
   if (!session->caps.check_privileges(PAXOS_PGMAP, MON_CAP_R)) {
@@ -351,7 +352,8 @@ bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
   }
 
   if (m->fsid != mon->monmap->fsid) {
-    dout(0) << "preprocess_getpoolstats on fsid " << m->fsid << " != " << mon->monmap->fsid << dendl;
+    dout(0) << "preprocess_getpoolstats on fsid " << m->fsid << " != " <<
+      mon->monmap->fsid << dendl;
     goto out;
   }
   
@@ -360,7 +362,7 @@ bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
   for (list<string>::iterator p = m->pools.begin();
        p != m->pools.end();
        p++) {
-    int64_t poolid = mon->osdmon()->osdmap.lookup_pg_pool_name(p->c_str());
+    int64_t poolid = l_osdmap->lookup_pg_pool_name(p->c_str());
     if (poolid < 0)
       continue;
     if (pg_map.pg_pool_sum.count(poolid) == 0)
@@ -396,7 +398,7 @@ bool PGMonitor::preprocess_pg_stats(MPGStats *stats)
   // only if they've had the map for a while.
   if (stats->had_map_for > 30.0 && 
       mon->osdmon()->paxos->is_readable() &&
-      stats->epoch < mon->osdmon()->osdmap.get_epoch())
+      stats->epoch < mon->osdmon()->osdmap->get_epoch())
     mon->osdmon()->send_latest_now_nodelete(stats, stats->epoch+1);
 
   // Always forward the PGStats to the leader, even if they are the same as
@@ -441,8 +443,8 @@ bool PGMonitor::prepare_pg_stats(MPGStats *stats)
   last_osd_report[from] = ceph_clock_now(g_ceph_context);
 
   if (!stats->get_orig_source().is_osd() ||
-      !mon->osdmon()->osdmap.is_up(from) ||
-      stats->get_orig_source_inst() != mon->osdmon()->osdmap.get_inst(from)) {
+      !mon->osdmon()->osdmap->is_up(from) ||
+      stats->get_orig_source_inst() != mon->osdmon()->osdmap->get_inst(from)) {
     dout(1) << " ignoring stats from non-active osd." << dendl;
     stats->put();
     return false;
@@ -579,9 +581,11 @@ void PGMonitor::check_osd_map(epoch_t epoch)
     bufferlist bl;
     mon->store->get_bl_sn(bl, "osdmap", e);
     assert(bl.length());
-    OSDMap::Incremental inc(bl);
-    for (map<int32_t,uint32_t>::iterator p = inc.new_weight.begin();
-	 p != inc.new_weight.end();
+
+    auto_ptr<PGOSDMap::Incremental> inc(new PGOSDMap::Incremental(bl));
+
+    for (map<int32_t,uint32_t>::iterator p = inc->new_weight.begin();
+	 p != inc->new_weight.end();
 	 p++)
       if (p->second == CEPH_OSD_OUT) {
 	dout(10) << "check_osd_map  osd." << p->first << " went OUT" << dendl;
@@ -593,8 +597,8 @@ void PGMonitor::check_osd_map(epoch_t epoch)
       }
 
     // this is conservative: we want to know if any osds (maybe) got marked down.
-    for (map<int32_t,uint8_t>::iterator p = inc.new_state.begin();
-	 p != inc.new_state.end();
+    for (map<int32_t,uint8_t>::iterator p = inc->new_state.begin();
+	 p != inc->new_state.end();
 	 ++p) {
       if (p->second & CEPH_OSD_UP) {   // true if marked up OR down, but we're too lazy to check which
 	need_check_down_pgs = true;
@@ -678,7 +682,7 @@ void PGMonitor::register_pg(pg_pool_t& pool, pg_t pgid, epoch_t epoch, bool new_
 bool PGMonitor::register_new_pgs()
 {
   // iterate over crush mapspace
-  epoch_t epoch = mon->osdmon()->osdmap.get_epoch();
+  epoch_t epoch = mon->osdmon()->osdmap->get_epoch();
   dout(10) << "register_new_pgs checking pg pools for osdmap epoch " << epoch
 	   << ", last_pg_scan " << pg_map.last_pg_scan << dendl;
 

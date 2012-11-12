@@ -13,10 +13,11 @@
  */
 
 #include "PGOSDMonitor.h"
-#include "mon/PGMonitor.cc"
+#include "mon/PGMonitor.h"
 #include "messages/MOSDPGTemp.h"
 #include "messages/MPoolOp.h"
 #include "messages/MRemoveSnaps.h"
+#include "messages/MMonCommand.h"
 
 
 #define dout_subsys ceph_subsys_mon
@@ -301,6 +302,9 @@ bool PGOSDMonitor::prepare_remove_snaps(MRemoveSnaps *m)
 
 void PGOSDMonitor::tick_sub(bool& do_propose)
 {
+  PGOSDMap::Incremental* const l_pending_inc =
+    dynamic_cast<PGOSDMap::Incremental*>(pending_inc.get());
+
   //if map full setting has changed, get that info out there!
   if (mon->pgmon()->paxos->is_readable()) {
     if (!mon->pgmon()->pg_map.full_osds.empty()) {
@@ -310,8 +314,8 @@ void PGOSDMonitor::tick_sub(bool& do_propose)
       dout(10) << "No full osds, removing full flag" << dendl;
       remove_flag(CEPH_OSDMAP_FULL);
     }
-    if (pending_inc->new_flags != -1 &&
-	(pending_inc->new_flags ^ osdmap->flags) & CEPH_OSDMAP_FULL) {
+    if (l_pending_inc->new_flags != -1 &&
+	(l_pending_inc->new_flags ^ osdmap->flags) & CEPH_OSDMAP_FULL) {
       dout(1) << "New setting for CEPH_OSDMAP_FULL -- doing propose" << dendl;
       do_propose = true;
     }
@@ -330,7 +334,7 @@ void PGOSDMonitor::tick_sub(bool& do_propose)
 	vector<int> osds;
 	osdmap->pg_to_osds(pgid, osds); 
 	if (osds[0] == 0) {
-	  pending_inc->new_pg_swap_primary[pgid] = osds[1];
+	  l_pending_inc->new_pg_swap_primary[pgid] = osds[1];
 	  dout(3) << "Changing primary for PG " << pgid << " from " << osds[0] << " to "
 		  << osds[1] << dendl;
 	  do_propose = true;
@@ -341,7 +345,7 @@ void PGOSDMonitor::tick_sub(bool& do_propose)
   // ---------------
 
   if (do_propose ||
-      !pending_inc->new_pg_temp.empty())  // also propose if we adjusted pg_temp
+      !l_pending_inc->new_pg_temp.empty())  // also propose if we adjusted pg_temp
     propose_pending();
 
   if (mon->pgmon()->paxos->is_readable() &&
@@ -361,286 +365,299 @@ void PGOSDMonitor::tick_sub(bool& do_propose)
 }
 
 
-void PGOSDMonitor::preprocess_command_sub(MMonCommand *m, int& r)
+void PGOSDMonitor::preprocess_command_sub(MMonCommand *m, int& r, stringstream& ss)
 {
+  PGOSDMap* const l_osdmap = dynamic_cast<PGOSDMap*>(osdmap.get());
+
   if (m->cmd[1] == "map" && m->cmd.size() == 4) {
-    int64_t pool = osdmap->lookup_pg_pool_name(m->cmd[2].c_str());
+    int64_t pool = l_osdmap->lookup_pg_pool_name(m->cmd[2].c_str());
     if (pool < 0) {
       ss << "pool " << m->cmd[2] << " dne";
       r = -ENOENT;
     } else {
       object_locator_t oloc(pool);
       object_t oid(m->cmd[3]);
-      pg_t pgid = osdmap->object_locator_to_pg(oid, oloc);
-      pg_t mpgid = osdmap->raw_pg_to_pg(pgid);
+      pg_t pgid = l_osdmap->object_locator_to_pg(oid, oloc);
+      pg_t mpgid = l_osdmap->raw_pg_to_pg(pgid);
       vector<int> up, acting;
-      osdmap->pg_to_up_acting_osds(mpgid, up, acting);
-      ss << "osdmap e" << osdmap->get_epoch()
+      l_osdmap->pg_to_up_acting_osds(mpgid, up, acting);
+      ss << "osdmap e" << l_osdmap->get_epoch()
 	 << " pool '" << m->cmd[2] << "' (" << pool << ") object '" << oid << "' ->"
 	 << " pg " << pgid << " (" << mpgid << ")"
 	 << " -> up " << up << " acting " << acting;
       r = 0;
     }
-    else if (m->cmd[1] == "lspools") {
-      uint64_t uid_pools = 0;
-      if (m->cmd.size() > 2) {
-	uid_pools = strtol(m->cmd[2].c_str(), NULL, 10);
-      }
-      for (map<int64_t, pg_pool_t>::iterator p = osdmap->pools.begin();
-	   p != osdmap->pools.end();
-	   ++p) {
-	if (!uid_pools || p->second.auid == uid_pools) {
-	  ss << p->first << ' ' << osdmap->pool_name[p->first] << ',';
-	}
-      }
-      r = 0;
+  }
+  else if (m->cmd[1] == "lspools") {
+    uint64_t uid_pools = 0;
+    if (m->cmd.size() > 2) {
+      uid_pools = strtol(m->cmd[2].c_str(), NULL, 10);
     }
-    else if (m->cmd[1] == "pool" && m->cmd.size() >= 3) {
-      if (m->cmd.size() >= 5 && m->cmd[2] == "mksnap") {
-	int64_t pool = osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
-	if (pool < 0) {
-	  ss << "unrecognized pool '" << m->cmd[3] << "'";
-	  err = -ENOENT;
-	} else {
-	  const pg_pool_t *p = osdmap->get_pg_pool(pool);
-	  pg_pool_t *pp = 0;
-	  if (pending_inc->new_pools.count(pool))
-	    pp = &pending_inc->new_pools[pool];
-	  const string& snapname = m->cmd[4];
-	  if (p->snap_exists(snapname.c_str()) ||
-	      (pp && pp->snap_exists(snapname.c_str()))) {
-	    ss << "pool " << m->cmd[3] << " snap " << snapname << " already exists";
-	    err = -EEXIST;
-	  } else {
-	    if (!pp) {
-	      pp = &pending_inc->new_pools[pool];
-	      *pp = *p;
-	    }
-	    pp->add_snap(snapname.c_str(), ceph_clock_now(g_ceph_context));
-	    pp->set_snap_epoch(pending_inc->epoch);
-	    ss << "created pool " << m->cmd[3] << " snap " << snapname;
-	    getline(ss, rs);
-	    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
-	    return true;
-	  }
-	}
+    for (map<int64_t, pg_pool_t>::iterator p = l_osdmap->pools.begin();
+	 p != l_osdmap->pools.end();
+	 ++p) {
+      if (!uid_pools || p->second.auid == uid_pools) {
+	ss << p->first << ' ' << l_osdmap->pool_name[p->first] << ',';
       }
-      else if (m->cmd.size() >= 5 && m->cmd[2] == "rmsnap") {
-	int64_t pool = osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
-	if (pool < 0) {
-	  ss << "unrecognized pool '" << m->cmd[3] << "'";
-	  err = -ENOENT;
-	} else {
-	  const pg_pool_t *p = osdmap->get_pg_pool(pool);
-	  pg_pool_t *pp = 0;
-	  if (pending_inc->new_pools.count(pool))
-	    pp = &pending_inc->new_pools[pool];
-	  const string& snapname = m->cmd[4];
-	  if (!p->snap_exists(snapname.c_str()) &&
-	      (!pp || !pp->snap_exists(snapname.c_str()))) {
-	    ss << "pool " << m->cmd[3] << " snap " << snapname << " does not exists";
-	    err = -ENOENT;
-	  } else {
-	    if (!pp) {
-	      pp = &pending_inc->new_pools[pool];
-	      *pp = *p;
-	    }
-	    snapid_t sn = pp->snap_exists(snapname.c_str());
-	    pp->remove_snap(sn);
-	    pp->set_snap_epoch(pending_inc->epoch);
-	    ss << "removed pool " << m->cmd[3] << " snap " << snapname;
-	    getline(ss, rs);
-	    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
-	    return true;
-	  }
-	}
-      }
-      else if (m->cmd[2] == "create" && m->cmd.size() >= 4) {
-        int pg_num = 0;
-        int pgp_num = 0;
-        if (m->cmd.size() > 4) { // try to parse out pg_num and pgp_num
-          const char *start = m->cmd[4].c_str();
-          char *end = (char*)start;
-          pgp_num = pg_num = strtol(start, &end, 10);
-          if (*end != '\0') { // failed to parse
-            err = -EINVAL;
-            ss << "usage: osd pool create <poolname> [pg_num [pgp_num]]";
-            goto out;
-          } else if (m->cmd.size() > 5) { // check for pgp_num too
-            start = m->cmd[5].c_str();
-            end = (char *)start;
-            pgp_num = strtol(start, &end, 10);
-            if (*end != '\0') { // failed to parse
-              err = -EINVAL;
-              ss << "usage: osd pool create <poolname> [pg_num [pgp_num]]";
-              goto out;
-            }
-          }
-        }
-        err = prepare_new_pool(m->cmd[3], 0,  // auid=0 for admin created pool
-			       -1,            // default crush rule
-			       pg_num, pgp_num);
-        if (err < 0) {
-          if (err == -EEXIST)
-            ss << "pool '" << m->cmd[3] << "' exists";
-          goto out;
-        }
-	ss << "pool '" << m->cmd[3] << "' created";
-	getline(ss, rs);
-	paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
-	return true;
-      } else if (m->cmd[2] == "delete" && m->cmd.size() >= 4) {
-	//hey, let's delete a pool!
-	int64_t pool = osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
-	if (pool < 0) {
-	  ss << "unrecognized pool '" << m->cmd[3] << "'";
-	  err = -ENOENT;
-	} else {
-	  int ret = _prepare_remove_pool(pool);
-	  if (ret == 0)
-	    ss << "pool '" << m->cmd[3] << "' deleted";
-	  getline(ss, rs);
-	  paxos->wait_for_commit(new Monitor::C_Command(mon, m, ret, rs, paxos->get_version()));
-	  return true;
-	}
-      } else if (m->cmd[2] == "rename" && m->cmd.size() == 5) {
-	int64_t pool = osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
-	if (pool < 0) {
-	  ss << "unrecognized pool '" << m->cmd[3] << "'";
-	  err = -ENOENT;
-	} else if (osdmap->lookup_pg_pool_name(m->cmd[4].c_str()) >= 0) {
-	  ss << "pool '" << m->cmd[4] << "' already exists";
+    }
+    r = 0;
+  }
+}
+
+
+void PGOSDMonitor::prepare_command_sub(MMonCommand *m, int& err, stringstream& ss, string& rs)
+{
+  PGOSDMap* const l_osdmap = dynamic_cast<PGOSDMap*>(osdmap.get());
+  PGOSDMap::Incremental* const l_pending_inc =
+    dynamic_cast<PGOSDMap::Incremental*>(pending_inc.get());
+
+  if (m->cmd[1] == "pool" && m->cmd.size() >= 3) {
+    if (m->cmd.size() >= 5 && m->cmd[2] == "mksnap") {
+      int64_t pool = l_osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
+      if (pool < 0) {
+	ss << "unrecognized pool '" << m->cmd[3] << "'";
+	err = -ENOENT;
+      } else {
+	const pg_pool_t *p = l_osdmap->get_pg_pool(pool);
+	pg_pool_t *pp = 0;
+	if (l_pending_inc->new_pools.count(pool))
+	  pp = &l_pending_inc->new_pools[pool];
+	const string& snapname = m->cmd[4];
+	if (p->snap_exists(snapname.c_str()) ||
+	    (pp && pp->snap_exists(snapname.c_str()))) {
+	  ss << "pool " << m->cmd[3] << " snap " << snapname << " already exists";
 	  err = -EEXIST;
 	} else {
-	  int ret = _prepare_rename_pool(pool, m->cmd[4]);
-	  if (ret == 0) {
-	    ss << "pool '" << m->cmd[3] << "' renamed to '" << m->cmd[4] << "'";
-	  } else {
-	    ss << "failed to rename pool '" << m->cmd[3] << "' to '" << m->cmd[4] << "': "
-	       << cpp_strerror(ret);
+	  if (!pp) {
+	    pp = &l_pending_inc->new_pools[pool];
+	    *pp = *p;
 	  }
+	  pp->add_snap(snapname.c_str(), ceph_clock_now(g_ceph_context));
+	  pp->set_snap_epoch(l_pending_inc->epoch);
+	  ss << "created pool " << m->cmd[3] << " snap " << snapname;
 	  getline(ss, rs);
-	  paxos->wait_for_commit(new Monitor::C_Command(mon, m, ret, rs, paxos->get_version()));
+	  paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
 	  return true;
 	}
-      } else if (m->cmd[2] == "set") {
-	if (m->cmd.size() != 6) {
-	  err = -EINVAL;
-	  ss << "usage: osd pool set <poolname> <field> <value>";
-	  goto out;
-	}
-	int64_t pool = osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
-	if (pool < 0) {
-	  ss << "unrecognized pool '" << m->cmd[3] << "'";
+      }
+    }
+    else if (m->cmd.size() >= 5 && m->cmd[2] == "rmsnap") {
+      int64_t pool = l_osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
+      if (pool < 0) {
+	ss << "unrecognized pool '" << m->cmd[3] << "'";
+	err = -ENOENT;
+      } else {
+	const pg_pool_t *p = l_osdmap->get_pg_pool(pool);
+	pg_pool_t *pp = 0;
+	if (l_pending_inc->new_pools.count(pool))
+	  pp = &l_pending_inc->new_pools[pool];
+	const string& snapname = m->cmd[4];
+	if (!p->snap_exists(snapname.c_str()) &&
+	    (!pp || !pp->snap_exists(snapname.c_str()))) {
+	  ss << "pool " << m->cmd[3] << " snap " << snapname << " does not exists";
 	  err = -ENOENT;
 	} else {
-	  const pg_pool_t *p = osdmap->get_pg_pool(pool);
-	  const char *start = m->cmd[5].c_str();
-	  char *end = (char *)start;
-	  unsigned n = strtol(start, &end, 10);
-	  if (*end == '\0') {
-	    if (m->cmd[4] == "size") {
-	      if (pending_inc->new_pools.count(pool) == 0)
-		pending_inc->new_pools[pool] = *p;
-	      pending_inc->new_pools[pool].size = n;
-	      pending_inc->new_pools[pool].last_change = pending_inc->epoch;
-	      ss << "set pool " << pool << " size to " << n;
-	      getline(ss, rs);
-	      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
-	      return true;
-	    } else if (m->cmd[4] == "crash_replay_interval") {
-	      if (pending_inc->new_pools.count(pool) == 0)
-		pending_inc->new_pools[pool] = *p;
-	      pending_inc->new_pools[pool].crash_replay_interval = n;
-	      ss << "set pool " << pool << " to crash_replay_interval to " << n;
-	      getline(ss, rs);
-	      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
-	      return true;
-	    } else if (m->cmd[4] == "pg_num") {
-	      if (true) {
-		// ** DISABLE THIS FOR NOW **
-		ss << "pg_num adjustment currently disabled (broken implementation)";
-		// ** DISABLE THIS FOR NOW **
-	      } else
-		if (n <= p->get_pg_num()) {
-		  ss << "specified pg_num " << n << " <= current " << p->get_pg_num();
-		} else if (!mon->pgmon()->pg_map.creating_pgs.empty()) {
-		  ss << "currently creating pgs, wait";
-		  err = -EAGAIN;
-		} else {
-		  if (pending_inc->new_pools.count(pool) == 0)
-		    pending_inc->new_pools[pool] = *p;
-		  pending_inc->new_pools[pool].set_pg_num(n);
-		  pending_inc->new_pools[pool].last_change = pending_inc->epoch;
-		  ss << "set pool " << pool << " pg_num to " << n;
-		  getline(ss, rs);
-		  paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
-		  return true;
-		}
-	    } else if (m->cmd[4] == "pgp_num") {
-	      if (n > p->get_pg_num()) {
-		ss << "specified pgp_num " << n << " > pg_num " << p->get_pg_num();
-	      } else if (!mon->pgmon()->pg_map.creating_pgs.empty()) {
-		ss << "still creating pgs, wait";
-		err = -EAGAIN;
-	      } else {
-		if (pending_inc->new_pools.count(pool) == 0)
-		  pending_inc->new_pools[pool] = *p;
-		pending_inc->new_pools[pool].set_pgp_num(n);
-		pending_inc->new_pools[pool].last_change = pending_inc->epoch;
-		ss << "set pool " << pool << " pgp_num to " << n;
-		getline(ss, rs);
-		paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
-		return true;
-	      }
-	    } else if (m->cmd[4] == "crush_ruleset") {
-	      if (osdmap->crush->rule_exists(n)) {
-		if (pending_inc->new_pools.count(pool) == 0)
-		  pending_inc->new_pools[pool] = *p;
-		pending_inc->new_pools[pool].crush_ruleset = n;
-		pending_inc->new_pools[pool].last_change = pending_inc->epoch;
-		ss << "set pool " << pool << " crush_ruleset to " << n;
-		getline(ss, rs);
-		paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
-		return true;
-	      } else {
-		ss << "crush ruleset " << n << " dne";
-		err = -ENOENT;
-	      }
-	    } else {
-	      ss << "unrecognized pool field " << m->cmd[4];
-	    }
+	  if (!pp) {
+	    pp = &l_pending_inc->new_pools[pool];
+	    *pp = *p;
+	  }
+	  snapid_t sn = pp->snap_exists(snapname.c_str());
+	  pp->remove_snap(sn);
+	  pp->set_snap_epoch(l_pending_inc->epoch);
+	  ss << "removed pool " << m->cmd[3] << " snap " << snapname;
+	  getline(ss, rs);
+	  paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+	  return true;
+	}
+      }
+    }
+    else if (m->cmd[2] == "create" && m->cmd.size() >= 4) {
+      int pg_num = 0;
+      int pgp_num = 0;
+      if (m->cmd.size() > 4) { // try to parse out pg_num and pgp_num
+	const char *start = m->cmd[4].c_str();
+	char *end = (char*)start;
+	pgp_num = pg_num = strtol(start, &end, 10);
+	if (*end != '\0') { // failed to parse
+	  err = -EINVAL;
+	  ss << "usage: osd pool create <poolname> [pg_num [pgp_num]]";
+	  goto out;
+	} else if (m->cmd.size() > 5) { // check for pgp_num too
+	  start = m->cmd[5].c_str();
+	  end = (char *)start;
+	  pgp_num = strtol(start, &end, 10);
+	  if (*end != '\0') { // failed to parse
+	    err = -EINVAL;
+	    ss << "usage: osd pool create <poolname> [pg_num [pgp_num]]";
+	    goto out;
 	  }
 	}
       }
-      else if (m->cmd[2] == "get") {
-	if (m->cmd.size() != 5) {
-	  err = -EINVAL;
-	  ss << "usage: osd pool get <poolname> <field>";
-	  goto out;
-	}
-	int64_t pool = osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
-	if (pool < 0) {
-	  ss << "unrecognized pool '" << m->cmd[3] << "'";
-	  err = -ENOENT;
-	  goto out;
-	}
-
-	const pg_pool_t *p = osdmap->get_pg_pool(pool);
-	if (m->cmd[4] == "pg_num") {
-	  ss << "PG_NUM: " << p->get_pg_num();
-	  err = 0;
-	  goto out;
-	}
-	if (m->cmd[4] == "pgp_num") {
-	  ss << "PGP_NUM: " << p->get_pgp_num();
-	  err = 0;
-	  goto out;
-	}
-	ss << "don't know how to get pool field " << m->cmd[4];
+      err = prepare_new_pool(m->cmd[3], 0,  // auid=0 for admin created pool
+			     -1,            // default crush rule
+			     pg_num, pgp_num);
+      if (err < 0) {
+	if (err == -EEXIST)
+	  ss << "pool '" << m->cmd[3] << "' exists";
 	goto out;
       }
+      ss << "pool '" << m->cmd[3] << "' created";
+      getline(ss, rs);
+      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+      return true;
+    } else if (m->cmd[2] == "delete" && m->cmd.size() >= 4) {
+      //hey, let's delete a pool!
+      int64_t pool = l_osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
+      if (pool < 0) {
+	ss << "unrecognized pool '" << m->cmd[3] << "'";
+	err = -ENOENT;
+      } else {
+	int ret = _prepare_remove_pool(pool);
+	if (ret == 0)
+	  ss << "pool '" << m->cmd[3] << "' deleted";
+	getline(ss, rs);
+	paxos->wait_for_commit(new Monitor::C_Command(mon, m, ret, rs, paxos->get_version()));
+	return true;
+      }
+    } else if (m->cmd[2] == "rename" && m->cmd.size() == 5) {
+      int64_t pool = l_osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
+      if (pool < 0) {
+	ss << "unrecognized pool '" << m->cmd[3] << "'";
+	err = -ENOENT;
+      } else if (l_osdmap->lookup_pg_pool_name(m->cmd[4].c_str()) >= 0) {
+	ss << "pool '" << m->cmd[4] << "' already exists";
+	err = -EEXIST;
+      } else {
+	int ret = _prepare_rename_pool(pool, m->cmd[4]);
+	if (ret == 0) {
+	  ss << "pool '" << m->cmd[3] << "' renamed to '" << m->cmd[4] << "'";
+	} else {
+	  ss << "failed to rename pool '" << m->cmd[3] << "' to '" << m->cmd[4] << "': "
+	     << cpp_strerror(ret);
+	}
+	getline(ss, rs);
+	paxos->wait_for_commit(new Monitor::C_Command(mon, m, ret, rs, paxos->get_version()));
+	return true;
+      }
+    } else if (m->cmd[2] == "set") {
+      if (m->cmd.size() != 6) {
+	err = -EINVAL;
+	ss << "usage: osd pool set <poolname> <field> <value>";
+	goto out;
+      }
+      int64_t pool = l_osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
+      if (pool < 0) {
+	ss << "unrecognized pool '" << m->cmd[3] << "'";
+	err = -ENOENT;
+      } else {
+	const pg_pool_t *p = l_osdmap->get_pg_pool(pool);
+	const char *start = m->cmd[5].c_str();
+	char *end = (char *)start;
+	unsigned n = strtol(start, &end, 10);
+	if (*end == '\0') {
+	  if (m->cmd[4] == "size") {
+	    if (l_pending_inc->new_pools.count(pool) == 0)
+	      l_pending_inc->new_pools[pool] = *p;
+	    l_pending_inc->new_pools[pool].size = n;
+	    l_pending_inc->new_pools[pool].last_change = l_pending_inc->epoch;
+	    ss << "set pool " << pool << " size to " << n;
+	    getline(ss, rs);
+	    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+	    return true;
+	  } else if (m->cmd[4] == "crash_replay_interval") {
+	    if (l_pending_inc->new_pools.count(pool) == 0)
+	      l_pending_inc->new_pools[pool] = *p;
+	    l_pending_inc->new_pools[pool].crash_replay_interval = n;
+	    ss << "set pool " << pool << " to crash_replay_interval to " << n;
+	    getline(ss, rs);
+	    paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+	    return true;
+	  } else if (m->cmd[4] == "pg_num") {
+	    if (true) {
+	      // ** DISABLE THIS FOR NOW **
+	      ss << "pg_num adjustment currently disabled (broken implementation)";
+	      // ** DISABLE THIS FOR NOW **
+	    } else
+	      if (n <= p->get_pg_num()) {
+		ss << "specified pg_num " << n << " <= current " << p->get_pg_num();
+	      } else if (!mon->pgmon()->pg_map.creating_pgs.empty()) {
+		ss << "currently creating pgs, wait";
+		err = -EAGAIN;
+	      } else {
+		if (l_pending_inc->new_pools.count(pool) == 0)
+		  l_pending_inc->new_pools[pool] = *p;
+		l_pending_inc->new_pools[pool].set_pg_num(n);
+		l_pending_inc->new_pools[pool].last_change = l_pending_inc->epoch;
+		ss << "set pool " << pool << " pg_num to " << n;
+		getline(ss, rs);
+		paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+		return true;
+	      }
+	  } else if (m->cmd[4] == "pgp_num") {
+	    if (n > p->get_pg_num()) {
+	      ss << "specified pgp_num " << n << " > pg_num " << p->get_pg_num();
+	    } else if (!mon->pgmon()->pg_map.creating_pgs.empty()) {
+	      ss << "still creating pgs, wait";
+	      err = -EAGAIN;
+	    } else {
+	      if (l_pending_inc->new_pools.count(pool) == 0)
+		l_pending_inc->new_pools[pool] = *p;
+	      l_pending_inc->new_pools[pool].set_pgp_num(n);
+	      l_pending_inc->new_pools[pool].last_change = l_pending_inc->epoch;
+	      ss << "set pool " << pool << " pgp_num to " << n;
+	      getline(ss, rs);
+	      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+	      return true;
+	    }
+	  } else if (m->cmd[4] == "crush_ruleset") {
+	    if (l_osdmap->crush->rule_exists(n)) {
+	      if (l_pending_inc->new_pools.count(pool) == 0)
+		l_pending_inc->new_pools[pool] = *p;
+	      l_pending_inc->new_pools[pool].crush_ruleset = n;
+	      l_pending_inc->new_pools[pool].last_change = l_pending_inc->epoch;
+	      ss << "set pool " << pool << " crush_ruleset to " << n;
+	      getline(ss, rs);
+	      paxos->wait_for_commit(new Monitor::C_Command(mon, m, 0, rs, paxos->get_version()));
+	      return true;
+	    } else {
+	      ss << "crush ruleset " << n << " dne";
+	      err = -ENOENT;
+	    }
+	  } else {
+	    ss << "unrecognized pool field " << m->cmd[4];
+	  }
+	}
+      }
     }
+    else if (m->cmd[2] == "get") {
+      if (m->cmd.size() != 5) {
+	err = -EINVAL;
+	ss << "usage: osd pool get <poolname> <field>";
+	goto out;
+      }
+      int64_t pool = l_osdmap->lookup_pg_pool_name(m->cmd[3].c_str());
+      if (pool < 0) {
+	ss << "unrecognized pool '" << m->cmd[3] << "'";
+	err = -ENOENT;
+	goto out;
+      }
+
+      const pg_pool_t *p = l_osdmap->get_pg_pool(pool);
+      if (m->cmd[4] == "pg_num") {
+	ss << "PG_NUM: " << p->get_pg_num();
+	err = 0;
+	goto out;
+      }
+      if (m->cmd[4] == "pgp_num") {
+	ss << "PGP_NUM: " << p->get_pgp_num();
+	err = 0;
+	goto out;
+      }
+      ss << "don't know how to get pool field " << m->cmd[4];
+      goto out;
+    }
+  } else {
+    ss << "no command?";
   }
 }
 

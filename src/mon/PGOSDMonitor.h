@@ -41,7 +41,8 @@ public:
   virtual bool prepare_update_sub(PaxosServiceMessage *m);  // true if processed.
   virtual bool preprocess_remove_snaps_sub(class MRemoveSnaps *m);
   virtual bool prepare_remove_snaps(MRemoveSnaps *m);
-  virtual void preprocess_command_sub(MMonCommand *m, int& r);
+  virtual void preprocess_command_sub(MMonCommand *m, int& r, stringstream& ss);
+  virtual void prepare_command_sub(MMonCommand *m, int& err, stringstream& ss, string& rs);
 
   bool preprocess_pgtemp(class MOSDPGTemp *m);
   bool prepare_pgtemp(class MOSDPGTemp *m);

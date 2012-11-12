@@ -1413,7 +1413,7 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
       ss << "listed " << osdmap->blacklist.size() << " entries";
       r = 0;
     } else {
-      preprocess_command_sub(m, r);
+      preprocess_command_sub(m, r, ss);
     }
   }
  out:
@@ -1964,7 +1964,7 @@ bool OSDMonitor::prepare_command(MMonCommand *m)
       ss << "unknown command " << m->cmd[1];
     }
   } else {
-    ss << "no command?";
+    prepare_command_sub(m, err, ss, rs);
   }
 out:
   getline(ss, rs);
