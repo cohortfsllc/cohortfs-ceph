@@ -15,6 +15,7 @@
 
 #include "PGOSDMap.h"
 #include "common/code_environment.h"
+#include "mon/PGMonitor.h"
 
 
 #define dout_subsys ceph_subsys_osd
@@ -675,8 +676,8 @@ int PGOSDMap::calc_pg_role(int osd, vector<int>& acting, int nrep)
 // mapping
 
 int PGOSDMap::object_locator_to_pg(const object_t& oid,
-                                         const object_locator_t& loc,
-                                         pg_t& pg) const
+				   const object_locator_t& loc,
+				   pg_t& pg) const
 {
   // calculate ps (placement seed)
   const pg_pool_t *pool = get_pg_pool(loc.get_pool());
@@ -693,6 +694,24 @@ int PGOSDMap::object_locator_to_pg(const object_t& oid,
 
 
 // building
+
+
+PGOSDMap::Incremental* PGOSDMap::newIncremental() const {
+  return new PGOSDMap::Incremental();
+}
+
+
+void PGOSDMap::build_simple(CephContext *cct,
+			    epoch_t e,
+			    uuid_d &fsid,
+			    int nosd)
+{
+  int pg_bits = g_conf->osd_pg_bits;
+  int pgp_bits = g_conf->osd_pgp_bits;
+
+  build_simple(cct, e, fsid, nosd, pg_bits, pgp_bits);
+}
+
 
 void PGOSDMap::build_simple(CephContext *cct,
 			    epoch_t e,
@@ -807,9 +826,11 @@ void PGOSDMap::build_simple_crush_map(CephContext *cct,
 }
 
 
-void PGOSDMap::build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid,
-				    int pg_bits, int pgp_bits)
+void PGOSDMap::build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid)
 {
+  const int pg_bits = g_conf->osd_pg_bits;
+  int pgp_bits = g_conf->osd_pgp_bits;
+
   ldout(cct, 10) << "build_simple_from_conf with "
 		 << pg_bits << " pg bits per osd, "
 		 << dendl;
@@ -1041,5 +1062,41 @@ void PGOSDMap::Incremental::encode_client_old(bufferlist& bl) const
     old_pg_t opg = p->first.get_old_pg();
     ::encode(opg, bl);
     ::encode(p->second, bl);
+  }
+}
+
+
+void PGOSDMap::thrash(Monitor* mon, OSDMap::Incremental& pending_inc_orig)
+{
+  Incremental& pending_inc = dynamic_cast<Incremental&>(pending_inc_orig);
+
+  // generate some pg_temp entries.
+  // let's assume the hash_map iterates in a random-ish order.
+  int n = rand() % mon->pgmon()->pg_map.pg_stat.size();
+  hash_map<pg_t,pg_stat_t>::iterator p = mon->pgmon()->pg_map.pg_stat.begin();
+  hash_map<pg_t,pg_stat_t>::iterator e = mon->pgmon()->pg_map.pg_stat.end();
+  while (n--)
+    p++;
+  for (int i=0; i<50; i++) {
+    vector<int> v;
+    for (int j=0; j<3; j++) {
+      int o = rand() % get_num_osds();
+      if (exists(o) && std::find(v.begin(), v.end(), o) == v.end())
+	v.push_back(o);
+    }
+    if (v.size() < 3) {
+      for (vector<int>::iterator q = p->second.acting.begin();
+	   q != p->second.acting.end();
+	   q++)
+	if (std::find(v.begin(), v.end(), *q) == v.end())
+	  v.push_back(*q);
+    }
+    if (v.size())
+      pending_inc.new_pg_temp[p->first] = v;
+    dout(5) << "thrash_map pg " << p->first << " pg_temp remapped to " << v << dendl;
+
+    p++;
+    if (p == e)
+      p = mon->pgmon()->pg_map.pg_stat.begin();
   }
 }

@@ -1054,8 +1054,10 @@ libcommon_files = \
 	os/hobject.cc \
 	osd/OSDMap.cc \
 	osd/osd_types.cc \
+	osd/PlaceSystem.cc \
 	pg/pg_types.cc \
 	pg/PGOSDMap.cc \
+	pg/PGPlaceSystem.cc \
 	mds/MDSMap.cc \
 	common/blkdev.cc \
 	common/common_init.cc \
@@ -1594,6 +1596,7 @@ noinst_HEADERS = \
         osd/OSDMap.h\
         osd/ObjectVersioner.h\
 	osd/OpRequest.h\
+	osd/PlaceSystem.h\
         osd/Watch.h\
         osd/osd_types.h\
         osdc/Blinker.h\
@@ -1608,6 +1611,7 @@ noinst_HEADERS = \
         pg/PG.h\
         pg/ReplicatedPG.h\
         pg/PGOSDMap.h\
+	pg/PGPlaceSystem.h\
 	rgw/rgw_acl.h\
 	rgw/rgw_acl_s3.h\
 	rgw/rgw_acl_swift.h\

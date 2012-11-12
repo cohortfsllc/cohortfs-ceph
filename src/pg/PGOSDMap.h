@@ -109,16 +109,17 @@ private:
 
 public:
 
+  virtual Incremental* newIncremental() const;
+
   /*
    * handy helpers to build simple maps...
    */
-  void build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
-		    int num_osd, int pg_bits, int pgp_bits);
-  void build_simple_from_conf(CephContext *cct,
-			      epoch_t e,
-			      uuid_d &fsid,
-			      int pg_bits,
-			      int pgp_bits);
+  virtual void build_simple(CephContext *cct, epoch_t e, uuid_d &fsid, int num_osd);
+  virtual void build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid);
+
+  void build_simple(CephContext *cct, epoch_t e, uuid_d &fsid, int num_osd,
+		    int pg_bits, int pogp_bits);
+			      
   static void build_simple_crush_map(CephContext *cct,
 				     CrushWrapper& crush,
 				     map<int, const char*>& poolsets,
@@ -131,6 +132,8 @@ public:
   static void generate_test_instances(list<OSDMap*>& o);
 
   int apply_incremental_subclass(OSDMap::Incremental& inc);
+
+  virtual void thrash(Monitor* mon, OSDMap::Incremental& pending_inc);
 
   /// try to re-use/reference addrs in oldmap from newmap
   static void dedup(const PGOSDMap *oldmap, PGOSDMap *newmap);

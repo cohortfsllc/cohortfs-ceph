@@ -260,6 +260,7 @@ OPTION(osd_tmapput_sets_uses_tmap, OPT_BOOL, false)
 
 OPTION(osd_uuid, OPT_UUID, uuid_d())
 OPTION(osd_data, OPT_STR, "/var/lib/ceph/osd/$cluster-$id")
+OPTION(osd_placement_system, OPT_STR, "pg+crush")
 OPTION(osd_journal, OPT_STR, "/var/lib/ceph/osd/$cluster-$id/journal")
 OPTION(osd_journal_size, OPT_INT, 0)         // in mb
 OPTION(osd_max_write_size, OPT_INT, 90)

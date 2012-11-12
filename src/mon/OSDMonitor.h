@@ -20,6 +20,8 @@
 
 #include <map>
 #include <set>
+#include <memory>
+
 using namespace std;
 
 #include "include/types.h"
@@ -38,13 +40,13 @@ class MOSDMap;
 
 class OSDMonitor : public PaxosService {
 public:
-  OSDMap osdmap;
+  auto_ptr<OSDMap> osdmap;
 
 private:
   map<epoch_t, list<PaxosServiceMessage*> > waiting_for_map;
 
   // [leader]
-  OSDMap::Incremental pending_inc;
+  auto_ptr<OSDMap::Incremental> pending_inc;
   multimap<int, pair<int, int> > failed_notes; // <failed_osd, <reporter, #reports> >
   map<int,utime_t>    down_pending_out;  // osd down -> out
 
@@ -198,18 +200,18 @@ private:
   void check_sub(Subscription *sub);
 
   void add_flag(int flag) {
-    if (!(osdmap.flags & flag)) {
-      if (pending_inc.new_flags < 0)
-	pending_inc.new_flags = osdmap.flags;
-      pending_inc.new_flags |= flag;
+    if (!(osdmap->flags & flag)) {
+      if (pending_inc->new_flags < 0)
+	pending_inc->new_flags = osdmap->flags;
+      pending_inc->new_flags |= flag;
     }
   }
 
   void remove_flag(int flag) {
-    if(osdmap.flags & flag) {
-      if (pending_inc.new_flags < 0)
-	pending_inc.new_flags = osdmap.flags;
-      pending_inc.new_flags &= ~flag;
+    if(osdmap->flags & flag) {
+      if (pending_inc->new_flags < 0)
+	pending_inc->new_flags = osdmap->flags;
+      pending_inc->new_flags &= ~flag;
     }
   }
 };

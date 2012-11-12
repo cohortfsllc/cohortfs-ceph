@@ -30,6 +30,8 @@
 #include "common/Mutex.h"
 #include "common/Clock.h"
 
+#include "mon/Monitor.h"
+
 #include "include/ceph_features.h"
 
 #include "crush/CrushWrapper.h"
@@ -129,6 +131,10 @@ public:
     void encode_client_old(bufferlist& bl) const;
     void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
     void decode(bufferlist::iterator &p);
+    void decode(bufferlist& bl) {
+      bufferlist::iterator p = bl.begin();
+      decode(p);
+    }
     void dump(Formatter *f) const;
 
     Incremental(epoch_t e=0) :
@@ -197,6 +203,15 @@ protected:
     memset(&fsid, 0, sizeof(fsid));
   }
   virtual ~OSDMap() { }
+
+  virtual Incremental* newIncremental() const = 0;
+  virtual void build_simple(CephContext *cct,
+			    epoch_t e,
+			    uuid_d &fsid,
+			    int num_osd) = 0;
+  virtual void build_simple_from_conf(CephContext *cct,
+				      epoch_t e,
+				      uuid_d &fsid) = 0;
 
   // map info
   const uuid_d& get_fsid() const { return fsid; }
@@ -391,6 +406,8 @@ public:
   virtual void dump(Formatter *f) const;
 
   string get_flag_string() const;
+  virtual void thrash(Monitor* mon, Incremental& pending_inc) = 0;
+
   static string get_flag_string(unsigned flags);
 }; // class OSDMap
 
