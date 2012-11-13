@@ -72,6 +72,8 @@
 #include "common/config.h"
 #include "include/assert.h"
 
+#include "osd/PlaceSystem.h"
+
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
@@ -118,9 +120,12 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorStore *s, Messenger *m, Mo
 {
   rank = -1;
 
+  PlaceSystem* placeSystem = PlaceSystem::getSystem(g_conf->osd_placement_system);
+
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, add_paxos(PAXOS_MDSMAP));
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, add_paxos(PAXOS_MONMAP));
-  paxos_service[PAXOS_OSDMAP] = new OSDMonitor(this, add_paxos(PAXOS_OSDMAP));
+  paxos_service[PAXOS_OSDMAP] =
+    placeSystem->newOSDMonitor(this, add_paxos(PAXOS_OSDMAP));
   paxos_service[PAXOS_PGMAP] = new PGMonitor(this, add_paxos(PAXOS_PGMAP));
   paxos_service[PAXOS_LOG] = new LogMonitor(this, add_paxos(PAXOS_LOG));
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, add_paxos(PAXOS_AUTH));
@@ -1245,7 +1250,7 @@ void Monitor::handle_command(MMonCommand *m)
       ss << "   health " << health << "\n";
       ss << "   monmap " << *monmap << ", election epoch " << get_epoch() << ", quorum " << get_quorum()
 	 << " " << get_quorum_names() << "\n";
-      ss << "   osdmap " << osdmon()->osdmap << "\n";
+      ss << "   osdmap " << *osdmon()->osdmap << "\n";
       ss << "    pgmap " << pgmon()->pg_map << "\n";
       ss << "   mdsmap " << mdsmon()->mdsmap << "\n";
       rs = ss.str();
@@ -1863,7 +1868,7 @@ void Monitor::handle_get_version(MMonGetVersion *m)
     reply->version = mdsmon()->mdsmap.get_epoch();
     reply->oldest_version = mdsmon()->paxos->get_first_committed();
   } else if (m->what == "osdmap") {
-    reply->version = osdmon()->osdmap.get_epoch();
+    reply->version = osdmon()->osdmap->get_epoch();
     reply->oldest_version = osdmon()->paxos->get_first_committed();
   } else if (m->what == "monmap") {
     reply->version = monmap->get_epoch();
@@ -2049,8 +2054,10 @@ int Monitor::mkfs(bufferlist& osdmapbl)
   if (osdmapbl.length()) {
     // make sure it's a valid osdmap
     try {
-      OSDMap om;
-      om.decode(osdmapbl);
+      PlaceSystem* placeSystem =
+	PlaceSystem::getSystem(g_conf->osd_placement_system);
+      OSDMap* om = placeSystem->newOSDMap();;
+      om->decode(osdmapbl);
     }
     catch (buffer::error& e) {
       derr << "error decoding provided osdmap: " << e.what() << dendl;

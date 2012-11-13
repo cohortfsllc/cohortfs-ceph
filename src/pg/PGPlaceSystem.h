@@ -18,6 +18,7 @@
 
 #include "osd/PlaceSystem.h"
 #include "PGOSDMap.h"
+#include "mon/PGOSDMonitor.h"
 
 
 class PGPlaceSystem : public PlaceSystem {
@@ -30,8 +31,17 @@ class PGPlaceSystem : public PlaceSystem {
 public:
   ~PGPlaceSystem() {}
 
-  OSDMap* newMap() const { return new PGOSDMap(); }
-  OSDMap::Incremental* newMapIncremental() const { return new PGOSDMap::Incremental(); }
+  virtual PGOSDMap* newOSDMap() const {
+    return new PGOSDMap();
+  }
+
+  virtual PGOSDMap::Incremental* newOSDMapIncremental() const {
+    return new PGOSDMap::Incremental();
+  }
+
+  virtual PGOSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const {
+    return new PGOSDMonitor(mon, p);
+  }
 };
 
 

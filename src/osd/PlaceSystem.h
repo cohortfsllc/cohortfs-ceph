@@ -23,6 +23,7 @@
 #include "include/inttypes.h"
 
 #include "OSDMap.h"
+#include "mon/OSDMonitor.h"
 
 
 class PlaceSystem {
@@ -47,10 +48,13 @@ public:
   __u16 getSystemIdentifier() const { return identifier; }
 
   // creates a new Map; caller must deallocate
-  virtual OSDMap* newMap() const = 0;
+  virtual OSDMap* newOSDMap() const = 0;
 
   // creates a new MapIncremental; caller must deallocate
-  virtual OSDMap::Incremental* newMapIncremental() const = 0;
+  virtual OSDMap::Incremental* newOSDMapIncremental() const = 0;
+
+  // 
+  virtual OSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const = 0;
 };
 
 #endif // CEPH_PLACESYSTEN_H

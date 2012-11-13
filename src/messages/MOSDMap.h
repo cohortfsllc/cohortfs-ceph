@@ -106,13 +106,13 @@ public:
       for (map<epoch_t,bufferlist>::iterator p = incremental_maps.begin();
 	   p != incremental_maps.end();
 	   ++p) {
-	auto_ptr<OSDMap::Incremental> inc(placeSystem->newMapIncremental());
+	auto_ptr<OSDMap::Incremental> inc(placeSystem->newOSDMapIncremental());
 	bufferlist::iterator q = p->second.begin();
 	inc->decode(q);
 	p->second.clear();
 	if (inc->fullmap.length()) {
 	  // embedded full map?
-	  auto_ptr<OSDMap> m(placeSystem->newMap());
+	  auto_ptr<OSDMap> m(placeSystem->newOSDMap());
 	  m->decode(inc->fullmap);
 	  inc->fullmap.clear();
 	  m->encode(inc->fullmap, features);
@@ -122,7 +122,7 @@ public:
       for (map<epoch_t,bufferlist>::iterator p = maps.begin();
 	   p != maps.end();
 	   ++p) {
-	auto_ptr<OSDMap> m(placeSystem->newMap());
+	auto_ptr<OSDMap> m(placeSystem->newOSDMap());
 	m->decode(p->second);
 	p->second.clear();
 	m->encode(p->second, features);
