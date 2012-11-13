@@ -1964,7 +1964,12 @@ bool OSDMonitor::prepare_command(MMonCommand *m)
       ss << "unknown command " << m->cmd[1];
     }
   } else {
-    prepare_command_sub(m, err, ss, rs);
+    const bool result = prepare_command_sub(m, err, ss, rs);
+    if (result) {
+      return true;
+    } else {
+      goto out;
+    }
   }
 out:
   getline(ss, rs);
