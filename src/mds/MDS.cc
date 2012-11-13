@@ -28,6 +28,7 @@
 #include "osdc/Objecter.h"
 #include "osdc/Filer.h"
 #include "osdc/Journaler.h"
+#include "osd/PlaceSystem.h"
 
 #include "MDSMap.h"
 
@@ -106,7 +107,9 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   monc->set_messenger(messenger);
 
   mdsmap = new MDSMap;
-  osdmap = new OSDMap;
+  PlaceSystem* placeSystem =
+    PlaceSystem::getSystem(g_conf->osd_placement_system);
+  osdmap = placeSystem->newOSDMap();;
 
   objecter = new Objecter(m->cct, messenger, monc, osdmap, mds_lock, timer);
   objecter->unset_honor_osdmap_full();

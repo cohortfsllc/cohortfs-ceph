@@ -15,6 +15,8 @@
 #ifndef CEPH_PG_TYPES_H
 #define CEPH_PG_TYPES_H
 
+#include "osd/osd_types.h"
+
 
 // object namespaces
 #define CEPH_METADATA_NS       1
@@ -67,6 +69,7 @@ struct pg_t {
     o.v.preferred = (__s16)m_preferred;
     return o;
   }
+
   pg_t(const old_pg_t& opg) {
     *this = opg.v;
   }

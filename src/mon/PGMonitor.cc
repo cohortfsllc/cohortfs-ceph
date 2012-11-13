@@ -19,6 +19,8 @@
 #include "OSDMonitor.h"
 #include "MonitorStore.h"
 
+#include "pg/PGOSDMap.h"
+
 #include "messages/MPGStats.h"
 #include "messages/MPGStatsAck.h"
 #include "messages/MGetPoolStats.h"
@@ -341,7 +343,8 @@ bool PGMonitor::preprocess_getpoolstats(MGetPoolStats *m)
 {
   MGetPoolStatsReply *reply;
   MonSession *session = m->get_session();
-  PGOSDMap* const l_osdmap = dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+  PGOSDMap* const l_osdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
 
   if (!session)
     goto out;
@@ -686,7 +689,7 @@ bool PGMonitor::register_new_pgs()
   dout(10) << "register_new_pgs checking pg pools for osdmap epoch " << epoch
 	   << ", last_pg_scan " << pg_map.last_pg_scan << dendl;
 
-  OSDMap *osdmap = &mon->osdmon()->osdmap;
+  PGOSDMap *osdmap = dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
 
   int created = 0;
   for (map<int64_t,pg_pool_t>::iterator p = osdmap->pools.begin();
@@ -764,6 +767,9 @@ void PGMonitor::send_pg_creates()
 {
   dout(10) << "send_pg_creates to " << pg_map.creating_pgs.size() << " pgs" << dendl;
 
+  PGOSDMap* const pgosdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+
   utime_t now = ceph_clock_now(g_ceph_context);
   
   for (set<pg_t>::iterator p = pg_map.creating_pgs.begin();
@@ -775,7 +781,7 @@ void PGMonitor::send_pg_creates()
     if (s.parent_split_bits)
       on = s.parent;
     vector<int> acting;
-    int nrep = mon->osdmon()->osdmap.pg_to_acting_osds(on, acting);
+    int nrep = pgosdmap->pg_to_acting_osds(on, acting);
 
     if (s.acting.size())
       pg_map.creating_pgs_by_osd[s.acting[0]].erase(pgid);
@@ -789,7 +795,7 @@ void PGMonitor::send_pg_creates()
       pg_map.creating_pgs_by_osd[acting[0]].insert(pgid);
     } else {
       dout(20) << "send_pg_creates  " << pgid << " -> no osds in epoch "
-	       << mon->osdmon()->osdmap.get_epoch() << ", skipping" << dendl;
+	       << pgosdmap->get_epoch() << ", skipping" << dendl;
       continue;  // blarney!
     }
   }
@@ -804,19 +810,22 @@ void PGMonitor::send_pg_creates()
 	now - g_conf->mon_pg_create_interval < last_sent_pg_create[osd]) 
       continue;
       
-    if (mon->osdmon()->osdmap.is_up(osd))
+    if (pgosdmap->is_up(osd))
       send_pg_creates(osd, NULL);
   }
 }
 
 void PGMonitor::send_pg_creates(int osd, Connection *con)
 {
+  PGOSDMap* const pgosdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
+
   map<int, set<pg_t> >::iterator p = pg_map.creating_pgs_by_osd.find(osd);
   if (p == pg_map.creating_pgs_by_osd.end())
     return;
 
   dout(20) << "send_pg_creates osd." << osd << " pgs " << p->second << dendl;
-  MOSDPGCreate *m = new MOSDPGCreate(mon->osdmon()->osdmap.get_epoch());
+  MOSDPGCreate *m = new MOSDPGCreate(pgosdmap->get_epoch());
   for (set<pg_t>::iterator q = p->second.begin(); q != p->second.end(); ++q) {
     m->mkpg[*q] = pg_create_t(pg_map.pg_stat[*q].created,
 			      pg_map.pg_stat[*q].parent,
@@ -826,8 +835,8 @@ void PGMonitor::send_pg_creates(int osd, Connection *con)
   if (con) {
     mon->messenger->send_message(m, con);
   } else {
-    assert(mon->osdmon()->osdmap.is_up(osd));
-    mon->messenger->send_message(m, mon->osdmon()->osdmap.get_inst(osd));
+    assert(pgosdmap->is_up(osd));
+    mon->messenger->send_message(m, pgosdmap->get_inst(osd));
   }
   last_sent_pg_create[osd] = ceph_clock_now(g_ceph_context);
 }
@@ -836,7 +845,8 @@ bool PGMonitor::check_down_pgs()
 {
   dout(10) << "check_down_pgs" << dendl;
 
-  OSDMap *osdmap = &mon->osdmon()->osdmap;
+  PGOSDMap* const osdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
   bool ret = false;
 
   for (hash_map<pg_t,pg_stat_t>::iterator p = pg_map.pg_stat.begin();
@@ -870,6 +880,9 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
   int r = -1;
   bufferlist rdata;
   stringstream ss;
+
+  PGOSDMap* const pgosdmap =
+    dynamic_cast<PGOSDMap*>(mon->osdmon()->osdmap.get());
 
   MonSession *session = m->get_session();
   if (!session ||
@@ -987,9 +1000,9 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
       r = -EINVAL;
       if (pgid.parse(m->cmd[2].c_str())) {
 	vector<int> up, acting;
-	pg_t mpgid = mon->osdmon()->osdmap.raw_pg_to_pg(pgid);
-	mon->osdmon()->osdmap.pg_to_up_acting_osds(pgid, up, acting);
-	ss << "osdmap e" << mon->osdmon()->osdmap.get_epoch()
+	pg_t mpgid = pgosdmap->raw_pg_to_pg(pgid);
+	pgosdmap->pg_to_up_acting_osds(pgid, up, acting);
+	ss << "osdmap e" << pgosdmap->get_epoch()
 	   << " pg " << pgid << " (" << mpgid << ")"
 	   << " -> up " << up << " acting " << acting;
 	r = 0;
@@ -1003,12 +1016,12 @@ bool PGMonitor::preprocess_command(MMonCommand *m)
 	if (pg_map.pg_stat.count(pgid)) {
 	  if (pg_map.pg_stat[pgid].acting.size()) {
 	    int osd = pg_map.pg_stat[pgid].acting[0];
-	    if (mon->osdmon()->osdmap.is_up(osd)) {
+	    if (pgosdmap->is_up(osd)) {
 	      vector<pg_t> pgs(1);
 	      pgs[0] = pgid;
 	      mon->try_send_message(new MOSDScrub(mon->monmap->fsid, pgs,
 						  m->cmd[1] == "repair"),
-				    mon->osdmon()->osdmap.get_inst(osd));
+				    pgosdmap->get_inst(osd));
 	      ss << "instructing pg " << pgid << " on osd." << osd << " to " << m->cmd[1];
 	      r = 0;
 	    } else
@@ -1074,7 +1087,7 @@ bool PGMonitor::prepare_command(MMonCommand *m)
 {
   stringstream ss;
   pg_t pgid;
-  epoch_t epoch = mon->osdmon()->osdmap.get_epoch();
+  epoch_t epoch = mon->osdmon()->osdmap->get_epoch();
   int r = -EINVAL;
   string rs;
 

@@ -42,6 +42,9 @@
 #include "messages/MOSDRepScrub.h"
 #include "messages/MOSDPGLog.h"
 
+#include "pg/PGOSDMap.h"
+
+
 #include "common/DecayCounter.h"
 
 #include <list>
@@ -337,6 +340,11 @@ protected:
     assert(is_locked());
     assert(osdmap_ref);
     return osdmap_ref;
+  }
+
+  const PGOSDMap* get_pgosdmap() const {
+    OSDMapRef ref = get_osdmap();
+    return dynamic_cast<const PGOSDMap*>(ref.get());
   }
 
   /** locking and reference counting.

@@ -36,6 +36,10 @@
 #include "common/config.h"
 #include "include/assert.h"
 
+#warning work to get rid of this include
+#include "pg/pg_types.h"
+
+
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, mdsmap)

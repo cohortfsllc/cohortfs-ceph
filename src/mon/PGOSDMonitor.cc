@@ -53,7 +53,7 @@ void PGOSDMonitor::create_pending()
 
 void PGOSDMonitor::remove_redundant_pg_temp()
 {
-  const PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap.get());
+  PGOSDMap* const pgosdmap = dynamic_cast<PGOSDMap*>(osdmap.get());
 
   dout(10) << "remove_redundant_pg_temp" << dendl;
 

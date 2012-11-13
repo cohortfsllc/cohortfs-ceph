@@ -16,6 +16,7 @@
 #include "common/config.h"
 #include "osd/OSD.h"
 #include "osd/OpRequest.h"
+#include "pg/PGOSDMap.h"
 
 #include "common/Timer.h"
 
@@ -42,11 +43,12 @@ static ostream& _prefix(std::ostream *_dout, const PG *pg) {
 
 void PGPool::update(OSDMapRef map)
 {
-  const pg_pool_t *pi = map->get_pg_pool(id);
+  const PGOSDMap* const pgosdmap = dynamic_cast<const PGOSDMap*>(map.get());
+  const pg_pool_t *pi = pgosdmap->get_pg_pool(id);
   assert(pi);
   info = *pi;
   auid = pi->auid;
-  if (pi->get_snap_epoch() == map->get_epoch()) {
+  if (pi->get_snap_epoch() == pgosdmap->get_epoch()) {
     pi->build_removed_snaps(newly_removed_snaps);
     newly_removed_snaps.subtract(cached_removed_snaps);
     cached_removed_snaps.union_of(newly_removed_snaps);
@@ -785,7 +787,8 @@ void PG::generate_past_intervals()
   vector<int> acting, up, old_acting, old_up;
 
   cur_map = osd->get_map(cur_epoch);
-  cur_map->pg_to_up_acting_osds(get_pgid(), up, acting);
+  const PGOSDMap* pgosdmap = dynamic_cast<const PGOSDMap*>(cur_map.get());
+  pgosdmap->pg_to_up_acting_osds(get_pgid(), up, acting);
   epoch_t same_interval_since = cur_epoch;
   dout(10) << __func__ << " over epochs " << cur_epoch << "-"
 	   << end_epoch << dendl;
@@ -796,7 +799,8 @@ void PG::generate_past_intervals()
     old_acting.swap(acting);
 
     cur_map = osd->get_map(cur_epoch);
-    cur_map->pg_to_up_acting_osds(get_pgid(), up, acting);
+    pgosdmap = dynamic_cast<const PGOSDMap*>(cur_map.get());
+    pgosdmap->pg_to_up_acting_osds(get_pgid(), up, acting);
 
     std::stringstream debug;
     bool new_interval = pg_interval_t::check_new_interval(
@@ -1143,7 +1147,7 @@ bool PG::calc_acting(int& newest_update_osd_id, vector<int>& want) const
   for (map<int,pg_info_t>::const_iterator i = all_info.begin();
        i != all_info.end();
        ++i) {
-    if (usable >= get_osdmap()->get_pg_size(info.pgid))
+    if (usable >= get_pgosdmap()->get_pg_size(info.pgid))
       break;
 
     // skip up osds we already considered above
@@ -1458,7 +1462,7 @@ void PG::activate(ObjectStore::Transaction& t,
     }
 
     // degraded?
-    if (get_osdmap()->get_pg_size(info.pgid) > active)
+    if (get_pgosdmap()->get_pg_size(info.pgid) > active)
       state_set(PG_STATE_DEGRADED);
 
     // all clean?
@@ -1660,7 +1664,7 @@ void PG::mark_clean()
 {
   // only mark CLEAN if we have the desired number of replicas AND we
   // are not remapped.
-  if (acting.size() == get_osdmap()->get_pg_size(info.pgid) &&
+  if (acting.size() == get_pgosdmap()->get_pg_size(info.pgid) &&
       up == acting)
     state_set(PG_STATE_CLEAN);
 
@@ -1899,7 +1903,8 @@ void PG::update_stats()
     pg_stats_stable = info.stats;
 
     // calc copies, degraded
-    unsigned target = MAX(get_osdmap()->get_pg_size(info.pgid), acting.size());
+    unsigned target =
+      MAX(get_pgosdmap()->get_pg_size(info.pgid), acting.size());
     pg_stats_stable.stats.calc_copies(target);
     pg_stats_stable.stats.sum.num_objects_degraded = 0;
     if (!is_clean() && is_active()) {
@@ -3759,7 +3764,7 @@ void PG::start_peering_interval(const OSDMapRef lastmap,
   else
     state_clear(PG_STATE_REMAPPED);
 
-  int role = osdmap->calc_pg_role(osd->whoami, acting, acting.size());
+  int role = get_pgosdmap()->calc_pg_role(osd->whoami, acting, acting.size());
   set_role(role);
 
   // did acting, up, primary|acker change?
@@ -4705,7 +4710,7 @@ boost::statechart::result PG::RecoveryState::Active::react(const RecoveryComplet
 
   // if we finished backfill, all acting are active; recheck if
   // DEGRADED is appropriate.
-  if (pg->get_osdmap()->get_pg_size(pg->info.pgid) <= pg->acting.size())
+  if (pg->get_pgosdmap()->get_pg_size(pg->info.pgid) <= pg->acting.size())
     pg->state_clear(PG_STATE_DEGRADED);
 
   // adjust acting set?  (e.g. because backfill completed...)
