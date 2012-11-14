@@ -3078,7 +3078,8 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 	dout(10) << " connected to " << w << " by " << entity << " session " << session << dendl;
 	obc->watchers[entity] = session;
 	session->get();
-	session->watches[obc] = get_osdmap()->object_locator_to_pg(soid.oid, obc->obs.oi.oloc);
+	session->watches[obc] =
+	  get_pgosdmap()->object_locator_to_pg(soid.oid, obc->obs.oi.oloc);
 	obc->ref++;
       } else if (iter->second == session) {
 	// already there
@@ -3092,7 +3093,8 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 	iter->second->put();
 	iter->second = session;
 	session->get();
-	session->watches[obc] = get_osdmap()->object_locator_to_pg(soid.oid, obc->obs.oi.oloc);
+	session->watches[obc] =
+	  get_pgosdmap()->object_locator_to_pg(soid.oid, obc->obs.oi.oloc);
       }
       map<entity_name_t,Watch::C_WatchTimeout*>::iterator un_iter =
 	obc->unconnected_watchers.find(entity);
@@ -3142,10 +3144,11 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 
       dout(10) << " " << *p << dendl;
 
-      Watch::Notification *notif = new Watch::Notification(ctx->reqid.name, session, p->cookie, p->bl);
+      Watch::Notification *notif =
+	new Watch::Notification(ctx->reqid.name, session, p->cookie, p->bl);
       session->get();  // notif got a reference
       session->con->get();
-      notif->pgid = get_osdmap()->object_locator_to_pg(soid.oid, obc->obs.oi.oloc);
+      notif->pgid = get_pgosdmap()->object_locator_to_pg(soid.oid, obc->obs.oi.oloc);
 
       osd->watch->add_notification(notif);
 
