@@ -17,18 +17,18 @@
 
 
 PGOSDService::PGOSDService(PGOSD *osd) :
-    OSDService(osd),
-    pg_recovery_stats(osd->pg_recovery_stats),
-    pg_temp_lock("OSDService::pg_temp_lock"),
-    op_wq(osd->op_wq),
-    peering_wq(osd->peering_wq),
-    recovery_wq(osd->recovery_wq),
-    snap_trim_wq(osd->snap_trim_wq),
-    scrub_wq(osd->scrub_wq),
-    scrub_finalize_wq(osd->scrub_finalize_wq),
-    rep_scrub_wq(osd->rep_scrub_wq)
+  OSDService(osd),
+  pg_recovery_stats(osd->pg_recovery_stats),
+  pg_temp_lock("OSDService::pg_temp_lock"),
+  op_wq(osd->op_wq),
+  peering_wq(osd->peering_wq),
+  recovery_wq(osd->recovery_wq),
+  snap_trim_wq(osd->snap_trim_wq),
+  scrub_wq(osd->scrub_wq),
+  scrub_finalize_wq(osd->scrub_finalize_wq),
+  rep_scrub_wq(osd->rep_scrub_wq)
 {
-    // empty
+  // empty
 }
 
 
@@ -42,84 +42,102 @@ void PGOSDService::pg_stat_queue_dequeue(PG *pg)
   osd->pg_stat_queue_dequeue(pg);
 }
 
+void PGOSDService::queue_want_pg_temp(pg_t pgid, vector<int>& want)
+{
+  Mutex::Locker l(pg_temp_lock);
+  pg_temp_wanted[pgid] = want;
+}
+
+void PGOSDService::send_pg_temp()
+{
+  Mutex::Locker l(pg_temp_lock);
+  if (pg_temp_wanted.empty())
+    return;
+  dout(10) << "send_pg_temp " << pg_temp_wanted << dendl;
+  MOSDPGTemp *m = new MOSDPGTemp(osdmap->get_epoch());
+  m->pg_temp = pg_temp_wanted;
+  monc->send_mon_message(m);
+}
+
+
 // OSD
 
 PGOSD::PGOSD(int id, Messenger *internal_messenger, Messenger *external_messenger,
              Messenger *hbclientm, Messenger *hbserverm, MonClient *mc,
              const std::string &dev, const std::string &jdev,
              OSDService* osdSvc) :
-    OSD(id, internal_messenger, external_messenger, hbclientm, hbservem,
-        mc, dev, jdev, osdSvc),
-    op_queue_len(0),
-    op_wq(this, g_conf->osd_op_thread_timeout, &op_tp),
-    peering_wq(this, g_conf->osd_op_thread_timeout, &op_tp, 200),
-    debug_drop_pg_create_probability(g_conf->osd_debug_drop_pg_create_probability),
-    debug_drop_pg_create_duration(g_conf->osd_debug_drop_pg_create_duration),
-    debug_drop_pg_create_left(-1),
-    outstanding_pg_stats(false),
-    pg_stat_queue_lock("OSD::pg_stat_queue_lock"),
-    osd_stat_updated(false),
-    pg_stat_tid(0),
-    pg_stat_tid_flushed(0),
-    recovery_ops_active(0),
-    recovery_wq(this, g_conf->osd_recovery_thread_timeout, &recovery_tp),
-    replay_queue_lock("OSD::replay_queue_lock"),
-    snap_trim_wq(this, g_conf->osd_snap_trim_thread_timeout, &disk_tp),
-    scrub_wq(this, g_conf->osd_scrub_thread_timeout, &disk_tp),
-    scrub_finalize_wq(this, g_conf->osd_scrub_finalize_thread_timeout, &op_tp),
-    rep_scrub_wq(this, g_conf->osd_scrub_thread_timeout, &disk_tp),
-    next_removal_seq(0)
+  OSD(id, internal_messenger, external_messenger, hbclientm, hbservem,
+      mc, dev, jdev, osdSvc),
+  op_queue_len(0),
+  op_wq(this, g_conf->osd_op_thread_timeout, &op_tp),
+  peering_wq(this, g_conf->osd_op_thread_timeout, &op_tp, 200),
+  debug_drop_pg_create_probability(g_conf->osd_debug_drop_pg_create_probability),
+  debug_drop_pg_create_duration(g_conf->osd_debug_drop_pg_create_duration),
+  debug_drop_pg_create_left(-1),
+  outstanding_pg_stats(false),
+  pg_stat_queue_lock("OSD::pg_stat_queue_lock"),
+  osd_stat_updated(false),
+  pg_stat_tid(0),
+  pg_stat_tid_flushed(0),
+  recovery_ops_active(0),
+  recovery_wq(this, g_conf->osd_recovery_thread_timeout, &recovery_tp),
+  replay_queue_lock("OSD::replay_queue_lock"),
+  snap_trim_wq(this, g_conf->osd_snap_trim_thread_timeout, &disk_tp),
+  scrub_wq(this, g_conf->osd_scrub_thread_timeout, &disk_tp),
+  scrub_finalize_wq(this, g_conf->osd_scrub_finalize_thread_timeout, &op_tp),
+  rep_scrub_wq(this, g_conf->osd_scrub_thread_timeout, &disk_tp),
+  next_removal_seq(0)
 {
-    // empty
+  // empty
 }
 
 
 int PGOSD::init() {
-    const int result = init_super();
+  const int result = init_super();
 
-    // load up pgs (as they previously existed)
-    load_pgs();
+  // load up pgs (as they previously existed)
+  load_pgs();
 
-    return result;
+  return result;
 }
 
 
 // NB: unsure if this will order the key steps correctly
 int PGOSD::shutdown() {
-    // then kick all pgs,
-    for (hash_map<pg_t, PG*>::iterator p = pg_map.begin();
-         p != pg_map.end();
-         p++) {
-        dout(20) << " kicking pg " << p->first << dendl;
-        p->second->lock();
-        p->second->kick();
-        p->second->unlock();
-    }
-    dout(20) << " kicked all pgs" << dendl;
+  // then kick all pgs,
+  for (hash_map<pg_t, PG*>::iterator p = pg_map.begin();
+       p != pg_map.end();
+       p++) {
+    dout(20) << " kicking pg " << p->first << dendl;
+    p->second->lock();
+    p->second->kick();
+    p->second->unlock();
+  }
+  dout(20) << " kicked all pgs" << dendl;
 
-    // then stop thread.
-    disk_tp.stop();
-    dout(10) << "disk tp stopped" << dendl;
+  // then stop thread.
+  disk_tp.stop();
+  dout(10) << "disk tp stopped" << dendl;
 
-    // tell pgs we're shutting down
-    for (hash_map<pg_t, PG*>::iterator p = pg_map.begin();
-         p != pg_map.end();
-         p++) {
-        p->second->lock();
-        p->second->on_shutdown();
-        p->second->unlock();
-    }
+  // tell pgs we're shutting down
+  for (hash_map<pg_t, PG*>::iterator p = pg_map.begin();
+       p != pg_map.end();
+       p++) {
+    p->second->lock();
+    p->second->on_shutdown();
+    p->second->unlock();
+  }
 
-    clear_pg_stat_queue();
+  clear_pg_stat_queue();
 
-    // close pgs
-    for (hash_map<pg_t, PG*>::iterator p = pg_map.begin();
-         p != pg_map.end();
-         p++) {
-        PG *pg = p->second;
-        pg->put();
-    }
-    pg_map.clear();
+  // close pgs
+  for (hash_map<pg_t, PG*>::iterator p = pg_map.begin();
+       p != pg_map.end();
+       p++) {
+    PG *pg = p->second;
+    pg->put();
+  }
+  pg_map.clear();
 
 
   // finish ops
@@ -127,7 +145,7 @@ int PGOSD::shutdown() {
   dout(10) << "no ops" << dendl;
 
 
-    return shutdown_super();
+  return shutdown_super();
 }
 
 
@@ -155,8 +173,8 @@ PGPool PGOSD::_get_pool(int id, OSDMapRef createmap)
 }
 
 PG *OSD::_open_lock_pg(
-  OSDMapRef createmap,
-  pg_t pgid, bool no_lockdep_check, bool hold_map_lock)
+		       OSDMapRef createmap,
+		       pg_t pgid, bool no_lockdep_check, bool hold_map_lock)
 {
   assert(osd_lock.is_locked());
 
@@ -184,11 +202,11 @@ PG *OSD::_open_lock_pg(
 }
 
 PG *OSD::_create_lock_pg(
-  OSDMapRef createmap,
-  pg_t pgid, bool newly_created, bool hold_map_lock,
-  int role, vector<int>& up, vector<int>& acting, pg_history_t history,
-  pg_interval_map_t& pi,
-  ObjectStore::Transaction& t)
+			 OSDMapRef createmap,
+			 pg_t pgid, bool newly_created, bool hold_map_lock,
+			 int role, vector<int>& up, vector<int>& acting, pg_history_t history,
+			 pg_interval_map_t& pi,
+			 ObjectStore::Transaction& t)
 {
   assert(osd_lock.is_locked());
   dout(20) << "_create_lock_pg pgid " << pgid << dendl;
@@ -287,7 +305,7 @@ void PGOSD::load_pgs()
 	  new boost::tuple<coll_t, SequencerRef, DeletingStateRef>;
 	to_queue->get<0>() = *it;
 	to_queue->get<1>() = serviceRef->osr_registry.lookup_or_create(
-	  pgid, stringify(pgid));
+								       pgid, stringify(pgid));
 	to_queue->get<2>() = serviceRef->deleting_pgs.lookup_or_create(pgid);
 	remove_wq.queue(to_queue);
 	continue;
@@ -386,9 +404,9 @@ PG *OSD::get_or_create_pg(const pg_info_t& info, pg_interval_map_t& pi,
     // ok, create PG locally using provided Info and History
     PG::RecoveryCtx rctx = create_context();
     pg = _create_lock_pg(
-      get_map(epoch),
-      info.pgid, create, false, role, up, acting, history, pi,
-      *rctx.transaction);
+			 get_map(epoch),
+			 info.pgid, create, false, role, up, acting, history, pi,
+			 *rctx.transaction);
     pg->handle_create(&rctx);
     pg->write_if_dirty(*rctx.transaction);
     dispatch_context(rctx, pg, osdmap);
@@ -453,8 +471,8 @@ void PGOSD::calc_priors_during(pg_t pgid, epoch_t start, epoch_t end, set<int>& 
  * and same_primary_since.
  */
 void PGOSD::project_pg_history(pg_t pgid, pg_history_t& h, epoch_t from,
-			     const vector<int>& currentup,
-			     const vector<int>& currentacting)
+			       const vector<int>& currentup,
+			       const vector<int>& currentacting)
 {
   dout(15) << "project_pg_history " << pgid
            << " from " << from << " to " << osdmap->get_epoch()
@@ -482,7 +500,7 @@ void PGOSD::project_pg_history(pg_t pgid, pg_history_t& h, epoch_t from,
     // up set change?
     if (up != currentup && e > h.same_up_since) {
       dout(15) << "project_pg_history " << pgid << " up changed in " << e 
-                << " from " << up << " -> " << currentup << dendl;
+	       << " from " << up << " -> " << currentup << dendl;
       h.same_up_since = e;
     }
 
@@ -532,4 +550,115 @@ void PGOSD::build_heartbeat_peers_list() const {
 	_add_heartbeat_peer(*p);
     pg->heartbeat_peer_lock.Unlock();
   }
+}
+
+
+void PGOSD::sched_scrub()
+{
+  assert(osd_lock.is_locked());
+
+  dout(20) << "sched_scrub" << dendl;
+
+  utime_t max = ceph_clock_now(g_ceph_context);
+  max -= g_conf->osd_scrub_max_interval;
+  
+  //dout(20) << " " << last_scrub_pg << dendl;
+
+  pair<utime_t, pg_t> pos;
+  while (serviceRef->next_scrub_stamp(pos, &pos)) {
+    utime_t t = pos.first;
+    pg_t pgid = pos.second;
+
+    if (t > max) {
+      dout(10) << " " << pgid << " at " << t
+	       << " > " << max << " (" << g_conf->osd_scrub_max_interval << " seconds ago)" << dendl;
+      break;
+    }
+
+    dout(10) << " on " << t << " " << pgid << dendl;
+    PG *pg = _lookup_lock_pg(pgid);
+    if (pg) {
+      if (pg->is_active() && !pg->sched_scrub()) {
+	pg->unlock();
+	break;
+      }
+      pg->unlock();
+    }
+  }    
+  dout(20) << "sched_scrub done" << dendl;
+}
+
+
+void PGOSD::tick_sub() {
+  if (outstanding_pg_stats
+      &&(now - g_conf->osd_mon_ack_timeout) > last_pg_stats_ack) {
+    dout(1) << "mon hasn't acked PGStats in " << now - last_pg_stats_ack
+            << " seconds, reconnecting elsewhere" << dendl;
+    monc->reopen_session();
+    last_pg_stats_ack = ceph_clock_now(g_ceph_context);  // reset clock
+  }
+}
+
+
+void PGOSD::do_mon_report_sub() {
+  pgosdmap()->send_pg_temp();
+  send_pg_stats(now);
+}
+
+
+void PGOSD::ms_handle_connect_sub(Connection *con) {
+  serviceRef->send_pg_temp();
+  send_pg_stats(ceph_clock_now(g_ceph_context));
+    
+  monc->sub_want("osd_pg_creates", 0, CEPH_SUBSCRIBE_ONETIME);
+}
+
+
+void PGOSD::put_object_context(void *_obc, pg_t pgid)
+{
+  ReplicatedPG::ObjectContext *obc = (ReplicatedPG::ObjectContext *)_obc;
+  ReplicatedPG *pg = (ReplicatedPG *)lookup_lock_raw_pg(pgid);
+  // If pg is being deleted, (which is the only case in which
+  // it will be NULL) it will clean up its object contexts itself
+  if (pg) {
+    pg->put_object_context(obc);
+    pg->unlock();
+  }
+}
+
+
+void PGOSD::ack_notification(entity_name_t& name,
+			     void *_notif,
+			     void *_obc,
+			     ReplicatedPG *pg)
+{
+  assert(serviceRef->watch_lock.is_locked());
+  pg->assert_locked();
+  Watch::Notification *notif = (Watch::Notification *)_notif;
+  if (serviceRef->watch->ack_notification(name, notif)) {
+    complete_notify(notif, _obc);
+    pg->put_object_context(static_cast<ReplicatedPG::ObjectContext *>(_obc));
+  }
+}
+
+
+void PGOSD::handle_watch_timeout(void *obc,
+				 ReplicatedPG *pg,
+				 entity_name_t entity,
+				 utime_t expire)
+{
+  // watch_lock is inside pg->lock; handle_watch_timeout checks for the race.
+  serviceRef->watch_lock.Unlock();
+  pg->lock();
+  serviceRef->watch_lock.Lock();
+
+  pg->handle_watch_timeout(obc, entity, expire);
+  pg->unlock();
+  pg->put();
+}
+
+
+void PGOSD::ms_handle_reset_sub(OSD::Session* session) {
+  Session* pgsession = dynamic_cast<Session*>(session);
+  disconnect_session_watches(pgsession);
 }

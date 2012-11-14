@@ -1447,7 +1447,7 @@ void OSD::tick()
 
   // mon report?
   utime_t now = ceph_clock_now(g_ceph_context);
-  if (now - last_pg_stats_sent > g_conf->osd_mon_report_interval_max) {
+  if (now - last_stats_sent > g_conf->osd_mon_report_interval_max) {
     osd_stat_updated = true;
     do_mon_report();
   }
@@ -1459,13 +1459,8 @@ void OSD::tick()
 
   timer.add_event_after(1.0, new C_Tick(this));
 
-  if (outstanding_pg_stats
-      &&(now - g_conf->osd_mon_ack_timeout) > last_pg_stats_ack) {
-    dout(1) << "mon hasn't acked PGStats in " << now - last_pg_stats_ack
-            << " seconds, reconnecting elsewhere" << dendl;
-    monc->reopen_session();
-    last_pg_stats_ack = ceph_clock_now(g_ceph_context);  // reset clock
-  }
+  tick_sub();
+
 
   // only do waiters if dispatch() isn't currently running.  (if it is,
   // it'll do the waiters, and doing them here may screw up ordering
@@ -1540,9 +1535,8 @@ void OSD::do_mon_report()
 
   // do any pending reports
   send_alive();
-  serviceRef->send_pg_temp();
+  do_mon_report_sub();
   send_failures();
-  send_pg_stats(now);
 }
 
 void OSD::ms_handle_connect(Connection *con)
@@ -1554,25 +1548,12 @@ void OSD::ms_handle_connect(Connection *con)
       start_boot();
     } else {
       send_alive();
-      serviceRef->send_pg_temp();
       send_failures();
-      send_pg_stats(ceph_clock_now(g_ceph_context));
 
-      monc->sub_want("osd_pg_creates", 0, CEPH_SUBSCRIBE_ONETIME);
+      ms_handle_connect_sub(con);
+      
       monc->renew_subs();
     }
-  }
-}
-
-void OSD::put_object_context(void *_obc, pg_t pgid)
-{
-  ReplicatedPG::ObjectContext *obc = (ReplicatedPG::ObjectContext *)_obc;
-  ReplicatedPG *pg = (ReplicatedPG *)lookup_lock_raw_pg(pgid);
-  // If pg is being deleted, (which is the only case in which
-  // it will be NULL) it will clean up its object contexts itself
-  if (pg) {
-    pg->put_object_context(obc);
-    pg->unlock();
   }
 }
 
@@ -1592,32 +1573,6 @@ void OSD::complete_notify(void *_notif, void *_obc)
   if (iter != obc->notifs.end())
     obc->notifs.erase(iter);
   delete notif;
-}
-
-void OSD::ack_notification(entity_name_t& name, void *_notif, void *_obc, ReplicatedPG *pg)
-{
-  assert(serviceRef->watch_lock.is_locked());
-  pg->assert_locked();
-  Watch::Notification *notif = (Watch::Notification *)_notif;
-  if (serviceRef->watch->ack_notification(name, notif)) {
-    complete_notify(notif, _obc);
-    pg->put_object_context(static_cast<ReplicatedPG::ObjectContext *>(_obc));
-  }
-}
-
-void OSD::handle_watch_timeout(void *obc,
-			       ReplicatedPG *pg,
-			       entity_name_t entity,
-			       utime_t expire)
-{
-  // watch_lock is inside pg->lock; handle_watch_timeout checks for the race.
-  serviceRef->watch_lock.Unlock();
-  pg->lock();
-  serviceRef->watch_lock.Lock();
-
-  pg->handle_watch_timeout(obc, entity, expire);
-  pg->unlock();
-  pg->put();
 }
 
 void OSD::disconnect_session_watches(Session *session)
@@ -1672,7 +1627,7 @@ bool OSD::ms_handle_reset(Connection *con)
   OSD::Session *session = (OSD::Session *)con->get_priv();
   if (!session)
     return false;
-  disconnect_session_watches(session);
+  ms_handle_reset_sub(session);
   session->put();
   return true;
 }
@@ -1796,23 +1751,6 @@ void OSD::send_alive()
   }
 }
 
-void OSDService::queue_want_pg_temp(pg_t pgid, vector<int>& want)
-{
-  Mutex::Locker l(pg_temp_lock);
-  pg_temp_wanted[pgid] = want;
-}
-
-void OSDService::send_pg_temp()
-{
-  Mutex::Locker l(pg_temp_lock);
-  if (pg_temp_wanted.empty())
-    return;
-  dout(10) << "send_pg_temp " << pg_temp_wanted << dendl;
-  MOSDPGTemp *m = new MOSDPGTemp(osdmap->get_epoch());
-  m->pg_temp = pg_temp_wanted;
-  monc->send_mon_message(m);
-}
-
 void OSD::send_failures()
 {
   bool locked = false;
@@ -1850,7 +1788,7 @@ void OSD::send_pg_stats(const utime_t &now)
   pg_stat_queue_lock.Lock();
 
   if (osd_stat_updated || !pg_stat_queue.empty()) {
-    last_pg_stats_sent = now;
+    last_stats_sent = now;
     osd_stat_updated = false;
 
     dout(10) << "send_pg_stats - " << pg_stat_queue.size() << " pgs updated" << dendl;
@@ -1900,7 +1838,7 @@ void OSD::handle_pg_stats_ack(MPGStatsAck *ack)
     return;
   }
 
-  last_pg_stats_ack = ceph_clock_now(g_ceph_context);
+  last_stats_ack = ceph_clock_now(g_ceph_context);
 
   pg_stat_queue_lock.Lock();
 
@@ -2667,40 +2605,6 @@ bool OSDService::scrub_should_schedule()
   return loadavgs[0] < g_conf->osd_scrub_load_threshold;
 }
 
-void OSD::sched_scrub()
-{
-  assert(osd_lock.is_locked());
-
-  dout(20) << "sched_scrub" << dendl;
-
-  utime_t max = ceph_clock_now(g_ceph_context);
-  max -= g_conf->osd_scrub_max_interval;
-  
-  //dout(20) << " " << last_scrub_pg << dendl;
-
-  pair<utime_t, pg_t> pos;
-  while (serviceRef->next_scrub_stamp(pos, &pos)) {
-    utime_t t = pos.first;
-    pg_t pgid = pos.second;
-
-    if (t > max) {
-      dout(10) << " " << pgid << " at " << t
-	       << " > " << max << " (" << g_conf->osd_scrub_max_interval << " seconds ago)" << dendl;
-      break;
-    }
-
-    dout(10) << " on " << t << " " << pgid << dendl;
-    PG *pg = _lookup_lock_pg(pgid);
-    if (pg) {
-      if (pg->is_active() && !pg->sched_scrub()) {
-	pg->unlock();
-	break;
-      }
-      pg->unlock();
-    }
-  }    
-  dout(20) << "sched_scrub done" << dendl;
-}
 
 bool OSDService::inc_scrubs_pending()
 {

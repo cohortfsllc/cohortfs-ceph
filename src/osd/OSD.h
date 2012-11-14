@@ -300,6 +300,7 @@ protected:
 
   void create_logger();
   void tick();
+  virtual void tick_sub() = 0;
   void _dispatch(Message *m);
   void dispatch_op(OpRequestRef op);
 
@@ -535,6 +536,7 @@ protected:
   // == monitor interaction ==
   utime_t last_mon_report;
   void do_mon_report();
+  virtual void do_mon_report_sub() = 0;
 
   // -- boot --
   void start_boot();
@@ -675,7 +677,9 @@ protected:
 			    bufferlist& authorizer_reply,
 			    bool& isvalid);
   void ms_handle_connect(Connection *con);
+  virtual void ms_handle_connect_sub(Connection *con) = 0;
   bool ms_handle_reset(Connection *con);
+  virtual void ms_handle_reset_sub(Session* session) = 0;
   void ms_handle_remote_reset(Connection *con) {}
 
  public:
@@ -688,6 +692,9 @@ protected:
   virtual ~OSD();
 
   virtual OSDService* newOSDService(const OSD* osd) const = 0;
+
+  utime_t last_stats_sent;
+  bool osd_stat_updated;
 
   // static bits
   static int find_osd_dev(char *result, int whoami);
@@ -733,6 +740,11 @@ public:
 
   int shutdown_super();
   virtual int shutdown() = 0;
+
+  virtual void check_replay_queue() = 0;
+
+  // -- scrubbing --
+  virtual void sched_scrub() = 0;
 
   void handle_signal(int signum);
 

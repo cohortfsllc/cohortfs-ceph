@@ -104,6 +104,13 @@ public:
   virtual int shutdown();
 
   virtual void build_heartbeat_peers_list() const;
+  virtual void tick_sub();
+
+  virtual void do_mon_report_sub();
+
+  virtual void ms_handle_connect_sub(Connection *con);
+
+  virtual void ms_handle_reset_sub(OSD::Session* session);
 
   hobject_t make_pg_log_oid(pg_t pg) {
     stringstream ss;
@@ -318,8 +325,6 @@ protected:
   void split_pg(PG *parent, map<pg_t,PG*>& children, ObjectStore::Transaction &t);
 
 
-  utime_t last_pg_stats_sent;
-
   /* if our monitor dies, we want to notice it and reconnect.
    *  So we keep track of when it last acked our stat updates,
    *  and if too much time passes (and we've been sending
@@ -333,7 +338,6 @@ protected:
   Mutex pg_stat_queue_lock;
   Cond pg_stat_queue_cond;
   xlist<PG*> pg_stat_queue;
-  bool osd_stat_updated;
   uint64_t pg_stat_tid, pg_stat_tid_flushed;
 
   void send_pg_stats(const utime_t &now);
@@ -408,7 +412,7 @@ protected:
   Mutex replay_queue_lock;
   list< pair<pg_t, utime_t > > replay_queue;
   
-  void check_replay_queue();
+  virtual void check_replay_queue();
 
 
   // -- snap trimming --
@@ -451,7 +455,7 @@ protected:
 
 
   // -- scrubbing --
-  void sched_scrub();
+  virtual void sched_scrub();
   xlist<PG*> scrub_queue;
 
 
