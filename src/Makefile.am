@@ -1167,6 +1167,7 @@ noinst_LIBRARIES += libos.a
 libosd_a_SOURCES = \
 	pg/PG.cc \
 	pg/ReplicatedPG.cc \
+	pg/PGOSD.cc \
 	osd/Ager.cc \
 	osd/OSD.cc \
 	osd/OSDCap.cc \
@@ -1612,6 +1613,7 @@ noinst_HEADERS = \
         pg/pg_types.h\
         pg/PG.h\
         pg/ReplicatedPG.h\
+        pg/PGOSD.h\
         pg/PGOSDMap.h\
 	pg/PGPlaceSystem.h\
 	rgw/rgw_acl.h\
