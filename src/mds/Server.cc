@@ -5831,7 +5831,7 @@ void Server::_rename_prepare(MDRequest *mdr,
 
       if (destdn->is_auth())
         metablob->add_remote_dentry(destdn, true, srcdnl->get_remote_ino(), srcdnl->get_remote_d_type());
-      if (srci->get_parent_dn()->is_auth()) { // it's remote
+      if (srci->get_parent_dn() && srci->get_parent_dn()->is_auth()) { // it's remote
 	metablob->add_dir_context(srci->get_parent_dir());
         mdcache->journal_cow_dentry(mdr, metablob, srci->get_parent_dn(), CEPH_NOSNAP, 0, srcdnl);
 	metablob->add_primary_dentry(srci->get_parent_dn(), true, srci);
