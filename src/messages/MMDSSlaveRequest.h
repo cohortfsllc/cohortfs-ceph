@@ -41,6 +41,9 @@ class MMDSSlaveRequest : public Message {
   static const int OP_RMDIRPREP = 10;
   static const int OP_RMDIRPREPACK = -10;
 
+  static const int OP_CREATE = 11;
+  static const int OP_CREATEACK = -11;
+
   static const int OP_FINISH = 17;  
   static const int OP_COMMITTED = -18;  
 
@@ -62,6 +65,9 @@ class MMDSSlaveRequest : public Message {
 
     case OP_RENAMEPREP: return "rename_prep";
     case OP_RENAMEPREPACK: return "rename_prep_ack";
+
+    case OP_CREATE: return "create";
+    case OP_CREATEACK: return "create_ack";
 
     case OP_FINISH: return "finish"; // commit
     case OP_COMMITTED: return "committed";

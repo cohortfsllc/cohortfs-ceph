@@ -1349,6 +1349,10 @@ void Server::handle_slave_request_reply(MMDSSlaveRequest *m)
     handle_slave_rename_prep_ack(mdr, m);
     break;
 
+  case MMDSSlaveRequest::OP_CREATEACK:
+    handle_slave_create_ack(mdr, m);
+    break;
+
   default:
     assert(0);
   }
@@ -1461,6 +1465,10 @@ void Server::dispatch_slave_request(MDRequest *mdr)
 
   case MMDSSlaveRequest::OP_RENAMEPREP:
     handle_slave_rename_prep(mdr);
+    break;
+
+  case MMDSSlaveRequest::OP_CREATE:
+    handle_slave_create(mdr);
     break;
 
   case MMDSSlaveRequest::OP_FINISH:
@@ -2209,7 +2217,67 @@ static void container_journal_dentry(MDCache *mdcache, MDRequest *mdr, EMetaBlob
     mdcache->predirty_journal_parents(mdr, metablob, in, dn->get_dir(),
                                       PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
     metablob->add_primary_dentry(dn, true, in);
+
+    // reply to the request, but don't clean up the mdr until slave create ack.
+    // use a dummy context for slave_commit to prevent reply_request() from
+    // calling request_finish()
+    mdr->more()->slave_commit = new C_NoopContext();
   }
+}
+
+
+
+// ===============================================================================
+// REMOTE CREATE
+
+struct C_MDS_SlaveCreateCommit : public Context {
+  Server *server;
+  MDRequest *mdr;
+  C_MDS_SlaveCreateCommit(Server *server, MDRequest *mdr)
+      : server(server), mdr(mdr) {}
+  void finish(int r) {
+    server->_slave_create_commit(mdr);
+  }
+};
+
+/* This function DOES put the mdr->slave_request before returning */
+void Server::handle_slave_create(MDRequest *mdr)
+{
+  MMDSSlaveRequest *req = mdr->slave_request;
+  int from = mdr->slave_to_mds;
+  const inodeno_t ino = req->get_object_info().ino;
+
+  dout(7) << "handle_slave_create " << ino << " from mds." << from << dendl;
+
+  // send ack
+  Message *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
+                                    MMDSSlaveRequest::OP_CREATEACK);
+  mds->send_message_mds(m, from);
+
+  // set up commit waiter
+  mdr->more()->slave_commit = new C_MDS_SlaveCreateCommit(this, mdr);
+
+  mdr->slave_request->put();
+  mdr->slave_request = 0;
+}
+
+void Server::_slave_create_commit(MDRequest *mdr)
+{
+  dout(7) << "slave_create_commit" << dendl;
+
+  mdr->slave_request->put();
+  mdr->slave_request = 0;
+}
+
+/* This function DOES clean up the mdr before returning */
+/* This function DOES NOT put the passed message before returning */
+void Server::handle_slave_create_ack(MDRequest *mdr, MMDSSlaveRequest *req)
+{
+  int from = req->get_source().num();
+  dout(7) << "slave_create_ack " << *req << " from mds." << from << dendl;
+
+  mdr->more()->slaves.insert(from); // send a FINISH
+  mdcache->request_finish(mdr);
 }
 
 
@@ -2219,15 +2287,18 @@ struct C_MDS_MknodFinish : public Context {
   MDRequest *mdr;
   CInode *in;
   CDentry *dn, *inodn;
-  C_MDS_MknodFinish(Server *server, MDRequest *mdr, CInode *in, CDentry *dn, CDentry *inodn)
-      : server(server), mdr(mdr), in(in), dn(dn), inodn(inodn) {}
+  int inoauth;
+  C_MDS_MknodFinish(Server *server, MDRequest *mdr, CInode *in,
+                    CDentry *dn, CDentry *inodn, int inoauth)
+      : server(server), mdr(mdr), in(in), dn(dn), inodn(inodn), inoauth(inoauth) {}
   void finish(int r) {
     assert(r == 0);
-    server->_mknod_finish(mdr, in, dn, inodn);
+    server->_mknod_finish(mdr, in, dn, inodn, inoauth);
   }
 };
 
-void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn, CDentry *inodn)
+void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn,
+                           CDentry *inodn, int inoauth)
 {
   // apply projected links
   dn->pop_projected_linkage();
@@ -2263,6 +2334,17 @@ void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn, CDentry *ino
     mds->balancer->hit_dir(mdr->now, dn->get_dir(), META_POP_IWR);
 
   reply_request(mdr, 0);
+
+  if (inodn == NULL) {
+    // send an asynchronous slave create request
+    MMDSSlaveRequest *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
+                                               MMDSSlaveRequest::OP_CREATE);
+    m->get_object_info().ino = in->ino();
+    m->now = mdr->now;
+
+    dout(7) << "sending " << *m << " to mds." << inoauth << dendl;
+    mds->send_message_mds(m, inoauth);
+  }
 }
 
 
@@ -2818,7 +2900,9 @@ void Server::handle_client_openc(MDRequest *mdr)
   LogSegment *ls = mds->mdlog->get_current_segment();
   ls->open_files.push_back(&in->item_open_file);
 
-  journal_and_reply(mdr, in, dn, le, new C_MDS_MknodFinish(this, mdr, in, dn, inodn));
+  int inoauth = inodir ? inodir->authority().first :
+      mdcache->get_inode_container()->authority().first;
+  journal_and_reply(mdr, in, dn, le, new C_MDS_MknodFinish(this, mdr, in, dn, inodn, inoauth));
 }
 
 
@@ -3745,7 +3829,9 @@ void Server::handle_client_mknod(MDRequest *mdr)
   journal_allocated_inos(mdr, &le->metablob);
   container_journal_dentry(mdcache, mdr, &le->metablob, newi, dn, inodn);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_MknodFinish(this, mdr, newi, dn, inodn));
+  int inoauth = inodir ? inodir->authority().first :
+      mdcache->get_inode_container()->authority().first;
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_MknodFinish(this, mdr, newi, dn, inodn, inoauth));
 }
 
 
@@ -3835,7 +3921,9 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   LogSegment *ls = mds->mdlog->get_current_segment();
   ls->open_files.push_back(&newi->item_open_file);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_MknodFinish(this, mdr, newi, dn, inodn));
+  int inoauth = inodir ? inodir->authority().first :
+      mdcache->get_inode_container()->authority().first;
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_MknodFinish(this, mdr, newi, dn, inodn, inoauth));
 }
 
 
@@ -3900,7 +3988,9 @@ void Server::handle_client_symlink(MDRequest *mdr)
   journal_allocated_inos(mdr, &le->metablob);
   container_journal_dentry(mdcache, mdr, &le->metablob, newi, dn, inodn);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_MknodFinish(this, mdr, newi, dn, inodn));
+  int inoauth = inodir ? inodir->authority().first :
+      mdcache->get_inode_container()->authority().first;
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_MknodFinish(this, mdr, newi, dn, inodn, inoauth));
 }
 
 
@@ -5598,6 +5688,7 @@ version_t Server::_rename_prepare_import(MDRequest *mdr, CDentry *srcdn, bufferl
   bufferlist::iterator blp = mdr->more()->inode_import.begin();
 	  
   // imported caps
+  ::decode(mdr->more()->imported_client_map, blp);
   ::encode(mdr->more()->imported_client_map, *client_map_bl);
   prepare_force_open_sessions(mdr->more()->imported_client_map, mdr->more()->sseq_map);
 
@@ -5830,7 +5921,7 @@ void Server::_rename_prepare(MDRequest *mdr,
 
       if (destdn->is_auth())
         metablob->add_remote_dentry(destdn, true, srcdnl->get_remote_ino(), srcdnl->get_remote_d_type());
-      if (srci->get_parent_dn() && srci->get_parent_dn()->is_auth()) { // it's remote
+      if (srci->get_parent_dn()->is_auth()) { // it's remote
 	metablob->add_dir_context(srci->get_parent_dir());
         mdcache->journal_cow_dentry(mdr, metablob, srci->get_parent_dn(), CEPH_NOSNAP, 0, srcdnl);
 	metablob->add_primary_dentry(srci->get_parent_dn(), true, srci);
@@ -6233,9 +6324,12 @@ void Server::_logged_slave_rename(MDRequest *mdr,
   // export srci?
   if (srcdn->is_auth() && srcdnl->is_primary()) {
     list<Context*> finished;
-    mdcache->migrator->encode_export_inode(srcdnl->get_inode(),
-                                           reply->inode_export, 
-					   reply->client_map);
+    map<client_t,entity_inst_t> exported_client_map;
+    bufferlist inodebl;
+    mdcache->migrator->encode_export_inode(srcdnl->get_inode(), inodebl, 
+					   exported_client_map);
+    ::encode(exported_client_map, reply->inode_export);
+    reply->inode_export.claim_append(inodebl);
     reply->inode_export_v = srcdnl->get_inode()->inode.version;
 
     // remove mdr auth pin
@@ -6586,7 +6680,6 @@ void Server::handle_slave_rename_prep_ack(MDRequest *mdr, MMDSSlaveRequest *ack)
   // srci import?
   if (ack->inode_export.length()) {
     dout(10) << " got srci import" << dendl;
-    mdr->more()->imported_client_map.swap(ack->client_map);
     mdr->more()->inode_import.claim(ack->inode_export);
     mdr->more()->inode_import_v = ack->inode_export_v;
   }

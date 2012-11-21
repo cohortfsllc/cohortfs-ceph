@@ -167,7 +167,8 @@ public:
   void handle_client_mknod(MDRequest *mdr);
   void handle_client_mkdir(MDRequest *mdr);
   void handle_client_symlink(MDRequest *mdr);
-  void _mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn, CDentry *inodn);
+  void _mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn,
+                     CDentry *inodn, int inoauth);
 
   // link
   void handle_client_link(MDRequest *mdr);
@@ -235,6 +236,11 @@ public:
   void do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr);
   void _rename_rollback_finish(Mutation *mut, MDRequest *mdr, CInode *in, CDir *olddir);
 
+  // remote create
+  void handle_slave_create(MDRequest *mdr);
+  void handle_slave_create_ack(MDRequest *mdr, MMDSSlaveRequest *req);
+
+  void _slave_create_commit(MDRequest *mdr);
 };
 
 #endif
