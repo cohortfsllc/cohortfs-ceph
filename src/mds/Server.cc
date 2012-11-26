@@ -2327,12 +2327,20 @@ void Server::_slave_create_local_finish(MDRequest *mdr, CInode *in,
   if (in->inode.is_file())
     mds->locker->share_inode_max_size(in);
 
+  // restore inode authority
+  in->inode_auth = std::make_pair(mds->get_nodeid(), CDIR_AUTH_UNKNOWN);
+  in->state_set(CInode::STATE_AUTH);
+  in->state_clear(CInode::STATE_AMBIGUOUSAUTH);
+  CDir *dir = in->is_dir() ? in->get_dirfrag(frag_t()) : NULL;
+  if (dir)
+    dir->state_set(CDir::STATE_AUTH);
+
   std::list<Context*> finished;
+  in->take_waiting(CInode::WAIT_SINGLEAUTH, finished);
 
   // unfreeze
   in->unfreeze_inode(finished);
-  if (in->is_dir()) {
-    CDir *dir = in->get_dirfrag(frag_t());
+  if (dir) {
     dir->mark_clean();
     dir->mark_new(mdr->ls);
     dir->unfreeze_dir();
@@ -2374,7 +2382,13 @@ void Server::slave_create_remote(MDRequest *mdr, CDir *dir, CDentry *dn)
     newdir->mark_complete();
     newdir->mark_clean();
     newdir->mark_new(mdr->ls);
+    newdir->state_clear(CDir::STATE_AUTH);
   }
+
+  // make auth ambiguous until slave_create_commit
+  in->inode_auth = std::make_pair(from, mds->get_nodeid());
+  in->state_clear(CInode::STATE_AUTH);
+  in->state_set(CInode::STATE_AMBIGUOUSAUTH);
 
   _slave_create_remote_finish(mdr, in, dn);
 }
@@ -2439,6 +2453,19 @@ void Server::_slave_create_commit(MDRequest *mdr, CInode *in)
 {
   dout(7) << "slave_create_commit " << *in << dendl;
 
+  // claim inode authority
+  in->inode_auth = std::make_pair(mds->get_nodeid(), CDIR_AUTH_UNKNOWN);
+  in->state_set(CInode::STATE_AUTH);
+  if (in->is_dir()) {
+    CDir *dir = in->get_dirfrag(frag_t());
+    dir->state_set(CDir::STATE_AUTH);
+  }
+
+  std::list<Context*> finished;
+  in->state_clear(CInode::STATE_AMBIGUOUSAUTH);
+  in->take_waiting(CInode::WAIT_SINGLEAUTH, finished);
+  mds->queue_waiters(finished);
+
   // drop our pins, etc.
   mdr->cleanup();
 
@@ -2488,10 +2515,18 @@ void Server::_slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn, i
   mdr->apply();
   mdr->cleanup();
 
+  // change inode authority from ambiguous to destination mds
+  in->inode_auth = std::make_pair(from, CDIR_AUTH_UNKNOWN);
+  in->state_clear(CInode::STATE_AUTH);
+  in->state_clear(CInode::STATE_AMBIGUOUSAUTH);
+  in->take_waiting(CInode::WAIT_SINGLEAUTH, finished);
+  CDir *dir = in->is_dir() ? in->get_dirfrag(frag_t()) : NULL;
+  if (dir)
+    dir->state_clear(CDir::STATE_AUTH);
+
   // unfreeze after export
   in->unfreeze_inode(finished);
-  if (in->is_dir()) {
-    CDir *dir = in->get_dirfrag(frag_t());
+  if (dir) {
     dir->mark_clean();
     dir->mark_new(mdr->ls);
     dir->unfreeze_dir();
@@ -2570,6 +2605,10 @@ void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn,
       dir->get(CDir::PIN_FROZEN);
       in->auth_pin(dir);
     }
+
+    // make auth ambiguous until slave_create_ack
+    in->inode_auth = std::make_pair(mds->get_nodeid(), inoauth);
+    in->state_set(CInode::STATE_AMBIGUOUSAUTH);
 
     // send an asynchronous slave create request
     MMDSSlaveRequest *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
