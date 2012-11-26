@@ -2327,11 +2327,18 @@ void Server::_slave_create_local_finish(MDRequest *mdr, CInode *in,
   if (in->inode.is_file())
     mds->locker->share_inode_max_size(in);
 
+  std::list<Context*> finished;
+
+  // unfreeze
+  in->unfreeze_inode(finished);
   if (in->is_dir()) {
     CDir *dir = in->get_dirfrag(frag_t());
     dir->mark_clean();
     dir->mark_new(mdr->ls);
+    dir->unfreeze_dir();
   }
+
+  mds->queue_waiters(finished);
 
   mdr->slave_request->put();
   mdr->slave_request = 0;
@@ -2481,10 +2488,13 @@ void Server::_slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn, i
   mdr->apply();
   mdr->cleanup();
 
+  // unfreeze after export
+  in->unfreeze_inode(finished);
   if (in->is_dir()) {
     CDir *dir = in->get_dirfrag(frag_t());
     dir->mark_clean();
     dir->mark_new(mdr->ls);
+    dir->unfreeze_dir();
   }
 
   mds->queue_waiters(finished);
@@ -2549,6 +2559,18 @@ void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn,
   reply_request(mdr, 0);
 
   if (inodn == NULL) {
+    // freeze inode for export
+    in->get(CInode::PIN_FROZEN);
+    in->state_set(CInode::STATE_FROZEN);
+    if (in->is_dir()) {
+      // freeze the dir fragment to prevent insertion
+      CDir *dir = in->get_dirfrag(frag_t());
+      dir->state_clear(CDir::STATE_FREEZINGDIR);
+      dir->state_set(CDir::STATE_FROZENDIR);
+      dir->get(CDir::PIN_FROZEN);
+      in->auth_pin(dir);
+    }
+
     // send an asynchronous slave create request
     MMDSSlaveRequest *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
                                                MMDSSlaveRequest::OP_CREATE);
