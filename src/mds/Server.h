@@ -238,11 +238,16 @@ public:
 
   // remote create
   void handle_slave_create(MDRequest *mdr);
-  void handle_slave_create_ack(MDRequest *mdr, MMDSSlaveRequest *req);
+  void handle_slave_create_ack(MDRequest *mdr, MMDSSlaveRequest *m);
 
-  void slave_create_local(MDRequest *mdr);
-  void slave_create_remote(MDRequest *mdr);
-  void _slave_create_commit(MDRequest *mdr);
+  void slave_create_local(MDRequest *mdr, CDir *dir, CDentry *dn);
+  void _slave_create_local_finish(MDRequest *mdr, CInode *in,
+                                  CDentry *dn, CDentry *inodn);
+
+  void slave_create_remote(MDRequest *mdr, CDir *dir, CDentry *dn);
+  void _slave_create_remote_finish(MDRequest *mdr, CInode *in, CDentry *dn);
+  void _slave_create_commit(MDRequest *mdr, CInode *in);
+  void _slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn, int from);
 };
 
 #endif

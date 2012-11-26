@@ -2265,16 +2265,73 @@ void Server::handle_slave_create(MDRequest *mdr)
       mdcache->request_cleanup(mdr);
     return;
   }
+  if (dir->is_frozen()) {
+    dout(7) << "waiting on frozen inode container " << *dir << dendl;
+    dir->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
+    return;
+  }
+  mdr->auth_pin(dir);
+
+  // acquire locks
+  std::set<SimpleLock*> rdlocks, wrlocks, xlocks;
+
+  CDentry *dn = container_xlock_dentry(dir, inoname, xlocks);
+  assert(dn);
+  mdr->auth_pin(dn);
+
+  if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
+    return;
 
   if (from == mds->get_nodeid()) // forwarded back to the originating mds
-    slave_create_local(mdr);
+    slave_create_local(mdr, dir, dn);
   else
-    slave_create_remote(mdr);
+    slave_create_remote(mdr, dir, dn);
 }
 
-void Server::slave_create_local(MDRequest *mdr)
+void Server::slave_create_local(MDRequest *mdr, CDir *dir, CDentry *inodn)
 {
-  dout(7) << "slave_create_local" << dendl;
+  CInode *in = mdr->in[0]; // pinned in mknod_finish
+  assert(in);
+
+  // undo inode/cap export
+  in->put(CInode::PIN_TEMPEXPORTING);
+  in->put(CInode::PIN_EXPORTINGCAPS);
+  in->state_clear(CInode::STATE_EXPORTINGCAPS);
+
+  // change parent dentry to remote link
+  CDentry *dn = in->get_parent_dn();
+  dn->push_projected_linkage(in->ino(), in->d_type());
+
+  // add primary link to inode container
+  inodn->push_projected_linkage(in);
+
+  _slave_create_local_finish(mdr, in, dn, inodn);
+}
+
+void Server::_slave_create_local_finish(MDRequest *mdr, CInode *in,
+                                        CDentry *dn, CDentry *inodn)
+{
+  dout(7) << "slave_create_local_finish " << *in << dendl;
+
+  // apply projected links
+  dn->get_dir()->unlink_inode(dn);
+  dn->pop_projected_linkage();
+  inodn->pop_projected_linkage();
+
+  mdr->apply();
+  mdr->cleanup();
+
+  mdcache->send_dentry_link(dn);
+  mdcache->send_dentry_link(inodn);
+
+  if (in->inode.is_file())
+    mds->locker->share_inode_max_size(in);
+
+  if (in->is_dir()) {
+    CDir *dir = in->get_dirfrag(frag_t());
+    dir->mark_clean();
+    dir->mark_new(mdr->ls);
+  }
 
   mdr->slave_request->put();
   mdr->slave_request = 0;
@@ -2282,22 +2339,73 @@ void Server::slave_create_local(MDRequest *mdr)
   mdcache->request_finish(mdr);
 }
 
-struct C_MDS_SlaveCreateCommit : public Context {
-  Server *server;
-  MDRequest *mdr;
-  C_MDS_SlaveCreateCommit(Server *server, MDRequest *mdr)
-      : server(server), mdr(mdr) {}
-  void finish(int r) {
-    server->_slave_create_commit(mdr);
-  }
-};
-
-void Server::slave_create_remote(MDRequest *mdr)
+void Server::slave_create_remote(MDRequest *mdr, CDir *dir, CDentry *dn)
 {
   MMDSSlaveRequest *req = mdr->slave_request;
   int from = req->ack_to_mds;
 
-  dout(7) << "slave_create_remote from mds." << from << dendl;
+  mdr->ls = mdlog->get_current_segment();
+
+  prepare_force_open_sessions(req->client_map, mdr->more()->sseq_map);
+
+  // decode imported inode
+  bufferlist::iterator p = req->inode_export.begin();
+
+  list<ScatterLock*> locks_ignored;
+  mdcache->migrator->decode_import_inode(dn, p, from, mdr->ls, 0,
+                                         mdr->more()->cap_imports,
+                                         locks_ignored);
+  CInode *in = dn->get_linkage()->get_inode();
+  assert(in);
+
+  in->filelock.remove_dirty();
+  in->nestlock.remove_dirty();
+  in->mark_clean();
+
+  if (in->is_dir()) { // mkdir
+    CDir *newdir = in->get_or_open_dirfrag(mdcache, frag_t());
+    newdir->mark_complete();
+    newdir->mark_clean();
+    newdir->mark_new(mdr->ls);
+  }
+
+  _slave_create_remote_finish(mdr, in, dn);
+}
+
+struct C_MDS_SlaveCreateCommit : public Context {
+  Server *server;
+  MDRequest *mdr;
+  CInode *in;
+  C_MDS_SlaveCreateCommit(Server *server, MDRequest *mdr, CInode *in)
+      : server(server), mdr(mdr), in(in) {}
+  void finish(int r) {
+    server->_slave_create_commit(mdr, in);
+  }
+};
+
+void Server::_slave_create_remote_finish(MDRequest *mdr, CInode *in, CDentry *dn)
+{
+  int from = mdr->slave_request->ack_to_mds;
+
+  dout(7) << "slave_create_remote_finish " << *in << dendl;
+
+  mdr->apply();
+  mdcache->send_dentry_link(dn);
+  if (in->inode.is_file())
+    mds->locker->share_inode_max_size(in);
+  mds->balancer->hit_inode(mdr->now, in, META_POP_IWR);
+
+  finish_force_open_sessions(mdr->slave_request->client_map,
+                             mdr->more()->sseq_map);
+
+  if (mdr->more()->cap_imports.count(in)) {
+    mdcache->migrator->finish_import_inode_caps(in, from, mdr->more()->cap_imports[in]);
+
+    // import xlocks
+    for (set<SimpleLock*>::iterator i = mdr->xlocks.begin(); i != mdr->xlocks.end(); ++i)
+      if ((*i)->get_parent() == in && !(*i)->is_locallock())
+        mds->locker->xlock_import(*i, mdr);
+  }
 
   // send ack
   Message *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
@@ -2305,15 +2413,29 @@ void Server::slave_create_remote(MDRequest *mdr)
   mds->send_message_mds(m, from);
 
   // set up commit waiter
-  mdr->more()->slave_commit = new C_MDS_SlaveCreateCommit(this, mdr);
+  mdr->more()->slave_commit = new C_MDS_SlaveCreateCommit(this, mdr, in);
 
   mdr->slave_request->put();
   mdr->slave_request = 0;
 }
 
-void Server::_slave_create_commit(MDRequest *mdr)
+struct C_MDS_CommittedSlave : public Context {
+  Server *server;
+  MDRequest *mdr;
+  C_MDS_CommittedSlave(Server *s, MDRequest *m) : server(s), mdr(m) {}
+  void finish(int r) {
+    server->_committed_slave(mdr);
+  }
+};
+
+void Server::_slave_create_commit(MDRequest *mdr, CInode *in)
 {
-  dout(7) << "slave_create_commit" << dendl;
+  dout(7) << "slave_create_commit " << *in << dendl;
+
+  // drop our pins, etc.
+  mdr->cleanup();
+
+  _committed_slave(mdr);
 
   mdr->slave_request->put();
   mdr->slave_request = 0;
@@ -2326,10 +2448,50 @@ void Server::handle_slave_create_ack(MDRequest *mdr, MMDSSlaveRequest *req)
   int from = req->get_source().num();
   dout(7) << "slave_create_ack " << *req << " from mds." << from << dendl;
 
+  CInode *in = mdr->in[0]; // pinned in mknod_finish
+  assert(in);
+
+  // change primary link to a remote link
+  CDentry *dn = in->get_projected_parent_dn();
+  assert(dn);
+  dn->push_projected_linkage(in->ino(), in->d_type());
+
+  _slave_create_ack_finish(mdr, in, dn, from);
+}
+
+void Server::_slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn, int from)
+{
+  dout(7) << "_slave_create_ack_finish " << *mdr << dendl;
+
+  // export any xlocks
+  set<SimpleLock*>::iterator i = mdr->xlocks.begin();
+  while (i != mdr->xlocks.end()) {
+    SimpleLock *lock = *i++;
+    if (lock->get_parent() == in && !lock->is_locallock())
+      mds->locker->xlock_export(lock, mdr);
+  }
+
+  // finish the export
+  std::list<Context*> finished;
+  mdcache->migrator->finish_export_inode(in, mdr->now, finished);
+
+  // apply the remote link
+  dn->get_dir()->unlink_inode(dn); // avoid assertion in CInode::set_primary_parent()
+  dn->pop_projected_linkage();
+  mdr->apply();
+  mdr->cleanup();
+
+  if (in->is_dir()) {
+    CDir *dir = in->get_dirfrag(frag_t());
+    dir->mark_clean();
+    dir->mark_new(mdr->ls);
+  }
+
+  mds->queue_waiters(finished);
+
   mdr->more()->slaves.insert(from); // send a FINISH
   mdcache->request_finish(mdr);
 }
-
 
 
 struct C_MDS_MknodFinish : public Context {
@@ -2358,11 +2520,11 @@ void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn,
   // be a bit hacky with the inode version, here.. we decrement it
   // just to keep mark_dirty() happy. (we didn't bother projecting
   // a new version of hte inode since it's just been created)
-  in->inode.version--; 
+  in->inode.version--;
   in->mark_dirty(in->inode.version + 1, mdr->ls);
 
   // mkdir?
-  if (in->is_dir()) { 
+  if (in->is_dir()) {
     CDir *dir = in->get_dirfrag(frag_t());
     assert(dir);
     dir->mark_dirty(1, mdr->ls);
@@ -2371,9 +2533,10 @@ void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn,
 
   mdr->apply();
 
-  mdcache->send_dentry_link(dn);
-  if (inodn)
+  if (inodn) {
+    mdcache->send_dentry_link(dn);
     mdcache->send_dentry_link(inodn);
+  }
 
   if (in->is_file())
     mds->locker->share_inode_max_size(in);
@@ -2393,8 +2556,18 @@ void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn,
     m->ack_to_mds = mds->get_nodeid();
     m->now = mdr->now;
 
+    // encode inode export
+    mdcache->migrator->encode_export_inode(in, m->inode_export, m->client_map);
+    m->inode_export_v = in->inode.version;
+
     dout(7) << "sending " << *m << " to mds." << inoauth << dendl;
     mds->send_message_mds(m, inoauth);
+
+    // save pointer to inode for slave_create_ack
+    mdr->pin(in);
+    mdr->in[0] = in;
+
+    mdcache->add_uncommitted_master(mdr->reqid, mdr->ls, mdr->more()->slaves);
 
     // the slave_create message may be forwarded if auth changes;
     // set slave_to_mds to -1 to accept a reply from any mds
@@ -4467,15 +4640,6 @@ void Server::_logged_slave_link(MDRequest *mdr, CInode *targeti)
   mdr->slave_request = 0;
 }
 
-
-struct C_MDS_CommittedSlave : public Context {
-  Server *server;
-  MDRequest *mdr;
-  C_MDS_CommittedSlave(Server *s, MDRequest *m) : server(s), mdr(m) {}
-  void finish(int r) {
-    server->_committed_slave(mdr);
-  }
-};
 
 void Server::_commit_slave_link(MDRequest *mdr, int r, CInode *targeti)
 {  
