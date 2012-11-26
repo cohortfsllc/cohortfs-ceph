@@ -3152,7 +3152,6 @@ void Client::handle_cap_grant(Inode *in, int mds, Cap *cap, MClientCaps *m)
 		<< " mds." << mds << " seq " << m->get_seq()
 		<< " caps now " << ccap_string(new_caps)
 		<< " was " << ccap_string(old_caps) << dendl;
-
   cap->seq = m->get_seq();
 
   in->layout = m->get_layout();
@@ -3211,16 +3210,17 @@ void Client::handle_cap_grant(Inode *in, int mds, Cap *cap, MClientCaps *m)
       check_caps(in, true);
     }
 
-    if (revoked & (CEPH_CAP_FILE_WR |
-		   CEPH_CAP_FILE_BUFFER |
-		   CEPH_CAP_FILE_WREXTEND |
-		   CEPH_CAP_FILE_CACHE |
+
+    if (revoked & (CEPH_CAP_FILE_CACHE |
 		   CEPH_CAP_FILE_RD)) {
-      in->recall_rw_caps(CEPH_CAP_FILE_WR ||
-			 CEPH_CAP_FILE_BUFFER ||
-			 CEPH_CAP_FILE_WREXTEND);
+      in->recall_rw_caps(false);
     }
 
+    if (revoked & (CEPH_CAP_FILE_WR |
+		   CEPH_CAP_FILE_BUFFER |
+		   CEPH_CAP_FILE_WREXTEND)) {
+      in->recall_rw_caps(true);
+    }
   } else if (old_caps == new_caps) {
     ldout(cct, 10) << "  caps unchanged at " << ccap_string(old_caps) << dendl;
   } else {

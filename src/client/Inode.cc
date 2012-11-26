@@ -288,7 +288,7 @@ void Inode::recall_rw_caps(bool write)
        p != revoke_notifiers.end();
        ++p) {
     if (write && !p->second->write) {
-      continue;
+	continue;
     }
     p->second->cb(vino(), p->second->write, p->second->opaque);
   }
