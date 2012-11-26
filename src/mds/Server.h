@@ -240,6 +240,8 @@ public:
   void handle_slave_create(MDRequest *mdr);
   void handle_slave_create_ack(MDRequest *mdr, MMDSSlaveRequest *req);
 
+  void slave_create_local(MDRequest *mdr);
+  void slave_create_remote(MDRequest *mdr);
   void _slave_create_commit(MDRequest *mdr);
 };
 

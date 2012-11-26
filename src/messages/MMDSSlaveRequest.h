@@ -111,6 +111,8 @@ class MMDSSlaveRequest : public Message {
 
   bufferlist stray;  // stray dir + dentry
 
+  int ack_to_mds; // for slave creates in case of forwarding
+
 public:
   metareqid_t get_reqid() { return reqid; }
   __u32 get_attempt() const { return attempt; }
@@ -150,6 +152,7 @@ public:
     ::encode(inode_export_v, payload);
     ::encode(srci_replica, payload);
     ::encode(stray, payload);
+    ::encode(ack_to_mds, payload);
   }
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
@@ -168,6 +171,7 @@ public:
     ::decode(inode_export_v, p);
     ::decode(srci_replica, p);
     ::decode(stray, p);
+    ::decode(ack_to_mds, p);
   }
 
   const char *get_type_name() const { return "slave_request"; }

@@ -1258,7 +1258,8 @@ void Server::handle_slave_request(MMDSSlaveRequest *m)
 	       << ", closing out" << dendl;
       mdcache->request_finish(mdr);
       mdr = NULL;
-    } else if (mdr->slave_to_mds != from) {
+    } else if (mdr->slave_to_mds != from &&
+               mdr->slave_to_mds != -1) { // -1 to accept from any mds
       dout(10) << "local request " << *mdr << " not slave to mds." << from << dendl;
       m->put();
       return;
@@ -2230,6 +2231,57 @@ static void container_journal_dentry(MDCache *mdcache, MDRequest *mdr, EMetaBlob
 // ===============================================================================
 // REMOTE CREATE
 
+/* This function DOES put the mdr->slave_request before returning */
+void Server::handle_slave_create(MDRequest *mdr)
+{
+  MMDSSlaveRequest *req = mdr->slave_request;
+  int from = req->ack_to_mds;
+  const inodeno_t ino = req->get_object_info().ino;
+
+  dout(7) << "handle_slave_create " << ino << " from mds." << from << dendl;
+  if (mdr->slave_to_mds != -1 && mdr->slave_to_mds != from)
+    dout(10) << "forwarded by mds." << mdr->slave_to_mds << dendl;
+
+  // open the corresponding inode container fragment
+  char inoname[20];
+  snprintf(inoname, sizeof(inoname), "%llx", (unsigned long long)ino.val);
+  CDir *dir = container_open_dirfrag(mdcache, inoname);
+
+  // inode container fragments can migrate while these messages are in flight
+  if (dir == NULL || !dir->is_auth()) {
+    // forward request to auth (or best guess)
+    int inoauth = dir ? dir->authority().first :
+        mdcache->get_inode_container()->authority().first;
+
+    mdr->cleanup();
+    mds->locker->drop_locks(mdr);
+    mdr->slave_request = 0;
+
+    dout(7) << "forwarding " << *req << " to mds." << inoauth << dendl;
+    mds->send_message_mds(req, inoauth);
+
+    // clean up mdr unless it's local; we won't get a FINISH
+    if (from != mds->get_nodeid())
+      mdcache->request_cleanup(mdr);
+    return;
+  }
+
+  if (from == mds->get_nodeid()) // forwarded back to the originating mds
+    slave_create_local(mdr);
+  else
+    slave_create_remote(mdr);
+}
+
+void Server::slave_create_local(MDRequest *mdr)
+{
+  dout(7) << "slave_create_local" << dendl;
+
+  mdr->slave_request->put();
+  mdr->slave_request = 0;
+
+  mdcache->request_finish(mdr);
+}
+
 struct C_MDS_SlaveCreateCommit : public Context {
   Server *server;
   MDRequest *mdr;
@@ -2240,14 +2292,12 @@ struct C_MDS_SlaveCreateCommit : public Context {
   }
 };
 
-/* This function DOES put the mdr->slave_request before returning */
-void Server::handle_slave_create(MDRequest *mdr)
+void Server::slave_create_remote(MDRequest *mdr)
 {
   MMDSSlaveRequest *req = mdr->slave_request;
-  int from = mdr->slave_to_mds;
-  const inodeno_t ino = req->get_object_info().ino;
+  int from = req->ack_to_mds;
 
-  dout(7) << "handle_slave_create " << ino << " from mds." << from << dendl;
+  dout(7) << "slave_create_remote from mds." << from << dendl;
 
   // send ack
   Message *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
@@ -2340,10 +2390,15 @@ void Server::_mknod_finish(MDRequest *mdr, CInode *in, CDentry *dn,
     MMDSSlaveRequest *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
                                                MMDSSlaveRequest::OP_CREATE);
     m->get_object_info().ino = in->ino();
+    m->ack_to_mds = mds->get_nodeid();
     m->now = mdr->now;
 
     dout(7) << "sending " << *m << " to mds." << inoauth << dendl;
     mds->send_message_mds(m, inoauth);
+
+    // the slave_create message may be forwarded if auth changes;
+    // set slave_to_mds to -1 to accept a reply from any mds
+    mdr->slave_to_mds = -1;
   }
 }
 
