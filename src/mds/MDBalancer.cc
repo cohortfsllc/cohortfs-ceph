@@ -832,6 +832,16 @@ bool MDBalancer::check_targets()
   return ok;
 }
 
+static bool dir_or_parent_frozen(CDir *dir)
+{
+  while (dir) {
+    if (dir->is_freezing() || dir->is_frozen())
+      return true;
+    dir = dir->get_parent_dir();
+  }
+  return false;
+}
+
 void MDBalancer::find_exports(CDir *dir,
                               double amount,
                               list<CDir*>& exports,
@@ -869,7 +879,7 @@ void MDBalancer::find_exports(CDir *dir,
       if (!subdir->is_auth()) continue;
       if (already_exporting.count(subdir)) continue;
 
-      if (subdir->is_frozen()) continue;  // can't export this right now!
+      if (dir_or_parent_frozen(subdir)) continue;  // can't export this right now!
 
       // how popular?
       double pop = subdir->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);

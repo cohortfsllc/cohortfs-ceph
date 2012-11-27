@@ -645,11 +645,12 @@ void Migrator::export_dir(CDir *dir, int dest)
     return;
   }
 
-
-  if (dir->is_frozen() ||
-      dir->is_freezing()) {
-    dout(7) << " can't export, freezing|frozen.  wait for other exports to finish first." << dendl;
-    return;
+  // if there are any frozen parents, the target mds' discovery will fail
+  for (CDir *d = dir; d; d = d->get_parent_dir()) {
+    if (d->is_frozen() || d->is_freezing()) {
+      dout(7) << "can't export " << *d << ", freezing|frozen" << dendl;
+      return;
+    }
   }
   if (dir->state_test(CDir::STATE_EXPORTING)) {
     dout(7) << "already exporting" << dendl;
