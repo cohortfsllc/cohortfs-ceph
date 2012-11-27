@@ -247,7 +247,8 @@ public:
   void slave_create_remote(MDRequest *mdr, CDir *dir, CDentry *dn);
   void _slave_create_remote_finish(MDRequest *mdr, CInode *in, CDentry *dn);
   void _slave_create_commit(MDRequest *mdr, CInode *in);
-  void _slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn, int from);
+  void _slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn,
+                                CDentry *inodn, int from);
 };
 
 #endif

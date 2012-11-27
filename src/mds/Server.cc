@@ -2429,8 +2429,11 @@ void Server::_slave_create_remote_finish(MDRequest *mdr, CInode *in, CDentry *dn
   }
 
   // send ack
-  Message *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
-                                    MMDSSlaveRequest::OP_CREATEACK);
+  MMDSSlaveRequest *m = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
+                                             MMDSSlaveRequest::OP_CREATEACK);
+  // replicate inode container fragment and primary dentry
+  mdcache->replicate_dir(dn->get_dir(), from, m->srci_replica);
+  mdcache->replicate_dentry(dn, from, m->srci_replica);
   mds->send_message_mds(m, from);
 
   // set up commit waiter
@@ -2490,10 +2493,23 @@ void Server::handle_slave_create_ack(MDRequest *mdr, MMDSSlaveRequest *req)
   assert(dn);
   dn->push_projected_linkage(in->ino(), in->d_type());
 
-  _slave_create_ack_finish(mdr, in, dn, from);
+  std::list<Context*> finished;
+
+  // decode inode container replicas
+  bufferlist::iterator p = req->srci_replica.begin();
+  CDir *inodir = mdcache->add_replica_dir(p, mdcache->get_inode_container(), from, finished);
+  CDentry *inodn = mdcache->add_replica_dentry(p, inodir, finished);
+
+  mds->queue_waiters(finished);
+
+  // project primary link to inode container
+  inodn->push_projected_linkage(in);
+
+  _slave_create_ack_finish(mdr, in, dn, inodn, from);
 }
 
-void Server::_slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn, int from)
+void Server::_slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn,
+                                      CDentry *inodn, int from)
 {
   dout(7) << "_slave_create_ack_finish " << *mdr << dendl;
 
@@ -2512,8 +2528,12 @@ void Server::_slave_create_ack_finish(MDRequest *mdr, CInode *in, CDentry *dn, i
   // apply the remote link
   dn->get_dir()->unlink_inode(dn); // avoid assertion in CInode::set_primary_parent()
   dn->pop_projected_linkage();
+  inodn->pop_projected_linkage();
   mdr->apply();
   mdr->cleanup();
+
+  // announce link to replicas
+  mdcache->send_dentry_link(inodn);
 
   // change inode authority from ambiguous to destination mds
   in->inode_auth = std::make_pair(from, CDIR_AUTH_UNKNOWN);
