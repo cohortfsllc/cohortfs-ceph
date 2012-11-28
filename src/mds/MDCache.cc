@@ -7047,21 +7047,14 @@ public:
 class C_MDC_OpenRemoteIno : public Context {
   MDCache *mdcache;
   inodeno_t ino;
-  inodeno_t hadino;
-  version_t hadv;
   Context *onfinish;
-public:
-  vector<Anchor> anchortrace;
-
-  C_MDC_OpenRemoteIno(MDCache *mdc, inodeno_t i, inodeno_t hi, version_t hv, Context *c) :
-    mdcache(mdc), ino(i), hadino(hi), hadv(hv), onfinish(c) {}
-  C_MDC_OpenRemoteIno(MDCache *mdc, inodeno_t i, vector<Anchor>& at, Context *c) :
-    mdcache(mdc), ino(i), hadino(0), hadv(0), onfinish(c), anchortrace(at) {}
-
+ public:
+  C_MDC_OpenRemoteIno(MDCache *mdcache, inodeno_t ino, Context *onfinish)
+      : mdcache(mdcache), ino(ino), onfinish(onfinish) {}
   void finish(int r) {
     assert(r == 0);
     if (r == 0)
-      mdcache->open_remote_ino_2(ino, anchortrace, hadino, hadv, onfinish);
+      mdcache->open_remote_ino(ino, onfinish);
     else {
       onfinish->finish(r);
       delete onfinish;
@@ -7069,116 +7062,26 @@ public:
   }
 };
 
-void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, inodeno_t hadino, version_t hadv)
+void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish,
+                              inodeno_t hadino, version_t hadv)
 {
   dout(7) << "open_remote_ino on " << ino << dendl;
-  
-  C_MDC_OpenRemoteIno *c = new C_MDC_OpenRemoteIno(this, ino, hadino, hadv, onfinish);
-  mds->anchorclient->lookup(ino, c->anchortrace, c);
+
+  char inoname[20];
+  snprintf(inoname, sizeof(inoname), "%llx", (unsigned long long)ino.val);
+
+  assert(inode_container);
+  frag_t frag = inode_container->pick_dirfrag(inoname);
+  CDir *dir = inode_container->is_auth()
+      ? inode_container->get_or_open_dirfrag(this, frag)
+      : inode_container->get_dirfrag(frag);
+
+  if (dir)
+    discover_ino(dir, ino, onfinish);
+  else
+    discover_dir_frag(inode_container, frag,
+                      new C_MDC_OpenRemoteIno(this, ino, onfinish));
 }
-
-void MDCache::open_remote_ino_2(inodeno_t ino,
-                                vector<Anchor>& anchortrace,
-				inodeno_t hadino, version_t hadv,
-                                Context *onfinish)
-{
-  dout(7) << "open_remote_ino_2 on " << ino
-	  << ", trace depth is " << anchortrace.size() << dendl;
-  
-  // find deepest cached inode in prefix
-  unsigned i = anchortrace.size();  // i := array index + 1
-  CInode *in = 0;
-  while (1) {
-    // inode?
-    dout(10) << " " << i << ": " << anchortrace[i-1] << dendl;
-    in = get_inode(anchortrace[i-1].ino);
-    if (in)
-      break;
-    i--;
-    if (!i) {
-      in = get_inode(anchortrace[i].dirino);
-      if (!in) {
-	dout(0) << "open_remote_ino_2 don't have dir inode " << anchortrace[i].dirino << dendl;
-	if (MDS_INO_IS_MDSDIR(anchortrace[i].dirino)) {
-	  open_foreign_mdsdir(anchortrace[i].dirino, onfinish);
-	  return;
-	}
-	assert(in);  // hrm!
-      }
-      break;
-    }
-  }
-  dout(10) << "deepest cached inode at " << i << " is " << *in << dendl;
-
-  if (in->ino() == ino) {
-    // success
-    dout(10) << "open_remote_ino_2 have " << *in << dendl;
-    onfinish->finish(0);
-    delete onfinish;
-    return;
-  } 
-
-  // open dirfrag beneath *in
-  frag_t frag = in->dirfragtree[anchortrace[i].dn_hash];
-
-  if (!in->dirfragtree.contains(frag)) {
-    dout(10) << "frag " << frag << " not valid, requerying anchortable" << dendl;
-    open_remote_ino(ino, onfinish);
-    return;
-  }
-
-  CDir *dir = in->get_dirfrag(frag);
-
-  if (!dir && !in->is_auth()) {
-    dout(10) << "opening remote dirfrag " << frag << " under " << *in << dendl;
-    /* we re-query the anchortable just to avoid a fragtree update race */
-    open_remote_dirfrag(in, frag,
-			new C_MDC_RetryOpenRemoteIno(this, ino, onfinish));
-    return;
-  }
-
-  if (!dir && in->is_auth()) {
-    if (in->is_frozen_dir()) {
-      dout(7) << "traverse: " << *in << " is frozen_dir, waiting" << dendl;
-      in->parent->dir->add_waiter(CDir::WAIT_UNFREEZE, onfinish);
-      return;
-    }
-    dir = in->get_or_open_dirfrag(this, frag);
-  }
-  assert(dir);
-
-  if (dir->is_auth()) {
-    if (dir->is_complete()) {
-      // make sure we didn't get to the same version anchor 2x in a row
-      if (hadv && hadino == anchortrace[i].ino && hadv == anchortrace[i].updated) {
-	dout(10) << "expected ino " << anchortrace[i].ino
-		 << " in complete dir " << *dir
-		 << ", got same anchor " << anchortrace[i] << " 2x in a row" << dendl;
-	onfinish->finish(-ENOENT);
-	delete onfinish;
-      } else {
-	// hrm.  requery anchor table.
-	dout(10) << "expected ino " << anchortrace[i].ino
-		 << " in complete dir " << *dir
-		 << ", requerying anchortable"
-		 << dendl;
-	open_remote_ino(ino, onfinish, anchortrace[i].ino, anchortrace[i].updated);
-      }
-    } else {
-      dout(10) << "need ino " << anchortrace[i].ino
-	       << ", fetching incomplete dir " << *dir
-	       << dendl;
-      dir->fetch(new C_MDC_OpenRemoteIno(this, ino, anchortrace, onfinish));
-    }
-  } else {
-    // hmm, discover.
-    dout(10) << "have remote dirfrag " << *dir << ", discovering " 
-	     << anchortrace[i].ino << dendl;
-    discover_ino(dir, anchortrace[i].ino, 
-		 new C_MDC_OpenRemoteIno(this, ino, anchortrace, onfinish));
-  }
-}
-
 
 struct C_MDC_OpenRemoteDentry : public Context {
   MDCache *mdc;
