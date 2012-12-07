@@ -679,6 +679,7 @@ protected:
 			    ReplicatedPG *pg,
 			    entity_name_t entity,
 			    utime_t expire);
+  void handle_notify_timeout(void *notif);
 
   void put_object_context(void *_obc, pg_t pgid);
   void ack_notification(entity_name_t& peer_addr, void *notif, void *obc,

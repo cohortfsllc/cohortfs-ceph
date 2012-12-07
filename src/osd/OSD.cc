@@ -680,8 +680,8 @@ OSD::OSD(int id, Messenger *internal_messenger, Messenger *external_messenger,
   up_thru_wanted(0), up_thru_pending(0),
   command_wq(this, g_conf->osd_command_thread_timeout, &command_tp),
   remove_wq(store, g_conf->osd_remove_thread_timeout, &disk_tp),
-  serviceRef(shared_ptr<OSDService>(osdSvc)),
-  osd_stat_updated(false)
+  osd_stat_updated(false),
+  serviceRef(shared_ptr<OSDService>(osdSvc))
 {
   monc->set_messenger(client_messenger);
 }
@@ -1575,52 +1575,6 @@ void OSD::complete_notify(void *_notif, void *_obc)
   delete notif;
 }
 
-void OSD::disconnect_session_watches(Session *session)
-{
-  // get any watched obc's
-  map<ReplicatedPG::ObjectContext *, pg_t> obcs;
-  serviceRef->watch_lock.Lock();
-  for (map<void *, pg_t>::iterator iter = session->watches.begin(); iter != session->watches.end(); ++iter) {
-    ReplicatedPG::ObjectContext *obc = (ReplicatedPG::ObjectContext *)iter->first;
-    obcs[obc] = iter->second;
-  }
-  serviceRef->watch_lock.Unlock();
-
-  for (map<ReplicatedPG::ObjectContext *, pg_t>::iterator oiter = obcs.begin(); oiter != obcs.end(); ++oiter) {
-    ReplicatedPG::ObjectContext *obc = (ReplicatedPG::ObjectContext *)oiter->first;
-    dout(10) << "obc=" << (void *)obc << dendl;
-
-    ReplicatedPG *pg = static_cast<ReplicatedPG *>(lookup_lock_raw_pg(oiter->second));
-    assert(pg);
-    serviceRef->watch_lock.Lock();
-    /* NOTE! fix this one, should be able to just lookup entity name,
-       however, we currently only keep EntityName on the session and not
-       entity_name_t. */
-    map<entity_name_t, Session *>::iterator witer = obc->watchers.begin();
-    while (1) {
-      while (witer != obc->watchers.end() && witer->second == session) {
-        dout(10) << "removing watching session entity_name=" << session->entity_name
-		<< " from " << obc->obs.oi << dendl;
-	entity_name_t entity = witer->first;
-	watch_info_t& w = obc->obs.oi.watchers[entity];
-	utime_t expire = ceph_clock_now(g_ceph_context);
-	expire += w.timeout_seconds;
-	pg->register_unconnected_watcher(obc, entity, expire);
-	dout(10) << " disconnected watch " << w << " by " << entity << " session " << session
-		 << ", expires " << expire << dendl;
-        obc->watchers.erase(witer++);
-	pg->put_object_context(obc);
-	session->put();
-      }
-      if (witer == obc->watchers.end())
-        break;
-      ++witer;
-    }
-    serviceRef->watch_lock.Unlock();
-    pg->unlock();
-  }
-}
-
 bool OSD::ms_handle_reset(Connection *con)
 {
   dout(1) << "OSD::ms_handle_reset()" << dendl;
@@ -1630,22 +1584,6 @@ bool OSD::ms_handle_reset(Connection *con)
   ms_handle_reset_sub(session);
   session->put();
   return true;
-}
-
-void OSD::handle_notify_timeout(void *_notif)
-{
-  assert(serviceRef->watch_lock.is_locked());
-  Watch::Notification *notif = (Watch::Notification *)_notif;
-  dout(10) << "OSD::handle_notify_timeout notif " << notif->id << dendl;
-
-  ReplicatedPG::ObjectContext *obc = (ReplicatedPG::ObjectContext *)notif->obc;
-
-  complete_notify(_notif, obc);
-  serviceRef->watch_lock.Unlock(); /* drop lock to change locking order */
-
-  put_object_context(obc, notif->pgid);
-  serviceRef->watch_lock.Lock();
-  /* exiting with watch_lock held */
 }
 
 struct C_OSD_GetVersion : public Context {
@@ -1774,128 +1712,6 @@ void OSD::send_still_alive(epoch_t epoch, entity_inst_t i)
   m->is_failed = false;
   monc->send_mon_message(m);
 }
-
-void OSD::send_pg_stats(const utime_t &now)
-{
-  assert(osd_lock.is_locked());
-
-  dout(20) << "send_pg_stats" << dendl;
-
-  stat_lock.Lock();
-  osd_stat_t cur_stat = osd_stat;
-  stat_lock.Unlock();
-   
-  pg_stat_queue_lock.Lock();
-
-  if (osd_stat_updated || !pg_stat_queue.empty()) {
-    last_stats_sent = now;
-    osd_stat_updated = false;
-
-    dout(10) << "send_pg_stats - " << pg_stat_queue.size() << " pgs updated" << dendl;
-
-    utime_t had_for(now);
-    had_for -= had_map_since;
-
-    MPGStats *m = new MPGStats(monc->get_fsid(), osdmap->get_epoch(), had_for);
-    m->set_tid(++pg_stat_tid);
-    m->osd_stat = cur_stat;
-
-    xlist<PG*>::iterator p = pg_stat_queue.begin();
-    while (!p.end()) {
-      PG *pg = *p;
-      ++p;
-      if (!pg->is_primary()) {  // we hold map_lock; role is stable.
-	pg->stat_queue_item.remove_myself();
-	pg->put();
-	continue;
-      }
-      pg->pg_stats_lock.Lock();
-      if (pg->pg_stats_valid) {
-	m->pg_stat[pg->info.pgid] = pg->pg_stats_stable;
-	dout(25) << " sending " << pg->info.pgid << " " << pg->pg_stats_stable.reported << dendl;
-      } else {
-	dout(25) << " NOT sending " << pg->info.pgid << " " << pg->pg_stats_stable.reported << ", not valid" << dendl;
-      }
-      pg->pg_stats_lock.Unlock();
-    }
-
-    if (!outstanding_pg_stats) {
-      outstanding_pg_stats = true;
-      last_pg_stats_ack = ceph_clock_now(g_ceph_context);
-    }
-    monc->send_mon_message(m);
-  }
-
-  pg_stat_queue_lock.Unlock();
-}
-
-void OSD::handle_pg_stats_ack(MPGStatsAck *ack)
-{
-  dout(10) << "handle_pg_stats_ack " << dendl;
-
-  if (!require_mon_peer(ack)) {
-    ack->put();
-    return;
-  }
-
-  last_stats_ack = ceph_clock_now(g_ceph_context);
-
-  pg_stat_queue_lock.Lock();
-
-  if (ack->get_tid() > pg_stat_tid_flushed) {
-    pg_stat_tid_flushed = ack->get_tid();
-    pg_stat_queue_cond.Signal();
-  }
-
-  xlist<PG*>::iterator p = pg_stat_queue.begin();
-  while (!p.end()) {
-    PG *pg = *p;
-    ++p;
-
-    if (ack->pg_stat.count(pg->info.pgid)) {
-      eversion_t acked = ack->pg_stat[pg->info.pgid];
-      pg->pg_stats_lock.Lock();
-      if (acked == pg->pg_stats_stable.reported) {
-	dout(25) << " ack on " << pg->info.pgid << " " << pg->pg_stats_stable.reported << dendl;
-	pg->stat_queue_item.remove_myself();
-	pg->put();
-      } else {
-	dout(25) << " still pending " << pg->info.pgid << " " << pg->pg_stats_stable.reported
-		 << " > acked " << acked << dendl;
-      }
-      pg->pg_stats_lock.Unlock();
-    } else
-      dout(30) << " still pending " << pg->info.pgid << " " << pg->pg_stats_stable.reported << dendl;
-  }
-  
-  if (!pg_stat_queue.size()) {
-    outstanding_pg_stats = false;
-  }
-
-  pg_stat_queue_lock.Unlock();
-
-  ack->put();
-}
-
-void OSD::flush_pg_stats()
-{
-  dout(10) << "flush_pg_stats" << dendl;
-  utime_t now = ceph_clock_now(cct);
-  send_pg_stats(now);
-
-  osd_lock.Unlock();
-
-  pg_stat_queue_lock.Lock();
-  uint64_t tid = pg_stat_tid;
-  dout(10) << "flush_pg_stats waiting for stats tid " << tid << " to flush" << dendl;
-  while (tid > pg_stat_tid_flushed)
-    pg_stat_queue_cond.Wait(pg_stat_queue_lock);
-  dout(10) << "flush_pg_stats finished waiting for stats tid " << tid << " to flush" << dendl;
-  pg_stat_queue_lock.Unlock();
-
-  osd_lock.Lock();
-}
-
 
 void OSD::handle_command(MMonCommand *m)
 {

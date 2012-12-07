@@ -441,11 +441,12 @@ public:
   } heartbeat_dispatcher;
 
 
-private:
+protected:
   // -- stats --
   Mutex stat_lock;
   osd_stat_t osd_stat;
 
+private:
   void update_osd_stat();
   
   // -- waiters --
@@ -776,7 +777,6 @@ public:
   int init_op_flags(MOSDOp *op);
 
   void complete_notify(void *notif, void *obc);
-  void handle_notify_timeout(void *notif);
 
   OSDServiceRef serviceRef;
   friend class OSDService;
@@ -787,4 +787,4 @@ extern const CompatSet::Feature ceph_osd_feature_compat[];
 extern const CompatSet::Feature ceph_osd_feature_ro_compat[];
 extern const CompatSet::Feature ceph_osd_feature_incompat[];
 
-#endif
+#endif // CEPH_OSD_H
