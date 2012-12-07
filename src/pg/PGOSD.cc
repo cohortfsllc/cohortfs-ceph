@@ -17,6 +17,7 @@
 #include "mon/MonClient.h"
 #include "messages/MOSDPGTemp.h"
 #include "ReplicatedPG.h"
+#include "common/errno.h"
 
 
 #define dout_subsys ceph_subsys_osd
@@ -195,7 +196,7 @@ PG *PGOSD::_open_lock_pg(OSDMapRef createmap,
   hobject_t logoid = make_pg_log_oid(pgid);
   hobject_t infooid = make_pg_biginfo_oid(pgid);
   if (get_pgosdmap()->get_pg_type(pgid) == pg_pool_t::TYPE_REP)
-    pg = new ReplicatedPG(serviceRef.get(), createmap, pool, pgid, logoid, infooid);
+    pg = new ReplicatedPG(serviceRef, createmap, pool, pgid, logoid, infooid);
   else 
     assert(0);
 
@@ -211,12 +212,12 @@ PG *PGOSD::_open_lock_pg(OSDMapRef createmap,
 }
 
 
-PG *PGOSD::_create_lock_pg(
-			 OSDMapRef createmap,
-			 pg_t pgid, bool newly_created, bool hold_map_lock,
-			 int role, vector<int>& up, vector<int>& acting, pg_history_t history,
-			 pg_interval_map_t& pi,
-			 ObjectStore::Transaction& t)
+PG *PGOSD::_create_lock_pg(OSDMapRef createmap,
+			   pg_t pgid, bool newly_created, bool hold_map_lock,
+			   int role, vector<int>& up, vector<int>& acting,
+			   pg_history_t history,
+			   pg_interval_map_t& pi,
+			   ObjectStore::Transaction& t)
 {
   assert(osd_lock.is_locked());
   dout(20) << "_create_lock_pg pgid " << pgid << dendl;
@@ -247,7 +248,7 @@ bool PGOSD::_have_pg(pg_t pgid)
   return pg_map.count(pgid);
 }
 
-PG *OSD::_lookup_lock_pg(pg_t pgid)
+PG *PGOSD::_lookup_lock_pg(pg_t pgid)
 {
   assert(osd_lock.is_locked());
   if (!pg_map.count(pgid))
@@ -257,7 +258,7 @@ PG *OSD::_lookup_lock_pg(pg_t pgid)
   return pg;
 }
 
-PG *OSD::_lookup_lock_pg_with_map_lock_held(pg_t pgid)
+PG *PGOSD::_lookup_lock_pg_with_map_lock_held(pg_t pgid)
 {
   assert(osd_lock.is_locked());
   assert(pg_map.count(pgid));
@@ -266,11 +267,11 @@ PG *OSD::_lookup_lock_pg_with_map_lock_held(pg_t pgid)
   return pg;
 }
 
-PG *OSD::lookup_lock_raw_pg(pg_t pgid)
+PG *PGOSD::lookup_lock_raw_pg(pg_t pgid)
 {
   Mutex::Locker l(osd_lock);
-  if (osdmap->have_pg_pool(pgid.pool())) {
-    pgid = osdmap->raw_pg_to_pg(pgid);
+  if (get_pgosdmap()->have_pg_pool(pgid.pool())) {
+    pgid = get_pgosdmap()->raw_pg_to_pg(pgid);
   }
   if (!_have_pg(pgid)) {
     return NULL;
@@ -314,9 +315,10 @@ void PGOSD::load_pgs()
 	boost::tuple<coll_t, SequencerRef, DeletingStateRef> *to_queue =
 	  new boost::tuple<coll_t, SequencerRef, DeletingStateRef>;
 	to_queue->get<0>() = *it;
-	to_queue->get<1>() = serviceRef->osr_registry.lookup_or_create(
-								       pgid, stringify(pgid));
-	to_queue->get<2>() = serviceRef->deleting_pgs.lookup_or_create(pgid);
+	to_queue->get<1>() =
+	  get_pgosdservice()->osr_registry.lookup_or_create(pgid,
+							    stringify(pgid));
+	to_queue->get<2>() = get_pgosdservice()->deleting_pgs.lookup_or_create(pgid);
 	remove_wq.queue(to_queue);
 	continue;
       }
@@ -328,7 +330,7 @@ void PGOSD::load_pgs()
       continue;
     }
 
-    if (!osdmap->have_pg_pool(pgid.pool())) {
+    if (!get_pgosdmap()->have_pg_pool(pgid.pool())) {
       dout(10) << __func__ << ": skipping PG " << pgid << " because we don't have pool "
 	       << pgid.pool() << dendl;
       continue;
@@ -345,11 +347,12 @@ void PGOSD::load_pgs()
     // read pg state, log
     pg->read_state(store);
 
-    serviceRef->reg_last_pg_scrub(pg->info.pgid, pg->info.history.last_scrub_stamp);
+    get_pgosdservice()->reg_last_pg_scrub(pg->info.pgid,
+					  pg->info.history.last_scrub_stamp);
 
     // generate state for current mapping
-    osdmap->pg_to_up_acting_osds(pgid, pg->up, pg->acting);
-    int role = osdmap->calc_pg_role(whoami, pg->acting);
+    get_pgosdmap()->pg_to_up_acting_osds(pgid, pg->up, pg->acting);
+    int role = get_pgosdmap()->calc_pg_role(whoami, pg->acting);
     pg->set_role(role);
 
     PG::RecoveryCtx rctx(0, 0, 0, 0, 0, 0);
@@ -366,16 +369,16 @@ void PGOSD::load_pgs()
  * look up a pg.  if we have it, great.  if not, consider creating it IF the pg mapping
  * hasn't changed since the given epoch and we are the primary.
  */
-PG *OSD::get_or_create_pg(const pg_info_t& info, pg_interval_map_t& pi,
-			  epoch_t epoch, int from, int& created, bool primary)
+PG *PGOSD::get_or_create_pg(const pg_info_t& info, pg_interval_map_t& pi,
+			    epoch_t epoch, int from, int& created, bool primary)
 {
   PG *pg;
 
   if (!_have_pg(info.pgid)) {
     // same primary?
     vector<int> up, acting;
-    osdmap->pg_to_up_acting_osds(info.pgid, up, acting);
-    int role = osdmap->calc_pg_role(whoami, acting, acting.size());
+    get_pgosdmap()->pg_to_up_acting_osds(info.pgid, up, acting);
+    int role = get_pgosdmap()->calc_pg_role(whoami, acting, acting.size());
 
     pg_history_t history = info.history;
     project_pg_history(info.pgid, history, epoch, up, acting);
@@ -454,7 +457,7 @@ void PGOSD::calc_priors_during(pg_t pgid, epoch_t start, epoch_t end, set<int>& 
   for (epoch_t e = start; e < end; e++) {
     OSDMapRef oldmap = get_map(e);
     vector<int> acting;
-    oldmap->pg_to_acting_osds(pgid, acting);
+    get_pgosdmap(oldmap)->pg_to_acting_osds(pgid, acting);
     dout(20) << "  " << pgid << " in epoch " << e << " was " << acting << dendl;
     int up = 0;
     for (unsigned i=0; i<acting.size(); i++)
@@ -497,7 +500,7 @@ void PGOSD::project_pg_history(pg_t pgid, pg_history_t& h, epoch_t from,
     OSDMapRef oldmap = get_map(e-1);
 
     vector<int> up, acting;
-    oldmap->pg_to_up_acting_osds(pgid, up, acting);
+    get_pgosdmap(oldmap)->pg_to_up_acting_osds(pgid, up, acting);
 
     // acting set change?
     if ((acting != currentacting || up != currentup) && e > h.same_interval_since) {
@@ -540,7 +543,7 @@ void PGOSD::project_pg_history(pg_t pgid, pg_history_t& h, epoch_t from,
 }
 
 
-void PGOSD::build_heartbeat_peers_list() const {
+void PGOSD::build_heartbeat_peers_list() {
   // build heartbeat from set
   for (hash_map<pg_t, PG*>::iterator i = pg_map.begin();
        i != pg_map.end();
@@ -575,7 +578,7 @@ void PGOSD::sched_scrub()
   //dout(20) << " " << last_scrub_pg << dendl;
 
   pair<utime_t, pg_t> pos;
-  while (serviceRef->next_scrub_stamp(pos, &pos)) {
+  while (get_pgosdservice()->next_scrub_stamp(pos, &pos)) {
     utime_t t = pos.first;
     pg_t pgid = pos.second;
 
@@ -599,9 +602,9 @@ void PGOSD::sched_scrub()
 }
 
 
-void PGOSD::tick_sub() {
+void PGOSD::tick_sub(const utime_t& now) {
   if (outstanding_pg_stats
-      &&(now - g_conf->osd_mon_ack_timeout) > last_pg_stats_ack) {
+      && (now - g_conf->osd_mon_ack_timeout) > last_pg_stats_ack) {
     dout(1) << "mon hasn't acked PGStats in " << now - last_pg_stats_ack
             << " seconds, reconnecting elsewhere" << dendl;
     monc->reopen_session();
@@ -610,14 +613,14 @@ void PGOSD::tick_sub() {
 }
 
 
-void PGOSD::do_mon_report_sub() {
-  pgosdmap()->send_pg_temp();
+void PGOSD::do_mon_report_sub(const utime_t& now) {
+  get_pgosdservice()->send_pg_temp();
   send_pg_stats(now);
 }
 
 
 void PGOSD::ms_handle_connect_sub(Connection *con) {
-  serviceRef->send_pg_temp();
+  get_pgosdservice()->send_pg_temp();
   send_pg_stats(ceph_clock_now(g_ceph_context));
     
   monc->sub_want("osd_pg_creates", 0, CEPH_SUBSCRIBE_ONETIME);
@@ -668,7 +671,6 @@ void PGOSD::handle_watch_timeout(void *obc,
 }
 
 
-void PGOSD::ms_handle_reset_sub(OSD::Session* session) {
-  Session* pgsession = dynamic_cast<Session*>(session);
-  disconnect_session_watches(pgsession);
+void PGOSD::ms_handle_reset_sub(PGSession* session) {
+  disconnect_session_watches(session);
 }

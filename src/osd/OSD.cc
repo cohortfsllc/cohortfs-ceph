@@ -1460,8 +1460,7 @@ void OSD::tick()
 
   timer.add_event_after(1.0, new C_Tick(this));
 
-  tick_sub();
-
+  tick_sub(now);
 
   // only do waiters if dispatch() isn't currently running.  (if it is,
   // it'll do the waiters, and doing them here may screw up ordering
@@ -1536,7 +1535,7 @@ void OSD::do_mon_report()
 
   // do any pending reports
   send_alive();
-  do_mon_report_sub();
+  do_mon_report_sub(now);
   send_failures();
 }
 

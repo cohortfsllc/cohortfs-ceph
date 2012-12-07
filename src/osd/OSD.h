@@ -307,7 +307,7 @@ protected:
 
   void create_logger();
   void tick();
-  virtual void tick_sub() = 0;
+  virtual void tick_sub(const utime_t& now) = 0;
   void _dispatch(Message *m);
   void dispatch_op(OpRequestRef op);
 
@@ -400,7 +400,8 @@ private:
   map<int,HeartbeatInfo> heartbeat_peers;  ///< map of osd id to HeartbeatInfo
   utime_t last_mon_heartbeat;
   Messenger *hbclient_messenger, *hbserver_messenger;
-  
+
+protected:  
   void _add_heartbeat_peer(int p);
   void maybe_update_heartbeat_peers();
   virtual void build_heartbeat_peers_list() const = 0;
@@ -409,6 +410,8 @@ private:
   void heartbeat_check();
   void heartbeat_entry();
   void need_heartbeat_peer_update();
+
+private:
 
   struct T_Heartbeat : public Thread {
     OSD *osd;
@@ -544,7 +547,7 @@ protected:
   // == monitor interaction ==
   utime_t last_mon_report;
   void do_mon_report();
-  virtual void do_mon_report_sub() = 0;
+  virtual void do_mon_report_sub(const utime_t& now) = 0;
 
   // -- boot --
   void start_boot();

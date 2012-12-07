@@ -623,7 +623,7 @@ protected:
   BackfillInterval peer_backfill_info;
   int backfill_target;
 
-  friend class OSD;
+  friend class PGOSD;
 
 public:
   int get_backfill_target() const {

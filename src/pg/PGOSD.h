@@ -117,10 +117,10 @@ public:
   virtual int init();
   virtual int shutdown();
 
-  virtual void build_heartbeat_peers_list() const;
-  virtual void tick_sub();
+  virtual void build_heartbeat_peers_list();
+  virtual void tick_sub(const utime_t& now);
 
-  virtual void do_mon_report_sub();
+  virtual void do_mon_report_sub(const utime_t& now);
 
   virtual void ms_handle_connect_sub(Connection *con);
 
@@ -257,6 +257,14 @@ protected:
 
   const PGOSDMap* get_pgosdmap() {
     return dynamic_cast<const PGOSDMap*>(get_osdmap().get());
+  }
+
+  const PGOSDMap* get_pgosdmap(OSDMapRef ref) const {
+    return dynamic_cast<const PGOSDMap*>(ref.get());
+  }
+
+  PGOSDService* get_pgosdservice() const {
+    return dynamic_cast<PGOSDService*>(serviceRef.get());
   }
 
   void advance_pg(epoch_t advance_to, PG *pg, PG::RecoveryCtx *rctx);

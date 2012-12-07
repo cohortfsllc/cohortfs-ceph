@@ -61,7 +61,7 @@ public:
 
 
 class ReplicatedPG : public PG {
-  friend class OSD;
+  friend class PGOSD;
 public:  
 
   /*

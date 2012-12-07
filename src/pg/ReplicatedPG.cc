@@ -3138,7 +3138,7 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 	  dout(10) << " acking pending notif " << notif->id << " by " << by << dendl;
 	  session->del_notif(notif);
 	  // TODOSAM: osd->osd-> not good
-	  osd->get_pgosd()->ack_notification(entity, notif, obc, this);
+	  get_pgosdservice()->get_pgosd()->ack_notification(entity, notif, obc, this);
 	}
       }
     }
@@ -3206,7 +3206,7 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 
       session->del_notif(notif);
       // TODOSAM: osd->osd-> not good
-      osd->get_pgosd()->ack_notification(entity, notif, obc, this);
+      get_pgosdservice()->get_pgosd()->ack_notification(entity, notif, obc, this);
     }
 
     osd->watch_lock.Unlock();
@@ -3470,7 +3470,7 @@ void ReplicatedPG::op_applied(RepGather *repop)
       scrub_gather_replica_maps();
       ++scrub_waiting_on;
       scrub_waiting_on_whom.insert(osd->whoami);
-      osd->scrub_wq.queue(this);
+      get_pgosdservice()->scrub_wq.queue(this);
     }
   }
 
@@ -4365,7 +4365,7 @@ void ReplicatedPG::sub_op_modify_applied(RepModify *rm)
     if (finalizing_scrub) {
       assert(active_rep_scrub);
       if (last_update_applied == active_rep_scrub->scrub_to) {
-	osd->rep_scrub_wq.queue(active_rep_scrub);
+	get_pgosdservice()->rep_scrub_wq.queue(active_rep_scrub);
 	active_rep_scrub = 0;
       }
     }
@@ -5693,7 +5693,7 @@ void ReplicatedPG::mark_all_unfound_lost(int what)
   share_pg_log();
 
   // queue ourselves so that we push the (now-lost) object_infos to replicas.
-  osd->queue_for_recovery(this);
+  get_pgosdservice()->queue_for_recovery(this);
 }
 
 void ReplicatedPG::_finish_mark_all_unfound_lost(list<ObjectContext*>& obcs)
