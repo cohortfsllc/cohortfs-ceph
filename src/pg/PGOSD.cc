@@ -868,3 +868,54 @@ void PGOSD::flush_pg_stats()
 }
 
 
+bool PGOSD::do_command_sub(Connection *con,
+			   tid_t tid,
+			   vector<string>& cmd,
+			   bufferlist& data,
+			   int& r,
+			   ostringstream& ss)
+{
+  if (cmd[0] == "pg") {
+    pg_t pgid;
+
+    if (cmd.size() < 2) {
+      ss << "no pgid specified";
+      r = -EINVAL;
+    } else if (!pgid.parse(cmd[1].c_str())) {
+      ss << "couldn't parse pgid '" << cmd[1] << "'";
+      r = -EINVAL;
+    } else {
+      PG *pg = _lookup_lock_pg(pgid);
+      if (!pg) {
+	ss << "i don't have pgid " << pgid;
+	r = -ENOENT;
+      } else {
+	cmd.erase(cmd.begin(), cmd.begin() + 2);
+	r = pg->do_command(cmd, ss, data, odata);
+	pg->unlock();
+      }
+    }
+    return true;
+  }
+
+  else if (cmd.size() >= 1 && cmd[0] == "flush_pg_stats") {
+    flush_pg_stats();
+    return true;
+  }
+  
+  else if (cmd[0] == "dump_pg_recovery_stats") {
+    stringstream s;
+    pg_recovery_stats.dump(s);
+    ss << "dump pg recovery stats: " << s.str();
+  }
+
+  else if (cmd[0] == "reset_pg_recovery_stats") {
+    ss << "reset pg recovery stats";
+    pg_recovery_stats.reset();
+  }
+
+  else {
+    return false
+  }
+
+}

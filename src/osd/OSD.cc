@@ -1748,7 +1748,9 @@ void OSD::handle_command(MCommand *m)
   m->put();
 }
 
-void OSD::do_command(Connection *con, tid_t tid, vector<string>& cmd, bufferlist& data)
+void OSD::do_command(Connection *con,
+		     tid_t tid, vector<string>& cmd,
+		     bufferlist& data)
 {
   int r = 0;
   ostringstream ss;
@@ -1765,28 +1767,6 @@ void OSD::do_command(Connection *con, tid_t tid, vector<string>& cmd, bufferlist
     osd_lock.Unlock();
     g_conf->injectargs(cmd[1], &ss);
     osd_lock.Lock();
-  }
-
-  else if (cmd[0] == "pg") {
-    pg_t pgid;
-
-    if (cmd.size() < 2) {
-      ss << "no pgid specified";
-      r = -EINVAL;
-    } else if (!pgid.parse(cmd[1].c_str())) {
-      ss << "couldn't parse pgid '" << cmd[1] << "'";
-      r = -EINVAL;
-    } else {
-      PG *pg = _lookup_lock_pg(pgid);
-      if (!pg) {
-	ss << "i don't have pgid " << pgid;
-	r = -ENOENT;
-      } else {
-	cmd.erase(cmd.begin(), cmd.begin() + 2);
-	r = pg->do_command(cmd, ss, data, odata);
-	pg->unlock();
-      }
-    }
   }
 
   else if (cmd[0] == "bench") {
@@ -1828,10 +1808,6 @@ void OSD::do_command(Connection *con, tid_t tid, vector<string>& cmd, bufferlist
        << (end-start) << " sec at " << prettybyte_t(rate) << "/sec";
   }
 
-  else if (cmd.size() >= 1 && cmd[0] == "flush_pg_stats") {
-    flush_pg_stats();
-  }
-  
   else if (cmd[0] == "heap") {
     if (ceph_using_tcmalloc()) {
       ceph_heap_profiler_handle_command(cmd, clog);
@@ -1906,18 +1882,7 @@ void OSD::do_command(Connection *con, tid_t tid, vector<string>& cmd, bufferlist
     cpu_profiler_handle_command(cmd, clog);
   }
 
-  else if (cmd[0] == "dump_pg_recovery_stats") {
-    stringstream s;
-    pg_recovery_stats.dump(s);
-    ss << "dump pg recovery stats: " << s.str();
-  }
-
-  else if (cmd[0] == "reset_pg_recovery_stats") {
-    ss << "reset pg recovery stats";
-    pg_recovery_stats.reset();
-  }
-
-  else {
+  else if (!do_command_sub(con, tid, cmd, data, r, ss)) {
     ss << "unrecognized command! " << cmd;
     r = -EINVAL;
   }

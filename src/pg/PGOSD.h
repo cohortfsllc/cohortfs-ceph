@@ -117,6 +117,13 @@ public:
   virtual int init();
   virtual int shutdown();
 
+  virtual bool do_command_sub(Connection *con,
+			      tid_t tid,
+			      vector<string>& cmd,
+			      bufferlist& data,
+			      int& r,
+			      ostringstream& ss);
+
   virtual void build_heartbeat_peers_list();
   virtual void tick_sub(const utime_t& now);
 

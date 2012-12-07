@@ -644,8 +644,17 @@ protected:
 
   void handle_command(class MMonCommand *m);
   void handle_command(class MCommand *m);
-  void do_command(Connection *con, tid_t tid, vector<string>& cmd, bufferlist& data);
-
+  void do_command(Connection *con,
+		  tid_t tid,
+		  vector<string>& cmd,
+		  bufferlist& data);
+  // true if handled, false if not handled
+  virtual bool do_command_sub(Connection *con,
+			      tid_t tid,
+			      vector<string>& cmd,
+			      bufferlist& data,
+			      int& r,
+			      ostringstream& ss) = 0;
 
   // -- removing --
   struct RemoveWQ : public ThreadPool::WorkQueue<boost::tuple<coll_t, SequencerRef, DeletingStateRef> > {
