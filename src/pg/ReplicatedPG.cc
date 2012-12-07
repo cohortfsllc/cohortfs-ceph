@@ -11,11 +11,12 @@
  * 
  */
 
-#include "PG.h"
-#include "ReplicatedPG.h"
 #include "osd/OSD.h"
 #include "osd/OpRequest.h"
 #include "osd/Watch.h"
+#include "PG.h"
+#include "ReplicatedPG.h"
+#include "PGOSD.h"
 
 #include "common/errno.h"
 #include "common/perf_counters.h"
@@ -580,7 +581,7 @@ void ReplicatedPG::calc_trim_to()
   }
 }
 
-ReplicatedPG::ReplicatedPG(OSDService *o, OSDMapRef curmap,
+ReplicatedPG::ReplicatedPG(OSDServiceRef o, OSDMapRef curmap,
 			   PGPool _pool, pg_t p, const hobject_t& oid,
 			   const hobject_t& ioid) :
   PG(o, curmap, _pool, p, oid, ioid), temp_created(false),
@@ -1531,7 +1532,7 @@ void ReplicatedPG::dump_watchers(ObjectContext *obc)
   assert(osd->watch_lock.is_locked());
   
   dout(10) << "dump_watchers " << obc->obs.oi.soid << " " << obc->obs.oi << dendl;
-  for (map<entity_name_t, OSD::Session *>::iterator iter = obc->watchers.begin(); 
+  for (map<entity_name_t, PGOSD::PGSession *>::iterator iter = obc->watchers.begin(); 
        iter != obc->watchers.end();
        ++iter)
     dout(10) << " * obc->watcher: " << iter->first << " session=" << iter->second << dendl;
@@ -1549,9 +1550,9 @@ void ReplicatedPG::remove_watcher(ObjectContext *obc, entity_name_t entity)
   assert_locked();
   assert(osd->watch_lock.is_locked());
   dout(10) << "remove_watcher " << *obc << " " << entity << dendl;
-  map<entity_name_t, OSD::Session *>::iterator iter = obc->watchers.find(entity);
+  map<entity_name_t, PGOSD::PGSession *>::iterator iter = obc->watchers.find(entity);
   assert(iter != obc->watchers.end());
-  OSD::Session *session = iter->second;
+  PGOSD::PGSession *session = iter->second;
   dout(10) << "remove_watcher removing session " << session << dendl;
 
   obc->watchers.erase(iter);
@@ -1595,7 +1596,8 @@ void ReplicatedPG::remove_watchers_and_notifies()
     map<hobject_t, ObjectContext *>::iterator iter = oiter++;
     ObjectContext *obc = iter->second;
     obc->ref++;
-    for (map<entity_name_t, OSD::Session *>::iterator witer = obc->watchers.begin();
+    for (map<entity_name_t, PGOSD::PGSession *>::iterator witer =
+	   obc->watchers.begin();
 	 witer != obc->watchers.end();
 	 remove_watcher(obc, (witer++)->first)) ;
     for (map<entity_name_t,Watch::C_WatchTimeout*>::iterator iter = obc->unconnected_watchers.begin();
@@ -3059,7 +3061,7 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 {
   if (ctx->watch_connect || ctx->watch_disconnect ||
       !ctx->notifies.empty() || !ctx->notify_acks.empty()) {
-    OSD::Session *session = (OSD::Session *)ctx->op->request->get_connection()->get_priv();
+    PGOSD::PGSession *session = (PGOSD::PGSession *)ctx->op->request->get_connection()->get_priv();
     ObjectContext *obc = ctx->obc;
     object_info_t& oi = ctx->new_obs.oi;
     hobject_t& soid = oi.soid;
@@ -3070,12 +3072,14 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
     osd->watch_lock.Lock();
     dump_watchers(obc);
     
-    map<entity_name_t, OSD::Session *>::iterator iter = obc->watchers.find(entity);
+    map<entity_name_t, PGOSD::PGSession *>::iterator iter =
+      obc->watchers.find(entity);
     if (ctx->watch_connect) {
       watch_info_t w = ctx->watch_info;
 
       if (iter == obc->watchers.end()) {
-	dout(10) << " connected to " << w << " by " << entity << " session " << session << dendl;
+	dout(10) << " connected to " << w << " by " << entity << " session "
+		 << session << dendl;
 	obc->watchers[entity] = session;
 	session->get();
 	session->watches[obc] =
@@ -3087,8 +3091,9 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 		 << " session " << session << dendl;
       } else {
 	// weird: same entity, different session.
-	dout(10) << " reconnected (with different session!) watch " << w << " by " << entity
-		 << " session " << session << " (was " << iter->second << ")" << dendl;
+	dout(10) << " reconnected (with different session!) watch " << w
+		 << " by " << entity << " session " << session
+		 << " (was " << iter->second << ")" << dendl;
 	iter->second->watches.erase(obc);
 	iter->second->put();
 	iter->second = session;
@@ -3133,7 +3138,7 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 	  dout(10) << " acking pending notif " << notif->id << " by " << by << dendl;
 	  session->del_notif(notif);
 	  // TODOSAM: osd->osd-> not good
-	  osd->osd->ack_notification(entity, notif, obc, this);
+	  osd->get_pgosd()->ack_notification(entity, notif, obc, this);
 	}
       }
     }
@@ -3156,7 +3161,8 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
       for (map<entity_name_t, watch_info_t>::iterator i = obc->obs.oi.watchers.begin();
 	   i != obc->obs.oi.watchers.end();
 	   ++i) {
-	map<entity_name_t, OSD::Session*>::iterator q = obc->watchers.find(i->first);
+	map<entity_name_t, PGOSD::PGSession*>::iterator q =
+	  obc->watchers.find(i->first);
 	if (q != obc->watchers.end()) {
 	  entity_name_t name = q->first;
 	  OSD::Session *s = q->second;
@@ -3200,7 +3206,7 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 
       session->del_notif(notif);
       // TODOSAM: osd->osd-> not good
-      osd->osd->ack_notification(entity, notif, obc, this);
+      osd->get_pgosd()->ack_notification(entity, notif, obc, this);
     }
 
     osd->watch_lock.Unlock();

@@ -14,32 +14,41 @@
 
 
 #include "PGOSD.h"
+#include "mon/MonClient.h"
+#include "messages/MOSDPGTemp.h"
+#include "ReplicatedPG.h"
+
+
+#define dout_subsys ceph_subsys_osd
 
 
 PGOSDService::PGOSDService(PGOSD *osd) :
   OSDService(osd),
   pg_recovery_stats(osd->pg_recovery_stats),
-  pg_temp_lock("OSDService::pg_temp_lock"),
   op_wq(osd->op_wq),
   peering_wq(osd->peering_wq),
   recovery_wq(osd->recovery_wq),
   snap_trim_wq(osd->snap_trim_wq),
   scrub_wq(osd->scrub_wq),
   scrub_finalize_wq(osd->scrub_finalize_wq),
-  rep_scrub_wq(osd->rep_scrub_wq)
+  rep_scrub_wq(osd->rep_scrub_wq),
+  pg_temp_lock("OSDService::pg_temp_lock")
 {
   // empty
 }
 
+PGOSD* PGOSDService::get_pgosd() const {
+  return dynamic_cast<PGOSD*>(osd);
+}
 
 void PGOSDService::pg_stat_queue_enqueue(PG *pg)
 {
-  osd->pg_stat_queue_enqueue(pg);
+  get_pgosd()->pg_stat_queue_enqueue(pg);
 }
 
 void PGOSDService::pg_stat_queue_dequeue(PG *pg)
 {
-  osd->pg_stat_queue_dequeue(pg);
+  get_pgosd()->pg_stat_queue_dequeue(pg);
 }
 
 void PGOSDService::queue_want_pg_temp(pg_t pgid, vector<int>& want)
@@ -66,7 +75,7 @@ PGOSD::PGOSD(int id, Messenger *internal_messenger, Messenger *external_messenge
              Messenger *hbclientm, Messenger *hbserverm, MonClient *mc,
              const std::string &dev, const std::string &jdev,
              OSDService* osdSvc) :
-  OSD(id, internal_messenger, external_messenger, hbclientm, hbservem,
+  OSD(id, internal_messenger, external_messenger, hbclientm, hbserverm,
       mc, dev, jdev, osdSvc),
   op_queue_len(0),
   op_wq(this, g_conf->osd_op_thread_timeout, &op_tp),
@@ -76,15 +85,14 @@ PGOSD::PGOSD(int id, Messenger *internal_messenger, Messenger *external_messenge
   debug_drop_pg_create_left(-1),
   outstanding_pg_stats(false),
   pg_stat_queue_lock("OSD::pg_stat_queue_lock"),
-  osd_stat_updated(false),
   pg_stat_tid(0),
   pg_stat_tid_flushed(0),
   recovery_ops_active(0),
-  recovery_wq(this, g_conf->osd_recovery_thread_timeout, &recovery_tp),
   replay_queue_lock("OSD::replay_queue_lock"),
   snap_trim_wq(this, g_conf->osd_snap_trim_thread_timeout, &disk_tp),
   scrub_wq(this, g_conf->osd_scrub_thread_timeout, &disk_tp),
   scrub_finalize_wq(this, g_conf->osd_scrub_finalize_thread_timeout, &op_tp),
+  recovery_wq(this, g_conf->osd_recovery_thread_timeout, &recovery_tp),
   rep_scrub_wq(this, g_conf->osd_scrub_thread_timeout, &disk_tp),
   next_removal_seq(0)
 {
@@ -152,8 +160,10 @@ int PGOSD::shutdown() {
 // ======================================================
 // PG's
 
-PGPool PGOSD::_get_pool(int id, OSDMapRef createmap)
+PGPool PGOSD::_get_pool(int id, OSDMapRef createmap_p)
 {
+  const PGOSDMap* createmap = dynamic_cast<const PGOSDMap*>(createmap_p.get());
+
   if (!createmap->have_pg_pool(id)) {
     dout(5) << __func__ << ": the OSDmap does not contain a PG pool with id = "
 	    << id << dendl;
@@ -172,9 +182,8 @@ PGPool PGOSD::_get_pool(int id, OSDMapRef createmap)
   return p;
 }
 
-PG *OSD::_open_lock_pg(
-		       OSDMapRef createmap,
-		       pg_t pgid, bool no_lockdep_check, bool hold_map_lock)
+PG *PGOSD::_open_lock_pg(OSDMapRef createmap,
+			 pg_t pgid, bool no_lockdep_check, bool hold_map_lock)
 {
   assert(osd_lock.is_locked());
 
@@ -185,8 +194,8 @@ PG *OSD::_open_lock_pg(
   PG *pg;
   hobject_t logoid = make_pg_log_oid(pgid);
   hobject_t infooid = make_pg_biginfo_oid(pgid);
-  if (osdmap->get_pg_type(pgid) == pg_pool_t::TYPE_REP)
-    pg = new ReplicatedPG(&service, createmap, pool, pgid, logoid, infooid);
+  if (get_pgosdmap()->get_pg_type(pgid) == pg_pool_t::TYPE_REP)
+    pg = new ReplicatedPG(serviceRef.get(), createmap, pool, pgid, logoid, infooid);
   else 
     assert(0);
 
@@ -201,7 +210,8 @@ PG *OSD::_open_lock_pg(
   return pg;
 }
 
-PG *OSD::_create_lock_pg(
+
+PG *PGOSD::_create_lock_pg(
 			 OSDMapRef createmap,
 			 pg_t pgid, bool newly_created, bool hold_map_lock,
 			 int role, vector<int>& up, vector<int>& acting, pg_history_t history,

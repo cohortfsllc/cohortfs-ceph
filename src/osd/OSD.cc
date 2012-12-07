@@ -680,7 +680,8 @@ OSD::OSD(int id, Messenger *internal_messenger, Messenger *external_messenger,
   up_thru_wanted(0), up_thru_pending(0),
   command_wq(this, g_conf->osd_command_thread_timeout, &command_tp),
   remove_wq(store, g_conf->osd_remove_thread_timeout, &disk_tp),
-  serviceRef(shared_ptr<OSDService>(osdSvc))
+  serviceRef(shared_ptr<OSDService>(osdSvc)),
+  osd_stat_updated(false)
 {
   monc->set_messenger(client_messenger);
 }

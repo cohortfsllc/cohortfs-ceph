@@ -12,11 +12,15 @@
  * 
  */
 
-#ifndef CEPH_OSD_H
-#define CEPH_OSD_H
+#ifndef CEPH_PGOSD_H
+#define CEPH_PGOSD_H
 
 
 #include "osd/OSD.h"
+#include "PG.h"
+
+
+class ReplicatedPG;
 
 
 class PGOSDService : public OSDService {
@@ -83,7 +87,9 @@ public:
   void pg_stat_queue_enqueue(PG *pg);
   void pg_stat_queue_dequeue(PG *pg);
 
-  PGOSDService(OSD *osd);
+  PGOSD* get_pgosd() const;
+
+  PGOSDService(PGOSD *osd);
 };
 
 
@@ -91,13 +97,21 @@ class PGOSD : public OSD {
 
 public:
 
+  struct PGSession : public Session {
+    std::map<void *, pg_t> watches;
+
+    PGSession() : Session() {}
+  };
+
+
   PGOSD(int id, Messenger *internal, Messenger *external, Messenger *hbmin,
 	Messenger *hbmout,
 	MonClient *mc, const std::string &dev, const std::string &jdev,
 	OSDService* osdSvc);
 
-  virtual OSDService* newOSDService(const OSD* osd) const {
-    return new PGOSDService(osd);
+  virtual OSDService* newOSDService(OSD* osd) const {
+    PGOSD* const pgosd = dynamic_cast<PGOSD*>(osd);
+    return new PGOSDService(pgosd);
   }
 
   virtual int init();
@@ -110,7 +124,7 @@ public:
 
   virtual void ms_handle_connect_sub(Connection *con);
 
-  virtual void ms_handle_reset_sub(OSD::Session* session);
+  virtual void ms_handle_reset_sub(PGSession* session);
 
   hobject_t make_pg_log_oid(pg_t pg) {
     stringstream ss;
@@ -129,20 +143,13 @@ public:
   }
 
 
-  struct PGSession : public Session {
-    std::map<void *, pg_t> watches;
-
-    PGSession() : Session() {}
-  };
-
-
   // -- op queue --
   list<PG*> op_queue;
   int op_queue_len;
 
   struct OpWQ : public ThreadPool::WorkQueue<PG> {
-    OSD *osd;
-    OpWQ(OSD *o, time_t ti, ThreadPool *tp)
+    PGOSD *osd;
+    OpWQ(PGOSD *o, time_t ti, ThreadPool *tp)
       : ThreadPool::WorkQueue<PG>("OSD::OpWQ", ti, ti*10, tp), osd(o) {}
 
     bool _enqueue(PG *pg);
@@ -172,17 +179,17 @@ public:
 
   void enqueue_op(PG *pg, OpRequestRef op);
   void dequeue_op(PG *pg);
-  static void static_dequeueop(OSD *o, PG *pg) {
+  static void static_dequeueop(PGOSD *o, PG *pg) {
     o->dequeue_op(pg);
   };
 
   // -- peering queue --
   struct PeeringWQ : public ThreadPool::BatchWorkQueue<PG> {
     list<PG*> peering_queue;
-    OSD *osd;
+    PGOSD *osd;
     set<PG*> in_use;
     const size_t batch_size;
-    PeeringWQ(OSD *o, time_t ti, ThreadPool *tp, size_t batch_size)
+    PeeringWQ(PGOSD *o, time_t ti, ThreadPool *tp, size_t batch_size)
       : ThreadPool::BatchWorkQueue<PG>(
 	"OSD::PeeringWQ", ti, ti*10, tp), osd(o), batch_size(batch_size) {}
 
@@ -248,8 +255,8 @@ public:
 
 protected:
 
-  const PGOSDMap* get_pgosdmap() const {
-    return dynamic_cast<PGOSDMap*>(osdmap.get());
+  const PGOSDMap* get_pgosdmap() {
+    return dynamic_cast<const PGOSDMap*>(get_osdmap().get());
   }
 
   void advance_pg(epoch_t advance_to, PG *pg, PG::RecoveryCtx *rctx);
@@ -419,8 +426,8 @@ protected:
   xlist<PG*> snap_trim_queue;
   
   struct SnapTrimWQ : public ThreadPool::WorkQueue<PG> {
-    OSD *osd;
-    SnapTrimWQ(OSD *o, time_t ti, ThreadPool *tp)
+    PGOSD *osd;
+    SnapTrimWQ(PGOSD *o, time_t ti, ThreadPool *tp)
       : ThreadPool::WorkQueue<PG>("OSD::SnapTrimWQ", ti, 0, tp), osd(o) {}
 
     bool _empty() {
@@ -460,8 +467,8 @@ protected:
 
 
   struct ScrubWQ : public ThreadPool::WorkQueue<PG> {
-    OSD *osd;
-    ScrubWQ(OSD *o, time_t ti, ThreadPool *tp)
+    PGOSD *osd;
+    ScrubWQ(PGOSD *o, time_t ti, ThreadPool *tp)
       : ThreadPool::WorkQueue<PG>("OSD::ScrubWQ", ti, 0, tp), osd(o) {}
 
     bool _empty() {
@@ -502,11 +509,11 @@ protected:
 
   struct ScrubFinalizeWQ : public ThreadPool::WorkQueue<PG> {
   private:
-    OSD *osd;
+    PGOSD *osd;
     xlist<PG*> scrub_finalize_queue;
 
   public:
-    ScrubFinalizeWQ(OSD *o, time_t ti, ThreadPool *tp)
+    ScrubFinalizeWQ(PGOSD *o, time_t ti, ThreadPool *tp)
       : ThreadPool::WorkQueue<PG>("OSD::ScrubFinalizeWQ", ti, ti*10, tp), osd(o) {}
 
     bool _empty() {
@@ -546,8 +553,8 @@ protected:
   } scrub_finalize_wq;
 
   struct RecoveryWQ : public ThreadPool::WorkQueue<PG> {
-    OSD *osd;
-    RecoveryWQ(OSD *o, time_t ti, ThreadPool *tp)
+    PGOSD *osd;
+    RecoveryWQ(PGOSD *o, time_t ti, ThreadPool *tp)
       : ThreadPool::WorkQueue<PG>("OSD::RecoveryWQ", ti, ti*10, tp), osd(o) {}
 
     bool _empty() {
@@ -603,11 +610,11 @@ protected:
 
   struct RepScrubWQ : public ThreadPool::WorkQueue<MOSDRepScrub> {
   private: 
-    OSD *osd;
+    PGOSD *osd;
     list<MOSDRepScrub*> rep_scrub_queue;
 
   public:
-    RepScrubWQ(OSD *o, time_t ti, ThreadPool *tp)
+    RepScrubWQ(PGOSD *o, time_t ti, ThreadPool *tp)
       : ThreadPool::WorkQueue<MOSDRepScrub>("OSD::RepScrubWQ", ti, 0, tp), osd(o) {}
 
     bool _empty() {
@@ -669,10 +676,10 @@ protected:
   void ack_notification(entity_name_t& peer_addr, void *notif, void *obc,
 			ReplicatedPG *pg);
 
-  void disconnect_session_watches(Session *session);
+  void disconnect_session_watches(PGSession *session);
 
   friend class PGOSDService;
 };
 
 
-#endif // CEPH_OSD_H
+#endif // CEPH_PGOSD_H

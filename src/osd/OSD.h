@@ -38,6 +38,8 @@
 #include "messages/MOSDRepScrub.h"
 #include "OpRequest.h"
 
+#include "OSDMap.h"
+
 #include <map>
 #include <memory>
 #include <tr1/memory>
@@ -262,9 +264,14 @@ public:
 
   void need_heartbeat_peer_update();
 
-
   OSDService(OSD *osd);
+
+  // this virtual function soley exists to make the class polymorphic
+  virtual ~OSDService() { };
 }; // class OSDService
+
+
+typedef shared_ptr<OSDService> OSDServiceRef;
 
 
 class OSD : public Dispatcher {
@@ -347,8 +354,7 @@ public:
   bool is_active() { return state == STATE_ACTIVE; }
   bool is_stopping() { return state == STATE_STOPPING; }
 
-private:
-
+protected:
   ThreadPool op_tp;
   ThreadPool recovery_tp;
   ThreadPool disk_tp;
@@ -442,7 +448,8 @@ private:
   // -- waiters --
   list<OpRequestRef> finished;
   Mutex finished_lock;
-  
+
+protected:  
   void take_waiters(list<OpRequestRef>& ls) {
     finished_lock.Lock();
     finished.splice(finished.end(), ls);
@@ -455,6 +462,7 @@ private:
   }
   void do_waiters();
   
+private:
   // -- op tracking --
   OpTracker op_tracker;
   void check_ops_in_flight();
@@ -767,7 +775,7 @@ public:
   void complete_notify(void *notif, void *obc);
   void handle_notify_timeout(void *notif);
 
-  shared_ptr<OSDService> serviceRef;
+  OSDServiceRef serviceRef;
   friend class OSDService;
 };
 

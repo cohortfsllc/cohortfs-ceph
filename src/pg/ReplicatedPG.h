@@ -19,6 +19,7 @@
 #include "osd/OSD.h"
 #include "osd/Watch.h"
 #include "osd/OpRequest.h"
+#include "PGOSD.h"
 
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
@@ -280,7 +281,7 @@ public:
     set<ObjectContext*> blocking;   // objects whose writes we block
 
     // any entity in obs.oi.watchers MUST be in either watchers or unconnected_watchers.
-    map<entity_name_t, OSD::Session *> watchers;
+    map<entity_name_t, PGOSD::PGSession *> watchers;
     map<entity_name_t, Watch::C_WatchTimeout *> unconnected_watchers;
     map<Watch::Notification *, bool> notifs;
 
@@ -918,12 +919,13 @@ protected:
   int get_pgls_filter(bufferlist::iterator& iter, PGLSFilter **pfilter);
 
 public:
-  ReplicatedPG(OSDService *o, OSDMapRef curmap,
+  ReplicatedPG(OSDServiceRef o, OSDMapRef curmap,
 	       PGPool _pool, pg_t p, const hobject_t& oid,
 	       const hobject_t& ioid);
   ~ReplicatedPG() {}
 
-  int do_command(vector<string>& cmd, ostream& ss, bufferlist& idata, bufferlist& odata);
+  int do_command(vector<string>& cmd, ostream& ss, bufferlist& idata,
+		 bufferlist& odata);
 
   void do_op(OpRequestRef op);
   bool pg_op_must_wait(MOSDOp *op);

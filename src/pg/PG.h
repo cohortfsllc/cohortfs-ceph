@@ -31,10 +31,12 @@
 #include "include/types.h"
 #include "include/stringify.h"
 #include "osd/osd_types.h"
+#include "pg/pg_types.h"
 #include "include/buffer.h"
 #include "include/xlist.h"
 #include "include/atomic.h"
 
+#include "osd/OSD.h"
 #include "osd/OpRequest.h"
 #include "osd/OSDMap.h"
 #include "os/ObjectStore.h"
@@ -61,6 +63,8 @@ using namespace __gnu_cxx;
 
 class OSD;
 class OSDService;
+class PGOSD;
+class PGOSDService;
 class MOSDOp;
 class MOSDSubOp;
 class MOSDSubOpReply;
@@ -332,7 +336,7 @@ public:
 
   /*** PG ****/
 protected:
-  OSDService *osd;
+  OSDServiceRef osd;
   OSDMapRef osdmap_ref;
   PGPool pool;
 
@@ -1396,9 +1400,12 @@ public:
 
 
  public:
-  PG(OSDService *o, OSDMapRef curmap,
+  PG(OSDServiceRef o, OSDMapRef curmap,
      PGPool pool, pg_t p, const hobject_t& loid, const hobject_t& ioid);
   virtual ~PG();
+
+protected:
+  PGOSDService* get_pgosdservice() const;
 
  private:
   // Prevent copying
