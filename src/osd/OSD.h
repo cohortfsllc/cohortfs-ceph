@@ -191,7 +191,6 @@ public:
     osdmap = map;
   }
 
-
   int get_nodeid() const { return whoami; }
 
   // -- scrub scheduling --
@@ -268,6 +267,8 @@ public:
 
   // this virtual function soley exists to make the class polymorphic
   virtual ~OSDService() { };
+
+  virtual OSDMap* newOSDMap() const = 0;
 }; // class OSDService
 
 
@@ -307,9 +308,12 @@ protected:
 
   void create_logger();
   void tick();
-  virtual void tick_sub(const utime_t& now) = 0;
   void _dispatch(Message *m);
   void dispatch_op(OpRequestRef op);
+
+  virtual void tick_sub(const utime_t& now) = 0;
+  virtual void dispatch_op_sub(OpRequestRef op) = 0;
+  virtual bool _dispatch_sub(Message *m) = 0;
 
 public:
   ClassHandler  *class_handler;
@@ -343,7 +347,7 @@ public:
   static const int STATE_ACTIVE = 2;
   static const int STATE_STOPPING = 3;
 
-private:
+protected:
   int state;
   epoch_t boot_epoch;  // _first_ epoch we were marked up (after this process started)
   epoch_t up_epoch;    // _most_recent_ epoch we were marked up
@@ -511,6 +515,10 @@ private:
   void advance_map(ObjectStore::Transaction& t, C_Contexts *tfin);
   void activate_map();
 
+  virtual void advance_map_sub(ObjectStore::Transaction& t,
+			       C_Contexts *tfin) = 0;
+  virtual void activate_map_sub() = 0;
+
   // osd map cache (past osd maps)
   OSDMapRef get_map(epoch_t e) {
     return serviceRef->get_map(e);
@@ -653,8 +661,12 @@ protected:
 			      tid_t tid,
 			      vector<string>& cmd,
 			      bufferlist& data,
+			      bufferlist& odata,
 			      int& r,
 			      ostringstream& ss) = 0;
+  virtual bool do_command_debug_sub(vector<string>& cmd,
+				    int& r,
+				    ostringstream& ss) = 0;
 
   // -- removing --
   struct RemoveWQ : public ThreadPool::WorkQueue<boost::tuple<coll_t, SequencerRef, DeletingStateRef> > {
@@ -713,6 +725,7 @@ protected:
   virtual ~OSD();
 
   virtual OSDService* newOSDService(const OSD* osd) const = 0;
+  virtual OSDMap* newOSDMap() const = 0;
 
   utime_t last_stats_sent;
   bool osd_stat_updated;
@@ -769,8 +782,6 @@ public:
 
   void handle_signal(int signum);
 
-  void handle_rep_scrub(MOSDRepScrub *m);
-  void handle_scrub(class MOSDScrub *m);
   void handle_osd_ping(class MOSDPing *m);
   void handle_op(OpRequestRef op);
   void handle_sub_op(OpRequestRef op);

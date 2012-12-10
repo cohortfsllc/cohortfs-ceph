@@ -90,7 +90,9 @@ public:
   PGOSD* get_pgosd() const;
 
   PGOSDService(PGOSD *osd);
-};
+
+  virtual OSDMap* newOSDMap() const { return new PGOSDMap(); }
+}; // class PGOSDService
 
 
 class PGOSD : public OSD {
@@ -114,6 +116,10 @@ public:
     return new PGOSDService(pgosd);
   }
 
+  virtual OSDMap* newOSDMap() const {
+    return new PGOSDMap();
+  }
+
   virtual int init();
   virtual int shutdown();
 
@@ -121,8 +127,12 @@ public:
 			      tid_t tid,
 			      vector<string>& cmd,
 			      bufferlist& data,
+			      bufferlist& odata,
 			      int& r,
 			      ostringstream& ss);
+  virtual bool do_command_debug_sub(vector<string>& cmd,
+				    int& r,
+				    ostringstream& ss);
 
   virtual void build_heartbeat_peers_list();
   virtual void tick_sub(const utime_t& now);
@@ -132,6 +142,12 @@ public:
   virtual void ms_handle_connect_sub(Connection *con);
 
   virtual void ms_handle_reset_sub(PGSession* session);
+
+  virtual void advance_map_sub(ObjectStore::Transaction& t,
+			       C_Contexts *tfin);
+  virtual void activate_map_sub();
+  virtual void dispatch_op_sub(OpRequestRef op);
+  virtual bool _dispatch_sub(Message *m);
 
   hobject_t make_pg_log_oid(pg_t pg) {
     stringstream ss;
@@ -478,6 +494,9 @@ protected:
 
   // -- scrubbing --
   virtual void sched_scrub();
+  void handle_rep_scrub(MOSDRepScrub *m);
+  void handle_scrub(class MOSDScrub *m);
+
   xlist<PG*> scrub_queue;
 
 

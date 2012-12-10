@@ -394,6 +394,7 @@ protected:
   void decodeOSDMap(bufferlist& bl, __u16 v);
   void decodeOSDMap(bufferlist::iterator& p, __u16 v);
 
+public:
   /// try to re-use/reference addrs in oldmap from newmap
   static void dedup(const OSDMap *oldmap, OSDMap *newmap);
 
