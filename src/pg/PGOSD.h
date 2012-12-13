@@ -134,6 +134,10 @@ public:
 				    int& r,
 				    ostringstream& ss);
 
+  virtual void handle_op_sub(OpRequestRef op);
+  virtual bool handle_sub_op_sub(OpRequestRef op);
+  virtual bool handle_sub_op_reply_sub(OpRequestRef op);
+
   virtual void build_heartbeat_peers_list();
   virtual void tick_sub(const utime_t& now);
 

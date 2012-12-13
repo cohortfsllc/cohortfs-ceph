@@ -331,7 +331,7 @@ public:
   }
   
 
-private:
+protected:
   // -- superblock --
   OSDSuperblock superblock;
 
@@ -339,6 +339,7 @@ private:
   void write_superblock(ObjectStore::Transaction& t);
   int read_superblock();
 
+private:
   CompatSet osd_compat;
 
   // -- state --
@@ -786,6 +787,10 @@ public:
   void handle_op(OpRequestRef op);
   void handle_sub_op(OpRequestRef op);
   void handle_sub_op_reply(OpRequestRef op);
+
+  virtual void handle_op_sub(OpRequestRef op) = 0;
+  virtual bool handle_sub_op_sub(OpRequestRef op) = 0;
+  virtual bool handle_sub_op_reply_sub(OpRequestRef op) = 0;
 
   /// check if we can throw out op from a disconnected client
   static bool op_is_discardable(class MOSDOp *m);

@@ -54,8 +54,8 @@
 #include "messages/MOSDFailure.h"
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
-#include "messages/MOSDSubOp.h"
-#include "messages/MOSDSubOpReply.h"
+// #include "messages/MOSDSubOp.h"
+// #include "messages/MOSDSubOpReply.h"
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDPGTemp.h"
 
@@ -2138,6 +2138,23 @@ void OSD::dispatch_op(OpRequestRef op)
   }
 }
 
+
+void OSD::handle_sub_op(OpRequestRef op)
+{
+  // hand this down to the subclass
+  // ignore return value as we having nothing else to try
+  handle_sub_op_sub(op);
+}
+
+
+void OSD::handle_sub_op_reply(OpRequestRef op)
+{
+  // hand this down to the subclass
+  // ignore return value as we having nothing else to try
+  handle_sub_op_reply_sub(op);
+}
+
+
 void OSD::_dispatch(Message *m)
 {
   assert(osd_lock.is_locked());
@@ -2866,24 +2883,6 @@ void OSDService::reply_op_error(OpRequestRef op, int err, eversion_t v)
   msgr->send_message(reply, m->get_connection());
 }
 
-void OSDService::handle_misdirected_op(PG *pg, OpRequestRef op)
-{
-  MOSDOp *m = (MOSDOp*)op->request;
-  assert(m->get_header().type == CEPH_MSG_OSD_OP);
-
-  if (m->get_map_epoch() < pg->info.history.same_primary_since) {
-    dout(7) << *pg << " changed after " << m->get_map_epoch() << ", dropping" << dendl;
-    return;
-  }
-
-  dout(7) << *pg << " misdirected op in " << m->get_map_epoch() << dendl;
-  clog.warn() << m->get_source_inst() << " misdirected " << m->get_reqid()
-	      << " pg " << m->get_pg()
-	      << " to osd." << whoami
-	      << " not " << pg->acting
-	      << " in e" << m->get_map_epoch() << "/" << osdmap->get_epoch() << "\n";
-  reply_op_error(op, -ENXIO);
-}
 
 void OSD::handle_op(OpRequestRef op)
 {
@@ -2948,158 +2947,8 @@ void OSD::handle_op(OpRequestRef op)
     }
   }
 
-  // calc actual pgid
-  pg_t pgid = m->get_pg();
-  int64_t pool = pgid.pool();
-  if ((m->get_flags() & CEPH_OSD_FLAG_PGOP) == 0 &&
-      osdmap->have_pg_pool(pool))
-    pgid = osdmap->raw_pg_to_pg(pgid);
-
-  // get and lock *pg.
-  PG *pg = _have_pg(pgid) ? _lookup_lock_pg(pgid) : NULL;
-  if (!pg) {
-    dout(7) << "hit non-existent pg " << pgid << dendl;
-
-    if (osdmap->get_pg_acting_role(pgid, whoami) >= 0) {
-      dout(7) << "we are valid target for op, waiting" << dendl;
-      waiting_for_pg[pgid].push_back(op);
-      op->mark_delayed();
-      return;
-    }
-
-    // okay, we aren't valid now; check send epoch
-    if (m->get_map_epoch() < superblock.oldest_map) {
-      dout(7) << "don't have sender's osdmap; assuming it was valid and that client will resend" << dendl;
-      return;
-    }
-    OSDMapRef send_map = get_map(m->get_map_epoch());
-
-    // remap pgid
-    pgid = m->get_pg();
-    if ((m->get_flags() & CEPH_OSD_FLAG_PGOP) == 0 &&
-	send_map->have_pg_pool(pgid.pool()))
-      pgid = send_map->raw_pg_to_pg(pgid);
-    
-    if (send_map->get_pg_acting_role(m->get_pg(), whoami) >= 0) {
-      dout(7) << "dropping request; client will resend when they get new map" << dendl;
-    } else {
-      dout(7) << "we are invalid target" << dendl;
-      clog.warn() << m->get_source_inst() << " misdirected " << m->get_reqid()
-		  << " pg " << m->get_pg()
-		  << " to osd." << whoami
-		  << " in e" << osdmap->get_epoch()
-		  << ", client e" << m->get_map_epoch()
-		  << " pg " << pgid
-		  << " features " << m->get_connection()->get_features()
-		  << "\n";
-      serviceRef->reply_op_error(op, -ENXIO);
-    }
-    return;
-  } else if (!op_has_sufficient_caps(pg, m)) {
-    pg->unlock();
-    return;
-  }
-
-
-  enqueue_op(pg, op);
-  pg->unlock();
-}
-
-bool OSD::op_has_sufficient_caps(PG *pg, MOSDOp *op)
-{
-  Session *session = (Session *)op->get_connection()->get_priv();
-  if (!session) {
-    dout(0) << "op_has_sufficient_caps: no session for op " << *op << dendl;
-    return false;
-  }
-  OSDCap& caps = session->caps;
-  session->put();
-  
-  string key = op->get_object_locator().key;
-  if (key.length() == 0)
-    key = op->get_oid().name;
-
-  bool cap = caps.is_capable(pg->pool.name, pg->pool.auid, key,
-			     op->may_read(), op->may_write(), op->require_exec_caps());
-
-  dout(20) << "op_has_sufficient_caps pool=" << pg->pool.id << " (" << pg->pool.name
-	   << ") owner=" << pg->pool.auid
-	   << " may_read=" << op->may_read()
-	   << " may_write=" << op->may_write()
-	   << " may_exec=" << op->may_exec()
-           << " require_exec_caps=" << op->require_exec_caps()
-	   << " -> " << (cap ? "yes" : "NO")
-	   << dendl;
-  return cap;
-}
-
-void OSD::handle_sub_op(OpRequestRef op)
-{
-  MOSDSubOp *m = (MOSDSubOp*)op->request;
-  assert(m->get_header().type == MSG_OSD_SUBOP);
-
-  dout(10) << "handle_sub_op " << *m << " epoch " << m->map_epoch << dendl;
-  if (m->map_epoch < up_epoch) {
-    dout(3) << "replica op from before up" << dendl;
-    return;
-  }
-
-  if (!require_osd_peer(op))
-    return;
-
-  // must be a rep op.
-  assert(m->get_source().is_osd());
-  
-  // make sure we have the pg
-  const pg_t pgid = m->pgid;
-
-  // require same or newer map
-  if (!require_same_or_newer_map(op, m->map_epoch))
-    return;
-
-  // share our map with sender, if they're old
-  _share_map_incoming(m->get_source_inst(), m->map_epoch,
-		      (Session*)m->get_connection()->get_priv());
-
-  PG *pg = _have_pg(pgid) ? _lookup_lock_pg(pgid) : NULL;
-  if (!pg) {
-    return;
-  }
-  enqueue_op(pg, op);
-  pg->unlock();
-}
-
-void OSD::handle_sub_op_reply(OpRequestRef op)
-{
-  MOSDSubOpReply *m = (MOSDSubOpReply*)op->request;
-  assert(m->get_header().type == MSG_OSD_SUBOPREPLY);
-  if (m->get_map_epoch() < up_epoch) {
-    dout(3) << "replica op reply from before up" << dendl;
-    return;
-  }
-
-  if (!require_osd_peer(op))
-    return;
-
-  // must be a rep op.
-  assert(m->get_source().is_osd());
-  
-  // make sure we have the pg
-  const pg_t pgid = m->get_pg();
-
-  // require same or newer map
-  if (!require_same_or_newer_map(op, m->get_map_epoch())) return;
-
-  // share our map with sender, if they're old
-  _share_map_incoming(m->get_source_inst(), m->get_map_epoch(),
-		      (Session*)m->get_connection()->get_priv());
-
-  PG *pg = _have_pg(pgid) ? _lookup_lock_pg(pgid) : NULL;
-  if (!pg) {
-    return;
-  }
-  enqueue_op(pg, op);
-  pg->unlock();
+  // rest of logic gets pushed down to subclass
+  handle_op_sub(op);
 }
 
 bool OSD::op_is_discardable(MOSDOp *op)
@@ -3113,118 +2962,6 @@ bool OSD::op_is_discardable(MOSDOp *op)
   }
   return false;
 }
-
-/*
- * enqueue called with osd_lock held
- */
-void OSD::enqueue_op(PG *pg, OpRequestRef op)
-{
-  dout(15) << *pg << " enqueue_op " << op->request << " "
-           << *(op->request) << dendl;
-  assert(pg->is_locked());
-  pg->queue_op(op);
-}
-
-bool OSD::OpWQ::_enqueue(PG *pg)
-{
-  pg->get();
-  osd->op_queue.push_back(pg);
-  osd->op_queue_len++;
-  osd->logger->set(l_osd_opq, osd->op_queue_len);
-  return true;
-}
-
-PG *OSD::OpWQ::_dequeue()
-{
-  if (osd->op_queue.empty())
-    return NULL;
-  PG *pg = osd->op_queue.front();
-  osd->op_queue.pop_front();
-  osd->op_queue_len--;
-  osd->logger->set(l_osd_opq, osd->op_queue_len);
-  return pg;
-}
-
-void OSDService::queue_for_peering(PG *pg)
-{
-  peering_wq.queue(pg);
-}
-
-void OSDService::queue_for_op(PG *pg)
-{
-  op_wq.queue(pg);
-}
-
-void OSD::process_peering_events(const list<PG*> &pgs)
-{
-  bool need_up_thru = false;
-  epoch_t same_interval_since = 0;
-  OSDMapRef curmap = serviceRef->get_osdmap();
-  PG::RecoveryCtx rctx = create_context();
-  for (list<PG*>::const_iterator i = pgs.begin();
-       i != pgs.end();
-       ++i) {
-    PG *pg = *i;
-    pg->lock();
-    curmap = serviceRef->get_osdmap();
-    if (pg->deleting) {
-      pg->unlock();
-      continue;
-    }
-    advance_pg(curmap->get_epoch(), pg, &rctx);
-    if (!pg->peering_queue.empty()) {
-      PG::CephPeeringEvtRef evt = pg->peering_queue.front();
-      pg->peering_queue.pop_front();
-      pg->handle_peering_event(evt, &rctx);
-    }
-    need_up_thru = pg->need_up_thru || need_up_thru;
-    same_interval_since = MAX(pg->info.history.same_interval_since,
-			      same_interval_since);
-    pg->write_if_dirty(*rctx.transaction);
-    dispatch_context_transaction(rctx, pg);
-    pg->unlock();
-  }
-  if (need_up_thru)
-    queue_want_up_thru(same_interval_since);
-  dispatch_context(rctx, 0, curmap);
-
-  serviceRef->send_pg_temp();
-}
-
-/*
- * NOTE: dequeue called in worker thread, without osd_lock
- */
-void OSD::dequeue_op(PG *pg)
-{
-  OpRequestRef op;
-
-  pg->lock();
-  if (pg->deleting) {
-    pg->unlock();
-    pg->put();
-    return;
-  }
-  assert(!pg->op_queue.empty());
-  op = pg->op_queue.front();
-  pg->op_queue.pop_front();
-    
-  dout(10) << "dequeue_op " << *op->request << " pg " << *pg << dendl;
-
-  op->mark_reached_pg();
-
-  pg->do_request(op);
-
-  // unlock and put pg
-  pg->unlock();
-  pg->put();
-  
-  //#warning foo
-  //scrub_wq.queue(pg);
-
-  // finish
-  dout(10) << "dequeue_op " << op << " finish" << dendl;
-}
-
 
 // --------------------------------
 
