@@ -17,8 +17,8 @@
 
 #include "PG.h"
 #include "osd/OSD.h"
-#include "osd/Watch.h"
 #include "osd/OpRequest.h"
+#include "Watch.h"
 #include "PGOSD.h"
 
 #include "messages/MOSDOp.h"

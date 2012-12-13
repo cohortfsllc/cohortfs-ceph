@@ -1168,10 +1168,10 @@ libosd_a_SOURCES = \
 	pg/PG.cc \
 	pg/ReplicatedPG.cc \
 	pg/PGOSD.cc \
+	pg/Watch.cc \
 	osd/Ager.cc \
 	osd/OSD.cc \
 	osd/OSDCap.cc \
-	osd/Watch.cc \
 	osd/ClassHandler.cc \
 	osd/OpRequest.cc
 libosd_a_CXXFLAGS= ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS}
@@ -1600,7 +1600,6 @@ noinst_HEADERS = \
         osd/ObjectVersioner.h\
 	osd/OpRequest.h\
 	osd/PlaceSystem.h\
-        osd/Watch.h\
         osd/osd_types.h\
         osdc/Blinker.h\
         osdc/Filer.h\
@@ -1616,6 +1615,7 @@ noinst_HEADERS = \
         pg/PGOSD.h\
         pg/PGOSDMap.h\
 	pg/PGPlaceSystem.h\
+        pg/Watch.h\
 	rgw/rgw_acl.h\
 	rgw/rgw_acl_s3.h\
 	rgw/rgw_acl_swift.h\

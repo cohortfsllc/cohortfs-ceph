@@ -701,6 +701,7 @@ protected:
     return coll_t::make_removal_coll(next_removal_seq++, pgid);
   }
 
+public:
 
   /// check if op has sufficient caps
   bool op_has_sufficient_caps(PG *pg, class MOSDOp *m);

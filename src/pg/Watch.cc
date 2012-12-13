@@ -6,7 +6,7 @@
 
 #include <map>
 
-#include "OSD.h"
+#include "PGOSD.h"
 #include "Watch.h"
 
 #include "common/config.h"

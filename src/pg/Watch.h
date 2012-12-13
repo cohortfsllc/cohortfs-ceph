@@ -18,7 +18,7 @@
 
 #include <map>
 
-#include "OSD.h"
+#include "PGOSD.h"
 #include "common/config.h"
 
 class MWatchNotify;
@@ -37,7 +37,7 @@ public:
     std::map<entity_name_t, WatcherState> watchers;
     entity_name_t name;
     uint64_t id;
-    OSD::Session *session;
+    PGOSD::PGSession *session;
     uint64_t cookie;
     MWatchNotify *reply;
     Context *timeout;
@@ -49,29 +49,38 @@ public:
       watchers[name] = state;
     }
 
-    Notification(entity_name_t& n, OSD::Session *s, uint64_t c, bufferlist& b) : name(n), session(s), cookie(c), bl(b) { }
+    Notification(entity_name_t& n, PGOSD::PGSession *s, uint64_t c,
+		 bufferlist& b)
+      : name(n), session(s), cookie(c), bl(b)
+    {
+      // empty
+    }
   };
 
   class C_NotifyTimeout : public Context {
-    OSD *osd;
+    PGOSD *osd;
     Notification *notif;
   public:
-    C_NotifyTimeout(OSD *_osd, Notification *_notif) : osd(_osd), notif(_notif) {}
+    C_NotifyTimeout(PGOSD *_osd, Notification *_notif)
+      : osd(_osd),
+	notif(_notif) {
+      // empty
+    }
     void finish(int r);
-  };
+  }; // class C_NotifyTimeout
 
   class C_WatchTimeout : public Context {
-    OSD *osd;
+    PGOSD *osd;
     void *obc;
     void *pg;
     entity_name_t entity;
   public:
     utime_t expire;
-    C_WatchTimeout(OSD *_osd, void *_obc, void *_pg,
+    C_WatchTimeout(PGOSD *_osd, void *_obc, void *_pg,
 		   entity_name_t _entity, utime_t _expire) :
       osd(_osd), obc(_obc), pg(_pg), entity(_entity), expire(_expire) {}
     void finish(int r);
-  };
+  }; // class C_WatchTimeout
 
 private:
   std::map<uint64_t, Notification *> notifs; /* notif_id to notifications */
@@ -96,7 +105,7 @@ public:
   }
 
   bool ack_notification(entity_name_t& watcher, Notification *notif);
-};
+}; // class Watch
 
 
 

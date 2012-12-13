@@ -13,7 +13,7 @@
 
 #include "osd/OSD.h"
 #include "osd/OpRequest.h"
-#include "osd/Watch.h"
+#include "Watch.h"
 #include "PG.h"
 #include "ReplicatedPG.h"
 #include "PGOSD.h"
@@ -3189,7 +3189,9 @@ void ReplicatedPG::do_osd_op_effects(OpContext *ctx)
 	obc->ref++;
 	notif->obc = obc;
 	// TODOSAM: osd->osd not good
-	notif->timeout = new Watch::C_NotifyTimeout(osd->osd, notif);
+	notif->timeout =
+	  new Watch::C_NotifyTimeout(get_pgosdservice()->get_pgosd(),
+				     notif);
 	osd->watch_timer.add_event_after(p->timeout, notif->timeout);
       }
     }
@@ -3846,10 +3848,12 @@ void ReplicatedPG::register_unconnected_watcher(void *_obc,
   pgid.set_ps(obc->obs.oi.soid.hash);
   get();
   obc->ref++;
-  Watch::C_WatchTimeout *cb = new Watch::C_WatchTimeout(osd->osd,
-							static_cast<void *>(obc),
-							this,
-							entity, expire);
+  Watch::C_WatchTimeout *cb =
+    new Watch::C_WatchTimeout(get_pgosdservice()->get_pgosd(),
+			      static_cast<void *>(obc),
+			      this,
+			      entity,
+			      expire);
   osd->watch_timer.add_event_at(expire, cb);
   obc->unconnected_watchers[entity] = cb;
 }
