@@ -43,7 +43,13 @@
 #include <set>
 #include <map>
 #include <tr1/memory>
+
+
 using namespace std;
+
+
+class Objecter;
+
 
 #include <ext/hash_set>
 using __gnu_cxx::hash_set;
@@ -214,6 +220,13 @@ protected:
   virtual void build_simple_from_conf(CephContext *cct,
 				      epoch_t e,
 				      uuid_d &fsid) = 0;
+  virtual int get_oid_osd(const Objecter* objecter,
+			  const object_t& oid,
+			  const ceph_file_layout* layout) = 0;
+
+  virtual int get_pool_replication(int64_t pool) = 0;
+  virtual int get_file_stripe_address(vector<ObjectExtent>& extents,
+				      vector<entity_addr_t>& address) = 0;
 
   // map info
   const uuid_d& get_fsid() const { return fsid; }

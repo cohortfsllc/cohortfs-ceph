@@ -16,6 +16,7 @@
 #include "PGOSDMap.h"
 #include "common/code_environment.h"
 #include "mon/PGMonitor.h"
+#include "osdc/Objecter.h"
 
 
 #define dout_subsys ceph_subsys_osd
@@ -1099,4 +1100,46 @@ void PGOSDMap::thrash(Monitor* mon, OSDMap::Incremental& pending_inc_orig)
     if (p == e)
       p = mon->pgmon()->pg_map.pg_stat.begin();
   }
+}
+
+
+int PGOSDMap::get_oid_osd(const Objecter* objecter,
+			  const object_t& oid,
+			  const ceph_file_layout* layout)
+{
+  ceph_object_layout olayout = file_to_object_layout(oid, *layout);
+
+  pg_t pg = (pg_t)olayout.ol_pgid;
+  vector<int> osds;
+  pg_to_osds(pg, osds);
+  return osds[0];
+}
+
+
+int PGOSDMap::get_pool_replication(int64_t pool)
+{
+  if (!have_pg_pool(pool)) {
+    return -ENOENT;
+  }
+  return get_pg_pool(pool)->get_size();
+}
+
+
+int PGOSDMap::get_file_stripe_address(vector<ObjectExtent>& extents,
+				      vector<entity_addr_t>& address)
+{
+  // now we have the object and its 'layout'
+  pg_t pg = object_locator_to_pg(extents[0].oid, extents[0].oloc);
+  vector<int> osds;
+  pg_to_acting_osds(pg, osds);
+  if (!osds.size()) {
+    return -EINVAL;
+  }
+
+  for (unsigned i = 0; i < osds.size(); i++) {
+    entity_addr_t addr = get_addr(osds[i]);
+    address.push_back(addr);
+  }
+
+  return 0;
 }

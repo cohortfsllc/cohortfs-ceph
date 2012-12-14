@@ -55,6 +55,7 @@ using namespace std;
 
 #include "mds/MDSMap.h"
 #include "osd/OSDMap.h"
+#include "osd/PlaceSystem.h"
 #include "mon/MonMap.h"
 
 #include "osdc/Filer.h"
@@ -144,8 +145,11 @@ Client::Client(Messenger *m, MonClient *mc)
   // set up messengers
   messenger = m;
 
+  PlaceSystem* placeSystem =
+    PlaceSystem::getSystem(g_conf->osd_placement_system);
+ 
   // osd interfaces
-  osdmap = new OSDMap;     // initially blank.. see mount()
+  osdmap = placeSystem->newOSDMap(); // initially blank.. see mount()
   mdsmap = new MDSMap;
   objecter = new Objecter(cct, messenger, monclient, osdmap, client_lock, timer);
   objecter->set_client_incarnation(0);  // client always 0, for now.
@@ -6707,7 +6711,9 @@ uint32_t Client::ll_file_layout(vinodeno_t vino, ceph_file_layout *layout)
    then index into that.  An array with one entry per OSD is much more
    tractable and works for demonstration purposes. */
 
-int Client::ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno, ceph_file_layout* layout)
+int Client::ll_get_stripe_osd(vinodeno_t vino,
+			      uint64_t blockno,
+			      ceph_file_layout* layout)
 {
   inodeno_t ino = vino.ino;
   uint32_t object_size = layout->fl_object_size;
@@ -6721,13 +6727,8 @@ int Client::ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno, ceph_file_layou
   uint64_t objectno = objectsetno * stripe_count + stripepos;  // object id
 
   object_t oid = file_object_t(ino, objectno);
-  ceph_object_layout olayout
-    = objecter->osdmap->file_to_object_layout(oid, *layout);
 
-  pg_t pg = (pg_t)olayout.ol_pgid;
-  vector<int> osds;
-  osdmap->pg_to_osds(pg, osds);
-  return osds[0];
+  return osdmap->get_oid_osd(objecter, oid, layout);
 }
 
 /* Return the offset of the block, internal to the object */
@@ -7182,12 +7183,11 @@ int Client::describe_layout(int fd, ceph_file_layout *lp)
 int Client::get_pool_replication(int64_t pool)
 {
   Mutex::Locker lock(client_lock);
-  if (!osdmap->have_pg_pool(pool))
-    return -ENOENT;
-  return osdmap->get_pg_pool(pool)->get_size();
+  return osdmap->get_pool_replication(pool);
 }
 
-int Client::get_file_stripe_address(int fd, loff_t offset, vector<entity_addr_t>& address)
+int Client::get_file_stripe_address(int fd, loff_t offset,
+				    vector<entity_addr_t>& address)
 {
   Mutex::Locker lock(client_lock);
 
@@ -7200,17 +7200,7 @@ int Client::get_file_stripe_address(int fd, loff_t offset, vector<entity_addr_t>
   Filer::file_to_extents(cct, in->ino, &in->layout, offset, 1, extents);
   assert(extents.size() == 1);
 
-  // now we have the object and its 'layout'
-  pg_t pg = osdmap->object_locator_to_pg(extents[0].oid, extents[0].oloc);
-  vector<int> osds;
-  osdmap->pg_to_acting_osds(pg, osds);
-  if (!osds.size())
-    return -EINVAL;
-
-  for (unsigned i = 0; i < osds.size(); i++) {
-    entity_addr_t addr = osdmap->get_addr(osds[i]);
-    address.push_back(addr);
-  }
+  osdmap->get_file_stripe_address(extents, address);
 
   return 0;
 }

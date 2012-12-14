@@ -123,8 +123,20 @@ public:
   virtual void build_simple(CephContext *cct, epoch_t e, uuid_d &fsid, int num_osd);
   virtual void build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid);
 
-  void build_simple(CephContext *cct, epoch_t e, uuid_d &fsid, int num_osd,
-		    int pg_bits, int pogp_bits);
+  virtual void build_simple(CephContext *cct,
+			    epoch_t e,
+			    uuid_d &fsid,
+			    int num_osd,
+			    int pg_bits, int pogp_bits);
+
+  virtual int get_oid_osd(const Objecter* objecter,
+			  const object_t& oid,
+			  const ceph_file_layout* layout);
+
+  virtual int get_pool_replication(int64_t pool);
+
+  virtual int get_file_stripe_address(vector<ObjectExtent>& extents,
+				      vector<entity_addr_t>& address);
 			      
   static void build_simple_crush_map(CephContext *cct,
 				     CrushWrapper& crush,
@@ -163,7 +175,7 @@ public:
 
   // oid -> pg
   ceph_object_layout file_to_object_layout(object_t oid,
-					   ceph_file_layout& layout) const {
+					   const ceph_file_layout& layout) const {
     return make_object_layout(oid, layout.fl_pg_pool);
   }
 

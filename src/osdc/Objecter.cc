@@ -14,6 +14,7 @@
 
 #include "Objecter.h"
 #include "osd/OSDMap.h"
+#include "pg/PGOSDMap.h"
 
 #include "mon/MonClient.h"
 
@@ -426,9 +427,11 @@ void Objecter::handle_osd_map(MOSDMap *m)
  
 	if (osdmap->get_epoch() == e-1 &&
 	    m->incremental_maps.count(e)) {
-	  ldout(cct, 3) << "handle_osd_map decoding incremental epoch " << e << dendl;
-	  OSDMap::Incremental inc(m->incremental_maps[e]);
-	  osdmap->apply_incremental(inc);
+	  ldout(cct, 3) << "handle_osd_map decoding incremental epoch "
+			<< e << dendl;
+	  auto_ptr<OSDMap::Incremental> inc(osdmap->newIncremental());
+	  inc->decode(m->incremental_maps[e]);
+	  osdmap->apply_incremental(*inc.get());
 	  logger->inc(l_osdc_map_inc);
 	}
 	else if (m->maps.count(e)) {
@@ -1012,16 +1015,19 @@ bool Objecter::is_pg_changed(vector<int>& o, vector<int>& n, bool any_change)
   return false;      // same primary (tho replicas may have changed)
 }
 
+
 int Objecter::recalc_op_target(Op *op)
 {
+  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
+
   vector<int> acting;
   pg_t pgid = op->pgid;
   if (!op->precalc_pgid) {
-    int ret = osdmap->object_locator_to_pg(op->oid, op->oloc, pgid);
+    int ret = pgosdmap->object_locator_to_pg(op->oid, op->oloc, pgid);
     if (ret == -ENOENT)
       return RECALC_OP_TARGET_POOL_DNE;
   }
-  osdmap->pg_to_acting_osds(pgid, acting);
+  pgosdmap->pg_to_acting_osds(pgid, acting);
 
   if (op->pgid != pgid || is_pg_changed(op->acting, acting, op->used_replica)) {
     op->pgid = pgid;
@@ -1077,13 +1083,16 @@ int Objecter::recalc_op_target(Op *op)
 
 bool Objecter::recalc_linger_op_target(LingerOp *linger_op)
 {
+  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
+
   vector<int> acting;
   pg_t pgid;
-  int ret = osdmap->object_locator_to_pg(linger_op->oid, linger_op->oloc, pgid);
+  int ret =
+    pgosdmap->object_locator_to_pg(linger_op->oid, linger_op->oloc, pgid);
   if (ret == -ENOENT) {
     return RECALC_OP_TARGET_POOL_DNE;
   }
-  osdmap->pg_to_acting_osds(pgid, acting);
+  pgosdmap->pg_to_acting_osds(pgid, acting);
 
   if (pgid != linger_op->pgid || is_pg_changed(linger_op->acting, acting, true)) {
     linger_op->pgid = pgid;
@@ -1102,6 +1111,7 @@ bool Objecter::recalc_linger_op_target(LingerOp *linger_op)
   }
   return RECALC_OP_TARGET_NO_ACTION;
 }
+
 
 void Objecter::cancel_op(Op *op)
 {
@@ -1359,6 +1369,7 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
 
 
 void Objecter::list_objects(ListContext *list_context, Context *onfinish) {
+  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
 
   ldout(cct, 10) << "list_objects" << dendl;
   ldout(cct, 20) << "pool_id " << list_context->pool_id
@@ -1375,7 +1386,7 @@ void Objecter::list_objects(ListContext *list_context, Context *onfinish) {
     return;
   }
 
-  const pg_pool_t *pool = osdmap->get_pg_pool(list_context->pool_id);
+  const pg_pool_t *pool = pgosdmap->get_pg_pool(list_context->pool_id);
   int pg_num = pool->get_pg_num();
 
   if (list_context->starting_pg_num == 0) {     // there can't be zero pgs!
@@ -1418,6 +1429,7 @@ void Objecter::list_objects(ListContext *list_context, Context *onfinish) {
 
   op_submit(o);
 }
+
 
 void Objecter::_list_reply(ListContext *list_context, int r, bufferlist *bl,
 			   Context *final_finish, epoch_t reply_epoch)
