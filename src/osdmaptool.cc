@@ -26,6 +26,8 @@ using namespace std;
 
 #include "common/errno.h"
 #include "osd/OSDMap.h"
+#include "pg/PGOSDMap.h"
+#include "osd/PlaceSystem.h"
 #include "mon/MonMap.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
@@ -137,7 +139,7 @@ int main(int argc, const char **argv)
       string error, s = f.str();
       bl.read_file(s.c_str(), &error);
       cout << s << " got " << bl.length() << " bytes" << std::endl;
-      OSDMap *o = new OSDMap;
+      OSDMap *o = PlaceSystem::getSystem().newOSDMap();
       o->decode(bl);
       maps.insert(o);
       if (prev)
@@ -146,8 +148,8 @@ int main(int argc, const char **argv)
     }
     exit(0);
   }
-  
-  OSDMap osdmap;
+
+  auto_ptr<OSDMap> osdmap_ref(PlaceSystem::getSystem().newOSDMap());
   bufferlist bl;
 
   cout << me << ": osdmap file '" << fn << "'" << std::endl;
@@ -159,7 +161,7 @@ int main(int argc, const char **argv)
     r = bl.read_file(fn.c_str(), &error);
     if (r == 0) {
       try {
-	osdmap.decode(bl);
+	osdmap_ref->decode(bl);
       }
       catch (const buffer::error &e) {
 	cerr << me << ": error decoding osdmap '" << fn << "'" << std::endl;
@@ -183,13 +185,13 @@ int main(int argc, const char **argv)
     }
     uuid_d fsid;
     memset(&fsid, 0, sizeof(uuid_d));
-    osdmap.build_simple(g_ceph_context, 0, fsid, num_osd, pg_bits, pgp_bits);
+    osdmap_ref->build_simple(g_ceph_context, 0, fsid, num_osd);
     modified = true;
   }
   if (create_from_conf) {
     uuid_d fsid;
     memset(&fsid, 0, sizeof(uuid_d));
-    osdmap.build_simple_from_conf(g_ceph_context, 0, fsid, pg_bits, pgp_bits);
+    osdmap_ref->build_simple_from_conf(g_ceph_context, 0, fsid);
     modified = true;
   }
 
@@ -208,89 +210,97 @@ int main(int argc, const char **argv)
     bufferlist::iterator p = cbl.begin();
     cw.decode(p);
 
-    if (cw.get_max_devices() > osdmap.get_max_osd()) {
+    if (cw.get_max_devices() > osdmap_ref->get_max_osd()) {
       cerr << me << ": crushmap max_devices " << cw.get_max_devices()
-	   << " > osdmap max_osd " << osdmap.get_max_osd() << std::endl;
+	   << " > osdmap max_osd " << osdmap_ref->get_max_osd() << std::endl;
       exit(1);
     }
     
     // apply
-    OSDMap::Incremental inc;
-    inc.fsid = osdmap.get_fsid();
-    inc.epoch = osdmap.get_epoch()+1;
-    inc.crush = cbl;
-    osdmap.apply_incremental(inc);
-    cout << me << ": imported " << cbl.length() << " byte crush map from " << import_crush << std::endl;
+    auto_ptr<OSDMap::Incremental> inc_ref(osdmap_ref->newIncremental());
+    inc_ref->fsid = osdmap_ref->get_fsid();
+    inc_ref->epoch = osdmap_ref->get_epoch()+1;
+    inc_ref->crush = cbl;
+    osdmap_ref->apply_incremental(*inc_ref.get());
+    cout << me << ": imported " << cbl.length()
+	 << " byte crush map from " << import_crush << std::endl;
     modified = true;
   }
 
   if (!export_crush.empty()) {
     bufferlist cbl;
-    osdmap.crush->encode(cbl);
+    osdmap_ref->crush->encode(cbl);
     r = cbl.write_file(export_crush.c_str());
     if (r < 0) {
       cerr << me << ": error writing crush map to " << import_crush << std::endl;
       exit(1);
     }
     cout << me << ": exported crush map to " << export_crush << std::endl;
-  }  
-
-  if (!test_map_object.empty()) {
-    object_t oid(test_map_object);
-    ceph_object_layout ol = osdmap.make_object_layout(oid, 0);
-    
-    pg_t pgid;
-    pgid = ol.ol_pgid;
-
-    vector<int> acting;
-    osdmap.pg_to_acting_osds(pgid, acting);
-    cout << " object '" << oid
-	 << "' -> " << pgid
-	 << " -> " << acting
-	 << std::endl;
-  }  
-  if (!test_map_pg.empty()) {
-    pg_t pgid;
-    if (pgid.parse(test_map_pg.c_str()) < 0) {
-      cerr << me << ": failed to parse pg '" << test_map_pg
-	   << "', r = " << r << std::endl;
-      usage();
-    }
-    cout << " parsed '" << test_map_pg << "' -> " << pgid << std::endl;
-
-    vector<int> raw, up, acting;
-    osdmap.pg_to_osds(pgid, raw);
-    osdmap.pg_to_up_acting_osds(pgid, up, acting);
-    cout << pgid << " raw " << raw << " up " << up << " acting " << acting << std::endl;
   }
-  if (test_crush) {
-    int pass = 0;
-    while (1) {
-      cout << "pass " << ++pass << std::endl;
 
-      hash_map<pg_t,vector<int> > m;
-      for (map<int64_t,pg_pool_t>::const_iterator p = osdmap.get_pools().begin();
-	   p != osdmap.get_pools().end();
-	   p++) {
-	const pg_pool_t *pool = osdmap.get_pg_pool(p->first);
-	for (ps_t ps = 0; ps < pool->get_pg_num(); ps++) {
-	  pg_t pgid(ps, p->first, -1);
-	  for (int i=0; i<100; i++) {
-	    cout << pgid << " attempt " << i << std::endl;
+  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap_ref.get());
+  if (pgosdmap) {
+    if (!test_map_object.empty()) {
+      object_t oid(test_map_object);
+      ceph_object_layout ol = pgosdmap->make_object_layout(oid, 0);
+    
+      pg_t pgid;
+      pgid = ol.ol_pgid;
 
-	    vector<int> r, s;
-	    osdmap.pg_to_acting_osds(pgid, r);
-	    //cout << pgid << " " << r << std::endl;
-	    if (m.count(pgid)) {
-	      if (m[pgid] != r) {
-		cout << pgid << " had " << m[pgid] << " now " << r << std::endl;
-		assert(0);
-	      }
-	    } else
-	      m[pgid] = r;
+      vector<int> acting;
+      pgosdmap->pg_to_acting_osds(pgid, acting);
+      cout << " object '" << oid
+	   << "' -> " << pgid
+	   << " -> " << acting
+	   << std::endl;
+    }  
+    if (!test_map_pg.empty()) {
+      pg_t pgid;
+      if (pgid.parse(test_map_pg.c_str()) < 0) {
+	cerr << me << ": failed to parse pg '" << test_map_pg
+	     << "', r = " << r << std::endl;
+	usage();
+      }
+      cout << " parsed '" << test_map_pg << "' -> " << pgid << std::endl;
+
+      vector<int> raw, up, acting;
+      pgosdmap->pg_to_osds(pgid, raw);
+      pgosdmap->pg_to_up_acting_osds(pgid, up, acting);
+      cout << pgid << " raw " << raw << " up " << up << " acting " << acting << std::endl;
+    }
+    if (test_crush) {
+      int pass = 0;
+      while (1) {
+	cout << "pass " << ++pass << std::endl;
+
+	hash_map<pg_t,vector<int> > m;
+	for (map<int64_t,pg_pool_t>::const_iterator p = pgosdmap->get_pools().begin();
+	     p != pgosdmap->get_pools().end();
+	     p++) {
+	  const pg_pool_t *pool = pgosdmap->get_pg_pool(p->first);
+	  for (ps_t ps = 0; ps < pool->get_pg_num(); ps++) {
+	    pg_t pgid(ps, p->first, -1);
+	    for (int i=0; i<100; i++) {
+	      cout << pgid << " attempt " << i << std::endl;
+
+	      vector<int> r, s;
+	      pgosdmap->pg_to_acting_osds(pgid, r);
+	      //cout << pgid << " " << r << std::endl;
+	      if (m.count(pgid)) {
+		if (m[pgid] != r) {
+		  cout << pgid << " had " << m[pgid] << " now " << r << std::endl;
+		  assert(0);
+		}
+	      } else
+		m[pgid] = r;
+	    }
 	  }
 	}
       }
+    } // if (test_crush)
+  } else {  // if (pgosdmap)
+    if (test_crush) {
+      cout << "crush test skipped; OSD is not a placement group type." << std::endl;
     }
   }
 
@@ -302,21 +312,21 @@ int main(int argc, const char **argv)
   }
 
   if (modified)
-    osdmap.inc_epoch();
+    osdmap_ref->inc_epoch();
 
   if (print) 
-    osdmap.print(cout);
+    osdmap_ref->print(cout);
   if (print_json)
-    osdmap.dump_json(cout);
+    osdmap_ref->dump_json(cout);
   if (tree) 
-    osdmap.print_tree(cout);
+    osdmap_ref->print_tree(cout);
 
   if (modified) {
     bl.clear();
-    osdmap.encode(bl);
+    osdmap_ref->encode(bl);
 
     // write it out
-    cout << me << ": writing epoch " << osdmap.get_epoch()
+    cout << me << ": writing epoch " << osdmap_ref->get_epoch()
 	 << " to " << fn
 	 << std::endl;
     int r = bl.write_file(fn.c_str());
