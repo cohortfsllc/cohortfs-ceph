@@ -18,6 +18,7 @@
 
 #include "osd/PlaceSystem.h"
 #include "PGOSDMap.h"
+#include "PGOSD.h"
 #include "mon/PGOSDMonitor.h"
 
 
@@ -42,7 +43,17 @@ public:
   virtual PGOSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const {
     return new PGOSDMonitor(mon, p);
   }
-};
+
+  virtual PGOSD* newOSD(int id,
+			Messenger *internal, Messenger *external,
+			Messenger *hbmin, Messenger *hbmout, MonClient *mc,
+			const std::string &dev,
+			const std::string &jdev) const
+  {
+    return new PGOSD(id, internal, external, hbmin, hbmout, mc, dev, jdev);
+  }
+
+}; // class PGPlaceSystem
 
 
 #endif // CEPH_PGPLACESYSTEM_H

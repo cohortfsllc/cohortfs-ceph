@@ -19,21 +19,20 @@ std::map<std::string,PlaceSystem*> PlaceSystem::nameMap;
 std::map<__u16,PlaceSystem*> PlaceSystem::identifierMap;
 
 
-PlaceSystem* PlaceSystem::getSystem(const std::string& name) {
-    if (nameMap.count(name)) {
-        return nameMap[name];
-    } else {
-        return NULL;
-    }
+const PlaceSystem& PlaceSystem::getSystem() {
+  return getSystem(g_conf->osd_placement_system);
 }
 
 
-PlaceSystem* PlaceSystem::getSystem(const __u16 identifier) {
-    if (identifierMap.count(identifier)) {
-        return identifierMap[identifier];
-    } else {
-        return NULL;
-    }
+const PlaceSystem& PlaceSystem::getSystem(const std::string& name) {
+  assert(nameMap.count(name));
+  return *nameMap[name];
+}
+
+
+const PlaceSystem& PlaceSystem::getSystem(const __u16 identifier) {
+  assert(identifierMap.count(identifier));
+  return *identifierMap[identifier];
 }
 
 

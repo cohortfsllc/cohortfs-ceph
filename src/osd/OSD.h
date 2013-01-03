@@ -409,7 +409,7 @@ private:
 protected:  
   void _add_heartbeat_peer(int p);
   void maybe_update_heartbeat_peers();
-  virtual void build_heartbeat_peers_list() const = 0;
+  virtual void build_heartbeat_peers_list() = 0;
   void reset_heartbeat_peers();
   void heartbeat();
   void heartbeat_check();
@@ -725,7 +725,7 @@ protected:
       OSDService* osdSvc);
   virtual ~OSD();
 
-  virtual OSDService* newOSDService(const OSD* osd) const = 0;
+  virtual OSDService* newOSDService(OSD* osd) const = 0;
   virtual OSDMap* newOSDMap() const = 0;
 
   utime_t last_stats_sent;

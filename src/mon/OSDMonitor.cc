@@ -74,9 +74,7 @@ void OSDMonitor::create_initial()
 {
   dout(10) << "create_initial for " << mon->monmap->fsid << dendl;
 
-  PlaceSystem* placeSystem =
-    PlaceSystem::getSystem(g_conf->osd_placement_system);
-  auto_ptr<OSDMap> newmap(placeSystem->newOSDMap());
+  auto_ptr<OSDMap> newmap(PlaceSystem::getSystem().newOSDMap());
 
   bufferlist bl;
   mon->store->get_bl_ss(bl, "mkfs", "osdmap");

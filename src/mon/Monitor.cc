@@ -120,12 +120,10 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorStore *s, Messenger *m, Mo
 {
   rank = -1;
 
-  PlaceSystem* placeSystem = PlaceSystem::getSystem(g_conf->osd_placement_system);
-
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, add_paxos(PAXOS_MDSMAP));
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, add_paxos(PAXOS_MONMAP));
   paxos_service[PAXOS_OSDMAP] =
-    placeSystem->newOSDMonitor(this, add_paxos(PAXOS_OSDMAP));
+    PlaceSystem::getSystem().newOSDMonitor(this, add_paxos(PAXOS_OSDMAP));
   paxos_service[PAXOS_PGMAP] = new PGMonitor(this, add_paxos(PAXOS_PGMAP));
   paxos_service[PAXOS_LOG] = new LogMonitor(this, add_paxos(PAXOS_LOG));
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, add_paxos(PAXOS_AUTH));
@@ -2054,9 +2052,7 @@ int Monitor::mkfs(bufferlist& osdmapbl)
   if (osdmapbl.length()) {
     // make sure it's a valid osdmap
     try {
-      PlaceSystem* placeSystem =
-	PlaceSystem::getSystem(g_conf->osd_placement_system);
-      OSDMap* om = placeSystem->newOSDMap();;
+      OSDMap* om = PlaceSystem::getSystem().newOSDMap();;
       om->decode(osdmapbl);
     }
     catch (buffer::error& e) {

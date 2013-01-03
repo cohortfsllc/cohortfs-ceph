@@ -283,7 +283,7 @@ void PGOSDMap::encode(bufferlist& bl, uint64_t features) const {
   __u16 v = 7;
   ::encode(v, bl);
 
-  inherited::encode(bl, features);
+  encodeOSDMap(bl, features);
 
   ::encode(pools, bl, features);
   ::encode(pool_name, bl);

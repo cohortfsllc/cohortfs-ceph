@@ -108,11 +108,10 @@ public:
 
   PGOSD(int id, Messenger *internal, Messenger *external, Messenger *hbmin,
 	Messenger *hbmout,
-	MonClient *mc, const std::string &dev, const std::string &jdev,
-	OSDService* osdSvc);
+	MonClient *mc, const std::string &dev, const std::string &jdev);
 
-  virtual OSDService* newOSDService(OSD* osd) const {
-    PGOSD* const pgosd = dynamic_cast<PGOSD*>(osd);
+  virtual PGOSDService* newOSDService(OSD* osd) const {
+    PGOSD* pgosd = dynamic_cast<PGOSD*>(osd);
     return new PGOSDService(pgosd);
   }
 
@@ -145,7 +144,7 @@ public:
 
   virtual void ms_handle_connect_sub(Connection *con);
 
-  virtual void ms_handle_reset_sub(PGSession* session);
+  virtual void ms_handle_reset_sub(OSD::Session* session);
 
   virtual void advance_map_sub(ObjectStore::Transaction& t,
 			       C_Contexts *tfin);

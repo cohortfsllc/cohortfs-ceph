@@ -22,6 +22,7 @@
 
 #include "include/inttypes.h"
 
+#include "OSD.h"
 #include "OSDMap.h"
 #include "mon/OSDMonitor.h"
 
@@ -39,8 +40,9 @@ protected:
 
 public:
 
-  static PlaceSystem* getSystem(const std::string& name);
-  static PlaceSystem* getSystem(const __u16 identifier);
+  static const PlaceSystem& getSystem();
+  static const PlaceSystem& getSystem(const std::string& name);
+  static const PlaceSystem& getSystem(const __u16 identifier);
 
   virtual ~PlaceSystem() {}
 
@@ -55,6 +57,12 @@ public:
 
   // 
   virtual OSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const = 0;
+
+  virtual OSD* newOSD(int id,
+		      Messenger *internal, Messenger *external,
+		      Messenger *hbmin, Messenger *hbmout, MonClient *mc,
+		      const std::string &dev,
+		      const std::string &jdev) const = 0;
 };
 
 #endif // CEPH_PLACESYSTEN_H

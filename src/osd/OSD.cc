@@ -32,7 +32,6 @@
 
 #include "OSD.h"
 #include "OSDMap.h"
-#include "Watch.h"
 
 #include "common/ceph_argparse.h"
 #include "os/FileStore.h"
@@ -47,46 +46,21 @@
 #include "mon/MonClient.h"
 
 #include "messages/MLog.h"
-
 #include "messages/MGenericMessage.h"
 #include "messages/MPing.h"
 #include "messages/MOSDPing.h"
 #include "messages/MOSDFailure.h"
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
-// #include "messages/MOSDSubOp.h"
-// #include "messages/MOSDSubOpReply.h"
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDPGTemp.h"
-
 #include "messages/MOSDMap.h"
-
-#warning remove these includes?
-#if 0
-#include "messages/MOSDPGNotify.h"
-#include "messages/MOSDPGQuery.h"
-#include "messages/MOSDPGLog.h"
-#include "messages/MOSDPGRemove.h"
-#include "messages/MOSDPGInfo.h"
-#include "messages/MOSDPGCreate.h"
-#include "messages/MOSDPGTrim.h"
-#include "messages/MOSDPGScan.h"
-#include "messages/MOSDPGBackfill.h"
-#include "messages/MOSDPGMissing.h"
-#include "messages/MOSDScrub.h"
-#include "messages/MOSDRepScrub.h"
-#endif
-
 #include "messages/MOSDAlive.h"
-
-
 #include "messages/MMonCommand.h"
 #include "messages/MCommand.h"
 #include "messages/MCommandReply.h"
-
 #include "messages/MPGStats.h"
 #include "messages/MPGStatsAck.h"
-
 #include "messages/MWatchNotify.h"
 
 #include "common/perf_counters.h"

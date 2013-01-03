@@ -208,7 +208,7 @@ void coll_t::decode(bufferlist::iterator& bl)
       break;
     default: {
       ostringstream oss;
-      oss << "coll_t::decode(): can't understand type " << type;
+      oss << "coll_t::decode(): can't understand type " << (int) type;
       throw std::domain_error(oss.str());
     }
     }
@@ -222,7 +222,7 @@ void coll_t::decode(bufferlist::iterator& bl)
   default: {
     ostringstream oss;
     oss << "coll_t::decode(): don't know how to decode version "
-	<< struct_v;
+	<< (int) struct_v;
     throw std::domain_error(oss.str());
   }
   }

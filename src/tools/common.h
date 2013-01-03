@@ -77,7 +77,8 @@ public:
   CephContext *cct;
   PGMap pgmap;
   MDSMap mdsmap;
-  OSDMap osdmap;
+  // OSDMap osdmap;
+  std::auto_ptr<OSDMap> osdmap_ref;
   MonClient mc;
 
   // Which aspects of the cluster have been updated recently?
@@ -111,6 +112,7 @@ public:
     concise(concise_),
     dispatcher(NULL)
   {
+      osdmap_ref = std::auto_ptr<OSDMap>(PlaceSystem::getSystem().newOSDMap());
   }
 
   ~CephToolCtx() {

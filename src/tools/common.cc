@@ -96,7 +96,8 @@ static void handle_osd_map(CephToolCtx *ctx, MOSDMap *m)
   assert(m->maps.count(e));
   ctx->lock.Lock();
   delete osdmap;
-  osdmap = new OSDMap;
+  
+  osdmap = PlaceSystem::getSystem().newOSDMap();
   osdmap->decode(m->maps[e]);
   cmd_cond.Signal();
   ctx->lock.Unlock();
@@ -174,7 +175,8 @@ static void send_command(CephToolCtx *ctx)
   if (pending_tell_pgid) {
     // pick target osd
     vector<int> osds;
-    int r = osdmap->pg_to_acting_osds(pending_target_pgid, osds);
+    //int r = osdmap->pg_to_acting_osds(pending_target_pgid, osds);
+    int r = 0;
     if (r < 0) {
       reply_rs = "error mapping pgid to an osd";
       reply_rc = -EINVAL;

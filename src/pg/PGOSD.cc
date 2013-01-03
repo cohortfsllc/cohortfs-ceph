@@ -96,10 +96,9 @@ void PGOSDService::send_pg_temp()
 
 PGOSD::PGOSD(int id, Messenger *internal_messenger, Messenger *external_messenger,
              Messenger *hbclientm, Messenger *hbserverm, MonClient *mc,
-             const std::string &dev, const std::string &jdev,
-             OSDService* osdSvc) :
+             const std::string &dev, const std::string &jdev) :
   OSD(id, internal_messenger, external_messenger, hbclientm, hbserverm,
-      mc, dev, jdev, osdSvc),
+      mc, dev, jdev, new PGOSDService(this)),
   op_queue_len(0),
   op_wq(this, g_conf->osd_op_thread_timeout, &op_tp),
   peering_wq(this, g_conf->osd_op_thread_timeout, &op_tp, 200),
@@ -575,9 +574,11 @@ void PGOSD::build_heartbeat_peers_list() {
     dout(20) << i->first << " heartbeat_peers " << pg->heartbeat_peers << dendl;
     for (set<int>::iterator p = pg->heartbeat_peers.begin();
 	 p != pg->heartbeat_peers.end();
-	 ++p)
-      if (osdmap->is_up(*p))
+	 ++p) {
+      if (osdmap->is_up(*p)) {
 	_add_heartbeat_peer(*p);
+      }
+    }
     for (set<int>::iterator p = pg->probe_targets.begin();
 	 p != pg->probe_targets.end();
 	 ++p)
@@ -693,8 +694,9 @@ void PGOSD::handle_watch_timeout(void *obc,
 }
 
 
-void PGOSD::ms_handle_reset_sub(PGSession* session) {
-  disconnect_session_watches(session);
+void PGOSD::ms_handle_reset_sub(OSD::Session* session) {
+  PGSession* pg_session = dynamic_cast<PGSession*>(session);
+  disconnect_session_watches(pg_session);
 }
 
 
