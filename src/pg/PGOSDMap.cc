@@ -994,7 +994,7 @@ PGOSDMap::build_simple_crush_map_from_conf(CephContext *cct,
 }
 
 
-void PGOSDMap::generate_test_instances(list<OSDMap*>& o)
+void PGOSDMap::generate_test_instances(list<PGOSDMap*>& o)
 {
   o.push_back(new PGOSDMap);
 

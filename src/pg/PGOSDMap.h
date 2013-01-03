@@ -147,7 +147,7 @@ public:
 				   CrushWrapper& crush,
 				   map<int, const char*>& rulesets);
 
-  static void generate_test_instances(list<OSDMap*>& o);
+  static void generate_test_instances(list<PGOSDMap*>& o);
 
   int apply_incremental_subclass(OSDMap::Incremental& inc);
 
