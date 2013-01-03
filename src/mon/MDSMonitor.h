@@ -30,9 +30,6 @@ using namespace std;
 #include "PaxosService.h"
 #include "Session.h"
 
-#warning work to get rid of this include
-#include "pg/pg_types.h"
-
 
 class MMDSBeacon;
 class MMDSGetMap;
