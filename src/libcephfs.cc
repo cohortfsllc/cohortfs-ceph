@@ -874,10 +874,10 @@ extern "C" int ceph_ll_write_block(struct ceph_mount_info *cmount,
 				   char* buf, uint64_t offset,
 				   uint64_t length,
 				   struct ceph_file_layout* layout,
-				   uint64_t snapseq, uint32_t sync)
+				   uint64_t snapseq, uint32_t flags)
 {
   return (cmount->get_client()->ll_write_block(vino, blockid, buf, offset,
-					       length, layout, snapseq, sync));
+					       length, layout, snapseq, flags));
 }
 
 extern "C" int ceph_ll_commit_blocks(struct ceph_mount_info *cmount,
@@ -891,6 +891,18 @@ extern "C" int ceph_ll_fsync(struct ceph_mount_info *cmount,
 			     Fh *fh, int syncdataonly)
 {
   return (cmount->get_client()->ll_fsync(fh, syncdataonly));
+}
+
+extern "C" int ceph_ll_update_inode(struct ceph_mount_info *cmount,
+				    vinodeno_t vino, uint64_t truncate_seq,
+				    uint64_t truncate_size, uint64_t size,
+				    uint64_t time_warp_seq, utime_t ctime,
+				    utime_t mtime, utime_t atime,
+				    int issued)
+{
+  return(cmount->get_client()->ll_update_inode(
+    vino, truncate_seq, truncate_size, size, time_warp_seq, ctime,
+    mtime, atime, issued));
 }
 
 extern "C" loff_t ceph_ll_lseek(struct ceph_mount_info *cmount,

@@ -35,10 +35,10 @@ using namespace std;
 #define cldout(cl, v)  dout_impl((cl)->cct, dout_subsys, v) \
   *_dout << "client." << cl->whoami << " "
 
-
 /* C_Block_Sync */
-C_Block_Sync::C_Block_Sync(Client *c, uint64_t i, barrier_interval iv) :
-  cl(c), ino(i), iv(iv)
+C_Block_Sync::C_Block_Sync(Client *c, uint64_t i, barrier_interval iv,
+			   int *r=0) :
+  cl(c), ino(i), iv(iv), rval(r)
 {
   state = CBlockSync_State_None;
   barrier = NULL;
@@ -52,9 +52,11 @@ C_Block_Sync::C_Block_Sync(Client *c, uint64_t i, barrier_interval iv) :
   cl->barriers[ino]->write_nobarrier(*this);
 }
 
-void C_Block_Sync::finish(int) {
+void C_Block_Sync::finish(int r) {
   cldout(cl, 1) << "C_Block_Sync::finish() for " << ino << " "
-		<< iv << dendl;
+		<< iv << " r==" << r << dendl;
+  if (rval)
+    *rval = r;
   cl->barriers[ino]->complete(*this);
 }
 

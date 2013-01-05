@@ -1071,6 +1071,14 @@ int ceph_ll_write_block(struct ceph_mount_info *cmount,
 			uint64_t snapseq, uint32_t sync);
 int ceph_ll_commit_blocks(struct ceph_mount_info *cmount,
 			  vinodeno_t vino, uint64_t offset, uint64_t range);
+
+int ceph_ll_update_inode(struct ceph_mount_info *cmount,
+			 vinodeno_t vino, uint64_t truncate_seq,
+			 uint64_t truncate_size, uint64_t size,
+			 uint64_t time_warp_seq, utime_t ctime,
+			 utime_t mtime, utime_t atime,
+			 int issued);
+
 int ceph_ll_connectable_x(struct ceph_mount_info *cmount,
 			  vinodeno_t vino, uint64_t* parent_ino,
 			  uint32_t* parent_hash);

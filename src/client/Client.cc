@@ -485,7 +485,7 @@ void Client::trim_dentry(Dentry *dn)
   unlink(dn, false);
 }
 
-
+/* XXX return status (David) */
 void Client::update_inode_file_bits(Inode *in,
 				    uint64_t truncate_seq, uint64_t truncate_size,
 				    uint64_t size,
@@ -7165,6 +7165,13 @@ uint32_t Client::ll_hold_rw(vinodeno_t vino,
   int r = 0;
   int got = 0;
   int need = CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0);
+
+  /* XXX as explained on-list, I think we would like to hold a cap
+   * which asserts unique coordination when the caller is an MDS
+   * requesting a layout.  Then we have the discussion about any
+   * adjust ment to DS caps.  RD|WR is definitely the right choice
+   * for prototyping. */
+
   Inode *in = _ll_get_inode(vino);
   r = get_caps(in, need, 0, &got, (write ? *max_fs : 0));
   if (r != 0) {
@@ -7386,13 +7393,18 @@ int Client::ll_read_block(vinodeno_t vino, uint64_t blockid,
   return r;
 }
 
+/* 
+ * Write block data to 
+ */
+
 /* It appears that the OSD doesn't return success unless the entire
    buffer was written, return the write length on success. */
 
 int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
 			   char* buf, uint64_t offset,
-			   uint64_t length, ceph_file_layout* layout,
-			   uint64_t snapseq, uint32_t sync)
+			   uint64_t length,
+			   ceph_file_layout* layout,
+			   uint64_t snapseq, uint32_t flags)
 {
   Mutex::Locker lock(client_lock);
   Mutex flock("Client::ll_write_block flock");
@@ -7401,29 +7413,53 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
   int r = 0;
   Context *onack;
   Context *onsafe;
+  Inode *in;
+  uint64_t __attribute__((unused)) in_size;
+
   if ((length == 0)) {
     return -EINVAL;
   }
-  if (sync) {
-      onack = new C_NoopContext;
-      onsafe = new C_SafeCond(&flock, &cond, &done, &r);
-  } else {
-      onack = new C_SafeCond(&flock, &cond, &done, &r);
-      onsafe = new C_Block_Sync(
-	this, vino.ino,
-	barrier_interval(offset, offset + length));
+
+  /* A call should use either CEPH_LL_WRITE_BLOCK_SYNC4, which performs
+   * an inline update of file metadata, or else CEPH_LL_WRITE_BLOCK_BARRIER,
+   * which sets up a barrier for a later commit.
+   *
+   * BUG: which must arrive.  We need to roll out barriers that will never
+   * complete.
+   */
+
+  ldout(cct, 1) << "ll_block_write for " << vino.ino << "." << blockid
+		<< dendl;
+
+  if (flags & CEPH_LL_WRITE_BLOCK_SYNC4) {
+    in = _ll_get_inode(vino);
+    if (! in) {
+      return (-ENOENT);
+    }
+    in_size = in->size;
   }
+
   object_t oid = file_object_t(vino.ino, blockid);
-  SnapContext fakesnap;
+
+  /* XXX see comment in _write (fix) */
   bufferptr bp;
   if (length > 0) bp = buffer::copy(buf, length);
   bufferlist bl;
   bl.push_back(bp);
 
-  ldout(cct, 1) << "ll_block_write for " << vino.ino << "." << blockid
-		<< dendl;
-
+  SnapContext fakesnap;
   fakesnap.seq = snapseq;
+
+  if (flags & CEPH_LL_WRITE_BLOCK_BARRIER) {
+    onack = new C_NoopContext;
+    /* stable */
+    onsafe =
+      new C_Block_Sync(this, vino.ino,
+		       barrier_interval(offset, offset + length), &r);
+  } else {
+    onack = new C_NoopContext;
+    onsafe = new C_SafeCond(&flock, &cond, &done, &r);
+  }
 
   objecter->write(oid,
 		  object_locator_t(layout->fl_pg_pool),
@@ -7442,7 +7478,11 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
   if (r < 0) {
       return r;
   } else {
-      return length;
+    if (flags & CEPH_LL_WRITE_BLOCK_SYNC4) {
+      /* TODO: if in_size < new size, we must update inode
+       * metadata */
+    }
+    return length;
   }
 }
 
@@ -7468,6 +7508,21 @@ int Client::ll_commit_blocks(vinodeno_t vino,
     }
 
     return 0;
+}
+
+int Client::ll_update_inode(vinodeno_t vino, uint64_t truncate_seq,
+			    uint64_t truncate_size, uint64_t size,
+			    uint64_t time_warp_seq, utime_t ctime,
+			    utime_t mtime, utime_t atime,
+			    int issued)
+{
+  Inode *in  = _ll_get_inode(vino);
+  if (! in) {
+    return -1;
+  }
+  update_inode_file_bits(in, truncate_seq, truncate_size, size,
+			 time_warp_seq, ctime, mtime, atime, issued);
+  return (0); /* XXX fix */
 }
 
 int Client::ll_write(Fh *fh, loff_t off, loff_t len, const char *data)

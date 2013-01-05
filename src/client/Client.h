@@ -729,18 +729,23 @@ public:
 		    uint64_t length,
 		    ceph_file_layout* layout);
 
-#if 0
-  map<uint64_t, pair<uint32_t, list<Cond*> > > outstanding_block_writes;
-#else
   map<uint64_t, BarrierContext* > barriers;
-#endif
+
+  #define CEPH_LL_WRITE_BLOCK_NONE     0x0000
+  #define CEPH_LL_WRITE_BLOCK_BARRIER  0x0001
+  #define CEPH_LL_WRITE_BLOCK_SYNC4    0x0002
 
   int ll_write_block(vinodeno_t vino, uint64_t blockid,
 		     char* buf, uint64_t offset,
-		     uint64_t length, ceph_file_layout* layout,
-		     uint64_t snapseq, uint32_t sync);
+		     uint64_t length,
+		     ceph_file_layout* layout,
+		     uint64_t snapseq, uint32_t flags);
   int ll_commit_blocks(vinodeno_t vino, uint64_t offset, uint64_t length);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
+  int ll_update_inode(vinodeno_t vino, uint64_t truncate_seq,
+		      uint64_t truncate_size, uint64_t size,
+		      uint64_t time_warp_seq, utime_t ctime,
+		      utime_t mtime, utime_t atime, int issued);
   loff_t ll_lseek(Fh *fh, loff_t offset, int whence);
   int ll_flush(Fh *fh);
   int ll_fsync(Fh *fh, bool syncdataonly);
