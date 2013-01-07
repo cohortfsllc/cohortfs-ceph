@@ -71,8 +71,6 @@ SUBDIRS += leveldb
 LEVELDB_INCLUDE = -I$(top_srcdir)/src/leveldb/include
 endif
 
-
-
 # monitor
 ceph_mon_SOURCES = ceph_mon.cc
 ceph_mon_LDFLAGS = $(AM_LDFLAGS)
@@ -1390,6 +1388,41 @@ libclient_la_SOURCES = \
 	client/Trace.cc
 libclient_la_LIBADD = libosdc.la $(LIBEDIT_LIBS)
 noinst_LTLIBRARIES += libclient.la
+
+# Shared -- ceph_osd.cc needs forked
+libosd_la_SOURCES = \
+	ceph_osd.cc objclass/class_debug.cc \
+	objclass/class_api.cc \
+	${__LIBOSD_A} \
+	osd/PG.cc \
+	osd/ReplicatedPG.cc \
+	osd/Ager.cc \
+	osd/OSD.cc \
+	osd/OSDCap.cc \
+	osd/Watch.cc \
+	osd/ClassHandler.cc \
+	osd/OpRequest.cc \
+	${__LIBOS_A} \
+	os/FileJournal.cc \
+	os/FileStore.cc \
+	os/chain_xattr.cc \
+	os/ObjectStore.cc \
+	os/JournalingObjectStore.cc \
+	os/LFNIndex.cc \
+	os/HashIndex.cc \
+	os/IndexManager.cc \
+	os/FlatIndex.cc \
+	os/DBObjectMap.cc \
+	os/LevelDBStore.cc
+
+libosd_la_CFLAGS = -fPIC
+libosd_la_CXXFLAGS = ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS} $(LEVELDB_INCLUDE)
+libosd_la_LIBADD = $(LIBGLOBAL_LDA)
+if LINUX
+libosd_la_LIBADD += -ldl
+endif
+lib_LTLIBRARIES += libosd.la
+
 
 dist-hook:
 	$(srcdir)/check_version $(srcdir)/.git_version
