@@ -1391,7 +1391,7 @@ noinst_LTLIBRARIES += libclient.la
 
 # Shared -- ceph_osd.cc needs forked
 libosd_la_SOURCES = \
-	ceph_osd.cc objclass/class_debug.cc \
+	osd_lib.cc objclass/class_debug.cc \
 	objclass/class_api.cc \
 	${__LIBOSD_A} \
 	osd/PG.cc \
