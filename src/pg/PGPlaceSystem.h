@@ -22,13 +22,19 @@
 #include "mon/PGOSDMonitor.h"
 
 
-class PGPlaceSystem : public PlaceSystem {
+// used to hold key identifiers
+struct PGPlaceSystem {
 public:
   static const std::string systemName;
   static const __u16 systemIdentifier;
+};
 
-  PGPlaceSystem(const std::string& name, const __u16 id) :
-    PlaceSystem(name, id)
+
+class PGOSDMapPlaceSystem : public OSDMapPlaceSystem {
+public:
+
+  PGOSDMapPlaceSystem(const std::string& name, const __u16 id) :
+    OSDMapPlaceSystem(name, id)
   {}
 
   virtual PGOSDMap* newOSDMap() const {
@@ -38,7 +44,7 @@ public:
   virtual PGOSDMap::Incremental* newOSDMapIncremental() const {
     return new PGOSDMap::Incremental();
   }
-}; // class PGPlaceSystem
+}; // class PGOSDMapPlaceSystem
 
 
 class PGOSDPlaceSystem : public OSDPlaceSystem {

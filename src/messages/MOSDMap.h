@@ -96,7 +96,7 @@ public:
       else
 	header.version = 2;  // old pg_pool_t
 
-      const PlaceSystem& placeSystem = PlaceSystem::getSystem();
+      const OSDMapPlaceSystem& placeSystem = OSDMapPlaceSystem::getSystem();
 
       // reencode maps using old format
       //

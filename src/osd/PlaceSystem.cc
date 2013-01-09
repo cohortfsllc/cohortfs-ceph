@@ -15,32 +15,38 @@
 #include "PlaceSystem.h"
 
 
-std::map<std::string,PlaceSystem*> PlaceSystem::nameMap;
-std::map<__u16,PlaceSystem*> PlaceSystem::identifierMap;
+std::map<std::string,OSDMapPlaceSystem*> OSDMapPlaceSystem::nameMap;
+std::map<__u16,OSDMapPlaceSystem*> OSDMapPlaceSystem::identifierMap;
 
 
-const PlaceSystem& PlaceSystem::getSystem() {
+const OSDMapPlaceSystem& OSDMapPlaceSystem::getSystem() {
   return getSystem(g_conf->osd_placement_system);
 }
 
 
-const PlaceSystem& PlaceSystem::getSystem(const std::string& name) {
+const OSDMapPlaceSystem& OSDMapPlaceSystem::getSystem(const std::string& name) {
   assert(nameMap.count(name));
   return *nameMap[name];
 }
 
 
-const PlaceSystem& PlaceSystem::getSystem(const __u16 identifier) {
+const OSDMapPlaceSystem& OSDMapPlaceSystem::getSystem(const __u16 identifier) {
   assert(identifierMap.count(identifier));
   return *identifierMap[identifier];
 }
 
 
-PlaceSystem::PlaceSystem(const std::string& name, const __u16 identifier)
+OSDMapPlaceSystem::OSDMapPlaceSystem(const std::string& name, const __u16 identifier)
   : name(name), identifier(identifier)
 {
   nameMap[name] = this;
   identifierMap[identifier] = this;
+}
+
+
+OSDMapPlaceSystem::~OSDMapPlaceSystem()
+{
+  nameMap.erase(name);
 }
 
 

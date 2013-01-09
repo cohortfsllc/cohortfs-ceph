@@ -146,7 +146,7 @@ Client::Client(Messenger *m, MonClient *mc)
   messenger = m;
 
   // osd interfaces
-  osdmap = PlaceSystem::getSystem().newOSDMap(); // initially blank.. see mount()
+  osdmap = OSDMapPlaceSystem::getSystem().newOSDMap(); // initially blank.. see mount()
   mdsmap = new MDSMap;
   objecter = new Objecter(cct, messenger, monclient, osdmap, client_lock, timer);
   objecter->set_client_incarnation(0);  // client always 0, for now.

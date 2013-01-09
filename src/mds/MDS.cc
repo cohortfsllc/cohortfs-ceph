@@ -107,7 +107,7 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   monc->set_messenger(messenger);
 
   mdsmap = new MDSMap;
-  osdmap = PlaceSystem::getSystem().newOSDMap();;
+  osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();;
 
   objecter = new Objecter(m->cct, messenger, monc, osdmap, mds_lock, timer);
   objecter->unset_honor_osdmap_full();

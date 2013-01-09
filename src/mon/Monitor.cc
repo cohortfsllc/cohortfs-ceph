@@ -2052,7 +2052,7 @@ int Monitor::mkfs(bufferlist& osdmapbl)
   if (osdmapbl.length()) {
     // make sure it's a valid osdmap
     try {
-      OSDMap* om = PlaceSystem::getSystem().newOSDMap();;
+      OSDMap* om = OSDMapPlaceSystem::getSystem().newOSDMap();;
       om->decode(osdmapbl);
     }
     catch (buffer::error& e) {

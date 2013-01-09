@@ -48,7 +48,7 @@ bool Dumper::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
 
 void Dumper::init(int rank) 
 {
-  osdmap = PlaceSystem::getSystem().newOSDMap();;
+  osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();;
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
   unsigned pg_pool = CEPH_METADATA_RULE;

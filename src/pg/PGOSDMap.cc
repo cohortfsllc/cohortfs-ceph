@@ -14,6 +14,7 @@
 
 
 #include "PGOSDMap.h"
+#include "PGPlaceSystem.h"
 #include "common/code_environment.h"
 #include "mon/PGMonitor.h"
 #include "osdc/Objecter.h"
@@ -21,6 +22,9 @@
 
 #define dout_subsys ceph_subsys_osd
 
+
+const PGOSDMapPlaceSystem placeSystem(PGPlaceSystem::systemName,
+				      PGPlaceSystem::systemIdentifier);
 
 
 // PGOSDMap::Incremental

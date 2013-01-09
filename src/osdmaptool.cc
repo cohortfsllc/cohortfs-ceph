@@ -139,7 +139,7 @@ int main(int argc, const char **argv)
       string error, s = f.str();
       bl.read_file(s.c_str(), &error);
       cout << s << " got " << bl.length() << " bytes" << std::endl;
-      OSDMap *o = PlaceSystem::getSystem().newOSDMap();
+      OSDMap *o = OSDMapPlaceSystem::getSystem().newOSDMap();
       o->decode(bl);
       maps.insert(o);
       if (prev)
@@ -149,7 +149,7 @@ int main(int argc, const char **argv)
     exit(0);
   }
 
-  auto_ptr<OSDMap> osdmap_ref(PlaceSystem::getSystem().newOSDMap());
+  auto_ptr<OSDMap> osdmap_ref(OSDMapPlaceSystem::getSystem().newOSDMap());
   bufferlist bl;
 
   cout << me << ": osdmap file '" << fn << "'" << std::endl;

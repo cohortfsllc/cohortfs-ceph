@@ -27,24 +27,24 @@
 #include "mon/OSDMonitor.h"
 
 
-class PlaceSystem {
-  static std::map<std::string,PlaceSystem*> nameMap;
-  static std::map<__u16,PlaceSystem*> identifierMap;
-
+class OSDMapPlaceSystem {
+private:
+  static std::map<std::string,OSDMapPlaceSystem*> nameMap;
+  static std::map<__u16,OSDMapPlaceSystem*> identifierMap;
   const std::string name;
   const __u16 identifier;
 
 protected:
 
-  PlaceSystem(const std::string& name, const __u16 identifier);
+  OSDMapPlaceSystem(const std::string& name, const __u16 identifier);
 
 public:
 
-  static const PlaceSystem& getSystem();
-  static const PlaceSystem& getSystem(const std::string& name);
-  static const PlaceSystem& getSystem(const __u16 identifier);
+  static const OSDMapPlaceSystem& getSystem();
+  static const OSDMapPlaceSystem& getSystem(const std::string& name);
+  static const OSDMapPlaceSystem& getSystem(const __u16 identifier);
 
-  virtual ~PlaceSystem() {}
+  virtual ~OSDMapPlaceSystem();
 
   std::string getSystemName() const { return name; }
   __u16 getSystemIdentifier() const { return identifier; }

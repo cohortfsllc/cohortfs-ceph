@@ -112,7 +112,7 @@ public:
     concise(concise_),
     dispatcher(NULL)
   {
-      osdmap_ref = std::auto_ptr<OSDMap>(PlaceSystem::getSystem().newOSDMap());
+      osdmap_ref = std::auto_ptr<OSDMap>(OSDMapPlaceSystem::getSystem().newOSDMap());
   }
 
   ~CephToolCtx() {

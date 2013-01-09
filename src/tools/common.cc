@@ -97,7 +97,7 @@ static void handle_osd_map(CephToolCtx *ctx, MOSDMap *m)
   ctx->lock.Lock();
   delete osdmap;
   
-  osdmap = PlaceSystem::getSystem().newOSDMap();
+  osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();
   osdmap->decode(m->maps[e]);
   cmd_cond.Signal();
   ctx->lock.Unlock();
