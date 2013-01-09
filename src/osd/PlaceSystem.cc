@@ -42,3 +42,47 @@ PlaceSystem::PlaceSystem(const std::string& name, const __u16 identifier)
   nameMap[name] = this;
   identifierMap[identifier] = this;
 }
+
+
+std::map<std::string,OSDPlaceSystem*> OSDPlaceSystem::nameMap;
+std::map<std::string,OSDMonitorPlaceSystem*> OSDMonitorPlaceSystem::nameMap;
+
+
+OSDPlaceSystem::OSDPlaceSystem(const std::string& name, const __u16 id)
+  : name(name), id(id)
+{
+  nameMap[name] = this;
+}
+
+
+OSDPlaceSystem::~OSDPlaceSystem()
+{
+  nameMap.erase(name);
+}
+
+
+OSDMonitorPlaceSystem::OSDMonitorPlaceSystem(const std::string& name, const __u16 id)
+  : name(name), id(id)
+{
+  nameMap[name] = this;
+}
+
+
+OSDMonitorPlaceSystem::~OSDMonitorPlaceSystem()
+{
+  nameMap.erase(name);
+}
+
+
+const OSDPlaceSystem& OSDPlaceSystem::getSystem() {
+  const string& name = g_conf->osd_placement_system;
+  assert(nameMap.count(name));
+  return *nameMap[name];
+}
+
+
+const OSDMonitorPlaceSystem& OSDMonitorPlaceSystem::getSystem() {
+  const string& name = g_conf->osd_placement_system;
+  assert(nameMap.count(name));
+  return *nameMap[name];
+}

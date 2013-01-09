@@ -18,4 +18,5 @@
 const std::string PGPlaceSystem::systemName = "pg+crush";
 const __u16 PGPlaceSystem::systemIdentifier = 0x07b3; // lower 4 bits of 'p', 'g', '+', & 'c'
 
-const PGPlaceSystem* PGPlaceSystem::singleton = new PGPlaceSystem();
+const PGPlaceSystem placeSystem(PGPlaceSystem::systemName,
+				PGPlaceSystem::systemIdentifier);

@@ -54,9 +54,20 @@ public:
 
   // creates a new MapIncremental; caller must deallocate
   virtual OSDMap::Incremental* newOSDMapIncremental() const = 0;
+};
 
-  // 
-  virtual OSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const = 0;
+
+class OSDPlaceSystem {
+private:
+  static std::map<std::string,OSDPlaceSystem*> nameMap;
+  const std::string name;
+  const __u16 id;
+
+public:
+  static const OSDPlaceSystem& getSystem();
+
+  OSDPlaceSystem(const std::string& name, const __u16 id);
+  virtual ~OSDPlaceSystem();
 
   virtual OSD* newOSD(int id,
 		      Messenger *internal, Messenger *external,
@@ -64,5 +75,22 @@ public:
 		      const std::string &dev,
 		      const std::string &jdev) const = 0;
 };
+
+
+class OSDMonitorPlaceSystem {
+private:
+  static std::map<std::string,OSDMonitorPlaceSystem*> nameMap;
+  const std::string name;
+  const __u16 id;
+
+public:
+  static const OSDMonitorPlaceSystem& getSystem();
+
+  OSDMonitorPlaceSystem(const std::string& name, const __u16 id);
+  virtual ~OSDMonitorPlaceSystem();
+
+  virtual OSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const = 0;
+};
+
 
 #endif // CEPH_PLACESYSTEN_H

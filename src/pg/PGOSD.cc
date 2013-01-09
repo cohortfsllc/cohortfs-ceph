@@ -16,6 +16,7 @@
 #include <fstream>
 
 #include "PGOSD.h"
+#include "PGPlaceSystem.h"
 #include "mon/MonClient.h"
 #include "messages/MOSDPGTemp.h"
 #include "messages/MPGStats.h"
@@ -43,6 +44,10 @@
 
 
 #define dout_subsys ceph_subsys_osd
+
+
+const PGOSDPlaceSystem placeSystem(PGPlaceSystem::systemName,
+				   PGPlaceSystem::systemIdentifier);
 
 
 PGOSDService::PGOSDService(PGOSD *osd) :
@@ -94,7 +99,8 @@ void PGOSDService::send_pg_temp()
 
 // OSD
 
-PGOSD::PGOSD(int id, Messenger *internal_messenger, Messenger *external_messenger,
+PGOSD::PGOSD(int id, Messenger *internal_messenger,
+	     Messenger *external_messenger,
              Messenger *hbclientm, Messenger *hbserverm, MonClient *mc,
              const std::string &dev, const std::string &jdev) :
   OSD(id, internal_messenger, external_messenger, hbclientm, hbserverm,

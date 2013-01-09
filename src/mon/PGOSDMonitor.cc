@@ -20,6 +20,11 @@
 #include "messages/MRemoveSnaps.h"
 #include "messages/MMonCommand.h"
 #include "common/errno.h"
+#include "pg/PGPlaceSystem.h"
+
+
+const PGOSDMonitorPlaceSystem placeSystem(PGPlaceSystem::systemName,
+					  PGPlaceSystem::systemIdentifier);
 
 
 #define dout_subsys ceph_subsys_mon

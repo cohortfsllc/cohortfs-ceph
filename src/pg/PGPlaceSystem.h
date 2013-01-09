@@ -23,14 +23,13 @@
 
 
 class PGPlaceSystem : public PlaceSystem {
-  const static __u16 systemIdentifier;
-  const static std::string systemName;
-  const static PGPlaceSystem* singleton;
-
-  PGPlaceSystem() : PlaceSystem(systemName, systemIdentifier) {}
-
 public:
-  ~PGPlaceSystem() {}
+  static const std::string systemName;
+  static const __u16 systemIdentifier;
+
+  PGPlaceSystem(const std::string& name, const __u16 id) :
+    PlaceSystem(name, id)
+  {}
 
   virtual PGOSDMap* newOSDMap() const {
     return new PGOSDMap();
@@ -39,10 +38,14 @@ public:
   virtual PGOSDMap::Incremental* newOSDMapIncremental() const {
     return new PGOSDMap::Incremental();
   }
+}; // class PGPlaceSystem
 
-  virtual PGOSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const {
-    return new PGOSDMonitor(mon, p);
-  }
+
+class PGOSDPlaceSystem : public OSDPlaceSystem {
+public:
+  PGOSDPlaceSystem(const std::string& name, const __u16 id) :
+    OSDPlaceSystem(name, id)
+  {}
 
   virtual PGOSD* newOSD(int id,
 			Messenger *internal, Messenger *external,
@@ -52,8 +55,19 @@ public:
   {
     return new PGOSD(id, internal, external, hbmin, hbmout, mc, dev, jdev);
   }
+};
 
-}; // class PGPlaceSystem
+
+class PGOSDMonitorPlaceSystem : public OSDMonitorPlaceSystem {
+public:
+  PGOSDMonitorPlaceSystem(const std::string& name, const __u16 id) :
+    OSDMonitorPlaceSystem(name, id)
+  {}
+
+  virtual PGOSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const {
+    return new PGOSDMonitor(mon, p);
+  }
+};
 
 
 #endif // CEPH_PGPLACESYSTEM_H

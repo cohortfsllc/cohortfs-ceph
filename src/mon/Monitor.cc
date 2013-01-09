@@ -123,7 +123,7 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorStore *s, Messenger *m, Mo
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, add_paxos(PAXOS_MDSMAP));
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, add_paxos(PAXOS_MONMAP));
   paxos_service[PAXOS_OSDMAP] =
-    PlaceSystem::getSystem().newOSDMonitor(this, add_paxos(PAXOS_OSDMAP));
+    OSDMonitorPlaceSystem::getSystem().newOSDMonitor(this, add_paxos(PAXOS_OSDMAP));
   paxos_service[PAXOS_PGMAP] = new PGMonitor(this, add_paxos(PAXOS_PGMAP));
   paxos_service[PAXOS_LOG] = new LogMonitor(this, add_paxos(PAXOS_LOG));
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, add_paxos(PAXOS_AUTH));

@@ -415,10 +415,10 @@ int main(int argc, const char **argv)
 
 
   // osd interfaces
-  osd = PlaceSystem::getSystem().newOSD(whoami, cluster_messenger, client_messenger,
-					messenger_hbclient, messenger_hbserver,
-					&mc,
-					g_conf->osd_data, g_conf->osd_journal);
+  osd = OSDPlaceSystem::getSystem().newOSD(whoami, cluster_messenger, client_messenger,
+					   messenger_hbclient, messenger_hbserver,
+					   &mc,
+					   g_conf->osd_data, g_conf->osd_journal);
   int err = osd->pre_init();
   if (err < 0) {
     derr << TEXT_RED << " ** ERROR: osd pre_init failed: " << cpp_strerror(-err)
