@@ -15,80 +15,8 @@
 #include "PlaceSystem.h"
 
 
-std::map<std::string,OSDMapPlaceSystem*> OSDMapPlaceSystem::nameMap;
-std::map<__u16,OSDMapPlaceSystem*> OSDMapPlaceSystem::identifierMap;
+template<class T>
+std::map<std::string,T*> PlaceSystemBase<T>::nameMap;
 
-
-const OSDMapPlaceSystem& OSDMapPlaceSystem::getSystem() {
-  return getSystem(g_conf->osd_placement_system);
-}
-
-
-const OSDMapPlaceSystem& OSDMapPlaceSystem::getSystem(const std::string& name) {
-  assert(nameMap.count(name));
-  return *nameMap[name];
-}
-
-
-const OSDMapPlaceSystem& OSDMapPlaceSystem::getSystem(const __u16 identifier) {
-  assert(identifierMap.count(identifier));
-  return *identifierMap[identifier];
-}
-
-
-OSDMapPlaceSystem::OSDMapPlaceSystem(const std::string& name, const __u16 identifier)
-  : name(name), identifier(identifier)
-{
-  nameMap[name] = this;
-  identifierMap[identifier] = this;
-}
-
-
-OSDMapPlaceSystem::~OSDMapPlaceSystem()
-{
-  nameMap.erase(name);
-}
-
-
-std::map<std::string,OSDPlaceSystem*> OSDPlaceSystem::nameMap;
-std::map<std::string,OSDMonitorPlaceSystem*> OSDMonitorPlaceSystem::nameMap;
-
-
-OSDPlaceSystem::OSDPlaceSystem(const std::string& name, const __u16 id)
-  : name(name), id(id)
-{
-  nameMap[name] = this;
-}
-
-
-OSDPlaceSystem::~OSDPlaceSystem()
-{
-  nameMap.erase(name);
-}
-
-
-OSDMonitorPlaceSystem::OSDMonitorPlaceSystem(const std::string& name, const __u16 id)
-  : name(name), id(id)
-{
-  nameMap[name] = this;
-}
-
-
-OSDMonitorPlaceSystem::~OSDMonitorPlaceSystem()
-{
-  nameMap.erase(name);
-}
-
-
-const OSDPlaceSystem& OSDPlaceSystem::getSystem() {
-  const string& name = g_conf->osd_placement_system;
-  assert(nameMap.count(name));
-  return *nameMap[name];
-}
-
-
-const OSDMonitorPlaceSystem& OSDMonitorPlaceSystem::getSystem() {
-  const string& name = g_conf->osd_placement_system;
-  assert(nameMap.count(name));
-  return *nameMap[name];
-}
+template<class T>
+std::map<__u16,T*> PlaceSystemBase<T>::identifierMap;

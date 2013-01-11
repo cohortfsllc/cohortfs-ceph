@@ -27,47 +27,58 @@
 #include "mon/OSDMonitor.h"
 
 
-class OSDMapPlaceSystem {
+template<class T>
+class PlaceSystemBase {
 private:
-  static std::map<std::string,OSDMapPlaceSystem*> nameMap;
-  static std::map<__u16,OSDMapPlaceSystem*> identifierMap;
+  static std::map<std::string,T*> nameMap;
+  static std::map<__u16,T*> identifierMap;
   const std::string name;
   const __u16 identifier;
 
 protected:
 
-  OSDMapPlaceSystem(const std::string& name, const __u16 identifier);
+  PlaceSystemBase(const std::string& name, const __u16 identifier) :
+    name(name),
+    identifier(identifier)
+  {
+    T* sub_this = dynamic_cast<T*>(this);
+    assert(sub_this);
+    nameMap[name] = sub_this;
+    identifierMap[identifier] = sub_this;
+  }
 
 public:
 
-  static const OSDMapPlaceSystem& getSystem();
-  static const OSDMapPlaceSystem& getSystem(const std::string& name);
-  static const OSDMapPlaceSystem& getSystem(const __u16 identifier);
-
-  virtual ~OSDMapPlaceSystem();
+  virtual ~PlaceSystemBase() {
+    nameMap.erase(name);
+    identifierMap.erase(identifier);
+  }
 
   std::string getSystemName() const { return name; }
   __u16 getSystemIdentifier() const { return identifier; }
 
-  // creates a new Map; caller must deallocate
-  virtual OSDMap* newOSDMap() const = 0;
+  static const T& getSystem() {
+    const string& name = g_conf->osd_placement_system;
+    return getSystem(name);
+  }
 
-  // creates a new MapIncremental; caller must deallocate
-  virtual OSDMap::Incremental* newOSDMapIncremental() const = 0;
+  static const T& getSystem(const std::string& name) {
+    assert(nameMap.count(name));
+    return *nameMap[name];
+  }
+
+  static const T& getSystem(const __u16 identifier) {
+    assert(identifierMap.count(identifier));
+    return *identifierMap[identifier];
+  }
 };
 
 
-class OSDPlaceSystem {
-private:
-  static std::map<std::string,OSDPlaceSystem*> nameMap;
-  const std::string name;
-  const __u16 id;
-
+class OSDPlaceSystem : public PlaceSystemBase<OSDPlaceSystem> {
 public:
-  static const OSDPlaceSystem& getSystem();
-
-  OSDPlaceSystem(const std::string& name, const __u16 id);
-  virtual ~OSDPlaceSystem();
+  OSDPlaceSystem(const std::string& name, const __u16 id) :
+    PlaceSystemBase(name, id)
+  { }
 
   virtual OSD* newOSD(int id,
 		      Messenger *internal, Messenger *external,
@@ -77,17 +88,28 @@ public:
 };
 
 
-class OSDMonitorPlaceSystem {
-private:
-  static std::map<std::string,OSDMonitorPlaceSystem*> nameMap;
-  const std::string name;
-  const __u16 id;
-
+class OSDMapPlaceSystem : public PlaceSystemBase<OSDMapPlaceSystem> {
 public:
-  static const OSDMonitorPlaceSystem& getSystem();
+  
+  OSDMapPlaceSystem(const std::string& name, const __u16 identifier) :
+    PlaceSystemBase(name, identifier)
+  {
+    // emtpy
+  }
 
-  OSDMonitorPlaceSystem(const std::string& name, const __u16 id);
-  virtual ~OSDMonitorPlaceSystem();
+  // creates a new Map; caller must deallocate
+  virtual OSDMap* newOSDMap() const = 0;
+
+  // creates a new MapIncremental; caller must deallocate
+  virtual OSDMap::Incremental* newOSDMapIncremental() const = 0;
+};
+
+
+class OSDMonitorPlaceSystem  : public PlaceSystemBase<OSDMonitorPlaceSystem> {
+public:
+  OSDMonitorPlaceSystem(const std::string& name, const __u16 id) :
+    PlaceSystemBase(name, id)
+  { }
 
   virtual OSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const = 0;
 };
