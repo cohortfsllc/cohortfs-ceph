@@ -36,7 +36,6 @@
 #include "common/config.h"
 #include "include/assert.h"
 
-#warning work to get rid of this include
 #include "pg/pg_types.h"
 
 
