@@ -27,31 +27,46 @@
 #include "mon/OSDMonitor.h"
 
 
+int force_template_invocation();
+
+
 template<class T>
 class PlaceSystemBase {
+  friend int force_template_invocation();
+
 private:
-  static std::map<std::string,T*> nameMap;
-  static std::map<__u16,T*> identifierMap;
+  static std::map<std::string,T*>* nameMap;
+  static std::map<__u16,T*>* identifierMap;
   const std::string name;
   const __u16 identifier;
 
 protected:
 
-  PlaceSystemBase(const std::string& name, const __u16 identifier) :
-    name(name),
-    identifier(identifier)
+  PlaceSystemBase(const char* name, const __u16 identifier)
+    : name(name),
+      identifier(identifier)
   {
-    T* sub_this = dynamic_cast<T*>(this);
-    assert(sub_this);
-    nameMap[name] = sub_this;
-    identifierMap[identifier] = sub_this;
+    if (nameMap == NULL) {
+      nameMap = new std::map<std::string,T*>();
+    }
+
+    if (identifierMap == NULL) {
+      identifierMap = new std::map<__u16,T*>();
+    }
   }
+
+  void registerSelf() {
+    T* sub_this = dynamic_cast<T*>(this);
+  assert(sub_this);
+  (*nameMap)[name] = sub_this;
+  (*identifierMap)[identifier] = sub_this;
+}
 
 public:
 
   virtual ~PlaceSystemBase() {
-    nameMap.erase(name);
-    identifierMap.erase(identifier);
+    nameMap->erase(name);
+    identifierMap->erase(identifier);
   }
 
   std::string getSystemName() const { return name; }
@@ -63,22 +78,24 @@ public:
   }
 
   static const T& getSystem(const std::string& name) {
-    assert(nameMap.count(name));
-    return *nameMap[name];
+    assert(nameMap->count(name));
+    return *(*nameMap)[name];
   }
 
   static const T& getSystem(const __u16 identifier) {
-    assert(identifierMap.count(identifier));
-    return *identifierMap[identifier];
+    assert(identifierMap->count(identifier));
+    return *(*identifierMap)[identifier];
   }
 };
 
 
 class OSDPlaceSystem : public PlaceSystemBase<OSDPlaceSystem> {
 public:
-  OSDPlaceSystem(const std::string& name, const __u16 id) :
+  OSDPlaceSystem(const char* name, const __u16 id) :
     PlaceSystemBase(name, id)
-  { }
+  {
+    registerSelf();
+  }
 
   virtual OSD* newOSD(int id,
 		      Messenger *internal, Messenger *external,
@@ -91,10 +108,10 @@ public:
 class OSDMapPlaceSystem : public PlaceSystemBase<OSDMapPlaceSystem> {
 public:
   
-  OSDMapPlaceSystem(const std::string& name, const __u16 identifier) :
+  OSDMapPlaceSystem(const char* name, const __u16 identifier) :
     PlaceSystemBase(name, identifier)
   {
-    // emtpy
+    registerSelf();
   }
 
   // creates a new Map; caller must deallocate
@@ -107,9 +124,11 @@ public:
 
 class OSDMonitorPlaceSystem  : public PlaceSystemBase<OSDMonitorPlaceSystem> {
 public:
-  OSDMonitorPlaceSystem(const std::string& name, const __u16 id) :
+  OSDMonitorPlaceSystem(const char* name, const __u16 id) :
     PlaceSystemBase(name, id)
-  { }
+  {
+    registerSelf();
+  }
 
   virtual OSDMonitor* newOSDMonitor(Monitor* mon, Paxos* p) const = 0;
 };

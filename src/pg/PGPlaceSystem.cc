@@ -15,5 +15,5 @@
 #include "PGPlaceSystem.h"
 
 
-const std::string PGPlaceSystem::systemName = "pg+crush";
+const char* PGPlaceSystem::systemName = "pg+crush";
 const __u16 PGPlaceSystem::systemIdentifier = 0x07b3; // lower 4 bits of 'p', 'g', '+', & 'c'

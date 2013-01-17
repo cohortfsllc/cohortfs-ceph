@@ -25,7 +25,7 @@
 // used to hold key identifiers
 struct PGPlaceSystem {
 public:
-  static const std::string systemName;
+  static const char* systemName;
   static const __u16 systemIdentifier;
 };
 
@@ -33,7 +33,7 @@ public:
 class PGOSDMapPlaceSystem : public OSDMapPlaceSystem {
 public:
 
-  PGOSDMapPlaceSystem(const std::string& name, const __u16 id) :
+  PGOSDMapPlaceSystem(const char* name, const __u16 id) :
     OSDMapPlaceSystem(name, id)
   {}
 
@@ -49,7 +49,7 @@ public:
 
 class PGOSDPlaceSystem : public OSDPlaceSystem {
 public:
-  PGOSDPlaceSystem(const std::string& name, const __u16 id) :
+  PGOSDPlaceSystem(const char* name, const __u16 id) :
     OSDPlaceSystem(name, id)
   {}
 
@@ -66,7 +66,7 @@ public:
 
 class PGOSDMonitorPlaceSystem : public OSDMonitorPlaceSystem {
 public:
-  PGOSDMonitorPlaceSystem(const std::string& name, const __u16 id) :
+  PGOSDMonitorPlaceSystem(const char* name, const __u16 id) :
     OSDMonitorPlaceSystem(name, id)
   {}
 

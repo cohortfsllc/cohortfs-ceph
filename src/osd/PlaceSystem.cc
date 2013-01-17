@@ -16,7 +16,21 @@
 
 
 template<class T>
-std::map<std::string,T*> PlaceSystemBase<T>::nameMap;
+std::map<std::string,T*>* PlaceSystemBase<T>::nameMap = NULL;
 
 template<class T>
-std::map<__u16,T*> PlaceSystemBase<T>::identifierMap;
+std::map<__u16,T*>* PlaceSystemBase<T>::identifierMap = NULL;
+
+int force_template_invocation() {
+  int count = 0;
+  if (PlaceSystemBase<OSD>::nameMap == NULL) {
+    ++count;
+  }
+  if (PlaceSystemBase<OSDMap>::nameMap == NULL) {
+    ++count;
+  }
+  if (PlaceSystemBase<OSDMonitor>::nameMap == NULL) {
+    ++count;
+  }
+  return count;
+}
