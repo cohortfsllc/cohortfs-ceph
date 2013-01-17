@@ -1116,7 +1116,9 @@ libmon_a_SOURCES = \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
 	mon/Elector.cc \
-	mon/MonitorStore.cc
+	mon/MonitorStore.cc \
+	osd/PlaceSystem.cc \
+	pg/PGPlaceSystem.cc
 libmon_a_CXXFLAGS= ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS}
 noinst_LIBRARIES += libmon.a
 
