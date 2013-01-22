@@ -54,7 +54,7 @@ OSD *osd = NULL;
 
 extern "C" {
 
-  int libosd_main(int argc, const char **argv)
+  int libosd_init(int argc, const char **argv)
   {
     /* XXXX need args, or argv, in order to use global_init (but libosd_main
      * need not provide argc or argv */
@@ -299,6 +299,11 @@ extern "C" {
   {
     return (0);
   } /* libosd_commit */
+
+  int libosd_shutdown(void)
+  {
+    return (0);
+  } /* libosd_shutdown */
 
 } /* extern "C" */
 

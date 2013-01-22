@@ -1418,9 +1418,29 @@ libosd_la_SOURCES = \
 libosd_la_CFLAGS = -fPIC
 libosd_la_CXXFLAGS = ${CRYPTO_CXXFLAGS} ${AM_CXXFLAGS} $(LEVELDB_INCLUDE)
 libosd_la_LIBADD = $(LIBGLOBAL_LDA)
+
+if WITH_SYSTEM_LEVELDB
+libosd_la_LIBADD += -lleveldb -lsnappy
+else
+libosd_la_LIBADD += leveldb/libleveldb.a
+endif
+
+if WITH_TCMALLOC
+libosd_la_CXXFLAGS += ${tcmalloc_safety_flags}
+libosd_la_SOURCES += perfglue/heap_profiler.cc
+libosd_la_LIBADD += -ltcmalloc
+else
+libosd_la_SOURCES += perfglue/disabled_heap_profiler.cc
+endif # WITH_TCMALLOC
+
+if WITH_LIBAIO
+libosd_la_LIBADD += -laio
+endif
+
 if LINUX
 libosd_la_LIBADD += -ldl
 endif
+
 lib_LTLIBRARIES += libosd.la
 
 
