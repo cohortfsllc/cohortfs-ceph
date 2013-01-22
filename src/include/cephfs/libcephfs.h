@@ -1064,6 +1064,11 @@ int ceph_ll_read_block(struct ceph_mount_info *cmount,
 		       struct vinodeno_t vino, uint64_t blockid,
 		       char* bl, uint64_t offset, uint64_t length,
 		       struct ceph_file_layout* layout);
+
+#define CEPH_LL_WRITE_BLOCK_NONE     0x0000
+#define CEPH_LL_WRITE_BLOCK_BARRIER  0x0001
+#define CEPH_LL_WRITE_BLOCK_SYNC4    0x0002
+
 int ceph_ll_write_block(struct ceph_mount_info *cmount,
 			vinodeno_t vino, uint64_t blockid,
 			char* buf, uint64_t offset,

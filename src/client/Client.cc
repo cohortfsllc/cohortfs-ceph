@@ -7456,6 +7456,8 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
     onsafe =
       new C_Block_Sync(this, vino.ino,
 		       barrier_interval(offset, offset + length), &r);
+    /* always already */
+    done = true;
   } else {
     onack = new C_NoopContext;
     onsafe = new C_SafeCond(&flock, &cond, &done, &r);
@@ -7472,7 +7474,7 @@ int Client::ll_write_block(vinodeno_t vino, uint64_t blockid,
 		  onack,
 		  onsafe);
 
-  while (!done)
+  while (! done)
       cond.Wait(client_lock);
 
   if (r < 0) {
