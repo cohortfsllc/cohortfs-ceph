@@ -804,6 +804,7 @@ void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<C
 bool Locker::eval(CInode *in, int mask, bool caps_imported)
 {
   bool need_issue = false;
+  list<Context*> finishers;
   
   dout(10) << "eval " << mask << " " << *in << dendl;
 
@@ -822,19 +823,19 @@ bool Locker::eval(CInode *in, int mask, bool caps_imported)
 
  retry:
   if (mask & CEPH_LOCK_IFILE)
-    eval_any(&in->filelock, &need_issue, caps_imported);
+    eval_any(&in->filelock, &need_issue, &finishers, caps_imported);
   if (mask & CEPH_LOCK_IAUTH)
-    eval_any(&in->authlock, &need_issue, caps_imported);
+    eval_any(&in->authlock, &need_issue, &finishers, caps_imported);
   if (mask & CEPH_LOCK_ILINK)
-    eval_any(&in->linklock, &need_issue,caps_imported);
+    eval_any(&in->linklock, &need_issue, &finishers, caps_imported);
   if (mask & CEPH_LOCK_IXATTR)
-    eval_any(&in->xattrlock, &need_issue, caps_imported);
+    eval_any(&in->xattrlock, &need_issue, &finishers, caps_imported);
   if (mask & CEPH_LOCK_INEST)
-    eval_any(&in->nestlock, &need_issue, caps_imported);
+    eval_any(&in->nestlock, &need_issue, &finishers, caps_imported);
   if (mask & CEPH_LOCK_IFLOCK)
-    eval_any(&in->flocklock, &need_issue, caps_imported);
+    eval_any(&in->flocklock, &need_issue, &finishers, caps_imported);
   if (mask & CEPH_LOCK_IPOLICY)
-    eval_any(&in->policylock, &need_issue, caps_imported);
+    eval_any(&in->policylock, &need_issue, &finishers, caps_imported);
 
   // drop loner?
   if (in->is_auth() && in->is_head() && in->get_wanted_loner() != in->get_loner()) {
@@ -854,6 +855,8 @@ bool Locker::eval(CInode *in, int mask, bool caps_imported)
       }
     }
   }
+
+  finish_contexts(g_ceph_context, finishers);
 
   if (need_issue && in->is_head())
     issue_caps(in);
