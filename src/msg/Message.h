@@ -122,6 +122,8 @@
 #define MSG_MDS_DENTRYLINK         0x20c
 #define MSG_MDS_FINDINO            0x20d
 #define MSG_MDS_FINDINOREPLY       0x20e
+#define MSG_MDS_RESTRIPE           0x210
+#define MSG_MDS_RESTRIPEACK        0x211
 
 #define MSG_MDS_LOCK               0x300
 #define MSG_MDS_INODEFILECAPS      0x301

@@ -1335,6 +1335,7 @@ libmds_a_SOURCES = \
 	mds/Server.cc \
 	mds/Mutation.cc \
 	mds/MDCache.cc \
+	mds/InodeContainer.cc \
 	mds/Locker.cc \
 	mds/Migrator.cc \
 	mds/MDBalancer.cc \
@@ -1656,6 +1657,7 @@ noinst_HEADERS = \
         mds/Capability.h\
 	mds/Dumper.h\
         mds/InoTable.h\
+        mds/InodeContainer.h\
         mds/LocalLock.h\
         mds/Locker.h\
         mds/LogEvent.h\

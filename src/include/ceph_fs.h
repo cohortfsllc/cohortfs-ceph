@@ -241,13 +241,14 @@ struct ceph_mon_subscribe_ack {
 #define CEPH_MDS_STATE_REPLAYONCE   -9 /* up, replaying an active node's journal */
 
 #define CEPH_MDS_STATE_REPLAY       8  /* up, replaying journal. */
-#define CEPH_MDS_STATE_RESOLVE      9  /* up, disambiguating distributed
+#define CEPH_MDS_STATE_RESTRIPE     9  /* up, restriping inode container */
+#define CEPH_MDS_STATE_RESOLVE      10 /* up, disambiguating distributed
 					  operations (import, rename, etc.) */
-#define CEPH_MDS_STATE_RECONNECT    10 /* up, reconnect to clients */
-#define CEPH_MDS_STATE_REJOIN       11 /* up, rejoining distributed cache */
-#define CEPH_MDS_STATE_CLIENTREPLAY 12 /* up, replaying client operations */
-#define CEPH_MDS_STATE_ACTIVE       13 /* up, active */
-#define CEPH_MDS_STATE_STOPPING     14 /* up, but exporting metadata */
+#define CEPH_MDS_STATE_RECONNECT    11 /* up, reconnect to clients */
+#define CEPH_MDS_STATE_REJOIN       12 /* up, rejoining distributed cache */
+#define CEPH_MDS_STATE_CLIENTREPLAY 13 /* up, replaying client operations */
+#define CEPH_MDS_STATE_ACTIVE       14 /* up, active */
+#define CEPH_MDS_STATE_STOPPING     15 /* up, but exporting metadata */
 
 extern const char *ceph_mds_state_name(int s);
 

@@ -122,6 +122,7 @@ const char *ceph_mds_state_name(int s)
 	case CEPH_MDS_STATE_STARTING:   return "up:starting";
 		/* up and in */
 	case CEPH_MDS_STATE_REPLAY:     return "up:replay";
+	case CEPH_MDS_STATE_RESTRIPE:   return "up:restriping";
 	case CEPH_MDS_STATE_RESOLVE:    return "up:resolve";
 	case CEPH_MDS_STATE_RECONNECT:  return "up:reconnect";
 	case CEPH_MDS_STATE_REJOIN:     return "up:rejoin";

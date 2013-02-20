@@ -85,6 +85,7 @@ public:
   static const int STATE_STARTING  =  CEPH_MDS_STATE_STARTING;  // up, starting prior stopped MDS instance.
 
   static const int STATE_REPLAY    =  CEPH_MDS_STATE_REPLAY;  // up, starting prior failed instance. scanning journal.
+  static const int STATE_RESTRIPE  =  CEPH_MDS_STATE_RESTRIPE;  // up, restriping inode container across available nodes
   static const int STATE_RESOLVE   =  CEPH_MDS_STATE_RESOLVE;  // up, disambiguating distributed operations (import, rename, etc.)
   static const int STATE_RECONNECT =  CEPH_MDS_STATE_RECONNECT;  // up, reconnect to clients
   static const int STATE_REJOIN    =  CEPH_MDS_STATE_REJOIN; // up, replayed journal, rejoining distributed cache
@@ -414,6 +415,7 @@ public:
   bool is_creating(int m) { return get_state(m) == STATE_CREATING; }
   bool is_starting(int m) { return get_state(m) == STATE_STARTING; }
   bool is_replay(int m)    { return get_state(m) == STATE_REPLAY; }
+  bool is_restripe(int m)  { return get_state(m) == STATE_RESTRIPE; }
   bool is_resolve(int m)   { return get_state(m) == STATE_RESOLVE; }
   bool is_reconnect(int m) { return get_state(m) == STATE_RECONNECT; }
   bool is_rejoin(int m)    { return get_state(m) == STATE_REJOIN; }
@@ -424,6 +426,7 @@ public:
 
   bool is_followable(int m) {
     return (is_resolve(m) ||
+	    is_restripe(m) ||
 	    is_replay(m) ||
 	    is_rejoin(m) ||
 	    is_clientreplay(m) ||
@@ -441,6 +444,7 @@ public:
   bool is_degraded() {   // degraded = some recovery in process.  fixes active membership and recovery_set.
     return 
       get_num_mds(STATE_REPLAY) + 
+      get_num_mds(STATE_RESTRIPE) + 
       get_num_mds(STATE_RESOLVE) + 
       get_num_mds(STATE_RECONNECT) + 
       get_num_mds(STATE_REJOIN) + 
@@ -449,9 +453,17 @@ public:
   bool is_any_failed() {
     return failed.size();
   }
+  bool is_restriping() {
+    return
+      get_num_mds(STATE_RESTRIPE) > 0 &&
+      get_num_mds(STATE_REPLAY) == 0 &&
+      get_num_mds(STATE_CREATING) == 0 &&
+      failed.empty();
+  }
   bool is_resolving() {
     return
       get_num_mds(STATE_RESOLVE) > 0 &&
+      get_num_mds(STATE_RESTRIPE) == 0 &&
       get_num_mds(STATE_REPLAY) == 0 &&
       failed.empty();
   }
@@ -462,6 +474,7 @@ public:
       get_num_mds(STATE_REPLAY) == 0 &&
       get_num_mds(STATE_RECONNECT) == 0 &&
       get_num_mds(STATE_RESOLVE) == 0 &&
+      get_num_mds(STATE_RESTRIPE) == 0 &&
       failed.empty();
   }
   bool is_stopped() {

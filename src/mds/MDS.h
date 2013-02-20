@@ -236,6 +236,7 @@ class MDS : public Dispatcher {
   bool is_standby()  { return state == MDSMap::STATE_STANDBY; }
   bool is_replay()   { return state == MDSMap::STATE_REPLAY; }
   bool is_standby_replay() { return state == MDSMap::STATE_STANDBY_REPLAY; }
+  bool is_restripe() { return state == MDSMap::STATE_RESTRIPE; }
   bool is_resolve()  { return state == MDSMap::STATE_RESOLVE; }
   bool is_reconnect() { return state == MDSMap::STATE_RECONNECT; }
   bool is_rejoin()   { return state == MDSMap::STATE_REJOIN; }
@@ -371,6 +372,8 @@ class MDS : public Dispatcher {
 
   void reopen_log();
 
+  void restripe_start();
+  void restripe_done();
   void resolve_start();
   void resolve_done();
   void reconnect_start();
