@@ -24,6 +24,7 @@
 #include "CInode.h"
 #include "CDentry.h"
 #include "CDir.h"
+#include "InodeContainer.h"
 #include "include/Context.h"
 #include "events/EMetaBlob.h"
 
@@ -56,6 +57,8 @@ struct MMDSFindIno;
 struct MMDSFindInoReply;
 struct MMDSOpenIno;
 struct MMDSOpenInoReply;
+class MMDSRestripe;
+class MMDSRestripeAck;
 
 class Message;
 class MClientRequest;
@@ -87,7 +90,7 @@ class MDCache {
   hash_map<vinodeno_t,CInode*> inode_map;  // map of inodes by ino
   CInode *root;                            // root inode
   CInode *myin;                            // .ceph/mds%d dir
-  CInode *container;                 // inode container dir
+  InodeContainer container;                // inode container dir
 
   CInode *strays[NUM_STRAY];         // my stray dir
   int stray_index;
@@ -711,16 +714,13 @@ public:
   void open_mydir_inode(Context *c);
   void populate_mydir();
 
+  InodeContainer* get_container() { return &container; }
+
   void _create_system_file(CDir *dir, const char *name, CInode *in, Context *fin);
   void _create_system_file_finish(Mutation *mut, CDentry *dn, version_t dpv, Context *fin);
 
   void open_foreign_mdsdir(inodeno_t ino, Context *c);
   CDentry *get_or_create_stray_dentry(CInode *in);
-
-  // inode container
-  CInode* get_container() { return container; }
-  CInode* create_container();
-  void open_container(Context *c);
 
 
   Context *_get_waiter(MDRequest *mdr, Message *req, Context *fin);
