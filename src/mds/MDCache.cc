@@ -128,13 +128,13 @@ set<int> SimpleLock::empty_gather_set;
 
 
 MDCache::MDCache(MDS *m) :
+  container(this),
   delayed_eval_stray(member_offset(CDentry, item_stray))
 {
   mds = m;
   migrator = new Migrator(mds, this);
   root = NULL;
   myin = NULL;
-  container = NULL;
 
   stray_index = 0;
   for (int i = 0; i < NUM_STRAY; ++i) {
@@ -223,7 +223,7 @@ void MDCache::add_inode(CInode *in)
     else if (in->ino() == MDS_INO_MDSDIR(mds->get_nodeid()))
       myin = in;
     else if (in->ino() == MDS_INO_CONTAINER)
-      container = in;
+      container.in = in;
     else if (in->is_stray()) {
       if (MDS_INO_STRAY_OWNER(in->ino()) == mds->get_nodeid()) {
 	strays[MDS_INO_STRAY_INDEX(in->ino())] = in;
@@ -261,7 +261,7 @@ void MDCache::remove_inode(CInode *o)
   if (o->ino() < MDS_INO_SYSTEM_BASE) {
     if (o == root) root = 0;
     if (o == myin) myin = 0;
-    if (o == container) container = 0;
+    if (o == container.get_inode()) container.in = 0;
     if (o->is_stray()) {
       if (MDS_INO_STRAY_OWNER(o->ino()) == mds->get_nodeid()) {
 	strays[MDS_INO_STRAY_INDEX(o->ino())] = 0;
@@ -369,7 +369,7 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   rootstripe->fnode.rstat.add(ceph->inode.rstat);
 
   // create inodes dir
-  CInode *inodes = create_container();
+  CInode *inodes = container.create();
   inodes->set_stripe_auth(auth);
   CStripe *inodestripe = inodes->get_or_open_stripe(0);
   inodestripe->state_set(CStripe::STATE_OPEN);
@@ -630,11 +630,11 @@ void MDCache::open_root()
     open_root_inode(new C_MDS_RetryOpenRoot(this));
     return;
   }
-  if (!container) {
-    open_container(new C_MDS_RetryOpenRoot(this));
+  if (!container.get_inode()) {
+    container.open(new C_MDS_RetryOpenRoot(this));
     return;
   }
-  pin_stray(container);
+  pin_stray(container.get_inode());
   if (mds->whoami == mds->mdsmap->get_root()) {
     assert(root->is_auth());  
     CStripe *rootstripe = root->get_or_open_stripe(0);
@@ -659,7 +659,7 @@ void MDCache::open_root()
       return;
     }
     // must register with root mds to get notified on fragmentation
-    assert(container->get_replica_nonce() != 0);
+    assert(container.get_inode()->get_replica_nonce() != 0);
   }
 
   if (!myin) {
@@ -769,24 +769,6 @@ CDentry *MDCache::get_or_create_stray_dentry(CInode *in)
 }
 
 
-// inode container
-CInode* MDCache::create_container()
-{
-  return create_system_inode(MDS_INO_CONTAINER, S_IFDIR);
-}
-
-void MDCache::open_container(Context *c)
-{
-  if (mds->whoami == mds->mdsmap->get_root()) {
-    dout(7) << "open_container fetching" << dendl;
-    create_container()->fetch(c);
-  } else {
-    dout(7) << "open_container discovering" << dendl;
-    discover_base_ino(MDS_INO_CONTAINER, c, mds->mdsmap->get_root());
-  }
-}
-
-
 MDSCacheObject *MDCache::get_object(MDSCacheObjectInfo &info) 
 {
   // inode?
@@ -802,8 +784,6 @@ MDSCacheObject *MDCache::get_object(MDSCacheObjectInfo &info)
   else
     return dir;
 }
-
-
 
 
 // ====================================================================
@@ -2504,7 +2484,7 @@ ESubtreeMap *MDCache::create_subtree_map()
 
 void MDCache::resolve_start()
 {
-  dout(10) << "resolve_start" << dendl;
+  dout(10) << "resolve_start " << *root << dendl;
 
   if (mds->mdsmap->get_root() != mds->whoami) {
     // if we don't have the root dir, adjust it to UNKNOWN.  during
@@ -2514,13 +2494,6 @@ void MDCache::resolve_start()
     CStripe *rootstripe = root->get_stripe(0);
     if (rootstripe)
       adjust_subtree_auth(rootstripe, CDIR_AUTH_UNKNOWN);
-
-    // do the same for the inode container
-    if (container) {
-      CStripe *inostripe = container->get_stripe(0);
-      if (inostripe)
-        adjust_subtree_auth(inostripe, CDIR_AUTH_UNKNOWN);
-    }
   }
   resolve_gather = recovery_set;
 }
@@ -3442,10 +3415,10 @@ void MDCache::recalc_auth_bits()
       root->state_set(CInode::STATE_REJOINING);
     }
   }
-  if (container) {
-    container->inode_auth.first = mds->mdsmap->get_root();
-    if (mds->whoami != container->inode_auth.first)
-      container->state_clear(CInode::STATE_AUTH);
+  if (container.get_inode()) {
+    container.get_inode()->inode_auth.first = mds->mdsmap->get_root();
+    if (mds->whoami != container.get_inode()->inode_auth.first)
+      container.get_inode()->state_clear(CInode::STATE_AUTH);
   }
 
   set<CInode*> subtree_inodes;
@@ -7156,8 +7129,8 @@ bool MDCache::shutdown_pass()
       unpin_stray(strays[i]);
 
   // drop the reference to inode container
-  if (container)
-    unpin_stray(container);
+  if (container.get_inode())
+    unpin_stray(container.get_inode());
 
   // trim cache
   trim(0);
@@ -7431,7 +7404,14 @@ void MDCache::dispatch(Message *m)
   case MSG_MDS_OPENINOREPLY:
     handle_open_ino_reply(static_cast<MMDSOpenInoReply *>(m));
     break;
-    
+
+  case MSG_MDS_RESTRIPE:
+    container.handle_restripe(static_cast<MMDSRestripe*>(m));
+    break;
+  case MSG_MDS_RESTRIPEACK:
+    container.handle_restripe_ack(static_cast<MMDSRestripeAck*>(m));
+    break;
+
   default:
     dout(7) << "cache unknown message " << m->get_type() << dendl;
     assert(0);
@@ -12064,7 +12044,7 @@ void MDCache::show_subtrees(int dbl)
     if (diri->ino() == MDS_INO_ROOT)
       assert(diri == root);
     if (diri->ino() == MDS_INO_CONTAINER)
-      assert(diri == container);
+      assert(diri == container.get_inode());
     if (diri->ino() == MDS_INO_MDSDIR(mds->get_nodeid()))
       assert(diri == myin);
     if (diri->is_stray() && (MDS_INO_STRAY_OWNER(diri->ino()) == mds->get_nodeid()))
