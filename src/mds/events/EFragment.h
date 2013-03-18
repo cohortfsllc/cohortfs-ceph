@@ -18,31 +18,21 @@
 #include "../LogEvent.h"
 #include "EMetaBlob.h"
 
-struct dirfrag_rollback {
-  fnode_t fnode;
-  dirfrag_rollback() { }
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& bl);
-};
-WRITE_CLASS_ENCODER(dirfrag_rollback)
-
 class EFragment : public LogEvent {
 public:
   EMetaBlob metablob;
   __u8 op;
-  inodeno_t ino;
-  frag_t basefrag;
+  dirfrag_t dirfrag;
   __s32 bits;         // positive for split (from basefrag), negative for merge (to basefrag)
-  list<frag_t> orig_frags;
-  bufferlist rollback;
+  map<frag_t, version_t> orig_frags;
 
   EFragment() : LogEvent(EVENT_FRAGMENT) { }
-  EFragment(MDLog *mdlog, int o, inodeno_t i, frag_t bf, int b) : 
+  EFragment(MDLog *mdlog, int o, dirfrag_t dirfrag, int b) : 
     LogEvent(EVENT_FRAGMENT), metablob(mdlog), 
-    op(o), ino(i), basefrag(bf), bits(b) { }
+    op(o), dirfrag(dirfrag), bits(b) { }
 
   void print(ostream& out) const {
-    out << "EFragment " << op_name(op) << " " << ino << " " << basefrag << " by " << bits << " " << metablob;
+    out << "EFragment " << op_name(op) << " " << dirfrag << " by " << bits << " " << metablob;
   }
 
   enum {
@@ -62,10 +52,8 @@ public:
     }
   }
 
-  void add_orig_frag(frag_t df, dirfrag_rollback *drb=NULL) {
-    orig_frags.push_back(df);
-    if (drb)
-      ::encode(*drb, rollback);
+  void add_orig_frag(frag_t df, version_t v) {
+    orig_frags[df] = v;
   }
 
   void encode(bufferlist &bl) const;

@@ -20,18 +20,18 @@
 #include "include/types.h"
 
 class MExportDirPrep : public Message {
-  dirfrag_t dirfrag;
+  dirstripe_t dirstripe;
  public:
-  bufferlist basedir;
-  list<dirfrag_t> bounds;
+  bufferlist base;
+  list<dirstripe_t> bounds;
   list<bufferlist> traces;
 private:
   set<__s32> bystanders;
   bool b_did_assim;
 
 public:
-  dirfrag_t get_dirfrag() { return dirfrag; }
-  list<dirfrag_t>& get_bounds() { return bounds; }
+  dirstripe_t get_dirstripe() { return dirstripe; }
+  list<dirstripe_t>& get_bounds() { return bounds; }
   set<__s32> &get_bystanders() { return bystanders; }
 
   bool did_assim() { return b_did_assim; }
@@ -40,9 +40,9 @@ public:
   MExportDirPrep() {
     b_did_assim = false;
   }
-  MExportDirPrep(dirfrag_t df) : 
+  MExportDirPrep(dirstripe_t ds) : 
     Message(MSG_MDS_EXPORTDIRPREP),
-    dirfrag(df),
+    dirstripe(ds),
     b_did_assim(false) { }
 private:
   ~MExportDirPrep() {}
@@ -50,11 +50,11 @@ private:
 public:
   const char *get_type_name() const { return "ExP"; }
   void print(ostream& o) const {
-    o << "export_prep(" << dirfrag << ")";
+    o << "export_prep(" << dirstripe << ")";
   }
 
-  void add_bound(dirfrag_t df) {
-    bounds.push_back( df );
+  void add_bound(dirstripe_t ds) {
+    bounds.push_back(ds);
   }
   void add_trace(bufferlist& bl) {
     traces.push_back(bl);
@@ -65,16 +65,16 @@ public:
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(dirfrag, p);
-    ::decode(basedir, p);
+    ::decode(dirstripe, p);
+    ::decode(base, p);
     ::decode(bounds, p);
     ::decode(traces, p);
     ::decode(bystanders, p);
   }
 
   void encode_payload(uint64_t features) {
-    ::encode(dirfrag, payload);
-    ::encode(basedir, payload);
+    ::encode(dirstripe, payload);
+    ::encode(base, payload);
     ::encode(bounds, payload);
     ::encode(traces, payload);
     ::encode(bystanders, payload);

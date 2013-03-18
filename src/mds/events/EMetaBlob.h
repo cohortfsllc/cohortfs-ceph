@@ -20,6 +20,7 @@
 #include "../CInode.h"
 #include "../CDir.h"
 #include "../CDentry.h"
+#include "../CStripe.h"
 
 #include "include/triple.h"
 #include "include/interval_set.h"
@@ -66,7 +67,7 @@ public:
     snapid_t dnfirst, dnlast;
     version_t dnv;
     inode_t inode;      // if it's not
-    fragtree_t dirfragtree;
+    vector<int> stripe_auth;
     map<string,bufferptr> xattrs;
     string symlink;
     bufferlist snapbl;
@@ -79,13 +80,13 @@ public:
     fullbit(const fullbit& o);
     const fullbit& operator=(const fullbit& o);
 
+    typedef std::tr1::shared_ptr<fullbit> ptr;
+
     fullbit(const string& d, snapid_t df, snapid_t dl, 
-	    version_t v, const inode_t& i, const fragtree_t &dft, 
+	    version_t v, const inode_t& i, const vector<int> &stripe_auth,
 	    const map<string,bufferptr> &xa, const string& sym,
 	    const bufferlist &sbl, __u8 st,
 	    const old_inodes_t *oi = NULL) :
-      //dn(d), dnfirst(df), dnlast(dl), dnv(v), 
-      //inode(i), dirfragtree(dft), xattrs(xa), symlink(sym), snapbl(sbl), dirty(dr) 
       _enc(1024)
     {
       ::encode(d, _enc);
@@ -97,7 +98,7 @@ public:
       if (i.is_symlink())
 	::encode(sym, _enc);
       if (i.is_dir()) {
-	::encode(dft, _enc);
+        ::encode(stripe_auth, _enc);
 	::encode(sbl, _enc);
       }
       ::encode(st, _enc);
@@ -226,21 +227,20 @@ public:
     static const int STATE_NEW =         (1<<3);  // new directory
     static const int STATE_IMPORTING =	 (1<<4);  // importing directory
 
-    //version_t  dirv;
-    fnode_t fnode;
+    version_t dirv;
     __u32 state;
     __u32 nfull, nremote, nnull;
 
   private:
     mutable bufferlist dnbl;
     bool dn_decoded;
-    list<std::tr1::shared_ptr<fullbit> >   dfull;
+    list<fullbit::ptr>   dfull;
     list<remotebit> dremote;
     list<nullbit>   dnull;
 
   public:
-    dirlump() : state(0), nfull(0), nremote(0), nnull(0), dn_decoded(true) { }
-    
+    dirlump() : dirv(0), state(0), nfull(0), nremote(0), nnull(0), dn_decoded(true) { }
+
     bool is_complete() const { return state & STATE_COMPLETE; }
     void mark_complete() { state |= STATE_COMPLETE; }
     bool is_dirty() const { return state & STATE_DIRTY; }
@@ -250,17 +250,17 @@ public:
     bool is_importing() { return state & STATE_IMPORTING; }
     void mark_importing() { state |= STATE_IMPORTING; }
 
-    list<std::tr1::shared_ptr<fullbit> >   &get_dfull()   { return dfull; }
+    list<fullbit::ptr>   &get_dfull()   { return dfull; }
     list<remotebit> &get_dremote() { return dremote; }
     list<nullbit>   &get_dnull()   { return dnull; }
 
     void print(dirfrag_t dirfrag, ostream& out) {
-      out << "dirlump " << dirfrag << " v " << fnode.version
+      out << "dirlump " << dirfrag << " v " << dirv
 	  << " state " << state
 	  << " num " << nfull << "/" << nremote << "/" << nnull
 	  << std::endl;
       _decode_bits();
-      for (list<std::tr1::shared_ptr<fullbit> >::iterator p = dfull.begin(); p != dfull.end(); ++p)
+      for (list<fullbit::ptr>::iterator p = dfull.begin(); p != dfull.end(); ++p)
 	(*p)->print(out);
       for (list<remotebit>::iterator p = dremote.begin(); p != dremote.end(); ++p)
 	p->print(out);
@@ -308,18 +308,58 @@ public:
   };
   WRITE_CLASS_ENCODER(dirlump)
 
+  struct stripelump {
+    static const int STATE_OPEN =   (1<<0);
+    static const int STATE_DIRTY =  (1<<1);
+    static const int STATE_NEW =    (1<<2);
+
+    fragtree_t dirfragtree;
+    fnode_t fnode;
+    __u32 state;
+
+    bool is_open() const { return state & STATE_OPEN; }
+    void mark_open() { state |= STATE_OPEN; }
+    bool is_dirty() const { return state & STATE_DIRTY; }
+    void mark_dirty() { state |= STATE_DIRTY; }
+    bool is_new() const { return state & STATE_NEW; }
+    void mark_new() { state |= STATE_NEW; }
+
+    string state_string() const {
+      string state_string;
+      bool marked_already = false;
+      if (is_open()) {
+	state_string.append("open");
+	marked_already = true;
+      }
+      if (is_dirty()) {
+	state_string.append(marked_already ? "+dirty" : "dirty");
+	marked_already = true;
+      }
+      if (is_new())
+	state_string.append(marked_already ? "+new" : "new");
+      return state_string;
+    }
+
+    void encode(bufferlist& bl) const;
+    void decode(bufferlist::iterator &bl);
+    void dump(Formatter *f) const;
+    static void generate_test_instances(list<stripelump*>& ls);
+  };
+  WRITE_CLASS_ENCODER(stripelump)
+
 private:
   // my lumps.  preserve the order we added them in a list.
   list<dirfrag_t>         lump_order;
   map<dirfrag_t, dirlump> lump_map;
-  list<std::tr1::shared_ptr<fullbit> > roots;
+  map<dirstripe_t, stripelump> stripe_map;
+  list<fullbit::ptr> roots;
 
   list<pair<__u8,version_t> > table_tids;  // tableclient transactions
 
   inodeno_t opened_ino;
 public:
   inodeno_t renamed_dirino;
-  list<frag_t> renamed_dir_frags;
+  list<dirstripe_t> renamed_dir_stripes;
 private:
   
   // ino (pre)allocation.  may involve both inotable AND session state.
@@ -343,6 +383,8 @@ private:
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
   static void generate_test_instances(list<EMetaBlob*>& ls);
+
+
   // soft stateadd
   uint64_t last_subtree_map;
   uint64_t my_offset;
@@ -454,14 +496,12 @@ private:
       sr->encode(snapbl);
 
     lump.nfull++;
-    lump.get_dfull().push_back(std::tr1::shared_ptr<fullbit>(new fullbit(dn->get_name(), 
-									 dn->first, dn->last,
-									 dn->get_projected_version(), 
-									 *pi, in->dirfragtree,
-									 *in->get_projected_xattrs(),
-									 in->symlink, snapbl,
-									 state,
-									 &in->old_inodes)));
+    lump.get_dfull().push_back(fullbit::ptr(
+            new fullbit(dn->get_name(), dn->first, dn->last,
+                        dn->get_projected_version(),
+                        *pi, in->get_stripe_auth(),
+                        *in->get_projected_xattrs(), in->symlink,
+                        snapbl, state, &in->old_inodes)));
   }
 
   // convenience: primary or remote?  figure it out.
@@ -492,13 +532,12 @@ private:
     add_primary_dentry(dn, 0, dirty, dirty_parent, dirty_pool);
   }
 
-  void add_root(bool dirty, CInode *in, inode_t *pi=0, fragtree_t *pdft=0, bufferlist *psnapbl=0,
+  void add_root(bool dirty, CInode *in, inode_t *pi=0, bufferlist *psnapbl=0,
 		    map<string,bufferptr> *px=0) {
     in->last_journaled = my_offset;
     //cout << "journaling " << in->inode.ino << " at " << my_offset << std::endl;
 
     if (!pi) pi = in->get_projected_inode();
-    if (!pdft) pdft = &in->dirfragtree;
     if (!px) px = in->get_projected_xattrs();
 
     bufferlist snapbl;
@@ -507,7 +546,7 @@ private:
     else
       in->encode_snap_blob(snapbl);
 
-    for (list<std::tr1::shared_ptr<fullbit> >::iterator p = roots.begin(); p != roots.end(); ++p) {
+    for (list<fullbit::ptr>::iterator p = roots.begin(); p != roots.end(); ++p) {
       if ((*p)->inode.ino == in->ino()) {
 	roots.erase(p);
 	break;
@@ -515,44 +554,68 @@ private:
     }
 
     string empty;
-    roots.push_back(std::tr1::shared_ptr<fullbit>(new fullbit(empty, in->first, in->last, 0, *pi,
-							      *pdft, *px, in->symlink, snapbl,
-							      dirty ? fullbit::STATE_DIRTY : 0,
-							      &in->old_inodes)));
+    roots.push_back(fullbit::ptr(
+            new fullbit(empty, in->first, in->last, 0, *pi,
+                        in->get_stripe_auth(), *px, in->symlink, snapbl,
+                        dirty ? fullbit::STATE_DIRTY : 0, &in->old_inodes)));
   }
   
   dirlump& add_dir(CDir *dir, bool dirty, bool complete=false) {
-    return add_dir(dir->dirfrag(), dir->get_projected_fnode(), dir->get_projected_version(),
+    add_stripe(dir->get_stripe(), false);
+    return add_dir(dir->dirfrag(), dir->get_projected_version(),
 		   dirty, complete);
   }
   dirlump& add_new_dir(CDir *dir) {
-    return add_dir(dir->dirfrag(), dir->get_projected_fnode(), dir->get_projected_version(),
+    add_stripe(dir->get_stripe(), true);
+    return add_dir(dir->dirfrag(), dir->get_projected_version(),
 		   true, true, true); // dirty AND complete AND new
   }
   dirlump& add_import_dir(CDir *dir) {
+    add_stripe(dir->get_stripe(), false);
     // dirty=false would be okay in some cases
-    return add_dir(dir->dirfrag(), dir->get_projected_fnode(), dir->get_projected_version(),
+    return add_dir(dir->dirfrag(), dir->get_projected_version(),
 		   true, dir->is_complete(), false, true);
   }
-  dirlump& add_dir(dirfrag_t df, fnode_t *pf, version_t pv, bool dirty,
-		   bool complete=false, bool isnew=false, bool importing=false) {
+  dirlump& add_dir(dirfrag_t df, version_t pv, bool dirty,
+                   bool complete=false, bool isnew=false,
+                   bool importing=false) {
     if (lump_map.count(df) == 0)
       lump_order.push_back(df);
 
     dirlump& l = lump_map[df];
-    l.fnode = *pf;
-    l.fnode.version = pv;
+    l.dirv = pv;
     if (complete) l.mark_complete();
     if (dirty) l.mark_dirty();
     if (isnew) l.mark_new();
     if (importing) l.mark_importing();
     return l;
   }
+
+
+  stripelump& add_stripe(CStripe *stripe, bool dirty, bool isnew=false) {
+    return add_stripe(stripe->dirstripe(), stripe->get_fragtree(),
+                      stripe->get_projected_fnode(),
+                      stripe->get_projected_version(),
+                      stripe->is_open(), dirty, isnew);
+  }
+  stripelump& add_stripe(dirstripe_t stripe, const fragtree_t &dft,
+                         const fnode_t *pf, version_t pv,
+                         bool open, bool dirty, bool isnew=false) {
+    stripelump& l = stripe_map[stripe];
+    l.dirfragtree = dft;
+    l.fnode = *pf;
+    l.fnode.version = pv;
+    if (open) l.mark_open();
+    if (dirty) l.mark_dirty();
+    if (isnew) l.mark_new();
+    return l;
+  }
   
+
   static const int TO_AUTH_SUBTREE_ROOT = 0;  // default.
   static const int TO_ROOT = 1;
   
-  void add_dir_context(CDir *dir, int mode = TO_AUTH_SUBTREE_ROOT);
+  void add_stripe_context(CStripe *stripe, int mode = TO_AUTH_SUBTREE_ROOT);
 
   void print(ostream& out) const {
     out << "[metablob";
@@ -573,6 +636,8 @@ private:
   }
 
   void update_segment(LogSegment *ls);
+  void update_stripe(MDS *mds, LogSegment *ls,
+                     CStripe *stripe, stripelump &lump);
   void replay(MDS *mds, LogSegment *ls, MDSlaveUpdate *su=NULL);
 };
 WRITE_CLASS_ENCODER(EMetaBlob)
@@ -580,6 +645,7 @@ WRITE_CLASS_ENCODER(EMetaBlob::fullbit)
 WRITE_CLASS_ENCODER(EMetaBlob::remotebit)
 WRITE_CLASS_ENCODER(EMetaBlob::nullbit)
 WRITE_CLASS_ENCODER(EMetaBlob::dirlump)
+WRITE_CLASS_ENCODER(EMetaBlob::stripelump)
 
 inline ostream& operator<<(ostream& out, const EMetaBlob& t) {
   t.print(out);

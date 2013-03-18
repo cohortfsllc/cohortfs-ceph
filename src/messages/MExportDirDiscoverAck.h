@@ -19,18 +19,18 @@
 #include "include/types.h"
 
 class MExportDirDiscoverAck : public Message {
-  dirfrag_t dirfrag;
+  dirstripe_t dirstripe;
   bool success;
 
  public:
-  inodeno_t get_ino() { return dirfrag.ino; }
-  dirfrag_t get_dirfrag() { return dirfrag; }
+  inodeno_t get_ino() { return dirstripe.ino; }
+  dirstripe_t get_dirstripe() { return dirstripe; }
   bool is_success() { return success; }
 
   MExportDirDiscoverAck() : Message(MSG_MDS_EXPORTDIRDISCOVERACK) {}
-  MExportDirDiscoverAck(dirfrag_t df, bool s=true) : 
+  MExportDirDiscoverAck(dirstripe_t ds, bool s=true) : 
     Message(MSG_MDS_EXPORTDIRDISCOVERACK),
-    dirfrag(df),
+    dirstripe(ds),
     success(s) { }
 private:
   ~MExportDirDiscoverAck() {}
@@ -38,7 +38,7 @@ private:
 public:
   const char *get_type_name() const { return "ExDisA"; }
   void print(ostream& o) const {
-    o << "export_discover_ack(" << dirfrag;
+    o << "export_discover_ack(" << dirstripe;
     if (success) 
       o << " success)";
     else
@@ -47,11 +47,11 @@ public:
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(dirfrag, p);
+    ::decode(dirstripe, p);
     ::decode(success, p);
   }
   void encode_payload(uint64_t features) {
-    ::encode(dirfrag, payload);
+    ::encode(dirstripe, payload);
     ::encode(success, payload);
   }
 };

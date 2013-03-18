@@ -27,23 +27,26 @@ public:
   */
   struct realm {
     map<vinodeno_t, __s32> inodes;
+    map<dirstripe_t, __s32> stripes;
     map<dirfrag_t, __s32> dirs;
     map<dirfrag_t, map<pair<string,snapid_t>,__s32> > dentries;
 
     void encode(bufferlist &bl) const {
       ::encode(inodes, bl);
+      ::encode(stripes, bl);
       ::encode(dirs, bl);
       ::encode(dentries, bl);
     }
     void decode(bufferlist::iterator &bl) {
       ::decode(inodes, bl);
+      ::decode(stripes, bl);
       ::decode(dirs, bl);
       ::decode(dentries, bl);
     }
   };
   WRITE_CLASS_ENCODER(realm)
 
-  map<dirfrag_t, realm> realms;
+  map<dirstripe_t, realm> realms;
 
   int get_from() { return from; }
 
@@ -57,18 +60,21 @@ private:
 public:
   virtual const char *get_type_name() const { return "cache_expire";}
   
-  void add_inode(dirfrag_t r, vinodeno_t vino, int nonce) {
+  void add_inode(dirstripe_t r, vinodeno_t vino, int nonce) {
     realms[r].inodes[vino] = nonce;
   }
-  void add_dir(dirfrag_t r, dirfrag_t df, int nonce) {
+  void add_stripe(dirstripe_t r, dirstripe_t ds, int nonce) {
+    realms[r].stripes[ds] = nonce;
+  }
+  void add_dir(dirstripe_t r, dirfrag_t df, int nonce) {
     realms[r].dirs[df] = nonce;
   }
-  void add_dentry(dirfrag_t r, dirfrag_t df, const string& dn, snapid_t last, int nonce) {
-    realms[r].dentries[df][pair<string,snapid_t>(dn,last)] = nonce;
+  void add_dentry(dirstripe_t r, dirfrag_t df, const string& dn, snapid_t last, int nonce) {
+    realms[r].dentries[df][make_pair(dn,last)] = nonce;
   }
 
-  void add_realm(dirfrag_t df, realm& r) {
-    realms[df] = r;
+  void add_realm(dirstripe_t ds, realm& r) {
+    realms[ds] = r;
   }
 
   void decode_payload() {
