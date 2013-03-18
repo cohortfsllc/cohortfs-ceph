@@ -637,8 +637,10 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
 			   issued);
   }
 
-  // move me if/when version reflects fragtree changes.
-  in->dirfragtree = st->dirfragtree;
+  // copy stripe auth array
+  in->stripe_auth = st->stripe_auth;
+  // resize the fragtree array
+  in->stripe_fragtrees.resize(st->stripe_auth.size());
 
   if (in->snapid == CEPH_NOSNAP)
     add_update_cap(in, mds, st->cap.cap_id, st->cap.caps, st->cap.seq, st->cap.mseq, inodeno_t(st->cap.realm), st->cap.flags);
@@ -740,30 +742,9 @@ void Client::update_dentry_lease(Dentry *dn, LeaseStat *dlease, utime_t from, in
 void Client::update_dir_dist(Inode *in, DirStat *dst)
 {
   // auth
-  ldout(cct, 20) << "got dirfrag map for " << in->ino << " frag " << dst->frag << " to mds " << dst->auth << dendl;
-  if (dst->auth >= 0) {
-    in->fragmap[dst->frag] = dst->auth;
-  } else {
-    in->fragmap.erase(dst->frag);
-  }
-  assert(in->dirfragtree.is_leaf(dst->frag));
-
-  // replicated
-  in->dir_replicated = !dst->dist.empty();  // FIXME that's just one frag!
-  
-  // dist
-  /*
-  if (!st->dirfrag_dist.empty()) {   // FIXME
-    set<int> dist = st->dirfrag_dist.begin()->second;
-    if (dist.empty() && !in->dir_contacts.empty())
-      ldout(cct, 9) << "lost dist spec for " << in->ino 
-              << " " << dist << dendl;
-    if (!dist.empty() && in->dir_contacts.empty()) 
-      ldout(cct, 9) << "got dist spec for " << in->ino 
-              << " " << dist << dendl;
-    in->dir_contacts = dist;
-  }
-  */
+  ldout(cct, 20) << "got dirfragtree for " << in->ino << " stripe " << dst->stripeid << ": " << dst->dirfragtree << dendl;
+  assert(dst->stripeid < in->stripe_fragtrees.size());
+  in->stripe_fragtrees[dst->stripeid] = dst->dirfragtree;
 }
 
 /*
@@ -820,9 +801,12 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
 
       // remove any skipped names
       while (pd != dir->dentry_map.end() && pd->first < dname) {
-	if (pd->first < dname &&
-	    diri->dirfragtree[ceph_str_hash_linux(pd->first.c_str(),
-						  pd->first.length())] == fg) {  // do not remove items in earlier frags
+        __u32 dnhash = ceph_str_hash_linux(pd->first.c_str(),
+                                           pd->first.length());
+        stripeid_t s = dnhash % diri->stripe_auth.size();
+        fragtree_t &dft = diri->stripe_fragtrees[s];
+        // do not remove items in earlier frags
+	if (pd->first < dname && dft[dnhash] == fg) {
 	  ldout(cct, 15) << "insert_trace  unlink '" << pd->first << "'" << dendl;
 	  Dentry *dn = pd->second;
 	  pd++;
@@ -871,8 +855,11 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
     // remove trailing names
     if (end) {
       while (pd != dir->dentry_map.end()) {
-	if (diri->dirfragtree[ceph_str_hash_linux(pd->first.c_str(),
-						  pd->first.length())] == fg) {
+        __u32 dnhash = ceph_str_hash_linux(pd->first.c_str(),
+                                           pd->first.length());
+        stripeid_t s = dnhash % diri->stripe_auth.size();
+        fragtree_t &dft = diri->stripe_fragtrees[s];
+	if (dft[dnhash] == fg) {
 	  ldout(cct, 15) << "insert_trace  unlink '" << pd->first << "'" << dendl;
 	  Dentry *dn = pd->second;
 	  pd++;
@@ -1064,13 +1051,10 @@ int Client::choose_target_mds(MetaRequest *req)
   ldout(cct, 20) << "choose_target_mds " << *in << " is_hash=" << is_hash
            << " hash=" << hash << dendl;
 
-  if (is_hash && S_ISDIR(in->mode) && !in->dirfragtree.empty()) {
-    frag_t fg = in->dirfragtree[hash];
-    if (in->fragmap.count(fg)) {
-      mds = in->fragmap[fg];
-      ldout(cct, 10) << "choose_target_mds from dirfragtree hash" << dendl;
-      goto out;
-    }
+  if (is_hash && S_ISDIR(in->mode)) {
+    mds = in->stripe_auth[hash % in->stripe_auth.size()];
+    ldout(cct, 10) << "choose_target_mds from stripe hash" << dendl;
+    goto out;
   }
 
   if (req->auth_is_best())
@@ -4523,7 +4507,7 @@ int Client::_opendir(Inode *in, dir_result_t **dirpp, int uid, int gid)
   if (!in->is_dir())
     return -ENOTDIR;
   *dirpp = new dir_result_t(in);
-  (*dirpp)->set_frag(in->dirfragtree[0]);
+  (*dirpp)->set_frag(in->stripe_fragtrees[0][0]); // XXX: use first stripe until dir_result_t can deal with multiple
   if (in->dir)
     (*dirpp)->release_count = in->dir->release_count;
   (*dirpp)->start_shared_gen = in->shared_gen;
@@ -4640,7 +4624,9 @@ void Client::_readdir_rechoose_frag(dir_result_t *dirp)
 {
   assert(dirp->inode);
   frag_t cur = dirp->frag();
-  frag_t f = dirp->inode->dirfragtree[cur.value()];
+  // XXX: use first stripe until dir_result_t can deal with multiple
+  fragtree_t &dft = dirp->inode->stripe_fragtrees[0];
+  frag_t f = dft[cur.value()];
   if (f != cur) {
     ldout(cct, 10) << "_readdir_rechoose_frag frag " << cur << " maps to " << f << dendl;
     dirp->set_frag(f);
@@ -6176,7 +6162,6 @@ Inode *Client::open_snapdir(Inode *diri)
     in->ctime = diri->ctime;
     in->size = diri->size;
 
-    in->dirfragtree.clear();
     inode_map[vino] = in;
     in->snapdir_parent = diri;
     diri->get();

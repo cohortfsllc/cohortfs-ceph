@@ -594,7 +594,7 @@ WRITE_CLASS_ENCODER(old_inode_t)
 
 
 /*
- * like an inode, but for a dir frag 
+ * like an inode, but for a dir stripe 
  */
 struct fnode_t {
   version_t version;
@@ -890,21 +890,60 @@ WRITE_CLASS_ENCODER(old_cap_reconnect_t)
 
 
 // ================================================================
-// dir frag
+// dir stripe
 
-struct dirfrag_t {
+typedef uint32_t stripeid_t;
+
+struct dirstripe_t {
   inodeno_t ino;
-  frag_t    frag;
+  stripeid_t stripeid;
 
-  dirfrag_t() : ino(0) { }
-  dirfrag_t(inodeno_t i, frag_t f) : ino(i), frag(f) { }
+  dirstripe_t() : ino(0), stripeid(0) {}
+  dirstripe_t(inodeno_t ino, stripeid_t stripeid)
+      : ino(ino), stripeid(stripeid) {}
 
   void encode(bufferlist& bl) const {
     ::encode(ino, bl);
-    ::encode(frag, bl);
+    ::encode(stripeid, bl);
   }
   void decode(bufferlist::iterator& bl) {
     ::decode(ino, bl);
+    ::decode(stripeid, bl);
+  }
+};
+WRITE_CLASS_ENCODER(dirstripe_t)
+
+inline ostream& operator<<(ostream& out, const dirstripe_t ds) {
+  return out << ds.ino << ":" << ds.stripeid;
+}
+inline bool operator<(dirstripe_t l, dirstripe_t r) {
+  if (l.ino < r.ino) return true;
+  if (l.ino == r.ino && l.stripeid < r.stripeid) return true;
+  return false;
+}
+inline bool operator==(dirstripe_t l, dirstripe_t r) {
+  return l.ino == r.ino && l.stripeid == r.stripeid;
+}
+
+// ================================================================
+// dir frag
+
+struct dirfrag_t {
+  dirstripe_t stripe;
+  frag_t    frag;
+
+  dirfrag_t() {}
+  dirfrag_t(dirstripe_t stripe, frag_t frag)
+      : stripe(stripe), frag(frag) {}
+  dirfrag_t(inodeno_t ino, stripeid_t stripeid, frag_t frag)
+      : stripe(ino, stripeid), frag(frag) {}
+
+  void encode(bufferlist& bl) const {
+    ::encode(stripe, bl);
+    ::encode(frag, bl);
+  }
+  void decode(bufferlist::iterator& bl) {
+    ::decode(stripe, bl);
     ::decode(frag, bl);
   }
 };
@@ -912,17 +951,17 @@ WRITE_CLASS_ENCODER(dirfrag_t)
 
 
 inline ostream& operator<<(ostream& out, const dirfrag_t df) {
-  out << df.ino;
+  out << df.stripe;
   if (!df.frag.is_root()) out << "." << df.frag;
   return out;
 }
 inline bool operator<(dirfrag_t l, dirfrag_t r) {
-  if (l.ino < r.ino) return true;
-  if (l.ino == r.ino && l.frag < r.frag) return true;
+  if (l.stripe < r.stripe) return true;
+  if (l.stripe == r.stripe && l.frag < r.frag) return true;
   return false;
 }
 inline bool operator==(dirfrag_t l, dirfrag_t r) {
-  return l.ino == r.ino && l.frag == r.frag;
+  return l.stripe == r.stripe && l.frag == r.frag;
 }
 
 namespace __gnu_cxx {
@@ -930,7 +969,7 @@ namespace __gnu_cxx {
     size_t operator()(const dirfrag_t &df) const { 
       static rjhash<uint64_t> H;
       static rjhash<uint32_t> I;
-      return H(df.ino) ^ I(df.frag);
+      return H(df.stripe.ino) ^ I(df.frag);
     }
   };
 }

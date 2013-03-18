@@ -477,7 +477,8 @@ struct ceph_mds_reply_inode {
 	__le32 nlink;
 	__le64 files, subdirs, rbytes, rfiles, rsubdirs;  /* dir stats */
 	struct ceph_timespec rctime;
-	struct ceph_frag_tree_head fragtree;  /* (must be at end of struct) */
+  __le32 stripes; /* sizeof(stripe_auth) */
+  __le32 stripe_auth[]; /* (must be at end of struct) */
 } __attribute__ ((packed));
 /* followed by frag array, symlink string, dir layout, xattr blob */
 

@@ -20,20 +20,20 @@
 using namespace std;
 
 class MExportDirNotify : public Message {
-  dirfrag_t base;
+  dirstripe_t base;
   bool ack;
   pair<__s32,__s32> old_auth, new_auth;
-  list<dirfrag_t> bounds;  // bounds; these dirs are _not_ included (tho the dirfragdes are)
+  list<dirstripe_t> bounds;  // bounds; these dirs are _not_ included (tho the dirstripedes are)
 
  public:
-  dirfrag_t get_dirfrag() { return base; }
+  dirstripe_t get_dirstripe() { return base; }
   pair<__s32,__s32> get_old_auth() { return old_auth; }
   pair<__s32,__s32> get_new_auth() { return new_auth; }
   bool wants_ack() { return ack; }
-  list<dirfrag_t>& get_bounds() { return bounds; }
+  list<dirstripe_t>& get_bounds() { return bounds; }
 
   MExportDirNotify() {}
-  MExportDirNotify(dirfrag_t i, bool a, pair<__s32,__s32> oa, pair<__s32,__s32> na) :
+  MExportDirNotify(dirstripe_t i, bool a, pair<__s32,__s32> oa, pair<__s32,__s32> na) :
     Message(MSG_MDS_EXPORTDIRNOTIFY),
     base(i), ack(a), old_auth(oa), new_auth(na) { }
 private:
@@ -50,13 +50,16 @@ public:
       o << " no ack)";
   }
   
-  void copy_bounds(list<dirfrag_t>& ex) {
-    this->bounds = ex;
+  void copy_bounds(list<dirstripe_t>& ex) {
+    bounds = ex;
   }
-  void copy_bounds(set<dirfrag_t>& ex) {
-    for (set<dirfrag_t>::iterator i = ex.begin();
+  void copy_bounds(set<dirstripe_t>& ex) {
+    copy(ex.begin(), ex.end(), back_inserter(bounds));
+#if 0
+    for (set<dirstripe_t>::iterator i = ex.begin();
 	 i != ex.end(); ++i)
       bounds.push_back(*i);
+#endif
   }
 
   void encode_payload(uint64_t features) {

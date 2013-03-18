@@ -22,16 +22,15 @@ class EFragment : public LogEvent {
 public:
   EMetaBlob metablob;
   __u8 op;
-  inodeno_t ino;
-  frag_t basefrag;
+  dirfrag_t dirfrag;
   __s32 bits;         // positive for split (from basefrag), negative for merge (to basefrag)
 
   EFragment() : LogEvent(EVENT_FRAGMENT) { }
-  EFragment(MDLog *mdlog, int o, inodeno_t i, frag_t bf, int b) : 
-    LogEvent(EVENT_FRAGMENT), metablob(mdlog), 
-    op(o), ino(i), basefrag(bf), bits(b) { }
+  EFragment(MDLog *mdlog, int o, dirfrag_t dirfrag, int b) : 
+    LogEvent(EVENT_FRAGMENT), metablob(mdlog),
+    op(o), dirfrag(dirfrag), bits(b) { }
   void print(ostream& out) {
-    out << "EFragment " << op_name(op) << " " << ino << " " << basefrag << " by " << bits << " " << metablob;
+    out << "EFragment " << op_name(op) << " " << dirfrag << " by " << bits << " " << metablob;
   }
 
   enum {
@@ -54,8 +53,7 @@ public:
     ::encode(struct_v, bl);
     ::encode(stamp, bl);
     ::encode(op, bl);
-    ::encode(ino, bl);
-    ::encode(basefrag, bl);
+    ::encode(dirfrag, bl);
     ::encode(bits, bl);
     ::encode(metablob, bl);
   } 
@@ -68,8 +66,7 @@ public:
       ::decode(op, bl);
     else
       op = OP_ONESHOT;
-    ::decode(ino, bl);
-    ::decode(basefrag, bl);
+    ::decode(dirfrag, bl);
     ::decode(bits, bl);
     ::decode(metablob, bl);
   }

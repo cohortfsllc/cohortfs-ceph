@@ -18,29 +18,29 @@
 #include "MExportDir.h"
 
 class MExportDirAck : public Message {
-  dirfrag_t dirfrag;
+  dirstripe_t dirstripe;
 
  public:
-  dirfrag_t get_dirfrag() { return dirfrag; }
+  dirstripe_t get_dirstripe() { return dirstripe; }
   
   MExportDirAck() : Message(MSG_MDS_EXPORTDIRACK) {}
-  MExportDirAck(dirfrag_t i) :
-    Message(MSG_MDS_EXPORTDIRACK), dirfrag(i) { }
+  MExportDirAck(dirstripe_t i) :
+    Message(MSG_MDS_EXPORTDIRACK), dirstripe(i) { }
 private:
   ~MExportDirAck() {}
 
 public:
   const char *get_type_name() const { return "ExAck"; }
     void print(ostream& o) const {
-    o << "export_ack(" << dirfrag << ")";
+    o << "export_ack(" << dirstripe << ")";
   }
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(dirfrag, p);
+    ::decode(dirstripe, p);
   }
   void encode_payload(uint64_t features) {
-    ::encode(dirfrag, payload);
+    ::encode(dirstripe, payload);
   }
 
 };

@@ -28,6 +28,7 @@ class Capability;
 class CInode;
 class CDir;
 class CDentry;
+class CStripe;
 class Session;
 class ScatterLock;
 class MClientRequest;
@@ -45,7 +46,7 @@ struct Mutation {
   // -- my pins and locks --
   // cache pins (so things don't expire)
   set< MDSCacheObject* > pins;
-  set<CInode*> stickydirs;
+  set<CInode*> stickystripes;
 
   // auth pins
   set< MDSCacheObject* > remote_auth_pins;
@@ -72,7 +73,7 @@ struct Mutation {
 
   // for applying projected inode changes
   list<CInode*> projected_inodes;
-  list<CDir*> projected_fnodes;
+  list<CStripe*> projected_fnodes;
   list<ScatterLock*> updated_locks;
 
   list<CInode*> dirty_cow_inodes;
@@ -113,7 +114,7 @@ struct Mutation {
 
   // pin items in cache
   void pin(MDSCacheObject *o);
-  void set_stickydirs(CInode *in);
+  void set_stickystripes(CInode *in);
   void drop_pins();
 
   void start_locking(SimpleLock *lock, int target=-1);
@@ -126,7 +127,7 @@ struct Mutation {
   void drop_local_auth_pins();
   void add_projected_inode(CInode *in);
   void pop_and_dirty_projected_inodes();
-  void add_projected_fnode(CDir *dir);
+  void add_projected_fnode(CStripe *stripe);
   void pop_and_dirty_projected_fnodes();
   void add_updated_lock(ScatterLock *lock);
   void add_cow_inode(CInode *in);
@@ -299,7 +300,7 @@ struct MDSlaveUpdate {
   bufferlist rollback;
   elist<MDSlaveUpdate*>::item item;
   Context *waiter;
-  set<CDir*> olddirs;
+  set<CStripe*> oldstripes;
   set<CInode*> unlinked;
   MDSlaveUpdate(int oo, bufferlist &rbl, elist<MDSlaveUpdate*> &list) :
     origop(oo),

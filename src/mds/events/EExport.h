@@ -26,16 +26,15 @@ class EExport : public LogEvent {
 public:
   EMetaBlob metablob; // exported dir
 protected:
-  dirfrag_t      base;
-  set<dirfrag_t> bounds;
+  dirstripe_t      base;
+  set<dirstripe_t> bounds;
   
 public:
   EExport() : LogEvent(EVENT_EXPORT) { }
-  EExport(MDLog *mdlog, CDir *dir) : 
-    LogEvent(EVENT_EXPORT), metablob(mdlog),
-    base(dir->dirfrag()) { }
+  EExport(MDLog *mdlog, dirstripe_t stripe)
+      : LogEvent(EVENT_EXPORT), metablob(mdlog), base(stripe) { }
   
-  set<dirfrag_t> &get_bounds() { return bounds; }
+  set<dirstripe_t> &get_bounds() { return bounds; }
   
   void print(ostream& out) {
     out << "EExport " << base << " " << metablob;

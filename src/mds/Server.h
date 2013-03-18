@@ -132,7 +132,7 @@ public:
 				    set<SimpleLock*>& xlocks, bool okexist, bool mustexist, bool alwaysxlock,
 				    ceph_file_layout **layout=NULL);
 
-  CDir* try_open_auth_dirfrag(CInode *diri, frag_t fg, MDRequest *mdr);
+  CStripe* try_open_auth_stripe(CInode *diri, int stripeid, MDRequest *mdr);
 
 
   // requests on existing inodes.
@@ -228,7 +228,7 @@ public:
   void _rename_prepare_witness(MDRequest *mdr, int who, set<int> &witnesse,
 			       CDentry *srcdn, CDentry *destdn, CDentry *straydn);
   version_t _rename_prepare_import(MDRequest *mdr, CDentry *srcdn, bufferlist *client_map_bl);
-  bool _need_force_journal(CInode *diri, bool empty);
+  bool _need_force_journal(CInode *diri);
   void _rename_prepare(MDRequest *mdr,
 		       EMetaBlob *metablob, bufferlist *client_map_bl,
 		       CDentry *srcdn, CDentry *destdn, CDentry *straydn);

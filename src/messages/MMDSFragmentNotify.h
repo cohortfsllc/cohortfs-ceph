@@ -20,41 +20,36 @@
 using namespace std;
 
 class MMDSFragmentNotify : public Message {
-  inodeno_t ino;
-  frag_t basefrag;
+  dirfrag_t base;
   int8_t bits;
 
  public:
-  inodeno_t get_ino() { return ino; }
-  frag_t get_basefrag() { return basefrag; }
+  dirstripe_t get_dirstripe() { return base.stripe; }
+  frag_t get_frag() { return base.frag; }
   int get_bits() { return bits; }
 
   bufferlist basebl;
 
   MMDSFragmentNotify() : Message(MSG_MDS_FRAGMENTNOTIFY) {}
-  MMDSFragmentNotify(inodeno_t i, frag_t bf, int b) :
-	Message(MSG_MDS_FRAGMENTNOTIFY),
-    ino(i), basefrag(bf), bits(b) { }
+  MMDSFragmentNotify(dirfrag_t df, int b)
+      : Message(MSG_MDS_FRAGMENTNOTIFY), base(df), bits(b) {}
 private:
   ~MMDSFragmentNotify() {}
 
 public:  
   const char *get_type_name() const { return "fragment_notify"; }
   void print(ostream& o) const {
-    o << "fragment_notify(" << ino << "." << basefrag
-      << " " << (int)bits << ")";
+    o << "fragment_notify(" << base << " " << (int)bits << ")";
   }
 
   void encode_payload(uint64_t features) {
-    ::encode(ino, payload);
-    ::encode(basefrag, payload);
+    ::encode(base, payload);
     ::encode(bits, payload);
     ::encode(basebl, payload);
   }
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(ino, p);
-    ::decode(basefrag, p);
+    ::decode(base, p);
     ::decode(bits, p);
     ::decode(basebl, p);
   }

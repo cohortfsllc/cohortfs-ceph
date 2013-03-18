@@ -20,13 +20,13 @@
 
 class MExportDirDiscover : public Message {
   int32_t from;
-  dirfrag_t dirfrag;
+  dirstripe_t dirstripe;
   filepath path;
 
  public:
   int get_source_mds() { return from; }
-  inodeno_t get_ino() { return dirfrag.ino; }
-  dirfrag_t get_dirfrag() { return dirfrag; }
+  inodeno_t get_ino() { return dirstripe.ino; }
+  dirstripe_t get_dirstripe() { return dirstripe; }
   filepath& get_path() { return path; }
 
   bool started;
@@ -34,10 +34,10 @@ class MExportDirDiscover : public Message {
   MExportDirDiscover() :     
     Message(MSG_MDS_EXPORTDIRDISCOVER),
     started(false) { }
-  MExportDirDiscover(int f, filepath& p, dirfrag_t df) : 
+  MExportDirDiscover(int f, filepath& p, dirstripe_t ds) : 
     Message(MSG_MDS_EXPORTDIRDISCOVER),
     from(f), 
-    dirfrag(df),
+    dirstripe(ds),
     path(p),
     started(false)
   { }
@@ -47,19 +47,19 @@ private:
 public:
   const char *get_type_name() const { return "ExDis"; }
   void print(ostream& o) const {
-    o << "export_discover(" << dirfrag << " " << path << ")";
+    o << "export_discover(" << dirstripe << " " << path << ")";
   }
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(from, p);
-    ::decode(dirfrag, p);
+    ::decode(dirstripe, p);
     ::decode(path, p);
   }
 
   virtual void encode_payload(uint64_t features) {
     ::encode(from, payload);
-    ::encode(dirfrag, payload);
+    ::encode(dirstripe, payload);
     ::encode(path, payload);
   }
 };

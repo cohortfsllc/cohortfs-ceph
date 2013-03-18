@@ -19,30 +19,30 @@
 #include "include/types.h"
 
 class MExportDirCancel : public Message {
-  dirfrag_t dirfrag;
+  dirstripe_t dirstripe;
 
  public:
-  dirfrag_t get_dirfrag() { return dirfrag; }
+  dirstripe_t get_dirstripe() { return dirstripe; }
 
   MExportDirCancel() : Message(MSG_MDS_EXPORTDIRCANCEL) {}
-  MExportDirCancel(dirfrag_t df) : 
+  MExportDirCancel(dirstripe_t ds) : 
     Message(MSG_MDS_EXPORTDIRCANCEL),
-	dirfrag(df) { }
+	dirstripe(ds) { }
 private:
   ~MExportDirCancel() {}
 
 public:
   const char *get_type_name() const { return "ExCancel"; }
   void print(ostream& o) const {
-    o << "export_cancel(" << dirfrag << ")";
+    o << "export_cancel(" << dirstripe << ")";
   }
 
   void encode_payload(uint64_t features) {
-    ::encode(dirfrag, payload);
+    ::encode(dirstripe, payload);
   }
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(dirfrag, p);
+    ::decode(dirstripe, p);
   }
 };
 

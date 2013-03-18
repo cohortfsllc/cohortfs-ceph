@@ -33,6 +33,7 @@ using namespace std;
 
 class CInode;
 class CDir;
+class CStripe;
 class MDRequest;
 
 class Message;
@@ -154,7 +155,6 @@ protected:
 #endif
   int nested_anchors;
 
-  friend class Migrator;
   friend class Locker;
   friend class MDCache;
   friend class CInode;
@@ -206,6 +206,7 @@ public:
 
 
   CDir *get_dir() const { return dir; }
+  CStripe *get_stripe() const;
   const string& get_name() const { return name; }
 
   __u32 get_hash() const { return hash; }

@@ -66,16 +66,13 @@ class MMDSCacheRejoin : public Message {
 
   struct dirfrag_strong {
     int32_t nonce;
-    int8_t  dir_rep;
     dirfrag_strong() {}
-    dirfrag_strong(int n, int dr) : nonce(n), dir_rep(dr) {}
+    dirfrag_strong(int n) : nonce(n) {}
     void encode(bufferlist &bl) const {
       ::encode(nonce, bl);
-      ::encode(dir_rep, bl);
     }
     void decode(bufferlist::iterator &bl) {
       ::decode(nonce, bl);
-      ::decode(dir_rep, bl);
     }
   };
   WRITE_CLASS_ENCODER(dirfrag_strong)
@@ -148,12 +145,14 @@ class MMDSCacheRejoin : public Message {
   WRITE_CLASS_ENCODER(lock_bls)
 
   // weak
-  map<inodeno_t, map<string_snap_t, dn_weak> > weak;
+  map<dirstripe_t, map<string_snap_t, dn_weak> > weak;
+  set<dirstripe_t> weak_stripes;
   set<dirfrag_t> weak_dirfrags;
   set<vinodeno_t> weak_inodes;
   map<inodeno_t, lock_bls> inode_scatterlocks;
 
   // strong
+  map<dirstripe_t, int> strong_stripes;
   map<dirfrag_t, dirfrag_strong> strong_dirfrags;
   map<dirfrag_t, map<string_snap_t, dn_strong> > strong_dentries;
   map<vinodeno_t, inode_strong> strong_inodes;
@@ -250,21 +249,29 @@ public:
   void copy_cap_exports(bufferlist &bl) {
     cap_export_bl = bl;
   }
-  
-  // dirfrags
-  void add_strong_dirfrag(dirfrag_t df, int n, int dr) {
-    strong_dirfrags[df] = dirfrag_strong(n, dr);
+
+  // stripes
+  void add_weak_stripe(dirstripe_t ds) {
+    weak_stripes.insert(ds);
   }
-   
-  // dentries
+  void add_strong_stripe(dirstripe_t ds, int n) {
+    strong_stripes[ds] = n;
+  }
+
+  // dirfrags
+  void add_strong_dirfrag(dirfrag_t df, int n) {
+    strong_dirfrags[df] = dirfrag_strong(n);
+  }
   void add_weak_dirfrag(dirfrag_t df) {
     weak_dirfrags.insert(df);
   }
-  void add_weak_dentry(inodeno_t dirino, const string& dname, snapid_t last, dn_weak& dnw) {
-    weak[dirino][string_snap_t(dname, last)] = dnw;
+
+  // dentries
+  void add_weak_dentry(dirstripe_t ds, const string& dname, snapid_t last, dn_weak& dnw) {
+    weak[ds][string_snap_t(dname, last)] = dnw;
   }
-  void add_weak_primary_dentry(inodeno_t dirino, const string& dname, snapid_t first, snapid_t last, inodeno_t ino) {
-    weak[dirino][string_snap_t(dname, last)] = dn_weak(first, ino);
+  void add_weak_primary_dentry(dirstripe_t ds, const string& dname, snapid_t first, snapid_t last, inodeno_t ino) {
+    weak[ds][string_snap_t(dname, last)] = dn_weak(first, ino);
   }
   void add_strong_dentry(dirfrag_t df, const string& dname, snapid_t first, snapid_t last, inodeno_t pi, inodeno_t ri, unsigned char rdt, int n, int ls) {
     strong_dentries[df][string_snap_t(dname, last)] = dn_strong(first, pi, ri, rdt, n, ls);
@@ -290,8 +297,10 @@ public:
     ::encode(xlocked_inodes, payload);
     ::encode(wrlocked_inodes, payload);
     ::encode(cap_export_bl, payload);
+    ::encode(strong_stripes, payload);
     ::encode(strong_dirfrags, payload);
     ::encode(weak, payload);
+    ::encode(weak_stripes, payload);
     ::encode(weak_dirfrags, payload);
     ::encode(weak_inodes, payload);
     ::encode(strong_dentries, payload);
@@ -315,8 +324,10 @@ public:
       ::decode(cap_exports, q);
       ::decode(cap_export_paths, q);
     }
+    ::decode(strong_stripes, p);
     ::decode(strong_dirfrags, p);
     ::decode(weak, p);
+    ::decode(weak_stripes, p);
     ::decode(weak_dirfrags, p);
     ::decode(weak_inodes, p);
     ::decode(strong_dentries, p);

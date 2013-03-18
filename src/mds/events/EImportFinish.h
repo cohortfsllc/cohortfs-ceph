@@ -22,13 +22,12 @@
 
 class EImportFinish : public LogEvent {
  protected:
-  dirfrag_t base; // imported dir
+  dirstripe_t base; // imported dir
   bool success;
 
  public:
-  EImportFinish(CDir *dir, bool s) : LogEvent(EVENT_IMPORTFINISH), 
-				     base(dir->dirfrag()),
-				     success(s) { }
+  EImportFinish(dirstripe_t stripe, bool s)
+      : LogEvent(EVENT_IMPORTFINISH), base(stripe), success(s) { }
   EImportFinish() : LogEvent(EVENT_IMPORTFINISH) { }
   
   void print(ostream& out) {

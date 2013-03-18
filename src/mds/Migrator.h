@@ -28,7 +28,7 @@ using std::set;
 
 
 class MDS;
-class CDir;
+class CStripe;
 class CInode;
 class CDentry;
 
@@ -79,17 +79,17 @@ public:
 
 protected:
   // export fun
-  map<CDir*,int>               export_state;
-  map<CDir*,int>               export_peer;
-  map<CDir*,set<SimpleLock*> > export_locks;
+  map<CStripe*,int>               export_state;
+  map<CStripe*,int>               export_peer;
+  map<CStripe*,set<SimpleLock*> > export_locks;
 
-  //map<CDir*,list<bufferlist> > export_data;   // only during EXPORTING state
-  map<CDir*,set<int> >         export_warning_ack_waiting;
-  map<CDir*,set<int> >         export_notify_ack_waiting;
+  //map<CStripe*,list<bufferlist> > export_data;   // only during EXPORTING state
+  map<CStripe*,set<int> >         export_warning_ack_waiting;
+  map<CStripe*,set<int> >         export_notify_ack_waiting;
 
-  map<CDir*,list<Context*> >   export_finish_waiters;
+  map<CStripe*,list<Context*> >   export_finish_waiters;
   
-  list< pair<dirfrag_t,int> >  export_queue;
+  list< pair<dirstripe_t,int> >  export_queue;
 
   // -- imports --
 public:
@@ -114,12 +114,15 @@ public:
   }
 
 protected:
-  map<dirfrag_t,int>              import_state;  // FIXME make these dirfrags
-  map<dirfrag_t,int>              import_peer;
-  map<CDir*,set<int> >            import_bystanders;
-  map<CDir*,list<dirfrag_t> >     import_bound_ls;
-  map<CDir*,list<ScatterLock*> >  import_updated_scatterlocks;
-  map<CDir*, map<CInode*, map<client_t,Capability::Export> > > import_caps;
+  map<dirstripe_t,int>              import_state;  // FIXME make these dirfrags
+  map<dirstripe_t,int>              import_peer;
+  map<CStripe*,set<int> >            import_bystanders;
+  map<CStripe*,list<dirstripe_t> >     import_bound_ls;
+  map<CStripe*,list<ScatterLock*> >  import_updated_scatterlocks;
+  typedef map<client_t, Capability::Export> client_cap_export_map;
+  typedef map<CInode*, client_cap_export_map> inode_cap_export_map;
+  typedef map<CStripe*, inode_cap_export_map> stripe_cap_export_map;
+  stripe_cap_export_map import_caps;
 
 
 public:
@@ -132,19 +135,19 @@ public:
   void show_exporting();
   
   // -- status --
-  int is_exporting(CDir *dir) {
+  int is_exporting(CStripe *dir) {
     if (export_state.count(dir)) return export_state[dir];
     return 0;
   }
   bool is_exporting() { return !export_state.empty(); }
-  int is_importing(dirfrag_t df) {
-    if (import_state.count(df)) return import_state[df];
+  int is_importing(dirstripe_t ds) {
+    if (import_state.count(ds)) return import_state[ds];
     return 0;
   }
   bool is_importing() { return !import_state.empty(); }
 
-  bool is_ambiguous_import(dirfrag_t df) {
-    map<dirfrag_t,int>::iterator p = import_state.find(df);
+  bool is_ambiguous_import(dirstripe_t ds) {
+    map<dirstripe_t,int>::iterator p = import_state.find(ds);
     if (p == import_state.end())
       return false;
     if (p->second >= IMPORT_LOGGINGSTART &&
@@ -153,16 +156,16 @@ public:
     return false;
   }
 
-  int get_import_state(dirfrag_t df) {
+  int get_import_state(dirstripe_t df) {
     assert(import_state.count(df));
     return import_state[df];
   }
-  int get_import_peer(dirfrag_t df) {
+  int get_import_peer(dirstripe_t df) {
     assert(import_peer.count(df));
     return import_peer[df];
   }
 
-  int get_export_state(CDir *dir) {
+  int get_export_state(CStripe *dir) {
     assert(export_state.count(dir));
     return export_state[dir];
   }
@@ -170,13 +173,13 @@ public:
   // and are not waiting for @who to be
   // be warned of ambiguous auth.
   // only returns meaningful results during EXPORT_WARNING state.
-  bool export_has_warned(CDir *dir, int who) {
+  bool export_has_warned(CStripe *dir, int who) {
     assert(is_exporting(dir));
     assert(export_state[dir] == EXPORT_WARNING); 
     return (export_warning_ack_waiting[dir].count(who) == 0);
   }
 
-  bool export_has_notified(CDir *dir, int who) {
+  bool export_has_notified(CStripe *dir, int who) {
     assert(is_exporting(dir));
     assert(export_state[dir] == EXPORT_NOTIFYING);
     return (export_notify_ack_waiting[dir].count(who) == 0);
@@ -189,16 +192,16 @@ public:
   // -- import/export --
   // exporter
  public:
-  void export_dir(CDir *dir, int dest);
-  void export_empty_import(CDir *dir);
+  void export_dir(CStripe *dir, int dest);
+  void export_empty_import(CStripe *dir);
 
-  void export_dir_nicely(CDir *dir, int dest);
+  void export_dir_nicely(CStripe *dir, int dest);
   void maybe_do_queued_export();
   void clear_export_queue() {
     export_queue.clear();
   }
   
-  void get_export_lock_set(CDir *dir, set<SimpleLock*>& locks);
+  void get_export_lock_set(CStripe *dir, set<SimpleLock*>& locks);
 
   void encode_export_inode(CInode *in, bufferlist& bl, 
 			   map<client_t,entity_inst_t>& exported_client_map);
@@ -207,31 +210,35 @@ public:
   void finish_export_inode(CInode *in, utime_t now, list<Context*>& finished);
   void finish_export_inode_caps(CInode *in);
 
-  int encode_export_dir(bufferlist& exportbl,
-			CDir *dir,
+  int encode_export_dir(bufferlist& exportbl, CDir *dir,
 			map<client_t,entity_inst_t>& exported_client_map,
 			utime_t now);
   void finish_export_dir(CDir *dir, list<Context*>& finished, utime_t now);
 
-  void add_export_finish_waiter(CDir *dir, Context *c) {
+  int encode_export_stripe(bufferlist& bl, CStripe *stripe,
+			map<client_t,entity_inst_t>& exported_client_map,
+			utime_t now);
+  void finish_export_stripe(CStripe *stripe, list<Context*>& finished, utime_t now);
+
+  void add_export_finish_waiter(CStripe *dir, Context *c) {
     export_finish_waiters[dir].push_back(c);
   }
-  void clear_export_proxy_pins(CDir *dir);
+  void clear_export_proxy_pins(CStripe *dir);
 
   void export_caps(CInode *in);
 
  protected:
   void handle_export_discover_ack(MExportDirDiscoverAck *m);
-  void export_frozen(CDir *dir);
+  void export_frozen(CStripe *dir);
   void handle_export_prep_ack(MExportDirPrepAck *m);
-  void export_go(CDir *dir);
-  void export_go_synced(CDir *dir);
-  void export_reverse(CDir *dir);
+  void export_go(CStripe *dir);
+  void export_go_synced(CStripe *dir);
+  void export_reverse(CStripe *dir);
   void handle_export_ack(MExportDirAck *m);
-  void export_logged_finish(CDir *dir);
+  void export_logged_finish(CStripe *dir);
   void handle_export_notify_ack(MExportDirNotifyAck *m);
-  void export_unlock(CDir *dir);
-  void export_finish(CDir *dir);
+  void export_unlock(CStripe *dir);
+  void export_finish(CStripe *dir);
 
   void handle_export_caps_ack(MExportCapsAck *m);
 
@@ -247,44 +254,45 @@ public:
   void handle_export_dir(MExportDir *m);
 
 public:
-  void decode_import_inode(CDentry *dn, bufferlist::iterator& blp, int oldauth, 
-			   LogSegment *ls, uint64_t log_offset,
-			   map<CInode*, map<client_t,Capability::Export> >& cap_imports,
+  void decode_import_inode(CDentry *dn, bufferlist::iterator& blp,
+                           int oldauth, LogSegment *ls, uint64_t log_offset,
+                           inode_cap_export_map& cap_imports,
 			   list<ScatterLock*>& updated_scatterlocks);
   void decode_import_inode_caps(CInode *in,
 				bufferlist::iterator &blp,
-				map<CInode*, map<client_t,Capability::Export> >& cap_imports);
-  void finish_import_inode_caps(CInode *in, int from, map<client_t,Capability::Export> &cap_map);
-  int decode_import_dir(bufferlist::iterator& blp,
-			int oldauth,
-			CDir *import_root,
-			EImportStart *le, 
-			LogSegment *ls,
-			map<CInode*, map<client_t,Capability::Export> >& cap_imports,
+                                inode_cap_export_map& cap_imports);
+  void finish_import_inode_caps(CInode *in, int from,
+                                client_cap_export_map& cap_map);
+  int decode_import_dir(bufferlist::iterator& blp, int oldauth,
+			CStripe *import_root, EImportStart *le,
+			LogSegment *ls, inode_cap_export_map& cap_imports,
 			list<ScatterLock*>& updated_scatterlocks, utime_t now);
+  int decode_import_stripe(bufferlist::iterator& blp, int oldauth,
+                           CStripe *import_root, EImportStart *le,
+                           LogSegment *ls, inode_cap_export_map& cap_imports,
+                           list<ScatterLock*>& updated_scatterlocks, utime_t now);
 
 public:
-  void import_reverse(CDir *dir);
+  void import_reverse(CStripe *dir);
 protected:
-  void import_reverse_discovering(dirfrag_t df);
-  void import_reverse_discovered(dirfrag_t df, CInode *diri);
-  void import_reverse_prepping(CDir *dir);
-  void import_remove_pins(CDir *dir, set<CDir*>& bounds);
-  void import_reverse_unfreeze(CDir *dir);
-  void import_reverse_final(CDir *dir);
-  void import_notify_abort(CDir *dir, set<CDir*>& bounds);
-  void import_logged_start(dirfrag_t df, CDir *dir, int from,
+  void import_reverse_discovering(dirstripe_t df);
+  void import_reverse_discovered(dirstripe_t df, CInode *diri);
+  void import_reverse_prepping(CStripe *dir);
+  void import_remove_pins(CStripe *dir, set<CStripe*>& bounds);
+  void import_reverse_unfreeze(CStripe *dir);
+  void import_reverse_final(CStripe *dir);
+  void import_notify_abort(CStripe *dir, set<CStripe*>& bounds);
+  void import_logged_start(CStripe *dir, int from,
 			   map<client_t,entity_inst_t> &imported_client_map,
 			   map<client_t,uint64_t>& sseqmap);
   void handle_export_finish(MExportDirFinish *m);
 public:
-  void import_finish(CDir *dir);
+  void import_finish(CStripe *dir);
 protected:
 
   void handle_export_caps(MExportCaps *m);
-  void logged_import_caps(CInode *in, 
-			  int from,
-			  map<CInode*, map<client_t,Capability::Export> >& cap_imports,
+  void logged_import_caps(CInode *in, int from,
+                          inode_cap_export_map& cap_imports,
 			  map<client_t,entity_inst_t>& client_map,
 			  map<client_t,uint64_t>& sseqmap);
 

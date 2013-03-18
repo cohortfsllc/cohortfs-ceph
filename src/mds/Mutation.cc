@@ -30,11 +30,11 @@ void Mutation::pin(MDSCacheObject *o)
   }      
 }
 
-void Mutation::set_stickydirs(CInode *in)
+void Mutation::set_stickystripes(CInode *in)
 {
-  if (stickydirs.count(in) == 0) {
-    in->get_stickydirs();
-    stickydirs.insert(in);
+  if (stickystripes.count(in) == 0) {
+    in->get_stickystripes();
+    stickystripes.insert(in);
   }
 }
 
@@ -109,17 +109,17 @@ void Mutation::pop_and_dirty_projected_inodes()
   }
 }
 
-void Mutation::add_projected_fnode(CDir *dir)
+void Mutation::add_projected_fnode(CStripe *stripe)
 {
-  projected_fnodes.push_back(dir);
+  projected_fnodes.push_back(stripe);
 }
 
 void Mutation::pop_and_dirty_projected_fnodes()
 {
   while (!projected_fnodes.empty()) {
-    CDir *dir = projected_fnodes.front();
+    CStripe *stripe = projected_fnodes.front();
     projected_fnodes.pop_front();
-    dir->pop_and_dirty_projected_fnode(ls);
+    stripe->pop_and_dirty_projected_fnode(ls);
   }
 }
 

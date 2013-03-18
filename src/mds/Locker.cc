@@ -1239,7 +1239,7 @@ bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
   dout(10) << "wrlock_start " << *lock << " on " << *lock->get_parent() << dendl;
 
   bool want_scatter = lock->get_parent()->is_auth() &&
-    ((CInode*)lock->get_parent())->has_subtree_root_dirfrag();
+    ((CInode*)lock->get_parent())->has_subtree_root_stripe();
     
   CInode *in = (CInode *)lock->get_parent();
   client_t client = mut->get_client();
@@ -2080,7 +2080,7 @@ bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
     CDentry *parent = in->get_projected_parent_dn();
     metablob->add_primary_dentry(parent, true, in);
   } else {
-    metablob->add_dir_context(in->get_projected_parent_dn()->get_dir());
+    metablob->add_stripe_context(in->get_projected_parent_stripe());
     mdcache->journal_dirty_inode(mut, metablob, in);
   }
   mds->mdlog->submit_entry(le, new C_Locker_FileUpdate_finish(this, in, mut, true));
@@ -2442,20 +2442,23 @@ void Locker::process_request_cap_release(MDRequest *mdr, client_t client, const 
     return;
 
   if (dname.length()) {
-    frag_t fg = in->pick_dirfrag(dname);
-    CDir *dir = in->get_dirfrag(fg);
-    if (dir) {
-      CDentry *dn = dir->lookup(dname);
-      if (dn) {
-	ClientLease *l = dn->get_client_lease(client);
-	if (l) {
-	  dout(10) << " removing lease on " << *dn << dendl;
-	  dn->remove_client_lease(l, this);
-	}
-      } else {
-	mds->clog.warn() << "client." << client << " released lease on dn "
-	    << dir->dirfrag() << "/" << dname << " which dne\n";
-     }
+    __u32 dnhash = in->hash_dentry_name(dname);
+    CStripe *stripe = in->get_stripe(in->pick_stripe(dnhash));
+    if (stripe) {
+      CDir *dir = stripe->get_dirfrag(stripe->pick_dirfrag(dnhash));
+      if (dir) {
+        CDentry *dn = dir->lookup(dname);
+        if (dn) {
+          ClientLease *l = dn->get_client_lease(client);
+          if (l) {
+            dout(10) << " removing lease on " << *dn << dendl;
+            dn->remove_client_lease(l, this);
+          }
+        } else {
+          mds->clog.warn() << "client." << client << " released lease on dn "
+              << dir->dirfrag() << "/" << dname << " which dne\n";
+        }
+      }
     }
   }
 
@@ -2925,8 +2928,18 @@ void Locker::handle_client_lease(MClientLease *m)
   }
   CDentry *dn = 0;
 
-  frag_t fg = in->pick_dirfrag(m->dname);
-  CDir *dir = in->get_dirfrag(fg);
+  __u32 dnhash = in->hash_dentry_name(m->dname);
+  stripeid_t stripeid = in->pick_stripe(dnhash);
+  CStripe *stripe = in->get_stripe(stripeid);
+  if (!stripe) {
+    dout(7) << "handle_client_lease don't have stripe " << stripeid
+        << " for " << in << dendl;
+    m->put();
+    return;
+  }
+
+  frag_t fg = stripe->pick_dirfrag(dnhash);
+  CDir *dir = stripe->get_dirfrag(fg);
   if (dir) 
     dn = dir->lookup(m->dname);
   if (!dn) {
@@ -3056,18 +3069,21 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
   case CEPH_LOCK_DN:
     {
       // be careful; info.dirfrag may have incorrect frag; recalculate based on dname.
-      CInode *diri = mdcache->get_inode(info.dirfrag.ino);
-      frag_t fg;
-      CDir *dir = 0;
-      CDentry *dn = 0;
-      if (diri) {
-	fg = diri->pick_dirfrag(info.dname);
-	dir = diri->get_dirfrag(fg);
-	if (dir) 
-	  dn = dir->lookup(info.dname, info.snapid);
+      // XXX: need get_inode() and pick_stripe() here?
+      CStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
+      if (!stripe) {
+	dout(7) << "get_lock doesn't have stripe " << info.dirfrag.stripe << dendl;
+        return 0;
       }
+      frag_t fg = stripe->pick_dirfrag(info.dname);
+      CDir *dir = stripe->get_dirfrag(fg);
+      if (!dir) {
+	dout(7) << "get_lock doesn't have dir " << fg << dendl;
+        return 0;
+      }
+      CDentry *dn = dir->lookup(info.dname, info.snapid);
       if (!dn) {
-	dout(7) << "get_lock don't have dn " << info.dirfrag.ino << " " << info.dname << dendl;
+	dout(7) << "get_lock don't have dn " << info.dirfrag.stripe << " " << info.dname << dendl;
 	return 0;
       }
       return &dn->lock;
@@ -3730,7 +3746,7 @@ void Locker::scatter_eval(ScatterLock *lock, bool *need_issue)
   }
 
   CInode *in = (CInode*)lock->get_parent();
-  if (!in->has_subtree_root_dirfrag() || in->is_base()) {
+  if (!in->has_subtree_root_stripe() || in->is_base()) {
     // i _should_ be sync.
     if (!lock->is_wrlocked() &&
 	lock->get_state() != LOCK_SYNC) {
@@ -3816,14 +3832,6 @@ void Locker::scatter_nudge(ScatterLock *lock, Context *c, bool forcelockchange)
 	dout(10) << "scatter_nudge auth, scatter/unscattering " << *lock << " on " << *p << dendl;
 	switch (lock->get_type()) {
 	case CEPH_LOCK_IFILE:
-	  if (p->is_replicated() && lock->get_state() != LOCK_MIX)
-	    scatter_mix((ScatterLock*)lock);
-	  else if (lock->get_state() != LOCK_LOCK)
-	    simple_lock((ScatterLock*)lock);
-	  else
-	    simple_sync((ScatterLock*)lock);
-	  break;
-	  
 	case CEPH_LOCK_IDFT:
 	case CEPH_LOCK_INEST:
 	  if (p->is_replicated() && lock->get_state() != LOCK_MIX)
@@ -4094,7 +4102,7 @@ void Locker::file_eval(ScatterLock *lock, bool *need_issue)
 	   !lock->is_rdlocked() &&
 	   //!lock->is_waiter_for(SimpleLock::WAIT_WR) &&
 	   ((wanted & (CEPH_CAP_GWR|CEPH_CAP_GBUFFER)) ||
-	    (in->inode.is_dir() && !in->has_subtree_root_dirfrag())) &&
+	    (in->inode.is_dir() && !in->has_subtree_root_stripe())) &&
 	   in->get_target_loner() >= 0) {
     dout(7) << "file_eval stable, bump to loner " << *lock
 	    << " on " << *lock->get_parent() << dendl;
@@ -4118,7 +4126,7 @@ void Locker::file_eval(ScatterLock *lock, bool *need_issue)
 	   !lock->is_waiter_for(SimpleLock::WAIT_WR) &&
 	   !(wanted & (CEPH_CAP_GWR|CEPH_CAP_GBUFFER)) &&
 	   !((lock->get_state() == LOCK_MIX) &&
-	     in->is_dir() && in->has_subtree_root_dirfrag())  // if we are a delegation point, stay where we are
+	     in->is_dir() && in->has_subtree_root_stripe())  // if we are a delegation point, stay where we are
 	   //((wanted & CEPH_CAP_RD) || 
 	   //in->is_replicated() || 
 	   //lock->get_num_client_lease() || 

@@ -131,15 +131,14 @@ public:
   struct discover_info_t {
     tid_t tid;
     int mds;
-    inodeno_t ino;
-    frag_t frag;
+    dirfrag_t base;
     snapid_t snap;
     filepath want_path;
     inodeno_t want_ino;
-    bool want_base_dir;
+    bool want_base_stripe;
     bool want_xlocked;
 
-    discover_info_t() : tid(0), mds(-1), snap(CEPH_NOSNAP), want_base_dir(false), want_xlocked(false) {}
+    discover_info_t() : tid(0), mds(-1), snap(CEPH_NOSNAP), want_base_stripe(false), want_xlocked(false) {}
   };
 
   map<tid_t, discover_info_t> discovers;
@@ -158,7 +157,8 @@ public:
   map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
 
   void discover_base_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
-  void discover_dir_frag(CInode *base, frag_t approx_fg, Context *onfinish,
+  void discover_dir_stripe(CInode *base, stripeid_t stripeid, Context *onfinish, int from=-1);
+  void discover_dir_frag(CStripe *stripe, frag_t approx_fg, Context *onfinish,
 			 int from=-1);
   void discover_path(CInode *base, snapid_t snap, filepath want_path, Context *onfinish,
 		     bool want_xlocked=false, int from=-1);
@@ -177,8 +177,9 @@ public:
 
   // -- subtrees --
 protected:
-  map<CDir*,set<CDir*> > subtrees;   // nested bounds on subtrees.
-  map<CInode*,list<pair<CDir*,CDir*> > > projected_subtree_renames;  // renamed ino -> target dir
+  typedef map<CStripe*, set<CStripe*> > subtree_map;
+  subtree_map subtrees;   // nested bounds on subtrees.
+  map<CInode*,list<pair<CStripe*,CStripe*> > > projected_subtree_renames;  // renamed ino -> target dir
   
   // adjust subtree auth specification
   //  dir->dir_auth
@@ -186,45 +187,46 @@ protected:
   //  join/split subtrees as appropriate
 public:
   bool is_subtrees() { return !subtrees.empty(); }
-  void list_subtrees(list<CDir*>& ls);
-  void adjust_subtree_auth(CDir *root, pair<int,int> auth, bool do_eval=true);
-  void adjust_subtree_auth(CDir *root, int a, int b=CDIR_AUTH_UNKNOWN, bool do_eval=true) {
+  void list_subtrees(list<CStripe*>& ls);
+  void adjust_subtree_auth(CStripe *root, pair<int,int> auth, bool do_eval=true);
+  void adjust_subtree_auth(CStripe *root, int a, int b=CDIR_AUTH_UNKNOWN, bool do_eval=true) {
     adjust_subtree_auth(root, pair<int,int>(a,b), do_eval); 
   }
-  void adjust_bounded_subtree_auth(CDir *dir, set<CDir*>& bounds, pair<int,int> auth);
-  void adjust_bounded_subtree_auth(CDir *dir, set<CDir*>& bounds, int a) {
+  void adjust_bounded_subtree_auth(CStripe *dir, const set<CStripe*>& bounds, pair<int,int> auth);
+  void adjust_bounded_subtree_auth(CStripe *dir, const set<CStripe*>& bounds, int a) {
     adjust_bounded_subtree_auth(dir, bounds, pair<int,int>(a, CDIR_AUTH_UNKNOWN));
   }
-  void adjust_bounded_subtree_auth(CDir *dir, vector<dirfrag_t>& bounds, pair<int,int> auth);
-  void adjust_bounded_subtree_auth(CDir *dir, vector<dirfrag_t>& bounds, int a) {
+  void adjust_bounded_subtree_auth(CStripe *dir, const vector<dirstripe_t>& bounds, pair<int,int> auth);
+  void adjust_bounded_subtree_auth(CStripe *dir, const vector<dirstripe_t>& bounds, int a) {
     adjust_bounded_subtree_auth(dir, bounds, pair<int,int>(a, CDIR_AUTH_UNKNOWN));
   }
-  void map_dirfrag_set(list<dirfrag_t>& dfs, set<CDir*>& result);
-  void try_subtree_merge(CDir *root);
-  void try_subtree_merge_at(CDir *root, bool do_eval=true);
+  void map_dirstripe_set(list<dirstripe_t>& dfs, set<CStripe*>& result);
+  void try_subtree_merge(CStripe *root);
+  void try_subtree_merge_at(CStripe *root, bool do_eval=true);
   void subtree_merge_writebehind_finish(CInode *in, Mutation *mut);
   void eval_subtree_root(CInode *diri);
-  CDir *get_subtree_root(CDir *dir);
-  CDir *get_projected_subtree_root(CDir *dir);
-  bool is_leaf_subtree(CDir *dir) {
-    assert(subtrees.count(dir));
-    return subtrees[dir].empty();
+  CStripe *get_subtree_root(CStripe *stripe);
+  CStripe *get_projected_subtree_root(CStripe *stripe);
+  bool is_leaf_subtree(CStripe *stripe) {
+    assert(subtrees.count(stripe));
+    return subtrees[stripe].empty();
   }
-  void remove_subtree(CDir *dir);
-  bool is_subtree(CDir *root) {
+  void remove_subtree(CStripe *stripe);
+  bool is_subtree(CStripe *root) {
     return subtrees.count(root);
   }
-  void get_subtree_bounds(CDir *root, set<CDir*>& bounds);
-  void get_wouldbe_subtree_bounds(CDir *root, set<CDir*>& bounds);
-  void verify_subtree_bounds(CDir *root, const set<CDir*>& bounds);
-  void verify_subtree_bounds(CDir *root, const list<dirfrag_t>& bounds);
+  void get_subtree_bounds(CStripe *root, set<CStripe*>& bounds);
+  void get_wouldbe_subtree_bounds(CStripe *root, set<CStripe*>& bounds);
+  void verify_subtree_bounds(CStripe *root, const set<CStripe*>& bounds);
+  void verify_subtree_bounds(CStripe *root, const list<dirstripe_t>& bounds);
+  void get_dirstripe_bound_set(vector<dirstripe_t>& stripes, set<CStripe*>& bounds);
 
-  void project_subtree_rename(CInode *diri, CDir *olddir, CDir *newdir);
-  void adjust_subtree_after_rename(CInode *diri, CDir *olddir,
+  void project_subtree_rename(CInode *diri, CStripe *oldstripe, CStripe *newstirpe);
+  void adjust_subtree_after_rename(CInode *diri, CStripe *oldstripe,
                                    bool pop, bool imported = false);
 
-  void get_auth_subtrees(set<CDir*>& s);
-  void get_fullauth_subtrees(set<CDir*>& s);
+  void get_auth_subtrees(set<CStripe*>& s);
+  void get_fullauth_subtrees(set<CStripe*>& s);
 
   int num_subtrees();
   int num_subtrees_fullauth();
@@ -233,7 +235,7 @@ public:
   
 protected:
   // delayed cache expire
-  map<CDir*, map<int, MCacheExpire*> > delayed_expire; // subtree root -> expire msg
+  map<CStripe*, map<int, MCacheExpire*> > delayed_expire; // subtree root -> expire msg
 
 
   // -- requests --
@@ -270,9 +272,9 @@ public:
 			  CInode **pcow_inode=0);
   void journal_dirty_inode(Mutation *mut, EMetaBlob *metablob, CInode *in, snapid_t follows=CEPH_NOSNAP);
 
-  void project_rstat_inode_to_frag(CInode *cur, CDir *parent, snapid_t first, int linkunlink);
+  void project_rstat_inode_to_frag(CInode *cur, CStripe *parent, snapid_t first, int linkunlink);
   void _project_rstat_inode_to_frag(inode_t& inode, snapid_t ofirst, snapid_t last,
-				    CDir *parent, int linkunlink=0);
+				    CStripe *parent, int linkunlink=0);
   void project_rstat_frag_to_inode(nest_info_t& rstat, nest_info_t& accounted_rstat,
 				   snapid_t ofirst, snapid_t last, 
 				   CInode *pin, bool cow_head);
@@ -308,12 +310,13 @@ public:
 protected:
   // [resolve]
   // from EImportStart w/o EImportFinish during journal replay
-  map<dirfrag_t, vector<dirfrag_t> >            my_ambiguous_imports;  
+  typedef map<dirstripe_t, vector<dirstripe_t> > stripe_bound_map;
+  stripe_bound_map my_ambiguous_imports;
   // from MMDSResolves
-  map<int, map<dirfrag_t, vector<dirfrag_t> > > other_ambiguous_imports;  
+  map<int, stripe_bound_map> other_ambiguous_imports;  
 
   map<int, map<metareqid_t, MDSlaveUpdate*> > uncommitted_slave_updates;  // slave: for replay.
-  map<CDir*, int> uncommitted_slave_rename_olddir;  // slave: preserve the non-auth dir until seeing commit.
+  map<CStripe*, int> uncommitted_slave_rename_oldstripe;  // slave: preserve the non-auth dir until seeing commit.
   map<CInode*, int> uncommitted_slave_unlink;  // slave: preserve the unlinked inode until seeing commit.
 
   // track master requests whose slaves haven't acknowledged commit
@@ -355,17 +358,17 @@ public:
   void finish_rollback(metareqid_t reqid);
 
   // ambiguous imports
-  void add_ambiguous_import(dirfrag_t base, const vector<dirfrag_t>& bounds);
-  void add_ambiguous_import(CDir *base, const set<CDir*>& bounds);
-  bool have_ambiguous_import(dirfrag_t base) {
+  void add_ambiguous_import(dirstripe_t base, const vector<dirstripe_t>& bounds);
+  void add_ambiguous_import(CStripe *base, const set<CStripe*>& bounds);
+  bool have_ambiguous_import(dirstripe_t base) {
     return my_ambiguous_imports.count(base);
   }
-  void get_ambiguous_import_bounds(dirfrag_t base, vector<dirfrag_t>& bounds) {
+  void get_ambiguous_import_bounds(dirstripe_t base, vector<dirstripe_t>& bounds) {
     assert(my_ambiguous_imports.count(base));
     bounds = my_ambiguous_imports[base];
   }
-  void cancel_ambiguous_import(CDir *);
-  void finish_ambiguous_import(dirfrag_t dirino);
+  void cancel_ambiguous_import(CStripe *stripe);
+  void finish_ambiguous_import(dirstripe_t ds);
   void resolve_start();
   void send_resolves();
   void send_slave_resolve(int who);
@@ -373,8 +376,8 @@ public:
   void send_resolve_later(int who);
   void maybe_send_pending_resolves();
   
-  void _move_subtree_map_bound(dirfrag_t df, dirfrag_t oldparent, dirfrag_t newparent,
-			       map<dirfrag_t,vector<dirfrag_t> >& subtrees);
+  void _move_subtree_map_bound(dirstripe_t ds, dirstripe_t oldparent, dirstripe_t newparent,
+                               map<dirstripe_t,vector<dirstripe_t> >& subtrees);
   ESubtreeMap *create_subtree_map();
 
 
@@ -400,11 +403,9 @@ protected:
   vector<CInode*> rejoin_recover_q, rejoin_check_q;
   list<Context*> rejoin_waiters;
 
-  void rejoin_walk(CDir *dir, MMDSCacheRejoin *rejoin);
+  void rejoin_walk(CStripe *stripe, MMDSCacheRejoin *rejoin);
   void handle_cache_rejoin(MMDSCacheRejoin *m);
   void handle_cache_rejoin_weak(MMDSCacheRejoin *m);
-  CInode* rejoin_invent_inode(inodeno_t ino, snapid_t last);
-  CDir* rejoin_invent_dirfrag(dirfrag_t df);
   bool rejoin_fetch_dirfrags(MMDSCacheRejoin *m);
   void handle_cache_rejoin_strong(MMDSCacheRejoin *m);
   void rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack, set<vinodeno_t>& acked_inodes);
@@ -501,7 +502,7 @@ public:
 
 
 
- public:
+public:
 
   // subsystems
   Migrator *migrator;
@@ -524,14 +525,16 @@ public:
   // trimming
   bool trim(int max = -1);   // trim cache
   void trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap);
-  void trim_dirfrag(CDir *dir, CDir *con,
+  void trim_dirfrag(CDir *dir, CStripe *root,
 		    map<int, MCacheExpire*>& expiremap);
-  void trim_inode(CDentry *dn, CInode *in, CDir *con,
-		  map<int,class MCacheExpire*>& expiremap);
+  void trim_stripe(CStripe *stripe, CStripe *root,
+		    map<int, MCacheExpire*>& expiremap);
+  void trim_inode(CDentry *dn, CInode *in, CStripe *root,
+		  map<int, MCacheExpire*>& expiremap);
   void send_expire_messages(map<int, MCacheExpire*>& expiremap);
   void trim_non_auth();      // trim out trimmable non-auth items
-  bool trim_non_auth_subtree(CDir *directory);
-  void try_trim_non_auth_subtree(CDir *dir);
+  bool trim_non_auth_subtree(CStripe *stripe);
+  void try_trim_non_auth_subtree(CStripe *stripe);
 
   void trim_client_leases();
   void check_memory_usage();
@@ -562,19 +565,26 @@ public:
     return get_inode(vinodeno_t(ino, s));
   }
 
-  CDir* get_dirfrag(dirfrag_t df) {
-    CInode *in = get_inode(df.ino);
+  CStripe *get_dirstripe(dirstripe_t ds) {
+    CInode *in = get_inode(ds.ino);
     if (!in)
       return NULL;
-    return in->get_dirfrag(df.frag);
+    return in->get_stripe(ds.stripeid);
+  }
+
+  CDir* get_dirfrag(dirfrag_t df) {
+    CStripe *stripe = get_dirstripe(df.stripe);
+    if (!stripe)
+      return NULL;
+    return stripe->get_dirfrag(df.frag);
   }
   CDir* get_force_dirfrag(dirfrag_t df) {
-    CInode *diri = get_inode(df.ino);
-    if (!diri)
+    CStripe *stripe = get_dirstripe(df.stripe);
+    if (!stripe)
       return NULL;
-    CDir *dir = force_dir_fragment(diri, df.frag);
+    CDir *dir = force_dir_fragment(stripe, df.frag);
     if (!dir)
-      dir = diri->get_dirfrag(df.frag);
+      dir = stripe->get_dirfrag(df.frag);
     return dir;
   }
 
@@ -705,7 +715,8 @@ public:
 
   CInode *cache_traverse(const filepath& path);
 
-  void open_remote_dirfrag(CInode *diri, frag_t fg, Context *fin);
+  void open_remote_dirstripe(CInode *diri, stripeid_t stripeid, Context *fin);
+  void open_remote_dirfrag(CStripe *stripe, frag_t fg, Context *fin);
   CInode *get_dentry_inode(CDentry *dn, MDRequest *mdr, bool projected=false);
   void open_remote_ino(inodeno_t ino, Context *fin, bool want_xlocked=false,
 		       inodeno_t hadino=0, version_t hadv=0);
@@ -807,6 +818,11 @@ protected:
   friend class C_MDC_Join;
 
 public:
+  void replicate_stripe(CStripe *stripe, int to, bufferlist& bl) {
+    dirstripe_t ds = stripe->dirstripe();
+    ::encode(ds, bl);
+    stripe->encode_replica(to, bl);
+  }
   void replicate_dir(CDir *dir, int to, bufferlist& bl) {
     dirfrag_t df = dir->dirfrag();
     ::encode(df, bl);
@@ -822,9 +838,12 @@ public:
     ::encode(in->last, bl);
     in->encode_replica(to, bl);
   }
-  
-  CDir* add_replica_dir(bufferlist::iterator& p, CInode *diri, int from, list<Context*>& finished);
-  CDir* forge_replica_dir(CInode *diri, frag_t fg, int from);
+
+  CStripe* add_replica_stripe(bufferlist::iterator& p, CInode *diri,
+                              int from, list<Context*>& finished);
+  CStripe* forge_replica_stripe(CInode *diri, stripeid_t stripe, int from);
+  CDir* add_replica_dir(bufferlist::iterator& p, CStripe *stripe, list<Context*>& finished);
+  CDir* forge_replica_dir(CStripe *stripe, frag_t fg, int from);
   CDentry *add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Context*>& finished);
   CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Context*>& finished);
 
@@ -845,16 +864,15 @@ public:
   set< pair<dirfrag_t,int> > uncommitted_fragments;  // prepared but uncommitted refragmentations
 
 private:
-  void adjust_dir_fragments(CInode *diri, frag_t basefrag, int bits,
+  void adjust_dir_fragments(CStripe *stripe, frag_t basefrag, int bits,
 			    list<CDir*>& frags, list<Context*>& waiters, bool replay);
-  void adjust_dir_fragments(CInode *diri,
+  void adjust_dir_fragments(CStripe *stripe,
 			    list<CDir*>& srcfrags,
 			    frag_t basefrag, int bits,
 			    list<CDir*>& resultfrags, 
 			    list<Context*>& waiters,
 			    bool replay);
-  CDir *force_dir_fragment(CInode *diri, frag_t fg);
-  void get_force_dirfrag_bound_set(vector<dirfrag_t>& dfs, set<CDir*>& bounds);
+  CDir *force_dir_fragment(CStripe *stripe, frag_t fg);
 
 
   friend class EFragment;
@@ -864,7 +882,7 @@ private:
 
 public:
   void split_dir(CDir *dir, int byn);
-  void merge_dir(CInode *diri, frag_t fg);
+  void merge_dir(CStripe *stripe, frag_t fg);
 
 private:
   void fragment_freeze_dirs(list<CDir*>& dirs, C_GatherBuilder &gather);
@@ -887,13 +905,13 @@ private:
   //int send_inode_updates(CInode *in);
   //void handle_inode_update(MInodeUpdate *m);
 
-  int send_dir_updates(CDir *in, bool bcast=false);
+  int send_dir_updates(CStripe *stripe, bool bcast=false);
   void handle_dir_update(MDirUpdate *m);
 
   // -- cache expiration --
   void handle_cache_expire(MCacheExpire *m);
-  void process_delayed_expire(CDir *dir);
-  void discard_delayed_expire(CDir *dir);
+  void process_delayed_expire(CStripe *stripe);
+  void discard_delayed_expire(CStripe *stripe);
 
 
   // == crap fns ==

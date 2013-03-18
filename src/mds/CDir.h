@@ -32,9 +32,10 @@
 using namespace std;
 
 
-#include "CInode.h"
+#include "CStripe.h"
 
 class CDentry;
+class CInode;
 class MDCache;
 class MDCluster;
 class Context;
@@ -69,44 +70,27 @@ public:
   static const int PIN_INOWAITER =    2;
   static const int PIN_CHILD =        3;
   static const int PIN_FROZEN =       4;
-  static const int PIN_SUBTREE =      5;
-  static const int PIN_IMPORTING =    7;
-  static const int PIN_IMPORTBOUND =  9;
-  static const int PIN_EXPORTBOUND = 10;
-  static const int PIN_STICKY =      11;
-  static const int PIN_SUBTREETEMP = 12;  // used by MDCache::trim_non_auth()
+  static const int PIN_STICKY =       5;
   const char *pin_name(int p) {
     switch (p) {
     case PIN_DNWAITER: return "dnwaiter";
     case PIN_INOWAITER: return "inowaiter";
     case PIN_CHILD: return "child";
     case PIN_FROZEN: return "frozen";
-    case PIN_SUBTREE: return "subtree";
-    case PIN_IMPORTING: return "importing";
-    case PIN_IMPORTBOUND: return "importbound";
-    case PIN_EXPORTBOUND: return "exportbound";
     case PIN_STICKY: return "sticky";
-    case PIN_SUBTREETEMP: return "subtreetemp";
     default: return generic_pin_name(p);
     }
   }
 
   // -- state --
-  static const unsigned STATE_COMPLETE =      (1<< 1);   // the complete contents are in cache
-  static const unsigned STATE_FROZENTREE =    (1<< 2);   // root of tree (bounded by exports)
-  static const unsigned STATE_FREEZINGTREE =  (1<< 3);   // in process of freezing 
-  static const unsigned STATE_FROZENDIR =     (1<< 4);
-  static const unsigned STATE_FREEZINGDIR =   (1<< 5);
-  static const unsigned STATE_COMMITTING =    (1<< 6);   // mid-commit
-  static const unsigned STATE_FETCHING =      (1<< 7);   // currenting fetching
-  static const unsigned STATE_IMPORTBOUND =   (1<<10);
-  static const unsigned STATE_EXPORTBOUND =   (1<<11);
-  static const unsigned STATE_EXPORTING =     (1<<12);
-  static const unsigned STATE_IMPORTING =     (1<<13);
-  static const unsigned STATE_FRAGMENTING =   (1<<14);
-  static const unsigned STATE_STICKY =        (1<<15);  // sticky pin due to inode stickydirs
-  static const unsigned STATE_DNPINNEDFRAG =  (1<<16);  // dir is refragmenting
-  static const unsigned STATE_ASSIMRSTAT =    (1<<17);  // assimilating inode->frag rstats
+  static const unsigned STATE_COMPLETE =      (1<<0);   // the complete contents are in cache
+  static const unsigned STATE_FROZEN =        (1<<1);
+  static const unsigned STATE_FREEZING =      (1<<2);
+  static const unsigned STATE_COMMITTING =    (1<<3);   // mid-commit
+  static const unsigned STATE_FETCHING =      (1<<4);   // currenting fetching
+  static const unsigned STATE_FRAGMENTING =   (1<<5);
+  static const unsigned STATE_STICKY =        (1<<6);  // sticky pin due to stripe stickydirs
+  static const unsigned STATE_DNPINNEDFRAG =  (1<<7);  // dir is refragmenting
 
   // common states
   static const unsigned STATE_CLEAN =  0;
@@ -114,25 +98,14 @@ public:
 
   // these state bits are preserved by an import/export
   // ...except if the directory is hashed, in which case none of them are!
-  static const unsigned MASK_STATE_EXPORTED = 
-  (STATE_COMPLETE|STATE_DIRTY);
-  static const unsigned MASK_STATE_IMPORT_KEPT = 
-  (						  
-   STATE_IMPORTING
-   |STATE_IMPORTBOUND|STATE_EXPORTBOUND
-   |STATE_FROZENTREE
-   |STATE_STICKY);
-  static const unsigned MASK_STATE_EXPORT_KEPT = 
-  (STATE_EXPORTING
-   |STATE_IMPORTBOUND|STATE_EXPORTBOUND
-   |STATE_FROZENTREE
-   |STATE_FROZENDIR
-   |STATE_STICKY);
-  static const unsigned MASK_STATE_FRAGMENT_KEPT = 
-  (STATE_DIRTY |
-   STATE_COMPLETE |
-   STATE_EXPORTBOUND |
-   STATE_IMPORTBOUND);
+  static const unsigned MASK_STATE_EXPORTED =
+      (STATE_COMPLETE|STATE_DIRTY);
+  static const unsigned MASK_STATE_IMPORT_KEPT =
+      (STATE_STICKY);
+  static const unsigned MASK_STATE_EXPORT_KEPT =
+      (STATE_FROZEN|STATE_STICKY);
+  static const unsigned MASK_STATE_FRAGMENT_KEPT =
+      (STATE_DIRTY|STATE_COMPLETE);
 
   // -- rep spec --
   static const int REP_NONE =     0;
@@ -159,53 +132,30 @@ public:
 
  public:
   // context
-  MDCache  *cache;
+  MDCache *cache;
 
-  CInode          *inode;  // my inode
-  frag_t           frag;   // my frag
+  CStripe *stripe; // my stripe
+  frag_t frag; // my frag
+  snapid_t first;
 
   bool is_lt(const MDSCacheObject *r) const {
     return dirfrag() < ((const CDir*)r)->dirfrag();
   }
 
-  fnode_t fnode;
-  snapid_t first;
-  map<snapid_t,old_rstat_t> dirty_old_rstat;  // [value.first,key]
-
-  // my inodes with dirty rstat data
-  elist<CInode*> dirty_rstat_inodes;     
-
-  void resync_accounted_fragstat();
-  void resync_accounted_rstat();
-  void assimilate_dirty_rstat_inodes();
-  void assimilate_dirty_rstat_inodes_finish(Mutation *mut, EMetaBlob *blob);
-
-protected:
-  version_t projected_version;
-  list<fnode_t*> projected_fnode;
-
-public:
   elist<CDir*>::item item_dirty, item_new;
 
+ private:
+  version_t version, projected_version;
+  snapid_t snap_purged_thru;
 
-public:
-  version_t get_version() { return fnode.version; }
-  void set_version(version_t v) { 
-    assert(projected_fnode.empty());
-    projected_version = fnode.version = v; 
+ public:
+  void set_version(version_t v) {
+    projected_version = version = v;
   }
+  version_t get_version() { return version; }
   version_t get_projected_version() { return projected_version; }
+  bool is_projected() { return projected_version != version; }
 
-  fnode_t *get_projected_fnode() {
-    if (projected_fnode.empty())
-      return &fnode;
-    else
-      return projected_fnode.back();
-  }
-  fnode_t *project_fnode();
-
-  void pop_and_dirty_projected_fnode(LogSegment *ls);
-  bool is_projected() { return !projected_fnode.empty(); }
   version_t pre_dirty(version_t min=0);
   void _mark_dirty(LogSegment *ls);
   void _set_dirty_flag() {
@@ -248,29 +198,14 @@ protected:
 
   int nested_anchors;
 
-  // cache control  (defined for authority; hints for replicas)
-  __s32      dir_rep;
-  set<__s32> dir_rep_by;      // if dir_rep == REP_LIST
-
   // popularity
   dirfrag_load_vec_t pop_me;
-  dirfrag_load_vec_t pop_nested;
-  dirfrag_load_vec_t pop_auth_subtree;
-  dirfrag_load_vec_t pop_auth_subtree_nested;
- 
-  utime_t last_popularity_sample;
-
-  load_spread_t pop_spread;
-
-  // and to provide density
-  int num_dentries_nested;
-  int num_dentries_auth_subtree;
-  int num_dentries_auth_subtree_nested;
 
 
   // friends
   friend class Migrator;
   friend class CInode;
+  friend class CStripe;
   friend class MDCache;
   friend class MDiscover;
   friend class MDBalancer;
@@ -283,7 +218,7 @@ protected:
    * It's deleted when you mark_complete() and is deliberately not serialized.*/
 
  public:
-  CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth);
+  CDir(CStripe *stripe, frag_t frag, MDCache *mdcache, bool auth);
   ~CDir() {
     g_num_dir--;
     g_num_dirs++;
@@ -292,12 +227,13 @@ protected:
 
 
   // -- accessors --
-  inodeno_t ino()     const { return inode->ino(); }          // deprecate me?
-  frag_t    get_frag()    const { return frag; }
-  dirfrag_t dirfrag() const { return dirfrag_t(inode->ino(), frag); }
+  inodeno_t ino() const { return stripe->get_inode()->ino(); } // deprecate me?
+  frag_t get_frag() const { return frag; }
+  dirfrag_t dirfrag() const { return dirfrag_t(stripe->dirstripe(), frag); }
 
-  CInode *get_inode()    { return inode; }
-  CDir *get_parent_dir() { return inode->get_parent_dir(); }
+  CStripe *get_stripe() { return stripe; }
+  CInode *get_inode() { return get_stripe()->get_inode(); }
+  CDir *get_parent_dir() { return get_inode()->get_parent_dir(); }
 
   map_t::iterator begin() { return items.begin(); }
   map_t::iterator end() { return items.end(); }
@@ -307,8 +243,6 @@ protected:
   unsigned get_num_snap_items() { return num_snap_items; }
   unsigned get_num_snap_null() { return num_snap_null; }
   unsigned get_num_any() { return num_head_items + num_head_null + num_snap_items + num_snap_null; }
-  
-  bool check_rstats();
 
   void inc_num_dirty() { num_dirty++; }
   void dec_num_dirty() { 
@@ -379,94 +313,31 @@ private:
 
 
   // -- authority --
-  /*
-   *     normal: <parent,unknown>   !subtree_root
-   * delegation: <mds,unknown>       subtree_root
-   *  ambiguous: <mds1,mds2>         subtree_root
-   *             <parent,mds2>       subtree_root     
-   */
-  pair<int,int> dir_auth;
-
  public:
-  pair<int,int> authority();
-  pair<int,int> get_dir_auth() { return dir_auth; }
-  void set_dir_auth(pair<int,int> a);
-  void set_dir_auth(int a) { set_dir_auth(pair<int,int>(a, CDIR_AUTH_UNKNOWN)); }
-  bool is_ambiguous_dir_auth() {
-    return dir_auth.second != CDIR_AUTH_UNKNOWN;
-  }
-  bool is_full_dir_auth() {
-    return is_auth() && !is_ambiguous_dir_auth();
-  }
-  bool is_full_dir_nonauth() {
-    return !is_auth() && !is_ambiguous_dir_auth();
-  }
-  
-  bool is_subtree_root() {
-    return dir_auth != CDIR_AUTH_DEFAULT;
-  }
+  pair<int,int> authority() { return stripe->authority(); }
 
   bool contains(CDir *x);  // true if we are x or an ancestor of x 
 
-
-  // for giving to clients
-  void get_dist_spec(set<int>& ls, int auth) {
-    if (is_rep()) {
-      for (map<int,int>::iterator p = replicas_begin();
-	   p != replicas_end(); 
-	   ++p)
-	ls.insert(p->first);
-      if (!ls.empty()) 
-	ls.insert(auth);
-    }
-  }
-  void encode_dirstat(bufferlist& bl, int whoami) {
-    /*
-     * note: encoding matches struct ceph_client_reply_dirfrag
-     */
-    frag_t frag = get_frag();
-    __s32 auth;
-    set<__s32> dist;
-    
-    auth = dir_auth.first;
-    if (is_auth()) 
-      get_dist_spec(dist, whoami);
-
-    ::encode(frag, bl);
-    ::encode(auth, bl);
-    ::encode(dist, bl);
-  }
 
   void encode_replica(int who, bufferlist& bl) {
     __u32 nonce = add_replica(who);
     ::encode(nonce, bl);
     ::encode(first, bl);
-    ::encode(fnode, bl);
-    ::encode(dir_rep, bl);
-    ::encode(dir_rep_by, bl);
+    ::encode(version, bl);
   }
   void decode_replica(bufferlist::iterator& p) {
     __u32 nonce;
     ::decode(nonce, p);
     replica_nonce = nonce;
     ::decode(first, p);
-    ::decode(fnode, p);
-    ::decode(dir_rep, p);
-    ::decode(dir_rep_by, p);
+    ::decode(version, p);
   }
 
 
 
   // -- state --
   bool is_complete() { return state & STATE_COMPLETE; }
-  bool is_exporting() { return state & STATE_EXPORTING; }
-  bool is_importing() { return state & STATE_IMPORTING; }
 
-  int get_dir_rep() { return dir_rep; }
-  bool is_rep() { 
-    if (dir_rep == REP_NONE) return false;
-    return true;
-  }
  
   // -- fetch --
   object_t get_ondisk_object() { 
@@ -563,49 +434,42 @@ public:
   void adjust_nested_anchors(int by);
 
   // -- freezing --
-  bool freeze_tree();
-  void _freeze_tree();
-  void unfreeze_tree();
-
   bool freeze_dir();
   void _freeze_dir();
   void unfreeze_dir();
 
   void maybe_finish_freeze();
 
-  bool is_freezing() { return is_freezing_tree() || is_freezing_dir(); }
-  bool is_freezing_tree();
-  bool is_freezing_tree_root() { return state & STATE_FREEZINGTREE; }
-  bool is_freezing_dir() { return state & STATE_FREEZINGDIR; }
+  bool is_freezing_dir() { return state & STATE_FREEZING; }
+  bool is_frozen_dir() { return state & STATE_FROZEN; }
 
-  bool is_frozen() { return is_frozen_dir() || is_frozen_tree(); }
-  bool is_frozen_tree();
-  bool is_frozen_tree_root() { return state & STATE_FROZENTREE; }
-  bool is_frozen_dir() { return state & STATE_FROZENDIR; }
-  
+  bool is_freezing() { return is_freezing_dir() || stripe->is_freezing(); }
+  bool is_frozen() { return is_frozen_dir() || stripe->is_frozen(); }
+#if 0
   bool is_freezeable(bool freezing=false) {
     // no nested auth pins.
     if ((auth_pins-freezing) > 0 || nested_auth_pins > 0) 
       return false;
 
     // inode must not be frozen.
-    if (!is_subtree_root() && inode->is_frozen())
+    if (!is_subtree_root() && get_inode()->is_frozen())
       return false;
 
     return true;
   }
+#endif
   bool is_freezeable_dir(bool freezing=false) {
-    if ((auth_pins-freezing) > 0 || dir_auth_pins > 0) 
+    if ((auth_pins-freezing) > 0 || dir_auth_pins > 0)
       return false;
 
+    // XXX: conditions for freezing
+#if 0
     // if not subtree root, inode must not be frozen (tree--frozen_dir is okay).
-    if (!is_subtree_root() && inode->is_frozen() && !inode->is_frozen_dir())
+    if (!is_subtree_root() && get_inode()->is_frozen() && !get_inode()->is_frozen_dir())
       return false;
-
+#endif
     return true;
   }
-
-  CDir *get_frozen_tree_root();
 
 
   ostream& print_db_line_prefix(ostream& out);

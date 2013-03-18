@@ -214,10 +214,15 @@ void CDentry::mark_new()
   state_set(STATE_NEW);
 }
 
+CStripe* CDentry::get_stripe() const
+{
+  return dir->get_stripe();
+}
+
 void CDentry::make_path_string(string& s)
 {
   if (dir) {
-    dir->inode->make_path_string(s);
+    dir->get_inode()->make_path_string(s);
   } else {
     s = "???";
   }
@@ -228,12 +233,12 @@ void CDentry::make_path_string(string& s)
 void CDentry::make_path(filepath& fp)
 {
   assert(dir);
-  if (dir->inode->is_base())
-    fp = filepath(dir->inode->ino());               // base case
-  else if (dir->inode->get_parent_dn())
-    dir->inode->get_parent_dn()->make_path(fp);  // recurse
+  if (dir->get_inode()->is_base())
+    fp = filepath(dir->get_inode()->ino());               // base case
+  else if (dir->get_inode()->get_parent_dn())
+    dir->get_inode()->get_parent_dn()->make_path(fp);  // recurse
   else
-    fp = filepath(dir->inode->ino());               // relative but not base?  hrm!
+    fp = filepath(dir->get_inode()->ino());               // relative but not base?  hrm!
   fp.push_dentry(name);
 }
 
@@ -242,12 +247,12 @@ void CDentry::make_path(string& s, inodeno_t tobase)
 {
   assert(dir);
   
-  if (dir->inode->is_root()) {
+  if (dir->get_inode()->is_root()) {
     s += "/";  // make it an absolute path (no matter what) if we hit the root.
   } 
-  else if (dir->inode->get_parent_dn() &&
-	   dir->inode->ino() != tobase) {
-    dir->inode->get_parent_dn()->make_path(s, tobase);
+  else if (dir->get_inode()->get_parent_dn() &&
+	   dir->get_inode()->ino() != tobase) {
+    dir->get_inode()->get_parent_dn()->make_path(s, tobase);
     s += "/";
   }
   s += name;
@@ -260,7 +265,7 @@ void CDentry::make_path(string& s, inodeno_t tobase)
 void CDentry::make_anchor_trace(vector<Anchor>& trace, CInode *in)
 {
   // start with parent dir inode
-  dir->inode->make_anchor_trace(trace);
+  dir->get_inode()->make_anchor_trace(trace);
 
   // add this inode (in my dirfrag) to the end
   trace.push_back(Anchor(in->ino(), dir->ino(), get_hash(), 0, 0));

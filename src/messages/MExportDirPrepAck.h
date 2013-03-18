@@ -19,30 +19,30 @@
 #include "include/types.h"
 
 class MExportDirPrepAck : public Message {
-  dirfrag_t dirfrag;
+  dirstripe_t dirstripe;
 
  public:
-  dirfrag_t get_dirfrag() { return dirfrag; }
+  dirstripe_t get_dirstripe() { return dirstripe; }
   
   MExportDirPrepAck() {}
-  MExportDirPrepAck(dirfrag_t df) :
+  MExportDirPrepAck(dirstripe_t ds) :
     Message(MSG_MDS_EXPORTDIRPREPACK),
-    dirfrag(df) { }
+    dirstripe(ds) { }
 private:
   ~MExportDirPrepAck() {}
 
 public:  
   const char *get_type_name() const { return "ExPAck"; }
   void print(ostream& o) const {
-    o << "export_prep_ack(" << dirfrag << ")";
+    o << "export_prep_ack(" << dirstripe << ")";
   }
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(dirfrag, p);
+    ::decode(dirstripe, p);
   }
   void encode_payload(uint64_t features) {
-    ::encode(dirfrag, payload);
+    ::encode(dirstripe, payload);
   }
 };
 

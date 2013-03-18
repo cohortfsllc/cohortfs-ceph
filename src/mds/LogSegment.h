@@ -20,16 +20,14 @@
 #include "include/interval_set.h"
 #include "include/Context.h"
 #include "mdstypes.h"
-#include "CInode.h"
 #include "CDentry.h"
 #include "CDir.h"
+#include "CInode.h"
+#include "CStripe.h"
 
 #include <ext/hash_set>
 using __gnu_cxx::hash_set;
 
-class CDir;
-class CInode;
-class CDentry;
 class MDS;
 class MDSlaveUpdate;
 
@@ -41,6 +39,7 @@ class LogSegment {
 
   // dirty items
   elist<CDir*>    dirty_dirfrags, new_dirfrags;
+  elist<CStripe*> dirty_stripes, new_stripes;
   elist<CInode*>  dirty_inodes;
   elist<CDentry*> dirty_dentries;
 
@@ -73,6 +72,8 @@ class LogSegment {
     offset(off), end(off), num_events(0), trimmable_at(0),
     dirty_dirfrags(member_offset(CDir, item_dirty)),
     new_dirfrags(member_offset(CDir, item_new)),
+    dirty_stripes(member_offset(CStripe, item_dirty)),
+    new_stripes(member_offset(CStripe, item_new)),
     dirty_inodes(member_offset(CInode, item_dirty)),
     dirty_dentries(member_offset(CDentry, item_dirty)),
     open_files(member_offset(CInode, item_open_file)),

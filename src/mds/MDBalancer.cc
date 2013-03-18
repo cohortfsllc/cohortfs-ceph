@@ -148,11 +148,11 @@ mds_load_t MDBalancer::get_load(utime_t now)
   mds_load_t load(now);
 
   if (mds->mdcache->get_root()) {
-    list<CDir*> ls;
-    mds->mdcache->get_root()->get_dirfrags(ls);
-    for (list<CDir*>::iterator p = ls.begin();
-	 p != ls.end();
-	 p++) {
+    list<CStripe*> stripes;
+    mds->mdcache->get_root()->get_stripes(stripes);
+
+    list<CDir*> dirs;
+    for (list<CStripe*>::iterator p = stripes.begin(); p != stripes.end(); ++p) {
       load.auth.add(now, mds->mdcache->decayrate, (*p)->pop_auth_subtree_nested);
       load.all.add(now, mds->mdcache->decayrate, (*p)->pop_nested);
     }
@@ -197,13 +197,13 @@ void MDBalancer::send_heartbeat()
 
   // import_map -- how much do i import from whom
   map<int, float> import_map;
-  set<CDir*> authsubs;
+  set<CStripe*> authsubs;
   mds->mdcache->get_auth_subtrees(authsubs);
-  for (set<CDir*>::iterator it = authsubs.begin();
+  for (set<CStripe*>::iterator it = authsubs.begin();
        it != authsubs.end();
        it++) {
-    CDir *im = *it;
-    int from = im->inode->authority().first;
+    CStripe *im = *it;
+    int from = im->get_inode()->authority().first;
     if (from == mds->get_nodeid()) continue;
     if (im->get_inode()->is_stray()) continue;
     import_map[from] += im->pop_auth_subtree.meta_load(now, mds->mdcache->decayrate);
@@ -292,20 +292,19 @@ void MDBalancer::export_empties()
 {
   dout(5) << "export_empties checking for empty imports" << dendl;
 
-  for (map<CDir*,set<CDir*> >::iterator it = mds->mdcache->subtrees.begin();
+  for (map<CStripe*,set<CStripe*> >::iterator it = mds->mdcache->subtrees.begin();
        it != mds->mdcache->subtrees.end();
        it++) {
-    CDir *dir = it->first;
-    if (!dir->is_auth() ||
-	dir->is_ambiguous_auth() ||
-	dir->is_freezing() ||
-	dir->is_frozen())
+    CStripe *stripe = it->first;
+    if (!stripe->is_auth() ||
+	stripe->is_ambiguous_auth() ||
+	stripe->is_freezing_or_frozen())
       continue;
 
-    if (!dir->inode->is_base() &&
-	!dir->inode->is_stray() &&
-	dir->get_num_head_items() == 0)
-      mds->mdcache->migrator->export_empty_import(dir);
+    if (!stripe->get_inode()->is_base() &&
+	!stripe->get_inode()->is_stray() &&
+        stripe->get_num_head_items() == 0)
+      mds->mdcache->migrator->export_empty_import(stripe);
   }
 }
 
@@ -386,13 +385,13 @@ void MDBalancer::do_fragmenting()
 
       dout(0) << "do_fragmenting merging " << *dir << dendl;
 
-      CInode *diri = dir->get_inode();
+      CStripe *stripe = dir->get_stripe();
 
       frag_t fg = dir->get_frag();
       while (fg != frag_t()) {
 	frag_t sibfg = fg.get_sibling();
 	list<CDir*> sibs;
-	bool complete = diri->get_dirfrags_under(sibfg, sibs);
+	bool complete = stripe->get_dirfrags_under(sibfg, sibs);
 	if (!complete) {
 	  dout(10) << "  not all sibs under " << sibfg << " in cache (have " << sibs << ")" << dendl;
 	  break;
@@ -414,7 +413,7 @@ void MDBalancer::do_fragmenting()
       }
 
       if (fg != dir->get_frag())
-	mds->mdcache->merge_dir(diri, fg);
+	mds->mdcache->merge_dir(stripe, fg);
     }
   }
 }
@@ -609,39 +608,40 @@ void MDBalancer::try_rebalance()
   }
 
   // make a sorted list of my imports
-  map<double,CDir*>    import_pop_map;
-  multimap<int,CDir*>  import_from_map;
-  set<CDir*> fullauthsubs;
+  map<double,CStripe*>    import_pop_map;
+  multimap<int,CStripe*>  import_from_map;
+  set<CStripe*> fullauthsubs;
 
   mds->mdcache->get_fullauth_subtrees(fullauthsubs);
-  for (set<CDir*>::iterator it = fullauthsubs.begin();
+  for (set<CStripe*>::iterator it = fullauthsubs.begin();
        it != fullauthsubs.end();
        it++) {
-    CDir *im = *it;
-    if (im->get_inode()->is_stray()) continue;
+    CStripe *im = *it;
+    CInode *in = im->get_inode();
+    if (in->is_stray()) continue;
 
     double pop = im->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
     if (g_conf->mds_bal_idle_threshold > 0 &&
 	pop < g_conf->mds_bal_idle_threshold &&
-	im->inode != mds->mdcache->get_root() &&
-	im->inode->authority().first != mds->get_nodeid()) {
+	in != mds->mdcache->get_root() &&
+	in->authority().first != mds->get_nodeid()) {
       dout(0) << " exporting idle (" << pop << ") import " << *im
-	      << " back to mds." << im->inode->authority().first
+	      << " back to mds." << in->authority().first
 	      << dendl;
-      mds->mdcache->migrator->export_dir_nicely(im, im->inode->authority().first);
+      mds->mdcache->migrator->export_dir_nicely(im, in->authority().first);
       continue;
     }
 
     import_pop_map[ pop ] = im;
-    int from = im->inode->authority().first;
+    int from = in->authority().first;
     dout(15) << "  map: i imported " << *im << " from " << from << dendl;
-    import_from_map.insert(pair<int,CDir*>(from, im));
+    import_from_map.insert(make_pair(from, im));
   }
 
 
 
   // do my exports!
-  set<CDir*> already_exporting;
+  set<CStripe*> already_exporting;
   double total_sent = 0;
   double total_goal = 0;
 
@@ -678,30 +678,30 @@ void MDBalancer::try_rebalance()
     // search imports from target
     if (import_from_map.count(target)) {
       dout(5) << " aha, looking through imports from target mds." << target << dendl;
-      pair<multimap<int,CDir*>::iterator, multimap<int,CDir*>::iterator> p =
+      pair<multimap<int,CStripe*>::iterator, multimap<int,CStripe*>::iterator> p =
 	import_from_map.equal_range(target);
       while (p.first != p.second) {
-	CDir *dir = (*p.first).second;
-	dout(5) << "considering " << *dir << " from " << (*p.first).first << dendl;
-	multimap<int,CDir*>::iterator plast = p.first++;
+	CStripe *stripe = (*p.first).second;
+	dout(5) << "considering " << *stripe << " from " << (*p.first).first << dendl;
+	multimap<int,CStripe*>::iterator plast = p.first++;
 
-	if (dir->inode->is_base() ||
-	    dir->inode->is_stray())
+        CInode *in = stripe->get_inode();
+	if (in->is_base() || in->is_stray())
 	  continue;
-	if (dir->is_freezing() || dir->is_frozen()) continue;  // export pbly already in progress
-	double pop = dir->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
-	assert(dir->inode->authority().first == target);  // cuz that's how i put it in the map, dummy
+	if (stripe->is_freezing_or_frozen()) continue;  // export pbly already in progress
+	double pop = stripe->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
+	assert(in->authority().first == target);  // cuz that's how i put it in the map, dummy
 
 	if (pop <= amount-have) {
-	  dout(0) << "reexporting " << *dir
+	  dout(0) << "reexporting " << *stripe
 		  << " pop " << pop
 		  << " back to mds." << target << dendl;
-	  mds->mdcache->migrator->export_dir_nicely(dir, target);
+	  mds->mdcache->migrator->export_dir_nicely(stripe, target);
 	  have += pop;
 	  import_from_map.erase(plast);
 	  import_pop_map.erase(pop);
 	} else {
-	  dout(5) << "can't reexport " << *dir << ", too big " << pop << dendl;
+	  dout(5) << "can't reexport " << *stripe << ", too big " << pop << dendl;
 	}
 	if (amount-have < MIN_OFFLOAD) break;
       }
@@ -713,22 +713,22 @@ void MDBalancer::try_rebalance()
 
     // any other imports
     if (false)
-      for (map<double,CDir*>::iterator import = import_pop_map.begin();
+      for (map<double,CStripe*>::iterator import = import_pop_map.begin();
 	   import != import_pop_map.end();
 	   import++) {
-	CDir *imp = (*import).second;
-	if (imp->inode->is_base() ||
-	    imp->inode->is_stray())
+	CStripe *imp = (*import).second;
+        CInode *in = imp->get_inode();
+	if (in->is_base() || in->is_stray())
 	  continue;
 
 	double pop = (*import).first;
 	if (pop < amount-have || pop < MIN_REEXPORT) {
 	  dout(0) << "reexporting " << *imp
 		  << " pop " << pop
-		  << " back to mds." << imp->inode->authority()
+		  << " back to mds." << in->authority()
 		  << dendl;
 	  have += pop;
-	  mds->mdcache->migrator->export_dir_nicely(imp, imp->inode->authority().first);
+	  mds->mdcache->migrator->export_dir_nicely(imp, in->authority().first);
 	}
 	if (amount-have < MIN_OFFLOAD) break;
       }
@@ -739,12 +739,12 @@ void MDBalancer::try_rebalance()
     }
 
     // okay, search for fragments of my workload
-    set<CDir*> candidates;
+    set<CStripe*> candidates;
     mds->mdcache->get_fullauth_subtrees(candidates);
 
-    list<CDir*> exports;
+    list<CStripe*> exports;
 
-    for (set<CDir*>::iterator pot = candidates.begin();
+    for (set<CStripe*>::iterator pot = candidates.begin();
 	 pot != candidates.end();
 	 pot++) {
       if ((*pot)->get_inode()->is_stray()) continue;
@@ -755,14 +755,11 @@ void MDBalancer::try_rebalance()
     //fudge = amount - have;
     total_sent += have;
 
-    for (list<CDir*>::iterator it = exports.begin(); it != exports.end(); it++) {
-      dout(0) << "   - exporting "
-	       << (*it)->pop_auth_subtree
-	       << " "
-	       << (*it)->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate)
-	       << " to mds." << target
-	       << " " << **it
-	       << dendl;
+    for (list<CStripe*>::iterator it = exports.begin(); it != exports.end(); it++) {
+      dirfrag_load_vec_t &subload = (*it)->pop_auth_subtree;
+      dout(0) << "   - exporting " << subload << " "
+          << subload.meta_load(rebalance_time, mds->mdcache->decayrate)
+          << " to mds." << target << " " << **it << dendl;
       mds->mdcache->migrator->export_dir_nicely(*it, target);
     }
   }
@@ -830,11 +827,9 @@ bool MDBalancer::check_targets()
   return ok;
 }
 
-void MDBalancer::find_exports(CDir *dir,
-                              double amount,
-                              list<CDir*>& exports,
-                              double& have,
-                              set<CDir*>& already_exporting)
+void MDBalancer::find_exports(CStripe *stripe, double amount,
+                              list<CStripe*>& exports, double& have,
+                              set<CStripe*>& already_exporting)
 {
   double need = amount - have;
   if (need < amount * g_conf->mds_bal_min_start)
@@ -844,59 +839,64 @@ void MDBalancer::find_exports(CDir *dir,
   double midchunk = need * g_conf->mds_bal_midchunk;
   double minchunk = need * g_conf->mds_bal_minchunk;
 
-  list<CDir*> bigger_rep, bigger_unrep;
-  multimap<double, CDir*> smaller;
+  list<CStripe*> bigger_rep, bigger_unrep;
+  multimap<double, CStripe*> smaller;
 
-  double dir_pop = dir->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
-  dout(7) << " find_exports in " << dir_pop << " " << *dir << " need " << need << " (" << needmin << " - " << needmax << ")" << dendl;
+  double dir_pop = stripe->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
+  dout(7) << " find_exports in " << dir_pop << " " << *stripe
+      << " need " << need << " (" << needmin << " - " << needmax << ")" << dendl;
 
   double subdir_sum = 0;
-  for (CDir::map_t::iterator it = dir->begin();
-       it != dir->end();
-       it++) {
-    CInode *in = it->second->get_linkage()->get_inode();
-    if (!in) continue;
-    if (!in->is_dir()) continue;
+  list<CDir*> dirs;
+  stripe->get_dirfrags(dirs);
+  for (list<CDir*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
+    CDir *dir = *d;
 
-    list<CDir*> dfls;
-    in->get_dirfrags(dfls);
-    for (list<CDir*>::iterator p = dfls.begin();
-	 p != dfls.end();
-	 ++p) {
-      CDir *subdir = *p;
-      if (!subdir->is_auth()) continue;
-      if (already_exporting.count(subdir)) continue;
+    for (CDir::map_t::iterator it = dir->begin();
+         it != dir->end();
+         it++) {
+      CInode *in = it->second->get_linkage()->get_inode();
+      if (!in) continue;
+      if (!in->is_dir()) continue;
 
-      if (subdir->is_frozen()) continue;  // can't export this right now!
+      list<CStripe*> stripes;
+      in->get_stripes(stripes);
+      for (list<CStripe*>::iterator p = stripes.begin(); p != stripes.end(); ++p) {
+        CStripe *subdir = *p;
+        if (!subdir->is_auth()) continue;
+        if (already_exporting.count(subdir)) continue;
 
-      // how popular?
-      double pop = subdir->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
-      subdir_sum += pop;
-      dout(15) << "   subdir pop " << pop << " " << *subdir << dendl;
+        if (subdir->is_frozen()) continue;  // can't export this right now!
 
-      if (pop < minchunk) continue;
+        // how popular?
+        double pop = subdir->pop_auth_subtree.meta_load(rebalance_time, mds->mdcache->decayrate);
+        subdir_sum += pop;
+        dout(15) << "   subdir pop " << pop << " " << *subdir << dendl;
 
-      // lucky find?
-      if (pop > needmin && pop < needmax) {
-	exports.push_back(subdir);
-	already_exporting.insert(subdir);
-	have += pop;
-	return;
+        if (pop < minchunk) continue;
+
+        // lucky find?
+        if (pop > needmin && pop < needmax) {
+          exports.push_back(subdir);
+          already_exporting.insert(subdir);
+          have += pop;
+          return;
+        }
+
+        if (pop > need) {
+          if (subdir->is_rep())
+            bigger_rep.push_back(subdir);
+          else
+            bigger_unrep.push_back(subdir);
+        } else
+          smaller.insert(make_pair(pop, subdir));
       }
-
-      if (pop > need) {
-	if (subdir->is_rep())
-	  bigger_rep.push_back(subdir);
-	else
-	  bigger_unrep.push_back(subdir);
-      } else
-	smaller.insert(pair<double,CDir*>(pop, subdir));
     }
   }
   dout(15) << "   sum " << subdir_sum << " / " << dir_pop << dendl;
 
   // grab some sufficiently big small items
-  multimap<double,CDir*>::reverse_iterator it;
+  multimap<double,CStripe*>::reverse_iterator it;
   for (it = smaller.rbegin();
        it != smaller.rend();
        it++) {
@@ -914,7 +914,7 @@ void MDBalancer::find_exports(CDir *dir,
   }
 
   // apprently not enough; drill deeper into the hierarchy (if non-replicated)
-  for (list<CDir*>::iterator it = bigger_unrep.begin();
+  for (list<CStripe*>::iterator it = bigger_unrep.begin();
        it != bigger_unrep.end();
        it++) {
     dout(15) << "   descending into " << **it << dendl;
@@ -937,7 +937,7 @@ void MDBalancer::find_exports(CDir *dir,
   }
 
   // ok fine, drill into replicated dirs
-  for (list<CDir*>::iterator it = bigger_rep.begin();
+  for (list<CStripe*>::iterator it = bigger_rep.begin();
        it != bigger_rep.end();
        it++) {
     dout(7) << "   descending into replicated " << **it << dendl;
@@ -956,34 +956,6 @@ void MDBalancer::hit_inode(utime_t now, CInode *in, int type, int who)
   if (in->get_parent_dn())
     hit_dir(now, in->get_parent_dn()->get_dir(), type, who);
 }
-/*
-  // hit me
-  in->popularity[MDS_POP_JUSTME].pop[type].hit(now);
-  in->popularity[MDS_POP_NESTED].pop[type].hit(now);
-  if (in->is_auth()) {
-    in->popularity[MDS_POP_CURDOM].pop[type].hit(now);
-    in->popularity[MDS_POP_ANYDOM].pop[type].hit(now);
-
-    dout(20) << "hit_inode " << type << " pop "
-	     << in->popularity[MDS_POP_JUSTME].pop[type].get(now) << " me, "
-	     << in->popularity[MDS_POP_NESTED].pop[type].get(now) << " nested, "
-	     << in->popularity[MDS_POP_CURDOM].pop[type].get(now) << " curdom, "
-	     << in->popularity[MDS_POP_CURDOM].pop[type].get(now) << " anydom"
-	     << " on " << *in
-	     << dendl;
-  } else {
-    dout(20) << "hit_inode " << type << " pop "
-	     << in->popularity[MDS_POP_JUSTME].pop[type].get(now) << " me, "
-	     << in->popularity[MDS_POP_NESTED].pop[type].get(now) << " nested, "
-      	     << " on " << *in
-	     << dendl;
-  }
-
-  // hit auth up to import
-  CDir *dir = in->get_parent_dir();
-  if (dir) hit_dir(now, dir, type);
-*/
-
 
 void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amount)
 {
@@ -995,7 +967,7 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
 
   // split/merge
   if (g_conf->mds_bal_frag && g_conf->mds_bal_fragment_interval > 0 &&
-      !dir->inode->is_base() &&        // not root/base (for now at least)
+      !dir->get_inode()->is_base() && // not root/base (for now at least)
       dir->is_auth()) {
 
     dout(20) << "hit_dir " << type << " pop is " << v << ", frag " << dir->get_frag()
@@ -1020,85 +992,92 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
     }
   }
 
+  hit_stripe(now, dir->get_stripe(), type, who, amount);
+}
+
+void MDBalancer::hit_stripe(utime_t now, CStripe *stripe, int type,
+                            int who, double amount)
+{
+  // hit me
+  stripe->pop_me.get(type).hit(now, amount);
+
   // replicate?
-  if (type == META_POP_IRD && who >= 0) {
-    dir->pop_spread.hit(now, mds->mdcache->decayrate, who);
-  }
+  if (type == META_POP_IRD && who >= 0)
+    stripe->pop_spread.hit(now, mds->mdcache->decayrate, who);
 
   double rd_adj = 0;
   if (type == META_POP_IRD &&
-      dir->last_popularity_sample < last_sample) {
-    float dir_pop = dir->pop_auth_subtree.get(type).get(now, mds->mdcache->decayrate);    // hmm??
-    dir->last_popularity_sample = last_sample;
-    float pop_sp = dir->pop_spread.get(now, mds->mdcache->decayrate);
-    dir_pop += pop_sp * 10;
+      stripe->last_popularity_sample < last_sample) {
+    float stripe_pop = stripe->pop_auth_subtree.get(type).get(now, mds->mdcache->decayrate);    // hmm??
+    stripe->last_popularity_sample = last_sample;
+    float pop_sp = stripe->pop_spread.get(now, mds->mdcache->decayrate);
+    stripe_pop += pop_sp * 10;
 
     //if (dir->ino() == inodeno_t(0x10000000002))
     if (pop_sp > 0) {
-      dout(20) << "hit_dir " << type << " pop " << dir_pop << " spread " << pop_sp
-	      << " " << dir->pop_spread.last[0]
-	      << " " << dir->pop_spread.last[1]
-	      << " " << dir->pop_spread.last[2]
-	      << " " << dir->pop_spread.last[3]
-	      << " in " << *dir << dendl;
+      dout(20) << "hit_stripe " << type << " pop " << stripe_pop
+          << " spread " << pop_sp
+          << " " << stripe->pop_spread.last[0]
+          << " " << stripe->pop_spread.last[1]
+          << " " << stripe->pop_spread.last[2]
+          << " " << stripe->pop_spread.last[3]
+          << " in " << *stripe << dendl;
     }
 
-    if (dir->is_auth() && !dir->is_ambiguous_auth()) {
-      if (!dir->is_rep() &&
-	  dir_pop >= g_conf->mds_bal_replicate_threshold) {
+    if (stripe->is_auth() && !stripe->is_ambiguous_auth()) {
+      if (!stripe->is_rep() &&
+          stripe_pop >= g_conf->mds_bal_replicate_threshold) {
 	// replicate
-	float rdp = dir->pop_me.get(META_POP_IRD).get(now, mds->mdcache->decayrate);
+	float rdp = stripe->pop_me.get(META_POP_IRD).get(now, mds->mdcache->decayrate);
 	rd_adj = rdp / mds->get_mds_map()->get_num_in_mds() - rdp;
 	rd_adj /= 2.0;  // temper somewhat
 
-	dout(0) << "replicating dir " << *dir << " pop " << dir_pop << " .. rdp " << rdp << " adj " << rd_adj << dendl;
+	dout(0) << "replicating stripe " << *stripe << " pop " << stripe_pop
+            << " .. rdp " << rdp << " adj " << rd_adj << dendl;
 
-	dir->dir_rep = CDir::REP_ALL;
-	mds->mdcache->send_dir_updates(dir, true);
+	stripe->replicate = true;
+	mds->mdcache->send_dir_updates(stripe, true);
 
 	// fixme this should adjust the whole pop hierarchy
-	dir->pop_me.get(META_POP_IRD).adjust(rd_adj);
-	dir->pop_auth_subtree.get(META_POP_IRD).adjust(rd_adj);
+	stripe->pop_me.get(META_POP_IRD).adjust(rd_adj);
+	stripe->pop_auth_subtree.get(META_POP_IRD).adjust(rd_adj);
       }
 
-      if (dir->ino() != 1 &&
-	  dir->is_rep() &&
-	  dir_pop < g_conf->mds_bal_unreplicate_threshold) {
+      if (stripe->get_inode()->ino() != MDS_INO_ROOT &&
+	  stripe->is_rep() &&
+	  stripe_pop < g_conf->mds_bal_unreplicate_threshold) {
 	// unreplicate
-	dout(0) << "unreplicating dir " << *dir << " pop " << dir_pop << dendl;
+	dout(0) << "unreplicating stripe " << *stripe
+            << " pop " << stripe_pop << dendl;
 
-	dir->dir_rep = CDir::REP_NONE;
-	mds->mdcache->send_dir_updates(dir);
+	stripe->replicate = false;
+	mds->mdcache->send_dir_updates(stripe);
       }
     }
   }
 
   // adjust ancestors
-  bool hit_subtree = dir->is_auth();         // current auth subtree (if any)
-  bool hit_subtree_nested = dir->is_auth();  // all nested auth subtrees
+  bool hit_subtree = stripe->is_auth(); // current auth subtree (if any)
 
-  while (1) {
-    dir->pop_nested.get(type).hit(now, amount);
+  while (stripe) {
+    stripe->pop_nested.get(type).hit(now, amount);
     if (rd_adj != 0.0)
-      dir->pop_nested.get(META_POP_IRD).adjust(now, mds->mdcache->decayrate, rd_adj);
+      stripe->pop_nested.get(META_POP_IRD).adjust(now, mds->mdcache->decayrate, rd_adj);
 
     if (hit_subtree) {
-      dir->pop_auth_subtree.get(type).hit(now, amount);
+      stripe->pop_auth_subtree.get(type).hit(now, amount);
       if (rd_adj != 0.0)
-	dir->pop_auth_subtree.get(META_POP_IRD).adjust(now, mds->mdcache->decayrate, rd_adj);
+	stripe->pop_auth_subtree.get(META_POP_IRD).adjust(now, mds->mdcache->decayrate, rd_adj);
     }
 
-    if (hit_subtree_nested) {
-      dir->pop_auth_subtree_nested.get(type).hit(now, mds->mdcache->decayrate, amount);
-      if (rd_adj != 0.0)
-	dir->pop_auth_subtree_nested.get(META_POP_IRD).adjust(now, mds->mdcache->decayrate, rd_adj);
-    }
+    stripe->pop_auth_subtree_nested.get(type).hit(now, mds->mdcache->decayrate, amount);
+    if (rd_adj != 0.0)
+      stripe->pop_auth_subtree_nested.get(META_POP_IRD).adjust(now, mds->mdcache->decayrate, rd_adj);
 
-    if (dir->is_subtree_root())
-      hit_subtree = false;                // end of auth domain, stop hitting auth counters.
+    if (stripe->is_subtree_root())
+      hit_subtree = false; // end of auth domain, stop hitting auth counters.
 
-    if (dir->inode->get_parent_dn() == 0) break;
-    dir = dir->inode->get_parent_dn()->get_dir();
+    stripe = stripe->get_parent_stripe();
   }
 }
 
@@ -1111,30 +1090,26 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
  * NOTE: call me _after_ forcing *dir into a subtree root,
  *       but _before_ doing the encode_export_dirs.
  */
-void MDBalancer::subtract_export(CDir *dir, utime_t now)
+void MDBalancer::subtract_export(CStripe *stripe, utime_t now)
 {
-  dirfrag_load_vec_t subload = dir->pop_auth_subtree;
+  dirfrag_load_vec_t &subload = stripe->pop_auth_subtree;
 
-  while (true) {
-    dir = dir->inode->get_parent_dir();
-    if (!dir) break;
-
-    dir->pop_nested.sub(now, mds->mdcache->decayrate, subload);
-    dir->pop_auth_subtree_nested.sub(now, mds->mdcache->decayrate, subload);
+  for (stripe = stripe->get_parent_stripe();
+       stripe; stripe = stripe->get_parent_stripe()) {
+    stripe->pop_nested.sub(now, mds->mdcache->decayrate, subload);
+    stripe->pop_auth_subtree_nested.sub(now, mds->mdcache->decayrate, subload);
   }
 }
 
 
-void MDBalancer::add_import(CDir *dir, utime_t now)
+void MDBalancer::add_import(CStripe *stripe, utime_t now)
 {
-  dirfrag_load_vec_t subload = dir->pop_auth_subtree;
+  dirfrag_load_vec_t &subload = stripe->pop_auth_subtree;
 
-  while (true) {
-    dir = dir->inode->get_parent_dir();
-    if (!dir) break;
-
-    dir->pop_nested.add(now, mds->mdcache->decayrate, subload);
-    dir->pop_auth_subtree_nested.add(now, mds->mdcache->decayrate, subload);
+  for (stripe = stripe->get_parent_stripe();
+       stripe; stripe = stripe->get_parent_stripe()) {
+    stripe->pop_nested.add(now, mds->mdcache->decayrate, subload);
+    stripe->pop_auth_subtree_nested.add(now, mds->mdcache->decayrate, subload);
   }
 }
 
@@ -1147,3 +1122,4 @@ void MDBalancer::show_imports(bool external)
 {
   mds->mdcache->show_subtrees();
 }
+

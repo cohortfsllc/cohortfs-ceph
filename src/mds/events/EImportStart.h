@@ -24,19 +24,16 @@
 
 class EImportStart : public LogEvent {
 protected:
-  dirfrag_t base;
-  vector<dirfrag_t> bounds;
+  dirstripe_t base;
+  vector<dirstripe_t> bounds;
 
  public:
   EMetaBlob metablob;
   bufferlist client_map;  // encoded map<__u32,entity_inst_t>
   version_t cmapv;
 
-  EImportStart(MDLog *log,
-	       dirfrag_t di,
-	       vector<dirfrag_t>& b) : LogEvent(EVENT_IMPORTSTART), 
-				       base(di), bounds(b),
-				       metablob(log) { }
+  EImportStart(MDLog *log, dirstripe_t di, vector<dirstripe_t>& b)
+      : LogEvent(EVENT_IMPORTSTART), base(di), bounds(b), metablob(log) { }
   EImportStart() : LogEvent(EVENT_IMPORTSTART) { }
   
   void print(ostream& out) {

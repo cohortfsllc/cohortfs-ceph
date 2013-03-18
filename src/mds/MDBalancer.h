@@ -33,6 +33,7 @@ class MHeartbeat;
 class CInode;
 class Context;
 class CDir;
+class CStripe;
 
 class MDBalancer {
  protected:
@@ -98,19 +99,17 @@ public:
     if it has then do the actual export. Otherwise send off our
     export targets message again*/
   void try_rebalance();
-  void find_exports(CDir *dir, 
-                    double amount, 
-                    list<CDir*>& exports, 
-                    double& have,
-                    set<CDir*>& already_exporting);
+  void find_exports(CStripe *stripe, double amount, 
+                    list<CStripe*>& exports, double& have,
+                    set<CStripe*>& already_exporting);
 
 
-  void subtract_export(class CDir *ex, utime_t now);
-  void add_import(class CDir *im, utime_t now);
+  void subtract_export(CStripe *ex, utime_t now);
+  void add_import(CStripe *im, utime_t now);
 
-  void hit_inode(utime_t now, class CInode *in, int type, int who=-1);
-  void hit_dir(utime_t now, class CDir *dir, int type, int who=-1, double amount=1.0);
-  void hit_recursive(utime_t now, class CDir *dir, int type, double amount, double rd_adj);
+  void hit_inode(utime_t now, CInode *in, int type, int who=-1);
+  void hit_dir(utime_t now, CDir *dir, int type, int who=-1, double amount=1.0);
+  void hit_stripe(utime_t now, CStripe *stripe, int type, int who=-1, double amount=1.0);
 
 
   void show_imports(bool external=false);

@@ -105,11 +105,12 @@ ostream& operator<<(ostream& out, CInode& in)
     out << "." << in.get_replica_nonce();
   }
 
+  if (!in.get_stripe_auth().empty())
+    out << " stripes=" << in.get_stripe_auth();
+
   if (in.is_symlink())
     out << " symlink='" << in.symlink << "'";
-  if (in.is_dir() && !in.dirfragtree.empty())
-    out << " " << in.dirfragtree;
-  
+ 
   out << " v" << in.get_version();
   if (in.get_projected_version() > in.get_version())
     out << " pv" << in.get_projected_version();
@@ -290,13 +291,13 @@ void CInode::mark_dirty_rstat()
     dout(10) << "mark_dirty_rstat" << dendl;
     state_set(STATE_DIRTYRSTAT);
     get(PIN_DIRTYRSTAT);
-    CDentry *dn = get_projected_parent_dn();
-    CDir *pdir = dn->dir;
-    pdir->dirty_rstat_inodes.push_back(&dirty_rstat_item);
+    CStripe *pstripe = get_projected_parent_stripe();
+    pstripe->dirty_rstat_inodes.push_back(&dirty_rstat_item);
 
-    mdcache->mds->locker->mark_updated_scatterlock(&pdir->inode->nestlock);
+    mdcache->mds->locker->mark_updated_scatterlock(&pstripe->get_inode()->nestlock);
   }
 }
+
 void CInode::clear_dirty_rstat()
 {
   if (state_test(STATE_DIRTYRSTAT)) {
@@ -438,7 +439,7 @@ void CInode::pop_projected_snaprealm(sr_t *next_snaprealm)
 
 // ====== CInode =======
 
-// dirfrags
+// stripes
 
 __u32 CInode::hash_dentry_name(const string &dn)
 {
@@ -448,218 +449,129 @@ __u32 CInode::hash_dentry_name(const string &dn)
   return ceph_str_hash(which, dn.data(), dn.length());
 }
 
-frag_t CInode::pick_dirfrag(const string& dn)
+stripeid_t CInode::pick_stripe(__u32 dnhash)
 {
-  if (dirfragtree.empty())
-    return frag_t();          // avoid the string hash if we can.
-
-  __u32 h = hash_dentry_name(dn);
-  return dirfragtree[h];
+  return stripeid_t(dnhash % stripe_auth.size());
 }
 
-bool CInode::get_dirfrags_under(frag_t fg, list<CDir*>& ls)
+stripeid_t CInode::pick_stripe(const string &dname)
 {
-  bool all = true;
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
-    if (fg.contains(p->first))
-      ls.push_back(p->second);
-    else
-      all = false;
-  }
-  /*
-  list<frag_t> fglist;
-  dirfragtree.get_leaves_under(fg, fglist);
-  for (list<frag_t>::iterator p = fglist.begin();
-       p != fglist.end();
-       ++p) 
-    if (dirfrags.count(*p))
-      ls.push_back(dirfrags[*p]);
-    else 
-      all = false;
-  */
-  return all;
+  if (stripes.size() == 1)
+    return 0;
+  __u32 dnhash = hash_dentry_name(dname);
+  return stripeid_t(dnhash % stripes.size());
 }
 
-void CInode::verify_dirfrags()
+bool CInode::has_open_stripes() const
 {
-  bool bad = false;
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
-    if (!dirfragtree.is_leaf(p->first)) {
-      dout(0) << "have open dirfrag " << p->first << " but not leaf in " << dirfragtree
-	      << ": " << *p->second << dendl;
-      bad = true;
-    }
-  }
-  assert(!bad);
+  return !stripes.empty();
 }
 
-void CInode::force_dirfrags()
+bool CInode::has_subtree_root_stripe() const
 {
-  bool bad = false;
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
-    if (!dirfragtree.is_leaf(p->first)) {
-      dout(0) << "have open dirfrag " << p->first << " but not leaf in " << dirfragtree
-	      << ": " << *p->second << dendl;
-      bad = true;
-    }
-  }
-
-  if (bad) {
-    list<frag_t> leaves;
-    dirfragtree.get_leaves(leaves);
-    for (list<frag_t>::iterator p = leaves.begin(); p != leaves.end(); ++p)
-      mdcache->get_force_dirfrag(dirfrag_t(ino(),*p));
-  }
-
-  verify_dirfrags();
-}
-
-CDir *CInode::get_approx_dirfrag(frag_t fg)
-{
-  CDir *dir = get_dirfrag(fg);
-  if (dir) return dir;
-
-  // find a child?
-  list<CDir*> ls;
-  get_dirfrags_under(fg, ls);
-  if (!ls.empty()) 
-    return ls.front();
-
-  // try parents?
-  while (1) {
-    fg = fg.parent();
-    dir = get_dirfrag(fg);
-    if (dir) return dir;
-  }
-}	
-
-void CInode::get_dirfrags(list<CDir*>& ls) 
-{
-  // all dirfrags
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-       p != dirfrags.end();
-       ++p)
-    ls.push_back(p->second);
-}
-void CInode::get_nested_dirfrags(list<CDir*>& ls) 
-{  
-  // dirfrags in same subtree
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-       p != dirfrags.end();
-       ++p)
-    if (!p->second->is_subtree_root())
-      ls.push_back(p->second);
-}
-void CInode::get_subtree_dirfrags(list<CDir*>& ls) 
-{ 
-  // dirfrags that are roots of new subtrees
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-       p != dirfrags.end();
-       ++p)
-    if (p->second->is_subtree_root())
-      ls.push_back(p->second);
-}
-
-
-CDir *CInode::get_or_open_dirfrag(MDCache *mdcache, frag_t fg)
-{
-  assert(is_dir());
-
-  // have it?
-  CDir *dir = get_dirfrag(fg);
-  if (!dir) {
-    // create it.
-    assert(is_auth());
-    dir = new CDir(this, fg, mdcache, true);
-    add_dirfrag(dir);
-  }
-  return dir;
-}
-
-CDir *CInode::add_dirfrag(CDir *dir)
-{
-  assert(dirfrags.count(dir->dirfrag().frag) == 0);
-  dirfrags[dir->dirfrag().frag] = dir;
-
-  if (stickydir_ref > 0) {
-    dir->state_set(CDir::STATE_STICKY);
-    dir->get(CDir::PIN_STICKY);
-  }
-
-  return dir;
-}
-
-void CInode::close_dirfrag(frag_t fg)
-{
-  dout(14) << "close_dirfrag " << fg << dendl;
-  assert(dirfrags.count(fg));
-  
-  CDir *dir = dirfrags[fg];
-  dir->remove_null_dentries();
-  
-  // clear dirty flag
-  if (dir->is_dirty())
-    dir->mark_clean();
-  
-  if (stickydir_ref > 0) {
-    dir->state_clear(CDir::STATE_STICKY);
-    dir->put(CDir::PIN_STICKY);
-  }
-  
-  // dump any remaining dentries, for debugging purposes
-  for (CDir::map_t::iterator p = dir->items.begin();
-       p != dir->items.end();
-       ++p) 
-    dout(14) << "close_dirfrag LEFTOVER dn " << *p->second << dendl;
-
-  assert(dir->get_num_ref() == 0);
-  delete dir;
-  dirfrags.erase(fg);
-}
-
-void CInode::close_dirfrags()
-{
-  while (!dirfrags.empty()) 
-    close_dirfrag(dirfrags.begin()->first);
-}
-
-bool CInode::has_subtree_root_dirfrag()
-{
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-       p != dirfrags.end();
-       ++p)
+  for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
     if (p->second->is_subtree_root())
       return true;
   return false;
 }
 
-
-void CInode::get_stickydirs()
+void CInode::get_stripes(list<CStripe*>& ls)
 {
-  if (stickydir_ref == 0) {
-    get(PIN_STICKYDIRS);
-    for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	 p != dirfrags.end();
-	 ++p) {
-      p->second->state_set(CDir::STATE_STICKY);
-      p->second->get(CDir::PIN_STICKY);
-    }
-  }
-  stickydir_ref++;
+  for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
+    ls.push_back(p->second);
 }
 
-void CInode::put_stickydirs()
+void CInode::get_nested_stripes(list<CStripe*>& ls) 
+{  
+  // stripes in same subtree
+  for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
+    if (!p->second->is_subtree_root())
+      ls.push_back(p->second);
+}
+
+void CInode::get_subtree_stripes(list<CStripe*>& ls) 
+{ 
+  // stripes that are roots of new subtrees
+  for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
+    if (p->second->is_subtree_root())
+      ls.push_back(p->second);
+}
+
+
+CStripe* CInode::get_stripe(stripeid_t stripeid)
 {
-  assert(stickydir_ref > 0);
-  stickydir_ref--;
-  if (stickydir_ref == 0) {
-    put(PIN_STICKYDIRS);
-    for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	 p != dirfrags.end();
-	 ++p) {
-      p->second->state_clear(CDir::STATE_STICKY);
-      p->second->put(CDir::PIN_STICKY);
-    }
+  assert(stripeid < stripe_auth.size());
+  stripe_map::iterator i = stripes.find(stripeid);
+  return i == stripes.end() ? NULL : i->second;
+}
+
+CStripe* CInode::get_or_open_stripe(stripeid_t stripeid)
+{
+  // have it?
+  CStripe *stripe = get_stripe(stripeid);
+  if (!stripe) {
+    // create it.
+    assert(is_auth());
+    stripe = new CStripe(this, stripeid, true);
+    add_stripe(stripe);
+  }
+  return stripe;
+}
+
+CStripe* CInode::add_stripe(CStripe *stripe)
+{
+  assert(stripes.count(stripe->get_stripeid()) == 0);
+  stripes[stripe->get_stripeid()] = stripe;
+
+  if (stickystripe_ref > 0)
+    stripe->get_stickydirs();
+
+  return stripe;
+}
+
+void CInode::close_stripe(CStripe *stripe)
+{
+  dout(14) << "close_stripe " << *stripe << dendl;
+  assert(stripes.count(stripe->get_stripeid()));
+
+  stripe->close_dirfrags();
+
+  // clear dirty flag
+  if (stripe->is_dirty())
+    stripe->mark_clean();
+ 
+  if (stickystripe_ref > 0)
+    stripe->put_stickydirs();
+
+  assert(stripe->get_num_ref() == 0);
+  stripes.erase(stripe->get_stripeid());
+  delete stripe;
+}
+
+void CInode::close_stripes()
+{
+  while (!stripes.empty())
+    close_stripe(stripes.begin()->second);
+}
+
+void CInode::get_stickystripes()
+{
+  if (stickystripe_ref == 0) {
+    get(PIN_STICKYSTRIPES);
+    for (stripe_map::iterator p = stripes.begin(); p != stripes.end(); ++p)
+      p->second->get_stickydirs();
+  }
+  stickystripe_ref++;
+}
+
+void CInode::put_stickystripes()
+{
+  assert(stickystripe_ref > 0);
+  stickystripe_ref--;
+  if (stickystripe_ref == 0) {
+    put(PIN_STICKYSTRIPES);
+    for (stripe_map::iterator p = stripes.begin(); p != stripes.end(); ++p)
+      p->second->put_stickydirs();
   }
 }
 
@@ -712,10 +624,20 @@ CDir *CInode::get_projected_parent_dir()
     return p->dir;
   return NULL;
 }
+CStripe* CInode::get_parent_stripe()
+{
+  CDir *dir = get_parent_dir();
+  return dir ? dir->get_stripe() : NULL;
+}
+CStripe* CInode::get_projected_parent_stripe()
+{
+  CDir *dir = get_projected_parent_dir();
+  return dir ? dir->get_stripe() : NULL;
+}
 CInode *CInode::get_parent_inode() 
 {
   if (parent) 
-    return parent->dir->inode;
+    return parent->dir->get_inode();
   return NULL;
 }
 
@@ -1093,6 +1015,8 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       ::encode(dirty, bl);
     }
     {
+      // XXX: move dirfragtreelock to CStripe
+#if 0
       // encode the raw tree
       ::encode(dirfragtree, bl);
 
@@ -1106,6 +1030,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
 	  myfrags.insert(fg);
 	}
       ::encode(myfrags, bl);
+#endif
     }
     break;
     
@@ -1125,6 +1050,8 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
     {
       dout(15) << "encode_lock_state inode.dirstat is " << inode.dirstat << dendl;
       ::encode(inode.dirstat, bl);  // only meaningful if i am auth.
+      // XXX: accumulate fragstats in CStripe?
+#if 0
       bufferlist tmp;
       __u32 n = 0;
       for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
@@ -1146,6 +1073,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       }
       ::encode(n, bl);
       bl.claim_append(tmp);
+#endif
     }
     break;
 
@@ -1157,6 +1085,8 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
     {
       dout(15) << "encode_lock_state inode.rstat is " << inode.rstat << dendl;
       ::encode(inode.rstat, bl);  // only meaningful if i am auth.
+      // XXX: accumulate rstats in CStripe
+#if 0
       bufferlist tmp;
       __u32 n = 0;
       for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
@@ -1180,6 +1110,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       }
       ::encode(n, bl);
       bl.claim_append(tmp);
+#endif
     }
     break;
     
@@ -1261,6 +1192,8 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
       }
     }
     {
+      // XXX: move fragtreelock to CStripe
+#if 0
       fragtree_t temp;
       ::decode(temp, p);
       set<frag_t> authfrags;
@@ -1289,6 +1222,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
       }
       if (g_conf->mds_debug_frag)
 	verify_dirfrags();
+#endif
     }
     break;
 
@@ -1315,6 +1249,8 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	dout(10) << " taking inode dirstat " << dirstat << " for " << *this << dendl;
 	inode.dirstat = dirstat;    // take inode summation if replica
       }
+      // XXX: accumulate fragstats in CStripe?
+#if 0
       __u32 n;
       ::decode(n, p);
       dout(10) << " ...got " << n << " fragstats on " << *this << dendl;
@@ -1355,6 +1291,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	  }
 	}
       }
+#endif
     }
     break;
 
@@ -1374,6 +1311,8 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	dout(10) << " taking inode rstat " << rstat << " for " << *this << dendl;
 	inode.rstat = rstat;    // take inode summation if replica
       }
+      // XXX: accumulate rstats in CStripe?
+#if 0
       __u32 n;
       ::decode(n, p);
       while (n--) {
@@ -1416,6 +1355,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	  }
 	}
       }
+#endif
     }
     break;
 
@@ -1503,26 +1443,24 @@ void CInode::start_scatter(ScatterLock *lock)
 {
   dout(10) << "start_scatter " << *lock << " on " << *this << dendl;
   assert(is_auth());
+
   inode_t *pi = get_projected_inode();
 
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-       p != dirfrags.end();
-       p++) {
-    frag_t fg = p->first;
-    CDir *dir = p->second;
-    fnode_t *pf = dir->get_projected_fnode();
-    dout(20) << fg << " " << *dir << dendl;
+  for (stripe_map::iterator p = stripes.begin(); p != stripes.end(); ++p) {
+    CStripe *stripe = p->second;
+    fnode_t *pf = stripe->get_projected_fnode();
+    dout(20) << p->first << " " << *stripe << dendl;
 
-    if (!dir->is_auth())
+    if (!stripe->is_auth())
       continue;
 
     switch (lock->get_type()) {
     case CEPH_LOCK_IFILE:
-      finish_scatter_update(lock, dir, pi->dirstat.version, pf->accounted_fragstat.version);
+      finish_scatter_update(lock, stripe, pi->dirstat.version, pf->accounted_fragstat.version);
       break;
 
     case CEPH_LOCK_INEST:
-      finish_scatter_update(lock, dir, pi->rstat.version, pf->accounted_rstat.version);
+      finish_scatter_update(lock, stripe, pi->rstat.version, pf->accounted_rstat.version);
       break;
     }
   }
@@ -1530,34 +1468,36 @@ void CInode::start_scatter(ScatterLock *lock)
 
 struct C_Inode_FragUpdate : public Context {
   CInode *in;
-  CDir *dir;
+  CStripe *stripe;
   Mutation *mut;
 
-  C_Inode_FragUpdate(CInode *i, CDir *d, Mutation *m) : in(i), dir(d), mut(m) {}
+  C_Inode_FragUpdate(CInode *in, CStripe *stripe, Mutation *mut)
+      : in(in), stripe(stripe), mut(mut) {}
   void finish(int r) {
-    in->_finish_frag_update(dir, mut);
-  }    
+    in->_finish_frag_update(stripe, mut);
+  }
 };
 
-void CInode::finish_scatter_update(ScatterLock *lock, CDir *dir,
+void CInode::finish_scatter_update(ScatterLock *lock, CStripe *stripe,
 				   version_t inode_version, version_t dir_accounted_version)
 {
-  frag_t fg = dir->get_frag();
-  assert(dir->is_auth());
+  assert(stripe->is_auth());
 
-  if (dir->is_frozen()) {
-    dout(10) << "finish_scatter_update " << fg << " frozen, marking " << *lock << " stale " << *dir << dendl;
+  if (stripe->is_frozen()) {
+    dout(10) << "finish_scatter_update frozen, marking "
+        << *lock << " stale " << *stripe << dendl;
   } else {
     if (dir_accounted_version != inode_version) {
-      dout(10) << "finish_scatter_update " << fg << " journaling accounted scatterstat update v" << inode_version << dendl;
+      dout(10) << "finish_scatter_update journaling accounted "
+          << "scatterstat update v" << inode_version << dendl;
 
       MDLog *mdlog = mdcache->mds->mdlog;
       Mutation *mut = new Mutation;
       mut->ls = mdlog->get_current_segment();
 
       inode_t *pi = get_projected_inode();
-      fnode_t *pf = dir->project_fnode();
-      pf->version = dir->pre_dirty();
+      fnode_t *pf = stripe->project_fnode();
+      pf->version = stripe->pre_dirty();
 
       const char *ename = 0;
       switch (lock->get_type()) {
@@ -1575,27 +1515,26 @@ void CInode::finish_scatter_update(ScatterLock *lock, CDir *dir,
 	assert(0);
       }
 	
-      mut->add_projected_fnode(dir);
+      mut->add_projected_fnode(stripe);
 
       EUpdate *le = new EUpdate(mdlog, ename);
       mdlog->start_entry(le);
-      le->metablob.add_dir_context(dir);
-      le->metablob.add_dir(dir, true);
-      
-      assert(!dir->is_frozen());
-      mut->auth_pin(dir);
-      
-      mdlog->submit_entry(le, new C_Inode_FragUpdate(this, dir, mut));
+      le->metablob.add_stripe(stripe, true);
+      le->metablob.add_stripe_context(stripe);
+
+      mut->auth_pin(stripe);
+
+      mdlog->submit_entry(le, new C_Inode_FragUpdate(this, stripe, mut));
     } else {
-      dout(10) << "finish_scatter_update " << fg << " accounted " << *lock
+      dout(10) << "finish_scatter_update accounted " << *lock
 	       << " scatter stat unchanged at v" << dir_accounted_version << dendl;
     }
   }
 }
 
-void CInode::_finish_frag_update(CDir *dir, Mutation *mut)
+void CInode::_finish_frag_update(CStripe *stripe, Mutation *mut)
 {
-  dout(10) << "_finish_frag_update on " << *dir << dendl;
+  dout(10) << "_finish_frag_update on " << *stripe << dendl;
   mut->apply();
   mut->cleanup();
   delete mut;
@@ -1637,31 +1576,28 @@ void CInode::finish_scatter_gather_update(int type)
       bool touched_mtime = false;
       dout(20) << "  orig dirstat " << pi->dirstat << dendl;
       pi->dirstat.version++;
-      for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	   p != dirfrags.end();
-	   p++) {
-	frag_t fg = p->first;
-	CDir *dir = p->second;
-	dout(20) << fg << " " << *dir << dendl;
+      for (stripe_map::iterator p = stripes.begin(); p != stripes.end(); ++p) {
+	CStripe *stripe = p->second;
+	dout(20) << p->first << " " << *stripe << dendl;
 
-	bool update = dir->is_auth() && !dir->is_frozen();
+	bool update = stripe->is_auth() && !stripe->is_frozen();
 
-	fnode_t *pf = dir->get_projected_fnode();
+	fnode_t *pf = stripe->get_projected_fnode();
 	if (update)
-	  pf = dir->project_fnode();
+	  pf = stripe->project_fnode();
 
 	if (pf->accounted_fragstat.version == pi->dirstat.version - 1) {
-	  dout(20) << fg << "           fragstat " << pf->fragstat << dendl;
-	  dout(20) << fg << " accounted_fragstat " << pf->accounted_fragstat << dendl;
+	  dout(20) << "           fragstat " << pf->fragstat << dendl;
+	  dout(20) << " accounted_fragstat " << pf->accounted_fragstat << dendl;
 	  pi->dirstat.add_delta(pf->fragstat, pf->accounted_fragstat, touched_mtime);
 	} else {
-	  dout(20) << fg << " skipping STALE accounted_fragstat " << pf->accounted_fragstat << dendl;
+	  dout(20) << " skipping STALE accounted_fragstat " << pf->accounted_fragstat << dendl;
 	}
 
 	if (pf->fragstat.nfiles < 0 ||
 	    pf->fragstat.nsubdirs < 0) {
 	  clog.error() << "bad/negative dir size on "
-	      << dir->dirfrag() << " " << pf->fragstat << "\n";
+	      << stripe->dirstripe() << " " << pf->fragstat << "\n";
 	  
 	  if (pf->fragstat.nfiles < 0)
 	    pf->fragstat.nfiles = 0;
@@ -1674,22 +1610,21 @@ void CInode::finish_scatter_gather_update(int type)
 	if (update) {
 	  pf->accounted_fragstat = pf->fragstat;
 	  pf->fragstat.version = pf->accounted_fragstat.version = pi->dirstat.version;
-	  dout(10) << fg << " updated accounted_fragstat " << pf->fragstat << " on " << *dir << dendl;
+	  dout(10) << " updated accounted_fragstat " << pf->fragstat << " on " << *stripe << dendl;
 	}
 
-	if (fg == frag_t()) { // i.e., we are the only frag
-	  if (pi->dirstat.size() != pf->fragstat.size()) {
-	    clog.error() << "unmatched fragstat size on single "
-	       << "dirfrag " << dir->dirfrag() << ", inode has " 
-	       << pi->dirstat << ", dirfrag has " << pf->fragstat << "\n";
-	    
-	    // trust the dirfrag for now
-	    version_t v = pi->dirstat.version;
-	    pi->dirstat = pf->fragstat;
-	    pi->dirstat.version = v;
+        if (get_stripe_count() == 1 &&
+            pi->dirstat.size() != pf->fragstat.size()) {
+          clog.error() << "unmatched fragstat size on single "
+              << "stripe " << stripe->dirstripe() << ", inode has "
+              << pi->dirstat << ", stripe has " << pf->fragstat << "\n";
 
-	    assert(!"unmatched fragstat size" == g_conf->mds_verify_scatter);
-	  }
+          // trust the dirfrag for now
+          version_t v = pi->dirstat.version;
+          pi->dirstat = pf->fragstat;
+          pi->dirstat.version = v;
+
+          assert(!"unmatched fragstat size" == g_conf->mds_verify_scatter);
 	}
       }
       if (touched_mtime)
@@ -1718,64 +1653,60 @@ void CInode::finish_scatter_gather_update(int type)
       inode_t *pi = get_projected_inode();
       dout(20) << "  orig rstat " << pi->rstat << dendl;
       pi->rstat.version++;
-      for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	   p != dirfrags.end();
-	   p++) {
-	frag_t fg = p->first;
-	CDir *dir = p->second;
-	dout(20) << fg << " " << *dir << dendl;
+      for (stripe_map::iterator p = stripes.begin(); p != stripes.end(); ++p) {
+	CStripe *stripe = p->second;
+	dout(20) << p->first << " " << *stripe << dendl;
 
-	bool update = dir->is_auth() && !dir->is_frozen();
+	bool update = stripe->is_auth() && !stripe->is_frozen();
 
-	fnode_t *pf = dir->get_projected_fnode();
+	fnode_t *pf = stripe->get_projected_fnode();
 	if (update)
-	  pf = dir->project_fnode();
+	  pf = stripe->project_fnode();
 
 	if (pf->accounted_rstat.version == pi->rstat.version-1) {
 	  // only pull this frag's dirty rstat inodes into the frag if
 	  // the frag is non-stale and updateable.  if it's stale,
 	  // that info will just get thrown out!
 	  if (update)
-	    dir->assimilate_dirty_rstat_inodes();
+	    stripe->assimilate_dirty_rstat_inodes();
 
-	  dout(20) << fg << "           rstat " << pf->rstat << dendl;
-	  dout(20) << fg << " accounted_rstat " << pf->accounted_rstat << dendl;
-	  dout(20) << fg << " dirty_old_rstat " << dir->dirty_old_rstat << dendl;
+	  dout(20) << "           rstat " << pf->rstat << dendl;
+	  dout(20) << " accounted_rstat " << pf->accounted_rstat << dendl;
+	  dout(20) << " dirty_old_rstat " << stripe->dirty_old_rstat << dendl;
 	  mdcache->project_rstat_frag_to_inode(pf->rstat, pf->accounted_rstat,
-					       dir->first, CEPH_NOSNAP, this, true);
-	  for (map<snapid_t,old_rstat_t>::iterator q = dir->dirty_old_rstat.begin();
-	       q != dir->dirty_old_rstat.end();
+					       stripe->first, CEPH_NOSNAP, this, true);
+	  for (map<snapid_t,old_rstat_t>::iterator q = stripe->dirty_old_rstat.begin();
+	       q != stripe->dirty_old_rstat.end();
 	       q++)
 	    mdcache->project_rstat_frag_to_inode(q->second.rstat, q->second.accounted_rstat,
 						 q->second.first, q->first, this, true);
 	  if (update)  // dir contents not valid if frozen or non-auth
-	    dir->check_rstats();
+	    stripe->check_rstats();
 	} else {
-	  dout(20) << fg << " skipping STALE accounted_rstat " << pf->accounted_rstat << dendl;
+	  dout(20) << " skipping STALE accounted_rstat " << pf->accounted_rstat << dendl;
 	}
 	if (update) {
 	  pf->accounted_rstat = pf->rstat;
-	  dir->dirty_old_rstat.clear();
+	  stripe->dirty_old_rstat.clear();
 	  pf->rstat.version = pf->accounted_rstat.version = pi->rstat.version;
-	  dout(10) << fg << " updated accounted_rstat " << pf->rstat << " on " << *dir << dendl;
+	  dout(10) << " updated accounted_rstat " << pf->rstat << " on " << *stripe << dendl;
 	}
 
-	if (fg == frag_t()) { // i.e., we are the only frag
-	  if (pi->rstat.rbytes != pf->rstat.rbytes) { 
-	    clog.error() << "unmatched rstat rbytes on single dirfrag "
-		<< dir->dirfrag() << ", inode has " << pi->rstat
-		<< ", dirfrag has " << pf->rstat << "\n";
-	    
-	    // trust the dirfrag for now
-	    version_t v = pi->rstat.version;
-	    pi->rstat = pf->rstat;
-	    pi->rstat.version = v;
-	    
-	    assert(!"unmatched rstat rbytes" == g_conf->mds_verify_scatter);
-	  }
+	if (get_stripe_count() == 1 &&
+            pi->rstat.rbytes != pf->rstat.rbytes) { 
+          clog.error() << "unmatched rstat rbytes on single stripe "
+              << stripe->dirstripe() << ", inode has " << pi->rstat
+              << ", stripe has " << pf->rstat << "\n";
+
+          // trust the dirfrag for now
+          version_t v = pi->rstat.version;
+          pi->rstat = pf->rstat;
+          pi->rstat.version = v;
+
+          assert(!"unmatched rstat rbytes" == g_conf->mds_verify_scatter);
 	}
 	if (update)
-	  dir->check_rstats();
+	  stripe->check_rstats();
       }
       dout(20) << " final rstat " << pi->rstat << dendl;
 
@@ -1808,26 +1739,24 @@ void CInode::finish_scatter_gather_update_accounted(int type, Mutation *mut, EMe
   dout(10) << "finish_scatter_gather_update_accounted " << type << " on " << *this << dendl;
   assert(is_auth());
 
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-       p != dirfrags.end();
-       p++) {
-    CDir *dir = p->second;
-    if (!dir->is_auth() || dir->is_frozen())
+  for (stripe_map::iterator p = stripes.begin(); p != stripes.end(); ++p) {
+    CStripe *stripe = p->second;
+    if (!stripe->is_auth() || stripe->is_frozen())
       continue;
     
     if (type == CEPH_LOCK_IDFT)
       continue;  // nothing to do.
 
-    dout(10) << " journaling updated frag accounted_ on " << *dir << dendl;
-    assert(dir->is_projected());
-    fnode_t *pf = dir->get_projected_fnode();
-    pf->version = dir->pre_dirty();
-    mut->add_projected_fnode(dir);
-    metablob->add_dir(dir, true);
-    mut->auth_pin(dir);
+    dout(10) << " journaling updated frag accounted_ on " << *stripe << dendl;
+    assert(stripe->is_projected());
+    fnode_t *pf = stripe->get_projected_fnode();
+    pf->version = stripe->pre_dirty();
+    mut->add_projected_fnode(stripe);
+    metablob->add_stripe(stripe, true);
+    mut->auth_pin(stripe);
 
     if (type == CEPH_LOCK_INEST)
-      dir->assimilate_dirty_rstat_inodes_finish(mut, metablob);
+      stripe->assimilate_dirty_rstat_inodes_finish(mut, metablob);
   }
 }
 
@@ -1871,6 +1800,20 @@ void CInode::add_waiter(uint64_t tag, Context *c)
   }
   dout(15) << "taking waiter here" << dendl;
   MDSCacheObject::add_waiter(tag, c);
+}
+
+void CInode::take_waiting(uint64_t mask, list<Context*> &ls)
+{
+  if (mask & WAIT_STRIPE) {
+    for (map<stripeid_t, list<Context*> >::iterator i = waiting_on_stripe.begin();
+         i != waiting_on_stripe.end();
+         ++i)
+      ls.splice(ls.end(), i->second);
+
+    waiting_on_stripe.clear();
+  }
+
+  MDSCacheObject::take_waiting(mask, ls);
 }
 
 bool CInode::freeze_inode(int auth_pin_allowance)
@@ -2009,7 +1952,7 @@ void CInode::adjust_nested_auth_pins(int a, void *by)
 {
   assert(a);
   nested_auth_pins += a;
-  dout(35) << "adjust_nested_auth_pins by " << by
+  dout(15) << "adjust_nested_auth_pins by " << by
 	   << " change " << a << " yields "
 	   << auth_pins << "+" << nested_auth_pins << dendl;
   assert(nested_auth_pins >= 0);
@@ -2017,15 +1960,11 @@ void CInode::adjust_nested_auth_pins(int a, void *by)
   if (g_conf->mds_debug_auth_pins) {
     // audit
     int s = 0;
-    for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	 p != dirfrags.end();
-	 ++p) {
-      CDir *dir = p->second;
-      if (!dir->is_subtree_root() && dir->get_cum_auth_pins())
+    for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
+      if (!p->second->is_subtree_root() && p->second->get_cum_auth_pins())
 	s++;
-    } 
     assert(s == nested_auth_pins);
-  } 
+  }
 
   if (parent)
     parent->adjust_nested_auth_pins(a, 0, by);
@@ -2228,7 +2167,7 @@ client_t CInode::calc_ideal_loner()
        it++) 
     if (!it->second->is_stale() &&
 	((it->second->wanted() & (CEPH_CAP_ANY_WR|CEPH_CAP_FILE_WR|CEPH_CAP_FILE_RD)) ||
-	 (inode.is_dir() && !has_subtree_root_dirfrag()))) {
+	 (inode.is_dir() && !has_subtree_root_stripe()))) {
       if (n)
 	return -1;
       n++;
@@ -2737,7 +2676,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   if (max_bytes) {
     unsigned bytes = sizeof(e);
     bytes += sizeof(__u32);
-    bytes += (sizeof(__u32) + sizeof(__u32)) * dirfragtree._splits.size();
+    bytes += sizeof(__u32) * stripe_auth.size();
     bytes += sizeof(__u32) + symlink.length();
     bytes += sizeof(__u32) + xbl.length();
     if (bytes > max_bytes)
@@ -2821,14 +2760,10 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   }
 
   // encode
-  e.fragtree.nsplits = dirfragtree._splits.size();
+  e.stripes = stripe_auth.size();
   ::encode(e, bl);
-  for (map<frag_t,int32_t>::iterator p = dirfragtree._splits.begin();
-       p != dirfragtree._splits.end();
-       p++) {
-    ::encode(p->first, bl);
-    ::encode(p->second, bl);
-  }
+  for (vector<int>::iterator p = stripe_auth.begin(); p != stripe_auth.end(); ++p)
+    ::encode(*p, bl);
   ::encode(symlink, bl);
   if (session->connection->has_feature(CEPH_FEATURE_DIRLAYOUTHASH)) {
     i = pfile ? pi : oi;
@@ -2898,7 +2833,7 @@ void CInode::_encode_base(bufferlist& bl)
   ::encode(first, bl);
   ::encode(inode, bl);
   ::encode(symlink, bl);
-  ::encode(dirfragtree, bl);
+  ::encode(stripe_auth, bl);
   ::encode(xattrs, bl);
   ::encode(old_inodes, bl);
   encode_snap(bl);
@@ -2912,7 +2847,7 @@ void CInode::_decode_base(bufferlist::iterator& p)
     parent->adjust_nested_anchors((int)inode.anchored - (int)was_anchored);
 
   ::decode(symlink, p);
-  ::decode(dirfragtree, p);
+  ::decode(stripe_auth, p);
   ::decode(xattrs, p);
   ::decode(old_inodes, p);
   decode_snap(p);
@@ -3004,20 +2939,19 @@ void CInode::encode_export(bufferlist& bl)
 
   // include scatterlock info for any bounding CDirs
   bufferlist bounding;
-  if (inode.is_dir())
-    for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	 p != dirfrags.end();
-	 ++p) {
-      CDir *dir = p->second;
-      if (dir->state_test(CDir::STATE_EXPORTBOUND)) {
-	::encode(p->first, bounding);
-	::encode(dir->fnode.fragstat, bounding);
-	::encode(dir->fnode.accounted_fragstat, bounding);
-	::encode(dir->fnode.rstat, bounding);
-	::encode(dir->fnode.accounted_rstat, bounding);
-	dout(10) << " encoded fragstat/rstat info for " << *dir << dendl;
+  if (inode.is_dir()) {
+    for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p) {
+      CStripe *stripe = p->second;
+      if (stripe->is_subtree_root()) {
+        ::encode(p->first, bounding);
+	::encode(stripe->fnode.fragstat, bounding);
+	::encode(stripe->fnode.accounted_fragstat, bounding);
+	::encode(stripe->fnode.rstat, bounding);
+	::encode(stripe->fnode.accounted_rstat, bounding);
+	dout(10) << " encoded fragstat/rstat info for " << *stripe << dendl;
       }
     }
+  }
   ::encode(bounding, bl);
 
   _encode_locks_full(bl);
@@ -3061,10 +2995,10 @@ void CInode::decode_import(bufferlist::iterator& p,
     ::decode(bounding, p);
     bufferlist::iterator q = bounding.begin();
     while (!q.end()) {
-      frag_t fg;
-      ::decode(fg, q);
-      CDir *dir = get_dirfrag(fg);
-      assert(dir);  // we should have all bounds open
+      stripeid_t stripeid;
+      ::decode(stripeid, q);
+      CStripe *stripe = get_stripe(stripeid);
+      assert(stripe);  // we should have all bounds open
 
       // Only take the remote's fragstat/rstat if we are non-auth for
       // this dirfrag AND the lock is NOT in a scattered (MIX) state.
@@ -3076,27 +3010,25 @@ void CInode::decode_import(bufferlist::iterator& p,
       // check because the dirfrag is under migration?  That implies
       // it is frozen (and in a SYNC or LOCK state).  FIXME.
 
-      if (dir->is_auth() ||
-	  filelock.get_state() == LOCK_MIX) {
-	dout(10) << " skipped fragstat info for " << *dir << dendl;
+      if (stripe->is_auth() || filelock.get_state() == LOCK_MIX) {
+	dout(10) << " skipped fragstat info for " << *stripe << dendl;
 	frag_info_t f;
 	::decode(f, q);
 	::decode(f, q);
       } else {
-	::decode(dir->fnode.fragstat, q);
-	::decode(dir->fnode.accounted_fragstat, q);
-	dout(10) << " took fragstat info for " << *dir << dendl;
+	::decode(stripe->fnode.fragstat, q);
+	::decode(stripe->fnode.accounted_fragstat, q);
+	dout(10) << " took fragstat info for " << *stripe << dendl;
       }
-      if (dir->is_auth() ||
-	  nestlock.get_state() == LOCK_MIX) {
-	dout(10) << " skipped rstat info for " << *dir << dendl;
+      if (stripe->is_auth() || nestlock.get_state() == LOCK_MIX) {
+	dout(10) << " skipped rstat info for " << *stripe << dendl;
 	nest_info_t n;
 	::decode(n, q);
 	::decode(n, q);
       } else {
-	::decode(dir->fnode.rstat, q);
-	::decode(dir->fnode.accounted_rstat, q);
-	dout(10) << " took rstat info for " << *dir << dendl;
+	::decode(stripe->fnode.rstat, q);
+	::decode(stripe->fnode.accounted_rstat, q);
+	dout(10) << " took rstat info for " << *stripe << dendl;
       }
     }
   }

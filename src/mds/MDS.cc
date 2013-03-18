@@ -566,10 +566,10 @@ void MDS::tick()
   // log
   utime_t now = ceph_clock_now(g_ceph_context);
   mds_load_t load = balancer->get_load(now);
-  
+
   if (logger) {
     req_rate = logger->get(l_mds_req);
-    
+
     logger->set(l_mds_l, 100 * load.mds_load());
     logger->set(l_mds_q, messenger->get_dispatch_queue_len());
     logger->set(l_mds_sm, mdcache->num_subtrees());
@@ -741,34 +741,44 @@ void MDS::handle_command(MMonCommand *m)
       dout(20) << "try_eval(" << inum << ", " << mask << ")" << dendl;
     } else dout(15) << "inode " << inum << " not in mdcache!" << dendl;
   } else if (m->cmd[0] == "fragment_dir") {
+    if (m->cmd.size() == 5) {
+      filepath fp(m->cmd[1].c_str());
+      CInode *in = mdcache->cache_traverse(fp);
+      if (in) {
+        stripeid_t stripeid = atoi(m->cmd[2].c_str());
+        CStripe *stripe = in->get_stripe(stripeid);
+        if (stripe) {
+          if (stripe->is_auth()) {
+            frag_t fg;
+            if (fg.parse(m->cmd[3].c_str())) {
+              CDir *dir = stripe->get_dirfrag(fg);
+              if (dir) {
+                int by = atoi(m->cmd[4].c_str());
+                if (by)
+                  mdcache->split_dir(dir, by);
+                else
+                  dout(0) << "need to split by >0 bits" << dendl;
+              } else dout(0) << "dir " << in->ino() << " " << fg << " dne" << dendl;
+            } else dout(0) << " frag " << m->cmd[3] << " does not parse" << dendl;
+          } else dout(0) << "stripe " << stripe->dirstripe() << " not auth" << dendl;
+        } else dout(0) << "stripe " << dirstripe_t(in->ino(), stripeid) << " dne" << dendl;
+      } else dout(0) << "path " << fp << " not found" << dendl;
+    } else dout(0) << "bad syntax" << dendl;
+  } else if (m->cmd[0] == "merge_dir") {
     if (m->cmd.size() == 4) {
       filepath fp(m->cmd[1].c_str());
       CInode *in = mdcache->cache_traverse(fp);
       if (in) {
-	frag_t fg;
-	if (fg.parse(m->cmd[2].c_str())) {
-	  CDir *dir = in->get_dirfrag(fg);
-	  if (dir) {
-	    if (dir->is_auth()) {
-	      int by = atoi(m->cmd[3].c_str());
-	      if (by)
-		mdcache->split_dir(dir, by);
-	      else
-		dout(0) << "need to split by >0 bits" << dendl;
-	    } else dout(0) << "dir " << dir->dirfrag() << " not auth" << dendl;
-	  } else dout(0) << "dir " << in->ino() << " " << fg << " dne" << dendl;
-	} else dout(0) << " frag " << m->cmd[2] << " does not parse" << dendl;
-      } else dout(0) << "path " << fp << " not found" << dendl;
-    } else dout(0) << "bad syntax" << dendl;
-  } else if (m->cmd[0] == "merge_dir") {
-    if (m->cmd.size() == 3) {
-      filepath fp(m->cmd[1].c_str());
-      CInode *in = mdcache->cache_traverse(fp);
-      if (in) {
-	frag_t fg;
-	if (fg.parse(m->cmd[2].c_str())) {
-	  mdcache->merge_dir(in, fg);
-	} else dout(0) << " frag " << m->cmd[2] << " does not parse" << dendl;
+        stripeid_t stripeid = atoi(m->cmd[2].c_str());
+        CStripe *stripe = in->get_stripe(stripeid);
+        if (stripe) {
+          if (stripe->is_auth()) {
+            frag_t fg;
+            if (fg.parse(m->cmd[3].c_str())) {
+              mdcache->merge_dir(stripe, fg);
+            } else dout(0) << " frag " << m->cmd[3] << " does not parse" << dendl;
+          } else dout(0) << "stripe " << stripe->dirstripe() << " not auth" << dendl;
+        } else dout(0) << "stripe " << dirstripe_t(in->ino(), stripeid) << " not found" << dendl;
       } else dout(0) << "path " << fp << " not found" << dendl;
     } else dout(0) << "bad syntax" << dendl;
   } else if (m->cmd[0] == "export_dir") {
@@ -778,11 +788,14 @@ void MDS::handle_command(MMonCommand *m)
       if (target != whoami && mdsmap->is_up(target) && mdsmap->is_in(target)) {
 	CInode *in = mdcache->cache_traverse(fp);
 	if (in) {
-	  CDir *dir = in->get_dirfrag(frag_t());
-	  if (dir && dir->is_auth()) {
-	    mdcache->migrator->export_dir(dir, target);
-	  } else dout(0) << "bad migrate_dir path dirfrag frag_t() or dir not auth" << dendl;
-	} else dout(0) << "bad migrate_dir path" << dendl;
+          stripeid_t stripeid = atoi(m->cmd[3].c_str());
+          CStripe *stripe = in->get_stripe(stripeid);
+          if (stripe) {
+            if (stripe->is_auth()) {
+              mdcache->migrator->export_dir(stripe, target);
+            } else dout(0) << "stripe " << stripe->dirstripe() << " not auth" << dendl;
+          } else dout(0) << "stripe " << dirstripe_t(in->ino(), stripeid) << " not found" << dendl;
+        } else dout(0) << "path " << fp << " not found" << dendl;
       } else dout(0) << "bad migrate_dir target syntax" << dendl;
     } else dout(0) << "bad migrate_dir syntax" << dendl;
   } 
@@ -1901,17 +1914,17 @@ bool MDS::_dispatch(Message *m)
     // pick a random dir inode
     CInode *in = mdcache->hack_pick_random_inode();
 
-    list<CDir*> ls;
-    in->get_dirfrags(ls);
+    list<CStripe*> ls;
+    in->get_stripes(ls);
     if (ls.empty())
       continue;                // must be an open dir.
-    list<CDir*>::iterator p = ls.begin();
+    list<CStripe*>::iterator p = ls.begin();
     int n = rand() % ls.size();
     while (n--)
       ++p;
-    CDir *dir = *p;
-    if (!dir->get_parent_dir()) continue;    // must be linked.
-    if (!dir->is_auth()) continue;           // must be auth.
+    CStripe *stripe = *p;
+    if (!stripe->get_parent_stripe()) continue; // must be linked.
+    if (!stripe->is_auth()) continue;           // must be auth.
 
     int dest;
     do {
@@ -1920,7 +1933,7 @@ bool MDS::_dispatch(Message *m)
       while (k--) p++;
       dest = *p;
     } while (dest == whoami);
-    mdcache->migrator->export_dir_nicely(dir,dest);
+    mdcache->migrator->export_dir_nicely(stripe,dest);
   }
   // hack: thrash fragments
   for (int i=0; i<g_conf->mds_thrash_fragments; i++) {
@@ -1930,16 +1943,22 @@ bool MDS::_dispatch(Message *m)
     // pick a random dir inode
     CInode *in = mdcache->hack_pick_random_inode();
 
+    // random stripe
+    list<CStripe*> stripes;
+    in->get_stripes(stripes);
+    if (stripes.empty()) continue;
+    CStripe *stripe = stripes.front();
+    if (!stripe->get_parent_stripe()) continue; // must be linked.
+    if (!stripe->is_auth()) continue;           // must be auth.
+
     list<CDir*> ls;
-    in->get_dirfrags(ls);
+    stripe->get_dirfrags(ls);
     if (ls.empty()) continue;                // must be an open dir.
     CDir *dir = ls.front();
-    if (!dir->get_parent_dir()) continue;    // must be linked.
-    if (!dir->is_auth()) continue;           // must be auth.
-    if (dir->get_frag() == frag_t() || (rand() % 3 == 0)) {
+    if (dir->get_frag() == frag_t() || (rand() % 3 == 0))
       mdcache->split_dir(dir, 1);
-    } else
-      balancer->queue_merge(dir);
+    else
+      balancer->queue_split(dir);
   }
 
   // hack: force hash root?
