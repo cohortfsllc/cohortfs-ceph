@@ -687,12 +687,12 @@ void MDSCacheObjectInfo::generate_test_instances(list<MDSCacheObjectInfo*>& ls)
   ls.push_back(new MDSCacheObjectInfo);
   ls.push_back(new MDSCacheObjectInfo);
   ls.back()->ino = 1;
-  ls.back()->dirfrag = dirfrag_t(2, 3);
+  ls.back()->dirfrag = dirfrag_t(2, 1, 3);
   ls.back()->dname = "fooname";
   ls.back()->snapid = CEPH_NOSNAP;
   ls.push_back(new MDSCacheObjectInfo);
   ls.back()->ino = 121;
-  ls.back()->dirfrag = dirfrag_t(222, 0);
+  ls.back()->dirfrag = dirfrag_t(222, 3, 0);
   ls.back()->dname = "bar foo";
   ls.back()->snapid = 21322;
 }

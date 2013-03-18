@@ -73,27 +73,24 @@ inline ostream& operator<<(ostream& out, const LeaseStat& l) {
 
 struct DirStat {
   // mds distribution hints
-  frag_t frag;
-  __s32 auth;
-  set<__s32> dist;
-  
-  DirStat() : auth(CDIR_AUTH_PARENT) {}
+  stripeid_t stripeid;
+  fragtree_t dirfragtree;
+ 
+  DirStat() : stripeid(0) {}
   DirStat(bufferlist::iterator& p) {
     decode(p);
   }
 
   void encode(bufferlist& bl) {
-    ::encode(frag, bl);
-    ::encode(auth, bl);
-    ::encode(dist, bl);
+    ::encode(stripeid, bl);
+    ::encode(dirfragtree, bl);
   }
   void decode(bufferlist::iterator& p) {
-    ::decode(frag, p);
-    ::decode(auth, p);
-    ::decode(dist, p);
+    ::decode(stripeid, p);
+    ::decode(dirfragtree, p);
   }
 
-  // see CDir::encode_dirstat for encoder.
+  // see CStripe::encode_dirstat for encoder.
 };
 
 struct InodeStat {
@@ -113,7 +110,7 @@ struct InodeStat {
   nest_info_t rstat;
   
   string  symlink;   // symlink content (if symlink)
-  fragtree_t dirfragtree;
+  vector<int> stripe_auth; // array of stripeid->auth
 
   version_t xattr_version;
   bufferlist xattrbl;
@@ -158,13 +155,11 @@ struct InodeStat {
     rstat.rfiles = e.rfiles;
     rstat.rsubdirs = e.rsubdirs;
 
-    int n = e.fragtree.nsplits;
-    while (n) {
-      ceph_frag_tree_split s;
-      ::decode(s, p);
-      dirfragtree._splits[(__u32)s.frag] = s.by;
-      n--;
-    }
+    int n = e.stripes;
+    stripe_auth.resize(n);
+    for (int i = 0; i < n; i++)
+      ::decode(stripe_auth[i], p);
+
     ::decode(symlink, p);
     
     if (features & CEPH_FEATURE_DIRLAYOUTHASH)

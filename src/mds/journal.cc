@@ -297,9 +297,9 @@ EMetaBlob::EMetaBlob(MDLog *mdlog) : opened_ino(0), renamed_dirino(0),
 				     my_offset(mdlog ? mdlog->get_write_pos() : 0) //, _segment(0)
 { }
 
-void EMetaBlob::add_dir_context(CDir *dir, int mode)
+void EMetaBlob::add_stripe_context(CStripe *stripe, int mode)
 {
-  MDS *mds = dir->cache->mds;
+  MDS *mds = stripe->get_inode()->mdcache->mds;
 
   list<CDentry*> parents;
 
@@ -310,14 +310,15 @@ void EMetaBlob::add_dir_context(CDir *dir, int mode)
   bool maybenot = false;
 
   while (true) {
-    // already have this dir?  (we must always add in order)
-    if (lump_map.count(dir->dirfrag())) {
-      dout(20) << "EMetaBlob::add_dir_context(" << dir << ") have lump " << dir->dirfrag() << dendl;
+    // already have this stripe?  (we must always add in order)
+    if (stripe_map.count(stripe->dirstripe())) {
+      dout(20) << "EMetaBlob::add_stripe_context(" << stripe
+          << ") have lump " << stripe->dirstripe() << dendl;
       break;
     }
-      
+
     // stop at root/stray
-    CInode *diri = dir->get_inode();
+    CInode *diri = stripe->get_inode();
     CDentry *parent = diri->get_projected_parent_dn();
 
     if (!parent)
@@ -325,51 +326,56 @@ void EMetaBlob::add_dir_context(CDir *dir, int mode)
 
     if (mode == TO_AUTH_SUBTREE_ROOT) {
       // subtree root?
-      if (dir->is_subtree_root() && !dir->state_test(CDir::STATE_EXPORTBOUND)) {
-	if (dir->is_auth() && !dir->is_ambiguous_auth()) {
+      if (stripe->is_subtree_root() && !stripe->state_test(CStripe::STATE_EXPORTBOUND)) {
+	if (stripe->is_auth() && !stripe->is_ambiguous_auth()) {
 	  // it's an auth subtree, we don't need maybe (if any), and we're done.
-	  dout(20) << "EMetaBlob::add_dir_context(" << dir << ") reached unambig auth subtree, don't need " << maybe
-		   << " at " << *dir << dendl;
+	  dout(20) << "EMetaBlob::add_stripe_context(" << stripe
+              << ") reached unambig auth subtree, don't need "
+              << maybe << " at " << *stripe << dendl;
 	  maybe.clear();
 	  break;
-	} else {
-	  dout(20) << "EMetaBlob::add_dir_context(" << dir << ") reached ambig or !auth subtree, need " << maybe
-		   << " at " << *dir << dendl;
-	  // we need the maybe list after all!
-	  parents.splice(parents.begin(), maybe);
-	  maybenot = false;
 	}
+        dout(20) << "EMetaBlob::add_stripe_context(" << stripe
+            << ") reached ambig or !auth subtree, need "
+            << maybe << " at " << *stripe << dendl;
+        // we need the maybe list after all!
+        parents.splice(parents.begin(), maybe);
+        maybenot = false;
       }
-      
+
       // was the inode journaled in this blob?
       if (my_offset && diri->last_journaled == my_offset) {
-	dout(20) << "EMetaBlob::add_dir_context(" << dir << ") already have diri this blob " << *diri << dendl;
+	dout(20) << "EMetaBlob::add_stripe_context(" << stripe
+            << ") already have diri this blob " << *diri << dendl;
 	break;
       }
 
       // have we journaled this inode since the last subtree map?
       if (!maybenot && last_subtree_map && diri->last_journaled >= last_subtree_map) {
-	dout(20) << "EMetaBlob::add_dir_context(" << dir << ") already have diri in this segment (" 
-		 << diri->last_journaled << " >= " << last_subtree_map << "), setting maybenot flag "
-		 << *diri << dendl;
+	dout(20) << "EMetaBlob::add_stripe_context(" << stripe
+            << ") already have diri in this segment ("
+            << diri->last_journaled << " >= " << last_subtree_map
+            << "), setting maybenot flag " << *diri << dendl;
 	maybenot = true;
       }
     }
 
     if (maybenot) {
-      dout(25) << "EMetaBlob::add_dir_context(" << dir << ")      maybe " << *parent << dendl;
+      dout(25) << "EMetaBlob::add_stripe_context(" << stripe
+          << ")      maybe " << *parent << dendl;
       maybe.push_front(parent);
     } else {
-      dout(25) << "EMetaBlob::add_dir_context(" << dir << ") definitely " << *parent << dendl;
+      dout(25) << "EMetaBlob::add_stripe_context(" << stripe
+          << ") definitely " << *parent << dendl;
       parents.push_front(parent);
     }
-    
-    dir = parent->get_dir();
+
+    stripe = parent->get_stripe();
   }
-  
+
   parents.splice(parents.begin(), maybe);
 
-  dout(20) << "EMetaBlob::add_dir_context final: " << parents << dendl;
+  dout(20) << "EMetaBlob::add_stripe_context final: " << parents << dendl;
   for (list<CDentry*>::iterator p = parents.begin(); p != parents.end(); ++p) {
     assert((*p)->get_projected_linkage()->is_primary());
     add_dentry(*p, false);
@@ -404,9 +410,9 @@ void EMetaBlob::update_segment(LogSegment *ls)
 // EMetaBlob::fullbit
 
 void EMetaBlob::fullbit::encode(bufferlist& bl) const {
-  ENCODE_START(6, 5, bl);
+  ENCODE_START(7, 7, bl);
   if (!_enc.length()) {
-    fullbit copy(dn, dnfirst, dnlast, dnv, inode, dirfragtree, xattrs, symlink,
+    fullbit copy(dn, dnfirst, dnlast, dnv, inode, stripe_auth, xattrs, symlink,
 		 snapbl, state, &old_inodes);
     bl.append(copy._enc);
   } else {
@@ -416,7 +422,7 @@ void EMetaBlob::fullbit::encode(bufferlist& bl) const {
 }
 
 void EMetaBlob::fullbit::decode(bufferlist::iterator &bl) {
-  DECODE_START_LEGACY_COMPAT_LEN(6, 5, 5, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(7, 7, 7, bl);
   ::decode(dn, bl);
   ::decode(dnfirst, bl);
   ::decode(dnlast, bl);
@@ -426,7 +432,7 @@ void EMetaBlob::fullbit::decode(bufferlist::iterator &bl) {
   if (inode.is_symlink())
     ::decode(symlink, bl);
   if (inode.is_dir()) {
-    ::decode(dirfragtree, bl);
+    ::decode(stripe_auth, bl);
     ::decode(snapbl, bl);
     if ((struct_v == 2) || (struct_v == 3)) {
       bool dir_layout_exists;
@@ -488,7 +494,7 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
     f->dump_string("symlink", symlink);
   }
   if (inode.is_dir()) {
-    f->dump_stream("frag tree") << dirfragtree;
+    f->dump_stream("stripe auth") << stripe_auth;
     f->dump_string("has_snapbl", snapbl.length() ? "true" : "false");
     if (inode.has_layout()) {
       f->open_object_section("file layout policy");
@@ -514,12 +520,12 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
 void EMetaBlob::fullbit::generate_test_instances(list<EMetaBlob::fullbit*>& ls)
 {
   inode_t inode;
-  fragtree_t fragtree;
+  vector<int> empty_stripe_auth;
   map<string,bufferptr> empty_xattrs;
   bufferlist empty_snapbl;
-  fullbit *sample = new fullbit("/testdn", 0, 0, 0,
-                                inode, fragtree, empty_xattrs, "", empty_snapbl,
-                                false, NULL);
+  fullbit *sample = new fullbit("/testdn", 0, 0, 0, inode,
+                                empty_stripe_auth, empty_xattrs, "",
+                                empty_snapbl, false, NULL);
   ls.push_back(sample);
 }
 
@@ -528,12 +534,7 @@ void EMetaBlob::fullbit::update_inode(MDS *mds, CInode *in)
   in->inode = inode;
   in->xattrs = xattrs;
   if (in->inode.is_dir()) {
-    if (!(in->dirfragtree == dirfragtree)) {
-      dout(10) << "EMetaBlob::fullbit::update_inode dft " << in->dirfragtree << " -> "
-	       << dirfragtree << " on " << *in << dendl;
-      in->dirfragtree = dirfragtree;
-      in->force_dirfrags();
-    }
+    in->set_stripe_auth(stripe_auth);
 
     /*
      * we can do this before linking hte inode bc the split_at would
@@ -676,8 +677,8 @@ void EMetaBlob::nullbit::generate_test_instances(list<nullbit*>& ls)
 
 void EMetaBlob::dirlump::encode(bufferlist& bl) const
 {
-  ENCODE_START(2, 2, bl);
-  ::encode(fnode, bl);
+  ENCODE_START(3, 3, bl);
+  ::encode(dirv, bl);
   ::encode(state, bl);
   ::encode(nfull, bl);
   ::encode(nremote, bl);
@@ -689,8 +690,8 @@ void EMetaBlob::dirlump::encode(bufferlist& bl) const
 
 void EMetaBlob::dirlump::decode(bufferlist::iterator &bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl)
-  ::decode(fnode, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, bl)
+  ::decode(dirv, bl);
   ::decode(state, bl);
   ::decode(nfull, bl);
   ::decode(nremote, bl);
@@ -706,9 +707,7 @@ void EMetaBlob::dirlump::dump(Formatter *f) const
     dirlump *me = const_cast<dirlump*>(this);
     me->_decode_bits();
   }
-  f->open_object_section("fnode");
-  fnode.dump(f);
-  f->close_section(); // fnode
+  f->dump_int("dirv", dirv);
   f->dump_string("state", state_string());
   f->dump_int("nfull", nfull);
   f->dump_int("nremote", nremote);
@@ -745,14 +744,49 @@ void EMetaBlob::dirlump::generate_test_instances(list<dirlump*>& ls)
   ls.push_back(new dirlump());
 }
 
+// EMetaBlob::dirlump
+
+void EMetaBlob::stripelump::encode(bufferlist& bl) const
+{
+  ENCODE_START(1, 1, bl);
+  ::encode(dirfragtree, bl);
+  ::encode(fnode, bl);
+  ::encode(state, bl);
+  ENCODE_FINISH(bl);
+}
+
+void EMetaBlob::stripelump::decode(bufferlist::iterator& bl)
+{
+  DECODE_START_LEGACY_COMPAT_LEN(1, 1, 1, bl)
+  ::decode(dirfragtree, bl);
+  ::decode(fnode, bl);
+  ::decode(state, bl);
+  DECODE_FINISH(bl);
+}
+
+void EMetaBlob::stripelump::dump(Formatter *f) const
+{
+  f->dump_stream("frag tree") << dirfragtree;
+  f->open_object_section("fnode");
+  fnode.dump(f);
+  f->close_section(); // fnode
+  f->dump_string("state", state_string());
+}
+
+void EMetaBlob::stripelump::generate_test_instances(list<stripelump*>& ls)
+{
+  ls.push_back(new stripelump());
+}
+
 /**
  * EMetaBlob proper
  */
 void EMetaBlob::encode(bufferlist& bl) const
 {
-  ENCODE_START(7, 5, bl);
+  ENCODE_START(8, 8, bl);
   ::encode(lump_order, bl);
   ::encode(lump_map, bl);
+  ::encode(stripe_map, bl);
   ::encode(roots, bl);
   ::encode(table_tids, bl);
   ::encode(opened_ino, bl);
@@ -767,7 +801,7 @@ void EMetaBlob::encode(bufferlist& bl) const
   ::encode(destroyed_inodes, bl);
   ::encode(client_reqs, bl);
   ::encode(renamed_dirino, bl);
-  ::encode(renamed_dir_frags, bl);
+  ::encode(renamed_dir_stripes, bl);
   {
     // make MDS use v6 format happy
     int64_t i = -1;
@@ -779,9 +813,10 @@ void EMetaBlob::encode(bufferlist& bl) const
 }
 void EMetaBlob::decode(bufferlist::iterator &bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(7, 5, 5, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(8, 8, 8, bl);
   ::decode(lump_order, bl);
   ::decode(lump_map, bl);
+  ::decode(stripe_map, bl);
   if (struct_v >= 4) {
     ::decode(roots, bl);
   } else {
@@ -789,7 +824,7 @@ void EMetaBlob::decode(bufferlist::iterator &bl)
     ::decode(rootbl, bl);
     if (rootbl.length()) {
       bufferlist::iterator p = rootbl.begin();
-      roots.push_back(std::tr1::shared_ptr<fullbit>(new fullbit(p)));
+      roots.push_back(fullbit::ptr(new fullbit(p)));
     }
   }
   ::decode(table_tids, bl);
@@ -815,7 +850,7 @@ void EMetaBlob::decode(bufferlist::iterator &bl)
   }
   if (struct_v >= 3) {
     ::decode(renamed_dirino, bl);
-    ::decode(renamed_dir_frags, bl);
+    ::decode(renamed_dir_stripes, bl);
   }
   if (struct_v >= 6) {
     // ignore
@@ -843,8 +878,17 @@ void EMetaBlob::dump(Formatter *f) const
   }
   f->close_section(); // lumps
   
+  f->open_array_section("stripes");
+  for (map<dirstripe_t, stripelump>::const_iterator i = stripe_map.begin();
+       i != stripe_map.end(); ++i) {
+    f->open_object_section("lump");
+    i->second.dump(f);
+    f->close_section(); // lump
+  }
+  f->close_section(); // stripes
+
   f->open_array_section("roots");
-  for (list<std::tr1::shared_ptr<fullbit> >::const_iterator i = roots.begin();
+  for (list<fullbit::ptr>::const_iterator i = roots.begin();
        i != roots.end(); ++i) {
     f->open_object_section("root");
     (*i)->dump(f);
@@ -865,9 +909,9 @@ void EMetaBlob::dump(Formatter *f) const
   f->dump_int("renamed directory inodeno", renamed_dirino);
   
   f->open_array_section("renamed directory fragments");
-  for (list<frag_t>::const_iterator i = renamed_dir_frags.begin();
-       i != renamed_dir_frags.end(); ++i) {
-    f->dump_int("frag", *i);
+  for (list<dirstripe_t>::const_iterator i = renamed_dir_stripes.begin();
+       i != renamed_dir_stripes.end(); ++i) {
+    f->dump_stream("stripe") << *i;
   }
   f->close_section(); // renamed directory fragments
 
@@ -921,15 +965,70 @@ void EMetaBlob::generate_test_instances(list<EMetaBlob*>& ls)
   ls.push_back(new EMetaBlob());
 }
 
+static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
+{
+  // find/create the inode
+  CInode *diri = mds->mdcache->get_inode(ds.ino);
+  if (!diri) {
+    if (MDS_INO_IS_BASE(ds.ino)) {
+      diri = mds->mdcache->create_system_inode(ds.ino, S_IFDIR|0755);
+      dout(10) << "EMetaBlob.replay created base " << *diri << dendl;
+    } else {
+      dout(0) << "EMetaBlob.replay missing dir ino " << ds.ino << dendl;
+      assert(diri);
+    }
+  }
+
+  // find/create the stripe
+  CStripe *stripe = diri->get_stripe(ds.stripeid);
+  if (stripe) {
+    dout(10) << "EMetaBlob had " << *stripe << dendl;
+  } else {
+    stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, true));
+    dout(10) << "EMetaBlob added " << *stripe << dendl;
+    if (MDS_INO_IS_BASE(ds.ino))
+      mds->mdcache->adjust_subtree_auth(stripe, CDIR_AUTH_UNKNOWN);
+  }
+  return stripe;
+}
+
+void EMetaBlob::update_stripe(MDS *mds, LogSegment *ls,
+                              CStripe *stripe, stripelump& lump)
+{
+  CInode *diri = stripe->get_inode();
+  if (lump.is_open())
+    stripe->mark_open();
+  if (lump.is_dirty()) {
+    stripe->_mark_dirty(ls);
+    if (!stripe->is_rstat_accounted()) {
+      dout(10) << "EMetaBlob dirty nestinfo on " << *stripe << dendl;
+      mds->locker->mark_updated_scatterlock(&diri->nestlock);
+      ls->dirty_dirfrag_nest.push_back(&diri->item_dirty_dirfrag_nest);
+    }
+    if (!stripe->is_fragstat_accounted()) {
+      dout(10) << "EMetaBlob dirty fragstat on " << *stripe << dendl;
+      mds->locker->mark_updated_scatterlock(&diri->filelock);
+      ls->dirty_dirfrag_dir.push_back(&diri->item_dirty_dirfrag_dir);
+    }
+  }
+  if (lump.is_new())
+    stripe->mark_new(ls);
+  stripe->fnode = lump.fnode;
+  stripe->set_fragtree(lump.dirfragtree);
+  stripe->force_dirfrags();
+  dout(10) << "EMetaBlob updated stripe " << *stripe << dendl;
+}
+
 void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 {
-  dout(10) << "EMetaBlob.replay " << lump_map.size() << " dirlumps by " << client_name << dendl;
+  dout(10) << "EMetaBlob.replay " << stripe_map.size() << " stripes, "
+      << lump_map.size() << " dirlumps by " << client_name << dendl;
 
   assert(logseg);
 
   assert(g_conf->mds_kill_journal_replay_at != 1);
 
-  for (list<std::tr1::shared_ptr<fullbit> >::iterator p = roots.begin(); p != roots.end(); ++p) {
+  for (list<fullbit::ptr>::iterator p = roots.begin(); p != roots.end(); ++p) {
     CInode *in = mds->mdcache->get_inode((*p)->inode.ino);
     bool isnew = in ? false:true;
     if (!in)
@@ -943,7 +1042,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   }
 
   CInode *renamed_diri = 0;
-  CDir *olddir = 0;
+  CStripe *oldstripe = 0;
   if (renamed_dirino) {
     renamed_diri = mds->mdcache->get_inode(renamed_dirino);
     if (renamed_diri)
@@ -963,7 +1062,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   }
 
   // keep track of any inodes we unlink and don't relink elsewhere
-  map<CInode*, CDir*> unlinked;
+  map<CInode*, CStripe*> unlinked;
   set<CInode*> linked;
 
   // walk through my dirs (in order!)
@@ -973,51 +1072,32 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     dout(10) << "EMetaBlob.replay dir " << *lp << dendl;
     dirlump &lump = lump_map[*lp];
 
-    // the dir 
+    // open the stripe
+    CStripe *stripe = open_stripe(mds, lp->stripe);
+    assert(stripe);
+
+    // update the stripe if we have a lump
+    map<dirstripe_t, stripelump>::iterator s = stripe_map.find(lp->stripe);
+    if (s != stripe_map.end()) {
+      update_stripe(mds, logseg, stripe, s->second);
+      stripe_map.erase(s);
+    }
+
+    // open the fragment
     CDir *dir = mds->mdcache->get_force_dirfrag(*lp);
     if (!dir) {
-      // hmm.  do i have the inode?
-      CInode *diri = mds->mdcache->get_inode((*lp).ino);
-      if (!diri) {
-	if (MDS_INO_IS_BASE(lp->ino)) {
-	  diri = mds->mdcache->create_system_inode(lp->ino, S_IFDIR|0755);
-	  dout(10) << "EMetaBlob.replay created base " << *diri << dendl;
-	} else {
-	  dout(0) << "EMetaBlob.replay missing dir ino  " << (*lp).ino << dendl;
-	  assert(0);
-	}
-      }
-
-      // create the dirfrag
-      dir = diri->get_or_open_dirfrag(mds->mdcache, (*lp).frag);
-
-      if (MDS_INO_IS_BASE(lp->ino))
-	mds->mdcache->adjust_subtree_auth(dir, CDIR_AUTH_UNKNOWN);
-
+      dir = stripe->get_or_open_dirfrag(lp->frag);
       dout(10) << "EMetaBlob.replay added dir " << *dir << dendl;  
+    } else {
+      dout(10) << "EMetaBlob.replay had dir " << *dir << dendl;  
     }
-    dir->set_version( lump.fnode.version );
-    dir->fnode = lump.fnode;
+    dir->set_version(lump.dirv);
 
     if (lump.is_dirty()) {
       dir->_mark_dirty(logseg);
-      dir->get_inode()->filelock.mark_dirty();
-      dir->get_inode()->nestlock.mark_dirty();
-
-      if (!(dir->fnode.rstat == dir->fnode.accounted_rstat)) {
-	dout(10) << "EMetaBlob.replay      dirty nestinfo on " << *dir << dendl;
-	mds->locker->mark_updated_scatterlock(&dir->inode->nestlock);
-	logseg->dirty_dirfrag_nest.push_back(&dir->inode->item_dirty_dirfrag_nest);
-      } else {
-	dout(10) << "EMetaBlob.replay      clean nestinfo on " << *dir << dendl;
-      }
-      if (!(dir->fnode.fragstat == dir->fnode.accounted_fragstat)) {
-	dout(10) << "EMetaBlob.replay      dirty fragstat on " << *dir << dendl;
-	mds->locker->mark_updated_scatterlock(&dir->inode->filelock);
-	logseg->dirty_dirfrag_dir.push_back(&dir->inode->item_dirty_dirfrag_dir);
-      } else {
-	dout(10) << "EMetaBlob.replay      clean fragstat on " << *dir << dendl;
-      }
+      CInode *diri = dir->get_inode();
+      diri->filelock.mark_dirty();
+      diri->nestlock.mark_dirty();
     }
     if (lump.is_new())
       dir->mark_new(logseg);
@@ -1032,10 +1112,10 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     lump._decode_bits();
 
     // full dentry+inode pairs
-    for (list<std::tr1::shared_ptr<fullbit> >::iterator pp = lump.get_dfull().begin();
+    for (list<fullbit::ptr>::iterator pp = lump.get_dfull().begin();
 	 pp != lump.get_dfull().end();
 	 ++pp) {
-      std::tr1::shared_ptr<fullbit> p = *pp;
+      fullbit::ptr p = *pp;
       CDentry *dn = dir->lookup_exact_snap(p->dn, p->dnlast);
       if (!dn) {
 	dn = dir->add_null_dentry(p->dn, p->dnfirst, p->dnlast);
@@ -1057,7 +1137,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	mds->mdcache->add_inode(in);
 	if (!dn->get_linkage()->is_null()) {
 	  if (dn->get_linkage()->is_primary()) {
-	    unlinked[dn->get_linkage()->get_inode()] = dir;
+	    unlinked[dn->get_linkage()->get_inode()] = dir->get_stripe();
 	    stringstream ss;
 	    ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
 	       << " " << *dn->get_linkage()->get_inode() << " should be " << p->inode.ino;
@@ -1074,7 +1154,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       } else {
 	if (dn->get_linkage()->get_inode() != in && in->get_parent_dn()) {
 	  dout(10) << "EMetaBlob.replay unlinking " << *in << dendl;
-	  unlinked[in] = in->get_parent_dir();
+	  unlinked[in] = in->get_parent_stripe();
 	  in->get_parent_dir()->unlink_inode(in->get_parent_dn());
 	}
 	if (in->get_parent_dn() && in->inode.anchored != p->inode.anchored)
@@ -1084,7 +1164,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	if (dn->get_linkage()->get_inode() != in) {
 	  if (!dn->get_linkage()->is_null()) { // note: might be remote.  as with stray reintegration.
 	    if (dn->get_linkage()->is_primary()) {
-	      unlinked[dn->get_linkage()->get_inode()] = dir;
+	      unlinked[dn->get_linkage()->get_inode()] = dir->get_stripe();
 	      stringstream ss;
 	      ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
 		 << " " << *dn->get_linkage()->get_inode() << " should be " << p->inode.ino;
@@ -1123,7 +1203,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	if (!dn->get_linkage()->is_null()) {
 	  dout(10) << "EMetaBlob.replay unlinking " << *dn << dendl;
 	  if (dn->get_linkage()->is_primary()) {
-	    unlinked[dn->get_linkage()->get_inode()] = dir;
+	    unlinked[dn->get_linkage()->get_inode()] = dir->get_stripe();
 	    stringstream ss;
 	    ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
 	       << " " << *dn->get_linkage()->get_inode() << " should be remote " << p->ino;
@@ -1155,7 +1235,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	if (!dn->get_linkage()->is_null()) {
 	  dout(10) << "EMetaBlob.replay unlinking " << *dn << dendl;
 	  if (dn->get_linkage()->is_primary())
-	    unlinked[dn->get_linkage()->get_inode()] = dir;
+	    unlinked[dn->get_linkage()->get_inode()] = dir->get_stripe();
 	  dir->unlink_inode(dn);
 	}
 	dn->set_version(p->dnv);
@@ -1163,45 +1243,52 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	dout(10) << "EMetaBlob.replay had " << *dn << dendl;
 	assert(dn->last == p->dnlast);
       }
-      olddir = dir;
+      oldstripe = dir->get_stripe();
     }
   }
 
   assert(g_conf->mds_kill_journal_replay_at != 3);
 
+  // update any stripes that weren't in lump_order
+  for (map<dirstripe_t, stripelump>::iterator s = stripe_map.begin();
+       s != stripe_map.end();
+       ++s) {
+    CStripe *stripe = open_stripe(mds, s->first);
+    update_stripe(mds, logseg, stripe, s->second);
+  }
+
   if (renamed_dirino) {
     if (renamed_diri) {
       assert(unlinked.count(renamed_diri));
       assert(linked.count(renamed_diri));
-      olddir = unlinked[renamed_diri];
+      oldstripe = unlinked[renamed_diri];
     } else {
       // we imported a diri we haven't seen before
       renamed_diri = mds->mdcache->get_inode(renamed_dirino);
       assert(renamed_diri);  // it was in the metablob
     }
 
-    if (olddir) {
-      if (olddir->authority() != CDIR_AUTH_UNDEF &&
+    if (oldstripe) {
+      if (oldstripe->authority() != CDIR_AUTH_UNDEF &&
 	  renamed_diri->authority() == CDIR_AUTH_UNDEF) {
-	assert(slaveup); // auth to non-auth, must be slave prepare
-	list<frag_t> leaves;
-	renamed_diri->dirfragtree.get_leaves(leaves);
-	for (list<frag_t>::iterator p = leaves.begin(); p != leaves.end(); ++p) {
-	  CDir *dir = renamed_diri->get_dirfrag(*p);
-	  assert(dir);
-	  // preserve subtree bound until slave commit
-	  if (dir->get_dir_auth() == CDIR_AUTH_UNDEF)
-	    slaveup->olddirs.insert(dir);
-	}
+	assert(slaveup); // auth to non-auth, must be slave prepare 
+        int stripe_count = renamed_diri->get_stripe_count();
+        for (int i = 0; i < stripe_count; i++) {
+          CStripe *stripe = renamed_diri->get_stripe(i);
+          assert(stripe);
+          // preserve subtree bound until slave commit
+          if (stripe->authority() == CDIR_AUTH_UNDEF)
+            slaveup->oldstripes.insert(stripe);
+        }
       }
 
-      mds->mdcache->adjust_subtree_after_rename(renamed_diri, olddir, false);
+      mds->mdcache->adjust_subtree_after_rename(renamed_diri, oldstripe, false);
       
       // see if we can discard the subtree we renamed out of
-      CDir *root = mds->mdcache->get_subtree_root(olddir);
-      if (root->get_dir_auth() == CDIR_AUTH_UNDEF) {
+      CStripe *root = mds->mdcache->get_subtree_root(oldstripe);
+      if (root->get_stripe_auth() == CDIR_AUTH_UNDEF) {
 	if (slaveup) // preserve the old dir until slave commit
-	  slaveup->olddirs.insert(olddir);
+	  slaveup->oldstripes.insert(oldstripe);
 	else
 	  mds->mdcache->try_trim_non_auth_subtree(root);
       }
@@ -1209,23 +1296,22 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 
     // if we are the srci importer, we'll also have some dirfrags we have to open up...
     if (renamed_diri->authority() != CDIR_AUTH_UNDEF) {
-      for (list<frag_t>::iterator p = renamed_dir_frags.begin(); p != renamed_dir_frags.end(); ++p) {
-	CDir *dir = renamed_diri->get_dirfrag(*p);
-	if (dir) {
+      for (list<dirstripe_t>::iterator p = renamed_dir_stripes.begin(); p != renamed_dir_stripes.end(); ++p) {
+        CStripe *stripe = renamed_diri->get_stripe(p->stripeid);
+        if (stripe) {
 	  // we already had the inode before, and we already adjusted this subtree accordingly.
-	  dout(10) << " already had+adjusted rename import bound " << *dir << dendl;
-	  assert(olddir); 
+	  dout(10) << " already had+adjusted rename import bound " << *stripe << dendl;
+	  assert(oldstripe);
 	  continue;
 	}
-	dir = renamed_diri->get_or_open_dirfrag(mds->mdcache, *p);
-	dout(10) << " creating new rename import bound " << *dir << dendl;
-	mds->mdcache->adjust_subtree_auth(dir, CDIR_AUTH_UNDEF, false);
+	mds->mdcache->adjust_subtree_auth(stripe, CDIR_AUTH_UNDEF, false);
+	dout(10) << " creating new rename import bound " << *stripe << dendl;
       }
     }
 
     // rename may overwrite an empty directory and move it into stray dir.
     unlinked.erase(renamed_diri);
-    for (map<CInode*, CDir*>::iterator p = unlinked.begin(); p != unlinked.end(); ++p) {
+    for (map<CInode*, CStripe*>::iterator p = unlinked.begin(); p != unlinked.end(); ++p) {
       if (!linked.count(p->first))
 	continue;
       assert(p->first->is_dir());
@@ -1237,7 +1323,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     for (set<CInode*>::iterator p = linked.begin(); p != linked.end(); ++p)
       unlinked.erase(*p);
     dout(10) << " unlinked set contains " << unlinked << dendl;
-    for (map<CInode*, CDir*>::iterator p = unlinked.begin(); p != unlinked.end(); ++p) {
+    for (map<CInode*, CStripe*>::iterator p = unlinked.begin(); p != unlinked.end(); ++p) {
       if (slaveup) // preserve unlinked inodes until slave commit
 	slaveup->unlinked.insert(p->first);
       else
@@ -2229,22 +2315,22 @@ void ESubtreeMap::dump(Formatter *f) const
   f->close_section(); // metablob
   
   f->open_array_section("subtrees");
-  for(map<dirfrag_t,vector<dirfrag_t> >::const_iterator i = subtrees.begin();
+  for(map<dirstripe_t,vector<dirstripe_t> >::const_iterator i = subtrees.begin();
       i != subtrees.end(); ++i) {
     f->open_object_section("tree");
-    f->dump_stream("root dirfrag") << i->first;
-    for (vector<dirfrag_t>::const_iterator j = i->second.begin();
+    f->dump_stream("root stripe") << i->first;
+    for (vector<dirstripe_t>::const_iterator j = i->second.begin();
 	 j != i->second.end(); ++j) {
-      f->dump_stream("bound dirfrag") << *j;
+      f->dump_stream("bound stripe") << *j;
     }
     f->close_section(); // tree
   }
   f->close_section(); // subtrees
 
   f->open_array_section("ambiguous subtrees");
-  for(set<dirfrag_t>::const_iterator i = ambiguous_subtrees.begin();
+  for(set<dirstripe_t>::const_iterator i = ambiguous_subtrees.begin();
       i != ambiguous_subtrees.end(); ++i) {
-    f->dump_stream("dirfrag") << *i;
+    f->dump_stream("stripe") << *i;
   }
   f->close_section(); // ambiguous subtrees
 
@@ -2266,35 +2352,35 @@ void ESubtreeMap::replay(MDS *mds)
     dout(10) << "ESubtreeMap.replay -- i already have import map; verifying" << dendl;
     int errors = 0;
 
-    for (map<dirfrag_t, vector<dirfrag_t> >::iterator p = subtrees.begin();
+    for (map<dirstripe_t, vector<dirstripe_t> >::iterator p = subtrees.begin();
 	 p != subtrees.end();
 	 ++p) {
-      CDir *dir = mds->mdcache->get_dirfrag(p->first);
-      if (!dir) {
+      CStripe *stripe = mds->mdcache->get_dirstripe(p->first);
+      if (!stripe) {
 	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
 			  << " subtree root " << p->first << " not in cache";
 	++errors;
 	continue;
       }
       
-      if (!mds->mdcache->is_subtree(dir)) {
+      if (!mds->mdcache->is_subtree(stripe)) {
 	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
 			  << " subtree root " << p->first << " not a subtree in cache";
 	++errors;
 	continue;
       }
-      if (dir->get_dir_auth().first != mds->whoami) {
+      if (stripe->get_stripe_auth().first != mds->whoami) {
 	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
 			  << " subtree root " << p->first
-			  << " is not mine in cache (it's " << dir->get_dir_auth() << ")";
+			  << " is not mine in cache (it's " << stripe->get_stripe_auth() << ")";
 	++errors;
 	continue;
       }
 
-      set<CDir*> bounds;
-      mds->mdcache->get_subtree_bounds(dir, bounds);
-      for (vector<dirfrag_t>::iterator q = p->second.begin(); q != p->second.end(); ++q) {
-	CDir *b = mds->mdcache->get_dirfrag(*q);
+      set<CStripe*> bounds;
+      mds->mdcache->get_subtree_bounds(stripe, bounds);
+      for (vector<dirstripe_t>::iterator q = p->second.begin(); q != p->second.end(); ++q) {
+	CStripe *b = mds->mdcache->get_dirstripe(*q);
 	if (!b) {
 	  mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
 			    << " subtree " << p->first << " bound " << *q << " not in cache";
@@ -2309,9 +2395,9 @@ void ESubtreeMap::replay(MDS *mds)
 	}
 	bounds.erase(b);
       }
-      for (set<CDir*>::iterator q = bounds.begin(); q != bounds.end(); ++q) {
+      for (set<CStripe*>::iterator q = bounds.begin(); q != bounds.end(); ++q) {
 	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			  << " subtree " << p->first << " has extra bound in cache " << (*q)->dirfrag();
+			  << " subtree " << p->first << " has extra bound in cache " << (*q)->dirstripe();
 	++errors;
       }
       
@@ -2330,15 +2416,15 @@ void ESubtreeMap::replay(MDS *mds)
       }
     }
     
-    list<CDir*> subs;
+    list<CStripe*> subs;
     mds->mdcache->list_subtrees(subs);
-    for (list<CDir*>::iterator p = subs.begin(); p != subs.end(); ++p) {
-      CDir *dir = *p;
-      if (dir->get_dir_auth().first != mds->whoami)
+    for (list<CStripe*>::iterator p = subs.begin(); p != subs.end(); ++p) {
+      CStripe *stripe = *p;
+      if (stripe->get_stripe_auth().first != mds->whoami)
 	continue;
-      if (subtrees.count(dir->dirfrag()) == 0) {
+      if (subtrees.count(stripe->dirstripe()) == 0) {
 	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			  << " does not include cache subtree " << dir->dirfrag();
+			  << " does not include cache subtree " << stripe->dirstripe();
 	++errors;
       }
     }
@@ -2359,19 +2445,19 @@ void ESubtreeMap::replay(MDS *mds)
   metablob.replay(mds, _segment);
   
   // restore import/export maps
-  for (map<dirfrag_t, vector<dirfrag_t> >::iterator p = subtrees.begin();
+  for (map<dirstripe_t, vector<dirstripe_t> >::iterator p = subtrees.begin();
        p != subtrees.end();
        ++p) {
-    CDir *dir = mds->mdcache->get_dirfrag(p->first);
-    assert(dir);
+    CStripe *stripe = mds->mdcache->get_dirstripe(p->first);
+    assert(stripe);
     if (ambiguous_subtrees.count(p->first)) {
       // ambiguous!
       mds->mdcache->add_ambiguous_import(p->first, p->second);
-      mds->mdcache->adjust_bounded_subtree_auth(dir, p->second,
+      mds->mdcache->adjust_bounded_subtree_auth(stripe, p->second,
 						pair<int,int>(mds->get_nodeid(), mds->get_nodeid()));
     } else {
       // not ambiguous
-      mds->mdcache->adjust_bounded_subtree_auth(dir, p->second, mds->get_nodeid());
+      mds->mdcache->adjust_bounded_subtree_auth(stripe, p->second, mds->get_nodeid());
     }
   }
   
@@ -2385,43 +2471,48 @@ void ESubtreeMap::replay(MDS *mds)
 
 void EFragment::replay(MDS *mds)
 {
-  dout(10) << "EFragment.replay " << op_name(op) << " " << ino << " " << basefrag << " by " << bits << dendl;
+  dout(10) << "EFragment.replay " << op_name(op) << " " << dirfrag << " by " << bits << dendl;
 
   list<CDir*> resultfrags;
   list<Context*> waiters;
-  list<frag_t> old_frags;
+  map<frag_t, version_t> old_frags;
 
   // in may be NULL if it wasn't in our cache yet.  if it's a prepare
   // it will be once we replay the metablob , but first we need to
   // refragment anything we already have in the cache.
-  CInode *in = mds->mdcache->get_inode(ino);
+  CStripe *stripe = mds->mdcache->get_dirstripe(dirfrag.stripe);
 
   switch (op) {
   case OP_PREPARE:
-    mds->mdcache->add_uncommitted_fragment(dirfrag_t(ino, basefrag), bits, orig_frags, _segment, &rollback);
+    mds->mdcache->add_uncommitted_fragment(dirfrag, bits, orig_frags, _segment);
     // fall-thru
   case OP_ONESHOT:
-    if (in)
-      mds->mdcache->adjust_dir_fragments(in, basefrag, bits, resultfrags, waiters, true);
+    if (stripe)
+      mds->mdcache->adjust_dir_fragments(stripe, dirfrag.frag, bits,
+                                         resultfrags, waiters, true);
     break;
 
   case OP_ROLLBACK:
-    if (in) {
-      in->dirfragtree.get_leaves_under(basefrag, old_frags);
+    if (stripe) {
+      list<frag_t> leaves;
+      stripe->get_fragtree().get_leaves_under(dirfrag.frag, leaves);
+      for (list<frag_t>::iterator p = leaves.begin(); p != leaves.end(); ++p)
+        old_frags[*p] = 0;
       if (orig_frags.empty()) {
 	// old format EFragment
-	mds->mdcache->adjust_dir_fragments(in, basefrag, -bits, resultfrags, waiters, true);
+	mds->mdcache->adjust_dir_fragments(stripe, dirfrag.frag, -bits,
+                                           resultfrags, waiters, true);
       } else {
-	for (list<frag_t>::iterator p = orig_frags.begin(); p != orig_frags.end(); ++p)
-	  mds->mdcache->force_dir_fragment(in, *p);
+	for (map<frag_t, version_t>::iterator p = orig_frags.begin(); p != orig_frags.end(); ++p)
+	  mds->mdcache->force_dir_fragment(stripe, p->first);
       }
     }
-    mds->mdcache->rollback_uncommitted_fragment(dirfrag_t(ino, basefrag), old_frags);
+    mds->mdcache->rollback_uncommitted_fragment(dirfrag, old_frags);
     break;
 
   case OP_COMMIT:
   case OP_FINISH:
-    mds->mdcache->finish_uncommitted_fragment(dirfrag_t(ino, basefrag), op);
+    mds->mdcache->finish_uncommitted_fragment(dirfrag, op);
     break;
 
   default:
@@ -2429,39 +2520,29 @@ void EFragment::replay(MDS *mds)
   }
 
   metablob.replay(mds, _segment);
-  if (in && g_conf->mds_debug_frag)
-    in->verify_dirfrags();
+  if (stripe && g_conf->mds_debug_frag)
+    stripe->verify_dirfrags();
 }
 
 void EFragment::encode(bufferlist &bl) const {
-  ENCODE_START(5, 4, bl);
+  ENCODE_START(6, 6, bl);
   ::encode(stamp, bl);
   ::encode(op, bl);
-  ::encode(ino, bl);
-  ::encode(basefrag, bl);
+  ::encode(dirfrag, bl);
   ::encode(bits, bl);
   ::encode(metablob, bl);
   ::encode(orig_frags, bl);
-  ::encode(rollback, bl);
   ENCODE_FINISH(bl);
 }
 
 void EFragment::decode(bufferlist::iterator &bl) {
-  DECODE_START_LEGACY_COMPAT_LEN(5, 4, 4, bl);
-  if (struct_v >= 2)
-    ::decode(stamp, bl);
-  if (struct_v >= 3)
-    ::decode(op, bl);
-  else
-    op = OP_ONESHOT;
-  ::decode(ino, bl);
-  ::decode(basefrag, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(6, 6, 6, bl);
+  ::decode(stamp, bl);
+  ::decode(op, bl);
+  ::decode(dirfrag, bl);
   ::decode(bits, bl);
   ::decode(metablob, bl);
-  if (struct_v >= 5) {
-    ::decode(orig_frags, bl);
-    ::decode(rollback, bl);
-  }
+  ::decode(orig_frags, bl);
   DECODE_FINISH(bl);
 }
 
@@ -2471,8 +2552,7 @@ void EFragment::dump(Formatter *f) const
   metablob.dump(f); // sadly we don't have this; dunno if we'll get it
   f->close_section();*/
   f->dump_string("op", op_name(op));
-  f->dump_stream("ino") << ino;
-  f->dump_stream("base frag") << basefrag;
+  f->dump_stream("dirfrag") << dirfrag;
   f->dump_int("bits", bits);
 }
 
@@ -2481,24 +2561,9 @@ void EFragment::generate_test_instances(list<EFragment*>& ls)
   ls.push_back(new EFragment);
   ls.push_back(new EFragment);
   ls.back()->op = OP_PREPARE;
-  ls.back()->ino = 1;
+  ls.back()->dirfrag.stripe.ino = 1;
   ls.back()->bits = 5;
 }
-
-void dirfrag_rollback::encode(bufferlist &bl) const
-{
-  ENCODE_START(1, 1, bl);
-  ::encode(fnode, bl);
-  ENCODE_FINISH(bl);
-}
-
-void dirfrag_rollback::decode(bufferlist::iterator &bl)
-{
-  DECODE_START(1, bl);
-  ::decode(fnode, bl);
-  DECODE_FINISH(bl);
-}
-
 
 
 // =========================================================================
@@ -2511,22 +2576,22 @@ void EExport::replay(MDS *mds)
   dout(10) << "EExport.replay " << base << dendl;
   metablob.replay(mds, _segment);
   
-  CDir *dir = mds->mdcache->get_dirfrag(base);
-  assert(dir);
+  CStripe *stripe = mds->mdcache->get_dirstripe(base);
+  assert(stripe);
   
-  set<CDir*> realbounds;
-  for (set<dirfrag_t>::iterator p = bounds.begin();
+  set<CStripe*> realbounds;
+  for (set<dirstripe_t>::iterator p = bounds.begin();
        p != bounds.end();
        ++p) {
-    CDir *bd = mds->mdcache->get_dirfrag(*p);
+    CStripe *bd = mds->mdcache->get_dirstripe(*p);
     assert(bd);
     realbounds.insert(bd);
   }
 
   // adjust auth away
-  mds->mdcache->adjust_bounded_subtree_auth(dir, realbounds, CDIR_AUTH_UNDEF);
+  mds->mdcache->adjust_bounded_subtree_auth(stripe, realbounds, CDIR_AUTH_UNDEF);
 
-  mds->mdcache->try_trim_non_auth_subtree(dir);
+  mds->mdcache->try_trim_non_auth_subtree(stripe);
 }
 
 void EExport::encode(bufferlist& bl) const
@@ -2556,11 +2621,11 @@ void EExport::dump(Formatter *f) const
   /*f->open_object_section("Metablob");
   metablob.dump(f); // sadly we don't have this; dunno if we'll get it
   f->close_section();*/
-  f->dump_stream("base dirfrag") << base;
-  f->open_array_section("bounds dirfrags");
-  for (set<dirfrag_t>::const_iterator i = bounds.begin();
+  f->dump_stream("base stripe") << base;
+  f->open_array_section("bound stripes");
+  for (set<dirstripe_t>::const_iterator i = bounds.begin();
       i != bounds.end(); ++i) {
-    f->dump_stream("dirfrag") << *i;
+    f->dump_stream("stripe") << *i;
   }
   f->close_section(); // bounds dirfrags
 }
@@ -2590,9 +2655,9 @@ void EImportStart::replay(MDS *mds)
   mds->mdcache->add_ambiguous_import(base, bounds);
 
   // set auth partially to us so we don't trim it
-  CDir *dir = mds->mdcache->get_dirfrag(base);
-  assert(dir);
-  mds->mdcache->adjust_bounded_subtree_auth(dir, bounds, pair<int,int>(mds->get_nodeid(), mds->get_nodeid()));
+  CStripe *stripe = mds->mdcache->get_dirstripe(base);
+  assert(stripe);
+  mds->mdcache->adjust_bounded_subtree_auth(stripe, bounds, make_pair(mds->get_nodeid(), mds->get_nodeid()));
 
   // open client sessions?
   if (mds->sessionmap.version >= cmapv) {
@@ -2636,11 +2701,11 @@ void EImportStart::decode(bufferlist::iterator &bl) {
 
 void EImportStart::dump(Formatter *f) const
 {
-  f->dump_stream("base dirfrag") << base;
-  f->open_array_section("boundary dirfrags");
-  for (vector<dirfrag_t>::const_iterator iter = bounds.begin();
+  f->dump_stream("base stripe") << base;
+  f->open_array_section("boundary stripes");
+  for (vector<dirstripe_t>::const_iterator iter = bounds.begin();
       iter != bounds.end(); ++iter) {
-    f->dump_stream("frag") << *iter;
+    f->dump_stream("stripe") << *iter;
   }
   f->close_section();
 }
@@ -2660,13 +2725,13 @@ void EImportFinish::replay(MDS *mds)
     if (success) {
       mds->mdcache->finish_ambiguous_import(base);
     } else {
-      CDir *dir = mds->mdcache->get_dirfrag(base);
-      assert(dir);
-      vector<dirfrag_t> bounds;
+      CStripe *stripe = mds->mdcache->get_dirstripe(base);
+      assert(stripe);
+      vector<dirstripe_t> bounds;
       mds->mdcache->get_ambiguous_import_bounds(base, bounds);
-      mds->mdcache->adjust_bounded_subtree_auth(dir, bounds, CDIR_AUTH_UNDEF);
-      mds->mdcache->cancel_ambiguous_import(dir);
-      mds->mdcache->try_trim_non_auth_subtree(dir);
+      mds->mdcache->adjust_bounded_subtree_auth(stripe, bounds, CDIR_AUTH_UNDEF);
+      mds->mdcache->cancel_ambiguous_import(stripe);
+      mds->mdcache->try_trim_non_auth_subtree(stripe);
    }
   } else {
     dout(10) << "EImportFinish.replay " << base << " success=" << success
@@ -2678,7 +2743,7 @@ void EImportFinish::replay(MDS *mds)
 
 void EImportFinish::encode(bufferlist& bl) const
 {
-  ENCODE_START(3, 3, bl);
+  ENCODE_START(4, 4, bl);
   ::encode(stamp, bl);
   ::encode(base, bl);
   ::encode(success, bl);
@@ -2687,7 +2752,7 @@ void EImportFinish::encode(bufferlist& bl) const
 
 void EImportFinish::decode(bufferlist::iterator &bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(4, 4, 4, bl);
   if (struct_v >= 2)
     ::decode(stamp, bl);
   ::decode(base, bl);
@@ -2697,7 +2762,7 @@ void EImportFinish::decode(bufferlist::iterator &bl)
 
 void EImportFinish::dump(Formatter *f) const
 {
-  f->dump_stream("base dirfrag") << base;
+  f->dump_stream("base stripe") << base;
   f->dump_string("success", success ? "true" : "false");
 }
 void EImportFinish::generate_test_instances(list<EImportFinish*>& ls)
@@ -2743,12 +2808,12 @@ void EResetJournal::replay(MDS *mds)
   mds->inotable->replay_reset();
 
   if (mds->mdsmap->get_root() == mds->whoami) {
-    CDir *rootdir = mds->mdcache->get_root()->get_or_open_dirfrag(mds->mdcache, frag_t());
-    mds->mdcache->adjust_subtree_auth(rootdir, mds->whoami);   
+    CStripe *rootstripe = mds->mdcache->get_root()->get_or_open_stripe(0);
+    mds->mdcache->adjust_subtree_auth(rootstripe, mds->whoami);
   }
 
-  CDir *mydir = mds->mdcache->get_myin()->get_or_open_dirfrag(mds->mdcache, frag_t());
-  mds->mdcache->adjust_subtree_auth(mydir, mds->whoami);   
+  CStripe *mystripe = mds->mdcache->get_myin()->get_or_open_stripe(0);
+  mds->mdcache->adjust_subtree_auth(mystripe, mds->whoami);
 
   mds->mdcache->show_subtrees();
 }

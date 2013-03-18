@@ -161,9 +161,10 @@ class Inode {
   Dir       *dir;     // if i'm a dir.
   set<Dentry*> dn_set;      // if i'm linked to a dentry.
   string    symlink;  // symlink content, if it's a symlink
-  fragtree_t dirfragtree;
   map<string,bufferptr> xattrs;
-  map<frag_t,int> fragmap;  // known frag -> mds mappings
+
+  vector<int> stripe_auth;
+  vector<fragtree_t> stripe_fragtrees;
 
   list<Cond*>       waitfor_caps;
   list<Cond*>       waitfor_commit;

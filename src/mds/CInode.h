@@ -43,8 +43,9 @@ using namespace std;
 class Context;
 class CDentry;
 class CDir;
-class Message;
 class CInode;
+class CStripe;
+class Message;
 class MDCache;
 class LogSegment;
 struct SnapRealm;
@@ -88,7 +89,7 @@ public:
 
  public:
   // -- pins --
-  static const int PIN_DIRFRAG =         -1; 
+  static const int PIN_STRIPE =          -1; 
   static const int PIN_CAPS =             2;  // client caps
   static const int PIN_IMPORTING =       -4;  // importing
   static const int PIN_ANCHORING =        5;
@@ -97,7 +98,7 @@ public:
   static const int PIN_REMOTEPARENT =     8;
   static const int PIN_BATCHOPENJOURNAL = 9;
   static const int PIN_SCATTERED =        10;
-  static const int PIN_STICKYDIRS =       11;
+  static const int PIN_STICKYSTRIPES =    11;
   //static const int PIN_PURGING =         -12;	
   static const int PIN_FREEZING =         13;
   static const int PIN_FROZEN =           14;
@@ -113,7 +114,7 @@ public:
 
   const char *pin_name(int p) {
     switch (p) {
-    case PIN_DIRFRAG: return "dirfrag";
+    case PIN_STRIPE: return "stripe";
     case PIN_CAPS: return "caps";
     case PIN_IMPORTING: return "importing";
     case PIN_ANCHORING: return "anchoring";
@@ -122,7 +123,7 @@ public:
     case PIN_REMOTEPARENT: return "remoteparent";
     case PIN_BATCHOPENJOURNAL: return "batchopenjournal";
     case PIN_SCATTERED: return "scattered";
-    case PIN_STICKYDIRS: return "stickydirs";
+    case PIN_STICKYSTRIPES: return "stickystripes";
       //case PIN_PURGING: return "purging";
     case PIN_FREEZING: return "freezing";
     case PIN_FROZEN: return "frozen";
@@ -165,7 +166,7 @@ public:
     (STATE_FROZEN|STATE_AMBIGUOUSAUTH|STATE_EXPORTINGCAPS);
 
   // -- waiters --
-  static const uint64_t WAIT_DIR         = (1<<0);
+  static const uint64_t WAIT_STRIPE      = (1<<0);
   static const uint64_t WAIT_ANCHORED    = (1<<1);
   static const uint64_t WAIT_UNANCHORED  = (1<<2);
   static const uint64_t WAIT_FROZEN      = (1<<3);
@@ -186,7 +187,6 @@ public:
   inode_t          inode;        // the inode itself
   string           symlink;      // symlink dest, if symlink
   map<string, bufferptr> xattrs;
-  fragtree_t       dirfragtree;  // dir frag tree, if any.  always consistent with our dirfrag map.
   SnapRealm        *snaprealm;
 
   SnapRealm        *containing_realm;
@@ -329,36 +329,46 @@ public:
 
   // -- cache infrastructure --
 private:
-  map<frag_t,CDir*> dirfrags; // cached dir fragments under this Inode
-  int stickydir_ref;
+  vector<int> stripe_auth;
+  typedef map<stripeid_t, CStripe*> stripe_map;
+  stripe_map stripes;
+  int stickystripe_ref;
 
 public:
-  __u32 hash_dentry_name(const string &dn);
-  frag_t pick_dirfrag(const string &dn);
-  bool has_dirfrags() { return !dirfrags.empty(); }
-  CDir* get_dirfrag(frag_t fg) {
-    if (dirfrags.count(fg)) {
-      //assert(g_conf->debug_mds < 2 || dirfragtree.is_leaf(fg)); // performance hack FIXME
-      return dirfrags[fg];
-    } else
-      return NULL;
+  size_t get_stripe_count() const { return stripe_auth.size(); }
+  int get_stripe_auth(stripeid_t stripeid) const {
+    assert(stripeid < stripe_auth.size());
+    return stripe_auth[stripeid];
   }
-  bool get_dirfrags_under(frag_t fg, list<CDir*>& ls);
-  CDir* get_approx_dirfrag(frag_t fg);
-  void get_dirfrags(list<CDir*>& ls);
-  void get_nested_dirfrags(list<CDir*>& ls);
-  void get_subtree_dirfrags(list<CDir*>& ls);
-  CDir *get_or_open_dirfrag(MDCache *mdcache, frag_t fg);
-  CDir *add_dirfrag(CDir *dir);
-  void close_dirfrag(frag_t fg);
-  void close_dirfrags();
-  bool has_subtree_root_dirfrag(int auth=-1);
+  const vector<int>& get_stripe_auth() const { return stripe_auth; }
+  void set_stripe_auth(const vector<int> &auth) {
+    assert(stripes.lower_bound(auth.size()) == stripes.end()); // don't erase any open stripes
+    stripe_auth = auth;
+  }
+  void set_stripe_auth(stripeid_t stripeid, int auth) {
+    assert(stripeid < stripe_auth.size());
+    stripe_auth[stripeid] = auth;
+  }
 
-  void force_dirfrags();
-  void verify_dirfrags();
+  __u32 hash_dentry_name(const string &dn);
+  stripeid_t pick_stripe(__u32 hash);
+  stripeid_t pick_stripe(const string &dn);
 
-  void get_stickydirs();
-  void put_stickydirs();  
+  bool has_open_stripes() const;
+  bool has_subtree_root_stripe(int auth=-1) const;
+
+  void get_stripes(list<CStripe*> &stripes);
+  void get_nested_stripes(list<CStripe*> &stripes);
+  void get_subtree_stripes(list<CStripe*> &stripes);
+
+  CStripe* get_stripe(stripeid_t stripeid);
+  CStripe* get_or_open_stripe(stripeid_t stripeid);
+  CStripe* add_stripe(CStripe *stripe);
+  void close_stripe(CStripe *stripe);
+  void close_stripes();
+
+  void get_stickystripes();
+  void put_stickystripes();
 
  protected:
   // parent dentries in cache
@@ -430,7 +440,7 @@ private:
     first(f), last(l),
     last_journaled(0), //last_open_journaled(0), 
     //hack_accessed(true),
-    stickydir_ref(0),
+    stickystripe_ref(0),
     parent(0),
     inode_auth(CDIR_AUTH_DEFAULT),
     replica_caps_wanted(0),
@@ -462,7 +472,7 @@ private:
   ~CInode() {
     g_num_ino--;
     g_num_inos++;
-    close_dirfrags();
+    close_stripes();
     close_snaprealm();
   }
   
@@ -504,6 +514,8 @@ private:
   CDentry* get_projected_parent_dn() { return !projected_parent.empty() ? projected_parent.back() : parent; }
   CDir *get_parent_dir();
   CDir *get_projected_parent_dir();
+  CStripe *get_parent_stripe();
+  CStripe *get_projected_parent_stripe();
   CInode *get_parent_inode();
   
   bool is_lt(const MDSCacheObject *r) const {
@@ -572,7 +584,26 @@ private:
 
 
   // -- waiting --
+ private:
+  map<stripeid_t, list<Context*> > waiting_on_stripe;
+
+ public:
+  bool is_waiting_for_stripe(stripeid_t stripeid) {
+    return waiting_on_stripe.count(stripeid);
+  }
+  void add_stripe_waiter(stripeid_t stripeid, Context *c) {
+    waiting_on_stripe[stripeid].push_back(c);
+  }
+  void take_stripe_waiting(stripeid_t stripeid, list<Context*>& ls) {
+    map<stripeid_t, list<Context*> >::iterator i = waiting_on_stripe.find(stripeid);
+    if (i != waiting_on_stripe.end()) {
+      ls.splice(ls.end(), i->second);
+      waiting_on_stripe.erase(i);
+    }
+  }
+
   void add_waiter(uint64_t tag, Context *c);
+  void take_waiting(uint64_t mask, list<Context*> &ls);
 
 
   // -- encode/decode helpers --
@@ -646,7 +677,7 @@ public:
   void encode_lock_state(int type, bufferlist& bl);
   void decode_lock_state(int type, bufferlist& bl);
 
-  void _finish_frag_update(CDir *dir, Mutation *mut);
+  void _finish_frag_update(CStripe *stripe, Mutation *mut);
 
   void clear_dirty_scattered(int type);
   bool is_dirty_scattered();
@@ -654,7 +685,7 @@ public:
 
   void start_scatter(ScatterLock *lock);
   void start_scatter_gather(ScatterLock *lock, int auth=-1);
-  void finish_scatter_update(ScatterLock *lock, CDir *dir,
+  void finish_scatter_update(ScatterLock *lock, CStripe *stripe,
 			     version_t inode_version, version_t dir_accounted_version);
   void finish_scatter_gather_update(int type);
   void finish_scatter_gather_update_accounted(int type, Mutation *mut, EMetaBlob *metablob);

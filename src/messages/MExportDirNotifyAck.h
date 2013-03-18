@@ -17,34 +17,31 @@
 
 #include "msg/Message.h"
 #include <string>
-using namespace std;
 
 class MExportDirNotifyAck : public Message {
-  dirfrag_t dirfrag;
+  dirstripe_t dirstripe;
 
  public:
-  dirfrag_t get_dirfrag() { return dirfrag; }
+  dirstripe_t get_dirstripe() { return dirstripe; }
   
   MExportDirNotifyAck() {}
-  MExportDirNotifyAck(dirfrag_t dirfrag) :
-    Message(MSG_MDS_EXPORTDIRNOTIFYACK) {
-    this->dirfrag = dirfrag;
-  }
+  MExportDirNotifyAck(dirstripe_t ds) :
+    Message(MSG_MDS_EXPORTDIRNOTIFYACK), dirstripe(ds) {}
 private:
   ~MExportDirNotifyAck() {}
 
 public:
   const char *get_type_name() const { return "ExNotA"; }
   void print(ostream& o) const {
-    o << "export_notify_ack(" << dirfrag << ")";
+    o << "export_notify_ack(" << dirstripe << ")";
   }
 
   void encode_payload(uint64_t features) {
-    ::encode(dirfrag, payload);
+    ::encode(dirstripe, payload);
   }
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(dirfrag, p);
+    ::decode(dirstripe, p);
   }
   
 };

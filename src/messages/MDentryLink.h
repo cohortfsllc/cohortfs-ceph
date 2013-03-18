@@ -17,22 +17,22 @@
 #define CEPH_MDENTRYLINK_H
 
 class MDentryLink : public Message {
-  dirfrag_t subtree;
+  dirstripe_t subtree;
   dirfrag_t dirfrag;
   string dn;
   bool is_primary;
 
  public:
-  dirfrag_t get_subtree() { return subtree; }
-  dirfrag_t get_dirfrag() { return dirfrag; }
-  string& get_dn() { return dn; }
-  bool get_is_primary() { return is_primary; }
+  dirstripe_t get_subtree() const { return subtree; }
+  dirfrag_t get_dirfrag() const { return dirfrag; }
+  const string& get_dn() const { return dn; }
+  bool get_is_primary() const { return is_primary; }
 
   bufferlist bl;
 
   MDentryLink() :
     Message(MSG_MDS_DENTRYLINK) { }
-  MDentryLink(dirfrag_t r, dirfrag_t df, string& n, bool p) :
+  MDentryLink(dirstripe_t r, dirfrag_t df, string& n, bool p) :
     Message(MSG_MDS_DENTRYLINK),
     subtree(r),
     dirfrag(df),

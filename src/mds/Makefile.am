@@ -16,6 +16,7 @@ libmds_la_SOURCES = \
 	mds/CDentry.cc \
 	mds/CDir.cc \
 	mds/CInode.cc \
+	mds/CStripe.cc \
 	mds/LogEvent.cc \
 	mds/MDSTable.cc \
 	mds/InoTable.cc \
@@ -42,6 +43,7 @@ noinst_HEADERS += \
 	mds/CDentry.h \
 	mds/CDir.h \
 	mds/CInode.h \
+	mds/CStripe.h \
 	mds/Capability.h \
 	mds/Dumper.h \
 	mds/InoTable.h \

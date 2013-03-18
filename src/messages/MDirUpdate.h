@@ -20,17 +20,15 @@
 
 class MDirUpdate : public Message {
   int32_t from_mds;
-  dirfrag_t dirfrag;
-  int32_t dir_rep;
-  int32_t discover;
-  set<int32_t> dir_rep_by;
+  dirstripe_t dirstripe;
   filepath path;
+  bool replicate;
+  int32_t discover;
 
  public:
   int get_source_mds() const { return from_mds; }
-  dirfrag_t get_dirfrag() const { return dirfrag; }
-  int get_dir_rep() const { return dir_rep; }
-  const set<int>& get_dir_rep_by() const { return dir_rep_by; } 
+  dirstripe_t get_dirstripe() const { return dirstripe; }
+  bool should_replicate() const { return replicate; }
   bool should_discover() const { return discover > 0; }
   const filepath& get_path() const { return path; }
 
@@ -39,45 +37,37 @@ class MDirUpdate : public Message {
   }
 
   MDirUpdate() : Message(MSG_MDS_DIRUPDATE) {}
-  MDirUpdate(int f, 
-	     dirfrag_t dirfrag,
-             int dir_rep,
-             set<int>& dir_rep_by,
-             filepath& path,
-             bool discover = false) :
-    Message(MSG_MDS_DIRUPDATE) {
-    this->from_mds = f;
-    this->dirfrag = dirfrag;
-    this->dir_rep = dir_rep;
-    this->dir_rep_by = dir_rep_by;
-    if (discover) this->discover = 5;
-    this->path = path;
-  }
+  MDirUpdate(int from, dirstripe_t dirstripe, filepath& path,
+             bool replicate = false, bool discover = false) :
+      Message(MSG_MDS_DIRUPDATE),
+      from_mds(from),
+      dirstripe(dirstripe),
+      path(path),
+      replicate(replicate),
+      discover(discover ? 5 : 0) {}
 private:
   ~MDirUpdate() {}
 
 public:
   const char *get_type_name() const { return "dir_update"; }
   void print(ostream& out) const {
-    out << "dir_update(" << get_dirfrag() << ")";
+    out << "dir_update(" << dirstripe << ")";
   }
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(from_mds, p);
-    ::decode(dirfrag, p);
-    ::decode(dir_rep, p);
+    ::decode(dirstripe, p);
+    ::decode(replicate, p);
     ::decode(discover, p);
-    ::decode(dir_rep_by, p);
     ::decode(path, p);
   }
 
   virtual void encode_payload(uint64_t features) {
     ::encode(from_mds, payload);
-    ::encode(dirfrag, payload);
-    ::encode(dir_rep, payload);
+    ::encode(dirstripe, payload);
+    ::encode(replicate, payload);
     ::encode(discover, payload);
-    ::encode(dir_rep_by, payload);
     ::encode(path, payload);
   }
 };
