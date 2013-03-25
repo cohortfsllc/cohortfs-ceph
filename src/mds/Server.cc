@@ -2728,13 +2728,6 @@ void Server::handle_client_readdir(MDRequest *mdr)
     reply_request(mdr, -ENOTDIR);
     return;
   }
-
-  rdlocks.insert(&diri->filelock);
-  rdlocks.insert(&diri->dirfragtreelock);
-
-  if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-    return;
-
   // which frag?
   frag_t fg = (__u32)req->head.args.readdir.frag;
   string offset_str = req->get_path2();
@@ -2743,6 +2736,13 @@ void Server::handle_client_readdir(MDRequest *mdr)
   // XXX: use first stripe until client learns about stripes
   CStripe *stripe = try_open_auth_stripe(diri, 0, mdr);
   if (!stripe) return;
+
+  rdlocks.insert(&diri->filelock);
+  rdlocks.insert(&stripe->dirfragtreelock);
+
+  if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
+    return;
+
 
   // does the frag exist?
   const fragtree_t &dft = stripe->get_fragtree();

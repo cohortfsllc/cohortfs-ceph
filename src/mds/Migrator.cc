@@ -623,7 +623,7 @@ void Migrator::get_export_lock_set(CStripe *stripe, set<SimpleLock*>& locks)
   set<CStripe*> wouldbe_bounds;
   cache->get_wouldbe_subtree_bounds(stripe, wouldbe_bounds);
   for (set<CStripe*>::iterator p = wouldbe_bounds.begin(); p != wouldbe_bounds.end(); ++p)
-    locks.insert(&(*p)->get_inode()->dirfragtreelock);
+    locks.insert(&(*p)->dirfragtreelock);
 }
 
 
@@ -1100,7 +1100,6 @@ void Migrator::finish_export_inode(CInode *in, utime_t now, list<Context*>& fini
   // twiddle lock states for auth -> replica transition
   in->authlock.export_twiddle();
   in->linklock.export_twiddle();
-  in->dirfragtreelock.export_twiddle();
   in->filelock.export_twiddle();
   in->nestlock.export_twiddle();
   in->xattrlock.export_twiddle();
@@ -1301,6 +1300,7 @@ void Migrator::finish_export_stripe(CStripe *stripe, list<Context*>& finished,
   stripe->state_clear(CStripe::STATE_AUTH);
   stripe->clear_replica_map();
   stripe->replica_nonce = CStripe::EXPORT_NONCE;
+  stripe->dirfragtreelock.export_twiddle();
 
   // clear dirty
   if (stripe->is_dirty())
@@ -2114,6 +2114,7 @@ void Migrator::import_reverse(CStripe *stripe)
     assert(cur->is_auth());
     cur->state_clear(CStripe::STATE_AUTH);
     cur->clear_replica_map();
+    cur->dirfragtreelock.clear_gather();
     if (cur->is_dirty())
       cur->mark_clean();
 
@@ -2149,7 +2150,6 @@ void Migrator::import_reverse(CStripe *stripe)
             in->mark_clean();
           in->authlock.clear_gather();
           in->linklock.clear_gather();
-          in->dirfragtreelock.clear_gather();
           in->filelock.clear_gather();
 
           // non-bounding dir?
