@@ -610,7 +610,8 @@ void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<C
 
   CInode *in = 0;
   bool caps = lock->get_cap_shift();
-  if (lock->get_type() != CEPH_LOCK_DN)
+  if (lock->get_type() != CEPH_LOCK_DN &&
+      lock->get_type() != CEPH_LOCK_SDFT)
     in = static_cast<CInode *>(lock->get_parent());
 
   bool need_issue = false;
@@ -919,6 +920,11 @@ void Locker::try_eval(MDSCacheObject *p, int mask)
     bool need_issue = false;  // ignore this, no caps on dentries
     CDentry *dn = static_cast<CDentry *>(p);
     eval_any(&dn->lock, &need_issue);
+  } else if (mask & CEPH_LOCK_SDFT) {
+    assert(mask == CEPH_LOCK_SDFT);
+    bool need_issue = false;
+    CStripe *stripe = (CStripe*)p;
+    eval_any(&stripe->dirfragtreelock, &need_issue);
   } else {
     CInode *in = static_cast<CInode *>(p);
     eval(in, mask);
@@ -1022,8 +1028,6 @@ void Locker::eval_scatter_gathers(CInode *in)
     eval_gather(&in->filelock, false, &need_issue, &finishers);
   if (!in->nestlock.is_stable())
     eval_gather(&in->nestlock, false, &need_issue, &finishers);
-  if (!in->dirfragtreelock.is_stable())
-    eval_gather(&in->dirfragtreelock, false, &need_issue, &finishers);
   
   if (need_issue && in->is_head())
     issue_caps(in);
@@ -1036,7 +1040,6 @@ void Locker::eval(SimpleLock *lock, bool *need_issue)
   switch (lock->get_type()) {
   case CEPH_LOCK_IFILE:
     return file_eval(static_cast<ScatterLock*>(lock), need_issue);
-  case CEPH_LOCK_IDFT:
   case CEPH_LOCK_INEST:
     return scatter_eval(static_cast<ScatterLock*>(lock), need_issue);
   default:
@@ -1116,7 +1119,8 @@ bool Locker::rdlock_start(SimpleLock *lock, MDRequest *mut, bool as_anon)
   client_t client = as_anon ? -1 : mut->get_client();
 
   CInode *in = 0;
-  if (lock->get_type() != CEPH_LOCK_DN)
+  if (lock->get_type() != CEPH_LOCK_DN &&
+      lock->get_type() != CEPH_LOCK_SDFT)
     in = static_cast<CInode *>(lock->get_parent());
 
   /*
@@ -1260,10 +1264,9 @@ bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
 
   dout(10) << "wrlock_start " << *lock << " on " << *lock->get_parent() << dendl;
 
-  bool want_scatter = lock->get_parent()->is_auth() &&
+  bool want_scatter = lock->get_parent()->is_auth() && lock->is_scatterlock() &&
     (static_cast<CInode*>(lock->get_parent()))->has_subtree_root_stripe();
     
-  CInode *in = static_cast<CInode *>(lock->get_parent());
   client_t client = mut->get_client();
   
   while (1) {
@@ -1278,7 +1281,7 @@ bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
     if (!lock->is_stable())
       break;
 
-    if (in->is_auth()) {
+    if (lock->get_parent()->is_auth()) {
       // don't do nested lock state change if we have dirty scatterdata and
       // may scatter_writebehind or start_scatter, because nowait==true implies
       // that the caller already has a log entry open!
@@ -3198,9 +3201,18 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
       return &dn->lock;
     }
 
+  case CEPH_LOCK_SDFT:
+    {
+      CStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
+      if (!stripe) {
+        dout(7) << "get_lock doesn't have stripe " << info.dirfrag.stripe << dendl;
+        return 0;
+      }
+      return &stripe->dirfragtreelock;
+    }
+
   case CEPH_LOCK_IAUTH:
   case CEPH_LOCK_ILINK:
-  case CEPH_LOCK_IDFT:
   case CEPH_LOCK_IFILE:
   case CEPH_LOCK_INEST:
   case CEPH_LOCK_IXATTR:
@@ -3216,7 +3228,6 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
       switch (lock_type) {
       case CEPH_LOCK_IAUTH: return &in->authlock;
       case CEPH_LOCK_ILINK: return &in->linklock;
-      case CEPH_LOCK_IDFT: return &in->dirfragtreelock;
       case CEPH_LOCK_IFILE: return &in->filelock;
       case CEPH_LOCK_INEST: return &in->nestlock;
       case CEPH_LOCK_IXATTR: return &in->xattrlock;
@@ -3250,6 +3261,7 @@ void Locker::handle_lock(MLock *m)
 
   switch (lock->get_type()) {
   case CEPH_LOCK_DN:
+  case CEPH_LOCK_SDFT:
   case CEPH_LOCK_IAUTH:
   case CEPH_LOCK_ILINK:
   case CEPH_LOCK_ISNAP:
@@ -3259,7 +3271,6 @@ void Locker::handle_lock(MLock *m)
     handle_simple_lock(lock, m);
     break;
     
-  case CEPH_LOCK_IDFT:
   case CEPH_LOCK_INEST:
     //handle_scatter_lock((ScatterLock*)lock, m);
     //break;
@@ -3421,7 +3432,8 @@ void Locker::simple_eval(SimpleLock *lock, bool *need_issue)
 
   CInode *in = 0;
   int wanted = 0;
-  if (lock->get_type() != CEPH_LOCK_DN) {
+  if (lock->get_type() != CEPH_LOCK_DN &&
+      lock->get_type() != CEPH_LOCK_SDFT) {
     in = static_cast<CInode*>(lock->get_parent());
     in->get_caps_wanted(&wanted, NULL, lock->get_cap_shift());
   }
@@ -3945,7 +3957,6 @@ void Locker::scatter_nudge(ScatterLock *lock, Context *c, bool forcelockchange)
 	dout(10) << "scatter_nudge auth, scatter/unscattering " << *lock << " on " << *p << dendl;
 	switch (lock->get_type()) {
 	case CEPH_LOCK_IFILE:
-	case CEPH_LOCK_IDFT:
 	case CEPH_LOCK_INEST:
 	  if (p->is_replicated() && lock->get_state() != LOCK_MIX)
 	    scatter_mix(lock);

@@ -27,7 +27,7 @@ inline const char *get_lock_type_name(int t) {
   case CEPH_LOCK_IFILE: return "ifile";
   case CEPH_LOCK_IAUTH: return "iauth";
   case CEPH_LOCK_ILINK: return "ilink";
-  case CEPH_LOCK_IDFT: return "idft";
+  case CEPH_LOCK_SDFT: return "sdft";
   case CEPH_LOCK_INEST: return "inest";
   case CEPH_LOCK_IXATTR: return "ixattr";
   case CEPH_LOCK_ISNAP: return "isnap";
@@ -56,6 +56,7 @@ struct LockType {
   LockType(int t) : type(t) {
     switch (type) {
     case CEPH_LOCK_DN:
+    case CEPH_LOCK_SDFT:
     case CEPH_LOCK_IAUTH:
     case CEPH_LOCK_ILINK:
     case CEPH_LOCK_IXATTR:
@@ -64,7 +65,6 @@ struct LockType {
     case CEPH_LOCK_IPOLICY:
       sm = &sm_simplelock;
       break;
-    case CEPH_LOCK_IDFT:
     case CEPH_LOCK_INEST:
       sm = &sm_scatterlock;
       break;
@@ -250,7 +250,7 @@ public:
     case CEPH_LOCK_DVERSION: return 8 + 1*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IAUTH:    return 8 + 2*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_ILINK:    return 8 + 3*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_IDFT:     return 8 + 4*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_SDFT:     return 8 + 4*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IFILE:    return 8 + 5*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IVERSION: return 8 + 6*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IXATTR:   return 8 + 7*SimpleLock::WAIT_BITS;
@@ -279,19 +279,14 @@ public:
     }
   }
 
-  struct ptr_lt {
+  class ptr_lt {
+   public:
     bool operator()(const SimpleLock* l, const SimpleLock* r) const {
-      // first sort by object type (dn < inode)
-      if ((l->type->type>CEPH_LOCK_DN) <  (r->type->type>CEPH_LOCK_DN)) return true;
-      if ((l->type->type>CEPH_LOCK_DN) == (r->type->type>CEPH_LOCK_DN)) {
-	// then sort by object
-	if (l->parent->is_lt(r->parent)) return true;
-	if (l->parent == r->parent) {
-	  // then sort by (inode) lock type
-	  if (l->type->type < r->type->type) return true;
-	}
-      }
-      return false;
+      // first sort by lock type
+      if (l->type->type < r->type->type) return true;
+      if (l->type->type > r->type->type) return false;
+      // then sort by object
+      return l->parent->is_lt(r->parent);
     }
   };
 
