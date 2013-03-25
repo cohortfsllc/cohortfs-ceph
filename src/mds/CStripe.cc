@@ -50,6 +50,8 @@
 
 boost::pool<> CStripe::pool(sizeof(CStripe));
 
+LockType CStripe::dirfragtreelock_type(CEPH_LOCK_SDFT);
+
 ostream& CStripe::print_db_line_prefix(ostream& out)
 {
   return out << ceph_clock_now(g_ceph_context) << " mds." << mdcache->mds->get_nodeid() << ".cache.stripe(" << dirstripe() << ") ";
@@ -83,6 +85,8 @@ ostream& operator<<(ostream& out, CStripe &s)
 
   if (!s.get_fragtree().empty())
     out << " " << s.get_fragtree();
+  if (!s.dirfragtreelock.is_sync_and_unlocked())
+    out << " " << s.dirfragtreelock;
 
   // fragstat
   out << " " << s.fnode.fragstat;
@@ -155,7 +159,8 @@ CStripe::CStripe(CInode *in, stripeid_t stripeid, bool auth)
     dirty_rstat_inodes(member_offset(CInode, dirty_rstat_item)),
     item_dirty(this),
     item_new(this),
-    stickydir_ref(0)
+    stickydir_ref(0),
+    dirfragtreelock(this, &dirfragtreelock_type)
 {
   memset(&fnode, 0, sizeof(fnode));
   if (auth)
@@ -457,6 +462,29 @@ void CStripe::put_stickydirs()
       p->second->put(CDir::PIN_STICKY);
     }
   }
+}
+
+
+// locks
+
+void CStripe::set_object_info(MDSCacheObjectInfo &info)
+{
+  info.dirfrag.stripe = dirstripe();
+}
+
+void CStripe::encode_lock_state(int type, bufferlist& bl)
+{
+  assert(type == CEPH_LOCK_SDFT);
+  if (is_auth()) // encode the raw tree for replicas
+    ::encode(dirfragtree, bl);
+}
+
+void CStripe::decode_lock_state(int type, bufferlist& bl)
+{
+  assert(type == CEPH_LOCK_SDFT);
+  bufferlist::iterator p = bl.begin();
+  if (!is_auth()) // take the new tree
+    ::decode(dirfragtree, p);
 }
 
 

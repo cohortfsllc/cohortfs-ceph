@@ -55,7 +55,7 @@ class CStripe : public MDSCacheObject {
 
  public:
   // -- pins --
-  static const int PIN_DIRFRAG            = 1;
+  static const int PIN_DIRFRAG            = -1;
   static const int PIN_STICKYDIRS         = 2;
   static const int PIN_SUBTREE            = 3;
   static const int PIN_SUBTREETEMP        = 4; // used by MDCache::trim_non_auth()
@@ -282,6 +282,18 @@ class CStripe : public MDSCacheObject {
   bool is_subtree_root() const {
     return stripe_auth != CDIR_AUTH_DEFAULT;
   }
+
+  // -- locks --
+  static LockType dirfragtreelock_type;
+  SimpleLock dirfragtreelock;
+
+  SimpleLock* get_lock(int type) {
+    assert(type == CEPH_LOCK_SDFT);
+    return &dirfragtreelock;
+  }
+  void set_object_info(MDSCacheObjectInfo &info);
+  void encode_lock_state(int type, bufferlist& bl);
+  void decode_lock_state(int type, bufferlist& bl);
 
   // -- auth pins --
  private:

@@ -447,7 +447,6 @@ public:
   elist<CInode*>::item item_renamed_file;
   elist<CInode*>::item item_dirty_dirfrag_dir;
   elist<CInode*>::item item_dirty_dirfrag_nest;
-  elist<CInode*>::item item_dirty_dirfrag_dirfragtree;
 
 private:
   // auth pin
@@ -489,7 +488,6 @@ private:
     item_dirty(this), item_caps(this), item_open_file(this), item_renamed_file(this), 
     item_dirty_dirfrag_dir(this), 
     item_dirty_dirfrag_nest(this), 
-    item_dirty_dirfrag_dirfragtree(this), 
     auth_pins(0), nested_auth_pins(0),
     auth_pin_freeze_allowance(0),
     nested_anchors(0),
@@ -497,7 +495,6 @@ private:
     versionlock(this, &versionlock_type),
     authlock(this, &authlock_type),
     linklock(this, &linklock_type),
-    dirfragtreelock(this, &dirfragtreelock_type),
     filelock(this, &filelock_type),
     xattrlock(this, &xattrlock_type),
     snaplock(this, &snaplock_type),
@@ -731,7 +728,6 @@ public:
   static LockType versionlock_type;
   static LockType authlock_type;
   static LockType linklock_type;
-  static LockType dirfragtreelock_type;
   static LockType filelock_type;
   static LockType xattrlock_type;
   static LockType snaplock_type;
@@ -742,7 +738,6 @@ public:
   LocalLock  versionlock;
   SimpleLock authlock;
   SimpleLock linklock;
-  ScatterLock dirfragtreelock;
   ScatterLock filelock;
   SimpleLock xattrlock;
   SimpleLock snaplock;
@@ -755,7 +750,6 @@ public:
     case CEPH_LOCK_IFILE: return &filelock;
     case CEPH_LOCK_IAUTH: return &authlock;
     case CEPH_LOCK_ILINK: return &linklock;
-    case CEPH_LOCK_IDFT: return &dirfragtreelock;
     case CEPH_LOCK_IXATTR: return &xattrlock;
     case CEPH_LOCK_ISNAP: return &snaplock;
     case CEPH_LOCK_INEST: return &nestlock;

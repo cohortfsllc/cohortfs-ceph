@@ -44,22 +44,19 @@ class MMDSCacheRejoin : public Message {
   // -- types --
   struct inode_strong { 
     int32_t caps_wanted;
-    int32_t filelock, nestlock, dftlock;
+    int32_t filelock, nestlock;
     inode_strong() {}
-    inode_strong(int cw, int dl, int nl, int dftl) : 
-      caps_wanted(cw),
-      filelock(dl), nestlock(nl), dftlock(dftl) { }
+    inode_strong(int cw, int dl, int nl)
+        : caps_wanted(cw), filelock(dl), nestlock(nl) {}
     void encode(bufferlist &bl) const {
       ::encode(caps_wanted, bl);
       ::encode(filelock, bl);
       ::encode(nestlock, bl);
-      ::encode(dftlock, bl);
     }
     void decode(bufferlist::iterator &bl) {
       ::decode(caps_wanted, bl);
       ::decode(filelock, bl);
       ::decode(nestlock, bl);
-      ::decode(dftlock, bl);
     }
   };
   WRITE_CLASS_ENCODER(inode_strong)
@@ -130,16 +127,14 @@ class MMDSCacheRejoin : public Message {
   int32_t op;
 
   struct lock_bls {
-    bufferlist file, nest, dft;
+    bufferlist file, nest;
     void encode(bufferlist& bl) const {
       ::encode(file, bl);
       ::encode(nest, bl);
-      ::encode(dft, bl);
     }
     void decode(bufferlist::iterator& bl) {
       ::decode(file, bl);
       ::decode(nest, bl);
-      ::decode(dft, bl);
     }
   };
   WRITE_CLASS_ENCODER(lock_bls)
@@ -207,8 +202,8 @@ public:
   void add_weak_inode(vinodeno_t i) {
     weak_inodes.insert(i);
   }
-  void add_strong_inode(vinodeno_t i, int cw, int dl, int nl, int dftl) {
-    strong_inodes[i] = inode_strong(cw, dl, nl, dftl);
+  void add_strong_inode(vinodeno_t i, int cw, int dl, int nl) {
+    strong_inodes[i] = inode_strong(cw, dl, nl);
   }
   void add_inode_locks(CInode *in, __u32 nonce) {
     ::encode(in->inode.ino, inode_locks);
@@ -243,7 +238,6 @@ public:
       return;  // already added this one
     in->encode_lock_state(CEPH_LOCK_IFILE, inode_scatterlocks[in->ino()].file);
     in->encode_lock_state(CEPH_LOCK_INEST, inode_scatterlocks[in->ino()].nest);
-    in->encode_lock_state(CEPH_LOCK_IDFT, inode_scatterlocks[in->ino()].dft);
   }
 
   void copy_cap_exports(bufferlist &bl) {

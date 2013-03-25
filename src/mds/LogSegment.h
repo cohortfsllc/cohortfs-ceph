@@ -47,7 +47,6 @@ class LogSegment {
   elist<CInode*>  renamed_files;
   elist<CInode*>  dirty_dirfrag_dir;
   elist<CInode*>  dirty_dirfrag_nest;
-  elist<CInode*>  dirty_dirfrag_dirfragtree;
 
   elist<MDSlaveUpdate*> slave_updates;
   
@@ -80,7 +79,6 @@ class LogSegment {
     renamed_files(member_offset(CInode, item_renamed_file)),
     dirty_dirfrag_dir(member_offset(CInode, item_dirty_dirfrag_dir)),
     dirty_dirfrag_nest(member_offset(CInode, item_dirty_dirfrag_nest)),
-    dirty_dirfrag_dirfragtree(member_offset(CInode, item_dirty_dirfrag_dirfragtree)),
     slave_updates(0), // passed to begin() manually
     inotablev(0), sessionmapv(0)
   { }

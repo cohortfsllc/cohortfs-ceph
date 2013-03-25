@@ -419,7 +419,7 @@ public:
 
 
   // -- auth pins --
-  bool can_auth_pin() { return is_auth() && !(is_frozen() || is_freezing()); }
+  bool can_auth_pin() { return is_auth() && !is_freezing_or_frozen(); }
   int get_cum_auth_pins() { return auth_pins + nested_auth_pins; }
   int get_auth_pins() { return auth_pins; }
   int get_nested_auth_pins() { return nested_auth_pins; }

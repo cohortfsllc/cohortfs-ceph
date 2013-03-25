@@ -240,7 +240,6 @@ void MDCache::remove_inode(CInode *o)
 
   o->filelock.remove_dirty();
   o->nestlock.remove_dirty();
-  o->dirfragtreelock.remove_dirty();
 
   o->item_open_file.remove_myself();
 
@@ -3412,7 +3411,6 @@ void MDCache::recalc_auth_bits()
               if (subtree_inodes.count(in) == 0) {
                 in->filelock.remove_dirty();
                 in->nestlock.remove_dirty();
-                in->dirfragtreelock.remove_dirty();
               }
             }
 
@@ -3553,8 +3551,7 @@ void MDCache::rejoin_send_rejoins()
 	p->second->add_strong_inode(root->vino(),
 				    root->get_caps_wanted(),
 				    root->filelock.get_state(),
-				    root->nestlock.get_state(),
-				    root->dirfragtreelock.get_state());
+				    root->nestlock.get_state());
 	if (root->is_dirty_scattered()) {
 	  dout(10) << " sending scatterlock state on root " << *root << dendl;
 	  p->second->add_scatterlock_state(root);
@@ -3566,8 +3563,7 @@ void MDCache::rejoin_send_rejoins()
 	p->second->add_strong_inode(in->vino(),
 				    in->get_caps_wanted(),
 				    in->filelock.get_state(),
-				    in->nestlock.get_state(),
-				    in->dirfragtreelock.get_state());
+				    in->nestlock.get_state());
       }
     }
   }  
@@ -3739,8 +3735,7 @@ void MDCache::rejoin_walk(CStripe *stripe, MMDSCacheRejoin *rejoin)
           rejoin->add_strong_inode(in->vino(),
                                    in->get_caps_wanted(),
                                    in->filelock.get_state(),
-                                   in->nestlock.get_state(),
-                                   in->dirfragtreelock.get_state());
+                                   in->nestlock.get_state());
           in->get_nested_stripes(nested);
           if (in->is_dirty_scattered()) {
             dout(10) << " sending scatterlock state on " << *in << dendl;
@@ -3874,7 +3869,6 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     assert(in);
     in->decode_lock_state(CEPH_LOCK_IFILE, p->second.file);
     in->decode_lock_state(CEPH_LOCK_INEST, p->second.nest);
-    in->decode_lock_state(CEPH_LOCK_IDFT, p->second.dft);
     if (!survivor)
       rejoin_potential_updated_scatterlocks.insert(in);
   }
@@ -4308,7 +4302,6 @@ void MDCache::handle_cache_rejoin_strong(MMDSCacheRejoin *strong)
     assert(in);
     in->decode_lock_state(CEPH_LOCK_IFILE, p->second.file);
     in->decode_lock_state(CEPH_LOCK_INEST, p->second.nest);
-    in->decode_lock_state(CEPH_LOCK_IDFT, p->second.dft);
     rejoin_potential_updated_scatterlocks.insert(in);
   }
 
@@ -4435,7 +4428,6 @@ void MDCache::handle_cache_rejoin_strong(MMDSCacheRejoin *strong)
 	  //   * go to LOCK if they are LOCK (just bc identify_files_to_recover might start twiddling filelock)
 	  in->filelock.infer_state_from_strong_rejoin(is.filelock, true);  // maybe also go to LOCK
 	  in->nestlock.infer_state_from_strong_rejoin(is.nestlock, false);
-	  in->dirfragtreelock.infer_state_from_strong_rejoin(is.dftlock, false);
 	  
 	  // auth pin?
 	  if (strong->authpinned_inodes.count(in->vino())) {
@@ -6542,7 +6534,6 @@ void MDCache::inode_remove_replica(CInode *in, int from)
   // fix lock
   if (in->authlock.remove_replica(from)) mds->locker->eval_gather(&in->authlock);
   if (in->linklock.remove_replica(from)) mds->locker->eval_gather(&in->linklock);
-  if (in->dirfragtreelock.remove_replica(from)) mds->locker->eval_gather(&in->dirfragtreelock);
   if (in->filelock.remove_replica(from)) mds->locker->eval_gather(&in->filelock);
   if (in->snaplock.remove_replica(from)) mds->locker->eval_gather(&in->snaplock);
   if (in->xattrlock.remove_replica(from)) mds->locker->eval_gather(&in->xattrlock);
@@ -10267,20 +10258,16 @@ class C_MDC_FragmentFrozen : public Context {
   frag_t basefrag;
   int by;
 public:
-  C_MDC_FragmentFrozen(MDCache *m, list<CDir*> d, frag_t bf, int b) : mdcache(m), dirs(d), basefrag(bf), by(b) {}
+  C_MDC_FragmentFrozen(MDCache *m, list<CDir*> d, frag_t bf, int b)
+      : mdcache(m), dirs(d), basefrag(bf), by(b) {}
   virtual void finish(int r) {
     mdcache->fragment_frozen(dirs, basefrag, by);
   }
 };
 
 
-bool MDCache::can_fragment_lock(CInode *diri)
+bool MDCache::can_fragment_lock(CStripe *stripe)
 {
-  if (!diri->dirfragtreelock.can_wrlock(-1)) {
-    dout(7) << "can_fragment: can't wrlock dftlock" << dendl;
-    mds->locker->scatter_nudge(&diri->dirfragtreelock, NULL);
-    return false;
-  }
   return true;
 }
 
@@ -10331,7 +10318,7 @@ void MDCache::split_dir(CDir *dir, int bits)
 
   if (!can_fragment(diri, dirs))
     return;
-  if (!can_fragment_lock(diri)) {
+  if (!can_fragment_lock(dir->get_stripe())) {
     dout(10) << " requeuing dir " << dir->dirfrag() << dendl;
     mds->balancer->queue_split(dir);
     return;
@@ -10364,7 +10351,7 @@ void MDCache::merge_dir(CStripe *stripe, frag_t frag)
   CInode *diri = stripe->get_inode();
   if (!can_fragment(diri, dirs))
     return;
-  if (!can_fragment_lock(diri)) {
+  if (!can_fragment_lock(stripe)) {
     //dout(10) << " requeuing dir " << dir->dirfrag() << dendl;
     //mds->mdbalancer->split_queue.insert(dir->dirfrag());
     return;
@@ -10502,13 +10489,10 @@ void MDCache::fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits)
   dout(10) << "fragment_frozen " << dirs << " " << basefrag << " by " << bits 
 	   << " on " << *stripe << dendl;
 
+  Mutation *mut = new Mutation;
+
   // wrlock dirfragtreelock
-  if (!diri->dirfragtreelock.can_wrlock(-1)) {
-    dout(10) << " can't wrlock " << diri->dirfragtreelock << " on " << *diri << dendl;
-    fragment_unmark_unfreeze_dirs(dirs);
-    return;
-  }
-  diri->dirfragtreelock.get_wrlock(true);
+  mds->locker->wrlock_force(&stripe->dirfragtreelock, mut);
 
   // prevent a racing gather on any other scatterlocks too
   diri->nestlock.get_wrlock(true);
@@ -10523,8 +10507,6 @@ void MDCache::fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits)
   mds->queue_waiters(waiters);
 
   // journal
-  Mutation *mut = new Mutation;
-
   mut->ls = mds->mdlog->get_current_segment();
   EFragment *le = new EFragment(mds->mdlog, EFragment::OP_PREPARE,
                                dirfrag_t(stripe->dirstripe(), basefrag), bits);
@@ -10532,23 +10514,6 @@ void MDCache::fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits)
 
   le->metablob.add_stripe_context(stripe);
   le->metablob.add_stripe(stripe, true); // stripe is dirty
-
-  // dft lock
-  mds->locker->mark_updated_scatterlock(&diri->dirfragtreelock);
-  mut->ls->dirty_dirfrag_dirfragtree.push_back(&diri->item_dirty_dirfrag_dirfragtree);
-  mut->add_updated_lock(&diri->dirfragtreelock);
-
-  /*
-  // filelock
-  mds->locker->mark_updated_scatterlock(&diri->filelock);
-  mut->ls->dirty_dirfrag_dir.push_back(&diri->item_dirty_dirfrag_dir);
-  mut->add_updated_lock(&diri->filelock);
-
-  // dirlock
-  mds->locker->mark_updated_scatterlock(&diri->nestlock);
-  mut->ls->dirty_dirfrag_nest.push_back(&diri->item_dirty_dirfrag_nest);
-  mut->add_updated_lock(&diri->nestlock);
-  */
 
   // freeze, journal, and store resulting frags
   C_GatherBuilder gather(g_ceph_context,
@@ -10605,7 +10570,7 @@ void MDCache::fragment_logged_and_stored(Mutation *mut, list<CDir*>& resultfrags
 
   // drop dft wrlock
   bool need_issue = false;
-  mds->locker->wrlock_finish(&diri->dirfragtreelock, NULL, &need_issue);
+  mds->locker->wrlock_finish(&stripe->dirfragtreelock, NULL, &need_issue);
   mds->locker->wrlock_finish(&diri->nestlock, NULL, &need_issue);
   mds->locker->wrlock_finish(&diri->filelock, NULL, &need_issue);
 

@@ -877,7 +877,7 @@ private:
 
   friend class EFragment;
 
-  bool can_fragment_lock(CInode *diri);
+  bool can_fragment_lock(CStripe *stripe);
   bool can_fragment(CInode *diri, list<CDir*>& dirs);
 
 public:

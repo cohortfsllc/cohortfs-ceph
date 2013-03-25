@@ -54,7 +54,6 @@ boost::pool<> Capability::pool(sizeof(Capability));
 LockType CInode::versionlock_type(CEPH_LOCK_IVERSION);
 LockType CInode::authlock_type(CEPH_LOCK_IAUTH);
 LockType CInode::linklock_type(CEPH_LOCK_ILINK);
-LockType CInode::dirfragtreelock_type(CEPH_LOCK_IDFT);
 LockType CInode::filelock_type(CEPH_LOCK_IFILE);
 LockType CInode::xattrlock_type(CEPH_LOCK_IXATTR);
 LockType CInode::snaplock_type(CEPH_LOCK_ISNAP);
@@ -176,8 +175,6 @@ ostream& operator<<(ostream& out, CInode& in)
   if (!in.linklock.is_sync_and_unlocked())
     out << " " << in.linklock;
   if (in.inode.is_dir()) {
-    if (!in.dirfragtreelock.is_sync_and_unlocked())
-      out << " " << in.dirfragtreelock;
     if (!in.snaplock.is_sync_and_unlocked())
       out << " " << in.snaplock;
     if (!in.nestlock.is_sync_and_unlocked())
@@ -1008,32 +1005,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
     ::encode(inode.nlink, bl);
     ::encode(inode.anchored, bl);
     break;
-    
-  case CEPH_LOCK_IDFT:
-    if (!is_auth()) {
-      bool dirty = dirfragtreelock.is_dirty();
-      ::encode(dirty, bl);
-    }
-    {
-      // XXX: move dirfragtreelock to CStripe
-#if 0
-      // encode the raw tree
-      ::encode(dirfragtree, bl);
 
-      // also specify which frags are mine
-      set<frag_t> myfrags;
-      list<CDir*> dfls;
-      get_dirfrags(dfls);
-      for (list<CDir*>::iterator p = dfls.begin(); p != dfls.end(); ++p) 
-	if ((*p)->is_auth()) {
-	  frag_t fg = (*p)->get_frag();
-	  myfrags.insert(fg);
-	}
-      ::encode(myfrags, bl);
-#endif
-    }
-    break;
-    
   case CEPH_LOCK_IFILE:
     if (is_auth()) {
       ::encode(inode.layout, bl);
@@ -1179,50 +1151,6 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
       ::decode(inode.anchored, p);
       if (parent && was_anchored != inode.anchored)
 	parent->adjust_nested_anchors((int)inode.anchored - (int)was_anchored);
-    }
-    break;
-
-  case CEPH_LOCK_IDFT:
-    if (is_auth()) {
-      bool replica_dirty;
-      ::decode(replica_dirty, p);
-      if (replica_dirty) {
-	dout(10) << "decode_lock_state setting dftlock dirty flag" << dendl;
-	dirfragtreelock.mark_dirty();  // ok bc we're auth and caller will handle
-      }
-    }
-    {
-      // XXX: move fragtreelock to CStripe
-#if 0
-      fragtree_t temp;
-      ::decode(temp, p);
-      set<frag_t> authfrags;
-      ::decode(authfrags, p);
-      if (is_auth()) {
-	// auth.  believe replica's auth frags only.
-	for (set<frag_t>::iterator p = authfrags.begin(); p != authfrags.end(); ++p)
-	  if (!dirfragtree.is_leaf(*p)) {
-	    dout(10) << " forcing frag " << *p << " to leaf (split|merge)" << dendl;
-	    dirfragtree.force_to_leaf(g_ceph_context, *p);
-	    dirfragtreelock.mark_dirty();  // ok bc we're auth and caller will handle
-	  }
-      } else {
-	// replica.  take the new tree, BUT make sure any open
-	//  dirfrags remain leaves (they may have split _after_ this
-	//  dft was scattered, or we may still be be waiting on the
-	//  notify from the auth)
-	dirfragtree.swap(temp);
-	for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	     p != dirfrags.end();
-	     p++)
-	  if (!dirfragtree.is_leaf(p->first)) {
-	    dout(10) << " forcing open dirfrag " << p->first << " to leaf (racing with split|merge)" << dendl;
-	    dirfragtree.force_to_leaf(g_ceph_context, p->first);
-	  }
-      }
-      if (g_conf->mds_debug_frag)
-	verify_dirfrags();
-#endif
     }
     break;
 
@@ -1401,15 +1329,13 @@ bool CInode::is_dirty_scattered()
 {
   return
     filelock.is_dirty_or_flushing() ||
-    nestlock.is_dirty_or_flushing() ||
-    dirfragtreelock.is_dirty_or_flushing();
+    nestlock.is_dirty_or_flushing();
 }
 
 void CInode::clear_scatter_dirty()
 {
   filelock.remove_dirty();
   nestlock.remove_dirty();
-  dirfragtreelock.remove_dirty();
 }
 
 void CInode::clear_dirty_scattered(int type)
@@ -1419,15 +1345,9 @@ void CInode::clear_dirty_scattered(int type)
   case CEPH_LOCK_IFILE:
     item_dirty_dirfrag_dir.remove_myself();
     break;
-
   case CEPH_LOCK_INEST:
     item_dirty_dirfrag_nest.remove_myself();
     break;
-
-  case CEPH_LOCK_IDFT:
-    item_dirty_dirfrag_dirfragtree.remove_myself();
-    break;
-
   default:
     assert(0);
   }
@@ -1726,9 +1646,6 @@ void CInode::finish_scatter_gather_update(int type)
     }
     break;
 
-  case CEPH_LOCK_IDFT:
-    break;
-
   default:
     assert(0);
   }
@@ -1744,9 +1661,6 @@ void CInode::finish_scatter_gather_update_accounted(int type, Mutation *mut, EMe
     if (!stripe->is_auth() || stripe->is_frozen())
       continue;
     
-    if (type == CEPH_LOCK_IDFT)
-      continue;  // nothing to do.
-
     dout(10) << " journaling updated frag accounted_ on " << *stripe << dendl;
     assert(stripe->is_projected());
     fnode_t *pf = stripe->get_projected_fnode();
@@ -2252,7 +2166,6 @@ void CInode::choose_lock_states()
     try_set_loner();
   choose_lock_state(&filelock, issued);
   choose_lock_state(&nestlock, issued);
-  choose_lock_state(&dirfragtreelock, issued);
   choose_lock_state(&authlock, issued);
   choose_lock_state(&xattrlock, issued);
   choose_lock_state(&linklock, issued);
@@ -2521,7 +2434,6 @@ void CInode::replicate_relax_locks()
   
   authlock.replicate_relax();
   linklock.replicate_relax();
-  dirfragtreelock.replicate_relax();
   filelock.replicate_relax();
   xattrlock.replicate_relax();
   snaplock.replicate_relax();
@@ -2857,7 +2769,6 @@ void CInode::_encode_locks_full(bufferlist& bl)
 {
   ::encode(authlock, bl);
   ::encode(linklock, bl);
-  ::encode(dirfragtreelock, bl);
   ::encode(filelock, bl);
   ::encode(xattrlock, bl);
   ::encode(snaplock, bl);
@@ -2871,7 +2782,6 @@ void CInode::_decode_locks_full(bufferlist::iterator& p)
 {
   ::decode(authlock, p);
   ::decode(linklock, p);
-  ::decode(dirfragtreelock, p);
   ::decode(filelock, p);
   ::decode(xattrlock, p);
   ::decode(snaplock, p);
@@ -2888,7 +2798,6 @@ void CInode::_encode_locks_state_for_replica(bufferlist& bl)
 {
   authlock.encode_state_for_replica(bl);
   linklock.encode_state_for_replica(bl);
-  dirfragtreelock.encode_state_for_replica(bl);
   filelock.encode_state_for_replica(bl);
   nestlock.encode_state_for_replica(bl);
   xattrlock.encode_state_for_replica(bl);
@@ -2900,7 +2809,6 @@ void CInode::_decode_locks_state(bufferlist::iterator& p, bool is_new)
 {
   authlock.decode_state(p, is_new);
   linklock.decode_state(p, is_new);
-  dirfragtreelock.decode_state(p, is_new);
   filelock.decode_state(p, is_new);
   nestlock.decode_state(p, is_new);
   xattrlock.decode_state(p, is_new);
@@ -2912,7 +2820,6 @@ void CInode::_decode_locks_rejoin(bufferlist::iterator& p, list<Context*>& waite
 {
   authlock.decode_state_rejoin(p, waiters);
   linklock.decode_state_rejoin(p, waiters);
-  dirfragtreelock.decode_state_rejoin(p, waiters);
   filelock.decode_state_rejoin(p, waiters);
   nestlock.decode_state_rejoin(p, waiters);
   xattrlock.decode_state_rejoin(p, waiters);

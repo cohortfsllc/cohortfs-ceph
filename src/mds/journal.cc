@@ -123,11 +123,6 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
     dout(10) << "try_to_expire waiting for dirlock flush on " << *in << dendl;
     mds->locker->scatter_nudge(&in->filelock, gather_bld.new_sub());
   }
-  for (elist<CInode*>::iterator p = dirty_dirfrag_dirfragtree.begin(); !p.end(); ++p) {
-    CInode *in = *p;
-    dout(10) << "try_to_expire waiting for dirfragtreelock flush on " << *in << dendl;
-    mds->locker->scatter_nudge(&in->dirfragtreelock, gather_bld.new_sub());
-  }
   for (elist<CInode*>::iterator p = dirty_dirfrag_nest.begin(); !p.end(); ++p) {
     CInode *in = *p;
     dout(10) << "try_to_expire waiting for nest flush on " << *in << dendl;
