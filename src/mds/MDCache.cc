@@ -1345,9 +1345,10 @@ void MDCache::adjust_subtree_after_rename(CInode *diri, CStripe *oldstripe,
   }
 
   // adjust subtree
-  int count = diri->get_stripe_count();
-  for (int i = 0; i < count; i++) {
-    CStripe *stripe = diri->get_stripe(i);
+  list<CStripe*> stripes;
+  diri->get_nested_stripes(stripes);
+  for (list<CStripe*>::iterator i = stripes.begin(); i != stripes.end(); ++i) {
+    CStripe *stripe = *i;
 
     dout(10) << "stripe " << *stripe << dendl;
     CStripe *oldparent = get_subtree_root(oldstripe);
@@ -3147,6 +3148,9 @@ void MDCache::handle_resolve_ack(MMDSResolveAck *ack)
 	break;
       case ESlaveUpdate::RMDIR:
 	mds->server->do_rmdir_rollback(su->rollback, from, 0);
+	break;
+      case ESlaveUpdate::MKDIR:
+	mds->server->do_mkdir_rollback(su->rollback, from, 0);
 	break;
       default:
 	assert(0);
@@ -7529,7 +7533,8 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
     stripeid_t stripeid = cur->pick_stripe(dnhash);
     CStripe *curstripe = cur->get_stripe(stripeid);
     if (!curstripe) {
-      if (cur->is_auth()) {
+      int stripe_auth = cur->get_stripe_auth(stripeid);
+      if (stripe_auth == mds->get_nodeid()) {
         // parent dir frozen_dir?
         if (cur->is_frozen()) {
           dout(7) << "traverse: " << *cur << " is frozen, waiting" << dendl;
@@ -7539,7 +7544,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
         curstripe = cur->get_or_open_stripe(stripeid);
       } else {
         discover_dir_stripe(cur, stripeid, _get_waiter(mdr, req, fin),
-                            cur->get_stripe_auth(stripeid));
+                            stripe_auth);
         return 1;
       }
     }
@@ -10267,11 +10272,8 @@ void MDCache::handle_discover(MDiscover *dis)
       stripeid = dis->get_base_stripe();
       assert(dis->wants_base_stripe() || dis->get_want_ino() || MDS_INO_IS_BASE(dis->get_base_ino()));
     }
-    CStripe *curstripe = cur->get_stripe(stripeid);
-
-    if ((!curstripe && !cur->is_auth()) ||
-	(curstripe && !curstripe->is_auth())) {
-
+    int stripe_auth = cur->get_stripe_auth(stripeid);
+    if (stripe_auth != mds->get_nodeid()) {
 	/* before:
 	 * ONLY set flag if empty!!
 	 * otherwise requester will wake up waiter(s) _and_ continue with discover,
@@ -10284,15 +10286,9 @@ void MDCache::handle_discover(MDiscover *dis)
 	//  someday this could be better, but right now the waiter logic isn't smart enough.
 
 	// hint
-	if (curstripe) {
-	  dout(7) << " not stripe auth, setting auth_hint for "
-              << *curstripe << dendl;
-	  reply->set_auth_hint(curstripe->authority().first);
-	} else {
-	  dout(7) << " stripe not open, not inode auth, setting auth_hint for "
-		  << *cur << dendl;
-	  reply->set_auth_hint(cur->authority().first);
-	}
+        dout(7) << " not stripe auth, setting auth_hint for "
+            << stripe_auth << dendl;
+        reply->set_auth_hint(stripe_auth);
 
 	// note error dentry, if any
 	//  NOTE: important, as it allows requester to issue an equivalent discover
@@ -10305,8 +10301,7 @@ void MDCache::handle_discover(MDiscover *dis)
     }
 
     // open stripe?
-    if (!curstripe) 
-      curstripe = cur->get_or_open_stripe(stripeid);
+    CStripe *curstripe = cur->get_or_open_stripe(stripeid);
     assert(curstripe);
     assert(curstripe->is_auth());
 
@@ -11066,7 +11061,9 @@ void MDCache::handle_dentry_link(MDentryLink *m)
   if (dn) {
     if (m->get_is_primary()) {
       // primary link.
-      add_replica_inode(p, dn, finished);
+      CInode *in = add_replica_inode(p, dn, finished);
+      if (dn->get_linkage()->is_null()) // fix linkage
+        dir->link_primary_inode(dn, in);
     } else {
       // remote link, easy enough.
       inodeno_t ino;
