@@ -508,7 +508,7 @@ CStripe* CInode::get_or_open_stripe(stripeid_t stripeid)
   CStripe *stripe = get_stripe(stripeid);
   if (!stripe) {
     // create it.
-    assert(is_auth());
+    //assert(get_stripe_auth(stripeid) == mdcache->mds->get_nodeid());
     stripe = new CStripe(this, stripeid, true);
     add_stripe(stripe);
   }

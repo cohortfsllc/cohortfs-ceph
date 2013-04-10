@@ -31,6 +31,9 @@ class MMDSSlaveRequest : public Message {
   static const int OP_UNLINKPREP =   5;
   static const int OP_LINKPREPACK = -4;
 
+  static const int OP_MKDIR =        6;
+  static const int OP_MKDIRACK =    -6;
+
   static const int OP_RENAMEPREP =     7;
   static const int OP_RENAMEPREPACK = -7;
 
@@ -61,6 +64,9 @@ class MMDSSlaveRequest : public Message {
     case OP_LINKPREP: return "link_prep";
     case OP_LINKPREPACK: return "link_prep_ack";
     case OP_UNLINKPREP: return "unlink_prep";
+
+    case OP_MKDIR: return "mkdir";
+    case OP_MKDIRACK: return "mkdir_ack";
 
     case OP_RENAMEPREP: return "rename_prep";
     case OP_RENAMEPREPACK: return "rename_prep_ack";
@@ -105,6 +111,7 @@ class MMDSSlaveRequest : public Message {
   version_t inode_export_v;
   bufferlist srci_replica;
   utime_t now;
+  set<stripeid_t> stripes; // for mkdir
 
   bufferlist stray;  // stray dir + dentry
 
@@ -146,6 +153,7 @@ public:
     ::encode(inode_export, payload);
     ::encode(inode_export_v, payload);
     ::encode(srci_replica, payload);
+    ::encode(stripes, payload);
     ::encode(stray, payload);
   }
   void decode_payload() {
@@ -163,6 +171,7 @@ public:
     ::decode(inode_export, p);
     ::decode(inode_export_v, p);
     ::decode(srci_replica, p);
+    ::decode(stripes, p);
     ::decode(stray, p);
   }
 

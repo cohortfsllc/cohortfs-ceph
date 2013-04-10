@@ -178,6 +178,14 @@ public:
   void handle_client_mkdir(MDRequest *mdr);
   void handle_client_symlink(MDRequest *mdr);
 
+  void handle_slave_mkdir(MDRequest *mdr);
+  void slave_mkdir_finish(MDRequest *mdr, CInode *in);
+  void slave_mkdir_commit(MDRequest *mdr);
+  void handle_slave_mkdir_ack(MDRequest *mdr, MMDSSlaveRequest *req);
+
+  void do_mkdir_rollback(bufferlist &rbl, int master, MDRequest *mdr);
+  void _mkdir_rollback_finish(Mutation *mut, MDRequest *mdr);
+
   // link
   void handle_client_link(MDRequest *mdr);
   void _link_local(MDRequest *mdr, CDentry *dn, CInode *targeti);
