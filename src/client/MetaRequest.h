@@ -53,11 +53,10 @@ public:
   bool kick;
   
   // readdir result
-  frag_t readdir_frag;
+  stripeid_t readdir_stripe;
   string readdir_start;  // starting _after_ this name
   uint64_t readdir_offset;
 
-  frag_t readdir_reply_frag;
   vector<pair<string,Inode*> > readdir_result;
   bool readdir_end;
   int readdir_num;
