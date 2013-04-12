@@ -942,12 +942,6 @@ void Server::reply_request(MDRequest *mdr, MClientReply *reply, CInode *tracei, 
 }
 
 
-void Server::encode_empty_dirstat(bufferlist& bl)
-{
-  static DirStat empty;
-  empty.encode(bl);
-}
-
 void Server::encode_infinite_lease(bufferlist& bl)
 {
   LeaseStat e;
@@ -1014,9 +1008,6 @@ void Server::set_trace_dist(Session *session, MClientReply *reply,
 
     diri->encode_inodestat(bl, session, NULL, snapid);
     dout(20) << "set_trace_dist added diri " << *diri << dendl;
-
-    stripe->encode_dirstat(bl);
-    dout(20) << "set_trace_dist added stripe " << *stripe << dendl;
 
     ::encode(dn->get_name(), bl);
     if (snapid == CEPH_NOSNAP)
@@ -2736,14 +2727,17 @@ void Server::handle_client_readdir(MDRequest *mdr)
     reply_request(mdr, -ENOTDIR);
     return;
   }
-  // which frag?
-  frag_t fg = (__u32)req->head.args.readdir.frag;
-  string offset_str = req->get_path2();
-  dout(10) << " frag " << fg << " offset '" << offset_str << "'" << dendl;
 
-  // XXX: use first stripe until client learns about stripes
-  CStripe *stripe = try_open_auth_stripe(diri, 0, mdr);
+  // which stripe?
+  stripeid_t stripeid = req->head.args.readdir.stripe;
+  const string &offset_str = req->get_path2();
+
+  CStripe *stripe = try_open_auth_stripe(diri, stripeid, mdr);
   if (!stripe) return;
+
+  dout(10) << "handle_client_readdir on " << *stripe
+      << " snapid " << mdr->snapid
+      << " offset '" << offset_str << "'" << dendl;
 
   rdlocks.insert(&diri->filelock);
   rdlocks.insert(&stripe->dirfragtreelock);
@@ -2751,21 +2745,17 @@ void Server::handle_client_readdir(MDRequest *mdr)
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
+  frag_t fg;
+  if (offset_str.length()) {
+    // start with the dir fragment that contains offset_str
+    fg = stripe->pick_dirfrag(offset_str);
+  } else {
+    // first fragment
+    fg = stripe->get_fragtree()[0];
+  }
 
   // does the frag exist?
-  const fragtree_t &dft = stripe->get_fragtree();
-  if (dft[fg.value()] != fg) {
-    frag_t newfg = dft[fg.value()];
-    dout(10) << " adjust frag " << fg << " -> " << newfg << " " << dft << dendl;
-    fg = newfg;
-    offset_str.clear();
-  }
   CDir *dir = stripe->get_or_open_dirfrag(fg);
-
-  // ok!
-  dout(10) << "handle_client_readdir on " << *dir << dendl;
-  assert(dir->is_auth());
-
   if (!dir->is_complete()) {
     if (dir->is_frozen()) {
       dout(7) << "dir is frozen " << *dir << dendl;
@@ -2776,6 +2766,31 @@ void Server::handle_client_readdir(MDRequest *mdr)
     dout(10) << " incomplete dir contents for readdir on " << *dir << ", fetching" << dendl;
     dir->fetch(new C_MDS_RetryRequest(mdcache, mdr), true);
     return;
+  }
+
+  CDir::map_t::iterator it;
+  if (offset_str.empty())
+    it = dir->begin();
+  else // first entry after 'offset_str'
+    it = dir->items.upper_bound(dentry_key_t(mdr->snapid, offset_str.c_str()));
+
+  // if we're at the end of a fragment, find the next non-empty one
+  while (it == dir->end() && !fg.is_rightmost()) {
+    // open next fragment
+    fg = fg.next();
+    dir = stripe->get_or_open_dirfrag(fg);
+    if (!dir->is_complete()) {
+      if (dir->is_frozen()) {
+        dout(7) << "dir is frozen " << *dir << dendl;
+        dir->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
+        return;
+      }
+      // fetch
+      dout(10) << " incomplete dir contents for readdir on " << *dir << ", fetching" << dendl;
+      dir->fetch(new C_MDS_RetryRequest(mdcache, mdr), true);
+      return;
+    }
+    it = dir->begin();
   }
 
 #ifdef MDS_VERIFY_FRAGSTAT
@@ -2807,11 +2822,10 @@ void Server::handle_client_readdir(MDRequest *mdr)
 
   // start final blob
   bufferlist dirbl;
-  stripe->encode_dirstat(dirbl);
 
   // count bytes available.
   //  this isn't perfect, but we should capture the main variable/unbounded size items!
-  int front_bytes = dirbl.length() + sizeof(__u32) + sizeof(__u8)*2;
+  int front_bytes = sizeof(__u32) + sizeof(__u8)*2;
   int bytes_left = max_bytes - front_bytes;
   bytes_left -= realm->get_snap_trace().length();
 
@@ -2845,7 +2859,6 @@ void Server::handle_client_readdir(MDRequest *mdr)
       continue;
 
     CInode *in = dnl->get_inode();
-
     if (in && in->ino() == CEPH_INO_CEPH)
       continue;
 
@@ -7395,7 +7408,6 @@ void Server::handle_client_lssnap(MDRequest *mdr)
   }
 
   bufferlist dirbl;
-  encode_empty_dirstat(dirbl);
   ::encode(num, dirbl);
   __u8 t = 1;
   ::encode(t, dirbl);  // end
