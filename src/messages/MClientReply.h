@@ -71,28 +71,6 @@ inline ostream& operator<<(ostream& out, const LeaseStat& l) {
   return out << "lease(mask " << l.mask << " dur " << l.duration_ms << ")";
 }
 
-struct DirStat {
-  // mds distribution hints
-  stripeid_t stripeid;
-  fragtree_t dirfragtree;
- 
-  DirStat() : stripeid(0) {}
-  DirStat(bufferlist::iterator& p) {
-    decode(p);
-  }
-
-  void encode(bufferlist& bl) {
-    ::encode(stripeid, bl);
-    ::encode(dirfragtree, bl);
-  }
-  void decode(bufferlist::iterator& p) {
-    ::decode(stripeid, p);
-    ::decode(dirfragtree, p);
-  }
-
-  // see CStripe::encode_dirstat for encoder.
-};
-
 struct InodeStat {
   vinodeno_t vino;
   version_t version;

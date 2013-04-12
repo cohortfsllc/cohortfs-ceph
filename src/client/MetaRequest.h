@@ -50,7 +50,7 @@ struct MetaRequest {
   bool kick;
   
   // readdir result
-  frag_t readdir_frag;
+  stripeid_t readdir_stripe;
   string readdir_start;  // starting _after_ this name
   uint64_t readdir_offset;
 

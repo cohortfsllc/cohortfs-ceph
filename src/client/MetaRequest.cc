@@ -40,7 +40,7 @@ void MetaRequest::dump(Formatter *f) const
 
   if (head.op == CEPH_MDS_OP_READDIR ||
       head.op == CEPH_MDS_OP_LSSNAP) {
-    f->dump_stream("readdir_frag") << readdir_frag;
+    f->dump_stream("readdir_stripe") << readdir_stripe;
     f->dump_string("readdir_start", readdir_start);
     f->dump_unsigned("readdir_offset", readdir_offset);
   }

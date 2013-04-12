@@ -373,11 +373,6 @@ class CStripe : public MDSCacheObject {
     ::decode(dirfragtree, p);
   }
 
-  void encode_dirstat(bufferlist& bl) {
-    ::encode(stripeid, bl);
-    ::encode(dirfragtree, bl);
-  }
-
 
   // -- migration --
   void encode_export(bufferlist& bl);

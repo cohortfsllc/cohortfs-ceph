@@ -209,6 +209,7 @@ protected:
   friend class MDCache;
   friend class MDiscover;
   friend class MDBalancer;
+  friend class Server;
 
   friend class CDirDiscover;
   friend class CDirExport;

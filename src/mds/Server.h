@@ -105,7 +105,6 @@ public:
 		      snapid_t snapid,
 		      int num_dentries_wanted);
 
-  void encode_empty_dirstat(bufferlist& bl);
   void encode_infinite_lease(bufferlist& bl);
   void encode_null_lease(bufferlist& bl);
 

@@ -164,7 +164,6 @@ class Inode {
   map<string,bufferptr> xattrs;
 
   vector<int> stripe_auth;
-  vector<fragtree_t> stripe_fragtrees;
 
   list<Cond*>       waitfor_caps;
   list<Cond*>       waitfor_commit;

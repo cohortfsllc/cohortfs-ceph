@@ -365,7 +365,7 @@ union ceph_mds_request_args {
 		__le32 mask;                 /* CEPH_SETATTR_* */
 	} __attribute__ ((packed)) setattr;
 	struct {
-		__le32 frag;                 /* which dir fragment */
+		__le32 stripe;               /* which dir stripe */
 		__le32 max_entries;          /* how many dentries to grab */
 		__le32 max_bytes;
 	} __attribute__ ((packed)) readdir;

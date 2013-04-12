@@ -62,7 +62,6 @@ class MClientLease;
 class MClientCaps;
 class MClientCapRelease;
 
-class DirStat;
 class LeaseStat;
 class InodeStat;
 
@@ -129,10 +128,10 @@ struct dir_result_t {
   static const int64_t MASK = (1 << SHIFT) - 1;
   static const loff_t END = 1ULL << (SHIFT + 32);
 
-  static uint64_t make_fpos(unsigned frag, unsigned off) {
-    return ((uint64_t)frag << SHIFT) | (uint64_t)off;
+  static uint64_t make_fpos(stripeid_t stripe, unsigned off) {
+    return ((uint64_t)stripe << SHIFT) | (uint64_t)off;
   }
-  static unsigned fpos_frag(uint64_t p) {
+  static stripeid_t fpos_stripe(uint64_t p) {
     return p >> SHIFT;
   }
   static unsigned fpos_off(uint64_t p) {
@@ -142,7 +141,7 @@ struct dir_result_t {
 
   Inode *inode;
 
-  int64_t offset;        // high bits: frag_t, low bits: an offset
+  int64_t offset;        // high bits: stripe, low bits: an offset
 
   uint64_t this_offset;  // offset of last chunk, adjusted for . and ..
   uint64_t next_offset;  // offset of next chunk (last_name's + 1)
@@ -151,25 +150,19 @@ struct dir_result_t {
   uint64_t release_count;
   int start_shared_gen;  // dir shared_gen at start of readdir
 
-  frag_t buffer_frag;
-  vector<pair<string,Inode*> > *buffer;
+  stripeid_t buffer_stripe;
+  vector<pair<string,Inode*> > buffer;
 
   string at_cache_name;  // last entry we successfully returned
 
   dir_result_t(Inode *in);
 
-  frag_t frag() { return frag_t(offset >> SHIFT); }
-  unsigned fragpos() { return offset & MASK; }
+  stripeid_t get_stripe() const { return (offset >> SHIFT); }
+  unsigned get_pos() const { return offset & MASK; }
 
-  void next_frag() {
-    frag_t fg = offset >> SHIFT;
-    if (fg.is_rightmost())
-      set_end();
-    else 
-      set_frag(fg.next());
-  }
-  void set_frag(frag_t f) {
-    offset = (uint64_t)f << SHIFT;
+  void next_stripe();
+  void set_stripe(stripeid_t stripe) {
+    offset = (uint64_t)stripe << SHIFT;
     assert(sizeof(offset) == 8);
   }
   void set_end() { offset = END; }
@@ -181,8 +174,7 @@ struct dir_result_t {
     next_offset = 2;
     this_offset = 0;
     offset = 0;
-    delete buffer;
-    buffer = 0;
+    buffer_stripe = -1;
   }
 };
 
@@ -462,9 +454,6 @@ protected:
   void lock_fh_pos(Fh *f);
   void unlock_fh_pos(Fh *f);
   
-  // metadata cache
-  void update_dir_dist(Inode *in, DirStat *st);
-
   void insert_readdir_results(MetaRequest *request, int mds, Inode *diri);
   Inode* insert_trace(MetaRequest *request, int mds);
   void update_inode_file_bits(Inode *in,
@@ -491,7 +480,6 @@ private:
   void _readdir_drop_dirp_buffer(dir_result_t *dirp);
   bool _readdir_have_frag(dir_result_t *dirp);
   void _readdir_next_frag(dir_result_t *dirp);
-  void _readdir_rechoose_frag(dir_result_t *dirp);
   int _readdir_get_frag(dir_result_t *dirp);
   int _readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p);
   void _closedir(dir_result_t *dirp);
