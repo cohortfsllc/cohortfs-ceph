@@ -15,14 +15,18 @@
 #ifndef CEPH_INODECONTAINER_H
 #define CEPH_INODECONTAINER_H
 
-#include <set>
+#include "mdstypes.h"
 
+
+class CDentry;
 class CInode;
 class CStripe;
 class Context;
 class MDCache;
+class MDRequest;
 class MMDSRestripe;
 class MMDSRestripeAck;
+class SimpleLock;
 
 class InodeContainer {
  private:
@@ -49,6 +53,10 @@ class InodeContainer {
 
   // open the inode container or discover from root
   void open(Context *c);
+
+  // create a null dentry and add its lock to xlocks
+  CDentry* xlock_dentry(MDRequest *mdr, inodeno_t ino,
+                        set<SimpleLock*> &xlocks);
 
   // initiate restriping over the new vector of nodes (root mds only)
   void restripe(const std::set<int> &nodes);

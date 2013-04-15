@@ -19,6 +19,7 @@
 
 #include "MDCache.h"
 #include "MDS.h"
+#include "Mutation.h"
 
 #include "messages/MMDSRestripe.h"
 #include "messages/MMDSRestripeAck.h"
@@ -47,6 +48,41 @@ void InodeContainer::open(Context *c)
     dout(7) << "open discovering" << dendl;
     mdcache->discover_base_ino(MDS_INO_CONTAINER, c, mds->mdsmap->get_root());
   }
+}
+
+CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
+                                      set<SimpleLock*> &xlocks)
+{
+  MDS *mds = mdcache->mds;
+
+  // format inode number as dentry name
+  char dname[20];
+  snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
+
+  dout(12) << "xlock_dentry " << ino << dendl;
+
+  // pick the dirfrag
+  assert(stripe);
+  frag_t fg = stripe->pick_dirfrag(dname);
+  CDir *dir = stripe->get_or_open_dirfrag(fg);
+  assert(dir);
+
+  if (dir->is_freezing_or_frozen()) {
+    dout(7) << "waiting on frozen inode container " << *dir << dendl;
+    dir->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
+    mdr->drop_local_auth_pins();
+    return NULL;
+  }
+
+  // find/create the dentry
+  CDentry *dn = dir->lookup(dname);
+  if (dn == NULL)
+    dn = dir->add_null_dentry(dname);
+  else
+    assert(dn->get_linkage()->is_null()); // must not exist
+
+  xlocks.insert(&dn->lock);
+  return dn;
 }
 
 
