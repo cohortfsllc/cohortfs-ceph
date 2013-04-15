@@ -430,6 +430,8 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
   adjust_subtree_auth(mystripe, mds->whoami);
   CDir *mydir = mystripe->get_or_open_dirfrag(frag_t());
 
+  LogSegment *ls = mds->mdlog->get_current_segment();
+
   // stray dir
   for (int i = 0; i < NUM_STRAY; ++i) {
     CInode *stray = create_system_inode(MDS_INO_STRAY(mds->whoami, i), S_IFDIR);
@@ -439,15 +441,20 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
     stringstream name;
     name << "stray" << i;
     CDentry *sdn = mydir->add_primary_dentry(name.str(), stray);
-    sdn->_mark_dirty(mds->mdlog->get_current_segment());
+    sdn->_mark_dirty(ls);
 
     stray->inode.dirstat = straystripe->fnode.fragstat;
 
     mystripe->fnode.rstat.add(stray->inode.rstat);
     mystripe->fnode.fragstat.nsubdirs++;
+
     // save them
+    straystripe->mark_open();
+    straystripe->mark_dirty(straystripe->pre_dirty(), ls);
+    straystripe->commit(gather->new_sub());
+
     straydir->mark_complete();
-    straydir->mark_dirty(straydir->pre_dirty(), mds->mdlog->get_current_segment());
+    straydir->mark_dirty(straydir->pre_dirty(), ls);
     straydir->commit(0, gather->new_sub());
   }
 
