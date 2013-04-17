@@ -434,7 +434,11 @@ static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
   } else {
     stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, true));
     dout(10) << "EMetaBlob added " << *stripe << dendl;
-    if (MDS_INO_IS_BASE(ds.ino))
+
+    const vector<int> &stripe_auth = diri->get_stripe_auth();
+    if (ds.stripeid < stripe_auth.size())
+      mds->mdcache->adjust_subtree_auth(stripe, stripe_auth[ds.stripeid]);
+    else if (MDS_INO_IS_BASE(ds.ino))
       mds->mdcache->adjust_subtree_auth(stripe, CDIR_AUTH_UNKNOWN);
   }
   return stripe;

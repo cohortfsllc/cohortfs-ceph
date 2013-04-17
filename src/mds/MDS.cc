@@ -991,7 +991,8 @@ void MDS::handle_mds_map(MMDSMap *m)
       && !oldmap->is_restriping() && mdsmap->is_restriping()) {
     set<int> nodes;
     mdsmap->get_mds_set(nodes, MDSMap::STATE_RESTRIPE);
-    mdcache->get_container()->restripe(nodes);
+    bool replay = last_state != MDSMap::STATE_CREATING;
+    mdcache->get_container()->restripe(nodes, replay);
   }
   
   // RESOLVE

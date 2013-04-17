@@ -3936,17 +3936,18 @@ void Server::handle_client_removexattr(MDRequest *mdr)
 class C_MDS_mknod_finish : public Context {
   MDS *mds;
   MDRequest *mdr;
-  CDentry *dn;
   CInode *newi;
-  snapid_t follows;
+  CDentry *dn, *inodn;
 public:
-  C_MDS_mknod_finish(MDS *m, MDRequest *r, CDentry *d, CInode *ni, snapid_t f) :
-    mds(m), mdr(r), dn(d), newi(ni), follows(f) {}
+  C_MDS_mknod_finish(MDS *mds, MDRequest *mdr, CInode *newi,
+                     CDentry *dn, CDentry *inodn)
+      : mds(mds), mdr(mdr), newi(newi), dn(dn), inodn(inodn) {}
   void finish(int r) {
     assert(r == 0);
 
     // link the inode
     dn->pop_projected_linkage();
+    inodn->pop_projected_linkage();
     
     // be a bit hacky with the inode version, here.. we decrement it
     // just to keep mark_dirty() happen. (we didn't bother projecting
@@ -3974,12 +3975,15 @@ public:
     mdr->apply();
 
     mds->mdcache->send_dentry_link(dn);
+    // don't send MDentryLink to nodes that got a slave_mkdir
+    mds->mdcache->send_dentry_link(inodn, &newi->get_stripe_auth());
 
     if (newi->inode.is_file())
       mds->locker->share_inode_max_size(newi);
 
     // hit pop
     mds->balancer->hit_inode(mdr->now, newi, META_POP_IWR);
+    mds->balancer->hit_dir(mdr->now, dn->get_dir(), META_POP_IWR);
 
     // reply
     MClientReply *reply = new MClientReply(mdr->client_request, 0);
@@ -4085,11 +4089,13 @@ void Server::handle_client_mknod(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
   
-  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
-				    PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-  le->metablob.add_primary_dentry(dn, true, newi);
+  le->metablob.add_primary_dentry(inodn, true, newi);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
+                                    PREDIRTY_DIR, 1);
+  le->metablob.add_remote_dentry(dn, true);
+
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, newi, dn, inodn));
 }
 
 
@@ -4178,8 +4184,10 @@ void Server::handle_client_mkdir(MDRequest *mdr)
         req->now = mdr->now;
         // stripe ids to create
         req->stripes.insert(i);
-        // send dentry+inode replicas
-        mdcache->replicate_dentry(dn, who, req->srci_replica);
+        // send replicas
+        mdcache->replicate_stripe(inodn->get_stripe(), who, req->srci_replica);
+        mdcache->replicate_dir(inodn->get_dir(), who, req->srci_replica);
+        mdcache->replicate_dentry(inodn, who, req->srci_replica);
         mdcache->replicate_inode(newi, who, req->srci_replica);
         mds->send_message_mds(req, who);
 
@@ -4217,8 +4225,12 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   mdlog->start_entry(le);
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-  le->metablob.add_primary_dentry(dn, true, newi);
+
+  le->metablob.add_primary_dentry(inodn, true, newi);
+
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
+                                    PREDIRTY_DIR, 1);
+  le->metablob.add_remote_dentry(dn, true);
 
   // add new stripes to the journal
   list<CStripe*> stripes;
@@ -4241,7 +4253,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   LogSegment *ls = mds->mdlog->get_current_segment();
   ls->open_files.push_back(&newi->item_open_file);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, newi, dn, inodn));
 }
 
 class C_MDS_SlaveMkdirFinish : public Context {
@@ -4261,27 +4273,16 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
 {
   MMDSSlaveRequest *req = mdr->slave_request;
   int from = req->get_source().num();
-  const dirfrag_t df = req->get_object_info().dirfrag;
-  const filepath &path = req->srcdnpath;
 
   dout(7) << "handle_slave_mkdir " << *mdr
       << " from mds." << from << dendl;
 
-  // discover parent directory
-  CDir *dir = mdcache->get_dirfrag(df);
-  if (!dir) {
-    vector<CDentry*> trace;
-    int r = mdcache->path_traverse(mdr, NULL, NULL, path, &trace,
-                                   NULL, MDS_TRAVERSE_DISCOVER);
-    if (r > 0) return;
-    dout(0) << "handle_slave_mkdir failed to discover " << path << dendl;
-    assert(0); // this shouldn't happen if the auth pins his path!!!!
-  }
-  assert(!dir->is_auth());
-
-  // decode dentry+inode replicas
+  // decode replicas
   list<Context*> finished;
   bufferlist::iterator blp = req->srci_replica.begin();
+  CInode *container = mdcache->get_container()->get_inode();
+  CStripe *stripe = mdcache->add_replica_stripe(blp, container, from, finished);
+  CDir *dir = mdcache->add_replica_dir(blp, stripe, finished);
   CDentry *dn = mdcache->add_replica_dentry(blp, dir, finished);
   CInode *in = mdcache->add_replica_inode(blp, dn, finished);
   mds->queue_waiters(finished);
@@ -4308,9 +4309,6 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
 
     le->commit.add_new_dir(newdir);
   }
-
-  // revert back to a null dentry until we get MDentryLink
-  dir->unlink_inode(dn);
 
   // initialize rollback
   mkdir_rollback rollback;
@@ -4528,9 +4526,14 @@ void Server::handle_client_symlink(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-  le->metablob.add_primary_dentry(dn, true, newi);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  le->metablob.add_primary_dentry(inodn, true, newi);
+
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
+                                    PREDIRTY_DIR, 1);
+  le->metablob.add_remote_dentry(dn, true);
+
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, newi, dn, inodn));
 }
 
 

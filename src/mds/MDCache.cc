@@ -634,8 +634,11 @@ void MDCache::open_root()
       discover_dir_frag(rootstripe, frag_t(), new C_MDS_RetryOpenRoot(this));
       return;
     }
-    // must register with root mds to get notified on fragmentation
-    assert(container.get_inode()->get_replica_nonce() != 0);
+    if (container.get_inode()->get_replica_nonce() == 0) {
+      // must register with root mds as a replica
+      discover_base_ino(MDS_INO_CONTAINER, new C_MDS_RetryOpenRoot(this), 0);
+      return;
+    }
   }
 
   if (!myin) {
@@ -3507,11 +3510,21 @@ void MDCache::rejoin_send_rejoins()
        ++p) {
     if (mds->is_rejoin()) {
       // weak
-      if (p->first == 0 && root) {
-	p->second->add_weak_inode(root->vino());
-	if (root->is_dirty_scattered()) {
-	  dout(10) << " sending scatterlock state on root " << *root << dendl;
-	  p->second->add_scatterlock_state(root);
+      if (p->first == 0) {
+        if (root) {
+          p->second->add_weak_inode(root->vino());
+          if (root->is_dirty_scattered()) {
+            dout(10) << " sending scatterlock state on root " << *root << dendl;
+            p->second->add_scatterlock_state(root);
+          }
+	}
+        CInode *ctnr = container.get_inode();
+        if (ctnr) {
+          p->second->add_weak_inode(ctnr->vino());
+          if (ctnr->is_dirty_scattered()) {
+            dout(10) << " sending scatterlock state on container " << *ctnr << dendl;
+            p->second->add_scatterlock_state(ctnr);
+          }
 	}
       }
       if (CInode *in = get_inode(MDS_INO_MDSDIR(p->first))) { 
@@ -3520,15 +3533,29 @@ void MDCache::rejoin_send_rejoins()
       }
     } else {
       // strong
-      if (p->first == 0 && root) {
-	p->second->add_weak_inode(root->vino());
-	p->second->add_strong_inode(root->vino(),
-				    root->get_caps_wanted(),
-				    root->filelock.get_state(),
-				    root->nestlock.get_state());
-	if (root->is_dirty_scattered()) {
-	  dout(10) << " sending scatterlock state on root " << *root << dendl;
-	  p->second->add_scatterlock_state(root);
+      if (p->first == 0) {
+        if (root) {
+          p->second->add_weak_inode(root->vino());
+          p->second->add_strong_inode(root->vino(),
+                                      root->get_caps_wanted(),
+                                      root->filelock.get_state(),
+                                      root->nestlock.get_state());
+          if (root->is_dirty_scattered()) {
+            dout(10) << " sending scatterlock state on root " << *root << dendl;
+            p->second->add_scatterlock_state(root);
+          }
+	}
+        CInode *ctnr = container.get_inode();
+        if (ctnr) {
+          p->second->add_weak_inode(ctnr->vino());
+          p->second->add_strong_inode(ctnr->vino(),
+                                      ctnr->get_caps_wanted(),
+                                      ctnr->filelock.get_state(),
+                                      ctnr->nestlock.get_state());
+          if (ctnr->is_dirty_scattered()) {
+            dout(10) << " sending scatterlock state on container " << *ctnr << dendl;
+            p->second->add_scatterlock_state(ctnr);
+          }
 	}
       }
 
@@ -4902,6 +4929,18 @@ void MDCache::choose_lock_states_and_reconnect_caps()
   reconnected_caps.clear();
 
   send_snaps(splits);
+
+  CInode *ctnr = container.get_inode();
+  if (ctnr) {
+    // these locks are not taken on the inode container
+    // clean them up and rechoose its lock states
+    ctnr->filelock.remove_dirty();
+    ctnr->filelock.get_updated_item()->remove_myself();
+    ctnr->nestlock.remove_dirty();
+    ctnr->nestlock.get_updated_item()->remove_myself();
+
+    ctnr->choose_lock_states();
+  }
 }
 
 void MDCache::prepare_realm_split(SnapRealm *realm, client_t client, inodeno_t ino,
@@ -6108,7 +6147,7 @@ void MDCache::trim_non_auth()
       hash_map<vinodeno_t,CInode*>::iterator next = p;
       ++next;
       CInode *in = p->second;
-      if (!in->is_auth()) {
+      if (!in->is_auth() && in->ino() != MDS_INO_CONTAINER) {
         list<CStripe*> stripes;
         in->get_stripes(stripes);
         for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
@@ -9937,7 +9976,7 @@ void MDCache::handle_dir_update(MDirUpdate *m)
 
 // LINK
 
-void MDCache::send_dentry_link(CDentry *dn)
+void MDCache::send_dentry_link(CDentry *dn, const vector<int> *skip)
 {
   dout(7) << "send_dentry_link " << *dn << dendl;
 
@@ -9945,6 +9984,8 @@ void MDCache::send_dentry_link(CDentry *dn)
   for (map<int,int>::iterator p = dn->replicas_begin(); 
        p != dn->replicas_end(); 
        p++) {
+    if (skip && find(skip->begin(), skip->end(), p->first) != skip->end())
+      continue;
     if (mds->mdsmap->get_state(p->first) < MDSMap::STATE_REJOIN) 
       continue;
     CDentry::linkage_t *dnl = dn->get_linkage();
