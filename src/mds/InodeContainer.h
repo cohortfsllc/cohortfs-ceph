@@ -37,13 +37,19 @@ class InodeContainer {
   CStripe *stripe; // container stripe for this mds
 
   std::set<int> pending_restripe_ack; // mds nodes pending restripe_ack
+  Context *pending_restripe_finish;
 
   // handle restripe messages
   void handle_restripe(MMDSRestripe *m);
   void handle_restripe_ack(MMDSRestripeAck *m);
 
+  friend class C_IC_RestripeFinish;
+  void restripe_finish();
+
  public:
-  InodeContainer(MDCache *mdcache) : mdcache(mdcache), in(0), stripe(0) {}
+  InodeContainer(MDCache *mdcache)
+      : mdcache(mdcache), in(0), stripe(0),
+        pending_restripe_finish(0) {}
 
   CInode* get_inode() { return in; }
   CStripe* get_stripe() { return stripe; }
@@ -59,7 +65,7 @@ class InodeContainer {
                         set<SimpleLock*> &xlocks);
 
   // initiate restriping over the new vector of nodes (root mds only)
-  void restripe(const std::set<int> &nodes);
+  void restripe(const std::set<int> &nodes, bool replay);
 };
 
 #endif

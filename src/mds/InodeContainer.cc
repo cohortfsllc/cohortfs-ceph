@@ -19,10 +19,13 @@
 
 #include "MDCache.h"
 #include "MDS.h"
+#include "MDLog.h"
 #include "Mutation.h"
 
 #include "messages/MMDSRestripe.h"
 #include "messages/MMDSRestripeAck.h"
+
+#include "events/EUpdate.h"
 
 
 #define dout_subsys ceph_subsys_mds
@@ -61,8 +64,19 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
 
   dout(12) << "xlock_dentry " << ino << dendl;
 
-  // pick the dirfrag
+  if (!stripe) {
+    // find our stripeid and open it
+    const vector<int> &stripe_auth = in->get_stripe_auth();
+    vector<int>::const_iterator i = find(stripe_auth.begin(),
+                                         stripe_auth.end(),
+                                         mds->get_nodeid());
+    assert(i != stripe_auth.end());
+
+    stripeid_t stripeid = i - stripe_auth.begin();
+    stripe = in->get_stripe(stripeid);
+  }
   assert(stripe);
+  // pick the dirfrag
   frag_t fg = stripe->pick_dirfrag(dname);
   CDir *dir = stripe->get_or_open_dirfrag(fg);
   assert(dir);
@@ -89,7 +103,18 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
 // ====================================================================
 // restriping
 
-void InodeContainer::restripe(const set<int> &nodes)
+class C_IC_RestripeFinish : public Context {
+ private:
+  InodeContainer *container;
+ public:
+  C_IC_RestripeFinish(InodeContainer *container) : container(container) {}
+  void finish(int r) {
+    assert(r == 0);
+    container->restripe_finish();
+  }
+};
+
+void InodeContainer::restripe(const set<int> &nodes, bool replay)
 {
   MDS *mds = mdcache->mds;
   assert(mds->is_restripe());
@@ -102,7 +127,18 @@ void InodeContainer::restripe(const set<int> &nodes)
   const vector<int> stripe_auth(nodes.begin(), nodes.end());
   // stripe 0 must always be root
   assert(stripe_auth[0] == mds->mdsmap->get_root());
-  in->set_stripe_auth(stripe_auth);
+
+  EUpdate *le = NULL;
+  if (replay) // no journal for replay
+    assert(in->get_stripe_auth() == stripe_auth);
+  else {
+    in->set_stripe_auth(stripe_auth);
+
+    le = new EUpdate(mds->mdlog, "restripe");
+    le->metablob.add_root(false, in);
+  }
+
+  C_GatherBuilder gather(g_ceph_context, new C_IC_RestripeFinish(this));
 
   for (size_t i = 0; i < stripe_auth.size(); i++) {
     int to = stripe_auth[i];
@@ -111,10 +147,16 @@ void InodeContainer::restripe(const set<int> &nodes)
       if (stripe == NULL) {
         stripe = in->add_stripe(new CStripe(in, i, true));
         mdcache->adjust_subtree_auth(stripe, mds->get_nodeid());
+
+        if (le)
+          le->metablob.add_stripe(stripe, false, false);
+        else
+          stripe->fetch(gather.new_sub());
       }
     } else {
+      assert(mds->mdsmap->is_restripe(to));
       // alert the mds that it's auth for the given stripe
-      MMDSRestripe *m = new MMDSRestripe(i);
+      MMDSRestripe *m = new MMDSRestripe(i, replay);
       // include a replica with the updated stripe_auth
       mdcache->replicate_inode(in, to, m->container);
 
@@ -126,7 +168,15 @@ void InodeContainer::restripe(const set<int> &nodes)
       pending_restripe_ack.insert(to);
     }
   }
-  assert(!pending_restripe_ack.empty());
+
+  if (pending_restripe_ack.size())
+    pending_restripe_finish = gather.new_sub();
+
+  if (le)
+    mds->mdlog->start_submit_entry(le, gather.new_sub());
+
+  assert(gather.has_subs());
+  gather.activate();
 }
 
 void InodeContainer::handle_restripe(MMDSRestripe *m)
@@ -136,24 +186,46 @@ void InodeContainer::handle_restripe(MMDSRestripe *m)
 
   dout(7) << "handle_restripe " << *m << " from mds." << from << dendl;
 
+  assert(mds->get_nodeid() != mds->mdsmap->get_root());
+  assert(from == mds->mdsmap->get_root());
+
   // decode inode container replica with new stripe_auth
   bufferlist::iterator p = m->container.begin();
 
   std::list<Context*> unused;
   in = mdcache->add_replica_inode(p, NULL, unused);
   assert(in);
-  assert(!in->is_auth());
 
-  // open my inode container fragment and claim auth
-  stripe = in->add_stripe(new CStripe(in, m->stripeid, true));
-  mdcache->adjust_subtree_auth(stripe, mds->get_nodeid());
+  // open my inode container stripe and claim auth
+  stripe = in->get_stripe(m->stripeid);
+  if (!stripe) {
+    stripe = in->add_stripe(new CStripe(in, m->stripeid, true));
+    mdcache->adjust_subtree_auth(stripe, mds->get_nodeid());
+  }
+
+  C_GatherBuilder gather(g_ceph_context);
+
+  if (!stripe->is_open()) {
+    if (m->replay)
+      stripe->fetch(gather.new_sub());
+    else
+      stripe->mark_open();
+  }
 
   dout(10) << "handle_restripe opened " << *stripe << " in " << *in << dendl;
 
-  MMDSRestripeAck *ack = new MMDSRestripeAck(m->stripeid);
-  dout(10) << "handle_restripe sending " << *ack << " to mds." << from << dendl;
-  mds->send_message_mds(ack, from);
-  mds->restripe_done();
+  if (!m->replay) {
+    EUpdate *le = new EUpdate(mds->mdlog, "restripe");
+    le->metablob.add_root(false, in);
+    le->metablob.add_stripe(stripe, false, false);
+    mds->mdlog->start_submit_entry(le, gather.new_sub());
+  }
+
+  if (gather.has_subs()) {
+    gather.set_finisher(new C_IC_RestripeFinish(this));
+    gather.activate();
+  } else
+    restripe_finish();
 
   m->put();
 }
@@ -165,12 +237,32 @@ void InodeContainer::handle_restripe_ack(MMDSRestripeAck *m)
 
   dout(7) << "handle_restripe_ack " << *m << " from mds." << from << dendl;
 
+  assert(mds->get_nodeid() == mds->mdsmap->get_root());
   assert(pending_restripe_ack.count(from));
   pending_restripe_ack.erase(from);
 
-  if (pending_restripe_ack.empty())
-    mds->restripe_done();
+  if (pending_restripe_ack.empty()) {
+    pending_restripe_finish->complete(0);
+    pending_restripe_finish = NULL;
+  }
 
   m->put();
+}
+
+void InodeContainer::restripe_finish()
+{
+  MDS *mds = mdcache->mds;
+  int root = mds->mdsmap->get_root();
+
+  dout(7) << "restripe_finish" << dendl;
+
+  if (mds->get_nodeid() != root) {
+    // reply to root mds with an ack
+    MMDSRestripeAck *ack = new MMDSRestripeAck(stripe->get_stripeid());
+    dout(10) << "handle_restripe sending " << *ack << " to mds." << root << dendl;
+    mds->send_message_mds(ack, root);
+  }
+
+  mds->restripe_done();
 }
 
