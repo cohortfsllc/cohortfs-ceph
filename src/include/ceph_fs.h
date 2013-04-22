@@ -301,7 +301,7 @@ struct ceph_mds_session_head {
  &  & 0x100000 -> use weird ino/path trace
  */
 #define CEPH_MDS_OP_WRITE        0x001000
-enum {
+enum ceph_mds_ops {
 	CEPH_MDS_OP_LOOKUP     = 0x00100,
 	CEPH_MDS_OP_GETATTR    = 0x00101,
 	CEPH_MDS_OP_LOOKUPHASH = 0x00102,
@@ -332,6 +332,11 @@ enum {
 	CEPH_MDS_OP_MKSNAP     = 0x01400,
 	CEPH_MDS_OP_RMSNAP     = 0x01401,
 	CEPH_MDS_OP_LSSNAP     = 0x00402,
+
+	CEPH_MDS_OP_GETRSV     = 0x01501,
+	CEPH_MDS_OP_PUTRSV     = 0x01502,
+	CEPH_MDS_OP_REGRSV     = 0x01503,
+	CEPH_MDS_OP_UREGRSV    = 0x01504
 };
 
 extern const char *ceph_mds_op_name(int op);
