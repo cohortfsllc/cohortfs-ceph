@@ -512,6 +512,26 @@ struct ceph_filelock {
 } __attribute__ ((packed));
 
 
+#define CEPH_RSV_TYPE_PNFS_1 1
+
+#define CEPH_RSV_FLAG_NONE 0x0000
+
+struct ceph_reservation {
+	__le64 id;
+	__le64 start; /* file offset to start lock at */
+	__le64 length; /* num bytes to lock; 0 for all following start */
+	__le64 client; /* client (or proxy) which holds the lock */
+	__le64 expires;
+	__le32 flags;
+    	__u16 type;
+} __attribute__ ((packed));
+
+struct ceph_rsv_osd_registration {
+	__le64 rsv_id;
+	__le64 osd_id;
+} __attribute__ ((packed));
+
+
 /* file access modes */
 #define CEPH_FILE_MODE_PIN        0
 #define CEPH_FILE_MODE_RD         1

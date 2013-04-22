@@ -25,6 +25,7 @@
 
 #include "mdstypes.h"
 #include "flock.h"
+#include "Reservation.h"
 
 #include "CDentry.h"
 #include "SimpleLock.h"
@@ -378,6 +379,8 @@ protected:
 
   ceph_lock_state_t fcntl_locks;
   ceph_lock_state_t flock_locks;
+
+  reservation_state_t reservations;
 
   // LogSegment dlists i (may) belong to
 public:
