@@ -80,18 +80,15 @@ void BarrierContext::write_barrier(C_Block_Sync &cbs)
 {
   Mutex::Locker locker(lock);
   barrier_interval &iv = cbs.iv;
-  bool done = false;
 
   { /* find blocking commit--intrusive no help here */
     BarrierList::iterator iter;
-    for (iter = active_commits.begin();
-	 !done && (iter != active_commits.end());
+    for (iter = active_commits.begin(); iter != active_commits.end();
 	 ++iter) {
       Barrier &barrier = *iter;
-      while (boost::icl::intersects(barrier.span, iv)) {
+      if (boost::icl::intersects(barrier.span, iv)) {
 	/*  wait on this */
 	barrier.cond.Wait(lock);
-	done = true;
       }
     }
   }
@@ -136,7 +133,7 @@ void BarrierContext::commit_barrier(barrier_interval &civ)
     }
 
     if (barrier) {
-      active_commits.push_back(*barrier);
+      active_commits.push_front(*barrier);
       /* and wait on this */
       barrier->cond.Wait(lock);
     }
