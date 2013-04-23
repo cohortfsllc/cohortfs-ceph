@@ -186,6 +186,9 @@ public:
 	  << ", length " << head.args.filelock_change.length
 	  << ", wait " << (int)head.args.filelock_change.wait;
     }
+
+    /* TODO:  print reservation op args */
+
     //if (!get_filepath().empty()) 
     out << " " << get_filepath();
     if (!get_filepath2().empty())

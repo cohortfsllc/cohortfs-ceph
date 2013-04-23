@@ -356,6 +356,31 @@ extern const char *ceph_mds_op_name(int op);
 #define CEPH_XATTR_CREATE  1
 #define CEPH_XATTR_REPLACE 2
 
+/*
+ * Ceph reservation types and flags
+ */
+
+#define CEPH_RSV_TYPE_PNFS_1 1
+
+#define CEPH_RSV_FLAG_NONE 0x0000
+
+struct ceph_reservation {
+	__le64 id;
+	__le64 offset; /* file offset */
+	__le64 length; /* 0 for all following offset */
+	__le64 client; /* client (or proxy) which holds the lock */
+	__le64 expiration;
+	__le32 flags;
+    	__u16 type;
+} __attribute__ ((packed));
+
+struct ceph_rsv_osd_registration {
+	__le64 rsv_id;
+	__le64 osd_id;
+	__le32 flags;
+	__u16 type;
+} __attribute__ ((packed));
+
 union ceph_mds_request_args {
 	struct {
 		__le32 mask;                 /* CEPH_CAP_* */
@@ -406,6 +431,18 @@ union ceph_mds_request_args {
 		__le64 length; /* num bytes to lock from start */
 		__u8 wait; /* will caller wait for lock to become available? */
 	} __attribute__ ((packed)) filelock_change;
+	struct {
+		struct ceph_reservation rsv;
+	} __attribute__ ((packed)) get_reservation;
+	struct {
+		struct ceph_reservation rsv;
+	} __attribute__ ((packed)) return_reservation;
+	struct {
+		struct ceph_rsv_osd_registration reg;
+	}  __attribute__ ((packed)) reg_reservation;
+	struct {
+		struct ceph_rsv_osd_registration reg;
+	}  __attribute__ ((packed)) ureg_reservation;
 } __attribute__ ((packed));
 
 #define CEPH_MDS_FLAG_REPLAY        1  /* this is a replayed op */
@@ -514,26 +551,6 @@ struct ceph_filelock {
 	__le64 pid; /* process id holding the lock on the client */
 	__le64 pid_namespace;
 	__u8 type; /* shared lock, exclusive lock, or unlock */
-} __attribute__ ((packed));
-
-
-#define CEPH_RSV_TYPE_PNFS_1 1
-
-#define CEPH_RSV_FLAG_NONE 0x0000
-
-struct ceph_reservation {
-	__le64 id;
-	__le64 start; /* file offset to start lock at */
-	__le64 length; /* num bytes to lock; 0 for all following start */
-	__le64 client; /* client (or proxy) which holds the lock */
-	__le64 expires;
-	__le32 flags;
-    	__u16 type;
-} __attribute__ ((packed));
-
-struct ceph_rsv_osd_registration {
-	__le64 rsv_id;
-	__le64 osd_id;
 } __attribute__ ((packed));
 
 

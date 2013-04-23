@@ -150,6 +150,11 @@ public:
   void handle_client_file_setlock(MDRequest *mdr);
   void handle_client_file_readlock(MDRequest *mdr);
 
+  void handle_client_get_rsv(MDRequest *mdr);
+  void handle_client_put_rsv(MDRequest *mdr);
+  void handle_client_reg_rsv(MDRequest *mdr);
+  void handle_client_ureg_rsv(MDRequest *mdr);
+
   void handle_client_setattr(MDRequest *mdr);
   void handle_client_setlayout(MDRequest *mdr);
   void handle_client_setdirlayout(MDRequest *mdr);

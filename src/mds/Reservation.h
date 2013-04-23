@@ -20,7 +20,7 @@
 
 inline ostream& operator<<(ostream& out, ceph_reservation& rsv) {
     out << "type: " << rsv.type
-        << " start: " << rsv.start
+        << " start: " << rsv.offset
         << " length: " << rsv.length
         << " client: " << rsv.client
         << " flags: " << rsv.flags /* decode */
@@ -31,26 +31,55 @@ inline ostream& operator<<(ostream& out, ceph_reservation& rsv) {
 
 inline bool operator==(ceph_reservation& lhs, ceph_reservation& rhs) {
   return
-  ( (lhs.start == lhs.start) &&
+  ( (lhs.offset == lhs.offset) &&
     (lhs.length == rhs.length) &&
     (lhs.client == rhs.client) &&
     (lhs.type == rhs.type) );
 }
 
+/*
+ * Cmp functor for reservations sorted by client,type,offset,length
+ */
+class rsv_key_cmp {
+public: 
+  bool operator()(const ceph_reservation &lhs,
+		  const ceph_reservation &rhs) {
+    if (lhs.client < rhs.client)
+      return (true);
+    if (lhs.client == rhs.client) {
+      if (lhs.type < rhs.type)
+	return (true);
+      if (lhs.type == rhs.type) {
+	if (lhs.offset < rhs.offset)
+	  return (true);
+	if (lhs.offset == rhs.offset) {
+	  if (lhs.length < rhs.length)
+	    return (true);
+	}
+      }
+    }
+    return (false);
+  }
+};
+
 class reservation_state_t
 {
 public:
-/* TODO:  switch to intrusive maps and ptr to permit sharing */
+/* TODO:  switch to boost::intrusive to permit sharing */
+    set<ceph_reservation, rsv_key_cmp> reservations;
     /* rsv_id, rsv> tuples: */
-    multimap<uint64_t, ceph_reservation> reservations_id;
+    map<uint64_t, ceph_reservation> reservations_id;
     /* client_t, rsv> tuples */
-    multimap<client_t, ceph_reservation> reservations_client;
+    map<uint64_t, ceph_reservation> reservations_client;
     /* <rsv_id, osd_id> tuples: */
-    multimap<uint64_t, uint64_t> reservations_osd;
+    map<uint64_t, uint64_t> reservations_osd;
+
+    uint64_t max_id;
 
     bool add_rsv(ceph_reservation& rsv, bool wait_on_fail, bool replay);
     void remove_rsv(ceph_reservation rsv);
-    bool remove_rsv_client(client_t client);
+    void remove_rsv_client(client_t client);
+    void remove_expired(void);
     bool register_osd(ceph_reservation &rsv, uint64_t osd);
     void unregister_osd(ceph_reservation &rsv, uint64_t osd);
     void unregister_osd_all(uint64_t osd);

@@ -1224,6 +1224,22 @@ void Server::dispatch_client_request(MDRequest *mdr)
     handle_client_file_readlock(mdr);
     break;
 
+  case CEPH_MDS_OP_GETRSV:
+    handle_client_get_rsv(mdr);
+    break;
+
+  case CEPH_MDS_OP_PUTRSV:
+    handle_client_put_rsv(mdr);
+    break;
+
+  case CEPH_MDS_OP_REGRSV:
+    handle_client_reg_rsv(mdr);
+    break;
+
+  case CEPH_MDS_OP_UREGRSV:
+    handle_client_ureg_rsv(mdr);
+    break;
+
     // funky.
   case CEPH_MDS_OP_CREATE:
     if (req->get_retry_attempt() &&
@@ -3229,6 +3245,71 @@ void Server::handle_client_file_readlock(MDRequest *mdr)
   reply_request(mdr, reply);
 }
 
+void Server::handle_client_get_rsv(MDRequest *mdr)
+{
+
+  MClientRequest *req = mdr->client_request;
+  set<SimpleLock*> rdlocks, wrlocks, xlocks;
+
+  /* Check type. */
+  if (req->head.args.get_reservation.rsv.type != CEPH_RSV_TYPE_PNFS_1)
+    return;
+
+  CInode *in = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
+  if (! in)
+    return;
+
+  xlocks.insert(&in->flocklock);
+  /* acquire_locks will return true if it gets the locks. If it fails,
+     it will redeliver this request at a later date, so drop the request.
+   */
+  if (! mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks)) {
+    dout(0) << "handle_client_get_rsv could not get locks!" << dendl;
+    return;
+  }
+
+  ceph_reservation rsv;
+  rsv.type = req->head.args.get_reservation.rsv.offset;
+  rsv.offset = req->head.args.get_reservation.rsv.offset;
+  rsv.length = req->head.args.get_reservation.rsv.length;
+  rsv.client = req->get_orig_source().num();
+
+  reservation_state_t &rstate = in->reservations;
+  pair<set<ceph_reservation, rsv_key_cmp>::iterator,bool> ret;
+
+  ret = rstate.reservations.insert(rsv);
+  if (! ret.second) {
+    dout(0) << "handle_client_get_rsv new request for existing rsv" << dendl;
+    return;
+  }
+
+  ceph_reservation& nrsv = const_cast<ceph_reservation&>(*(ret.first));
+  nrsv.id = ++(rstate.max_id);
+
+  // populate lookup tables
+  rstate.reservations_id.insert(pair<uint64_t,ceph_reservation>(rsv.id, rsv));
+  rstate.reservations_client.insert(
+    pair<uint64_t,ceph_reservation>(rsv.client, rsv));
+
+  // populate reply buffers (blech)
+
+}
+
+void Server::handle_client_put_rsv(MDRequest *mdr)
+{
+
+}
+
+void Server::handle_client_reg_rsv(MDRequest *mdr)
+{
+
+}
+
+void Server::handle_client_ureg_rsv(MDRequest *mdr)
+{
+
+}
+
 void Server::handle_client_setattr(MDRequest *mdr)
 {
   MClientRequest *req = mdr->client_request;
@@ -3236,14 +3317,13 @@ void Server::handle_client_setattr(MDRequest *mdr)
   CInode *cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
   if (!cur) return;
 
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   if (cur->ino() < MDS_INO_SYSTEM_BASE && !cur->is_base()) {
     reply_request(mdr, -EPERM);
     return;
   }
+
+  // take flocklock for now
+  xlocks.insert(&cur->flocklock);
 
   __u32 mask = req->head.args.setattr.mask;
 
