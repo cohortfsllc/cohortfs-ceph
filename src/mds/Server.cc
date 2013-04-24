@@ -3281,20 +3281,28 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
   reservation_state_t &rstate = in->reservations;
   if (! rstate.add_rsv(rsv)) {
     dout(0) << "handle_client_get_rsv new request for existing rsv" << dendl;
+    reply = new MClientReply(req, -EINVAL);
+    reply_request(mdr, reply);
     return;
   }
 
-  // populate reply buffers (blech)
-  bufferlist bl;
-  ::encode(rsv, bl);
+  // journal
+  mdr->ls = mdlog->get_current_segment();
+  EUpdate *le = new EUpdate(mdlog, "get_rsv"); // isa LogEvent
+  mdlog->start_entry(le);
+  le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
+  mdcache->journal_dirty_inode(mdr, &le->metablob, in);
 
-  reply = new MClientReply(req, 0 /* return code */);
-  reply->set_extra_bl(bl);
+  // populate reply buffers (blech)
+  bufferlist xbl;
+  ::encode(rsv, xbl);
+  mdr->reply_extra_bl = xbl; // synchronous
 
   dout(10) << "reply to " << *req << " " << rsv << dendl;
 
   // send it
-  reply_request(mdr, reply, in);
+  journal_and_reply(mdr, in, 0, le,
+		    new C_MDS_inode_update_finish(mds, mdr, in));
 }
 
 void Server::handle_client_put_rsv(MDRequest *mdr)
@@ -3327,15 +3335,23 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
   reservation_state_t &rstate = in->reservations;
   if (! rstate.remove_rsv(req->head.args.get_rsv.rsv)) {
     dout(0) << "handle_client_put_rsv failed" << dendl;
+    reply = new MClientReply(req, -EINVAL);
+    reply_request(mdr, reply);
     return;
   }
 
-  reply = new MClientReply(req, 0 /* return code */);
+  // journal
+  mdr->ls = mdlog->get_current_segment();
+  EUpdate *le = new EUpdate(mdlog, "put_rsv"); // isa LogEvent
+  mdlog->start_entry(le);
+  le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
+  mdcache->journal_dirty_inode(mdr, &le->metablob, in);
 
   dout(10) << "reply to " << *req << dendl;
 
   // send it
-  reply_request(mdr, reply, in);
+  journal_and_reply(mdr, in, 0, le,
+		    new C_MDS_inode_update_finish(mds, mdr, in));
 }
 
 void Server::handle_client_reg_rsv(MDRequest *mdr)
@@ -3363,15 +3379,23 @@ void Server::handle_client_reg_rsv(MDRequest *mdr)
   if (! rstate.register_osd(req->head.args.reg_rsv.reg.rsv_id,
 			    req->head.args.reg_rsv.reg.osd_id)) {
     dout(0) << "handle_client_reg_rsv failed" << dendl;
+    reply = new MClientReply(req, -EINVAL);
+    reply_request(mdr, reply);
     return;
   }
 
-  reply = new MClientReply(req, 0 /* return code */);
+  // journal
+  mdr->ls = mdlog->get_current_segment();
+  EUpdate *le = new EUpdate(mdlog, "get_rsv"); // isa LogEvent
+  mdlog->start_entry(le);
+  le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
+  mdcache->journal_dirty_inode(mdr, &le->metablob, in);
 
   dout(10) << "reply to " << *req << dendl;
 
   // send it
-  reply_request(mdr, reply, in);
+ journal_and_reply(mdr, in, 0, le,
+		    new C_MDS_inode_update_finish(mds, mdr, in));
 }
 
 void Server::handle_client_ureg_rsv(MDRequest *mdr)
@@ -3398,15 +3422,23 @@ void Server::handle_client_ureg_rsv(MDRequest *mdr)
   if (! rstate.unregister_osd(req->head.args.ureg_rsv.reg.rsv_id,
 			      req->head.args.ureg_rsv.reg.osd_id)) {
     dout(0) << "handle_client_ureg_rsv failed" << dendl;
+    reply = new MClientReply(req, -EINVAL);
+    reply_request(mdr, reply);
     return;
   }
 
-  reply = new MClientReply(req, 0 /* return code */);
+  // journal
+  mdr->ls = mdlog->get_current_segment();
+  EUpdate *le = new EUpdate(mdlog, "get_rsv"); // isa LogEvent
+  mdlog->start_entry(le);
+  le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
+  mdcache->journal_dirty_inode(mdr, &le->metablob, in);
 
   dout(10) << "reply to " << *req << dendl;
 
   // send it
-  reply_request(mdr, reply, in);
+ journal_and_reply(mdr, in, 0, le,
+		    new C_MDS_inode_update_finish(mds, mdr, in));
 }
 
 void Server::handle_client_setattr(MDRequest *mdr)
