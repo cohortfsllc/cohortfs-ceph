@@ -62,8 +62,8 @@ protected:
     ::decode(client_map, bl);
   }
   
-  void update_segment();
-  void replay(MDS *mds);
+  void update_segment() {}
+  void replay(MDS *mds) {}
 
 };
 

@@ -140,11 +140,11 @@ void CStripe::print(ostream& out)
 }
 
 
-CStripe::CStripe(CInode *in, stripeid_t stripeid, bool auth)
+CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
   : mdcache(in->mdcache),
     inode(in),
     stripeid(stripeid),
-    stripe_auth(CDIR_AUTH_DEFAULT),
+    stripe_auth(auth, CDIR_AUTH_UNKNOWN),
     auth_pins(0),
     nested_auth_pins(0),
     replicate(false),
@@ -163,7 +163,7 @@ CStripe::CStripe(CInode *in, stripeid_t stripeid, bool auth)
     dirfragtreelock(this, &dirfragtreelock_type)
 {
   memset(&fnode, 0, sizeof(fnode));
-  if (auth)
+  if (auth == mdcache->mds->get_nodeid())
     state_set(STATE_AUTH);
 }
 
@@ -378,12 +378,8 @@ CDir *CStripe::get_or_open_dirfrag(frag_t fg)
 {
   // have it?
   CDir *dir = get_dirfrag(fg);
-  if (!dir) {
-    // create it.
-    assert(is_auth());
-    dir = new CDir(this, fg, mdcache, true);
-    add_dirfrag(dir);
-  }
+  if (!dir) // create it.
+    dir = add_dirfrag(new CDir(this, fg, mdcache, is_auth()));
   return dir;
 }
 

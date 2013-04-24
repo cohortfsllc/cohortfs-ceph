@@ -54,7 +54,7 @@ class EImportFinish : public LogEvent {
     ::decode(success, bl);
   }
   
-  void replay(MDS *mds);
+  void replay(MDS *mds) {}
 
 };
 

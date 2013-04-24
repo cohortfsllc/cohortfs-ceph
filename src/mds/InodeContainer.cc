@@ -38,7 +38,8 @@ static ostream& _prefix(std::ostream *_dout, MDS *mds) {
 
 CInode* InodeContainer::create()
 {
-  return mdcache->create_system_inode(MDS_INO_CONTAINER, S_IFDIR);
+  int auth = mdcache->mds->mdsmap->get_root();
+  return mdcache->create_system_inode(MDS_INO_CONTAINER, auth, S_IFDIR);
 }
 
 void InodeContainer::open(Context *c)
@@ -145,9 +146,7 @@ void InodeContainer::restripe(const set<int> &nodes, bool replay)
     if (to == mds->get_nodeid()) {
       stripe = in->get_stripe(i);
       if (stripe == NULL) {
-        stripe = in->add_stripe(new CStripe(in, i, true));
-        mdcache->adjust_subtree_auth(stripe, mds->get_nodeid());
-
+        stripe = in->add_stripe(new CStripe(in, i, to));
         if (le)
           le->metablob.add_stripe(stripe, false, false);
         else
@@ -193,14 +192,14 @@ void InodeContainer::handle_restripe(MMDSRestripe *m)
   bufferlist::iterator p = m->container.begin();
 
   std::list<Context*> unused;
-  in = mdcache->add_replica_inode(p, NULL, unused);
+  in = mdcache->add_replica_inode(p, NULL, from, unused);
   assert(in);
 
   // open my inode container stripe and claim auth
   stripe = in->get_stripe(m->stripeid);
   if (!stripe) {
-    stripe = in->add_stripe(new CStripe(in, m->stripeid, true));
-    mdcache->adjust_subtree_auth(stripe, mds->get_nodeid());
+    stripe = in->add_stripe(new CStripe(in, m->stripeid, mds->get_nodeid()));
+    stripe->set_stripe_auth(mds->get_nodeid());
   }
 
   C_GatherBuilder gather(g_ceph_context);

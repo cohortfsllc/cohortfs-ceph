@@ -572,7 +572,6 @@ void MDS::tick()
 
     logger->set(l_mds_l, 100 * load.mds_load());
     logger->set(l_mds_q, messenger->get_dispatch_queue_len());
-    logger->set(l_mds_sm, mdcache->num_subtrees());
 
     mdcache->log_stat();
   }
@@ -1486,16 +1485,16 @@ void MDS::rejoin_joint_start()
 void MDS::rejoin_done()
 {
   dout(1) << "rejoin_done" << dendl;
-  mdcache->show_subtrees();
   mdcache->show_cache();
 
   // funny case: is our cache empty?  no subtrees?
+#if 0
   if (!mdcache->is_subtrees()) {
     dout(1) << " empty cache, no subtrees, leaving cluster" << dendl;
     request_state(MDSMap::STATE_STOPPED);
     return;
   }
-
+#endif
   if (replay_queue.empty())
     request_state(MDSMap::STATE_ACTIVE);
   else

@@ -394,6 +394,11 @@ void EMetaBlob::update_segment(LogSegment *ls)
 void EMetaBlob::fullbit::update_inode(MDS *mds, CInode *in)
 {
   in->inode = inode;
+  in->inode_auth = inode_auth;
+  if (inode_auth.first == mds->get_nodeid())
+    in->state_set(CInode::STATE_AUTH);
+  else
+    in->state_clear(CInode::STATE_AUTH);
   in->xattrs = xattrs;
   if (in->inode.is_dir()) {
     in->set_stripe_auth(stripe_auth);
@@ -419,7 +424,12 @@ static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
   CInode *diri = mds->mdcache->get_inode(ds.ino);
   if (!diri) {
     if (MDS_INO_IS_BASE(ds.ino)) {
-      diri = mds->mdcache->create_system_inode(ds.ino, S_IFDIR|0755);
+      int auth;
+      if (MDS_INO_IS_MDSDIR(ds.ino))
+        auth = ds.ino - MDS_INO_MDSDIR_OFFSET;
+      else
+        auth = mds->mdsmap->get_root();
+      diri = mds->mdcache->create_system_inode(ds.ino, auth, S_IFDIR|0755);
       dout(10) << "EMetaBlob.replay created base " << *diri << dendl;
     } else {
       dout(0) << "EMetaBlob.replay missing dir ino " << ds.ino << dendl;
@@ -432,14 +442,9 @@ static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
   if (stripe) {
     dout(10) << "EMetaBlob had " << *stripe << dendl;
   } else {
-    stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, true));
+    int auth = diri->get_stripe_auth(ds.stripeid);
+    stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, auth));
     dout(10) << "EMetaBlob added " << *stripe << dendl;
-
-    const vector<int> &stripe_auth = diri->get_stripe_auth();
-    if (ds.stripeid < stripe_auth.size())
-      mds->mdcache->adjust_subtree_auth(stripe, stripe_auth[ds.stripeid]);
-    else if (MDS_INO_IS_BASE(ds.ino))
-      mds->mdcache->adjust_subtree_auth(stripe, CDIR_AUTH_UNKNOWN);
   }
   return stripe;
 }
@@ -465,6 +470,7 @@ void EMetaBlob::update_stripe(MDS *mds, LogSegment *ls,
   }
   if (lump.is_new())
     stripe->mark_new(ls);
+  stripe->set_stripe_auth(lump.auth);
   stripe->fnode = lump.fnode;
   stripe->set_fragtree(lump.dirfragtree);
   stripe->force_dirfrags();
@@ -482,7 +488,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     CInode *in = mds->mdcache->get_inode((*p)->inode.ino);
     bool isnew = in ? false:true;
     if (!in)
-      in = new CInode(mds->mdcache, true);
+      in = new CInode(mds->mdcache, mds->get_nodeid());
     (*p)->update_inode(mds, in);
     if (isnew)
       mds->mdcache->add_inode(in);
@@ -581,7 +587,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 
       CInode *in = mds->mdcache->get_inode(p->inode.ino, p->dnlast);
       if (!in) {
-	in = new CInode(mds->mdcache, true, p->dnfirst, p->dnlast);
+	in = new CInode(mds->mdcache, mds->get_nodeid(), p->dnfirst, p->dnlast);
 	p->update_inode(mds, in);
 	mds->mdcache->add_inode(in);
 	if (!dn->get_linkage()->is_null()) {
@@ -715,21 +721,16 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       if (oldstripe->authority() != CDIR_AUTH_UNDEF &&
 	  renamed_diri->authority() == CDIR_AUTH_UNDEF) {
 	assert(slaveup); // auth to non-auth, must be slave prepare 
-        int stripe_count = renamed_diri->get_stripe_count();
-        for (int i = 0; i < stripe_count; i++) {
-          CStripe *stripe = renamed_diri->get_or_open_stripe(i);
-          const fragtree_t &dft = stripe->get_fragtree();
-          list<frag_t> leaves;
-          dft.get_leaves(leaves);
-          for (list<frag_t>::iterator p = leaves.begin(); p != leaves.end(); ++p) {
-            CDir *dir = stripe->get_or_open_dirfrag(*p);
-            // preserve subtree bound until slave commit
-            if (dir->authority() == CDIR_AUTH_UNDEF)
-              slaveup->oldstripes.insert(dir->get_stripe());
-          }
+        list<CStripe*> stripes;
+        renamed_diri->get_stripes(stripes);
+        for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+          CStripe *stripe = *s;
+          // preserve subtree bound until slave commit
+          if (stripe->authority() == CDIR_AUTH_UNDEF)
+            slaveup->oldstripes.insert(stripe);
         }
       }
-
+#if 0
       mds->mdcache->adjust_subtree_after_rename(renamed_diri, oldstripe, false);
       
       // see if we can discard the subtree we renamed out of
@@ -740,9 +741,11 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	else
 	  mds->mdcache->try_trim_non_auth_subtree(root);
       }
+#endif
     }
 
     // if we are the srci importer, we'll also have some dirfrags we have to open up...
+#if 0
     if (renamed_diri->authority() != CDIR_AUTH_UNDEF) {
       for (list<dirstripe_t>::iterator p = renamed_dir_stripes.begin(); p != renamed_dir_stripes.end(); ++p) {
         CStripe *stripe = renamed_diri->get_stripe(p->stripeid);
@@ -765,6 +768,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       assert(p->first->is_dir());
       mds->mdcache->adjust_subtree_after_rename(p->first, p->second, false);
     }
+#endif
   }
 
   if (!unlinked.empty()) {
@@ -1209,133 +1213,6 @@ void ESlaveUpdate::replay(MDS *mds)
 
 
 // -----------------------
-// ESubtreeMap
-
-void ESubtreeMap::replay(MDS *mds) 
-{
-  if (expire_pos && expire_pos > mds->mdlog->journaler->get_expire_pos())
-    mds->mdlog->journaler->set_expire_pos(expire_pos);
-
-  // suck up the subtree map?
-  if (mds->mdcache->is_subtrees()) {
-    dout(10) << "ESubtreeMap.replay -- i already have import map; verifying" << dendl;
-    int errors = 0;
-
-    for (map<dirstripe_t, vector<dirstripe_t> >::iterator p = subtrees.begin();
-	 p != subtrees.end();
-	 ++p) {
-      CStripe *stripe = mds->mdcache->get_dirstripe(p->first);
-      if (!stripe) {
-	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			  << " subtree root " << p->first << " not in cache";
-	++errors;
-	continue;
-      }
-      
-      if (!mds->mdcache->is_subtree(stripe)) {
-	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			  << " subtree root " << p->first << " not a subtree in cache";
-	++errors;
-	continue;
-      }
-      if (stripe->get_stripe_auth().first != mds->whoami) {
-	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			  << " subtree root " << p->first
-			  << " is not mine in cache (it's " << stripe->get_stripe_auth() << ")";
-	++errors;
-	continue;
-      }
-
-      set<CStripe*> bounds;
-      mds->mdcache->get_subtree_bounds(stripe, bounds);
-      for (vector<dirstripe_t>::iterator q = p->second.begin(); q != p->second.end(); ++q) {
-	CStripe *b = mds->mdcache->get_dirstripe(*q);
-	if (!b) {
-	  mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			    << " subtree " << p->first << " bound " << *q << " not in cache";
-	++errors;
-	  continue;
-	}
-	if (bounds.count(b) == 0) {
-	  mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			    << " subtree " << p->first << " bound " << *q << " not a bound in cache";
-	++errors;
-	  continue;
-	}
-	bounds.erase(b);
-      }
-      for (set<CStripe*>::iterator q = bounds.begin(); q != bounds.end(); ++q) {
-	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			  << " subtree " << p->first << " has extra bound in cache " << (*q)->dirstripe();
-	++errors;
-      }
-      
-      if (ambiguous_subtrees.count(p->first)) {
-	if (!mds->mdcache->have_ambiguous_import(p->first)) {
-	  mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			    << " subtree " << p->first << " is ambiguous but is not in our cache";
-	  ++errors;
-	}
-      } else {
-	if (mds->mdcache->have_ambiguous_import(p->first)) {
-	  mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			    << " subtree " << p->first << " is not ambiguous but is in our cache";
-	  ++errors;
-	}
-      }
-    }
-    
-    list<CStripe*> subs;
-    mds->mdcache->list_subtrees(subs);
-    for (list<CStripe*>::iterator p = subs.begin(); p != subs.end(); ++p) {
-      CStripe *stripe = *p;
-      if (stripe->get_stripe_auth().first != mds->whoami)
-	continue;
-      if (subtrees.count(stripe->dirstripe()) == 0) {
-	mds->clog.error() << " replayed ESubtreeMap at " << get_start_off()
-			  << " does not include cache subtree " << stripe->dirstripe();
-	++errors;
-      }
-    }
-
-    if (errors) {
-      dout(0) << "journal subtrees: " << subtrees << dendl;
-      dout(0) << "journal ambig_subtrees: " << ambiguous_subtrees << dendl;
-      mds->mdcache->show_subtrees();
-      assert(!g_conf->mds_debug_subtrees || errors == 0);
-    }
-    return;
-  }
-
-  dout(10) << "ESubtreeMap.replay -- reconstructing (auth) subtree spanning tree" << dendl;
-  
-  // first, stick the spanning tree in my cache
-  //metablob.print(*_dout);
-  metablob.replay(mds, _segment);
-  
-  // restore import/export maps
-  for (map<dirstripe_t, vector<dirstripe_t> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *stripe = mds->mdcache->get_dirstripe(p->first);
-    assert(stripe);
-    if (ambiguous_subtrees.count(p->first)) {
-      // ambiguous!
-      mds->mdcache->add_ambiguous_import(p->first, p->second);
-      mds->mdcache->adjust_bounded_subtree_auth(stripe, p->second,
-						pair<int,int>(mds->get_nodeid(), mds->get_nodeid()));
-    } else {
-      // not ambiguous
-      mds->mdcache->adjust_bounded_subtree_auth(stripe, p->second, mds->get_nodeid());
-    }
-  }
-  
-  mds->mdcache->show_subtrees();
-}
-
-
-
-// -----------------------
 // EFragment
 
 void EFragment::replay(MDS *mds)
@@ -1380,107 +1257,6 @@ void EFragment::replay(MDS *mds)
 }
 
 
-
-
-
-
-// =========================================================================
-
-// -----------------------
-// EExport
-
-void EExport::replay(MDS *mds)
-{
-  dout(10) << "EExport.replay " << base << dendl;
-  metablob.replay(mds, _segment);
-  
-  CStripe *stripe = mds->mdcache->get_dirstripe(base);
-  assert(stripe);
-  
-  set<CStripe*> realbounds;
-  for (set<dirstripe_t>::iterator p = bounds.begin();
-       p != bounds.end();
-       ++p) {
-    CStripe *bd = mds->mdcache->get_dirstripe(*p);
-    assert(bd);
-    realbounds.insert(bd);
-  }
-
-  // adjust auth away
-  mds->mdcache->adjust_bounded_subtree_auth(stripe, realbounds, CDIR_AUTH_UNDEF);
-
-  mds->mdcache->try_trim_non_auth_subtree(stripe);
-}
-
-
-
-// -----------------------
-// EImportStart
-
-void EImportStart::update_segment()
-{
-  _segment->sessionmapv = cmapv;
-}
-
-void EImportStart::replay(MDS *mds)
-{
-  dout(10) << "EImportStart.replay " << base << " bounds " << bounds << dendl;
-  //metablob.print(*_dout);
-  metablob.replay(mds, _segment);
-
-  // put in ambiguous import list
-  mds->mdcache->add_ambiguous_import(base, bounds);
-
-  // set auth partially to us so we don't trim it
-  CStripe *stripe = mds->mdcache->get_dirstripe(base);
-  assert(stripe);
-  mds->mdcache->adjust_bounded_subtree_auth(stripe, bounds, make_pair(mds->get_nodeid(), mds->get_nodeid()));
-
-  // open client sessions?
-  if (mds->sessionmap.version >= cmapv) {
-    dout(10) << "EImportStart.replay sessionmap " << mds->sessionmap.version 
-	     << " >= " << cmapv << ", noop" << dendl;
-  } else {
-    dout(10) << "EImportStart.replay sessionmap " << mds->sessionmap.version 
-	     << " < " << cmapv << dendl;
-    map<client_t,entity_inst_t> cm;
-    bufferlist::iterator blp = client_map.begin();
-    ::decode(cm, blp);
-    mds->sessionmap.open_sessions(cm);
-    assert(mds->sessionmap.version == cmapv);
-    mds->sessionmap.projected = mds->sessionmap.version;
-  }
-  update_segment();
-}
-
-// -----------------------
-// EImportFinish
-
-void EImportFinish::replay(MDS *mds)
-{
-  if (mds->mdcache->have_ambiguous_import(base)) {
-    dout(10) << "EImportFinish.replay " << base << " success=" << success << dendl;
-    if (success) {
-      mds->mdcache->finish_ambiguous_import(base);
-    } else {
-      CStripe *stripe = mds->mdcache->get_dirstripe(base);
-      assert(stripe);
-      vector<dirstripe_t> bounds;
-      mds->mdcache->get_ambiguous_import_bounds(base, bounds);
-      mds->mdcache->adjust_bounded_subtree_auth(stripe, bounds, CDIR_AUTH_UNDEF);
-      mds->mdcache->cancel_ambiguous_import(stripe);
-      mds->mdcache->try_trim_non_auth_subtree(stripe);
-   }
-  } else {
-    dout(10) << "EImportFinish.replay " << base << " success=" << success
-	     << " on subtree not marked as ambiguous" 
-	     << dendl;
-    assert(0 == "this shouldn't happen unless this is an old journal");
-  }
-}
-
-
-
 // ------------------------
 // EResetJournal
 
@@ -1493,12 +1269,10 @@ void EResetJournal::replay(MDS *mds)
 
   if (mds->mdsmap->get_root() == mds->whoami) {
     CStripe *rootstripe = mds->mdcache->get_root()->get_or_open_stripe(0);
-    mds->mdcache->adjust_subtree_auth(rootstripe, mds->whoami);
+    rootstripe->set_stripe_auth(mds->whoami);
   }
 
   CStripe *mystripe = mds->mdcache->get_myin()->get_or_open_stripe(0);
-  mds->mdcache->adjust_subtree_auth(mystripe, mds->whoami);
-
-  mds->mdcache->show_subtrees();
+  mystripe->set_stripe_auth(mds->whoami);
 }
 

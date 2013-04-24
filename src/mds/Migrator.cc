@@ -84,6 +84,9 @@
 /* This function DOES put the passed message before returning*/
 void Migrator::dispatch(Message *m)
 {
+  m->put();
+}
+#if 0
   switch (m->get_type()) {
     // import
   case MSG_MDS_EXPORTDIRDISCOVER:
@@ -133,7 +136,6 @@ void Migrator::dispatch(Message *m)
     assert(0);
   }
 }
-
 
 class C_MDC_EmptyImport : public Context {
   Migrator *mig;
@@ -1002,6 +1004,7 @@ void Migrator::export_go_synced(CStripe *stripe)
   cache->show_subtrees();
 }
 
+#endif
 
 /** encode_export_inode
  * update our local state for this inode to export.
@@ -1304,6 +1307,8 @@ void Migrator::finish_export_stripe(CStripe *stripe, list<Context*>& finished,
   for (list<CDir*>::iterator i = dirs.begin(); i != dirs.end(); ++i)
     finish_export_dir(*i, finished, now);
 }
+
+#if 0
 
 class C_MDS_ExportFinishLogged : public Context {
   Migrator *migrator;
@@ -2326,6 +2331,7 @@ void Migrator::import_finish(CStripe *stripe)
   }
 }
 
+#endif
 
 void Migrator::decode_import_inode(CDentry *dn, bufferlist::iterator& blp, int oldauth,
 				   LogSegment *ls, uint64_t log_offset,
@@ -2577,8 +2583,7 @@ int Migrator::decode_import_stripe(bufferlist::iterator& blp, int oldauth,
   return num_imported;
 }
 
-
-
+#if 0
 
 // authority bystander
 
@@ -2736,4 +2741,4 @@ void Migrator::logged_import_caps(CInode *in, int from,
 
 
 
-
+#endif

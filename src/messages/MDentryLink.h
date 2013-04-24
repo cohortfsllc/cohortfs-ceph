@@ -17,27 +17,20 @@
 #define CEPH_MDENTRYLINK_H
 
 class MDentryLink : public Message {
-  dirstripe_t subtree;
   dirfrag_t dirfrag;
   string dn;
   bool is_primary;
 
  public:
-  dirstripe_t get_subtree() const { return subtree; }
   dirfrag_t get_dirfrag() const { return dirfrag; }
   const string& get_dn() const { return dn; }
   bool get_is_primary() const { return is_primary; }
 
   bufferlist bl;
 
-  MDentryLink() :
-    Message(MSG_MDS_DENTRYLINK) { }
-  MDentryLink(dirstripe_t r, dirfrag_t df, string& n, bool p) :
-    Message(MSG_MDS_DENTRYLINK),
-    subtree(r),
-    dirfrag(df),
-    dn(n),
-    is_primary(p) {}
+  MDentryLink() : Message(MSG_MDS_DENTRYLINK) {}
+  MDentryLink(dirfrag_t df, const string& n, bool p)
+      : Message(MSG_MDS_DENTRYLINK), dirfrag(df), dn(n), is_primary(p) {}
 private:
   ~MDentryLink() {}
 
@@ -49,14 +42,12 @@ public:
   
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(subtree, p);
     ::decode(dirfrag, p);
     ::decode(dn, p);
     ::decode(is_primary, p);
     ::decode(bl, p);
   }
   void encode_payload(uint64_t features) {
-    ::encode(subtree, payload);
     ::encode(dirfrag, payload);
     ::encode(dn, payload);
     ::encode(is_primary, payload);

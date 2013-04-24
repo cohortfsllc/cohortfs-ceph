@@ -217,6 +217,8 @@ public:
   map<snapid_t, old_inode_t> old_inodes;  // key = last, value.first = first
   set<snapid_t> dirty_old_rstats;
 
+  pair<int,int> inode_auth;
+
   bool is_multiversion() {
     return snaprealm ||  // other snaprealms will link to me
       inode.is_dir() ||  // links to me in other snaps
@@ -418,8 +420,6 @@ public:
 
   list<CDentry*>   projected_parent;   // for in-progress rename, (un)link, etc.
 
-  pair<int,int> inode_auth;
-
   // -- distributed state --
 protected:
   // file capabilities
@@ -471,50 +471,12 @@ private:
   friend class MDCache;
   friend class CDir;
   friend class CInodeExport;
+  friend class EMetaBlob;
 
  public:
-  // ---------------------------
-  CInode(MDCache *c, bool auth=true, snapid_t f=2, snapid_t l=CEPH_NOSNAP) : 
-    mdcache(c),
-    snaprealm(0), containing_realm(0),
-    first(f), last(l),
-    last_journaled(0), //last_open_journaled(0), 
-    default_layout(NULL),
-    //hack_accessed(true),
-    stickystripe_ref(0),
-    parent(0),
-    inode_auth(CDIR_AUTH_DEFAULT),
-    replica_caps_wanted(0),
-    item_dirty(this), item_caps(this), item_open_file(this), item_renamed_file(this), 
-    item_dirty_dirfrag_dir(this), 
-    item_dirty_dirfrag_nest(this), 
-    auth_pins(0), nested_auth_pins(0),
-    auth_pin_freeze_allowance(0),
-    nested_anchors(0),
-    pop(ceph_clock_now(g_ceph_context)),
-    versionlock(this, &versionlock_type),
-    authlock(this, &authlock_type),
-    linklock(this, &linklock_type),
-    filelock(this, &filelock_type),
-    xattrlock(this, &xattrlock_type),
-    snaplock(this, &snaplock_type),
-    nestlock(this, &nestlock_type),
-    flocklock(this, &flocklock_type),
-    policylock(this, &policylock_type),
-    loner_cap(-1), want_loner_cap(-1)
-  {
-    g_num_ino++;
-    g_num_inoa++;
-    state = 0;  
-    if (auth) state_set(STATE_AUTH);
-  };
-  ~CInode() {
-    g_num_ino--;
-    g_num_inos++;
-    close_stripes();
-    close_snaprealm();
-  }
-  
+  CInode(MDCache *mdcache, int auth,
+         snapid_t first = 2, snapid_t last = CEPH_NOSNAP);
+  ~CInode();
 
   // -- accessors --
   bool is_file()    { return inode.is_file(); }

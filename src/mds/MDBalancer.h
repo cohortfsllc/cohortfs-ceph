@@ -87,7 +87,7 @@ public:
   void send_heartbeat();
   void handle_heartbeat(MHeartbeat *m);
 
-  void tick();
+  void tick() {}
 
   void do_fragmenting();
 
@@ -98,7 +98,7 @@ public:
   /*check if the monitor has recorded the current export targets;
     if it has then do the actual export. Otherwise send off our
     export targets message again*/
-  void try_rebalance();
+  void try_rebalance() {}
   void find_exports(CStripe *stripe, double amount, 
                     list<CStripe*>& exports, double& have,
                     set<CStripe*>& already_exporting);
@@ -107,14 +107,14 @@ public:
   void subtract_export(CStripe *ex, utime_t now);
   void add_import(CStripe *im, utime_t now);
 
-  void hit_inode(utime_t now, CInode *in, int type, int who=-1);
-  void hit_dir(utime_t now, CDir *dir, int type, int who=-1, double amount=1.0);
-  void hit_stripe(utime_t now, CStripe *stripe, int type, int who=-1, double amount=1.0);
+  void hit_inode(utime_t now, CInode *in, int type, int who=-1) {}
+  void hit_dir(utime_t now, CDir *dir, int type, int who=-1, double amount=1.0) {}
+  void hit_stripe(utime_t now, CStripe *stripe, int type, int who=-1, double amount=1.0) {}
 
 
   void show_imports(bool external=false);
 
-  void queue_split(CDir *dir);
+  void queue_split(CDir *dir) {}
   void queue_merge(CDir *dir);
 
 };

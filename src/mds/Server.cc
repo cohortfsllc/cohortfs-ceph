@@ -1781,7 +1781,7 @@ inodeno_t Server::prepare_new_inodeno(MDRequest *mdr, inodeno_t useino)
 CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino,
                                   unsigned mode, ceph_file_layout *layout)
 {
-  CInode *in = new CInode(mdcache);
+  CInode *in = new CInode(mdcache, mds->get_nodeid());
 
   in->inode.ino = useino;
   in->inode.version = 1;
@@ -4284,7 +4284,7 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
   CStripe *stripe = mdcache->add_replica_stripe(blp, container, from, finished);
   CDir *dir = mdcache->add_replica_dir(blp, stripe, finished);
   CDentry *dn = mdcache->add_replica_dentry(blp, dir, finished);
-  CInode *in = mdcache->add_replica_inode(blp, dn, finished);
+  CInode *in = mdcache->add_replica_inode(blp, dn, from, finished);
   mds->queue_waiters(finished);
 
   // journal new stripes
@@ -4297,11 +4297,9 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
 
   const set<stripeid_t> &stripes = req->stripes;
   for (set<stripeid_t>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CStripe *newstripe = in->add_stripe(new CStripe(in, *s, true));
+    CStripe *newstripe = in->add_stripe(new CStripe(in, *s, mds->get_nodeid()));
     newstripe->mark_open();
     newstripe->pre_dirty();
-
-    mdcache->adjust_subtree_auth(newstripe, mds->get_nodeid());
 
     CDir *newdir = newstripe->get_or_open_dirfrag(frag_t());
     newdir->mark_complete();
@@ -5372,9 +5370,6 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn, CDentry *straydn)
 
   dn->push_projected_linkage();
 
-  if (in->is_dir())
-    mds->mdcache->project_subtree_rename(in, dn->get_stripe(), straydn->get_stripe());
-
   journal_and_reply(mdr, 0, dn, le, new C_MDS_unlink_local_finish(mds, mdr, dn, straydn));
 }
 
@@ -5408,10 +5403,6 @@ void Server::_unlink_local_finish(MDRequest *mdr,
   
   mds->mdcache->send_dentry_unlink(dn, straydn, mdr);
   
-  // update subtree map?
-  if (straydn && straydnl->get_inode()->is_dir()) 
-    mdcache->adjust_subtree_after_rename(straydnl->get_inode(), dn->get_stripe(), true);
-
   // commit anchor update?
   if (mdr->more()->dst_reanchor_atid) 
     mds->anchorclient->commit(mdr->more()->dst_reanchor_atid, mdr->ls);
@@ -5509,8 +5500,6 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
   dout(10) << " noting renamed (unlinked) dir ino " << in->ino() << " in metablob" << dendl;
   le->commit.renamed_dirino = in->ino();
 
-  mds->mdcache->project_subtree_rename(in, dn->get_stripe(), straydn->get_stripe());
-
   mdlog->submit_entry(le, new C_MDS_SlaveRmdirPrep(this, mdr, dn, straydn));
   mdlog->flush();
 }
@@ -5531,11 +5520,9 @@ void Server::_logged_slave_rmdir(MDRequest *mdr, CDentry *dn, CDentry *straydn)
 
   // update our cache now, so we are consistent with what is in the journal
   // when we journal a subtree map
-  CInode *in = dn->get_linkage()->get_inode();
   dn->get_dir()->unlink_inode(dn);
   straydn->pop_projected_linkage();
   dn->pop_projected_linkage();
-  mdcache->adjust_subtree_after_rename(in, dn->get_stripe(), true);
 
   MMDSSlaveRequest *reply = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
 						 MMDSSlaveRequest::OP_RMDIRPREPACK);
@@ -5638,8 +5625,6 @@ void Server::do_rmdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   dout(10) << " noting renamed (unlinked) dir ino " << in->ino() << " in metablob" << dendl;
   le->commit.renamed_dirino = in->ino();
 
-  mdcache->project_subtree_rename(in, straydn->get_stripe(), dn->get_stripe());
-
   mdlog->submit_entry(le, new C_MDS_LoggedRmdirRollback(this, mdr, rollback.reqid, dn, straydn));
   mdlog->flush();
 }
@@ -5651,14 +5636,14 @@ void Server::_rmdir_rollback_finish(MDRequest *mdr, metareqid_t reqid, CDentry *
   straydn->get_dir()->unlink_inode(straydn);
   dn->pop_projected_linkage();
   straydn->pop_projected_linkage();
-
+#if 0
   CInode *in = dn->get_linkage()->get_inode();
   mdcache->adjust_subtree_after_rename(in, straydn->get_stripe(), true);
   if (mds->is_resolve()) {
     CStripe *root = mdcache->get_subtree_root(straydn->get_stripe());
     mdcache->try_trim_non_auth_subtree(root);
   }
-
+#endif
   if (mdr)
     mds->mdcache->request_finish(mdr);
 
@@ -6123,11 +6108,10 @@ void Server::handle_client_rename(MDRequest *mdr)
     C_GatherBuilder anchorgather(g_ceph_context);
 
     if (srcdnl->is_primary() &&
-	(srcdnl->get_inode()->is_anchored() || 
-	 (srcdnl->get_inode()->is_dir() && (srcdnl->get_inode()->inode.rstat.ranchors ||
-					    srcdnl->get_inode()->nested_anchors ||
-					    !mdcache->is_leaf_subtree(mdcache->get_projected_subtree_root(srcdn->get_stripe()))))) &&
-	!mdr->more()->src_reanchor_atid) {
+        (srcdnl->get_inode()->is_anchored() || 
+         (srcdnl->get_inode()->is_dir() && (srcdnl->get_inode()->inode.rstat.ranchors ||
+                                            srcdnl->get_inode()->nested_anchors))) &&
+        !mdr->more()->src_reanchor_atid) {
       dout(10) << "reanchoring src->dst " << *srcdnl->get_inode() << dendl;
       vector<Anchor> trace;
       destdn->make_anchor_trace(trace, srcdnl->get_inode());
@@ -6541,11 +6525,12 @@ void Server::_rename_prepare(MDRequest *mdr,
     metablob->add_table_transaction(TABLE_ANCHOR, mdr->more()->src_reanchor_atid);
   if (mdr->more()->dst_reanchor_atid)
     metablob->add_table_transaction(TABLE_ANCHOR, mdr->more()->dst_reanchor_atid);
-
+#if 0
   if (oldin && oldin->is_dir())
     mdcache->project_subtree_rename(oldin, destdn->get_stripe(), straydn->get_stripe());
   if (srci->is_dir())
     mdcache->project_subtree_rename(srci, srcdn->get_stripe(), destdn->get_stripe());
+#endif
 }
 
 
@@ -6559,8 +6544,6 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
 
   CInode *oldin = destdnl->get_inode();
   
-  bool imported_inode = false;
-
   // primary+remote link merge?
   bool linkmerge = (srcdnl->get_inode() == destdnl->get_inode() &&
 		    (srcdnl->is_primary() || destdnl->is_primary()));
@@ -6644,7 +6627,6 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
       
       // hack: fix auth bit
       in->state_set(CInode::STATE_AUTH);
-      imported_inode = true;
 
       mdr->clear_ambiguous_auth();
     }
@@ -6674,14 +6656,14 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
   
   // apply remaining projected inodes (nested)
   mdr->apply();
-
+#if 0
   // update subtree map?
   if (destdnl->is_primary() && in->is_dir()) 
     mdcache->adjust_subtree_after_rename(in, srcdn->get_stripe(), true, imported_inode);
 
   if (straydn && oldin->is_dir())
     mdcache->adjust_subtree_after_rename(oldin, destdn->get_stripe(), true);
-
+#endif
   // removing a new dn?
   if (srcdn->is_auth())
     srcdn->get_dir()->try_remove_unlinked_dn(srcdn);
@@ -7269,7 +7251,7 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr)
     dout(10) << " noting renamed dir ino " << in->ino() << " in metablob" << dendl;
     le->commit.renamed_dirino = in->ino();
   }
-  
+#if 0  
   if (target && target->is_dir()) {
     assert(destdn);
     mdcache->project_subtree_rename(in, straydir->get_stripe(), destdir->get_stripe());
@@ -7279,7 +7261,7 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr)
     assert(srcdn);
     mdcache->project_subtree_rename(in, destdir->get_stripe(), srcdir->get_stripe());
   }
-
+#endif
   mdlog->submit_entry(le, new C_MDS_LoggedRenameRollback(this, mut, mdr,
 							 srcdn, srcdnpv, destdn, straydn));
   mdlog->flush();
@@ -7305,7 +7287,7 @@ void Server::_rename_rollback_finish(Mutation *mut, MDRequest *mdr, CDentry *src
   }
 
   mut->apply();
-
+#if 0
   if (srcdn) {
     CInode *in = srcdn->get_linkage()->get_inode();
     // update subtree map?
@@ -7329,7 +7311,7 @@ void Server::_rename_rollback_finish(Mutation *mut, MDRequest *mdr, CDentry *src
     if (root)
       mdcache->try_trim_non_auth_subtree(root);
   }
-
+#endif
   if (mdr)
     mds->mdcache->request_finish(mdr);
 

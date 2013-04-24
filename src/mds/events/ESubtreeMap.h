@@ -55,7 +55,7 @@ public:
       ::decode(expire_pos, bl);
   }
 
-  void replay(MDS *mds);
+  void replay(MDS *mds) {}
 };
 
 #endif

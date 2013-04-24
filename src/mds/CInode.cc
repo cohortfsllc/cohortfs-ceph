@@ -244,6 +244,53 @@ void CInode::print(ostream& out)
 }
 
 
+CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
+  : mdcache(c),
+    snaprealm(0), containing_realm(0),
+    first(f), last(l),
+    inode_auth(auth, CDIR_AUTH_UNKNOWN),
+    last_journaled(0),
+    default_layout(NULL),
+    stickystripe_ref(0),
+    parent(0),
+    replica_caps_wanted(0),
+    item_dirty(this),
+    item_caps(this),
+    item_open_file(this),
+    item_renamed_file(this),
+    item_dirty_dirfrag_dir(this),
+    item_dirty_dirfrag_nest(this),
+    auth_pins(0),
+    nested_auth_pins(0),
+    auth_pin_freeze_allowance(0),
+    nested_anchors(0),
+    pop(ceph_clock_now(g_ceph_context)),
+    versionlock(this, &versionlock_type),
+    authlock(this, &authlock_type),
+    linklock(this, &linklock_type),
+    filelock(this, &filelock_type),
+    xattrlock(this, &xattrlock_type),
+    snaplock(this, &snaplock_type),
+    nestlock(this, &nestlock_type),
+    flocklock(this, &flocklock_type),
+    policylock(this, &policylock_type),
+    loner_cap(-1),
+    want_loner_cap(-1)
+{
+  g_num_ino++;
+  g_num_inoa++;
+  if (auth == mdcache->mds->get_nodeid())
+    state_set(STATE_AUTH);
+};
+
+CInode::~CInode()
+{
+  g_num_ino--;
+  g_num_inos++;
+  close_stripes();
+  close_snaprealm();
+}
+
 
 void CInode::add_need_snapflush(CInode *snapin, snapid_t snapid, client_t client)
 {
@@ -509,7 +556,7 @@ CStripe* CInode::get_or_open_stripe(stripeid_t stripeid)
   if (!stripe) {
     // create it.
     //assert(get_stripe_auth(stripeid) == mdcache->mds->get_nodeid());
-    stripe = new CStripe(this, stripeid, true);
+    stripe = new CStripe(this, stripeid, get_stripe_auth(stripeid));
     add_stripe(stripe);
   }
   return stripe;

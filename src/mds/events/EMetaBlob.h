@@ -64,6 +64,7 @@ public:
     snapid_t dnfirst, dnlast;
     version_t dnv;
     inode_t inode;      // if it's not
+    pair<int, int> inode_auth;
     vector<int> stripe_auth;
     map<string,bufferptr> xattrs;
     string symlink;
@@ -80,8 +81,9 @@ public:
 
     typedef std::tr1::shared_ptr<fullbit> ptr;
 
-    fullbit(const string& d, snapid_t df, snapid_t dl, 
-	    version_t v, inode_t& i, const vector<int> &stripe_auth,
+    fullbit(const string& d, snapid_t df, snapid_t dl, version_t v,
+            inode_t& i, const pair<int, int> &iauth,
+            const vector<int> &sauth,
             const map<string,bufferptr> &xa, const string& sym,
             bufferlist &sbl, bool dr, default_file_layout *defl = NULL,
             old_inodes_t *oi = NULL) :
@@ -94,11 +96,12 @@ public:
       ::encode(dl, _enc);
       ::encode(v, _enc);
       ::encode(i, _enc);
+      ::encode(iauth, _enc);
       ::encode(xa, _enc);
       if (i.is_symlink())
 	::encode(sym, _enc);
       if (i.is_dir()) {
-        ::encode(stripe_auth, _enc);
+        ::encode(sauth, _enc);
 	::encode(sbl, _enc);
 	::encode((defl ? true : false), _enc);
 	if (defl)
@@ -131,6 +134,7 @@ public:
       ::decode(dnlast, bl);
       ::decode(dnv, bl);
       ::decode(inode, bl);
+      ::decode(inode_auth, bl);
       ::decode(xattrs, bl);
       if (inode.is_symlink())
 	::decode(symlink, bl);
@@ -373,6 +377,7 @@ public:
     static const int STATE_DIRTY =  (1<<1);
     static const int STATE_NEW =    (1<<2);
 
+    pair<int, int> auth;
     fragtree_t dirfragtree;
     fnode_t fnode;
     __u32 state;
@@ -385,15 +390,13 @@ public:
     void mark_new() { state |= STATE_NEW; }
 
     void encode(bufferlist& bl) const {
-      __u8 struct_v = 1;
-      ::encode(struct_v, bl);
+      ::encode(auth, bl);
       ::encode(dirfragtree, bl);
       ::encode(fnode, bl);
       ::encode(state, bl);
     }
     void decode(bufferlist::iterator& bl) {
-      __u8 struct_v;
-      ::decode(struct_v, bl);
+      ::decode(auth, bl);
       ::decode(dirfragtree, bl);
       ::decode(fnode, bl);
       ::decode(state, bl);
@@ -615,7 +618,7 @@ private:
     lump.get_dfull().push_back(fullbit::ptr(
             new fullbit(dn->get_name(), dn->first, dn->last,
                         dn->get_projected_version(), *pi,
-                        in->get_stripe_auth(),
+                        in->inode_auth, in->get_stripe_auth(),
                         *in->get_projected_xattrs(), in->symlink,
                         snapbl, dirty, default_layout, &in->old_inodes)));
   }
@@ -668,8 +671,9 @@ private:
     string empty;
     roots.push_back(fullbit::ptr(
             new fullbit(empty, in->first, in->last, 0, *pi,
-                        in->get_stripe_auth(), *px, in->symlink,
-                        snapbl, dirty, default_layout, &in->old_inodes)));
+                        in->inode_auth, in->get_stripe_auth(),
+                        *px, in->symlink, snapbl, dirty,
+                        default_layout, &in->old_inodes)));
   }
   
   dirlump& add_dir(CDir *dir, bool dirty, bool complete=false) {
@@ -705,15 +709,19 @@ private:
 
 
   stripelump& add_stripe(CStripe *stripe, bool dirty, bool isnew=false) {
-    return add_stripe(stripe->dirstripe(), stripe->get_fragtree(),
+    return add_stripe(stripe->dirstripe(),
+                      stripe->get_stripe_auth(),
+                      stripe->get_fragtree(),
                       stripe->get_projected_fnode(),
                       stripe->get_projected_version(),
                       stripe->is_open(), dirty, isnew);
   }
-  stripelump& add_stripe(dirstripe_t stripe, const fragtree_t &dft,
+  stripelump& add_stripe(dirstripe_t stripe, const pair<int, int> &auth,
+                         const fragtree_t &dft,
                          const fnode_t *pf, version_t pv,
                          bool open, bool dirty, bool isnew=false) {
     stripelump& l = stripe_map[stripe];
+    l.auth = auth;
     l.dirfragtree = dft;
     l.fnode = *pf;
     l.fnode.version = pv;

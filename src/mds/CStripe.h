@@ -138,7 +138,7 @@ class CStripe : public MDSCacheObject {
   friend class Migrator;
 
  public:
-  CStripe(CInode *in, stripeid_t stripe, bool auth);
+  CStripe(CInode *in, stripeid_t stripe, int auth);
 
   bool is_lt(const MDSCacheObject *r) const {
     return dirstripe() < ((const CStripe*)r)->dirstripe();
@@ -261,9 +261,7 @@ class CStripe : public MDSCacheObject {
    *  ambiguous: <mds1,mds2>         subtree_root
    *             <parent,mds2>       subtree_root     
    */
-  pair<int,int> authority() {
-    return is_subtree_root() ? stripe_auth : inode->authority();
-  }
+  pair<int,int> authority() { return stripe_auth; }
   pair<int,int> get_stripe_auth() { return stripe_auth; }
   void set_stripe_auth(const pair<int,int> &a);
   void set_stripe_auth(int a) {

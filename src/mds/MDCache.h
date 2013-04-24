@@ -84,7 +84,8 @@ class MDCache {
   // -- my cache --
   LRU lru;   // dentry lru for expiring items from cache
  protected:
-  hash_map<vinodeno_t,CInode*> inode_map;  // map of inodes by ino
+  typedef hash_map<vinodeno_t,CInode*> inode_map;
+  inode_map inodes;                        // map of inodes by ino
   CInode *root;                            // root inode
   CInode *myin;                            // .ceph/mds%d dir
   InodeContainer container;                // inode container dir
@@ -174,68 +175,9 @@ public:
 
 
 public:
-  int get_num_inodes() { return inode_map.size(); }
+  int get_num_inodes() { return inodes.size(); }
   int get_num_dentries() { return lru.lru_get_size(); }
 
-
-  // -- subtrees --
-protected:
-  typedef map<CStripe*, set<CStripe*> > subtree_map;
-  subtree_map subtrees;   // nested bounds on subtrees.
-  map<CInode*,list<pair<CStripe*,CStripe*> > > projected_subtree_renames;  // renamed ino -> target dir
-  
-  // adjust subtree auth specification
-  //  dir->dir_auth
-  //  imports/exports/nested_exports
-  //  join/split subtrees as appropriate
-public:
-  bool is_subtrees() { return !subtrees.empty(); }
-  void list_subtrees(list<CStripe*>& ls);
-  void adjust_subtree_auth(CStripe *root, pair<int,int> auth, bool do_eval=true);
-  void adjust_subtree_auth(CStripe *root, int a, int b=CDIR_AUTH_UNKNOWN, bool do_eval=true) {
-    adjust_subtree_auth(root, pair<int,int>(a,b), do_eval); 
-  }
-  void adjust_bounded_subtree_auth(CStripe *dir, const set<CStripe*>& bounds, pair<int,int> auth);
-  void adjust_bounded_subtree_auth(CStripe *dir, const set<CStripe*>& bounds, int a) {
-    adjust_bounded_subtree_auth(dir, bounds, pair<int,int>(a, CDIR_AUTH_UNKNOWN));
-  }
-  void adjust_bounded_subtree_auth(CStripe *dir, const vector<dirstripe_t>& bounds, pair<int,int> auth);
-  void adjust_bounded_subtree_auth(CStripe *dir, const vector<dirstripe_t>& bounds, int a) {
-    adjust_bounded_subtree_auth(dir, bounds, pair<int,int>(a, CDIR_AUTH_UNKNOWN));
-  }
-  void map_dirstripe_set(list<dirstripe_t>& dfs, set<CStripe*>& result);
-  void try_subtree_merge(CStripe *root);
-  void try_subtree_merge_at(CStripe *root, bool do_eval=true);
-  void subtree_merge_writebehind_finish(CInode *in, Mutation *mut);
-  void eval_subtree_root(CInode *diri);
-  CStripe *get_subtree_root(CStripe *stripe);
-  CStripe *get_projected_subtree_root(CStripe *stripe);
-  bool is_leaf_subtree(CStripe *stripe) {
-    assert(subtrees.count(stripe));
-    return subtrees[stripe].empty();
-  }
-  void remove_subtree(CStripe *stripe);
-  bool is_subtree(CStripe *root) {
-    return subtrees.count(root);
-  }
-  void get_subtree_bounds(CStripe *root, set<CStripe*>& bounds);
-  void get_wouldbe_subtree_bounds(CStripe *root, set<CStripe*>& bounds);
-  void verify_subtree_bounds(CStripe *root, const set<CStripe*>& bounds);
-  void verify_subtree_bounds(CStripe *root, const list<dirstripe_t>& bounds);
-  void get_dirstripe_bound_set(vector<dirstripe_t>& stripes, set<CStripe*>& bounds);
-
-  void project_subtree_rename(CInode *diri, CStripe *oldstripe, CStripe *newstirpe);
-  void adjust_subtree_after_rename(CInode *diri, CStripe *oldstripe,
-                                   bool pop, bool imported = false);
-
-  void get_auth_subtrees(set<CStripe*>& s);
-  void get_fullauth_subtrees(set<CStripe*>& s);
-
-  int num_subtrees();
-  int num_subtrees_fullauth();
-  int num_subtrees_fullnonauth();
-
-  
 protected:
   // delayed cache expire
   map<CStripe*, map<int, MCacheExpire*> > delayed_expire; // subtree root -> expire msg
@@ -312,12 +254,6 @@ public:
 
 protected:
   // [resolve]
-  // from EImportStart w/o EImportFinish during journal replay
-  typedef map<dirstripe_t, vector<dirstripe_t> > stripe_bound_map;
-  stripe_bound_map my_ambiguous_imports;
-  // from MMDSResolves
-  map<int, stripe_bound_map> other_ambiguous_imports;  
-
   map<int, map<metareqid_t, MDSlaveUpdate*> > uncommitted_slave_updates;  // slave: for replay.
   map<CStripe*, int> uncommitted_slave_rename_oldstripe;  // slave: preserve the non-auth dir until seeing commit.
   map<CInode*, int> uncommitted_slave_unlink;  // slave: preserve the unlinked inode until seeing commit.
@@ -346,8 +282,7 @@ protected:
   void process_delayed_resolve();
   void discard_delayed_resolve(int who);
   void maybe_resolve_finish();
-  void disambiguate_imports();
-  void recalc_auth_bits();
+  void recalc_auth_bits() {}
   void trim_unlinked_inodes();
   void add_uncommitted_slave_update(metareqid_t reqid, int master, MDSlaveUpdate*);
   void finish_uncommitted_slave_update(metareqid_t reqid, int master);
@@ -360,29 +295,12 @@ public:
   }
   void finish_rollback(metareqid_t reqid);
 
-  // ambiguous imports
-  void add_ambiguous_import(dirstripe_t base, const vector<dirstripe_t>& bounds);
-  void add_ambiguous_import(CStripe *base, const set<CStripe*>& bounds);
-  bool have_ambiguous_import(dirstripe_t base) {
-    return my_ambiguous_imports.count(base);
-  }
-  void get_ambiguous_import_bounds(dirstripe_t base, vector<dirstripe_t>& bounds) {
-    assert(my_ambiguous_imports.count(base));
-    bounds = my_ambiguous_imports[base];
-  }
-  void cancel_ambiguous_import(CStripe *stripe);
-  void finish_ambiguous_import(dirstripe_t ds);
   void resolve_start();
   void send_resolves();
   void send_slave_resolve(int who);
   void send_resolve_now(int who);
   void send_resolve_later(int who);
   void maybe_send_pending_resolves();
-  
-  void _move_subtree_map_bound(dirstripe_t ds, dirstripe_t oldparent, dirstripe_t newparent,
-                               map<dirstripe_t,vector<dirstripe_t> >& subtrees);
-  ESubtreeMap *create_subtree_map();
-
 
   void clean_open_file_lists();
 
@@ -528,12 +446,9 @@ public:
   // trimming
   bool trim(int max = -1);   // trim cache
   void trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap);
-  void trim_dirfrag(CDir *dir, CStripe *root,
-		    map<int, MCacheExpire*>& expiremap);
-  void trim_stripe(CStripe *stripe, CStripe *root,
-		    map<int, MCacheExpire*>& expiremap);
-  void trim_inode(CDentry *dn, CInode *in, CStripe *root,
-		  map<int, MCacheExpire*>& expiremap);
+  void trim_dirfrag(CDir *dir, map<int, MCacheExpire*>& expiremap);
+  void trim_stripe(CStripe *stripe, map<int, MCacheExpire*>& expiremap);
+  void trim_inode(CDentry *dn, CInode *in, map<int, MCacheExpire*>& expiremap);
   void send_expire_messages(map<int, MCacheExpire*>& expiremap);
   void trim_non_auth();      // trim out trimmable non-auth items
   bool trim_non_auth_subtree(CStripe *stripe);
@@ -554,15 +469,14 @@ public:
 
   // inode_map
   bool have_inode(vinodeno_t vino) {
-    return inode_map.count(vino) ? true:false;
+    return inodes.count(vino) ? true:false;
   }
   bool have_inode(inodeno_t ino, snapid_t snap=CEPH_NOSNAP) {
     return have_inode(vinodeno_t(ino, snap));
   }
   CInode* get_inode(vinodeno_t vino) {
-    if (have_inode(vino))
-      return inode_map[vino];
-    return NULL;
+    inode_map::iterator i = inodes.find(vino);
+    return i == inodes.end() ? NULL : i->second;
   }
   CInode* get_inode(inodeno_t ino, snapid_t s=CEPH_NOSNAP) {
     return get_inode(vinodeno_t(ino, s));
@@ -644,7 +558,7 @@ private:
 
 public:
   void init_layouts();
-  CInode *create_system_inode(inodeno_t ino, int mode);
+  CInode *create_system_inode(inodeno_t ino, int auth, int mode);
   CInode *create_root_inode();
 
   void create_empty_hierarchy(C_Gather *gather);
@@ -845,7 +759,8 @@ public:
   CDir* add_replica_dir(bufferlist::iterator& p, CStripe *stripe, list<Context*>& finished);
   CDir* forge_replica_dir(CStripe *stripe, frag_t fg, int from);
   CDentry *add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Context*>& finished);
-  CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Context*>& finished);
+  CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn,
+                            int from, list<Context*>& finished);
 
   void replicate_stray(CDentry *straydn, int who, bufferlist& bl);
   CDentry *add_replica_stray(bufferlist &bl, int from);
@@ -918,12 +833,11 @@ private:
  public:
   void show_cache();
   void dump_cache(const char *fn=0);
-  void show_subtrees(int dbl=10);
 
   CInode *hack_pick_random_inode() {
-    assert(!inode_map.empty());
-    int n = rand() % inode_map.size();
-    hash_map<vinodeno_t,CInode*>::iterator p = inode_map.begin();
+    assert(!inodes.empty());
+    int n = rand() % inodes.size();
+    inode_map::iterator p = inodes.begin();
     while (n--) p++;
     return p->second;
   }

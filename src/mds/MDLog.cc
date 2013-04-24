@@ -225,15 +225,6 @@ void MDLog::submit_entry(LogEvent *le, Context *c)
     dout(10) << "submit_entry also starting new segment: last = " << last_seg
 	     << ", cur pos = " << journaler->get_write_pos() << dendl;
     start_new_segment();
-  } else if (g_conf->mds_debug_subtrees &&
-	     le->get_type() != EVENT_SUBTREEMAP_TEST &&
-	     le->get_type() != EVENT_SUBTREEMAP) {
-    // debug: journal this every time to catch subtree replay bugs.
-    // use a different event id so it doesn't get interpreted as a
-    // LogSegment boundary on replay.
-    LogEvent *sle = mds->mdcache->create_subtree_map();
-    sle->set_type(EVENT_SUBTREEMAP_TEST);
-    submit_entry(sle);
   }
 
   delete le;
@@ -274,8 +265,7 @@ void MDLog::start_new_segment(Context *onsync)
 
   segments[journaler->get_write_pos()] = new LogSegment(journaler->get_write_pos());
 
-  ESubtreeMap *le = mds->mdcache->create_subtree_map();
-  submit_entry(le);
+  start_submit_entry(new ESubtreeMap());
   if (onsync) {
     wait_for_safe(onsync);  
     flush();

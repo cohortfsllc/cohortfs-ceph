@@ -58,7 +58,7 @@ public:
     ::decode(bounds, bl);
   }
   
-  void replay(MDS *mds);
+  void replay(MDS *mds) {}
 
 };
 

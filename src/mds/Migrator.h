@@ -131,8 +131,8 @@ public:
 
   void dispatch(Message*);
 
-  void show_importing();
-  void show_exporting();
+  void show_importing() {}
+  void show_exporting() {}
   
   // -- status --
   int is_exporting(CStripe *dir) {
@@ -185,17 +185,17 @@ public:
     return (export_notify_ack_waiting[dir].count(who) == 0);
   }
   // -- misc --
-  void handle_mds_failure_or_stop(int who);
+  void handle_mds_failure_or_stop(int who) {}
 
   void audit();
 
   // -- import/export --
   // exporter
  public:
-  void export_dir(CStripe *dir, int dest);
-  void export_empty_import(CStripe *dir);
+  void export_dir(CStripe *dir, int dest) {}
+  void export_empty_import(CStripe *dir) {}
 
-  void export_dir_nicely(CStripe *dir, int dest);
+  void export_dir_nicely(CStripe *dir, int dest) {}
   void maybe_do_queued_export();
   void clear_export_queue() {
     export_queue.clear();
@@ -225,7 +225,7 @@ public:
   }
   void clear_export_proxy_pins(CStripe *dir);
 
-  void export_caps(CInode *in);
+  void export_caps(CInode *in) {}
 
  protected:
   void handle_export_discover_ack(MExportDirDiscoverAck *m);
