@@ -3250,10 +3250,14 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
 
   MClientRequest *req = mdr->client_request;
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
+  MClientReply *reply;
 
   /* Check type. */
-  if (req->head.args.get_reservation.rsv.type != CEPH_RSV_TYPE_PNFS_1)
+  if (req->head.args.get_reservation.rsv.type != CEPH_RSV_TYPE_PNFS_1) {
+    reply = new MClientReply(req, EINVAL);
+    reply_request(mdr, reply);
     return;
+  }
 
   CInode *in = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
   if (! in)
@@ -3284,7 +3288,7 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
   bufferlist bl;
   ::encode(rsv, bl);
 
-  MClientReply *reply = new MClientReply(req, 0 /* return code */);
+  reply = new MClientReply(req, 0 /* return code */);
   reply->set_extra_bl(bl);
 
   dout(10) << "reply to " << *req << " " << rsv << dendl;
@@ -3295,6 +3299,43 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
 
 void Server::handle_client_put_rsv(MDRequest *mdr)
 {
+  MClientRequest *req = mdr->client_request;
+  set<SimpleLock*> rdlocks, wrlocks, xlocks;
+  MClientReply *reply;
+
+  // check client
+  if (req->head.args.get_reservation.rsv.client !=
+      req->get_orig_source().num()) {
+    reply = new MClientReply(req, EINVAL);
+    reply_request(mdr, reply);
+    return;
+  }
+
+  CInode *in = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
+  if (! in)
+    return;
+
+  xlocks.insert(&in->flocklock);
+  /* acquire_locks will return true if it gets the locks. If it fails,
+     it will redeliver this request at a later date, so drop the request.
+   */
+  if (! mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks)) {
+    dout(0) << "handle_client_get_rsv could not get locks!" << dendl;
+    return;
+  }
+
+  reservation_state_t &rstate = in->reservations;
+  if (! rstate.remove_rsv(req->head.args.get_reservation.rsv)) {
+    dout(0) << "handle_client_put_rsv failed" << dendl;
+    return;
+  }
+
+  reply = new MClientReply(req, 0 /* return code */);
+
+  dout(10) << "reply to " << *req << dendl;
+
+  // send it
+  reply_request(mdr, reply, in);
 
 }
 

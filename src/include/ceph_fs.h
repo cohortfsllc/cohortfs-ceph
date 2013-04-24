@@ -365,19 +365,19 @@ extern const char *ceph_mds_op_name(int op);
 #define CEPH_RSV_FLAG_NONE 0x0000
 
 struct ceph_reservation {
-	__le64 id;
-	__le64 offset; /* file offset */
-	__le64 length; /* 0 for all following offset */
-	__le64 client; /* client (or proxy) which holds the lock */
-	__le64 expiration;
-	__le32 flags;
+	__u64 id;
+	__u64 offset; /* file offset */
+	__u64 length; /* 0 for all following offset */
+	__u64 client; /* client (or proxy) which holds the lock */
+	__u64 expiration;
+	__u32 flags;
     	__u16 type;
 } __attribute__ ((packed));
 
 struct ceph_rsv_osd_registration {
-	__le64 rsv_id;
-	__le64 osd_id;
-	__le32 flags;
+	__u64 rsv_id;
+	__u64 osd_id;
+	__u32 flags;
 	__u16 type;
 } __attribute__ ((packed));
 
