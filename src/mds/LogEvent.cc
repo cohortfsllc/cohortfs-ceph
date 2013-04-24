@@ -19,9 +19,6 @@
 
 // events i know of
 #include "events/ESubtreeMap.h"
-#include "events/EExport.h"
-#include "events/EImportStart.h"
-#include "events/EImportFinish.h"
 #include "events/EFragment.h"
 
 #include "events/EResetJournal.h"
@@ -75,9 +72,6 @@ LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, __u32 
     le = new ESubtreeMap;
     le->set_type(type);
     break;
-  case EVENT_EXPORT: le = new EExport; break;
-  case EVENT_IMPORTSTART: le = new EImportStart; break;
-  case EVENT_IMPORTFINISH: le = new EImportFinish; break;
   case EVENT_FRAGMENT: le = new EFragment; break;
 
   case EVENT_RESETJOURNAL: le = new EResetJournal; break;

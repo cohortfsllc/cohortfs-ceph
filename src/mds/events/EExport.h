@@ -46,7 +46,6 @@ public:
   void dump(Formatter *f) const;
   static void generate_test_instances(list<EExport*>& ls);
   void replay(MDS *mds);
-
 };
 
 #endif

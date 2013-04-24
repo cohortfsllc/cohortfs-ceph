@@ -153,19 +153,14 @@ TYPE(SessionMap)
 
 #include "mds/events/ECommitted.h"
 TYPE(ECommitted)
-#include "mds/events/EExport.h"
-TYPE(EExport)
 #include "mds/events/EFragment.h"
 TYPE(EFragment)
-#include "mds/events/EImportFinish.h"
-TYPE(EImportFinish)
-#include "mds/events/EImportStart.h"
-TYPE(EImportStart)
 #include "mds/events/EMetaBlob.h"
 TYPE(EMetaBlob::fullbit)
 TYPE(EMetaBlob::remotebit)
 TYPE(EMetaBlob::nullbit)
 TYPE(EMetaBlob::dirlump)
+TYPE(EMetaBlob::stripelump)
 TYPE(EMetaBlob)
 #include "mds/events/EOpen.h"
 TYPE(EOpen)

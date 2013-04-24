@@ -1293,7 +1293,7 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
 	  if (undef_inode && in)
 	    in->first = first;
 	  else
-	    in = new CInode(cache, true, first, last);
+	    in = new CInode(cache, cache->mds->get_nodeid(), first, last);
 	  
 	  in->inode = inode;
 	  // symlink?

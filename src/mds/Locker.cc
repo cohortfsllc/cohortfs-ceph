@@ -3774,6 +3774,7 @@ void Locker::scatter_writebehind(ScatterLock *lock)
 {
   CInode *in = static_cast<CInode*>(lock->get_parent());
   dout(10) << "scatter_writebehind " << in->inode.mtime << " on " << *lock << " on " << *in << dendl;
+  assert(in->is_auth());
 
   // journal
   Mutation *mut = new Mutation;
@@ -3795,7 +3796,8 @@ void Locker::scatter_writebehind(ScatterLock *lock)
   EUpdate *le = new EUpdate(mds->mdlog, "scatter_writebehind");
   mds->mdlog->start_entry(le);
 
-  mdcache->predirty_journal_parents(mut, &le->metablob, in, 0, PREDIRTY_PRIMARY, false);
+  mdcache->predirty_journal_parents(mut, &le->metablob, in, 0,
+                                    PREDIRTY_PRIMARY, false);
   mdcache->journal_dirty_inode(mut, &le->metablob, in);
   
   in->finish_scatter_gather_update_accounted(lock->get_type(), mut, &le->metablob);
