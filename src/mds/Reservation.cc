@@ -21,7 +21,7 @@ bool reservation_state_t::add_rsv(ceph_reservation& rsv)
     return (true);
 }
 
-bool reservation_state_t::remove_rsv(ceph_reservation& rsv)
+bool reservation_state_t::remove_rsv(const ceph_reservation& rsv)
 {
     // rsv.client and source client are confirmed eq
     if (reservations.erase(rsv)) {
@@ -46,4 +46,81 @@ bool reservation_state_t::remove_rsv(ceph_reservation& rsv)
     }
 
     return (false);
+}
+
+bool reservation_state_t::remove_rsv_client(const client_t client)
+{
+    set<ceph_reservation>::iterator iter, iter2;
+
+    iter = reservations.begin();
+    while (iter != reservations.end()) {
+        if (iter->client == client) {
+            iter2 = iter++;
+            remove_rsv(*iter);
+            continue;
+        }
+        iter++;
+    }
+
+    return (false);
+}
+
+bool reservation_state_t::remove_expired(void)
+{
+    utime_t now = ceph_clock_now(g_ceph_context);
+    set<ceph_reservation>::iterator iter, iter2;
+
+    iter = reservations.begin();
+    while (iter != reservations.end()) {
+        if (iter->expiration <= now) {
+            iter2 = iter++;
+            remove_rsv(*iter);
+            continue;
+        }
+        iter++;
+    }
+
+    return (false);
+}
+
+bool reservation_state_t::register_osd(ceph_reservation &rsv, uint64_t osd)
+{
+    pair<uint64_t,uint64_t> pr = pair<uint64_t,uint64_t>(rsv.id,osd);
+    pair<set<pair<uint64_t,uint64_t> >::iterator,bool> ret;
+
+    ret = reservations_osd.insert(pr);
+    if (! ret.second)
+        return (false);
+
+    // and the multi-map
+    osds_by_rsv.insert(pr);
+
+    return (true);
+}
+
+bool reservation_state_t::unregister_osd(ceph_reservation &rsv, uint64_t osd)
+{
+    if (reservations_osd.erase(pair<uint64_t,uint64_t>(rsv.id,osd))) {
+        osds_by_rsv.erase(rsv.id);
+        return (true);
+    }
+
+    return (false);
+}
+
+void reservation_state_t::unregister_osd_all(uint64_t osd)
+{
+    set<pair<uint64_t,uint64_t> >::iterator iter, iter2;
+
+    iter = reservations_osd.begin();
+    while (iter != reservations_osd.end()) {
+        if (iter->second == osd) {
+            iter2 = iter++;
+            if (reservations_osd.erase(*iter)) {
+              osds_by_rsv.erase(iter->first);
+             }
+            continue;
+        }
+        iter++;
+    }
 }

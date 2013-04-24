@@ -80,8 +80,8 @@ public:
   uint64_t max_id;
 
   bool add_rsv(ceph_reservation& rsv);
-  bool remove_rsv(ceph_reservation& rsv);
-  bool remove_rsv_client(client_t client);
+  bool remove_rsv(const ceph_reservation& rsv);
+  bool remove_rsv_client(const client_t client);
   bool remove_expired(void);
   bool register_osd(ceph_reservation &rsv, uint64_t osd);
   bool unregister_osd(ceph_reservation &rsv, uint64_t osd);
