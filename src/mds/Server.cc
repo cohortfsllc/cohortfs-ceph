@@ -3254,7 +3254,7 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
 
   /* Check type. */
   if (req->head.args.get_rsv.rsv.type != CEPH_RSV_TYPE_PNFS_1) {
-    reply = new MClientReply(req, EINVAL);
+    reply = new MClientReply(req, -EINVAL);
     reply_request(mdr, reply);
     return;
   }
@@ -3306,7 +3306,7 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
   // check client
   if (req->head.args.put_rsv.rsv.client !=
       (uint64_t) req->get_orig_source().num()) {
-    reply = new MClientReply(req, EINVAL);
+    reply = new MClientReply(req, -EINVAL);
     reply_request(mdr, reply);
     return;
   }
