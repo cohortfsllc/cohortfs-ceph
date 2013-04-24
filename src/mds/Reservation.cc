@@ -86,9 +86,9 @@ bool reservation_state_t::remove_expired(void)
     return (false);
 }
 
-bool reservation_state_t::register_osd(ceph_reservation &rsv, uint64_t osd)
+bool reservation_state_t::register_osd(uint64_t rsv_id, uint64_t osd)
 {
-    pair<uint64_t,uint64_t> pr = pair<uint64_t,uint64_t>(rsv.id,osd);
+    pair<uint64_t,uint64_t> pr = pair<uint64_t,uint64_t>(rsv_id,osd);
     pair<set<pair<uint64_t,uint64_t> >::iterator,bool> ret;
 
     ret = reservations_osd.insert(pr);
@@ -101,10 +101,10 @@ bool reservation_state_t::register_osd(ceph_reservation &rsv, uint64_t osd)
     return (true);
 }
 
-bool reservation_state_t::unregister_osd(ceph_reservation &rsv, uint64_t osd)
+bool reservation_state_t::unregister_osd(uint64_t rsv_id, uint64_t osd)
 {
-    if (reservations_osd.erase(pair<uint64_t,uint64_t>(rsv.id,osd))) {
-        osds_by_rsv.erase(rsv.id);
+    if (reservations_osd.erase(pair<uint64_t,uint64_t>(rsv_id,osd))) {
+        osds_by_rsv.erase(rsv_id);
         return (true);
     }
 

@@ -3253,7 +3253,7 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
   MClientReply *reply;
 
   /* Check type. */
-  if (req->head.args.get_reservation.rsv.type != CEPH_RSV_TYPE_PNFS_1) {
+  if (req->head.args.get_rsv.rsv.type != CEPH_RSV_TYPE_PNFS_1) {
     reply = new MClientReply(req, EINVAL);
     reply_request(mdr, reply);
     return;
@@ -3273,9 +3273,9 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
   }
 
   ceph_reservation rsv;
-  rsv.type = req->head.args.get_reservation.rsv.offset;
-  rsv.offset = req->head.args.get_reservation.rsv.offset;
-  rsv.length = req->head.args.get_reservation.rsv.length;
+  rsv.type = req->head.args.get_rsv.rsv.offset;
+  rsv.offset = req->head.args.get_rsv.rsv.offset;
+  rsv.length = req->head.args.get_rsv.rsv.length;
   rsv.client = req->get_orig_source().num();
 
   reservation_state_t &rstate = in->reservations;
@@ -3304,7 +3304,7 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
   MClientReply *reply;
 
   // check client
-  if (req->head.args.get_reservation.rsv.client !=
+  if (req->head.args.put_rsv.rsv.client !=
       (uint64_t) req->get_orig_source().num()) {
     reply = new MClientReply(req, EINVAL);
     reply_request(mdr, reply);
@@ -3320,12 +3320,12 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
      it will redeliver this request at a later date, so drop the request.
    */
   if (! mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks)) {
-    dout(0) << "handle_client_get_rsv could not get locks!" << dendl;
+    dout(0) << "handle_client_put_rsv could not get locks!" << dendl;
     return;
   }
 
   reservation_state_t &rstate = in->reservations;
-  if (! rstate.remove_rsv(req->head.args.get_reservation.rsv)) {
+  if (! rstate.remove_rsv(req->head.args.get_rsv.rsv)) {
     dout(0) << "handle_client_put_rsv failed" << dendl;
     return;
   }
@@ -3336,17 +3336,77 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
 
   // send it
   reply_request(mdr, reply, in);
-
 }
 
 void Server::handle_client_reg_rsv(MDRequest *mdr)
 {
+  MClientRequest *req = mdr->client_request;
+  set<SimpleLock*> rdlocks, wrlocks, xlocks;
+  MClientReply *reply;
 
+  // TODO:  prove OSD is who it claims to be
+
+  CInode *in = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
+  if (! in)
+    return;
+
+  xlocks.insert(&in->flocklock);
+  /* acquire_locks will return true if it gets the locks. If it fails,
+     it will redeliver this request at a later date, so drop the request.
+   */
+  if (! mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks)) {
+    dout(0) << "handle_client_reg_rsv could not get locks!" << dendl;
+    return;
+  }
+
+  reservation_state_t &rstate = in->reservations;
+  if (! rstate.register_osd(req->head.args.reg_rsv.reg.rsv_id,
+			    req->head.args.reg_rsv.reg.osd_id)) {
+    dout(0) << "handle_client_reg_rsv failed" << dendl;
+    return;
+  }
+
+  reply = new MClientReply(req, 0 /* return code */);
+
+  dout(10) << "reply to " << *req << dendl;
+
+  // send it
+  reply_request(mdr, reply, in);
 }
 
 void Server::handle_client_ureg_rsv(MDRequest *mdr)
 {
+  MClientRequest *req = mdr->client_request;
+  set<SimpleLock*> rdlocks, wrlocks, xlocks;
+  MClientReply *reply;
 
+  // TODO:  prove OSD is who it claims to be
+  CInode *in = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
+  if (! in)
+    return;
+
+  xlocks.insert(&in->flocklock);
+  /* acquire_locks will return true if it gets the locks. If it fails,
+     it will redeliver this request at a later date, so drop the request.
+   */
+  if (! mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks)) {
+    dout(0) << "handle_client_ureg_rsv could not get locks!" << dendl;
+    return;
+  }
+
+  reservation_state_t &rstate = in->reservations;
+  if (! rstate.unregister_osd(req->head.args.ureg_rsv.reg.rsv_id,
+			      req->head.args.ureg_rsv.reg.osd_id)) {
+    dout(0) << "handle_client_ureg_rsv failed" << dendl;
+    return;
+  }
+
+  reply = new MClientReply(req, 0 /* return code */);
+
+  dout(10) << "reply to " << *req << dendl;
+
+  // send it
+  reply_request(mdr, reply, in);
 }
 
 void Server::handle_client_setattr(MDRequest *mdr)

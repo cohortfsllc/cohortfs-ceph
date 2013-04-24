@@ -433,16 +433,16 @@ union ceph_mds_request_args {
 	} __attribute__ ((packed)) filelock_change;
 	struct {
 		struct ceph_reservation rsv;
-	} __attribute__ ((packed)) get_reservation;
+	} __attribute__ ((packed)) get_rsv;
 	struct {
 		struct ceph_reservation rsv;
-	} __attribute__ ((packed)) return_reservation;
+	} __attribute__ ((packed)) put_rsv;
 	struct {
 		struct ceph_rsv_osd_registration reg;
-	}  __attribute__ ((packed)) reg_reservation;
+	}  __attribute__ ((packed)) reg_rsv;
 	struct {
 		struct ceph_rsv_osd_registration reg;
-	}  __attribute__ ((packed)) ureg_reservation;
+	}  __attribute__ ((packed)) ureg_rsv;
 } __attribute__ ((packed));
 
 #define CEPH_MDS_FLAG_REPLAY        1  /* this is a replayed op */
