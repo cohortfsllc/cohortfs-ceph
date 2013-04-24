@@ -40,33 +40,36 @@ inline bool operator==(ceph_reservation& lhs, ceph_reservation& rhs) {
 /*
  * Cmp functor for reservations sorted by client,type,offset,length
  */
-class rsv_key_cmp {
-public: 
-  bool operator()(const ceph_reservation &lhs,
-		  const ceph_reservation &rhs) {
-    if (lhs.client < rhs.client)
+namespace std {
+  template<>
+  class less<ceph_reservation> {
+  public: 
+    bool operator()(const ceph_reservation &lhs,
+		    const ceph_reservation &rhs) {
+      if (lhs.client < rhs.client)
       return (true);
-    if (lhs.client == rhs.client) {
-      if (lhs.type < rhs.type)
-	return (true);
-      if (lhs.type == rhs.type) {
-	if (lhs.offset < rhs.offset)
+      if (lhs.client == rhs.client) {
+	if (lhs.type < rhs.type)
 	  return (true);
-	if (lhs.offset == rhs.offset) {
-	  if (lhs.length < rhs.length)
+	if (lhs.type == rhs.type) {
+	  if (lhs.offset < rhs.offset)
 	    return (true);
+	  if (lhs.offset == rhs.offset) {
+	    if (lhs.length < rhs.length)
+	      return (true);
+	  }
 	}
-      }
     }
-    return (false);
-  }
-};
+      return (false);
+    }
+  };
+}
 
 class reservation_state_t
 {
 public:
 /* TODO:  switch to boost::intrusive to permit sharing */
-  set<ceph_reservation, rsv_key_cmp> reservations;
+  set<ceph_reservation> reservations;
   /* rsv_id, rsv> tuples: */
   map<uint64_t, ceph_reservation> reservations_id;
   /* <rsv_id, osd_id> tuples */
@@ -89,11 +92,11 @@ private:
 
 public:
   void encode(bufferlist& bl) const {
-      ::encode(reservations_id, bl);
+      ::encode(reservations, bl);
       ::encode(reservations_osd, bl);
   }
   void decode(bufferlist::iterator& bl) {
-      ::decode(reservations_id, bl); //
+      ::decode(reservations, bl); // also expands reservations_id
       ::decode(reservations_osd, bl); // also expands osds_by_rsv
   }
 };

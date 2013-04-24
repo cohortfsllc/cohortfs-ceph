@@ -4,7 +4,7 @@
 
 bool reservation_state_t::add_rsv(ceph_reservation& rsv)
 {
-    pair<set<ceph_reservation, rsv_key_cmp>::iterator,bool> ret;
+    pair<set<ceph_reservation>::iterator,bool> ret;
 
     ret = reservations.insert(rsv);
     if (! ret.second)
