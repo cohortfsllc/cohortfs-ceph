@@ -16,6 +16,9 @@ bool reservation_state_t::add_rsv(ceph_reservation& rsv)
     // populate lookup tables
     reservations_id.insert(pair<uint64_t,ceph_reservation>(rsv.id, rsv));
 
+    // set an expiration (1d)
+    nrsv.expiration = ceph_clock_now(g_ceph_context) + 86400;
+
     rsv = nrsv;
 
     return (true);
