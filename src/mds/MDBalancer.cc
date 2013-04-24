@@ -54,7 +54,8 @@ int MDBalancer::proc_message(Message *m)
   switch (m->get_type()) {
 
   case MSG_MDS_HEARTBEAT:
-    handle_heartbeat(static_cast<MHeartbeat*>(m));
+    //handle_heartbeat(static_cast<MHeartbeat*>(m));
+    m->put();
     break;
 
   default:
@@ -67,7 +68,7 @@ int MDBalancer::proc_message(Message *m)
   return 0;
 }
 
-
+#if 0
 
 
 void MDBalancer::tick()
@@ -121,7 +122,7 @@ public:
   }
 };
 
-
+#endif
 double mds_load_t::mds_load()
 {
   switch(g_conf->mds_bal_mode) {
@@ -170,6 +171,7 @@ mds_load_t MDBalancer::get_load(utime_t now)
   dout(15) << "get_load " << load << dendl;
   return load;
 }
+#if 0
 
 void MDBalancer::send_heartbeat()
 {
@@ -332,6 +334,8 @@ double MDBalancer::try_match(int ex, double& maxex,
   return howmuch;
 }
 
+#endif
+
 void MDBalancer::queue_split(CDir *dir)
 {
   split_queue.insert(dir->dirfrag());
@@ -418,7 +422,7 @@ void MDBalancer::do_fragmenting()
   }
 }
 
-
+#if 0
 
 void MDBalancer::prep_rebalance(int beat)
 {
@@ -1124,3 +1128,4 @@ void MDBalancer::show_imports(bool external)
   mds->mdcache->show_subtrees();
 }
 
+#endif

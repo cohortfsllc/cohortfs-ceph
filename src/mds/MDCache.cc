@@ -204,7 +204,9 @@ bool MDCache::shutdown()
   if (lru.lru_get_size() > 0) {
     dout(7) << "WARNING: mdcache shutdown with non-empty cache" << dendl;
     //show_cache();
+#if 0
     show_subtrees();
+#endif
     //dump();
   }
   return true;
@@ -217,8 +219,8 @@ bool MDCache::shutdown()
 void MDCache::add_inode(CInode *in) 
 {
   // add to lru, inode map
-  assert(inode_map.count(in->vino()) == 0);  // should be no dup inos!
-  inode_map[ in->vino() ] = in;
+  assert(inodes.count(in->vino()) == 0);  // should be no dup inos!
+  inodes[ in->vino() ] = in;
 
   if (in->ino() < MDS_INO_SYSTEM_BASE) {
     if (in->ino() == MDS_INO_ROOT)
@@ -259,7 +261,7 @@ void MDCache::remove_inode(CInode *o)
   o->item_open_file.remove_myself();
 
   // remove from inode map
-  inode_map.erase(o->vino());    
+  inodes.erase(o->vino());    
 
   if (o->ino() < MDS_INO_SYSTEM_BASE) {
     if (o == root) root = 0;
@@ -294,10 +296,10 @@ void MDCache::init_layouts()
   }
 }
 
-CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
+CInode *MDCache::create_system_inode(inodeno_t ino, int auth, int mode)
 {
   dout(0) << "creating system inode with ino:" << ino << dendl;
-  CInode *in = new CInode(this);
+  CInode *in = new CInode(this, auth);
   in->inode.ino = ino;
   in->inode.version = 1;
   in->inode.mode = 0500 | mode;
@@ -319,10 +321,6 @@ CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
   in->inode.accounted_rstat = in->inode.rstat;
 
   if (in->is_base()) {
-    if (in->is_mdsdir())
-      in->inode_auth = pair<int,int>(in->ino() - MDS_INO_MDSDIR_OFFSET, CDIR_AUTH_UNKNOWN);
-    else
-      in->inode_auth = pair<int,int>(mds->whoami, CDIR_AUTH_UNKNOWN);
     in->open_snaprealm();  // empty snaprealm
     in->snaprealm->srnode.seq = 1;
   }
@@ -333,35 +331,38 @@ CInode *MDCache::create_system_inode(inodeno_t ino, int mode)
 
 CInode *MDCache::create_root_inode()
 {
-  CInode *i = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);
-  i->set_stripe_auth(vector<int>(1, mds->mdsmap->get_root()));
+  int auth = mds->mdsmap->get_root();
+  CInode *i = create_system_inode(MDS_INO_ROOT, auth, S_IFDIR|0755);
+  i->set_stripe_auth(vector<int>(1, auth));
   i->inode.layout = default_file_layout;
   i->inode.layout.fl_pg_pool = mds->mdsmap->get_first_data_pool();
+  dout(10) << "create_root_inode " << *i << dendl;
   return i;
 }
 
 void MDCache::create_empty_hierarchy(C_Gather *gather)
 {
-  const vector<int> auth(1, 0);
+  int auth = mds->get_nodeid();
+  const vector<int> stripe_auth(1, auth);
   LogSegment *ls = mds->mdlog->get_current_segment();
 
   // create root dir
   CInode *root = create_root_inode();
 
   // force empty root dir
-  root->set_stripe_auth(auth);
+  root->set_stripe_auth(stripe_auth);
   CStripe *rootstripe = root->get_or_open_stripe(0);
   rootstripe->state_set(CStripe::STATE_OPEN);
   rootstripe->replicate = true;
-  adjust_subtree_auth(rootstripe, mds->whoami);
+  rootstripe->set_stripe_auth(mds->whoami);
   CDir *rootdir = rootstripe->get_or_open_dirfrag(frag_t());
 
   // create ceph dir
-  CInode *ceph = create_system_inode(MDS_INO_CEPH, S_IFDIR);
+  CInode *ceph = create_system_inode(MDS_INO_CEPH, auth, S_IFDIR);
   CDentry *dn = rootdir->add_primary_dentry(".ceph", ceph);
   dn->_mark_dirty(ls);
 
-  ceph->set_stripe_auth(auth);
+  ceph->set_stripe_auth(stripe_auth);
   CStripe *cephstripe = ceph->get_or_open_stripe(0);
   cephstripe->state_set(CStripe::STATE_OPEN);
   cephstripe->replicate = true;
@@ -373,11 +374,11 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
 
   // create inodes dir
   CInode *inodes = container.create();
-  inodes->set_stripe_auth(auth);
+  inodes->set_stripe_auth(stripe_auth);
   CStripe *inodestripe = inodes->get_or_open_stripe(0);
   inodestripe->state_set(CStripe::STATE_OPEN);
   inodestripe->replicate = true;
-  adjust_subtree_auth(inodestripe, mds->whoami);
+  inodestripe->set_stripe_auth(mds->whoami);
   CDir *inodesdir = inodestripe->get_or_open_dirfrag(frag_t());
   inodes->inode.dirstat = inodestripe->fnode.fragstat;
 
@@ -421,20 +422,22 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
   // create mds dir
   char myname[10];
   snprintf(myname, sizeof(myname), "mds%d", mds->whoami);
-  CInode *my = create_system_inode(MDS_INO_MDSDIR(mds->whoami), S_IFDIR);
+  CInode *my = create_system_inode(MDS_INO_MDSDIR(mds->whoami),
+                                   mds->whoami, S_IFDIR);
   //cephdir->add_remote_dentry(myname, MDS_INO_MDSDIR(mds->whoami), S_IFDIR);
 
   const vector<int> auth(1, mds->whoami);
   my->set_stripe_auth(auth);
   CStripe *mystripe = my->get_or_open_stripe(0);
-  adjust_subtree_auth(mystripe, mds->whoami);
+  mystripe->set_stripe_auth(mds->whoami);
   CDir *mydir = mystripe->get_or_open_dirfrag(frag_t());
 
   LogSegment *ls = mds->mdlog->get_current_segment();
 
   // stray dir
   for (int i = 0; i < NUM_STRAY; ++i) {
-    CInode *stray = create_system_inode(MDS_INO_STRAY(mds->whoami, i), S_IFDIR);
+    CInode *stray = create_system_inode(MDS_INO_STRAY(mds->whoami, i),
+                                        mds->whoami, S_IFDIR);
     stray->set_stripe_auth(auth);
     CStripe *straystripe = stray->get_or_open_stripe(0);
     CDir *straydir = straystripe->get_or_open_dirfrag(frag_t());
@@ -458,7 +461,8 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
     straydir->commit(0, gather->new_sub());
   }
 
-  CInode *journal = create_system_inode(MDS_INO_LOG_OFFSET + mds->whoami, S_IFREG);
+  CInode *journal = create_system_inode(MDS_INO_LOG_OFFSET + mds->whoami,
+                                        mds->whoami, S_IFREG);
   string name = "journal";
   CDentry *jdn = mydir->add_primary_dentry(name, journal);
   jdn->_mark_dirty(mds->mdlog->get_current_segment());
@@ -599,7 +603,7 @@ void MDCache::open_root_inode(Context *c)
 {
   if (mds->whoami == mds->mdsmap->get_root()) {
     CInode *in;
-    in = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);  // initially inaccurate!
+    in = create_system_inode(MDS_INO_ROOT, mds->whoami, S_IFDIR|0755);  // initially inaccurate!
     in->fetch(c);
   } else {
     discover_base_ino(MDS_INO_ROOT, c, mds->mdsmap->get_root());
@@ -608,7 +612,8 @@ void MDCache::open_root_inode(Context *c)
 
 void MDCache::open_mydir_inode(Context *c)
 {
-  CInode *in = create_system_inode(MDS_INO_MDSDIR(mds->whoami), S_IFDIR|0755);  // initially inaccurate!
+  CInode *in = create_system_inode(MDS_INO_MDSDIR(mds->whoami),
+                                   mds->whoami, S_IFDIR|0755);  // initially inaccurate!
   in->fetch(c);
 }
 
@@ -648,8 +653,7 @@ void MDCache::open_root()
   if (mds->whoami == mds->mdsmap->get_root()) {
     assert(root->is_auth());  
     CStripe *rootstripe = root->get_or_open_stripe(0);
-    if (!rootstripe->is_subtree_root())
-      adjust_subtree_auth(rootstripe, mds->whoami);   
+    rootstripe->set_stripe_auth(mds->whoami);
     CDir *rootdir = rootstripe->get_or_open_dirfrag(frag_t());
     if (!rootdir->is_complete()) {
       rootdir->fetch(new C_MDS_RetryOpenRoot(this));
@@ -676,12 +680,13 @@ void MDCache::open_root()
   }
 
   if (!myin) {
-    CInode *in = create_system_inode(MDS_INO_MDSDIR(mds->whoami), S_IFDIR|0755);  // initially inaccurate!
+    CInode *in = create_system_inode(MDS_INO_MDSDIR(mds->whoami),
+                                     mds->whoami, S_IFDIR|0755);  // initially inaccurate!
     in->fetch(new C_MDS_RetryOpenRoot(this));
     return;
   }
   CStripe *mystripe = myin->get_or_open_stripe(0);
-  adjust_subtree_auth(mystripe, mds->whoami);
+  mystripe->set_stripe_auth(mds->whoami);
 
   populate_mydir();
 }
@@ -710,8 +715,10 @@ void MDCache::populate_mydir()
       straydn = mydir->lookup("stray");
 
     if (!straydn || !straydn->get_linkage()->get_inode()) {
-      _create_system_file(mydir, name.str().c_str(), create_system_inode(MDS_INO_STRAY(mds->whoami, i), S_IFDIR),
-			  new C_MDS_RetryOpenRoot(this));
+      CInode *in = create_system_inode(MDS_INO_STRAY(mds->whoami, i),
+                                       mds->whoami, S_IFDIR);
+      _create_system_file(mydir, name.str().c_str(), in,
+                          new C_MDS_RetryOpenRoot(this));
       return;
     }
     assert(straydn);
@@ -740,8 +747,10 @@ void MDCache::populate_mydir()
   string jname("journal");
   CDentry *jdn = mydir->lookup(jname);
   if (!jdn || !jdn->get_linkage()->get_inode()) {
-    _create_system_file(mydir, jname.c_str(), create_system_inode(MDS_INO_LOG_OFFSET + mds->whoami, S_IFREG),
-			new C_MDS_RetryOpenRoot(this));
+    CInode *in = create_system_inode(MDS_INO_LOG_OFFSET + mds->whoami,
+                                     mds->whoami, S_IFREG);
+    _create_system_file(mydir, jname.c_str(), in,
+                        new C_MDS_RetryOpenRoot(this));
     return;
   }
 
@@ -797,660 +806,6 @@ MDSCacheObject *MDCache::get_object(MDSCacheObjectInfo &info)
   else
     return dir;
 }
-
-
-// ====================================================================
-// subtree management
-
-void MDCache::list_subtrees(list<CStripe*>& ls)
-{
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p)
-    ls.push_back(p->first);
-}
-
-/*
- * adjust the dir_auth of a subtree.
- * merge with parent and/or child subtrees, if is it appropriate.
- * merge can ONLY happen if both parent and child have unambiguous auth.
- */
-void MDCache::adjust_subtree_auth(CStripe *stripe, pair<int,int> auth, bool do_eval)
-{
-  dout(7) << "adjust_subtree_auth " << stripe->get_stripe_auth() << " -> " << auth
-	  << " on " << *stripe << dendl;
-
-  if (mds->is_any_replay() || mds->is_resolve())
-    do_eval = false;
-
-  show_subtrees();
-
-  CStripe *root;
-  if (stripe->get_inode()->is_base()) {
-    root = stripe;  // bootstrap hack.
-    if (subtrees.count(root) == 0) {
-      subtrees[root].clear();
-      root->get(CStripe::PIN_SUBTREE);
-    }
-  } else {
-    root = get_subtree_root(stripe);  // subtree root
-  }
-  assert(root);
-  assert(subtrees.count(root));
-  dout(7) << " current root is " << *root << dendl;
-
-  if (root == stripe) {
-    // i am already a subtree.
-    stripe->set_stripe_auth(auth);
-  } else {
-    // i am a new subtree.
-    dout(10) << "  new subtree at " << *stripe << dendl;
-    assert(subtrees.count(stripe) == 0);
-    subtrees[stripe].clear();      // create empty subtree bounds list for me.
-    stripe->get(CStripe::PIN_SUBTREE);
-
-    // set dir_auth
-    stripe->set_stripe_auth(auth);
-
-    // move items nested beneath me, under me.
-    set<CStripe*>::iterator p = subtrees[root].begin();
-    while (p != subtrees[root].end()) {
-      set<CStripe*>::iterator next = p;
-      ++next;
-      if (get_subtree_root((*p)->get_parent_stripe()) == stripe) {
-	// move under me
-	dout(10) << "  claiming child bound " << **p << dendl;
-	subtrees[stripe].insert(*p);
-	subtrees[root].erase(p);
-      }
-      p = next;
-    }
-
-    // i am a bound of the parent subtree.
-    subtrees[root].insert(stripe);
-
-    // i am now the subtree root.
-    root = stripe;
-
-    // adjust recursive pop counters
-    if (stripe->is_auth()) {
-      utime_t now = ceph_clock_now(g_ceph_context);
-      CStripe *p = stripe->get_parent_stripe();
-      while (p) {
-        p->pop_auth_subtree.sub(now, decayrate, stripe->pop_auth_subtree);
-        if (p->is_subtree_root()) break;
-        p = p->get_parent_stripe();
-      }
-    }
-
-    if (do_eval)
-      eval_subtree_root(stripe->get_inode());
-  }
-
-  show_subtrees();
-}
-
-
-void MDCache::try_subtree_merge(CStripe *stripe)
-{
-  dout(7) << "try_subtree_merge " << *stripe << dendl;
-  assert(subtrees.count(stripe));
-  set<CStripe*> oldbounds = subtrees[stripe];
-
-  // try merge at my root
-  try_subtree_merge_at(stripe);
-
-  // try merge at my old bounds
-  for (set<CStripe*>::iterator p = oldbounds.begin();
-       p != oldbounds.end();
-       ++p)
-    try_subtree_merge_at(*p);
-}
-
-class C_MDC_SubtreeMergeWB : public Context {
-  MDCache *mdcache;
-  CInode *in;
-  Mutation *mut;
-public:
-  C_MDC_SubtreeMergeWB(MDCache *mdc, CInode *i, Mutation *m) : mdcache(mdc), in(i), mut(m) {}
-  void finish(int r) { 
-    mdcache->subtree_merge_writebehind_finish(in, mut);
-  }
-};
-
-void MDCache::try_subtree_merge_at(CStripe *stripe, bool do_eval)
-{
-  dout(10) << "try_subtree_merge_at " << *stripe << dendl;
-  assert(subtrees.count(stripe));
-
-  if (mds->is_any_replay() || mds->is_resolve())
-    do_eval = false;
-
-  // merge with parent?
-  CStripe *parent = stripe;  
-  if (!stripe->get_inode()->is_base())
-    parent = get_subtree_root(stripe->get_parent_stripe());
-  
-  if (parent != stripe && // we have a parent,
-      parent->get_stripe_auth() == stripe->get_stripe_auth() && // auth matches,
-      stripe->get_stripe_auth().second == CDIR_AUTH_UNKNOWN) { // auth is unambiguous,
-    // merge with parent.
-    dout(10) << "  subtree merge at " << *stripe << dendl;
-    stripe->set_stripe_auth(CDIR_AUTH_DEFAULT);
-    
-    // move our bounds under the parent
-    for (set<CStripe*>::iterator p = subtrees[stripe].begin();
-	 p != subtrees[stripe].end();
-	 ++p) 
-      subtrees[parent].insert(*p);
-    
-    // we are no longer a subtree or bound
-    stripe->put(CStripe::PIN_SUBTREE);
-    subtrees.erase(stripe);
-    subtrees[parent].erase(stripe);
-
-    // adjust popularity?
-    if (stripe->is_auth()) {
-      utime_t now = ceph_clock_now(g_ceph_context);
-      CStripe *p = stripe->get_parent_stripe();
-      while (p) {
-        p->pop_auth_subtree.add(now, decayrate, stripe->pop_auth_subtree);
-        if (p->is_subtree_root()) break;
-        p = p->get_parent_stripe();
-      }
-    }
-
-    if (do_eval)
-      eval_subtree_root(stripe->get_inode());
-
-    // journal inode? 
-    //  (this is a large hammer to ensure that dirfragtree updates will
-    //   hit the disk before the relevant dirfrags ever close)
-    CInode *in = stripe->get_inode();
-    if (in->is_auth() && in->can_auth_pin() &&
-	(mds->is_clientreplay() || mds->is_active() || mds->is_stopping())) {
-      dout(10) << "try_subtree_merge_at journaling merged bound " << *in << dendl;
-      
-      in->auth_pin(this);
-
-      // journal write-behind.
-      inode_t *pi = in->project_inode();
-      pi->version = in->pre_dirty();
-      
-      Mutation *mut = new Mutation;
-      mut->ls = mds->mdlog->get_current_segment();
-      EUpdate *le = new EUpdate(mds->mdlog, "subtree merge writebehind");
-      mds->mdlog->start_entry(le);
-
-      le->metablob.add_stripe_context(in->get_parent_stripe());
-      journal_dirty_inode(mut, &le->metablob, in);
-      
-      mds->mdlog->submit_entry(le);
-      mds->mdlog->wait_for_safe(new C_MDC_SubtreeMergeWB(this, in, mut));
-      mds->mdlog->flush();
-    }
-  } 
-
-  show_subtrees(15);
-}
-
-void MDCache::subtree_merge_writebehind_finish(CInode *in, Mutation *mut)
-{
-  dout(10) << "subtree_merge_writebehind_finish on " << in << dendl;
-  in->pop_and_dirty_projected_inode(mut->ls);
-
-  mut->apply();
-  mds->locker->drop_locks(mut);
-  mut->cleanup();
-  delete mut;
-
-  in->auth_unpin(this);
-}
-
-void MDCache::eval_subtree_root(CInode *diri)
-{
-  // evaluate subtree inode filelock?
-  //  (we should scatter the filelock on subtree bounds)
-  if (diri->is_auth())
-    mds->locker->try_eval(diri, CEPH_LOCK_IFILE | CEPH_LOCK_INEST);
-}
-
-
-void MDCache::get_dirstripe_bound_set(vector<dirstripe_t>& stripes, set<CStripe*>& bounds)
-{
-  dout(10) << "get_dirstripe_bound_set " << stripes << dendl;
-
-  // sort by ino
-  typedef map<inodeno_t, vector<stripeid_t> > byino_map;
-  byino_map byino;
-  for (vector<dirstripe_t>::iterator p = stripes.begin(); p != stripes.end(); ++p)
-    byino[p->ino].push_back(p->stripeid);
-  dout(10) << " by ino: " << byino << dendl;
-
-  for (byino_map::iterator p = byino.begin(); p != byino.end(); ++p) {
-    CInode *diri = get_inode(p->first);
-    if (!diri)
-      continue;
-    for (vector<stripeid_t>::iterator s = p->second.begin(); s != p->second.end(); ++s) {
-      CStripe *stripe = diri->get_stripe(*s);
-      if (stripe)
-        bounds.insert(stripe);
-    }
-  }
-}
-
-void MDCache::adjust_bounded_subtree_auth(CStripe *stripe, const set<CStripe*>& bounds, pair<int,int> auth)
-{
-  dout(7) << "adjust_bounded_subtree_auth "
-      << stripe->get_stripe_auth() << " -> " << auth
-      << " on " << *stripe << " bounds " << bounds << dendl;
-
-  show_subtrees();
-
-  CStripe *root;
-  if (MDS_INO_IS_BASE(stripe->get_inode()->ino())) {
-    root = stripe;  // bootstrap hack.
-    if (subtrees.count(root) == 0) {
-      subtrees[root].clear();
-      root->get(CStripe::PIN_SUBTREE);
-    }
-  } else {
-    root = get_subtree_root(stripe);  // subtree root
-  }
-  assert(root);
-  dout(7) << " current root is " << *root << dendl;
-  assert(subtrees.count(root));
-
-  pair<int,int> oldauth = stripe->authority();
-
-  if (root == stripe) {
-    // i am already a subtree.
-    stripe->set_stripe_auth(auth);
-  } else {
-    // i am a new subtree.
-    dout(10) << "  new subtree at " << *stripe << dendl;
-    assert(subtrees.count(stripe) == 0);
-    subtrees[stripe].clear();      // create empty subtree bounds list for me.
-    stripe->get(CStripe::PIN_SUBTREE);
-    
-    // set dir_auth
-    stripe->set_stripe_auth(auth);
-    
-    // move items nested beneath me, under me.
-    set<CStripe*>::iterator p = subtrees[root].begin();
-    while (p != subtrees[root].end()) {
-      set<CStripe*>::iterator next = p;
-      ++next;
-      if (get_subtree_root((*p)->get_parent_stripe()) == stripe) {
-	// move under me
-	dout(10) << "  claiming child bound " << **p << dendl;
-	subtrees[stripe].insert(*p); 
-	subtrees[root].erase(p);
-      }
-      p = next;
-    }
-    
-    // i am a bound of the parent subtree.
-    subtrees[root].insert(stripe); 
-
-    // i am now the subtree root.
-    root = stripe;
-  }
-
-  // verify/adjust bounds.
-  // - these may be new, or
-  // - beneath existing ambiguous bounds (which will be collapsed),
-  // - but NOT beneath unambiguous bounds.
-  for (set<CStripe*>::iterator p = bounds.begin();
-       p != bounds.end();
-       ++p) {
-    CStripe *bound = *p;
-    
-    // new bound?
-    if (subtrees[stripe].count(bound) == 0) {
-      if (get_subtree_root(bound) == stripe) {
-	dout(10) << "  new bound " << *bound << ", adjusting auth back to old " << oldauth << dendl;
-	adjust_subtree_auth(bound, oldauth);       // otherwise, adjust at bound.
-      }
-      else {
-        dout(10) << "  want bound " << *bound << dendl;
-        CStripe *t = get_subtree_root(bound->get_parent_stripe());
-	if (subtrees[t].count(bound) == 0) {
-	  assert(t != stripe);
-	  dout(10) << "  new bound " << *bound << dendl;
-	  adjust_subtree_auth(bound, t->authority());
-	}
-	// make sure it's nested beneath ambiguous subtree(s)
-	while (1) {
-	  while (subtrees[stripe].count(t) == 0)
-	    t = get_subtree_root(t->get_parent_stripe());
-	  dout(10) << "  swallowing intervening subtree at " << *t << dendl;
-	  adjust_subtree_auth(t, auth);
-	  try_subtree_merge_at(t);
-	  t = get_subtree_root(bound->get_parent_stripe());
-	  if (t == stripe) break;
-	}
-      }
-    }
-    else {
-      dout(10) << "  already have bound " << *bound << dendl;
-    }
-  }
-  // merge stray bounds?
-  while (!subtrees[stripe].empty()) {
-    set<CStripe*> copy = subtrees[stripe];
-    for (set<CStripe*>::iterator p = copy.begin(); p != copy.end(); ++p) {
-      if (bounds.count(*p) == 0) {
-	CStripe *stray = *p;
-	dout(10) << "  swallowing extra subtree at " << *stray << dendl;
-	adjust_subtree_auth(stray, auth);
-	try_subtree_merge_at(stray);
-      }
-    }
-    // swallowing subtree may add new subtree bounds
-    if (copy == subtrees[stripe])
-      break;
-  }
-
-  // bound should now match.
-  verify_subtree_bounds(stripe, bounds);
-
-  show_subtrees();
-}
-
-
-void MDCache::adjust_bounded_subtree_auth(CStripe *stripe, const vector<dirstripe_t>& bound_dfs, pair<int,int> auth)
-{
-  dout(7) << "adjust_bounded_subtree_auth "
-      << stripe->get_stripe_auth() << " -> " << auth
-      << " on " << *stripe << " bound_dfs " << bound_dfs << dendl;
-  
-  // make bounds list
-  set<CStripe*> bounds;
-  for (vector<dirstripe_t>::const_iterator p = bound_dfs.begin();
-       p != bound_dfs.end();
-       ++p) {
-    CStripe *bd = get_dirstripe(*p);
-    if (bd) 
-      bounds.insert(bd);
-  }
-  
-  adjust_bounded_subtree_auth(stripe, bounds, auth);
-}
-
-void MDCache::map_dirstripe_set(list<dirstripe_t>& dfs, set<CStripe*>& result)
-{
-  dout(10) << "map_dirstripe_set " << dfs << dendl;
-
-  // group by inode
-  map<inodeno_t, set<stripeid_t> > ino_stripeid;
-  for (list<dirstripe_t>::iterator p = dfs.begin(); p != dfs.end(); ++p)
-    ino_stripeid[p->ino].insert(p->stripeid);
-
-  // get stripes
-  for (map<inodeno_t, set<stripeid_t> >::iterator p = ino_stripeid.begin();
-       p != ino_stripeid.end();
-       ++p) {
-    CInode *in = get_inode(p->first);
-    if (!in)
-      continue;
-
-    for (set<stripeid_t>::iterator s = p->second.begin();
-         s != p->second.end(); s++) {
-      CStripe *stripe = in->get_stripe(*s);
-      if (stripe)
-        result.insert(stripe);
-    }
-  }
-}
-
-
-
-CStripe *MDCache::get_subtree_root(CStripe *stripe)
-{
-  // find the underlying stripe that delegates (or is about to delegate) auth
-  while (stripe && !stripe->is_subtree_root())
-    stripe = stripe->get_parent_stripe();
-  return stripe;
-}
-
-CStripe *MDCache::get_projected_subtree_root(CStripe *stripe)
-{
-  // find the underlying stripe that delegates (or is about to delegate) auth
-  while (stripe && !stripe->is_subtree_root())
-    stripe = stripe->get_projected_parent_stripe();
-  return stripe;
-}
-
-void MDCache::remove_subtree(CStripe *stripe)
-{
-  dout(10) << "remove_subtree " << *stripe << dendl;
-  assert(subtrees.count(stripe));
-  assert(subtrees[stripe].empty());
-  subtrees.erase(stripe);
-  stripe->put(CStripe::PIN_SUBTREE);
-  if (stripe->get_parent_stripe()) {
-    CStripe *p = get_subtree_root(stripe->get_parent_stripe());
-    assert(subtrees[p].count(stripe));
-    subtrees[p].erase(stripe);
-  }
-}
-
-void MDCache::get_subtree_bounds(CStripe *stripe, set<CStripe*>& bounds)
-{
-  assert(subtrees.count(stripe));
-  bounds = subtrees[stripe];
-}
-
-void MDCache::get_wouldbe_subtree_bounds(CStripe *stripe, set<CStripe*>& bounds)
-{
-  if (subtrees.count(stripe)) {
-    // just copy them, dir is a subtree.
-    get_subtree_bounds(stripe, bounds);
-  } else {
-    // find them
-    CStripe *root = get_subtree_root(stripe);
-    for (set<CStripe*>::iterator p = subtrees[root].begin();
-	 p != subtrees[root].end();
-	 ++p) {
-      CStripe *t = *p;
-      while (t != root) {
-	t = t->get_parent_stripe();
-	assert(t);
-	if (t == stripe) {
-	  bounds.insert(*p);
-	  continue;
-	}
-      }
-    }
-  }
-}
-
-void MDCache::verify_subtree_bounds(CStripe *stripe, const set<CStripe*>& bounds)
-{
-  // for debugging only.
-  assert(subtrees.count(stripe));
-  if (bounds != subtrees[stripe]) {
-    dout(0) << "verify_subtree_bounds failed" << dendl;
-    set<CStripe*> b = bounds;
-    for (set<CStripe*>::iterator p = subtrees[stripe].begin();
-	 p != subtrees[stripe].end();
-	 ++p) {
-      if (bounds.count(*p)) {
-	b.erase(*p);
-	continue;
-      }
-      dout(0) << "  missing bound " << **p << dendl;
-    }
-    for (set<CStripe*>::iterator p = b.begin();
-	 p != b.end();
-	 ++p) 
-      dout(0) << "    extra bound " << **p << dendl;
-  }
-  assert(bounds == subtrees[stripe]);
-}
-
-void MDCache::verify_subtree_bounds(CStripe *stripe, const list<dirstripe_t>& bounds)
-{
-  // for debugging only.
-  assert(subtrees.count(stripe));
-
-  // make sure that any bounds i do have are properly noted as such.
-  int failed = 0;
-  for (list<dirstripe_t>::const_iterator p = bounds.begin();
-       p != bounds.end();
-       ++p) {
-    CStripe *bd = get_dirstripe(*p);
-    if (!bd) continue;
-    if (subtrees[stripe].count(bd) == 0) {
-      dout(0) << "verify_subtree_bounds failed: extra bound " << *bd << dendl;
-      failed++;
-    }
-  }
-  assert(failed == 0);
-}
-
-void MDCache::project_subtree_rename(CInode *diri, CStripe *oldstripe, CStripe *newstripe)
-{
-  dout(10) << "project_subtree_rename " << *diri << " from " << *oldstripe
-	   << " to " << *newstripe << dendl;
-  projected_subtree_renames[diri].push_back(pair<CStripe*,CStripe*>(oldstripe, newstripe));
-}
-
-void MDCache::adjust_subtree_after_rename(CInode *diri, CStripe *oldstripe,
-                                          bool pop, bool imported)
-{
-  dout(10) << "adjust_subtree_after_rename " << *diri << " from " << *oldstripe << dendl;
-
-  //show_subtrees();
-
-  CStripe *newstripe = diri->get_parent_stripe();
-
-  if (pop) {
-    map<CInode*,list<pair<CStripe*,CStripe*> > >::iterator p = projected_subtree_renames.find(diri);
-    assert(p != projected_subtree_renames.end());
-    assert(!p->second.empty());
-    assert(p->second.front().first == oldstripe);
-    assert(p->second.front().second == newstripe);
-    p->second.pop_front();
-    if (p->second.empty())
-      projected_subtree_renames.erase(p);
-  }
-
-  // adjust subtree
-  list<CStripe*> stripes;
-  diri->get_nested_stripes(stripes);
-  for (list<CStripe*>::iterator i = stripes.begin(); i != stripes.end(); ++i) {
-    CStripe *stripe = *i;
-
-    dout(10) << "stripe " << *stripe << dendl;
-    CStripe *oldparent = get_subtree_root(oldstripe);
-    dout(10) << " old parent " << *oldstripe << dendl;
-    CStripe *newparent = get_subtree_root(newstripe);
-    dout(10) << " new parent " << *newstripe << dendl;
-
-    if (oldparent == newparent) {
-      dout(10) << "parent unchanged for " << *stripe << " at " << *oldparent << dendl;
-      continue;
-    }
-
-    if (stripe->is_subtree_root()) {
-      // children are fine.  change parent.
-      dout(10) << "moving " << *stripe << " from " << *oldparent << " to " << *newparent << dendl;
-      assert(subtrees[oldparent].count(stripe));
-      subtrees[oldparent].erase(stripe);
-      assert(subtrees.count(newparent));
-      subtrees[newparent].insert(stripe);
-      try_subtree_merge_at(stripe, !imported);
-    } else {
-      // mid-subtree.
-
-      // see if any old bounds move to the new parent.
-      list<CStripe*> tomove;
-      for (set<CStripe*>::iterator p = subtrees[oldparent].begin();
-	   p != subtrees[oldparent].end();
-	   ++p) {
-	CStripe *bound = *p;
-	CStripe *broot = get_subtree_root(bound->get_parent_stripe());
-	if (broot != oldparent) {
-	  assert(broot == newparent);
-	  tomove.push_back(bound);
-	}
-      }
-      for (list<CStripe*>::iterator p = tomove.begin(); p != tomove.end(); ++p) {
-	CStripe *bound = *p;
-	dout(10) << "moving bound " << *bound << " from " << *oldparent << " to " << *newparent << dendl;
-	subtrees[oldparent].erase(bound);
-	subtrees[newparent].insert(bound);
-      }	   
-
-      // did auth change?
-      if (oldparent->authority() != newparent->authority()) {
-	adjust_subtree_auth(stripe, oldparent->authority(), !imported);  // caller is responsible for *diri.
-	try_subtree_merge_at(stripe, !imported);
-      }
-    }
-  }
-
-  show_subtrees();
-}
-
-
-void MDCache::get_fullauth_subtrees(set<CStripe*>& s)
-{
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (root->is_full_stripe_auth())
-      s.insert(root);
-  }
-}
-void MDCache::get_auth_subtrees(set<CStripe*>& s)
-{
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (root->is_auth())
-      s.insert(root);
-  }
-}
-
-
-// count.
-
-int MDCache::num_subtrees()
-{
-  return subtrees.size();
-}
-
-int MDCache::num_subtrees_fullauth()
-{
-  int n = 0;
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (root->is_full_stripe_auth())
-      n++;
-  }
-  return n;
-}
-
-int MDCache::num_subtrees_fullnonauth()
-{
-  int n = 0;
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (root->is_full_stripe_nonauth())
-      n++;
-  }
-  return n;
-}
-
 
 
 // ===================================
@@ -2316,198 +1671,10 @@ void MDCache::_logged_slave_commit(int from, metareqid_t reqid)
 // ====================================================================
 // import map, recovery
 
-void MDCache::_move_subtree_map_bound(dirstripe_t ds, dirstripe_t oldparent, dirstripe_t newparent,
-                                      map<dirstripe_t,vector<dirstripe_t> >& subtrees)
-{
-  if (subtrees.count(oldparent)) {
-    vector<dirstripe_t>& v = subtrees[oldparent];
-    dout(10) << " removing " << ds << " from " << oldparent << " bounds " << v << dendl;
-    v.erase(remove(v.begin(), v.end(), ds));
-  }
-  if (subtrees.count(newparent)) {
-    vector<dirstripe_t>& v = subtrees[newparent];
-    dout(10) << " adding " << ds << " to " << newparent << " bounds " << v << dendl;
-    v.push_back(ds);
-  }
-}
-
-ESubtreeMap *MDCache::create_subtree_map() 
-{
-  dout(10) << "create_subtree_map " << num_subtrees() << " subtrees, " 
-	   << num_subtrees_fullauth() << " fullauth"
-	   << dendl;
-
-  show_subtrees();
-
-  ESubtreeMap *le = new ESubtreeMap();
-  mds->mdlog->start_entry(le);
-  
-  CStripe *mystripe = myin ? myin->get_stripe(0) : 0;
-
-  // include all auth subtrees, and their bounds.
-  // and a spanning tree to tie it to the root.
-  for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *stripe = p->first;
-
-    // journal subtree as "ours" if we are
-    //   me, -2
-    //   me, me
-    //   me, !me (may be importing and ambiguous!)
-
-    // so not
-    //   !me, *
-    if (stripe->get_stripe_auth().first != mds->whoami)
-      continue;
-
-    if (migrator->is_ambiguous_import(stripe->dirstripe()) ||
-	my_ambiguous_imports.count(stripe->dirstripe())) {
-      dout(15) << " ambig subtree " << *stripe << dendl;
-      le->ambiguous_subtrees.insert(stripe->dirstripe());
-    } else {
-      dout(15) << " subtree " << *stripe << dendl;
-    }
-
-    le->subtrees[stripe->dirstripe()].clear();
-    le->metablob.add_stripe_context(stripe, EMetaBlob::TO_ROOT);
-    le->metablob.add_stripe(stripe, false);
-
-    if (mystripe == stripe)
-      mystripe = NULL;
-
-    // bounds
-    for (set<CStripe*>::iterator q = p->second.begin();
-	 q != p->second.end();
-	 ++q) {
-      CStripe *bound = *q;
-      dout(15) << " subtree bound " << *bound << dendl;
-      le->subtrees[stripe->dirstripe()].push_back(bound->dirstripe());
-      le->metablob.add_stripe_context(bound, EMetaBlob::TO_ROOT);
-      le->metablob.add_stripe(bound, false);
-    }
-  }
-
-  // apply projected renames
-  for (map<CInode*,list<pair<CStripe*,CStripe*> > >::iterator p = projected_subtree_renames.begin();
-       p != projected_subtree_renames.end();
-       ++p) {
-    for (list<pair<CStripe*,CStripe*> >::iterator q = p->second.begin(); q != p->second.end(); ++q) {
-      CInode *diri = p->first;
-      CStripe *oldstripe = q->first;
-      CStripe *newstripe = q->second;
-      dout(10) << " adjusting for projected rename of " << *diri << " to " << *newstripe << dendl;
-
-      int count = diri->get_stripe_count();
-      for (int i = 0; i < count; i++) {
-        CStripe *stripe = diri->get_stripe(i);
-	dout(10) << "stripe " << *stripe << dendl;
-	CStripe *oldparent = get_projected_subtree_root(oldstripe);
-	dout(10) << " old parent " << *oldparent << dendl;
-	CStripe *newparent = get_projected_subtree_root(newstripe);
-	dout(10) << " new parent " << *newparent << dendl;
-
-	if (oldparent == newparent) {
-	  dout(10) << "parent unchanged for " << stripe->dirstripe() << " at "
-		   << oldparent->dirstripe() << dendl;
-	  continue;
-	}
-
-	bool journal_dir = false;
-	if (stripe->is_subtree_root()) {
-	  if (le->subtrees.count(newparent->dirstripe()) &&
-	      oldparent->get_stripe_auth() != newparent->get_stripe_auth())
-	    journal_dir = true;
-	  // children are fine.  change parent.
-	  _move_subtree_map_bound(stripe->dirstripe(), oldparent->dirstripe(),
-                                  newparent->dirstripe(), le->subtrees);
-	} else {
-	  // mid-subtree.
-	  if (oldparent->get_stripe_auth() != newparent->get_stripe_auth()) {
-	    dout(10) << " creating subtree for " << stripe->dirstripe() << dendl;
-	    // if oldparent is auth, subtree is mine; include it.
-	    if (le->subtrees.count(oldparent->dirstripe())) {
-	      le->subtrees[stripe->dirstripe()].clear();
-	      journal_dir = true;
-	    }
-	    // if newparent is auth, subtree is a new bound
-	    if (le->subtrees.count(newparent->dirstripe())) {
-	      le->subtrees[newparent->dirstripe()].push_back(stripe->dirstripe());  // newparent is auth; new bound
-	      journal_dir = true;
-	    }
-	    newparent = stripe;
-	  }
-	  
-	  // see if any old bounds move to the new parent.
-	  for (set<CStripe*>::iterator p = subtrees[oldparent].begin();
-	       p != subtrees[oldparent].end();
-	       ++p) {
-	    CStripe *bound = *p;
-	    if (stripe->contains(bound->get_parent_stripe()))
-	      _move_subtree_map_bound(bound->dirstripe(), oldparent->dirstripe(), newparent->dirstripe(),
-				      le->subtrees);
-	  }
-	}
-	if (journal_dir) {
-          CInode *in = stripe->get_inode();
-	  le->metablob.add_stripe_context(stripe, EMetaBlob::TO_ROOT);
-	  le->metablob.add_dir(in->get_parent_dir(), false);
-	}
-      }
-    }
-  }
-
-  // simplify the journaled map.  our in memory map may have more
-  // subtrees than needed due to migrations that are just getting
-  // started or just completing.  but on replay, the "live" map will
-  // be simple and we can do a straight comparison.
-  for (map<dirstripe_t, vector<dirstripe_t> >::iterator p = le->subtrees.begin(); p != le->subtrees.end(); ++p) {
-    if (le->ambiguous_subtrees.count(p->first))
-      continue;
-    unsigned i = 0;
-    while (i < p->second.size()) {
-      dirstripe_t b = p->second[i];
-      if (le->subtrees.count(b) &&
-	  le->ambiguous_subtrees.count(b) == 0) {
-	vector<dirstripe_t>& bb = le->subtrees[b];
-	dout(10) << "simplify: " << p->first << " swallowing " << b << " with bounds " << bb << dendl;
-	for (vector<dirstripe_t>::iterator r = bb.begin(); r != bb.end(); ++r)
-	  p->second.push_back(*r);
-	le->subtrees.erase(b);
-	p->second.erase(p->second.begin() + i);
-      } else {
-	++i;
-      }
-    }
-  }
-  dout(15) << " subtrees " << le->subtrees << dendl;
-  dout(15) << " ambiguous_subtrees " << le->ambiguous_subtrees << dendl;
-
-  if (mystripe) {
-    // include my dir
-    le->metablob.add_stripe_context(mystripe, EMetaBlob::TO_ROOT);
-    le->metablob.add_dir(myin->get_parent_dir(), false);
-  }
-
-  //le->metablob.print(cout);
-  le->expire_pos = mds->mdlog->journaler->get_expire_pos();
-  return le;
-}
-
-
 void MDCache::resolve_start()
 {
   dout(10) << "resolve_start " << *root << dendl;
 
-  if (mds->mdsmap->get_root() != mds->whoami) {
-    // if we don't have the root dir, adjust it to UNKNOWN.  during
-    // resolve we want mds0 to explicit claim the portion of it that
-    // it owns, so that anything beyond its bounds get left as
-    // unknown.
-    CStripe *rootstripe = root->get_stripe(0);
-    if (rootstripe)
-      adjust_subtree_auth(rootstripe, CDIR_AUTH_UNKNOWN);
-  }
   resolve_gather = recovery_set;
 }
 
@@ -2597,6 +1764,7 @@ void MDCache::send_subtree_resolves()
       resolves[*p] = new MMDSResolve;
   }
 
+#if 0
   // known
   for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
        p != subtrees.end();
@@ -2648,7 +1816,7 @@ void MDCache::send_subtree_resolves()
       q->second->add_ambiguous_import(p->first, p->second);
     dout(10) << " ambig " << p->first << " " << p->second << dendl;
   }
-
+#endif
   // send
   for (resolve_iter p = resolves.begin(); p != resolves.end(); ++p) {
     dout(10) << "sending subtee resolve to mds." << p->first << dendl;
@@ -2795,7 +1963,9 @@ void MDCache::handle_mds_failure(int who)
   kick_find_ino_peers(who);
   kick_open_ino_peers(who);
 
+#if 0
   show_subtrees();  
+#endif
 }
 
 /*
@@ -2807,7 +1977,7 @@ void MDCache::handle_mds_recovery(int who)
   dout(7) << "handle_mds_recovery mds." << who << dendl;
 
   list<Context*> waiters;
-
+#if 0
   // wake up any waiters in their subtrees
   for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
        p != subtrees.end();
@@ -2859,7 +2029,7 @@ void MDCache::handle_mds_recovery(int who)
       }
     }
   }
-
+#endif
   kick_discovers(who);
   kick_open_ino_peers(who);
   kick_find_ino_peers(who);
@@ -2940,7 +2110,7 @@ void MDCache::handle_resolve(MMDSResolve *m)
     delayed_resolve[from] = m;
     return;
   }
-
+#if 0
   // am i a surviving ambiguous importer?
   if (mds->is_clientreplay() || mds->is_active() || mds->is_stopping()) {
     // check for any import success/failure (from this node)
@@ -3019,7 +2189,7 @@ void MDCache::handle_resolve(MMDSResolve *m)
     dout(10) << "noting ambiguous import on " << pi->first << " bounds " << pi->second << dendl;
     other_ambiguous_imports[from][pi->first].swap( pi->second );
   }
-  
+#endif 
   // did i get them all?
   resolve_gather.erase(from);
   
@@ -3057,7 +2227,6 @@ void MDCache::maybe_resolve_finish()
   }
 
   dout(10) << "maybe_resolve_finish got all resolves+resolve_acks, done." << dendl;
-  disambiguate_imports();
   finish_committed_masters();
   if (mds->is_resolve()) {
     trim_unlinked_inodes();
@@ -3188,12 +2357,8 @@ void MDCache::finish_uncommitted_slave_update(metareqid_t reqid, int master)
   for(set<CStripe*>::iterator p = su->oldstripes.begin(); p != su->oldstripes.end(); ++p) {
     CStripe *stripe = *p;
     uncommitted_slave_rename_oldstripe[stripe]--;
-    if (uncommitted_slave_rename_oldstripe[stripe] == 0) {
+    if (uncommitted_slave_rename_oldstripe[stripe] == 0)
       uncommitted_slave_rename_oldstripe.erase(stripe);
-      CStripe *root = get_subtree_root(stripe);
-      if (root->get_stripe_auth() == CDIR_AUTH_UNDEF)
-	try_trim_non_auth_subtree(root);
-    }
   }
   // removed the inodes that were unlinked by slave update
   for(set<CInode*>::iterator p = su->unlinked.begin(); p != su->unlinked.end(); ++p) {
@@ -3231,131 +2396,6 @@ void MDCache::finish_rollback(metareqid_t reqid) {
   }
 }
 
-void MDCache::disambiguate_imports()
-{
-  dout(10) << "disambiguate_imports" << dendl;
-
-  // other nodes' ambiguous imports
-  for (map<int, stripe_bound_map>::iterator p = other_ambiguous_imports.begin();
-       p != other_ambiguous_imports.end();
-       ++p) {
-    int who = p->first;
-    dout(10) << "ambiguous imports for mds." << who << dendl;
-
-    for (stripe_bound_map::iterator q = p->second.begin();
-	 q != p->second.end();
-	 ++q) {
-      dout(10) << " ambiguous import " << q->first << " bounds " << q->second << dendl;
-      // an ambiguous import will not race with a refragmentation; it's appropriate to force here.
-      CStripe *stripe = get_dirstripe(q->first);
-      if (!stripe) continue;
-
-      if (stripe->is_ambiguous_auth() || // works for me_ambig or if i am a surviving bystander
-	  stripe->authority() == CDIR_AUTH_UNDEF) { // resolving
-	dout(10) << "  mds." << who << " did import " << *stripe << dendl;
-	adjust_bounded_subtree_auth(stripe, q->second, who);
-	try_subtree_merge(stripe);
-      } else {
-	dout(10) << "  mds." << who << " did not import " << *stripe << dendl;
-      }
-    }
-  }
-  other_ambiguous_imports.clear();
-
-  // my ambiguous imports
-  pair<int,int> me_ambig(mds->whoami, mds->whoami);
-  while (!my_ambiguous_imports.empty()) {
-    stripe_bound_map::iterator q = my_ambiguous_imports.begin();
-
-    CStripe *stripe = get_dirstripe(q->first);
-    if (!stripe) continue;
-    
-    if (stripe->authority() != me_ambig) {
-      dout(10) << "ambiguous import auth known, must not be me " << *stripe << dendl;
-      cancel_ambiguous_import(stripe);
-
-      // subtree may have been swallowed by another node claiming dir
-      // as their own.
-      CStripe *root = get_subtree_root(stripe);
-      if (root != stripe)
-	dout(10) << "  subtree root is " << *root << dendl;
-      assert(root->get_stripe_auth().first != mds->whoami); // not us!
-      try_trim_non_auth_subtree(root);
-
-      mds->mdlog->start_submit_entry(new EImportFinish(q->first, false));
-    } else {
-      dout(10) << "ambiguous import auth unclaimed, must be me " << *stripe << dendl;
-      finish_ambiguous_import(q->first);
-      mds->mdlog->start_submit_entry(new EImportFinish(q->first, true));
-    }
-  }
-  assert(my_ambiguous_imports.empty());
-  mds->mdlog->flush();
-
-  if (mds->is_resolve()) {
-    // verify all my subtrees are unambiguous!
-    for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-	 p != subtrees.end();
-	 ++p) {
-      CStripe *stripe = p->first;
-      if (stripe->is_ambiguous_stripe_auth()) {
-	dout(0) << "disambiguate_imports uh oh, stripe_auth is still ambiguous for " << *stripe << dendl;
-	show_subtrees();
-      }
-      assert(!stripe->is_ambiguous_stripe_auth());
-    }
-  }
-
-  show_subtrees();
-}
-
-
-void MDCache::add_ambiguous_import(dirstripe_t base, const vector<dirstripe_t>& bounds)
-{
-  assert(my_ambiguous_imports.count(base) == 0);
-  my_ambiguous_imports[base] = bounds;
-}
-
-
-void MDCache::add_ambiguous_import(CStripe *base, const set<CStripe*>& bounds)
-{
-  vector<dirstripe_t> &v = my_ambiguous_imports[base->dirstripe()];
-  v.clear();
-
-  // make a list
-  for (set<CStripe*>::iterator p = bounds.begin(); p != bounds.end(); ++p) 
-    v.push_back((*p)->dirstripe());
-}
-
-void MDCache::cancel_ambiguous_import(CStripe *stripe)
-{
-  dirstripe_t ds = stripe->dirstripe();
-  assert(my_ambiguous_imports.count(ds));
-  dout(10) << "cancel_ambiguous_import " << ds
-	   << " bounds " << my_ambiguous_imports[ds]
-	   << " " << *stripe
-	   << dendl;
-  my_ambiguous_imports.erase(ds);
-}
-
-void MDCache::finish_ambiguous_import(dirstripe_t ds)
-{
-  assert(my_ambiguous_imports.count(ds));
-  vector<dirstripe_t> bounds;
-  bounds.swap(my_ambiguous_imports[ds]);
-  my_ambiguous_imports.erase(ds);
-  
-  dout(10) << "finish_ambiguous_import " << ds
-	   << " bounds " << bounds
-	   << dendl;
-  CStripe *stripe = get_dirstripe(ds);
-  assert(stripe);
-  
-  // adjust dir_auth, import maps
-  adjust_bounded_subtree_auth(stripe, bounds, mds->get_nodeid());
-  try_subtree_merge(stripe);
-}
-
 void MDCache::remove_inode_recursive(CInode *in)
 {
   dout(10) << "remove_inode_recursive " << *in << dendl;
@@ -3389,8 +2429,6 @@ void MDCache::remove_inode_recursive(CInode *in)
       stripe->close_dirfrag(subdir->get_frag());
     }
 
-    if (stripe->is_subtree_root())
-      remove_subtree(stripe);
     in->close_stripe(stripe);
   }
   remove_inode(in);
@@ -3400,9 +2438,7 @@ void MDCache::trim_unlinked_inodes()
 {
   dout(7) << "trim_unlinked_inodes" << dendl;
   list<CInode*> q;
-  for (hash_map<vinodeno_t,CInode*>::iterator p = inode_map.begin();
-       p != inode_map.end();
-       ++p) {
+  for (inode_map::iterator p = inodes.begin(); p != inodes.end(); ++p) {
     CInode *in = p->second;
     if (in->get_parent_dn() == NULL && !in->is_base()) {
       dout(7) << " will trim from " << *in << dendl;
@@ -3412,120 +2448,6 @@ void MDCache::trim_unlinked_inodes()
   for (list<CInode*>::iterator p = q.begin(); p != q.end(); ++p)
     remove_inode_recursive(*p);
 }
-
-/** recalc_auth_bits()
- * once subtree auth is disambiguated, we need to adjust all the 
- * auth and dirty bits in our cache before moving on.
- */
-void MDCache::recalc_auth_bits()
-{
-  dout(7) << "recalc_auth_bits" << dendl;
-
-  if (root) {
-    root->inode_auth.first = mds->mdsmap->get_root();
-    if (mds->whoami != root->inode_auth.first) {
-      root->state_clear(CInode::STATE_AUTH);
-      root->state_set(CInode::STATE_REJOINING);
-    }
-  }
-  if (container.get_inode()) {
-    container.get_inode()->inode_auth.first = mds->mdsmap->get_root();
-    if (mds->whoami != container.get_inode()->inode_auth.first)
-      container.get_inode()->state_clear(CInode::STATE_AUTH);
-  }
-
-  set<CInode*> subtree_inodes;
-  for (subtree_map::iterator p = subtrees.begin(); p != subtrees.end(); ++p)
-    subtree_inodes.insert(p->first->get_inode());
-
-  for (subtree_map::iterator p = subtrees.begin(); p != subtrees.end(); ++p) {
-    CInode *inode = p->first->get_inode();
-    if (inode->is_mdsdir() && inode->ino() != MDS_INO_MDSDIR(mds->get_nodeid())) {
-      inode->state_clear(CInode::STATE_AUTH);
-      inode->state_set(CInode::STATE_REJOINING);
-    }
-
-    list<CStripe*> dsq; // dirstripe queue
-    dsq.push_back(p->first);
-
-    bool auth = p->first->authority().first == mds->get_nodeid();
-    dout(10) << " subtree auth=" << auth << " for " << *p->first << dendl;
-
-    while (!dsq.empty()) {
-      CStripe *stripe = dsq.front();
-      dsq.pop_front();
-
-      // stripe
-      if (auth)
-	stripe->state_set(CDir::STATE_AUTH);
-      else {
-        stripe->state_clear(CDir::STATE_AUTH);
-        if (stripe->is_dirty()) 
-          stripe->mark_clean();
-      }
-
-      list<CDir*> dirs;
-      stripe->get_dirfrags(dirs);
-      for (list<CDir*>::iterator i = dirs.begin(); i != dirs.end(); ++i) {
-        CDir *dir = *i;
-
-        // dir
-        if (auth) 
-          dir->state_set(CDir::STATE_AUTH);
-        else {
-          dir->state_set(CDir::STATE_REJOINING);
-          dir->state_clear(CDir::STATE_AUTH);
-          dir->state_clear(CDir::STATE_COMPLETE);
-          if (dir->is_dirty()) 
-            dir->mark_clean();
-        }
-
-        // dentries in this dir
-        for (CDir::map_t::iterator q = dir->items.begin();
-             q != dir->items.end();
-             ++q) {
-          // dn
-          CDentry *dn = q->second;
-          CDentry::linkage_t *dnl = dn->get_linkage();
-          if (auth)
-            dn->state_set(CDentry::STATE_AUTH);
-          else {
-            dn->state_set(CDentry::STATE_REJOINING);
-            dn->state_clear(CDentry::STATE_AUTH);
-            if (dn->is_dirty()) 
-              dn->mark_clean();
-          }
-
-          if (dnl->is_primary()) {
-            CInode *in = dnl->get_inode();
-            // inode
-            if (auth) 
-              in->state_set(CInode::STATE_AUTH);
-            else {
-              in->state_set(CInode::STATE_REJOINING);
-              in->state_clear(CInode::STATE_AUTH);
-              if (in->is_dirty())
-                in->mark_clean();
-              // avoid touching scatterlocks for our subtree roots!
-              if (subtree_inodes.count(in) == 0) {
-                in->filelock.remove_dirty();
-                in->nestlock.remove_dirty();
-              }
-            }
-
-            // recurse?
-            if (in->is_dir()) 
-              in->get_nested_stripes(dsq);
-          }
-        }
-      }
-    }
-  }
-  
-  show_subtrees();
-  show_cache();
-}
-
 
 
 // ===========================================================================
@@ -3600,7 +2522,8 @@ void MDCache::rejoin_send_rejoins()
     return;
   }
 
-  map<int, MMDSCacheRejoin*> rejoins;
+  typedef map<int, MMDSCacheRejoin*> rejoin_map;
+  rejoin_map rejoins;
 
 
   // if i am rejoining, send a rejoin to everyone.
@@ -3627,27 +2550,28 @@ void MDCache::rejoin_send_rejoins()
   
   assert(!migrator->is_importing());
   assert(!migrator->is_exporting());
-  
-  // check all subtrees
-  for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *stripe = p->first;
-    assert(stripe->is_subtree_root());
-    assert(!stripe->is_ambiguous_stripe_auth());
 
-    // my subtree?
-    if (stripe->is_auth())
-      continue;  // skip my own regions!
+  // share inode lock state
+  for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
+    CInode *in = i->second;
+    int who = in->authority().first;
+    rejoin_map::iterator p = rejoins.find(who);
+    if (p == rejoins.end())
+      continue;
 
-    int auth = stripe->get_stripe_auth().first;
-    assert(auth >= 0);
-    if (rejoins.count(auth) == 0)
-      continue;   // don't care about this node's subtrees
+    dout(15) << "rejoining " << *in << " for mds." << who << dendl;
+    p->second->add_weak_inode(in->vino());
+    if (!mds->is_rejoin())
+      p->second->add_strong_inode(in->vino(),
+                                  in->get_replica_nonce(),
+                                  in->get_caps_wanted(),
+                                  in->filelock.get_state(),
+                                  in->nestlock.get_state());
 
-    rejoin_walk(stripe, rejoins[auth]);
+    if (in->is_dirty_scattered())
+      p->second->add_scatterlock_state(in);
   }
-  
+
   // rejoin root inodes, too
   for (map<int, MMDSCacheRejoin*>::iterator p = rejoins.begin();
        p != rejoins.end();
@@ -4307,9 +3231,7 @@ void MDCache::rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack,
 
   // FIXME: what about root and stray inodes.
   
-  for (hash_map<vinodeno_t,CInode*>::iterator p = inode_map.begin();
-       p != inode_map.end();
-       ++p) {
+  for (inode_map::iterator p = inodes.begin(); p != inodes.end(); ++p) {
     CInode *in = p->second;
     
     // inode?
@@ -4741,9 +3663,6 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
         stripe = new CStripe(diri, p->first.stripe.stripeid, true);
         diri->add_stripe(stripe);
       }
-      if (stripe->authority() != CDIR_AUTH_UNDEF &&
-	  stripe->authority().first != from)
-	adjust_subtree_auth(stripe, from);
 
       // barebones dirfrag; the full dirfrag loop below will clean up.
       dir = stripe->add_dirfrag(new CDir(stripe, p->first.frag, this, false));
@@ -4799,7 +3718,7 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
 	  CInode *in = get_inode(q->second.ino, q->first.snapid);
 	  if (!in) {
 	    // barebones inode; assume it's dir, the full inode loop below will clean up.
-	    in = new CInode(this, false, q->second.first, q->first.snapid);
+	    in = new CInode(this, from, q->second.first, q->first.snapid);
 	    in->inode.ino = q->second.ino;
 	    in->inode.mode = S_IFDIR;
 	    add_inode(in);
@@ -4846,7 +3765,7 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
     bufferlist::iterator q = basebl.begin();
     in->_decode_base(q);
     // auth will send a full inode for any inode it got scatterlock state for.
-    in->clear_scatter_dirty();
+    //in->clear_scatter_dirty();
     dout(10) << " got inode base " << *in << dendl;
   }
 
@@ -5218,9 +4137,7 @@ void MDCache::choose_lock_states_and_reconnect_caps()
 
   map<client_t,MClientSnap*> splits;
 
-  for (hash_map<vinodeno_t,CInode*>::iterator i = inode_map.begin();
-       i != inode_map.end();
-       ++i) {
+  for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
     CInode *in = i->second;
  
     if (in->is_auth() && !in->is_base() && in->inode.is_dirty_rstat())
@@ -5664,106 +4581,19 @@ void MDCache::rejoin_send_acks()
        p != recovery_set.end();
        ++p) 
     ack[*p] = new MMDSCacheRejoin(MMDSCacheRejoin::OP_ACK);
- 
-  // walk subtrees
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (!root->is_auth())
+
+  for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
+    CInode *in = i->second;
+    if (!in->is_auth())
       continue;
-    dout(10) << "subtree " << *root << dendl;
 
-    // stripe
-    for (map<int,int>::iterator r = root->replicas_begin();
-         r != root->replicas_end();
-         ++r)
-      ack[r->first]->add_strong_stripe(root->dirstripe(), r->second);
- 
-    // auth items in this subtree
-    list<CDir*> dq;
-    root->get_dirfrags(dq);
-
-    while (!dq.empty()) {
-      CDir *dir = dq.front();
-      dq.pop_front();
-
-      // dir
-      for (map<int,int>::iterator r = dir->replicas_begin();
-	   r != dir->replicas_end();
-	   ++r) {
-	ack[r->first]->add_strong_dirfrag(dir->dirfrag(), ++r->second);
-	ack[r->first]->add_dirfrag_base(dir);
-      }
-
-      for (CDir::map_t::iterator q = dir->items.begin();
-	   q != dir->items.end();
-	   ++q) {
-	CDentry *dn = q->second;
-	CDentry::linkage_t *dnl = dn->get_linkage();
-
-	// inode
-	CInode *in = NULL;
-	if (dnl->is_primary())
-	  in = dnl->get_inode();
-
-	// dentry
-	for (map<int,int>::iterator r = dn->replicas_begin();
-	     r != dn->replicas_end();
-	     ++r) {
-	  ack[r->first]->add_strong_dentry(dir->dirfrag(), dn->name, dn->first, dn->last,
-					   dnl->is_primary() ? dnl->get_inode()->ino():inodeno_t(0),
-					   dnl->is_remote() ? dnl->get_remote_ino():inodeno_t(0),
-					   dnl->is_remote() ? dnl->get_remote_d_type():0,
-					   ++r->second,
-					   dn->lock.get_replica_state());
-	  // peer missed MDentrylink message ?
-	  if (in && !in->is_replica(r->first))
-	    in->add_replica(r->first);
-	}
-	
-	if (!in)
-	  continue;
-
-	for (map<int,int>::iterator r = in->replicas_begin();
-	     r != in->replicas_end();
-	     ++r) {
-	  ack[r->first]->add_inode_base(in);
-	  ack[r->first]->add_inode_locks(in, ++r->second);
-	}
-
-	// subdirs in this subtree?
-        list<CStripe*> stripes;
-        in->get_nested_stripes(stripes);
-        for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-          // stripe
-          CStripe *stripe = *s;
-          for (map<int,int>::iterator r = stripe->replicas_begin();
-               r != stripe->replicas_end();
-               ++r)
-            ack[r->first]->add_strong_stripe(stripe->dirstripe(), r->second);
-
-          stripe->get_dirfrags(dq);
-        }
-      }
+    for (map<int,int>::iterator r = in->replicas_begin();
+	 r != in->replicas_end();
+	 ++r) {
+      ack[r->first]->add_inode_base(in);
+      ack[r->first]->add_inode_locks(in, ++r->second);
     }
   }
-
-  // base inodes too
-  if (root && root->is_auth()) 
-    for (map<int,int>::iterator r = root->replicas_begin();
-	 r != root->replicas_end();
-	 ++r) {
-      ack[r->first]->add_inode_base(root);
-      ack[r->first]->add_inode_locks(root, ++r->second);
-    }
-  if (myin)
-    for (map<int,int>::iterator r = myin->replicas_begin();
-	 r != myin->replicas_end();
-	 ++r) {
-      ack[r->first]->add_inode_base(myin);
-      ack[r->first]->add_inode_locks(myin, ++r->second);
-    }
 
   // include inode base for any inodes whose scatterlocks may have updated
   for (set<CInode*>::iterator p = rejoin_potential_updated_scatterlocks.begin();
@@ -5789,9 +4619,7 @@ void MDCache::reissue_all_caps()
 {
   dout(10) << "reissue_all_caps" << dendl;
 
-  for (hash_map<vinodeno_t,CInode*>::iterator p = inode_map.begin();
-       p != inode_map.end();
-       ++p) {
+  for (inode_map::iterator p = inodes.begin(); p != inodes.end(); ++p) {
     CInode *in = p->second;
     if (in->is_head() && in->is_any_caps()) {
       if (!mds->locker->eval(in, CEPH_CAP_LOCKS))
@@ -5891,9 +4719,7 @@ void MDCache::unqueue_file_recover(CInode *in)
 void MDCache::identify_files_to_recover(vector<CInode*>& recover_q, vector<CInode*>& check_q)
 {
   dout(10) << "identify_files_to_recover" << dendl;
-  for (hash_map<vinodeno_t,CInode*>::iterator p = inode_map.begin();
-       p != inode_map.end();
-       ++p) {
+  for (inode_map::iterator p = inodes.begin(); p != inodes.end(); ++p) {
     CInode *in = p->second;
     if (!in->is_auth())
       continue;
@@ -6233,7 +5059,7 @@ bool MDCache::trim(int max)
       i != unexpirables.end();
       ++i)
     lru.lru_insert_mid(*i);
-
+#if 0
   // trim non-auth, non-bound subtrees
   for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
        p != subtrees.end();) {
@@ -6244,7 +5070,7 @@ bool MDCache::trim(int max)
         stripe->get_num_ref() == 1) // subtree pin
       trim_stripe(stripe, 0, expiremap);
   }
-
+#endif
   // trim root?
   if (max == 0 && root) {
     list<CStripe*> ls;
@@ -6252,10 +5078,10 @@ bool MDCache::trim(int max)
     for (list<CStripe*>::iterator p = ls.begin(); p != ls.end(); ++p) {
       CStripe *stripe = *p;
       if (stripe->get_num_ref() == 1)  // subtree pin
-	trim_stripe(stripe, 0, expiremap);
+	trim_stripe(stripe, expiremap);
     }
     if (root->get_num_ref() == 0)
-      trim_inode(0, root, 0, expiremap);
+      trim_inode(0, root, expiremap);
   }
 
   // send any expire messages
@@ -6293,14 +5119,6 @@ bool MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
 
   CStripe *stripe = dir->get_stripe();
   assert(stripe);
-  
-  CStripe *root = get_subtree_root(stripe);
-  if (root)
-    dout(12) << " in container " << *root << dendl;
-  else {
-    dout(12) << " no container; under a not-yet-linked dir" << dendl;
-    assert(dn->is_auth());
-  }
 
   // notify dentry authority?
   if (!dn->is_auth()) {
@@ -6310,15 +5128,13 @@ bool MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
       int a = auth.first;
       if (p) a = auth.second;
       if (a < 0 || (p == 1 && auth.second == auth.first)) break;
-      if (mds->get_nodeid() == auth.second &&
-	  root->is_importing()) break;                // don't send any expire while importing.
       if (a == mds->get_nodeid()) continue;          // on export, ignore myself.
 
       dout(12) << "  sending expire to mds." << a << " on " << *dn << dendl;
       assert(a != mds->get_nodeid());
       if (expiremap.count(a) == 0)
 	expiremap[a] = new MCacheExpire(mds->get_nodeid());
-      expiremap[a]->add_dentry(root->dirstripe(), dir->dirfrag(), dn->name, dn->last, dn->get_replica_nonce());
+      expiremap[a]->add_dentry(dir->dirfrag(), dn->name, dn->last, dn->get_replica_nonce());
     }
   }
 
@@ -6339,7 +5155,7 @@ bool MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
     // expire the inode, too.
     CInode *in = dnl->get_inode();
     assert(in);
-    trim_inode(dn, in, root, expiremap);
+    trim_inode(dn, in, expiremap);
     // purging stray instead of trimming ?
     if (dn->get_num_ref() > 0)
       return true;
@@ -6364,8 +5180,7 @@ bool MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
 }
 
 
-void MDCache::trim_dirfrag(CDir *dir, CStripe *root,
-                           map<int, MCacheExpire*>& expiremap)
+void MDCache::trim_dirfrag(CDir *dir, map<int, MCacheExpire*>& expiremap)
 {
   dout(15) << "trim_dirfrag " << *dir << dendl;
 
@@ -6378,39 +5193,30 @@ void MDCache::trim_dirfrag(CDir *dir, CStripe *root,
       int a = auth.first;
       if (p) a = auth.second;
       if (a < 0 || (p == 1 && auth.second == auth.first)) break;
-      if (mds->get_nodeid() == auth.second &&
-	  root->is_importing()) break;                // don't send any expire while importing.
       if (a == mds->get_nodeid()) continue;          // on export, ignore myself.
 
       dout(12) << "  sending expire to mds." << a << " on   " << *dir << dendl;
       assert(a != mds->get_nodeid());
       if (expiremap.count(a) == 0)
 	expiremap[a] = new MCacheExpire(mds->get_nodeid());
-      expiremap[a]->add_dir(root->dirstripe(), dir->dirfrag(), dir->replica_nonce);
+      expiremap[a]->add_dir(dir->dirfrag(), dir->replica_nonce);
     }
   }
 
   dir->get_stripe()->close_dirfrag(dir->get_frag());
 }
 
-void MDCache::trim_stripe(CStripe *stripe, CStripe *root,
-                          map<int, MCacheExpire*>& expiremap)
+void MDCache::trim_stripe(CStripe *stripe, map<int, MCacheExpire*>& expiremap)
 {
   dout(15) << "trim_stripe " << *stripe << dendl;
 
-  if (stripe->is_subtree_root()) {
-    assert(!stripe->is_auth() ||
-	   (!stripe->is_replicated() && stripe->get_inode()->is_base()));
-    remove_subtree(stripe); // remove from subtree map
-    root = stripe;
-  }
   assert(stripe->get_num_ref() == 0);
 
   // DIR
   list<CDir*> dirs;
   stripe->get_dirfrags(dirs);
   for (list<CDir*>::iterator d = dirs.begin(); d != dirs.end(); ++d)
-    trim_dirfrag(*d, root, expiremap);
+    trim_dirfrag(*d, expiremap);
 
   // STRIPE
   if (!stripe->is_auth()) {
@@ -6420,22 +5226,20 @@ void MDCache::trim_stripe(CStripe *stripe, CStripe *root,
       int a = auth.first;
       if (p) a = auth.second;
       if (a < 0 || (p == 1 && auth.second == auth.first)) break;
-      if (mds->get_nodeid() == auth.second &&
-	  root->is_importing()) break;                // don't send any expire while importing.
       if (a == mds->get_nodeid()) continue;          // on export, ignore myself.
 
       dout(12) << "  sending expire to mds." << a << " on   " << *stripe << dendl;
       assert(a != mds->get_nodeid());
       if (expiremap.count(a) == 0)
 	expiremap[a] = new MCacheExpire(mds->get_nodeid());
-      expiremap[a]->add_stripe(root->dirstripe(), stripe->dirstripe(),
+      expiremap[a]->add_stripe(stripe->dirstripe(),
                                stripe->get_replica_nonce());
     }
   }
   stripe->get_inode()->close_stripe(stripe);
 }
 
-void MDCache::trim_inode(CDentry *dn, CInode *in, CStripe *root,
+void MDCache::trim_inode(CDentry *dn, CInode *in,
                          map<int, MCacheExpire*>& expiremap)
 {
   dout(15) << "trim_inode " << *in << dendl;
@@ -6445,7 +5249,7 @@ void MDCache::trim_inode(CDentry *dn, CInode *in, CStripe *root,
   list<CStripe*> stripes;
   in->get_stripes(stripes);
   for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s)
-    trim_stripe(*s, root ? root : *s, expiremap);
+    trim_stripe(*s, expiremap);
 
   // INODE
   if (in->is_auth()) {
@@ -6458,23 +5262,17 @@ void MDCache::trim_inode(CDentry *dn, CInode *in, CStripe *root,
   } else {
     pair<int,int> auth = in->authority();
     
-    dirstripe_t ds;
-    if (root)
-      ds = root->dirstripe();
-
     for (int p=0; p<2; p++) {
       int a = auth.first;
       if (p) a = auth.second;
       if (a < 0 || (p == 1 && auth.second == auth.first)) break;
-      if (root && mds->get_nodeid() == auth.second &&
-	  root->is_importing()) break;      // don't send any expire while importing.
       if (a == mds->get_nodeid()) continue; // on export, ignore myself.
 
       dout(12) << "  sending expire to mds." << a << " on " << *in << dendl;
       assert(a != mds->get_nodeid());
       if (expiremap.count(a) == 0) 
 	expiremap[a] = new MCacheExpire(mds->get_nodeid());
-      expiremap[a]->add_inode(ds, in->vino(), in->get_replica_nonce());
+      expiremap[a]->add_inode(in->vino(), in->get_replica_nonce());
     }
   }
 
@@ -6515,12 +5313,6 @@ void MDCache::trim_inode(CDentry *dn, CInode *in, CStripe *root,
 void MDCache::trim_non_auth()
 {
   dout(7) << "trim_non_auth" << dendl;
-  
-  // temporarily pin all subtree roots
-  for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) 
-    p->first->get(CStripe::PIN_SUBTREETEMP);
 
   // note first auth item we see.
   // when we see it the second time, stop.
@@ -6566,9 +5358,6 @@ void MDCache::trim_non_auth()
         in->get_stripes(stripes);
         for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
           CStripe *stripe = *s;
-	  if (stripe->is_subtree_root()) 
-	    remove_subtree(stripe);
-
           list<CDir*> ls;
           stripe->get_dirfrags(ls);
           for (list<CDir*>::iterator p = ls.begin(); p != ls.end(); ++p) {
@@ -6596,16 +5385,10 @@ void MDCache::trim_non_auth()
   // move everything in the pintail to the top bit of the lru.
   lru.lru_touch_entire_pintail();
 
-  // unpin all subtrees
-  for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) 
-    p->first->put(CStripe::PIN_SUBTREETEMP);
-
   if (lru.lru_get_size() == 0) {
     // root, stray, etc.?
-    hash_map<vinodeno_t,CInode*>::iterator p = inode_map.begin();
-    while (p != inode_map.end()) {
+    inode_map::iterator p = inodes.begin();
+    while (p != inodes.end()) {
       hash_map<vinodeno_t,CInode*>::iterator next = p;
       ++next;
       CInode *in = p->second;
@@ -6622,7 +5405,6 @@ void MDCache::trim_non_auth()
             assert(dir->get_num_ref() == 0);
             stripe->close_dirfrag(dir->get_frag());
           }
-          remove_subtree(stripe);
           assert(stripe->get_num_ref() == 0);
           in->close_stripe(stripe);
         }
@@ -6633,8 +5415,6 @@ void MDCache::trim_non_auth()
       p = next;
     }
   }
-
-  show_subtrees();
 }
 
 /**
@@ -6648,8 +5428,7 @@ bool MDCache::trim_non_auth_subtree(CStripe *stripe)
 {
   dout(10) << "trim_non_auth_subtree(" << stripe << ") " << *stripe << dendl;
 
-  if (uncommitted_slave_rename_oldstripe.count(stripe) || // preserve the stripe for rollback
-      my_ambiguous_imports.count(stripe->dirstripe()))
+  if (uncommitted_slave_rename_oldstripe.count(stripe)) // preserve the stripe for rollback
     return true;
 
   bool keep_stripe = false;
@@ -6673,9 +5452,8 @@ bool MDCache::trim_non_auth_subtree(CStripe *stripe)
           in->get_stripes(stripes);
           for (list<CStripe*>::iterator sub = stripes.begin(); sub != stripes.end(); ++sub) {
             CStripe *substripe = *sub;
-            if (uncommitted_slave_rename_oldstripe.count(substripe) || // preserve the stripe for rollback
-                my_ambiguous_imports.count(substripe->dirstripe()) ||
-                substripe->is_subtree_root()) {
+            if (uncommitted_slave_rename_oldstripe.count(substripe)) {
+              // preserve the stripe for rollback
               keep_inode = true;
               dout(10) << "trim_non_auth_subtree(" << stripe << ") substripe " << *substripe << " is kept!" << dendl;
             } else if (trim_non_auth_subtree(substripe))
@@ -6716,62 +5494,6 @@ bool MDCache::trim_non_auth_subtree(CStripe *stripe)
   return keep_stripe;
 }
 
-/*
- * during replay, when we determine a subtree is no longer ours, we
- * try to trim it from our cache.  because subtrees must be connected
- * to the root, the fact that we can trim this tree may mean that our
- * children or parents can also be trimmed.
- */
-void MDCache::try_trim_non_auth_subtree(CStripe *stripe)
-{
-  dout(10) << "try_trim_nonauth_subtree " << *stripe << dendl;
-
-  // can we now trim child subtrees?
-  set<CStripe*> bounds;
-  get_subtree_bounds(stripe, bounds);
-  for (set<CStripe*>::iterator p = bounds.begin(); p != bounds.end(); ++p) {
-    CStripe *bd = *p;
-    if (bd->get_stripe_auth().first != mds->whoami && // we are not auth
-	bd->get_num_any() == 0) {                     // and empty
-      CInode *bi = bd->get_inode();
-      dout(10) << " closing empty non-auth child subtree " << *bd << dendl;
-      remove_subtree(bd);
-      bd->mark_clean();
-      bi->close_stripe(bd);
-    }
-  }
-
-  if (trim_non_auth_subtree(stripe)) {
-    // keep
-    try_subtree_merge(stripe);
-  } else {
-    // can we trim this subtree (and possibly our ancestors) too?
-    while (true) {
-      CInode *diri = stripe->get_inode();
-      if (diri->is_base())
-	break;
-
-      CStripe *psub = get_subtree_root(diri->get_parent_stripe());
-      dout(10) << " parent subtree is " << *psub << dendl;
-      if (psub->get_stripe_auth().first == mds->whoami)
-	break;  // we are auth, keep.
-
-      dout(10) << " closing empty non-auth subtree " << *stripe << dendl;
-      remove_subtree(stripe);
-      stripe->mark_clean();
-      diri->close_stripe(stripe);
-
-      dout(10) << " parent subtree also non-auth: " << *psub << dendl;
-      if (trim_non_auth_subtree(psub))
-	break;
-      stripe = psub;
-    }
-  }
-
-  show_subtrees();
-}
-
-
 /* This function DOES put the passed message before returning */
 void MDCache::handle_cache_expire(MCacheExpire *m)
 {
@@ -6785,183 +5507,138 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
   }
 
   set<SimpleLock *> gather_locks;
-  // loop over realms
-  for (map<dirstripe_t,MCacheExpire::realm>::iterator p = m->realms.begin();
-       p != m->realms.end();
-       ++p) {
-    // check container?
-    if (p->first.ino > 0) {
-      CStripe *expired_stripe = get_dirstripe(p->first);
-      assert(expired_stripe);  // we had better have this.
+  // INODES
+  for (map<vinodeno_t,int>::iterator it = m->inodes.begin();
+       it != m->inodes.end();
+       ++it) {
+    CInode *in = get_inode(it->first);
+    int nonce = it->second;
 
-      int export_state = -1;
-      if (expired_stripe->is_auth() && expired_stripe->is_exporting()) {
-	export_state = migrator->get_export_state(expired_stripe);
-	assert(export_state >= 0);
-      }
-
-      if (!expired_stripe->is_auth() ||
-          ((export_state == Migrator::EXPORT_WARNING &&
-            migrator->export_has_warned(expired_stripe,from)) ||
-           export_state == Migrator::EXPORT_EXPORTING ||
-           export_state == Migrator::EXPORT_LOGGINGFINISH ||
-           (export_state == Migrator::EXPORT_NOTIFYING &&
-            !migrator->export_has_notified(expired_stripe,from)))) {
-
-	// not auth.
-	dout(7) << "delaying nonauth|warned expires for " << *expired_stripe << dendl;
-	assert(expired_stripe->is_frozen_root());
-	
-	// make a message container
-	if (delayed_expire[expired_stripe].count(from) == 0)
-	  delayed_expire[expired_stripe][from] = new MCacheExpire(from);
-	
-	// merge these expires into it
-	delayed_expire[expired_stripe][from]->add_realm(p->first, p->second);
-	continue;
-      }
-      assert(export_state <= Migrator::EXPORT_PREPPING ||
-             (export_state == Migrator::EXPORT_WARNING &&
-              !migrator->export_has_warned(expired_stripe, from)));
-
-      dout(7) << "expires for " << *expired_stripe << dendl;
-    } else {
-      dout(7) << "containerless expires (root, stray inodes)" << dendl;
+    if (!in) {
+      dout(0) << " inode expire on " << it->first << " from " << from 
+          << ", don't have it" << dendl;
+      assert(in);
     }
+    assert(in->is_auth());
 
-    // INODES
-    for (map<vinodeno_t,int>::iterator it = p->second.inodes.begin();
-	 it != p->second.inodes.end();
-	 ++it) {
-      CInode *in = get_inode(it->first);
-      int nonce = it->second;
-      
-      if (!in) {
-	dout(0) << " inode expire on " << it->first << " from " << from 
-		<< ", don't have it" << dendl;
-	assert(in);
-      }        
-      assert(in->is_auth());
-      
-      // check nonce
-      if (nonce == in->get_replica_nonce(from)) {
-	// remove from our cached_by
-	dout(7) << " inode expire on " << *in << " from mds." << from 
-		<< " cached_by was " << in->get_replicas() << dendl;
-	inode_remove_replica(in, from, gather_locks);
-      } 
-      else {
-	// this is an old nonce, ignore expire.
-	dout(7) << " inode expire on " << *in << " from mds." << from
-		<< " with old nonce " << nonce
-		<< " (current " << in->get_replica_nonce(from) << "), dropping" 
-		<< dendl;
-      }
+    // check nonce
+    if (nonce == in->get_replica_nonce(from)) {
+      // remove from our cached_by
+      dout(7) << " inode expire on " << *in << " from mds." << from 
+          << " cached_by was " << in->get_replicas() << dendl;
+      inode_remove_replica(in, from, gather_locks);
+    } 
+    else {
+      // this is an old nonce, ignore expire.
+      dout(7) << " inode expire on " << *in << " from mds." << from
+          << " with old nonce " << nonce
+          << " (current " << in->get_replica_nonce(from) << "), dropping" 
+          << dendl;
     }
+  }
 
-    // STRIPES
-    for (map<dirstripe_t,int>::iterator it = p->second.stripes.begin();
-	 it != p->second.stripes.end();
-	 it++) {
-      CStripe *stripe = get_dirstripe(it->first);
-      int nonce = it->second;
+  // STRIPES
+  for (map<dirstripe_t,int>::iterator it = m->stripes.begin();
+       it != m->stripes.end();
+       ++it) {
+    CStripe *stripe = get_dirstripe(it->first);
+    int nonce = it->second;
 
-      if (!stripe) {
-	dout(0) << " stripe expire on " << it->first << " from " << from 
-		<< ", don't have it" << dendl;
-	assert(stripe);
-      }
-      assert(stripe->is_auth());
-
-      // check nonce
-      if (nonce == stripe->get_replica_nonce(from)) {
-	// remove from our cached_by
-	dout(7) << " stripe expire on " << *stripe << " from mds." << from
-		<< " replicas was " << stripe->get_replicas() << dendl;
-	stripe->remove_replica(from);
-      } 
-      else {
-	// this is an old nonce, ignore expire.
-	dout(7) << " stripe expire on " << *stripe << " from mds." << from 
-		<< " with old nonce " << nonce << " (current " << stripe->get_replica_nonce(from)
-		<< "), dropping" << dendl;
-      }
-    }
-
-    // DIRS
-    for (map<dirfrag_t,int>::iterator it = p->second.dirs.begin();
-	 it != p->second.dirs.end();
-	 ++it) {
-      CDir *dir = get_dirfrag(it->first);
-      int nonce = it->second;
-      
-      if (!dir) {
-	dout(0) << " dir expire on " << it->first << " from " << from 
-		<< ", don't have it" << dendl;
-	assert(dir);
-      }  
-      assert(dir->is_auth());
-      
-      // check nonce
-      if (nonce == dir->get_replica_nonce(from)) {
-	// remove from our cached_by
-	dout(7) << " dir expire on " << *dir << " from mds." << from
-		<< " replicas was " << dir->replica_map << dendl;
-	dir->remove_replica(from);
-      } 
-      else {
-	// this is an old nonce, ignore expire.
-	dout(7) << " dir expire on " << *dir << " from mds." << from 
-		<< " with old nonce " << nonce << " (current " << dir->get_replica_nonce(from)
-		<< "), dropping" << dendl;
-      }
-    }
-    
-    // DENTRIES
-    for (map<dirfrag_t, map<pair<string,snapid_t>,int> >::iterator pd = p->second.dentries.begin();
-	 pd != p->second.dentries.end();
-	 ++pd) {
-      dout(10) << " dn expires in dir " << pd->first << dendl;
-      CStripe *stripe = get_dirstripe(pd->first.stripe);
+    if (!stripe) {
+      dout(0) << " stripe expire on " << it->first << " from " << from 
+          << ", don't have it" << dendl;
       assert(stripe);
-      CDir *dir = stripe->get_dirfrag(pd->first.frag);
+    }
+    assert(stripe->is_auth());
 
-      if (!dir) {
-	dout(0) << " dn expires on " << pd->first << " from " << from
-		<< ", must have refragmented" << dendl;
+    // check nonce
+    if (nonce == stripe->get_replica_nonce(from)) {
+      // remove from our cached_by
+      dout(7) << " stripe expire on " << *stripe << " from mds." << from
+          << " replicas was " << stripe->get_replicas() << dendl;
+      stripe->remove_replica(from);
+    } 
+    else {
+      // this is an old nonce, ignore expire.
+      dout(7) << " stripe expire on " << *stripe << " from mds." << from 
+          << " with old nonce " << nonce << " (current " << stripe->get_replica_nonce(from)
+          << "), dropping" << dendl;
+    }
+  }
+
+  // DIRS
+  for (map<dirfrag_t,int>::iterator it = m->dirs.begin();
+       it != m->dirs.end();
+       ++it) {
+    CDir *dir = get_dirfrag(it->first);
+    int nonce = it->second;
+
+    if (!dir) {
+      dout(0) << " dir expire on " << it->first << " from " << from 
+          << ", don't have it" << dendl;
+      assert(dir);
+    }  
+    assert(dir->is_auth());
+
+    // check nonce
+    if (nonce == dir->get_replica_nonce(from)) {
+      // remove from our cached_by
+      dout(7) << " dir expire on " << *dir << " from mds." << from
+          << " replicas was " << dir->replica_map << dendl;
+      dir->remove_replica(from);
+    }
+    else {
+      // this is an old nonce, ignore expire.
+      dout(7) << " dir expire on " << *dir << " from mds." << from 
+          << " with old nonce " << nonce << " (current " << dir->get_replica_nonce(from)
+          << "), dropping" << dendl;
+    }
+  }
+
+  // DENTRIES
+  for (map<dirfrag_t, map<pair<string,snapid_t>,int> >::iterator pd = m->dentries.begin();
+       pd != m->dentries.end();
+       ++pd) {
+    dout(10) << " dn expires in dir " << pd->first << dendl;
+    CStripe *stripe = get_dirstripe(pd->first.stripe);
+    assert(stripe);
+    CDir *dir = stripe->get_dirfrag(pd->first.frag);
+
+    if (!dir) {
+      dout(0) << " dn expires on " << pd->first << " from " << from
+          << ", must have refragmented" << dendl;
+    } else {
+      assert(dir->is_auth());
+    }
+
+    for (map<pair<string,snapid_t>,int>::iterator p = pd->second.begin();
+         p != pd->second.end();
+         ++p) {
+      int nonce = p->second;
+      CDentry *dn;
+
+      if (dir) {
+        dn = dir->lookup(p->first.first, p->first.second);
       } else {
-	assert(dir->is_auth());
-      }
+        // which dirfrag for this dentry?
+        CDir *dir = stripe->get_dirfrag(stripe->pick_dirfrag(p->first.first));
+        assert(dir); 
+        assert(dir->is_auth());
+        dn = dir->lookup(p->first.first, p->first.second);
+      } 
 
-      for (map<pair<string,snapid_t>,int>::iterator p = pd->second.begin();
-	   p != pd->second.end();
-	   ++p) {
-	int nonce = p->second;
-	CDentry *dn;
-	
-	if (dir) {
-	  dn = dir->lookup(p->first.first, p->first.second);
-	} else {
-	  // which dirfrag for this dentry?
-	  CDir *dir = stripe->get_dirfrag(stripe->pick_dirfrag(p->first.first));
-	  assert(dir); 
-	  assert(dir->is_auth());
-	  dn = dir->lookup(p->first.first, p->first.second);
-	}
+      if (!dn) 
+        dout(0) << "  missing dentry for " << p->first.first << " snap " << p->first.second << " in " << *dir << dendl;
+      assert(dn);
 
-	if (!dn) 
-	  dout(0) << "  missing dentry for " << p->first.first << " snap " << p->first.second << " in " << *dir << dendl;
-	assert(dn);
-	
-	if (nonce == dn->get_replica_nonce(from)) {
-	  dout(7) << "  dentry_expire on " << *dn << " from mds." << from << dendl;
-	  dentry_remove_replica(dn, from, gather_locks);
-	} 
-	else {
-	  dout(7) << "  dentry_expire on " << *dn << " from mds." << from
-		  << " with old nonce " << nonce << " (current " << dn->get_replica_nonce(from)
-		  << "), dropping" << dendl;
-	}
+      if (nonce == dn->get_replica_nonce(from)) {
+        dout(7) << "  dentry_expire on " << *dn << " from mds." << from << dendl;
+        dentry_remove_replica(dn, from, gather_locks);
+      } 
+      else {
+        dout(7) << "  dentry_expire on " << *dn << " from mds." << from
+            << " with old nonce " << nonce << " (current " << dn->get_replica_nonce(from)
+            << "), dropping" << dendl;
       }
     }
   }
@@ -7053,7 +5730,7 @@ void MDCache::check_memory_usage()
   static MemoryModel::snap baseline = last;
 
   // check client caps
-  int num_inodes = inode_map.size();
+  int num_inodes = inodes.size();
   float caps_per_inode = (float)num_caps / (float)num_inodes;
   //float cap_rate = (float)num_inodes_with_caps / (float)inode_map.size();
 
@@ -7065,7 +5742,7 @@ void MDCache::check_memory_usage()
 	   << ", baseline " << baseline.get_heap()
 	   << ", buffers " << (buffer::get_total_alloc() >> 10)
 	   << ", max " << g_conf->mds_mem_max
-	   << ", " << num_inodes_with_caps << " / " << inode_map.size() << " inodes have caps"
+	   << ", " << num_inodes_with_caps << " / " << num_inodes << " inodes have caps"
 	   << ", " << num_caps << " caps, " << caps_per_inode << " caps per inode"
 	   << dendl;
 
@@ -7147,7 +5824,6 @@ bool MDCache::shutdown_pass()
   if (mds->is_stopped()) {
     dout(7) << " already shut down" << dendl;
     show_cache();
-    show_subtrees();
     return true;
   }
 
@@ -7185,67 +5861,6 @@ bool MDCache::shutdown_pass()
   // trim cache
   trim(0);
   dout(5) << "lru size now " << lru.lru_get_size() << dendl;
-
-  // SUBTREES
-  if (!subtrees.empty() &&
-      mds->get_nodeid() != 0 &&
-      !migrator->is_exporting() //&&
-      //!migrator->is_importing()
-      ) {
-    dout(7) << "looking for subtrees to export to mds0" << dendl;
-    list<CStripe*> ls;
-    for (map<CStripe*, set<CStripe*> >::iterator it = subtrees.begin();
-         it != subtrees.end();
-         ++it) {
-      CStripe *stripe = it->first;
-      if (stripe->get_inode()->is_mdsdir())
-	continue;
-      if (stripe->is_frozen() || stripe->is_freezing())
-	continue;
-      if (!stripe->is_full_stripe_auth())
-	continue;
-      ls.push_back(stripe);
-    }
-    int max = 5; // throttle shutdown exports.. hack!
-    for (list<CStripe*>::iterator p = ls.begin(); p != ls.end(); ++p) {
-      CStripe *stripe = *p;
-      int dest = stripe->get_inode()->authority().first;
-      if (dest > 0 && !mds->mdsmap->is_active(dest))
-	dest = 0;
-      dout(7) << "sending " << *stripe << " back to mds." << dest << dendl;
-      migrator->export_dir(stripe, dest);
-      if (--max == 0)
-	break;
-    }
-  }
-
-  if (!shutdown_export_caps()) {
-    dout(7) << "waiting for residual caps to export" << dendl;
-    return false;
-  }
-
-  // make mydir subtree go away
-  if (myin) {
-    CStripe *mystripe = myin->get_stripe(0);
-    if (mystripe && mystripe->is_subtree_root()) {
-      adjust_subtree_auth(mystripe, CDIR_AUTH_UNKNOWN);
-      remove_subtree(mystripe);
-    }
-  }
-  
-  // subtrees map not empty yet?
-  if (!subtrees.empty()) {
-    dout(7) << "still have " << num_subtrees() << " subtrees" << dendl;
-    show_subtrees();
-    migrator->show_importing();
-    migrator->show_exporting();
-    if (!migrator->is_importing() && !migrator->is_exporting())
-      show_cache();
-    return false;
-  }
-  assert(subtrees.empty());
-  assert(!migrator->is_exporting());
-  assert(!migrator->is_importing());
 
   // (only do this once!)
   if (!mds->mdlog->is_capped()) {
@@ -7319,7 +5934,7 @@ bool MDCache::shutdown_export_strays()
       dir->fetch(0);
       done = false;
     }
-    
+
     for (CDir::map_t::iterator p = dir->items.begin();
 	 p != dir->items.end();
 	 ++p) {
@@ -7327,7 +5942,7 @@ bool MDCache::shutdown_export_strays()
       CDentry::linkage_t *dnl = dn->get_linkage();
       if (dnl->is_null()) continue;
       done = false;
-      
+
       // FIXME: we'll deadlock if a rename fails.
       if (exported_strays.count(dnl->get_inode()->ino()) == 0) {
 	exported_strays.insert(dnl->get_inode()->ino());
@@ -7340,59 +5955,6 @@ bool MDCache::shutdown_export_strays()
 
   return done;
 }
-
-bool MDCache::shutdown_export_caps()
-{
-  // export caps?
-  //  note: this runs more often than it should.
-  static bool exported_caps = false;
-  static set<CStripe*> exported_caps_in;
-  if (!exported_caps) {
-    dout(7) << "searching for caps to export" << dendl;
-    exported_caps = true;
-
-    list<CStripe*> stripes;
-    for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-	 p != subtrees.end();
-	 ++p) {
-      if (exported_caps_in.count(p->first)) continue;
-      if (p->first->is_auth() ||
-	  p->first->is_ambiguous_auth())
-	exported_caps = false; // we'll have to try again
-      else {
-	stripes.push_back(p->first);
-	exported_caps_in.insert(p->first);
-      }
-    }
-    while (!stripes.empty()) {
-      CStripe *stripe = stripes.front();
-      stripes.pop_front();
-
-      list<CDir*> dirs;
-      stripe->get_dirfrags(dirs);
-      for (list<CDir*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
-        CDir *dir = *d;
-        for (CDir::map_t::iterator p = dir->items.begin();
-             p != dir->items.end();
-             ++p) {
-          CDentry *dn = p->second;
-          CDentry::linkage_t *dnl = dn->get_linkage();
-          if (!dnl->is_primary()) continue;
-          CInode *in = dnl->get_inode();
-          if (in->is_dir())
-            in->get_nested_stripes(stripes);
-          if (in->is_any_caps() && !in->state_test(CInode::STATE_EXPORTINGCAPS))
-            migrator->export_caps(in);
-        }
-      }
-    }
-  }
-
-  return true;
-}
-
-
-
 
 
 // ========= messaging ==============
@@ -10010,7 +8572,7 @@ void MDCache::discover_dir_stripe(CInode *base, stripeid_t stripeid,
     from = base->authority().first;
 
   dout(7) << "discover_dir_stripe " << dirstripe_t(base->ino(), stripeid)
-      << " from mds." << from << dendl;
+      << " under " << *base << " from mds." << from << dendl;
 
   if (!base->is_waiting_for_stripe(stripeid) || !onfinish) {  // FIXME: this is kind of weak!
     discover_info_t& d = _create_discover(from);
@@ -10598,7 +9160,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 
   // discover may start with an inode
   if (!p.end() && next == MDiscoverReply::INODE) {
-    cur = add_replica_inode(p, NULL, finished);
+    cur = add_replica_inode(p, NULL, from, finished);
     dout(7) << "discover_reply got base inode " << *cur << dendl;
     assert(cur->is_base());
     
@@ -10652,7 +9214,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
       break;
 
     // inode
-    cur = add_replica_inode(p, dn, finished);
+    cur = add_replica_inode(p, dn, from, finished);
 
     next = MDiscoverReply::STRIPE;
   }
@@ -10776,16 +9338,12 @@ CStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
         << " nonce " << stripe->get_replica_nonce() << dendl;
   } else {
     assert(ds.stripeid < diri->get_stripe_count());
-    stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, false));
+    stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, from));
     stripe->decode_replica(p);
     dout(7) << "add_replica_stripe added " << *stripe
         << " nonce " << stripe->get_replica_nonce() << dendl;
 
-    // is this a stripe_auth delegation boundary?
-    if (from != diri->authority().first ||
-        diri->is_ambiguous_auth() ||
-        diri->is_base())
-      adjust_subtree_auth(stripe, from);
+    stripe->set_stripe_auth(from);
 
     diri->take_stripe_waiting(ds.stripeid, finished);
   }
@@ -10797,10 +9355,10 @@ CStripe *MDCache::forge_replica_stripe(CInode *diri, stripeid_t stripeid, int fr
   assert(mds->mdsmap->get_state(from) < MDSMap::STATE_REJOIN);
  
   // forge a replica.
-  CStripe *stripe = diri->add_stripe(new CStripe(diri, stripeid, false));
+  CStripe *stripe = diri->add_stripe(new CStripe(diri, stripeid, from));
  
   // i'm assuming this is a subtree root. 
-  adjust_subtree_auth(stripe, from);
+  stripe->set_stripe_auth(from);
 
   dout(7) << "forge_replica_stripe added " << *stripe << " while mds." << from << " is down" << dendl;
 
@@ -10880,7 +9438,8 @@ CDentry *MDCache::add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Co
   return dn;
 }
 
-CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Context*>& finished)
+CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn,
+                                   int from, list<Context*>& finished)
 {
   inodeno_t ino;
   snapid_t last;
@@ -10888,13 +9447,9 @@ CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn, list<Co
   ::decode(last, p);
   CInode *in = get_inode(ino, last);
   if (!in) {
-    in = new CInode(this, false, 1, last);
+    in = new CInode(this, from, 1, last);
     in->decode_replica(p, true);
     add_inode(in);
-    if (in->is_mdsdir())
-      in->inode_auth.first = in->ino() - MDS_INO_MDSDIR_OFFSET;
-    else if (in->is_base())
-      in->inode_auth.first = 0;
     dout(10) << "add_replica_inode added " << *in << dendl;
     if (dn) {
       assert(dn->get_linkage()->is_null());
@@ -10941,11 +9496,11 @@ CDentry *MDCache::add_replica_stray(bufferlist &bl, int from)
   list<Context*> finished;
   bufferlist::iterator p = bl.begin();
 
-  CInode *parentin = add_replica_inode(p, NULL, finished);
+  CInode *parentin = add_replica_inode(p, NULL, from, finished);
   CStripe *parentstripe = add_replica_stripe(p, parentin, from, finished);
   CDir *parentdir = add_replica_dir(p, parentstripe, finished);
   CDentry *parentdn = add_replica_dentry(p, parentdir, finished);
-  CInode *strayin = add_replica_inode(p, parentdn, finished);
+  CInode *strayin = add_replica_inode(p, parentdn, from, finished);
   CStripe *straystripe = add_replica_stripe(p, strayin, from, finished);
   CDir *straydir = add_replica_dir(p, straystripe, finished);
   CDentry *straydn = add_replica_dentry(p, straydir, finished);
@@ -11039,7 +9594,6 @@ void MDCache::send_dentry_link(CDentry *dn, const vector<int> *skip)
 {
   dout(7) << "send_dentry_link " << *dn << dendl;
 
-  CStripe *subtree = get_subtree_root(dn->get_stripe());
   for (map<int,int>::iterator p = dn->replicas_begin(); 
        p != dn->replicas_end(); 
        p++) {
@@ -11050,8 +9604,7 @@ void MDCache::send_dentry_link(CDentry *dn, const vector<int> *skip)
 	 rejoin_gather.count(p->first)))
       continue;
     CDentry::linkage_t *dnl = dn->get_linkage();
-    MDentryLink *m = new MDentryLink(subtree->dirstripe(),
-                                     dn->get_dir()->dirfrag(),
+    MDentryLink *m = new MDentryLink(dn->get_dir()->dirfrag(),
 				     dn->name, dnl->is_primary());
     if (dnl->is_primary()) {
       dout(10) << "  primary " << *dnl->get_inode() << dendl;
@@ -11071,7 +9624,7 @@ void MDCache::send_dentry_link(CDentry *dn, const vector<int> *skip)
 /* This function DOES put the passed message before returning */
 void MDCache::handle_dentry_link(MDentryLink *m)
 {
-
+  int from = m->get_source().num();
   CDentry *dn = NULL;
   CDir *dir = get_dirfrag(m->get_dirfrag());
   if (!dir) {
@@ -11094,7 +9647,7 @@ void MDCache::handle_dentry_link(MDentryLink *m)
   if (dn) {
     if (m->get_is_primary()) {
       // primary link.
-      CInode *in = add_replica_inode(p, dn, finished);
+      CInode *in = add_replica_inode(p, dn, from, finished);
       if (dn->get_linkage()->is_null()) // fix linkage
         dir->link_primary_inode(dn, in);
     } else {
@@ -11106,13 +9659,13 @@ void MDCache::handle_dentry_link(MDentryLink *m)
       dir->link_remote_inode(dn, ino, d_type);
     }
   } else if (m->get_is_primary()) {
-    CInode *in = add_replica_inode(p, NULL, finished);
+    CInode *in = add_replica_inode(p, NULL, from, finished);
     assert(in->get_num_ref() == 0);
     assert(in->get_parent_dn() == NULL);
     map<int, MCacheExpire*> expiremap;
     int from = m->get_source().num();
     expiremap[from] = new MCacheExpire(mds->get_nodeid());
-    expiremap[from]->add_inode(m->get_subtree(), in->vino(), in->get_replica_nonce());
+    expiremap[from]->add_inode(in->vino(), in->get_replica_nonce());
     send_expire_messages(expiremap);
     remove_inode(in);
   }
@@ -11180,10 +9733,6 @@ void MDCache::handle_dentry_unlink(MDentryUnlink *m)
 	// that we always keep it in sync with the dnq
 	assert(straydn->first >= in->first);
 	in->first = straydn->first;
-
-	// update subtree map?
-	if (in->is_dir()) 
-	  adjust_subtree_after_rename(in, dir->get_stripe(), false);
 
 	// send caps to auth (if we're not already)
 	if (in->is_any_caps() &&
@@ -11989,7 +10538,7 @@ void MDCache::rollback_uncommitted_fragments()
 
 // ==============================================================
 // debug crap
-
+#if 0
 void MDCache::show_subtrees(int dbl)
 {
   //dout(10) << "show_subtrees" << dendl;
@@ -12129,15 +10678,13 @@ void MDCache::show_subtrees(int dbl)
   }
   assert(lost == 0);
 }
-
+#endif
 
 void MDCache::show_cache()
 {
   dout(7) << "show_cache" << dendl;
  
-  for (hash_map<vinodeno_t,CInode*>::iterator it = inode_map.begin();
-       it != inode_map.end();
-       ++it) {
+  for (inode_map::iterator it = inodes.begin(); it != inodes.end(); ++it) {
     // unlinked?
     if (!it->second->parent)
       dout(7) << " unlinked " << *it->second << dendl;
@@ -12188,9 +10735,7 @@ void MDCache::dump_cache(const char *fn)
     return;
   }
   
-  for (hash_map<vinodeno_t,CInode*>::iterator it = inode_map.begin();
-       it != inode_map.end();
-       ++it) {
+  for (inode_map::iterator it = inodes.begin(); it != inodes.end(); ++it) {
     CInode *in = it->second;
     ostringstream ss;
     ss << *in << std::endl;

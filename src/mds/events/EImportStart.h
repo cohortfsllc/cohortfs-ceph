@@ -46,8 +46,8 @@ protected:
   void dump(Formatter *f) const;
   static void generate_test_instances(list<EImportStart*>& ls);
   
-  void update_segment();
-  void replay(MDS *mds);
+  void update_segment() {}
+  void replay(MDS *mds) {}
 
 };
 
