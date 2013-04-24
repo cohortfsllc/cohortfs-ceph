@@ -3275,24 +3275,22 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
   rsv.client = req->get_orig_source().num();
 
   reservation_state_t &rstate = in->reservations;
-  pair<set<ceph_reservation, rsv_key_cmp>::iterator,bool> ret;
-
-  ret = rstate.reservations.insert(rsv);
-  if (! ret.second) {
+  if (! rstate.add_rsv(rsv)) {
     dout(0) << "handle_client_get_rsv new request for existing rsv" << dendl;
     return;
   }
 
-  ceph_reservation& nrsv = const_cast<ceph_reservation&>(*(ret.first));
-  nrsv.id = ++(rstate.max_id);
-
-  // populate lookup tables
-  rstate.reservations_id.insert(pair<uint64_t,ceph_reservation>(rsv.id, rsv));
-  rstate.reservations_client.insert(
-    pair<uint64_t,ceph_reservation>(rsv.client, rsv));
-
   // populate reply buffers (blech)
+  bufferlist bl;
+  ::encode(rsv, bl);
 
+  MClientReply *reply = new MClientReply(req, 0 /* return code */);
+  reply->set_extra_bl(bl);
+
+  dout(10) << "reply to " << *req << " " << rsv << dendl;
+
+  // send it
+  reply_request(mdr, reply, in);
 }
 
 void Server::handle_client_put_rsv(MDRequest *mdr)

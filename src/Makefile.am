@@ -1380,6 +1380,7 @@ libmds_a_SOURCES = \
 	mds/flock.cc \
 	mds/locks.c \
 	mds/journal.cc \
+	mds/Reservation.cc \
 	mds/Server.cc \
 	mds/Mutation.cc \
 	mds/MDCache.cc \
