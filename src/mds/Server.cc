@@ -3305,7 +3305,7 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
 
   // check client
   if (req->head.args.get_reservation.rsv.client !=
-      req->get_orig_source().num()) {
+      (uint64_t) req->get_orig_source().num()) {
     reply = new MClientReply(req, EINVAL);
     reply_request(mdr, reply);
     return;

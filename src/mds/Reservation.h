@@ -66,23 +66,23 @@ class reservation_state_t
 {
 public:
 /* TODO:  switch to boost::intrusive to permit sharing */
-    set<ceph_reservation, rsv_key_cmp> reservations;
-    /* rsv_id, rsv> tuples: */
-    map<uint64_t, ceph_reservation> reservations_id;
-    /* client_t, rsv> tuples */
-    map<uint64_t, ceph_reservation> reservations_client;
-    /* <rsv_id, osd_id> tuples: */
-    map<uint64_t, uint64_t> reservations_osd;
+  set<ceph_reservation, rsv_key_cmp> reservations;
+  /* rsv_id, rsv> tuples: */
+  map<uint64_t, ceph_reservation> reservations_id;
+  /* <rsv_id, osd_id> tuples */
+  set<pair<uint64_t,uint64_t> > reservations_osd;
+  /* rsv -> osds */
+  multimap<uint64_t, uint64_t> osds_by_rsv;
 
-    uint64_t max_id;
+  uint64_t max_id;
 
-    bool add_rsv(ceph_reservation& rsv);
-    bool remove_rsv(ceph_reservation& rsv);
-    bool remove_rsv_client(client_t client);
-    bool remove_expired(void);
-    bool register_osd(ceph_reservation &rsv, uint64_t osd);
-    bool unregister_osd(ceph_reservation &rsv, uint64_t osd);
-    void unregister_osd_all(uint64_t osd);
+  bool add_rsv(ceph_reservation& rsv);
+  bool remove_rsv(ceph_reservation& rsv);
+  bool remove_rsv_client(client_t client);
+  bool remove_expired(void);
+  bool register_osd(ceph_reservation &rsv, uint64_t osd);
+  bool unregister_osd(ceph_reservation &rsv, uint64_t osd);
+  void unregister_osd_all(uint64_t osd);
 
 private:
   // nothing yet
@@ -93,8 +93,8 @@ public:
       ::encode(reservations_osd, bl);
   }
   void decode(bufferlist::iterator& bl) {
-      ::decode(reservations_id, bl); // also expands by client
-      ::decode(reservations_osd, bl);
+      ::decode(reservations_id, bl); //
+      ::decode(reservations_osd, bl); // also expands osds_by_rsv
   }
 };
 WRITE_CLASS_ENCODER(reservation_state_t)

@@ -15,7 +15,6 @@ bool reservation_state_t::add_rsv(ceph_reservation& rsv)
 
     // populate lookup tables
     reservations_id.insert(pair<uint64_t,ceph_reservation>(rsv.id, rsv));
-    reservations_client.insert(pair<uint64_t,ceph_reservation>(rsv.client,rsv));
 
     rsv = nrsv;
 
@@ -28,15 +27,21 @@ bool reservation_state_t::remove_rsv(ceph_reservation& rsv)
     if (reservations.erase(rsv)) {
 
         reservations_id.erase(rsv.id);
-        reservations_client.erase(rsv.client);
 
         // fixup max_id
         uint64_t hkey = (reservations_id.size() == 0) ? 0 :
             reservations_id.rbegin()->first;
-
         if (max_id > hkey)
             max_id = hkey;
 
+        // remove OSD mappings
+        multimap<uint64_t, uint64_t>::iterator iter;
+        iter = osds_by_rsv.find(rsv.id);
+        while((iter != osds_by_rsv.end()) && (iter->first == rsv.id)) {
+            // TODO: async fence rsv at OSD
+            reservations_osd.erase(*iter);
+        }
+        osds_by_rsv.erase(rsv.id);
         return (true);
     }
 
