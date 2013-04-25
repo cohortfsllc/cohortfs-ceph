@@ -3287,6 +3287,9 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
   }
 
   // journal
+  inode_t *pi = in->project_inode();
+  pi->version = in->pre_dirty();
+
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "get_rsv"); // isa LogEvent
   mdlog->start_entry(le);
@@ -3341,6 +3344,9 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
   }
 
   // journal
+  inode_t *pi = in->project_inode();
+  pi->version = in->pre_dirty();
+
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "put_rsv"); // isa LogEvent
   mdlog->start_entry(le);
@@ -3385,6 +3391,9 @@ void Server::handle_client_reg_rsv(MDRequest *mdr)
   }
 
   // journal
+  inode_t *pi = in->project_inode();
+  pi->version = in->pre_dirty();
+
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "get_rsv"); // isa LogEvent
   mdlog->start_entry(le);
@@ -3428,6 +3437,9 @@ void Server::handle_client_ureg_rsv(MDRequest *mdr)
   }
 
   // journal
+  inode_t *pi = in->project_inode();
+  pi->version = in->pre_dirty();
+
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "get_rsv"); // isa LogEvent
   mdlog->start_entry(le);
