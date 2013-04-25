@@ -65,6 +65,13 @@ public:
     inode_t inode;      // if it's not
     fragtree_t dirfragtree;
     map<string,bufferptr> xattrs;
+
+    // TODO:  locks
+
+    // reservations and OSD registrations
+    set<ceph_reservation> reservations;
+    set<pair<uint64_t,uint64_t> > reservations_osd;
+
     string symlink;
     bufferlist snapbl;
     bool dirty;
@@ -78,7 +85,10 @@ public:
 
     fullbit(const string& d, snapid_t df, snapid_t dl, 
 	    version_t v, const inode_t& i, const fragtree_t &dft, 
-	    const map<string,bufferptr> &xa, const string& sym,
+	    const map<string,bufferptr> &xa,
+	    const set<ceph_reservation> &rsv,
+	    const set<pair<uint64_t,uint64_t> > &rsv_osd,
+	    const string& sym,
 	    const bufferlist &sbl, bool dr,
 	    const old_inodes_t *oi = NULL) :
       //dn(d), dnfirst(df), dnlast(dl), dnv(v), 
@@ -91,6 +101,8 @@ public:
       ::encode(v, _enc);
       ::encode(i, _enc);
       ::encode(xa, _enc);
+      ::encode(rsv, _enc);
+      ::encode(rsv_osd, _enc);
       if (i.is_symlink())
 	::encode(sym, _enc);
       if (i.is_dir()) {
@@ -433,14 +445,17 @@ private:
       sr->encode(snapbl);
 
     lump.nfull++;
-    lump.get_dfull().push_back(std::tr1::shared_ptr<fullbit>(new fullbit(dn->get_name(), 
-									 dn->first, dn->last,
-									 dn->get_projected_version(), 
-									 *pi, in->dirfragtree,
-									 *in->get_projected_xattrs(),
-									 in->symlink, snapbl,
-									 dirty,
-									 &in->old_inodes)));
+    lump.get_dfull().push_back(std::tr1::shared_ptr<fullbit>(
+				 new fullbit(dn->get_name(), 
+					     dn->first, dn->last,
+					     dn->get_projected_version(), 
+					     *pi, in->dirfragtree,
+					     *in->get_projected_xattrs(),
+					     in->get_reservations(),
+					     in->get_reservations_osd(),
+					     in->symlink, snapbl,
+					     dirty,
+					     &in->old_inodes)));
   }
 
   // convenience: primary or remote?  figure it out.
@@ -485,7 +500,10 @@ private:
 
     string empty;
     roots.push_back(std::tr1::shared_ptr<fullbit>(new fullbit(empty, in->first, in->last,
-							      0, *pi, *pdft, *px, in->symlink,
+							      0, *pi, *pdft, *px,
+							      in->get_reservations(),
+							      in->get_reservations_osd(),
+							      in->symlink,
 							      snapbl, dirty,
 							      &in->old_inodes)));
   }

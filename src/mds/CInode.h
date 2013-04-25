@@ -208,6 +208,14 @@ public:
   void mark_dirty_rstat();
   void clear_dirty_rstat();
 
+  set<ceph_reservation>& get_reservations() {
+    return (reservations.reservations);
+  }
+
+  set<pair<uint64_t,uint64_t> >& get_reservations_osd() {
+    return (reservations.reservations_osd);
+  }
+
   //bool hack_accessed;
   //utime_t hack_load_stamp;
 

@@ -34,7 +34,6 @@
 #include "events/ETableClient.h"
 #include "events/ETableServer.h"
 
-
 #include "LogSegment.h"
 
 #include "MDS.h"
@@ -43,6 +42,7 @@
 #include "Server.h"
 #include "Migrator.h"
 #include "Mutation.h"
+#include "Reservation.h"
 
 #include "InoTable.h"
 #include "MDSTableClient.h"
@@ -487,8 +487,9 @@ void EMetaBlob::update_segment(LogSegment *ls)
 void EMetaBlob::fullbit::encode(bufferlist& bl) const {
   ENCODE_START(5, 5, bl);
   if (!_enc.length()) {
-    fullbit copy(dn, dnfirst, dnlast, dnv, inode, dirfragtree, xattrs, symlink,
-		 snapbl, dirty, &old_inodes);
+    fullbit copy(dn, dnfirst, dnlast, dnv, inode, dirfragtree,
+		 xattrs, reservations, reservations_osd,
+		 symlink, snapbl, dirty, &old_inodes);
     bl.append(copy._enc);
   } else {
     bl.append(_enc);
@@ -504,6 +505,8 @@ void EMetaBlob::fullbit::decode(bufferlist::iterator &bl) {
   ::decode(dnv, bl);
   ::decode(inode, bl);
   ::decode(xattrs, bl);
+  ::decode(reservations, bl);
+  ::decode(reservations_osd, bl);
   if (inode.is_symlink())
     ::decode(symlink, bl);
   if (inode.is_dir()) {
@@ -558,6 +561,31 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
     f->dump_string(iter->first.c_str(), iter->second.c_str());
   }
   f->close_section(); // xattrs
+  // reservations
+  std::stringstream ss;
+  f->open_array_section("reservations 1");
+  if (reservations.size() > 0) {
+    set<ceph_reservation>::iterator iter;
+    ss.str("");
+    for (iter = reservations.begin(); iter != reservations.end(); ++iter) {
+      const ceph_reservation &rsv = *iter;
+      ss << rsv;
+    }
+    f->dump_stream(ss.str().c_str());
+  }
+  if (reservations_osd.size() > 0) {
+    set<pair<uint64_t,uint64_t> >::iterator iter;
+    ss.str("");
+    for (iter = reservations_osd.begin(); iter != reservations_osd.end(); ++iter) {
+      ss << iter->first;
+      ss << iter->second;
+    }
+    f->dump_stream(ss.str().c_str());
+  }
+  f->close_section(); // reservations 1
+  f->open_array_section("reservations 2 (OSD registrations)");
+  f->close_section(); // reservations 2
+  // symlink
   if (inode.is_symlink()) {
     f->dump_string("symlink", symlink);
   }
@@ -590,9 +618,13 @@ void EMetaBlob::fullbit::generate_test_instances(list<EMetaBlob::fullbit*>& ls)
   inode_t inode;
   fragtree_t fragtree;
   map<string,bufferptr> empty_xattrs;
+  set<ceph_reservation> reservations;
+  set<pair<uint64_t,uint64_t> > reservations_osd;
   bufferlist empty_snapbl;
   fullbit *sample = new fullbit("/testdn", 0, 0, 0,
-                                inode, fragtree, empty_xattrs, "", empty_snapbl,
+                                inode, fragtree, empty_xattrs,
+				reservations, reservations_osd,
+				"", empty_snapbl,
                                 false, NULL);
   ls.push_back(sample);
 }

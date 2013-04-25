@@ -18,7 +18,8 @@
 #include "common/debug.h"
 #include "mdstypes.h"
 
-inline ostream& operator<<(ostream& out, ceph_reservation& rsv) {
+inline ostream& operator<<(ostream& out,
+			   const ceph_reservation& rsv) {
     out << "type: " << rsv.type
         << " start: " << rsv.offset
         << " length: " << rsv.length
@@ -29,7 +30,8 @@ inline ostream& operator<<(ostream& out, ceph_reservation& rsv) {
   return out;
 }
 
-inline bool operator==(ceph_reservation& lhs, ceph_reservation& rhs) {
+inline bool operator==(const ceph_reservation& lhs,
+		       const ceph_reservation& rhs) {
   return
   ( (lhs.offset == lhs.offset) &&
     (lhs.length == rhs.length) &&
