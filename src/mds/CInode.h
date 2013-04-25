@@ -216,6 +216,11 @@ public:
     return (reservations.reservations_osd);
   }
 
+  void on_update_inode_rsv(set<ceph_reservation>& rsv,
+			   set<pair<uint64_t,uint64_t> > rsv_osd) {
+    reservations.on_update_inode(rsv, rsv_osd);
+  }
+
   //bool hack_accessed;
   //utime_t hack_load_stamp;
 

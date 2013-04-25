@@ -563,7 +563,7 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
   f->close_section(); // xattrs
   // reservations
   std::stringstream ss;
-  f->open_array_section("reservations 1");
+  f->open_array_section("reservations 1 (Reservations)");
   if (reservations.size() > 0) {
     set<ceph_reservation>::iterator iter;
     ss.str("");
@@ -573,6 +573,8 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
     }
     f->dump_stream(ss.str().c_str());
   }
+  f->close_section(); // reservations 1
+  f->open_array_section("reservations 2 (OSD registrations)");
   if (reservations_osd.size() > 0) {
     set<pair<uint64_t,uint64_t> >::iterator iter;
     ss.str("");
@@ -582,8 +584,6 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
     }
     f->dump_stream(ss.str().c_str());
   }
-  f->close_section(); // reservations 1
-  f->open_array_section("reservations 2 (OSD registrations)");
   f->close_section(); // reservations 2
   // symlink
   if (inode.is_symlink()) {
@@ -633,6 +633,7 @@ void EMetaBlob::fullbit::update_inode(MDS *mds, CInode *in)
 {
   in->inode = inode;
   in->xattrs = xattrs;
+  in->on_update_inode_rsv(reservations, reservations_osd);
   if (in->inode.is_dir()) {
     if (!(in->dirfragtree == dirfragtree)) {
       dout(10) << "EMetaBlob::fullbit::update_inode dft " << in->dirfragtree << " -> "

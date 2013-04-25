@@ -81,13 +81,15 @@ public:
 
   uint64_t max_id;
 
-  bool add_rsv(ceph_reservation& rsv);
+  bool add_rsv(ceph_reservation& rsv, bool adjust=true);
   bool remove_rsv(const ceph_reservation& rsv);
   bool remove_rsv_client(const client_t client);
   bool remove_expired(void);
   bool register_osd(uint64_t rsv_id, uint64_t osd);
   bool unregister_osd(uint64_t rsv_id, uint64_t osd);
   void unregister_osd_all(uint64_t osd);
+  void on_update_inode(set<ceph_reservation>& rsv,
+		       set<pair<uint64_t,uint64_t> > rsv_osd);
 
 private:
   // nothing yet

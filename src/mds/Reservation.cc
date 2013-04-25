@@ -2,7 +2,7 @@
 #include "Reservation.h"
 
 
-bool reservation_state_t::add_rsv(ceph_reservation& rsv)
+bool reservation_state_t::add_rsv(ceph_reservation& rsv, bool adjust)
 {
     pair<set<ceph_reservation>::iterator,bool> ret;
 
@@ -11,15 +11,17 @@ bool reservation_state_t::add_rsv(ceph_reservation& rsv)
         return (false);
 
     ceph_reservation& nrsv = const_cast<ceph_reservation&>(*(ret.first));
-    nrsv.id = ++max_id;
+    if (adjust) {
+        nrsv.id = ++max_id;
 
-    // populate lookup tables
-    reservations_id.insert(pair<uint64_t,ceph_reservation>(rsv.id, rsv));
-
-    // set an expiration (1d)
-    nrsv.expiration = ceph_clock_now(g_ceph_context) + 86400;
+        // set an expiration (1d)
+        nrsv.expiration = ceph_clock_now(g_ceph_context) + 86400;
+    }
 
     rsv = nrsv;
+
+    // populate lookup tables
+    reservations_id.insert(pair<uint64_t,ceph_reservation>(nrsv.id, nrsv));
 
     return (true);
 }
@@ -125,5 +127,28 @@ void reservation_state_t::unregister_osd_all(uint64_t osd)
             continue;
         }
         iter++;
+    }
+}
+
+void reservation_state_t::on_update_inode(set<ceph_reservation>& rsv,
+                                          set<pair<uint64_t,uint64_t> > rsv_osd)
+{
+    reservations.clear();
+    reservations_id.clear();
+    reservations_osd.clear();
+    osds_by_rsv.clear();
+
+    max_id = 0;
+
+    set<ceph_reservation>::iterator rsv_iter;
+    for (rsv_iter = rsv.begin(); rsv_iter != rsv.end(); ++rsv_iter) {
+        ceph_reservation &rsv = const_cast<ceph_reservation&>(*rsv_iter);
+        /* populates reservations and reservations_id */
+        add_rsv(rsv, false /* no adjust */);
+    }
+
+    set<pair<uint64_t,uint64_t> >::iterator osd_iter;
+    for (osd_iter = rsv_osd.begin(); osd_iter != rsv_osd.end(); ++osd_iter) {
+        register_osd(osd_iter->first, osd_iter->second);
     }
 }
