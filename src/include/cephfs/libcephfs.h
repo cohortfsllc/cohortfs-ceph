@@ -67,6 +67,30 @@ struct ceph_file_layout {
 	uint32_t fl_pg_pool;      /* namespace, crush ruleset, rep level */
 } __attribute__ ((packed));
 
+/*
+ * Ceph reservation types and flags
+ */
+
+#define CEPH_RSV_TYPE_PNFS_1 1
+
+#define CEPH_RSV_FLAG_NONE 0x0000
+
+struct ceph_reservation {
+	uint64_t id;
+	uint64_t offset; /* file offset */
+	uint64_t length; /* 0 for all following offset */
+	uint64_t client; /* client (or proxy) which holds the lock */
+	uint64_t expiration;
+	uint32_t flags;
+    	uint16_t type;
+} __attribute__ ((packed));
+
+struct ceph_rsv_osd_registration {
+	uint64_t rsv_id;
+	uint64_t osd_id;
+	uint32_t flags;
+	uint16_t type;
+} __attribute__ ((packed));
 
 typedef struct _inodeno_t {
   uint64_t val;
