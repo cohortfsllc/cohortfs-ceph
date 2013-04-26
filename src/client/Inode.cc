@@ -495,44 +495,45 @@ void CapSnap::dump(Formatter *f) const
   f->dump_unsigned("flush_tid", flush_tid);
 }
 
-void Inode::add_revoke_notifier(bool write,
-                                bool(*cb)(vinodeno_t, bool, void*),
-                                void *opaque,
-                                uint64_t *serial)
+void Inode::add_client_reservation(bool write,
+				   bool(*cb)(vinodeno_t, bool, void*),
+				   void *opaque,
+				   struct ceph_reservation *rsv)
 {
-  revoke_notifier *revoker = new revoke_notifier(write, cb, opaque);
-  *serial = revoke_serial++;
-  revoke_notifiers[*serial] = revoker;
+  client_reservation *cl_rsv = new client_reservation(write, cb, opaque, rsv);
+  client_reservations[rsv->id] = cl_rsv;
 }
 
-bool Inode::remove_revoke_notifier(uint64_t serial)
+bool Inode::remove_client_reservation(struct ceph_reservation *rsv)
 {
-  revoke_notifier *revoker = revoke_notifiers[serial];
-  bool write = revoker->write;
-  revoke_notifiers.erase(serial);
-  delete revoker;
-  return write;
+  client_reservation *cl_rsv = client_reservations[rsv->id];
+  if (cl_rsv) {
+    bool write = cl_rsv->write;
+    client_reservations.erase(rsv->id);
+    delete cl_rsv;
+    return (write); // why?
+  }
+  return (false);
 }
 
 void Inode::recall_rw_caps(bool write)
 {
 
-  map<uint64_t,revoke_notifier*>::iterator p
-    = revoke_notifiers.begin();
+  map<uint64_t,client_reservation*>::iterator p
+    = client_reservations.begin();
   bool will_return = false;
-  while (p != revoke_notifiers.end()) {
-    revoke_notifier *revoker = p->second;
-    if (write && !revoker->write) {
+  while (p != client_reservations.end()) {
+    client_reservation *cl_rsv = p->second;
+    if (write && !cl_rsv->write) {
 	continue;
     }
-    will_return = revoker->cb(vino(), revoker->write,
-			      revoker->opaque);
+    will_return = cl_rsv->cb(vino(), cl_rsv->write, cl_rsv->opaque);
     if (will_return) {
       ++p;
     } else {
       put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));
-      revoke_notifiers.erase(p++);
-      delete revoker;
+      client_reservations.erase(p++);
+      delete cl_rsv;
     }
   }
 }

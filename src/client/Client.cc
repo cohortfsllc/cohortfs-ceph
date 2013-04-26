@@ -7562,6 +7562,7 @@ uint32_t Client::ll_hold_rw(vinodeno_t vino,
 			    uint64_t* serial,
 			    uint64_t* max_fs)
 {
+#if 0
   Mutex::Locker lock(client_lock);
   int r = 0;
   int got = 0;
@@ -7580,15 +7581,55 @@ uint32_t Client::ll_hold_rw(vinodeno_t vino,
   if (write) {
     *max_fs = max(in->max_size, mdsmap->get_max_filesize());
   }
+#endif
   return 0;
 }
 
 void Client::ll_return_rw(vinodeno_t vino,
 			  uint64_t serial)
 {
+#if 0
   Mutex::Locker lock(client_lock);
   Inode *in = _ll_get_inode(vino);
   bool write = in->remove_revoke_notifier(serial);
+  in->put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));
+#endif
+}
+
+uint32_t Client::ll_get_reservation(vinodeno_t vino,
+				    bool write,
+				    bool(*cb)(vinodeno_t, bool, void*),
+				    void *opaque,
+				    struct ceph_reservation *rsv,
+				    uint64_t* max_fs)
+{
+  Mutex::Locker lock(client_lock);
+  int r = 0;
+  int got = 0;
+  int need = CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0);
+  Inode *in = _ll_get_inode(vino);
+  r = get_caps(in, need, 0, &got, (write ? *max_fs : 0));
+  if (r != 0) {
+    return r;
+  }
+  if (need & ~got) {
+    return -EBUSY;
+  }
+  in->add_client_reservation(write, cb, opaque, rsv);
+  /* Assume the client will actually use them */
+  mark_caps_dirty(in, need);
+  if (write) {
+    *max_fs = max(in->max_size, mdsmap->get_max_filesize());
+  }
+  return 0;
+}
+
+void Client::ll_return_reservation(vinodeno_t vino,
+				   struct ceph_reservation *rsv)
+{
+  Mutex::Locker lock(client_lock);
+  Inode *in = _ll_get_inode(vino);
+  bool write = in->remove_client_reservation(rsv);
   in->put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));
 }
 

@@ -1177,6 +1177,18 @@ void ceph_ll_return_rw(struct ceph_mount_info *cmount,
 		       vinodeno_t vino,
 		       uint64_t serial);
 
+uint32_t ceph_ll_get_reservation(struct ceph_mount_info *cmount,
+				 vinodeno_t vino,
+				 bool write,
+				 bool(*cb)(vinodeno_t, bool, void*),
+				 void *opaque,
+				 struct ceph_reservation *rsv /* INOUT */,
+				 uint64_t* max_fs);
+
+void ceph_ll_return_reservation(struct ceph_mount_info *cmount,
+				vinodeno_t vino,
+				struct ceph_reservation *rsv);
+
 #ifdef __cplusplus
 }
 #endif

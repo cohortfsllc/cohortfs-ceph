@@ -214,7 +214,7 @@ class Inode {
       snaprealm(0), snaprealm_item(this), snapdir_parent(0),
       oset((void *)this, newlayout->fl_pg_pool, ino),
       reported_size(0), wanted_max_size(0), requested_max_size(0),
-      _ref(0), ll_ref(0), dir(0), dn_set(), revoke_serial(0)
+      _ref(0), ll_ref(0), dir(0), dn_set()
   {
     memset(&dir_layout, 0, sizeof(dir_layout));
     memset(&layout, 0, sizeof(layout));
@@ -257,27 +257,31 @@ class Inode {
 
   void dump(Formatter *f) const;
 
-  struct revoke_notifier {
+  // client proxy for inode reservations
+  struct client_reservation {
     bool write;
+    // need more ops
     bool(*cb)(vinodeno_t, bool, void*);
     void *opaque;
+    ceph_reservation *rsv;
 
-    revoke_notifier(bool write_,
-                    bool(*cb_)(vinodeno_t, bool, void*),
-                    void* opaque_)
+    client_reservation(bool write_,
+		       bool(*cb_)(vinodeno_t, bool, void*),
+		       void* opaque_,
+		       struct ceph_reservation *rsv_)
     : write(write_),
       cb(cb_),
-      opaque(opaque_)
+      opaque(opaque_),
+      rsv(rsv_)
     { }
   };
 
-  map<uint64_t,revoke_notifier*> revoke_notifiers;
-  uint64_t revoke_serial;
-  void add_revoke_notifier(bool write,
-                           bool(*cb)(vinodeno_t, bool, void*),
-                           void *opaque,
-                           uint64_t *serial);
-  bool remove_revoke_notifier(uint64_t serial);
+  map<uint64_t,client_reservation*> client_reservations;
+  void add_client_reservation(bool write,
+			      bool(*cb)(vinodeno_t, bool, void*),
+			      void *opaque,
+			      struct ceph_reservation *rsv);
+  bool remove_client_reservation(struct ceph_reservation *rsv);
   void recall_rw_caps(bool write);
 };
 
