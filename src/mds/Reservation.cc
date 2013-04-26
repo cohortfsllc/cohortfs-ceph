@@ -21,21 +21,21 @@ bool reservation_state_t::add_rsv(ceph_reservation& rsv, bool adjust)
     rsv = nrsv;
 
     // populate lookup tables
-    reservations_id.insert(pair<uint64_t,ceph_reservation>(nrsv.id, nrsv));
+    reservations_id.insert(pair<uint64_t,ceph_reservation*>(nrsv.id, &nrsv));
 
     return (true);
 }
 
 bool reservation_state_t::put_rsv(uint64_t rsv_id, const client_t client)
 {
-    map<uint64_t, ceph_reservation>::iterator iter =
+    map<uint64_t, ceph_reservation*>::iterator iter =
         reservations_id.find(rsv_id);
 
     // not found
     if (iter == reservations_id.end())
         return (false);
 
-    ceph_reservation& rsv = iter->second;
+    ceph_reservation& rsv = *(iter->second);
     if (! (rsv.client == client))
         return (false);
 

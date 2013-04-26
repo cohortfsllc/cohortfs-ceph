@@ -73,7 +73,7 @@ public:
 /* TODO:  switch to boost::intrusive to permit sharing */
   set<ceph_reservation> reservations;
   /* rsv_id, rsv> tuples: */
-  map<uint64_t, ceph_reservation> reservations_id;
+  map<uint64_t, ceph_reservation*> reservations_id;
   /* <rsv_id, osd_id> tuples */
   set<pair<uint64_t,uint64_t> > reservations_osd;
   /* rsv -> osds */
@@ -107,6 +107,7 @@ public:
 };
 WRITE_CLASS_ENCODER(reservation_state_t)
 
+#if 0
 inline ostream& operator<<(ostream& out, reservation_state_t& r) {
 
     out << "reservations (: " << r.reservations_id.size() << ")\n";
@@ -118,5 +119,6 @@ inline ostream& operator<<(ostream& out, reservation_state_t& r) {
 
   return out;
 }
+#endif
 
 #endif /* CEPH_MDS_RESERVATION_H */
