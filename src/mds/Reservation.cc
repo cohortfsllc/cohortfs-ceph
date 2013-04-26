@@ -26,6 +26,23 @@ bool reservation_state_t::add_rsv(ceph_reservation& rsv, bool adjust)
     return (true);
 }
 
+bool reservation_state_t::put_rsv(uint64_t rsv_id, const client_t client)
+{
+    map<uint64_t, ceph_reservation>::iterator iter =
+        reservations_id.find(rsv_id);
+
+    // not found
+    if (iter == reservations_id.end())
+        return (false);
+
+    ceph_reservation& rsv = iter->second;
+    if (! (rsv.client == client))
+        return (false);
+
+    bool r = remove_rsv(rsv);
+    return (r);
+}
+
 bool reservation_state_t::remove_rsv(const ceph_reservation& rsv)
 {
     // rsv.client and source client are confirmed eq

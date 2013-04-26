@@ -435,7 +435,9 @@ union ceph_mds_request_args {
 		struct ceph_reservation rsv;
 	} __attribute__ ((packed)) get_rsv;
 	struct {
-		struct ceph_reservation rsv;
+            __u64 rsv_id;
+            __u32 flags;
+            __u16 type;
 	} __attribute__ ((packed)) put_rsv;
 	struct {
 		struct ceph_rsv_osd_registration reg;

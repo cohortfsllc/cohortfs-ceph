@@ -82,6 +82,7 @@ public:
   uint64_t max_id;
 
   bool add_rsv(ceph_reservation& rsv, bool adjust=true);
+  bool put_rsv(uint64_t rsv_id, const client_t client);
   bool remove_rsv(const ceph_reservation& rsv);
   bool remove_rsv_client(const client_t client);
   bool remove_expired(void);

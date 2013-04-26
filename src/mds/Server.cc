@@ -3314,14 +3314,6 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
   MClientReply *reply;
 
-  // check client
-  if (req->head.args.put_rsv.rsv.client !=
-      (uint64_t) req->get_orig_source().num()) {
-    reply = new MClientReply(req, -EINVAL);
-    reply_request(mdr, reply);
-    return;
-  }
-
   CInode *in = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
   if (! in)
     return;
@@ -3336,7 +3328,8 @@ void Server::handle_client_put_rsv(MDRequest *mdr)
   }
 
   reservation_state_t &rstate = in->reservations;
-  if (! rstate.remove_rsv(req->head.args.get_rsv.rsv)) {
+  if (! rstate.put_rsv(req->head.args.put_rsv.rsv_id,
+		       (uint64_t) req->get_orig_source().num())) {
     dout(0) << "handle_client_put_rsv failed" << dendl;
     reply = new MClientReply(req, -EINVAL);
     reply_request(mdr, reply);
