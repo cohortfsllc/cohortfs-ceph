@@ -1271,13 +1271,13 @@ void ceph_ll_return_rw(struct ceph_mount_info *cmount,
   cmount->get_client()->ll_return_rw(vino, serial);
 }
 
-extern "C" uint32_t ceph_ll_get_reservation(struct ceph_mount_info *cmount,
-					    vinodeno_t vino,
-					    bool write,
-					    bool(*cb)(vinodeno_t, bool, void*),
-					    void *opaque,
-					    struct ceph_reservation *rsv,
-					    uint64_t* max_fs)
+extern "C" int ceph_ll_get_reservation(struct ceph_mount_info *cmount,
+				       vinodeno_t vino,
+				       bool write,
+				       bool(*cb)(vinodeno_t, bool, void*),
+				       void *opaque,
+				       struct ceph_reservation *rsv,
+				       uint64_t* max_fs)
 {
   return (cmount->get_client()->ll_get_reservation(vino, write, cb, opaque, rsv,
 						   max_fs));

@@ -724,13 +724,12 @@ public:
 		      uint64_t* max_fs);
   void ll_return_rw(vinodeno_t vino,
 		    uint64_t serial);
-
-  uint32_t ll_get_reservation(vinodeno_t vino,
-			      bool write,
-			      bool(*cb)(vinodeno_t, bool, void*),
-			      void *opaque,
-			      struct ceph_reservation *rsv,
-			      uint64_t* max_fs);
+  int ll_get_reservation(vinodeno_t vino,
+			 bool write,
+			 bool(*cb)(vinodeno_t, bool, void*),
+			 void *opaque,
+			 struct ceph_reservation *rsv,
+			 uint64_t* max_fs);
   void ll_return_reservation(vinodeno_t vino,
 			     struct ceph_reservation *rsv);
   int ll_get_stripe_osd(vinodeno_t vino, uint64_t blockno,

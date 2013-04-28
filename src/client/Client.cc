@@ -3627,7 +3627,7 @@ int Client::mount(const std::string &mount_root)
   Mutex::Locker lock(client_lock);
 
   if (mounted) {
-    ldout(cct, 5) << "already mounted" << dendl;;
+    ldout(cct, 5) << "already mounted" << dendl;
     return 0;
   }
 
@@ -7596,18 +7596,21 @@ void Client::ll_return_rw(vinodeno_t vino,
 #endif
 }
 
-uint32_t Client::ll_get_reservation(vinodeno_t vino,
-				    bool write,
-				    bool(*cb)(vinodeno_t, bool, void*),
-				    void *opaque,
-				    struct ceph_reservation *rsv,
-				    uint64_t* max_fs)
+int Client::ll_get_reservation(vinodeno_t vino,
+			       bool write,
+			       bool(*cb)(vinodeno_t, bool, void*),
+			       void *opaque,
+			       struct ceph_reservation *rsv,
+			       uint64_t* max_fs)
 {
   Mutex::Locker lock(client_lock);
   int r = 0;
   int got = 0;
   int need = CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0);
   Inode *in = _ll_get_inode(vino);
+  bufferlist bl;
+
+  // always need caps -- but could it be piggy-backed on req?
   r = get_caps(in, need, 0, &got, (write ? *max_fs : 0));
   if (r != 0) {
     return r;
@@ -7615,7 +7618,26 @@ uint32_t Client::ll_get_reservation(vinodeno_t vino,
   if (need & ~got) {
     return -EBUSY;
   }
+
+  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETRSV);
+  filepath path;
+
+  in->make_nosnap_relative_path(path);
+  req->set_filepath(path);
+  req->set_inode(in);
+  req->head.args.get_rsv.rsv = *rsv;
+  req->head.args.get_rsv.rsv.flags = CEPH_RSV_FLAG_NONE;
+
+  // block on request, returned rsv in bl
+  r = make_request(req, 0, 0, NULL, NULL, 0, &bl);
+  if (r < 0) {
+    in->put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));
+    return (-EINVAL);
+  }
+
+  ::decode(*rsv, bl);
   in->add_client_reservation(write, cb, opaque, rsv);
+
   /* Assume the client will actually use them */
   mark_caps_dirty(in, need);
   if (write) {
@@ -7629,6 +7651,21 @@ void Client::ll_return_reservation(vinodeno_t vino,
 {
   Mutex::Locker lock(client_lock);
   Inode *in = _ll_get_inode(vino);
+  int r;
+
+  MetaRequest *req = new MetaRequest(CEPH_MDS_OP_PUTRSV);
+  filepath path;
+
+  in->make_nosnap_relative_path(path);
+  req->set_filepath(path);
+  req->set_inode(in);
+  req->head.args.put_rsv.rsv_id = rsv->id;
+  req->head.args.put_rsv.type = rsv->type;
+  req->head.args.put_rsv.flags = CEPH_RSV_FLAG_NONE;
+
+  // block on request, returned rsv in bl
+  r = make_request(req, 0, 0, NULL, NULL, 0, NULL);
+
   bool write = in->remove_client_reservation(rsv);
   in->put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));
 }
