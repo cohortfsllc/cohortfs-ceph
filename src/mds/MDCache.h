@@ -254,7 +254,10 @@ public:
 
 protected:
   // [resolve]
-  map<int, map<metareqid_t, MDSlaveUpdate*> > uncommitted_slave_updates;  // slave: for replay.
+  typedef map<metareqid_t, MDSlaveUpdate*> req_slave_update_map;
+  typedef map<int, req_slave_update_map> mds_slave_update_map;
+  mds_slave_update_map uncommitted_slave_updates;  // slave: for replay.
+
   map<CStripe*, int> uncommitted_slave_rename_oldstripe;  // slave: preserve the non-auth dir until seeing commit.
   map<CInode*, int> uncommitted_slave_unlink;  // slave: preserve the unlinked inode until seeing commit.
 

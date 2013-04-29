@@ -187,14 +187,8 @@ void MDCache::log_stat()
 
 bool MDCache::shutdown()
 {
-  if (lru.lru_get_size() > 0) {
+  if (lru.lru_get_size() > 0)
     dout(7) << "WARNING: mdcache shutdown with non-empty cache" << dendl;
-    //show_cache();
-#if 0
-    show_subtrees();
-#endif
-    //dump();
-  }
   return true;
 }
 
@@ -769,653 +763,6 @@ MDSCacheObject *MDCache::get_object(MDSCacheObjectInfo &info)
   else
     return dir;
 }
-
-#if 0
-// ====================================================================
-// subtree management
-
-void MDCache::list_subtrees(list<CStripe*>& ls)
-{
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p)
-    ls.push_back(p->first);
-}
-
-/*
- * adjust the dir_auth of a subtree.
- * merge with parent and/or child subtrees, if is it appropriate.
- * merge can ONLY happen if both parent and child have unambiguous auth.
- */
-void MDCache::adjust_subtree_auth(CStripe *stripe, pair<int,int> auth, bool do_eval)
-{
-  dout(7) << "adjust_subtree_auth " << stripe->get_stripe_auth() << " -> " << auth
-	  << " on " << *stripe << dendl;
-
-  if (mds->is_any_replay() || mds->is_resolve())
-    do_eval = false;
-
-  show_subtrees();
-
-  CStripe *root;
-  if (stripe->get_inode()->is_base()) {
-    root = stripe;  // bootstrap hack.
-    if (subtrees.count(root) == 0) {
-      subtrees[root].clear();
-      root->get(CStripe::PIN_SUBTREE);
-    }
-  } else {
-    root = get_subtree_root(stripe);  // subtree root
-  }
-  assert(root);
-  assert(subtrees.count(root));
-  dout(7) << " current root is " << *root << dendl;
-
-  if (root == stripe) {
-    // i am already a subtree.
-    stripe->set_stripe_auth(auth);
-  } else {
-    // i am a new subtree.
-    dout(10) << "  new subtree at " << *stripe << dendl;
-    assert(subtrees.count(stripe) == 0);
-    subtrees[stripe].clear();      // create empty subtree bounds list for me.
-    stripe->get(CStripe::PIN_SUBTREE);
-
-    // set dir_auth
-    stripe->set_stripe_auth(auth);
-
-    // move items nested beneath me, under me.
-    set<CStripe*>::iterator p = subtrees[root].begin();
-    while (p != subtrees[root].end()) {
-      set<CStripe*>::iterator next = p;
-      next++;
-      if (get_subtree_root((*p)->get_parent_stripe()) == stripe) {
-	// move under me
-	dout(10) << "  claiming child bound " << **p << dendl;
-	subtrees[stripe].insert(*p);
-	subtrees[root].erase(p);
-      }
-      p = next;
-    }
-
-    // i am a bound of the parent subtree.
-    subtrees[root].insert(stripe);
-
-    // i am now the subtree root.
-    root = stripe;
-
-    // adjust recursive pop counters
-    if (stripe->is_auth()) {
-      utime_t now = ceph_clock_now(g_ceph_context);
-      CStripe *p = stripe->get_parent_stripe();
-      while (p) {
-        p->pop_auth_subtree.sub(now, decayrate, stripe->pop_auth_subtree);
-        if (p->is_subtree_root()) break;
-        p = p->get_parent_stripe();
-      }
-    }
-
-    if (do_eval)
-      eval_subtree_root(stripe->get_inode());
-  }
-
-  show_subtrees();
-}
-
-
-void MDCache::try_subtree_merge(CStripe *stripe)
-{
-  dout(7) << "try_subtree_merge " << *stripe << dendl;
-  assert(subtrees.count(stripe));
-  set<CStripe*> oldbounds = subtrees[stripe];
-
-  // try merge at my root
-  try_subtree_merge_at(stripe);
-
-  // try merge at my old bounds
-  for (set<CStripe*>::iterator p = oldbounds.begin();
-       p != oldbounds.end();
-       ++p)
-    try_subtree_merge_at(*p);
-}
-
-class C_MDC_SubtreeMergeWB : public Context {
-  MDCache *mdcache;
-  CInode *in;
-  Mutation *mut;
-public:
-  C_MDC_SubtreeMergeWB(MDCache *mdc, CInode *i, Mutation *m) : mdcache(mdc), in(i), mut(m) {}
-  void finish(int r) { 
-    mdcache->subtree_merge_writebehind_finish(in, mut);
-  }
-};
-
-void MDCache::try_subtree_merge_at(CStripe *stripe, bool do_eval)
-{
-  dout(10) << "try_subtree_merge_at " << *stripe << dendl;
-  assert(subtrees.count(stripe));
-
-  if (mds->is_any_replay() || mds->is_resolve())
-    do_eval = false;
-
-  // merge with parent?
-  CStripe *parent = stripe;  
-  if (!stripe->get_inode()->is_base())
-    parent = get_subtree_root(stripe->get_parent_stripe());
-  
-  if (parent != stripe && // we have a parent,
-      parent->get_stripe_auth() == stripe->get_stripe_auth() && // auth matches,
-      stripe->get_stripe_auth().second == CDIR_AUTH_UNKNOWN) { // auth is unambiguous,
-    // merge with parent.
-    dout(10) << "  subtree merge at " << *stripe << dendl;
-    stripe->set_stripe_auth(CDIR_AUTH_DEFAULT);
-    
-    // move our bounds under the parent
-    for (set<CStripe*>::iterator p = subtrees[stripe].begin();
-	 p != subtrees[stripe].end();
-	 ++p) 
-      subtrees[parent].insert(*p);
-    
-    // we are no longer a subtree or bound
-    stripe->put(CStripe::PIN_SUBTREE);
-    subtrees.erase(stripe);
-    subtrees[parent].erase(stripe);
-
-    // adjust popularity?
-    if (stripe->is_auth()) {
-      utime_t now = ceph_clock_now(g_ceph_context);
-      CStripe *p = stripe->get_parent_stripe();
-      while (p) {
-        p->pop_auth_subtree.add(now, decayrate, stripe->pop_auth_subtree);
-        if (p->is_subtree_root()) break;
-        p = p->get_parent_stripe();
-      }
-    }
-
-    if (do_eval)
-      eval_subtree_root(stripe->get_inode());
-
-    // journal inode? 
-    //  (this is a large hammer to ensure that dirfragtree updates will
-    //   hit the disk before the relevant dirfrags ever close)
-    CInode *in = stripe->get_inode();
-    if (in->is_auth() && in->can_auth_pin() &&
-	(mds->is_clientreplay() || mds->is_active() || mds->is_stopping())) {
-      dout(10) << "try_subtree_merge_at journaling merged bound " << *in << dendl;
-      
-      in->auth_pin(this);
-
-      // journal write-behind.
-      inode_t *pi = in->project_inode();
-      pi->version = in->pre_dirty();
-      
-      Mutation *mut = new Mutation;
-      mut->ls = mds->mdlog->get_current_segment();
-      EUpdate *le = new EUpdate(mds->mdlog, "subtree merge writebehind");
-      mds->mdlog->start_entry(le);
-
-      le->metablob.add_stripe_context(in->get_parent_stripe());
-      journal_dirty_inode(mut, &le->metablob, in);
-      
-      mds->mdlog->submit_entry(le);
-      mds->mdlog->wait_for_safe(new C_MDC_SubtreeMergeWB(this, in, mut));
-      mds->mdlog->flush();
-    }
-  } 
-
-  show_subtrees(15);
-}
-
-void MDCache::subtree_merge_writebehind_finish(CInode *in, Mutation *mut)
-{
-  dout(10) << "subtree_merge_writebehind_finish on " << in << dendl;
-  in->pop_and_dirty_projected_inode(mut->ls);
-
-  mut->apply();
-  mds->locker->drop_locks(mut);
-  mut->cleanup();
-  delete mut;
-
-  in->auth_unpin(this);
-}
-
-void MDCache::eval_subtree_root(CInode *diri)
-{
-  // evaluate subtree inode filelock?
-  //  (we should scatter the filelock on subtree bounds)
-  if (diri->is_auth())
-    mds->locker->try_eval(diri, CEPH_LOCK_IFILE | CEPH_LOCK_INEST);
-}
-
-
-void MDCache::get_dirstripe_bound_set(vector<dirstripe_t>& stripes, set<CStripe*>& bounds)
-{
-  dout(10) << "get_dirstripe_bound_set " << stripes << dendl;
-
-  // sort by ino
-  typedef map<inodeno_t, vector<stripeid_t> > byino_map;
-  byino_map byino;
-  for (vector<dirstripe_t>::iterator p = stripes.begin(); p != stripes.end(); ++p)
-    byino[p->ino].push_back(p->stripeid);
-  dout(10) << " by ino: " << byino << dendl;
-
-  for (byino_map::iterator p = byino.begin(); p != byino.end(); ++p) {
-    CInode *diri = get_inode(p->first);
-    if (!diri)
-      continue;
-    for (vector<stripeid_t>::iterator s = p->second.begin(); s != p->second.end(); ++s) {
-      CStripe *stripe = diri->get_stripe(*s);
-      if (stripe)
-        bounds.insert(stripe);
-    }
-  }
-}
-
-void MDCache::adjust_bounded_subtree_auth(CStripe *stripe, const set<CStripe*>& bounds, pair<int,int> auth)
-{
-  dout(7) << "adjust_bounded_subtree_auth "
-      << stripe->get_stripe_auth() << " -> " << auth
-      << " on " << *stripe << " bounds " << bounds << dendl;
-
-  show_subtrees();
-
-  CStripe *root;
-  if (MDS_INO_IS_BASE(stripe->get_inode()->ino())) {
-    root = stripe;  // bootstrap hack.
-    if (subtrees.count(root) == 0) {
-      subtrees[root].clear();
-      root->get(CStripe::PIN_SUBTREE);
-    }
-  } else {
-    root = get_subtree_root(stripe);  // subtree root
-  }
-  assert(root);
-  dout(7) << " current root is " << *root << dendl;
-  assert(subtrees.count(root));
-
-  pair<int,int> oldauth = stripe->authority();
-
-  if (root == stripe) {
-    // i am already a subtree.
-    stripe->set_stripe_auth(auth);
-  } else {
-    // i am a new subtree.
-    dout(10) << "  new subtree at " << *stripe << dendl;
-    assert(subtrees.count(stripe) == 0);
-    subtrees[stripe].clear();      // create empty subtree bounds list for me.
-    stripe->get(CStripe::PIN_SUBTREE);
-    
-    // set dir_auth
-    stripe->set_stripe_auth(auth);
-    
-    // move items nested beneath me, under me.
-    set<CStripe*>::iterator p = subtrees[root].begin();
-    while (p != subtrees[root].end()) {
-      set<CStripe*>::iterator next = p;
-      next++;
-      if (get_subtree_root((*p)->get_parent_stripe()) == stripe) {
-	// move under me
-	dout(10) << "  claiming child bound " << **p << dendl;
-	subtrees[stripe].insert(*p); 
-	subtrees[root].erase(p);
-      }
-      p = next;
-    }
-    
-    // i am a bound of the parent subtree.
-    subtrees[root].insert(stripe); 
-
-    // i am now the subtree root.
-    root = stripe;
-  }
-
-  // verify/adjust bounds.
-  // - these may be new, or
-  // - beneath existing ambiguous bounds (which will be collapsed),
-  // - but NOT beneath unambiguous bounds.
-  for (set<CStripe*>::iterator p = bounds.begin();
-       p != bounds.end();
-       ++p) {
-    CStripe *bound = *p;
-    
-    // new bound?
-    if (subtrees[stripe].count(bound) == 0) {
-      if (get_subtree_root(bound) == stripe) {
-	dout(10) << "  new bound " << *bound << ", adjusting auth back to old " << oldauth << dendl;
-	adjust_subtree_auth(bound, oldauth);       // otherwise, adjust at bound.
-      }
-      else {
-	dout(10) << "  want bound " << *bound << dendl;
-	// make sure it's nested beneath ambiguous subtree(s)
-	while (1) {
-	  CStripe *t = get_subtree_root(bound->get_parent_stripe());
-	  if (t == stripe) break;
-	  while (subtrees[stripe].count(t) == 0)
-	    t = get_subtree_root(t->get_parent_stripe());
-	  dout(10) << "  swallowing intervening subtree at " << *t << dendl;
-	  adjust_subtree_auth(t, auth);
-	  try_subtree_merge_at(t);
-	}
-      }
-    }
-    else {
-      dout(10) << "  already have bound " << *bound << dendl;
-    }
-  }
-  // merge stray bounds?
-  while (!subtrees[stripe].empty()) {
-    set<CStripe*> copy = subtrees[stripe];
-    for (set<CStripe*>::iterator p = copy.begin(); p != copy.end(); p++) {
-      if (bounds.count(*p) == 0) {
-	CStripe *stray = *p;
-	dout(10) << "  swallowing extra subtree at " << *stray << dendl;
-	adjust_subtree_auth(stray, auth);
-	try_subtree_merge_at(stray);
-      }
-    }
-    // swallowing subtree may add new subtree bounds
-    if (copy == subtrees[stripe])
-      break;
-  }
-
-  // bound should now match.
-  verify_subtree_bounds(stripe, bounds);
-
-  show_subtrees();
-}
-
-
-void MDCache::adjust_bounded_subtree_auth(CStripe *stripe, const vector<dirstripe_t>& bound_dfs, pair<int,int> auth)
-{
-  dout(7) << "adjust_bounded_subtree_auth "
-      << stripe->get_stripe_auth() << " -> " << auth
-      << " on " << *stripe << " bound_dfs " << bound_dfs << dendl;
-  
-  // make bounds list
-  set<CStripe*> bounds;
-  for (vector<dirstripe_t>::const_iterator p = bound_dfs.begin();
-       p != bound_dfs.end();
-       ++p) {
-    CStripe *bd = get_dirstripe(*p);
-    if (bd) 
-      bounds.insert(bd);
-  }
-  
-  adjust_bounded_subtree_auth(stripe, bounds, auth);
-}
-
-void MDCache::map_dirstripe_set(list<dirstripe_t>& dfs, set<CStripe*>& result)
-{
-  dout(10) << "map_dirstripe_set " << dfs << dendl;
-
-  // group by inode
-  map<inodeno_t, set<stripeid_t> > ino_stripeid;
-  for (list<dirstripe_t>::iterator p = dfs.begin(); p != dfs.end(); ++p)
-    ino_stripeid[p->ino].insert(p->stripeid);
-
-  // get stripes
-  for (map<inodeno_t, set<stripeid_t> >::iterator p = ino_stripeid.begin();
-       p != ino_stripeid.end();
-       ++p) {
-    CInode *in = get_inode(p->first);
-    if (!in)
-      continue;
-
-    for (set<stripeid_t>::iterator s = p->second.begin();
-         s != p->second.end(); s++) {
-      CStripe *stripe = in->get_stripe(*s);
-      if (stripe)
-        result.insert(stripe);
-    }
-  }
-}
-
-
-
-CStripe *MDCache::get_subtree_root(CStripe *stripe)
-{
-  // find the underlying stripe that delegates (or is about to delegate) auth
-  while (stripe && !stripe->is_subtree_root())
-    stripe = stripe->get_parent_stripe();
-  return stripe;
-}
-
-CStripe *MDCache::get_projected_subtree_root(CStripe *stripe)
-{
-  // find the underlying stripe that delegates (or is about to delegate) auth
-  while (stripe && !stripe->is_subtree_root())
-    stripe = stripe->get_projected_parent_stripe();
-  return stripe;
-}
-
-void MDCache::remove_subtree(CStripe *stripe)
-{
-  dout(10) << "remove_subtree " << *stripe << dendl;
-  assert(subtrees.count(stripe));
-  assert(subtrees[stripe].empty());
-  subtrees.erase(stripe);
-  stripe->put(CStripe::PIN_SUBTREE);
-  if (stripe->get_parent_stripe()) {
-    CStripe *p = get_subtree_root(stripe->get_parent_stripe());
-    assert(subtrees[p].count(stripe));
-    subtrees[p].erase(stripe);
-  }
-}
-
-void MDCache::get_subtree_bounds(CStripe *stripe, set<CStripe*>& bounds)
-{
-  assert(subtrees.count(stripe));
-  bounds = subtrees[stripe];
-}
-
-void MDCache::get_wouldbe_subtree_bounds(CStripe *stripe, set<CStripe*>& bounds)
-{
-  if (subtrees.count(stripe)) {
-    // just copy them, dir is a subtree.
-    get_subtree_bounds(stripe, bounds);
-  } else {
-    // find them
-    CStripe *root = get_subtree_root(stripe);
-    for (set<CStripe*>::iterator p = subtrees[root].begin();
-	 p != subtrees[root].end();
-	 ++p) {
-      CStripe *t = *p;
-      while (t != root) {
-	t = t->get_parent_stripe();
-	assert(t);
-	if (t == stripe) {
-	  bounds.insert(*p);
-	  continue;
-	}
-      }
-    }
-  }
-}
-
-void MDCache::verify_subtree_bounds(CStripe *stripe, const set<CStripe*>& bounds)
-{
-  // for debugging only.
-  assert(subtrees.count(stripe));
-  if (bounds != subtrees[stripe]) {
-    dout(0) << "verify_subtree_bounds failed" << dendl;
-    set<CStripe*> b = bounds;
-    for (set<CStripe*>::iterator p = subtrees[stripe].begin();
-	 p != subtrees[stripe].end();
-	 ++p) {
-      if (bounds.count(*p)) {
-	b.erase(*p);
-	continue;
-      }
-      dout(0) << "  missing bound " << **p << dendl;
-    }
-    for (set<CStripe*>::iterator p = b.begin();
-	 p != b.end();
-	 ++p) 
-      dout(0) << "    extra bound " << **p << dendl;
-  }
-  assert(bounds == subtrees[stripe]);
-}
-
-void MDCache::verify_subtree_bounds(CStripe *stripe, const list<dirstripe_t>& bounds)
-{
-  // for debugging only.
-  assert(subtrees.count(stripe));
-
-  // make sure that any bounds i do have are properly noted as such.
-  int failed = 0;
-  for (list<dirstripe_t>::const_iterator p = bounds.begin();
-       p != bounds.end();
-       ++p) {
-    CStripe *bd = get_dirstripe(*p);
-    if (!bd) continue;
-    if (subtrees[stripe].count(bd) == 0) {
-      dout(0) << "verify_subtree_bounds failed: extra bound " << *bd << dendl;
-      failed++;
-    }
-  }
-  assert(failed == 0);
-}
-
-void MDCache::project_subtree_rename(CInode *diri, CStripe *oldstripe, CStripe *newstripe)
-{
-  dout(10) << "project_subtree_rename " << *diri << " from " << *oldstripe
-	   << " to " << *newstripe << dendl;
-  projected_subtree_renames[diri].push_back(pair<CStripe*,CStripe*>(oldstripe, newstripe));
-}
-
-void MDCache::adjust_subtree_after_rename(CInode *diri, CStripe *oldstripe,
-                                          bool pop, bool imported)
-{
-  dout(10) << "adjust_subtree_after_rename " << *diri << " from " << *oldstripe << dendl;
-
-  //show_subtrees();
-
-  CStripe *newstripe = diri->get_parent_stripe();
-
-  if (pop) {
-    map<CInode*,list<pair<CStripe*,CStripe*> > >::iterator p = projected_subtree_renames.find(diri);
-    assert(p != projected_subtree_renames.end());
-    assert(!p->second.empty());
-    assert(p->second.front().first == oldstripe);
-    assert(p->second.front().second == newstripe);
-    p->second.pop_front();
-    if (p->second.empty())
-      projected_subtree_renames.erase(p);
-  }
-
-  // adjust subtree
-  int count = diri->get_stripe_count();
-  for (int i = 0; i < count; i++) {
-    CStripe *stripe = diri->get_stripe(i);
-
-    dout(10) << "stripe " << *stripe << dendl;
-    CStripe *oldparent = get_subtree_root(oldstripe);
-    dout(10) << " old parent " << *oldstripe << dendl;
-    CStripe *newparent = get_subtree_root(newstripe);
-    dout(10) << " new parent " << *newstripe << dendl;
-
-    if (oldparent == newparent) {
-      dout(10) << "parent unchanged for " << *stripe << " at " << *oldparent << dendl;
-      continue;
-    }
-
-    if (stripe->is_subtree_root()) {
-      // children are fine.  change parent.
-      dout(10) << "moving " << *stripe << " from " << *oldparent << " to " << *newparent << dendl;
-      assert(subtrees[oldparent].count(stripe));
-      subtrees[oldparent].erase(stripe);
-      assert(subtrees.count(newparent));
-      subtrees[newparent].insert(stripe);
-      try_subtree_merge_at(stripe, !imported);
-    } else {
-      // mid-subtree.
-
-      // see if any old bounds move to the new parent.
-      list<CStripe*> tomove;
-      for (set<CStripe*>::iterator p = subtrees[oldparent].begin();
-	   p != subtrees[oldparent].end();
-	   ++p) {
-	CStripe *bound = *p;
-	CStripe *broot = get_subtree_root(bound->get_parent_stripe());
-	if (broot != oldparent) {
-	  assert(broot == newparent);
-	  tomove.push_back(bound);
-	}
-      }
-      for (list<CStripe*>::iterator p = tomove.begin(); p != tomove.end(); ++p) {
-	CStripe *bound = *p;
-	dout(10) << "moving bound " << *bound << " from " << *oldparent << " to " << *newparent << dendl;
-	subtrees[oldparent].erase(bound);
-	subtrees[newparent].insert(bound);
-      }	   
-
-      // did auth change?
-      if (oldparent->authority() != newparent->authority()) {
-	adjust_subtree_auth(stripe, oldparent->authority(), !imported);  // caller is responsible for *diri.
-	try_subtree_merge_at(stripe, !imported);
-      }
-    }
-  }
-
-  show_subtrees();
-}
-
-
-void MDCache::get_fullauth_subtrees(set<CStripe*>& s)
-{
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (root->is_full_stripe_auth())
-      s.insert(root);
-  }
-}
-void MDCache::get_auth_subtrees(set<CStripe*>& s)
-{
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (root->is_auth())
-      s.insert(root);
-  }
-}
-
-
-// count.
-
-int MDCache::num_subtrees()
-{
-  return subtrees.size();
-}
-
-int MDCache::num_subtrees_fullauth()
-{
-  int n = 0;
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (root->is_full_stripe_auth())
-      n++;
-  }
-  return n;
-}
-
-int MDCache::num_subtrees_fullnonauth()
-{
-  int n = 0;
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *root = p->first;
-    if (root->is_full_stripe_nonauth())
-      n++;
-  }
-  return n;
-}
-#endif
 
 
 // ===================================
@@ -2262,207 +1609,11 @@ void MDCache::_logged_slave_commit(int from, metareqid_t reqid)
 }
 
 
-
-
-
-
-// ====================================================================
-// import map, recovery
-#if 0
-void MDCache::_move_subtree_map_bound(dirstripe_t ds, dirstripe_t oldparent, dirstripe_t newparent,
-                                      map<dirstripe_t,vector<dirstripe_t> >& subtrees)
-{
-  if (subtrees.count(oldparent)) {
-    vector<dirstripe_t>& v = subtrees[oldparent];
-    dout(10) << " removing " << ds << " from " << oldparent << " bounds " << v << dendl;
-    v.erase(remove(v.begin(), v.end(), ds));
-  }
-  if (subtrees.count(newparent)) {
-    vector<dirstripe_t>& v = subtrees[newparent];
-    dout(10) << " adding " << ds << " to " << newparent << " bounds " << v << dendl;
-    v.push_back(ds);
-  }
-}
-
-ESubtreeMap *MDCache::create_subtree_map() 
-{
-  dout(10) << "create_subtree_map " << num_subtrees() << " subtrees, " 
-	   << num_subtrees_fullauth() << " fullauth"
-	   << dendl;
-
-  show_subtrees();
-
-  ESubtreeMap *le = new ESubtreeMap();
-  mds->mdlog->start_entry(le);
-  
-  CStripe *mystripe = myin ? myin->get_stripe(0) : 0;
-
-  // include all auth subtrees, and their bounds.
-  // and a spanning tree to tie it to the root.
-  for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       ++p) {
-    CStripe *stripe = p->first;
-
-    // journal subtree as "ours" if we are
-    //   me, -2
-    //   me, me
-    //   me, !me (may be importing and ambiguous!)
-
-    // so not
-    //   !me, *
-    if (stripe->get_stripe_auth().first != mds->whoami)
-      continue;
-
-    if (migrator->is_ambiguous_import(stripe->dirstripe()) ||
-	my_ambiguous_imports.count(stripe->dirstripe())) {
-      dout(15) << " ambig subtree " << *stripe << dendl;
-      le->ambiguous_subtrees.insert(stripe->dirstripe());
-    } else {
-      dout(15) << " subtree " << *stripe << dendl;
-    }
-
-    le->subtrees[stripe->dirstripe()].clear();
-    le->metablob.add_stripe_context(stripe, EMetaBlob::TO_ROOT);
-    le->metablob.add_stripe(stripe, false);
-
-    if (mystripe == stripe)
-      mystripe = NULL;
-
-    // bounds
-    for (set<CStripe*>::iterator q = p->second.begin();
-	 q != p->second.end();
-	 ++q) {
-      CStripe *bound = *q;
-      dout(15) << " subtree bound " << *bound << dendl;
-      le->subtrees[stripe->dirstripe()].push_back(bound->dirstripe());
-      le->metablob.add_stripe_context(bound, EMetaBlob::TO_ROOT);
-      le->metablob.add_stripe(bound, false);
-    }
-  }
-
-  // apply projected renames
-  for (map<CInode*,list<pair<CStripe*,CStripe*> > >::iterator p = projected_subtree_renames.begin();
-       p != projected_subtree_renames.end();
-       ++p) {
-    for (list<pair<CStripe*,CStripe*> >::iterator q = p->second.begin(); q != p->second.end(); ++q) {
-      CInode *diri = p->first;
-      CStripe *oldstripe = q->first;
-      CStripe *newstripe = q->second;
-      dout(10) << " adjusting for projected rename of " << *diri << " to " << *newstripe << dendl;
-
-      int count = diri->get_stripe_count();
-      for (int i = 0; i < count; i++) {
-        CStripe *stripe = diri->get_stripe(i);
-	dout(10) << "stripe " << *stripe << dendl;
-	CStripe *oldparent = get_projected_subtree_root(oldstripe);
-	dout(10) << " old parent " << *oldparent << dendl;
-	CStripe *newparent = get_projected_subtree_root(newstripe);
-	dout(10) << " new parent " << *newparent << dendl;
-
-	if (oldparent == newparent) {
-	  dout(10) << "parent unchanged for " << stripe->dirstripe() << " at "
-		   << oldparent->dirstripe() << dendl;
-	  continue;
-	}
-
-	bool journal_dir = false;
-	if (stripe->is_subtree_root()) {
-	  if (le->subtrees.count(newparent->dirstripe()) &&
-	      oldparent->get_stripe_auth() != newparent->get_stripe_auth())
-	    journal_dir = true;
-	  // children are fine.  change parent.
-	  _move_subtree_map_bound(stripe->dirstripe(), oldparent->dirstripe(),
-                                  newparent->dirstripe(), le->subtrees);
-	} else {
-	  // mid-subtree.
-	  if (oldparent->get_stripe_auth() != newparent->get_stripe_auth()) {
-	    dout(10) << " creating subtree for " << stripe->dirstripe() << dendl;
-	    // if oldparent is auth, subtree is mine; include it.
-	    if (le->subtrees.count(oldparent->dirstripe())) {
-	      le->subtrees[stripe->dirstripe()].clear();
-	      journal_dir = true;
-	    }
-	    // if newparent is auth, subtree is a new bound
-	    if (le->subtrees.count(newparent->dirstripe())) {
-	      le->subtrees[newparent->dirstripe()].push_back(stripe->dirstripe());  // newparent is auth; new bound
-	      journal_dir = true;
-	    }
-	    newparent = stripe;
-	  }
-	  
-	  // see if any old bounds move to the new parent.
-	  for (set<CStripe*>::iterator p = subtrees[oldparent].begin();
-	       p != subtrees[oldparent].end();
-	       ++p) {
-	    CStripe *bound = *p;
-	    if (stripe->contains(bound->get_parent_stripe()))
-	      _move_subtree_map_bound(bound->dirstripe(), oldparent->dirstripe(), newparent->dirstripe(),
-				      le->subtrees);
-	  }
-	}
-	if (journal_dir) {
-          CInode *in = stripe->get_inode();
-	  le->metablob.add_stripe_context(stripe, EMetaBlob::TO_ROOT);
-	  le->metablob.add_dir(in->get_parent_dir(), false);
-	}
-      }
-    }
-  }
-
-  // simplify the journaled map.  our in memory map may have more
-  // subtrees than needed due to migrations that are just getting
-  // started or just completing.  but on replay, the "live" map will
-  // be simple and we can do a straight comparison.
-  for (map<dirstripe_t, vector<dirstripe_t> >::iterator p = le->subtrees.begin(); p != le->subtrees.end(); ++p) {
-    if (le->ambiguous_subtrees.count(p->first))
-      continue;
-    unsigned i = 0;
-    while (i < p->second.size()) {
-      dirstripe_t b = p->second[i];
-      if (le->subtrees.count(b) &&
-	  le->ambiguous_subtrees.count(b) == 0) {
-	vector<dirstripe_t>& bb = le->subtrees[b];
-	dout(10) << "simplify: " << p->first << " swallowing " << b << " with bounds " << bb << dendl;
-	for (vector<dirstripe_t>::iterator r = bb.begin(); r != bb.end(); ++r)
-	  p->second.push_back(*r);
-	le->subtrees.erase(b);
-	p->second.erase(p->second.begin() + i);
-      } else {
-	++i;
-      }
-    }
-  }
-  dout(15) << " subtrees " << le->subtrees << dendl;
-  dout(15) << " ambiguous_subtrees " << le->ambiguous_subtrees << dendl;
-
-  if (mystripe) {
-    // include my dir
-    le->metablob.add_stripe_context(mystripe, EMetaBlob::TO_ROOT);
-    le->metablob.add_dir(myin->get_parent_dir(), false);
-  }
-
-  //le->metablob.print(cout);
-  le->expire_pos = mds->mdlog->journaler->get_expire_pos();
-  return le;
-}
-#endif
-
 void MDCache::resolve_start()
 {
   dout(10) << "resolve_start " << *root << dendl;
-#if 0
-  if (mds->mdsmap->get_root() != mds->whoami) {
-    // if we don't have the root dir, adjust it to UNKNOWN.  during
-    // resolve we want mds0 to explicit claim the portion of it that
-    // it owns, so that anything beyond its bounds get left as
-    // unknown.
-    CStripe *rootstripe = root->get_stripe(0);
-    if (rootstripe)
-      adjust_subtree_auth(rootstripe, CDIR_AUTH_UNKNOWN);
-  }
-#endif
-  for (map<int, map<metareqid_t, MDSlaveUpdate*> >::iterator p = uncommitted_slave_updates.begin();
+
+  for (mds_slave_update_map::iterator p = uncommitted_slave_updates.begin();
        p != uncommitted_slave_updates.end(); p++)
     need_resolve_ack.insert(p->first);
 }
@@ -2472,157 +1623,49 @@ void MDCache::send_resolves()
   // reset resolve state
   got_resolve.clear();
 
-  if (!need_resolve_ack.empty()) {
-    for (set<int>::iterator p = need_resolve_ack.begin(); p != need_resolve_ack.end(); ++p)
-      send_slave_resolve(*p);
-    return;
-  }
-  if (!need_resolve_rollback.empty()) {
-    dout(10) << "send_resolves still waiting for rollback to commit on ("
-	     << need_resolve_rollback << ")" << dendl;
-    return;
-  }
-  assert(uncommitted_slave_updates.empty());
-  for (set<int>::iterator p = recovery_set.begin(); p != recovery_set.end(); ++p) {
-    int who = *p;
-    if (who == mds->whoami)
-      continue;
-    if (migrator->is_importing() ||
-	migrator->is_exporting())
-      send_resolve_later(who);
-    else
-      send_resolve_now(who);
-  }
-}
-
-void MDCache::send_resolve_later(int who)
-{
-  dout(10) << "send_resolve_later to mds." << who << dendl;
-  wants_resolve.insert(who);
-}
-
-void MDCache::maybe_send_pending_resolves()
-{
-  if (wants_resolve.empty())
-    return;  // nothing to send.
-
-  // only if it's appropriate!
-  if (migrator->is_exporting() ||
-      migrator->is_importing()) {
-    dout(7) << "maybe_send_pending_resolves waiting, imports/exports still in progress" << dendl;
-    migrator->show_importing();
-    migrator->show_exporting();
-    return;  // not now
-  }
-  
-  // ok, send them.
-  for (set<int>::iterator p = wants_resolve.begin();
-       p != wants_resolve.end();
-       p++) 
-    send_resolve_now(*p);
-  wants_resolve.clear();
-}
-
-
-class C_MDC_SendResolve : public Context {
-  MDCache *mdc;
-  int who;
-public:
-  C_MDC_SendResolve(MDCache *c, int w) : mdc(c), who(w) { }
-  void finish(int r) {
-    mdc->send_resolve_now(who);
-  }
-};
-
-void MDCache::send_slave_resolve(int who)
-{
-  dout(10) << "send_slave_resolve to mds." << who << dendl;
-  MMDSResolve *m = new MMDSResolve;
+  // allocate resolve messages for everyone in recovery_set
+  typedef map<int, MMDSResolve*> resolve_map;
+  resolve_map resolves;
+  for (set<int>::iterator p = recovery_set.begin(); p != recovery_set.end(); ++p)
+    if (*p != mds->whoami)
+      resolves[*p] = new MMDSResolve;
 
   // list prepare requests lacking a commit
   // [active survivor]
   for (hash_map<metareqid_t, MDRequest*>::iterator p = active_requests.begin();
       p != active_requests.end();
       ++p) {
-    if (p->second->is_slave() && p->second->slave_to_mds == who) {
-      dout(10) << " including uncommitted " << *p->second << dendl;
-      m->add_slave_request(p->first);
-    }
-  }
-  // [resolving]
-  if (uncommitted_slave_updates.count(who) &&
-      !uncommitted_slave_updates[who].empty()) {
-    for (map<metareqid_t, MDSlaveUpdate*>::iterator p = uncommitted_slave_updates[who].begin();
-	p != uncommitted_slave_updates[who].end();
-	++p) {
-      dout(10) << " including uncommitted " << p->first << dendl;
-      m->add_slave_request(p->first);
-    }
-  }
-
-  assert(!m->slave_requests.empty());
-  dout(10) << " will need resolve ack from mds." << who << dendl;
-  mds->send_message_mds(m, who);
-}
-
-void MDCache::send_resolve_now(int who)
-{
-  dout(10) << "send_resolve_now to mds." << who << dendl;
-  MMDSResolve *m = new MMDSResolve;
-#if 0
-  show_subtrees();
-
-  // known
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();
-       p++) {
-    CStripe *stripe = p->first;
-
-    // only our subtrees
-    if (stripe->authority().first != mds->get_nodeid()) 
+    if (!p->second->is_slave())
       continue;
-
-    if (mds->is_resolve() && my_ambiguous_imports.count(stripe->dirstripe()))
-      continue;  // we'll add it below
-    
-    if (migrator->is_ambiguous_import(stripe->dirstripe())) {
-      // ambiguous (mid-import)
-      vector<dirstripe_t> dsls;
-      for (set<CStripe*>::iterator q = subtrees[stripe].begin();
-	   q != subtrees[stripe].end();
-	   ++q)
-        dsls.push_back((*q)->dirstripe());
-      m->add_ambiguous_import(stripe->dirstripe(), dsls);
-      dout(10) << " ambig " << stripe->dirstripe() << " " << dsls << dendl;
-    } else {
-      // not ambiguous.
-      m->add_subtree(stripe->dirstripe());
-      
-      // bounds too
-      vector<dirstripe_t> dsls;
-      for (set<CStripe*>::iterator q = subtrees[stripe].begin();
-	   q != subtrees[stripe].end();
-	   ++q) {
-	CStripe *bound = *q;
-	m->add_subtree_bound(stripe->dirstripe(), bound->dirstripe());
-	dsls.push_back(bound->dirstripe());
-      }
-      dout(10) << " claim " << stripe->dirstripe() << " " << dsls << dendl;
+    resolve_map::iterator r = resolves.find(p->second->slave_to_mds);
+    if (r != resolves.end()) {
+      dout(10) << " including uncommitted " << *p->second << dendl;
+      r->second->add_slave_request(p->first);
     }
   }
 
-  // ambiguous
-  for (map<dirstripe_t, vector<dirstripe_t> >::iterator p = my_ambiguous_imports.begin();
-       p != my_ambiguous_imports.end();
+  // [resolving]
+  for (mds_slave_update_map::iterator p = uncommitted_slave_updates.begin();
+       p != uncommitted_slave_updates.end();
        ++p) {
-    m->add_ambiguous_import(p->first, p->second);
-    dout(10) << " ambig " << p->first << " " << p->second << dendl;
+    resolve_map::iterator r = resolves.find(p->first);
+    if (r == resolves.end())
+      continue;
+    for (req_slave_update_map::iterator q = p->second.begin();
+         q != p->second.end();
+         ++q) {
+      dout(10) << " including uncommitted " << q->first
+          << " for mds." << p->first << dendl;
+      r->second->add_slave_request(q->first);
+    }
   }
-#endif
-  // send
-  mds->send_message_mds(m, who);
-}
 
+  // send all resolves
+  for (resolve_map::iterator r = resolves.begin(); r != resolves.end(); ++r) {
+    dout(10) << "sending " << *r->second << " to mds." << r->first << dendl;
+    mds->send_message_mds(r->second, r->first);
+  }
+}
 
 void MDCache::handle_mds_failure(int who)
 {
@@ -2636,7 +1679,6 @@ void MDCache::handle_mds_failure(int who)
   // adjust my recovery lists
   wants_resolve.erase(who);   // MDS will ask again
   got_resolve.erase(who);     // i'll get another.
-  discard_delayed_resolve(who);
 
   rejoin_sent.erase(who);        // i need to send another
   rejoin_ack_gather.erase(who);  // i'll need/get another.
@@ -2706,9 +1748,6 @@ void MDCache::handle_mds_failure(int who)
   }
 
   kick_find_ino_peers(who);
-#if 0
-  show_subtrees();  
-#endif
 }
 
 /*
@@ -2829,138 +1868,40 @@ void MDCache::handle_resolve(MMDSResolve *m)
       }
     }
     mds->send_message(ack, m->get_connection());
-    m->put();
-    return;
   }
 
-  if (!need_resolve_ack.empty() || !need_resolve_rollback.empty()) {
-    dout(10) << "delay processing subtree resolve" << dendl;
-    discard_delayed_resolve(from);
-    delayed_resolve[from] = m;
-    return;
-  }
-#if 0
-  // am i a surviving ambiguous importer?
-  if (mds->is_clientreplay() || mds->is_active() || mds->is_stopping()) {
-    // check for any import success/failure (from this node)
-    stripe_bound_map::iterator p = my_ambiguous_imports.begin();
-    while (p != my_ambiguous_imports.end()) {
-      stripe_bound_map::iterator next = p;
-      next++;
-      CStripe *stripe = get_dirstripe(p->first);
-      assert(stripe);
-      dout(10) << "checking ambiguous import " << *stripe << dendl;
-      if (migrator->is_importing(stripe->dirstripe()) &&
-	  migrator->get_import_peer(stripe->dirstripe()) == from) {
-	assert(migrator->get_import_state(stripe->dirstripe()) == Migrator::IMPORT_ACKING);
-	
-	// check if sender claims the subtree
-	bool claimed_by_sender = false;
-	for (stripe_bound_map::iterator q = m->subtrees.begin();
-	     q != m->subtrees.end();
-	     ++q) {
-	  // an ambiguous import won't race with a refragmentation; it's appropriate to force here.
-	  CStripe *base = get_dirstripe(q->first);
-	  if (!base || !base->contains(stripe)) 
-	    continue;  // base not dir or an ancestor of dir, clearly doesn't claim dir.
-
-	  bool inside = true;
-	  set<CStripe*> bounds;
-	  get_dirstripe_bound_set(q->second, bounds);
-	  for (set<CStripe*>::iterator p = bounds.begin(); p != bounds.end(); ++p) {
-	    CStripe *bound = *p;
-	    if (bound->contains(stripe)) {
-	      inside = false;  // nope, bound is dir or parent of dir, not inside.
-	      break;
-	    }
-	  }
-	  if (inside)
-	    claimed_by_sender = true;
-	}
-
-	if (claimed_by_sender) {
-	  dout(7) << "ambiguous import failed on " << *stripe << dendl;
-	  migrator->import_reverse(stripe);
-	} else {
-	  dout(7) << "ambiguous import succeeded on " << *stripe << dendl;
-	  migrator->import_finish(stripe);
-	}
-	my_ambiguous_imports.erase(p);  // no longer ambiguous.
-      }
-      p = next;
-    }
-  }    
-
-  // update my dir_auth values
-  //   need to do this on recoverying nodes _and_ bystanders (to resolve ambiguous
-  //   migrations between other nodes)
-  for (map<dirstripe_t, vector<dirstripe_t> >::iterator pi = m->subtrees.begin();
-       pi != m->subtrees.end();
-       ++pi) {
-    dout(10) << "peer claims " << pi->first << " bounds " << pi->second << dendl;
-    CStripe *stripe = get_dirstripe(pi->first);
-    if (!stripe)
-      continue;
-
-    set<CStripe*> bounds;
-    get_dirstripe_bound_set(pi->second, bounds);
-
-    adjust_bounded_subtree_auth(stripe, bounds, from);
-    try_subtree_merge(stripe);
-  }
-
-  show_subtrees();
-
-  // note ambiguous imports too
-  for (map<dirstripe_t, vector<dirstripe_t> >::iterator pi = m->ambiguous_imports.begin();
-       pi != m->ambiguous_imports.end();
-       ++pi) {
-    dout(10) << "noting ambiguous import on " << pi->first << " bounds " << pi->second << dendl;
-    other_ambiguous_imports[from][pi->first].swap( pi->second );
-  }
-#endif 
   // did i get them all?
   got_resolve.insert(from);
-  
+ 
   maybe_resolve_finish();
 
   m->put();
 }
 
-void MDCache::process_delayed_resolve()
-{
-  dout(10) << "process_delayed_resolve" << dendl;
-  for (map<int, MMDSResolve *>::iterator p = delayed_resolve.begin();
-       p != delayed_resolve.end(); p++)
-    handle_resolve(p->second);
-  delayed_resolve.clear();
-}
-
-void MDCache::discard_delayed_resolve(int who)
-{
-  if (delayed_resolve.count(who)) {
-      delayed_resolve[who]->put();
-      delayed_resolve.erase(who);
-  }
-}
-
 void MDCache::maybe_resolve_finish()
 {
-  assert(need_resolve_ack.empty());
-  assert(need_resolve_rollback.empty());
-
+  if (!need_resolve_ack.empty()) {
+    dout(10) << "maybe_resolve_finish still waiting for acks from "
+        << need_resolve_ack << dendl;
+    return;
+  }
+  if (!need_resolve_rollback.empty()) {
+    dout(10) << "maybe_resolve_finish still waiting for rollbacks from "
+        << need_resolve_rollback << dendl;
+    return;
+  }
   if (got_resolve != recovery_set) {
     dout(10) << "maybe_resolve_finish still waiting for more resolves, got (" 
 	     << got_resolve << "), need (" << recovery_set << ")" << dendl;
     return;
-  } else {
-    dout(10) << "maybe_resolve_finish got all resolves+resolve_acks, done." << dendl;
-    if (mds->is_resolve()) {
-      trim_unlinked_inodes();
-      recalc_auth_bits();
-      trim_non_auth(); 
-      mds->resolve_done();
-    }
+  }
+
+  dout(10) << "maybe_resolve_finish got all resolves+resolve_acks, done." << dendl;
+  if (mds->is_resolve()) {
+    trim_unlinked_inodes();
+    recalc_auth_bits();
+    trim_non_auth(); 
+    mds->resolve_done();
   }
 }
 
@@ -3049,10 +1990,7 @@ void MDCache::handle_resolve_ack(MMDSResolveAck *ack)
   }
 
   need_resolve_ack.erase(from);
-  if (need_resolve_ack.empty() && need_resolve_rollback.empty()) {
-    send_resolves();
-    process_delayed_resolve();
-  }
+  maybe_resolve_finish();
 
   ack->put();
 }
@@ -3112,10 +2050,7 @@ void MDCache::finish_rollback(metareqid_t reqid) {
   if (mds->is_resolve())
     finish_uncommitted_slave_update(reqid, need_resolve_rollback[reqid]);
   need_resolve_rollback.erase(reqid);
-  if (need_resolve_ack.empty() && need_resolve_rollback.empty()) {
-    send_resolves();
-    process_delayed_resolve();
-  }
+  maybe_resolve_finish();
 }
 
 void MDCache::remove_inode_recursive(CInode *in)
@@ -3653,6 +2588,9 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
        p != weak->inode_scatterlocks.end();
        p++) {
     CInode *in = get_inode(p->first);
+    if (!in)
+      dout(0) << "missing ino " << p->first
+          << " for scatterlock state" << dendl;
     assert(in);
     in->decode_lock_state(CEPH_LOCK_IFILE, p->second.file);
     in->decode_lock_state(CEPH_LOCK_INEST, p->second.nest);
