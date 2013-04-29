@@ -75,6 +75,11 @@ struct ceph_file_layout {
 
 #define CEPH_RSV_FLAG_NONE 0x0000
 
+enum ceph_rsv_iomode {
+	CEPH_RSV_IOMODE_READ = 1,
+	CEPH_RSV_IOMODE_RW = 2
+};
+
 struct ceph_reservation {
 	uint64_t id;
 	uint64_t offset; /* file offset */
@@ -82,6 +87,7 @@ struct ceph_reservation {
 	uint64_t client; /* client (or proxy) which holds the lock */
 	uint64_t expiration;
 	uint32_t flags;
+	uint16_t iomode;
     	uint16_t type;
 } __attribute__ ((packed));
 
@@ -1165,21 +1171,8 @@ int ceph_ll_connectable_m(struct ceph_mount_info *cmount,
 			  vinodeno_t* vino, uint64_t parent_ino,
 			  uint32_t parent_hash);
 
-uint32_t ceph_ll_hold_rw(struct ceph_mount_info *cmount,
-			 vinodeno_t vino,
-			 bool write,
-			 bool(*cb)(vinodeno_t, bool, void*),
-			 void *opaque,
-			 uint64_t* serial,
-			 uint64_t* max_fs);
-
-void ceph_ll_return_rw(struct ceph_mount_info *cmount,
-		       vinodeno_t vino,
-		       uint64_t serial);
-
 int ceph_ll_get_reservation(struct ceph_mount_info *cmount,
 			    vinodeno_t vino,
-			    bool write,
 			    bool(*cb)(vinodeno_t, bool, void*),
 			    void *opaque,
 			    struct ceph_reservation *rsv /* INOUT */,

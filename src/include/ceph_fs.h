@@ -364,6 +364,11 @@ extern const char *ceph_mds_op_name(int op);
 
 #define CEPH_RSV_FLAG_NONE 0x0000
 
+enum ceph_rsv_iomode {
+	CEPH_RSV_IOMODE_READ = 1,
+	CEPH_RSV_IOMODE_RW = 2
+};
+
 struct ceph_reservation {
 	__u64 id;
 	__u64 offset; /* file offset */
@@ -371,6 +376,7 @@ struct ceph_reservation {
 	__u64 client; /* client (or proxy) which holds the lock */
 	__u64 expiration;
 	__u32 flags;
+	__u16 iomode;
     	__u16 type;
 } __attribute__ ((packed));
 

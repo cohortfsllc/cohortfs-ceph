@@ -3286,6 +3286,12 @@ void Server::handle_client_get_rsv(MDRequest *mdr)
     return;
   }
 
+  // issue caps
+  uint32_t caps = CEPH_CAP_FILE_RD | \
+    ((rsv.iomode == CEPH_RSV_IOMODE_RW) ? CEPH_CAP_FILE_WR : 0);
+  mds->locker->inline_issue_caps(in, caps, mdr->session,
+				 in->find_snaprealm(),
+				 mdr->client_request->is_replay());
   // journal
   inode_t *pi = in->project_inode();
   pi->version = in->pre_dirty();

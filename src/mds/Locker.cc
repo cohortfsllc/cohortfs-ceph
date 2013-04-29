@@ -1675,6 +1675,61 @@ Capability* Locker::issue_new_caps(CInode *in,
   return cap;
 }
 
+Capability* Locker::inline_issue_caps(CInode *in,
+				      uint32_t caps,
+				      Session *session,
+				      SnapRealm *realm,
+				      bool is_replay)
+{
+  dout(7) << "issue_inline_caps " << caps << " on " << *in << dendl;
+
+  // if replay, try to reconnect cap, and otherwise do nothing.
+  if (is_replay) {
+    mds->mdcache->try_reconnect_cap(in, session);
+    return NULL;
+  }
+
+  // my needs
+  assert(session->info.inst.name.is_client());
+  int client = session->info.inst.name.num();
+
+  // register a capability
+  Capability *cap = in->get_client_cap(client);
+  if (! cap) {
+    // new cap
+    cap = in->add_client_cap(client, session, realm);
+    cap->set_wanted(caps);
+  } else {
+    // make sure it wants sufficient caps
+    if (caps & ~cap->wanted()) {
+      // augment wanted caps for this client
+      cap->set_wanted(cap->wanted() | caps);
+    }
+  }
+
+  // always inline caps with reply
+  cap->inc_suppress();
+
+  if (in->is_auth()) {
+    // [auth] twiddle mode?
+    eval(in, CEPH_CAP_LOCKS);
+
+    if (!in->filelock.is_stable() ||
+	!in->authlock.is_stable() ||
+	!in->linklock.is_stable() ||
+	!in->xattrlock.is_stable())
+      mds->mdlog->flush();
+
+  } else {
+    // [replica] tell auth about any new caps wanted
+    request_inode_file_caps(in);
+  }
+
+  // XXX hope this is correct--this must not send immediately
+  cap->dec_suppress();
+
+  return cap;
+}
 
 void Locker::issue_caps_set(set<CInode*>& inset)
 {

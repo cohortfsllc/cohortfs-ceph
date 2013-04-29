@@ -7544,80 +7544,17 @@ int Client::ll_file_layout(vinodeno_t vino, ceph_file_layout *layout)
   return -1;
 }
 
-/* Allow the client to get and hold a read capability or read and
-   write capabilities.  If write is true, get both read and write
-   capabilities.  The cb function is called when the the read or write
-   capabilities are recalled. Opaque is passed to ths function.
-   Serial is an identifier that should be passed to ll_release_rw, and
-   max_fs, if write is set to true, is the requested maximum filesize
-   to which the file may be extended as input, and the allowed maximum
-   filesize on output.  If write is false, it is undefined.  The cb
-   function should return true if it intends to return the
-   capabilities later, and false if to return them now. */
-
-uint32_t Client::ll_hold_rw(vinodeno_t vino,
-			    bool write,
-			    bool(*cb)(vinodeno_t, bool, void*),
-			    void *opaque,
-			    uint64_t* serial,
-			    uint64_t* max_fs)
-{
-#if 0
-  Mutex::Locker lock(client_lock);
-  int r = 0;
-  int got = 0;
-  int need = CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0);
-  Inode *in = _ll_get_inode(vino);
-  r = get_caps(in, need, 0, &got, (write ? *max_fs : 0));
-  if (r != 0) {
-    return r;
-  }
-  if (need & ~got) {
-    return -EBUSY;
-  }
-  in->add_revoke_notifier(write, cb, opaque, serial);
-  /* Assume the client will actually use them */
-  mark_caps_dirty(in, need);
-  if (write) {
-    *max_fs = max(in->max_size, mdsmap->get_max_filesize());
-  }
-#endif
-  return 0;
-}
-
-void Client::ll_return_rw(vinodeno_t vino,
-			  uint64_t serial)
-{
-#if 0
-  Mutex::Locker lock(client_lock);
-  Inode *in = _ll_get_inode(vino);
-  bool write = in->remove_revoke_notifier(serial);
-  in->put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));
-#endif
-}
-
 int Client::ll_get_reservation(vinodeno_t vino,
-			       bool write,
 			       bool(*cb)(vinodeno_t, bool, void*),
 			       void *opaque,
 			       struct ceph_reservation *rsv,
 			       uint64_t* max_fs)
 {
   Mutex::Locker lock(client_lock);
-  int r = 0;
-  int got = 0;
-  int need = CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0);
+
   Inode *in = _ll_get_inode(vino);
   bufferlist bl;
-
-  // always need caps -- but could it be piggy-backed on req?
-  r = get_caps(in, need, 0, &got, (write ? *max_fs : 0));
-  if (r != 0) {
-    return r;
-  }
-  if (need & ~got) {
-    return -EBUSY;
-  }
+  int r, caps;
 
   MetaRequest *req = new MetaRequest(CEPH_MDS_OP_GETRSV);
   filepath path;
@@ -7630,20 +7567,23 @@ int Client::ll_get_reservation(vinodeno_t vino,
 
   // block on request, returned rsv in bl
   r = make_request(req, 0, 0, NULL, NULL, 0, &bl);
-  if (r < 0) {
-    in->put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));
+  if (r < 0)
     return (-EINVAL);
-  }
 
   ::decode(*rsv, bl);
-  in->add_client_reservation(write, cb, opaque, rsv);
+  in->add_client_reservation(cb, opaque, rsv);
+
+  if (rsv->iomode == CEPH_RSV_IOMODE_RW) {
+    *max_fs = max(in->max_size, mdsmap->get_max_filesize());
+    caps = CEPH_CAP_FILE_RD|CEPH_CAP_FILE_WR;
+  } else {
+    caps = CEPH_CAP_FILE_RD;
+  }
 
   /* Assume the client will actually use them */
-  mark_caps_dirty(in, need);
-  if (write) {
-    *max_fs = max(in->max_size, mdsmap->get_max_filesize());
-  }
-  return 0;
+  mark_caps_dirty(in, caps);
+
+  return (0);
 }
 
 void Client::ll_return_reservation(vinodeno_t vino,
@@ -7651,7 +7591,6 @@ void Client::ll_return_reservation(vinodeno_t vino,
 {
   Mutex::Locker lock(client_lock);
   Inode *in = _ll_get_inode(vino);
-  int r;
 
   MetaRequest *req = new MetaRequest(CEPH_MDS_OP_PUTRSV);
   filepath path;
@@ -7663,8 +7602,8 @@ void Client::ll_return_reservation(vinodeno_t vino,
   req->head.args.put_rsv.type = rsv->type;
   req->head.args.put_rsv.flags = CEPH_RSV_FLAG_NONE;
 
-  // block on request, returned rsv in bl
-  r = make_request(req, 0, 0, NULL, NULL, 0, NULL);
+  // do it
+  (void) make_request(req, 0, 0, NULL, NULL, 0, NULL);
 
   bool write = in->remove_client_reservation(rsv);
   in->put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));

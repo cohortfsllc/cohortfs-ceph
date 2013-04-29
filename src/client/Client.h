@@ -716,16 +716,7 @@ public:
   uint32_t ll_stripe_unit(vinodeno_t vino);
   int ll_file_layout(vinodeno_t vino, ceph_file_layout *layout);
   uint64_t ll_snap_seq(vinodeno_t vino);
-  uint32_t ll_hold_rw(vinodeno_t vino,
-		      bool write,
-		      bool(*cb)(vinodeno_t, bool, void*),
-		      void *opaque,
-		      uint64_t* serial,
-		      uint64_t* max_fs);
-  void ll_return_rw(vinodeno_t vino,
-		    uint64_t serial);
   int ll_get_reservation(vinodeno_t vino,
-			 bool write,
 			 bool(*cb)(vinodeno_t, bool, void*),
 			 void *opaque,
 			 struct ceph_reservation *rsv,

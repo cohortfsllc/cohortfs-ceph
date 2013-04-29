@@ -265,11 +265,10 @@ class Inode {
     void *opaque;
     ceph_reservation *rsv;
 
-    client_reservation(bool write_,
-		       bool(*cb_)(vinodeno_t, bool, void*),
+    client_reservation(bool(*cb_)(vinodeno_t, bool, void*),
 		       void* opaque_,
 		       struct ceph_reservation *rsv_)
-    : write(write_),
+    : write(rsv_->iomode == CEPH_RSV_IOMODE_RW),
       cb(cb_),
       opaque(opaque_),
       rsv(rsv_)
@@ -277,8 +276,7 @@ class Inode {
   };
 
   map<uint64_t,client_reservation*> client_reservations;
-  void add_client_reservation(bool write,
-			      bool(*cb)(vinodeno_t, bool, void*),
+  void add_client_reservation(bool(*cb)(vinodeno_t, bool, void*),
 			      void *opaque,
 			      struct ceph_reservation *rsv);
   bool remove_client_reservation(struct ceph_reservation *rsv);

@@ -495,12 +495,11 @@ void CapSnap::dump(Formatter *f) const
   f->dump_unsigned("flush_tid", flush_tid);
 }
 
-void Inode::add_client_reservation(bool write,
-				   bool(*cb)(vinodeno_t, bool, void*),
+void Inode::add_client_reservation(bool(*cb)(vinodeno_t, bool, void*),
 				   void *opaque,
 				   struct ceph_reservation *rsv)
 {
-  client_reservation *cl_rsv = new client_reservation(write, cb, opaque, rsv);
+  client_reservation *cl_rsv = new client_reservation(cb, opaque, rsv);
   client_reservations[rsv->id] = cl_rsv;
 }
 

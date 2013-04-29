@@ -1252,34 +1252,14 @@ extern "C" int ceph_ll_connectable_m(struct ceph_mount_info *cmount,
 						 parent_hash));
 }
 
-extern "C" uint32_t ceph_ll_hold_rw(struct ceph_mount_info *cmount,
-				    vinodeno_t vino,
-				    bool write,
-				    bool(*cb)(vinodeno_t, bool, void*),
-				    void *opaque,
-				    uint64_t* serial,
-				    uint64_t* max_fs)
-{
-  return (cmount->get_client()->ll_hold_rw(vino, write, cb, opaque, serial,
-					   max_fs));
-}
-
-void ceph_ll_return_rw(struct ceph_mount_info *cmount,
-		       vinodeno_t vino,
-		       uint64_t serial)
-{
-  cmount->get_client()->ll_return_rw(vino, serial);
-}
-
 extern "C" int ceph_ll_get_reservation(struct ceph_mount_info *cmount,
 				       vinodeno_t vino,
-				       bool write,
 				       bool(*cb)(vinodeno_t, bool, void*),
 				       void *opaque,
 				       struct ceph_reservation *rsv,
 				       uint64_t* max_fs)
 {
-  return (cmount->get_client()->ll_get_reservation(vino, write, cb, opaque, rsv,
+  return (cmount->get_client()->ll_get_reservation(vino, cb, opaque, rsv,
 						   max_fs));
 }
 
