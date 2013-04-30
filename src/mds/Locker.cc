@@ -1268,7 +1268,7 @@ bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
     (static_cast<CInode*>(lock->get_parent()))->has_subtree_root_stripe();
     
   client_t client = mut->get_client();
-  
+ 
   while (1) {
     // wrlock?
     if (lock->can_wrlock(client)) {
@@ -1295,7 +1295,6 @@ bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
 
       if (nowait && !lock->can_wrlock(client))
 	return false;
-      
     } else {
       // replica.
       // auth should be auth_pinned (see acquire_locks wrlock weird mustpin case).
@@ -4228,8 +4227,7 @@ void Locker::file_eval(ScatterLock *lock, bool *need_issue)
   else if (lock->get_state() != LOCK_EXCL &&
 	   !lock->is_rdlocked() &&
 	   //!lock->is_waiter_for(SimpleLock::WAIT_WR) &&
-	   ((wanted & (CEPH_CAP_GWR|CEPH_CAP_GBUFFER)) ||
-	    (in->inode.is_dir() && !in->has_subtree_root_stripe())) &&
+	   ((wanted & (CEPH_CAP_GWR|CEPH_CAP_GBUFFER))) &&
 	   in->get_target_loner() >= 0) {
     dout(7) << "file_eval stable, bump to loner " << *lock
 	    << " on " << *lock->get_parent() << dendl;
@@ -4252,8 +4250,7 @@ void Locker::file_eval(ScatterLock *lock, bool *need_issue)
 	   !lock->is_wrlocked() &&   // drain wrlocks first!
 	   !lock->is_waiter_for(SimpleLock::WAIT_WR) &&
 	   !(wanted & (CEPH_CAP_GWR|CEPH_CAP_GBUFFER)) &&
-	   !((lock->get_state() == LOCK_MIX) &&
-	     in->is_dir() && in->has_subtree_root_stripe())  // if we are a delegation point, stay where we are
+	   !((lock->get_state() == LOCK_MIX) && in->is_dir()) // if we are a delegation point, stay where we are
 	   //((wanted & CEPH_CAP_RD) || 
 	   //in->is_replicated() || 
 	   //lock->get_num_client_lease() || 
