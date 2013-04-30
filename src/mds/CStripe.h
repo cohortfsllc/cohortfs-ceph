@@ -57,23 +57,13 @@ class CStripe : public MDSCacheObject {
   // -- pins --
   static const int PIN_DIRFRAG            = -1;
   static const int PIN_STICKYDIRS         = 2;
-  static const int PIN_SUBTREE            = 3;
-  static const int PIN_SUBTREETEMP        = 4; // used by MDCache::trim_non_auth()
-  static const int PIN_FROZEN             = 5;
-  static const int PIN_IMPORTING          = 6;
-  static const int PIN_IMPORTBOUND        = 7;
-  static const int PIN_EXPORTBOUND        = 8;
+  static const int PIN_FROZEN             = 3;
 
   const char *pin_name(int p) {
     switch (p) {
       case PIN_DIRFRAG: return "dirfrag";
       case PIN_STICKYDIRS: return "stickydirs";
-      case PIN_SUBTREE: return "subtree";
-      case PIN_SUBTREETEMP: return "subtreetemp";
       case PIN_FROZEN: return "frozen";
-      case PIN_IMPORTING: return "importing";
-      case PIN_IMPORTBOUND: return "importbound";
-      case PIN_EXPORTBOUND: return "exportbound";
       default: return generic_pin_name(p);
     }
   }
@@ -84,10 +74,6 @@ class CStripe : public MDSCacheObject {
   static const unsigned STATE_FREEZING      = (1<<2);
   static const unsigned STATE_ASSIMRSTAT    = (1<<3); // assimilating inode->stripe rstats
   static const unsigned STATE_COMMITTING    = (1<<4);
-  static const unsigned STATE_IMPORTBOUND   = (1<<5);
-  static const unsigned STATE_EXPORTBOUND   = (1<<6);
-  static const unsigned STATE_EXPORTING     = (1<<7);
-  static const unsigned STATE_IMPORTING     = (1<<8);
 
   // these state bits are preserved by an import/export
   static const unsigned MASK_STATE_EXPORTED =
@@ -95,10 +81,7 @@ class CStripe : public MDSCacheObject {
        |STATE_DIRTY);
   static const unsigned MASK_STATE_IMPORT_KEPT =
       (STATE_OPEN
-       |STATE_FROZEN
-       |STATE_IMPORTING
-       |STATE_IMPORTBOUND
-       |STATE_EXPORTBOUND);
+       |STATE_FROZEN);
   static const unsigned MASK_STATE_EXPORT_KEPT =
       (STATE_FROZEN);
 
@@ -119,19 +102,9 @@ class CStripe : public MDSCacheObject {
   pair<int,int> stripe_auth;
 
   int auth_pins;
-  int nested_auth_pins;
 
   // cache control  (defined for authority; hints for replicas)
   bool replicate; // was CDir::dir_rep
-
-  // popularity
-  dirfrag_load_vec_t pop_me;
-  dirfrag_load_vec_t pop_nested;
-  dirfrag_load_vec_t pop_auth_subtree;
-  dirfrag_load_vec_t pop_auth_subtree_nested;
-
-  utime_t last_popularity_sample;
-  load_spread_t pop_spread;
 
   friend class MDBalancer;
   friend class MDCache;
@@ -255,12 +228,6 @@ class CStripe : public MDSCacheObject {
   void put_stickydirs();
 
   // -- authority --
-  /*
-   *     normal: <parent,unknown>   !subtree_root
-   * delegation: <mds,unknown>       subtree_root
-   *  ambiguous: <mds1,mds2>         subtree_root
-   *             <parent,mds2>       subtree_root     
-   */
   pair<int,int> authority() { return stripe_auth; }
   pair<int,int> get_stripe_auth() { return stripe_auth; }
   void set_stripe_auth(const pair<int,int> &a);
@@ -275,10 +242,6 @@ class CStripe : public MDSCacheObject {
   }
   bool is_full_stripe_nonauth() {
     return !is_auth() && !is_ambiguous_stripe_auth();
-  }
-
-  bool is_subtree_root() const {
-    return stripe_auth != CDIR_AUTH_DEFAULT;
   }
 
   // -- locks --
@@ -299,15 +262,12 @@ class CStripe : public MDSCacheObject {
     multiset<void*> auth_pin_set;
 #endif
  public:
-  bool is_auth_pinned() const { return auth_pins || nested_auth_pins; }
+  bool is_auth_pinned() const { return auth_pins; }
   bool can_auth_pin() { return is_auth() && !is_freezing_or_frozen(); }
   void auth_pin(void *by);
   void auth_unpin(void *by);
 
   int get_num_auth_pins() const { return auth_pins; }
-  int get_num_nested_auth_pins() const { return nested_auth_pins; }
-  int get_cum_auth_pins() const { return auth_pins + nested_auth_pins; }
-  void adjust_nested_auth_pins(int a, void *by);
 
   // -- freezing --
  private:
@@ -315,11 +275,8 @@ class CStripe : public MDSCacheObject {
   void _freeze();
 
  public:
-  bool is_freezing();
-  bool is_freezing_root() { return state & STATE_FREEZING; }
-
-  bool is_frozen();
-  bool is_frozen_root() { return state & STATE_FROZEN; }
+  bool is_freezing() { return state & STATE_FREEZING; }
+  bool is_frozen() { return state & STATE_FROZEN; }
 
   bool freeze();
   void unfreeze();
@@ -378,9 +335,6 @@ class CStripe : public MDSCacheObject {
 
   void finish_export(utime_t now);
   void abort_export();
-
-  bool is_importing() const { return state_test(STATE_IMPORTING); }
-  bool is_exporting() const { return state_test(STATE_EXPORTING); }
 
 
   ostream& print_db_line_prefix(ostream& out);
