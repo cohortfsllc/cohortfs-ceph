@@ -105,8 +105,15 @@ bool reservation_state_t::remove_expired(void)
     return (false);
 }
 
-bool reservation_state_t::register_osd(uint64_t rsv_id, uint64_t osd)
+bool reservation_state_t::register_osd(uint64_t rsv_id, uint64_t osd,
+                                       ceph_reservation **rsv)
 {
+    map<uint64_t, ceph_reservation*>::iterator iter;
+
+    iter = reservations_id.find(rsv_id);
+    if (iter == reservations_id.end())
+        return false;
+
     pair<uint64_t,uint64_t> pr = pair<uint64_t,uint64_t>(rsv_id,osd);
     pair<set<pair<uint64_t,uint64_t> >::iterator,bool> ret;
 
@@ -116,6 +123,8 @@ bool reservation_state_t::register_osd(uint64_t rsv_id, uint64_t osd)
 
     // and the multi-map
     osds_by_rsv.insert(pr);
+
+    *rsv = iter->second;
 
     return (true);
 }
@@ -147,7 +156,7 @@ void reservation_state_t::unregister_osd_all(uint64_t osd)
     }
 }
 
-void reservation_state_t::on_update_inode(set<ceph_reservation>& rsv,
+void reservation_state_t::on_update_inode(set<ceph_reservation>& rsvs,
                                           set<pair<uint64_t,uint64_t> > rsv_osd)
 {
     reservations.clear();
@@ -158,7 +167,7 @@ void reservation_state_t::on_update_inode(set<ceph_reservation>& rsv,
     max_id = 0;
 
     set<ceph_reservation>::iterator rsv_iter;
-    for (rsv_iter = rsv.begin(); rsv_iter != rsv.end(); ++rsv_iter) {
+    for (rsv_iter = rsvs.begin(); rsv_iter != rsvs.end(); ++rsv_iter) {
         ceph_reservation &rsv = const_cast<ceph_reservation&>(*rsv_iter);
         /* populates reservations and reservations_id */
         add_rsv(rsv, false /* no adjust */);
@@ -166,6 +175,7 @@ void reservation_state_t::on_update_inode(set<ceph_reservation>& rsv,
 
     set<pair<uint64_t,uint64_t> >::iterator osd_iter;
     for (osd_iter = rsv_osd.begin(); osd_iter != rsv_osd.end(); ++osd_iter) {
-        register_osd(osd_iter->first, osd_iter->second);
+        ceph_reservation *orsv;
+        register_osd(osd_iter->first, osd_iter->second, &orsv);
     }
 }

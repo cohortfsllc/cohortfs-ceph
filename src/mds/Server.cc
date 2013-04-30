@@ -3363,6 +3363,7 @@ void Server::handle_client_reg_rsv(MDRequest *mdr)
 {
   MClientRequest *req = mdr->client_request;
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
+  ceph_reservation *rsv;
   MClientReply *reply;
 
   // TODO:  prove OSD is who it claims to be
@@ -3382,7 +3383,8 @@ void Server::handle_client_reg_rsv(MDRequest *mdr)
 
   reservation_state_t &rstate = in->reservations;
   if (! rstate.register_osd(req->head.args.reg_rsv.reg.rsv_id,
-			    req->head.args.reg_rsv.reg.osd_id)) {
+			    req->head.args.reg_rsv.reg.osd_id,
+			    &rsv)) {
     dout(0) << "handle_client_reg_rsv failed" << dendl;
     reply = new MClientReply(req, -EINVAL);
     reply_request(mdr, reply);
@@ -3399,7 +3401,12 @@ void Server::handle_client_reg_rsv(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   mdcache->journal_dirty_inode(mdr, &le->metablob, in);
 
-  dout(10) << "reply to " << *req << dendl;
+  // populate reply buffers (blech)
+  bufferlist xbl;
+  ::encode(*rsv, xbl);
+  mdr->reply_extra_bl = xbl; // synchronous
+
+  dout(10) << "reply to " << *req << " " << rsv << dendl;
 
   // send it
  journal_and_reply(mdr, in, 0, le,

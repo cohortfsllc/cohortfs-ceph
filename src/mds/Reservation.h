@@ -86,7 +86,7 @@ public:
   bool remove_rsv(const ceph_reservation& rsv);
   bool remove_rsv_client(const client_t client);
   bool remove_expired(void);
-  bool register_osd(uint64_t rsv_id, uint64_t osd);
+  bool register_osd(uint64_t rsv_id, uint64_t osd, ceph_reservation **rsv);
   bool unregister_osd(uint64_t rsv_id, uint64_t osd);
   void unregister_osd_all(uint64_t osd);
   void on_update_inode(set<ceph_reservation>& rsv,
