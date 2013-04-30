@@ -680,18 +680,6 @@ public:
   void find_ino_dir(inodeno_t ino, Context *c);
   void _find_ino_dir(inodeno_t ino, Context *c, bufferlist& bl, int r);
 
-  // -- anchors --
-public:
-  void anchor_create_prep_locks(MDRequest *mdr, CInode *in, set<SimpleLock*>& rdlocks,
-				set<SimpleLock*>& xlocks);
-  void anchor_create(MDRequest *mdr, CInode *in, Context *onfinish);
-  void anchor_destroy(CInode *in, Context *onfinish);
-protected:
-  void _anchor_prepared(CInode *in, version_t atid, bool add);
-  void _anchor_logged(CInode *in, version_t atid, Mutation *mut);
-  friend class C_MDC_AnchorPrepared;
-  friend class C_MDC_AnchorLogged;
-
   // -- snaprealms --
 public:
   void snaprealm_create(MDRequest *mdr, CInode *in);

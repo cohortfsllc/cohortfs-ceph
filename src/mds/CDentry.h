@@ -149,11 +149,10 @@ public:
   elist<CDentry*>::item item_dirty;
 
 protected:
-  int auth_pins, nested_auth_pins;
+  int auth_pins;
 #ifdef MDS_AUTHPIN_SET
   multiset<void*> auth_pin_set;
 #endif
-  int nested_anchors;
 
   friend class Locker;
   friend class MDCache;
@@ -178,7 +177,7 @@ public:
     dir(0),
     version(0), projected_version(0),
     item_dirty(this),
-    auth_pins(0), nested_auth_pins(0), nested_anchors(0),
+    auth_pins(0),
     lock(this, &lock_type),
     versionlock(this, &versionlock_type) {
     g_num_dn++;
@@ -191,7 +190,7 @@ public:
     dir(0),
     version(0), projected_version(0),
     item_dirty(this),
-    auth_pins(0), nested_auth_pins(0), nested_anchors(0),
+    auth_pins(0),
     lock(this, &lock_type),
     versionlock(this, &versionlock_type) {
     g_num_dn++;
@@ -263,12 +262,8 @@ public:
   void adjust_nested_auth_pins(int adjustment, int diradj, void *by);
   bool is_frozen();
   bool is_freezing();
-  bool is_auth_pinned() { return auth_pins || nested_auth_pins; }
+  bool is_auth_pinned() { return auth_pins; }
   int get_num_auth_pins() { return auth_pins; }
-  int get_num_dir_auth_pins();
-  int get_num_nested_auth_pins() { return nested_auth_pins; }
-  
-  void adjust_nested_anchors(int by);
 
   // remote links
   void link_remote(linkage_t *dnl, CInode *in);

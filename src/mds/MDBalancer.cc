@@ -148,19 +148,6 @@ mds_load_t MDBalancer::get_load(utime_t now)
 {
   mds_load_t load(now);
 
-  if (mds->mdcache->get_root()) {
-    list<CStripe*> stripes;
-    mds->mdcache->get_root()->get_stripes(stripes);
-
-    list<CDir*> dirs;
-    for (list<CStripe*>::iterator p = stripes.begin(); p != stripes.end(); ++p) {
-      load.auth.add(now, mds->mdcache->decayrate, (*p)->pop_auth_subtree_nested);
-      load.all.add(now, mds->mdcache->decayrate, (*p)->pop_nested);
-    }
-  } else {
-    dout(20) << "get_load no root, no load" << dendl;
-  }
-
   load.req_rate = mds->get_req_rate();
   load.queue_len = mds->messenger->get_dispatch_queue_len();
 

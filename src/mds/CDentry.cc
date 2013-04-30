@@ -95,7 +95,7 @@ ostream& operator<<(ostream& out, CDentry& dn)
   out << " v=" << dn.get_version();
 
   if (dn.is_auth_pinned())
-    out << " ap=" << dn.get_num_auth_pins() << "+" << dn.get_num_nested_auth_pins();
+    out << " ap=" << dn.get_num_auth_pins();
 
   out << " inode=" << dn.get_linkage()->get_inode();
 
@@ -350,14 +350,6 @@ CDentry::linkage_t *CDentry::pop_projected_linkage()
 // ----------------------------
 // auth pins
 
-int CDentry::get_num_dir_auth_pins()
-{
-  assert(!is_projected());
-  if (get_linkage()->is_primary())
-    return auth_pins + get_linkage()->get_inode()->get_num_auth_pins();
-  return auth_pins;
-}
-
 bool CDentry::can_auth_pin()
 {
   assert(dir);
@@ -375,10 +367,7 @@ void CDentry::auth_pin(void *by)
 #endif
 
   dout(10) << "auth_pin by " << by << " on " << *this 
-	   << " now " << auth_pins << "+" << nested_auth_pins
-	   << dendl;
-
-  dir->adjust_nested_auth_pins(1, 1, by);
+	   << " now " << auth_pins << dendl;
 }
 
 void CDentry::auth_unpin(void *by)
@@ -394,25 +383,10 @@ void CDentry::auth_unpin(void *by)
     put(PIN_AUTHPIN);
 
   dout(10) << "auth_unpin by " << by << " on " << *this
-	   << " now " << auth_pins << "+" << nested_auth_pins
-	   << dendl;
+	   << " now " << auth_pins << dendl;
   assert(auth_pins >= 0);
-
-  dir->adjust_nested_auth_pins(-1, -1, by);
 }
 
-void CDentry::adjust_nested_auth_pins(int adjustment, int diradj, void *by)
-{
-  nested_auth_pins += adjustment;
-
-  dout(35) << "adjust_nested_auth_pins by " << by 
-	   << ", change " << adjustment << " yields "
-	   << auth_pins << "+" << nested_auth_pins
-	   << dendl;
-  assert(nested_auth_pins >= 0);
-
-  dir->adjust_nested_auth_pins(adjustment, diradj, by);
-}
 
 bool CDentry::is_frozen()
 {
@@ -422,15 +396,6 @@ bool CDentry::is_frozen()
 bool CDentry::is_freezing()
 {
   return dir->is_freezing();
-}
-
-
-void CDentry::adjust_nested_anchors(int by)
-{
-  nested_anchors += by;
-  dout(20) << "adjust_nested_anchors by " << by << " -> " << nested_anchors << dendl;
-  assert(nested_anchors >= 0);
-  dir->adjust_nested_anchors(by);
 }
 
 

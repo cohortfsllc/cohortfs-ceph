@@ -115,7 +115,7 @@ ostream& operator<<(ostream& out, CInode& in)
     out << " pv" << in.get_projected_version();
 
   if (in.is_auth_pinned()) {
-    out << " ap=" << in.get_num_auth_pins() << "+" << in.get_num_nested_auth_pins();
+    out << " ap=" << in.get_num_auth_pins();
 #ifdef MDS_AUTHPIN_SET
     out << "(" << in.auth_pin_set << ")";
 #endif
@@ -135,12 +135,6 @@ ostream& operator<<(ostream& out, CInode& in)
   inode_t *pi = in.get_projected_inode();
   if (pi->is_truncating())
     out << " truncating(" << pi->truncate_from << " to " << pi->truncate_size << ")";
-
-  // anchors
-  if (in.is_anchored())
-    out << " anc";
-  if (in.get_nested_anchors())
-    out << " na=" << in.get_nested_anchors();
 
   if (in.inode.is_dir()) {
     out << " " << in.inode.dirstat;
@@ -261,10 +255,7 @@ CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
     item_dirty_dirfrag_dir(this),
     item_dirty_dirfrag_nest(this),
     auth_pins(0),
-    nested_auth_pins(0),
     auth_pin_freeze_allowance(0),
-    nested_anchors(0),
-    pop(ceph_clock_now(g_ceph_context)),
     versionlock(this, &versionlock_type),
     authlock(this, &authlock_type),
     linklock(this, &linklock_type),
@@ -511,34 +502,10 @@ bool CInode::has_open_stripes() const
   return !stripes.empty();
 }
 
-bool CInode::has_subtree_root_stripe() const
-{
-  for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
-    if (p->second->is_subtree_root())
-      return true;
-  return false;
-}
-
 void CInode::get_stripes(list<CStripe*>& ls)
 {
   for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
     ls.push_back(p->second);
-}
-
-void CInode::get_nested_stripes(list<CStripe*>& ls) 
-{  
-  // stripes in same subtree
-  for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
-    if (!p->second->is_subtree_root())
-      ls.push_back(p->second);
-}
-
-void CInode::get_subtree_stripes(list<CStripe*>& ls) 
-{ 
-  // stripes that are roots of new subtrees
-  for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
-    if (p->second->is_subtree_root())
-      ls.push_back(p->second);
 }
 
 
@@ -1193,12 +1160,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
     ::decode(tm, p);
     if (inode.ctime < tm) inode.ctime = tm;
     ::decode(inode.nlink, p);
-    {
-      bool was_anchored = inode.anchored;
-      ::decode(inode.anchored, p);
-      if (parent && was_anchored != inode.anchored)
-	parent->adjust_nested_anchors((int)inode.anchored - (int)was_anchored);
-    }
+    ::decode(inode.anchored, p);
     break;
 
   case CEPH_LOCK_IFILE:
@@ -1870,11 +1832,7 @@ void CInode::auth_pin(void *by)
 #endif
 
   dout(10) << "auth_pin by " << by << " on " << *this
-	   << " now " << auth_pins << "+" << nested_auth_pins
-	   << dendl;
-  
-  if (parent)
-    parent->adjust_nested_auth_pins(1, 1, this);
+	   << " now " << auth_pins << dendl;
 }
 
 void CInode::auth_unpin(void *by) 
@@ -1888,15 +1846,11 @@ void CInode::auth_unpin(void *by)
 
   if (auth_pins == 0)
     put(PIN_AUTHPIN);
-  
+ 
   dout(10) << "auth_unpin by " << by << " on " << *this
-	   << " now " << auth_pins << "+" << nested_auth_pins
-	   << dendl;
-  
+	   << " now " << auth_pins << dendl;
+ 
   assert(auth_pins >= 0);
-
-  if (parent)
-    parent->adjust_nested_auth_pins(-1, -1, by);
 
   if (is_freezing_inode() &&
       auth_pins == auth_pin_freeze_allowance) {
@@ -1906,39 +1860,7 @@ void CInode::auth_unpin(void *by)
     state_clear(STATE_FREEZING);
     state_set(STATE_FROZEN);
     finish_waiting(WAIT_FROZEN);
-  }  
-}
-
-void CInode::adjust_nested_auth_pins(int a, void *by)
-{
-  assert(a);
-  nested_auth_pins += a;
-  dout(15) << "adjust_nested_auth_pins by " << by
-	   << " change " << a << " yields "
-	   << auth_pins << "+" << nested_auth_pins << dendl;
-  assert(nested_auth_pins >= 0);
-
-  if (g_conf->mds_debug_auth_pins) {
-    // audit
-    int s = 0;
-    for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
-      if (!p->second->is_subtree_root() && p->second->get_cum_auth_pins())
-	s++;
-    assert(s == nested_auth_pins);
   }
-
-  if (parent)
-    parent->adjust_nested_auth_pins(a, 0, by);
-}
-
-void CInode::adjust_nested_anchors(int by)
-{
-  assert(by);
-  nested_anchors += by;
-  dout(20) << "adjust_nested_anchors by " << by << " -> " << nested_anchors << dendl;
-  assert(nested_anchors >= 0);
-  if (parent)
-    parent->adjust_nested_anchors(by);
 }
 
 // authority
@@ -2127,8 +2049,7 @@ client_t CInode::calc_ideal_loner()
        it != client_caps.end();
        it++) 
     if (!it->second->is_stale() &&
-	((it->second->wanted() & (CEPH_CAP_ANY_WR|CEPH_CAP_FILE_WR|CEPH_CAP_FILE_RD)) ||
-	 (inode.is_dir() && !has_subtree_root_stripe()))) {
+        (it->second->wanted() & (CEPH_CAP_ANY_WR|CEPH_CAP_FILE_WR|CEPH_CAP_FILE_RD))) {
       if (n)
 	return -1;
       n++;
@@ -2800,11 +2721,7 @@ void CInode::_encode_base(bufferlist& bl)
 void CInode::_decode_base(bufferlist::iterator& p)
 {
   ::decode(first, p);
-  bool was_anchored = inode.anchored;
   ::decode(inode, p);
-  if (parent && was_anchored != inode.anchored)
-    parent->adjust_nested_anchors((int)inode.anchored - (int)was_anchored);
-
   ::decode(symlink, p);
   ::decode(stripe_auth, p);
   ::decode(xattrs, p);
@@ -2880,17 +2797,15 @@ void CInode::_decode_locks_rejoin(bufferlist::iterator& p, list<Context*>& waite
 
 void CInode::encode_export(bufferlist& bl)
 {
-  __u8 struct_v = 2;
+  __u8 struct_v = 3;
   ::encode(struct_v, bl);
   _encode_base(bl);
 
   bool dirty = is_dirty();
   ::encode(dirty, bl);
 
-  ::encode(pop, bl);
-
   ::encode(replica_map, bl);
-
+#if 0
   // include scatterlock info for any bounding CDirs
   bufferlist bounding;
   if (inode.is_dir()) {
@@ -2907,18 +2822,13 @@ void CInode::encode_export(bufferlist& bl)
     }
   }
   ::encode(bounding, bl);
-
+#endif
   _encode_locks_full(bl);
   get(PIN_TEMPEXPORTING);
 }
 
 void CInode::finish_export(utime_t now)
 {
-  pop.zero(now);
-
-  // just in case!
-  //dirlock.clear_updated();
-
   loner_cap = -1;
 
   put(PIN_TEMPEXPORTING);
@@ -2937,12 +2847,10 @@ void CInode::decode_import(bufferlist::iterator& p,
   if (dirty) 
     _mark_dirty(ls);
 
-  ::decode(pop, ceph_clock_now(g_ceph_context), p);
-
   ::decode(replica_map, p);
   if (!replica_map.empty())
     get(PIN_REPLICATED);
-
+#if 0
   if (struct_v >= 2) {
     // decode fragstat info on bounding cdirs
     bufferlist bounding;
@@ -2986,6 +2894,6 @@ void CInode::decode_import(bufferlist::iterator& p,
       }
     }
   }
-
+#endif
   _decode_locks_full(p);
 }

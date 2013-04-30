@@ -80,8 +80,7 @@ ostream& operator<<(ostream& out, CStripe &s)
     out << " pv" << s.get_projected_version();
 
   if (s.is_auth_pinned())
-    out << " ap=" << s.get_num_auth_pins()
-        << "+" << s.get_num_nested_auth_pins();
+    out << " ap=" << s.get_num_auth_pins();
 
   if (!s.get_fragtree().empty())
     out << " " << s.get_fragtree();
@@ -115,12 +114,7 @@ ostream& operator<<(ostream& out, CStripe &s)
   if (s.state_test(CStripe::STATE_DIRTY)) out << " DIRTY";
   if (s.state_test(CStripe::STATE_FREEZING)) out << " FREEZING";
   if (s.state_test(CStripe::STATE_FROZEN)) out << " FROZEN";
-  if (s.state_test(CStripe::STATE_ASSIMRSTAT)) out << " ASSIMRSTAT";
   if (s.state_test(CStripe::STATE_COMMITTING)) out << " COMMITTING";
-  if (s.state_test(CStripe::STATE_IMPORTBOUND)) out << " IMPORTBOUND";
-  if (s.state_test(CStripe::STATE_EXPORTBOUND)) out << " EXPORTBOUND";
-  if (s.state_test(CStripe::STATE_EXPORTING)) out << " EXPORTING";
-  if (s.state_test(CStripe::STATE_IMPORTING)) out << " IMPORTING";
 
   if (s.is_rep()) out << " REP";
 
@@ -146,12 +140,7 @@ CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
     stripeid(stripeid),
     stripe_auth(auth, CDIR_AUTH_UNKNOWN),
     auth_pins(0),
-    nested_auth_pins(0),
     replicate(false),
-    pop_me(ceph_clock_now(g_ceph_context)),
-    pop_nested(ceph_clock_now(g_ceph_context)),
-    pop_auth_subtree(ceph_clock_now(g_ceph_context)),
-    pop_auth_subtree_nested(ceph_clock_now(g_ceph_context)),
     first(2),
     projected_version(0),
     committing_version(0),
@@ -685,9 +674,6 @@ void CStripe::encode_export(bufferlist& bl)
   ::encode(state, bl);
   ::encode(replicate, bl);
 
-  ::encode(pop_me, bl);
-  ::encode(pop_auth_subtree, bl);
-
   ::encode(replica_map, bl);
 
   get(PIN_TEMPEXPORTING);
@@ -709,10 +695,6 @@ void CStripe::decode_import(bufferlist::iterator& blp, utime_t now)
 
   ::decode(replicate, blp);
 
-  ::decode(pop_me, now, blp);
-  ::decode(pop_auth_subtree, now, blp);
-  pop_auth_subtree_nested.add(now, mdcache->decayrate, pop_auth_subtree);
-
   ::decode(replica_map, blp);
   if (!replica_map.empty()) get(PIN_REPLICATED);
 
@@ -721,10 +703,6 @@ void CStripe::decode_import(bufferlist::iterator& blp, utime_t now)
 
 void CStripe::finish_export(utime_t now)
 {
-  pop_auth_subtree_nested.sub(now, mdcache->decayrate, pop_auth_subtree);
-  pop_me.zero(now);
-  pop_auth_subtree.zero(now);
-
   put(PIN_TEMPEXPORTING);
 }
 
@@ -736,30 +714,10 @@ void CStripe::abort_export()
 
 // freezing
 
-bool CStripe::is_freezing()
-{
-  if (is_freezing_root())
-    return true;
-  if (is_subtree_root())
-    return false;
-  CStripe *parent = get_parent_stripe();
-  return parent ? parent->is_freezing() : false;
-}
-
-bool CStripe::is_frozen()
-{
-  if (is_frozen_root())
-    return true;
-  if (is_subtree_root())
-    return false;
-  CStripe *parent = get_parent_stripe();
-  return parent ? parent->is_frozen() : false;
-}
-
 bool CStripe::freeze()
 {
   auth_pin(this); // auth pin while freezing
-  if (auth_pins > 1 || nested_auth_pins > 0) {
+  if (auth_pins > 1) {
     state_set(STATE_FREEZING);
     dout(10) << "freeze waiting " << *this << dendl;
     return false;
@@ -776,9 +734,6 @@ void CStripe::_freeze()
   state_set(STATE_FROZEN);
   get(PIN_FROZEN);
 
-  if (is_auth() && !is_subtree_root())
-    inode->auth_pin(this);
-
   dout(10) << "stripe frozen " << *this << dendl;
 }
 
@@ -787,9 +742,6 @@ void CStripe::unfreeze()
   if (state_test(STATE_FROZEN)) {
     state_clear(STATE_FROZEN);
     put(PIN_FROZEN);
-
-    if (is_auth() && !is_subtree_root())
-      inode->auth_unpin(this);
 
     finish_waiting(WAIT_UNFREEZE);
     dout(10) << "unfreeze " << *this << dendl;
@@ -807,11 +759,11 @@ void CStripe::unfreeze()
 
 void CStripe::maybe_finish_freeze()
 {
-  if (is_freezing_root() && auth_pins == 1 && nested_auth_pins == 0) {
+  if (is_freezing() && auth_pins == 1) {
     _freeze();
     auth_unpin(this);
     finish_waiting(WAIT_FROZEN);
-  }  
+  }
 }
 
 void CStripe::add_waiter(uint64_t tag, Context *c)
@@ -824,7 +776,7 @@ void CStripe::add_waiter(uint64_t tag, Context *c)
   // wait on the stripe?
   //  make sure its not the stripe that is explicitly ambiguous|freezing|frozen
   if (((tag & WAIT_SINGLEAUTH) && !is_ambiguous_stripe_auth()) ||
-      ((tag & WAIT_UNFREEZE) && !is_freezing_root() && !is_frozen_root())) {
+      ((tag & WAIT_UNFREEZE) && !is_freezing() && !is_frozen())) {
     dout(15) << "passing waiter up tree" << dendl;
     inode->add_waiter(tag, c);
     return;
@@ -846,11 +798,7 @@ void CStripe::auth_pin(void *by)
 #endif
 
   dout(10) << "auth_pin by " << by << " on " << *this
-	   << " now " << auth_pins << "+" << nested_auth_pins
-	   << dendl;
-
-  if (get_cum_auth_pins() == 1 && !is_subtree_root())
-    inode->adjust_nested_auth_pins(1, this);
+	   << " now " << auth_pins << dendl;
 }
 
 void CStripe::auth_unpin(void *by) 
@@ -864,51 +812,13 @@ void CStripe::auth_unpin(void *by)
 
   if (auth_pins == 0)
     put(PIN_AUTHPIN);
-  
+
   dout(10) << "auth_unpin by " << by << " on " << *this
-	   << " now " << auth_pins << "+" << nested_auth_pins
-	   << dendl;
-  
+	   << " now " << auth_pins << dendl;
+
   assert(auth_pins >= 0);
 
-  int newcum = get_cum_auth_pins();
-
   maybe_finish_freeze();
-
-  if (newcum == 0 && !is_subtree_root())
-    inode->adjust_nested_auth_pins(-1, by);
-}
-
-void CStripe::adjust_nested_auth_pins(int a, void *by)
-{
-  assert(a);
-  nested_auth_pins += a;
-  dout(15) << "adjust_nested_auth_pins by " << by
-	   << " change " << a << " yields "
-	   << auth_pins << "+" << nested_auth_pins << dendl;
-  assert(nested_auth_pins >= 0);
-
-  if (g_conf->mds_debug_auth_pins) {
-    // audit
-    int s = 0;
-    for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-         p != dirfrags.end();
-         ++p)
-      if (p->second->get_cum_auth_pins())
-	s++;
-    assert(s == nested_auth_pins);
-  }
-
-  int newcum = get_cum_auth_pins();
-
-  maybe_finish_freeze();
-
-  if (!is_subtree_root()) {
-    if (newcum == 0)
-      inode->adjust_nested_auth_pins(-1, by);
-    else if (newcum == a)
-      inode->adjust_nested_auth_pins(1, by);
-  }
 }
 
 
@@ -917,35 +827,10 @@ void CStripe::set_stripe_auth(const pair<int, int> &a)
   dout(10) << "setting stripe_auth=" << a
       << " from " << stripe_auth << " on " << *this << dendl;
 
-  bool was_subtree = is_subtree_root();
   bool was_ambiguous = is_ambiguous_stripe_auth();
 
   // set it.
   stripe_auth = a;
-
-  // new subtree root?
-  if (!was_subtree && is_subtree_root()) {
-    dout(10) << " new subtree root, adjusting auth_pins" << dendl;
-
-    // adjust nested auth pins
-    if (get_cum_auth_pins())
-      inode->adjust_nested_auth_pins(-1, NULL);
-
-    // unpin parent of frozen tree?
-    if (inode->is_auth() && is_frozen_root())
-      inode->auth_unpin(this);
-  }
-  if (was_subtree && !is_subtree_root()) {
-    dout(10) << " old subtree root, adjusting auth_pins" << dendl;
-
-    // adjust nested auth pins
-    if (get_cum_auth_pins())
-      inode->adjust_nested_auth_pins(1, NULL);
-
-    // pin parent of frozen tree?
-    if (inode->is_auth() && is_frozen_root())
-      inode->auth_pin(this);
-  }
 
   // newly single auth?
   if (was_ambiguous && !is_ambiguous_stripe_auth())

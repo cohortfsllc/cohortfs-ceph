@@ -1124,7 +1124,7 @@ void Migrator::finish_export_inode(CInode *in, utime_t now, list<Context*>& fini
     cache->lru.lru_bottouch(in->get_parent_dn());
 
 }
-
+#if 0
 int Migrator::encode_export_dir(bufferlist& exportbl,
 				CDir *dir,
 				map<client_t,entity_inst_t>& exported_client_map,
@@ -1308,7 +1308,6 @@ void Migrator::finish_export_stripe(CStripe *stripe, list<Context*>& finished,
     finish_export_dir(*i, finished, now);
 }
 
-#if 0
 
 class C_MDS_ExportFinishLogged : public Context {
   Migrator *migrator;

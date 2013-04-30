@@ -4570,35 +4570,12 @@ void Server::handle_client_link(MDRequest *mdr)
   
   xlocks.insert(&targeti->linklock);
 
-  // take any locks needed for anchor creation/verification
-  // NOTE: we do this on the master even if the anchor/link update may happen
-  // on the slave.  That means we may have out of date anchor state on our
-  // end.  That's fine:  either, we xlock when we don't need to (slow but
-  // not a problem), or we rdlock when we need to xlock, but then discover we
-  // need to xlock and on our next pass through we adjust the locks (this works
-  // as long as the linklock rdlock isn't the very last lock we take).
-  mds->mdcache->anchor_create_prep_locks(mdr, targeti, rdlocks, xlocks);
-
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
   // pick mtime
   if (mdr->now == utime_t())
     mdr->now = ceph_clock_now(g_ceph_context);
-
-  // does the target need an anchor?
-  if (targeti->is_auth()) {
-    if (targeti->is_anchored()) {
-      dout(7) << "target anchored already (nlink=" << targeti->inode.nlink << "), sweet" << dendl;
-    } 
-    else {
-      dout(7) << "target needs anchor, nlink=" << targeti->inode.nlink << ", creating anchor" << dendl;
-      
-      mdcache->anchor_create(mdr, targeti,
-			     new C_MDS_RetryRequest(mdcache, mdr));
-      return;
-    }
-  }
 
   // go!
   assert(g_conf->mds_kill_link_at != 1);
@@ -4848,24 +4825,6 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   mdr->now = mdr->slave_request->now;
 
   mdr->auth_pin(targeti);
-
-  //assert(0);  // test hack: make sure master can handle a slave that fails to prepare...
-
-  // anchor?
-  if (mdr->slave_request->get_op() == MMDSSlaveRequest::OP_LINKPREP) {
-    
-    // NOTE: the master took any locks needed for anchor creation/verification.
-
-    if (targeti->is_anchored()) {
-      dout(7) << "target anchored already (nlink=" << targeti->inode.nlink << "), sweet" << dendl;
-    } 
-    else {
-      dout(7) << "target needs anchor, nlink=" << targeti->inode.nlink << ", creating anchor" << dendl;
-      mdcache->anchor_create(mdr, targeti,
-			     new C_MDS_RetryRequest(mdcache, mdr));
-      return;
-    }
-  }
 
   assert(g_conf->mds_kill_link_at != 5);
 
@@ -5203,18 +5162,6 @@ void Server::handle_client_unlink(MDRequest *mdr)
     rdlocks.insert(&in->filelock);   // to verify it's empty
   mds->locker->include_snap_rdlocks(rdlocks, dnl->get_inode());
 
-  // if we unlink a snapped multiversion inode and are creating a
-  // remote link to it, it must be anchored.  this mirrors the logic
-  // in MDCache::journal_cow_dentry().
-  bool need_snap_dentry = 
-    dnl->is_primary() &&
-    in->is_multiversion() &&
-    in->find_snaprealm()->get_newest_seq() + 1 > dn->first;
-  if (need_snap_dentry) {
-    dout(10) << " i need to be anchored because i am multiversion and will get a remote cow dentry" << dendl;
-    mds->mdcache->anchor_create_prep_locks(mdr, in, rdlocks, xlocks);
-  }
-
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -5227,26 +5174,6 @@ void Server::handle_client_unlink(MDRequest *mdr)
   // yay!
   if (mdr->now == utime_t())
     mdr->now = ceph_clock_now(g_ceph_context);
-
-  // NOTE: this is non-optimal.  we create an anchor at the old
-  // location, and then change it.  we can do better, but it's more
-  // complicated.  this is fine for now.
-  if (need_snap_dentry && !in->is_anchored()) {
-    mdcache->anchor_create(mdr, in, new C_MDS_RetryRequest(mdcache, mdr));
-    return;
-  }
-
-  // get stray dn ready?
-  if (dnl->is_primary()) {
-    if (!mdr->more()->dst_reanchor_atid && in->is_anchored()) {
-      dout(10) << "reanchoring to stray " << *dnl->get_inode() << dendl;
-      vector<Anchor> trace;
-      straydn->make_anchor_trace(trace, dnl->get_inode());
-      mds->anchorclient->prepare_update(dnl->get_inode()->ino(), trace, &mdr->more()->dst_reanchor_atid, 
-					new C_MDS_RetryRequest(mdcache, mdr));
-      return;
-    }
-  }
 
   if (in->is_dir() && in->get_stripe_count() > 1) {
     // subtree root auths need to be witnesses
@@ -5667,7 +5594,7 @@ bool Server::_dir_is_nonempty_unlocked(MDRequest *mdr, CInode *in)
     return true; // in a snapshot!
 
   list<CStripe*> stripes;
-  in->get_nested_stripes(stripes);
+  in->get_stripes(stripes);
   for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CStripe *stripe = *s;
     // is the frag obviously non-empty?
@@ -6000,9 +5927,6 @@ void Server::handle_client_rename(MDRequest *mdr)
   else
     rdlocks.insert(&srci->snaplock);
 
-  // take any locks needed for anchor creation/verification
-  mds->mdcache->anchor_create_prep_locks(mdr, srci, rdlocks, xlocks);
-
   CInode *auth_pin_freeze = !srcdn->is_auth() && srcdnl->is_primary() ? srci : NULL;
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks,
 				  &remote_wrlocks, auth_pin_freeze))
@@ -6109,8 +6033,7 @@ void Server::handle_client_rename(MDRequest *mdr)
 
     if (srcdnl->is_primary() &&
         (srcdnl->get_inode()->is_anchored() || 
-         (srcdnl->get_inode()->is_dir() && (srcdnl->get_inode()->inode.rstat.ranchors ||
-                                            srcdnl->get_inode()->nested_anchors))) &&
+         (srcdnl->get_inode()->is_dir() && (srcdnl->get_inode()->inode.rstat.ranchors))) &&
         !mdr->more()->src_reanchor_atid) {
       dout(10) << "reanchoring src->dst " << *srcdnl->get_inode() << dendl;
       vector<Anchor> trace;
@@ -6884,21 +6807,10 @@ void Server::_logged_slave_rename(MDRequest *mdr, CDentry *srcdn,
 
   // export srci?
   if (srcdn->is_auth() && srcdnl->is_primary()) {
-    // set export bounds for CInode::encode_export()
-    list<CStripe*> bounds;
-    if (srcdnl->get_inode()->is_dir()) {
-      srcdnl->get_inode()->get_stripes(bounds);
-      for (list<CStripe*>::iterator p = bounds.begin(); p != bounds.end(); p++)
-	(*p)->state_set(CStripe::STATE_EXPORTBOUND);
-    }
-
     map<client_t,entity_inst_t> exported_client_map;
     bufferlist inodebl;
     mdcache->migrator->encode_export_inode(srcdnl->get_inode(), inodebl, 
 					   exported_client_map);
-
-    for (list<CStripe*>::iterator p = bounds.begin(); p != bounds.end(); ++p)
-      (*p)->state_clear(CStripe::STATE_EXPORTBOUND);
 
     ::encode(exported_client_map, reply->inode_export);
     reply->inode_export.claim_append(inodebl);
@@ -7474,9 +7386,6 @@ void Server::handle_client_mksnap(MDRequest *mdr)
   rdlocks.erase(&diri->snaplock);
   xlocks.insert(&diri->snaplock);
 
-  // we need to anchor... get these locks up front!
-  mds->mdcache->anchor_create_prep_locks(mdr, diri, rdlocks, xlocks);
-
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -7494,12 +7403,6 @@ void Server::handle_client_mksnap(MDRequest *mdr)
 
   if (mdr->now == utime_t())
     mdr->now = ceph_clock_now(g_ceph_context);
-
-  // anchor
-  if (!diri->is_anchored()) {
-    mdcache->anchor_create(mdr, diri, new C_MDS_RetryRequest(mdcache, mdr));
-    return;
-  }
 
   // allocate a snapid
   if (!mdr->more()->stid) {

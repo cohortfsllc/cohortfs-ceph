@@ -72,12 +72,8 @@ ostream& operator<<(ostream& out, CDir& dir)
     out << "." << dir.get_replica_nonce();
   }
 
-  if (dir.get_cum_auth_pins())
-    out << " ap=" << dir.get_auth_pins() 
-	<< "+" << dir.get_dir_auth_pins()
-	<< "+" << dir.get_nested_auth_pins();
-  if (dir.get_nested_anchors())
-    out << " na=" << dir.get_nested_anchors();
+  if (dir.get_auth_pins())
+    out << " ap=" << dir.get_auth_pins();
 
   out << " state=" << dir.get_state();
   if (dir.state_test(CDir::STATE_COMPLETE)) out << "|complete";
@@ -134,11 +130,7 @@ CDir::CDir(CStripe *stripe, frag_t frag, MDCache *mdcache, bool auth)
     committing_version(0),
     committed_version(0),
     auth_pins(0),
-    nested_auth_pins(0),
-    dir_auth_pins(0),
     request_pins(0),
-    nested_anchors(0),
-    pop_me(ceph_clock_now(g_ceph_context)),
     bloom(NULL)
 {
   g_num_dir++;
@@ -387,24 +379,14 @@ void CDir::link_primary_inode(CDentry *dn, CInode *in)
   assert(get_num_any() == items.size());
 }
 
-void CDir::link_inode_work( CDentry *dn, CInode *in)
+void CDir::link_inode_work(CDentry *dn, CInode *in)
 {
   assert(dn->get_linkage()->get_inode() == in);
   assert(in->get_parent_dn() == dn);
 
-  // set inode version
-  //in->inode.version = dn->get_version();
-  
   // pin dentry?
   if (in->get_num_ref())
     dn->get(CDentry::PIN_INODEPIN);
-  
-  // adjust auth pin count
-  if (in->auth_pins + in->nested_auth_pins)
-    dn->adjust_nested_auth_pins(in->auth_pins + in->nested_auth_pins, in->auth_pins, NULL);
-
-  if (in->inode.anchored + in->nested_anchors)
-    dn->adjust_nested_anchors(in->nested_anchors + in->inode.anchored);
 
   // verify open snaprealm parent
   if (in->snaprealm)
@@ -454,7 +436,7 @@ void CDir::try_remove_unlinked_dn(CDentry *dn)
 }
 
 
-void CDir::unlink_inode_work( CDentry *dn )
+void CDir::unlink_inode_work(CDentry *dn)
 {
   CInode *in = dn->get_linkage()->get_inode();
 
@@ -471,13 +453,6 @@ void CDir::unlink_inode_work( CDentry *dn )
     // unpin dentry?
     if (in->get_num_ref())
       dn->put(CDentry::PIN_INODEPIN);
-    
-    // unlink auth_pin count
-    if (in->auth_pins + in->nested_auth_pins)
-      dn->adjust_nested_auth_pins(0 - (in->auth_pins + in->nested_auth_pins), 0 - in->auth_pins, NULL);
-    
-    if (in->inode.anchored + in->nested_anchors)
-      dn->adjust_nested_anchors(0 - (in->nested_anchors + in->inode.anchored));
 
     // detach inode
     in->remove_primary_parent(dn);
@@ -628,17 +603,7 @@ void CDir::steal_dentry(CDentry *dn)
 #endif
   }
 
-  if (dn->auth_pins || dn->nested_auth_pins) {
-    // use the helpers here to maintain the auth_pin invariants on the dir inode
-    int ap = dn->get_num_auth_pins() + dn->get_num_nested_auth_pins();
-    int dap = dn->get_num_dir_auth_pins();
-    assert(dap <= ap);
-    adjust_nested_auth_pins(ap, dap, NULL);
-    dn->dir->adjust_nested_auth_pins(-ap, -dap, NULL);
-  }
-
-  nested_anchors += dn->nested_anchors;
-  if (dn->is_dirty()) 
+  if (dn->is_dirty())
     num_dirty++;
 
   dn->dir = this;
@@ -670,8 +635,6 @@ void CDir::finish_old_fragment(list<Context*>& waiters, bool replay)
     }
   }
 
-  assert(nested_auth_pins == 0);
-  assert(dir_auth_pins == 0);
   assert(auth_pins == 0);
 
   num_head_items = num_head_null = 0;
@@ -710,8 +673,6 @@ void CDir::split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool repl
 
   vector<CDir*> subfrags(1 << bits);
   
-  double fac = 1.0 / (double)(1 << bits);  // for scaling load vecs
-
   prepare_old_fragment(replay);
 
   // create subfrag dirs
@@ -722,9 +683,6 @@ void CDir::split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool repl
     f->replica_map = replica_map;
     f->init_fragment_pins();
     f->set_version(get_version());
-
-    f->pop_me = pop_me;
-    f->pop_me.scale(fac);
 
     dout(10) << " subfrag " << *p << " " << *f << dendl;
     subfrags[n++] = f;
@@ -1840,7 +1798,6 @@ void CDir::encode_export(bufferlist& bl)
   ::encode(snap_purged_thru, bl);
   ::encode(committed_version, bl);
   ::encode(state, bl);
-  ::encode(pop_me, bl);
   ::encode(replica_map, bl);
 
   get(PIN_TEMPEXPORTING);
@@ -1848,7 +1805,6 @@ void CDir::encode_export(bufferlist& bl)
 
 void CDir::finish_export(utime_t now)
 {
-  pop_me.zero(now);
   put(PIN_TEMPEXPORTING);
 }
 
@@ -1867,7 +1823,6 @@ void CDir::decode_import(bufferlist::iterator& blp, utime_t now)
   state |= (s & MASK_STATE_EXPORTED);
   if (is_dirty()) get(PIN_DIRTY);
 
-  ::decode(pop_me, now, blp);
   ::decode(replica_map, blp);
   if (!replica_map.empty()) get(PIN_REPLICATED);
 
@@ -1916,13 +1871,8 @@ void CDir::auth_pin(void *by)
   auth_pin_set.insert(by);
 #endif
 
-  dout(10) << "auth_pin by " << by
-	   << " on " << *this
-	   << " count now " << auth_pins << " + " << nested_auth_pins << dendl;
-
-  // nest pins?
-  if (get_cum_auth_pins() == 1)
-    stripe->adjust_nested_auth_pins(1, by);
+  dout(10) << "auth_pin by " << by << " on " << *this
+	   << " count now " << auth_pins << dendl;
 }
 
 void CDir::auth_unpin(void *by) 
@@ -1936,66 +1886,21 @@ void CDir::auth_unpin(void *by)
   if (auth_pins == 0)
     put(PIN_AUTHPIN);
 
-  dout(10) << "auth_unpin by " << by
-	   << " on " << *this
-	   << " count now " << auth_pins << " + " << nested_auth_pins << dendl;
+  dout(10) << "auth_unpin by " << by << " on " << *this
+	   << " count now " << auth_pins << dendl;
   assert(auth_pins >= 0);
-  
-  int newcum = get_cum_auth_pins();
 
   maybe_finish_freeze();  // pending freeze?
-
-  // nest?
-  if (newcum == 0)
-    stripe->adjust_nested_auth_pins(-1, by);
 }
 
-void CDir::adjust_nested_auth_pins(int inc, int dirinc, void *by)
-{
-  assert(inc);
-  nested_auth_pins += inc;
-  dir_auth_pins += dirinc;
-  
-  dout(15) << "adjust_nested_auth_pins " << inc << "/" << dirinc << " on " << *this
-	   << " by " << by << " count now "
-	   << auth_pins << " + " << nested_auth_pins << dendl;
-  assert(nested_auth_pins >= 0);
-  assert(dir_auth_pins >= 0);
-
-  int newcum = get_cum_auth_pins();
-
-  maybe_finish_freeze();  // pending freeze?
-
-  if (newcum == 0)
-    stripe->adjust_nested_auth_pins(-1, by);
-  else if (newcum == inc)
-    stripe->adjust_nested_auth_pins(1, by);
-}
-
-void CDir::adjust_nested_anchors(int by)
-{
-  assert(by);
-  nested_anchors += by;
-  dout(20) << "adjust_nested_anchors by " << by << " -> " << nested_anchors << dendl;
-  assert(nested_anchors >= 0);
-  get_inode()->adjust_nested_anchors(by);
-}
 
 /*****************************************************************************
  * FREEZING
  */
 
-struct C_Dir_AuthUnpin : public Context {
-  CDir *dir;
-  C_Dir_AuthUnpin(CDir *d) : dir(d) {}
-  void finish(int r) {
-    dir->auth_unpin(dir->get_inode());
-  }
-};
-
 void CDir::maybe_finish_freeze()
 {
-  if (auth_pins != 1 || dir_auth_pins != 0)
+  if (auth_pins != 1)
     return;
 
   // we can freeze the _dir_ even with nested pins...
@@ -2033,9 +1938,6 @@ void CDir::_freeze_dir()
   state_clear(STATE_FREEZING);
   state_set(STATE_FROZEN);
   get(PIN_FROZEN);
-
-  if (is_auth() && !stripe->is_subtree_root())
-    stripe->auth_pin(this);  // auth_pin for duration of freeze
 }
 
 
@@ -2047,10 +1949,6 @@ void CDir::unfreeze_dir()
     state_clear(STATE_FROZEN);
     put(PIN_FROZEN);
 
-    // unpin  (may => FREEZEABLE)   FIXME: is this order good?
-    if (is_auth() && !stripe->is_subtree_root())
-      stripe->auth_unpin(this);
-
     finish_waiting(WAIT_UNFREEZE);
   } else {
     finish_waiting(WAIT_FROZEN, -1);
@@ -2059,7 +1957,7 @@ void CDir::unfreeze_dir()
     assert(state_test(STATE_FREEZING));
     state_clear(STATE_FREEZING);
     auth_unpin(this);
-    
+
     finish_waiting(WAIT_UNFREEZE);
   }
 }

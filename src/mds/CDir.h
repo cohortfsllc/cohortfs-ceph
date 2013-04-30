@@ -193,13 +193,7 @@ protected:
 #ifdef MDS_AUTHPIN_SET
   multiset<void*> auth_pin_set;
 #endif
-  int nested_auth_pins, dir_auth_pins;
   int request_pins;
-
-  int nested_anchors;
-
-  // popularity
-  dirfrag_load_vec_t pop_me;
 
 
   // friends
@@ -421,18 +415,11 @@ public:
 
   // -- auth pins --
   bool can_auth_pin() { return is_auth() && !is_freezing_or_frozen(); }
-  int get_cum_auth_pins() { return auth_pins + nested_auth_pins; }
   int get_auth_pins() { return auth_pins; }
-  int get_nested_auth_pins() { return nested_auth_pins; }
-  int get_dir_auth_pins() { return dir_auth_pins; }
   void auth_pin(void *who);
   void auth_unpin(void *who);
 
-  void adjust_nested_auth_pins(int inc, int dirinc, void *by);
   void verify_fragstat();
-
-  int get_nested_anchors() { return nested_anchors; }
-  void adjust_nested_anchors(int by);
 
   // -- freezing --
   bool freeze_dir();
@@ -460,7 +447,7 @@ public:
   }
 #endif
   bool is_freezeable_dir(bool freezing=false) {
-    if ((auth_pins-freezing) > 0 || dir_auth_pins > 0)
+    if ((auth_pins-freezing) > 0)
       return false;
 
     // XXX: conditions for freezing

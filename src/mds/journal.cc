@@ -287,12 +287,6 @@ void EMetaBlob::add_stripe_context(CStripe *stripe, int mode)
 
   list<CDentry*> parents;
 
-  // it may be okay not to include the maybe items, if
-  //  - we journaled the maybe child inode in this segment
-  //  - that subtree turns out to be unambiguously auth
-  list<CDentry*> maybe;
-  bool maybenot = false;
-
   while (true) {
     // already have this stripe?  (we must always add in order)
     if (stripe_map.count(stripe->dirstripe())) {
@@ -309,55 +303,20 @@ void EMetaBlob::add_stripe_context(CStripe *stripe, int mode)
       break;
 
     if (mode == TO_AUTH_SUBTREE_ROOT) {
-      // subtree root?
-      if (stripe->is_subtree_root()) {
-	if (stripe->is_auth() && !stripe->is_ambiguous_auth()) {
-	  // it's an auth subtree, we don't need maybe (if any), and we're done.
-	  dout(20) << "EMetaBlob::add_stripe_context(" << stripe
-              << ") reached unambig auth subtree, don't need "
-              << maybe << " at " << *stripe << dendl;
-	  maybe.clear();
-	  break;
-	}
-        dout(20) << "EMetaBlob::add_stripe_context(" << stripe
-            << ") reached ambig or !auth subtree, need "
-            << maybe << " at " << *stripe << dendl;
-        // we need the maybe list after all!
-        parents.splice(parents.begin(), maybe);
-        maybenot = false;
-      }
-
       // was the inode journaled in this blob?
       if (my_offset && diri->last_journaled == my_offset) {
 	dout(20) << "EMetaBlob::add_stripe_context(" << stripe
             << ") already have diri this blob " << *diri << dendl;
 	break;
       }
-
-      // have we journaled this inode since the last subtree map?
-      if (!maybenot && last_subtree_map && diri->last_journaled >= last_subtree_map) {
-	dout(20) << "EMetaBlob::add_stripe_context(" << stripe
-            << ") already have diri in this segment ("
-            << diri->last_journaled << " >= " << last_subtree_map
-            << "), setting maybenot flag " << *diri << dendl;
-	maybenot = true;
-      }
     }
 
-    if (maybenot) {
-      dout(25) << "EMetaBlob::add_stripe_context(" << stripe
-          << ")      maybe " << *parent << dendl;
-      maybe.push_front(parent);
-    } else {
-      dout(25) << "EMetaBlob::add_stripe_context(" << stripe
-          << ") definitely " << *parent << dendl;
-      parents.push_front(parent);
-    }
+    dout(25) << "EMetaBlob::add_stripe_context(" << stripe
+        << ") definitely " << *parent << dendl;
+    parents.push_front(parent);
 
     stripe = parent->get_stripe();
   }
-
-  parents.splice(parents.begin(), maybe);
 
   dout(20) << "EMetaBlob::add_stripe_context final: " << parents << dendl;
   for (list<CDentry*>::iterator p = parents.begin(); p != parents.end(); p++) {
@@ -612,8 +571,6 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	  unlinked[in] = in->get_parent_stripe();
 	  in->get_parent_dir()->unlink_inode(in->get_parent_dn());
 	}
-	if (in->get_parent_dn() && in->inode.anchored != p->inode.anchored)
-	  in->get_parent_dn()->adjust_nested_anchors( (int)p->inode.anchored - (int)in->inode.anchored );
 	p->update_inode(mds, in);
 	if (p->dirty) in->_mark_dirty(logseg);
 	if (dn->get_linkage()->get_inode() != in) {

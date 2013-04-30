@@ -398,11 +398,8 @@ public:
   stripeid_t pick_stripe(const string &dn);
 
   bool has_open_stripes() const;
-  bool has_subtree_root_stripe() const;
 
   void get_stripes(list<CStripe*> &stripes);
-  void get_nested_stripes(list<CStripe*> &stripes);
-  void get_subtree_stripes(list<CStripe*> &stripes);
 
   CStripe* get_stripe(stripeid_t stripeid);
   CStripe* get_or_open_stripe(stripeid_t stripeid);
@@ -451,18 +448,11 @@ public:
 private:
   // auth pin
   int auth_pins;
-  int nested_auth_pins;
 public:
 #ifdef MDS_AUTHPIN_SET
   multiset<void*> auth_pin_set;
 #endif
   int auth_pin_freeze_allowance;
-
-private:
-  int nested_anchors;   // _NOT_ including me!
-
- public:
-  inode_load_vec_t pop;
 
   // friends
   friend class Server;
@@ -840,16 +830,11 @@ public:
 
 
   // -- auth pins --
-  bool is_auth_pinned() { return auth_pins || nested_auth_pins; }
+  bool is_auth_pinned() { return auth_pins; }
   int get_num_auth_pins() { return auth_pins; }
-  int get_num_nested_auth_pins() { return nested_auth_pins; }
-  void adjust_nested_auth_pins(int a, void *by);
   bool can_auth_pin();
   void auth_pin(void *by);
   void auth_unpin(void *by);
-
-  void adjust_nested_anchors(int by);
-  int get_nested_anchors() { return nested_anchors; }
 
   // -- freeze --
   bool is_freezing_inode() { return state_test(STATE_FREEZING); }

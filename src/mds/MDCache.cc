@@ -2377,7 +2377,7 @@ void MDCache::rejoin_send_rejoins()
   }
 }
 
-
+#if 0
 /** 
  * rejoin_walk - build rejoin declarations for a subtree
  * 
@@ -2472,7 +2472,7 @@ void MDCache::rejoin_walk(CStripe *stripe, MMDSCacheRejoin *rejoin)
   for (list<CStripe*>::iterator p = nested.begin(); p != nested.end(); ++p)
     rejoin_walk(*p, rejoin);
 }
-
+#endif
 
 /*
  * i got a rejoin.
@@ -2677,7 +2677,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
       dout(10) << " have " << *in << dendl;
 
       // scatter the dirlock, just in case?
-      if (!survivor && in->is_dir() && in->has_subtree_root_stripe())
+      if (!survivor && in->is_dir())
 	in->filelock.set_state(LOCK_MIX);
 
       if (ack) {
@@ -4610,9 +4610,6 @@ void MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
   if (clear_complete)
     dir->state_clear(CDir::STATE_COMPLETE);
   
-  if (stripe->get_num_head_items() == 0 && stripe->is_subtree_root())
-    migrator->export_empty_import(stripe);
-
   if (mds->logger) mds->logger->inc(l_mds_iex);
 }
 
@@ -5357,68 +5354,7 @@ bool MDCache::shutdown_pass()
   // trim cache
   trim(0);
   dout(5) << "lru size now " << lru.lru_get_size() << dendl;
-#if 0
-  // SUBTREES
-  if (!subtrees.empty() &&
-      mds->get_nodeid() != 0 &&
-      !migrator->is_exporting() //&&
-      //!migrator->is_importing()
-      ) {
-    dout(7) << "looking for subtrees to export to mds0" << dendl;
-    list<CStripe*> ls;
-    for (map<CStripe*, set<CStripe*> >::iterator it = subtrees.begin();
-         it != subtrees.end();
-         it++) {
-      CStripe *stripe = it->first;
-      if (stripe->get_inode()->is_mdsdir())
-	continue;
-      if (stripe->is_frozen() || stripe->is_freezing())
-	continue;
-      if (!stripe->is_full_stripe_auth())
-	continue;
-      ls.push_back(stripe);
-    }
-    int max = 5; // throttle shutdown exports.. hack!
-    for (list<CStripe*>::iterator p = ls.begin(); p != ls.end(); ++p) {
-      CStripe *stripe = *p;
-      int dest = stripe->get_inode()->authority().first;
-      if (dest > 0 && !mds->mdsmap->is_active(dest))
-	dest = 0;
-      dout(7) << "sending " << *stripe << " back to mds." << dest << dendl;
-      migrator->export_dir(stripe, dest);
-      if (--max == 0)
-	break;
-    }
-  }
 
-  if (!shutdown_export_caps()) {
-    dout(7) << "waiting for residual caps to export" << dendl;
-    return false;
-  }
-
-  // make mydir subtree go away
-  if (myin) {
-    CStripe *mystripe = myin->get_stripe(0);
-    if (mystripe && mystripe->is_subtree_root()) {
-      adjust_subtree_auth(mystripe, CDIR_AUTH_UNKNOWN);
-      remove_subtree(mystripe);
-    }
-  }
-  
-  // subtrees map not empty yet?
-  if (!subtrees.empty()) {
-    dout(7) << "still have " << num_subtrees() << " subtrees" << dendl;
-    show_subtrees();
-    migrator->show_importing();
-    migrator->show_exporting();
-    if (!migrator->is_importing() && !migrator->is_exporting())
-      show_cache();
-    return false;
-  }
-  assert(subtrees.empty());
-  assert(!migrator->is_exporting());
-  assert(!migrator->is_importing());
-#endif
   // (only do this once!)
   if (!mds->mdlog->is_capped()) {
     dout(7) << "capping the log" << dendl;
@@ -6815,196 +6751,6 @@ void MDCache::request_kill(MDRequest *mdr)
   }
 }
 
-
-// --------------------------------------------------------------------
-// ANCHORS
-
-class C_MDC_AnchorPrepared : public Context {
-  MDCache *cache;
-  CInode *in;
-  bool add;
-public:
-  version_t atid;
-  C_MDC_AnchorPrepared(MDCache *c, CInode *i, bool a) : cache(c), in(i), add(a), atid(0) {}
-  void finish(int r) {
-    cache->_anchor_prepared(in, atid, add);
-  }
-};
-
-void MDCache::anchor_create_prep_locks(MDRequest *mdr, CInode *in,
-				       set<SimpleLock*>& rdlocks, set<SimpleLock*>& xlocks)
-{
-  dout(10) << "anchor_create_prep_locks " << *in << dendl;
-
-  if (in->is_anchored()) {
-    // caller may have already xlocked it.. if so, that will suffice!
-    if (xlocks.count(&in->linklock) == 0)
-      rdlocks.insert(&in->linklock);
-  } else {
-    xlocks.insert(&in->linklock);
-
-    // path components too!
-    CDentry *dn = in->get_projected_parent_dn();
-    while (dn) {
-      rdlocks.insert(&dn->lock);
-      dn = dn->get_dir()->get_inode()->get_parent_dn();
-    }
-  }
-}
-
-void MDCache::anchor_create(MDRequest *mdr, CInode *in, Context *onfinish)
-{
-  assert(in->is_auth());
-  dout(10) << "anchor_create " << *in << dendl;
-
-  // auth pin
-  if (!in->can_auth_pin() &&
-      !mdr->is_auth_pinned(in)) {
-    dout(7) << "anchor_create not authpinnable, waiting on " << *in << dendl;
-    in->add_waiter(CInode::WAIT_UNFREEZE, onfinish);
-    return;
-  }
-
-  // wait
-  in->add_waiter(CInode::WAIT_ANCHORED, onfinish);
-
-  // already anchoring?
-  if (in->state_test(CInode::STATE_ANCHORING)) {
-    dout(7) << "anchor_create already anchoring " << *in << dendl;
-    return;
-  }
-
-  dout(7) << "anchor_create " << *in << dendl;
-
-  // auth: do it
-  in->state_set(CInode::STATE_ANCHORING);
-  in->get(CInode::PIN_ANCHORING);
-  in->auth_pin(this);
-  
-  // make trace
-  vector<Anchor> trace;
-  in->make_anchor_trace(trace);
-  if (!trace.size()) {
-    assert(MDS_INO_IS_BASE(in->ino()));
-    trace.push_back(Anchor(in->ino(), in->ino(), 0, 0, 0));
-  }
-  
-  // do it
-  C_MDC_AnchorPrepared *fin = new C_MDC_AnchorPrepared(this, in, true);
-  mds->anchorclient->prepare_create(in->ino(), trace, &fin->atid, fin);
-}
-
-void MDCache::anchor_destroy(CInode *in, Context *onfinish)
-{
-  assert(in->is_auth());
-
-  // auth pin
-  if (!in->can_auth_pin()/* &&
-			    !mdr->is_auth_pinned(in)*/) {
-    dout(7) << "anchor_destroy not authpinnable, waiting on " << *in << dendl;
-    in->add_waiter(CInode::WAIT_UNFREEZE, onfinish);
-    return;
-  }
-
-  dout(7) << "anchor_destroy " << *in << dendl;
-
-  // wait
-  if (onfinish)
-    in->add_waiter(CInode::WAIT_UNANCHORED, onfinish);
-
-  // already anchoring?
-  if (in->state_test(CInode::STATE_UNANCHORING)) {
-    dout(7) << "anchor_destroy already unanchoring " << *in << dendl;
-    return;
-  }
-
-  // auth: do it
-  in->state_set(CInode::STATE_UNANCHORING);
-  in->get(CInode::PIN_UNANCHORING);
-  in->auth_pin(this);
-  
-  // do it
-  C_MDC_AnchorPrepared *fin = new C_MDC_AnchorPrepared(this, in, false);
-  mds->anchorclient->prepare_destroy(in->ino(), &fin->atid, fin);
-}
-
-class C_MDC_AnchorLogged : public Context {
-  MDCache *cache;
-  CInode *in;
-  version_t atid;
-  Mutation *mut;
-public:
-  C_MDC_AnchorLogged(MDCache *c, CInode *i, version_t t, Mutation *m) : 
-    cache(c), in(i), atid(t), mut(m) {}
-  void finish(int r) {
-    cache->_anchor_logged(in, atid, mut);
-  }
-};
-
-void MDCache::_anchor_prepared(CInode *in, version_t atid, bool add)
-{
-  dout(10) << "_anchor_prepared " << *in << " atid " << atid 
-	   << " " << (add ? "create":"destroy") << dendl;
-  assert(in->inode.anchored == !add);
-
-  // update the logged inode copy
-  inode_t *pi = in->project_inode();
-  if (add) {
-    pi->anchored = true;
-    pi->rstat.ranchors++;
-  } else {
-    pi->anchored = false;
-    pi->rstat.ranchors--;
-  }
-  pi->version = in->pre_dirty();
-
-  Mutation *mut = new Mutation;
-  mut->ls = mds->mdlog->get_current_segment();
-  EUpdate *le = new EUpdate(mds->mdlog, add ? "anchor_create":"anchor_destroy");
-  mds->mdlog->start_entry(le);
-  predirty_journal_parents(mut, &le->metablob, in, 0, PREDIRTY_PRIMARY);
-  journal_dirty_inode(mut, &le->metablob, in);
-  le->metablob.add_table_transaction(TABLE_ANCHOR, atid);
-  mds->mdlog->submit_entry(le, new C_MDC_AnchorLogged(this, in, atid, mut));
-  mds->mdlog->flush();
-}
-
-
-void MDCache::_anchor_logged(CInode *in, version_t atid, Mutation *mut)
-{
-  dout(10) << "_anchor_logged on " << *in << dendl;
-
-  // unpin
-  if (in->state_test(CInode::STATE_ANCHORING)) {
-    in->state_clear(CInode::STATE_ANCHORING);
-    in->put(CInode::PIN_ANCHORING);
-    if (in->parent)
-      in->parent->adjust_nested_anchors(1);
-  } else if (in->state_test(CInode::STATE_UNANCHORING)) {
-    in->state_clear(CInode::STATE_UNANCHORING);
-    in->put(CInode::PIN_UNANCHORING);
-    if (in->parent)
-      in->parent->adjust_nested_anchors(-1);
-  }
-  in->auth_unpin(this);
-  
-  // apply update to cache
-  in->pop_and_dirty_projected_inode(mut->ls);
-  mut->apply();
-  
-  // tell the anchortable we've committed
-  mds->anchorclient->commit(atid, mut->ls);
-
-  // drop locks and finish
-  mds->locker->drop_locks(mut);
-  mut->cleanup();
-  delete mut;
-
-  // trigger waiters
-  in->finish_waiting(CInode::WAIT_ANCHORED|CInode::WAIT_UNANCHORED, 0);
-}
-
-
 // -------------------------------------------------------------------------------
 // SNAPREALMS
 
@@ -7024,11 +6770,6 @@ void MDCache::snaprealm_create(MDRequest *mdr, CInode *in)
 {
   dout(10) << "snaprealm_create " << *in << dendl;
   assert(!in->snaprealm);
-
-  if (!in->inode.anchored) {
-    mds->mdcache->anchor_create(mdr, in, new C_MDS_RetryRequest(mds->mdcache, mdr));
-    return;
-  }
 
   // allocate an id..
   if (!mdr->more()->stid) {
@@ -7321,12 +7062,6 @@ void MDCache::purge_stray(CDentry *dn)
   CInode *in = dnl->get_inode();
   dout(10) << "purge_stray " << *dn << " " << *in << dendl;
   assert(!dn->is_replicated());
-
-  // anchored?
-  if (in->inode.anchored) {
-    anchor_destroy(in, new C_MDC_EvalStray(this, dn));
-    return;
-  }
 
   dn->state_set(CDentry::STATE_PURGING);
   dn->get(CDentry::PIN_PURGING);
