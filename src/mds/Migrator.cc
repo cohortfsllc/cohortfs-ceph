@@ -2391,10 +2391,10 @@ void Migrator::import_finish(CStripe *stripe, bool notify)
 
 #endif
 
-void Migrator::decode_import_inode(CDentry *dn, bufferlist::iterator& blp, int oldauth,
+void Migrator::decode_import_inode(CDentry *dn, bufferlist::iterator& blp,
+                                   int oldauth, EMetaBlob *le,
 				   LogSegment *ls, uint64_t log_offset,
-                                   inode_cap_export_map& cap_imports,
-				   list<ScatterLock*>& updated_scatterlocks)
+                                   inode_cap_export_map& cap_imports)
 {  
   dout(15) << "decode_import_inode on " << *dn << dendl;
 
@@ -2440,17 +2440,17 @@ void Migrator::decode_import_inode(CDentry *dn, bufferlist::iterator& blp, int o
   
   // clear if dirtyscattered, since we're going to journal this
   //  but not until we _actually_ finish the import...
-  if (in->filelock.is_dirty()) {
-    updated_scatterlocks.push_back(&in->filelock);
+  if (in->filelock.is_dirty())
     mds->locker->mark_updated_scatterlock(&in->filelock);
-  }
 
   // adjust replica list
   //assert(!in->is_replica(oldauth));  // not true on failed export
   in->add_replica(oldauth, CInode::EXPORT_NONCE);
   if (in->is_replica(mds->get_nodeid()))
     in->remove_replica(mds->get_nodeid());
-  
+
+  if (le)
+    le->add_inode(in, false);
 }
 
 void Migrator::decode_import_inode_caps(CInode *in,
@@ -2488,7 +2488,7 @@ void Migrator::finish_import_inode_caps(CInode *in, bool auth_cap,
   in->replica_caps_wanted = 0;
   in->put(CInode::PIN_IMPORTINGCAPS);
 }
-
+#if 0
 int Migrator::decode_import_dir(bufferlist::iterator& blp, int oldauth,
 				CStripe *import_root, LogSegment *ls,
                                 inode_cap_export_map& cap_imports,
@@ -2624,6 +2624,9 @@ int Migrator::decode_import_stripe(bufferlist::iterator& blp, int oldauth,
   if (stripe->is_replica(mds->get_nodeid()))
     stripe->remove_replica(mds->get_nodeid());
 
+  if (le)
+    le->add_stripe(stripe, false);
+
   __u32 count;
   ::decode(count, blp);
 
@@ -2634,7 +2637,6 @@ int Migrator::decode_import_stripe(bufferlist::iterator& blp, int oldauth,
   return num_imported;
 }
 
-#if 0
 
 // authority bystander
 
