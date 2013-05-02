@@ -48,10 +48,9 @@ WRITE_CLASS_ENCODER(link_rollback)
  */
 struct rmdir_rollback {
   metareqid_t reqid;
-  dirfrag_t src_dir;
-  string src_dname;
-  dirfrag_t dest_dir;
-  string dest_dname;
+  dirfrag_t dir;
+  string dname;
+  inodeno_t ino;
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
