@@ -629,6 +629,7 @@ struct C_Stripe_Fetched : public Context {
 void CStripe::fetch(Context *fin)
 {
   dout(10) << "fetch" << dendl;
+  assert(is_auth());
 
   object_t oid = get_ondisk_object();
   object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pool());

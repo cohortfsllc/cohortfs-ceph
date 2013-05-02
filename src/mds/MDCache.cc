@@ -8409,7 +8409,7 @@ void MDCache::handle_dentry_link(MDentryLink *m)
 
 // UNLINK
 
-void MDCache::send_dentry_unlink(CDentry *dn, CDentry *straydn, MDRequest *mdr)
+void MDCache::send_dentry_unlink(CDentry *dn, MDRequest *mdr)
 {
   dout(10) << "send_dentry_unlink " << *dn << dendl;
   // share unlink news with replicas
@@ -8421,8 +8421,6 @@ void MDCache::send_dentry_unlink(CDentry *dn, CDentry *straydn, MDRequest *mdr)
       continue;
 
     MDentryUnlink *unlink = new MDentryUnlink(dn->get_dir()->dirfrag(), dn->name);
-    if (straydn)
-      replicate_stray(straydn, it->first, unlink->straybl);
     mds->send_message_mds(unlink, it->first);
   }
 }
@@ -8430,11 +8428,6 @@ void MDCache::send_dentry_unlink(CDentry *dn, CDentry *straydn, MDRequest *mdr)
 /* This function DOES put the passed message before returning */
 void MDCache::handle_dentry_unlink(MDentryUnlink *m)
 {
-  // straydn
-  CDentry *straydn = NULL;
-  if (m->straybl.length())
-    straydn = add_replica_stray(m->straybl, m->get_source().num());
-
   CDir *dir = get_dirfrag(m->get_dirfrag());
   if (!dir) {
     dout(7) << "handle_dentry_unlink don't have dirfrag " << m->get_dirfrag() << dendl;
@@ -8450,23 +8443,12 @@ void MDCache::handle_dentry_unlink(MDentryUnlink *m)
       if (dnl->is_primary()) {
 	CInode *in = dnl->get_inode();
 	dn->dir->unlink_inode(dn);
-	assert(straydn);
-	straydn->dir->link_primary_inode(straydn, in);
-
-	// in->first is lazily updated on replica; drag it forward so
-	// that we always keep it in sync with the dnq
-	assert(straydn->first >= in->first);
-	in->first = straydn->first;
 
 	// send caps to auth (if we're not already)
 	if (in->is_any_caps() &&
 	    !in->state_test(CInode::STATE_EXPORTINGCAPS))
 	  migrator->export_caps(in);
-	
-	lru.lru_bottouch(straydn);  // move stray to end of lru
-	straydn = NULL;
       } else {
-	assert(!straydn);
 	assert(dnl->is_remote());
 	dn->dir->unlink_inode(dn);
       }
@@ -8477,17 +8459,7 @@ void MDCache::handle_dentry_unlink(MDentryUnlink *m)
     }
   }
 
-  // race with trim_dentry()
-  if (straydn) {
-    assert(straydn->get_num_ref() == 0);
-    assert(straydn->get_linkage()->is_null());
-    map<int, MCacheExpire*> expiremap;
-    trim_dentry(straydn, expiremap);
-    send_expire_messages(expiremap);
-  }
-
   m->put();
-  return;
 }
 
 

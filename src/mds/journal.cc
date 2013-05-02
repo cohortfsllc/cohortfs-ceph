@@ -443,6 +443,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 
   assert(logseg);
 
+  // replay all inodes
   for (inode_map::iterator p = inodes.begin(); p != inodes.end(); ++p) {
     CInode *in = mds->mdcache->get_inode(p->first);
     bool isnew = in ? false:true;
@@ -455,31 +456,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     dout(10) << "EMetaBlob.replay " << (isnew ? " added ":" updated ") << *in << dendl;
   }
 
-  CInode *renamed_diri = 0;
-  CStripe *oldstripe = 0;
-  if (renamed_dirino) {
-    renamed_diri = mds->mdcache->get_inode(renamed_dirino);
-    if (renamed_diri)
-      dout(10) << "EMetaBlob.replay renamed inode is " << *renamed_diri << dendl;
-    else
-      dout(10) << "EMetaBlob.replay don't have renamed ino " << renamed_dirino << dendl;
-#if 0
-    int nnull = 0;
-    for (list<dirfrag_t>::iterator lp = lump_order.begin(); lp != lump_order.end(); ++lp) {
-      dirlump &lump = lump_map[*lp];
-      if (lump.nnull) {
-	dout(10) << "EMetaBlob.replay found null dentry in dir " << *lp << dendl;
-	nnull += lump.nnull;
-      }
-    }
-    assert(nnull <= 1);
-#endif
-  }
-
-  // keep track of any inodes we unlink and don't relink elsewhere
-  map<CInode*, CStripe*> unlinked;
-  set<CInode*> linked;
-
+  // replay stripes->dirfrags->dentries
   for (stripe_map::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     // open the stripe
     CStripe *stripe = open_stripe(mds, s->first);
@@ -538,83 +515,6 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
         else
           assert(d->ino == dnl->get_remote_ino());
       }
-    }
-  }
-
-  if (renamed_dirino) {
-    if (renamed_diri) {
-      assert(unlinked.count(renamed_diri));
-      assert(linked.count(renamed_diri));
-      oldstripe = unlinked[renamed_diri];
-    } else {
-      // we imported a diri we haven't seen before
-      renamed_diri = mds->mdcache->get_inode(renamed_dirino);
-      assert(renamed_diri);  // it was in the metablob
-    }
-
-    if (oldstripe) {
-      if (oldstripe->authority() != CDIR_AUTH_UNDEF &&
-	  renamed_diri->authority() == CDIR_AUTH_UNDEF) {
-	assert(slaveup); // auth to non-auth, must be slave prepare 
-        list<CStripe*> stripes;
-        renamed_diri->get_stripes(stripes);
-        for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-          CStripe *stripe = *s;
-          // preserve subtree bound until slave commit
-          if (stripe->authority() == CDIR_AUTH_UNDEF)
-            slaveup->oldstripes.insert(stripe);
-        }
-      }
-#if 0
-      mds->mdcache->adjust_subtree_after_rename(renamed_diri, oldstripe, false);
-      
-      // see if we can discard the subtree we renamed out of
-      CStripe *root = mds->mdcache->get_subtree_root(oldstripe);
-      if (root->get_stripe_auth() == CDIR_AUTH_UNDEF) {
-	if (slaveup) // preserve the old dir until slave commit
-	  slaveup->oldstripes.insert(oldstripe);
-	else
-	  mds->mdcache->try_trim_non_auth_subtree(root);
-      }
-#endif
-    }
-
-    // if we are the srci importer, we'll also have some dirfrags we have to open up...
-#if 0
-    if (renamed_diri->authority() != CDIR_AUTH_UNDEF) {
-      for (list<dirstripe_t>::iterator p = renamed_dir_stripes.begin(); p != renamed_dir_stripes.end(); ++p) {
-        CStripe *stripe = renamed_diri->get_stripe(p->stripeid);
-        if (stripe) {
-	  // we already had the inode before, and we already adjusted this subtree accordingly.
-	  dout(10) << " already had+adjusted rename import bound " << *stripe << dendl;
-	  assert(oldstripe);
-	  continue;
-	}
-	mds->mdcache->adjust_subtree_auth(stripe, CDIR_AUTH_UNDEF, false);
-	dout(10) << " creating new rename import bound " << *stripe << dendl;
-      }
-    }
-
-    // rename may overwrite an empty directory and move it into stray dir.
-    unlinked.erase(renamed_diri);
-    for (map<CInode*, CStripe*>::iterator p = unlinked.begin(); p != unlinked.end(); ++p) {
-      if (!linked.count(p->first))
-	continue;
-      assert(p->first->is_dir());
-      mds->mdcache->adjust_subtree_after_rename(p->first, p->second, false);
-    }
-#endif
-  }
-
-  if (!unlinked.empty()) {
-    for (set<CInode*>::iterator p = linked.begin(); p != linked.end(); p++)
-      unlinked.erase(*p);
-    dout(10) << " unlinked set contains " << unlinked << dendl;
-    for (map<CInode*, CStripe*>::iterator p = unlinked.begin(); p != unlinked.end(); ++p) {
-      if (slaveup) // preserve unlinked inodes until slave commit
-	slaveup->unlinked.insert(p->first);
-      else
-	mds->mdcache->remove_inode_recursive(p->first);
     }
   }
 

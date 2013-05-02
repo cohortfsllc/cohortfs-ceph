@@ -759,7 +759,7 @@ public:
   // -- namespace --
 public:
   void send_dentry_link(CDentry *dn, const vector<int> *skip = NULL);
-  void send_dentry_unlink(CDentry *dn, CDentry *straydn, MDRequest *mdr);
+  void send_dentry_unlink(CDentry *dn, MDRequest *mdr);
 protected:
   void handle_dentry_link(MDentryLink *m);
   void handle_dentry_unlink(MDentryUnlink *m);

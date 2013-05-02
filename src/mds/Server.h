@@ -212,17 +212,15 @@ public:
   void handle_client_unlink(MDRequest *mdr);
   bool _dir_is_nonempty_unlocked(MDRequest *mdr, CInode *rmdiri);
   bool _dir_is_nonempty(MDRequest *mdr, CInode *rmdiri);
-  void _unlink_local(MDRequest *mdr, CDentry *dn, CDentry *straydn);
-  void _unlink_local_finish(MDRequest *mdr, 
-			    CDentry *dn, CDentry *straydn,
-			    version_t);
-  void _rmdir_prepare_witness(MDRequest *mdr, int who, CDentry *dn, CDentry *straydn);
+  void _unlink_local(MDRequest *mdr, CDentry *dn);
+  void _unlink_local_finish(MDRequest *mdr, CDentry *dn, version_t);
+  void _rmdir_prepare_witness(MDRequest *mdr, int who, CDentry *dn);
   void handle_slave_rmdir_prep(MDRequest *mdr);
-  void _logged_slave_rmdir(MDRequest *mdr, CDentry *srcdn, CDentry *straydn);
+  void _logged_slave_rmdir(MDRequest *mdr, CDentry *srcdn);
   void _commit_slave_rmdir(MDRequest *mdr, int r);
   void handle_slave_rmdir_prep_ack(MDRequest *mdr, MMDSSlaveRequest *ack);
   void do_rmdir_rollback(bufferlist &rbl, int master, MDRequest *mdr);
-  void _rmdir_rollback_finish(MDRequest *mdr, metareqid_t reqid, CDentry *dn, CDentry *straydn);
+  void _rmdir_rollback_finish(MDRequest *mdr, metareqid_t reqid, CDentry *dn);
 
   // rename
   void handle_client_rename(MDRequest *mdr);

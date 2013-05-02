@@ -62,28 +62,25 @@ WRITE_CLASS_ENCODER(link_rollback)
  */
 struct rmdir_rollback {
   metareqid_t reqid;
-  dirfrag_t src_dir;
-  string src_dname;
-  dirfrag_t dest_dir;
-  string dest_dname;
+  dirfrag_t dir;
+  string dname;
+  inodeno_t ino;
 
   void encode(bufferlist& bl) const {
     __u8 struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(reqid, bl);
-    ::encode(src_dir, bl);
-    ::encode(src_dname, bl);
-    ::encode(dest_dir, bl);
-    ::encode(dest_dname, bl);
+    ::encode(dir, bl);
+    ::encode(dname, bl);
+    ::encode(ino, bl);
   }
   void decode(bufferlist::iterator& bl) {
     __u8 struct_v;
     ::decode(struct_v, bl);
     ::decode(reqid, bl);
-    ::decode(src_dir, bl);
-    ::decode(src_dname, bl);
-    ::decode(dest_dir, bl);
-    ::decode(dest_dname, bl);
+    ::decode(dir, bl);
+    ::decode(dname, bl);
+    ::decode(ino, bl);
   }
 };
 WRITE_CLASS_ENCODER(rmdir_rollback)
