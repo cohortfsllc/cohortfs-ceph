@@ -156,11 +156,10 @@ TYPE(ECommitted)
 #include "mds/events/EFragment.h"
 TYPE(EFragment)
 #include "mds/events/EMetaBlob.h"
-TYPE(EMetaBlob::fullbit)
-TYPE(EMetaBlob::remotebit)
-TYPE(EMetaBlob::nullbit)
-TYPE(EMetaBlob::dirlump)
-TYPE(EMetaBlob::stripelump)
+TYPE(EMetaBlob::Inode)
+TYPE(EMetaBlob::Dentry)
+TYPE(EMetaBlob::Dir)
+TYPE(EMetaBlob::Stripe)
 TYPE(EMetaBlob)
 #include "mds/events/EOpen.h"
 TYPE(EOpen)

@@ -101,6 +101,17 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
 }
 
 
+int InodeContainer::place(inodeno_t ino) const
+{
+  assert(in);
+  const vector<int> &stripe_auth = in->get_stripe_auth();
+  assert(stripe_auth.size());
+
+  static const uint64_t SHIFT = 40; // see InoTable
+  return stripe_auth[(ino >> SHIFT) % stripe_auth.size()];
+}
+
+
 // ====================================================================
 // restriping
 
@@ -136,7 +147,7 @@ void InodeContainer::restripe(const set<int> &nodes, bool replay)
     in->set_stripe_auth(stripe_auth);
 
     le = new EUpdate(mds->mdlog, "restripe");
-    le->metablob.add_root(false, in);
+    le->metablob.add_inode(in, false);
   }
 
   C_GatherBuilder gather(g_ceph_context, new C_IC_RestripeFinish(this));
@@ -148,7 +159,7 @@ void InodeContainer::restripe(const set<int> &nodes, bool replay)
       if (stripe == NULL) {
         stripe = in->add_stripe(new CStripe(in, i, to));
         if (le)
-          le->metablob.add_stripe(stripe, false, false);
+          le->metablob.add_stripe(stripe, false);
         else
           stripe->fetch(gather.new_sub());
       }
@@ -215,7 +226,7 @@ void InodeContainer::handle_restripe(MMDSRestripe *m)
 
   if (!m->replay) {
     EUpdate *le = new EUpdate(mds->mdlog, "restripe");
-    le->metablob.add_root(false, in);
+    le->metablob.add_inode(in, false);
     le->metablob.add_stripe(stripe, false, false);
     mds->mdlog->start_submit_entry(le, gather.new_sub());
   }

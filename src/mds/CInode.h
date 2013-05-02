@@ -737,7 +737,7 @@ public:
 
 
   // -- authority --
-  pair<int,int> authority();
+  pair<int,int> authority() { return inode_auth; }
 
 
   // -- auth pins --
