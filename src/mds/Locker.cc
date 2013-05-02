@@ -2073,9 +2073,7 @@ bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
   mds->mdlog->start_entry(le);
   if (update_size) {  // FIXME if/when we do max_size nested accounting
     mdcache->predirty_journal_parents(mut, metablob, in, 0, PREDIRTY_PRIMARY);
-    // no cow, here!
-    CDentry *parent = in->get_projected_parent_dn();
-    metablob->add_primary_dentry(parent, true, in);
+    metablob->add_inode(in, true);
   } else {
     metablob->add_stripe_context(in->get_projected_parent_stripe());
     mdcache->journal_dirty_inode(mut, metablob, in);

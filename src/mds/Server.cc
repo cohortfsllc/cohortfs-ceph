@@ -2174,34 +2174,19 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
  */
 CStripe* Server::try_open_auth_stripe(CInode *diri, int stripeid, MDRequest *mdr)
 {
-  CStripe *stripe = diri->get_stripe(stripeid);
-
-  // not open and inode not mine?
-  if (!stripe && !diri->is_auth()) {
-    int inauth = diri->authority().first;
-    dout(7) << "try_open_auth_stripe: not open, not inode auth, fw to mds." << inauth << dendl;
-    mdcache->request_forward(mdr, inauth);
+  // are we the stripe auth?
+  int who = diri->get_stripe_auth(stripeid);
+  if (who != mds->get_nodeid())
+  {
+    dout(7) << "try_open_auth_stripe: fw to stripe auth mds." << who << dendl;
+    mdcache->request_forward(mdr, who);
     return 0;
   }
 
-  // not open and inode frozen?
-  if (!stripe && diri->is_frozen_dir()) {
-    dout(10) << "try_open_auth_stripe: dir inode is frozen, waiting " << *diri << dendl;
-    assert(diri->get_parent_dir());
-    diri->get_parent_dir()->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
-    return 0;
-  }
-
-  // invent?
-  if (!stripe) 
-    stripe = diri->get_or_open_stripe(stripeid);
- 
-  // am i auth for the dirfrag?
-  if (!stripe->is_auth()) {
-    int auth = stripe->authority().first;
-    dout(7) << "try_open_auth_stripe: not auth for " << *stripe
-	    << ", fw to mds." << auth << dendl;
-    mdcache->request_forward(mdr, auth);
+  // fetch the stripe if it's not open
+  CStripe *stripe = diri->get_or_open_stripe(stripeid);
+  if (!stripe->is_open()) {
+    stripe->fetch(new C_MDS_RetryRequest(mdcache, mdr));
     return 0;
   }
   return stripe;
@@ -2827,11 +2812,12 @@ void Server::handle_client_openc(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
 
-  le->metablob.add_primary_dentry(inodn, true, in);
+  le->metablob.add_dentry(inodn, true);
+  le->metablob.add_inode(in, true);
 
   mdcache->predirty_journal_parents(mdr, &le->metablob, in, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
-  le->metablob.add_remote_dentry(dn, true);
+  le->metablob.add_dentry(dn, true);
 
   // do the open
   mds->locker->issue_new_caps(in, cmode, mdr->session, realm, req->is_replay());
@@ -3858,7 +3844,7 @@ void Server::handle_client_setxattr(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   mdcache->predirty_journal_parents(mdr, &le->metablob, cur, 0, PREDIRTY_PRIMARY, false);
   mdcache->journal_cow_inode(mdr, &le->metablob, cur);
-  le->metablob.add_primary_dentry(cur->get_projected_parent_dn(), true, cur);
+  le->metablob.add_inode(cur, true);
 
   journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(mds, mdr, cur));
 }
@@ -3917,9 +3903,10 @@ void Server::handle_client_removexattr(MDRequest *mdr)
   EUpdate *le = new EUpdate(mdlog, "removexattr");
   mdlog->start_entry(le);
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
-  mdcache->predirty_journal_parents(mdr, &le->metablob, cur, 0, PREDIRTY_PRIMARY, false);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, cur, 0,
+                                    PREDIRTY_PRIMARY, false);
   mdcache->journal_cow_inode(mdr, &le->metablob, cur);
-  le->metablob.add_primary_dentry(cur->get_projected_parent_dn(), true, cur);
+  le->metablob.add_inode(cur, true);
 
   journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(mds, mdr, cur));
 }
@@ -4079,7 +4066,7 @@ void Server::handle_client_mknod(MDRequest *mdr)
   if (follows >= dn->first)
     dn->first = follows + 1;
   newi->first = dn->first;
-    
+
   dout(10) << "mknod mode " << newi->inode.mode << " rdev " << newi->inode.rdev << dendl;
 
   // prepare finisher
@@ -4088,12 +4075,13 @@ void Server::handle_client_mknod(MDRequest *mdr)
   mdlog->start_entry(le);
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
-  
-  le->metablob.add_primary_dentry(inodn, true, newi);
+ 
+  le->metablob.add_dentry(inodn, true);
+  le->metablob.add_inode(newi, true);
 
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
-  le->metablob.add_remote_dentry(dn, true);
+  le->metablob.add_dentry(dn, true);
 
   journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, newi, dn, inodn));
 }
@@ -4226,11 +4214,12 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
 
-  le->metablob.add_primary_dentry(inodn, true, newi);
+  le->metablob.add_dentry(inodn, true);
+  le->metablob.add_inode(newi, true);
 
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
-  le->metablob.add_remote_dentry(dn, true);
+  le->metablob.add_dentry(dn, true);
 
   // add new stripes to the journal
   list<CStripe*> stripes;
@@ -4293,7 +4282,8 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
       mdlog, "slave_mkdir", mdr->reqid, mdr->slave_to_mds,
       ESlaveUpdate::OP_PREPARE, ESlaveUpdate::MKDIR);
 
-  le->commit.add_primary_dentry(dn, false, in);
+  le->commit.add_dentry(dn, true);
+  le->commit.add_inode(in, true);
 
   const set<stripeid_t> &stripes = req->stripes;
   for (set<stripeid_t>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
@@ -4523,13 +4513,15 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdlog->start_entry(le);
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
+  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
+                                    PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
 
-  le->metablob.add_primary_dentry(inodn, true, newi);
+  le->metablob.add_dentry(inodn, true);
+  le->metablob.add_inode(newi, true);
 
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
-  le->metablob.add_remote_dentry(dn, true);
+  le->metablob.add_dentry(dn, true);
 
   journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, newi, dn, inodn));
 }
@@ -4633,11 +4625,12 @@ void Server::_link_local(MDRequest *mdr, CDentry *dn, CInode *targeti)
   le->metablob.add_client_req(mdr->reqid, mdr->client_request->get_oldest_client_tid());
   mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, 1);      // new dn
   mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, 0, PREDIRTY_PRIMARY);           // targeti
-  le->metablob.add_remote_dentry(dn, true, targeti->ino(), targeti->d_type());  // new remote
-  mdcache->journal_dirty_inode(mdr, &le->metablob, targeti);
 
   // do this after predirty_*, to avoid funky extra dnl arg
   dn->push_projected_linkage(targeti->ino(), targeti->d_type());
+
+  le->metablob.add_dentry(dn, true);  // new remote
+  mdcache->journal_dirty_inode(mdr, &le->metablob, targeti);
 
   journal_and_reply(mdr, targeti, dn, le, new C_MDS_link_local_finish(mds, mdr, dn, targeti, dnpv, tipv));
 }
@@ -4731,13 +4724,13 @@ void Server::_link_remote(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti
   if (inc) {
     dn->pre_dirty();
     mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, 1);
-    le->metablob.add_remote_dentry(dn, true, targeti->ino(), targeti->d_type()); // new remote
     dn->push_projected_linkage(targeti->ino(), targeti->d_type());
+    le->metablob.add_dentry(dn, true); // new remote
   } else {
     dn->pre_dirty();
     mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, -1);
     mdcache->journal_cow_dentry(mdr, &le->metablob, dn);
-    le->metablob.add_null_dentry(dn, true);
+    le->metablob.add_dentry(dn, true);
   }
 
   if (mdr->more()->dst_reanchor_atid)
@@ -5008,8 +5001,8 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
 				      ESlaveUpdate::OP_ROLLBACK, ESlaveUpdate::LINK);
   mdlog->start_entry(le);
   le->commit.add_stripe_context(stripe);
-  le->commit.add_dir(parent, true);
-  le->commit.add_primary_dentry(in->get_projected_parent_dn(), true, 0);
+  le->commit.add_dentry(in->get_projected_parent_dn(), true);
+  le->commit.add_inode(in, true);
   
   mdlog->submit_entry(le, new C_MDS_LoggedLinkRollback(this, mut, mdr));
   mdlog->flush();
@@ -5276,7 +5269,8 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn, CDentry *straydn)
     if (in->snaprealm || follows + 1 > dn->first)
       in->project_past_snaprealm_parent(straydn->get_dir()->get_inode()->find_snaprealm());
 
-    le->metablob.add_primary_dentry(straydn, true, in);
+    le->metablob.add_dentry(straydn, true);
+    le->metablob.add_inode(in, true);
   } else {
     // remote link.  update remote inode.
     mdcache->predirty_journal_parents(mdr, &le->metablob, in, dn->get_dir(), PREDIRTY_DIR, -1);
@@ -5285,7 +5279,7 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn, CDentry *straydn)
   }
 
   mdcache->journal_cow_dentry(mdr, &le->metablob, dn);
-  le->metablob.add_null_dentry(dn, true);
+  le->metablob.add_dentry(dn, true);
 
   if (in->is_dir()) {
     dout(10) << " noting renamed (unlinked) dir ino " << in->ino() << " in metablob" << dendl;
@@ -5421,7 +5415,8 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
   le->rollback = mdr->more()->rollback_bl;
 
   le->commit.add_stripe_context(straydn->get_stripe());
-  le->commit.add_primary_dentry(straydn, true, in);
+  le->commit.add_dentry(straydn, true);
+  le->commit.add_inode(in, true);
   // slave: no need to journal original dentry
 
   dout(10) << " noting renamed (unlinked) dir ino " << in->ino() << " in metablob" << dendl;
@@ -5544,9 +5539,10 @@ void Server::do_rmdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   ESlaveUpdate *le = new ESlaveUpdate(mdlog, "slave_rmdir_rollback", rollback.reqid, master,
 				      ESlaveUpdate::OP_ROLLBACK, ESlaveUpdate::RMDIR);
   mdlog->start_entry(le);
-  
+
   le->commit.add_stripe_context(dn->get_stripe());
-  le->commit.add_primary_dentry(dn, true, in);
+  le->commit.add_dentry(dn, true);
+  le->commit.add_inode(in, true);
   // slave: no need to journal straydn
   
   dout(10) << " noting renamed (unlinked) dir ino " << in->ino() << " in metablob" << dendl;
@@ -6155,7 +6151,8 @@ void Server::_rename_prepare_witness(MDRequest *mdr, int who, set<int> &witnesse
   mdr->more()->waiting_on_slave.insert(who);
 }
 
-version_t Server::_rename_prepare_import(MDRequest *mdr, CDentry *srcdn, bufferlist *client_map_bl)
+version_t Server::_rename_prepare_import(MDRequest *mdr, CDentry *srcdn,
+                                         EMetaBlob *le, bufferlist *cmapbl)
 {
   version_t oldpv = mdr->more()->inode_import_v;
 
@@ -6163,19 +6160,18 @@ version_t Server::_rename_prepare_import(MDRequest *mdr, CDentry *srcdn, bufferl
 
   /* import node */
   bufferlist::iterator blp = mdr->more()->inode_import.begin();
-	  
+
   // imported caps
   ::decode(mdr->more()->imported_client_map, blp);
-  ::encode(mdr->more()->imported_client_map, *client_map_bl);
-  prepare_force_open_sessions(mdr->more()->imported_client_map, mdr->more()->sseq_map);
+  ::encode(mdr->more()->imported_client_map, *cmapbl);
+  prepare_force_open_sessions(mdr->more()->imported_client_map,
+                              mdr->more()->sseq_map);
 
-  list<ScatterLock*> updated_scatterlocks;  // we clear_updated explicitly below
-  mdcache->migrator->decode_import_inode(srcdn, blp, 
-					 srcdn->authority().first,
-					 mdr->ls, 0,
-					 mdr->more()->cap_imports, updated_scatterlocks);
-  srcdnl->get_inode()->filelock.remove_dirty();  
-  srcdnl->get_inode()->nestlock.remove_dirty();  
+  mdcache->migrator->decode_import_inode(srcdn, blp, srcdn->authority().first,
+                                         le, mdr->ls, 0,
+                                         mdr->more()->cap_imports);
+  srcdnl->get_inode()->filelock.remove_dirty();
+  srcdnl->get_inode()->nestlock.remove_dirty();
 
   // hack: force back to !auth and clean, temporarily
   srcdnl->get_inode()->state_clear(CInode::STATE_AUTH);
@@ -6291,7 +6287,7 @@ void Server::_rename_prepare(MDRequest *mdr,
       if (srcdn->is_auth())
 	oldpv = srci->get_projected_version();
       else {
-	oldpv = _rename_prepare_import(mdr, srcdn, client_map_bl);
+	oldpv = _rename_prepare_import(mdr, srcdn, metablob, client_map_bl);
 
 	// note which dirfrags have child subtrees in the journal
 	// event, so that we can open those (as bounds) during replay.
@@ -6365,11 +6361,13 @@ void Server::_rename_prepare(MDRequest *mdr,
 	if (oldin->snaprealm || src_realm->get_newest_seq() + 1 > srcdn->first)
 	  oldin->project_past_snaprealm_parent(straydn->get_dir()->get_inode()->find_snaprealm());
 	straydn->first = MAX(oldin->first, next_dest_snap);
-	metablob->add_primary_dentry(straydn, true, oldin);
+	metablob->add_dentry(straydn, true);
+        metablob->add_inode(oldin);
       } else if (force_journal_stray) {
 	dout(10) << " forced journaling straydn " << *straydn << dendl;
 	metablob->add_stripe_context(straydn->get_stripe());
-	metablob->add_primary_dentry(straydn, true, oldin);
+	metablob->add_dentry(straydn, true);
+        metablob->add_inode(oldin);
       }
     } else if (destdnl->is_remote()) {
       if (oldin->is_auth()) {
@@ -6377,7 +6375,7 @@ void Server::_rename_prepare(MDRequest *mdr,
 	metablob->add_stripe_context(oldin->get_projected_parent_stripe());
 	mdcache->journal_cow_dentry(mdr, metablob, oldin->get_projected_parent_dn(),
 				    CEPH_NOSNAP, 0, destdnl);
-	metablob->add_primary_dentry(oldin->get_projected_parent_dn(), true, oldin);
+	metablob->add_dentry(oldin->get_projected_parent_dn(), true);
       }
     }
   }
@@ -6391,11 +6389,11 @@ void Server::_rename_prepare(MDRequest *mdr,
 	destdn->first = MAX(destdn->first, next_dest_snap);
 
       if (destdn->is_auth())
-        metablob->add_remote_dentry(destdn, true, srcdnl->get_remote_ino(), srcdnl->get_remote_d_type());
+        metablob->add_dentry(destdn, true);
       if (srci->get_projected_parent_dn()->is_auth()) { // it's remote
 	metablob->add_stripe_context(srci->get_projected_parent_stripe());
         mdcache->journal_cow_dentry(mdr, metablob, srci->get_projected_parent_dn(), CEPH_NOSNAP, 0, srcdnl);
-	metablob->add_primary_dentry(srci->get_projected_parent_dn(), true, srci);
+	metablob->add_dentry(srci->get_projected_parent_dn(), true);
       }
     } else {
       if (destdn->is_auth() && !destdnl->is_null())
@@ -6404,7 +6402,7 @@ void Server::_rename_prepare(MDRequest *mdr,
 	destdn->first = MAX(destdn->first, next_dest_snap);
 
       if (destdn->is_auth())
-        metablob->add_primary_dentry(destdn, true, destdnl->get_inode());
+        metablob->add_dentry(destdn, true);
     }
   } else if (srcdnl->is_primary()) {
     // project snap parent update?
@@ -6418,11 +6416,11 @@ void Server::_rename_prepare(MDRequest *mdr,
       destdn->first = MAX(destdn->first, next_dest_snap);
 
     if (destdn->is_auth())
-      metablob->add_primary_dentry(destdn, true, srci);
+      metablob->add_dentry(destdn, true);
     else if (force_journal_dest) {
       dout(10) << " forced journaling destdn " << *destdn << dendl;
       metablob->add_stripe_context(destdn->get_stripe());
-      metablob->add_primary_dentry(destdn, true, srci);
+      metablob->add_dentry(destdn, true);
     }
   }
     
@@ -6434,8 +6432,8 @@ void Server::_rename_prepare(MDRequest *mdr,
     // both primary and NULL dentries. Because during journal replay, null dentry is
     // processed after primary dentry.
     if (srcdnl->is_primary() && !srci->is_dir() && !destdn->is_auth())
-      metablob->add_primary_dentry(srcdn, true, srci);
-    metablob->add_null_dentry(srcdn, true);
+      metablob->add_inode(srci);
+    metablob->add_dentry(srcdn, true);
   } else
     dout(10) << " NOT journaling srcdn " << *srcdn << dendl;
 
@@ -7136,16 +7134,13 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr)
 
   if (srcdn && (srcdn->authority().first == whoami || force_journal_src)) {
     le->commit.add_stripe_context(srcdir->get_stripe());
-    if (rollback.orig_src.ino)
-      le->commit.add_primary_dentry(srcdn, true);
-    else
-      le->commit.add_remote_dentry(srcdn, true);
+    le->commit.add_dentry(srcdn, true);
   }
 
   if (force_journal_dest) {
     assert(rollback.orig_dest.ino);
     le->commit.add_stripe_context(destdir->get_stripe());
-    le->commit.add_primary_dentry(destdn, true);
+    le->commit.add_dentry(destdn, true);
   }
 
   // slave: no need to journal straydn
@@ -7153,7 +7148,7 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   if (target && target->authority().first == whoami) {
     assert(rollback.orig_dest.remote_ino);
     le->commit.add_stripe_context(target->get_projected_parent_stripe());
-    le->commit.add_primary_dentry(target->get_projected_parent_dn(), true, target);
+    le->commit.add_dentry(target->get_projected_parent_dn(), true);
   }
 
   if (force_journal_dest) {

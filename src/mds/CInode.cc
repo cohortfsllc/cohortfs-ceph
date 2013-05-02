@@ -1863,25 +1863,6 @@ void CInode::auth_unpin(void *by)
   }
 }
 
-// authority
-
-pair<int,int> CInode::authority() 
-{
-  if (inode_auth.first >= 0) 
-    return inode_auth;
-
-  if (parent)
-    return parent->dir->authority();
-
-  // new items that are not yet linked in (in the committed plane) belong
-  // to their first parent.
-  if (!projected_parent.empty())
-    return projected_parent.front()->dir->authority();
-
-  return CDIR_AUTH_UNDEF;
-}
-
-
 // SNAP
 
 snapid_t CInode::get_oldest_snap()

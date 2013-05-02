@@ -238,7 +238,8 @@ public:
   // helpers
   void _rename_prepare_witness(MDRequest *mdr, int who, set<int> &witnesse,
 			       CDentry *srcdn, CDentry *destdn, CDentry *straydn);
-  version_t _rename_prepare_import(MDRequest *mdr, CDentry *srcdn, bufferlist *client_map_bl);
+  version_t _rename_prepare_import(MDRequest *mdr, CDentry *srcdn,
+                                   EMetaBlob *le, bufferlist *client_map_bl);
   bool _need_force_journal(CInode *diri);
   void _rename_prepare(MDRequest *mdr,
 		       EMetaBlob *metablob, bufferlist *client_map_bl,

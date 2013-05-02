@@ -274,12 +274,12 @@ void EString::replay(MDS *mds)
 // -----------------------
 // EMetaBlob
 
-EMetaBlob::EMetaBlob(MDLog *mdlog) : opened_ino(0), renamed_dirino(0),
-				     inotablev(0), sessionmapv(0),
-				     allocated_ino(0),
-				     last_subtree_map(mdlog ? mdlog->get_last_segment_offset() : 0),
-				     my_offset(mdlog ? mdlog->get_write_pos() : 0) //, _segment(0)
-{ }
+EMetaBlob::EMetaBlob(MDLog *mdlog)
+  : opened_ino(0), renamed_dirino(0), inotablev(0), sessionmapv(0), allocated_ino(0),
+    last_subtree_map(mdlog ? mdlog->get_last_segment_offset() : 0),
+    my_offset(mdlog ? mdlog->get_write_pos() : 0)
+{
+}
 
 void EMetaBlob::add_stripe_context(CStripe *stripe, int mode)
 {
@@ -289,7 +289,7 @@ void EMetaBlob::add_stripe_context(CStripe *stripe, int mode)
 
   while (true) {
     // already have this stripe?  (we must always add in order)
-    if (stripe_map.count(stripe->dirstripe())) {
+    if (stripes.count(stripe->dirstripe())) {
       dout(20) << "EMetaBlob::add_stripe_context(" << stripe
           << ") have lump " << stripe->dirstripe() << dendl;
       break;
@@ -327,30 +327,13 @@ void EMetaBlob::add_stripe_context(CStripe *stripe, int mode)
 
 void EMetaBlob::update_segment(LogSegment *ls)
 {
-  // atids?
-  //for (list<version_t>::iterator p = atids.begin(); p != atids.end(); ++p)
-  //  ls->pending_commit_atids[*p] = ls;
-  // -> handled directly by AnchorClient
-
-  // dirty inode mtimes
-  // -> handled directly by Server.cc, replay()
-
-  // alloc table update?
   if (inotablev)
     ls->inotablev = inotablev;
   if (sessionmapv)
     ls->sessionmapv = sessionmapv;
-
-  // truncated inodes
-  // -> handled directly by Server.cc
-
-  // client requests
-  //  note the newest request per client
-  //if (!client_reqs.empty())
-    //    ls->last_client_tid[client_reqs.rbegin()->client] = client_reqs.rbegin()->tid);
 }
 
-void EMetaBlob::fullbit::update_inode(MDS *mds, CInode *in)
+void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
 {
   in->inode = inode;
   in->inode_auth = inode_auth;
@@ -375,6 +358,24 @@ void EMetaBlob::fullbit::update_inode(MDS *mds, CInode *in)
     in->symlink = symlink;
   }
   in->old_inodes = old_inodes;
+}
+
+void EMetaBlob::Dir::apply(MDS *mds, CDir *dir, LogSegment *ls)
+{
+  dir->set_version(version);
+
+  if (is_dirty()) {
+    dir->_mark_dirty(ls);
+    CInode *diri = dir->get_inode();
+    diri->filelock.mark_dirty();
+    diri->nestlock.mark_dirty();
+  }
+  if (is_new())
+    dir->mark_new(ls);
+  if (is_complete())
+    dir->mark_complete();
+
+  dout(10) << "EMetaBlob.replay updated dir " << *dir << dendl;
 }
 
 static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
@@ -408,13 +409,12 @@ static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
   return stripe;
 }
 
-void EMetaBlob::update_stripe(MDS *mds, LogSegment *ls,
-                              CStripe *stripe, stripelump& lump)
+void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls)
 {
   CInode *diri = stripe->get_inode();
-  if (lump.is_open())
+  if (is_open())
     stripe->mark_open();
-  if (lump.is_dirty()) {
+  if (is_dirty()) {
     stripe->_mark_dirty(ls);
     if (!stripe->is_rstat_accounted()) {
       dout(10) << "EMetaBlob dirty nestinfo on " << *stripe << dendl;
@@ -427,32 +427,32 @@ void EMetaBlob::update_stripe(MDS *mds, LogSegment *ls,
       ls->dirty_dirfrag_dir.push_back(&diri->item_dirty_dirfrag_dir);
     }
   }
-  if (lump.is_new())
+  if (is_new())
     stripe->mark_new(ls);
-  stripe->set_stripe_auth(lump.auth);
-  stripe->fnode = lump.fnode;
-  stripe->set_fragtree(lump.dirfragtree);
+  stripe->set_stripe_auth(auth);
+  stripe->fnode = fnode;
+  stripe->set_fragtree(dirfragtree);
   stripe->force_dirfrags();
   dout(10) << "EMetaBlob updated stripe " << *stripe << dendl;
 }
 
 void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 {
-  dout(10) << "EMetaBlob.replay " << stripe_map.size() << " stripes, "
-      << lump_map.size() << " dirlumps by " << client_name << dendl;
+  dout(10) << "EMetaBlob.replay " << inodes.size() << " inodes, "
+      << stripes.size() << " stripes by " << client_name << dendl;
 
   assert(logseg);
 
-  for (list<fullbit::ptr>::iterator p = roots.begin(); p != roots.end(); p++) {
-    CInode *in = mds->mdcache->get_inode((*p)->inode.ino);
+  for (inode_map::iterator p = inodes.begin(); p != inodes.end(); ++p) {
+    CInode *in = mds->mdcache->get_inode(p->first);
     bool isnew = in ? false:true;
     if (!in)
       in = new CInode(mds->mdcache, mds->get_nodeid());
-    (*p)->update_inode(mds, in);
+    p->second.apply(mds, in);
     if (isnew)
       mds->mdcache->add_inode(in);
-    if ((*p)->dirty) in->_mark_dirty(logseg);
-    dout(10) << "EMetaBlob.replay " << (isnew ? " added root ":" updated root ") << *in << dendl;    
+    if (p->second.dirty) in->_mark_dirty(logseg);
+    dout(10) << "EMetaBlob.replay " << (isnew ? " added ":" updated ") << *in << dendl;
   }
 
   CInode *renamed_diri = 0;
@@ -463,7 +463,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       dout(10) << "EMetaBlob.replay renamed inode is " << *renamed_diri << dendl;
     else
       dout(10) << "EMetaBlob.replay don't have renamed ino " << renamed_dirino << dendl;
-
+#if 0
     int nnull = 0;
     for (list<dirfrag_t>::iterator lp = lump_order.begin(); lp != lump_order.end(); ++lp) {
       dirlump &lump = lump_map[*lp];
@@ -473,194 +473,72 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       }
     }
     assert(nnull <= 1);
+#endif
   }
 
   // keep track of any inodes we unlink and don't relink elsewhere
   map<CInode*, CStripe*> unlinked;
   set<CInode*> linked;
 
-  // walk through my dirs (in order!)
-  for (list<dirfrag_t>::iterator lp = lump_order.begin();
-       lp != lump_order.end();
-       ++lp) {
-    dout(10) << "EMetaBlob.replay dir " << *lp << dendl;
-    dirlump &lump = lump_map[*lp];
-
+  for (stripe_map::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     // open the stripe
-    CStripe *stripe = open_stripe(mds, lp->stripe);
+    CStripe *stripe = open_stripe(mds, s->first);
     assert(stripe);
 
-    // update the stripe if we have a lump
-    map<dirstripe_t, stripelump>::iterator s = stripe_map.find(lp->stripe);
-    if (s != stripe_map.end()) {
-      update_stripe(mds, logseg, stripe, s->second);
-      stripe_map.erase(s);
-    }
+    s->second.apply(mds, stripe, logseg);
 
-    // open the fragment
-    CDir *dir = mds->mdcache->get_force_dirfrag(*lp);
-    if (!dir) {
-      dir = stripe->get_or_open_dirfrag(lp->frag);
-      dout(10) << "EMetaBlob.replay added dir " << *dir << dendl;  
-    } else {
-      dout(10) << "EMetaBlob.replay had dir " << *dir << dendl;  
-    }
-    dir->set_version(lump.dirv);
-
-    if (lump.is_dirty()) {
-      dir->_mark_dirty(logseg);
-      CInode *diri = dir->get_inode();
-      diri->filelock.mark_dirty();
-      diri->nestlock.mark_dirty();
-    }
-    if (lump.is_new())
-      dir->mark_new(logseg);
-    if (lump.is_complete())
-      dir->mark_complete();
-    else if (lump.is_importing())
-      dir->state_clear(CDir::STATE_COMPLETE);
-    
-    dout(10) << "EMetaBlob.replay updated dir " << *dir << dendl;  
-
-    // decode bits
-    lump._decode_bits();
-
-    // full dentry+inode pairs
-    for (list<fullbit::ptr>::iterator pp = lump.get_dfull().begin();
-	 pp != lump.get_dfull().end();
-	 pp++) {
-      fullbit::ptr p = *pp;
-      CDentry *dn = dir->lookup_exact_snap(p->dn, p->dnlast);
-      if (!dn) {
-	dn = dir->add_null_dentry(p->dn, p->dnfirst, p->dnlast);
-	dn->set_version(p->dnv);
-	if (p->dirty) dn->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay added " << *dn << dendl;
+    dir_map &dirs = s->second.get_dirs();
+    for (dir_map::iterator f = dirs.begin(); f != dirs.end(); ++f) {
+      // open the fragment
+      CDir *dir = stripe->get_dirfrag(f->first);
+      if (!dir) {
+        dir = stripe->get_or_open_dirfrag(f->first);
+        dout(10) << "EMetaBlob.replay added " << *dir << dendl;
       } else {
-	dn->set_version(p->dnv);
-	if (p->dirty) dn->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay for [" << p->dnfirst << "," << p->dnlast << "] had " << *dn << dendl;
-	dn->first = p->dnfirst;
-	assert(dn->last == p->dnlast);
+        dout(10) << "EMetaBlob.replay had " << *dir << dendl;
       }
 
-      CInode *in = mds->mdcache->get_inode(p->inode.ino, p->dnlast);
-      if (!in) {
-	in = new CInode(mds->mdcache, mds->get_nodeid(), p->dnfirst, p->dnlast);
-	p->update_inode(mds, in);
-	mds->mdcache->add_inode(in);
-	if (!dn->get_linkage()->is_null()) {
-	  if (dn->get_linkage()->is_primary()) {
-	    unlinked[dn->get_linkage()->get_inode()] = dir->get_stripe();
-	    stringstream ss;
-	    ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
-	       << " " << *dn->get_linkage()->get_inode() << " should be " << p->inode.ino;
-	    dout(0) << ss.str() << dendl;
-	    mds->clog.warn(ss);
-	  }
-	  dir->unlink_inode(dn);
-	}
-	if (unlinked.count(in))
-	  linked.insert(in);
-	dir->link_primary_inode(dn, in);
-	if (p->dirty) in->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay added " << *in << dendl;
-      } else {
-	if (dn->get_linkage()->get_inode() != in && in->get_parent_dn()) {
-	  dout(10) << "EMetaBlob.replay unlinking " << *in << dendl;
-	  unlinked[in] = in->get_parent_stripe();
-	  in->get_parent_dir()->unlink_inode(in->get_parent_dn());
-	}
-	p->update_inode(mds, in);
-	if (p->dirty) in->_mark_dirty(logseg);
-	if (dn->get_linkage()->get_inode() != in) {
-	  if (!dn->get_linkage()->is_null()) { // note: might be remote.  as with stray reintegration.
-	    if (dn->get_linkage()->is_primary()) {
-	      unlinked[dn->get_linkage()->get_inode()] = dir->get_stripe();
-	      stringstream ss;
-	      ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
-		 << " " << *dn->get_linkage()->get_inode() << " should be " << p->inode.ino;
-	      dout(0) << ss.str() << dendl;
-	      mds->clog.warn(ss);
-	    }
-	    dir->unlink_inode(dn);
-	  }
-	  if (unlinked.count(in))
-	    linked.insert(in);
-	  dir->link_primary_inode(dn, in);
-	  dout(10) << "EMetaBlob.replay linked " << *in << dendl;
-	} else {
-	  dout(10) << "EMetaBlob.replay for [" << p->dnfirst << "," << p->dnlast << "] had " << *in << dendl;
-	}
-	assert(in->first == p->dnfirst ||
-	       (in->is_multiversion() && in->first > p->dnfirst));
+      f->second.apply(mds, dir, logseg);
+
+      dentry_vec &dns = f->second.get_dentries();
+      for (dentry_vec::iterator d = dns.begin(); d != dns.end(); ++d) {
+        // open the dentry
+        CDentry *dn = dir->lookup_exact_snap(d->name, d->last);
+        if (!dn) {
+          dn = dir->add_null_dentry(d->name, d->first, d->last);
+          dn->set_version(d->version);
+          if (d->dirty) dn->_mark_dirty(logseg);
+          dout(10) << "EMetaBlob.replay added " << *dn << dendl;
+        } else {
+          dn->set_version(d->version);
+          if (d->dirty) dn->_mark_dirty(logseg);
+          dout(10) << "EMetaBlob.replay had " << *dn << dendl;
+          dn->first = d->first;
+          assert(dn->last == d->last);
+        }
+
+        // update linkage
+        CDentry::linkage_t *dnl = dn->get_linkage();
+        if (dnl->is_null()) {
+          assert(d->ino); // don't journal a null dentry unless unlinking
+          CInode *in = mds->mdcache->get_inode(d->ino, d->last);
+          if (s->first.ino == MDS_INO_CONTAINER) {
+            // primary links in inode container
+            assert(in);
+            dir->link_primary_inode(dn, in);
+          } else if (in)
+            dir->link_remote_inode(dn, in);
+          else
+            dir->link_remote_inode(dn, d->ino, d->d_type);
+        } else if (d->ino == 0) {
+          dir->unlink_inode(dn);
+          // TODO: track unlinked
+        } else if (dnl->is_primary())
+          assert(d->ino == dnl->get_inode()->ino());
+        else
+          assert(d->ino == dnl->get_remote_ino());
       }
     }
-
-    // remote dentries
-    for (list<remotebit>::iterator p = lump.get_dremote().begin();
-	 p != lump.get_dremote().end();
-	 p++) {
-      CDentry *dn = dir->lookup_exact_snap(p->dn, p->dnlast);
-      if (!dn) {
-	dn = dir->add_remote_dentry(p->dn, p->ino, p->d_type, p->dnfirst, p->dnlast);
-	dn->set_version(p->dnv);
-	if (p->dirty) dn->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay added " << *dn << dendl;
-      } else {
-	if (!dn->get_linkage()->is_null()) {
-	  dout(10) << "EMetaBlob.replay unlinking " << *dn << dendl;
-	  if (dn->get_linkage()->is_primary()) {
-	    unlinked[dn->get_linkage()->get_inode()] = dir->get_stripe();
-	    stringstream ss;
-	    ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
-	       << " " << *dn->get_linkage()->get_inode() << " should be remote " << p->ino;
-	    dout(0) << ss.str() << dendl;
-	  }
-	  dir->unlink_inode(dn);
-	}
-	dir->link_remote_inode(dn, p->ino, p->d_type);
-	dn->set_version(p->dnv);
-	if (p->dirty) dn->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay for [" << p->dnfirst << "," << p->dnlast << "] had " << *dn << dendl;
-	dn->first = p->dnfirst;
-	assert(dn->last == p->dnlast);
-      }
-    }
-
-    // null dentries
-    for (list<nullbit>::iterator p = lump.get_dnull().begin();
-	 p != lump.get_dnull().end();
-	 p++) {
-      CDentry *dn = dir->lookup_exact_snap(p->dn, p->dnlast);
-      if (!dn) {
-	dn = dir->add_null_dentry(p->dn, p->dnfirst, p->dnlast);
-	dn->set_version(p->dnv);
-	if (p->dirty) dn->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay added " << *dn << dendl;
-      } else {
-	dn->first = p->dnfirst;
-	if (!dn->get_linkage()->is_null()) {
-	  dout(10) << "EMetaBlob.replay unlinking " << *dn << dendl;
-	  if (dn->get_linkage()->is_primary())
-	    unlinked[dn->get_linkage()->get_inode()] = dir->get_stripe();
-	  dir->unlink_inode(dn);
-	}
-	dn->set_version(p->dnv);
-	if (p->dirty) dn->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay had " << *dn << dendl;
-	assert(dn->last == p->dnlast);
-      }
-      oldstripe = dir->get_stripe();
-    }
-  }
-
-  // update any stripes that weren't in lump_order
-  for (map<dirstripe_t, stripelump>::iterator s = stripe_map.begin();
-       s != stripe_map.end();
-       ++s) {
-    CStripe *stripe = open_stripe(mds, s->first);
-    update_stripe(mds, logseg, stripe, s->second);
   }
 
   if (renamed_dirino) {

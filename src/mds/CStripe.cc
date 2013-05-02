@@ -258,13 +258,11 @@ void CStripe::assimilate_dirty_rstat_inodes_finish(Mutation *mut, EMetaBlob *blo
     if (in->is_frozen())
       continue;
 
-    CDentry *dn = in->get_projected_parent_dn();
-
     mut->auth_pin(in);
     mut->add_projected_inode(in);
 
     in->clear_dirty_rstat();
-    blob->add_primary_dentry(dn, true, in);
+    blob->add_inode(in, true);
   }
 
   if (!dirty_rstat_inodes.empty())

@@ -46,24 +46,14 @@ class MDSlaveUpdate;
 
 
 class EMetaBlob {
+ public:
+  // journal entry for an inode
+  class Inode {
+   private:
+    bufferlist _enc;
 
-public:
-  /* fullbit - a regular dentry + inode
-   *
-   * We encode this one a bit weirdly, just because (also, it's marginally faster
-   * on multiple encodes, which I think can happen):
-   * Encode a bufferlist on struct creation with all data members, without a struct_v.
-   * When encode is called, encode struct_v and then append the bufferlist.
-   * Decode straight into the appropriate variables.
-   *
-   * So, if you add members, encode them in the constructor and then change
-   * the struct_v in the encode function!
-   */
-  struct fullbit {
-    string  dn;         // dentry
-    snapid_t dnfirst, dnlast;
-    version_t dnv;
-    inode_t inode;      // if it's not
+   public:
+    inode_t inode;
     pair<int, int> inode_auth;
     vector<int> stripe_auth;
     map<string,bufferptr> xattrs;
@@ -74,50 +64,39 @@ public:
     typedef map<snapid_t, old_inode_t> old_inodes_t;
     old_inodes_t old_inodes;
 
-    bufferlist _enc;
+    Inode(bufferlist::iterator &p) : dir_layout(NULL) {
+      decode(p);
+    }
+    Inode() : dir_layout(NULL) {}
+    ~Inode() {
+      delete dir_layout;
+    }
 
-    fullbit(const fullbit& o);
-    const fullbit& operator=(const fullbit& o);
-
-    typedef std::tr1::shared_ptr<fullbit> ptr;
-
-    fullbit(const string& d, snapid_t df, snapid_t dl, version_t v,
-            inode_t& i, const pair<int, int> &iauth,
-            const vector<int> &sauth,
-            const map<string,bufferptr> &xa, const string& sym,
-            bufferlist &sbl, bool dr, default_file_layout *defl = NULL,
-            old_inodes_t *oi = NULL) :
-      //dn(d), dnfirst(df), dnlast(dl), dnv(v), 
-      //inode(i), xattrs(xa), symlink(sym), snapbl(sbl), dirty(dr) 
-      dir_layout(NULL), _enc(1024)
+    // initialize/overwrite the encoded contents
+    void encode(inode_t &i, const pair<int, int> &iauth,
+                const vector<int> &sauth, const map<string,bufferptr> &xa,
+                const string &sym, bufferlist &sbl, bool dr,
+                default_file_layout *defl = NULL,
+                old_inodes_t *oi = NULL)
     {
-      ::encode(d, _enc);
-      ::encode(df, _enc);
-      ::encode(dl, _enc);
-      ::encode(v, _enc);
+      _enc = bufferlist(1024);
+
       ::encode(i, _enc);
       ::encode(iauth, _enc);
       ::encode(xa, _enc);
       if (i.is_symlink())
-	::encode(sym, _enc);
+        ::encode(sym, _enc);
       if (i.is_dir()) {
         ::encode(sauth, _enc);
-	::encode(sbl, _enc);
-	::encode((defl ? true : false), _enc);
-	if (defl)
-	  ::encode(*defl, _enc);
+        ::encode(sbl, _enc);
+        ::encode((defl ? true : false), _enc);
+        if (defl)
+          ::encode(*defl, _enc);
       }
-      ::encode(dr, _enc);      
+      ::encode(dr, _enc);
       ::encode(oi ? true : false, _enc);
       if (oi)
-	::encode(*oi, _enc);
-    }
-    fullbit(bufferlist::iterator &p) : dir_layout(NULL) {
-      decode(p);
-    }
-    fullbit() : dir_layout(NULL) {}
-    ~fullbit() {
-      delete dir_layout;
+        ::encode(*oi, _enc);
     }
 
     void encode(bufferlist& bl) const {
@@ -129,10 +108,6 @@ public:
     void decode(bufferlist::iterator &bl) {
       __u8 struct_v;
       ::decode(struct_v, bl);
-      ::decode(dn, bl);
-      ::decode(dnfirst, bl);
-      ::decode(dnlast, bl);
-      ::decode(dnv, bl);
       ::decode(inode, bl);
       ::decode(inode_auth, bl);
       ::decode(xattrs, bl);
@@ -160,31 +135,32 @@ public:
       }
     }
 
-    void update_inode(MDS *mds, CInode *in);
+    void apply(MDS *mds, CInode *in);
 
     void print(ostream& out) {
-      out << " fullbit dn " << dn << " [" << dnfirst << "," << dnlast << "] dnv " << dnv
-	  << " inode " << inode.ino
-	  << " dirty=" << dirty << std::endl;
+      out << " inode " << inode.ino << " dirty=" << dirty << std::endl;
     }
   };
-  WRITE_CLASS_ENCODER(fullbit)
-  
-  /* remotebit - a dentry + remote inode link (i.e. just an ino)
-   */
-  struct remotebit {
-    string dn;
-    snapid_t dnfirst, dnlast;
-    version_t dnv;
+  WRITE_CLASS_ENCODER(Inode)
+  typedef map<inodeno_t, Inode> inode_map;
+
+  // journal entry for a dentry
+  class Dentry {
+   private:
+    bufferlist _enc;
+
+   public:
+    string name;
+    snapid_t first, last;
+    version_t version;
     inodeno_t ino;
     unsigned char d_type;
     bool dirty;
 
-    bufferlist _enc;
-
-    remotebit(const string& d, snapid_t df, snapid_t dl, version_t v, inodeno_t i, unsigned char dt, bool dr) : 
-      //dn(d), dnfirst(df), dnlast(dl), dnv(v), ino(i), d_type(dt), dirty(dr) { }
-      _enc(256) {
+    Dentry(const string& d, snapid_t df, snapid_t dl,
+           version_t v, inodeno_t i, unsigned char dt, bool dr)
+        : _enc(256)
+    {
       ::encode(d, _enc);
       ::encode(df, _enc);
       ::encode(dl, _enc);
@@ -193,118 +169,67 @@ public:
       ::encode(dt, _enc);
       ::encode(dr, _enc);
     }
-    remotebit(bufferlist::iterator &p) { decode(p); }
-    remotebit() {}
+    Dentry(bufferlist::iterator &p) { decode(p); }
+    Dentry() {}
 
     void encode(bufferlist& bl) const {
       __u8 struct_v = 1;
       ::encode(struct_v, bl);
       assert(_enc.length());
       bl.append(_enc);
-      /*
-      ::encode(dn, bl);
-      ::encode(dnfirst, bl);
-      ::encode(dnlast, bl);
-      ::encode(dnv, bl);
-      ::encode(ino, bl);
-      ::encode(d_type, bl);
-      ::encode(dirty, bl);
-      */
     }
     void decode(bufferlist::iterator &bl) {
       __u8 struct_v;
       ::decode(struct_v, bl);
-      ::decode(dn, bl);
-      ::decode(dnfirst, bl);
-      ::decode(dnlast, bl);
-      ::decode(dnv, bl);
+      ::decode(name, bl);
+      ::decode(first, bl);
+      ::decode(last, bl);
+      ::decode(version, bl);
       ::decode(ino, bl);
       ::decode(d_type, bl);
       ::decode(dirty, bl);
     }
     void print(ostream& out) {
-      out << " remotebit dn " << dn << " [" << dnfirst << "," << dnlast << "] dnv " << dnv
-	  << " ino " << ino
-	  << " dirty=" << dirty << std::endl;
+      out << " dn " << name << " [" << first << "," << last << "] v " << version
+	  << " ino " << ino << " dirty=" << dirty << std::endl;
     }
   };
-  WRITE_CLASS_ENCODER(remotebit)
+  WRITE_CLASS_ENCODER(Dentry)
+  typedef vector<Dentry> dentry_vec;
 
-  /*
-   * nullbit - a null dentry
-   */
-  struct nullbit {
-    string dn;
-    snapid_t dnfirst, dnlast;
-    version_t dnv;
-    bool dirty;
+  // journal entry for a dir fragment
+  class Dir {
+   private:
+    dentry_vec dentries;
 
-    bufferlist _enc;
+    mutable bufferlist dnbl;
+    bool dn_decoded;
 
-    nullbit(const string& d, snapid_t df, snapid_t dl, version_t v, bool dr) : 
-      //dn(d), dnfirst(df), dnlast(dl), dnv(v), dirty(dr) { }
-      _enc(128) {
-      ::encode(d, _enc);
-      ::encode(df, _enc);
-      ::encode(dl, _enc);
-      ::encode(v, _enc);
-      ::encode(dr, _enc);
+    void encode_dentries() const {
+      ::encode(dentries, dnbl);
     }
-    nullbit(bufferlist::iterator &p) { decode(p); }
-    nullbit() {}
-
-    void encode(bufferlist& bl) const {
-      __u8 struct_v = 1;
-      ::encode(struct_v, bl);
-      assert(_enc.length());
-      bl.append(_enc);
-      /*
-      ::encode(dn, bl);
-      ::encode(dnfirst, bl);
-      ::encode(dnlast, bl);
-      ::encode(dnv, bl);
-      ::encode(dirty, bl);
-      */
+    void decode_dentries() {
+      if (dn_decoded) return;
+      bufferlist::iterator p = dnbl.begin();
+      ::decode(dentries, p);
+      dn_decoded = true;
     }
-    void decode(bufferlist::iterator &bl) {
-      __u8 struct_v;
-      ::decode(struct_v, bl);
-      ::decode(dn, bl);
-      ::decode(dnfirst, bl);
-      ::decode(dnlast, bl);
-      ::decode(dnv, bl);
-      ::decode(dirty, bl);
-    }
-    void print(ostream& out) {
-      out << " nullbit dn " << dn << " [" << dnfirst << "," << dnlast << "] dnv " << dnv
-	  << " dirty=" << dirty << std::endl;
-    }
-  };
-  WRITE_CLASS_ENCODER(nullbit)
 
-
-  /* dirlump - contains metadata for any dir we have contents for.
-   */
-public:
-  struct dirlump {
+   public:
     static const int STATE_COMPLETE =    (1<<1);
     static const int STATE_DIRTY =       (1<<2);  // dirty due to THIS journal item, that is!
     static const int STATE_NEW =         (1<<3);  // new directory
-    static const int STATE_IMPORTING =	 (1<<4);  // importing directory
 
-    version_t dirv;
-    __u32 state;
-    __u32 nfull, nremote, nnull;
+    version_t version;
+    int state;
 
-  private:
-    mutable bufferlist dnbl;
-    bool dn_decoded;
-    list<fullbit::ptr>   dfull;
-    list<remotebit> dremote;
-    list<nullbit>   dnull;
+    Dir() : dn_decoded(true), version(0), state(0) {}
 
-  public:
-    dirlump() : dirv(0), state(0), nfull(0), nremote(0), nnull(0), dn_decoded(true) { }
+    dentry_vec& get_dentries()
+    {
+      decode_dentries();
+      return dentries;
+    }
 
     bool is_complete() { return state & STATE_COMPLETE; }
     void mark_complete() { state |= STATE_COMPLETE; }
@@ -312,67 +237,61 @@ public:
     void mark_dirty() { state |= STATE_DIRTY; }
     bool is_new() { return state & STATE_NEW; }
     void mark_new() { state |= STATE_NEW; }
-    bool is_importing() { return state & STATE_IMPORTING; }
-    void mark_importing() { state |= STATE_IMPORTING; }
 
-    list<fullbit::ptr>   &get_dfull()   { return dfull; }
-    list<remotebit> &get_dremote() { return dremote; }
-    list<nullbit>   &get_dnull()   { return dnull; }
-
-    void print(dirfrag_t dirfrag, ostream& out) {
-      out << "dirlump " << dirfrag << " v " << dirv
-	  << " state " << state
-	  << " num " << nfull << "/" << nremote << "/" << nnull
-	  << std::endl;
-      _decode_bits();
-      for (list<fullbit::ptr>::iterator p = dfull.begin(); p != dfull.end(); ++p)
-	(*p)->print(out);
-      for (list<remotebit>::iterator p = dremote.begin(); p != dremote.end(); ++p)
-	p->print(out);
-      for (list<nullbit>::iterator p = dnull.begin(); p != dnull.end(); ++p)
-	p->print(out);
-    }
-
-    void _encode_bits() const {
-      ::encode(dfull, dnbl);
-      ::encode(dremote, dnbl);
-      ::encode(dnull, dnbl);
-    }
-    void _decode_bits() { 
-      if (dn_decoded) return;
-      bufferlist::iterator p = dnbl.begin();
-      ::decode(dfull, p);
-      ::decode(dremote, p);
-      ::decode(dnull, p);
-      dn_decoded = true;
+    void print(dirfrag_t df, ostream& out) {
+      out << "dirfrag " << df << " v " << version << " state " << state << std::endl;
+      dentry_vec &dns = get_dentries();
+      for (dentry_vec::iterator p = dns.begin(); p != dns.end(); ++p)
+        p->print(out);
     }
 
     void encode(bufferlist& bl) const {
       __u8 struct_v = 1;
       ::encode(struct_v, bl);
-      ::encode(dirv, bl);
+      ::encode(version, bl);
       ::encode(state, bl);
-      ::encode(nfull, bl);
-      ::encode(nremote, bl);
-      ::encode(nnull, bl);
-      _encode_bits();
+      encode_dentries();
       ::encode(dnbl, bl);
     }
     void decode(bufferlist::iterator &bl) {
       __u8 struct_v;
       ::decode(struct_v, bl);
-      ::decode(dirv, bl);
+      ::decode(version, bl);
       ::decode(state, bl);
-      ::decode(nfull, bl);
-      ::decode(nremote, bl);
-      ::decode(nnull, bl);
       ::decode(dnbl, bl);
-      dn_decoded = false;      // don't decode bits unless we need them.
+      dn_decoded = false;      // don't decode dentries unless we need them.
+    }
+
+    void apply(MDS *mds, CDir *dir, LogSegment *ls);
+
+    void add_dentry(const string& name, snapid_t first, snapid_t last,
+                    version_t version, inodeno_t ino,
+                    unsigned char dtype, bool dirty) {
+      dentries.push_back(Dentry(name, first, last, version, ino, dtype, dirty));
     }
   };
-  WRITE_CLASS_ENCODER(dirlump)
+  WRITE_CLASS_ENCODER(Dir)
+  typedef map<frag_t, Dir> dir_map;
 
-  struct stripelump {
+  // journal entry for a dir stripe
+  class Stripe {
+   private:
+    dir_map dirs;
+
+    mutable bufferlist dfbl;
+    bool df_decoded;
+
+    void encode_dirs() const {
+      ::encode(dirs, dfbl);
+    }
+    void decode_dirs() {
+      if (df_decoded) return;
+      bufferlist::iterator p = dfbl.begin();
+      ::decode(dirs, p);
+      df_decoded = true;
+    }
+
+   public:
     static const int STATE_OPEN =   (1<<0);
     static const int STATE_DIRTY =  (1<<1);
     static const int STATE_NEW =    (1<<2);
@@ -380,7 +299,15 @@ public:
     pair<int, int> auth;
     fragtree_t dirfragtree;
     fnode_t fnode;
-    __u32 state;
+    int state;
+
+    Stripe() : df_decoded(true), state(0) {}
+
+    dir_map& get_dirs()
+    {
+      decode_dirs();
+      return dirs;
+    }
 
     bool is_open() const { return state & STATE_OPEN; }
     void mark_open() { state |= STATE_OPEN; }
@@ -394,31 +321,45 @@ public:
       ::encode(dirfragtree, bl);
       ::encode(fnode, bl);
       ::encode(state, bl);
+      encode_dirs();
+      ::encode(dfbl, bl);
     }
     void decode(bufferlist::iterator& bl) {
       ::decode(auth, bl);
       ::decode(dirfragtree, bl);
       ::decode(fnode, bl);
       ::decode(state, bl);
+      ::decode(dfbl, bl);
+      df_decoded = false;
+    }
+
+    void apply(MDS *mds, CStripe *stripe, LogSegment *ls);
+
+    Dir& add_dir(frag_t frag, version_t v, bool dirty,
+                 bool complete=false, bool isnew=false) {
+      Dir& d = dirs[frag];
+      d.version = v;
+      if (complete) d.mark_complete();
+      if (dirty) d.mark_dirty();
+      if (isnew) d.mark_new();
+      return d;
     }
   };
-  WRITE_CLASS_ENCODER(stripelump)
+  WRITE_CLASS_ENCODER(Stripe)
+  typedef map<dirstripe_t, Stripe> stripe_map;
 
-private:
-  // my lumps.  preserve the order we added them in a list.
-  list<dirfrag_t>         lump_order;
-  map<dirfrag_t, dirlump> lump_map;
-  map<dirstripe_t, stripelump> stripe_map;
-  list<fullbit::ptr> roots;
+ private:
+  inode_map inodes;
+  stripe_map stripes;
 
   list<pair<__u8,version_t> > table_tids;  // tableclient transactions
 
   inodeno_t opened_ino;
-public:
+ public:
   inodeno_t renamed_dirino;
   list<dirstripe_t> renamed_dir_stripes;
-private:
-  
+
+ private:
   // ino (pre)allocation.  may involve both inotable AND session state.
   version_t inotablev, sessionmapv;
   inodeno_t allocated_ino;            // inotable
@@ -427,7 +368,7 @@ private:
   entity_name_t client_name;          //            session
 
   // inodes i've truncated
-  list<inodeno_t> truncate_start;        // start truncate 
+  list<inodeno_t> truncate_start;        // start truncate
   map<inodeno_t,uint64_t> truncate_finish;  // finished truncate (started in segment blah)
 
   vector<inodeno_t> destroyed_inodes;
@@ -439,10 +380,8 @@ private:
   void encode(bufferlist& bl) const {
     __u8 struct_v = 4;
     ::encode(struct_v, bl);
-    ::encode(lump_order, bl);
-    ::encode(lump_map, bl);
-    ::encode(stripe_map, bl);
-    ::encode(roots, bl);
+    ::encode(inodes, bl);
+    ::encode(stripes, bl);
     ::encode(table_tids, bl);
     ::encode(opened_ino, bl);
     ::encode(allocated_ino, bl);
@@ -461,19 +400,8 @@ private:
   void decode(bufferlist::iterator &bl) {
     __u8 struct_v;
     ::decode(struct_v, bl);
-    ::decode(lump_order, bl);
-    ::decode(lump_map, bl);
-    ::decode(stripe_map, bl);
-    if (struct_v >= 4) {
-      ::decode(roots, bl);
-    } else {
-      bufferlist rootbl;
-      ::decode(rootbl, bl);
-      if (rootbl.length()) {
-	bufferlist::iterator p = rootbl.begin();
-	roots.push_back(fullbit::ptr(new fullbit(p)));
-      }
-    }
+    ::decode(inodes, bl);
+    ::decode(stripes, bl);
     ::decode(table_tids, bl);
     ::decode(opened_ino, bl);
     ::decode(allocated_ino, bl);
@@ -506,19 +434,9 @@ private:
   uint64_t last_subtree_map;
   uint64_t my_offset;
 
-  // for replay, in certain cases
-  //LogSegment *_segment;
 
   EMetaBlob(MDLog *mdl = 0);  // defined in journal.cc
   ~EMetaBlob() { }
-
-  void print(ostream& out) {
-    for (list<dirfrag_t>::iterator p = lump_order.begin();
-	 p != lump_order.end();
-	 ++p) {
-      lump_map[*p].print(*p, out);
-    }
-  }
 
   void add_client_req(metareqid_t r, uint64_t tid=0) {
     client_reqs.push_back(pair<metareqid_t,uint64_t>(r, tid));
@@ -533,11 +451,9 @@ private:
     opened_ino = ino;
   }
 
-  void set_ino_alloc(inodeno_t alloc,
-		     inodeno_t used_prealloc,
-		     interval_set<inodeno_t>& prealloc,
-		     entity_name_t client,
-		     version_t sv, version_t iv) {
+  void set_ino_alloc(inodeno_t alloc, inodeno_t used_prealloc,
+                     interval_set<inodeno_t>& prealloc,
+                     entity_name_t client, version_t sv, version_t iv) {
     allocated_ino = alloc;
     used_preallocated_ino = used_prealloc;
     preallocated_inos = prealloc;
@@ -556,159 +472,62 @@ private:
   void add_destroyed_inode(inodeno_t ino) {
     destroyed_inodes.push_back(ino);
   }
-  
-  void add_null_dentry(CDentry *dn, bool dirty) {
-    add_null_dentry(add_dir(dn->get_dir(), false), dn, dirty);
-  }
-  void add_null_dentry(dirlump& lump, CDentry *dn, bool dirty) {
-    // add the dir
-    lump.nnull++;
-    lump.get_dnull().push_back(nullbit(dn->get_name(), 
-				       dn->first, dn->last,
-				       dn->get_projected_version(), 
-				       dirty));
-  }
-
-  void add_remote_dentry(CDentry *dn, bool dirty) {
-    add_remote_dentry(add_dir(dn->get_dir(), false), dn, dirty, 0, 0);
-  }
-  void add_remote_dentry(CDentry *dn, bool dirty, inodeno_t rino, int rdt) {
-    add_remote_dentry(add_dir(dn->get_dir(), false), dn, dirty, rino, rdt);
-  }
-  void add_remote_dentry(dirlump& lump, CDentry *dn, bool dirty, 
-			 inodeno_t rino=0, unsigned char rdt=0) {
-    if (!rino) {
-      rino = dn->get_projected_linkage()->get_remote_ino();
-      rdt = dn->get_projected_linkage()->get_remote_d_type();
-    }
-    lump.nremote++;
-    lump.get_dremote().push_back(remotebit(dn->get_name(), 
-					   dn->first, dn->last,
-					   dn->get_projected_version(), 
-					   rino, rdt,
-					   dirty));
-  }
-
-  // return remote pointer to to-be-journaled inode
-  void add_primary_dentry(CDentry *dn, bool dirty, CInode *in=0) {
-    add_primary_dentry(add_dir(dn->get_dir(), false),
-		       dn, dirty, in);
-  }
-  void add_primary_dentry(dirlump& lump, CDentry *dn, bool dirty, CInode *in=0) {
-    if (!in) 
-      in = dn->get_projected_linkage()->get_inode();
-
+ 
+  void add_inode(CInode *in, bool dirty = false) {
     // make note of where this inode was last journaled
     in->last_journaled = my_offset;
-    //cout << "journaling " << in->inode.ino << " at " << my_offset << std::endl;
 
-    inode_t *pi = in->get_projected_inode();
     default_file_layout *default_layout = NULL;
     if (in->is_dir())
       default_layout = (in->get_projected_node() ?
-                           in->get_projected_node()->dir_layout :
-                           in->default_layout);
+                        in->get_projected_node()->dir_layout :
+                        in->default_layout);
 
     bufferlist snapbl;
     sr_t *sr = in->get_projected_srnode();
     if (sr)
       sr->encode(snapbl);
 
-    lump.nfull++;
-    lump.get_dfull().push_back(fullbit::ptr(
-            new fullbit(dn->get_name(), dn->first, dn->last,
-                        dn->get_projected_version(), *pi,
-                        in->inode_auth, in->get_stripe_auth(),
-                        *in->get_projected_xattrs(), in->symlink,
-                        snapbl, dirty, default_layout, &in->old_inodes)));
+    Inode &inode = inodes[in->ino()];
+    inode.encode(*in->get_projected_inode(),
+                 in->inode_auth, in->get_stripe_auth(),
+                 *in->get_projected_xattrs(), in->symlink,
+                 snapbl, dirty, default_layout, &in->old_inodes);
   }
 
-  // convenience: primary or remote?  figure it out.
   void add_dentry(CDentry *dn, bool dirty) {
-    dirlump& lump = add_dir(dn->get_dir(), false);
-    add_dentry(lump, dn, dirty);
-  }
-  void add_dentry(dirlump& lump, CDentry *dn, bool dirty) {
-    // primary or remote
-    if (dn->get_projected_linkage()->is_remote()) {
-      add_remote_dentry(dn, dirty);
-      return;
-    } else if (dn->get_projected_linkage()->is_null()) {
-      add_null_dentry(dn, dirty);
-      return;
-    }
-    assert(dn->get_projected_linkage()->is_primary());
-    add_primary_dentry(dn, dirty);
-  }
+    CDir *dir = dn->get_dir();
 
-  void add_root(bool dirty, CInode *in, inode_t *pi=0, bufferlist *psnapbl=0,
-		    map<string,bufferptr> *px=0) {
-    in->last_journaled = my_offset;
-    //cout << "journaling " << in->inode.ino << " at " << my_offset << std::endl;
+    inodeno_t ino = 0;
+    unsigned char d_type = 0;
 
-    if (!pi) pi = in->get_projected_inode();
-    if (!px) px = &in->xattrs;
-
-    default_file_layout *default_layout = NULL;
-    if (in->is_dir())
-      default_layout = (in->get_projected_node() ?
-                           in->get_projected_node()->dir_layout :
-                           in->default_layout);
-
-    bufferlist snapbl;
-    if (psnapbl)
-      snapbl = *psnapbl;
-    else
-      in->encode_snap_blob(snapbl);
-
-    for (list<fullbit::ptr>::iterator p = roots.begin(); p != roots.end(); p++) {
-      if ((*p)->inode.ino == in->ino()) {
-	roots.erase(p);
-	break;
-      }
+    CDentry::linkage_t *dnl = dn->get_projected_linkage();
+    if (dnl->is_primary()) {
+      assert(dir->dirfrag().stripe.ino == MDS_INO_CONTAINER);
+      ino = dnl->get_inode()->ino();
+      d_type = dnl->get_inode()->d_type();
+    } else if (dnl->is_remote()) {
+      ino = dnl->get_remote_ino();
+      d_type = dnl->get_remote_d_type();
     }
 
-    string empty;
-    roots.push_back(fullbit::ptr(
-            new fullbit(empty, in->first, in->last, 0, *pi,
-                        in->inode_auth, in->get_stripe_auth(),
-                        *px, in->symlink, snapbl, dirty,
-                        default_layout, &in->old_inodes)));
-  }
-  
-  dirlump& add_dir(CDir *dir, bool dirty, bool complete=false) {
-    add_stripe(dir->get_stripe(), false);
-    return add_dir(dir->dirfrag(), dir->get_projected_version(),
-		   dirty, complete);
-  }
-  dirlump& add_new_dir(CDir *dir) {
-    add_stripe(dir->get_stripe(), true);
-    return add_dir(dir->dirfrag(), dir->get_projected_version(),
-		   true, true, true); // dirty AND complete AND new
-  }
-  dirlump& add_import_dir(CDir *dir) {
-    add_stripe(dir->get_stripe(), false);
-    // dirty=false would be okay in some cases
-    return add_dir(dir->dirfrag(), dir->get_projected_version(),
-		   true, dir->is_complete(), false, true);
-  }
-  dirlump& add_dir(dirfrag_t df, version_t pv, bool dirty,
-                   bool complete=false, bool isnew=false,
-                   bool importing=false) {
-    if (lump_map.count(df) == 0)
-      lump_order.push_back(df);
-
-    dirlump& l = lump_map[df];
-    l.dirv = pv;
-    if (complete) l.mark_complete();
-    if (dirty) l.mark_dirty();
-    if (isnew) l.mark_new();
-    if (importing) l.mark_importing();
-    return l;
+    Dir& df = add_dir(dir, false);
+    df.add_dentry(dn->get_name(), dn->first, dn->last,
+                  dn->get_projected_version(), ino, d_type, dirty);
   }
 
+  Dir& add_dir(CDir *dir, bool dirty, bool complete=false) {
+    Stripe &s = add_stripe(dir->get_stripe(), false);
+    return s.add_dir(dir->get_frag(), dir->get_projected_version(),
+                     dirty, complete);
+  }
+  Dir& add_new_dir(CDir *dir) {
+    Stripe &s = add_stripe(dir->get_stripe(), true);
+    return s.add_dir(dir->get_frag(), dir->get_projected_version(),
+                     true, true, true); // dirty AND complete AND new
+  }
 
-  stripelump& add_stripe(CStripe *stripe, bool dirty, bool isnew=false) {
+  Stripe& add_stripe(CStripe *stripe, bool dirty, bool isnew=false) {
     return add_stripe(stripe->dirstripe(),
                       stripe->get_stripe_auth(),
                       stripe->get_fragtree(),
@@ -716,21 +535,21 @@ private:
                       stripe->get_projected_version(),
                       stripe->is_open(), dirty, isnew);
   }
-  stripelump& add_stripe(dirstripe_t stripe, const pair<int, int> &auth,
-                         const fragtree_t &dft,
-                         const fnode_t *pf, version_t pv,
-                         bool open, bool dirty, bool isnew=false) {
-    stripelump& l = stripe_map[stripe];
-    l.auth = auth;
-    l.dirfragtree = dft;
-    l.fnode = *pf;
-    l.fnode.version = pv;
-    if (open) l.mark_open();
-    if (dirty) l.mark_dirty();
-    if (isnew) l.mark_new();
-    return l;
+  Stripe& add_stripe(dirstripe_t ds, const pair<int, int> &auth,
+                     const fragtree_t &dft,
+                     const fnode_t *pf, version_t pv,
+                     bool open, bool dirty, bool isnew=false) {
+    Stripe& s = stripes[ds];
+    s.auth = auth;
+    s.dirfragtree = dft;
+    s.fnode = *pf;
+    s.fnode.version = pv;
+    if (open) s.mark_open();
+    if (dirty) s.mark_dirty();
+    if (isnew) s.mark_new();
+    return s;
   }
-  
+
 
   static const int TO_AUTH_SUBTREE_ROOT = 0;  // default.
   static const int TO_ROOT = 1;
@@ -739,8 +558,10 @@ private:
  
   void print(ostream& out) const {
     out << "[metablob";
-    if (!lump_order.empty()) 
-      out << " " << lump_order.front() << ", " << lump_map.size() << " dirs";
+    if (!inodes.empty()) 
+      out << " " << inodes.size() << " inodes";
+    if (!stripes.empty()) 
+      out << " " << stripes.size() << " stripes";
     if (!table_tids.empty())
       out << " table_tids=" << table_tids;
     if (allocated_ino || preallocated_inos.size()) {
@@ -757,15 +578,14 @@ private:
 
   void update_segment(LogSegment *ls);
   void update_stripe(MDS *mds, LogSegment *ls,
-                     CStripe *stripe, stripelump &lump);
+                     CStripe *stripe, Stripe &lump);
   void replay(MDS *mds, LogSegment *ls, MDSlaveUpdate *su=NULL);
 };
 WRITE_CLASS_ENCODER(EMetaBlob)
-WRITE_CLASS_ENCODER(EMetaBlob::fullbit)
-WRITE_CLASS_ENCODER(EMetaBlob::remotebit)
-WRITE_CLASS_ENCODER(EMetaBlob::nullbit)
-WRITE_CLASS_ENCODER(EMetaBlob::dirlump)
-WRITE_CLASS_ENCODER(EMetaBlob::stripelump)
+WRITE_CLASS_ENCODER(EMetaBlob::Inode)
+WRITE_CLASS_ENCODER(EMetaBlob::Dentry)
+WRITE_CLASS_ENCODER(EMetaBlob::Dir)
+WRITE_CLASS_ENCODER(EMetaBlob::Stripe)
 
 inline ostream& operator<<(ostream& out, const EMetaBlob& t) {
   t.print(out);

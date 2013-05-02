@@ -196,11 +196,12 @@ bool MDCache::shutdown()
 // ====================================================================
 // some inode functions
 
-void MDCache::add_inode(CInode *in) 
+void MDCache::add_inode(CInode *in)
 {
   // add to lru, inode map
-  assert(inodes.count(in->vino()) == 0);  // should be no dup inos!
-  inodes[ in->vino() ] = in;
+  pair<inode_map::iterator, bool> inserted = inodes.insert(
+      make_pair(in->vino(), in));
+  assert(inserted.second); // should be no dup inos!
 
   if (in->ino() < MDS_INO_SYSTEM_BASE) {
     if (in->ino() == MDS_INO_ROOT)
@@ -500,14 +501,13 @@ void MDCache::_create_system_file(CDir *dir, const char *name, CInode *in, Conte
 
   if (!in->is_mdsdir()) {
     predirty_journal_parents(mut, &le->metablob, in, dir, PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-    le->metablob.add_primary_dentry(dn, true, in);
   } else {
     predirty_journal_parents(mut, &le->metablob, in, dir, PREDIRTY_DIR, 1);
     journal_dirty_inode(mut, &le->metablob, in);
     dn->push_projected_linkage(in->ino(), in->d_type());
-    le->metablob.add_remote_dentry(dn, true, in->ino(), in->d_type());
-    le->metablob.add_root(true, in);
   }
+  le->metablob.add_dentry(dn, true);
+  le->metablob.add_inode(in, true);
   if (mdir)
     le->metablob.add_new_dir(mdir); // dirty AND complete AND new
 
@@ -896,7 +896,7 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
 						  oldfirst, follows);
       olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
-      metablob->add_remote_dentry(olddn, true);
+      metablob->add_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
 
       // FIXME: adjust link count here?  hmm.
@@ -934,7 +934,7 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
       CDentry *olddn = dn->dir->add_primary_dentry(dn->name, oldin, oldfirst, follows);
       oldin->inode.version = olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
-      metablob->add_primary_dentry(olddn, true, 0);
+      metablob->add_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
     } else {
       assert(dnl->is_remote());
@@ -942,7 +942,7 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
 						  oldfirst, follows);
       olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
-      metablob->add_remote_dentry(olddn, true);
+      metablob->add_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
     }
   }
@@ -959,16 +959,14 @@ void MDCache::journal_cow_inode(Mutation *mut, EMetaBlob *metablob, CInode *in, 
 
 void MDCache::journal_dirty_inode(Mutation *mut, EMetaBlob *metablob, CInode *in, snapid_t follows)
 {
-  if (in->is_base()) {
-    metablob->add_root(true, in, in->get_projected_inode());
-  } else {
+  if (!in->is_base()) {
     if (follows == CEPH_NOSNAP && in->last != CEPH_NOSNAP)
       follows = in->first - 1;
     CDentry *dn = in->get_projected_parent_dn();
     if (!dn->get_projected_linkage()->is_null())  // no need to cow a null dentry
       journal_cow_dentry(mut, metablob, dn, follows);
-    metablob->add_primary_dentry(dn, true, in);
   }
+  metablob->add_inode(in, true);
 }
 
 
@@ -4129,7 +4127,7 @@ void MDCache::queue_file_recover(CInode *in)
     }
     
     in->parent->first = in->first;
-    le->metablob.add_primary_dentry(in->parent, true, in);
+    le->metablob.add_inode(in, true);
     mds->mdlog->submit_entry(le, new C_MDC_QueuedCow(this, in, mut));
     mds->mdlog->flush();
   }
@@ -4403,7 +4401,7 @@ void MDCache::truncate_inode_finish(CInode *in, LogSegment *ls)
   EUpdate *le = new EUpdate(mds->mdlog, "truncate finish");
   mds->mdlog->start_entry(le);
   le->metablob.add_stripe_context(in->get_parent_stripe());
-  le->metablob.add_primary_dentry(in->get_projected_parent_dn(), true, in);
+  le->metablob.add_inode(in, true);
   le->metablob.add_truncate_finish(in->ino(), ls->offset);
 
   journal_dirty_inode(mut, &le->metablob, in);
@@ -6799,7 +6797,7 @@ void MDCache::snaprealm_create(MDRequest *mdr, CInode *in)
   
   predirty_journal_parents(mut, &le->metablob, in, 0, PREDIRTY_PRIMARY);
   journal_cow_inode(mut, &le->metablob, in);
-  le->metablob.add_primary_dentry(in->get_projected_parent_dn(), true, in);
+  le->metablob.add_inode(in, true);
 
   mds->mdlog->submit_entry(le, new C_MDC_snaprealm_create_finish(this, mdr, mut, in));
   mds->mdlog->flush();
@@ -7157,7 +7155,7 @@ void MDCache::_purge_stray_purged(CDentry *dn, int r)
     pf->rstat.sub(in->inode.accounted_rstat);
 
     le->metablob.add_stripe_context(stripe);
-    le->metablob.add_null_dentry(dn, true);
+    le->metablob.add_dentry(dn, true);
     le->metablob.add_destroyed_inode(in->ino());
 
     mds->mdlog->submit_entry(le, new C_MDC_PurgeStrayLogged(this, dn, pdv, mds->mdlog->get_current_segment()));
@@ -7174,7 +7172,7 @@ void MDCache::_purge_stray_purged(CDentry *dn, int r)
     pi->version = in->pre_dirty();
 
     le->metablob.add_stripe_context(dn->get_stripe());
-    le->metablob.add_primary_dentry(dn, true, in);
+    le->metablob.add_inode(in, true);
 
     mds->mdlog->submit_entry(le, new C_MDC_PurgeStrayLoggedTruncate(this, dn, mds->mdlog->get_current_segment()));
   }

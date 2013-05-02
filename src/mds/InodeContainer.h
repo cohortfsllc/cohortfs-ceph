@@ -64,6 +64,9 @@ class InodeContainer {
   CDentry* xlock_dentry(MDRequest *mdr, inodeno_t ino,
                         set<SimpleLock*> &xlocks);
 
+  // run the placement algorithm for the given inode number
+  int place(inodeno_t ino) const;
+
   // initiate restriping over the new vector of nodes (root mds only)
   void restripe(const std::set<int> &nodes, bool replay);
 };

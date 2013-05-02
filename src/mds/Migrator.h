@@ -203,13 +203,13 @@ public:
   
   void get_export_lock_set(CStripe *dir, set<SimpleLock*>& locks);
 
-  void encode_export_inode(CInode *in, bufferlist& bl, 
+  void encode_export_inode(CInode *in, bufferlist& bl,
 			   map<client_t,entity_inst_t>& exported_client_map);
   void encode_export_inode_caps(CInode *in, bufferlist& bl,
 				map<client_t,entity_inst_t>& exported_client_map);
   void finish_export_inode(CInode *in, utime_t now, list<Context*>& finished);
   void finish_export_inode_caps(CInode *in);
-
+#if 0
   int encode_export_dir(bufferlist& exportbl, CDir *dir,
 			map<client_t,entity_inst_t>& exported_client_map,
 			utime_t now);
@@ -219,7 +219,7 @@ public:
 			map<client_t,entity_inst_t>& exported_client_map,
 			utime_t now);
   void finish_export_stripe(CStripe *stripe, list<Context*>& finished, utime_t now);
-
+#endif
   void add_export_finish_waiter(CStripe *dir, Context *c) {
     export_finish_waiters[dir].push_back(c);
   }
@@ -255,14 +255,14 @@ public:
 
 public:
   void decode_import_inode(CDentry *dn, bufferlist::iterator& blp,
-                           int oldauth, LogSegment *ls, uint64_t log_offset,
-                           inode_cap_export_map& cap_imports,
-			   list<ScatterLock*>& updated_scatterlocks);
-  void decode_import_inode_caps(CInode *in,
-				bufferlist::iterator &blp,
+                           int oldauth, EMetaBlob *le,
+                           LogSegment *ls, uint64_t log_offset,
+                           inode_cap_export_map& cap_imports);
+  void decode_import_inode_caps(CInode *in, bufferlist::iterator &blp,
                                 inode_cap_export_map& cap_imports);
   void finish_import_inode_caps(CInode *in, int from,
                                 client_cap_export_map& cap_map);
+#if 0
   int decode_import_dir(bufferlist::iterator& blp, int oldauth,
 			CStripe *import_root, EImportStart *le,
 			LogSegment *ls, inode_cap_export_map& cap_imports,
@@ -271,7 +271,7 @@ public:
                            CStripe *import_root, EImportStart *le,
                            LogSegment *ls, inode_cap_export_map& cap_imports,
                            list<ScatterLock*>& updated_scatterlocks, utime_t now);
-
+#endif
 public:
   void import_reverse(CStripe *dir);
 protected:
