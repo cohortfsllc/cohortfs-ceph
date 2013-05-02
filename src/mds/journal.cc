@@ -870,6 +870,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 
   assert(g_conf->mds_kill_journal_replay_at != 1);
 
+  // replay all inodes
   for (inode_map::iterator p = inodes.begin(); p != inodes.end(); ++p) {
     CInode *in = mds->mdcache->get_inode(p->first);
     bool isnew = in ? false:true;
@@ -882,20 +883,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     dout(10) << "EMetaBlob.replay " << (isnew ? " added ":" updated ") << *in << dendl;
   }
 
-  CInode *renamed_diri = 0;
-  CStripe *oldstripe = 0;
-  if (renamed_dirino) {
-    renamed_diri = mds->mdcache->get_inode(renamed_dirino);
-    if (renamed_diri)
-      dout(10) << "EMetaBlob.replay renamed inode is " << *renamed_diri << dendl;
-    else
-      dout(10) << "EMetaBlob.replay don't have renamed ino " << renamed_dirino << dendl;
-  }
-
-  // keep track of any inodes we unlink and don't relink elsewhere
-  map<CInode*, CStripe*> unlinked;
-  set<CInode*> linked;
-
+  // replay stripes->dirfrags->dentries
   for (stripe_map::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     // open the stripe
     CStripe *stripe = open_stripe(mds, s->first);
@@ -958,45 +946,6 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   }
 
   assert(g_conf->mds_kill_journal_replay_at != 2);
-
-  if (renamed_dirino) {
-    if (renamed_diri) {
-      assert(unlinked.count(renamed_diri));
-      assert(linked.count(renamed_diri));
-      oldstripe = unlinked[renamed_diri];
-    } else {
-      // we imported a diri we haven't seen before
-      renamed_diri = mds->mdcache->get_inode(renamed_dirino);
-      assert(renamed_diri);  // it was in the metablob
-    }
-
-    if (oldstripe) {
-      if (oldstripe->authority() != CDIR_AUTH_UNDEF &&
-	  renamed_diri->authority() == CDIR_AUTH_UNDEF) {
-	assert(slaveup); // auth to non-auth, must be slave prepare 
-        list<CStripe*> stripes;
-        renamed_diri->get_stripes(stripes);
-        for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-          CStripe *stripe = *s;
-          // preserve subtree bound until slave commit
-          if (stripe->authority() == CDIR_AUTH_UNDEF)
-            slaveup->oldstripes.insert(stripe);
-        }
-      }
-    }
-  }
-
-  if (!unlinked.empty()) {
-    for (set<CInode*>::iterator p = linked.begin(); p != linked.end(); ++p)
-      unlinked.erase(*p);
-    dout(10) << " unlinked set contains " << unlinked << dendl;
-    for (map<CInode*, CStripe*>::iterator p = unlinked.begin(); p != unlinked.end(); ++p) {
-      if (slaveup) // preserve unlinked inodes until slave commit
-	slaveup->unlinked.insert(p->first);
-      else
-	mds->mdcache->remove_inode_recursive(p->first);
-    }
-  }
 
   // table client transactions
   for (list<pair<__u8,version_t> >::iterator p = table_tids.begin();
@@ -1723,33 +1672,30 @@ void link_rollback::generate_test_instances(list<link_rollback*>& ls)
 
 void rmdir_rollback::encode(bufferlist& bl) const
 {
-  ENCODE_START(2, 2, bl);
+  ENCODE_START(3, 3, bl);
   ::encode(reqid, bl);
-  ::encode(src_dir, bl);
-  ::encode(src_dname, bl);
-  ::encode(dest_dir, bl);
-  ::encode(dest_dname, bl);
+  ::encode(dir, bl);
+  ::encode(dname, bl);
+  ::encode(ino, bl);
   ENCODE_FINISH(bl);
 }
 
 void rmdir_rollback::decode(bufferlist::iterator& bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, bl);
   ::decode(reqid, bl);
-  ::decode(src_dir, bl);
-  ::decode(src_dname, bl);
-  ::decode(dest_dir, bl);
-  ::decode(dest_dname, bl);
+  ::decode(dir, bl);
+  ::decode(dname, bl);
+  ::decode(ino, bl);
   DECODE_FINISH(bl);
 }
 
 void rmdir_rollback::dump(Formatter *f) const
 {
   f->dump_stream("metareqid") << reqid;
-  f->dump_stream("source directory") << src_dir;
-  f->dump_string("source dname", src_dname);
-  f->dump_stream("destination directory") << dest_dir;
-  f->dump_string("destination dname", dest_dname);
+  f->dump_stream("directory") << dir;
+  f->dump_string("dname", dname);
+  f->dump_stream("inode") << ino;
 }
 
 void rmdir_rollback::generate_test_instances(list<rmdir_rollback*>& ls)

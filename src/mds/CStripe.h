@@ -326,6 +326,7 @@ class CStripe : public MDSCacheObject {
     ::decode(nonce, p);
     replica_nonce = nonce;
     ::decode(dirfragtree, p);
+    state_set(STATE_OPEN);
   }
 
 

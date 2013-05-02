@@ -24,8 +24,6 @@ class MDentryUnlink : public Message {
   dirfrag_t get_dirfrag() { return dirfrag; }
   string& get_dn() { return dn; }
 
-  bufferlist straybl;
-
   MDentryUnlink() :
     Message(MSG_MDS_DENTRYUNLINK) { }
   MDentryUnlink(dirfrag_t df, string& n) :
@@ -45,12 +43,10 @@ public:
     bufferlist::iterator p = payload.begin();
     ::decode(dirfrag, p);
     ::decode(dn, p);
-    ::decode(straybl, p);
   }
   void encode_payload(uint64_t features) {
     ::encode(dirfrag, payload);
     ::encode(dn, payload);
-    ::encode(straybl, payload);
   }
 };
 
