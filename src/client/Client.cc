@@ -7609,6 +7609,23 @@ void Client::ll_return_reservation(vinodeno_t vino,
   in->put_cap_ref(CEPH_CAP_FILE_RD | (write ? CEPH_CAP_FILE_WR : 0));
 }
 
+int Client::ll_assert_reservation(vinodeno_t vino,
+				  bool(*cb)(vinodeno_t, bool, void*),
+				  void *opaque,
+				  struct ceph_reservation *rsv,
+				  uint64_t osd)
+{
+  return (0);
+}
+
+void Client::ll_unassert_reservation(vinodeno_t vino,
+				     struct ceph_reservation *rsv,
+				     uint64_t osd)
+{
+  return;
+}
+
+
 /* Currently we cannot take advantage of redundancy in reads, since we
    would have to go through all possible placement groups (a
    potentially quite large number determined by a hash), and use CRUSH

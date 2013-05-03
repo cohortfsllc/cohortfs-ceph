@@ -1182,6 +1182,18 @@ void ceph_ll_return_reservation(struct ceph_mount_info *cmount,
 				vinodeno_t vino,
 				struct ceph_reservation *rsv);
 
+void ceph_ll_assert_reservation(struct ceph_mount_info *cmount,
+				vinodeno_t vino,
+				bool(*cb)(vinodeno_t, bool, void*),
+				void *opaque,
+				struct ceph_reservation *rsv,
+				uint64_t osd);
+
+void ceph_ll_unassert_reservation(struct ceph_mount_info *cmount,
+				  vinodeno_t vino,
+				  struct ceph_reservation *rsv,
+				  uint64_t osd);
+
 #ifdef __cplusplus
 }
 #endif

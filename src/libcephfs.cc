@@ -1263,9 +1263,28 @@ extern "C" int ceph_ll_get_reservation(struct ceph_mount_info *cmount,
 						   max_fs));
 }
 
-void ceph_ll_return_reservation(struct ceph_mount_info *cmount,
-				vinodeno_t vino,
-				struct ceph_reservation *rsv)
+extern "C" void ceph_ll_return_reservation(struct ceph_mount_info *cmount,
+					   vinodeno_t vino,
+					   struct ceph_reservation *rsv)
 {
   cmount->get_client()->ll_return_reservation(vino, rsv);
+}
+
+
+extern "C" void ceph_ll_assert_reservation(struct ceph_mount_info *cmount,
+					   vinodeno_t vino,
+					   bool(*cb)(vinodeno_t, bool, void*),
+					   void *opaque,
+					   struct ceph_reservation *rsv,
+					   uint64_t osd)
+{
+  cmount->get_client()->ll_assert_reservation(vino, cb, opaque, rsv, osd);
+}
+
+extern "C" void ceph_ll_unassert_reservation(struct ceph_mount_info *cmount,
+					     vinodeno_t vino,
+					     struct ceph_reservation *rsv,
+					     uint64_t osd)
+{
+  cmount->get_client()->ll_unassert_reservation(vino, rsv, osd);
 }
