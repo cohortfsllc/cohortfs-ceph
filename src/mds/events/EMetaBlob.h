@@ -60,7 +60,6 @@ class EMetaBlob {
     vector<int> stripe_auth;
     map<string,bufferptr> xattrs;
     string symlink;
-    bufferlist snapbl;
     __u8 state;
     typedef map<snapid_t, old_inode_t> old_inodes_t;
     old_inodes_t old_inodes;
@@ -73,7 +72,7 @@ class EMetaBlob {
     // initialize/overwrite the encoded contents
     void encode(const inode_t &i, const pair<int, int> &iauth,
                 const vector<int> &sauth, const map<string,bufferptr> &xa,
-                const string &sym, const bufferlist &sbl, __u8 st,
+                const string &sym, __u8 st,
                 const old_inodes_t *oi = NULL) const;
 
     void encode(bufferlist& bl) const;
@@ -378,18 +377,13 @@ class EMetaBlob {
     // make note of where this inode was last journaled
     in->last_journaled = my_offset;
 
-    bufferlist snapbl;
-    sr_t *sr = in->get_projected_srnode();
-    if (sr)
-      sr->encode(snapbl);
-
     __u8 state = Inode::make_state(dirty);
 
     Inode &inode = inodes[in->ino()];
     inode.encode(*in->get_projected_inode(),
                  in->inode_auth, in->get_stripe_auth(),
                  *in->get_projected_xattrs(), in->symlink,
-                 snapbl, state, &in->old_inodes);
+                 state, &in->old_inodes);
   }
 
   void add_dentry(CDentry *dn, bool dirty) {

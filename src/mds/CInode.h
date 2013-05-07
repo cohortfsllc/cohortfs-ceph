@@ -187,7 +187,6 @@ public:
   inode_t          inode;        // the inode itself
   string           symlink;      // symlink dest, if symlink
   map<string, bufferptr> xattrs;
-  SnapRealm        *snaprealm;
 
   SnapRealm        *containing_realm;
   snapid_t          first, last;
@@ -197,8 +196,7 @@ public:
   pair<int,int> inode_auth;
 
   bool is_multiversion() {
-    return snaprealm ||  // other snaprealms will link to me
-      inode.is_dir() ||  // links to me in other snaps
+    return inode.is_dir() ||  // links to me in other snaps
       inode.nlink > 1 || // there are remote links, possibly snapped, that will need to find me
       !old_inodes.empty(); // once multiversion, always multiversion.  until old_inodes gets cleaned out.
   }
@@ -227,27 +225,20 @@ public:
    * Usage:
    * project_inode as needed. If you're also projecting xattrs, pass
    * in an xattr map (by pointer), then edit the map.
-   * If you're also projecting the snaprealm, call project_snaprealm after
-   * calling project_inode, and modify the snaprealm as necessary.
    *
    * Then, journal. Once journaling is done, pop_and_dirty_projected_inode.
-   * This function will take care of the inode itself, the xattrs, and the snaprealm.
+   * This function will take care of the inode itself and the xattrs.
    */
 
   struct projected_inode_t {
     inode_t *inode;
     map<string,bufferptr> *xattrs;
-    sr_t *snapnode;
 
-    projected_inode_t()
-      : inode(NULL), xattrs(NULL), snapnode(NULL) {}
-    projected_inode_t(inode_t *in, sr_t *sn)
-      : inode(in), xattrs(NULL), snapnode(sn) {}
-    projected_inode_t(inode_t *in, map<string, bufferptr> *xp = NULL, sr_t *sn = NULL)
-      : inode(in), xattrs(xp), snapnode(sn) {}
+    projected_inode_t(inode_t *in = NULL, map<string, bufferptr> *xp = NULL)
+      : inode(in), xattrs(xp) {}
   };
   list<projected_inode_t*> projected_nodes;   // projected values (only defined while dirty)
-  
+ 
   inode_t *project_inode(map<string,bufferptr> *px=0);
   void pop_and_dirty_projected_inode(LogSegment *ls);
 
@@ -301,27 +292,6 @@ public:
 	return (*p)->xattrs;
     return &xattrs;
   }
-
-  sr_t *project_snaprealm(snapid_t snapid=0);
-  sr_t *get_projected_srnode() {
-    if (projected_nodes.empty()) {
-      if (snaprealm)
-	return &snaprealm->srnode;
-      else
-	return NULL;
-    } else {
-      for (list<projected_inode_t*>::reverse_iterator p = projected_nodes.rbegin();
-          p != projected_nodes.rend();
-          ++p)
-        if ((*p)->snapnode)
-          return (*p)->snapnode;
-    }
-    return &snaprealm->srnode;
-  }
-  void project_past_snaprealm_parent(SnapRealm *newparent);
-
-private:
-  void pop_projected_snaprealm(sr_t *next_snaprealm);
 
 public:
   old_inode_t& cow_old_inode(snapid_t follows, bool cow_head);
@@ -592,7 +562,6 @@ public:
   static LockType linklock_type;
   static LockType filelock_type;
   static LockType xattrlock_type;
-  static LockType snaplock_type;
   static LockType nestlock_type;
   static LockType flocklock_type;
   static LockType policylock_type;
@@ -602,7 +571,6 @@ public:
   SimpleLock linklock;
   ScatterLock filelock;
   SimpleLock xattrlock;
-  SimpleLock snaplock;
   ScatterLock nestlock;
   SimpleLock flocklock;
   SimpleLock policylock;
@@ -613,7 +581,6 @@ public:
     case CEPH_LOCK_IAUTH: return &authlock;
     case CEPH_LOCK_ILINK: return &linklock;
     case CEPH_LOCK_IXATTR: return &xattrlock;
-    case CEPH_LOCK_ISNAP: return &snaplock;
     case CEPH_LOCK_INEST: return &nestlock;
     case CEPH_LOCK_IFLOCK: return &flocklock;
     case CEPH_LOCK_IPOLICY: return &policylock;
@@ -637,15 +604,6 @@ public:
 			     version_t inode_version, version_t dir_accounted_version);
   void finish_scatter_gather_update(int type);
   void finish_scatter_gather_update_accounted(int type, Mutation *mut, EMetaBlob *metablob);
-
-  // -- snap --
-  void open_snaprealm(bool no_split=false);
-  void close_snaprealm(bool no_join=false);
-  SnapRealm *find_snaprealm();
-  void encode_snap_blob(bufferlist &bl);
-  void decode_snap_blob(bufferlist &bl);
-  void encode_snap(bufferlist& bl);
-  void decode_snap(bufferlist::iterator& p);
 
   // -- caps -- (new)
   // client caps

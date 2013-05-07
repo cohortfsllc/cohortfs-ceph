@@ -347,8 +347,8 @@ void EMetaBlob::update_segment(LogSegment *ls)
 void EMetaBlob::Inode::encode(const inode_t &i, const pair<int, int> &iauth,
                               const vector<int> &sauth,
                               const map<string,bufferptr> &xa,
-                              const string &sym, const bufferlist &sbl,
-                              __u8 st, const old_inodes_t *oi) const
+                              const string &sym, __u8 st,
+                              const old_inodes_t *oi) const
 {
   _enc = bufferlist(1024);
 
@@ -357,10 +357,8 @@ void EMetaBlob::Inode::encode(const inode_t &i, const pair<int, int> &iauth,
   ::encode(xa, _enc);
   if (i.is_symlink())
     ::encode(sym, _enc);
-  if (i.is_dir()) {
+  if (i.is_dir())
     ::encode(sauth, _enc);
-    ::encode(sbl, _enc);
-  }
   ::encode(st, _enc);
   ::encode(oi ? true : false, _enc);
   if (oi)
@@ -371,7 +369,7 @@ void EMetaBlob::Inode::encode(bufferlist& bl) const {
   ENCODE_START(1, 1, bl);
   if (!_enc.length())
     encode(inode, inode_auth, stripe_auth, xattrs,
-           symlink, snapbl, state, &old_inodes);
+           symlink, state, &old_inodes);
   bl.append(_enc);
   ENCODE_FINISH(bl);
 }
@@ -383,10 +381,8 @@ void EMetaBlob::Inode::decode(bufferlist::iterator &bl) {
   ::decode(xattrs, bl);
   if (inode.is_symlink())
     ::decode(symlink, bl);
-  if (inode.is_dir()) {
+  if (inode.is_dir())
     ::decode(stripe_auth, bl);
-    ::decode(snapbl, bl);
-  }
   ::decode(state, bl);
 
   bool old_inodes_present;
@@ -427,7 +423,6 @@ void EMetaBlob::Inode::dump(Formatter *f) const
   }
   if (inode.is_dir()) {
     f->dump_stream("stripe auth") << stripe_auth;
-    f->dump_string("has_snapbl", snapbl.length() ? "true" : "false");
     if (inode.has_layout()) {
       f->open_object_section("file layout policy");
       // FIXME
@@ -453,10 +448,9 @@ void EMetaBlob::Inode::generate_test_instances(list<EMetaBlob::Inode*>& ls)
 {
   inode_t inode;
   map<string,bufferptr> empty_xattrs;
-  bufferlist empty_snapbl;
   Inode *sample = new Inode();
-  sample->encode(inode, make_pair(0, 0), vector<int>(), empty_xattrs,
-                 "", empty_snapbl, 0, NULL);
+  sample->encode(inode, make_pair(0, 0), vector<int>(),
+                 empty_xattrs, "", 0, NULL);
   ls.push_back(sample);
 }
 
@@ -469,18 +463,10 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
   else
     in->state_clear(CInode::STATE_AUTH);
   in->xattrs = xattrs;
-  if (in->inode.is_dir()) {
+  if (in->inode.is_dir())
     in->set_stripe_auth(stripe_auth);
-
-    /*
-     * we can do this before linking hte inode bc the split_at would
-     * be a no-op.. we have no children (namely open snaprealms) to
-     * divy up 
-     */
-    in->decode_snap_blob(snapbl);  
-  } else if (in->inode.is_symlink()) {
+  else if (in->inode.is_symlink())
     in->symlink = symlink;
-  }
   in->old_inodes = old_inodes;
 }
 
