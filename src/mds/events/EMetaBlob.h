@@ -58,7 +58,6 @@ class EMetaBlob {
     vector<int> stripe_auth;
     map<string,bufferptr> xattrs;
     string symlink;
-    bufferlist snapbl;
     bool dirty;
     struct default_file_layout *dir_layout;
     typedef map<snapid_t, old_inode_t> old_inodes_t;
@@ -75,8 +74,7 @@ class EMetaBlob {
     // initialize/overwrite the encoded contents
     void encode(inode_t &i, const pair<int, int> &iauth,
                 const vector<int> &sauth, const map<string,bufferptr> &xa,
-                const string &sym, bufferlist &sbl, bool dr,
-                default_file_layout *defl = NULL,
+                const string &sym, bool dr, default_file_layout *defl = NULL,
                 old_inodes_t *oi = NULL)
     {
       _enc = bufferlist(1024);
@@ -88,7 +86,6 @@ class EMetaBlob {
         ::encode(sym, _enc);
       if (i.is_dir()) {
         ::encode(sauth, _enc);
-        ::encode(sbl, _enc);
         ::encode((defl ? true : false), _enc);
         if (defl)
           ::encode(*defl, _enc);
@@ -115,7 +112,6 @@ class EMetaBlob {
 	::decode(symlink, bl);
       if (inode.is_dir()) {
 	::decode(stripe_auth, bl);
-	::decode(snapbl, bl);
 	if (struct_v >= 2) {
 	  bool dir_layout_exists;
 	  ::decode(dir_layout_exists, bl);
@@ -483,16 +479,11 @@ class EMetaBlob {
                         in->get_projected_node()->dir_layout :
                         in->default_layout);
 
-    bufferlist snapbl;
-    sr_t *sr = in->get_projected_srnode();
-    if (sr)
-      sr->encode(snapbl);
-
     Inode &inode = inodes[in->ino()];
     inode.encode(*in->get_projected_inode(),
                  in->inode_auth, in->get_stripe_auth(),
                  *in->get_projected_xattrs(), in->symlink,
-                 snapbl, dirty, default_layout, &in->old_inodes);
+                 dirty, default_layout, &in->old_inodes);
   }
 
   void add_dentry(CDentry *dn, bool dirty) {

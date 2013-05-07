@@ -348,12 +348,6 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
     delete in->default_layout;
     in->default_layout = dir_layout;
     dir_layout = NULL;
-    /*
-     * we can do this before linking hte inode bc the split_at would
-     * be a no-op.. we have no children (namely open snaprealms) to
-     * divy up 
-     */
-    in->decode_snap_blob(snapbl);  
   } else if (in->inode.is_symlink()) {
     in->symlink = symlink;
   }

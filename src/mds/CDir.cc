@@ -387,10 +387,6 @@ void CDir::link_inode_work(CDentry *dn, CInode *in)
   // pin dentry?
   if (in->get_num_ref())
     dn->get(CDentry::PIN_INODEPIN);
-
-  // verify open snaprealm parent
-  if (in->snaprealm)
-    in->snaprealm->adjust_parent();
 }
 
 void CDir::unlink_inode(CDentry *dn)
@@ -1107,12 +1103,9 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
   }
 
   // purge stale snaps?
-  //  * only if we have past_parents open!
   const set<snapid_t> *snaps = 0;
-  SnapRealm *realm = get_inode()->find_snaprealm();
-  if (!realm->have_past_parents_open()) {
-    dout(10) << " no snap purge, one or more past parents NOT open" << dendl;
-  } else if (snap_purged_thru < realm->get_last_destroyed()) {
+  SnapRealm *realm = cache->get_snaprealm();
+  if (snap_purged_thru < realm->get_last_destroyed()) {
     snaps = &realm->get_snaps();
     dout(10) << " snap_purged_thru " << snap_purged_thru
 	     << " < " << realm->get_last_destroyed()
@@ -1203,7 +1196,6 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
       string symlink;
       vector<int> stripe_auth;
       map<string, bufferptr> xattrs;
-      bufferlist snapbl;
       map<snapid_t,old_inode_t> old_inodes;
       ::decode(inode, q);
       if (inode.is_symlink())
@@ -1211,7 +1203,6 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
       if (inode.is_dir())
         ::decode(stripe_auth, q);
       ::decode(xattrs, q);
-      ::decode(snapbl, q);
       ::decode(old_inodes, q);
       
       if (stale)
@@ -1251,7 +1242,6 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
             in->set_stripe_auth(stripe_auth);
 	  
 	  in->xattrs.swap(xattrs);
-	  in->decode_snap_blob(snapbl);
 	  in->old_inodes.swap(old_inodes);
 	  if (snaps)
 	    in->purge_stale_snap_data(*snaps);
@@ -1547,12 +1537,9 @@ void CDir::_encode_dentry(CDentry *dn, bufferlist& bl,
     }
     if (in->is_dir())
       ::encode(in->get_stripe_auth(), bl);
-    
+
     ::encode(in->xattrs, bl);
-    bufferlist snapbl;
-    in->encode_snap_blob(snapbl);
-    ::encode(snapbl, bl);
-    
+
     if (in->is_multiversion() && snaps)
       in->purge_stale_snap_data(*snaps);
     ::encode(in->old_inodes, bl);
@@ -1615,11 +1602,9 @@ void CDir::_commit(version_t want)
   if (cache->mds->logger) cache->mds->logger->inc(l_mds_dir_c);
 
   // snap purge?
-  SnapRealm *realm = get_inode()->find_snaprealm();
+  SnapRealm *realm = cache->get_snaprealm();
   const set<snapid_t> *snaps = 0;
-  if (!realm->have_past_parents_open()) {
-    dout(10) << " no snap purge, one or more past parents NOT open" << dendl;
-  } else if (snap_purged_thru < realm->get_last_destroyed()) {
+  if (snap_purged_thru < realm->get_last_destroyed()) {
     snaps = &realm->get_snaps();
     dout(10) << " snap_purged_thru " << snap_purged_thru
 	     << " < " << realm->get_last_destroyed()

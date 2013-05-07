@@ -130,44 +130,6 @@ void Locker::send_lock_message(SimpleLock *lock, int msg, const bufferlist &data
 }
 
 
-
-
-void Locker::include_snap_rdlocks(set<SimpleLock*>& rdlocks, CInode *in)
-{
-  // rdlock ancestor snaps
-  CInode *t = in;
-  rdlocks.insert(&in->snaplock);
-  while (t->get_projected_parent_dn()) {
-    t = t->get_projected_parent_dn()->get_dir()->get_inode();
-    rdlocks.insert(&t->snaplock);
-  }
-}
-
-void Locker::include_snap_rdlocks_wlayout(set<SimpleLock*>& rdlocks, CInode *in,
-                                  ceph_file_layout **layout)
-{
-  //rdlock ancestor snaps
-  CInode *t = in;
-  rdlocks.insert(&in->snaplock);
-  rdlocks.insert(&in->policylock);
-  bool found_layout = false;
-  while (t) {
-    rdlocks.insert(&t->snaplock);
-    if (!found_layout) {
-      rdlocks.insert(&t->policylock);
-      if (t->get_projected_dir_layout()) {
-        *layout = t->get_projected_dir_layout();
-        found_layout = true;
-      }
-    }
-    if (t->get_projected_parent_dn() &&
-        t->get_projected_parent_dn()->get_dir())
-      t = t->get_projected_parent_dn()->get_dir()->get_inode();
-    else t = NULL;
-  }
-}
-
-
 /* If this function returns false, the mdr has been placed
  * on the appropriate wait list */
 bool Locker::acquire_locks(MDRequest *mdr,
@@ -1769,7 +1731,7 @@ bool Locker::issue_caps(CInode *in, Capability *only_cap)
 
 	MClientCaps *m = new MClientCaps((before & ~after) ? CEPH_CAP_OP_REVOKE:CEPH_CAP_OP_GRANT,
 					 in->ino(),
-					 in->find_snaprealm()->inode->ino(),
+					 MDS_INO_ROOT,
 					 cap->get_cap_id(), cap->get_last_seq(),
 					 after, wanted, 0,
 					 cap->get_mseq());
@@ -1796,7 +1758,7 @@ void Locker::issue_truncate(CInode *in)
     Capability *cap = it->second;
     MClientCaps *m = new MClientCaps(CEPH_CAP_OP_TRUNC,
 				     in->ino(),
-				     in->find_snaprealm()->inode->ino(),
+				     MDS_INO_ROOT,
 				     cap->get_cap_id(), cap->get_last_seq(),
 				     cap->pending(), cap->wanted(), 0,
 				     cap->get_mseq());
@@ -2109,7 +2071,7 @@ void Locker::share_inode_max_size(CInode *in)
       dout(10) << "share_inode_max_size with client." << client << dendl;
       MClientCaps *m = new MClientCaps(CEPH_CAP_OP_GRANT,
 				       in->ino(),
-				       in->find_snaprealm()->inode->ino(),
+				       MDS_INO_ROOT,
 				       cap->get_cap_id(), cap->get_last_seq(),
 				       cap->pending(), cap->wanted(), 0,
 				       cap->get_mseq());
@@ -2287,7 +2249,7 @@ void Locker::handle_client_caps(MClientCaps *m)
       goto out;
     }
 
-    SnapRealm *realm = in->find_snaprealm();
+    SnapRealm *realm = mds->mdcache->get_snaprealm();
     snapid_t snap = realm->get_snap_following(follows);
     dout(10) << "  flushsnap follows " << follows << " -> snap " << snap << dendl;
 
@@ -3099,7 +3061,6 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
   case CEPH_LOCK_IFILE:
   case CEPH_LOCK_INEST:
   case CEPH_LOCK_IXATTR:
-  case CEPH_LOCK_ISNAP:
   case CEPH_LOCK_IFLOCK:
   case CEPH_LOCK_IPOLICY:
     {
@@ -3114,7 +3075,6 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
       case CEPH_LOCK_IFILE: return &in->filelock;
       case CEPH_LOCK_INEST: return &in->nestlock;
       case CEPH_LOCK_IXATTR: return &in->xattrlock;
-      case CEPH_LOCK_ISNAP: return &in->snaplock;
       case CEPH_LOCK_IFLOCK: return &in->flocklock;
       case CEPH_LOCK_IPOLICY: return &in->policylock;
       }
@@ -3147,7 +3107,6 @@ void Locker::handle_lock(MLock *m)
   case CEPH_LOCK_SDFT:
   case CEPH_LOCK_IAUTH:
   case CEPH_LOCK_ILINK:
-  case CEPH_LOCK_ISNAP:
   case CEPH_LOCK_IXATTR:
   case CEPH_LOCK_IFLOCK:
   case CEPH_LOCK_IPOLICY:

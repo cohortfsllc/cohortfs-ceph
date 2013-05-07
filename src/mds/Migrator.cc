@@ -1070,7 +1070,7 @@ void Migrator::finish_export_inode_caps(CInode *in)
 	    << " exported caps on " << *in << dendl;
     MClientCaps *m = new MClientCaps(CEPH_CAP_OP_EXPORT,
 				     in->ino(),
-				     in->find_snaprealm()->inode->ino(),
+				     MDS_INO_ROOT,
 				     cap->get_cap_id(), cap->get_last_seq(), 
 				     cap->pending(), cap->wanted(), 0,
 				     cap->get_mseq());
@@ -1101,7 +1101,6 @@ void Migrator::finish_export_inode(CInode *in, utime_t now, list<Context*>& fini
   in->filelock.export_twiddle();
   in->nestlock.export_twiddle();
   in->xattrlock.export_twiddle();
-  in->snaplock.export_twiddle();
   in->flocklock.export_twiddle();
   in->policylock.export_twiddle();
   

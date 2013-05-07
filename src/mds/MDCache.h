@@ -89,6 +89,7 @@ class MDCache {
   CInode *root;                            // root inode
   CInode *myin;                            // .ceph/mds%d dir
   InodeContainer container;                // inode container dir
+  SnapRealm snaprealm;
 
   CInode *strays[NUM_STRAY];         // my stray dir
   int stray_index;
@@ -100,6 +101,8 @@ class MDCache {
   set<CInode*> base_inodes;
 
 public:
+  SnapRealm* get_snaprealm() { return &snaprealm; }
+
   void advance_stray() {
     stray_index = (stray_index+1)%NUM_STRAY;
   }
@@ -366,21 +369,8 @@ public:
   }
 
   // [reconnect/rejoin caps]
-  map<CInode*,map<client_t, inodeno_t> >  reconnected_caps;   // inode -> client -> realmino
-  map<inodeno_t,map<client_t, snapid_t> > reconnected_snaprealms;  // realmino -> client -> realmseq
-
-  void add_reconnected_cap(CInode *in, client_t client, inodeno_t realm) {
-    reconnected_caps[in][client] = realm;
-  }
-  void add_reconnected_snaprealm(client_t client, inodeno_t ino, snapid_t seq) {
-    reconnected_snaprealms[ino][client] = seq;
-  }
   void process_imported_caps();
-  void choose_lock_states_and_reconnect_caps();
-  void prepare_realm_split(SnapRealm *realm, client_t client, inodeno_t ino,
-			   map<client_t,MClientSnap*>& splits);
-  void do_realm_invalidate_and_update_notify(CInode *in, int snapop, bool nosend=false);
-  void send_snaps(map<client_t,MClientSnap*>& splits);
+  void choose_lock_states();
   void rejoin_import_cap(CInode *in, client_t client, ceph_mds_cap_reconnect& icr, int frommds);
   void finish_snaprealm_reconnect(client_t client, SnapRealm *realm, snapid_t seq);
   void try_reconnect_cap(CInode *in, Session *session);
@@ -679,11 +669,6 @@ public:
 
   void find_ino_dir(inodeno_t ino, Context *c);
   void _find_ino_dir(inodeno_t ino, Context *c, bufferlist& bl, int r);
-
-  // -- snaprealms --
-public:
-  void snaprealm_create(MDRequest *mdr, CInode *in);
-  void _snaprealm_create_finish(MDRequest *mdr, Mutation *mut, CInode *in);
 
   // -- stray --
 public:

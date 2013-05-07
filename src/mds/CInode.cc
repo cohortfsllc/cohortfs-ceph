@@ -56,7 +56,6 @@ LockType CInode::authlock_type(CEPH_LOCK_IAUTH);
 LockType CInode::linklock_type(CEPH_LOCK_ILINK);
 LockType CInode::filelock_type(CEPH_LOCK_IFILE);
 LockType CInode::xattrlock_type(CEPH_LOCK_IXATTR);
-LockType CInode::snaplock_type(CEPH_LOCK_ISNAP);
 LockType CInode::nestlock_type(CEPH_LOCK_INEST);
 LockType CInode::flocklock_type(CEPH_LOCK_IFLOCK);
 LockType CInode::policylock_type(CEPH_LOCK_IPOLICY);
@@ -121,9 +120,6 @@ ostream& operator<<(ostream& out, CInode& in)
 #endif
   }
 
-  if (in.snaprealm)
-    out << " snaprealm=" << in.snaprealm;
-
   if (in.state_test(CInode::STATE_AMBIGUOUSAUTH)) out << " AMBIGAUTH";
   if (in.state_test(CInode::STATE_NEEDSRECOVER)) out << " needsrecover";
   if (in.state_test(CInode::STATE_RECOVERING)) out << " recovering";
@@ -169,8 +165,6 @@ ostream& operator<<(ostream& out, CInode& in)
   if (!in.linklock.is_sync_and_unlocked())
     out << " " << in.linklock;
   if (in.inode.is_dir()) {
-    if (!in.snaplock.is_sync_and_unlocked())
-      out << " " << in.snaplock;
     if (!in.nestlock.is_sync_and_unlocked())
       out << " " << in.nestlock;
     if (!in.policylock.is_sync_and_unlocked())
@@ -240,7 +234,6 @@ void CInode::print(ostream& out)
 
 CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
   : mdcache(c),
-    snaprealm(0), containing_realm(0),
     first(f), last(l),
     inode_auth(auth, CDIR_AUTH_UNKNOWN),
     last_journaled(0),
@@ -261,7 +254,6 @@ CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
     linklock(this, &linklock_type),
     filelock(this, &filelock_type),
     xattrlock(this, &xattrlock_type),
-    snaplock(this, &snaplock_type),
     nestlock(this, &nestlock_type),
     flocklock(this, &flocklock_type),
     policylock(this, &policylock_type),
@@ -279,7 +271,6 @@ CInode::~CInode()
   g_num_ino--;
   g_num_inos++;
   close_stripes();
-  close_snaprealm();
 }
 
 
@@ -382,93 +373,10 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
     default_layout = projected_nodes.front()->dir_layout;
   }
 
-  if (projected_nodes.front()->snapnode)
-    pop_projected_snaprealm(projected_nodes.front()->snapnode);
-
   delete projected_nodes.front()->inode;
   delete projected_nodes.front();
 
   projected_nodes.pop_front();
-}
-
-sr_t *CInode::project_snaprealm(snapid_t snapid)
-{
-  sr_t *cur_srnode = get_projected_srnode();
-  sr_t *new_srnode;
-
-  if (cur_srnode) {
-    new_srnode = new sr_t(*cur_srnode);
-  } else {
-    new_srnode = new sr_t();
-    new_srnode->created = snapid;
-    new_srnode->current_parent_since = snapid;
-  }
-  dout(10) << "project_snaprealm " << new_srnode << dendl;
-  projected_nodes.back()->snapnode = new_srnode;
-  return new_srnode;
-}
-
-/* if newparent != parent, add parent to past_parents
- if parent DNE, we need to find what the parent actually is and fill that in */
-void CInode::project_past_snaprealm_parent(SnapRealm *newparent)
-{
-  sr_t *new_snap = project_snaprealm();
-  SnapRealm *oldparent;
-  if (!snaprealm) {
-    oldparent = find_snaprealm();
-    new_snap->seq = oldparent->get_newest_seq();
-  }
-  else
-    oldparent = snaprealm->parent;
-
-  if (newparent != oldparent) {
-    snapid_t oldparentseq = oldparent->get_newest_seq();
-    if (oldparentseq + 1 > new_snap->current_parent_since) {
-      new_snap->past_parents[oldparentseq].ino = oldparent->inode->ino();
-      new_snap->past_parents[oldparentseq].first = new_snap->current_parent_since;
-    }
-    new_snap->current_parent_since = MAX(oldparentseq, newparent->get_last_created()) + 1;
-  }
-}
-
-void CInode::pop_projected_snaprealm(sr_t *next_snaprealm)
-{
-  assert(next_snaprealm);
-  dout(10) << "pop_projected_snaprealm " << next_snaprealm
-          << " seq" << next_snaprealm->seq << dendl;
-  bool invalidate_cached_snaps = false;
-  if (!snaprealm) {
-    open_snaprealm();
-  } else if (next_snaprealm->past_parents.size() !=
-	     snaprealm->srnode.past_parents.size()) {
-    invalidate_cached_snaps = true;
-
-    // update parent pointer
-    assert(snaprealm->open);
-    assert(snaprealm->parent);   // had a parent before
-    SnapRealm *new_parent = get_parent_inode()->find_snaprealm();
-    assert(new_parent);
-    CInode *parenti = new_parent->inode;
-    assert(parenti);
-    assert(parenti->snaprealm);
-    snaprealm->parent = new_parent;
-    snaprealm->add_open_past_parent(new_parent);
-    dout(10) << " realm " << *snaprealm << " past_parents " << snaprealm->srnode.past_parents
-	     << " -> " << next_snaprealm->past_parents << dendl;
-    dout(10) << " pinning new parent " << *parenti << dendl;
-  }
-  snaprealm->srnode = *next_snaprealm;
-  delete next_snaprealm;
-
-  // we should be able to open these up (or have them already be open).
-  bool ok = snaprealm->_open_parents(NULL);
-  assert(ok);
-
-  if (invalidate_cached_snaps)
-    snaprealm->invalidate_cached_snaps();
-
-  if (snaprealm->parent)
-    dout(10) << " realm " << *snaprealm << " parent " << *snaprealm->parent << dendl;
 }
 
 
@@ -1104,10 +1012,6 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
     ::encode(xattrs, bl);
     break;
 
-  case CEPH_LOCK_ISNAP:
-    encode_snap(bl);
-    break;
-
   case CEPH_LOCK_IFLOCK:
     ::encode(fcntl_locks, bl);
     ::encode(flock_locks, bl);
@@ -1298,17 +1202,6 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 
   case CEPH_LOCK_IXATTR:
     ::decode(xattrs, p);
-    break;
-
-  case CEPH_LOCK_ISNAP:
-    {
-      snapid_t seq = 0;
-      if (snaprealm)
-	seq = snaprealm->srnode.seq;
-      decode_snap(p);
-      if (snaprealm && snaprealm->srnode.seq != seq)
-	mdcache->do_realm_invalidate_and_update_notify(this, seq ? CEPH_SNAP_OP_UPDATE:CEPH_SNAP_OP_SPLIT);
-    }
     break;
 
   case CEPH_LOCK_IFLOCK:
@@ -1903,7 +1796,7 @@ old_inode_t& CInode::cow_old_inode(snapid_t follows, bool cow_head)
 
 void CInode::pre_cow_old_inode()
 {
-  snapid_t follows = find_snaprealm()->get_newest_seq();
+  snapid_t follows = mdcache->get_snaprealm()->get_newest_seq();
   if (first <= follows)
     cow_old_inode(follows, true);
 }
@@ -1940,82 +1833,6 @@ old_inode_t * CInode::pick_old_inode(snapid_t snap)
   return NULL;
 }
 
-void CInode::open_snaprealm(bool nosplit)
-{
-  if (!snaprealm) {
-    SnapRealm *parent = find_snaprealm();
-    snaprealm = new SnapRealm(mdcache, this);
-    if (parent) {
-      dout(10) << "open_snaprealm " << snaprealm
-	       << " parent is " << parent
-	       << dendl;
-      dout(30) << " siblings are " << parent->open_children << dendl;
-      snaprealm->parent = parent;
-      if (!nosplit)
-	parent->split_at(snaprealm);
-      parent->open_children.insert(snaprealm);
-    }
-  }
-}
-void CInode::close_snaprealm(bool nojoin)
-{
-  if (snaprealm) {
-    dout(15) << "close_snaprealm " << *snaprealm << dendl;
-    snaprealm->close_parents();
-    if (snaprealm->parent) {
-      snaprealm->parent->open_children.erase(snaprealm);
-      //if (!nojoin)
-      //snaprealm->parent->join(snaprealm);
-    }
-    delete snaprealm;
-    snaprealm = 0;
-  }
-}
-
-SnapRealm *CInode::find_snaprealm()
-{
-  CInode *cur = this;
-  while (!cur->snaprealm) {
-    if (cur->get_parent_dn())
-      cur = cur->get_parent_dn()->get_dir()->get_inode();
-    else if (get_projected_parent_dn())
-      cur = cur->get_projected_parent_dn()->get_dir()->get_inode();
-    else
-      break;
-  }
-  return cur->snaprealm;
-}
-
-void CInode::encode_snap_blob(bufferlist &snapbl)
-{
-  if (snaprealm) {
-    ::encode(snaprealm->srnode, snapbl);
-    dout(20) << "encode_snap_blob " << *snaprealm << dendl;
-  }
-}
-void CInode::decode_snap_blob(bufferlist& snapbl) 
-{
-  if (snapbl.length()) {
-    open_snaprealm();
-    bufferlist::iterator p = snapbl.begin();
-    ::decode(snaprealm->srnode, p);
-    dout(20) << "decode_snap_blob " << *snaprealm << dendl;
-  }
-}
-
-void CInode::encode_snap(bufferlist& bl)
-{
-  bufferlist snapbl;
-  encode_snap_blob(snapbl);
-  ::encode(snapbl, bl);
-}    
-
-void CInode::decode_snap(bufferlist::iterator& p)
-{
-  bufferlist snapbl;
-  ::decode(snapbl, p);
-  decode_snap_blob(snapbl);
-}
 
 // =============================================
 
@@ -2127,7 +1944,7 @@ Capability *CInode::add_client_cap(client_t client, Session *session, SnapRealm 
     if (conrealm)
       containing_realm = conrealm;
     else
-      containing_realm = find_snaprealm();
+      containing_realm = mdcache->get_snaprealm();
     containing_realm->inodes_with_caps.push_back(&item_caps);
     dout(10) << "add_client_cap first cap, joining realm " << *containing_realm << dendl;
   }
@@ -2385,7 +2202,6 @@ void CInode::replicate_relax_locks()
   linklock.replicate_relax();
   filelock.replicate_relax();
   xattrlock.replicate_relax();
-  snaplock.replicate_relax();
   nestlock.replicate_relax();
   flocklock.replicate_relax();
   policylock.replicate_relax();
@@ -2406,7 +2222,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   bool valid = true;
 
   // do not issue caps if inode differs from readdir snaprealm
-  SnapRealm *realm = find_snaprealm();
+  SnapRealm *realm = mdcache->get_snaprealm();
   bool no_caps = (realm && dir_realm && realm != dir_realm) ||
 		 is_frozen() || state_test(CInode::STATE_EXPORTINGCAPS);
   if (no_caps)
@@ -2593,7 +2409,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
       e.cap.seq = cap->get_last_seq();
       dout(10) << "encode_inodestat issueing " << ccap_string(issue) << " seq " << cap->get_last_seq() << dendl;
       e.cap.mseq = cap->get_mseq();
-      e.cap.realm = realm->inode->ino();
+      e.cap.realm = MDS_INO_ROOT;
     } else {
       e.cap.cap_id = 0;
       e.cap.caps = 0;
@@ -2697,7 +2513,6 @@ void CInode::_encode_base(bufferlist& bl)
   ::encode(stripe_auth, bl);
   ::encode(xattrs, bl);
   ::encode(old_inodes, bl);
-  encode_snap(bl);
 }
 void CInode::_decode_base(bufferlist::iterator& p)
 {
@@ -2707,7 +2522,6 @@ void CInode::_decode_base(bufferlist::iterator& p)
   ::decode(stripe_auth, p);
   ::decode(xattrs, p);
   ::decode(old_inodes, p);
-  decode_snap(p);
 }
 
 void CInode::_encode_locks_full(bufferlist& bl)
@@ -2716,7 +2530,6 @@ void CInode::_encode_locks_full(bufferlist& bl)
   ::encode(linklock, bl);
   ::encode(filelock, bl);
   ::encode(xattrlock, bl);
-  ::encode(snaplock, bl);
   ::encode(nestlock, bl);
   ::encode(flocklock, bl);
   ::encode(policylock, bl);
@@ -2729,7 +2542,6 @@ void CInode::_decode_locks_full(bufferlist::iterator& p)
   ::decode(linklock, p);
   ::decode(filelock, p);
   ::decode(xattrlock, p);
-  ::decode(snaplock, p);
   ::decode(nestlock, p);
   ::decode(flocklock, p);
   ::decode(policylock, p);
@@ -2746,7 +2558,6 @@ void CInode::_encode_locks_state_for_replica(bufferlist& bl)
   filelock.encode_state_for_replica(bl);
   nestlock.encode_state_for_replica(bl);
   xattrlock.encode_state_for_replica(bl);
-  snaplock.encode_state_for_replica(bl);
   flocklock.encode_state_for_replica(bl);
   policylock.encode_state_for_replica(bl);
 }
@@ -2757,7 +2568,6 @@ void CInode::_decode_locks_state(bufferlist::iterator& p, bool is_new)
   filelock.decode_state(p, is_new);
   nestlock.decode_state(p, is_new);
   xattrlock.decode_state(p, is_new);
-  snaplock.decode_state(p, is_new);
   flocklock.decode_state(p, is_new);
   policylock.decode_state(p, is_new);
 }
@@ -2768,7 +2578,6 @@ void CInode::_decode_locks_rejoin(bufferlist::iterator& p, list<Context*>& waite
   filelock.decode_state_rejoin(p, waiters);
   nestlock.decode_state_rejoin(p, waiters);
   xattrlock.decode_state_rejoin(p, waiters);
-  snaplock.decode_state_rejoin(p, waiters);
   flocklock.decode_state_rejoin(p, waiters);
   policylock.decode_state_rejoin(p, waiters);
 }
