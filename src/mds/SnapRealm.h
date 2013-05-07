@@ -28,12 +28,6 @@ struct SnapRealm {
 
   // in-memory state
   MDCache *mdcache;
-  CInode *inode;
-
-  bool open;                        // set to true once all past_parents are opened
-  SnapRealm *parent;
-  set<SnapRealm*> open_children;    // active children that are currently open
-  map<inodeno_t,SnapRealm*> open_past_parents;  // these are explicitly pinned.
 
   // cache
   snapid_t cached_seq;           // max seq over self and all past+present parents.
@@ -47,12 +41,7 @@ struct SnapRealm {
   elist<CInode*> inodes_with_caps;             // for efficient realm splits
   map<client_t, xlist<Capability*>* > client_caps;   // to identify clients who need snap notifications
 
-  SnapRealm(MDCache *c, CInode *in) : 
-    srnode(),
-    mdcache(c), inode(in),
-    open(false), parent(0),
-    inodes_with_caps(0) 
-  { }
+  SnapRealm(MDCache *c) : mdcache(c), inodes_with_caps(0) {}
 
   bool exists(const string &name) {
     for (map<snapid_t,SnapInfo>::iterator p = srnode.snaps.begin();
@@ -64,20 +53,6 @@ struct SnapRealm {
     return false;
   }
 
-  bool _open_parents(Context *retryorfinish, snapid_t first=1, snapid_t last=CEPH_NOSNAP);
-  bool open_parents(Context *retryorfinish) {
-    if (!_open_parents(retryorfinish))
-      return false;
-    delete retryorfinish;
-    return true;
-  }
-  bool have_past_parents_open(snapid_t first=1, snapid_t last=CEPH_NOSNAP);
-  void add_open_past_parent(SnapRealm *parent);
-  void close_parents();
-
-  void prune_past_parents();
-  bool has_past_parents() { return !srnode.past_parents.empty(); }
-
   void build_snap_set(set<snapid_t>& s, 
 		      snapid_t& max_seq, snapid_t& max_last_created, snapid_t& max_last_destroyed,
 		      snapid_t first, snapid_t last);
@@ -86,8 +61,8 @@ struct SnapRealm {
   const bufferlist& get_snap_trace();
   void build_snap_trace(bufferlist& snapbl);
 
-  const string& get_snapname(snapid_t snapid, inodeno_t atino);
-  snapid_t resolve_snapname(const string &name, inodeno_t atino, snapid_t first=0, snapid_t last=CEPH_NOSNAP);
+  const string& get_snapname(snapid_t snapid);
+  snapid_t resolve_snapname(const string &name, snapid_t first=0, snapid_t last=CEPH_NOSNAP);
 
   void check_cache();
   const set<snapid_t>& get_snaps();
@@ -123,11 +98,6 @@ struct SnapRealm {
       return *p;
     return CEPH_NOSNAP;
   }
-
-  void adjust_parent();
-
-  void split_at(SnapRealm *child);
-  void join(SnapRealm *child);
 
   void add_cap(client_t client, Capability *cap) {
     if (client_caps.count(client) == 0)

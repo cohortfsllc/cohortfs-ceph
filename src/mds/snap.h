@@ -23,7 +23,6 @@
  */
 struct SnapInfo {
   snapid_t snapid;
-  inodeno_t ino;
   utime_t stamp;
   string name;
 
@@ -33,8 +32,6 @@ struct SnapInfo {
   void decode(bufferlist::iterator &bl);
   void dump(Formatter *f) const;
   static void generate_test_instances(list<SnapInfo*>& ls);
-
-  const string& get_long_name();
 };
 WRITE_CLASS_ENCODER(SnapInfo)
 
@@ -74,15 +71,9 @@ struct sr_t {
   snapid_t created;                 // when this realm was created.
   snapid_t last_created;            // last snap created in _this_ realm.
   snapid_t last_destroyed;          // seq for last removal
-  snapid_t current_parent_since;
   map<snapid_t, SnapInfo> snaps;
-  map<snapid_t, snaplink_t> past_parents;  // key is "last" (or NOSNAP)
 
-  sr_t()
-    : seq(0), created(0),
-      last_created(0), last_destroyed(0),
-      current_parent_since(1)
-  {}
+  sr_t() : seq(0), created(0), last_created(0), last_destroyed(0) {}
 
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator &bl);

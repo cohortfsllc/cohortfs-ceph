@@ -53,7 +53,6 @@ void SnapServer::_prepare(bufferlist &bl, uint64_t reqid, int bymds)
       version++;
 
       SnapInfo info;
-      ::decode(info.ino, p);
       if (!p.end()) {
 	::decode(info.name, p);
 	::decode(info.stamp, p);
@@ -71,9 +70,7 @@ void SnapServer::_prepare(bufferlist &bl, uint64_t reqid, int bymds)
 
   case TABLE_OP_DESTROY:
     {
-      inodeno_t ino;
       snapid_t snapid;
-      ::decode(ino, p);    // not used, currently.
       ::decode(snapid, p);
       version++;
 
