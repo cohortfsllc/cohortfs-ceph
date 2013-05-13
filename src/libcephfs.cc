@@ -1271,14 +1271,15 @@ extern "C" void ceph_ll_return_reservation(struct ceph_mount_info *cmount,
 }
 
 
-extern "C" void ceph_ll_assert_reservation(struct ceph_mount_info *cmount,
+extern "C" int ceph_ll_assert_reservation(struct ceph_mount_info *cmount,
 					   vinodeno_t vino,
 					   bool(*cb)(vinodeno_t, bool, void*),
 					   void *opaque,
 					   struct ceph_reservation *rsv,
 					   uint64_t osd)
 {
-  cmount->get_client()->ll_assert_reservation(vino, cb, opaque, rsv, osd);
+  return (cmount->get_client()->ll_assert_reservation(
+	    vino, cb, opaque, rsv, osd));
 }
 
 extern "C" void ceph_ll_unassert_reservation(struct ceph_mount_info *cmount,
