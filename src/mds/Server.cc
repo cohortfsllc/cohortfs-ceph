@@ -6148,12 +6148,15 @@ void Server::_rename_prepare(MDRequest *mdr,
     if (pi) {
       pi->last_renamed_version = pi->version;
       pi->ctime = mdr->now;
-      if (linkmerge)
-	pi->nlink--;
+      if (linkmerge) {
+        pi->nlink--;
+        pi->remove_parent(srcdn->get_stripe()->dirstripe(), srcdn->get_name());
+      }
     }
     if (tpi) {
       tpi->nlink--;
       tpi->ctime = mdr->now;
+      tpi->remove_parent(destdn->get_stripe()->dirstripe(), destdn->get_name());
     }
   }
 
@@ -6936,6 +6939,8 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr)
     if (ti->ctime == rollback.ctime)
       ti->ctime = rollback.orig_dest.old_ctime;
     ti->nlink++;
+    ti->add_parent(destdn->get_stripe()->dirstripe(),
+                   destdn->authority().first, destdn->get_name());
   }
 
   if (srcdn)
