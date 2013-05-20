@@ -6,6 +6,7 @@
 #include "include/int_types.h"
 
 #include <math.h>
+#include <algorithm>
 #include <ostream>
 #include <set>
 #include <map>
@@ -306,6 +307,64 @@ inline bool operator==(const client_writeable_range_t& l,
 
 
 /*
+ * dir stripe
+ */
+typedef uint32_t stripeid_t;
+
+struct dirstripe_t {
+  inodeno_t ino;
+  stripeid_t stripeid;
+
+  dirstripe_t() : ino(0), stripeid(0) {}
+  dirstripe_t(inodeno_t ino, stripeid_t stripeid)
+      : ino(ino), stripeid(stripeid) {}
+
+  void encode(bufferlist &bl) const;
+  void decode(bufferlist::iterator& bl);
+  void dump(Formatter *f) const;
+  static void generate_test_instances(list<dirstripe_t*>& ls);
+};
+WRITE_CLASS_ENCODER(dirstripe_t)
+
+inline ostream& operator<<(ostream& out, const dirstripe_t ds) {
+  return out << ds.ino << ":" << ds.stripeid;
+}
+inline bool operator<(dirstripe_t l, dirstripe_t r) {
+  if (l.ino < r.ino) return true;
+  if (l.ino == r.ino && l.stripeid < r.stripeid) return true;
+  return false;
+}
+inline bool operator==(dirstripe_t l, dirstripe_t r) {
+  return l.ino == r.ino && l.stripeid == r.stripeid;
+}
+
+
+/*
+ * inode parents
+ */
+struct inoparent_t {
+  dirstripe_t stripe;
+  int who;
+  string name;
+
+  inoparent_t() : who(0) {}
+  inoparent_t(dirstripe_t stripe, int who, const string &name)
+      : stripe(stripe), who(who), name(name) {}
+
+  void encode(bufferlist &bl) const;
+  void decode(bufferlist::iterator& bl);
+  void dump(Formatter *f) const;
+  static void generate_test_instances(list<inoparent_t*>& ls);
+};
+WRITE_CLASS_ENCODER(inoparent_t)
+
+inline bool operator==(const inoparent_t &l, const inoparent_t &r) {
+  // ignore 'who' in comparison
+  return l.stripe == r.stripe && l.name == r.name;
+}
+
+
+/*
  * inode_t
  */
 struct inode_t {
@@ -340,7 +399,8 @@ struct inode_t {
 
   map<client_t,client_writeable_range_t> client_ranges;  // client(s) can write to these ranges
 
-  // dirfrag, recursive accountin
+  // dirfrag, recursive accounting
+  list<inoparent_t> parents;   // protected by my linklock
   frag_info_t dirstat;         // protected by my filelock
   nest_info_t rstat;           // protected by my nestlock
   nest_info_t accounted_rstat; // protected by parent's nestlock
@@ -436,6 +496,16 @@ struct inode_t {
   }
   void update_backtrace() {
     backtrace_version = version;
+  }
+
+  void add_parent(dirstripe_t stripe, int who, const string &name) {
+    parents.push_back(inoparent_t(stripe, who, name));
+  }
+  void remove_parent(dirstripe_t stripe, const string &name) {
+    list<inoparent_t>::iterator p = find(parents.begin(), parents.end(),
+                                         inoparent_t(stripe, 0, name));
+    assert(p != parents.end());
+    parents.erase(p);
   }
 
   void add_old_pool(int64_t l) {
@@ -767,42 +837,6 @@ struct old_cap_reconnect_t {
 };
 WRITE_CLASS_ENCODER(old_cap_reconnect_t)
 
-
-// ================================================================
-// dir stripe
-
-typedef uint32_t stripeid_t;
-
-struct dirstripe_t {
-  inodeno_t ino;
-  stripeid_t stripeid;
-
-  dirstripe_t() : ino(0), stripeid(0) {}
-  dirstripe_t(inodeno_t ino, stripeid_t stripeid)
-      : ino(ino), stripeid(stripeid) {}
-
-  void encode(bufferlist& bl) const {
-    ::encode(ino, bl);
-    ::encode(stripeid, bl);
-  }
-  void decode(bufferlist::iterator& bl) {
-    ::decode(ino, bl);
-    ::decode(stripeid, bl);
-  }
-};
-WRITE_CLASS_ENCODER(dirstripe_t)
-
-inline ostream& operator<<(ostream& out, const dirstripe_t ds) {
-  return out << ds.ino << ":" << ds.stripeid;
-}
-inline bool operator<(dirstripe_t l, dirstripe_t r) {
-  if (l.ino < r.ino) return true;
-  if (l.ino == r.ino && l.stripeid < r.stripeid) return true;
-  return false;
-}
-inline bool operator==(dirstripe_t l, dirstripe_t r) {
-  return l.ino == r.ino && l.stripeid == r.stripeid;
-}
 
 // ================================================================
 // dir frag
