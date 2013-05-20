@@ -2762,6 +2762,9 @@ void Server::handle_client_openc(MDRequest *mdr)
   }
   in->inode.rstat.rfiles = 1;
 
+  in->inode.add_parent(dn->get_stripe()->dirstripe(),
+                       mds->get_nodeid(), dn->get_name());
+
   if (follows >= dn->first)
     dn->first = follows+1;
   in->first = dn->first;
@@ -3999,6 +4002,8 @@ void Server::handle_client_mknod(MDRequest *mdr)
     newi->inode.mode |= S_IFREG;
   newi->inode.version = inodn->pre_dirty();
   newi->inode.rstat.rfiles = 1;
+  newi->inode.add_parent(dn->get_stripe()->dirstripe(),
+                         mds->get_nodeid(), dn->get_name());
 
   // if the client created a _regular_ file via MKNOD, it's highly likely they'll
   // want to write to it (e.g., if they are reexporting NFS)
@@ -4088,6 +4093,11 @@ void Server::handle_client_mkdir(MDRequest *mdr)
     mode |= S_IFDIR;
     mdr->in[0] = newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
 
+    newi->inode.version = inodn->pre_dirty();
+    newi->inode.rstat.rsubdirs = 1;
+    newi->inode.add_parent(dn->get_stripe()->dirstripe(),
+                           mds->get_nodeid(), dn->get_name());
+
     // issue a cap on the directory.  do this before initializing
     // stripes, so replicas get the correct lock state
     int cmode = CEPH_FILE_MODE_RDWR;
@@ -4154,9 +4164,6 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   }
   assert(newi);
   assert(mdr->more()->waiting_on_slave.empty());
-
-  newi->inode.version = inodn->pre_dirty();
-  newi->inode.rstat.rsubdirs = 1;
 
   dout(12) << " follows " << follows << dendl;
   if (follows >= dn->first)
@@ -4463,6 +4470,8 @@ void Server::handle_client_symlink(MDRequest *mdr)
   newi->inode.rstat.rbytes = newi->inode.size;
   newi->inode.rstat.rfiles = 1;
   newi->inode.version = dn->pre_dirty();
+  newi->inode.add_parent(dn->get_stripe()->dirstripe(),
+                         mds->get_nodeid(), dn->get_name());
 
   if (follows >= dn->first)
     dn->first = follows + 1;
