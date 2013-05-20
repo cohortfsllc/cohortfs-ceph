@@ -6177,14 +6177,17 @@ void Server::_rename_prepare(MDRequest *mdr,
   if (!silent) {
     if (pi) {
       pi->ctime = mdr->now;
-      if (linkmerge)
-	pi->nlink--;
+      if (linkmerge) {
+        pi->nlink--;
+        pi->remove_parent(srcdn->get_stripe()->dirstripe(), srcdn->get_name());
+      }
     }
     if (tpi) {
       tpi->ctime = mdr->now;
       tpi->nlink--;
       if (tpi->nlink == 0)
 	oldin->state_set(CInode::STATE_ORPHAN);
+      tpi->remove_parent(destdn->get_stripe()->dirstripe(), destdn->get_name());
     }
   }
 
@@ -6980,6 +6983,8 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr,
     if (ti->ctime == rollback.ctime)
       ti->ctime = rollback.orig_dest.old_ctime;
     ti->nlink++;
+    ti->add_parent(destdn->get_stripe()->dirstripe(),
+                   destdn->authority().first, destdn->get_name());
   }
 
   if (srcdn)

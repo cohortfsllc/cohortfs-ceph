@@ -468,6 +468,8 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
   else if (in->inode.is_symlink())
     in->symlink = symlink;
   in->old_inodes = old_inodes;
+
+  assert(in->is_base() || static_cast<size_t>(inode.nlink) == inode.parents.size());
 }
 
 // EMetaBlob::Dentry
