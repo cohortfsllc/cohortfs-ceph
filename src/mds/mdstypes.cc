@@ -200,11 +200,78 @@ ostream& operator<<(ostream& out, const client_writeable_range_t& r)
 
 
 /*
+ * dirstripe_t
+ */
+void dirstripe_t::encode(bufferlist &bl) const
+{
+  ENCODE_START(1, 1, bl);
+  ::encode(ino, bl);
+  ::encode(stripeid, bl);
+  ENCODE_FINISH(bl);
+}
+
+void dirstripe_t::decode(bufferlist::iterator &p)
+{
+  DECODE_START_LEGACY_COMPAT_LEN(7, 6, 6, p);
+  ::decode(ino, p);
+  ::decode(stripeid, p);
+  DECODE_FINISH(p);
+}
+
+void dirstripe_t::dump(Formatter *f) const
+{
+  f->dump_unsigned("ino", ino);
+  f->dump_unsigned("stripeid", stripeid);
+}
+
+void dirstripe_t::generate_test_instances(list<dirstripe_t*> &ls)
+{
+  ls.push_back(new dirstripe_t());
+  ls.push_back(new dirstripe_t(1, 6));
+}
+
+
+/*
+ * inoparent_t
+ */
+void inoparent_t::encode(bufferlist &bl) const
+{
+  ENCODE_START(1, 1, bl);
+  ::encode(stripe, bl);
+  ::encode(who, bl);
+  ::encode(name, bl);
+  ENCODE_FINISH(bl);
+}
+
+void inoparent_t::decode(bufferlist::iterator &p)
+{
+  DECODE_START_LEGACY_COMPAT_LEN(1, 1, 1, p);
+  ::decode(stripe, p);
+  ::decode(who, p);
+  ::decode(name, p);
+  DECODE_FINISH(p);
+}
+
+void inoparent_t::dump(Formatter *f) const
+{
+  f->dump_stream("stripe") << stripe;
+  f->dump_unsigned("who", who);
+  f->dump_string("name", name);
+}
+
+void inoparent_t::generate_test_instances(list<inoparent_t*> &ls)
+{
+  ls.push_back(new inoparent_t());
+  ls.push_back(new inoparent_t(dirstripe_t(1, 6), 0, "parent"));
+}
+
+
+/*
  * inode_t
  */
 void inode_t::encode(bufferlist &bl) const
 {
-  ENCODE_START(8, 6, bl);
+  ENCODE_START(9, 9, bl);
 
   ::encode(ino, bl);
   ::encode(rdev, bl);
@@ -229,6 +296,7 @@ void inode_t::encode(bufferlist &bl) const
   ::encode(time_warp_seq, bl);
   ::encode(client_ranges, bl);
 
+  ::encode(parents, bl);
   ::encode(dirstat, bl);
   ::encode(rstat, bl);
   ::encode(accounted_rstat, bl);
@@ -245,7 +313,7 @@ void inode_t::encode(bufferlist &bl) const
 
 void inode_t::decode(bufferlist::iterator &p)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(7, 6, 6, p);
+  DECODE_START_LEGACY_COMPAT_LEN(9, 9, 9, p);
 
   ::decode(ino, p);
   ::decode(rdev, p);
@@ -283,7 +351,8 @@ void inode_t::decode(bufferlist::iterator &p)
 	q = m.begin(); q != m.end(); ++q)
       client_ranges[q->first].range = q->second;
   }
-    
+
+  ::decode(parents, p);
   ::decode(dirstat, p);
   ::decode(rstat, p);
   ::decode(accounted_rstat, p);
@@ -345,6 +414,11 @@ void inode_t::dump(Formatter *f) const
     p->second.dump(f);
     f->close_section();
   }
+  f->close_section();
+
+  f->open_object_section("parents");
+  for (list<inoparent_t>::const_iterator i = parents.begin(); i != parents.end(); ++i)
+    i->dump(f);
   f->close_section();
 
   f->open_object_section("dirstat");
