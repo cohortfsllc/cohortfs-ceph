@@ -30,6 +30,7 @@ struct link_rollback {
   utime_t old_ctime;
   utime_t old_dir_mtime;
   utime_t old_dir_rctime;
+  inoparent_t parent;
 
   void encode(bufferlist &bl) const {
     __u8 struct_v = 1;
@@ -40,6 +41,7 @@ struct link_rollback {
     ::encode(old_ctime, bl);
     ::encode(old_dir_mtime, bl);
     ::encode(old_dir_rctime, bl);
+    ::encode(parent, bl);
   }
   void decode(bufferlist::iterator &bl) {
     __u8 struct_v;
@@ -50,6 +52,7 @@ struct link_rollback {
     ::decode(old_ctime, bl);
     ::decode(old_dir_mtime, bl);
     ::decode(old_dir_rctime, bl);
+    ::decode(parent, bl);
   }
 };
 WRITE_CLASS_ENCODER(link_rollback)

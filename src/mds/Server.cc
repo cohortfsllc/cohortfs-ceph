@@ -4555,16 +4555,12 @@ class C_MDS_link_local_finish : public Context {
   MDRequest *mdr;
   CDentry *dn;
   CInode *targeti;
-  version_t dnpv;
-  version_t tipv;
 public:
-  C_MDS_link_local_finish(MDS *m, MDRequest *r, CDentry *d, CInode *ti, 
-			  version_t dnpv_, version_t tipv_) :
-    mds(m), mdr(r), dn(d), targeti(ti),
-    dnpv(dnpv_), tipv(tipv_) { }
+  C_MDS_link_local_finish(MDS *mds, MDRequest *mdr, CDentry *dn, CInode *ti)
+      : mds(mds), mdr(mdr), dn(dn), targeti(ti) {}
   void finish(int r) {
     assert(r == 0);
-    mds->server->_link_local_finish(mdr, dn, targeti, dnpv, tipv);
+    mds->server->_link_local_finish(mdr, dn, targeti);
   }
 };
 
@@ -4576,14 +4572,15 @@ void Server::_link_local(MDRequest *mdr, CDentry *dn, CInode *targeti)
   mdr->ls = mdlog->get_current_segment();
 
   // predirty NEW dentry
-  version_t dnpv = dn->pre_dirty();
-  version_t tipv = targeti->pre_dirty();
-  
+  mdr->more()->pvmap[dn] = dn->pre_dirty();
+
   // project inode update
   inode_t *pi = targeti->project_inode();
   pi->nlink++;
   pi->ctime = mdr->now;
-  pi->version = tipv;
+  pi->version = targeti->pre_dirty();
+  pi->add_parent(dn->get_stripe()->dirstripe(),
+                 mds->get_nodeid(), dn->get_name());
 
   snapid_t follows = mdcache->get_snaprealm()->get_newest_seq();
   if (follows >= dn->first)
@@ -4602,17 +4599,16 @@ void Server::_link_local(MDRequest *mdr, CDentry *dn, CInode *targeti)
   le->metablob.add_dentry(dn, true);  // new remote
   mdcache->journal_dirty_inode(mdr, &le->metablob, targeti);
 
-  journal_and_reply(mdr, targeti, dn, le, new C_MDS_link_local_finish(mds, mdr, dn, targeti, dnpv, tipv));
+  journal_and_reply(mdr, targeti, dn, le, new C_MDS_link_local_finish(mds, mdr, dn, targeti));
 }
 
-void Server::_link_local_finish(MDRequest *mdr, CDentry *dn, CInode *targeti,
-				version_t dnpv, version_t tipv)
+void Server::_link_local_finish(MDRequest *mdr, CDentry *dn, CInode *targeti)
 {
   dout(10) << "_link_local_finish " << *dn << " to " << *targeti << dendl;
 
   // link and unlock the NEW dentry
   dn->pop_projected_linkage();
-  dn->mark_dirty(dnpv, mdr->ls);
+  dn->mark_dirty(mdr->more()->pvmap[dn], mdr->ls);
 
   // target inode
   targeti->pop_and_dirty_projected_inode(mdr->ls);
@@ -4639,14 +4635,13 @@ class C_MDS_link_remote_finish : public Context {
   bool inc;
   CDentry *dn;
   CInode *targeti;
-  version_t dpv;
-public:
-  C_MDS_link_remote_finish(MDS *m, MDRequest *r, bool i, CDentry *d, CInode *ti) :
-    mds(m), mdr(r), inc(i), dn(d), targeti(ti),
-    dpv(d->get_projected_version()) {}
+ public:
+  C_MDS_link_remote_finish(MDS *mds, MDRequest *mdr, bool inc,
+                           CDentry *dn, CInode *targeti)
+      : mds(mds), mdr(mdr), inc(inc), dn(dn), targeti(targeti) {}
   void finish(int r) {
     assert(r == 0);
-    mds->server->_link_remote_finish(mdr, inc, dn, targeti, dpv);
+    mds->server->_link_remote_finish(mdr, inc, dn, targeti);
   }
 };
 
@@ -4668,6 +4663,7 @@ void Server::_link_remote(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti
       op = MMDSSlaveRequest::OP_UNLINKPREP;
     MMDSSlaveRequest *req = new MMDSSlaveRequest(mdr->reqid, mdr->attempt, op);
     targeti->set_object_info(req->get_object_info());
+    req->get_object_info().dname = dn->get_name();
     req->now = mdr->now;
     mds->send_message_mds(req, linkauth);
 
@@ -4710,8 +4706,7 @@ void Server::_link_remote(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti
 }
 
 void Server::_link_remote_finish(MDRequest *mdr, bool inc,
-				 CDentry *dn, CInode *targeti,
-				 version_t dpv)
+				 CDentry *dn, CInode *targeti)
 {
   dout(10) << "_link_remote_finish "
 	   << (inc ? "link ":"unlink ")
@@ -4722,12 +4717,11 @@ void Server::_link_remote_finish(MDRequest *mdr, bool inc,
   if (inc) {
     // link the new dentry
     dn->pop_projected_linkage();
-    dn->mark_dirty(dpv, mdr->ls);
   } else {
     // unlink main dentry
     dn->get_dir()->unlink_inode(dn);
-    dn->mark_dirty(dn->get_projected_version(), mdr->ls);  // dirty old dentry
   }
+  dn->mark_dirty(mdr->more()->pvmap[dn], mdr->ls);
 
   mdr->apply();
 
@@ -4772,18 +4766,19 @@ public:
 /* This function DOES put the mdr->slave_request before returning*/
 void Server::handle_slave_link_prep(MDRequest *mdr)
 {
-  dout(10) << "handle_slave_link_prep " << *mdr 
-	   << " on " << mdr->slave_request->get_object_info() 
-	   << dendl;
+  MDSCacheObjectInfo &info = mdr->slave_request->get_object_info();
+
+  dout(10) << "handle_slave_link_prep " << *mdr << " on " << info << dendl;
 
   assert(g_conf->mds_kill_link_at != 4);
 
-  CInode *targeti = mdcache->get_inode(mdr->slave_request->get_object_info().ino);
+  CInode *targeti = mdcache->get_inode(info.ino);
   assert(targeti);
   dout(10) << "targeti " << *targeti << dendl;
   CDentry *dn = targeti->get_parent_dn();
   CDentry::linkage_t *dnl = dn->get_linkage();
   assert(dnl->is_primary());
+  dirstripe_t pstripe = dn->get_stripe()->dirstripe();
 
   mdr->now = mdr->slave_request->now;
 
@@ -4798,15 +4793,18 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   mdlog->start_entry(le);
 
   inode_t *pi = dnl->get_inode()->project_inode();
+  mdr->add_projected_inode(dnl->get_inode());
 
   // update journaled target inode
   bool inc;
   if (mdr->slave_request->get_op() == MMDSSlaveRequest::OP_LINKPREP) {
     inc = true;
     pi->nlink++;
+    pi->add_parent(pstripe, mdr->slave_to_mds, info.dname);
   } else {
     inc = false;
     pi->nlink--;
+    pi->remove_parent(pstripe, info.dname);
   }
 
   link_rollback rollback;
@@ -4817,6 +4815,8 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   rollback.old_dir_mtime = pf->fragstat.mtime;
   rollback.old_dir_rctime = pf->rstat.rctime;
   rollback.was_inc = inc;
+  rollback.parent.stripe = pstripe;
+  rollback.parent.name = info.dname;
   ::encode(rollback, le->rollback);
   mdr->more()->rollback_bl = le->rollback;
 
@@ -4853,7 +4853,6 @@ void Server::_logged_slave_link(MDRequest *mdr, CInode *targeti)
   assert(g_conf->mds_kill_link_at != 6);
 
   // update the target
-  targeti->pop_and_dirty_projected_inode(mdr->ls);
   mdr->apply();
 
   // hit pop
@@ -4961,10 +4960,13 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
 
   // inode
   pi->ctime = rollback.old_ctime;
-  if (rollback.was_inc)
+  if (rollback.was_inc) {
     pi->nlink--;
-  else
+    pi->remove_parent(rollback.parent.stripe, rollback.parent.name);
+  } else {
     pi->nlink++;
+    pi->add_parent(rollback.parent.stripe, master, rollback.parent.name);
+  }
 
   // journal it
   ESlaveUpdate *le = new ESlaveUpdate(mdlog, "slave_link_rollback", rollback.reqid, master,
@@ -5150,13 +5152,12 @@ class C_MDS_unlink_local_finish : public Context {
   MDS *mds;
   MDRequest *mdr;
   CDentry *dn;
-  version_t dnpv;  // deleted dentry
-public:
+ public:
   C_MDS_unlink_local_finish(MDS *mds, MDRequest *mdr, CDentry *dn)
-      : mds(mds), mdr(mdr), dn(dn), dnpv(dn->get_projected_version()) {}
+      : mds(mds), mdr(mdr), dn(dn) {}
   void finish(int r) {
     assert(r == 0);
-    mds->server->_unlink_local_finish(mdr, dn, dnpv);
+    mds->server->_unlink_local_finish(mdr, dn);
   }
 };
 
@@ -5181,13 +5182,14 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
   }
 
   // the unlinked dentry
-  dn->pre_dirty();
+  mdr->more()->pvmap[dn] = dn->pre_dirty();
 
   inode_t *pi = in->project_inode();
   mdr->add_projected_inode(in); // do this _after_ my dn->pre_dirty().. we apply that one manually.
   pi->version = in->pre_dirty();
   pi->nlink--;
   pi->ctime = mdr->now;
+  pi->remove_parent(dn->get_stripe()->dirstripe(), dn->get_name());
 
   // remote link.  update remote inode.
   assert(dnl->is_remote());
@@ -5211,7 +5213,7 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
   journal_and_reply(mdr, 0, dn, le, new C_MDS_unlink_local_finish(mds, mdr, dn));
 }
 
-void Server::_unlink_local_finish(MDRequest *mdr, CDentry *dn, version_t dnpv)
+void Server::_unlink_local_finish(MDRequest *mdr, CDentry *dn)
 {
   dout(10) << "_unlink_local_finish " << *dn << dendl;
 
@@ -5219,7 +5221,7 @@ void Server::_unlink_local_finish(MDRequest *mdr, CDentry *dn, version_t dnpv)
   dn->get_dir()->unlink_inode(dn);
   dn->pop_projected_linkage();
 
-  dn->mark_dirty(dnpv, mdr->ls);
+  dn->mark_dirty(mdr->more()->pvmap[dn], mdr->ls);
   mdr->apply();
 
   mds->mdcache->send_dentry_unlink(dn, mdr);

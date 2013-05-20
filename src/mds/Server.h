@@ -192,13 +192,10 @@ public:
   // link
   void handle_client_link(MDRequest *mdr);
   void _link_local(MDRequest *mdr, CDentry *dn, CInode *targeti);
-  void _link_local_finish(MDRequest *mdr,
-			  CDentry *dn, CInode *targeti,
-			  version_t, version_t);
+  void _link_local_finish(MDRequest *mdr, CDentry *dn, CInode *targeti);
 
   void _link_remote(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti);
-  void _link_remote_finish(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti,
-			   version_t);
+  void _link_remote_finish(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti);
 
   void handle_slave_link_prep(MDRequest *mdr);
   void _logged_slave_link(MDRequest *mdr, CInode *targeti);
@@ -213,7 +210,7 @@ public:
   bool _dir_is_nonempty_unlocked(MDRequest *mdr, CInode *rmdiri);
   bool _dir_is_nonempty(MDRequest *mdr, CInode *rmdiri);
   void _unlink_local(MDRequest *mdr, CDentry *dn);
-  void _unlink_local_finish(MDRequest *mdr, CDentry *dn, version_t);
+  void _unlink_local_finish(MDRequest *mdr, CDentry *dn);
   void _rmdir_prepare_witness(MDRequest *mdr, int who, CDentry *dn);
   void handle_slave_rmdir_prep(MDRequest *mdr);
   void _logged_slave_rmdir(MDRequest *mdr, CDentry *srcdn);
