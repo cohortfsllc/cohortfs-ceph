@@ -30,8 +30,9 @@ struct link_rollback {
   utime_t old_ctime;
   utime_t old_dir_mtime;
   utime_t old_dir_rctime;
+  inoparent_t parent;
 
-  link_rollback() : ino(0), was_inc(false) {}
+  link_rollback() : was_inc(false) {}
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
