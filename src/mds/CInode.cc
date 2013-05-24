@@ -1017,77 +1017,21 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
 	::encode(inode.size, bl);
 	::encode(inode.client_ranges, bl);
       }
+      dout(15) << "encode_lock_state inode.dirstat is " << inode.dirstat << dendl;
+      ::encode(inode.dirstat, bl);
     } else {
       bool dirty = filelock.is_dirty();
       ::encode(dirty, bl);
     }
-
-    {
-      dout(15) << "encode_lock_state inode.dirstat is " << inode.dirstat << dendl;
-      ::encode(inode.dirstat, bl);  // only meaningful if i am auth.
-      // XXX: accumulate fragstats in CStripe?
-#if 0
-      bufferlist tmp;
-      __u32 n = 0;
-      for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	   p != dirfrags.end();
-	   ++p) {
-	frag_t fg = p->first;
-	CDir *dir = p->second;
-	if (is_auth() || dir->is_auth()) {
-	  fnode_t *pf = dir->get_projected_fnode();
-	  dout(15) << fg << " " << *dir << dendl;
-	  dout(20) << fg << "           fragstat " << pf->fragstat << dendl;
-	  dout(20) << fg << " accounted_fragstat " << pf->accounted_fragstat << dendl;
-	  ::encode(fg, tmp);
-	  ::encode(dir->mseq, tmp);
-	  ::encode(dir->first, tmp);
-	  ::encode(pf->fragstat, tmp);
-	  ::encode(pf->accounted_fragstat, tmp);
-	  n++;
-	}
-      }
-      ::encode(n, bl);
-      bl.claim_append(tmp);
-#endif
-    }
     break;
 
   case CEPH_LOCK_INEST:
-    if (!is_auth()) {
+    if (is_auth()) {
+      dout(15) << "encode_lock_state inode.rstat is " << inode.rstat << dendl;
+      ::encode(inode.rstat, bl);
+    } else {
       bool dirty = nestlock.is_dirty();
       ::encode(dirty, bl);
-    }
-    {
-      dout(15) << "encode_lock_state inode.rstat is " << inode.rstat << dendl;
-      ::encode(inode.rstat, bl);  // only meaningful if i am auth.
-      // XXX: accumulate rstats in CStripe
-#if 0
-      bufferlist tmp;
-      __u32 n = 0;
-      for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
-	   p != dirfrags.end();
-	   ++p) {
-	frag_t fg = p->first;
-	CDir *dir = p->second;
-	if (is_auth() || dir->is_auth()) {
-	  fnode_t *pf = dir->get_projected_fnode();
-	  dout(10) << fg << " " << *dir << dendl;
-	  dout(10) << fg << " " << pf->rstat << dendl;
-	  dout(10) << fg << " " << pf->rstat << dendl;
-	  dout(10) << fg << " " << dir->dirty_old_rstat << dendl;
-	  ::encode(fg, tmp);
-	  ::encode(dir->mseq, tmp);
-	  ::encode(dir->first, tmp);
-	  ::encode(pf->rstat, tmp);
-	  ::encode(pf->accounted_rstat, tmp);
-	  ::encode(dir->dirty_old_rstat, tmp);
-	  n++;
-	}
-      }
-      ::encode(n, bl);
-      bl.claim_append(tmp);
-#endif
     }
     break;
     
@@ -1158,6 +1102,8 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	::decode(inode.size, p);
 	::decode(inode.client_ranges, p);
       }
+      ::decode(inode.dirstat, p);
+      dout(10) << " taking inode dirstat " << inode.dirstat << dendl;
     } else {
       bool replica_dirty;
       ::decode(replica_dirty, p);
@@ -1166,136 +1112,19 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	filelock.mark_dirty();  // ok bc we're auth and caller will handle
       }
     }
-    {
-      frag_info_t dirstat;
-      ::decode(dirstat, p);
-      if (!is_auth()) {
-	dout(10) << " taking inode dirstat " << dirstat << " for " << *this << dendl;
-	inode.dirstat = dirstat;    // take inode summation if replica
-      }
-      // XXX: accumulate fragstats in CStripe?
-#if 0
-      __u32 n;
-      ::decode(n, p);
-      dout(10) << " ...got " << n << " fragstats on " << *this << dendl;
-      while (n--) {
-	frag_t fg;
-	ceph_seq_t mseq;
-	snapid_t fgfirst;
-	frag_info_t fragstat;
-	frag_info_t accounted_fragstat;
-	::decode(fg, p);
-	::decode(mseq, p);
-	::decode(fgfirst, p);
-	::decode(fragstat, p);
-	::decode(accounted_fragstat, p);
-	dout(10) << fg << " [" << fgfirst << ",head] " << dendl;
-	dout(10) << fg << "           fragstat " << fragstat << dendl;
-	dout(20) << fg << " accounted_fragstat " << accounted_fragstat << dendl;
-
-	CDir *dir = get_dirfrag(fg);
-	if (is_auth()) {
-	  assert(dir);                // i am auth; i had better have this dir open
-	  dout(10) << fg << " first " << dir->first << " -> " << fgfirst
-		   << " on " << *dir << dendl;
-	  if (dir->fnode.fragstat.version == get_projected_inode()->dirstat.version &&
-	      ceph_seq_cmp(mseq, dir->mseq) < 0) {
-	    dout(10) << " mseq " << mseq << " < " << dir->mseq << ", ignoring" << dendl;
-	    continue;
-	  }
-	  dir->mseq = mseq;
-	  dir->first = fgfirst;
-	  dir->fnode.fragstat = fragstat;
-	  dir->fnode.accounted_fragstat = accounted_fragstat;
-	  dir->first = fgfirst;
-	  if (!(fragstat == accounted_fragstat)) {
-	    dout(10) << fg << " setting filelock updated flag" << dendl;
-	    filelock.mark_dirty();  // ok bc we're auth and caller will handle
-	  }
-	} else {
-	  if (dir && dir->is_auth()) {
-	    dout(10) << fg << " first " << dir->first << " -> " << fgfirst
-		     << " on " << *dir << dendl;
-	    dir->first = fgfirst;
-	    fnode_t *pf = dir->get_projected_fnode();
-	    finish_scatter_update(&filelock, dir,
-				  inode.dirstat.version, pf->accounted_fragstat.version);
-	  }
-	}
-      }
-#endif
-    }
     break;
 
   case CEPH_LOCK_INEST:
-    if (is_auth()) {
+    if (!is_auth()) {
+      ::decode(inode.rstat, p);
+      dout(10) << " taking inode rstat " << inode.rstat << dendl;
+    } else {
       bool replica_dirty;
       ::decode(replica_dirty, p);
       if (replica_dirty) {
 	dout(10) << "decode_lock_state setting nestlock dirty flag" << dendl;
 	nestlock.mark_dirty();  // ok bc we're auth and caller will handle
       }
-    }
-    {
-      nest_info_t rstat;
-      ::decode(rstat, p);
-      if (!is_auth()) {
-	dout(10) << " taking inode rstat " << rstat << " for " << *this << dendl;
-	inode.rstat = rstat;    // take inode summation if replica
-      }
-      // XXX: accumulate rstats in CStripe?
-#if 0
-      __u32 n;
-      ::decode(n, p);
-      while (n--) {
-	frag_t fg;
-	ceph_seq_t mseq;
-	snapid_t fgfirst;
-	nest_info_t rstat;
-	nest_info_t accounted_rstat;
-	map<snapid_t,old_rstat_t> dirty_old_rstat;
-	::decode(fg, p);
-	::decode(mseq, p);
-	::decode(fgfirst, p);
-	::decode(rstat, p);
-	::decode(accounted_rstat, p);
-	::decode(dirty_old_rstat, p);
-	dout(10) << fg << " [" << fgfirst << ",head]" << dendl;
-	dout(10) << fg << "               rstat " << rstat << dendl;
-	dout(10) << fg << "     accounted_rstat " << accounted_rstat << dendl;
-	dout(10) << fg << "     dirty_old_rstat " << dirty_old_rstat << dendl;
-
-	CDir *dir = get_dirfrag(fg);
-	if (is_auth()) {
-	  assert(dir);                // i am auth; i had better have this dir open
-	  dout(10) << fg << " first " << dir->first << " -> " << fgfirst
-		   << " on " << *dir << dendl;
-	  if (dir->fnode.rstat.version == get_projected_inode()->rstat.version &&
-	      ceph_seq_cmp(mseq, dir->mseq) < 0) {
-	    dout(10) << " mseq " << mseq << " < " << dir->mseq << ", ignoring" << dendl;
-	    continue;
-	  }
-	  dir->mseq = mseq;
-	  dir->first = fgfirst;
-	  dir->fnode.rstat = rstat;
-	  dir->fnode.accounted_rstat = accounted_rstat;
-	  dir->dirty_old_rstat.swap(dirty_old_rstat);
-	  if (!(rstat == accounted_rstat) || !dir->dirty_old_rstat.empty()) {
-	    dout(10) << fg << " setting nestlock updated flag" << dendl;
-	    nestlock.mark_dirty();  // ok bc we're auth and caller will handle
-	  }
-	} else {
-	  if (dir && dir->is_auth()) {
-	    dout(10) << fg << " first " << dir->first << " -> " << fgfirst
-		     << " on " << *dir << dendl;
-	    dir->first = fgfirst;
-	    fnode_t *pf = dir->get_projected_fnode();
-	    finish_scatter_update(&nestlock, dir,
-				  inode.rstat.version, pf->accounted_rstat.version);
-	  }
-	}
-      }
-#endif
     }
     break;
 
