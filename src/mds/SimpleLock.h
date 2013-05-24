@@ -34,8 +34,34 @@ inline const char *get_lock_type_name(int t) {
   case CEPH_LOCK_INO: return "ino";
   case CEPH_LOCK_IFLOCK: return "iflock";
   case CEPH_LOCK_IPOLICY: return "ipolicy";
+  case CEPH_LOCK_SLINK: return "slink";
+  case CEPH_LOCK_SNEST: return "snest";
   default: assert(0); return 0;
   }
+}
+inline bool is_local_lock(int t) {
+  return t == CEPH_LOCK_DVERSION
+      || t == CEPH_LOCK_IVERSION;
+}
+inline bool is_scatter_lock(int t) {
+  return t == CEPH_LOCK_IFILE
+      || t == CEPH_LOCK_INEST;
+}
+inline bool is_inode_lock(int t) {
+  switch (t) {
+  case CEPH_LOCK_IVERSION:
+  case CEPH_LOCK_IFILE:
+  case CEPH_LOCK_IAUTH:
+  case CEPH_LOCK_ILINK:
+  case CEPH_LOCK_INEST:
+  case CEPH_LOCK_IXATTR:
+  case CEPH_LOCK_ISNAP:
+  case CEPH_LOCK_INO:
+  case CEPH_LOCK_IFLOCK:
+  case CEPH_LOCK_IPOLICY:
+    return true;
+  }
+  return false;
 }
 
 class Mutation;
@@ -63,6 +89,8 @@ struct LockType {
     case CEPH_LOCK_ISNAP:
     case CEPH_LOCK_IFLOCK:
     case CEPH_LOCK_IPOLICY:
+    case CEPH_LOCK_SLINK:
+    case CEPH_LOCK_SNEST:
       sm = &sm_simplelock;
       break;
     case CEPH_LOCK_INEST:
@@ -258,6 +286,8 @@ public:
     case CEPH_LOCK_INEST:    return 8 + 9*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IFLOCK:   return 8 +10*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IPOLICY:  return 8 +11*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_SLINK:    return 8 +12*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_SNEST:    return 8 +13*SimpleLock::WAIT_BITS;
     default:
       assert(0);
     }
@@ -283,7 +313,7 @@ public:
    private:
     int object_type(const SimpleLock* l) const {
       if (l->type->type <= CEPH_LOCK_DN) return 0; // dentry
-      if (l->type->type <= CEPH_LOCK_SDFT) return 1; // stripe
+      if (!is_inode_lock(l->type->type)) return 1; // stripe
       return 2; // inode
     }
    public:

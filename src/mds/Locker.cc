@@ -175,7 +175,7 @@ bool Locker::acquire_locks(MDRequest *mdr,
 	sorted.insert(&dn->versionlock);
       }
     }
-    if ((*p)->get_type() > CEPH_LOCK_IVERSION) {
+    if (is_inode_lock((*p)->get_type())) {
       // inode version lock?
       CInode *in = (CInode*)(*p)->get_parent();
       if (!in->is_auth())
@@ -498,8 +498,7 @@ void Locker::cancel_locking(Mutation *mut, set<CInode*> *pneed_issue)
   dout(10) << "cancel_locking " << *lock << " on " << *mut << dendl;
 
   if (lock->get_parent()->is_auth()) {
-    if (lock->get_type() != CEPH_LOCK_DN &&
-        lock->get_type() != CEPH_LOCK_SDFT) {
+    if (is_inode_lock(lock->get_type())) {
       bool need_issue = false;
       if (lock->get_state() == LOCK_PREXLOCK)
 	_finish_xlock(lock, &need_issue);
@@ -565,11 +564,10 @@ void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<C
 
   int next = lock->get_next_state();
 
-  CInode *in = 0;
   bool caps = lock->get_cap_shift();
-  if (lock->get_type() != CEPH_LOCK_DN &&
-      lock->get_type() != CEPH_LOCK_SDFT)
-    in = (CInode *)lock->get_parent();
+  CInode *in = is_inode_lock(lock->get_type())
+      ? (CInode *)lock->get_parent()
+      : NULL;
 
   bool need_issue = false;
 
@@ -863,11 +861,15 @@ void Locker::try_eval(MDSCacheObject *p, int mask)
     bool need_issue = false;  // ignore this, no caps on dentries
     CDentry *dn = (CDentry *)p;
     eval_any(&dn->lock, &need_issue);
-  } else if (mask & CEPH_LOCK_SDFT) {
-    assert(mask == CEPH_LOCK_SDFT);
-    bool need_issue = false;
+  } else if (mask & (CEPH_LOCK_SDFT|CEPH_LOCK_SLINK|CEPH_LOCK_SNEST)) {
+    bool need_issue = false;  // ignore this, no caps on stripes
     CStripe *stripe = (CStripe*)p;
-    eval_any(&stripe->dirfragtreelock, &need_issue);
+    if (mask & CEPH_LOCK_SDFT)
+      eval_any(&stripe->dirfragtreelock, &need_issue);
+    if (mask & CEPH_LOCK_SLINK)
+      eval_any(&stripe->linklock, &need_issue);
+    if (mask & CEPH_LOCK_SNEST)
+      eval_any(&stripe->nestlock, &need_issue);
   } else {
     CInode *in = (CInode *)p;
     eval(in, mask);
@@ -1059,10 +1061,9 @@ bool Locker::rdlock_start(SimpleLock *lock, MDRequest *mut, bool as_anon)
     as_anon = true;
   client_t client = as_anon ? -1 : mut->get_client();
 
-  CInode *in = 0;
-  if (lock->get_type() != CEPH_LOCK_DN &&
-      lock->get_type() != CEPH_LOCK_SDFT)
-    in = (CInode *)lock->get_parent();
+  CInode *in = is_inode_lock(lock->get_type())
+      ? (CInode *)lock->get_parent()
+      : NULL;
 
   /*
   if (!lock->get_parent()->is_auth() &&
@@ -1186,8 +1187,7 @@ void Locker::rdlock_finish_set(set<SimpleLock*>& locks)
 
 void Locker::wrlock_force(SimpleLock *lock, Mutation *mut)
 {
-  if (lock->get_type() == CEPH_LOCK_IVERSION ||
-      lock->get_type() == CEPH_LOCK_DVERSION)
+  if (is_local_lock(lock->get_type()))
     return local_wrlock_grab((LocalLock*)lock, mut);
 
   dout(7) << "wrlock_force  on " << *lock
@@ -1199,8 +1199,7 @@ void Locker::wrlock_force(SimpleLock *lock, Mutation *mut)
 
 bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
 {
-  if (lock->get_type() == CEPH_LOCK_IVERSION ||
-      lock->get_type() == CEPH_LOCK_DVERSION)
+  if (is_local_lock(lock->get_type()))
     return local_wrlock_start((LocalLock*)lock, mut);
 
   dout(10) << "wrlock_start " << *lock << " on " << *lock->get_parent() << dendl;
@@ -1252,8 +1251,7 @@ bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
 
 void Locker::wrlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
 {
-  if (lock->get_type() == CEPH_LOCK_IVERSION ||
-      lock->get_type() == CEPH_LOCK_DVERSION)
+  if (is_local_lock(lock->get_type()))
     return local_wrlock_finish((LocalLock*)lock, mut);
 
   dout(7) << "wrlock_finish on " << *lock << " on " << *lock->get_parent() << dendl;
@@ -1323,8 +1321,7 @@ void Locker::remote_wrlock_finish(SimpleLock *lock, int target, Mutation *mut)
 
 bool Locker::xlock_start(SimpleLock *lock, MDRequest *mut)
 {
-  if (lock->get_type() == CEPH_LOCK_IVERSION ||
-      lock->get_type() == CEPH_LOCK_DVERSION)
+  if (is_local_lock(lock->get_type()))
     return local_xlock_start((LocalLock*)lock, mut);
 
   dout(7) << "xlock_start on " << *lock << " on " << *lock->get_parent() << dendl;
@@ -1391,7 +1388,7 @@ bool Locker::xlock_start(SimpleLock *lock, MDRequest *mut)
 void Locker::_finish_xlock(SimpleLock *lock, bool *pneed_issue)
 {
   assert(!lock->is_stable());
-  if (lock->get_type() != CEPH_LOCK_DN && ((CInode*)lock->get_parent())->get_loner() >= 0)
+  if (is_inode_lock(lock->get_type()) && ((CInode*)lock->get_parent())->get_loner() >= 0)
     lock->set_state(LOCK_EXCL);
   else
     lock->set_state(LOCK_LOCK);
@@ -1405,8 +1402,7 @@ void Locker::_finish_xlock(SimpleLock *lock, bool *pneed_issue)
 
 void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
 {
-  if (lock->get_type() == CEPH_LOCK_IVERSION ||
-      lock->get_type() == CEPH_LOCK_DVERSION)
+  if (is_local_lock(lock->get_type()))
     return local_xlock_finish((LocalLock*)lock, mut);
 
   dout(10) << "xlock_finish on " << *lock << " " << *lock->get_parent() << dendl;
@@ -3047,13 +3043,19 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
     }
 
   case CEPH_LOCK_SDFT:
+  case CEPH_LOCK_SLINK:
+  case CEPH_LOCK_SNEST:
     {
       CStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
       if (!stripe) {
         dout(7) << "get_lock doesn't have stripe " << info.dirfrag.stripe << dendl;
         return 0;
       }
-      return &stripe->dirfragtreelock;
+      switch (lock_type) {
+      case CEPH_LOCK_SDFT: return &stripe->dirfragtreelock;
+      case CEPH_LOCK_SLINK: return &stripe->linklock;
+      case CEPH_LOCK_SNEST: return &stripe->nestlock;
+      }
     }
 
   case CEPH_LOCK_IAUTH:
@@ -3110,13 +3112,12 @@ void Locker::handle_lock(MLock *m)
   case CEPH_LOCK_IXATTR:
   case CEPH_LOCK_IFLOCK:
   case CEPH_LOCK_IPOLICY:
+  case CEPH_LOCK_SLINK:
+  case CEPH_LOCK_SNEST:
     handle_simple_lock(lock, m);
     break;
     
   case CEPH_LOCK_INEST:
-    //handle_scatter_lock((ScatterLock*)lock, m);
-    //break;
-
   case CEPH_LOCK_IFILE:
     handle_file_lock((ScatterLock*)lock, m);
     break;
@@ -3274,8 +3275,7 @@ void Locker::simple_eval(SimpleLock *lock, bool *need_issue)
 
   CInode *in = 0;
   int wanted = 0;
-  if (lock->get_type() != CEPH_LOCK_DN &&
-      lock->get_type() != CEPH_LOCK_SDFT) {
+  if (is_inode_lock(lock->get_type())) {
     in = (CInode*)lock->get_parent();
     in->get_caps_wanted(&wanted, NULL, lock->get_cap_shift());
   }
@@ -3710,6 +3710,9 @@ void Locker::scatter_eval(ScatterLock *lock, bool *need_issue)
     return;
   }
 
+  if (!is_inode_lock(lock->get_type()))
+    return;
+
   CInode *in = (CInode*)lock->get_parent();
   if (in->is_base()) {
     // i _should_ be sync.
@@ -3829,7 +3832,7 @@ void Locker::scatter_nudge(ScatterLock *lock, Context *c, bool forcelockchange)
     dout(10) << "scatter_nudge replica, requesting scatter/unscatter of " 
 	     << *lock << " on " << *p << dendl;
     // request unscatter?
-    int auth = lock->get_parent()->authority().first;
+    int auth = p->authority().first;
     if (mds->mdsmap->get_state(auth) >= MDSMap::STATE_ACTIVE)
       mds->send_message_mds(new MLock(lock, LOCK_AC_NUDGE, mds->get_nodeid()), auth);
 
@@ -4106,13 +4109,16 @@ void Locker::scatter_mix(ScatterLock *lock, bool *need_issue)
 {
   dout(7) << "scatter_mix " << *lock << " on " << *lock->get_parent() << dendl;
 
-  CInode *in = (CInode*)lock->get_parent();
-  assert(in->is_auth());
+  CInode *in = is_inode_lock(lock->get_type())
+      ? (CInode*)lock->get_parent()
+      : NULL;
+  assert(lock->get_parent()->is_auth());
   assert(lock->is_stable());
 
   if (lock->get_state() == LOCK_LOCK) {
-    in->start_scatter(lock);
-    if (in->is_replicated()) {
+    if (in)
+      in->start_scatter(lock);
+    if (lock->get_parent()->is_replicated()) {
       // data
       bufferlist softdata;
       lock->encode_locked_state(softdata);

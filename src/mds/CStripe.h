@@ -246,12 +246,22 @@ class CStripe : public MDSCacheObject {
 
   // -- locks --
   static LockType dirfragtreelock_type;
-  SimpleLock dirfragtreelock;
+  static LockType linklock_type;
+  static LockType nestlock_type;
+
+  SimpleLock dirfragtreelock; // protects dirfragtree
+  SimpleLock linklock; // protects fnode.fragstat
+  SimpleLock nestlock; // protects fnode.rstat
 
   SimpleLock* get_lock(int type) {
-    assert(type == CEPH_LOCK_SDFT);
-    return &dirfragtreelock;
+    switch (type) {
+    case CEPH_LOCK_SDFT: return &dirfragtreelock;
+    case CEPH_LOCK_SLINK: return &linklock;
+    case CEPH_LOCK_SNEST: return &nestlock;
+    }
+    return 0;
   }
+
   void set_object_info(MDSCacheObjectInfo &info);
   void encode_lock_state(int type, bufferlist& bl);
   void decode_lock_state(int type, bufferlist& bl);

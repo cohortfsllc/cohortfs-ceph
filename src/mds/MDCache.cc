@@ -1113,7 +1113,8 @@ void MDCache::_project_rstat_inode_to_frag(inode_t& inode, snapid_t ofirst, snap
   }
 }
 
-void MDCache::project_rstat_frag_to_inode(nest_info_t& rstat, nest_info_t& accounted_rstat,
+void MDCache::project_rstat_frag_to_inode(const nest_info_t& rstat,
+                                          const nest_info_t& accounted_rstat,
 					  snapid_t ofirst, snapid_t last, 
 					  CInode *pin, bool cow_head)
 {
