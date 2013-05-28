@@ -136,6 +136,7 @@ bool Locker::acquire_locks(MDRequest *mdr,
 			   set<SimpleLock*> &wrlocks,
 			   set<SimpleLock*> &xlocks,
 			   map<SimpleLock*,int> *remote_wrlocks,
+			   map<SimpleLock*,int> *remote_xlocks,
 			   CInode *auth_pin_freeze)
 {
   if (mdr->done_locking &&
@@ -210,6 +211,16 @@ bool Locker::acquire_locks(MDRequest *mdr,
   if (remote_wrlocks) {
     for (map<SimpleLock*,int>::iterator p = remote_wrlocks->begin(); p != remote_wrlocks->end(); ++p) {
       dout(20) << " must remote_wrlock on mds." << p->second << " "
+	       << *p->first << " " << *(p->first)->get_parent() << dendl;
+      sorted.insert(p->first);
+      mustpin.insert(p->first);
+    }
+  }
+
+  // remote_xlocks
+  if (remote_xlocks) {
+    for (map<SimpleLock*,int>::iterator p = remote_xlocks->begin(); p != remote_xlocks->end(); ++p) {
+      dout(20) << " must remote_xlock on mds." << p->second << " "
 	       << *p->first << " " << *(p->first)->get_parent() << dendl;
       sorted.insert(p->first);
       mustpin.insert(p->first);
@@ -356,6 +367,18 @@ bool Locker::acquire_locks(MDRequest *mdr,
 	remote_wrlock_finish(have, mdr->remote_wrlocks[have], mdr);
 	// continue...
       }
+      if (remote_xlocks && remote_xlocks->count(have) &&
+	  mdr->remote_xlocks.count(have)) {
+	if (mdr->remote_xlocks[have] == (*remote_xlocks)[have]) {
+	  dout(10) << " already remote_xlocked " << *have << " " << *have->get_parent() << dendl;
+	  continue;
+	}
+	dout(10) << " unlocking remote_xlock on wrong mds." << mdr->remote_xlocks[have]
+		 << " (want mds." << (*remote_xlocks)[have] << ") " 
+		 << *have << " " << *have->get_parent() << dendl;
+	remote_xlock_finish(have, mdr->remote_xlocks[have], mdr);
+	// continue...
+      }
       if (rdlocks.count(have) && mdr->rdlocks.count(have)) {
 	dout(10) << " already rdlocked " << *have << " " << *have->get_parent() << dendl;
 	continue;
@@ -374,6 +397,8 @@ bool Locker::acquire_locks(MDRequest *mdr,
 	wrlock_finish(stray, mdr, &need_issue);
       else if (mdr->remote_wrlocks.count(stray))
 	remote_wrlock_finish(stray, mdr->remote_wrlocks[stray], mdr);
+      else if (mdr->remote_xlocks.count(stray))
+	remote_xlock_finish(stray, mdr->remote_xlocks[stray], mdr);
       else
 	rdlock_finish(stray, mdr, &need_issue);
       if (need_issue)
@@ -395,6 +420,9 @@ bool Locker::acquire_locks(MDRequest *mdr,
     } else if (remote_wrlocks && remote_wrlocks->count(*p)) {
       remote_wrlock_start(*p, (*remote_wrlocks)[*p], mdr);
       goto out;
+    } else if (remote_xlocks && remote_xlocks->count(*p)) {
+      remote_xlock_start(*p, (*remote_xlocks)[*p], mdr);
+      goto out;
     } else {
       if (!rdlock_start(*p, mdr)) 
 	goto out;
@@ -414,6 +442,8 @@ bool Locker::acquire_locks(MDRequest *mdr,
       wrlock_finish(stray, mdr, &need_issue);
     else if (mdr->remote_wrlocks.count(stray))
       remote_wrlock_finish(stray, mdr->remote_wrlocks[stray], mdr);
+    else if (mdr->remote_xlocks.count(stray))
+      remote_xlock_finish(stray, mdr->remote_xlocks[stray], mdr);
     else
       rdlock_finish(stray, mdr, &need_issue);
     if (need_issue)
@@ -478,6 +508,12 @@ void Locker::_drop_non_rdlocks(Mutation *mut, set<CInode*> *pneed_issue)
     slaves.insert(mut->remote_wrlocks.begin()->second);
     mut->locks.erase(mut->remote_wrlocks.begin()->first);
     mut->remote_wrlocks.erase(mut->remote_wrlocks.begin());
+  }
+
+  while (!mut->remote_xlocks.empty()) {
+    slaves.insert(mut->remote_xlocks.begin()->second);
+    mut->locks.erase(mut->remote_xlocks.begin()->first);
+    mut->remote_xlocks.erase(mut->remote_xlocks.begin());
   }
 
   while (!mut->wrlocks.empty()) {
@@ -1354,71 +1390,37 @@ bool Locker::xlock_start(SimpleLock *lock, MDRequest *mut)
     return local_xlock_start(static_cast<LocalLock*>(lock), mut);
 
   dout(7) << "xlock_start on " << *lock << " on " << *lock->get_parent() << dendl;
+
+  assert(lock->get_parent()->is_auth());
+
   client_t client = mut->get_client();
 
-  // auth?
-  if (lock->get_parent()->is_auth()) {
-    // auth
-    while (1) {
-      if (lock->can_xlock(client)) {
-	lock->set_state(LOCK_XLOCK);
-	lock->get_xlock(mut, client);
-	mut->xlocks.insert(lock);
-	mut->locks.insert(lock);
-	mut->finish_locking(lock);
-	return true;
-      }
-      
-      if (!lock->is_stable() && !(lock->get_state() == LOCK_XLOCKDONE &&
-				  lock->get_xlock_by_client() == client))
-	break;
-
-      if (lock->get_state() == LOCK_LOCK || lock->get_state() == LOCK_XLOCKDONE) {
-	mut->start_locking(lock);
-	simple_xlock(lock);
-      } else {
-	simple_lock(lock);
-      }
-    }
-    
-    lock->add_waiter(SimpleLock::WAIT_WR|SimpleLock::WAIT_STABLE, new C_MDS_RetryRequest(mdcache, mut));
-    nudge_log(lock);
-    return false;
-  } else {
-    // replica
-    assert(lock->get_sm()->can_remote_xlock);
-    assert(!mut->slave_request);
-    
-    // wait for single auth
-    if (lock->get_parent()->is_ambiguous_auth()) {
-      lock->get_parent()->add_waiter(MDSCacheObject::WAIT_SINGLEAUTH, 
-				     new C_MDS_RetryRequest(mdcache, mut));
-      return false;
-    }
-    
-    // wait for active auth
-    int auth = lock->get_parent()->authority().first;
-    if (!mds->mdsmap->is_clientreplay_or_active_or_stopping(auth)) {
-      dout(7) << " mds." << auth << " is not active" << dendl;
-      if (mut->more()->waiting_on_slave.empty())
-	mds->wait_for_active_peer(auth, new C_MDS_RetryRequest(mdcache, mut));
-      return false;
+  while (1) {
+    if (lock->can_xlock(client)) {
+      lock->set_state(LOCK_XLOCK);
+      lock->get_xlock(mut, client);
+      mut->xlocks.insert(lock);
+      mut->locks.insert(lock);
+      mut->finish_locking(lock);
+      return true;
     }
 
-    // send lock request
-    mut->more()->slaves.insert(auth);
-    mut->start_locking(lock, auth);
-    MMDSSlaveRequest *r = new MMDSSlaveRequest(mut->reqid, mut->attempt,
-					       MMDSSlaveRequest::OP_XLOCK);
-    r->set_lock_type(lock->get_type());
-    lock->get_parent()->set_object_info(r->get_object_info());
-    mds->send_message_mds(r, auth);
+    if (!lock->is_stable() && !(lock->get_state() == LOCK_XLOCKDONE &&
+                                lock->get_xlock_by_client() == client))
+      break;
 
-    assert(mut->more()->waiting_on_slave.count(auth) == 0);
-    mut->more()->waiting_on_slave.insert(auth);
-
-    return false;
+    if (lock->get_state() == LOCK_LOCK || lock->get_state() == LOCK_XLOCKDONE) {
+      mut->start_locking(lock);
+      simple_xlock(lock);
+    } else {
+      simple_lock(lock);
+    }
   }
+
+  lock->add_waiter(SimpleLock::WAIT_WR|SimpleLock::WAIT_STABLE,
+                   new C_MDS_RetryRequest(mdcache, mut));
+  nudge_log(lock);
+  return false;
 }
 
 void Locker::_finish_xlock(SimpleLock *lock, client_t xlocker, bool *pneed_issue)
@@ -1452,6 +1454,7 @@ void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
     return local_xlock_finish(static_cast<LocalLock*>(lock), mut);
 
   dout(10) << "xlock_finish on " << *lock << " " << *lock->get_parent() << dendl;
+  assert(lock->get_parent()->is_auth());
 
   client_t xlocker = lock->get_xlock_by_client();
 
@@ -1460,35 +1463,27 @@ void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
   assert(mut);
   mut->xlocks.erase(lock);
   mut->locks.erase(lock);
-  
+ 
   bool do_issue = false;
 
-  // remote xlock?
-  if (!lock->get_parent()->is_auth()) {
-    assert(lock->get_sm()->can_remote_xlock);
-
-    // tell auth
-    dout(7) << "xlock_finish releasing remote xlock on " << *lock->get_parent()  << dendl;
-    int auth = lock->get_parent()->authority().first;
-    if (mds->mdsmap->get_state(auth) >= MDSMap::STATE_REJOIN) {
-      MMDSSlaveRequest *slavereq = new MMDSSlaveRequest(mut->reqid, mut->attempt,
-							MMDSSlaveRequest::OP_UNXLOCK);
-      slavereq->set_lock_type(lock->get_type());
-      lock->get_parent()->set_object_info(slavereq->get_object_info());
-      mds->send_message_mds(slavereq, auth);
-    }
-    // others waiting?
-    lock->finish_waiters(SimpleLock::WAIT_STABLE |
-			 SimpleLock::WAIT_WR | 
-			 SimpleLock::WAIT_RD, 0); 
-  } else {
-    if (lock->get_num_xlocks() == 0) {
-      if (lock->get_state() == LOCK_LOCK_XLOCK)
-	lock->set_state(LOCK_XLOCKDONE);
-      _finish_xlock(lock, xlocker, &do_issue);
-    }
+  if (lock->get_num_xlocks() == 0 &&
+      lock->get_num_rdlocks() == 0 &&
+      lock->get_num_wrlocks() == 0 &&
+      lock->get_num_client_lease() == 0) {
+    _finish_xlock(lock, xlocker, &do_issue);
   }
-  
+
+  // others waiting?
+  lock->finish_waiters(SimpleLock::WAIT_STABLE |
+                       SimpleLock::WAIT_WR |
+                       SimpleLock::WAIT_RD, 0);
+
+  // eval?
+  if (!lock->is_stable())
+    eval_gather(lock, false, &do_issue);
+  else
+    try_eval(lock, &do_issue);
+
   if (do_issue) {
     CInode *in = static_cast<CInode*>(lock->get_parent());
     if (in->is_head()) {
@@ -1497,6 +1492,60 @@ void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
       else
 	issue_caps(in);
     }
+  }
+}
+
+void Locker::remote_xlock_start(SimpleLock *lock, int target, MDRequest *mut)
+{
+  dout(7) << "remote_xlock_start on " << *lock
+      << " on " << *lock->get_parent() << dendl;
+
+  assert(lock->get_sm()->can_remote_xlock);
+  assert(!mut->slave_request);
+
+  // wait for single auth
+  if (lock->get_parent()->is_ambiguous_auth()) {
+    lock->get_parent()->add_waiter(MDSCacheObject::WAIT_SINGLEAUTH,
+                                   new C_MDS_RetryRequest(mdcache, mut));
+    return;
+  }
+
+  // send lock request
+  if (!lock->is_waiter_for(SimpleLock::WAIT_REMOTEXLOCK)) {
+    int auth = lock->get_parent()->authority().first;
+    mut->more()->slaves.insert(auth);
+    mut->start_locking(lock, auth);
+    MMDSSlaveRequest *r = new MMDSSlaveRequest(mut->reqid, mut->attempt,
+                                               MMDSSlaveRequest::OP_XLOCK);
+    r->set_lock_type(lock->get_type());
+    lock->get_parent()->set_object_info(r->get_object_info());
+    mds->send_message_mds(r, auth);
+  }
+
+  // wait
+  lock->add_waiter(SimpleLock::WAIT_REMOTEXLOCK, new C_MDS_RetryRequest(mdcache, mut));
+}
+
+void Locker::remote_xlock_finish(SimpleLock *lock, int target, Mutation *mut)
+{
+  dout(7) << "remote_xlock_finish on " << *lock
+      << " on " << *lock->get_parent()  << dendl;
+
+  assert(lock->get_sm()->can_remote_xlock);
+  assert(!lock->get_parent()->is_auth());
+
+  // drop ref
+  mut->remote_xlocks.erase(lock);
+  mut->locks.erase(lock);
+
+  // tell auth
+  int auth = lock->get_parent()->authority().first;
+  if (mds->mdsmap->get_state(auth) >= MDSMap::STATE_REJOIN) {
+    MMDSSlaveRequest *slavereq = new MMDSSlaveRequest(mut->reqid, mut->attempt,
+                                                      MMDSSlaveRequest::OP_UNXLOCK);
+    slavereq->set_lock_type(lock->get_type());
+    lock->get_parent()->set_object_info(slavereq->get_object_info());
+    mds->send_message_mds(slavereq, auth);
   }
 }
 
