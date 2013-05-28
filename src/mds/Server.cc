@@ -5764,7 +5764,7 @@ void Server::handle_client_rename(MDRequest *mdr)
 
   CInode *auth_pin_freeze = !srcdn->is_auth() && srcdnl->is_primary() ? srci : NULL;
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks,
-				  &remote_wrlocks, auth_pin_freeze))
+				  &remote_wrlocks, NULL, auth_pin_freeze))
     return;
 
   if (oldin &&

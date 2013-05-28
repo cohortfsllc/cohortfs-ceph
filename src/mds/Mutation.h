@@ -53,10 +53,11 @@ struct Mutation {
   set< MDSCacheObject* > auth_pins;
   
   // held locks
-  set< SimpleLock* > rdlocks;  // always local.
-  set< SimpleLock* > wrlocks;  // always local.
+  set< SimpleLock* > rdlocks;
+  set< SimpleLock* > wrlocks;
+  set< SimpleLock* > xlocks;
   map< SimpleLock*, int > remote_wrlocks;
-  set< SimpleLock* > xlocks;   // local or remote.
+  map< SimpleLock*, int > remote_xlocks;
   set< SimpleLock*, SimpleLock::ptr_lt > locks;  // full ordering
 
   // lock we are currently trying to acquire.  if we give up for some reason,
@@ -101,6 +102,7 @@ struct Mutation {
     assert(rdlocks.empty());
     assert(wrlocks.empty());
     assert(remote_wrlocks.empty());
+    assert(remote_xlocks.empty());
   }
 
   bool is_master() { return slave_to_mds < 0; }
