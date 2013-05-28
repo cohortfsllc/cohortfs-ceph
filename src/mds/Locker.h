@@ -139,7 +139,7 @@ public:
   void remote_wrlock_start(SimpleLock *lock, int target, MDRequest *mut);
   void remote_wrlock_finish(SimpleLock *lock, int target, Mutation *mut);
 
-  bool xlock_start(SimpleLock *lock, MDRequest *mut);
+  bool xlock_start(SimpleLock *lock, Mutation *mut, C_GatherBuilder *gather);
   void _finish_xlock(SimpleLock *lock, bool *pneed_issue);
   void xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue);
 
@@ -233,7 +233,8 @@ public:
 protected:
   bool local_wrlock_start(LocalLock *lock, MDRequest *mut);
   void local_wrlock_finish(LocalLock *lock, Mutation *mut);
-  bool local_xlock_start(LocalLock *lock, MDRequest *mut);
+  bool local_xlock_start(LocalLock *lock, Mutation *mut,
+                         C_GatherBuilder *gather);
   void local_xlock_finish(LocalLock *lock, Mutation *mut);
 
 

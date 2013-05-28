@@ -328,6 +328,8 @@ bool Locker::acquire_locks(MDRequest *mdr,
   set<CInode*> issue_set;
   bool result = false;
 
+  C_GatherBuilder gather(g_ceph_context);
+
   // acquire locks.
   // make sure they match currently acquired locks.
   set<SimpleLock*, SimpleLock::ptr_lt>::iterator existing = mdr->locks.begin();
@@ -403,7 +405,7 @@ bool Locker::acquire_locks(MDRequest *mdr,
       cancel_locking(mdr, &issue_set);
     }
     if (xlocks.count(*p)) {
-      if (!xlock_start(*p, mdr)) 
+      if (!xlock_start(*p, mdr, &gather)) 
 	goto out;
       dout(10) << " got xlock on " << **p << " " << *(*p)->get_parent() << dendl;
     } else if (wrlocks.count(*p)) {
@@ -448,6 +450,10 @@ bool Locker::acquire_locks(MDRequest *mdr,
 
  out:
   issue_caps_set(issue_set);
+  if (gather.has_subs()) {
+    gather.set_finisher(new C_MDS_RetryRequest(mdcache, mdr));
+    gather.activate();
+  }
   return result;
 }
 
@@ -1355,10 +1361,11 @@ void Locker::remote_wrlock_finish(SimpleLock *lock, int target, Mutation *mut)
 // ------------------
 // xlock
 
-bool Locker::xlock_start(SimpleLock *lock, MDRequest *mut)
+bool Locker::xlock_start(SimpleLock *lock, Mutation *mut,
+                         C_GatherBuilder *gather)
 {
   if (is_local_lock(lock->get_type()))
-    return local_xlock_start((LocalLock*)lock, mut);
+    return local_xlock_start((LocalLock*)lock, mut, gather);
 
   dout(7) << "xlock_start on " << *lock << " on " << *lock->get_parent() << dendl;
   client_t client = mut->get_client();
@@ -1385,9 +1392,11 @@ bool Locker::xlock_start(SimpleLock *lock, MDRequest *mut)
     }
   }
 
-  lock->add_waiter(SimpleLock::WAIT_WR|SimpleLock::WAIT_STABLE,
-                   new C_MDS_RetryRequest(mdcache, mut));
-  nudge_log(lock);
+  if (gather) {
+    lock->add_waiter(SimpleLock::WAIT_WR |
+                     SimpleLock::WAIT_STABLE, gather->new_sub());
+    nudge_log(lock);
+  }
   return false;
 }
 
@@ -4017,14 +4026,17 @@ void Locker::local_wrlock_finish(LocalLock *lock, Mutation *mut)
   }
 }
 
-bool Locker::local_xlock_start(LocalLock *lock, MDRequest *mut)
+bool Locker::local_xlock_start(LocalLock *lock, Mutation *mut,
+                               C_GatherBuilder *gather)
 {
   dout(7) << "local_xlock_start  on " << *lock
-	  << " on " << *lock->get_parent() << dendl;  
-  
+	  << " on " << *lock->get_parent() << dendl;
+
   assert(lock->get_parent()->is_auth());
   if (!lock->can_xlock_local()) {
-    lock->add_waiter(SimpleLock::WAIT_WR|SimpleLock::WAIT_STABLE, new C_MDS_RetryRequest(mdcache, mut));
+    if (gather)
+    lock->add_waiter(SimpleLock::WAIT_WR |
+                     SimpleLock::WAIT_STABLE, gather->new_sub());
     return false;
   }
 
