@@ -409,7 +409,7 @@ bool Locker::acquire_locks(MDRequest *mdr,
 	goto out;
       dout(10) << " got xlock on " << **p << " " << *(*p)->get_parent() << dendl;
     } else if (wrlocks.count(*p)) {
-      if (!wrlock_start(*p, mdr)) 
+      if (!wrlock_start(*p, mdr, &gather)) 
 	goto out;
       dout(10) << " got wrlock on " << **p << " " << *(*p)->get_parent() << dendl;
     } else if (remote_wrlocks && remote_wrlocks->count(*p)) {
@@ -1239,15 +1239,16 @@ void Locker::wrlock_force(SimpleLock *lock, Mutation *mut)
   mut->locks.insert(lock);
 }
 
-bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
+bool Locker::wrlock_start(SimpleLock *lock, Mutation *mut,
+                          C_GatherBuilder *gather)
 {
   if (is_local_lock(lock->get_type()))
-    return local_wrlock_start((LocalLock*)lock, mut);
+    return local_wrlock_start((LocalLock*)lock, mut, gather);
 
   dout(10) << "wrlock_start " << *lock << " on " << *lock->get_parent() << dendl;
 
   client_t client = mut->get_client();
- 
+
   while (1) {
     // wrlock?
     if (lock->can_wrlock(client)) {
@@ -1264,30 +1265,30 @@ bool Locker::wrlock_start(SimpleLock *lock, MDRequest *mut, bool nowait)
       // don't do nested lock state change if we have dirty scatterdata and
       // may scatter_writebehind or start_scatter, because nowait==true implies
       // that the caller already has a log entry open!
-      if (nowait && lock->is_dirty())
+      if (!gather && lock->is_dirty())
 	return false;
 
       scatter_mix((ScatterLock*)lock);
 
-      if (nowait && !lock->can_wrlock(client))
+      if (!gather && !lock->can_wrlock(client))
 	return false;
     } else {
       // replica.
       // auth should be auth_pinned (see acquire_locks wrlock weird mustpin case).
       int auth = lock->get_parent()->authority().first;
-      dout(10) << "requesting scatter from auth on " 
+      dout(10) << "requesting scatter from auth on "
 	       << *lock << " on " << *lock->get_parent() << dendl;
       mds->send_message_mds(new MLock(lock, LOCK_AC_REQSCATTER, mds->get_nodeid()), auth);
       break;
     }
   }
 
-  if (!nowait) {
+  if (gather) {
     dout(7) << "wrlock_start waiting on " << *lock << " on " << *lock->get_parent() << dendl;
-    lock->add_waiter(SimpleLock::WAIT_STABLE, new C_MDS_RetryRequest(mdcache, mut));
+    lock->add_waiter(SimpleLock::WAIT_STABLE, gather->new_sub());
     nudge_log(lock);
   }
-    
+
   return false;
 }
 
@@ -3994,11 +3995,12 @@ void Locker::local_wrlock_grab(LocalLock *lock, Mutation *mut)
   mut->locks.insert(lock);
 }
 
-bool Locker::local_wrlock_start(LocalLock *lock, MDRequest *mut)
+bool Locker::local_wrlock_start(LocalLock *lock, Mutation *mut,
+                                C_GatherBuilder *gather)
 {
   dout(7) << "local_wrlock_start  on " << *lock
-	  << " on " << *lock->get_parent() << dendl;  
-  
+	  << " on " << *lock->get_parent() << dendl;
+
   assert(lock->get_parent()->is_auth());
   if (lock->can_wrlock()) {
     assert(!mut->wrlocks.count(lock));
@@ -4006,10 +4008,12 @@ bool Locker::local_wrlock_start(LocalLock *lock, MDRequest *mut)
     mut->wrlocks.insert(lock);
     mut->locks.insert(lock);
     return true;
-  } else {
-    lock->add_waiter(SimpleLock::WAIT_WR|SimpleLock::WAIT_STABLE, new C_MDS_RetryRequest(mdcache, mut));
-    return false;
   }
+
+  if (gather)
+    lock->add_waiter(SimpleLock::WAIT_WR |
+                     SimpleLock::WAIT_STABLE, gather->new_sub());
+  return false;
 }
 
 void Locker::local_wrlock_finish(LocalLock *lock, Mutation *mut)
