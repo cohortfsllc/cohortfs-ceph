@@ -9,6 +9,7 @@ class Cond;
 // file handle for any open file state
 
 struct Fh {
+  Mutex     mtx;
   Inode    *inode;
   loff_t    pos;
   int       mds;        // have to talk to mds we opened with (for now)
@@ -25,9 +26,18 @@ struct Fh {
   loff_t consec_read_bytes;
   int nr_consec_read;
 
-  Fh() : inode(0), pos(0), mds(0), mode(0), flags(0), pos_locked(false),
-	 last_pos(0), consec_read_bytes(0), nr_consec_read(0) {}
-};
+  Fh() : mtx("Fh Lock"), inode(0), pos(0), mds(0), mode(0), flags(0),
+      pos_locked(false), last_pos(0), consec_read_bytes(0),
+      nr_consec_read(0) {}
 
+  void lock() {
+    mtx.Lock();
+  }
+
+  void unlock() {
+    mtx.Unlock();
+  }
+
+};
 
 #endif
