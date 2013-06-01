@@ -179,20 +179,20 @@ class Inode {
   void make_nosnap_relative_path(filepath& p);
 
   void get() {
-    _ref++;
-    lsubdout(cct, mds, 15) << "inode.get on " << this << " " <<  ino << '.' << snapid
-                           << " now " << _ref << dendl;
+    __sync_fetch_and_add(&_ref, 1);
+    lsubdout(cct, mds, 15) << "inode.get on " << this << " " <<  ino << '.'
+			   << snapid << " now " << _ref << dendl;
   }
   int put(int n=1) {
-    _ref -= n;
-    lsubdout(cct, mds, 15) << "inode.put on " << this << " " << ino << '.' << snapid
-                           << " now " << _ref << dendl;
+    __sync_fetch_and_sub(&_ref, n);
+    lsubdout(cct, mds, 15) << "inode.put on " << this << " " << ino << '.'
+			   << snapid << " now " << _ref << dendl;
     assert(_ref >= 0);
     return _ref;
   }
 
   int get_num_ref() {
-    return _ref;
+    return(__sync_fetch_and_add(&_ref, 0));
   }
 
   void lock() {
@@ -204,11 +204,12 @@ class Inode {
   }
 
   void ll_get() {
-    ll_ref++;
+    __sync_fetch_and_add(&ll_ref, 1);
   }
+
   void ll_put(int n=1) {
     assert(ll_ref >= n);
-    ll_ref -= n;
+    __sync_fetch_and_sub(&ll_ref, n);
   }
 
   Inode(CephContext *cct_, vinodeno_t vino, ceph_file_layout *newlayout)
