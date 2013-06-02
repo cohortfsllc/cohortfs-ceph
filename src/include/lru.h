@@ -319,6 +319,7 @@ inline void LRUObject::lru_pin()
   lru_pinned = true;
   if (lru) lru->lru_num_pinned++;
 }
+
 inline void LRUObject::lru_unpin() {
   lru_pinned = false;
   if (lru) {

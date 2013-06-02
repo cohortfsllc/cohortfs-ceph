@@ -26,14 +26,15 @@ class Dentry : public LRUObject {
    */
   void get() {
     assert(ref > 0);
-    if (++ref == 2)
-      lru_pin();
+    if (__sync_fetch_and_add(&ref, 1) == 2)
+        lru_pin();
     //cout << "dentry.get on " << this << " " << name << " now " << ref << std::endl;
   }
+
   void put() {
     assert(ref > 0);
-    if (--ref == 1)
-      lru_unpin();
+    if (__sync_fetch_and_sub(&ref, 1) == 1)
+        lru_unpin();
     //cout << "dentry.put on " << this << " " << name << " now " << ref << std::endl;
     if (ref == 0)
       delete this;
