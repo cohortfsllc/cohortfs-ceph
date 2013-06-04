@@ -521,7 +521,7 @@ void Client::update_inode_file_bits(Inode *in,
 				    utime_t atime,
 				    int issued)
 {
-  // CF_ILOCKED
+  // CF_CLIENT_LOCKED, CF_ILOCKED
 
   bool warn = false;
   ldout(cct, 10) << "update_inode_file_bits " << *in << " " <<
@@ -545,7 +545,7 @@ void Client::update_inode_file_bits(Inode *in,
       // truncate cached file data
       if (prior_size > size) {
 	_invalidate_inode_cache(in, truncate_size, prior_size - truncate_size,
-				true);
+				true, CF_ILOCKED|CF_ILOCK);
       }
     }
   }
@@ -609,28 +609,35 @@ void Client::update_inode_file_bits(Inode *in,
 Inode * Client::add_update_inode(InodeStat *st, utime_t from,
 				 MetaSession *session)
 {
+  // CF_CLIENT_LOCKED
+
   Inode *in;
   bool was_new = false;
-  if (inode_map.count(st->vino)) {
-    in = inode_map[st->vino];
+  hash_map<vinodeno_t, Inode*>::iterator p = inode_map.find(st->vino);
+  if (p != inode_map.end()) {
+    in = p->second;
     ldout(cct, 12) << "add_update_inode had " << *in << " caps "
 		   << ccap_string(st->cap.caps) << dendl;
   } else {
     in = new Inode(cct, st->vino, &st->layout);
-    inode_map[st->vino] = in;
-    if (!root) {
-      root = in;
-      cwd = root;
-      cwd->get();
-    }
-
     // immutable bits
     in->ino = st->vino.ino;
     in->snapid = st->vino.snapid;
     in->mode = st->mode & S_IFMT;
     was_new = true;
+
+    // CF_CLIENT_LOCKED
+    inode_map[st->vino] = in;
+
+    // XXX really?
+    if (!root) {
+      root = in;
+      cwd = root; // XXX also doubtful
+      cwd->get();
+    }
   }
 
+  // in reachable
   ILOCK(in);
   in->rdev = st->rdev;
   if (in->is_symlink())
@@ -640,9 +647,11 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from,
     ldout(cct, 12) << "add_update_inode adding " << *in << " caps "
 		   << ccap_string(st->cap.caps) << dendl;
 
-  if (!st->cap.caps)
+  if (!st->cap.caps) {
+    IUNLOCK(in);
     return in;   // as with readdir returning indoes in different snaprealms
                  // (no caps!)
+  }
 
   // only update inode if mds info is strictly newer, or it is the same and
   // projected (odd).
@@ -689,6 +698,7 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from,
     in->ctime = st->ctime;
     in->max_size = st->max_size;  // right?
 
+    // CF_ILOCKED
     update_inode_file_bits(in, st->truncate_seq, st->truncate_size, st->size,
 			   st->time_warp_seq, st->ctime, st->mtime, st->atime,
 			   issued);
@@ -697,7 +707,7 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from,
   // move me if/when version reflects fragtree changes.
   in->dirfragtree = st->dirfragtree;
 
-  if (in->snapid == CEPH_NOSNAP)
+  if (in->snapid == CEPH_NOSNAP) // CF_ILOCKED
     add_update_cap(in, session, st->cap.cap_id, st->cap.caps, st->cap.seq,
 		   st->cap.mseq, inodeno_t(st->cap.realm), st->cap.flags);
   else
@@ -713,19 +723,20 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from,
     ldout(cct, 10) << " marking I_COMPLETE on empty dir " << *in << dendl;
     in->flags |= I_COMPLETE;
 
-    // XXXX: fixme:  need to avoid deadlock on dir
-
     if (in->dir) {
+      Dir *dir = in->dir;
+      IUNLOCK(in);
+      dir->lock();
       ldout(cct, 10) << " dir is open on empty dir " << in->ino << " with "
-		     << in->dir->dentry_map.size() << " entries, tearing down"
+		     << dir->dentry_map.size() << " entries, tearing down"
 		     << dendl;
-      while (!in->dir->dentry_map.empty())
-	unlink(in->dir->dentry_map.begin()->second, true);
-      close_dir(in->dir);
+      while (! dir->dentry_map.empty())
+	unlink(dir->dentry_map.begin()->second, true);
+      close_dir(dir);
     }
+  } else {
+    IUNLOCK(in);
   }
-
-  IUNLOCK(in);
 
   return in;
 }
@@ -2972,33 +2983,45 @@ void Client::_async_invalidate(Inode *in, int64_t off, int64_t len,
 }
 
 void Client::_schedule_invalidate_callback(Inode *in, int64_t off, int64_t len,
-					   bool keep_caps)
+					   bool keep_caps, uint32_t cf)
 {
   if (ino_invalidate_cb)
     // we queue the invalidate, which calls the callback and decrements the ref
     async_ino_invalidator.queue(
       new C_Client_CacheInvalidate(this, in, off, len, keep_caps));
-  else if (!keep_caps)
+  else if (!keep_caps) {
     // if not set, we just decrement the cap ref here
+    COND_ILOCK(in, cf);
     in->put_cap_ref(CEPH_CAP_FILE_CACHE);
+    COND_IUNLOCK(in, cf);
+    return;
+  }
+  COND_IUNLOCK(in, cf);
 }
 
-void Client::_invalidate_inode_cache(Inode *in, bool keep_caps)
+void Client::_invalidate_inode_cache(Inode *in, bool keep_caps, uint32_t cf)
 {
+  // CF_CLIENT_LOCKED
+
+  COND_ILOCK(in, cf);
+
   ldout(cct, 10) << "_invalidate_inode_cache " << *in << dendl;
 
   // invalidate our userspace inode cache
   if (cct->_conf->client_oc)
     objectcacher->release_set(&in->oset);
 
-  _schedule_invalidate_callback(in, 0, 0, keep_caps);
+  _schedule_invalidate_callback(in, 0, 0, keep_caps, cf);
 }
 
 void Client::_invalidate_inode_cache(Inode *in, int64_t off, int64_t len,
-				     bool keep_caps)
+				     bool keep_caps, uint32_t cf)
 {
+  // CF_CLIENT_LOCKED
   ldout(cct, 10) << "_invalidate_inode_cache " << *in << " " << off << "~"
 		 << len << dendl;
+
+  COND_ILOCK(in, cf);
 
   // invalidate our userspace inode cache
   if (cct->_conf->client_oc) {
@@ -3007,9 +3030,10 @@ void Client::_invalidate_inode_cache(Inode *in, int64_t off, int64_t len,
     objectcacher->discard_set(&in->oset, ls);
   }
 
-  _schedule_invalidate_callback(in, off, len, keep_caps);
+  _schedule_invalidate_callback(in, off, len, keep_caps, cf|CF_ILOCKED);
 }
 
+// XXXX fixme locking
 void Client::_release(Inode *in)
 {
   ldout(cct, 20) << "_release " << *in << dendl;

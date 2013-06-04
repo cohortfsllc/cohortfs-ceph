@@ -488,9 +488,9 @@ protected:
   void finish_cap_snap(Inode *in, CapSnap *capsnap, int used);
   void _flushed_cap_snap(Inode *in, snapid_t seq);
 
-  void _schedule_invalidate_callback(Inode *in, int64_t off, int64_t len, bool keep_caps);
-  void _invalidate_inode_cache(Inode *in, bool keep_caps);
-  void _invalidate_inode_cache(Inode *in, int64_t off, int64_t len, bool keep_caps);
+  void _schedule_invalidate_callback(Inode *in, int64_t off, int64_t len, bool keep_caps, uint32_t cf=CF_NONE);
+  void _invalidate_inode_cache(Inode *in, bool keep_caps, uint32_t cf=CF_NONE);
+  void _invalidate_inode_cache(Inode *in, int64_t off, int64_t len, bool keep_caps, uint32_t cf=CF_NONE);
   void _async_invalidate(Inode *in, int64_t off, int64_t len, bool keep_caps);
   void _release(Inode *in);
   
