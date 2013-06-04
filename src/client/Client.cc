@@ -3018,6 +3018,7 @@ void Client::_invalidate_inode_cache(Inode *in, int64_t off, int64_t len,
 				     bool keep_caps, uint32_t cf)
 {
   // CF_CLIENT_LOCKED
+
   ldout(cct, 10) << "_invalidate_inode_cache " << *in << " " << off << "~"
 		 << len << dendl;
 
@@ -3033,12 +3034,11 @@ void Client::_invalidate_inode_cache(Inode *in, int64_t off, int64_t len,
   _schedule_invalidate_callback(in, off, len, keep_caps, cf|CF_ILOCKED);
 }
 
-// XXXX fixme locking
-void Client::_release(Inode *in)
+void Client::_release(Inode *in, uint32_t cf)
 {
   ldout(cct, 20) << "_release " << *in << dendl;
   if (in->cap_refs[CEPH_CAP_FILE_CACHE]) {
-    _invalidate_inode_cache(in, false);
+    _invalidate_inode_cache(in, false, cf);
   }
 }
 
@@ -3073,6 +3073,7 @@ bool Client::_flush(Inode *in, Context *onfinish)
 
 void Client::_flush_range(Inode *in, int64_t offset, uint64_t size)
 {
+  // CF_CLIENT_LOCKED
   assert(client_lock.is_locked());
   if (!in->oset.dirty_or_tx) {
     ldout(cct, 10) << " nothing to flush" << dendl;
@@ -3100,6 +3101,8 @@ void Client::_flush_range(Inode *in, int64_t offset, uint64_t size)
 
 void Client::flush_set_callback(ObjectCacher::ObjectSet *oset)
 {
+  // CF_CLIENT_LOCKED
+
   //  Mutex::Locker l(client_lock);
   assert(client_lock.is_locked()); // will be called via dispatch() ->
                                    // objecter -> ...
@@ -3110,6 +3113,8 @@ void Client::flush_set_callback(ObjectCacher::ObjectSet *oset)
 
 void Client::_flushed(Inode *in)
 {
+  // CF_CLIENT_LOCKED
+
   ldout(cct, 10) << "_flushed " << *in << dendl;
 
   // release clean pages too, if we dont hold RDCACHE reference
@@ -4009,6 +4014,8 @@ void Client::handle_cap_grant(MetaSession *session, Inode *in, Cap *cap,
     ::decode(in->xattrs, p);
     in->xattr_version = m->head.xattr_version;
   }
+
+  // CF_ILOCKED
   update_inode_file_bits(in, m->get_truncate_seq(), m->get_truncate_size(),
 			 m->get_size(), m->get_time_warp_seq(), m->get_ctime(),
 			 m->get_mtime(), m->get_atime(), issued);
@@ -4035,7 +4042,7 @@ void Client::handle_cap_grant(MetaSession *session, Inode *in, Cap *cap,
     cap->implemented |= new_caps;
 
     if ((~cap->issued & old_caps) & CEPH_CAP_FILE_CACHE)
-      _release(in);
+      _release(in, CF_CLIENT_LOCKED|CF_ILOCKED|CF_ILOCK /* XXX and !unlock */);
 
     if (((used & ~new_caps) & CEPH_CAP_FILE_BUFFER) &&
 	!_flush(in)) {
@@ -4220,11 +4227,11 @@ void Client::unmount()
       ILOCK(in);
       if (!in->caps.empty()) {
 	in->get();
-	_release(in);
+	_release(in, CF_CLIENT_LOCKED|CF_ILOCKED|CF_ILOCK /* and !unlock */);
 	_flush(in);
 	put_inode(in, 1, CF_ILOCKED);
-      }
-      IUNLOCK(in);
+      } else
+	IUNLOCK(in);
     }
   }
 

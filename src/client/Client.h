@@ -492,7 +492,7 @@ protected:
   void _invalidate_inode_cache(Inode *in, bool keep_caps, uint32_t cf=CF_NONE);
   void _invalidate_inode_cache(Inode *in, int64_t off, int64_t len, bool keep_caps, uint32_t cf=CF_NONE);
   void _async_invalidate(Inode *in, int64_t off, int64_t len, bool keep_caps);
-  void _release(Inode *in);
+  void _release(Inode *in, uint32_t cf=CF_NONE);
   
   /**
    * Initiate a flush of the data associated with the given inode.
