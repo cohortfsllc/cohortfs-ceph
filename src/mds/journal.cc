@@ -128,12 +128,12 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
   for (elist<CInode*>::iterator p = dirty_dirfrag_dir.begin(); !p.end(); ++p) {
     CInode *in = *p;
     dout(10) << "try_to_expire waiting for dirlock flush on " << *in << dendl;
-    mds->locker->scatter_nudge(&in->filelock, gather_bld.new_sub());
+    // TODO: wait for accounted fragstats
   }
   for (elist<CInode*>::iterator p = dirty_dirfrag_nest.begin(); !p.end(); ++p) {
     CInode *in = *p;
     dout(10) << "try_to_expire waiting for nest flush on " << *in << dendl;
-    mds->locker->scatter_nudge(&in->nestlock, gather_bld.new_sub());
+    // TODO: wait for accounted rstats
   }
 
   assert(g_conf->mds_kill_journal_expire_at != 2);
@@ -603,12 +603,8 @@ void EMetaBlob::Dir::apply(MDS *mds, CDir *dir, LogSegment *ls) const
 {
   dir->set_version(version);
 
-  if (is_dirty()) {
+  if (is_dirty())
     dir->_mark_dirty(ls);
-    CInode *diri = dir->get_inode();
-    diri->filelock.mark_dirty();
-    diri->nestlock.mark_dirty();
-  }
   if (is_new())
     dir->mark_new(ls);
   if (is_complete())
@@ -698,12 +694,10 @@ void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls) const
     stripe->_mark_dirty(ls);
     if (!stripe->is_rstat_accounted()) {
       dout(10) << "EMetaBlob dirty nestinfo on " << *stripe << dendl;
-      mds->locker->mark_updated_scatterlock(&diri->nestlock);
       ls->dirty_dirfrag_nest.push_back(&diri->item_dirty_dirfrag_nest);
     }
     if (!stripe->is_fragstat_accounted()) {
       dout(10) << "EMetaBlob dirty fragstat on " << *stripe << dendl;
-      mds->locker->mark_updated_scatterlock(&diri->filelock);
       ls->dirty_dirfrag_dir.push_back(&diri->item_dirty_dirfrag_dir);
     }
   }

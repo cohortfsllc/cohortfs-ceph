@@ -152,7 +152,6 @@ public:
   static const int STATE_RECOVERING =   (1<<12);
   static const int STATE_PURGING =     (1<<13);
   static const int STATE_DIRTYPARENT =  (1<<14);
-  static const int STATE_DIRTYRSTAT =  (1<<15);
   static const int STATE_STRAYPINNED = (1<<16);
   static const int STATE_FROZENAUTHPIN = (1<<17);
   static const int STATE_DIRTYPOOL =   (1<<18);
@@ -205,15 +204,6 @@ public:
   //loff_t last_open_journaled;  // log offset for the last journaled EOpen
   utime_t last_dirstat_prop;
 
-
-  // list item node for when we have unpropagated rstat data
-  elist<CInode*>::item dirty_rstat_item;
-
-  bool is_dirty_rstat() {
-    return state_test(STATE_DIRTYRSTAT);
-  }
-  void mark_dirty_rstat();
-  void clear_dirty_rstat();
 
   //bool hack_accessed;
   //utime_t hack_load_stamp;
@@ -586,18 +576,9 @@ public:
   void encode_lock_state(int type, bufferlist& bl);
   void decode_lock_state(int type, bufferlist& bl);
 
-  void _finish_frag_update(CStripe *stripe, Mutation *mut);
-
   void clear_dirty_scattered(int type);
   bool is_dirty_scattered();
   void clear_scatter_dirty();  // on rejoin ack
-
-  void start_scatter(ScatterLock *lock);
-  void start_scatter_gather(ScatterLock *lock, int auth=-1);
-  void finish_scatter_update(ScatterLock *lock, CStripe *stripe,
-			     version_t inode_version, version_t dir_accounted_version);
-  void finish_scatter_gather_update(int type);
-  void finish_scatter_gather_update_accounted(int type, Mutation *mut, EMetaBlob *metablob);
 
   // -- caps -- (new)
   // client caps

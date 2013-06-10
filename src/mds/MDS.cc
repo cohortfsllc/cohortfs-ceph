@@ -577,10 +577,8 @@ void MDS::tick()
   }
 
   // ...
-  if (is_clientreplay() || is_active() || is_stopping()) {
-    locker->scatter_tick();
+  if (is_clientreplay() || is_active() || is_stopping())
     server->find_idle_sessions();
-  }
   
   if (is_reconnect())
     server->reconnect_tick();
