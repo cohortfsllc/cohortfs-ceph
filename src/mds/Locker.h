@@ -169,36 +169,14 @@ protected:
 public:
   void scatter_eval(ScatterLock *lock, bool *need_issue);        // public for MDCache::adjust_subtree_auth()
 
-  void scatter_tick();
-  void scatter_nudge(ScatterLock *lock, Context *c, bool forcelockchange=false);
-
 protected:
   void handle_scatter_lock(ScatterLock *lock, MLock *m);
   void _scatter_replica_lock(ScatterLock *lock, int auth);
   bool scatter_scatter_fastpath(ScatterLock *lock);
   void scatter_scatter(ScatterLock *lock, bool nowait=false);
-  void scatter_tempsync(ScatterLock *lock, bool *need_issue=0);
 
-  void scatter_writebehind(ScatterLock *lock);
-  class C_Locker_ScatterWB : public Context {
-    Locker *locker;
-    ScatterLock *lock;
-    Mutation *mut;
-  public:
-    C_Locker_ScatterWB(Locker *l, ScatterLock *sl, Mutation *m) : locker(l), lock(sl), mut(m) {}
-    void finish(int r) { 
-      locker->scatter_writebehind_finish(lock, mut); 
-    }
-  };
-  void scatter_writebehind_finish(ScatterLock *lock, Mutation *mut);
-
-  xlist<ScatterLock*> updated_scatterlocks;
 public:
-  void mark_updated_scatterlock(ScatterLock *lock);
-
-
   void handle_reqrdlock(SimpleLock *lock, MLock *m);
-
 
 
   // caps
@@ -237,11 +215,6 @@ protected:
 
 public:
   void file_recover(ScatterLock *lock);
-
-private:
-  xlist<ScatterLock*> updated_filelocks;
-public:
-  void mark_updated_Filelock(ScatterLock *lock);
 
   // -- file i/o --
  public:

@@ -565,35 +565,8 @@ void CDir::steal_dentry(CDentry *dn)
     else
       num_snap_items++;
 
-#if 1
     // no change to stripe rstats
     assert(dn->dir->get_stripe() == get_stripe());
-#else
-    if (dn->get_linkage()->is_primary()) {
-      CInode *in = dn->get_linkage()->get_inode();
-      inode_t *pi = in->get_projected_inode();
-      if (dn->get_linkage()->get_inode()->is_dir())
-	fnode.fragstat.nsubdirs++;
-      else
-	fnode.fragstat.nfiles++;
-      fnode.rstat.rbytes += pi->accounted_rstat.rbytes;
-      fnode.rstat.rfiles += pi->accounted_rstat.rfiles;
-      fnode.rstat.rsubdirs += pi->accounted_rstat.rsubdirs;
-      fnode.rstat.ranchors += pi->accounted_rstat.ranchors;
-      fnode.rstat.rsnaprealms += pi->accounted_rstat.ranchors;
-      if (pi->accounted_rstat.rctime > fnode.rstat.rctime)
-	fnode.rstat.rctime = pi->accounted_rstat.rctime;
-
-      // move dirty inode rstat to new dirfrag
-      if (in->is_dirty_rstat())
-	dirty_rstat_inodes.push_back(&in->dirty_rstat_item);
-    } else if (dn->get_linkage()->is_remote()) {
-      if (dn->get_linkage()->get_remote_d_type() == DT_DIR)
-	fnode.fragstat.nsubdirs++;
-      else
-	fnode.fragstat.nfiles++;
-    }
-#endif
   }
 
   if (dn->is_dirty())
@@ -1235,9 +1208,6 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
 	  // link
 	  dn = add_primary_dentry(dname, in, first, last);
 	  dout(12) << "_fetched  got " << *dn << " " << *in << dendl;
-
-	  if (in->inode.is_dirty_rstat())
-	    in->mark_dirty_rstat();
 
 	  //in->hack_accessed = false;
 	  //in->hack_load_stamp = ceph_clock_now(g_ceph_context);

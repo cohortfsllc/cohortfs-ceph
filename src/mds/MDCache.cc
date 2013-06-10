@@ -3333,9 +3333,6 @@ void MDCache::choose_lock_states()
 
   for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
     CInode *in = i->second;
- 
-    if (in->is_auth() && !in->is_base() && in->inode.is_dirty_rstat())
-      in->mark_dirty_rstat();
 
     in->choose_lock_states();
     dout(15) << " chose lock states on " << *in << dendl;
@@ -8578,7 +8575,6 @@ void MDCache::dump_cache(const char *fn)
           myfile << "   " << *dn << std::endl;
         }
       }
-      stripe->check_rstats();
     }
   }
 

@@ -690,11 +690,6 @@ void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<C
 	return;
       }
 
-      if (lock->is_dirty() && !lock->is_flushed()) {
-	scatter_writebehind((ScatterLock*)lock);
-	mds->mdlog->flush();
-	return;
-      }
       lock->clear_flushed();
       
       switch (lock->get_state()) {
@@ -702,7 +697,6 @@ void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<C
       case LOCK_TSYN_MIX:
       case LOCK_SYNC_MIX:
       case LOCK_EXCL_MIX:
-	in->start_scatter((ScatterLock *)lock);
 	if (lock->get_parent()->is_replicated()) {
 	  bufferlist softdata;
 	  lock->encode_locked_state(softdata);
@@ -1007,13 +1001,7 @@ bool Locker::_rdlock_kick(SimpleLock *lock, bool as_anon)
   // kick the lock
   if (lock->is_stable()) {
     if (lock->get_parent()->is_auth()) {
-      if (lock->get_sm() == &sm_scatterlock) {
-	// not until tempsync is fully implemented
-	//if (lock->get_parent()->is_replicated())
-	//scatter_tempsync((ScatterLock*)lock);
-	//else
-	simple_sync(lock);
-      } else if (lock->get_sm() == &sm_filelock) {
+      if (lock->get_sm() == &sm_filelock) {
 	CInode *in = (CInode*)lock->get_parent();
 	if (lock->get_state() == LOCK_EXCL &&
 	    in->get_target_loner() >= 0 &&
@@ -1220,12 +1208,6 @@ bool Locker::wrlock_start(SimpleLock *lock, Mutation *mut,
       break;
 
     if (lock->get_parent()->is_auth()) {
-      // don't do nested lock state change if we have dirty scatterdata and
-      // may scatter_writebehind or start_scatter, because nowait==true implies
-      // that the caller already has a log entry open!
-      if (!gather && lock->is_dirty())
-	return false;
-
       scatter_mix((ScatterLock*)lock);
 
       if (!gather && !lock->can_wrlock(client))
@@ -3349,13 +3331,6 @@ bool Locker::simple_sync(SimpleLock *lock, bool *need_issue)
       mds->mdcache->do_file_recover();
       gather++;
     }
-    
-    if (!gather && lock->is_dirty()) {
-      lock->get_parent()->auth_pin(lock);
-      scatter_writebehind((ScatterLock*)lock);
-      mds->mdlog->flush();
-      return false;
-    }
 
     if (gather) {
       lock->get_parent()->auth_pin(lock);
@@ -3505,13 +3480,6 @@ void Locker::simple_lock(SimpleLock *lock, bool *need_issue)
     }
   }
 
-  if (!gather && lock->is_dirty()) {
-    lock->get_parent()->auth_pin(lock);
-    scatter_writebehind((ScatterLock*)lock);
-    mds->mdlog->flush();
-    return;
-  }
-
   if (gather) {
     lock->get_parent()->auth_pin(lock);
   } else {
@@ -3567,110 +3535,6 @@ void Locker::simple_xlock(SimpleLock *lock)
 // ==========================================================================
 // scatter lock
 
-/*
-
-Some notes on scatterlocks.
-
- - The scatter/gather is driven by the inode lock.  The scatter always
-   brings in the latest metadata from the fragments.
-
- - When in a scattered/MIX state, fragments are only allowed to
-   update/be written to if the accounted stat matches the inode's
-   current version.
-
- - That means, on gather, we _only_ assimilate diffs for frag metadata
-   that match the current version, because those are the only ones
-   written during this scatter/gather cycle.  (Others didn't permit
-   it.)  We increment the version and journal this to disk.
-
- - When possible, we also simultaneously update our local frag
-   accounted stats to match.
-
- - On scatter, the new inode info is broadcast to frags, both local
-   and remote.  If possible (auth and !frozen), the dirfrag auth
-   should update the accounted state (if it isn't already up to date).
-   Note that this may occur on both the local inode auth node and
-   inode replicas, so there are two potential paths. If it is NOT
-   possible, they need to mark_stale to prevent any possible writes.
-
- - A scatter can be to MIX (potentially writeable) or to SYNC (read
-   only).  Both are opportunities to update the frag accounted stats,
-   even though only the MIX case is affected by a stale dirfrag.
-
- - Because many scatter/gather cycles can potentially go by without a
-   frag being able to update its accounted stats (due to being frozen
-   by exports/refragments in progress), the frag may have (even very)
-   old stat versions.  That's fine.  If when we do want to update it,
-   we can update accounted_* and the version first.
-
-*/
-
-void Locker::scatter_writebehind(ScatterLock *lock)
-{
-  CInode *in = (CInode*)lock->get_parent();
-  dout(10) << "scatter_writebehind " << in->inode.mtime << " on " << *lock << " on " << *in << dendl;
-  assert(in->is_auth());
-
-  // journal
-  Mutation *mut = new Mutation;
-  mut->ls = mds->mdlog->get_current_segment();
-
-  // forcefully take a wrlock
-  lock->get_wrlock(true);
-  mut->wrlocks.insert(lock);
-  mut->locks.insert(lock);
-
-  in->pre_cow_old_inode();  // avoid cow mayhem
-
-  in->project_inode();
-
-  in->finish_scatter_gather_update(lock->get_type());
-  lock->start_flush();
-
-  EUpdate *le = new EUpdate(mds->mdlog, "scatter_writebehind");
-  mds->mdlog->start_entry(le);
-
-  mdcache->predirty_journal_parents(mut, &le->metablob, in, 0,
-                                    PREDIRTY_PRIMARY, false);
-  mdcache->journal_dirty_inode(mut, &le->metablob, in);
-  
-  in->finish_scatter_gather_update_accounted(lock->get_type(), mut, &le->metablob);
-
-  mds->mdlog->submit_entry(le);
-  mds->mdlog->wait_for_safe(new C_Locker_ScatterWB(this, lock, mut));
-}
-
-void Locker::scatter_writebehind_finish(ScatterLock *lock, Mutation *mut)
-{
-  CInode *in = (CInode*)lock->get_parent();
-  dout(10) << "scatter_writebehind_finish on " << *lock << " on " << *in << dendl;
-  in->pop_and_dirty_projected_inode(mut->ls);
-
-  lock->finish_flush();
-
-  // if replicas may have flushed in a mix->lock state, send another
-  // message so they can finish_flush().
-  if (in->is_replicated()) {
-    switch (lock->get_state()) {
-    case LOCK_MIX_LOCK:
-    case LOCK_MIX_LOCK2:
-    case LOCK_MIX_EXCL:
-    case LOCK_MIX_TSYN:
-      send_lock_message(lock, LOCK_AC_LOCKFLUSHED);
-    }
-  }
-
-  mut->apply();
-  drop_locks(mut);
-  mut->cleanup();
-  delete mut;
-
-  if (lock->is_stable())
-    lock->finish_waiters(ScatterLock::WAIT_STABLE);
-
-  //scatter_eval_gather(lock);
-}
-
 void Locker::scatter_eval(ScatterLock *lock, bool *need_issue)
 {
   dout(10) << "scatter_eval " << *lock << " on " << *lock->get_parent() << dendl;
@@ -3716,208 +3580,6 @@ void Locker::scatter_eval(ScatterLock *lock, bool *need_issue)
 	lock->get_state() != LOCK_SYNC) {
       dout(10) << "scatter_eval no wrlocks|xlocks, not subtree root inode, syncing" << dendl;
       simple_sync(lock, need_issue);
-    }
-  }
-}
-
-
-/*
- * mark a scatterlock to indicate that the dir fnode has some dirty data
- */
-void Locker::mark_updated_scatterlock(ScatterLock *lock)
-{
-  lock->mark_dirty();
-  if (lock->get_updated_item()->is_on_list()) {
-    dout(10) << "mark_updated_scatterlock " << *lock
-	     << " - already on list since " << lock->get_update_stamp() << dendl;
-  } else {
-    updated_scatterlocks.push_back(lock->get_updated_item());
-    utime_t now = ceph_clock_now(g_ceph_context);
-    lock->set_update_stamp(now);
-    dout(10) << "mark_updated_scatterlock " << *lock
-	     << " - added at " << now << dendl;
-  }
-}
-
-/*
- * this is called by scatter_tick and LogSegment::try_to_trim() when
- * trying to flush dirty scattered data (i.e. updated fnode) back to
- * the inode.
- *
- * we need to lock|scatter in order to push fnode changes into the
- * inode.dirstat.
- */
-void Locker::scatter_nudge(ScatterLock *lock, Context *c, bool forcelockchange)
-{
-  CInode *p = (CInode *)lock->get_parent();
-
-  if (p->is_frozen() || p->is_freezing()) {
-    dout(10) << "scatter_nudge waiting for unfreeze on " << *p << dendl;
-    if (c) 
-      p->add_waiter(MDSCacheObject::WAIT_UNFREEZE, c);
-    else
-      // just requeue.  not ideal.. starvation prone..
-      updated_scatterlocks.push_back(lock->get_updated_item());
-    return;
-  }
-
-  if (p->is_ambiguous_auth()) {
-    dout(10) << "scatter_nudge waiting for single auth on " << *p << dendl;
-    if (c) 
-      p->add_waiter(MDSCacheObject::WAIT_SINGLEAUTH, c);
-    else
-      // just requeue.  not ideal.. starvation prone..
-      updated_scatterlocks.push_back(lock->get_updated_item());
-    return;
-  }
-
-  if (p->is_auth()) {
-    int count = 0;
-    while (true) {
-      if (lock->is_stable()) {
-	// can we do it now?
-	//  (only if we're not replicated.. if we are, we really do need
-	//   to nudge the lock state!)
-	/*
-	  actually, even if we're not replicated, we can't stay in MIX, because another mds
-	  could discover and replicate us at any time.  if that happens while we're flushing,
-	  they end up in MIX but their inode has the old scatterstat version.
-
-	if (!forcelockchange && !lock->get_parent()->is_replicated() && lock->can_wrlock(-1)) {
-	  dout(10) << "scatter_nudge auth, propagating " << *lock << " on " << *p << dendl;
-	  scatter_writebehind(lock);
-	  if (c)
-	    lock->add_waiter(SimpleLock::WAIT_STABLE, c);
-	  return;
-	}
-	*/
-
-	// adjust lock state
-	dout(10) << "scatter_nudge auth, scatter/unscattering " << *lock << " on " << *p << dendl;
-	switch (lock->get_type()) {
-	case CEPH_LOCK_IFILE:
-	case CEPH_LOCK_INEST:
-	  if (p->is_replicated() && lock->get_state() != LOCK_MIX)
-	    scatter_mix(lock);
-	  else if (lock->get_state() != LOCK_LOCK)
-	    simple_lock(lock);
-	  else
-	    simple_sync(lock);
-	  break;
-	default:
-	  assert(0);
-	}
-	++count;
-	if (lock->is_stable() && count == 2) {
-	  dout(10) << "scatter_nudge oh, stable after two cycles." << dendl;
-	  // this should only realy happen when called via
-	  // handle_file_lock due to AC_NUDGE, because the rest of the
-	  // time we are replicated or have dirty data and won't get
-	  // called.  bailing here avoids an infinite loop.
-	  assert(!c); 
-	  break;
-	}
-      } else {
-	dout(10) << "scatter_nudge auth, waiting for stable " << *lock << " on " << *p << dendl;
-	if (c)
-	  lock->add_waiter(SimpleLock::WAIT_STABLE, c);
-	return;
-      }
-    }
-  } else {
-    dout(10) << "scatter_nudge replica, requesting scatter/unscatter of " 
-	     << *lock << " on " << *p << dendl;
-    // request unscatter?
-    int auth = p->authority().first;
-    if (mds->mdsmap->get_state(auth) >= MDSMap::STATE_ACTIVE)
-      mds->send_message_mds(new MLock(lock, LOCK_AC_NUDGE, mds->get_nodeid()), auth);
-
-    // wait...
-    if (c)
-      lock->add_waiter(SimpleLock::WAIT_STABLE, c);
-
-    // also, requeue, in case we had wrong auth or something
-    updated_scatterlocks.push_back(lock->get_updated_item());
-  }
-}
-
-void Locker::scatter_tick()
-{
-  dout(10) << "scatter_tick" << dendl;
-  
-  // updated
-  utime_t now = ceph_clock_now(g_ceph_context);
-  int n = updated_scatterlocks.size();
-  while (!updated_scatterlocks.empty()) {
-    ScatterLock *lock = updated_scatterlocks.front();
-
-    if (n-- == 0) break;  // scatter_nudge() may requeue; avoid looping
-    
-    if (!lock->is_dirty()) {
-      updated_scatterlocks.pop_front();
-      dout(10) << " removing from updated_scatterlocks " 
-	       << *lock << " " << *lock->get_parent() << dendl;
-      continue;
-    }
-    if (now - lock->get_update_stamp() < g_conf->mds_scatter_nudge_interval)
-      break;
-    updated_scatterlocks.pop_front();
-    scatter_nudge(lock, 0);
-  }
-  mds->mdlog->flush();
-}
-
-
-void Locker::scatter_tempsync(ScatterLock *lock, bool *need_issue)
-{
-  dout(10) << "scatter_tempsync " << *lock
-	   << " on " << *lock->get_parent() << dendl;
-  assert(lock->get_parent()->is_auth());
-  assert(lock->is_stable());
-
-  assert(0 == "not fully implemented, at least not for filelock");
-
-  CInode *in = (CInode *)lock->get_parent();
-
-  switch (lock->get_state()) {
-  case LOCK_SYNC: assert(0);   // this shouldn't happen
-  case LOCK_LOCK: lock->set_state(LOCK_LOCK_TSYN); break;
-  case LOCK_MIX: lock->set_state(LOCK_MIX_TSYN); break;
-  default: assert(0);
-  }
-
-  int gather = 0;
-  if (lock->is_wrlocked())
-    gather++;
-
-  if (lock->get_cap_shift() &&
-      in->is_head() &&
-      in->issued_caps_need_gather(lock)) {
-    if (need_issue)
-      *need_issue = true;
-    else
-      issue_caps(in);
-    gather++;
-  }
-
-  if (lock->get_state() == LOCK_MIX_TSYN &&
-      in->is_replicated()) {
-    lock->init_gather();
-    send_lock_message(lock, LOCK_AC_LOCK);
-    gather++;
-  }
-
-  if (gather) {
-    in->auth_pin(lock);
-  } else {
-    // do tempsync
-    lock->set_state(LOCK_TSYN);
-    lock->finish_waiters(ScatterLock::WAIT_RD|ScatterLock::WAIT_STABLE);
-    if (lock->get_cap_shift()) {
-      if (need_issue)
-	*need_issue = true;
-      else
-	issue_caps(in);
     }
   }
 }
@@ -4031,8 +3693,6 @@ void Locker::scatter_mix(ScatterLock *lock, bool *need_issue)
   assert(lock->is_stable());
 
   if (lock->get_state() == LOCK_LOCK) {
-    if (in)
-      in->start_scatter(lock);
     if (lock->get_parent()->is_replicated()) {
       // data
       bufferlist softdata;
@@ -4098,7 +3758,6 @@ void Locker::scatter_mix(ScatterLock *lock, bool *need_issue)
     if (gather)
       lock->get_parent()->auth_pin(lock);
     else {
-      in->start_scatter(lock);
       lock->set_state(LOCK_MIX);
       lock->clear_scatter_wanted();
       if (in->is_replicated()) {
@@ -4429,7 +4088,7 @@ void Locker::handle_file_lock(ScatterLock *lock, MLock *m)
       dout(7) << "handle_file_lock got unscatter request on " << *lock
 	      << " on " << *lock->get_parent() << dendl;
       if (lock->get_state() == LOCK_MIX)  // i.e., the reqscatter didn't race with an actual mix/scatter
-	simple_lock(lock);  // FIXME tempsync?
+	simple_lock(lock);
     } else {
       dout(7) << "handle_file_lock ignoring unscatter request on " << *lock
 	      << " on " << *lock->get_parent() << dendl;
@@ -4451,7 +4110,6 @@ void Locker::handle_file_lock(ScatterLock *lock, MLock *m)
     } else {
       dout(7) << "handle_file_lock trying nudge on " << *lock
 	      << " on " << *lock->get_parent() << dendl;
-      scatter_nudge(lock, 0, true);
       mds->mdlog->flush();
     }    
     break;

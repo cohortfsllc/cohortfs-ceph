@@ -72,7 +72,6 @@ class CStripe : public MDSCacheObject {
   static const unsigned STATE_OPEN          = (1<<0); // has been loaded from disk
   static const unsigned STATE_FROZEN        = (1<<1);
   static const unsigned STATE_FREEZING      = (1<<2);
-  static const unsigned STATE_ASSIMRSTAT    = (1<<3); // assimilating inode->stripe rstats
   static const unsigned STATE_COMMITTING    = (1<<4);
 
   // these state bits are preserved by an import/export
@@ -145,7 +144,6 @@ class CStripe : public MDSCacheObject {
   list<fnode_t*> projected_fnode;
 
  public:
-  elist<CInode*> dirty_rstat_inodes;
   elist<CStripe*>::item item_dirty, item_new;
 
   version_t get_version() const { return fnode.version; }
@@ -174,13 +172,6 @@ class CStripe : public MDSCacheObject {
   bool is_fragstat_accounted() const {
     return fnode.fragstat == fnode.accounted_fragstat;
   }
-
-  void resync_accounted_fragstat();
-  void resync_accounted_rstat();
-  void assimilate_dirty_rstat_inodes();
-  void assimilate_dirty_rstat_inodes_finish(Mutation *mut, EMetaBlob *blob);
-  bool check_rstats();
-  void verify_fragstat();
 
   void mark_dirty(LogSegment *ls);
   void _mark_dirty(LogSegment *ls);

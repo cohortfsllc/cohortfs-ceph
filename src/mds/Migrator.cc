@@ -1109,8 +1109,6 @@ void Migrator::finish_export_inode(CInode *in, utime_t now, list<Context*>& fini
   in->state_clear(CInode::STATE_AUTH);
   in->replica_nonce = CInode::EXPORT_NONCE;
   
-  in->clear_dirty_rstat();
-
   in->item_open_file.remove_myself();
 
   // waiters
@@ -2374,14 +2372,6 @@ void Migrator::decode_import_inode(CDentry *dn, bufferlist::iterator& blp,
   } else {
     dout(10) << "  had " << *in << dendl;
   }
-
-  if (in->inode.is_dirty_rstat())
-    in->mark_dirty_rstat();
-  
-  // clear if dirtyscattered, since we're going to journal this
-  //  but not until we _actually_ finish the import...
-  if (in->filelock.is_dirty())
-    mds->locker->mark_updated_scatterlock(&in->filelock);
 
   // adjust replica list
   //assert(!in->is_replica(oldauth));  // not true on failed export
