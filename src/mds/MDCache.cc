@@ -2669,12 +2669,8 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
        ++p) {
     CInode *in = get_inode(p->first);
     assert(in);
-    if (survivor) {
-      in->start_scatter_gather(&in->filelock, from);
-      in->start_scatter_gather(&in->nestlock, from);
-    } else {
+    if (!survivor)
       rejoin_potential_updated_scatterlocks.insert(in);
-    }
     in->decode_lock_state(CEPH_LOCK_IFILE, p->second.file);
     in->decode_lock_state(CEPH_LOCK_INEST, p->second.nest);
   }
@@ -3841,9 +3837,6 @@ void MDCache::choose_lock_states()
 
   for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
     CInode *in = i->second;
- 
-    if (in->is_auth() && !in->is_base() && in->inode.is_dirty_rstat())
-      in->mark_dirty_rstat();
 
     in->choose_lock_states();
     dout(15) << " chose lock states on " << *in << dendl;
@@ -9867,7 +9860,6 @@ void MDCache::dump_cache(const char *fn)
             goto out;
         }
       }
-      stripe->check_rstats();
     }
   }
 
