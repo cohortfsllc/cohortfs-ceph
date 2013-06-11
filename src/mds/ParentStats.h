@@ -44,11 +44,9 @@ class ParentStats {
 
 
   // open the parent object or forward stats to auth mds
-  CStripe* open_parent_stripe(inode_t *pi, const frag_info_t &fragstat,
-                              const nest_info_t &rstat);
+  CStripe* open_parent_stripe(inode_t *pi, const stripe_stat_update_t &supdate);
   CInode* open_parent_inode(CStripe *stripe, const Mutation *mut,
-                            const frag_info_t &dirstat,
-                            const nest_info_t &rstat);
+                            const inode_stat_update_t &iupdate);
 
   // set of projected stripes/inodes
   class Projected {
@@ -64,33 +62,37 @@ class ParentStats {
   // stripe fragstat/rstat
   bool update_stripe_stats(CStripe *stripe, Projected &projected,
                            Mutation *mut, EMetaBlob *blob,
-                           frag_info_t &fragstat, nest_info_t &rstat);
+                           const stripe_stat_update_t &supdate,
+                           inode_stat_update_t &iupdate);
   // stripe rstat
   bool update_stripe_nest(CStripe *stripe, Projected &projected,
                           Mutation *mut, EMetaBlob *blob,
-                          nest_info_t &rstat);
+                          const stripe_stat_update_t &supdate,
+                          inode_stat_update_t &iupdate);
   // inode dirstat/rstat
   bool update_inode_stats(CInode *in, Projected &projected,
                          Mutation *mut, EMetaBlob *blob,
-                         frag_info_t &dirstat, nest_info_t &rstat);
+                         const inode_stat_update_t &iupdate,
+                         stripe_stat_update_t &supdate);
   // inode rstat
   bool update_inode_nest(CInode *in, Projected &projected,
                          Mutation *mut, EMetaBlob *blob,
-                         nest_info_t &rstat);
+                         const inode_stat_update_t &iupdate,
+                         stripe_stat_update_t &supdate);
 
   // recursive versions, terminated by non-recursive loop in update_rstats()
   void update_stripe(CStripe *stripe, Projected &projected,
                      Mutation *mut, EMetaBlob *blob,
-                     frag_info_t &fragstat, nest_info_t &rstat);
+                     const stripe_stat_update_t &supdate);
 
   void update_inode(CInode *in, Projected &projected,
                     Mutation *mut, EMetaBlob *blob,
-                    frag_info_t &dirstat, nest_info_t &rstat);
+                    const inode_stat_update_t &iupdate);
 
   // stripe rstat -> inode rstat -> ...
   void update_rstats(CInode *in, Projected &projected,
                      Mutation *mut, EMetaBlob *blob,
-                     nest_info_t rstat);
+                     stripe_stat_update_t &supdate);
 
   friend class C_PS_StripeFrag;
   friend class C_PS_StripeNest;
@@ -98,11 +100,26 @@ class ParentStats {
   friend class C_PS_InodeFrag;
   friend class C_PS_InodeNest;
 
+  // update accounted stats, or send an ack to the auth mds
+  void update_accounted(dirstripe_t ds, int who,
+                        Projected &projected, Mutation *mut,
+                        const frag_info_t &accounted_fragstat,
+                        const nest_info_t &accounted_rstat);
+  void update_accounted(inodeno_t ino, Projected &projected, Mutation *mut,
+                        const nest_info_t &accounted_rstat);
+
+  void account_stripe(dirstripe_t ds, fnode_t *pf,
+                      const frag_info_t &fragstat,
+                      const nest_info_t &rstat);
+  void account_inode(inode_t *pi, const nest_info_t &rstat);
+
  public:
   ParentStats(MDS *mds) : mds(mds), tick_event(NULL) {}
 
   // update parent stats for the given object
-  void update(CInode *in, Mutation *mut, EMetaBlob *blob, frag_info_t fragstat);
+  void update(CInode *in, Mutation *mut, EMetaBlob *blob,
+              const frag_info_t &fragstat,
+              const nest_info_t &rstat);
 
   // handle remote requests to update parent stats
   void handle(MParentStats *m);

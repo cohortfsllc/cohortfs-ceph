@@ -1233,21 +1233,23 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
 	   << " " << *in << dendl;
 
   frag_info_t fragstat;
+  nest_info_t rstat;
 
   if (linkunlink) {
-    if (in->is_dir())
-      fragstat.nsubdirs = linkunlink;
-    else
-      fragstat.nfiles = linkunlink;
-    fragstat.version = 1;
+    if (in->is_dir()) {
+      fragstat.nsubdirs = rstat.rsubdirs = linkunlink;
+    } else {
+      fragstat.nfiles = rstat.rfiles = linkunlink;
+    }
+    fragstat.version = rstat.version = 1;
   }
 
   if (do_parent_mtime) {
-    fragstat.mtime = mut->now;
-    fragstat.version = 1;
+    fragstat.mtime = rstat.rctime = mut->now;
+    fragstat.version = rstat.version = 1;
   }
 
-  parentstats.update(in, mut, blob, fragstat);
+  parentstats.update(in, mut, blob, fragstat, rstat);
 }
 
 

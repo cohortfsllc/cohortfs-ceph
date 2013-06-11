@@ -60,12 +60,11 @@ class C_PS_StripeFrag : public Context {
   MDS *mds;
   CStripe *stripe;
   Mutation *mut;
-  frag_info_t fragstat;
-  nest_info_t rstat;
+  const stripe_stat_update_t supdate;
  public:
   C_PS_StripeFrag(MDS *mds, CStripe *stripe, Mutation *mut,
-                  const frag_info_t &fragstat, const nest_info_t &rstat)
-      : mds(mds), stripe(stripe), mut(mut), fragstat(fragstat), rstat(rstat) {}
+                  const stripe_stat_update_t &supdate)
+      : mds(mds), stripe(stripe), mut(mut), supdate(supdate) {}
   ~C_PS_StripeFrag() { delete mut; }
   void finish(int r) {
     ParentStats &ps = mds->mdcache->parentstats;
@@ -73,7 +72,7 @@ class C_PS_StripeFrag : public Context {
     // attempt to take the linklock again
     if (!mut->xlocks.count(&stripe->linklock) &&
         !mds->locker->xlock_start(&stripe->linklock, mut, &gather)) {
-      gather.set_finisher(new C_PS_StripeFrag(mds, stripe, mut, fragstat, rstat));
+      gather.set_finisher(new C_PS_StripeFrag(mds, stripe, mut, supdate));
       gather.activate();
       dout(10) << "still waiting on " << stripe->nestlock
           << " for " << stripe->dirstripe() << dendl;
@@ -81,7 +80,7 @@ class C_PS_StripeFrag : public Context {
       // only after we get the lock, create a log entry and do the update
       ParentStats::Projected projected;
       EUpdate *le = new EUpdate(mds->mdlog, "parent_stats");
-      ps.update_stripe(stripe, projected, mut, &le->metablob, fragstat, rstat);
+      ps.update_stripe(stripe, projected, mut, &le->metablob, supdate);
       mds->mdlog->start_submit_entry(le, new C_PS_Finish(mds, mut));
     }
     mut = NULL;
@@ -93,11 +92,16 @@ class C_PS_StripeNest : public Context {
   MDS *mds;
   CStripe *stripe;
   Mutation *mut;
-  nest_info_t rstat;
+  stripe_stat_update_t supdate;
  public:
   C_PS_StripeNest(MDS *mds, CStripe *stripe, Mutation *mut,
-                  const nest_info_t &rstat)
-      : mds(mds), stripe(stripe), mut(mut), rstat(rstat) {}
+                  const stripe_stat_update_t &update)
+      : mds(mds), stripe(stripe), mut(mut), supdate(update)
+  {
+    // frag info was already handled
+    supdate.frag.delta.zero();
+    supdate.frag.stat.zero();
+  }
   ~C_PS_StripeNest() { delete mut; }
   void finish(int r) {
     ParentStats &ps = mds->mdcache->parentstats;
@@ -105,7 +109,7 @@ class C_PS_StripeNest : public Context {
     // attempt to take the nestlock again
     if (!mut->xlocks.count(&stripe->nestlock) &&
         !mds->locker->xlock_start(&stripe->nestlock, mut, &gather)) {
-      gather.set_finisher(new C_PS_StripeNest(mds, stripe, mut, rstat));
+      gather.set_finisher(new C_PS_StripeNest(mds, stripe, mut, supdate));
       gather.activate();
       dout(10) << "still waiting on " << stripe->nestlock
           << " for " << stripe->dirstripe() << dendl;
@@ -113,8 +117,7 @@ class C_PS_StripeNest : public Context {
       // only after we get the lock, create a log entry and do the update
       ParentStats::Projected projected;
       EUpdate *le = new EUpdate(mds->mdlog, "parent_stats");
-      frag_info_t empty;
-      ps.update_stripe(stripe, projected, mut, &le->metablob, empty, rstat);
+      ps.update_stripe(stripe, projected, mut, &le->metablob, supdate);
       mds->mdlog->start_submit_entry(le, new C_PS_Finish(mds, mut));
     }
     mut = NULL;
@@ -126,12 +129,11 @@ class C_PS_InodeAmbig : public Context {
   MDS *mds;
   CInode *in;
   Mutation *mut;
-  frag_info_t dirstat;
-  nest_info_t rstat;
+  const inode_stat_update_t iupdate;
  public:
   C_PS_InodeAmbig(MDS *mds, CInode *in, Mutation *mut,
-                  const frag_info_t &dirstat, const nest_info_t &rstat)
-      : mds(mds), in(in), mut(mut), dirstat(dirstat), rstat(rstat) {}
+                  const inode_stat_update_t &iupdate)
+      : mds(mds), in(in), mut(mut), iupdate(iupdate) {}
   ~C_PS_InodeAmbig() { delete mut; }
   void finish(int r) {
     assert(!in->is_ambiguous_auth());
@@ -139,11 +141,11 @@ class C_PS_InodeAmbig : public Context {
     if (!in->is_auth()) {
       int who = in->authority().first;
       dout(10) << "forwarding to parent auth mds." << who << dendl;
-      ps.stats_for_mds(who)->add_inode(in->ino(), dirstat, rstat);
+      ps.stats_for_mds(who)->add_inode(in->ino(), iupdate);
     } else {
       ParentStats::Projected projected;
       EUpdate *le = new EUpdate(mds->mdlog, "parent_stats");
-      ps.update_inode(in, projected, mut, &le->metablob, dirstat, rstat);
+      ps.update_inode(in, projected, mut, &le->metablob, iupdate);
       mds->mdlog->start_submit_entry(le, new C_PS_Finish(mds, mut));
       mut = NULL;
     }
@@ -155,12 +157,11 @@ class C_PS_InodeFrag : public Context {
   MDS *mds;
   CInode *in;
   Mutation *mut;
-  frag_info_t dirstat;
-  nest_info_t rstat;
+  const inode_stat_update_t iupdate;
  public:
   C_PS_InodeFrag(MDS *mds, CInode *in, Mutation *mut,
-                  const frag_info_t &dirstat, const nest_info_t &rstat)
-      : mds(mds), in(in), mut(mut), dirstat(dirstat), rstat(rstat) {}
+                 const inode_stat_update_t &iupdate)
+      : mds(mds), in(in), mut(mut), iupdate(iupdate) {}
   ~C_PS_InodeFrag() { delete mut; }
   void finish(int r) {
     ParentStats &ps = mds->mdcache->parentstats;
@@ -168,7 +169,7 @@ class C_PS_InodeFrag : public Context {
     // attempt to take the filelock again
     if (!mut->wrlocks.count(&in->filelock) &&
         !mds->locker->wrlock_start(&in->filelock, mut, &gather)) {
-      gather.set_finisher(new C_PS_InodeFrag(mds, in, mut, dirstat, rstat));
+      gather.set_finisher(new C_PS_InodeFrag(mds, in, mut, iupdate));
       gather.activate();
       dout(10) << "still waiting on " << in->filelock
           << " for " << in->ino() << dendl;
@@ -176,7 +177,7 @@ class C_PS_InodeFrag : public Context {
       // only after we get the lock, create a log entry and do the update
       ParentStats::Projected projected;
       EUpdate *le = new EUpdate(mds->mdlog, "parent_stats");
-      ps.update_inode(in, projected, mut, &le->metablob, dirstat, rstat);
+      ps.update_inode(in, projected, mut, &le->metablob, iupdate);
       mds->mdlog->start_submit_entry(le, new C_PS_Finish(mds, mut));
     }
     mut = NULL;
@@ -188,10 +189,16 @@ class C_PS_InodeNest : public Context {
   MDS *mds;
   CInode *in;
   Mutation *mut;
-  nest_info_t rstat;
+  inode_stat_update_t iupdate;
  public:
-  C_PS_InodeNest(MDS *mds, CInode *in, Mutation *mut, const nest_info_t &rstat)
-      : mds(mds), in(in), mut(mut), rstat(rstat) {}
+  C_PS_InodeNest(MDS *mds, CInode *in, Mutation *mut,
+                 const inode_stat_update_t &update)
+      : mds(mds), in(in), mut(mut), iupdate(update)
+  {
+    // frag info was already handled
+    iupdate.frag.delta.zero();
+    iupdate.frag.stat.zero();
+  }
   ~C_PS_InodeNest() { delete mut; }
   void finish(int r) {
     ParentStats &ps = mds->mdcache->parentstats;
@@ -199,7 +206,7 @@ class C_PS_InodeNest : public Context {
     // attempt to take the nestlock again
     if (!mut->wrlocks.count(&in->nestlock) &&
         !mds->locker->wrlock_start(&in->nestlock, mut, &gather)) {
-      gather.set_finisher(new C_PS_InodeNest(mds, in, mut, rstat));
+      gather.set_finisher(new C_PS_InodeNest(mds, in, mut, iupdate));
       gather.activate();
       dout(10) << "still waiting on " << in->nestlock
           << " for " << in->ino() << dendl;
@@ -207,8 +214,7 @@ class C_PS_InodeNest : public Context {
       // only after we get the lock, create a log entry and do the update
       ParentStats::Projected projected;
       EUpdate *le = new EUpdate(mds->mdlog, "parent_stats");
-      frag_info_t empty;
-      ps.update_inode(in, projected, mut, &le->metablob, empty, rstat);
+      ps.update_inode(in, projected, mut, &le->metablob, iupdate);
       mds->mdlog->start_submit_entry(le, new C_PS_Finish(mds, mut));
     }
     mut = NULL;
@@ -282,12 +288,14 @@ void ParentStats::tick()
 }
 
 CStripe* ParentStats::open_parent_stripe(inode_t *pi,
-                                         const frag_info_t &fragstat,
-                                         const nest_info_t &rstat)
+                                         const stripe_stat_update_t &update)
 {
+  assert(update.frag.delta.version || update.nest.delta.version);
+
   // find first parent
   if (pi->parents.empty()) {
     dout(10) << "open_parent_stripe at base inode " << pi->ino << dendl;
+    account_inode(pi, update.nest.stat);
     return NULL;
   }
 
@@ -296,7 +304,7 @@ CStripe* ParentStats::open_parent_stripe(inode_t *pi,
     dout(10) << "forwarding to auth mds." << parent.who
         << " for parent " << parent.stripe << ":" << parent.name << dendl;
     // forward to stripe mds
-    stats_for_mds(parent.who)->add_stripe(parent.stripe, fragstat, rstat);
+    stats_for_mds(parent.who)->add_stripe(parent.stripe, update);
     return NULL;
   }
 
@@ -305,10 +313,12 @@ CStripe* ParentStats::open_parent_stripe(inode_t *pi,
   return stripe;
 }
 
-CInode* ParentStats::open_parent_inode(CStripe *stripe, const Mutation *mut,
-                                       const frag_info_t &dirstat,
-                                       const nest_info_t &rstat)
+CInode* ParentStats::open_parent_inode(CStripe *stripe,
+                                       const Mutation *mut,
+                                       const inode_stat_update_t &update)
 {
+  assert(update.frag.delta.version || update.nest.delta.version);
+
   CInode *in = stripe->get_inode();
   assert(in);
 
@@ -316,7 +326,7 @@ CInode* ParentStats::open_parent_inode(CStripe *stripe, const Mutation *mut,
     // retry on single auth
     Mutation *newmut = new Mutation(mut->reqid, mut->attempt);
     in->add_waiter(CInode::WAIT_SINGLEAUTH,
-                   new C_PS_InodeAmbig(mds, in, newmut, dirstat, rstat));
+                   new C_PS_InodeAmbig(mds, in, newmut, update));
     dout(10) << "waiting on single auth for " << *in << dendl;
     return NULL;
   }
@@ -325,7 +335,7 @@ CInode* ParentStats::open_parent_inode(CStripe *stripe, const Mutation *mut,
     int who = in->authority().first;
     dout(10) << "forwarding to auth mds." << who
         << " for parent inode " << in->ino() << dendl;
-    stats_for_mds(who)->add_inode(in->ino(), dirstat, rstat);
+    stats_for_mds(who)->add_inode(in->ino(), update);
     return NULL;
   }
 
@@ -336,11 +346,13 @@ CInode* ParentStats::open_parent_inode(CStripe *stripe, const Mutation *mut,
 // stripe.fragstat and stripe.rstat
 bool ParentStats::update_stripe_stats(CStripe *stripe, Projected &projected,
                                       Mutation *mut, EMetaBlob *blob,
-                                      frag_info_t &fragstat, nest_info_t &rstat)
+                                      const stripe_stat_update_t &supdate,
+                                      inode_stat_update_t &iupdate)
 {
-  if (!fragstat.size() && fragstat.mtime.is_zero()) {
-    dout(10) << "update_stripe_frag empty fragstat" << dendl;
-    return update_stripe_nest(stripe, projected, mut, blob, rstat);
+  const frag_delta_t &frag = supdate.frag;
+  if (!frag.delta.version) {
+    dout(10) << "update_stripe_frag already accounted" << dendl;
+    return update_stripe_nest(stripe, projected, mut, blob, supdate, iupdate);
   }
 
   // requires stripe.linklock from caller
@@ -349,22 +361,27 @@ bool ParentStats::update_stripe_stats(CStripe *stripe, Projected &projected,
   // inode.dirstat -> stripe.fragstat
   fnode_t *pf = projected.get(stripe, mut);
   assert(pf->fragstat.version >= pf->accounted_fragstat.version);
-  pf->fragstat.add(fragstat);
+  pf->fragstat.add(frag.delta);
   pf->fragstat.version++;
 
-  dout(10) << "update_stripe_frag " << stripe->dirstripe()
-      << " " << pf->fragstat << dendl;
+  iupdate.frag.delta = frag.delta;
+  iupdate.frag.stat = pf->fragstat;
 
-  return update_stripe_nest(stripe, projected, mut, blob, rstat);
+  dout(10) << "update_stripe_frag " << stripe->dirstripe()
+      << " " << iupdate.frag << dendl;
+
+  return update_stripe_nest(stripe, projected, mut, blob, supdate, iupdate);
 }
 
 // stripe.rstat
 bool ParentStats::update_stripe_nest(CStripe *stripe, Projected &projected,
                                      Mutation *mut, EMetaBlob *blob,
-                                     nest_info_t &rstat)
+                                     const stripe_stat_update_t &supdate,
+                                     inode_stat_update_t &iupdate)
 {
-  if (!rstat.rsize() && rstat.rctime.is_zero()) {
-    dout(10) << "update_stripe_nest empty rstat" << dendl;
+  const nest_delta_t &nest = supdate.nest;
+  if (!nest.delta.version) {
+    dout(10) << "update_stripe_nest already accounted" << dendl;
     return false;
   }
 
@@ -373,7 +390,7 @@ bool ParentStats::update_stripe_nest(CStripe *stripe, Projected &projected,
   if (!mut->xlocks.count(&stripe->nestlock) &&
       !mds->locker->xlock_start(&stripe->nestlock, mut, &gather)) {
     Mutation *newmut = new Mutation(mut->reqid, mut->attempt);
-    gather.set_finisher(new C_PS_StripeNest(mds, stripe, newmut, rstat));
+    gather.set_finisher(new C_PS_StripeNest(mds, stripe, newmut, supdate));
     gather.activate();
     dout(10) << "update_stripe_nest waiting on " << stripe->nestlock << dendl;
     return false;
@@ -382,22 +399,31 @@ bool ParentStats::update_stripe_nest(CStripe *stripe, Projected &projected,
   // inode.rstat -> stripe.rstat
   fnode_t *pf = projected.get(stripe, mut);
   assert(pf->rstat.version >= pf->accounted_rstat.version);
-  pf->rstat.add(rstat);
+  pf->rstat.add(nest.delta);
   pf->rstat.version++;
 
+  iupdate.stripeid = stripe->get_stripeid();
+  iupdate.nest.delta = nest.delta;
+  iupdate.nest.stat = pf->rstat;
+
   dout(10) << "update_stripe_nest " << stripe->dirstripe()
-     << " " << pf->rstat << dendl;
+     << " " << iupdate.nest << dendl;
+
+  // ack for inode.accounted_rstat
+  update_accounted(supdate.ino, projected, mut, nest.stat);
   return true;
 }
 
 // inode.dirstat and inode.rstat
 bool ParentStats::update_inode_stats(CInode *in, Projected &projected,
                                      Mutation *mut, EMetaBlob *blob,
-                                     frag_info_t &dirstat, nest_info_t &rstat)
+                                     const inode_stat_update_t &iupdate,
+                                     stripe_stat_update_t &supdate)
 {
-  if (!dirstat.size() && dirstat.mtime.is_zero()) {
-    dout(10) << "update_inode_frag empty dirstat" << dendl;
-    return update_inode_nest(in, projected, mut, blob, rstat);
+  const frag_delta_t &frag = iupdate.frag;
+  if (!frag.delta.version) {
+    dout(10) << "update_inode_frag already accounted" << dendl;
+    return update_inode_nest(in, projected, mut, blob, iupdate, supdate);
   }
 
   // requires inode.filelock
@@ -405,31 +431,40 @@ bool ParentStats::update_inode_stats(CInode *in, Projected &projected,
   if (!mut->wrlocks.count(&in->filelock) &&
       !mds->locker->wrlock_start(&in->filelock, mut, &gather)) {
     Mutation *newmut = new Mutation(mut->reqid, mut->attempt);
-    gather.set_finisher(new C_PS_InodeFrag(mds, in, newmut, dirstat, rstat));
+    gather.set_finisher(new C_PS_InodeFrag(mds, in, newmut, iupdate));
     gather.activate();
     dout(10) << "update_inode_frag waiting on " << in->filelock << dendl;
     return false;
   }
 
   inode_t *pi = projected.get(in, mut);
-  pi->dirstat.add(dirstat);
+  pi->dirstat.add(frag.delta);
   pi->dirstat.version++;
 
   // frag info does not propagate recursively
-  dirstat.zero();
+  supdate.ino = pi->ino;
+  supdate.frag.delta.zero();
+  supdate.frag.stat.zero();
 
   dout(10) << "update_inode_frag " << pi->ino << " " << pi->dirstat << dendl;
 
-  return update_inode_nest(in, projected, mut, blob, rstat);
+  // ack for stripe.accounted_fragstat
+  dirstripe_t ds(in->ino(), iupdate.stripeid);
+  int who = in->get_stripe_auth(ds.stripeid);
+  update_accounted(ds, who, projected, mut, frag.stat, nest_info_t());
+
+  return update_inode_nest(in, projected, mut, blob, iupdate, supdate);
 }
 
 // inode.rstat
 bool ParentStats::update_inode_nest(CInode *in, Projected &projected,
                                     Mutation *mut, EMetaBlob *blob,
-                                    nest_info_t &rstat)
+                                    const inode_stat_update_t &iupdate,
+                                    stripe_stat_update_t &supdate)
 {
-  if (!rstat.rsize() && rstat.rctime.is_zero()) {
-    dout(10) << "update_inode_nest empty rstat" << dendl;
+  const nest_delta_t &nest = iupdate.nest;
+  if (!nest.delta.version) {
+    dout(10) << "update_inode_nest already accounted" << dendl;
     return false;
   }
 
@@ -438,7 +473,7 @@ bool ParentStats::update_inode_nest(CInode *in, Projected &projected,
   if (!mut->wrlocks.count(&in->nestlock) &&
       !mds->locker->wrlock_start(&in->nestlock, mut, &gather)) {
     Mutation *newmut = new Mutation(mut->reqid, mut->attempt);
-    gather.set_finisher(new C_PS_InodeNest(mds, in, newmut, rstat));
+    gather.set_finisher(new C_PS_InodeNest(mds, in, newmut, iupdate));
     gather.activate();
     dout(10) << "update_inode_nest waiting on " << in->nestlock << dendl;
     return false;
@@ -446,87 +481,183 @@ bool ParentStats::update_inode_nest(CInode *in, Projected &projected,
 
   inode_t *pi = projected.get(in, mut);
   assert(pi->rstat.version >= pi->accounted_rstat.version);
-  pi->rstat.add(rstat);
+  pi->rstat.add(nest.delta);
   pi->rstat.version++;
 
-  dout(10) << "update_inode_nest " << pi->ino << " " << pi->rstat << dendl;
+  supdate.ino = pi->ino;
+  supdate.nest.delta = nest.delta;
+  supdate.nest.stat = pi->rstat;
+
+  dout(10) << "update_inode_nest " << pi->ino << " " << supdate.nest << dendl;
+
+  // ack for stripe.accounted_rstat
+  dirstripe_t ds(in->ino(), iupdate.stripeid);
+  int who = in->get_stripe_auth(ds.stripeid);
+  update_accounted(ds, who, projected, mut, frag_info_t(), nest.stat);
   return true;
 }
 
+
+// update accounted stats
+void ParentStats::update_accounted(dirstripe_t ds, int who,
+                                   Projected &projected, Mutation *mut,
+                                   const frag_info_t &fragstat,
+                                   const nest_info_t &rstat)
+{
+  if (who == mds->get_nodeid()) {
+    CStripe *stripe = mds->mdcache->get_dirstripe(ds);
+    assert(stripe); // TODO: pin until accounted
+    fnode_t *pf = projected.get(stripe, mut);
+    account_stripe(ds, pf, fragstat, rstat);
+  } else {
+    // queue ack for remote mds
+    stats_for_mds(who)->add_stripe_ack(ds, fragstat, rstat);
+    dout(10) << "forwarding stripe ack for " << ds << " to mds." << who
+        << ": " << fragstat << " " << rstat << dendl;
+  }
+}
+
+void ParentStats::update_accounted(inodeno_t ino, Projected &projected,
+                                   Mutation *mut, const nest_info_t &rstat)
+{
+  // check cache, or use placement algorithm to locate inode
+  CInode *in = mds->mdcache->get_inode(ino);
+  const InodeContainer *container = mds->mdcache->get_container();
+  int who = in ? in->authority().first : container->place(ino);
+  if (who == mds->get_nodeid()) {
+    assert(in); // TODO: pin until accounted
+    inode_t *pi = projected.get(in, mut);
+    account_inode(pi, rstat);
+  } else {
+    // queue ack for remote mds
+    stats_for_mds(who)->add_inode_ack(ino, rstat);
+    dout(10) << "forwarding inode ack for " << ino << " to mds." << who
+        << ": " << rstat << dendl;
+  }
+}
+
+void ParentStats::account_stripe(dirstripe_t ds, fnode_t *pf,
+                                 const frag_info_t &fragstat,
+                                 const nest_info_t &rstat)
+{
+  assert(pf->fragstat.version >= fragstat.version);
+  if (pf->accounted_fragstat.version < fragstat.version) {
+    pf->accounted_fragstat = fragstat;
+    dout(10) << "fragstat accounted " << pf->accounted_fragstat
+        << " for stripe " << ds << dendl;
+  }
+  assert(pf->rstat.version >= rstat.version);
+  if (pf->accounted_rstat.version < rstat.version) {
+    pf->accounted_rstat = rstat;
+    dout(10) << "rstat accounted " << pf->accounted_rstat
+        << " for stripe " << ds << dendl;
+  }
+}
+
+void ParentStats::account_inode(inode_t *pi, const nest_info_t &rstat)
+{
+  assert(pi->rstat.version >= rstat.version);
+  if (pi->accounted_rstat.version < rstat.version) {
+    pi->accounted_rstat = rstat;
+    dout(10) << "rstat accounted " << pi->accounted_rstat
+        << " for inode " << pi->ino << dendl;
+  }
+}
 
 // recursive versions
 // stripe stats -> inode stats
 void ParentStats::update_stripe(CStripe *stripe, Projected &projected,
                                 Mutation *mut, EMetaBlob *blob,
-                                frag_info_t &fragstat, nest_info_t &rstat)
+                                const stripe_stat_update_t &supdate)
 {
-  if (!update_stripe_stats(stripe, projected, mut, blob, fragstat, rstat))
+  inode_stat_update_t iupdate;
+  if (!update_stripe_stats(stripe, projected, mut, blob, supdate, iupdate))
     return;
 
-  CInode *in = open_parent_inode(stripe, mut, fragstat, rstat);
+  CInode *in = open_parent_inode(stripe, mut, iupdate);
   if (in)
-    update_inode(in, projected, mut, blob, fragstat, rstat);
+    update_inode(in, projected, mut, blob, iupdate);
 }
 
 // inode stats -> rstats
 void ParentStats::update_inode(CInode *in, Projected &projected,
                                Mutation *mut, EMetaBlob *blob,
-                               frag_info_t &dirstat, nest_info_t &rstat)
+                               const inode_stat_update_t &iupdate)
 {
-  if (!update_inode_stats(in, projected, mut, blob, dirstat, rstat))
+  stripe_stat_update_t supdate;
+  if (!update_inode_stats(in, projected, mut, blob, iupdate, supdate))
     return;
 
-  update_rstats(in, projected, mut, blob, rstat);
+  update_rstats(in, projected, mut, blob, supdate);
 }
 
 // inode.rstat -> stripe.rstat -> ...
 void ParentStats::update_rstats(CInode *in, Projected &projected,
                                 Mutation *mut, EMetaBlob *blob,
-                                nest_info_t rstat)
+                                stripe_stat_update_t &supdate)
 {
-  if (!rstat.rsize() && rstat.rctime.is_zero()) {
-    dout(10) << "update_rstats empty rstat" << dendl;
+  const nest_delta_t &nest = supdate.nest;
+  if (!nest.delta.version) {
+    dout(10) << "update_rstats already accounted" << dendl;
     return;
   }
 
-  dout(10) << "update_rstats " << rstat << dendl;
-  frag_info_t empty;
+  dout(10) << "update_rstats " << supdate << dendl;
 
-  CStripe *stripe = open_parent_stripe(in->get_projected_inode(), empty, rstat);
+  CStripe *stripe = open_parent_stripe(in->get_projected_inode(), supdate);
   while (stripe) {
-    if (!update_stripe_nest(stripe, projected, mut, blob, rstat))
+    inode_stat_update_t iupdate;
+    if (!update_stripe_nest(stripe, projected, mut, blob, supdate, iupdate))
       break;
 
-    in = open_parent_inode(stripe, mut, empty, rstat);
+    in = open_parent_inode(stripe, mut, iupdate);
     if (!in)
       break;
 
-    if (!update_inode_nest(in, projected, mut, blob, rstat))
+    supdate.ino = in->ino();
+    supdate.frag.delta.zero();
+    supdate.frag.stat.zero();
+    supdate.nest.delta.zero();
+    supdate.nest.stat.zero();
+
+    if (!update_inode_nest(in, projected, mut, blob, iupdate, supdate))
       break;
 
     // continue with next parent stripe
-    stripe = open_parent_stripe(in->get_projected_inode(), empty, rstat);
+    stripe = open_parent_stripe(in->get_projected_inode(), supdate);
   }
 }
 
 void ParentStats::update(CInode *in, Mutation *mut, EMetaBlob *blob,
-                         frag_info_t fragstat)
+                         const frag_info_t &fragstat,
+                         const nest_info_t &rstat)
 {
   Projected projected; // projected stripes and inodes to journal
 
   inode_t *pi = in->get_projected_inode();
 
-  nest_info_t rstat;
-  rstat.add_delta(pi->rstat, pi->accounted_rstat);
+  stripe_stat_update_t update;
+  update.ino = pi->ino;
+  update.frag.delta = fragstat;
 
-  dout(10) << "update " << in->ino() << " " << fragstat << dendl;
+  if (rstat.version) {
+    pi->rstat.add(rstat);
+    pi->rstat.version++;
+    update.nest.delta = rstat;
+    update.nest.stat = pi->rstat;
+  }
+
+  if (!update.frag.delta.version && !update.nest.delta.version)
+    return;
+
+  dout(10) << "update " << in->ino() << " " << update << dendl;
 
   // find first parent, or forward request
-  CStripe *stripe = open_parent_stripe(pi, fragstat, rstat);
+  CStripe *stripe = open_parent_stripe(pi, update);
 
   // update stripe.fragstat and recursive stats
   if (stripe)
-    update_stripe(stripe, projected, mut, blob, fragstat, rstat);
+    update_stripe(stripe, projected, mut, blob, update);
 
   // write updated stripes and inodes to the journal
   projected.journal(blob);
@@ -543,6 +674,31 @@ void ParentStats::handle(MParentStats *m)
   Mutation *mut = new Mutation();
   EUpdate *le = new EUpdate(mds->mdlog, "remote_parent_stats");
 
+  // account for acks first
+  typedef MParentStats::inode_ack_map::iterator inode_ack_iter;
+  for (inode_ack_iter i = m->inode_acks.begin(); i != m->inode_acks.end(); ++i) {
+    dout(15) << "ack " << i->first << ": " << i->second << dendl;
+
+    CInode *in = mds->mdcache->get_inode(i->first);
+    assert(in); // TODO: keep pinned until accounted
+    assert(in->is_auth());
+
+    inode_t *pi = projected.get(in, mut);
+    account_inode(pi, i->second);
+  }
+
+  typedef MParentStats::stripe_ack_map::iterator stripe_ack_iter;
+  for (stripe_ack_iter s = m->stripe_acks.begin(); s != m->stripe_acks.end(); ++s) {
+    dout(15) << "ack " << s->first << ": " << s->second << dendl;
+
+    CStripe *stripe = mds->mdcache->get_dirstripe(s->first);
+    assert(stripe); // TODO: keep pinned until accounted
+    assert(stripe->is_auth());
+
+    fnode_t *pf = projected.get(stripe, mut);
+    account_stripe(s->first, pf, s->second.first, s->second.second);
+  }
+
   // propagate inode and stripe updates
   typedef MParentStats::inode_map::iterator inode_iter;
   for (inode_iter i = m->inodes.begin(); i != m->inodes.end(); ++i) {
@@ -552,8 +708,7 @@ void ParentStats::handle(MParentStats *m)
     assert(in); // TODO: fetch from disk
     assert(in->is_auth());
 
-    update_inode(in, projected, mut, &le->metablob,
-                 i->second.first, i->second.second);
+    update_inode(in, projected, mut, &le->metablob, i->second);
   }
 
   typedef MParentStats::stripe_map::iterator stripe_iter;
@@ -564,8 +719,7 @@ void ParentStats::handle(MParentStats *m)
     assert(stripe); // TODO: fetch from disk
     assert(stripe->is_auth());
 
-    update_stripe(stripe, projected, mut, &le->metablob,
-                  s->second.first, s->second.second);
+    update_stripe(stripe, projected, mut, &le->metablob, s->second);
   }
 
   if (!projected.journal(&le->metablob)) {

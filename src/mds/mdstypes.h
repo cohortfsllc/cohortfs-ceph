@@ -130,7 +130,7 @@ struct frag_info_t : public scatter_info_t {
   }
 
   // *this += cur - acc;
-  void add_delta(const frag_info_t &cur, frag_info_t &acc, bool& touched_mtime) {
+  void add_delta(const frag_info_t &cur, const frag_info_t &acc, bool& touched_mtime) {
     if (!(cur.mtime == acc.mtime)) {
       mtime = cur.mtime;
       touched_mtime = true;
@@ -169,6 +169,10 @@ WRITE_CLASS_ENCODER(frag_info_t)
 
 inline bool operator==(const frag_info_t &l, const frag_info_t &r) {
   return memcmp(&l, &r, sizeof(l)) == 0;
+}
+
+inline bool operator!=(const frag_info_t &l, const frag_info_t &r) {
+  return memcmp(&l, &r, sizeof(l)) != 0;
 }
 
 inline ostream& operator<<(ostream &out, const frag_info_t &f) {
@@ -215,7 +219,7 @@ struct nest_info_t : public scatter_info_t {
   }
 
   // *this += cur - acc;
-  void add_delta(const nest_info_t &cur, nest_info_t &acc) {
+  void add_delta(const nest_info_t &cur, const nest_info_t &acc) {
     if (cur.rctime > rctime)
       rctime = cur.rctime;
     rbytes += cur.rbytes - acc.rbytes;
@@ -273,6 +277,7 @@ inline ostream& operator<<(ostream &out, const nest_info_t &n) {
   out << ")";    
   return out;
 }
+
 
 struct vinodeno_t {
   inodeno_t ino;
@@ -410,6 +415,108 @@ inline bool operator<(dirstripe_t l, dirstripe_t r) {
 }
 inline bool operator==(dirstripe_t l, dirstripe_t r) {
   return l.ino == r.ino && l.stripeid == r.stripeid;
+}
+
+
+// parent stat updates
+struct frag_delta_t {
+  frag_info_t delta;
+  frag_info_t stat;
+
+  void add(const frag_delta_t &other) {
+    delta.add(other.delta);
+    delta.version += other.delta.version;
+    if (stat.version < other.stat.version)
+      stat = other.stat;
+  }
+
+  void encode(bufferlist &bl) const {
+    ::encode(delta, bl);
+    ::encode(stat, bl);
+  }
+  void decode(bufferlist::iterator &bl) {
+    ::decode(delta, bl);
+    ::decode(stat, bl);
+  }
+};
+WRITE_CLASS_ENCODER(frag_delta_t)
+
+inline ostream& operator<<(ostream &out, const frag_delta_t &f) {
+  return out << "frag + " << f.delta << " = " << f.stat;
+}
+
+struct nest_delta_t {
+  nest_info_t delta;
+  nest_info_t stat;
+
+  void add(const nest_delta_t &other) {
+    delta.add(other.delta);
+    delta.version += other.delta.version;
+    if (stat.version < other.stat.version)
+      stat = other.stat;
+  }
+
+  void encode(bufferlist &bl) const {
+    ::encode(delta, bl);
+    ::encode(stat, bl);
+  }
+  void decode(bufferlist::iterator &bl) {
+    ::decode(delta, bl);
+    ::decode(stat, bl);
+  }
+};
+WRITE_CLASS_ENCODER(nest_delta_t)
+
+inline ostream& operator<<(ostream &out, const nest_delta_t &n) {
+  return out << "nest + " << n.delta << " = " << n.stat;
+}
+
+struct inode_stat_update_t {
+  stripeid_t stripeid; // originating stripeid
+  frag_delta_t frag;
+  nest_delta_t nest;
+
+  inode_stat_update_t(stripeid_t stripeid = 0) : stripeid(stripeid) {}
+
+  void encode(bufferlist &bl) const {
+    ::encode(stripeid, bl);
+    ::encode(frag, bl);
+    ::encode(nest, bl);
+  }
+  void decode(bufferlist::iterator &bl) {
+    ::decode(stripeid, bl);
+    ::decode(frag, bl);
+    ::decode(nest, bl);
+  }
+};
+WRITE_CLASS_ENCODER(inode_stat_update_t)
+
+inline ostream& operator<<(ostream &out, const inode_stat_update_t &i) {
+  return out << i.stripeid << ": " << i.frag << " " << i.nest;
+}
+
+struct stripe_stat_update_t {
+  inodeno_t ino; // originating ino
+  frag_delta_t frag;
+  nest_delta_t nest;
+
+  stripe_stat_update_t(inodeno_t ino = 0) : ino(ino) {}
+
+  void encode(bufferlist &bl) const {
+    ::encode(ino, bl);
+    ::encode(frag, bl);
+    ::encode(nest, bl);
+  }
+  void decode(bufferlist::iterator &bl) {
+    ::decode(ino, bl);
+    ::decode(frag, bl);
+    ::decode(nest, bl);
+  }
+};
+WRITE_CLASS_ENCODER(stripe_stat_update_t)
+
+inline ostream& operator<<(ostream &out, const stripe_stat_update_t &s) {
+  return out << s.ino << ": " << s.frag << " " << s.nest;
 }
 
 
