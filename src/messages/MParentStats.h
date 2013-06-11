@@ -22,46 +22,78 @@
 class MParentStats : public Message {
  public:
   // batched inode/stripe parent stat updates
-  typedef pair<frag_info_t, nest_info_t> stat_update_t;
-  typedef map<inodeno_t, stat_update_t> inode_map;
+  typedef map<inodeno_t, inode_stat_update_t> inode_map;
   inode_map inodes;
 
-  typedef map<dirstripe_t, stat_update_t> stripe_map;
+  typedef map<dirstripe_t, stripe_stat_update_t> stripe_map;
   stripe_map stripes;
 
 
-  void add_inode(inodeno_t ino, const frag_info_t &dirstat,
-                 const nest_info_t &rstat)
+  void add_inode(inodeno_t ino, const inode_stat_update_t &update)
   {
-    const stat_update_t update(dirstat, rstat);
     pair<inode_map::iterator, bool> result =
         inodes.insert(make_pair(ino, update));
     if (result.second)
       return;
 
     // add to existing stats
-    stat_update_t &existing = result.first->second;
-    if (existing.first.version < update.first.version)
-      existing.first = update.first;
-    if (existing.second.version < update.second.version)
-      existing.second = update.second;
+    inode_stat_update_t &existing = result.first->second;
+    existing.frag.add(update.frag);
+    existing.nest.add(update.nest);
   }
 
-  void add_stripe(dirstripe_t ds, const frag_info_t &fragstat,
-                  const nest_info_t &rstat)
+  void add_stripe(dirstripe_t ds, const stripe_stat_update_t &update)
   {
-    const stat_update_t update(fragstat, rstat);
     pair<stripe_map::iterator, bool> result =
         stripes.insert(make_pair(ds, update));
     if (result.second)
       return;
 
     // add to existing stats
-    stat_update_t &existing = result.first->second;
-    if (existing.first.version < update.first.version)
-      existing.first = update.first;
-    if (existing.second.version < update.second.version)
-      existing.second = update.second;
+    stripe_stat_update_t &existing = result.first->second;
+    existing.frag.add(update.frag);
+    existing.nest.add(update.nest);
+  }
+
+
+  // batched inode/stripe ack messages
+  typedef map<inodeno_t, nest_info_t> inode_ack_map;
+  inode_ack_map inode_acks;
+
+  typedef pair<frag_info_t, nest_info_t> stat_ack_t;
+  typedef map<dirstripe_t, stat_ack_t> stripe_ack_map;
+  stripe_ack_map stripe_acks;
+
+  void add_inode_ack(inodeno_t ino, const nest_info_t &rstat)
+  {
+    pair<inode_ack_map::iterator, bool> result =
+        inode_acks.insert(make_pair(ino, rstat));
+    if (result.second)
+      return;
+
+    // update existing ack if newer
+    nest_info_t &existing = result.first->second;
+    if (existing.version < rstat.version)
+      existing = rstat;
+  }
+
+  void add_stripe_ack(dirstripe_t ds,
+                      const frag_info_t &fragstat,
+                      const nest_info_t &rstat)
+  {
+    const stat_ack_t ack(fragstat, rstat);
+
+    pair<stripe_ack_map::iterator, bool> result =
+        stripe_acks.insert(make_pair(ds, ack));
+    if (result.second)
+      return;
+
+    // update existing ack if newer
+    stat_ack_t &existing = result.first->second;
+    if (existing.first.version < fragstat.version)
+      existing.first = fragstat;
+    if (existing.second.version < rstat.version)
+      existing.second = rstat;
   }
 
   MParentStats() : Message(MSG_MDS_PARENTSTATS) {}
@@ -72,18 +104,23 @@ class MParentStats : public Message {
   const char *get_type_name() const { return "parent_stats"; }
   void print(ostream& out) const {
     out << get_type_name()
-        << "(inodes=" << inodes.size() << " stripes=" << stripes.size() << ")";
+        << "(inodes=" << inodes.size() << "/" << inode_acks.size()
+        << " stripes=" << stripes.size() << "/" << stripe_acks.size() << ")";
   }
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(inodes, p);
+    ::decode(inode_acks, p);
     ::decode(stripes, p);
+    ::decode(stripe_acks, p);
   }
 
   virtual void encode_payload(uint64_t features) {
     ::encode(inodes, payload);
+    ::encode(inode_acks, payload);
     ::encode(stripes, payload);
+    ::encode(stripe_acks, payload);
   }
 };
 
