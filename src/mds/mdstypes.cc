@@ -210,6 +210,162 @@ ostream& operator<<(ostream& out, const dirstripe_t &ds)
 
 
 /*
+ * frag_delta_t
+ */
+void frag_delta_t::encode(bufferlist &bl) const
+{
+  ::encode(delta, bl);
+  ::encode(stat, bl);
+}
+
+void frag_delta_t::decode(bufferlist::iterator &p)
+{
+  ::decode(delta, p);
+  ::decode(stat, p);
+}
+
+void frag_delta_t::dump(Formatter *f) const
+{
+  f->open_object_section("delta");
+  delta.dump(f);
+  f->close_section();
+
+  f->open_object_section("stat");
+  stat.dump(f);
+  f->close_section();
+}
+
+void frag_delta_t::generate_test_instances(list<frag_delta_t*>& ls)
+{
+  ls.push_back(new frag_delta_t());
+}
+
+ostream& operator<<(ostream& out, const frag_delta_t &f)
+{
+  return out << "frag + " << f.delta << " = " << f.stat;
+}
+
+
+/*
+ * nest_delta_t
+ */
+void nest_delta_t::encode(bufferlist &bl) const
+{
+  ::encode(delta, bl);
+  ::encode(stat, bl);
+}
+
+void nest_delta_t::decode(bufferlist::iterator &p)
+{
+  ::decode(delta, p);
+  ::decode(stat, p);
+}
+
+void nest_delta_t::dump(Formatter *f) const
+{
+  f->open_object_section("delta");
+  delta.dump(f);
+  f->close_section();
+
+  f->open_object_section("stat");
+  stat.dump(f);
+  f->close_section();
+}
+
+void nest_delta_t::generate_test_instances(list<nest_delta_t*>& ls)
+{
+  ls.push_back(new nest_delta_t());
+}
+
+ostream& operator<<(ostream& out, const nest_delta_t &n)
+{
+  return out << "nest + " << n.delta << " = " << n.stat;
+}
+
+
+/*
+ * inode_stat_update_t
+ */
+void inode_stat_update_t::encode(bufferlist &bl) const
+{
+  ::encode(stripeid, bl);
+  ::encode(frag, bl);
+  ::encode(nest, bl);
+}
+
+void inode_stat_update_t::decode(bufferlist::iterator &p)
+{
+  ::decode(stripeid, p);
+  ::decode(frag, p);
+  ::decode(nest, p);
+}
+
+void inode_stat_update_t::dump(Formatter *f) const
+{
+  f->dump_unsigned("stripeid", stripeid);
+
+  f->open_object_section("frag");
+  frag.dump(f);
+  f->close_section();
+
+  f->open_object_section("nest");
+  nest.dump(f);
+  f->close_section();
+}
+
+void inode_stat_update_t::generate_test_instances(list<inode_stat_update_t*>& ls)
+{
+  ls.push_back(new inode_stat_update_t());
+}
+
+ostream& operator<<(ostream& out, const inode_stat_update_t &i)
+{
+  return out << i.stripeid << ": " << i.frag << " " << i.nest;
+}
+
+
+/*
+ * stripe_stat_update_t
+ */
+void stripe_stat_update_t::encode(bufferlist &bl) const
+{
+  ::encode(ino, bl);
+  ::encode(frag, bl);
+  ::encode(nest, bl);
+}
+
+void stripe_stat_update_t::decode(bufferlist::iterator &p)
+{
+  ::decode(ino, p);
+  ::decode(frag, p);
+  ::decode(nest, p);
+}
+
+void stripe_stat_update_t::dump(Formatter *f) const
+{
+  f->dump_stream("ino") << ino;
+
+  f->open_object_section("frag");
+  frag.dump(f);
+  f->close_section();
+
+  f->open_object_section("nest");
+  nest.dump(f);
+  f->close_section();
+}
+
+void stripe_stat_update_t::generate_test_instances(list<stripe_stat_update_t*>& ls)
+{
+  ls.push_back(new stripe_stat_update_t());
+}
+
+ostream& operator<<(ostream& out, const stripe_stat_update_t &s)
+{
+  return out << s.ino << ": " << s.frag << " " << s.nest;
+}
+
+
+/*
  * inoparent_t
  */
 void inoparent_t::encode(bufferlist &bl) const
@@ -239,7 +395,8 @@ void inoparent_t::generate_test_instances(list<inoparent_t*>& ls)
   ls.push_back(new inoparent_t(dirstripe_t(1, 6), 2, "parent"));
 }
 
-ostream& operator<<(ostream& out, const inoparent_t &p) {
+ostream& operator<<(ostream& out, const inoparent_t &p)
+{
   return out << p.stripe << '/' << p.name << "@mds." << p.who;
 }
 
