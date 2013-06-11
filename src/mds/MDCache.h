@@ -25,6 +25,7 @@
 #include "CDentry.h"
 #include "CDir.h"
 #include "InodeContainer.h"
+#include "ParentStats.h"
 #include "include/Context.h"
 #include "events/EMetaBlob.h"
 
@@ -104,6 +105,8 @@ class MDCache {
   set<CInode*> base_inodes;
 
 public:
+  ParentStats parentstats;
+
   SnapRealm* get_snaprealm() { return &snaprealm; }
 
   void advance_stray() {
