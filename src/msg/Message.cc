@@ -111,6 +111,7 @@ using namespace std;
 #include "messages/MMDSFindInoReply.h"
 #include "messages/MMDSRestripe.h"
 #include "messages/MMDSRestripeAck.h"
+#include "messages/MParentStats.h"
 
 #include "messages/MDirUpdate.h"
 #include "messages/MDiscover.h"
@@ -531,6 +532,10 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     break;
   case MSG_MDS_RESTRIPEACK:
     m = new MMDSRestripeAck;
+    break;
+
+  case MSG_MDS_PARENTSTATS:
+    m = new MParentStats;
     break;
 
   case MSG_MDS_FRAGMENTNOTIFY:

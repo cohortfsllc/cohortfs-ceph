@@ -2115,9 +2115,10 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
     xlocks.insert(&dn->lock);                 // new dn, xlock
   else
     rdlocks.insert(&dn->lock);  // existing dn, rdlock
-  wrlocks.insert(&dn->get_dir()->get_inode()->filelock); // also, wrlock on dir mtime
-  wrlocks.insert(&dn->get_dir()->get_inode()->nestlock); // also, wrlock on dir mtime
 
+  // also xlock stripe for mtime
+  xlocks.insert(&dn->get_stripe()->linklock);
+  xlocks.insert(&dn->get_stripe()->nestlock);
   return dn;
 }
 
@@ -2758,7 +2759,6 @@ void Server::handle_client_openc(MDRequest *mdr)
     in->inode.client_ranges[client].range.last = in->inode.get_layout_size_increment();
     in->inode.client_ranges[client].follows = follows;
   }
-  in->inode.rstat.rfiles = 1;
 
   in->inode.add_parent(dn->get_stripe()->dirstripe(),
                        mds->get_nodeid(), dn->get_name());
@@ -3983,7 +3983,6 @@ void Server::handle_client_mknod(MDRequest *mdr)
   newi->inode.rdev = req->head.args.mknod.rdev;
   if ((newi->inode.mode & S_IFMT) == 0)
     newi->inode.mode |= S_IFREG;
-  newi->inode.rstat.rfiles = 1;
   newi->inode.add_parent(dn->get_stripe()->dirstripe(),
                          mds->get_nodeid(), dn->get_name());
 
@@ -4075,7 +4074,6 @@ void Server::handle_client_mkdir(MDRequest *mdr)
     mode |= S_IFDIR;
     mdr->in[0] = newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
 
-    newi->inode.rstat.rsubdirs = 1;
     newi->inode.add_parent(dn->get_stripe()->dirstripe(),
                            mds->get_nodeid(), dn->get_name());
 
@@ -4445,7 +4443,6 @@ void Server::handle_client_symlink(MDRequest *mdr)
   newi->symlink = req->get_path2();
   newi->inode.size = newi->symlink.length();
   newi->inode.rstat.rbytes = newi->inode.size;
-  newi->inode.rstat.rfiles = 1;
   newi->inode.add_parent(dn->get_stripe()->dirstripe(),
                          mds->get_nodeid(), dn->get_name());
 
@@ -4459,8 +4456,6 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdlog->start_entry(le);
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
-                                    PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
 
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_inode(newi, true);

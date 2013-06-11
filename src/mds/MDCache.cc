@@ -123,7 +123,7 @@ long g_num_caps = 0;
 set<int> SimpleLock::empty_gather_set;
 
 
-MDCache::MDCache(MDS *m) : container(this), snaprealm(this)
+MDCache::MDCache(MDS *m) : container(this), snaprealm(this), parentstats(m)
 {
   mds = m;
   migrator = new Migrator(mds, this);
@@ -1215,9 +1215,7 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
 				       int flags, int linkunlink,
 				       snapid_t cfollows)
 {
-  bool primary_dn = flags & PREDIRTY_PRIMARY;
   bool do_parent_mtime = flags & PREDIRTY_DIR;
-  bool shallow = flags & PREDIRTY_SHALLOW;
 
   assert(mds->mdlog->entry_is_open());
 
@@ -1231,259 +1229,26 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
   dout(10) << "predirty_journal_parents"
 	   << (do_parent_mtime ? " do_parent_mtime":"")
 	   << " linkunlink=" <<  linkunlink
-	   << (primary_dn ? " primary_dn":" remote_dn")
-	   << (shallow ? " SHALLOW":"")
 	   << " follows " << cfollows
 	   << " " << *in << dendl;
 
-  if (!parent) {
-    assert(primary_dn);
-    parent = in->get_projected_parent_dn()->get_dir();
+  frag_info_t fragstat;
+
+  if (linkunlink) {
+    if (in->is_dir())
+      fragstat.nsubdirs = linkunlink;
+    else
+      fragstat.nfiles = linkunlink;
+    fragstat.version = 1;
   }
 
-  if (flags == 0 && linkunlink == 0) {
-    dout(10) << " no flags/linkunlink, just adding dir context to blob(s)" << dendl;
-    blob->add_stripe_context(parent->get_stripe());
-    return;
+  if (do_parent_mtime) {
+    fragstat.mtime = mut->now;
+    fragstat.version = 1;
   }
 
-  // build list of inodes to wrlock, dirty, and update
-  list<CInode*> lsi;
-  CInode *cur = in;
-  CDentry *parentdn = NULL;
-  bool first = true;
-  while (parent) {
-    //assert(cur->is_auth() || !primary_dn);  // this breaks the rename auth twiddle hack
-    assert(parent->is_auth());
-    
-    // opportunistically adjust parent dirfrag
-    CStripe *stripe = parent->get_stripe();
-    CInode *pin = stripe->get_inode();
-
-    // inode -> dirfrag
-    mut->auth_pin(stripe);
-    mut->add_projected_fnode(stripe);
-
-    fnode_t *pf = stripe->project_fnode();
-
-    if (do_parent_mtime || linkunlink) {
-      assert(mut->wrlocks.count(&pin->filelock) ||
-	     mut->is_slave());   // we are slave.  master will have wrlocked the dir.
-      assert(cfollows == CEPH_NOSNAP);
-      
-      // update stale fragstat?
-      stripe->resync_accounted_fragstat();
-
-      if (do_parent_mtime) {
-	pf->fragstat.mtime = mut->now;
-	if (mut->now > pf->rstat.rctime) {
-	  dout(10) << "predirty_journal_parents updating mtime on " << *stripe << dendl;
-	  pf->rstat.rctime = mut->now;
-	} else {
-	  dout(10) << "predirty_journal_parents updating mtime UNDERWATER on " << *stripe << dendl;
-	}
-      }
-      if (linkunlink) {
-	dout(10) << "predirty_journal_parents updating size on " << *stripe << dendl;
-	if (in->is_dir()) {
-	  pf->fragstat.nsubdirs += linkunlink;
-	  //pf->rstat.rsubdirs += linkunlink;
-	} else {
- 	  pf->fragstat.nfiles += linkunlink;
- 	  //pf->rstat.rfiles += linkunlink;
-	}
-      }
-    }
-
-    
-    // rstat
-    if (!primary_dn) {
-      // don't update parent this pass
-    } else if (!linkunlink && !pin->nestlock.can_wrlock(-1)) {
-      dout(20) << " unwritable parent nestlock " << pin->nestlock
-	       << ", marking dirty rstat on " << *cur << dendl;
-      cur->mark_dirty_rstat();
-   } else {
-      // if we don't hold a wrlock reference on this nestlock, take one,
-      // because we are about to write into the dirfrag fnode and that needs
-      // to commit before the lock can cycle.
-     if (linkunlink) {
-       assert(pin->nestlock.get_num_wrlocks() || mut->is_slave());
-     }
-
-      if (mut->wrlocks.count(&pin->nestlock) == 0) {
-	dout(10) << " taking wrlock on " << pin->nestlock << " on " << *pin << dendl;
-	mds->locker->wrlock_force(&pin->nestlock, mut);
-      }
-
-      // now we can project the inode rstat diff the dirfrag
-      snapid_t follows = cfollows;
-      if (follows == CEPH_NOSNAP)
-	follows = get_snaprealm()->get_newest_seq();
-
-      snapid_t first = follows+1;
-
-      // first, if the frag is stale, bring it back in sync.
-      stripe->resync_accounted_rstat();
-
-      // now push inode rstats into frag
-      project_rstat_inode_to_frag(cur, stripe, first, linkunlink);
-      cur->clear_dirty_rstat();
-    }
-
-    bool stop = false;
-    if (!pin->is_auth() || pin->is_ambiguous_auth()) {
-      dout(10) << "predirty_journal_parents !auth or ambig on " << *pin << dendl;
-      stop = true;
-    }
-
-    // delay propagating until later?
-    if (!stop && !first &&
-	g_conf->mds_dirstat_min_interval > 0) {
-      if (pin->last_dirstat_prop.sec() > 0) {
-	double since_last_prop = mut->now - pin->last_dirstat_prop;
-	if (since_last_prop < g_conf->mds_dirstat_min_interval) {
-	  dout(10) << "predirty_journal_parents last prop " << since_last_prop
-		   << " < " << g_conf->mds_dirstat_min_interval
-		   << ", stopping" << dendl;
-	  stop = true;
-	} else {
-	  dout(10) << "predirty_journal_parents last prop " << since_last_prop << " ago, continuing" << dendl;
-	}
-      } else {
-	dout(10) << "predirty_journal_parents last prop never, stopping" << dendl;
-	stop = true;
-      }
-    }
-
-    if (!stop && mut->wrlocks.count(&pin->nestlock) == 0 &&
-	(!pin->can_auth_pin() ||
-	 !mds->locker->wrlock_start(&pin->nestlock, mut, NULL))) {
-      dout(10) << "predirty_journal_parents can't wrlock " << pin->nestlock
-	       << " on " << *pin << dendl;
-      stop = true;
-    }
-    if (stop) {
-      dout(10) << "predirty_journal_parents stop.  marking nestlock on " << *pin << dendl;
-      mds->locker->mark_updated_scatterlock(&pin->nestlock);
-      mut->ls->dirty_dirfrag_nest.push_back(&pin->item_dirty_dirfrag_nest);
-      mut->add_updated_lock(&pin->nestlock);
-      if (do_parent_mtime || linkunlink) {
-	mds->locker->mark_updated_scatterlock(&pin->filelock);
-	mut->ls->dirty_dirfrag_dir.push_back(&pin->item_dirty_dirfrag_dir);
-	mut->add_updated_lock(&pin->filelock);
-      }
-      break;
-    }
-
-    assert(mut->wrlocks.count(&pin->nestlock) ||
-	   mut->is_slave());
-    
-    pin->last_dirstat_prop = mut->now;
-
-    // dirfrag -> diri
-    mut->auth_pin(pin);
-    mut->add_projected_inode(pin);
-    lsi.push_front(pin);
-
-    pin->pre_cow_old_inode();  // avoid cow mayhem!
-
-    inode_t *pi = pin->project_inode();
-
-    // dirstat
-    if (do_parent_mtime || linkunlink) {
-      dout(20) << "predirty_journal_parents add_delta " << pf->fragstat << dendl;
-      dout(20) << "predirty_journal_parents         - " << pf->accounted_fragstat << dendl;
-      bool touched_mtime = false;
-      pi->dirstat.add_delta(pf->fragstat, pf->accounted_fragstat, touched_mtime);
-      pf->accounted_fragstat = pf->fragstat;
-      if (touched_mtime)
-	pi->mtime = pi->ctime = pi->dirstat.mtime;
-      dout(20) << "predirty_journal_parents     gives " << pi->dirstat << " on " << *pin << dendl;
-
-      if (pi->dirstat.size() < 0)
-	assert(!"negative dirstat size" == g_conf->mds_verify_scatter);
-      if (pin->get_stripe_count() == 1) {
-	if (pi->dirstat.size() != pf->fragstat.size()) {
-	  mds->clog.error() << "unmatched fragstat size on single dirstripe "
-	     << stripe->dirstripe() << ", inode has " << pi->dirstat
-	     << ", dirfrag has " << pf->fragstat << "\n";
-
-	  // trust the dirfrag for now
-	  pi->dirstat = pf->fragstat;
-
-	  assert(!"unmatched fragstat size" == g_conf->mds_verify_scatter);
-	}
-      }
-    }
-
-    /* 
-     * the rule here is to follow the _oldest_ parent with dirty rstat
-     * data.  if we don't propagate all data, we add ourselves to the
-     * nudge list.  that way all rstat data will (eventually) get
-     * pushed up the tree.
-     *
-     * actually, no.  for now, silently drop rstats for old parents.  we need 
-     * hard link backpointers to do the above properly.
-     */
-
-    // stop?
-    if (pin->is_base())
-      break;
-    parentdn = pin->get_projected_parent_dn();
-    assert(parentdn);
-
-    // rstat
-    if (primary_dn) {
-
-      dout(10) << "predirty_journal_parents frag->inode on " << *stripe << dendl;
-
-      // first, if the frag is stale, bring it back in sync.
-      stripe->resync_accounted_rstat();
-
-      for (map<snapid_t,old_rstat_t>::iterator p = stripe->dirty_old_rstat.begin();
-	   p != stripe->dirty_old_rstat.end();
-	   p++)
-	project_rstat_frag_to_inode(p->second.rstat, p->second.accounted_rstat, p->second.first, p->first, pin, true);//false);
-      stripe->dirty_old_rstat.clear();
-      project_rstat_frag_to_inode(pf->rstat, pf->accounted_rstat, stripe->first, CEPH_NOSNAP, pin, true);//false);
-
-      pf->accounted_rstat = pf->rstat;
-
-      if (pin->get_stripe_count() == 1) {
-	if (pi->rstat.rbytes != pf->rstat.rbytes) { 
-	  mds->clog.error() << "unmatched rstat rbytes on single dirstripe "
-	      << stripe->dirstripe() << ", inode has " << pi->rstat
-	      << ", dirfrag has " << pf->rstat << "\n";
-	  
-	  // trust the dirfrag for now
-	  pi->rstat = pf->rstat;
-
-	  assert(!"unmatched rstat rbytes" == g_conf->mds_verify_scatter);
-	}
-      }
-    }
-
-    stripe->check_rstats();
-    // next parent!
-    cur = pin;
-    parent = parentdn->get_dir();
-    linkunlink = 0;
-    do_parent_mtime = false;
-    primary_dn = true;
-    first = false;
-  }
-
-  // now, stick it in the blob
-  assert(parent->is_auth());
-  blob->add_stripe_context(parent->get_stripe());
-  blob->add_dir(parent, true);
-  for (list<CInode*>::iterator p = lsi.begin(); p != lsi.end(); p++)
-    journal_dirty_inode(mut, blob, *p);
+  parentstats.update(in, mut, blob, fragstat);
 }
-
-
-
 
 
 // ===================================
@@ -5357,7 +5122,10 @@ void MDCache::dispatch(Message *m)
     container.handle_restripe_ack((MMDSRestripeAck*)m);
     break;
 
-    
+  case MSG_MDS_PARENTSTATS:
+    parentstats.handle((MParentStats*)m);
+    break;
+
   default:
     dout(7) << "cache unknown message " << m->get_type() << dendl;
     assert(0);
