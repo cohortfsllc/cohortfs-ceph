@@ -2540,8 +2540,7 @@ public:
     inodn->pop_projected_linkage();
 
     // dirty inode, dn, dir
-    newi->inode.version--;   // a bit hacky, see C_MDS_mknod_finish
-    newi->mark_dirty(newi->inode.version+1, mdr->ls);
+    newi->mark_dirty(mdr->ls);
     newi->_mark_dirty_parent(mdr->ls);
 
     mdr->apply();
@@ -2687,7 +2686,6 @@ void Server::handle_client_openc(MDRequest *mdr)
   // remote link to filesystem namespace
   dn->push_projected_linkage(in->ino(), in->d_type());
 
-  in->inode.version = inodn->pre_dirty();
   in->inode.update_backtrace();
   if (cmode & CEPH_FILE_MODE_WR) {
     in->inode.client_ranges[client].range.first = 0;
@@ -3253,7 +3251,6 @@ void Server::handle_client_setattr(MDRequest *mdr)
     }
   }
 
-  pi->version = cur->pre_dirty();
   pi->ctime = now;
 
   // log + wait
@@ -3290,7 +3287,6 @@ void Server::do_open_truncate(MDRequest *mdr, int cmode)
   // prepare
   inode_t *pi = in->project_inode();
   pi->mtime = pi->ctime = ceph_clock_now(g_ceph_context);
-  pi->version = in->pre_dirty();
 
   uint64_t old_size = MAX(pi->size, mdr->client_request->head.args.open.old_size);
   if (old_size > 0) {
@@ -3394,7 +3390,6 @@ void Server::handle_client_setlayout(MDRequest *mdr)
   pi->layout = layout;
   // add the old pool to the inode
   pi->add_old_pool(old_pool);
-  pi->version = cur->pre_dirty();
   pi->ctime = ceph_clock_now(g_ceph_context);
   
   // log + wait
@@ -3471,7 +3466,6 @@ void Server::handle_client_setdirlayout(MDRequest *mdr)
 
   pi = cur->project_inode();
   pi->layout = layout;
-  pi->version = cur->pre_dirty();
 
   // log + wait
   mdr->ls = mdlog->get_current_segment();
@@ -3658,7 +3652,6 @@ void Server::handle_set_vxattr(MDRequest *mdr, CInode *cur,
       pi->ctime = ceph_clock_now(g_ceph_context);
     }
 
-    pi->version = cur->pre_dirty();
     if (cur->is_file())
       pi->update_backtrace();
 
@@ -3705,9 +3698,7 @@ void Server::handle_remove_vxattr(MDRequest *mdr, CInode *cur,
     if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
       return;
 
-    cur->project_inode();
-    cur->get_projected_inode()->clear_layout();
-    cur->get_projected_inode()->version = cur->pre_dirty();
+    cur->project_inode()->clear_layout();
 
     // log + wait
     mdr->ls = mdlog->get_current_segment();
@@ -3795,7 +3786,6 @@ void Server::handle_client_setxattr(MDRequest *mdr)
   // project update
   map<string,bufferptr> *px = new map<string,bufferptr>;
   inode_t *pi = cur->project_inode(px);
-  pi->version = cur->pre_dirty();
   pi->ctime = ceph_clock_now(g_ceph_context);
   pi->xattr_version++;
   px->erase(name);
@@ -3854,7 +3844,6 @@ void Server::handle_client_removexattr(MDRequest *mdr)
   // project update
   map<string,bufferptr> *px = new map<string,bufferptr>;
   inode_t *pi = cur->project_inode(px);
-  pi->version = cur->pre_dirty();
   pi->ctime = ceph_clock_now(g_ceph_context);
   pi->xattr_version++;
   px->erase(name);
@@ -3895,12 +3884,7 @@ public:
     // link the inode
     dn->pop_projected_linkage();
     inodn->pop_projected_linkage();
-    
-    // be a bit hacky with the inode version, here.. we decrement it
-    // just to keep mark_dirty() happen. (we didn't bother projecting
-    // a new version of hte inode since it's just been created)
-    newi->inode.version--; 
-    newi->mark_dirty(newi->inode.version + 1, mdr->ls);
+    newi->mark_dirty(mdr->ls);
     newi->_mark_dirty_parent(mdr->ls);
 
     // mkdir?
@@ -3910,12 +3894,12 @@ public:
       for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
         CStripe *stripe = *s;
         assert(stripe);
-        stripe->mark_dirty(1, mdr->ls);
+        stripe->mark_dirty(mdr->ls);
         stripe->mark_new(mdr->ls);
 
         CDir *dir = stripe->get_dirfrag(frag_t());
         assert(dir);
-        dir->mark_dirty(1, mdr->ls);
+        dir->mark_dirty(mdr->ls);
         dir->mark_new(mdr->ls);
       }
     }
@@ -3997,7 +3981,6 @@ void Server::handle_client_mknod(MDRequest *mdr)
   newi->inode.rdev = req->head.args.mknod.rdev;
   if ((newi->inode.mode & S_IFMT) == 0)
     newi->inode.mode |= S_IFREG;
-  newi->inode.version = inodn->pre_dirty();
   newi->inode.rstat.rfiles = 1;
   newi->inode.update_backtrace();
   newi->inode.add_parent(dn->get_stripe()->dirstripe(),
@@ -4091,7 +4074,6 @@ void Server::handle_client_mkdir(MDRequest *mdr)
     mode |= S_IFDIR;
     mdr->in[0] = newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
 
-    newi->inode.version = inodn->pre_dirty();
     newi->inode.rstat.rsubdirs = 1;
     newi->inode.update_backtrace();
     newi->inode.add_parent(dn->get_stripe()->dirstripe(),
@@ -4129,9 +4111,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
         CStripe *newstripe = newi->get_or_open_stripe(i);
         CDir *newdir = newstripe->get_or_open_dirfrag(frag_t());
         newdir->mark_complete();
-        newdir->pre_dirty();
         newstripe->mark_open();
-        newstripe->pre_dirty();
       } else {
         // remote slave request
         MMDSSlaveRequest *req = new MMDSSlaveRequest(
@@ -4256,11 +4236,9 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
   for (set<stripeid_t>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CStripe *newstripe = in->add_stripe(new CStripe(in, *s, mds->get_nodeid()));
     newstripe->mark_open();
-    newstripe->pre_dirty();
 
     CDir *newdir = newstripe->get_or_open_dirfrag(frag_t());
     newdir->mark_complete();
-    newdir->pre_dirty();
 
     le->commit.add_new_dir(newdir);
   }
@@ -4301,9 +4279,9 @@ void Server::slave_mkdir_finish(MDRequest *mdr, CInode *in)
   in->get_stripes(stripes);
   for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CStripe *stripe = *s;
-    stripe->mark_dirty(1, mdr->ls);
+    stripe->mark_dirty(mdr->ls);
     CDir *dir = stripe->get_dirfrag(frag_t());
-    dir->mark_dirty(1, mdr->ls);
+    dir->mark_dirty(mdr->ls);
   }
 
   // reply with an ack
@@ -4468,7 +4446,6 @@ void Server::handle_client_symlink(MDRequest *mdr)
   newi->inode.size = newi->symlink.length();
   newi->inode.rstat.rbytes = newi->inode.size;
   newi->inode.rstat.rfiles = 1;
-  newi->inode.version = dn->pre_dirty();
   newi->inode.update_backtrace();
   newi->inode.add_parent(dn->get_stripe()->dirstripe(),
                          mds->get_nodeid(), dn->get_name());
@@ -4571,14 +4548,10 @@ void Server::_link_local(MDRequest *mdr, CDentry *dn, CInode *targeti)
 
   mdr->ls = mdlog->get_current_segment();
 
-  // predirty NEW dentry
-  mdr->more()->pvmap[dn] = dn->pre_dirty();
-
   // project inode update
   inode_t *pi = targeti->project_inode();
   pi->nlink++;
   pi->ctime = mdr->now;
-  pi->version = targeti->pre_dirty();
   pi->add_parent(dn->get_stripe()->dirstripe(),
                  mds->get_nodeid(), dn->get_name());
 
@@ -4608,7 +4581,7 @@ void Server::_link_local_finish(MDRequest *mdr, CDentry *dn, CInode *targeti)
 
   // link and unlock the NEW dentry
   dn->pop_projected_linkage();
-  dn->mark_dirty(mdr->more()->pvmap[dn], mdr->ls);
+  dn->mark_dirty(mdr->ls);
 
   // target inode
   targeti->pop_and_dirty_projected_inode(mdr->ls);
@@ -4694,12 +4667,10 @@ void Server::_link_remote(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti
   }
 
   if (inc) {
-    dn->pre_dirty();
     mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, 1);
     dn->push_projected_linkage(targeti->ino(), targeti->d_type());
     le->metablob.add_dentry(dn, true); // new remote
   } else {
-    dn->pre_dirty();
     mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, -1);
     mdcache->journal_cow_dentry(mdr, &le->metablob, dn);
     le->metablob.add_dentry(dn, true);
@@ -4730,7 +4701,7 @@ void Server::_link_remote_finish(MDRequest *mdr, bool inc,
     // unlink main dentry
     dn->get_dir()->unlink_inode(dn);
   }
-  dn->mark_dirty(mdr->more()->pvmap[dn], mdr->ls);
+  dn->mark_dirty(mdr->ls);
 
   mdr->apply();
 
@@ -4830,7 +4801,6 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   mdr->more()->rollback_bl = le->rollback;
 
   pi->ctime = mdr->now;
-  pi->version = targeti->pre_dirty();
 
   dout(10) << " projected inode " << pi << " v " << pi->version << dendl;
 
@@ -4950,7 +4920,6 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   assert(!in->is_projected());  // live slave request hold versionlock xlock.
   
   inode_t *pi = in->project_inode();
-  pi->version = in->pre_dirty();
   mut->add_projected_inode(in);
 
   // parent dir rctime
@@ -4958,7 +4927,6 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   CStripe *stripe = parent->get_stripe();
   fnode_t *pf = stripe->project_fnode();
   mut->add_projected_fnode(stripe);
-  pf->version = stripe->pre_dirty();
   if (pf->fragstat.mtime == pi->ctime) {
     pf->fragstat.mtime = rollback.old_dir_mtime;
     if (pf->rstat.rctime == pi->ctime)
@@ -5191,11 +5159,8 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
   }
 
   // the unlinked dentry
-  mdr->more()->pvmap[dn] = dn->pre_dirty();
-
   inode_t *pi = in->project_inode();
-  mdr->add_projected_inode(in); // do this _after_ my dn->pre_dirty().. we apply that one manually.
-  pi->version = in->pre_dirty();
+  mdr->add_projected_inode(in);
   pi->ctime = mdr->now;
   pi->nlink--;
   if (pi->nlink == 0)
@@ -5235,7 +5200,7 @@ void Server::_unlink_local_finish(MDRequest *mdr, CDentry *dn)
   dn->get_dir()->unlink_inode(dn);
   dn->pop_projected_linkage();
 
-  dn->mark_dirty(mdr->more()->pvmap[dn], mdr->ls);
+  dn->mark_dirty(mdr->ls);
   mdr->apply();
 
   mds->mdcache->send_dentry_unlink(dn, mdr);
@@ -6119,16 +6084,13 @@ void Server::_rename_prepare(MDRequest *mdr,
       // link--, and move.
       if (destdn->is_auth()) {
 	tpi = oldin->project_inode(); //project_snaprealm
-	tpi->version = straydn->pre_dirty(tpi->version);
 	tpi->update_backtrace();
       }
       straydn->push_projected_linkage(oldin);
     } else if (destdnl->is_remote()) {
       // nlink-- targeti
-      if (oldin->is_auth()) {
+      if (oldin->is_auth())
 	tpi = oldin->project_inode();
-	tpi->version = oldin->pre_dirty();
-      }
     }
   }
 
@@ -6136,46 +6098,32 @@ void Server::_rename_prepare(MDRequest *mdr,
   if (srcdnl->is_remote()) {
     if (!linkmerge) {
       // destdn
-      if (destdn->is_auth())
-	mdr->more()->pvmap[destdn] = destdn->pre_dirty();
       destdn->push_projected_linkage(srcdnl->get_remote_ino(), srcdnl->get_remote_d_type());
       // srci
-      if (srci->is_auth()) {
+      if (srci->is_auth())
 	pi = srci->project_inode();
-	pi->version = srci->pre_dirty();
-      }
     } else {
       dout(10) << " will merge remote onto primary link" << dendl;
-      if (destdn->is_auth()) {
+      if (destdn->is_auth())
 	pi = oldin->project_inode();
-	pi->version = mdr->more()->pvmap[destdn] = destdn->pre_dirty(oldin->inode.version);
-      }
     }
   } else { // primary
-    if (destdn->is_auth()) {
-      version_t oldpv;
-      if (srcdn->is_auth())
-	oldpv = srci->get_projected_version();
-      else {
-	oldpv = _rename_prepare_import(mdr, srcdn, metablob, client_map_bl);
+    if (destdn->is_auth() && !srcdn->is_auth()) {
+      _rename_prepare_import(mdr, srcdn, metablob, client_map_bl);
 
-	// note which dirfrags have child subtrees in the journal
-	// event, so that we can open those (as bounds) during replay.
-	if (srci->is_dir()) {
-          metablob->renamed_dir_stripes.push_back(srcdn->get_stripe()->dirstripe());
-	  dout(10) << " noting renamed dir open frags " << metablob->renamed_dir_stripes << dendl;
-	}
+      // note which dirfrags have child subtrees in the journal
+      // event, so that we can open those (as bounds) during replay.
+      if (srci->is_dir()) {
+        metablob->renamed_dir_stripes.push_back(srcdn->get_stripe()->dirstripe());
+        dout(10) << " noting renamed dir open frags " << metablob->renamed_dir_stripes << dendl;
       }
       pi = srci->project_inode();
-      pi->version = mdr->more()->pvmap[destdn] = destdn->pre_dirty(oldpv);
       pi->update_backtrace();
     }
     destdn->push_projected_linkage(srci);
   }
 
   // src
-  if (srcdn->is_auth())
-    mdr->more()->pvmap[srcdn] = srcdn->pre_dirty();
   srcdn->push_projected_linkage();  // push null linkage
 
   if (!silent) {
@@ -6372,7 +6320,7 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
 
       destdn->link_remote(destdnl, in);
       if (destdn->is_auth())
-	destdn->mark_dirty(mdr->more()->pvmap[destdn], mdr->ls);
+	destdn->mark_dirty(mdr->ls);
       // in
       if (in->is_auth())
 	in->pop_and_dirty_projected_inode(mdr->ls);
@@ -6423,7 +6371,7 @@ void Server::_rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDen
 
   // src
   if (srcdn->is_auth())
-    srcdn->mark_dirty(mdr->more()->pvmap[srcdn], mdr->ls);
+    srcdn->mark_dirty(mdr->ls);
   srcdn->pop_projected_linkage();
   
   // apply remaining projected inodes (nested)
@@ -6796,7 +6744,6 @@ void _rollback_repair_stripe(Mutation *mut, CStripe *stripe,
 {
   fnode_t *pf = stripe->project_fnode();
   mut->add_projected_fnode(stripe);
-  pf->version = stripe->pre_dirty();
 
   if (isdir) {
     pf->fragstat.nsubdirs += linkunlink;
@@ -6928,8 +6875,6 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr,
   version_t srcdnpv = 0;
   // repair src
   if (srcdn) {
-    if (srcdn->authority().first == whoami)
-      srcdnpv = srcdn->pre_dirty();
     if (rollback.orig_src.ino) {
       assert(in);
       srcdn->push_projected_linkage(in);
@@ -6943,7 +6888,6 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr,
     if (in->authority().first == whoami) {
       pi = in->project_inode();
       mut->add_projected_inode(in);
-      pi->version = in->pre_dirty();
     } else
       pi = in->get_projected_inode();
     if (pi->ctime == rollback.ctime)
@@ -6981,7 +6925,6 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr,
     if (target->authority().first == whoami) {
       ti = target->project_inode();
       mut->add_projected_inode(target);
-      ti->version = target->pre_dirty();
     } else 
       ti = target->get_projected_inode();
     if (ti->ctime == rollback.ctime)
@@ -7064,7 +7007,7 @@ void Server::_rename_rollback_finish(Mutation *mut, MDRequest *mdr, CDentry *src
   if (srcdn) {
     srcdn->pop_projected_linkage();
     if (srcdn->authority().first == mds->get_nodeid())
-      srcdn->mark_dirty(srcdnpv, mut->ls);
+      srcdn->mark_dirty(mut->ls);
   }
 
   mut->apply();

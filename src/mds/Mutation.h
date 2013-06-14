@@ -78,7 +78,7 @@ struct Mutation {
   list<ScatterLock*> updated_locks;
 
   list<CInode*> dirty_cow_inodes;
-  list<pair<CDentry*,version_t> > dirty_cow_dentries;
+  list<CDentry*> dirty_cow_dentries;
 
   Mutation()
     : attempt(0),

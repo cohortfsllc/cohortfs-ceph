@@ -155,14 +155,6 @@ void CDentry::add_waiter(uint64_t tag, Context *c)
 }
 
 
-version_t CDentry::pre_dirty(version_t min)
-{
-  projected_version = dir->pre_dirty(min);
-  dout(10) << " pre_dirty " << *this << dendl;
-  return projected_version;
-}
-
-
 void CDentry::_mark_dirty(LogSegment *ls)
 {
   // state+pin
@@ -176,17 +168,15 @@ void CDentry::_mark_dirty(LogSegment *ls)
     ls->dirty_dentries.push_back(&item_dirty);
 }
 
-void CDentry::mark_dirty(version_t pv, LogSegment *ls) 
+void CDentry::mark_dirty(LogSegment *ls) 
 {
+  version++;
   dout(10) << " mark_dirty " << *this << dendl;
 
-  // i now live in this new dir version
-  assert(pv <= projected_version);
-  version = pv;
   _mark_dirty(ls);
 
   // mark dir too
-  dir->mark_dirty(pv, ls);
+  dir->mark_dirty(ls);
 }
 
 
