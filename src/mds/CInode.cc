@@ -347,6 +347,7 @@ inode_t *CInode::project_inode(map<string,bufferptr> *px)
       *px = *get_projected_xattrs();
   }
   projected_nodes.back()->xattrs = px;
+  projected_nodes.back()->inode->version = get_projected_version();
   dout(15) << "project_inode " << projected_nodes.back()->inode << dendl;
   return projected_nodes.back()->inode;
 }
@@ -355,10 +356,10 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
 {
   assert(!projected_nodes.empty());
   dout(15) << "pop_and_dirty_projected_inode " << projected_nodes.front()->inode
-	   << " v" << projected_nodes.front()->inode->version << dendl;
+	   << " v" << get_projected_version() << dendl;
   int64_t old_pool = inode.layout.fl_pg_pool;
 
-  mark_dirty(projected_nodes.front()->inode->version, ls);
+  mark_dirty(ls);
   inode = *projected_nodes.front()->inode;
 
   if (inode.is_backtrace_updated())
@@ -653,21 +654,6 @@ void CInode::name_stray_dentry(string& dname)
 }
 
 
-
-
-version_t CInode::pre_dirty()
-{
-  version_t pv; 
-  if (parent || !projected_parent.empty()) {
-    pv = get_projected_parent_dn()->pre_dirty(get_projected_version());
-    dout(10) << "pre_dirty " << pv << " (current v " << inode.version << ")" << dendl;
-  } else {
-    assert(is_base());
-    pv = get_projected_version() + 1;
-  }
-  return pv;
-}
-
 void CInode::_mark_dirty(LogSegment *ls)
 {
   if (!state_test(STATE_DIRTY)) {
@@ -681,7 +667,7 @@ void CInode::_mark_dirty(LogSegment *ls)
     ls->dirty_inodes.push_back(&item_dirty);
 }
 
-void CInode::mark_dirty(version_t pv, LogSegment *ls) {
+void CInode::mark_dirty(LogSegment *ls) {
   
   dout(10) << "mark_dirty " << *this << dendl;
 
@@ -696,13 +682,12 @@ void CInode::mark_dirty(version_t pv, LogSegment *ls) {
   assert(is_auth());
   
   // touch my private version
-  assert(inode.version < pv);
-  inode.version = pv;
+  inode.version++;
   _mark_dirty(ls);
 
   // mark dentry too
   if (parent)
-    parent->mark_dirty(pv, ls);
+    parent->mark_dirty(ls);
 }
 
 
@@ -1271,7 +1256,6 @@ void CInode::finish_scatter_update(ScatterLock *lock, CStripe *stripe,
 
       inode_t *pi = get_projected_inode();
       fnode_t *pf = stripe->project_fnode();
-      pf->version = stripe->pre_dirty();
 
       const char *ename = 0;
       switch (lock->get_type()) {
@@ -1517,8 +1501,6 @@ void CInode::finish_scatter_gather_update_accounted(int type, Mutation *mut, EMe
     
     dout(10) << " journaling updated frag accounted_ on " << *stripe << dendl;
     assert(stripe->is_projected());
-    fnode_t *pf = stripe->get_projected_fnode();
-    pf->version = stripe->pre_dirty();
     mut->add_projected_fnode(stripe);
     metablob->add_stripe(stripe, true);
     mut->auth_pin(stripe);

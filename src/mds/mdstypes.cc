@@ -175,6 +175,79 @@ void client_writeable_range_t::decode(bufferlist::iterator& bl)
   DECODE_FINISH(bl);
 }
 
+
+/*
+ * dirstripe_t
+ */
+void dirstripe_t::encode(bufferlist &bl) const
+{
+  ::encode(ino, bl);
+  ::encode(stripeid, bl);
+}
+
+void dirstripe_t::decode(bufferlist::iterator &p)
+{
+  ::decode(ino, p);
+  ::decode(stripeid, p);
+}
+
+void dirstripe_t::dump(Formatter *f) const
+{
+  f->dump_stream("ino") << ino;
+  f->dump_unsigned("stripeid", stripeid);
+}
+
+void dirstripe_t::generate_test_instances(list<dirstripe_t*>& ls)
+{
+  ls.push_back(new dirstripe_t());
+  ls.push_back(new dirstripe_t(1, 6));
+}
+
+ostream& operator<<(ostream& out, const dirstripe_t &ds)
+{
+  return out << ds.ino << ':' << ds.stripeid;
+}
+
+
+/*
+ * inoparent_t
+ */
+void inoparent_t::encode(bufferlist &bl) const
+{
+  ::encode(stripe, bl);
+  ::encode(who, bl);
+  ::encode(name, bl);
+}
+
+void inoparent_t::decode(bufferlist::iterator &p)
+{
+  ::decode(stripe, p);
+  ::decode(who, p);
+  ::decode(name, p);
+}
+
+void inoparent_t::dump(Formatter *f) const
+{
+  f->dump_stream("stripe") << stripe;
+  f->dump_unsigned("who", who);
+  f->dump_string("name", name);
+}
+
+void inoparent_t::generate_test_instances(list<inoparent_t*>& ls)
+{
+  ls.push_back(new inoparent_t());
+  ls.push_back(new inoparent_t(dirstripe_t(1, 6), 2, "parent"));
+}
+
+ostream& operator<<(ostream& out, const inoparent_t &p) {
+  return out << p.stripe << '/' << p.name << "@mds." << p.who;
+}
+
+
+/*
+ * inode_t
+ */
+
 void client_writeable_range_t::dump(Formatter *f) const
 {
   f->open_object_section("byte range");
@@ -196,73 +269,6 @@ void client_writeable_range_t::generate_test_instances(list<client_writeable_ran
 ostream& operator<<(ostream& out, const client_writeable_range_t& r)
 {
   return out << r.range.first << '-' << r.range.last << "@" << r.follows;
-}
-
-
-/*
- * dirstripe_t
- */
-void dirstripe_t::encode(bufferlist &bl) const
-{
-  ENCODE_START(1, 1, bl);
-  ::encode(ino, bl);
-  ::encode(stripeid, bl);
-  ENCODE_FINISH(bl);
-}
-
-void dirstripe_t::decode(bufferlist::iterator &p)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(7, 6, 6, p);
-  ::decode(ino, p);
-  ::decode(stripeid, p);
-  DECODE_FINISH(p);
-}
-
-void dirstripe_t::dump(Formatter *f) const
-{
-  f->dump_unsigned("ino", ino);
-  f->dump_unsigned("stripeid", stripeid);
-}
-
-void dirstripe_t::generate_test_instances(list<dirstripe_t*> &ls)
-{
-  ls.push_back(new dirstripe_t());
-  ls.push_back(new dirstripe_t(1, 6));
-}
-
-
-/*
- * inoparent_t
- */
-void inoparent_t::encode(bufferlist &bl) const
-{
-  ENCODE_START(1, 1, bl);
-  ::encode(stripe, bl);
-  ::encode(who, bl);
-  ::encode(name, bl);
-  ENCODE_FINISH(bl);
-}
-
-void inoparent_t::decode(bufferlist::iterator &p)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(1, 1, 1, p);
-  ::decode(stripe, p);
-  ::decode(who, p);
-  ::decode(name, p);
-  DECODE_FINISH(p);
-}
-
-void inoparent_t::dump(Formatter *f) const
-{
-  f->dump_stream("stripe") << stripe;
-  f->dump_unsigned("who", who);
-  f->dump_string("name", name);
-}
-
-void inoparent_t::generate_test_instances(list<inoparent_t*> &ls)
-{
-  ls.push_back(new inoparent_t());
-  ls.push_back(new inoparent_t(dirstripe_t(1, 6), 0, "parent"));
 }
 
 

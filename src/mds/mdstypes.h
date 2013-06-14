@@ -326,9 +326,8 @@ struct dirstripe_t {
 };
 WRITE_CLASS_ENCODER(dirstripe_t)
 
-inline ostream& operator<<(ostream& out, const dirstripe_t &ds) {
-  return out << ds.ino << ':' << ds.stripeid;
-}
+ostream& operator<<(ostream& out, const dirstripe_t &ds);
+
 inline bool operator<(const dirstripe_t &l, const dirstripe_t &r) {
   if (l.ino < r.ino) return true;
   if (l.ino == r.ino && l.stripeid < r.stripeid) return true;
@@ -358,9 +357,8 @@ struct inoparent_t {
 };
 WRITE_CLASS_ENCODER(inoparent_t)
 
-inline ostream& operator<<(ostream& out, const inoparent_t &p) {
-  return out << p.stripe << '/' << p.name << "@mds." << p.who;
-}
+ostream& operator<<(ostream& out, const inoparent_t &p);
+
 inline bool operator==(const inoparent_t &l, const inoparent_t &r) {
   // ignore 'who' in comparison
   return l.stripe == r.stripe && l.name == r.name;
