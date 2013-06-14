@@ -39,7 +39,6 @@ ostream& CDentry::print_db_line_prefix(ostream& out)
 boost::pool<> CDentry::pool(sizeof(CDentry));
 
 LockType CDentry::lock_type(CEPH_LOCK_DN);
-LockType CDentry::versionlock_type(CEPH_LOCK_DVERSION);
 
 
 // CDentry
@@ -87,8 +86,6 @@ ostream& operator<<(ostream& out, CDentry& dn)
 
   if (!dn.lock.is_sync_and_unlocked())
     out << " " << dn.lock;
-  if (!dn.versionlock.is_sync_and_unlocked())
-    out << " " << dn.versionlock;
 
   if (dn.get_projected_version() != dn.get_version())
     out << " pv=" << dn.get_projected_version();
