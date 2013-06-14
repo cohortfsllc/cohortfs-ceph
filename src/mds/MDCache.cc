@@ -1336,8 +1336,7 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
     // rstat
     if (!primary_dn) {
       // don't update parent this pass
-    } else if (!linkunlink && !(pin->nestlock.can_wrlock(-1) &&
-			        pin->versionlock.can_wrlock())) {
+    } else if (!linkunlink && !pin->nestlock.can_wrlock(-1)) {
       dout(20) << " unwritable parent nestlock " << pin->nestlock
 	       << ", marking dirty rstat on " << *cur << dendl;
       cur->mark_dirty_rstat();
@@ -1394,12 +1393,9 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
       }
     }
 
-    if (!stop &&
-	mut->wrlocks.count(&pin->nestlock) == 0 &&
-	(!pin->versionlock.can_wrlock() ||                   // make sure we can take versionlock, too
-	 !mds->locker->wrlock_start(&pin->nestlock, mut, NULL)
-	 )) {  // ** do not initiate.. see above comment **
-      dout(10) << "predirty_journal_parents can't wrlock one of " << pin->versionlock << " or " << pin->nestlock
+    if (!stop && mut->wrlocks.count(&pin->nestlock) == 0 &&
+        !mds->locker->wrlock_start(&pin->nestlock, mut, NULL)) {
+      dout(10) << "predirty_journal_parents can't wrlock " << pin->nestlock
 	       << " on " << *pin << dendl;
       stop = true;
     }
@@ -1415,8 +1411,6 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
       }
       break;
     }
-    if (!mut->wrlocks.count(&pin->versionlock))
-      mds->locker->local_wrlock_grab(&pin->versionlock, mut);
 
     assert(mut->wrlocks.count(&pin->nestlock) ||
 	   mut->is_slave());
@@ -3442,12 +3436,6 @@ void MDCache::handle_cache_rejoin_strong(MMDSCacheRejoin *strong)
 	dout(10) << " dn xlock by " << r << " on " << *dn << dendl;
 	MDRequest *mdr = request_get(r.reqid);  // should have this from auth_pin above.
 	assert(mdr->is_auth_pinned(dn));
-	if (!mdr->xlocks.count(&dn->versionlock)) {
-	  assert(dn->versionlock.can_xlock_local());
-	  dn->versionlock.get_xlock(mdr, mdr->get_client());
-	  mdr->xlocks.insert(&dn->versionlock);
-	  mdr->locks.insert(&dn->versionlock);
-	}
 	if (dn->lock.is_stable())
 	  dn->auth_pin(&dn->lock);
 	dn->lock.set_state(LOCK_XLOCK);
@@ -3543,12 +3531,6 @@ void MDCache::handle_cache_rejoin_strong(MMDSCacheRejoin *strong)
 	dout(10) << " inode xlock by " << q->second << " on " << *lock << " on " << *in << dendl;
 	MDRequest *mdr = request_get(q->second.reqid);  // should have this from auth_pin above.
 	assert(mdr->is_auth_pinned(in));
-	if (!mdr->xlocks.count(&in->versionlock)) {
-	  assert(in->versionlock.can_xlock_local());
-	  in->versionlock.get_xlock(mdr, mdr->get_client());
-	  mdr->xlocks.insert(&in->versionlock);
-	  mdr->locks.insert(&in->versionlock);
-	}
 	if (lock->is_stable())
 	  in->auth_pin(lock);
 	lock->set_state(LOCK_XLOCK);

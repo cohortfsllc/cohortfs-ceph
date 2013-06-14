@@ -29,7 +29,6 @@
 #include "CDentry.h"
 #include "SimpleLock.h"
 #include "ScatterLock.h"
-#include "LocalLock.h"
 #include "Capability.h"
 #include "SnapRealm.h"
 
@@ -553,7 +552,6 @@ public:
 
   // -- locks --
 public:
-  static LockType versionlock_type;
   static LockType authlock_type;
   static LockType linklock_type;
   static LockType filelock_type;
@@ -562,7 +560,6 @@ public:
   static LockType flocklock_type;
   static LockType policylock_type;
 
-  LocalLock  versionlock;
   SimpleLock authlock;
   SimpleLock linklock;
   ScatterLock filelock;
