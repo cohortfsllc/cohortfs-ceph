@@ -1299,8 +1299,7 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
     // rstat
     if (!primary_dn) {
       // don't update parent this pass
-    } else if (!linkunlink && !(pin->nestlock.can_wrlock(-1) &&
-			        pin->versionlock.can_wrlock())) {
+    } else if (!linkunlink && !pin->nestlock.can_wrlock(-1)) {
       dout(20) << " unwritable parent nestlock " << pin->nestlock
 	       << ", marking dirty rstat on " << *cur << dendl;
       cur->mark_dirty_rstat();
@@ -1357,14 +1356,10 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
       }
     }
 
-    if (!stop &&
-	mut->wrlocks.count(&pin->nestlock) == 0 &&
+    if (!stop && mut->wrlocks.count(&pin->nestlock) == 0 &&
 	(!pin->can_auth_pin() ||
-	 !pin->versionlock.can_wrlock() ||                   // make sure we can take versionlock, too
-	 //true
-	 !mds->locker->wrlock_start(&pin->nestlock, mut, NULL)
-	 )) {  // ** do not initiate.. see above comment **
-      dout(10) << "predirty_journal_parents can't wrlock one of " << pin->versionlock << " or " << pin->nestlock
+	 !mds->locker->wrlock_start(&pin->nestlock, mut, NULL))) {
+      dout(10) << "predirty_journal_parents can't wrlock " << pin->nestlock
 	       << " on " << *pin << dendl;
       stop = true;
     }
@@ -1380,8 +1375,6 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
       }
       break;
     }
-    if (!mut->wrlocks.count(&pin->versionlock))
-      mds->locker->local_wrlock_grab(&pin->versionlock, mut);
 
     assert(mut->wrlocks.count(&pin->nestlock) ||
 	   mut->is_slave());

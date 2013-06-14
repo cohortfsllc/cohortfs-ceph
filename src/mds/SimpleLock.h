@@ -22,8 +22,6 @@
 inline const char *get_lock_type_name(int t) {
   switch (t) {
   case CEPH_LOCK_DN: return "dn";
-  case CEPH_LOCK_DVERSION: return "dversion";
-  case CEPH_LOCK_IVERSION: return "iversion";
   case CEPH_LOCK_IFILE: return "ifile";
   case CEPH_LOCK_IAUTH: return "iauth";
   case CEPH_LOCK_ILINK: return "ilink";
@@ -39,17 +37,12 @@ inline const char *get_lock_type_name(int t) {
   default: assert(0); return 0;
   }
 }
-inline bool is_local_lock(int t) {
-  return t == CEPH_LOCK_DVERSION
-      || t == CEPH_LOCK_IVERSION;
-}
 inline bool is_scatter_lock(int t) {
   return t == CEPH_LOCK_IFILE
       || t == CEPH_LOCK_INEST;
 }
 inline bool is_inode_lock(int t) {
   switch (t) {
-  case CEPH_LOCK_IVERSION:
   case CEPH_LOCK_IFILE:
   case CEPH_LOCK_IAUTH:
   case CEPH_LOCK_ILINK:
@@ -98,10 +91,6 @@ struct LockType {
       break;
     case CEPH_LOCK_IFILE:
       sm = &sm_filelock;
-      break;
-    case CEPH_LOCK_DVERSION:
-    case CEPH_LOCK_IVERSION:
-      sm = &sm_locallock;
       break;
     default:
       sm = 0;
@@ -275,12 +264,10 @@ public:
   int get_wait_shift() const {
     switch (get_type()) {
     case CEPH_LOCK_DN:       return 8;
-    case CEPH_LOCK_DVERSION: return 8 + 1*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IAUTH:    return 8 + 2*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_ILINK:    return 8 + 3*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_SDFT:     return 8 + 4*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IFILE:    return 8 + 5*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_IVERSION: return 8 + 6*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IXATTR:   return 8 + 7*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_ISNAP:    return 8 + 8*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_INEST:    return 8 + 9*SimpleLock::WAIT_BITS;

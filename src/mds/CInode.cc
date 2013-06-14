@@ -51,7 +51,6 @@
 boost::pool<> CInode::pool(sizeof(CInode));
 boost::pool<> Capability::pool(sizeof(Capability));
 
-LockType CInode::versionlock_type(CEPH_LOCK_IVERSION);
 LockType CInode::authlock_type(CEPH_LOCK_IAUTH);
 LockType CInode::linklock_type(CEPH_LOCK_ILINK);
 LockType CInode::filelock_type(CEPH_LOCK_IFILE);
@@ -177,8 +176,6 @@ ostream& operator<<(ostream& out, CInode& in)
     out << " " << in.filelock;
   if (!in.xattrlock.is_sync_and_unlocked())
     out << " " << in.xattrlock;
-  if (!in.versionlock.is_sync_and_unlocked())  
-    out << " " << in.versionlock;
 
   // hack: spit out crap on which clients have caps
   if (in.inode.client_ranges.size())
@@ -249,7 +246,6 @@ CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
     item_dirty_dirfrag_nest(this),
     auth_pins(0),
     auth_pin_freeze_allowance(0),
-    versionlock(this, &versionlock_type),
     authlock(this, &authlock_type),
     linklock(this, &linklock_type),
     filelock(this, &filelock_type),
@@ -2162,15 +2158,12 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   bool pauth = authlock.is_xlocked_by_client(client) || get_loner() == client;
   bool plink = linklock.is_xlocked_by_client(client) || get_loner() == client;
   bool pxattr = xattrlock.is_xlocked_by_client(client) || get_loner() == client;
-
-  bool plocal = versionlock.get_last_wrlock_client() == client;
   bool ppolicy = policylock.is_xlocked_by_client(client) || get_loner()==client;
   
-  inode_t *i = (pfile|pauth|plink|pxattr|plocal) ? pi : oi;
+  inode_t *i = (pfile|pauth|plink|pxattr) ? pi : oi;
   i->ctime.encode_timeval(&e.ctime);
   
   dout(20) << " pfile " << pfile << " pauth " << pauth << " plink " << plink << " pxattr " << pxattr
-	   << " plocal " << plocal
 	   << " ctime " << i->ctime
 	   << " valid=" << valid << dendl;
 

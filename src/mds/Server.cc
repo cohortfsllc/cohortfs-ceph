@@ -3245,8 +3245,6 @@ void Server::handle_client_setattr(MDRequest *mdr)
     xlocks.insert(&cur->authlock);
   if (mask & (CEPH_SETATTR_MTIME|CEPH_SETATTR_ATIME|CEPH_SETATTR_SIZE))
     xlocks.insert(&cur->filelock);
-  if (mask & CEPH_SETATTR_CTIME)
-    wrlocks.insert(&cur->versionlock);
 
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
@@ -4782,7 +4780,7 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   link_rollback rollback;
   rollback.reqid = mdr->reqid;
   rollback.ino = targeti->ino();
-  rollback.old_ctime = targeti->inode.ctime;   // we hold versionlock xlock; no concorrent projections
+  rollback.old_ctime = targeti->inode.ctime;
   fnode_t *pf = targeti->get_parent_stripe()->get_projected_fnode();
   rollback.old_dir_mtime = pf->fragstat.mtime;
   rollback.old_dir_rctime = pf->rstat.rctime;
@@ -4909,7 +4907,7 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   CInode *in = mds->mdcache->get_inode(rollback.ino);
   assert(in);
   dout(10) << " target is " << *in << dendl;
-  assert(!in->is_projected());  // live slave request hold versionlock xlock.
+  assert(!in->is_projected());
   
   inode_t *pi = in->project_inode();
   mut->add_projected_inode(in);
@@ -5706,20 +5704,8 @@ void Server::handle_client_rename(MDRequest *mdr)
     xlocks.insert(&straydn->lock);
   }
 
-  // xlock versionlock on dentries if there are witnesses.
-  //  replicas can't see projected dentry linkages, and will get
   //  confused if we try to pipeline things.
   if (!witnesses.empty()) {
-    // take xlock on all projected ancestor dentries for srcdn and destdn.
-    // this ensures the srcdn and destdn can be traversed to by the witnesses.
-    for (int i= 0; i<(int)srctrace.size(); i++) {
-      if (srctrace[i]->is_auth() && srctrace[i]->is_projected())
-	  xlocks.insert(&srctrace[i]->versionlock);
-    }
-    for (int i=0; i<(int)desttrace.size(); i++) {
-      if (desttrace[i]->is_auth() && desttrace[i]->is_projected())
-	  xlocks.insert(&desttrace[i]->versionlock);
-    }
     // xlock srci and oldin's primary dentries, so witnesses can call
     // open_remote_ino() with 'want_locked=true' when the srcdn or destdn
     // is traversed.
@@ -6452,7 +6438,6 @@ void Server::handle_slave_rename_prep(MDRequest *mdr)
       // we need this to
       //  - avoid conflicting lock state changes
       //  - avoid concurrent updates to the inode
-      //     (this could also be accomplished with the versionlock)
       int allowance = 2; // 1 for the mdr auth_pin, 1 for the link lock
       allowance += srcdnl->get_inode()->is_dir(); // for the snap lock
       dout(10) << " freezing srci " << *srcdnl->get_inode() << " with allowance " << allowance << dendl;

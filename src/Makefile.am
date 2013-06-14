@@ -1658,7 +1658,6 @@ noinst_HEADERS = \
 	mds/Dumper.h\
         mds/InoTable.h\
         mds/InodeContainer.h\
-        mds/LocalLock.h\
         mds/Locker.h\
         mds/LogEvent.h\
         mds/LogSegment.h\

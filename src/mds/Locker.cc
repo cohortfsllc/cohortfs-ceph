@@ -156,41 +156,6 @@ bool Locker::acquire_locks(MDRequest *mdr,
   for (set<SimpleLock*>::iterator p = xlocks.begin(); p != xlocks.end(); ++p) {
     dout(20) << " must xlock " << **p << " " << *(*p)->get_parent() << dendl;
     sorted.insert(*p);
-
-    // augment xlock with a versionlock?
-    if ((*p)->get_type() == CEPH_LOCK_DN) {
-      CDentry *dn = (CDentry*)(*p)->get_parent();
-      if (!dn->is_auth())
-	continue;
-
-      if (xlocks.count(&dn->versionlock))
-	continue;  // we're xlocking the versionlock too; don't wrlock it!
-
-      if (mdr->is_master()) {
-	// master.  wrlock versionlock so we can pipeline dentry updates to journal.
-	wrlocks.insert(&dn->versionlock);
-      } else {
-	// slave.  exclusively lock the dentry version (i.e. block other journal updates).
-	// this makes rollback safe.
-	xlocks.insert(&dn->versionlock);
-	sorted.insert(&dn->versionlock);
-      }
-    }
-    if (is_inode_lock((*p)->get_type())) {
-      // inode version lock?
-      CInode *in = (CInode*)(*p)->get_parent();
-      if (!in->is_auth())
-	continue;
-      if (mdr->is_master()) {
-	// master.  wrlock versionlock so we can pipeline inode updates to journal.
-	wrlocks.insert(&in->versionlock);
-      } else {
-	// slave.  exclusively lock the inode version (i.e. block other journal updates).
-	// this makes rollback safe.
-	xlocks.insert(&in->versionlock);
-	sorted.insert(&in->versionlock);
-      }
-    }
   }
 
   // wrlocks
@@ -463,8 +428,7 @@ void Locker::set_xlocks_done(Mutation *mut, bool skip_dentry)
   for (set<SimpleLock*>::iterator p = mut->xlocks.begin();
        p != mut->xlocks.end();
        p++) {
-    if (skip_dentry &&
-	((*p)->get_type() == CEPH_LOCK_DN || (*p)->get_type() == CEPH_LOCK_DVERSION))
+    if (skip_dentry && (*p)->get_type() == CEPH_LOCK_DN)
       continue;
     dout(10) << "set_xlocks_done on " << **p << " " << *(*p)->get_parent() << dendl;
     (*p)->set_xlock_done();
@@ -1229,9 +1193,6 @@ void Locker::rdlock_finish_set(set<SimpleLock*>& locks)
 
 void Locker::wrlock_force(SimpleLock *lock, Mutation *mut)
 {
-  if (is_local_lock(lock->get_type()))
-    return local_wrlock_grab((LocalLock*)lock, mut);
-
   dout(7) << "wrlock_force  on " << *lock
 	  << " on " << *lock->get_parent() << dendl;  
   lock->get_wrlock(true);
@@ -1242,9 +1203,6 @@ void Locker::wrlock_force(SimpleLock *lock, Mutation *mut)
 bool Locker::wrlock_start(SimpleLock *lock, Mutation *mut,
                           C_GatherBuilder *gather)
 {
-  if (is_local_lock(lock->get_type()))
-    return local_wrlock_start((LocalLock*)lock, mut, gather);
-
   dout(10) << "wrlock_start " << *lock << " on " << *lock->get_parent() << dendl;
 
   client_t client = mut->get_client();
@@ -1294,9 +1252,6 @@ bool Locker::wrlock_start(SimpleLock *lock, Mutation *mut,
 
 void Locker::wrlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
 {
-  if (is_local_lock(lock->get_type()))
-    return local_wrlock_finish((LocalLock*)lock, mut);
-
   dout(7) << "wrlock_finish on " << *lock << " on " << *lock->get_parent() << dendl;
   lock->put_wrlock();
   if (mut) {
@@ -1365,9 +1320,6 @@ void Locker::remote_wrlock_finish(SimpleLock *lock, int target, Mutation *mut)
 bool Locker::xlock_start(SimpleLock *lock, Mutation *mut,
                          C_GatherBuilder *gather)
 {
-  if (is_local_lock(lock->get_type()))
-    return local_xlock_start((LocalLock*)lock, mut, gather);
-
   dout(7) << "xlock_start on " << *lock << " on " << *lock->get_parent() << dendl;
   client_t client = mut->get_client();
 
@@ -1418,9 +1370,6 @@ void Locker::_finish_xlock(SimpleLock *lock, bool *pneed_issue)
 
 void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
 {
-  if (is_local_lock(lock->get_type()))
-    return local_xlock_finish((LocalLock*)lock, mut);
-
   dout(10) << "xlock_finish on " << *lock << " " << *lock->get_parent() << dendl;
   assert(lock->get_parent()->is_auth());
 
@@ -3972,93 +3921,6 @@ void Locker::scatter_tempsync(ScatterLock *lock, bool *need_issue)
     }
   }
 }
-
-
-
-// ==========================================================================
-// local lock
-
-void Locker::local_wrlock_grab(LocalLock *lock, Mutation *mut)
-{
-  dout(7) << "local_wrlock_grab  on " << *lock
-	  << " on " << *lock->get_parent() << dendl;  
-  
-  assert(lock->get_parent()->is_auth());
-  assert(lock->can_wrlock());
-  assert(!mut->wrlocks.count(lock));
-  lock->get_wrlock(mut->get_client());
-  mut->wrlocks.insert(lock);
-  mut->locks.insert(lock);
-}
-
-bool Locker::local_wrlock_start(LocalLock *lock, Mutation *mut,
-                                C_GatherBuilder *gather)
-{
-  dout(7) << "local_wrlock_start  on " << *lock
-	  << " on " << *lock->get_parent() << dendl;
-
-  assert(lock->get_parent()->is_auth());
-  if (lock->can_wrlock()) {
-    assert(!mut->wrlocks.count(lock));
-    lock->get_wrlock(mut->get_client());
-    mut->wrlocks.insert(lock);
-    mut->locks.insert(lock);
-    return true;
-  }
-
-  if (gather)
-    lock->add_waiter(SimpleLock::WAIT_WR |
-                     SimpleLock::WAIT_STABLE, gather->new_sub());
-  return false;
-}
-
-void Locker::local_wrlock_finish(LocalLock *lock, Mutation *mut)
-{
-  dout(7) << "local_wrlock_finish  on " << *lock
-	  << " on " << *lock->get_parent() << dendl;  
-  lock->put_wrlock();
-  mut->wrlocks.erase(lock);
-  mut->locks.erase(lock);
-  if (lock->get_num_wrlocks() == 0) {
-    lock->finish_waiters(SimpleLock::WAIT_STABLE |
-                         SimpleLock::WAIT_WR |
-                         SimpleLock::WAIT_RD);
-  }
-}
-
-bool Locker::local_xlock_start(LocalLock *lock, Mutation *mut,
-                               C_GatherBuilder *gather)
-{
-  dout(7) << "local_xlock_start  on " << *lock
-	  << " on " << *lock->get_parent() << dendl;
-
-  assert(lock->get_parent()->is_auth());
-  if (!lock->can_xlock_local()) {
-    if (gather)
-    lock->add_waiter(SimpleLock::WAIT_WR |
-                     SimpleLock::WAIT_STABLE, gather->new_sub());
-    return false;
-  }
-
-  lock->get_xlock(mut, mut->get_client());
-  mut->xlocks.insert(lock);
-  mut->locks.insert(lock);
-  return true;
-}
-
-void Locker::local_xlock_finish(LocalLock *lock, Mutation *mut)
-{
-  dout(7) << "local_xlock_finish  on " << *lock
-	  << " on " << *lock->get_parent() << dendl;  
-  lock->put_xlock();
-  mut->xlocks.erase(lock);
-  mut->locks.erase(lock);
-
-  lock->finish_waiters(SimpleLock::WAIT_STABLE | 
-		       SimpleLock::WAIT_WR | 
-		       SimpleLock::WAIT_RD);
-}
-
 
 
 // ==========================================================================

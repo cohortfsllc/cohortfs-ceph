@@ -51,7 +51,6 @@ class LogSegment;
 
 class SimpleLock;
 class ScatterLock;
-class LocalLock;
 class MDCache;
 
 #include "SimpleLock.h"
@@ -225,18 +224,6 @@ public:
   bool _do_cap_update(CInode *in, Capability *cap, int dirty, snapid_t follows, MClientCaps *m,
 		      MClientCaps *ack=0);
   void handle_client_cap_release(class MClientCapRelease *m);
-
-
-  // local
-public:
-  void local_wrlock_grab(LocalLock *lock, Mutation *mut);
-protected:
-  bool local_wrlock_start(LocalLock *lock, Mutation *mut,
-                          C_GatherBuilder *gather);
-  void local_wrlock_finish(LocalLock *lock, Mutation *mut);
-  bool local_xlock_start(LocalLock *lock, Mutation *mut,
-                         C_GatherBuilder *gather);
-  void local_xlock_finish(LocalLock *lock, Mutation *mut);
 
 
   // file
