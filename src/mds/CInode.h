@@ -293,10 +293,7 @@ public:
   }
 
   version_t get_projected_version() {
-    if (projected_nodes.empty())
-      return inode.version;
-    else
-      return projected_nodes.back()->inode->version;
+    return inode.version + projected_nodes.size();
   }
   bool is_projected() {
     return !projected_nodes.empty();
@@ -502,9 +499,8 @@ public:
   // -- dirtyness --
   version_t get_version() { return inode.version; }
 
-  version_t pre_dirty();
   void _mark_dirty(LogSegment *ls);
-  void mark_dirty(version_t projected_dirv, LogSegment *ls);
+  void mark_dirty(LogSegment *ls);
   void mark_clean();
 
   void store(Context *fin);

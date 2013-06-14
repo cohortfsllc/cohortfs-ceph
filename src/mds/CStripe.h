@@ -141,19 +141,21 @@ class CStripe : public MDSCacheObject {
   map<snapid_t,old_rstat_t> dirty_old_rstat;  // [value.first,key]
 
  private:
-  version_t projected_version, committing_version, committed_version;
+  version_t committing_version, committed_version;
   list<fnode_t*> projected_fnode;
 
  public:
   elist<CInode*> dirty_rstat_inodes;
   elist<CStripe*>::item item_dirty, item_new;
 
-  version_t get_version() { return fnode.version; }
+  version_t get_version() const { return fnode.version; }
   void set_version(version_t v) {
     assert(projected_fnode.empty());
-    projected_version = fnode.version = v;
+    fnode.version = v;
   }
-  version_t get_projected_version() { return projected_version; }
+  version_t get_projected_version() const {
+    return fnode.version + projected_fnode.size();
+  }
 
   fnode_t *get_projected_fnode() {
     if (projected_fnode.empty())
@@ -180,8 +182,7 @@ class CStripe : public MDSCacheObject {
   bool check_rstats();
   void verify_fragstat();
 
-  version_t pre_dirty(version_t min=0);
-  void mark_dirty(version_t pv, LogSegment *ls);
+  void mark_dirty(LogSegment *ls);
   void _mark_dirty(LogSegment *ls);
   void log_mark_dirty();
   void mark_clean();

@@ -509,13 +509,12 @@ class EMetaBlob {
 
   Dir& add_dir(CDir *dir, bool dirty, bool complete=false) {
     Stripe &s = add_stripe(dir->get_stripe(), false);
-    return s.add_dir(dir->get_frag(), dir->get_projected_version(),
-                     dirty, complete);
+    return s.add_dir(dir->get_frag(), dir->get_version(), dirty, complete);
   }
   Dir& add_new_dir(CDir *dir) {
     Stripe &s = add_stripe(dir->get_stripe(), true);
-    return s.add_dir(dir->get_frag(), dir->get_projected_version(),
-                     true, true, true); // dirty AND complete AND new
+    // dirty AND complete AND new
+    return s.add_dir(dir->get_frag(), dir->get_version(), true, true, true);
   }
 
   Stripe& add_stripe(CStripe *stripe, bool dirty, bool isnew=false) {

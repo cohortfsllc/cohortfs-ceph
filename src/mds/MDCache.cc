@@ -361,27 +361,27 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   root->inode.accounted_rstat = root->inode.rstat;
 
   cephdir->mark_complete();
-  cephdir->mark_dirty(cephdir->pre_dirty(), ls);
+  cephdir->mark_dirty(ls);
   cephdir->commit(0, gather->new_sub());
 
   inodesdir->mark_complete();
-  inodesdir->mark_dirty(inodesdir->pre_dirty(), ls);
+  inodesdir->mark_dirty(ls);
   inodesdir->commit(0, gather->new_sub());
 
   rootdir->mark_complete();
-  rootdir->mark_dirty(rootdir->pre_dirty(), ls);
+  rootdir->mark_dirty(ls);
   rootdir->commit(0, gather->new_sub());
 
   cephstripe->mark_open();
-  cephstripe->mark_dirty(cephstripe->pre_dirty(), ls);
+  cephstripe->mark_dirty(ls);
   cephstripe->commit(gather->new_sub());
 
   inodestripe->mark_open();
-  inodestripe->mark_dirty(inodestripe->pre_dirty(), ls);
+  inodestripe->mark_dirty(ls);
   inodestripe->commit(gather->new_sub());
 
   rootstripe->mark_open();
-  rootstripe->mark_dirty(rootstripe->pre_dirty(), ls);
+  rootstripe->mark_dirty(ls);
   rootstripe->commit(gather->new_sub());
 
   root->store(gather->new_sub());
@@ -421,7 +421,7 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
     mystripe->fnode.fragstat.nsubdirs++;
     // save them
     straydir->mark_complete();
-    straydir->mark_dirty(straydir->pre_dirty(), mds->mdlog->get_current_segment());
+    straydir->mark_dirty(mds->mdlog->get_current_segment());
     straydir->commit(0, gather->new_sub());
   }
 
@@ -442,7 +442,7 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
 
 
   mydir->mark_complete();
-  mydir->mark_dirty(mydir->pre_dirty(), mds->mdlog->get_current_segment());
+  mydir->mark_dirty(mds->mdlog->get_current_segment());
   mydir->commit(0, gather->new_sub());
 
   myin->store(gather->new_sub());
@@ -452,12 +452,11 @@ struct C_MDC_CreateSystemFile : public Context {
   MDCache *cache;
   Mutation *mut;
   CDentry *dn;
-  version_t dpv;
   Context *fin;
-  C_MDC_CreateSystemFile(MDCache *c, Mutation *mu, CDentry *d, version_t v, Context *f) :
-    cache(c), mut(mu), dn(d), dpv(v), fin(f) {}
+  C_MDC_CreateSystemFile(MDCache *c, Mutation *mu, CDentry *d, Context *f) :
+    cache(c), mut(mu), dn(d), fin(f) {}
   void finish(int r) {
-    cache->_create_system_file_finish(mut, dn, dpv, fin);
+    cache->_create_system_file_finish(mut, dn, fin);
   }
 };
 
@@ -467,19 +466,19 @@ void MDCache::_create_system_file(CDir *dir, const char *name, CInode *in, Conte
   CDentry *dn = dir->add_null_dentry(name);
 
   dn->push_projected_linkage(in);
-  version_t dpv = dn->pre_dirty();
-  
+
   CDir *mdir = 0;
   if (in->inode.is_dir()) {
     in->inode.rstat.rsubdirs = 1;
 
     in->set_stripe_auth(vector<int>(1, mds->whoami));
-    mdir = in->get_or_open_stripe(0)->get_or_open_dirfrag(frag_t());
+    CStripe *stripe = in->get_or_open_stripe(0);
+    stripe->mark_open();
+
+    mdir = stripe->get_or_open_dirfrag(frag_t());
     mdir->mark_complete();
-    mdir->pre_dirty();
   } else
     in->inode.rstat.rfiles = 1;
-  in->inode.version = dn->pre_dirty();
   
   SnapRealm *realm = get_snaprealm();
   dn->first = in->first = realm->get_newest_seq() + 1;
@@ -507,25 +506,27 @@ void MDCache::_create_system_file(CDir *dir, const char *name, CInode *in, Conte
     le->metablob.add_new_dir(mdir); // dirty AND complete AND new
 
   mds->mdlog->submit_entry(le);
-  mds->mdlog->wait_for_safe(new C_MDC_CreateSystemFile(this, mut, dn, dpv, fin));
+  mds->mdlog->wait_for_safe(new C_MDC_CreateSystemFile(this, mut, dn, fin));
   mds->mdlog->flush();
 }
 
-void MDCache::_create_system_file_finish(Mutation *mut, CDentry *dn, version_t dpv, Context *fin)
+void MDCache::_create_system_file_finish(Mutation *mut, CDentry *dn, Context *fin)
 {
   dout(10) << "_create_system_file_finish " << *dn << dendl;
-  
+ 
   dn->pop_projected_linkage();
-  dn->mark_dirty(dpv, mut->ls);
+  dn->mark_dirty(mut->ls);
 
   CInode *in = dn->get_linkage()->get_inode();
-  in->inode.version--;
-  in->mark_dirty(in->inode.version + 1, mut->ls);
+  in->mark_dirty(mut->ls);
 
-  CDir *dir = 0;
   if (in->inode.is_dir()) {
-    dir = in->get_stripe(0)->get_dirfrag(frag_t());
-    dir->mark_dirty(1, mut->ls);
+    CStripe *stripe = in->get_stripe(0);
+    stripe->mark_dirty(mut->ls);
+    stripe->mark_new(mut->ls);
+
+    CDir *dir = stripe->get_dirfrag(frag_t());
+    dir->mark_dirty(mut->ls);
     dir->mark_new(mut->ls);
   }
 
@@ -536,9 +537,6 @@ void MDCache::_create_system_file_finish(Mutation *mut, CDentry *dn, version_t d
 
   fin->finish(0);
   delete fin;
-
-  //if (dir && MDS_INO_IS_MDSDIR(in->ino()))
-  //migrator->export_dir(dir, (int)in->ino() - MDS_INO_MDSDIR_OFFSET);
 }
 
 
@@ -888,7 +886,6 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
       dn->first = follows+1;
       CDentry *olddn = dn->dir->add_remote_dentry(dn->name, in->ino(),  in->d_type(),
 						  oldfirst, follows);
-      olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
       metablob->add_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
@@ -926,7 +923,6 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
       if (pcow_inode)
 	*pcow_inode = oldin;
       CDentry *olddn = dn->dir->add_primary_dentry(dn->name, oldin, oldfirst, follows);
-      oldin->inode.version = olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
       metablob->add_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
@@ -934,7 +930,6 @@ void MDCache::journal_cow_dentry(Mutation *mut, EMetaBlob *metablob, CDentry *dn
       assert(dnl->is_remote());
       CDentry *olddn = dn->dir->add_remote_dentry(dn->name, dnl->get_remote_ino(), dnl->get_remote_d_type(),
 						  oldfirst, follows);
-      olddn->pre_dirty();
       dout(10) << " olddn " << *olddn << dendl;
       metablob->add_dentry(olddn, true);
       mut->add_cow_dentry(olddn);
@@ -1270,7 +1265,6 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
     mut->add_projected_fnode(stripe);
 
     fnode_t *pf = stripe->project_fnode();
-    pf->version = stripe->pre_dirty();
 
     if (do_parent_mtime || linkunlink) {
       assert(mut->wrlocks.count(&pin->filelock) ||
@@ -1402,7 +1396,6 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
     pin->pre_cow_old_inode();  // avoid cow mayhem!
 
     inode_t *pi = pin->project_inode();
-    pi->version = pin->pre_dirty();
 
     // dirstat
     if (do_parent_mtime || linkunlink) {
@@ -3928,10 +3921,9 @@ void MDCache::queue_file_recover(CInode *in)
     s.erase(*s.rbegin());
   dout(10) << " snaps in [" << in->first << "," << in->last << "] are " << s << dendl;
   if (s.size() > 1) {
-    inode_t *pi = in->project_inode();
-    pi->version = in->pre_dirty();
-
     Mutation *mut = new Mutation;
+    mut->add_projected_inode(in);
+    in->project_inode();
     mut->ls = mds->mdlog->get_current_segment();
     EUpdate *le = new EUpdate(mds->mdlog, "queue_file_recover cow");
     mds->mdlog->start_entry(le);
@@ -4198,7 +4190,6 @@ void MDCache::truncate_inode_finish(CInode *in, LogSegment *ls)
 
   // update
   inode_t *pi = in->project_inode();
-  pi->version = in->pre_dirty();
   pi->truncate_from = 0;
   pi->truncate_pending--;
 
@@ -6717,13 +6708,12 @@ void MDCache::purge_stray(CDentry *dn)
 class C_MDC_PurgeStrayLogged : public Context {
   MDCache *cache;
   CDentry *dn;
-  version_t pdv;
   LogSegment *ls;
 public:
-  C_MDC_PurgeStrayLogged(MDCache *c, CDentry *d, version_t v, LogSegment *s) : 
-    cache(c), dn(d), pdv(v), ls(s) { }
+  C_MDC_PurgeStrayLogged(MDCache *c, CDentry *d, LogSegment *s)
+      : cache(c), dn(d), ls(s) { }
   void finish(int r) {
-    cache->_purge_stray_logged(dn, pdv, ls);
+    cache->_purge_stray_logged(dn, ls);
   }
 };
 class C_MDC_PurgeStrayLoggedTruncate : public Context {
@@ -6747,7 +6737,6 @@ void MDCache::_purge_stray_purged(CDentry *dn, int r)
   if (in->get_num_ref() == (int)in->is_dirty() &&
       dn->get_num_ref() == (int)dn->is_dirty() + !!in->get_num_ref() + 1/*PIN_PURGING*/) {
     // kill dentry.
-    version_t pdv = dn->pre_dirty();
     dn->push_projected_linkage(); // NULL
 
     EUpdate *le = new EUpdate(mds->mdlog, "purge_stray");
@@ -6756,7 +6745,6 @@ void MDCache::_purge_stray_purged(CDentry *dn, int r)
     // update dirfrag fragstat, rstat
     CStripe *stripe = dn->get_stripe();
     fnode_t *pf = stripe->project_fnode();
-    pf->version = stripe->pre_dirty();
     if (in->is_dir())
       pf->fragstat.nsubdirs--;
     else
@@ -6767,7 +6755,7 @@ void MDCache::_purge_stray_purged(CDentry *dn, int r)
     le->metablob.add_dentry(dn, true);
     le->metablob.add_destroyed_inode(in->ino());
 
-    mds->mdlog->submit_entry(le, new C_MDC_PurgeStrayLogged(this, dn, pdv, mds->mdlog->get_current_segment()));
+    mds->mdlog->submit_entry(le, new C_MDC_PurgeStrayLogged(this, dn, mds->mdlog->get_current_segment()));
   } else {
     // new refs.. just truncate to 0
     EUpdate *le = new EUpdate(mds->mdlog, "purge_stray truncate");
@@ -6778,7 +6766,6 @@ void MDCache::_purge_stray_purged(CDentry *dn, int r)
     pi->client_ranges.clear();
     pi->truncate_size = 0;
     pi->truncate_from = 0;
-    pi->version = in->pre_dirty();
 
     le->metablob.add_stripe_context(dn->get_stripe());
     le->metablob.add_inode(in, true);
@@ -6787,7 +6774,7 @@ void MDCache::_purge_stray_purged(CDentry *dn, int r)
   }
 }
 
-void MDCache::_purge_stray_logged(CDentry *dn, version_t pdv, LogSegment *ls)
+void MDCache::_purge_stray_logged(CDentry *dn, LogSegment *ls)
 {
   CInode *in = dn->get_linkage()->get_inode();
   dout(10) << "_purge_stray_logged " << *dn << " " << *in << dendl;
@@ -6802,7 +6789,7 @@ void MDCache::_purge_stray_logged(CDentry *dn, version_t pdv, LogSegment *ls)
   assert(dn->get_projected_linkage()->is_null());
   dir->unlink_inode(dn);
   dn->pop_projected_linkage();
-  dn->mark_dirty(pdv, ls);
+  dn->mark_dirty(ls);
 
   dir->get_stripe()->pop_and_dirty_projected_fnode(ls);
 

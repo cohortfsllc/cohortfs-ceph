@@ -137,7 +137,7 @@ void Mutation::add_cow_inode(CInode *in)
 void Mutation::add_cow_dentry(CDentry *dn)
 {
   pin(dn);
-  dirty_cow_dentries.push_back(pair<CDentry*,version_t>(dn, dn->get_projected_version()));
+  dirty_cow_dentries.push_back(dn);
 }
 
 void Mutation::apply()
@@ -149,11 +149,11 @@ void Mutation::apply()
        p != dirty_cow_inodes.end();
        p++) 
     (*p)->_mark_dirty(ls);
-  for (list<pair<CDentry*,version_t> >::iterator p = dirty_cow_dentries.begin();
+  for (list<CDentry*>::iterator p = dirty_cow_dentries.begin();
        p != dirty_cow_dentries.end();
        p++)
-    p->first->mark_dirty(p->second, ls);
-  
+    (*p)->mark_dirty(ls);
+ 
   for (list<ScatterLock*>::iterator p = updated_locks.begin();
        p != updated_locks.end();
        p++)

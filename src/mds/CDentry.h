@@ -143,7 +143,6 @@ protected:
   list<linkage_t> projected;
   
   version_t version;  // dir version when last touched.
-  version_t projected_version;  // what it will be when i unlock/commit.
 
 public:
   elist<CDentry*>::item item_dirty;
@@ -175,7 +174,7 @@ public:
     name(n), hash(h),
     first(f), last(l),
     dir(0),
-    version(0), projected_version(0),
+    version(0),
     item_dirty(this),
     auth_pins(0),
     lock(this, &lock_type),
@@ -188,7 +187,7 @@ public:
     name(n), hash(h),
     first(f), last(l),
     dir(0),
-    version(0), projected_version(0),
+    version(0),
     item_dirty(this),
     auth_pins(0),
     lock(this, &lock_type),
@@ -279,16 +278,14 @@ public:
   void make_anchor_trace(vector<class Anchor>& trace, CInode *in);
 
   // -- version --
-  version_t get_version() { return version; }
-  void set_version(version_t v) { projected_version = version = v; }
-  version_t get_projected_version() { return projected_version; }
-  void set_projected_version(version_t v) { projected_version = v; }
+  version_t get_version() const { return version; }
+  void set_version(version_t v) { version = v; }
+  version_t get_projected_version() const { return version + projected.size(); }
   
   pair<int,int> authority();
 
-  version_t pre_dirty(version_t min=0);
   void _mark_dirty(LogSegment *ls);
-  void mark_dirty(version_t projected_dirv, LogSegment *ls);
+  void mark_dirty(LogSegment *ls);
   void mark_clean();
 
   void mark_new();
@@ -317,7 +314,6 @@ public:
     ::encode(first, bl);
     ::encode(state, bl);
     ::encode(version, bl);
-    ::encode(projected_version, bl);
     ::encode(lock, bl);
     ::encode(replica_map, bl);
     get(PIN_TEMPEXPORTING);
@@ -339,7 +335,6 @@ public:
     __u32 nstate;
     ::decode(nstate, blp);
     ::decode(version, blp);
-    ::decode(projected_version, blp);
     ::decode(lock, blp);
     ::decode(replica_map, blp);
 

@@ -59,8 +59,6 @@ ostream& operator<<(ostream& out, CDir& dir)
     if (dir.is_replicated())
       out << dir.get_replicas();
 
-    if (dir.is_projected())
-      out << " pv=" << dir.get_projected_version();
     out << " v=" << dir.get_version();
     out << " cv=" << dir.get_committing_version();
     out << "/" << dir.get_committed_version();
@@ -121,7 +119,6 @@ CDir::CDir(CStripe *stripe, frag_t frag, MDCache *mdcache, bool auth)
     item_dirty(this),
     item_new(this),
     version(0),
-    projected_version(0),
     num_head_items(0),
     num_head_null(0),
     num_snap_items(0),
@@ -176,7 +173,7 @@ CDentry* CDir::add_null_dentry(const string& dname,
   cache->lru.lru_insert_mid(dn);
 
   dn->dir = this;
-  dn->version = get_projected_version();
+  dn->version = version;
   
   // add to dir
   assert(items.count(dn->key()) == 0);
@@ -217,7 +214,7 @@ CDentry* CDir::add_primary_dentry(const string& dname, CInode *in,
   cache->lru.lru_insert_mid(dn);
 
   dn->dir = this;
-  dn->version = get_projected_version();
+  dn->version = version;
   
   // add to dir
   assert(items.count(dn->key()) == 0);
@@ -262,7 +259,7 @@ CDentry* CDir::add_remote_dentry(const string& dname, inodeno_t ino, unsigned ch
   cache->lru.lru_insert_mid(dn);
 
   dn->dir = this;
-  dn->version = get_projected_version();
+  dn->version = version;
   
   // add to dir
   assert(items.count(dn->key()) == 0);
@@ -887,20 +884,10 @@ void CDir::finish_waiting(uint64_t mask, int result)
 
 // dirty/clean
 
-version_t CDir::pre_dirty(version_t min)
+void CDir::mark_dirty(LogSegment *ls)
 {
-  if (min > projected_version)
-    projected_version = min;
-  ++projected_version;
-  dout(10) << "pre_dirty " << projected_version << dendl;
-  return projected_version;
-}
-
-void CDir::mark_dirty(version_t pv, LogSegment *ls)
-{
-  assert(get_version() < pv);
-  assert(pv <= projected_version);
-  version = pv;
+  version++;
+  dout(10) << "mark_dirty v" << version << dendl;
   _mark_dirty(ls);
 }
 
@@ -942,20 +929,18 @@ void CDir::mark_clean()
 
 struct C_Dir_Dirty : public Context {
   CDir *dir;
-  version_t pv;
   LogSegment *ls;
-  C_Dir_Dirty(CDir *d, version_t p, LogSegment *l) : dir(d), pv(p), ls(l) {}
+  C_Dir_Dirty(CDir *d, LogSegment *l) : dir(d), ls(l) {}
   void finish(int r) {
-    dir->mark_dirty(pv, ls);
+    dir->mark_dirty(ls);
   }
 };
 
 void CDir::log_mark_dirty()
 {
   MDLog *mdlog = cache->mds->mdlog;
-  version_t pv = pre_dirty();
   mdlog->flush();
-  mdlog->wait_for_safe(new C_Dir_Dirty(this, pv, mdlog->get_current_segment()));
+  mdlog->wait_for_safe(new C_Dir_Dirty(this, mdlog->get_current_segment()));
 }
 
 void CDir::mark_complete() {
@@ -1090,10 +1075,8 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
   // take the loaded fnode?
   // only if we are a fresh CDir* with no prior state.
   if (get_version() == 0) {
-    assert(!is_projected());
     assert(!state_test(STATE_COMMITTING));
-    projected_version = committing_version =
-        committed_version = version = got_version;
+    committing_version = committed_version = version = got_version;
 
     if (state_test(STATE_REJOINUNDEF)) {
       assert(cache->mds->is_rejoin());
@@ -1735,10 +1718,7 @@ void CDir::_committed(version_t v, version_t lrv)
 	dn->mark_clean();
 
 	// drop clean null stray dentries immediately
-	if (stray && 
-	    dn->get_num_ref() == 0 &&
-	    !dn->is_projected() &&
-	    dn->get_linkage()->is_null())
+	if (stray &&  dn->get_num_ref() == 0 && dn->get_linkage()->is_null())
 	  remove_dentry(dn);
       } 
     } else {
@@ -1777,7 +1757,6 @@ void CDir::_committed(version_t v, version_t lrv)
 
 void CDir::encode_export(bufferlist& bl)
 {
-  assert(!is_projected());
   ::encode(first, bl);
   ::encode(version, bl);
   ::encode(snap_purged_thru, bl);
@@ -1798,7 +1777,6 @@ void CDir::decode_import(bufferlist::iterator& blp, utime_t now)
   ::decode(first, blp);
   ::decode(version, blp);
   ::decode(snap_purged_thru, blp);
-  projected_version = version;
   ::decode(committed_version, blp);
   committing_version = committed_version;
 

@@ -2048,7 +2048,6 @@ bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
   mut->ls = mds->mdlog->get_current_segment();
     
   inode_t *pi = in->project_inode();
-  pi->version = in->pre_dirty();
 
   if (new_max) {
     dout(10) << "check_inode_max_size client_ranges " << pi->client_ranges << " -> " << new_ranges << dendl;
@@ -2583,7 +2582,6 @@ void Locker::_do_snap_update(CInode *in, snapid_t snap, int dirty, snapid_t foll
     px = new map<string,bufferptr>;
 
   inode_t *pi = in->project_inode(px);
-  pi->version = in->pre_dirty();
   if (oi)
     pi = &oi->inode;
 
@@ -2794,7 +2792,6 @@ bool Locker::_do_cap_update(CInode *in, Capability *cap,
     px = new map<string,bufferptr>;
 
   inode_t *pi = in->project_inode(px);
-  pi->version = in->pre_dirty();
 
   Mutation *mut = new Mutation;
   mut->ls = mds->mdlog->get_current_segment();
@@ -3676,8 +3673,7 @@ void Locker::scatter_writebehind(ScatterLock *lock)
 
   in->pre_cow_old_inode();  // avoid cow mayhem
 
-  inode_t *pi = in->project_inode();
-  pi->version = in->pre_dirty();
+  in->project_inode();
 
   in->finish_scatter_gather_update(lock->get_type());
   lock->start_flush();

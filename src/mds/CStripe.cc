@@ -148,7 +148,6 @@ CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
     auth_pins(0),
     replicate(false),
     first(2),
-    projected_version(0),
     committing_version(0),
     committed_version(0),
     dirty_rstat_inodes(member_offset(CInode, dirty_rstat_item)),
@@ -187,6 +186,7 @@ fnode_t *CStripe::project_fnode()
   fnode_t *p = new fnode_t;
   *p = *get_projected_fnode();
   projected_fnode.push_back(p);
+  p->version = get_projected_version();
   dout(10) << "project_fnode " << p << dendl;
   return p;
 }
@@ -243,9 +243,7 @@ void CStripe::assimilate_dirty_rstat_inodes()
     if (in->is_frozen())
       continue;
 
-    inode_t *pi = in->project_inode();
-    pi->version = in->pre_dirty();
-
+    in->project_inode();
     mdcache->project_rstat_inode_to_frag(in, this, 0, 0);
   }
   state_set(STATE_ASSIMRSTAT);
@@ -526,22 +524,10 @@ bool CStripe::contains(CStripe *stripe)
 }
 
 
-version_t CStripe::pre_dirty(version_t min)
+void CStripe::mark_dirty(LogSegment *ls)
 {
-  if (projected_version > min)
-    projected_version = min;
-  ++projected_version;
-  dout(10) << "pre_dirty " << projected_version << dendl;
-  return projected_version;
-}
-
-void CStripe::mark_dirty(version_t pv, LogSegment *ls)
-{
+  fnode.version++;
   dout(10) << "mark_dirty " << *this << dendl;
-
-  assert(get_version() < pv);
-  assert(pv <= projected_version);
-  fnode.version = pv;
   _mark_dirty(ls);
 }
 
@@ -676,7 +662,7 @@ int CStripe::_fetched(bufferlist& bl)
   version_t v = get_version();
   decode_store(p);
   if (v == 0)
-    committing_version = committed_version = projected_version = fnode.version;
+    committing_version = committed_version = fnode.version;
   state_set(STATE_OPEN);
   dout(10) << "_fetched " << *this << dendl;
   return 0;
@@ -704,7 +690,6 @@ void CStripe::decode_import(bufferlist::iterator& blp, utime_t now)
 {
   ::decode(first, blp);
   ::decode(fnode, blp);
-  projected_version = fnode.version;
   ::decode(committed_version, blp);
   committing_version = committed_version;
 

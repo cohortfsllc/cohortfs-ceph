@@ -571,7 +571,7 @@ public:
   InodeContainer* get_container() { return &container; }
 
   void _create_system_file(CDir *dir, const char *name, CInode *in, Context *fin);
-  void _create_system_file_finish(Mutation *mut, CDentry *dn, version_t dpv, Context *fin);
+  void _create_system_file_finish(Mutation *mut, CDentry *dn, Context *fin);
 
   void open_foreign_mdsdir(inodeno_t ino, Context *c);
   CDentry *get_or_create_stray_dentry(CInode *in);
@@ -689,7 +689,7 @@ public:
 protected:
   void purge_stray(CDentry *dn);
   void _purge_stray_purged(CDentry *dn, int r=0);
-  void _purge_stray_logged(CDentry *dn, version_t pdv, LogSegment *ls);
+  void _purge_stray_logged(CDentry *dn, LogSegment *ls);
   void _purge_stray_logged_truncate(CDentry *dn, LogSegment *ls);
   friend class C_MDC_PurgeStrayLogged;
   friend class C_MDC_PurgeStrayLoggedTruncate;
