@@ -58,12 +58,16 @@ class CStripe : public MDSCacheObject {
   static const int PIN_DIRFRAG            = -1;
   static const int PIN_STICKYDIRS         = 2;
   static const int PIN_FROZEN             = 3;
+  static const int PIN_DIRTYFRAGSTAT      = 4; // has unaccounted fragstat
+  static const int PIN_DIRTYRSTAT         = 5; // has unaccounted rstat
 
   const char *pin_name(int p) {
     switch (p) {
       case PIN_DIRFRAG: return "dirfrag";
       case PIN_STICKYDIRS: return "stickydirs";
       case PIN_FROZEN: return "frozen";
+      case PIN_DIRTYFRAGSTAT: return "dirtyfragstat";
+      case PIN_DIRTYRSTAT: return "dirtyrstat";
       default: return generic_pin_name(p);
     }
   }
@@ -72,7 +76,9 @@ class CStripe : public MDSCacheObject {
   static const unsigned STATE_OPEN          = (1<<0); // has been loaded from disk
   static const unsigned STATE_FROZEN        = (1<<1);
   static const unsigned STATE_FREEZING      = (1<<2);
-  static const unsigned STATE_COMMITTING    = (1<<4);
+  static const unsigned STATE_COMMITTING    = (1<<3);
+  static const unsigned STATE_DIRTYFRAGSTAT = (1<<4);
+  static const unsigned STATE_DIRTYRSTAT    = (1<<5);
 
   // these state bits are preserved by an import/export
   static const unsigned MASK_STATE_EXPORTED =
@@ -165,13 +171,6 @@ class CStripe : public MDSCacheObject {
 
   void pop_and_dirty_projected_fnode(LogSegment *ls);
   bool is_projected() { return !projected_fnode.empty(); }
-
-  bool is_rstat_accounted() const {
-    return fnode.rstat == fnode.accounted_rstat;
-  }
-  bool is_fragstat_accounted() const {
-    return fnode.fragstat == fnode.accounted_fragstat;
-  }
 
   void mark_dirty(LogSegment *ls);
   void _mark_dirty(LogSegment *ls);
