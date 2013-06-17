@@ -95,7 +95,7 @@ ostream& operator<<(ostream& out, CStripe &s)
 
   // fragstat
   out << " " << s.fnode.fragstat;
-  if (!s.is_fragstat_accounted())
+  if (s.fnode.fragstat.version != s.fnode.accounted_fragstat.version)
     out << "/" << s.fnode.accounted_fragstat;
   if (g_conf->mds_debug_scatterstat && s.is_projected()) {
     fnode_t *pf = s.get_projected_fnode();
@@ -106,7 +106,7 @@ ostream& operator<<(ostream& out, CStripe &s)
 
   // rstat
   out << " " << s.fnode.rstat;
-  if (!s.is_rstat_accounted())
+  if (s.fnode.rstat.version != s.fnode.accounted_rstat.version)
     out << "/" << s.fnode.accounted_rstat;
   if (g_conf->mds_debug_scatterstat && s.is_projected())
   {

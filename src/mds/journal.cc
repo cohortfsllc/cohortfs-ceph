@@ -404,23 +404,27 @@ static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
 void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls)
 {
   CInode *diri = stripe->get_inode();
+  stripe->set_stripe_auth(auth);
+  if (auth.first == mds->get_nodeid())
+    stripe->state_set(CStripe::STATE_AUTH);
+  else
+    stripe->state_clear(CStripe::STATE_AUTH);
+  stripe->fnode = fnode;
   if (is_open())
     stripe->mark_open();
   if (is_dirty()) {
     stripe->_mark_dirty(ls);
-    if (!stripe->is_rstat_accounted()) {
+    if (fnode.accounted_rstat.version != fnode.rstat.version) {
       dout(10) << "EMetaBlob dirty nestinfo on " << *stripe << dendl;
       ls->dirty_dirfrag_nest.push_back(&diri->item_dirty_dirfrag_nest);
     }
-    if (!stripe->is_fragstat_accounted()) {
+    if (fnode.accounted_fragstat.version != fnode.fragstat.version) {
       dout(10) << "EMetaBlob dirty fragstat on " << *stripe << dendl;
       ls->dirty_dirfrag_dir.push_back(&diri->item_dirty_dirfrag_dir);
     }
   }
   if (is_new())
     stripe->mark_new(ls);
-  stripe->set_stripe_auth(auth);
-  stripe->fnode = fnode;
   stripe->set_fragtree(dirfragtree);
   stripe->force_dirfrags();
   dout(10) << "EMetaBlob updated stripe " << *stripe << dendl;

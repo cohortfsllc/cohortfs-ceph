@@ -138,7 +138,7 @@ public:
   static const int PIN_TRUNCATING =       18;
   static const int PIN_STRAY =            19;  // we pin our stray inode while active
   static const int PIN_NEEDSNAPFLUSH =    20;
-  static const int PIN_DIRTYRSTAT =       21;
+  static const int PIN_DIRTYRSTAT =       21; // has unaccounted rstat
   static const int PIN_EXPORTINGCAPS =    22;
   static const int PIN_DIRTYPARENT =      23;
 
@@ -183,6 +183,7 @@ public:
   static const int STATE_RECOVERING =   (1<<12);
   static const int STATE_PURGING =     (1<<13);
   static const int STATE_DIRTYPARENT =  (1<<14);
+  static const int STATE_DIRTYRSTAT =  (1<<15);
   static const int STATE_STRAYPINNED = (1<<16);
   static const int STATE_FROZENAUTHPIN = (1<<17);
 

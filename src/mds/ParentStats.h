@@ -44,7 +44,7 @@ class ParentStats {
 
 
   // open the parent object or forward stats to auth mds
-  CStripe* open_parent_stripe(inode_t *pi, const stripe_stat_update_t &supdate);
+  CStripe* open_parent_stripe(CInode *in, const stripe_stat_update_t &supdate);
   CInode* open_parent_inode(CStripe *stripe, const Mutation *mut,
                             const inode_stat_update_t &iupdate);
 
@@ -108,10 +108,9 @@ class ParentStats {
   void update_accounted(inodeno_t ino, Projected &projected, Mutation *mut,
                         const nest_info_t &accounted_rstat);
 
-  void account_stripe(dirstripe_t ds, fnode_t *pf,
-                      const frag_info_t &fragstat,
+  void account_stripe(CStripe *stripe, const frag_info_t &fragstat,
                       const nest_info_t &rstat);
-  void account_inode(inode_t *pi, const nest_info_t &rstat);
+  void account_inode(CInode *in, const nest_info_t &rstat);
 
  public:
   ParentStats(MDS *mds) : mds(mds), tick_event(NULL) {}
