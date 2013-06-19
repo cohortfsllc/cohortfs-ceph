@@ -70,8 +70,8 @@ class C_PS_StripeFrag : public Context {
     ParentStats &ps = mds->mdcache->parentstats;
     C_GatherBuilder gather(g_ceph_context);
     // attempt to take the linklock again
-    if (!mut->xlocks.count(&stripe->linklock) &&
-        !mds->locker->xlock_start(&stripe->linklock, mut, &gather)) {
+    if (!mut->wrlocks.count(&stripe->linklock) &&
+        !mds->locker->wrlock_start(&stripe->linklock, mut, &gather)) {
       gather.set_finisher(new C_PS_StripeFrag(mds, stripe, mut, supdate));
       gather.activate();
       dout(10) << "still waiting on " << stripe->nestlock
@@ -107,8 +107,8 @@ class C_PS_StripeNest : public Context {
     ParentStats &ps = mds->mdcache->parentstats;
     C_GatherBuilder gather(g_ceph_context);
     // attempt to take the nestlock again
-    if (!mut->xlocks.count(&stripe->nestlock) &&
-        !mds->locker->xlock_start(&stripe->nestlock, mut, &gather)) {
+    if (!mut->wrlocks.count(&stripe->nestlock) &&
+        !mds->locker->wrlock_start(&stripe->nestlock, mut, &gather)) {
       gather.set_finisher(new C_PS_StripeNest(mds, stripe, mut, supdate));
       gather.activate();
       dout(10) << "still waiting on " << stripe->nestlock
@@ -357,7 +357,7 @@ bool ParentStats::update_stripe_stats(CStripe *stripe, Projected &projected,
   }
 
   // requires stripe.linklock from caller
-  assert(mut->xlocks.count(&stripe->linklock));
+  assert(mut->wrlocks.count(&stripe->linklock));
 
   // inode.dirstat -> stripe.fragstat
   fnode_t *pf = projected.get(stripe, mut);
@@ -394,8 +394,8 @@ bool ParentStats::update_stripe_nest(CStripe *stripe, Projected &projected,
 
   // requires stripe.nestlock
   C_GatherBuilder gather(g_ceph_context);
-  if (!mut->xlocks.count(&stripe->nestlock) &&
-      !mds->locker->xlock_start(&stripe->nestlock, mut, &gather)) {
+  if (!mut->wrlocks.count(&stripe->nestlock) &&
+      !mds->locker->wrlock_start(&stripe->nestlock, mut, &gather)) {
     Mutation *newmut = new Mutation(mut->reqid, mut->attempt);
     gather.set_finisher(new C_PS_StripeNest(mds, stripe, newmut, supdate));
     gather.activate();

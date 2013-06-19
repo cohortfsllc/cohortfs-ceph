@@ -2117,8 +2117,8 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
     rdlocks.insert(&dn->lock);  // existing dn, rdlock
 
   // also xlock stripe for mtime
-  xlocks.insert(&dn->get_stripe()->linklock);
-  xlocks.insert(&dn->get_stripe()->nestlock);
+  wrlocks.insert(&dn->get_stripe()->linklock);
+  wrlocks.insert(&dn->get_stripe()->nestlock);
   return dn;
 }
 

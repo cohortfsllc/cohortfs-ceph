@@ -241,8 +241,8 @@ class CStripe : public MDSCacheObject {
   static LockType nestlock_type;
 
   SimpleLock dirfragtreelock; // protects dirfragtree
-  SimpleLock linklock; // protects fnode.fragstat
-  SimpleLock nestlock; // protects fnode.rstat
+  ScatterLock linklock; // protects fnode.fragstat
+  ScatterLock nestlock; // protects fnode.rstat
 
   SimpleLock* get_lock(int type) {
     switch (type) {

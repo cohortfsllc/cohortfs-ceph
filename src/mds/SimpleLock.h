@@ -39,7 +39,9 @@ inline const char *get_lock_type_name(int t) {
 }
 inline bool is_scatter_lock(int t) {
   return t == CEPH_LOCK_IFILE
-      || t == CEPH_LOCK_INEST;
+      || t == CEPH_LOCK_INEST
+      || t == CEPH_LOCK_SLINK
+      || t == CEPH_LOCK_SNEST;
 }
 inline bool is_inode_lock(int t) {
   switch (t) {
@@ -82,11 +84,11 @@ struct LockType {
     case CEPH_LOCK_ISNAP:
     case CEPH_LOCK_IFLOCK:
     case CEPH_LOCK_IPOLICY:
-    case CEPH_LOCK_SLINK:
-    case CEPH_LOCK_SNEST:
       sm = &sm_simplelock;
       break;
     case CEPH_LOCK_INEST:
+    case CEPH_LOCK_SLINK:
+    case CEPH_LOCK_SNEST:
       sm = &sm_scatterlock;
       break;
     case CEPH_LOCK_IFILE:
