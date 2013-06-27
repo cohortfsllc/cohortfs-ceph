@@ -4227,8 +4227,8 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
       mdlog, "slave_mkdir", mdr->reqid, mdr->slave_to_mds,
       ESlaveUpdate::OP_PREPARE, ESlaveUpdate::MKDIR);
 
-  le->commit.add_dentry(dn, true);
-  le->commit.add_inode(in, true);
+  le->commit.add_dentry(dn, false);
+  le->commit.add_inode(in, false);
 
   const set<stripeid_t> &stripes = req->stripes;
   for (set<stripeid_t>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
