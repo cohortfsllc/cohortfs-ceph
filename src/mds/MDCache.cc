@@ -1929,6 +1929,8 @@ void MDCache::rejoin_send_rejoins()
   assert(!migrator->is_importing());
   assert(!migrator->is_exporting());
 
+  list<CStripe*> stripes;
+
   // share inode lock state
   for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
     CInode *in = i->second;
@@ -1947,6 +1949,19 @@ void MDCache::rejoin_send_rejoins()
 
     if (in->is_dirty_scattered())
       p->second->add_scatterlock_state(in);
+    if (in->is_dir())
+      in->get_stripes(stripes);
+  }
+
+  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    CStripe *stripe = *s;
+    int who = stripe->authority().first;
+    rejoin_map::iterator p = rejoins.find(who);
+    if (p == rejoins.end())
+      continue;
+
+    dout(15) << "rejoining " << *stripe << " for mds." << who << dendl;
+    p->second->add_weak_stripe(stripe->dirstripe());
   }
 #if 0 
   // check all subtrees
@@ -2448,6 +2463,21 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
       ack->add_inode_base(in);
       ack->add_inode_locks(in, inonce);
     }
+  }
+
+  for (set<dirstripe_t>::iterator s = weak->weak_stripes.begin();
+       s != weak->weak_stripes.end(); ++s) {
+    CStripe *stripe = get_dirstripe(*s);
+    if (!stripe)
+      dout(5) << " missing stripe " << *s << dendl;
+    assert(stripe);
+    if (survivor && stripe->is_replica(from)) 
+      stripe->remove_replica(from);
+
+    int snonce = stripe->add_replica(from);
+    dout(10) << " have stripe " << *stripe << dendl;
+    if (ack)
+      ack->add_strong_stripe(*s, snonce);
   }
 
   if (survivor) {
@@ -3616,17 +3646,27 @@ void MDCache::rejoin_send_acks()
   }
 #endif
 
+  list<CStripe*> stripes;
+  typedef map<int,int>::iterator rep_iter;
   for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
     CInode *in = i->second;
     if (!in->is_auth())
       continue;
 
-    for (map<int,int>::iterator r = in->replicas_begin();
-	 r != in->replicas_end();
-	 ++r) {
+    for (rep_iter r = in->replicas_begin(); r != in->replicas_end(); ++r) {
       ack[r->first]->add_inode_base(in);
       ack[r->first]->add_inode_locks(in, r->second);
     }
+    in->get_stripes(stripes);
+  }
+
+  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    CStripe *stripe = *s;
+    if (!stripe->is_auth())
+      continue;
+
+    for (rep_iter r = stripe->replicas_begin(); r != stripe->replicas_end(); ++r)
+      ack[r->first]->add_strong_stripe(stripe->dirstripe(), r->second);
   }
 
   // include inode base for any inodes whose scatterlocks may have updated
