@@ -321,12 +321,16 @@ class CStripe : public MDSCacheObject {
     __u32 nonce = add_replica(who);
     ::encode(nonce, bl);
     ::encode(dirfragtree, bl);
+    linklock.encode_state_for_replica(bl);
+    nestlock.encode_state_for_replica(bl);
   }
-  void decode_replica(bufferlist::iterator& p) {
+  void decode_replica(bufferlist::iterator& p, bool is_new) {
     __u32 nonce;
     ::decode(nonce, p);
     replica_nonce = nonce;
     ::decode(dirfragtree, p);
+    linklock.decode_state(p, is_new);
+    nestlock.decode_state(p, is_new);
     state_set(STATE_OPEN);
   }
 
