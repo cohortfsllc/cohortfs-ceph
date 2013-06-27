@@ -7475,13 +7475,13 @@ CStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
 
   CStripe *stripe = get_dirstripe(ds);
   if (stripe) {
-    stripe->decode_replica(p);
+    stripe->decode_replica(p, false);
     dout(7) << "add_replica_stripe had " << *stripe
         << " nonce " << stripe->get_replica_nonce() << dendl;
   } else {
     assert(ds.stripeid < diri->get_stripe_count());
     stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, from));
-    stripe->decode_replica(p);
+    stripe->decode_replica(p, true);
     dout(7) << "add_replica_stripe added " << *stripe
         << " nonce " << stripe->get_replica_nonce() << dendl;
 
