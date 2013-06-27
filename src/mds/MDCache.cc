@@ -3679,6 +3679,14 @@ void MDCache::rejoin_trim_undef_inodes()
   assert(rejoin_undef_inodes.empty());
 }
 
+struct C_MDC_StartParentStats : public Context {
+  ParentStats *stats;
+  C_MDC_StartParentStats(ParentStats *stats) : stats(stats) {}
+  void finish(int r) {
+    stats->propagate_unaccounted();
+  }
+};
+
 void MDCache::rejoin_gather_finish() 
 {
   dout(10) << "rejoin_gather_finish" << dendl;
@@ -3706,6 +3714,8 @@ void MDCache::rejoin_gather_finish()
 
   // finish rejoin
   start_files_to_recover(rejoin_recover_q, rejoin_check_q);
+  // start parent stats when root opens
+  wait_for_open(new C_MDC_StartParentStats(&parentstats));
   mds->queue_waiters(rejoin_waiters);
   mds->rejoin_done();
 }
@@ -5534,7 +5544,10 @@ void MDCache::dispatch(Message *m)
     break;
 
   case MSG_MDS_PARENTSTATS:
-    parentstats.handle((MParentStats*)m);
+    if (!is_open())
+      wait_for_open(new C_MDS_RetryMessage(mds, m));
+    else
+      parentstats.handle((MParentStats*)m);
     break;
 
   default:
