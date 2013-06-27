@@ -353,6 +353,9 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
   }
   in->old_inodes = old_inodes;
 
+  if (in->is_auth() && inode.rstat.version != inode.accounted_rstat.version)
+    mds->mdcache->parentstats.replay_unaccounted(in);
+
   assert(in->is_base() || static_cast<size_t>(inode.nlink) == inode.parents.size());
 }
 
@@ -403,7 +406,6 @@ static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
 
 void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls)
 {
-  CInode *diri = stripe->get_inode();
   stripe->set_stripe_auth(auth);
   if (auth.first == mds->get_nodeid())
     stripe->state_set(CStripe::STATE_AUTH);
@@ -414,14 +416,11 @@ void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls)
     stripe->mark_open();
   if (is_dirty()) {
     stripe->_mark_dirty(ls);
-    if (fnode.accounted_rstat.version != fnode.rstat.version) {
-      dout(10) << "EMetaBlob dirty nestinfo on " << *stripe << dendl;
-      ls->dirty_dirfrag_nest.push_back(&diri->item_dirty_dirfrag_nest);
-    }
-    if (fnode.accounted_fragstat.version != fnode.fragstat.version) {
-      dout(10) << "EMetaBlob dirty fragstat on " << *stripe << dendl;
-      ls->dirty_dirfrag_dir.push_back(&diri->item_dirty_dirfrag_dir);
-    }
+
+    if (stripe->is_auth() &&
+        (fnode.rstat.version != fnode.accounted_rstat.version ||
+        fnode.fragstat.version != fnode.accounted_fragstat.version))
+      mds->mdcache->parentstats.replay_unaccounted(stripe);
   }
   if (is_new())
     stripe->mark_new(ls);

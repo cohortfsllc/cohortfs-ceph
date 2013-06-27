@@ -775,3 +775,121 @@ void ParentStats::handle(MParentStats *m)
   m->put();
 }
 
+
+// replay/rejoin
+void ParentStats::replay_unaccounted(CStripe *stripe)
+{
+  fnode_t *pf = stripe->get_projected_fnode();
+
+  // get pins for dirty parent stats
+  if (pf->accounted_fragstat.version != pf->fragstat.version &&
+      !stripe->state_test(CStripe::STATE_DIRTYFRAGSTAT)) {
+    stripe->state_set(CStripe::STATE_DIRTYFRAGSTAT);
+    stripe->get(CStripe::PIN_DIRTYFRAGSTAT);
+  }
+  if (pf->accounted_rstat.version != pf->rstat.version &&
+      !stripe->state_test(CStripe::STATE_DIRTYRSTAT)) {
+    stripe->state_set(CStripe::STATE_DIRTYRSTAT);
+    stripe->get(CStripe::PIN_DIRTYRSTAT);
+  }
+  unaccounted_stripes.insert(stripe);
+}
+
+void ParentStats::replay_unaccounted(CInode *in)
+{
+  inode_t *pi = in->get_projected_inode();
+
+  // get pin for dirty rstat
+  if (pi->accounted_rstat.version != pi->rstat.version &&
+      !in->state_test(CInode::STATE_DIRTYRSTAT)) {
+    in->state_set(CInode::STATE_DIRTYRSTAT);
+    in->get(CInode::PIN_DIRTYRSTAT);
+  }
+  unaccounted_inodes.insert(in);
+}
+
+void ParentStats::propagate_unaccounted()
+{
+  dout(10) << "propagate_unaccounted with " << unaccounted_stripes.size()
+      << " stripes and " << unaccounted_inodes.size() << " inodes" << dendl;
+  assert(mds->mdcache->is_open());
+
+  Projected projected; // projected stripes and inodes to journal
+
+  Mutation *mut = new Mutation();
+  EUpdate *le = new EUpdate(mds->mdlog, "replay_parent_stats");
+
+  for (set<CStripe*>::iterator s = unaccounted_stripes.begin();
+       s != unaccounted_stripes.end(); ++s) {
+    CStripe *stripe = *s;
+    fnode_t *pf = projected.get(stripe, mut);
+
+    inode_stat_update_t update;
+    update.stripeid = stripe->get_stripeid();
+
+    // get fragstat delta, or drop dirty fragstat pin
+    if (pf->fragstat.version != pf->accounted_fragstat.version) {
+      bool mtime = false; // ignored
+      update.frag.delta.add_delta(pf->fragstat, pf->accounted_fragstat, mtime);
+      update.frag.delta.version = 1;
+      update.frag.stat = pf->fragstat;
+    } else if (stripe->state_test(CStripe::STATE_DIRTYFRAGSTAT)) {
+      stripe->state_clear(CStripe::STATE_DIRTYFRAGSTAT);
+      stripe->put(CStripe::PIN_DIRTYFRAGSTAT);
+    }
+    // get rstat delta, or drop dirty rstat pin
+    if (pf->rstat.version != pf->accounted_rstat.version) {
+      update.nest.delta.add_delta(pf->rstat, pf->accounted_rstat);
+      update.nest.delta.version = 1;
+      update.nest.stat = pf->rstat;
+    } else if (stripe->state_test(CStripe::STATE_DIRTYRSTAT)) {
+      stripe->state_clear(CStripe::STATE_DIRTYRSTAT);
+      stripe->put(CStripe::PIN_DIRTYRSTAT);
+    }
+
+    if (update.frag.delta.version == 0 && update.nest.delta.version == 0)
+      continue;
+
+    CInode *in = open_parent_inode(stripe, mut, update);
+    if (in)
+      update_inode(in, projected, mut, &le->metablob, update);
+  }
+  unaccounted_stripes.clear();
+
+  for (set<CInode*>::iterator i = unaccounted_inodes.begin();
+       i != unaccounted_inodes.end(); ++i) {
+    CInode *in = *i;
+    inode_t *pi = projected.get(in, mut);
+
+    stripe_stat_update_t update;
+    update.ino = pi->ino;
+
+    // get rstat delta, or drop dirty rstat pin
+    if (pi->rstat.version != pi->accounted_rstat.version) {
+      update.nest.delta.add_delta(pi->rstat, pi->accounted_rstat);
+      update.nest.delta.version = 1;
+      update.nest.stat = pi->rstat;
+    } else if (in->state_test(CInode::STATE_DIRTYRSTAT)) {
+      in->state_clear(CInode::STATE_DIRTYRSTAT);
+      in->put(CInode::PIN_DIRTYRSTAT);
+    }
+
+    if (update.nest.delta.version == 0)
+      continue;
+
+    CStripe *stripe = open_parent_stripe(in, update);
+    if (stripe)
+      update_stripe(stripe, projected, mut, &le->metablob, update);
+  }
+  unaccounted_inodes.clear();
+
+  if (!projected.journal(&le->metablob)) {
+    // no changes to journal
+    mds->locker->drop_locks(mut);
+    delete mut;
+    delete le;
+  } else {
+    mds->mdlog->start_submit_entry(le, new C_PS_Finish(mds, mut));
+  }
+}
+
