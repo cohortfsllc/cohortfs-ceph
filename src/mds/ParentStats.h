@@ -28,6 +28,9 @@ class ParentStats {
  private:
   MDS *mds;
 
+  set<CInode*> unaccounted_inodes;
+  set<CStripe*> unaccounted_stripes;
+
   // queued async update messages
   typedef map<int, MParentStats*> dirty_stats_map;
   dirty_stats_map dirty_stats;
@@ -122,6 +125,13 @@ class ParentStats {
 
   // handle remote requests to update parent stats
   void handle(MParentStats *m);
+
+  // collect the set of unaccounted parent stats during replay
+  void replay_unaccounted(CStripe *stripe);
+  void replay_unaccounted(CInode *in);
+
+  // start to propagate unaccounted parent stats from replay
+  void propagate_unaccounted();
 };
 
 #endif
