@@ -884,7 +884,8 @@ private:
 			    bool replay);
   CDir *force_dir_fragment(CStripe *stripe, frag_t fg);
 
-  bool can_fragment(CInode *diri, list<CDir*>& dirs);
+  bool can_fragment(CStripe *stripe, list<CDir*>& dirs);
+
   void fragment_freeze_dirs(list<CDir*>& dirs, C_GatherBuilder &gather);
   void fragment_mark_and_complete(list<CDir*>& dirs);
   void fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits);
