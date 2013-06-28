@@ -486,8 +486,8 @@ void MDCache::_create_system_file(CDir *dir, const char *name, CInode *in, Conte
   Mutation *mut = new Mutation;
 
   // force some locks.  hacky.
-  mds->locker->wrlock_force(&dir->get_inode()->filelock, mut);
-  mds->locker->wrlock_force(&dir->get_inode()->nestlock, mut);
+  mds->locker->wrlock_force(&dir->get_stripe()->linklock, mut);
+  mds->locker->wrlock_force(&dir->get_stripe()->nestlock, mut);
 
   mut->ls = mds->mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mds->mdlog, "create system file");
@@ -8006,21 +8006,29 @@ public:
 
 bool MDCache::can_fragment_lock(CStripe *stripe)
 {
+  if (!stripe->dirfragtreelock.can_wrlock(-1)) {
+    dout(7) << "can_fragment: can't wrlock dftlock" << dendl;
+    //mds->locker->scatter_nudge(&stripe->dirfragtreelock, NULL);
+    return false;
+  }
   return true;
 }
 
-bool MDCache::can_fragment(CInode *diri, list<CDir*>& dirs)
+bool MDCache::can_fragment(CStripe *stripe, list<CDir*>& dirs)
 {
   if (mds->mdsmap->is_degraded()) {
     dout(7) << "can_fragment: cluster degraded, no fragmenting for now" << dendl;
     return false;
   }
+#if 0
   if (diri->get_parent_dir() &&
       diri->get_parent_dir()->get_inode()->is_stray()) {
     dout(7) << "can_fragment: i won't merge|split anything in stray" << dendl;
     return false;
   }
-  if (diri->is_mdsdir() || diri->ino() == MDS_INO_CEPH) {
+#endif
+  inodeno_t ino = stripe->dirstripe().ino;
+  if (MDS_INO_IS_MDSDIR(ino) || ino == MDS_INO_CEPH) {
     dout(7) << "can_fragment: i won't fragment the mdsdir or .ceph" << dendl;
     return false;
   }
@@ -8035,8 +8043,7 @@ bool MDCache::can_fragment(CInode *diri, list<CDir*>& dirs)
       dout(7) << "can_fragment: not auth on " << *dir << dendl;
       return false;
     }
-    if (dir->is_frozen() ||
-	dir->is_freezing()) {
+    if (dir->is_freezing_or_frozen()) {
       dout(7) << "can_fragment: can't merge, freezing|frozen.  wait for other exports to finish first." << dendl;
       return false;
     }
@@ -8049,12 +8056,11 @@ void MDCache::split_dir(CDir *dir, int bits)
 {
   dout(7) << "split_dir " << *dir << " bits " << bits << dendl;
   assert(dir->is_auth());
-  CInode *diri = dir->get_inode();
 
   list<CDir*> dirs;
   dirs.push_back(dir);
 
-  if (!can_fragment(diri, dirs))
+  if (!can_fragment(dir->get_stripe(), dirs))
     return;
   if (!can_fragment_lock(dir->get_stripe())) {
     dout(10) << " requeuing dir " << dir->dirfrag() << dendl;
@@ -8086,8 +8092,7 @@ void MDCache::merge_dir(CStripe *stripe, frag_t frag)
     return;
   }
 
-  CInode *diri = stripe->get_inode();
-  if (!can_fragment(diri, dirs))
+  if (!can_fragment(stripe, dirs))
     return;
   if (!can_fragment_lock(stripe)) {
     //dout(10) << " requeuing dir " << dir->dirfrag() << dendl;
@@ -8132,8 +8137,8 @@ public:
 
 void MDCache::fragment_mark_and_complete(list<CDir*>& dirs)
 {
-  CInode *diri = dirs.front()->get_inode();
-  dout(10) << "fragment_mark_and_complete " << dirs << " on " << *diri << dendl;
+  dout(10) << "fragment_mark_and_complete " << dirs
+      << " on " << *dirs.front()->get_stripe() << dendl;
 
   C_GatherBuilder gather(g_ceph_context);
   
@@ -8216,7 +8221,6 @@ public:
 void MDCache::fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits)
 {
   CStripe *stripe = dirs.front()->get_stripe();
-  CInode *diri = stripe->get_inode();
 
   if (bits > 0) {
     assert(dirs.size() == 1);
@@ -8233,8 +8237,8 @@ void MDCache::fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits)
   mds->locker->wrlock_force(&stripe->dirfragtreelock, mut);
 
   // prevent a racing gather on any other scatterlocks too
-  diri->nestlock.get_wrlock(true);
-  diri->filelock.get_wrlock(true);
+  mds->locker->wrlock_force(&stripe->linklock, mut);
+  mds->locker->wrlock_force(&stripe->nestlock, mut);
 
   // refragment
   list<CDir*> resultfrags;
@@ -8278,7 +8282,6 @@ void MDCache::fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits)
 void MDCache::fragment_logged_and_stored(Mutation *mut, list<CDir*>& resultfrags, frag_t basefrag, int bits)
 {
   CStripe *stripe = resultfrags.front()->get_stripe();
-  CInode *diri = stripe->get_inode();
   dirfrag_t dirfrag(stripe->dirstripe(), basefrag);
 
   dout(10) << "fragment_logged_and_stored " << resultfrags
@@ -8306,12 +8309,6 @@ void MDCache::fragment_logged_and_stored(Mutation *mut, list<CDir*>& resultfrags
   mut->cleanup();
   delete mut;
 
-  // drop dft wrlock
-  bool need_issue = false;
-  mds->locker->wrlock_finish(&stripe->dirfragtreelock, NULL, &need_issue);
-  mds->locker->wrlock_finish(&diri->nestlock, NULL, &need_issue);
-  mds->locker->wrlock_finish(&diri->filelock, NULL, &need_issue);
-
   // unfreeze resulting frags
   for (list<CDir*>::iterator p = resultfrags.begin();
        p != resultfrags.end();
@@ -8333,9 +8330,6 @@ void MDCache::fragment_logged_and_stored(Mutation *mut, list<CDir*>& resultfrags
 
     dir->unfreeze_dir();
   }
-
-  if (need_issue)
-    mds->locker->issue_caps(diri);
 }
 
 

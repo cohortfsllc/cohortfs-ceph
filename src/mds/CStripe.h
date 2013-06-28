@@ -102,7 +102,7 @@ class CStripe : public MDSCacheObject {
   MDCache *mdcache;
 
   CInode *inode; // my inode
-  stripeid_t stripeid; // stripe index
+  dirstripe_t ds; // { ino, stripe index }
 
   pair<int,int> stripe_auth;
 
@@ -125,8 +125,8 @@ class CStripe : public MDSCacheObject {
 
   // -- accessors --
   CInode* get_inode() { return inode; }
-  dirstripe_t dirstripe() const { return dirstripe_t(inode->ino(), stripeid); }
-  stripeid_t get_stripeid() const { return stripeid; }
+  dirstripe_t dirstripe() const { return ds; }
+  stripeid_t get_stripeid() const { return ds.stripeid; }
 
   CStripe* get_parent_stripe();
   CStripe* get_projected_parent_stripe();

@@ -773,7 +773,7 @@ private:
   friend class EFragment;
 
   bool can_fragment_lock(CStripe *stripe);
-  bool can_fragment(CInode *diri, list<CDir*>& dirs);
+  bool can_fragment(CStripe *stripe, list<CDir*>& dirs);
 
 public:
   void split_dir(CDir *dir, int byn);

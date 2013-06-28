@@ -143,7 +143,7 @@ void CStripe::print(ostream& out)
 CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
   : mdcache(in->mdcache),
     inode(in),
-    stripeid(stripeid),
+    ds(in->ino(), stripeid),
     stripe_auth(auth, CDIR_AUTH_UNKNOWN),
     auth_pins(0),
     replicate(false),
