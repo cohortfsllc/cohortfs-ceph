@@ -191,6 +191,9 @@ protected:
 #endif
   int request_pins;
 
+  // popularity
+  dirfrag_load_vec_t pop_me;
+
 
   // friends
   friend class Migrator;

@@ -520,8 +520,8 @@ void MDCache::_create_system_file(CDir *dir, const char *name, CInode *in, Conte
   Mutation *mut = new Mutation;
 
   // force some locks.  hacky.
-  mds->locker->wrlock_force(&dir->get_inode()->filelock, mut);
-  mds->locker->wrlock_force(&dir->get_inode()->nestlock, mut);
+  mds->locker->wrlock_force(&dir->get_stripe()->linklock, mut);
+  mds->locker->wrlock_force(&dir->get_stripe()->nestlock, mut);
 
   mut->ls = mds->mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mds->mdlog, "create system file");
@@ -9036,19 +9036,21 @@ public:
   }
 };
 
-bool MDCache::can_fragment(CInode *diri, list<CDir*>& dirs)
+bool MDCache::can_fragment(CStripe *stripe, list<CDir*>& dirs)
 {
   if (mds->mdsmap->is_degraded()) {
     dout(7) << "can_fragment: cluster degraded, no fragmenting for now" << dendl;
     return false;
   }
+  CInode *diri = stripe->get_inode();
   if (diri->get_parent_dir() &&
       diri->get_parent_dir()->get_inode()->is_stray()) {
     dout(7) << "can_fragment: i won't merge|split anything in stray" << dendl;
     return false;
   }
-  if (diri->is_mdsdir() || diri->is_stray() || diri->ino() == MDS_INO_CEPH) {
-    dout(7) << "can_fragment: i won't fragment the mdsdir or straydir or .ceph" << dendl;
+  inodeno_t ino = stripe->dirstripe().ino;
+  if (MDS_INO_IS_MDSDIR(ino) || ino == MDS_INO_CEPH) {
+    dout(7) << "can_fragment: i won't fragment the mdsdir or .ceph" << dendl;
     return false;
   }
 
@@ -9062,8 +9064,7 @@ bool MDCache::can_fragment(CInode *diri, list<CDir*>& dirs)
       dout(7) << "can_fragment: not auth on " << *dir << dendl;
       return false;
     }
-    if (dir->is_frozen() ||
-	dir->is_freezing()) {
+    if (dir->is_freezing_or_frozen()) {
       dout(7) << "can_fragment: can't merge, freezing|frozen.  wait for other exports to finish first." << dendl;
       return false;
     }
@@ -9076,12 +9077,11 @@ void MDCache::split_dir(CDir *dir, int bits)
 {
   dout(7) << "split_dir " << *dir << " bits " << bits << dendl;
   assert(dir->is_auth());
-  CInode *diri = dir->get_inode();
 
   list<CDir*> dirs;
   dirs.push_back(dir);
 
-  if (!can_fragment(diri, dirs))
+  if (!can_fragment(dir->get_stripe(), dirs))
     return;
 
   C_GatherBuilder gather(g_ceph_context, 
@@ -9108,8 +9108,7 @@ void MDCache::merge_dir(CStripe *stripe, frag_t frag)
     return;
   }
 
-  CInode *diri = stripe->get_inode();
-  if (!can_fragment(diri, dirs))
+  if (!can_fragment(stripe, dirs))
     return;
 
   CDir *first = dirs.front();
@@ -9149,8 +9148,8 @@ public:
 
 void MDCache::fragment_mark_and_complete(list<CDir*>& dirs)
 {
-  CInode *diri = dirs.front()->get_inode();
-  dout(10) << "fragment_mark_and_complete " << dirs << " on " << *diri << dendl;
+  dout(10) << "fragment_mark_and_complete " << dirs
+      << " on " << *dirs.front()->get_stripe() << dendl;
 
   C_GatherBuilder gather(g_ceph_context);
   
@@ -9294,15 +9293,14 @@ void MDCache::dispatch_fragment_dir(MDRequest *mdr)
   assert(it != fragment_requests.end());
   fragment_info_t &info = it->second;
   CStripe *stripe = info.dirs.front()->get_stripe();
-  CInode *diri = stripe->get_inode();
 
   dout(10) << "dispatch_fragment_dir " << info.resultfrags << " "
-	   << info.dirfrag << " bits " << info.bits << " on " << *diri << dendl;
+	   << info.dirfrag << " bits " << info.bits << " on " << *stripe << dendl;
 
   // avoid freeze dir deadlock
-  if (!mdr->is_auth_pinned(diri)) {
-    if (!diri->can_auth_pin()) {
-      dout(10) << " can't auth_pin " << *diri << ", requeuing dir "
+  if (!mdr->is_auth_pinned(stripe)) {
+    if (!stripe->can_auth_pin()) {
+      dout(10) << " can't auth_pin " << *stripe << ", requeuing dir "
 	       << info.dirs.front()->dirfrag() << dendl;
       if (info.bits > 0)
 	mds->balancer->queue_split(info.dirs.front());
@@ -9313,14 +9311,11 @@ void MDCache::dispatch_fragment_dir(MDRequest *mdr)
       request_finish(mdr);
       return;
     }
-    mdr->auth_pin(diri);
+    mdr->auth_pin(stripe);
   }
 
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
-  wrlocks.insert(&stripe->dirfragtreelock);
-  // prevent a racing gather on any other scatterlocks too
-  wrlocks.insert(&diri->nestlock);
-  wrlocks.insert(&diri->filelock);
+  xlocks.insert(&stripe->dirfragtreelock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -9354,18 +9349,6 @@ void MDCache::dispatch_fragment_dir(MDRequest *mdr)
        ++p) {
     le->metablob.add_dir(*p, false);
   }
-
-  /*
-  // filelock
-  mds->locker->mark_updated_scatterlock(&diri->filelock);
-  mut->ls->dirty_dirfrag_dir.push_back(&diri->item_dirty_dirfrag_dir);
-  mut->add_updated_lock(&diri->filelock);
-
-  // dirlock
-  mds->locker->mark_updated_scatterlock(&diri->nestlock);
-  mut->ls->dirty_dirfrag_nest.push_back(&diri->item_dirty_dirfrag_nest);
-  mut->add_updated_lock(&diri->nestlock);
-  */
 
   add_uncommitted_fragment(info.dirfrag, info.bits, le->orig_frags, mdr->ls);
   mds->mdlog->submit_entry(le, new C_MDC_FragmentPrep(this, mdr));

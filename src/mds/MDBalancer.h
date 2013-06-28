@@ -87,7 +87,7 @@ public:
   void send_heartbeat();
   void handle_heartbeat(MHeartbeat *m);
 
-  void tick() {}
+  void tick();
 
   void do_fragmenting();
 
@@ -108,7 +108,7 @@ public:
   void add_import(CStripe *im, utime_t now);
 
   void hit_inode(utime_t now, CInode *in, int type, int who=-1) {}
-  void hit_dir(utime_t now, CDir *dir, int type, int who=-1, double amount=1.0) {}
+  void hit_dir(utime_t now, CDir *dir, int type, int who=-1, double amount=1.0);
   void hit_stripe(utime_t now, CStripe *stripe, int type, int who=-1, double amount=1.0) {}
 
 

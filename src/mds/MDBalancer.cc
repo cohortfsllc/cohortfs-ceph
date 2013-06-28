@@ -68,39 +68,11 @@ int MDBalancer::proc_message(Message *m)
   return 0;
 }
 
-#if 0
-
 
 void MDBalancer::tick()
 {
-  static int num_bal_times = g_conf->mds_bal_max;
-  static utime_t first = ceph_clock_now(g_ceph_context);
   utime_t now = ceph_clock_now(g_ceph_context);
-  utime_t elapsed = now;
-  elapsed -= first;
 
-  // sample?
-  if ((double)now - (double)last_sample > g_conf->mds_bal_sample_interval) {
-    dout(15) << "tick last_sample now " << now << dendl;
-    last_sample = now;
-  }
-
-  // balance?
-  if (last_heartbeat == utime_t())
-    last_heartbeat = now;
-  if (mds->get_nodeid() == 0 &&
-      g_conf->mds_bal_interval > 0 &&
-      (num_bal_times ||
-       (g_conf->mds_bal_max_until >= 0 &&
-	elapsed.sec() > g_conf->mds_bal_max_until)) &&
-      mds->is_active() &&
-      now.sec() - last_heartbeat.sec() >= g_conf->mds_bal_interval) {
-    last_heartbeat = now;
-    send_heartbeat();
-    num_bal_times--;
-  }
-
-  // hash?
   if (g_conf->mds_bal_frag && g_conf->mds_bal_fragment_interval > 0 &&
       now.sec() - last_fragment.sec() > g_conf->mds_bal_fragment_interval) {
     last_fragment = now;
@@ -109,7 +81,7 @@ void MDBalancer::tick()
 }
 
 
-
+#if 0
 
 class C_Bal_SendHeartbeat : public Context {
 public:
@@ -948,6 +920,7 @@ void MDBalancer::hit_inode(utime_t now, CInode *in, int type, int who)
   if (in->get_parent_dn())
     hit_dir(now, in->get_parent_dn()->get_dir(), type, who);
 }
+#endif
 
 void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amount)
 {
@@ -962,31 +935,34 @@ void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amoun
       !dir->get_inode()->is_base() && // not root/base (for now at least)
       dir->is_auth()) {
 
-    dout(20) << "hit_dir " << type << " pop is " << v << ", frag " << dir->get_frag()
+    dout(20) << "hit_dir " << type << " pop is " << v << ", frag " << dir->dirfrag()
 	     << " size " << dir->get_num_head_items() << dendl;
 
     // split
     if (g_conf->mds_bal_split_size > 0 &&
 	((dir->get_num_head_items() > (unsigned)g_conf->mds_bal_split_size) ||
 	 (v > g_conf->mds_bal_split_rd && type == META_POP_IRD) ||
-	 (v > g_conf->mds_bal_split_wr && type == META_POP_IWR)) &&
-	split_queue.count(dir->dirfrag()) == 0) {
-      dout(10) << "hit_dir " << type << " pop is " << v << ", putting in split_queue: " << *dir << dendl;
-      split_queue.insert(dir->dirfrag());
+	 (v > g_conf->mds_bal_split_wr && type == META_POP_IWR))) {
+      pair<set<dirfrag_t>::iterator, bool> result =
+          split_queue.insert(dir->dirfrag());
+      if (result.second)
+        dout(10) << "hit_dir " << type << " pop is " << v << ", putting in split_queue: " << *dir << dendl;
     }
 
     // merge?
     if (dir->get_frag() != frag_t() &&
-	(dir->get_num_head_items() < (unsigned)g_conf->mds_bal_merge_size) &&
-	merge_queue.count(dir->dirfrag()) == 0) {
-      dout(10) << "hit_dir " << type << " pop is " << v << ", putting in merge_queue: " << *dir << dendl;
-      merge_queue.insert(dir->dirfrag());
+	(dir->get_num_head_items() < (unsigned)g_conf->mds_bal_merge_size)) {
+      pair<set<dirfrag_t>::iterator, bool> result =
+          merge_queue.insert(dir->dirfrag());
+      if (result.second)
+        dout(10) << "hit_dir " << type << " pop is " << v << ", putting in merge_queue: " << *dir << dendl;
     }
   }
 
   hit_stripe(now, dir->get_stripe(), type, who, amount);
 }
 
+#if 0
 void MDBalancer::hit_stripe(utime_t now, CStripe *stripe, int type,
                             int who, double amount)
 {
@@ -1072,7 +1048,6 @@ void MDBalancer::hit_stripe(utime_t now, CStripe *stripe, int type,
     stripe = stripe->get_parent_stripe();
   }
 }
-
 
 /*
  * subtract off an exported chunk.
