@@ -223,6 +223,8 @@ public:
   struct projected_inode_t {
     inode_t *inode;
     map<string,bufferptr> *xattrs;
+    list<inoparent_t> parents_removed;
+    list<inoparent_t> parents_added;
 
     projected_inode_t(inode_t *in = NULL, map<string, bufferptr> *xp = NULL)
       : inode(in), xattrs(xp) {}
@@ -279,6 +281,22 @@ public:
 	return (*p)->xattrs;
     return &xattrs;
   }
+
+  void project_added_parent(dirstripe_t stripe, int who, const string &name) {
+    if (projected_nodes.empty())
+      project_inode();
+    projected_nodes.back()->parents_added.push_back(
+        inoparent_t(stripe, who, name));
+  }
+  void project_added_parent(CDentry *dn);
+
+  void project_removed_parent(dirstripe_t stripe, const string &name) {
+    if (projected_nodes.empty())
+      project_inode();
+    projected_nodes.back()->parents_removed.push_back(
+        inoparent_t(stripe, 0, name));
+  }
+  void project_removed_parent(CDentry *dn);
 
 public:
   old_inode_t& cow_old_inode(snapid_t follows, bool cow_head);
