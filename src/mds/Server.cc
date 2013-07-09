@@ -4546,8 +4546,7 @@ void Server::_link_local(MDRequest *mdr, CDentry *dn, CInode *targeti)
   inode_t *pi = targeti->project_inode();
   pi->nlink++;
   pi->ctime = mdr->now;
-  pi->add_parent(dn->get_stripe()->dirstripe(),
-                 mds->get_nodeid(), dn->get_name());
+  targeti->project_added_parent(dn);
 
   snapid_t follows = mdcache->get_snaprealm()->get_newest_seq();
   if (follows >= dn->first)
@@ -4757,19 +4756,20 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
 				      ESlaveUpdate::OP_PREPARE, ESlaveUpdate::LINK);
   mdlog->start_entry(le);
 
-  inode_t *pi = dnl->get_inode()->project_inode();
-  mdr->add_projected_inode(dnl->get_inode());
+  CInode *in = dnl->get_inode();
+  inode_t *pi = in->project_inode();
+  mdr->add_projected_inode(in);
 
   // update journaled target inode
   bool inc;
   if (mdr->slave_request->get_op() == MMDSSlaveRequest::OP_LINKPREP) {
     inc = true;
     pi->nlink++;
-    pi->add_parent(pstripe, mdr->slave_to_mds, info.dname);
+    in->project_added_parent(pstripe, mdr->slave_to_mds, info.dname);
   } else {
     inc = false;
     pi->nlink--;
-    pi->remove_parent(pstripe, info.dname);
+    in->project_removed_parent(pstripe, info.dname);
   }
 
   link_rollback rollback;
@@ -4924,10 +4924,11 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   pi->ctime = rollback.old_ctime;
   if (rollback.was_inc) {
     pi->nlink--;
-    pi->remove_parent(rollback.parent.stripe, rollback.parent.name);
+    in->project_removed_parent(rollback.parent.stripe, rollback.parent.name);
   } else {
     pi->nlink++;
-    pi->add_parent(rollback.parent.stripe, master, rollback.parent.name);
+    in->project_added_parent(rollback.parent.stripe, master,
+                             rollback.parent.name);
   }
 
   // journal it
@@ -5148,7 +5149,7 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
   mdr->add_projected_inode(in);
   pi->nlink--;
   pi->ctime = mdr->now;
-  pi->remove_parent(dn->get_stripe()->dirstripe(), dn->get_name());
+  in->project_removed_parent(dn);
 
   // remote link.  update remote inode.
   assert(dnl->is_remote());
@@ -6862,8 +6863,7 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr)
     if (ti->ctime == rollback.ctime)
       ti->ctime = rollback.orig_dest.old_ctime;
     ti->nlink++;
-    ti->add_parent(destdn->get_stripe()->dirstripe(),
-                   destdn->authority().first, destdn->get_name());
+    target->project_added_parent(destdn);
   }
 
   if (srcdn)

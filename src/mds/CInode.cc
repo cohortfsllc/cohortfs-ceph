@@ -330,26 +330,66 @@ inode_t *CInode::project_inode(map<string,bufferptr> *px)
 void CInode::pop_and_dirty_projected_inode(LogSegment *ls) 
 {
   assert(!projected_nodes.empty());
-  dout(15) << "pop_and_dirty_projected_inode " << projected_nodes.front()->inode
+  projected_inode_t *projected = projected_nodes.front();
+  dout(15) << "pop_and_dirty_projected_inode " << projected->inode
 	   << " v" << get_projected_version() << dendl;
   mark_dirty(ls);
-  inode = *projected_nodes.front()->inode;
 
-  map<string,bufferptr> *px = projected_nodes.front()->xattrs;
+  // save original parents
+  list<inoparent_t> parents;
+  swap(parents, inode.parents);
+
+  inode = *projected->inode;
+
+  // restore original parents
+  swap(parents, inode.parents);
+
+  // apply removed parents
+  for (list<inoparent_t>::iterator i = projected->parents_removed.begin();
+       i != projected->parents_removed.end(); ++i) {
+    list<inoparent_t>::iterator p = find(inode.parents.begin(),
+                                         inode.parents.end(),
+                                         *i);
+    assert(p != parents.end());
+    if (!projected->parents_added.empty()) {
+      // replace with first parent added
+      *p = projected->parents_added.front();
+      projected->parents_added.pop_front();
+    } else {
+      inode.parents.erase(p);
+    }
+  }
+  // apply added parents
+  for (list<inoparent_t>::iterator i = projected->parents_added.begin();
+       i != projected->parents_added.end(); ++i)
+    inode.parents.push_back(*i);
+
+  map<string,bufferptr> *px = projected->xattrs;
   if (px) {
     xattrs = *px;
     delete px;
   }
 
-  if (projected_nodes.front()->dir_layout != default_layout) {
+  if (projected->dir_layout != default_layout) {
     delete default_layout;
-    default_layout = projected_nodes.front()->dir_layout;
+    default_layout = projected->dir_layout;
   }
 
-  delete projected_nodes.front()->inode;
-  delete projected_nodes.front();
+  delete projected->inode;
+  delete projected;
 
   projected_nodes.pop_front();
+}
+
+void CInode::project_added_parent(CDentry *dn) {
+  project_added_parent(dn->get_stripe()->dirstripe(),
+                       dn->authority().first,
+                       dn->get_name());
+}
+
+void CInode::project_removed_parent(CDentry *dn) {
+  project_removed_parent(dn->get_stripe()->dirstripe(),
+                         dn->get_name());
 }
 
 
