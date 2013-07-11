@@ -5712,161 +5712,17 @@ public:
   }
 };
 
-
-class C_MDC_OpenRemoteIno : public Context {
-  MDCache *mdcache;
-  inodeno_t ino;
-  inodeno_t hadino;
-  version_t hadv;
-  bool want_xlocked;
-  Context *onfinish;
-public:
-  vector<Anchor> anchortrace;
-
-  C_MDC_OpenRemoteIno(MDCache *mdc, inodeno_t i, bool wx, inodeno_t hi, version_t hv, Context *c) :
-    mdcache(mdc), ino(i), hadino(hi), hadv(hv), want_xlocked(wx), onfinish(c) {}
-  C_MDC_OpenRemoteIno(MDCache *mdc, inodeno_t i, bool wx, vector<Anchor>& at, Context *c) :
-    mdcache(mdc), ino(i), hadino(0), hadv(0), want_xlocked(wx), onfinish(c), anchortrace(at) {}
-
-  void finish(int r) {
-    assert(r == 0);
-    if (r == 0)
-      mdcache->open_remote_ino_2(ino, anchortrace, want_xlocked, hadino, hadv, onfinish);
-    else {
-      onfinish->finish(r);
-      delete onfinish;
-    }
-  }
-};
-
-void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocked,
-			      inodeno_t hadino, version_t hadv)
+void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocked)
 {
   dout(7) << "open_remote_ino on " << ino << (want_xlocked ? " want_xlocked":"") << dendl;
-  
-  C_MDC_OpenRemoteIno *c = new C_MDC_OpenRemoteIno(this, ino, want_xlocked,
-						   hadino, hadv, onfinish);
-  mds->anchorclient->lookup(ino, c->anchortrace, c);
-}
 
-void MDCache::open_remote_ino_2(inodeno_t ino, vector<Anchor>& anchortrace, bool want_xlocked,
-				inodeno_t hadino, version_t hadv, Context *onfinish)
-{
-  dout(7) << "open_remote_ino_2 on " << ino
-	  << ", trace depth is " << anchortrace.size() << dendl;
-  
-  // find deepest cached inode in prefix
-  unsigned i = anchortrace.size();  // i := array index + 1
-  CInode *in = 0;
-  while (1) {
-    // inode?
-    dout(10) << " " << i << ": " << anchortrace[i-1] << dendl;
-    in = get_inode(anchortrace[i-1].ino);
-    if (in)
-      break;
-    i--;
-    if (!i) {
-      in = get_inode(anchortrace[i].dirino);
-      if (!in) {
-	dout(0) << "open_remote_ino_2 don't have dir inode " << anchortrace[i].dirino << dendl;
-	if (MDS_INO_IS_MDSDIR(anchortrace[i].dirino)) {
-	  open_foreign_mdsdir(anchortrace[i].dirino, onfinish);
-	  return;
-	}
-	assert(in);  // hrm!
-      }
-      break;
-    }
-  }
-  dout(10) << "deepest cached inode at " << i << " is " << *in << dendl;
+  // discover the inode from the inode container
+  CInode *base = get_container()->get_inode();
+  char dname[20];
+  snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
+  filepath path(dname, base->ino());
 
-  if (in->ino() == ino) {
-    // success
-    dout(10) << "open_remote_ino_2 have " << *in << dendl;
-    onfinish->finish(0);
-    delete onfinish;
-    return;
-  } 
-
-  // open stripe beneath in
-  stripeid_t stripeid = in->pick_stripe(anchortrace[i].dn_hash);
-  CStripe *stripe = in->get_stripe(stripeid);
-  if (!stripe) {
-    if (!in->is_auth()) {
-      open_remote_dirstripe(in, stripeid,
-                         new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked));
-      return;
-    }
-    if (in->is_frozen_dir()) {
-      dout(7) << "traverse: " << *in << " is frozen_dir, waiting" << dendl;
-      in->add_waiter(CDir::WAIT_UNFREEZE,
-                     new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked));
-      return;
-    }
-    stripe = in->get_or_open_stripe(stripeid);
-  }
-  assert(stripe);
-
-  // open dirfrag beneath stripe
-  const fragtree_t &dft = stripe->get_fragtree();
-  frag_t frag = dft[anchortrace[i].dn_hash];
-  if (!dft.contains(frag)) {
-    dout(10) << "frag " << frag << " not valid, requerying anchortable" << dendl;
-    open_remote_ino(ino, onfinish, want_xlocked);
-    return;
-  }
-
-  CDir *dir = stripe->get_dirfrag(frag);
-  if (!dir) {
-    if (!in->is_auth()) {
-      dout(10) << "opening remote dirfrag " << frag << " under " << *stripe << dendl;
-      /* we re-query the anchortable just to avoid a fragtree update race */
-      open_remote_dirfrag(stripe, frag,
-                          new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked));
-      return;
-    }
-    if (in->is_frozen_dir()) {
-      dout(7) << "traverse: " << *in << " is frozen_dir, waiting" << dendl;
-      in->add_waiter(CDir::WAIT_UNFREEZE,
-                     new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked));
-      return;
-    }
-    dir = stripe->get_or_open_dirfrag(frag);
-  }
-  assert(dir);
-
-  if (dir->is_auth()) {
-    if (dir->is_complete()) {
-      // make sure we didn't get to the same version anchor 2x in a row
-      if (hadv && hadino == anchortrace[i].ino && hadv == anchortrace[i].updated) {
-	dout(10) << "expected ino " << anchortrace[i].ino
-		 << " in complete dir " << *dir
-		 << ", got same anchor " << anchortrace[i] << " 2x in a row" << dendl;
-	onfinish->finish(-ENOENT);
-	delete onfinish;
-      } else {
-	// hrm.  requery anchor table.
-	dout(10) << "expected ino " << anchortrace[i].ino
-		 << " in complete dir " << *dir
-		 << ", requerying anchortable"
-		 << dendl;
-	open_remote_ino(ino, onfinish, want_xlocked,
-		        anchortrace[i].ino, anchortrace[i].updated);
-      }
-    } else {
-      dout(10) << "need ino " << anchortrace[i].ino
-	       << ", fetching incomplete dir " << *dir
-	       << dendl;
-      dir->fetch(new C_MDC_OpenRemoteIno(this, ino, want_xlocked, anchortrace, onfinish));
-    }
-  } else {
-    // hmm, discover.
-    dout(10) << "have remote dirfrag " << *dir << ", discovering " 
-	     << anchortrace[i].ino << dendl;
-    discover_ino(dir, anchortrace[i].ino,
-	         new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked),
-		 (want_xlocked && i == anchortrace.size() - 1));
-  }
+  discover_path(base, CEPH_NOSNAP, path, onfinish, want_xlocked);
 }
 
 
@@ -6781,11 +6637,11 @@ void MDCache::discover_path(CInode *base,
 			    bool want_xlocked,
 			    int from)
 {
-  if (from < 0)
-    from = base->authority().first;
-
   __u32 dnhash = base->hash_dentry_name(want_path[0]);
   dirstripe_t ds(base->ino(), dnhash % base->get_stripe_count());
+
+  if (from < 0)
+    from = base->get_stripe_auth(ds.stripeid);
 
   dout(7) << "discover_path " << ds << " " << want_path << " snap " << snap << " from mds." << from
 	  << (want_xlocked ? " want_xlocked":"")

@@ -629,11 +629,7 @@ public:
   void open_remote_dirstripe(CInode *diri, stripeid_t stripeid, Context *fin);
   void open_remote_dirfrag(CStripe *stripe, frag_t fg, Context *fin);
   CInode *get_dentry_inode(CDentry *dn, MDRequest *mdr, bool projected=false);
-  void open_remote_ino(inodeno_t ino, Context *fin, bool want_xlocked=false,
-		       inodeno_t hadino=0, version_t hadv=0);
-  void open_remote_ino_2(inodeno_t ino,
-			 vector<Anchor>& anchortrace, bool want_xlocked,
-			 inodeno_t hadino, version_t hadv, Context *onfinish);
+  void open_remote_ino(inodeno_t ino, Context *fin, bool want_xlocked=false);
   void open_remote_dentry(CDentry *dn, bool projected, Context *fin);
   void _open_remote_dentry_finish(int r, CDentry *dn, bool projected, Context *fin);
 
