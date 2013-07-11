@@ -5720,9 +5720,31 @@ void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocke
   CInode *base = get_container()->get_inode();
   char dname[20];
   snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
-  filepath path(dname, base->ino());
+  const filepath path(dname, base->ino());
 
-  discover_path(base, CEPH_NOSNAP, path, onfinish, want_xlocked);
+  int who = get_container()->place(ino);
+  if (who != mds->get_nodeid()) {
+    // fetch from remote stripe of inode container
+    discover_path(base, CEPH_NOSNAP, path, onfinish, want_xlocked, who);
+    return;
+  }
+
+  // local stripe of inode container
+  CStripe *stripe = get_container()->get_stripe();
+  assert(stripe);
+  if (!stripe->is_open()) {
+    stripe->fetch(new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked));
+    return;
+  }
+  frag_t fg = stripe->pick_dirfrag(base->hash_dentry_name(path.last_dentry()));
+  CDir *dir = stripe->get_or_open_dirfrag(fg);
+  if (!dir->is_complete()) {
+    dir->fetch(new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked),
+               path.last_dentry());
+    return;
+  }
+  assert(get_inode(ino));
+  onfinish->complete(0);
 }
 
 
@@ -6623,19 +6645,17 @@ struct C_MDC_RetryDiscoverPath : public Context {
   snapid_t snapid;
   filepath path;
   int from;
-  C_MDC_RetryDiscoverPath(MDCache *c, CInode *b, snapid_t s, filepath &p, int f) :
-    mdc(c), base(b), snapid(s), path(p), from(f)  {}
+  C_MDC_RetryDiscoverPath(MDCache *c, CInode *b, snapid_t s,
+                          const filepath &p, int f)
+      : mdc(c), base(b), snapid(s), path(p), from(f) {}
   void finish(int r) {
     mdc->discover_path(base, snapid, path, 0, from);
   }
 };
 
-void MDCache::discover_path(CInode *base,
-			    snapid_t snap,
-			    filepath want_path,
-			    Context *onfinish,
-			    bool want_xlocked,
-			    int from)
+void MDCache::discover_path(CInode *base, snapid_t snap,
+			    const filepath &want_path, Context *onfinish,
+			    bool want_xlocked, int from)
 {
   __u32 dnhash = base->hash_dentry_name(want_path[0]);
   dirstripe_t ds(base->ino(), dnhash % base->get_stripe_count());
@@ -6676,18 +6696,16 @@ struct C_MDC_RetryDiscoverPath2 : public Context {
   CDir *base;
   snapid_t snapid;
   filepath path;
-  C_MDC_RetryDiscoverPath2(MDCache *c, CDir *b, snapid_t s, filepath &p) :
-    mdc(c), base(b), snapid(s), path(p) {}
+  C_MDC_RetryDiscoverPath2(MDCache *c, CDir *b, snapid_t s, const filepath &p)
+      : mdc(c), base(b), snapid(s), path(p) {}
   void finish(int r) {
     mdc->discover_path(base, snapid, path, 0);
   }
 };
 
-void MDCache::discover_path(CDir *base,
-			    snapid_t snap,
-			    filepath want_path,
-			    Context *onfinish,
-			    bool want_xlocked)
+void MDCache::discover_path(CDir *base, snapid_t snap,
+                            const filepath &want_path,
+			    Context *onfinish, bool want_xlocked)
 {
   int from = base->authority().first;
 
@@ -6810,10 +6828,12 @@ void MDCache::handle_discover(MDiscover *dis)
 
     cur = get_inode(dis->get_base_ino());
 
-    // add root
-    reply->starts_with = MDiscoverReply::INODE;
-    replicate_inode(cur, from, reply->trace);
+    if (cur->is_auth()) {
+      // add root
+      reply->starts_with = MDiscoverReply::INODE;
+      replicate_inode(cur, from, reply->trace);
     dout(10) << "added base " << *cur << dendl;
+    }
   }
   else {
     // there's a base inode

@@ -170,10 +170,10 @@ public:
   void discover_dir_stripe(CInode *base, stripeid_t stripeid, Context *onfinish, int from=-1);
   void discover_dir_frag(CStripe *stripe, frag_t approx_fg, Context *onfinish,
 			 int from=-1);
-  void discover_path(CInode *base, snapid_t snap, filepath want_path, Context *onfinish,
-		     bool want_xlocked=false, int from=-1);
-  void discover_path(CDir *base, snapid_t snap, filepath want_path, Context *onfinish,
-		     bool want_xlocked=false);
+  void discover_path(CInode *base, snapid_t snap, const filepath &want_path,
+                     Context *onfinish, bool want_xlocked=false, int from=-1);
+  void discover_path(CDir *base, snapid_t snap, const filepath &want_path,
+                     Context *onfinish, bool want_xlocked=false);
   void discover_ino(CDir *base, inodeno_t want_ino, Context *onfinish,
 		    bool want_xlocked=false);
 
