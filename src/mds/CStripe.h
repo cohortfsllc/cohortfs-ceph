@@ -60,6 +60,7 @@ class CStripe : public MDSCacheObject {
   static const int PIN_FROZEN             = 3;
   static const int PIN_DIRTYFRAGSTAT      = 4; // has unaccounted fragstat
   static const int PIN_DIRTYRSTAT         = 5; // has unaccounted rstat
+  static const int PIN_DIRWAITER          = 6;
 
   const char *pin_name(int p) {
     switch (p) {
@@ -68,6 +69,7 @@ class CStripe : public MDSCacheObject {
       case PIN_FROZEN: return "frozen";
       case PIN_DIRTYFRAGSTAT: return "dirtyfragstat";
       case PIN_DIRTYRSTAT: return "dirtyrstat";
+      case PIN_DIRWAITER: return "dirwaiter";
       default: return generic_pin_name(p);
     }
   }
@@ -284,6 +286,30 @@ class CStripe : public MDSCacheObject {
 
 
   // -- waiters --
+ private:
+  typedef map<frag_t, list<Context*> > dir_waiter_map;
+  dir_waiter_map dir_waiters;
+ public:
+  void add_dir_waiter(frag_t fg, Context *c) {
+    if (dir_waiters.empty())
+      get(PIN_DIRWAITER);
+    dir_waiters[fg].push_back(c);
+  }
+  void take_dir_waiting(frag_t fg, list<Context*> &waiters) {
+    dir_waiter_map::iterator p = dir_waiters.find(fg);
+    if (p == dir_waiters.end())
+      return;
+
+    waiters.splice(waiters.end(), p->second);
+    dir_waiters.erase(p);
+
+    if (dir_waiters.empty())
+      put(PIN_DIRWAITER);
+  }
+  bool is_waiting_for_dir(frag_t fg) const {
+    return dir_waiters.count(fg);
+  }
+
   void add_waiter(uint64_t mask, Context *c);
 
 
