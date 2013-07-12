@@ -101,14 +101,11 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
 }
 
 
-int InodeContainer::place(inodeno_t ino) const
+stripeid_t InodeContainer::place(inodeno_t ino) const
 {
-  assert(in);
-  const vector<int> &stripe_auth = in->get_stripe_auth();
-  assert(stripe_auth.size());
-
   static const uint64_t SHIFT = 40; // see InoTable
-  return stripe_auth[(ino >> SHIFT) % stripe_auth.size()];
+  assert(in);
+  return ((ino >> SHIFT) - 1) % in->get_stripe_count();
 }
 
 

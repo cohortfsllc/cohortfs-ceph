@@ -5722,16 +5722,27 @@ void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocke
   snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
   const filepath path(dname, base->ino());
 
-  int who = get_container()->place(ino);
-  if (who != mds->get_nodeid()) {
+  stripeid_t stripeid = get_container()->place(ino);
+  CStripe *stripe = base->get_stripe(stripeid);
+  if (!stripe) {
     // fetch from remote stripe of inode container
+    int who = base->get_stripe_auth(stripeid);
     discover_path(base, CEPH_NOSNAP, path, onfinish, want_xlocked, who);
     return;
   }
 
+  if (!stripe->is_auth()) {
+    // fetch from remote stripe of inode container
+    frag_t fg = stripe->pick_dirfrag(path.last_dentry());
+    CDir *dir = stripe->get_dirfrag(fg);
+    if (!dir) // start from stripe
+      discover_path(stripe, CEPH_NOSNAP, path, onfinish, want_xlocked);
+    else // start from dir
+      discover_path(dir, CEPH_NOSNAP, path, onfinish, want_xlocked);
+    return;
+  }
+
   // local stripe of inode container
-  CStripe *stripe = get_container()->get_stripe();
-  assert(stripe);
   if (!stripe->is_open()) {
     stripe->fetch(new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked));
     return;
@@ -6932,7 +6943,15 @@ void MDCache::handle_discover(MDiscover *dis)
     stripeid_t stripeid;
     if (dis->get_want().depth()) {
       dnhash = cur->hash_dentry_name(dis->get_dentry(i));
-      stripeid = cur->pick_stripe(dnhash);
+
+      if (cur->ino() == MDS_INO_CONTAINER) {
+        // use inode placement rules
+        inodeno_t ino;
+        istringstream stream(dis->get_dentry(i));
+        stream >> hex >> ino.val;
+        stripeid = get_container()->place(ino);
+      } else
+        stripeid = cur->pick_stripe(dnhash);
     } else {
       stripeid = dis->get_base_stripe();
       assert(dis->wants_base_stripe() || dis->get_want_ino() || MDS_INO_IS_BASE(dis->get_base_ino()));
