@@ -388,7 +388,8 @@ void CStripe::put_stickydirs()
 
 void CStripe::set_object_info(MDSCacheObjectInfo &info)
 {
-  info.dirfrag.stripe = dirstripe();
+  info.ino = ds.ino;
+  info.dirfrag.stripe = ds;
 }
 
 void CStripe::encode_lock_state(int type, bufferlist& bl)
