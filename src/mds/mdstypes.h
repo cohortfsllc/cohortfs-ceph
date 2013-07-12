@@ -1775,7 +1775,11 @@ inline ostream& operator<<(ostream& out, MDSCacheObject &o) {
 }
 
 inline ostream& operator<<(ostream& out, const MDSCacheObjectInfo &info) {
-  if (info.ino) return out << info.ino << "." << info.snapid;
+  if (info.ino) {
+    if (info.ino == info.dirfrag.stripe.ino)
+      return out << info.dirfrag.stripe;
+    return out << info.ino << "." << info.snapid;
+  }
   if (info.dname.length()) return out << info.dirfrag << "/" << info.dname
 				      << " snap " << info.snapid;
   return out << info.dirfrag;

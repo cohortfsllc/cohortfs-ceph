@@ -741,11 +741,14 @@ CDentry *MDCache::get_or_create_stray_dentry(CInode *in)
 }
 
 
-MDSCacheObject *MDCache::get_object(MDSCacheObjectInfo &info) 
+MDSCacheObject *MDCache::get_object(MDSCacheObjectInfo &info)
 {
   // inode?
-  if (info.ino) 
+  if (info.ino) {
+    if (info.dirfrag.stripe.ino == info.ino)
+      return get_dirstripe(info.dirfrag.stripe);
     return get_inode(info.ino, info.snapid);
+  }
 
   // dir or dentry.
   CDir *dir = get_dirfrag(info.dirfrag);
