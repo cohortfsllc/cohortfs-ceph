@@ -266,17 +266,17 @@ public:
   int get_wait_shift() const {
     switch (get_type()) {
     case CEPH_LOCK_DN:       return 8;
-    case CEPH_LOCK_IAUTH:    return 8 + 2*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_ILINK:    return 8 + 3*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_SDFT:     return 8 + 4*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_IFILE:    return 8 + 5*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_IXATTR:   return 8 + 7*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_ISNAP:    return 8 + 8*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_INEST:    return 8 + 9*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_IFLOCK:   return 8 +10*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_IPOLICY:  return 8 +11*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_SLINK:    return 8 +12*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_SNEST:    return 8 +13*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_IAUTH:    return 8 + 1*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_ILINK:    return 8 + 2*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_SDFT:     return 8 + 3*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_IFILE:    return 8 + 4*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_IXATTR:   return 8 + 5*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_ISNAP:    return 8 + 6*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_INEST:    return 8 + 7*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_IFLOCK:   return 8 + 8*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_IPOLICY:  return 8 + 9*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_SLINK:    return 8 +10*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_SNEST:    return 8 +11*SimpleLock::WAIT_BITS;
     default:
       assert(0);
     }

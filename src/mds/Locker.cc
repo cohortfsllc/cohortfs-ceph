@@ -1307,32 +1307,62 @@ bool Locker::xlock_start(SimpleLock *lock, Mutation *mut,
   dout(7) << "xlock_start on " << *lock << " on " << *lock->get_parent() << dendl;
   client_t client = mut->get_client();
 
-  while (1) {
-    if (lock->can_xlock(client)) {
-      lock->set_state(LOCK_XLOCK);
-      lock->get_xlock(mut, client);
-      mut->xlocks.insert(lock);
-      mut->locks.insert(lock);
-      mut->finish_locking(lock);
-      return true;
+  if (lock->get_parent()->is_auth()) {
+    while (1) {
+      if (lock->can_xlock(client)) {
+        lock->set_state(LOCK_XLOCK);
+        lock->get_xlock(mut, client);
+        mut->xlocks.insert(lock);
+        mut->locks.insert(lock);
+        mut->finish_locking(lock);
+        return true;
+      }
+
+      if (!lock->is_stable() && !(lock->get_state() == LOCK_XLOCKDONE &&
+                                  lock->get_xlock_by_client() == client))
+        break;
+
+      if (lock->get_state() == LOCK_LOCK || lock->get_state() == LOCK_XLOCKDONE) {
+        mut->start_locking(lock);
+        simple_xlock(lock);
+      } else {
+        simple_lock(lock);
+      }
     }
 
-    if (!lock->is_stable() && !(lock->get_state() == LOCK_XLOCKDONE &&
-                                lock->get_xlock_by_client() == client))
-      break;
-
-    if (lock->get_state() == LOCK_LOCK || lock->get_state() == LOCK_XLOCKDONE) {
-      mut->start_locking(lock);
-      simple_xlock(lock);
-    } else {
-      simple_lock(lock);
+    if (gather) {
+      lock->add_waiter(SimpleLock::WAIT_WR |
+                       SimpleLock::WAIT_STABLE, gather->new_sub());
+      nudge_log(lock);
     }
-  }
-
-  if (gather) {
-    lock->add_waiter(SimpleLock::WAIT_WR |
-                     SimpleLock::WAIT_STABLE, gather->new_sub());
-    nudge_log(lock);
+  } else {
+    // replica
+    assert(lock->get_sm()->can_remote_xlock);
+    MDRequest *mdr = dynamic_cast<MDRequest*>(mut); // XXX
+    assert(mdr);
+    assert(!mdr->slave_request);
+    
+    // wait for single auth
+    if (lock->get_parent()->is_ambiguous_auth()) {
+      lock->get_parent()->add_waiter(MDSCacheObject::WAIT_SINGLEAUTH, 
+				     gather->new_sub());
+      return false;
+    }
+    
+    // send lock request
+    if (!lock->is_waiter_for(SimpleLock::WAIT_REMOTEXLOCK)) {
+      int auth = lock->get_parent()->authority().first;
+      mdr->more()->slaves.insert(auth);
+      mut->start_locking(lock, auth);
+      MMDSSlaveRequest *r = new MMDSSlaveRequest(mut->reqid, mut->attempt,
+						 MMDSSlaveRequest::OP_XLOCK);
+      r->set_lock_type(lock->get_type());
+      lock->get_parent()->set_object_info(r->get_object_info());
+      mds->send_message_mds(r, auth);
+    }
+    
+    // wait
+    lock->add_waiter(SimpleLock::WAIT_REMOTEXLOCK, gather->new_sub());
   }
   return false;
 }

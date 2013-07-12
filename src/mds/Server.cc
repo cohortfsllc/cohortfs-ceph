@@ -5686,11 +5686,11 @@ void Server::handle_client_rename(MDRequest *mdr)
   int srcdirauth = srcdn->get_dir()->authority().first;
   if (srcdirauth != mds->whoami) {
     dout(10) << " will remote_wrlock srcdir scatterlocks on mds." << srcdirauth << dendl;
-    remote_wrlocks[&srcdn->get_dir()->get_inode()->filelock] = srcdirauth;
-    remote_wrlocks[&srcdn->get_dir()->get_inode()->nestlock] = srcdirauth;
+    remote_wrlocks[&srcdn->get_stripe()->linklock] = srcdirauth;
+    remote_wrlocks[&srcdn->get_stripe()->nestlock] = srcdirauth;
   } else {
-    wrlocks.insert(&srcdn->get_dir()->get_inode()->filelock);
-    wrlocks.insert(&srcdn->get_dir()->get_inode()->nestlock);
+    wrlocks.insert(&srcdn->get_stripe()->linklock);
+    wrlocks.insert(&srcdn->get_stripe()->nestlock);
   }
 
   // straydn?
