@@ -65,7 +65,7 @@ class InodeContainer {
                         set<SimpleLock*> &xlocks);
 
   // run the placement algorithm for the given inode number
-  int place(inodeno_t ino) const;
+  stripeid_t place(inodeno_t ino) const;
 
   // initiate restriping over the new vector of nodes (root mds only)
   void restripe(const std::set<int> &nodes, bool replay);
