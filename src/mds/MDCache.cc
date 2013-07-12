@@ -6639,17 +6639,38 @@ void MDCache::discover_dir_frag(CStripe *base,
     base->add_waiter(CStripe::WAIT_DIR, onfinish);
 }
 
-struct C_MDC_RetryDiscoverPath : public Context {
-  MDCache *mdc;
-  CInode *base;
+class C_MDC_DiscoverPath : public Context {
+ private:
+  MDCache *mdcache;
+  CInode *in;
+  CStripe *stripe;
+  CDir *dir;
   snapid_t snapid;
   filepath path;
   int from;
-  C_MDC_RetryDiscoverPath(MDCache *c, CInode *b, snapid_t s,
-                          const filepath &p, int f)
-      : mdc(c), base(b), snapid(s), path(p), from(f) {}
+ public:
+  C_MDC_DiscoverPath(MDCache *mdcache, CInode *base, snapid_t snapid,
+                     const filepath &path, int from)
+      : mdcache(mdcache), in(base), stripe(NULL), dir(NULL),
+        snapid(snapid), path(path), from(from) {}
+
+  C_MDC_DiscoverPath(MDCache *mdcache, CStripe *base, snapid_t snapid,
+                     const filepath &path)
+      : mdcache(mdcache), in(NULL), stripe(base), dir(NULL),
+        snapid(snapid), path(path), from(-1) {}
+
+  C_MDC_DiscoverPath(MDCache *mdcache, CDir *base, snapid_t snapid,
+                     const filepath &path)
+      : mdcache(mdcache), in(NULL), stripe(NULL), dir(base),
+        snapid(snapid), path(path), from(-1) {}
+
   void finish(int r) {
-    mdc->discover_path(base, snapid, path, 0, from);
+    if (in)
+      mdcache->discover_path(in, snapid, path, 0, from);
+    else if (stripe)
+      mdcache->discover_path(stripe, snapid, path, 0);
+    else
+      mdcache->discover_path(dir, snapid, path, 0);
   }
 };
 
@@ -6663,14 +6684,15 @@ void MDCache::discover_path(CInode *base, snapid_t snap,
   if (from < 0)
     from = base->get_stripe_auth(ds.stripeid);
 
-  dout(7) << "discover_path " << ds << " " << want_path << " snap " << snap << " from mds." << from
+  dout(7) << "discover_path " << ds << " " << want_path
+	  << " snap " << snap << " from mds." << from
 	  << (want_xlocked ? " want_xlocked":"")
 	  << dendl;
 
   if (base->is_ambiguous_auth()) {
     dout(10) << " waiting for single auth on " << *base << dendl;
     if (!onfinish)
-      onfinish = new C_MDC_RetryDiscoverPath(this, base, snap, want_path, from);
+      onfinish = new C_MDC_DiscoverPath(this, base, snap, want_path, from);
     base->add_waiter(CInode::WAIT_SINGLEAUTH, onfinish);
     return;
   } 
@@ -6691,17 +6713,41 @@ void MDCache::discover_path(CInode *base, snapid_t snap,
     base->add_stripe_waiter(ds.stripeid, onfinish);
 }
 
-struct C_MDC_RetryDiscoverPath2 : public Context {
-  MDCache *mdc;
-  CDir *base;
-  snapid_t snapid;
-  filepath path;
-  C_MDC_RetryDiscoverPath2(MDCache *c, CDir *b, snapid_t s, const filepath &p)
-      : mdc(c), base(b), snapid(s), path(p) {}
-  void finish(int r) {
-    mdc->discover_path(base, snapid, path, 0);
+void MDCache::discover_path(CStripe *base, snapid_t snap,
+			    const filepath &want_path, Context *onfinish,
+			    bool want_xlocked)
+{
+  int from = base->authority().first;
+  dirfrag_t df(base->dirstripe(), base->pick_dirfrag(want_path[0]));
+
+  dout(7) << "discover_path " << df << " " << want_path
+	  << " snap " << snap << " from mds." << from
+	  << (want_xlocked ? " want_xlocked":"")
+	  << dendl;
+
+  if (base->is_ambiguous_auth()) {
+    dout(10) << " waiting for single auth on " << *base << dendl;
+    if (!onfinish)
+      onfinish = new C_MDC_DiscoverPath(this, base, snap, want_path);
+    base->add_waiter(CStripe::WAIT_SINGLEAUTH, onfinish);
+    return;
+  } 
+
+  if ((want_xlocked && want_path.depth() == 1) ||
+      !base->is_waiting_for_dir(df.frag) || !onfinish) {
+    discover_info_t& d = _create_discover(from);
+    d.base = df;
+    d.snap = snap;
+    d.want_path = want_path;
+    d.want_base_stripe = true;
+    d.want_xlocked = want_xlocked;
+    _send_discover(d);
   }
-};
+
+  // register + wait
+  if (onfinish)
+    base->add_dir_waiter(df.frag, onfinish);
+}
 
 void MDCache::discover_path(CDir *base, snapid_t snap,
                             const filepath &want_path,
@@ -6716,7 +6762,7 @@ void MDCache::discover_path(CDir *base, snapid_t snap,
   if (base->is_ambiguous_auth()) {
     dout(7) << " waiting for single auth on " << *base << dendl;
     if (!onfinish)
-      onfinish = new C_MDC_RetryDiscoverPath2(this, base, snap, want_path);
+      onfinish = new C_MDC_DiscoverPath(this, base, snap, want_path);
     base->add_waiter(CDir::WAIT_SINGLEAUTH, onfinish);
     return;
   }
