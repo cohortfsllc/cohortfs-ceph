@@ -207,8 +207,6 @@ public:
 
   // unlink
   void handle_client_unlink(MDRequest *mdr);
-  bool _dir_is_nonempty_unlocked(MDRequest *mdr, CInode *rmdiri);
-  bool _dir_is_nonempty(MDRequest *mdr, CInode *rmdiri);
   void _unlink_local(MDRequest *mdr, CDentry *dn);
   void _unlink_local_finish(MDRequest *mdr, CDentry *dn);
   void _rmdir_prepare_witness(MDRequest *mdr, int who, CDentry *dn);

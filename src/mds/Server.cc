@@ -4986,7 +4986,49 @@ void Server::handle_slave_link_prep_ack(MDRequest *mdr, MMDSSlaveRequest *m)
 }
 
 
+bool _discover_all_stripes(MDRequest *mdr, CInode *in)
+{
+  C_GatherBuilder gather(g_ceph_context);
+  MDCache *mdcache = in->mdcache;
 
+  // discover any stripes that aren't already cached
+  for (size_t stripeid = 0; stripeid < in->get_stripe_count(); ++stripeid) {
+    CStripe *stripe = in->get_stripe(stripeid);
+    if (!stripe)
+      mdcache->discover_dir_stripe(in, stripeid, gather.new_sub(),
+                                   in->get_stripe_auth(stripeid));
+    else
+      mdr->pin(stripe);
+  }
+
+  if (!gather.has_subs())
+    return true;
+
+  gather.set_finisher(new C_MDS_RetryRequest(mdcache, mdr));
+  gather.activate();
+  return false;
+}
+
+// check if a directory is non-empty (i.e. we can rmdir it).
+bool _dir_is_nonempty(MDRequest *mdr, CInode *in)
+{
+  MDS *mds = in->mdcache->mds;
+
+  dout(10) << "dir_is_nonempty " << *in << dendl;
+
+  for (size_t stripeid = 0; stripeid < in->get_stripe_count(); ++stripeid) {
+    CStripe *stripe = in->get_stripe(stripeid);
+    assert(stripe);
+    fnode_t *pf = stripe->get_projected_fnode();
+    if (pf->fragstat.size() > 0) {
+      dout(10) << "dir_is_nonempty projected dir size still "
+          << pf->fragstat.size() << " on " << *in << dendl;
+      return true;
+    }
+  }
+
+  return false;
+}
 
 
 // UNLINK
@@ -5038,17 +5080,14 @@ void Server::handle_client_unlink(MDRequest *mdr)
 
   // rmdir vs is_dir
   if (in->is_dir()) {
-    if (rmdir) {
-      // do empty directory checks
-      if (_dir_is_nonempty_unlocked(mdr, in)) {
-	reply_request(mdr, -ENOTEMPTY);
-	return;
-      }
-    } else {
+    if (!rmdir) {
       dout(7) << "handle_client_unlink on dir " << *in << ", returning error" << dendl;
       reply_request(mdr, -EISDIR);
       return;
     }
+    // discover stripes for empty directory checks
+    if (!_discover_all_stripes(mdr, in))
+      return;
   } else {
     if (rmdir) {
       // unlink
@@ -5068,8 +5107,9 @@ void Server::handle_client_unlink(MDRequest *mdr)
   wrlocks.insert(&dn->get_dir()->get_inode()->nestlock);
   xlocks.insert(&in->linklock);
 
-  if (in->is_dir())
-    rdlocks.insert(&in->filelock);   // to verify it's empty
+  // rdlock stripes to prevent creates while verifying emptiness
+  for (size_t i = 0; i < in->get_stripe_count(); ++i)
+    rdlocks.insert(&in->get_stripe(i)->linklock);
 
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
@@ -5399,53 +5439,7 @@ void Server::_rmdir_rollback_finish(MDRequest *mdr, metareqid_t reqid, CDentry *
 }
 
 
-/** _dir_is_nonempty[_unlocked]
- *
- * check if a directory is non-empty (i.e. we can rmdir it).
- *
- * the unlocked varient this is a fastpath check.  we can't really be
- * sure until we rdlock the filelock.
- */
-bool Server::_dir_is_nonempty_unlocked(MDRequest *mdr, CInode *in)
-{
-  dout(10) << "dir_is_nonempty_unlocked " << *in << dendl;
-  assert(in->is_auth());
-
-  list<CStripe*> stripes;
-  in->get_stripes(stripes);
-  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CStripe *stripe = *s;
-    // is the frag obviously non-empty?
-    fnode_t *pfnode = stripe->get_projected_fnode();
-    if (pfnode->fragstat.size()) {
-      dout(10) << "dir_is_nonempty_unlocked dirstat has "
-          << pfnode->fragstat.size() << " items " << *stripe << dendl;
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool Server::_dir_is_nonempty(MDRequest *mdr, CInode *in)
-{
-  dout(10) << "dir_is_nonempty " << *in << dendl;
-  assert(in->is_auth());
-
-  if (in->get_projected_inode()->dirstat.size() > 0) {	
-    dout(10) << "dir_is_nonempty projected dir size still "
-	     << in->get_projected_inode()->dirstat.size()
-	     << " on " << *in
-	     << dendl;
-    return true;
-  }
-
-  return false;
-}
-
-
 // ======================================================
-
 
 class C_MDS_rename_finish : public Context {
   MDS *mds;
@@ -5551,15 +5545,14 @@ void Server::handle_client_rename(MDRequest *mdr)
       return;
     }
 
-    // non-empty dir?
-    if (oldin->is_dir() && _dir_is_nonempty_unlocked(mdr, oldin)) {
-      reply_request(mdr, -ENOTEMPTY);
-      return;
-    }
     if (srci == oldin && !srcdn->get_dir()->get_inode()->is_stray()) {
       reply_request(mdr, 0);  // no-op.  POSIX makes no sense.
       return;
     }
+
+    // get replicas of its stripes for rdlocking
+    if (oldin->is_dir() && !_discover_all_stripes(mdr, oldin))
+      return;
   }
 
   // -- some sanity checks --
@@ -5717,8 +5710,10 @@ void Server::handle_client_rename(MDRequest *mdr)
   // xlock oldin (for nlink--)
   if (oldin) {
     xlocks.insert(&oldin->linklock);
-    if (oldin->is_dir())
-      rdlocks.insert(&oldin->filelock);
+
+    // rdlock oldin stripes to prevent creates while verifying emptiness
+    for (size_t i = 0; i < oldin->get_stripe_count(); ++i)
+      rdlocks.insert(&oldin->get_stripe(i)->linklock);
   }
 
   CInode *auth_pin_freeze = !srcdn->is_auth() && srcdnl->is_primary() ? srci : NULL;
