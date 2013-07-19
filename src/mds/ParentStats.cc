@@ -761,7 +761,9 @@ void ParentStats::handle(MParentStats *m)
     assert(stripe); // TODO: fetch from disk
     assert(stripe->is_auth());
 
-    update_stripe(stripe, projected, mut, &le->metablob, s->second);
+    typedef MParentStats::stripe_update_vec::iterator stripe_update_iter;
+    for (stripe_update_iter i = s->second.begin(); i != s->second.end(); ++i)
+      update_stripe(stripe, projected, mut, &le->metablob, *i);
   }
 
   if (!projected.journal(&le->metablob)) {
