@@ -25,7 +25,8 @@ class MParentStats : public Message {
   typedef map<inodeno_t, inode_stat_update_t> inode_map;
   inode_map inodes;
 
-  typedef map<dirstripe_t, stripe_stat_update_t> stripe_map;
+  typedef vector<stripe_stat_update_t> stripe_update_vec;
+  typedef map<dirstripe_t, stripe_update_vec> stripe_map;
   stripe_map stripes;
 
 
@@ -44,15 +45,18 @@ class MParentStats : public Message {
 
   void add_stripe(dirstripe_t ds, const stripe_stat_update_t &update)
   {
-    pair<stripe_map::iterator, bool> result =
-        stripes.insert(make_pair(ds, update));
-    if (result.second)
-      return;
-
-    // add to existing stats
-    stripe_stat_update_t &existing = result.first->second;
-    existing.frag.add(update.frag);
-    existing.nest.add(update.nest);
+    // search existing updates for a matching ino
+    stripe_update_vec &existing = stripes[ds];
+    for (stripe_update_vec::iterator i = existing.begin();
+         i != existing.end(); ++i) {
+      if (i->ino == update.ino) {
+        // add to existing stats
+        i->frag.add(update.frag);
+        i->nest.add(update.nest);
+        return;
+      }
+    }
+    existing.push_back(update);
   }
 
 
