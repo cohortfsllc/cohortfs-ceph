@@ -341,13 +341,13 @@ void EMetaBlob::update_segment(LogSegment *ls)
     ls->sessionmapv = sessionmapv;
 }
 
-
 // EMetaBlob::Inode
 
 void EMetaBlob::Inode::encode(const inode_t &i, const pair<int, int> &iauth,
                               const vector<int> &sauth,
                               const map<string,bufferptr> &xa,
                               const string &sym, __u8 st,
+                              const inoparent_t &ap, const inoparent_t &rp,
                               const old_inodes_t *oi) const
 {
   _enc = bufferlist(1024);
@@ -361,15 +361,18 @@ void EMetaBlob::Inode::encode(const inode_t &i, const pair<int, int> &iauth,
     ::encode(sauth, _enc);
   ::encode(st, _enc);
   ::encode(oi ? true : false, _enc);
-  if (oi)
-    ::encode(*oi, _enc);
+  if (oi) ::encode(*oi, _enc);
+  ::encode(ap ? true : false, _enc);
+  if (ap) ::encode(ap, _enc);
+  ::encode(rp ? true : false, _enc);
+  if (rp) ::encode(rp, _enc);
 }
 
 void EMetaBlob::Inode::encode(bufferlist& bl) const {
   ENCODE_START(1, 1, bl);
   if (!_enc.length())
-    encode(inode, inode_auth, stripe_auth, xattrs,
-           symlink, state, &old_inodes);
+    encode(inode, inode_auth, stripe_auth, xattrs, symlink,
+           state, added_parent, removed_parent, &old_inodes);
   bl.append(_enc);
   ENCODE_FINISH(bl);
 }
@@ -389,6 +392,14 @@ void EMetaBlob::Inode::decode(bufferlist::iterator &bl) {
   ::decode(old_inodes_present, bl);
   if (old_inodes_present)
     ::decode(old_inodes, bl);
+
+  bool has_parent;
+  ::decode(has_parent, bl);
+  if (has_parent)
+    ::decode(added_parent, bl);
+  ::decode(has_parent, bl);
+  if (has_parent)
+    ::decode(removed_parent, bl);
 
   DECODE_FINISH(bl);
 }
@@ -442,21 +453,45 @@ void EMetaBlob::Inode::dump(Formatter *f) const
     }
     f->close_section(); // old inodes
   }
+  if (added_parent) {
+    f->open_object_section("added parent");
+    added_parent.dump(f);
+    f->close_section();
+  }
+  if (removed_parent) {
+    f->open_object_section("removed parent");
+    removed_parent.dump(f);
+    f->close_section();
+  }
 }
 
 void EMetaBlob::Inode::generate_test_instances(list<EMetaBlob::Inode*>& ls)
 {
   inode_t inode;
   map<string,bufferptr> empty_xattrs;
+  inoparent_t empty_parent;
   Inode *sample = new Inode();
   sample->encode(inode, make_pair(0, 0), vector<int>(),
-                 empty_xattrs, "", 0, NULL);
+                 empty_xattrs, "", 0, empty_parent, empty_parent, NULL);
   ls.push_back(sample);
 }
 
-void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
+void EMetaBlob::Inode::apply(MDS *mds, CInode *in, bool isnew)
 {
+  list<inoparent_t> existing_parents;
+  if (!isnew)
+    swap(in->inode.parents, existing_parents);
+
   in->inode = inode;
+
+  if (!isnew) {
+    // apply added/removed parents to existing parents
+    swap(in->inode.parents, existing_parents);
+    update_inoparents(in->inode.parents, removed_parent, added_parent);
+  }
+  dout(10) << "inode " << in->ino() << " links " << inode.nlink
+      << " inoparents " << in->inode.parents << dendl;
+
   in->inode_auth = inode_auth;
   if (inode_auth.first == mds->get_nodeid())
     in->state_set(CInode::STATE_AUTH);
@@ -472,7 +507,7 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
   if (in->is_auth() && inode.rstat.version != inode.accounted_rstat.version)
     mds->mdcache->parentstats.replay_unaccounted(in);
 
-  assert(in->is_base() || static_cast<size_t>(inode.nlink) == inode.parents.size());
+  assert(in->is_base() || static_cast<size_t>(inode.nlink) == in->inode.parents.size());
 }
 
 // EMetaBlob::Dentry
@@ -861,7 +896,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     bool isnew = in ? false:true;
     if (!in)
       in = new CInode(mds->mdcache, mds->get_nodeid());
-    p->second.apply(mds, in);
+    p->second.apply(mds, in, isnew);
     if (isnew)
       mds->mdcache->add_inode(in);
     if (p->second.is_dirty()) in->_mark_dirty(logseg);

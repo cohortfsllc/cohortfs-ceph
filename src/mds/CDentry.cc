@@ -206,6 +206,11 @@ CStripe* CDentry::get_stripe() const
   return dir->get_stripe();
 }
 
+inoparent_t CDentry::inoparent()
+{
+  return inoparent_t(get_stripe()->dirstripe(), authority().first, get_name());
+}
+
 void CDentry::make_path_string(string& s)
 {
   if (dir) {
