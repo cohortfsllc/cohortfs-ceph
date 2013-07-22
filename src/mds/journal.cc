@@ -333,9 +333,22 @@ void EMetaBlob::update_segment(LogSegment *ls)
     ls->sessionmapv = sessionmapv;
 }
 
-void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
+void EMetaBlob::Inode::apply(MDS *mds, CInode *in, bool isnew)
 {
+  list<inoparent_t> existing_parents;
+  if (!isnew)
+    swap(in->inode.parents, existing_parents);
+
   in->inode = inode;
+
+  if (!isnew) {
+    // apply added/removed parents to existing parents
+    swap(in->inode.parents, existing_parents);
+    update_inoparents(in->inode.parents, removed_parent, added_parent);
+  }
+  dout(10) << "inode " << in->ino() << " links " << inode.nlink
+      << " inoparents " << in->inode.parents << dendl;
+
   in->inode_auth = inode_auth;
   if (inode_auth.first == mds->get_nodeid())
     in->state_set(CInode::STATE_AUTH);
@@ -356,7 +369,7 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in)
   if (in->is_auth() && inode.rstat.version != inode.accounted_rstat.version)
     mds->mdcache->parentstats.replay_unaccounted(in);
 
-  assert(in->is_base() || static_cast<size_t>(inode.nlink) == inode.parents.size());
+  assert(in->is_base() || static_cast<size_t>(inode.nlink) == in->inode.parents.size());
 }
 
 void EMetaBlob::Dir::apply(MDS *mds, CDir *dir, LogSegment *ls)
@@ -442,7 +455,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     bool isnew = in ? false:true;
     if (!in)
       in = new CInode(mds->mdcache, mds->get_nodeid());
-    p->second.apply(mds, in);
+    p->second.apply(mds, in, isnew);
     if (isnew)
       mds->mdcache->add_inode(in);
     if (p->second.dirty) in->_mark_dirty(logseg);

@@ -202,6 +202,8 @@ public:
   CStripe *get_stripe() const;
   const string& get_name() const { return name; }
 
+  inoparent_t inoparent();
+
   __u32 get_hash() const { return hash; }
 
   // linkage

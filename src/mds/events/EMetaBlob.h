@@ -59,6 +59,8 @@ class EMetaBlob {
     map<string,bufferptr> xattrs;
     string symlink;
     bool dirty;
+    inoparent_t added_parent;
+    inoparent_t removed_parent;
     struct default_file_layout *dir_layout;
     typedef map<snapid_t, old_inode_t> old_inodes_t;
     old_inodes_t old_inodes;
@@ -74,7 +76,8 @@ class EMetaBlob {
     // initialize/overwrite the encoded contents
     void encode(inode_t &i, const pair<int, int> &iauth,
                 const vector<int> &sauth, const map<string,bufferptr> &xa,
-                const string &sym, bool dr, default_file_layout *defl = NULL,
+                const string &sym, bool dr, inoparent_t *ap = NULL,
+                inoparent_t *rp = NULL, default_file_layout *defl = NULL,
                 old_inodes_t *oi = NULL)
     {
       _enc = bufferlist(1024);
@@ -92,12 +95,15 @@ class EMetaBlob {
       }
       ::encode(dr, _enc);
       ::encode(oi ? true : false, _enc);
-      if (oi)
-        ::encode(*oi, _enc);
+      if (oi) ::encode(*oi, _enc);
+      ::encode(ap ? true : false, _enc);
+      if (ap) ::encode(*ap, _enc);
+      ::encode(rp ? true : false, _enc);
+      if (rp) ::encode(*rp, _enc);
     }
 
     void encode(bufferlist& bl) const {
-      __u8 struct_v = 3;
+      __u8 struct_v = 4;
       ::encode(struct_v, bl);
       assert(_enc.length());
       bl.append(_enc); 
@@ -129,9 +135,18 @@ class EMetaBlob {
 	  ::decode(old_inodes, bl);
 	}
       }
+      if (struct_v >= 4) {
+        bool has_parent;
+        ::decode(has_parent, bl);
+        if (has_parent)
+          ::decode(added_parent, bl);
+        ::decode(has_parent, bl);
+        if (has_parent)
+          ::decode(removed_parent, bl);
+      }
     }
 
-    void apply(MDS *mds, CInode *in);
+    void apply(MDS *mds, CInode *in, bool isnew);
 
     void print(ostream& out) {
       out << " inode " << inode.ino << " dirty=" << dirty << std::endl;
@@ -469,7 +484,9 @@ class EMetaBlob {
     destroyed_inodes.push_back(ino);
   }
  
-  void add_inode(CInode *in, bool dirty = false) {
+  void add_inode(CInode *in, bool dirty = false,
+                 inoparent_t *added_parent = NULL,
+                 inoparent_t *removed_parent = NULL) {
     // make note of where this inode was last journaled
     in->last_journaled = my_offset;
 
@@ -483,7 +500,27 @@ class EMetaBlob {
     inode.encode(*in->get_projected_inode(),
                  in->inode_auth, in->get_stripe_auth(),
                  *in->get_projected_xattrs(), in->symlink,
-                 dirty, default_layout, &in->old_inodes);
+                 dirty, added_parent, removed_parent,
+                 default_layout, &in->old_inodes);
+  }
+
+  void add_inode(CInode *in, CDentry *added_parent,
+                 CDentry *removed_parent = NULL)
+  {
+    inoparent_t added, removed;
+    if (added_parent) {
+      added.stripe = added_parent->get_stripe()->dirstripe();
+      added.who = added_parent->authority().first;
+      added.name = added_parent->get_name();
+    }
+    if (removed_parent) {
+      removed.stripe = removed_parent->get_stripe()->dirstripe();
+      removed.who = removed_parent->authority().first;
+      removed.name = removed_parent->get_name();
+    }
+    add_inode(in, true,
+              added_parent ? &added : NULL,
+              removed_parent ? &removed : NULL);
   }
 
   void add_dentry(CDentry *dn, bool dirty) {

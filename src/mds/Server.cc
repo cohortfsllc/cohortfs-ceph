@@ -4546,7 +4546,7 @@ void Server::_link_local(MDRequest *mdr, CDentry *dn, CInode *targeti)
   inode_t *pi = targeti->project_inode();
   pi->nlink++;
   pi->ctime = mdr->now;
-  targeti->project_added_parent(dn);
+  targeti->project_added_parent(dn->inoparent());
 
   snapid_t follows = mdcache->get_snaprealm()->get_newest_seq();
   if (follows >= dn->first)
@@ -4742,7 +4742,6 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   CDentry *dn = targeti->get_parent_dn();
   CDentry::linkage_t *dnl = dn->get_linkage();
   assert(dnl->is_primary());
-  dirstripe_t pstripe = dn->get_stripe()->dirstripe();
 
   mdr->now = mdr->slave_request->now;
 
@@ -4760,19 +4759,25 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   inode_t *pi = in->project_inode();
   mdr->add_projected_inode(in);
 
+  link_rollback rollback;
+  rollback.parent.stripe = dn->get_stripe()->dirstripe();
+  rollback.parent.who = mdr->slave_to_mds;
+  rollback.parent.name = dn->get_name();
+
   // update journaled target inode
   bool inc;
   if (mdr->slave_request->get_op() == MMDSSlaveRequest::OP_LINKPREP) {
     inc = true;
     pi->nlink++;
-    in->project_added_parent(pstripe, mdr->slave_to_mds, info.dname);
+    in->project_added_parent(rollback.parent);
+    le->commit.add_inode(in, false, &rollback.parent);
   } else {
     inc = false;
     pi->nlink--;
-    in->project_removed_parent(pstripe, info.dname);
+    in->project_removed_parent(rollback.parent);
+    le->commit.add_inode(in, false, NULL, &rollback.parent);
   }
 
-  link_rollback rollback;
   rollback.reqid = mdr->reqid;
   rollback.ino = targeti->ino();
   rollback.old_ctime = targeti->inode.ctime;
@@ -4780,8 +4785,6 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   rollback.old_dir_mtime = pf->fragstat.mtime;
   rollback.old_dir_rctime = pf->rstat.rctime;
   rollback.was_inc = inc;
-  rollback.parent.stripe = pstripe;
-  rollback.parent.name = info.dname;
   ::encode(rollback, le->rollback);
   mdr->more()->rollback_bl = le->rollback;
 
@@ -4924,11 +4927,10 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   pi->ctime = rollback.old_ctime;
   if (rollback.was_inc) {
     pi->nlink--;
-    in->project_removed_parent(rollback.parent.stripe, rollback.parent.name);
+    in->project_removed_parent(rollback.parent);
   } else {
     pi->nlink++;
-    in->project_added_parent(rollback.parent.stripe, master,
-                             rollback.parent.name);
+    in->project_added_parent(rollback.parent);
   }
 
   // journal it
@@ -4937,7 +4939,10 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   mdlog->start_entry(le);
   le->commit.add_stripe_context(stripe);
   le->commit.add_dentry(in->get_projected_parent_dn(), true);
-  le->commit.add_inode(in, true);
+  if (rollback.was_inc)
+    le->commit.add_inode(in, true, &rollback.parent);
+  else
+    le->commit.add_inode(in, true, NULL, &rollback.parent);
   
   mdlog->submit_entry(le, new C_MDS_LoggedLinkRollback(this, mut, mdr));
   mdlog->flush();
@@ -5189,7 +5194,7 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
   mdr->add_projected_inode(in);
   pi->nlink--;
   pi->ctime = mdr->now;
-  in->project_removed_parent(dn);
+  in->project_removed_parent(dn->inoparent());
 
   // remote link.  update remote inode.
   assert(dnl->is_remote());
@@ -6075,13 +6080,14 @@ void Server::_rename_prepare(MDRequest *mdr,
       pi->ctime = mdr->now;
       if (linkmerge) {
         pi->nlink--;
-        pi->remove_parent(srcdn->get_stripe()->dirstripe(), srcdn->get_name());
+        CInode *in = srcdnl->is_remote() && linkmerge ? oldin : srci;
+        in->project_removed_parent(srcdn->inoparent());
       }
     }
     if (tpi) {
       tpi->nlink--;
       tpi->ctime = mdr->now;
-      tpi->remove_parent(destdn->get_stripe()->dirstripe(), destdn->get_name());
+      oldin->project_removed_parent(destdn->inoparent());
     }
   }
 
@@ -6858,7 +6864,7 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr)
     if (ti->ctime == rollback.ctime)
       ti->ctime = rollback.orig_dest.old_ctime;
     ti->nlink++;
-    target->project_added_parent(destdn);
+    target->project_added_parent(destdn->inoparent());
   }
 
   if (srcdn)

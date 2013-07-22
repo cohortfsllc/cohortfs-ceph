@@ -343,26 +343,8 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
 
   // restore original parents
   swap(parents, inode.parents);
-
-  // apply removed parents
-  for (list<inoparent_t>::iterator i = projected->parents_removed.begin();
-       i != projected->parents_removed.end(); ++i) {
-    list<inoparent_t>::iterator p = find(inode.parents.begin(),
-                                         inode.parents.end(),
-                                         *i);
-    assert(p != parents.end());
-    if (!projected->parents_added.empty()) {
-      // replace with first parent added
-      *p = projected->parents_added.front();
-      projected->parents_added.pop_front();
-    } else {
-      inode.parents.erase(p);
-    }
-  }
-  // apply added parents
-  for (list<inoparent_t>::iterator i = projected->parents_added.begin();
-       i != projected->parents_added.end(); ++i)
-    inode.parents.push_back(*i);
+  update_inoparents(inode.parents, projected->removed_parent,
+                    projected->added_parent);
 
   map<string,bufferptr> *px = projected->xattrs;
   if (px) {
@@ -381,15 +363,37 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
   projected_nodes.pop_front();
 }
 
-void CInode::project_added_parent(CDentry *dn) {
-  project_added_parent(dn->get_stripe()->dirstripe(),
-                       dn->authority().first,
-                       dn->get_name());
+void CInode::get_projected_parents(list<inoparent_t> &parents)
+{
+  // start with current, non-projected inode parents
+  parents = inode.parents;
+  // apply each projected change
+  typedef list<projected_inode_t*>::const_iterator node_iter;
+  for (node_iter i = projected_nodes.begin(); i != projected_nodes.end(); ++i)
+    update_inoparents(parents, (*i)->removed_parent, (*i)->added_parent);
 }
 
-void CInode::project_removed_parent(CDentry *dn) {
-  project_removed_parent(dn->get_stripe()->dirstripe(),
-                         dn->get_name());
+void CInode::project_added_parent(const inoparent_t &parent)
+{
+  assert(!projected_nodes.empty());
+  projected_nodes.back()->added_parent = parent;
+  get_projected_parents(projected_nodes.back()->inode->parents);
+}
+
+void CInode::project_removed_parent(const inoparent_t &parent)
+{
+  assert(!projected_nodes.empty());
+  projected_nodes.back()->removed_parent = parent;
+  get_projected_parents(projected_nodes.back()->inode->parents);
+}
+
+void CInode::project_renamed_parent(const inoparent_t &removed,
+                                    const inoparent_t &added)
+{
+  assert(!projected_nodes.empty());
+  projected_nodes.back()->removed_parent = removed;
+  projected_nodes.back()->added_parent = added;
+  get_projected_parents(projected_nodes.back()->inode->parents);
 }
 
 

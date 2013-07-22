@@ -542,6 +542,8 @@ struct inoparent_t {
     ::decode(who, p);
     ::decode(name, p);
   }
+
+  operator bool() const { return stripe.ino != 0 && !name.empty(); }
 };
 WRITE_CLASS_ENCODER(inoparent_t)
 
@@ -549,6 +551,26 @@ inline bool operator==(const inoparent_t &l, const inoparent_t &r) {
   // ignore 'who' in comparison
   return l.stripe == r.stripe && l.name == r.name;
 }
+inline ostream& operator<<(ostream &out, const inoparent_t &p) {
+  return out << p.stripe << ':' << p.name;
+}
+
+inline void update_inoparents(list<inoparent_t> &parents,
+                              const inoparent_t &removed,
+                              const inoparent_t &added)
+{
+  if (removed) {
+    list<inoparent_t>::iterator p = find(parents.begin(), parents.end(),
+                                         removed);
+    assert(p != parents.end());
+    if (added) // replace with first parent added
+      *p = added;
+    else
+      parents.erase(p);
+  } else if (added)
+    parents.push_back(added);
+}
+
 
 
 // ================================================================
@@ -662,12 +684,6 @@ struct inode_t {
 
   void add_parent(dirstripe_t stripe, int who, const string &name) {
     parents.push_back(inoparent_t(stripe, who, name));
-  }
-  void remove_parent(dirstripe_t stripe, const string &name) {
-    list<inoparent_t>::iterator p = find(parents.begin(), parents.end(),
-                                         inoparent_t(stripe, 0, name));
-    assert(p != parents.end());
-    parents.erase(p);
   }
 
   void encode(bufferlist &bl) const {
