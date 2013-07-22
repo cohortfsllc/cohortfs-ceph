@@ -16,7 +16,6 @@
 #include "Filer.h"
 #include "osd/OSDMap.h"
 #include "Striper.h"
-#include "pg/PGOSDMap.h"
 
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
@@ -242,14 +241,15 @@ int Filer::purge_range(inodeno_t ino,
 		       uint64_t first_obj, uint64_t num_obj,
 		       utime_t mtime,
 		       int flags,
-		       Context *oncommit) 
+		       Context *oncommit)
 {
+#if 0
   assert(num_obj > 0);
 
   // single object?  easy!
   if (num_obj == 1) {
     object_t oid = file_object_t(ino, first_obj);
-    object_locator_t oloc = PGOSDMap::file_to_object_locator(*layout);
+    object_locator_t oloc = OSDMap::file_to_object_locator(*layout);
     objecter->remove(oid, oloc, snapc, mtime, flags, NULL, oncommit);
     return 0;
   }
@@ -267,6 +267,8 @@ int Filer::purge_range(inodeno_t ino,
   pr->uncommitted = 0;
 
   _do_purge_range(pr, 0);
+#endif /* 0 */
+  abort();
   return 0;
 }
 
@@ -281,6 +283,7 @@ struct C_PurgeRange : public Context {
 
 void Filer::_do_purge_range(PurgeRange *pr, int fin)
 {
+#if 0
   pr->uncommitted -= fin;
   ldout(cct, 10) << "_do_purge_range " << pr->ino << " objects " << pr->first << "~" << pr->num
 	   << " uncommitted " << pr->uncommitted << dendl;
@@ -303,4 +306,5 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
     pr->num--;
     max--;
   }
+#endif /* 0 */
 }

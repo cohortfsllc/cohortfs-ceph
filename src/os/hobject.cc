@@ -25,8 +25,7 @@ static void append_escaped(const string &in, string *out)
 
 set<string> hobject_t::get_prefixes(
   uint32_t bits,
-  uint32_t mask,
-  int64_t pool)
+  uint32_t mask)
 {
   uint32_t len = bits;
   while (len % 4 /* nibbles */) len++;
@@ -54,8 +53,6 @@ set<string> hobject_t::get_prefixes(
 
   char buf[20];
   char *t = buf;
-  uint64_t poolid(pool);
-  t += snprintf(t, sizeof(buf), "%.*llX", 16, (long long unsigned)poolid);
   *(t++) = '.';
   string poolstr(buf, t - buf);
   set<string> ret;
@@ -76,9 +73,6 @@ string hobject_t::to_str() const
   char snap_with_hash[1000];
   char *t = snap_with_hash;
   char *end = t + sizeof(snap_with_hash);
-
-  uint64_t poolid(pool);
-  t += snprintf(t, end - t, "%.*llX", 16, (long long unsigned)poolid);
 
   uint32_t revhash(get_filestore_key_u32());
   t += snprintf(t, end - t, ".%.*X", 8, revhash);
@@ -111,7 +105,6 @@ void hobject_t::encode(bufferlist& bl) const
   ::encode(hash, bl);
   ::encode(max, bl);
   ::encode(nspace, bl);
-  ::encode(pool, bl);
   ENCODE_FINISH(bl);
 }
 
@@ -129,7 +122,6 @@ void hobject_t::decode(bufferlist::iterator& bl)
     max = false;
   if (struct_v >= 4) {
     ::decode(nspace, bl);
-    ::decode(pool, bl);
   }
   DECODE_FINISH(bl);
 }
@@ -167,9 +159,9 @@ void hobject_t::generate_test_instances(list<hobject_t*>& o)
   o.push_back(new hobject_t);
   o.push_back(new hobject_t);
   o.back()->max = true;
-  o.push_back(new hobject_t(object_t("oname"), string(), 1, 234, -1));
-  o.push_back(new hobject_t(object_t("oname2"), string("okey"), CEPH_NOSNAP, 67, 0));
-  o.push_back(new hobject_t(object_t("oname3"), string("oname3"), CEPH_SNAPDIR, 910, 1));
+  o.push_back(new hobject_t(object_t("oname"), string(), 1, 234));
+  o.push_back(new hobject_t(object_t("oname2"), string("okey"), CEPH_NOSNAP, 67));
+  o.push_back(new hobject_t(object_t("oname3"), string("oname3"), CEPH_SNAPDIR, 910));
 }
 
 ostream& operator<<(ostream& out, const hobject_t& o)
@@ -180,6 +172,6 @@ ostream& operator<<(ostream& out, const hobject_t& o)
   if (o.get_key().length())
     out << "." << o.get_key();
   out << "/" << o.oid << "/" << o.snap;
-  out << "/" << o.nspace << "/" << o.pool;
+  out << "/" << o.nspace;
   return out;
 }

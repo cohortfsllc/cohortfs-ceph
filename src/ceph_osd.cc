@@ -124,31 +124,6 @@ int main(int argc, const char **argv)
     usage();
   }
 
-  if (!dump_pg_log.empty()) {
-    common_init_finish(g_ceph_context);
-    bufferlist bl;
-    std::string error;
-    int r = bl.read_file(dump_pg_log.c_str(), &error);
-    if (r >= 0) {
-      pg_log_entry_t e;
-      bufferlist::iterator p = bl.begin();
-      while (!p.end()) {
-	uint64_t pos = p.get_off();
-	try {
-	  ::decode(e, p);
-	}
-	catch (const buffer::error &e) {
-	  derr << "failed to decode LogEntry at offset " << pos << dendl;
-	  return 1;
-	}
-	derr << pos << ":\t" << e << dendl;
-      }
-    } else {
-      derr << "unable to open " << dump_pg_log << ": " << error << dendl;
-    }
-    return 0;
-  }
-
   // whoami
   char *end;
   const char *id = g_conf->name.get_id().c_str();

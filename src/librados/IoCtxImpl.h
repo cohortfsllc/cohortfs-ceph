@@ -25,7 +25,6 @@
 #include "include/xlist.h"
 #include "osd/osd_types.h"
 #include "osdc/Objecter.h"
-#include "pg/PGOSDMap.h"
 
 class RadosClient;
 
@@ -92,16 +91,6 @@ struct librados::IoCtxImpl {
     return poolid;
   }
 
-
-  const map<int64_t, pg_pool_t>& get_pools() const {
-    const PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(objecter->osdmap);
-    return pgosdmap->get_pools();
-  }
-
-  const pg_pool_t* get_pg_pool(int64_t poolid) const {
-    const PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(objecter->osdmap);
-    return pgosdmap->get_pg_pool(poolid);
-  }
 
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);
 

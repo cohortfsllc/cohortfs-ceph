@@ -35,7 +35,6 @@ public:
   
   // subop metadata
   osd_reqid_t reqid;
-  pg_t pgid;
   hobject_t poid;
 
   vector<OSDOp> ops;
@@ -54,7 +53,6 @@ public:
     bufferlist::iterator p = payload.begin();
     ::decode(map_epoch, p);
     ::decode(reqid, p);
-    ::decode(pgid, p);
     ::decode(poid, p);
 
     unsigned num_ops;
@@ -68,14 +66,10 @@ public:
     ::decode(last_complete_ondisk, p);
     ::decode(peer_stat, p);
     ::decode(attrset, p);
-
-    if (poid.pool == -1)
-      poid.pool = pgid.pool();
   }
   virtual void encode_payload(uint64_t features) {
     ::encode(map_epoch, payload);
     ::encode(reqid, payload);
-    ::encode(pgid, payload);
     ::encode(poid, payload);
     __u32 num_ops = ops.size();
     ::encode(num_ops, payload);
@@ -91,7 +85,6 @@ public:
 
   epoch_t get_map_epoch() { return map_epoch; }
 
-  pg_t get_pg() { return pgid; }
   hobject_t get_poid() { return poid; }
 
   int get_ack_type() { return ack_type; }
@@ -114,7 +107,6 @@ public:
     Message(MSG_OSD_SUBOPREPLY),
     map_epoch(e),
     reqid(req->reqid),
-    pgid(req->pgid),
     poid(req->poid),
     ops(req->ops),
     ack_type(at),
@@ -131,7 +123,6 @@ public:
   
   void print(ostream& out) const {
     out << "osd_sub_op_reply(" << reqid
-	<< " " << pgid 
 	<< " " << poid << " " << ops;
     if (ack_type & CEPH_OSD_FLAG_ONDISK)
       out << " ondisk";

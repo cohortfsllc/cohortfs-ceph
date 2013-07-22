@@ -942,4 +942,69 @@ struct obj_list_snap_response_t {
 
 WRITE_CLASS_ENCODER(obj_list_snap_response_t)
 
+class coll_t {
+public:
+  const static coll_t META_COLL;
+
+  coll_t()
+    : str("meta")
+  { }
+
+  explicit coll_t(const std::string &str_)
+    : str(str_)
+  { }
+
+  const std::string& to_str() const {
+    return str;
+  }
+
+  const char* c_str() const {
+    return str.c_str();
+  }
+
+  int operator<(const coll_t &rhs) const {
+    return str < rhs.str;
+  }
+
+  void encode(bufferlist& bl) const;
+  void decode(bufferlist::iterator& bl);
+  inline bool operator==(const coll_t& rhs) const {
+    return str == rhs.str;
+  }
+  inline bool operator!=(const coll_t& rhs) const {
+    return str != rhs.str;
+  }
+
+  void dump(Formatter *f) const;
+  static void generate_test_instances(list<coll_t*>& o);
+
+private:
+  std::string str;
+};
+
+WRITE_CLASS_ENCODER(coll_t)
+
+inline ostream& operator<<(ostream& out, const coll_t& c) {
+  out << c.to_str();
+  return out;
+}
+
+namespace __gnu_cxx {
+  template<> struct hash<coll_t> {
+    size_t operator()(const coll_t &c) const {
+      size_t h = 0;
+      string str(c.to_str());
+      std::string::const_iterator end(str.end());
+      for (std::string::const_iterator s = str.begin(); s != end; ++s) {
+	h += *s;
+	h += (h << 10);
+	h ^= (h >> 6);
+      }
+      h += (h << 3);
+      h ^= (h >> 11);
+      h += (h << 15);
+      return h;
+    }
+  };
+}
 #endif

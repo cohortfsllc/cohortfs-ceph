@@ -223,9 +223,6 @@ class SyntheticClient {
   int full_walk(string& fromdir);
   int random_walk(int n);
 
-  int dump_placement(string& fn);
-
-
   int make_dirs(const char *basedir, int dirs, int files, int depth);
   int stat_dirs(const char *basedir, int dirs, int files, int depth);
   int read_dirs(const char *basedir, int dirs, int files, int depth);
@@ -250,7 +247,6 @@ class SyntheticClient {
   int read_random_ex(string& fn, int mb, int chunk);
   
   int overload_osd_0(int n, int sie, int wrsize);
-  int check_first_primary(int fd);
 
   int clean_dir(string& basedir);
 

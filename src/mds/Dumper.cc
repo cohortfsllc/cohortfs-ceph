@@ -53,10 +53,9 @@ void Dumper::init(int rank)
   osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();;
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
-  unsigned pg_pool = CEPH_METADATA_RULE;
   objecter = new Objecter(g_ceph_context, messenger, monc, osdmap, lock, timer);
-  journaler = new Journaler(ino, pg_pool, CEPH_FS_ONDISK_MAGIC,
-                                       objecter, 0, 0, &timer);
+  journaler = new Journaler(ino, CEPH_FS_ONDISK_MAGIC,
+			    objecter, 0, 0, &timer);
 
   objecter->set_client_incarnation(0);
 
@@ -197,7 +196,6 @@ void Dumper::undump(const char *dump_file)
   cout << "start " << start << " len " << len << std::endl;
   
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
-  unsigned pg_pool = CEPH_METADATA_RULE;
 
   Journaler::Header h;
   h.trimmed_pos = start;
@@ -206,22 +204,20 @@ void Dumper::undump(const char *dump_file)
   h.magic = CEPH_FS_ONDISK_MAGIC;
 
   h.layout = g_default_file_layout;
-  h.layout.fl_pg_pool = pg_pool;
-  
+
   bufferlist hbl;
   ::encode(h, hbl);
 
   object_t oid = file_object_t(ino, 0);
-  object_locator_t oloc(pg_pool);
+  object_locator_t oloc(-1);
   SnapContext snapc;
 
   bool done = false;
   Cond cond;
   
   cout << "writing header " << oid << std::endl;
-  objecter->write_full(oid, oloc, snapc, hbl, ceph_clock_now(g_ceph_context), 0, 
-		       NULL, 
-		       new C_SafeCond(&lock, &cond, &done));
+  objecter->write_full(oid, oloc, snapc, hbl, ceph_clock_now(g_ceph_context),
+		       0, NULL, new C_SafeCond(&lock, &cond, &done));
 
   lock.Lock();
   while (!done)

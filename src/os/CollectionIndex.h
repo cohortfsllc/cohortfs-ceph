@@ -20,7 +20,6 @@
 #include <tr1/memory>
 
 #include "osd/osd_types.h"
-#include "pg/pg_types.h"
 #include "include/object.h"
 
 /**

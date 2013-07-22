@@ -150,10 +150,7 @@ string DBObjectMap::hobject_key(const hobject_t &hoid)
   else
     t += snprintf(t, end - t, "%llx", (long long unsigned)hoid.snap);
 
-  if (hoid.pool == -1)
-    t += snprintf(t, end - t, ".none");
-  else
-    t += snprintf(t, end - t, ".%llx", (long long unsigned)hoid.pool);
+  t += snprintf(t, end - t, ".none");
   snprintf(t, end - t, ".%.*X", (int)(sizeof(hoid.hash)*2), hoid.hash);
   out += string(snap_with_hash);
   return out;
@@ -240,11 +237,7 @@ bool DBObjectMap::parse_hobject_key_v0(const string &in, coll_t *c,
   sscanf(hash_str.c_str(), "%X", &hash);
 
   *c = coll_t(coll);
-  int64_t pool = -1;
-  pg_t pg;
-  if (c->is_pg_prefix(pg))
-    pool = (int64_t)pg.pool();
-  (*hoid) = hobject_t(name, key, snap, hash, pool);
+  (*hoid) = hobject_t(name, key, snap, hash);
   return true;
 }
 

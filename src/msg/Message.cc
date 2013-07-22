@@ -15,18 +15,10 @@ using namespace std;
 
 #include "Message.h"
 #include "Pipe.h"
-#include "messages/MPGStats.h"
-
 #include "messages/MGenericMessage.h"
-
-#include "messages/MPGStatsAck.h"
 
 #include "messages/MStatfs.h"
 #include "messages/MStatfsReply.h"
-
-#include "messages/MGetPoolStats.h"
-#include "messages/MGetPoolStatsReply.h"
-
 
 #include "messages/MPoolOp.h"
 #include "messages/MPoolOpReply.h"
@@ -56,7 +48,6 @@ using namespace std;
 
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDAlive.h"
-#include "messages/MOSDPGTemp.h"
 #include "messages/MOSDFailure.h"
 #include "messages/MOSDMarkMeDown.h"
 #include "messages/MOSDPing.h"
@@ -65,19 +56,6 @@ using namespace std;
 #include "messages/MOSDSubOp.h"
 #include "messages/MOSDSubOpReply.h"
 #include "messages/MOSDMap.h"
-
-#include "messages/MOSDPGNotify.h"
-#include "messages/MOSDPGQuery.h"
-#include "messages/MOSDPGLog.h"
-#include "messages/MOSDPGRemove.h"
-#include "messages/MOSDPGInfo.h"
-#include "messages/MOSDPGCreate.h"
-#include "messages/MOSDPGTrim.h"
-#include "messages/MOSDPGMissing.h"
-#include "messages/MOSDScrub.h"
-#include "messages/MOSDRepScrub.h"
-#include "messages/MOSDPGScan.h"
-#include "messages/MOSDPGBackfill.h"
 
 #include "messages/MRemoveSnaps.h"
 
@@ -271,24 +249,11 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
 
     // -- with payload --
 
-  case MSG_PGSTATS:
-    m = new MPGStats;
-    break;
-  case MSG_PGSTATSACK:
-    m = new MPGStatsAck;
-    break;
-
   case CEPH_MSG_STATFS:
     m = new MStatfs;
     break;
   case CEPH_MSG_STATFS_REPLY:
     m = new MStatfsReply;
-    break;
-  case MSG_GETPOOLSTATS:
-    m = new MGetPoolStats;
-    break;
-  case MSG_GETPOOLSTATSREPLY:
-    m = new MGetPoolStatsReply;
     break;
   case CEPH_MSG_POOLOP:
     m = new MPoolOp;
@@ -368,9 +333,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case MSG_OSD_ALIVE:
     m = new MOSDAlive();
     break;
-  case MSG_OSD_PGTEMP:
-    m = new MOSDPGTemp;
-    break;
   case MSG_OSD_FAILURE:
     m = new MOSDFailure();
     break;
@@ -401,45 +363,8 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     m = new MWatchNotify;
     break;
 
-  case MSG_OSD_PG_NOTIFY:
-    m = new MOSDPGNotify;
-    break;
-  case MSG_OSD_PG_QUERY:
-    m = new MOSDPGQuery;
-    break;
-  case MSG_OSD_PG_LOG:
-    m = new MOSDPGLog;
-    break;
-  case MSG_OSD_PG_REMOVE:
-    m = new MOSDPGRemove;
-    break;
-  case MSG_OSD_PG_INFO:
-    m = new MOSDPGInfo;
-    break;
-  case MSG_OSD_PG_CREATE:
-    m = new MOSDPGCreate;
-    break;
-  case MSG_OSD_PG_TRIM:
-    m = new MOSDPGTrim;
-    break;
-
-  case MSG_OSD_SCRUB:
-    m = new MOSDScrub;
-    break;
   case MSG_REMOVE_SNAPS:
     m = new MRemoveSnaps;
-    break;
-  case MSG_OSD_PG_MISSING:
-    m = new MOSDPGMissing;
-    break;
-  case MSG_OSD_REP_SCRUB:
-    m = new MOSDRepScrub;
-    break;
-  case MSG_OSD_PG_SCAN:
-    m = new MOSDPGScan;
-    break;
-  case MSG_OSD_PG_BACKFILL:
-    m = new MOSDPGBackfill;
     break;
    // auth
   case CEPH_MSG_AUTH:

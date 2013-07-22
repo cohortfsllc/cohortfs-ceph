@@ -20,6 +20,7 @@
 #include "boost/tuple/tuple.hpp"
 
 #include "msg/Dispatcher.h"
+#include "msg/Messenger.h"
 
 #include "common/Mutex.h"
 #include "common/RWLock.h"
@@ -35,7 +36,6 @@
 #include "include/CompatSet.h"
 
 #include "auth/KeyRing.h"
-#include "messages/MOSDRepScrub.h"
 #include "OpRequest.h"
 
 #include "OSDMap.h"
@@ -53,6 +53,7 @@ using namespace __gnu_cxx;
 #include "common/simple_cache.hpp"
 #include "common/sharedptr_registry.hpp"
 #include "common/PrioritizedQueue.h"
+#include "include/assert.h"
 
 #define CEPH_OSD_PROTOCOL    10 /* cluster internal */
 
@@ -252,8 +253,6 @@ public:
     tid_lock.Unlock();
     return t;
   }
-
-  Finisher reserver_finisher;
 
   // osd map cache (past osd maps)
   Mutex map_cache_lock;
@@ -613,7 +612,6 @@ private:
   // -- op tracking --
   OpTracker op_tracker;
   void check_ops_in_flight();
-  void test_ops(std::string command, std::string args, ostream& ss);
   friend class TestOpsSocketHook;
   TestOpsSocketHook *test_ops_hook;
 

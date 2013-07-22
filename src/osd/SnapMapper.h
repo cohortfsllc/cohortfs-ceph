@@ -173,8 +173,7 @@ public:
     mask_bits = new_bits;
     prefixes = hobject_t::get_prefixes(
       mask_bits,
-      match,
-      pool);
+      match);
   }
 
   /// Update snaps for oid, empty new_snaps removes the mapping

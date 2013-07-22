@@ -21,7 +21,6 @@ class MBackfillReserve : public Message {
   static const int HEAD_VERSION = 2;
   static const int COMPAT_VERSION = 1;
 public:
-  pg_t pgid;
   epoch_t query_epoch;
   enum {
     REQUEST = 0,
@@ -35,10 +34,9 @@ public:
     : Message(MSG_OSD_BACKFILL_RESERVE, HEAD_VERSION, COMPAT_VERSION),
       query_epoch(0), type(-1), priority(-1) {}
   MBackfillReserve(int type,
-		   pg_t pgid,
 		   epoch_t query_epoch, unsigned prio = -1)
     : Message(MSG_OSD_BACKFILL_RESERVE, HEAD_VERSION, COMPAT_VERSION),
-      pgid(pgid), query_epoch(query_epoch),
+      query_epoch(query_epoch),
       type(type), priority(prio) {}
 
   const char *get_type_name() const {
@@ -58,14 +56,13 @@ public:
       out << "REJECT ";
       break;
     }
-    out << " pgid: " << pgid << ", query_epoch: " << query_epoch;
+    out << ", query_epoch: " << query_epoch;
     if (type == REQUEST) out << ", prio: " << priority;
     return;
   }
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(pgid, p);
     ::decode(query_epoch, p);
     ::decode(type, p);
     if (header.version > 1)
@@ -75,7 +72,6 @@ public:
   }
 
   void encode_payload(uint64_t features) {
-    ::encode(pgid, payload);
     ::encode(query_epoch, payload);
     ::encode(type, payload);
     ::encode(priority, payload);

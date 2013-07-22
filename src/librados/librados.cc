@@ -1444,61 +1444,6 @@ int librados::Rados::get_pool_stats(std::list<string>& v, std::map<string, stats
   return get_pool_stats(v, category, result);
 }
 
-int librados::Rados::get_pool_stats(std::list<string>& v, string& category,
-				    std::map<string, stats_map>& result)
-{
-  map<string,::pool_stat_t> rawresult;
-  int r = client->get_pool_stats(v, rawresult);
-  for (map<string,::pool_stat_t>::iterator p = rawresult.begin();
-       p != rawresult.end();
-       ++p) {
-    stats_map& c = result[p->first];
-
-    string cat;
-    vector<string> cats;
-
-    if (!category.size()) {
-      cats.push_back(cat);
-      map<string,object_stat_sum_t>::iterator iter;
-      for (iter = p->second.stats.cat_sum.begin(); iter != p->second.stats.cat_sum.end(); ++iter) {
-        cats.push_back(iter->first);
-      }
-    } else {
-      cats.push_back(category);
-    }
-
-    vector<string>::iterator cat_iter;
-    for (cat_iter = cats.begin(); cat_iter != cats.end(); ++cat_iter) {
-      string& cur_category = *cat_iter;
-      object_stat_sum_t *sum;
-
-      if (!cur_category.size()) {
-         sum = &p->second.stats.sum;
-      } else {
-        map<string,object_stat_sum_t>::iterator iter = p->second.stats.cat_sum.find(cur_category);
-        if (iter == p->second.stats.cat_sum.end())
-          continue;
-        sum = &iter->second;
-      }
-
-      pool_stat_t& pv = c[cur_category];
-      pv.num_kb = SHIFT_ROUND_UP(sum->num_bytes, 10);
-      pv.num_bytes = sum->num_bytes;
-      pv.num_objects = sum->num_objects;
-      pv.num_object_clones = sum->num_object_clones;
-      pv.num_object_copies = sum->num_object_copies;
-      pv.num_objects_missing_on_primary = sum->num_objects_missing_on_primary;
-      pv.num_objects_unfound = sum->num_objects_unfound;
-      pv.num_objects_degraded = sum->num_objects_degraded;
-      pv.num_rd = sum->num_rd;
-      pv.num_rd_kb = sum->num_rd_kb;
-      pv.num_wr = sum->num_wr;
-      pv.num_wr_kb = sum->num_wr_kb;
-    }
-  }
-  return r;
-}
-
 int librados::Rados::cluster_stat(cluster_stat_t& result)
 {
   ceph_statfs stats;
@@ -1923,33 +1868,6 @@ extern "C" int rados_osd_command(rados_t cluster, int osdid, const char **cmd,
 
 
 
-extern "C" int rados_pg_command(rados_t cluster, const char *pgstr,
-				const char **cmd, size_t cmdlen,
-				const char *inbuf, size_t inbuflen,
-				char **outbuf, size_t *outbuflen,
-				char **outs, size_t *outslen)
-{
-  librados::RadosClient *client = (librados::RadosClient *)cluster;
-  bufferlist inbl;
-  bufferlist outbl;
-  string outstring;
-  pg_t pgid;
-  vector<string> cmdvec;
-
-  for (size_t i = 0; i < cmdlen; i++)
-    cmdvec.push_back(cmd[i]);
-
-  inbl.append(inbuf, inbuflen);
-  if (!pgid.parse(pgstr))
-    return -EINVAL;
-
-  int ret = client->pg_command(pgid, cmdvec, inbl, &outbl, &outstring);
-
-  do_out_buffer(outbl, outbuf, outbuflen);
-  do_out_buffer(outstring, outs, outslen);
-  return ret;
-}
-
 extern "C" void rados_buffer_free(char *buf)
 {
   if (buf)
@@ -1981,33 +1899,6 @@ extern "C" void rados_ioctx_destroy(rados_ioctx_t io)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   ctx->put();
-}
-
-extern "C" int rados_ioctx_pool_stat(rados_ioctx_t io, struct rados_pool_stat_t *stats)
-{
-  librados::IoCtxImpl *io_ctx_impl = (librados::IoCtxImpl *)io;
-  list<string> ls;
-  ls.push_back(io_ctx_impl->pool_name);
-  map<string, ::pool_stat_t> rawresult;
-
-  int err = io_ctx_impl->client->get_pool_stats(ls, rawresult);
-  if (err)
-    return err;
-
-  ::pool_stat_t& r = rawresult[io_ctx_impl->pool_name];
-  stats->num_kb = SHIFT_ROUND_UP(r.stats.sum.num_bytes, 10);
-  stats->num_bytes = r.stats.sum.num_bytes;
-  stats->num_objects = r.stats.sum.num_objects;
-  stats->num_object_clones = r.stats.sum.num_object_clones;
-  stats->num_object_copies = r.stats.sum.num_object_copies;
-  stats->num_objects_missing_on_primary = r.stats.sum.num_objects_missing_on_primary;
-  stats->num_objects_unfound = r.stats.sum.num_objects_unfound;
-  stats->num_objects_degraded = r.stats.sum.num_objects_degraded;
-  stats->num_rd = r.stats.sum.num_rd;
-  stats->num_rd_kb = r.stats.sum.num_rd_kb;
-  stats->num_wr = r.stats.sum.num_wr;
-  stats->num_wr_kb = r.stats.sum.num_wr_kb;
-  return 0;
 }
 
 extern "C" rados_config_t rados_ioctx_cct(rados_ioctx_t io)

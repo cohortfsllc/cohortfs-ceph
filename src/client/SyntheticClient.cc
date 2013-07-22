@@ -21,7 +21,6 @@ using namespace std;
 #include "SyntheticClient.h"
 #include "osdc/Objecter.h"
 #include "osdc/Filer.h"
-#include "pg/PGOSDMap.h"
 
 #include "include/filepath.h"
 #include "common/perf_counters.h"
@@ -469,18 +468,6 @@ int SyntheticClient::run()
 	client->drop_caches();
       }
       break;
-
-    case SYNCLIENT_MODE_DUMP:
-      {
-	string sarg1 = get_sarg(0);
-	if (run_me()) {
-	  dout(2) << "placement dump " << sarg1 << dendl;
-	  dump_placement(sarg1);
-	}
-	did_run_me();
-      }
-      break;
-
 
     case SYNCLIENT_MODE_MAKEDIRMESS:
       {
@@ -1399,25 +1386,13 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 
     // object-level traces
 
-    else if (strcmp(op, "o_stat") == 0) {
-      int64_t oh = t.get_int();
-      int64_t ol = t.get_int();
-      object_t oid = file_object_t(oh, ol);
-      lock.Lock();
-      object_locator_t oloc(CEPH_DATA_RULE);
-      uint64_t size;
-      utime_t mtime;
-      client->objecter->stat(oid, oloc, CEPH_NOSNAP, &size, &mtime, 0, new C_SafeCond(&lock, &cond, &ack));
-      while (!ack) cond.Wait(lock);
-      lock.Unlock();
-    }
     else if (strcmp(op, "o_read") == 0) {
       int64_t oh = t.get_int();
       int64_t ol = t.get_int();
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc(CEPH_DATA_RULE);
+      object_locator_t oloc;
       lock.Lock();
       bufferlist bl;
       client->objecter->read(oid, oloc, off, len, CEPH_NOSNAP, &bl, 0, new C_SafeCond(&lock, &cond, &ack));
@@ -1430,7 +1405,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc(CEPH_DATA_RULE);
+      object_locator_t oloc;
       lock.Lock();
       bufferptr bp(len);
       bufferlist bl;
@@ -1449,7 +1424,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc(CEPH_DATA_RULE);
+      object_locator_t oloc;
       lock.Lock();
       SnapContext snapc;
       client->objecter->zero(oid, oloc, off, len, snapc, ceph_clock_now(g_ceph_context), 0,
@@ -1647,50 +1622,6 @@ int SyntheticClient::full_walk(string& basedir)
   return 0;
 }
 
-
-
-int SyntheticClient::dump_placement(string& fn) {
-
-  // open file
-  int fd = client->open(fn.c_str(), O_RDONLY);
-  dout(5) << "reading from " << fn << " fd " << fd << dendl;
-  if (fd < 0) return fd;
-
-
-  // How big is it?
-  struct stat stbuf;
-  int lstat_result = client->lstat(fn.c_str(), &stbuf);
-  if (lstat_result < 0) {
-    dout(0) << "lstat error for file " << fn << dendl;
-    return lstat_result;
-  }
-    
-  off_t filesize = stbuf.st_size;
- 
-  // grab the placement info
-  vector<ObjectExtent> extents;
-  off_t offset = 0;
-  client->enumerate_layout(fd, extents, filesize, offset);
-  client->close(fd);
-
-
-  // run through all the object extents
-  dout(0) << "file size is " << filesize << dendl;
-  dout(0) << "(osd, start, length) tuples for file " << fn << dendl;
-  for (vector<ObjectExtent>::iterator i = extents.begin(); 
-       i != extents.end(); ++i) {
-    PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(client->osdmap);
-    int osd = pgosdmap->get_pg_primary(pgosdmap->object_locator_to_pg(i->oid, i->oloc));
-
-    // run through all the buffer extents
-    for (vector<pair<uint64_t, uint64_t> >::iterator j = i->buffer_extents.begin();
-	 j != i->buffer_extents.end(); ++j) {
-      dout(0) << "OSD " << osd << ", offset " << (*j).first
-	      << ", length " << (*j).second << dendl;    
-    }
-  }
-  return 0;
-}
 
 
 
@@ -1936,18 +1867,6 @@ int SyntheticClient::overload_osd_0(int n, int size, int wrsize) {
     int fd = client->open(filename.c_str(), O_RDWR|O_CREAT);
     ++tried;
 
-    // only use the file if its first primary is OSD 0
-    int primary_osd = check_first_primary(fd);
-    if (primary_osd != 0) {
-      client->close(fd);
-      dout(1) << "OSD Overload workload: SKIPPING file " << filename <<
-	" with OSD " << primary_osd << " as first primary. " << dendl;
-      continue;
-    }
-      dout(1) << "OSD Overload workload: USING file " << filename <<
-	" with OSD 0 as first primary. " << dendl;
-
-
     --left;
     // do whatever operation we want to do on the file. How about a write?
     write_fd(fd, size, wrsize);
@@ -1955,15 +1874,6 @@ int SyntheticClient::overload_osd_0(int n, int size, int wrsize) {
   return 0;
 }
 
-
-// See what the primary is for the first object in this file.
-int SyntheticClient::check_first_primary(int fh) {
-  vector<ObjectExtent> extents;
-  client->enumerate_layout(fh, extents, 1, 0);  
-  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(client->osdmap);
-  return pgosdmap->get_pg_primary(pgosdmap->object_locator_to_pg(extents.begin()->oid,
-								 extents.begin()->oloc));
-}
 
 int SyntheticClient::rm_file(string& fn)
 {
@@ -2220,7 +2130,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     if (time_to_stop()) break;
 
     object_t oid = file_object_t(999, i);
-    object_locator_t oloc(CEPH_DATA_RULE);
+    object_locator_t oloc;
     SnapContext snapc;
     
     if (i % inflight == 0) {
@@ -2321,7 +2231,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       o = (long)trunc(pow(r, rskew) * (double)nobj);  // exponentially skew towards 0
     }
     object_t oid = file_object_t(999, o);
-    object_locator_t oloc(CEPH_DATA_RULE);
+    object_locator_t oloc;
     SnapContext snapc;
     
     client->client_lock.Lock();

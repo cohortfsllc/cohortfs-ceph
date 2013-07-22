@@ -1219,10 +1219,6 @@ public:
 
   PaxosService *get_paxos_service_by_name(const string& name);
 
-  class PGMonitor *pgmon() {
-    return (class PGMonitor *)paxos_service[PAXOS_PGMAP];
-  }
-
   class MDSMonitor *mdsmon() {
     return (class MDSMonitor *)paxos_service[PAXOS_MDSMAP];
   }
@@ -1251,7 +1247,6 @@ public:
   friend class OSDMonitor;
   friend class MDSMonitor;
   friend class MonmapMonitor;
-  friend class PGMonitor;
   friend class LogMonitor;
   friend class VolMonitor;
 

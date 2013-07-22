@@ -18,7 +18,6 @@
 
 #include "msg/Message.h"
 #include "osd/osd_types.h"
-#include "pg/pg_types.h"
 #include "include/ceph_features.h"
 
 /*
@@ -46,7 +45,6 @@ private:
 
   object_t oid;
   object_locator_t oloc;
-  pg_t pgid;
 public:
   vector<OSDOp> ops;
 private:
@@ -79,8 +77,6 @@ public:
   
   object_t& get_oid() { return oid; }
 
-  pg_t     get_pg() const { return pgid; }
-
   object_locator_t get_object_locator() const {
     return oloc;
   }
@@ -94,12 +90,12 @@ public:
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
   MOSDOp(int inc, long tid,
-         object_t& _oid, object_locator_t& _oloc, pg_t _pgid, epoch_t _osdmap_epoch,
+	 object_t& _oid, object_locator_t& _oloc, epoch_t _osdmap_epoch,
 	 int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       client_inc(inc),
       osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),
-      oid(_oid), oloc(_oloc), pgid(_pgid) {
+      oid(_oid), oloc(_oloc) {
     set_tid(tid);
   }
 private:
@@ -208,7 +204,6 @@ struct ceph_osd_request_head {
       ::encode(client_inc, payload);
 
       __u32 su = 0;
-      ::encode(pgid, payload);
       ::encode(su, payload);
 
       ::encode(osdmap_epoch, payload);
@@ -239,7 +234,6 @@ struct ceph_osd_request_head {
       ::encode(reassert_version, payload);
 
       ::encode(oloc, payload);
-      ::encode(pgid, payload);
       ::encode(oid, payload);
 
       __u16 num_ops = ops.size();
@@ -262,13 +256,8 @@ struct ceph_osd_request_head {
       // old decode
       ::decode(client_inc, p);
 
-      old_pg_t opgid;
-      ::decode_raw(opgid, p);
-      pgid = opgid;
-
       __u32 su;
       ::decode(su, p);
-      oloc.pool = pgid.pool();
 
       ::decode(osdmap_epoch, p);
       ::decode(flags, p);
@@ -292,11 +281,6 @@ struct ceph_osd_request_head {
       decode_nohead(oid_len, oid.name, p);
       decode_nohead(num_snaps, snaps, p);
 
-      // recalculate pgid hash value
-      pgid.set_ps(ceph_str_hash(CEPH_STR_HASH_RJENKINS,
-				oid.name.c_str(),
-				oid.name.length()));
-
       retry_attempt = -1;
     } else {
       // new decode 
@@ -307,14 +291,6 @@ struct ceph_osd_request_head {
       ::decode(reassert_version, p);
 
       ::decode(oloc, p);
-
-      if (header.version < 3) {
-	old_pg_t opgid;
-	::decode_raw(opgid, p);
-	pgid = opgid;
-      } else {
-	::decode(pgid, p);
-      }
 
       ::decode(oid, p);
 
@@ -358,7 +334,6 @@ struct ceph_osd_request_head {
       out << " " << oloc;
 
     out << " " << ops;
-    out << " " << pgid;
     if (is_retry_attempt())
       out << " RETRY=" << get_retry_attempt();
     if (get_snap_seq())

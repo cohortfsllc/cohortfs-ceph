@@ -16,13 +16,12 @@
 #ifndef CEPH_CONTEXT_H
 #define CEPH_CONTEXT_H
 
-#include "common/dout.h"
-#include "include/assert.h"
-
 #include <list>
 #include <set>
 
 #include <iostream>
+#include "include/assert.h"
+#include "common/dout.h"
 
 #define mydout(cct, v) lgeneric_subdout(cct, context, v)
 

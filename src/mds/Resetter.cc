@@ -61,11 +61,9 @@ void Resetter::init(int rank)
   osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
-  unsigned pg_pool = CEPH_METADATA_RULE;
 
   objecter = new Objecter(g_ceph_context, messenger, monc, osdmap, lock, timer);
-  journaler = new Journaler(ino, pg_pool, CEPH_FS_ONDISK_MAGIC,
-                                       objecter, 0, 0, &timer);
+  journaler = new Journaler(ino, CEPH_FS_ONDISK_MAGIC, objecter, 0, 0, &timer);
 
   objecter->set_client_incarnation(0);
 

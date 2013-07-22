@@ -12,6 +12,7 @@
  *
  */
 
+#include <errno.h>
 #include "OSDMap.h"
 
 #include "common/config.h"
@@ -172,67 +173,6 @@ int OSDMap::Incremental::identify_osd(uuid_d u) const
   return -1;
 }
 
-bool OSDMap::subtree_is_down(int id, set<int> *down_cache) const
-{
-  if (id >= 0)
-    return is_down(id);
-
-  if (down_cache &&
-      down_cache->count(id)) {
-    return true;
-  }
-
-  list<int> children;
-  crush->get_children(id, &children);
-  for (list<int>::iterator p = children.begin(); p != children.end(); ++p) {
-    if (!subtree_is_down(*p, down_cache)) {
-      return false;
-    }
-  }
-  if (down_cache) {
-    down_cache->insert(id);
-  }
-  return true;
-}
-
-bool OSDMap::containing_subtree_is_down(CephContext *cct, int id, int subtree_type, set<int> *down_cache) const
-{
-  // use a stack-local down_cache if we didn't get one from the
-  // caller.  then at least this particular call will avoid duplicated
-  // work.
-  set<int> local_down_cache;
-  if (!down_cache) {
-    down_cache = &local_down_cache;
-  }
-
-  int current = id;
-  while (true) {
-    int type;
-    if (current >= 0) {
-      type = 0;
-    } else {
-      type = crush->get_bucket_type(current);
-    }
-    assert(type >= 0);
-
-    if (!subtree_is_down(current, down_cache)) {
-      ldout(cct, 30) << "containing_subtree_is_down(" << id << ") = false" << dendl;
-      return false;
-    }
-
-    // is this a big enough subtree to be done?
-    if (type >= subtree_type) {
-      ldout(cct, 30) << "containing_subtree_is_down(" << id << ") = true ... " << type << " >= " << subtree_type << dendl;
-      return true;
-    }
-
-    int r = crush->get_immediate_parent_id(current, &current);
-    if (r < 0) {
-      return false;
-    }
-  }
-}
-
 void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
 {
   ::encode(fsid, bl);
@@ -240,7 +180,6 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
   ::encode(modified, bl);
   ::encode(new_flags, bl);
   ::encode(fullmap, bl);
-  ::encode(crush, bl);
 
   ::encode(new_max_osd, bl);
   ::encode(new_up_client, bl);
@@ -267,28 +206,34 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
 // least 7
 void OSDMap::Incremental::decode(bufferlist::iterator &p)
 {
+  // base
+  __u16 v;
+  ::decode(v, p);
   ::decode(fsid, p);
   ::decode(epoch, p);
   ::decode(modified, p);
   ::decode(new_flags, p);
   ::decode(fullmap, p);
-  ::decode(crush, p);
+
   ::decode(new_max_osd, p);
   ::decode(new_up_client, p);
   ::decode(new_state, p);
   ::decode(new_weight, p);
 
+  // decode short map, too.
+  if (v == 5 && p.end())
+    return;
+
   // extended
   __u16 ev = 0;
-  ::decode(ev, p);
-
-  ::decode(new_hb_up, p);
+  if (v >= 5)
+    ::decode(ev, p);
+  ::decode(new_hb_back_up, p);
   ::decode(new_up_thru, p);
   ::decode(new_last_clean_interval, p);
   ::decode(new_lost, p);
   ::decode(new_blacklist, p);
   ::decode(old_blacklist, p);
-
   if (ev >= 6)
     ::decode(new_up_cluster, p);
   if (ev >= 7)
@@ -317,15 +262,6 @@ void OSDMap::Incremental::dump(Formatter *f) const
     full->dump(f);
     f->close_section();
     delete full;
-  }
-  if (crush.length()) {
-    f->open_object_section("crush");
-    CrushWrapper c;
-    bufferlist tbl = crush;  // kludge around constness.
-    bufferlist::iterator p = tbl.begin();
-    c.decode(p);
-    c.dump(f);
-    f->close_section();
   }
 
   f->dump_int("new_max_osd", new_max_osd);
@@ -615,14 +551,6 @@ void OSDMap::dedup(const OSDMap *o, OSDMap *n)
     n->osd_addrs = o->osd_addrs;
   }
 
-  // does crush match?
-  bufferlist oc, nc;
-  ::encode(*o->crush, oc);
-  ::encode(*n->crush, nc);
-  if (oc.contents_equal(nc)) {
-    n->crush = o->crush;
-  }
-
   // do uuids match?
   if (o->osd_uuid->size() == n->osd_uuid->size() &&
       *o->osd_uuid == *n->osd_uuid)
@@ -749,14 +677,6 @@ int OSDMap::apply_incremental(const Incremental &inc)
     cluster_snapshot_epoch = 0;
   }
 
-  // do new crush map last (after up/down stuff)
-  if (inc.crush.length()) {
-    bufferlist bl(inc.crush);
-    bufferlist::iterator blp = bl.begin();
-    crush.reset(new CrushWrapper);
-    crush->decode(blp);
-  }
-
   calc_num_osds();
 
   return apply_incremental_subclass(inc);
@@ -795,11 +715,6 @@ void OSDMap::encodeOSDMap(bufferlist& bl, uint64_t features) const
   ::encode(osd_weight, bl);
   ::encode(osd_addrs->client_addr, bl);
 
-  // crush
-  bufferlist cbl;
-  crush->encode(cbl);
-  ::encode(cbl, bl);
-
   // extended
   __u16 ev = 10;
   ::encode(ev, bl);
@@ -834,12 +749,6 @@ void OSDMap::decodeOSDMap(bufferlist::iterator& p, __u16 v)
   ::decode(osd_state, p);
   ::decode(osd_weight, p);
   ::decode(osd_addrs->client_addr, p);
-
-  // crush
-  bufferlist cbl;
-  ::decode(cbl, p);
-  bufferlist::iterator cblp = cbl.begin();
-  crush->decode(cblp);
 
   // extended
   __u16 ev = 0;
@@ -1037,7 +946,6 @@ void OSDMap::print_osd_line(int cur, ostream *out, Formatter *f) const
     f->dump_unsigned("id", cur);
     f->dump_stream("name") << "osd." << cur;
     f->dump_unsigned("exists", (int)exists(cur));
-    f->dump_string("type", crush->get_type_name(0));
     f->dump_int("type_id", 0);
   }
   if (out)
@@ -1068,106 +976,6 @@ void OSDMap::print_osd_line(int cur, ostream *out, Formatter *f) const
       f->dump_float("reweight", get_weightf(cur));
     }
   }
-}
-
-void OSDMap::print_tree(ostream *out, Formatter *f) const
-{
-  if (out)
-    *out << "# id\tweight\ttype name\tup/down\treweight\n";
-  if (f)
-    f->open_array_section("nodes");
-  set<int> touched;
-  set<int> roots;
-  crush->find_roots(roots);
-  for (set<int>::iterator p = roots.begin(); p != roots.end(); ++p) {
-    list<qi> q;
-    q.push_back(qi(*p, 0, crush->get_bucket_weight(*p) / (float)0x10000));
-    while (!q.empty()) {
-      int cur = q.front().item;
-      int depth = q.front().depth;
-      float weight = q.front().weight;
-      q.pop_front();
-
-      if (out) {
-	*out << cur << "\t";
-	int oldprecision = out->precision();
-	*out << std::setprecision(4) << weight << std::setprecision(oldprecision) << "\t";
-
-	for (int k=0; k<depth; k++)
-	  *out << "\t";
-      }
-      if (f) {
-	f->open_object_section("item");
-      }
-      if (cur >= 0) {
-	print_osd_line(cur, out, f);
-	if (out)
-	  *out << "\n";
-	if (f) {
-	  f->dump_float("crush_weight", weight);
-	  f->dump_unsigned("depth", depth);
-	  f->close_section();
-	}
-	touched.insert(cur);
-      }
-      if (cur >= 0) {
-	continue;
-      }
-
-      // queue bucket contents...
-      int type = crush->get_bucket_type(cur);
-      int s = crush->get_bucket_size(cur);
-      if (f) {
-	f->dump_int("id", cur);
-	f->dump_string("name", crush->get_item_name(cur));
-	f->dump_string("type", crush->get_type_name(type));
-	f->dump_int("type_id", type);
-	f->open_array_section("children");
-      }
-      for (int k=s-1; k>=0; k--) {
-	int item = crush->get_bucket_item(cur, k);
-	q.push_front(qi(item, depth+1, (float)crush->get_bucket_item_weight(cur, k) / (float)0x10000));
-	if (f)
-	  f->dump_int("child", item);
-      }
-      if (f)
-	f->close_section();
-
-      if (out)
-	*out << crush->get_type_name(type) << " " << crush->get_item_name(cur) << "\n";
-      if (f) {
-	f->close_section();
-      }
-
-    }
-  }
-  if (f) {
-    f->close_section();
-    f->open_array_section("stray");
-  }
-
-  set<int> stray;
-  for (int i=0; i<max_osd; i++)
-    if (exists(i) && touched.count(i) == 0)
-      stray.insert(i);
-
-  if (!stray.empty()) {
-    if (out)
-      *out << "\n";
-    if (f)
-      f->open_object_section("osd");
-    for (set<int>::iterator p = stray.begin(); p != stray.end(); ++p) {
-      if (out)
-	*out << *p << "\t0\t";
-      print_osd_line(*p, out, f);
-      if (out)
-	*out << "\n";
-    }
-    if (f)
-      f->close_section();
-  }
-  if (f)
-    f->close_section();
 }
 
 void OSDMap::print_summary(ostream& out) const

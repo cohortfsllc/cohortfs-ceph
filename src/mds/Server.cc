@@ -3480,20 +3480,7 @@ int Server::parse_layout_vxattr(string name, string value, ceph_file_layout *lay
       layout->fl_stripe_unit = boost::lexical_cast<unsigned>(value);
     } else if (name == "layout.stripe_count") {
       layout->fl_stripe_count = boost::lexical_cast<unsigned>(value);
-    } else if (name == "layout.pool") {
-      try {
-	layout->fl_pg_pool = boost::lexical_cast<unsigned>(value);
-      } catch (boost::bad_lexical_cast const&) {
-#warning Return to this point and fix me!
-//	int64_t pool = mds->osdmap->lookup_pg_pool_name(value);
-	int64_t pool = -1;
-	if (pool < 0) {
-	  dout(10) << " unknown pool " << value << dendl;
-	  return -ENOENT;
-	}
-	layout->fl_pg_pool = pool;
-      }
-    } else {
+    }  else {
       dout(10) << " unknown layout vxattr " << name << dendl;
       return -EINVAL;
     }

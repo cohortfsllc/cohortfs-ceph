@@ -23,7 +23,6 @@
 #include "common/ceph_argparse.h"
 #include "mon/MDSMonitor.h"
 #include "mon/OSDMonitor.h"
-#include "mon/PGMonitor.h"
 
 #include <sstream>
 #include "common/config.h"

@@ -66,7 +66,6 @@
 #include "OSDMonitor.h"
 #include "MDSMonitor.h"
 #include "MonmapMonitor.h"
-#include "PGMonitor.h"
 #include "LogMonitor.h"
 #include "AuthMonitor.h"
 #include "mon/QuorumService.h"
@@ -172,7 +171,6 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, paxos, "monmap");
   paxos_service[PAXOS_OSDMAP]
     = OSDMonitorPlaceSystem::getSystem().newOSDMonitor(this, paxos, "osdmap");
-  paxos_service[PAXOS_PGMAP] = new PGMonitor(this, paxos, "pgmap");
   paxos_service[PAXOS_LOG] = new LogMonitor(this, paxos, "logm");
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, paxos, "auth");
   paxos_service[PAXOS_VOLMAP] = new VolMonitor(this, paxos, "volmap");
@@ -2511,7 +2509,6 @@ void Monitor::get_status(stringstream &ss, Formatter *f)
     f->dump_stream("quorum") << get_quorum();
     f->dump_stream("quorum_names") << get_quorum_names();
     f->dump_stream("osdmap") << *osdmon()->osdmap;
-    f->dump_stream("pgmap") << pgmon()->pg_map;
     f->dump_stream("mdsmap") << mdsmon()->mdsmap;
     f->close_section();
   } else {
@@ -2520,7 +2517,6 @@ void Monitor::get_status(stringstream &ss, Formatter *f)
     ss << "   monmap " << *monmap << ", election epoch " << get_epoch()
       << ", quorum " << get_quorum() << " " << get_quorum_names() << "\n";
     ss << "   osdmap " << *osdmon()->osdmap << "\n";
-    ss << "    pgmap " << pgmon()->pg_map << "\n";
     ss << "   mdsmap " << mdsmon()->mdsmap << "\n";
   }
 }
@@ -2629,10 +2625,6 @@ void Monitor::handle_command(MMonCommand *m)
     return;
   }
 
-  if (module == "pg") {
-    pgmon()->dispatch(m);
-    return;
-  }
   if (module == "vol") {
     volmon()->dispatch(m);
     return;
@@ -2743,14 +2735,8 @@ void Monitor::handle_command(MMonCommand *m)
       rdata = comb;
       r = 0;
     } else if (prefix == "df") {
-      bool verbose = (detail == "detail");
       if (f)
         f->open_object_section("stats");
-
-      pgmon()->dump_fs_stats(ds, f.get(), verbose);
-      if (!f)
-        ds << '\n';
-      pgmon()->dump_pool_stats(ds, f.get(), verbose);
 
       if (f) {
         f->close_section();
@@ -2795,7 +2781,6 @@ void Monitor::handle_command(MMonCommand *m)
     monmon()->dump_info(f.get());
     osdmon()->dump_info(f.get());
     mdsmon()->dump_info(f.get());
-    pgmon()->dump_info(f.get());
 
     f->close_section();
     f->flush(ds);
@@ -3857,10 +3842,6 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
     } else if (p->first == "osdmap") {
       if ((int)s->is_capable("osd", MON_CAP_R)) {
         osdmon()->check_sub(s->sub_map["osdmap"]);
-      }
-    } else if (p->first == "osd_pg_creates") {
-      if ((int)s->is_capable("osd", MON_CAP_W)) {
-	pgmon()->check_sub(s->sub_map["osd_pg_creates"]);
       }
     } else if (p->first == "monmap") {
       check_sub(s->sub_map["monmap"]);

@@ -368,205 +368,6 @@ void object_stat_collection_t::generate_test_instances(list<object_stat_collecti
 
 // -- object_stat_sum_t --
 
-void object_stat_sum_t::dump(Formatter *f) const
-{
-  f->dump_int("num_bytes", num_bytes);
-  f->dump_int("num_objects", num_objects);
-  f->dump_int("num_object_clones", num_object_clones);
-  f->dump_int("num_object_copies", num_object_copies);
-  f->dump_int("num_objects_missing_on_primary", num_objects_missing_on_primary);
-  f->dump_int("num_objects_degraded", num_objects_degraded);
-  f->dump_int("num_objects_unfound", num_objects_unfound);
-  f->dump_int("num_read", num_rd);
-  f->dump_int("num_read_kb", num_rd_kb);
-  f->dump_int("num_write", num_wr);
-  f->dump_int("num_write_kb", num_wr_kb);
-  f->dump_int("num_scrub_errors", num_scrub_errors);
-  f->dump_int("num_shallow_scrub_errors", num_shallow_scrub_errors);
-  f->dump_int("num_deep_scrub_errors", num_deep_scrub_errors);
-  f->dump_int("num_objects_recovered", num_objects_recovered);
-  f->dump_int("num_bytes_recovered", num_bytes_recovered);
-  f->dump_int("num_keys_recovered", num_keys_recovered);
-}
-
-void object_stat_sum_t::encode(bufferlist& bl) const
-{
-  ENCODE_START(6, 3, bl);
-  ::encode(num_bytes, bl);
-  ::encode(num_objects, bl);
-  ::encode(num_object_clones, bl);
-  ::encode(num_object_copies, bl);
-  ::encode(num_objects_missing_on_primary, bl);
-  ::encode(num_objects_degraded, bl);
-  ::encode(num_objects_unfound, bl);
-  ::encode(num_rd, bl);
-  ::encode(num_rd_kb, bl);
-  ::encode(num_wr, bl);
-  ::encode(num_wr_kb, bl);
-  ::encode(num_scrub_errors, bl);
-  ::encode(num_objects_recovered, bl);
-  ::encode(num_bytes_recovered, bl);
-  ::encode(num_keys_recovered, bl);
-  ::encode(num_shallow_scrub_errors, bl);
-  ::encode(num_deep_scrub_errors, bl);
-  ENCODE_FINISH(bl);
-}
-
-void object_stat_sum_t::decode(bufferlist::iterator& bl)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(6, 3, 3, bl);
-  ::decode(num_bytes, bl);
-  if (struct_v < 3) {
-    uint64_t num_kb;
-    ::decode(num_kb, bl);
-  }
-  ::decode(num_objects, bl);
-  ::decode(num_object_clones, bl);
-  ::decode(num_object_copies, bl);
-  ::decode(num_objects_missing_on_primary, bl);
-  ::decode(num_objects_degraded, bl);
-  if (struct_v >= 2)
-    ::decode(num_objects_unfound, bl);
-  ::decode(num_rd, bl);
-  ::decode(num_rd_kb, bl);
-  ::decode(num_wr, bl);
-  ::decode(num_wr_kb, bl);
-  if (struct_v >= 4)
-    ::decode(num_scrub_errors, bl);
-  else
-    num_scrub_errors = 0;
-  if (struct_v >= 5) {
-    ::decode(num_objects_recovered, bl);
-    ::decode(num_bytes_recovered, bl);
-    ::decode(num_keys_recovered, bl);
-  } else {
-    num_objects_recovered = 0;
-    num_bytes_recovered = 0;
-    num_keys_recovered = 0;
-  }
-  if (struct_v >= 6) {
-    ::decode(num_shallow_scrub_errors, bl);
-    ::decode(num_deep_scrub_errors, bl);
-  } else {
-    num_shallow_scrub_errors = 0;
-    num_deep_scrub_errors = 0;
-  }
-  DECODE_FINISH(bl);
-}
-
-void object_stat_sum_t::generate_test_instances(list<object_stat_sum_t*>& o)
-{
-  object_stat_sum_t a;
-  o.push_back(new object_stat_sum_t(a));
-
-  a.num_bytes = 1;
-  a.num_objects = 3;
-  a.num_object_clones = 4;
-  a.num_object_copies = 5;
-  a.num_objects_missing_on_primary = 6;
-  a.num_objects_degraded = 7;
-  a.num_objects_unfound = 8;
-  a.num_rd = 9; a.num_rd_kb = 10;
-  a.num_wr = 11; a.num_wr_kb = 12;
-  a.num_objects_recovered = 14;
-  a.num_bytes_recovered = 15;
-  a.num_keys_recovered = 16;
-  a.num_deep_scrub_errors = 17;
-  a.num_shallow_scrub_errors = 18;
-  a.num_scrub_errors = a.num_deep_scrub_errors + a.num_shallow_scrub_errors;
-  o.push_back(new object_stat_sum_t(a));
-}
-
-void object_stat_sum_t::add(const object_stat_sum_t& o)
-{
-  num_bytes += o.num_bytes;
-  num_objects += o.num_objects;
-  num_object_clones += o.num_object_clones;
-  num_object_copies += o.num_object_copies;
-  num_objects_missing_on_primary += o.num_objects_missing_on_primary;
-  num_objects_degraded += o.num_objects_degraded;
-  num_rd += o.num_rd;
-  num_rd_kb += o.num_rd_kb;
-  num_wr += o.num_wr;
-  num_wr_kb += o.num_wr_kb;
-  num_objects_unfound += o.num_objects_unfound;
-  num_scrub_errors += o.num_scrub_errors;
-  num_shallow_scrub_errors += o.num_shallow_scrub_errors;
-  num_deep_scrub_errors += o.num_deep_scrub_errors;
-  num_objects_recovered += o.num_objects_recovered;
-  num_bytes_recovered += o.num_bytes_recovered;
-  num_keys_recovered += o.num_keys_recovered;
-}
-
-void object_stat_sum_t::sub(const object_stat_sum_t& o)
-{
-  num_bytes -= o.num_bytes;
-  num_objects -= o.num_objects;
-  num_object_clones -= o.num_object_clones;
-  num_object_copies -= o.num_object_copies;
-  num_objects_missing_on_primary -= o.num_objects_missing_on_primary;
-  num_objects_degraded -= o.num_objects_degraded;
-  num_rd -= o.num_rd;
-  num_rd_kb -= o.num_rd_kb;
-  num_wr -= o.num_wr;
-  num_wr_kb -= o.num_wr_kb;
-  num_objects_unfound -= o.num_objects_unfound;
-  num_scrub_errors -= o.num_scrub_errors;
-  num_shallow_scrub_errors -= o.num_shallow_scrub_errors;
-  num_deep_scrub_errors -= o.num_deep_scrub_errors;
-  num_objects_recovered -= o.num_objects_recovered;
-  num_bytes_recovered -= o.num_bytes_recovered;
-  num_keys_recovered -= o.num_keys_recovered;
-}
-
-
-// -- object_stat_collection_t --
-
-void object_stat_collection_t::dump(Formatter *f) const
-{
-  f->open_object_section("stat_sum");
-  sum.dump(f);
-  f->close_section();
-  f->open_object_section("stat_cat_sum");
-  for (map<string,object_stat_sum_t>::const_iterator p = cat_sum.begin(); p != cat_sum.end(); ++p) {
-    f->open_object_section(p->first.c_str());
-    p->second.dump(f);
-    f->close_section();
-  }
-  f->close_section();
-}
-
-void object_stat_collection_t::encode(bufferlist& bl) const
-{
-  ENCODE_START(2, 2, bl);
-  ::encode(sum, bl);
-  ::encode(cat_sum, bl);
-  ENCODE_FINISH(bl);
-}
-
-void object_stat_collection_t::decode(bufferlist::iterator& bl)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  ::decode(sum, bl);
-  ::decode(cat_sum, bl);
-  DECODE_FINISH(bl);
-}
-
-void object_stat_collection_t::generate_test_instances(list<object_stat_collection_t*>& o)
-{
-  object_stat_collection_t a;
-  o.push_back(new object_stat_collection_t(a));
-  list<object_stat_sum_t*> l;
-  object_stat_sum_t::generate_test_instances(l);
-  char n[2] = { 'a', 0 };
-  for (list<object_stat_sum_t*>::iterator p = l.begin(); p != l.end(); ++p) {
-    a.add(**p, n);
-    n[0]++;
-    o.push_back(new object_stat_collection_t(a));
-  }
-}
-
-
 // -- osd_peer_stat_t --
 
 void osd_peer_stat_t::encode(bufferlist& bl) const
@@ -865,13 +666,13 @@ void object_info_t::decode(bufferlist::iterator& bl)
     sobject_t obj;
     ::decode(obj, bl);
     ::decode(oloc, bl);
-    soid = hobject_t(obj.oid, oloc.key, obj.snap, 0, 0);
+    soid = hobject_t(obj.oid, oloc.key, obj.snap, 0);
     soid.hash = legacy_object_locator_to_ps(soid.oid, oloc);
   } else if (struct_v >= 6) {
     ::decode(soid, bl);
     ::decode(oloc, bl);
     if (struct_v == 6) {
-      hobject_t hoid(soid.oid, oloc.key, soid.snap, soid.hash, 0);
+      hobject_t hoid(soid.oid, oloc.key, soid.snap, soid.hash);
       soid = hoid;
     }
   }
@@ -901,8 +702,6 @@ void object_info_t::decode(bufferlist::iterator& bl)
     ::decode(uses_tmap, bl);
   else
     uses_tmap = true;
-  if (struct_v < 10)
-    soid.pool = oloc.pool;
   if (struct_v >= 11) {
     ::decode(watchers, bl);
   } else {
@@ -1064,16 +863,12 @@ void ObjectRecoveryInfo::decode(bufferlist::iterator &bl,
   DECODE_FINISH(bl);
 
   if (struct_v < 2) {
-    if (soid.pool == -1)
-      soid.pool = pool;
     map<hobject_t, interval_set<uint64_t> > tmp;
     tmp.swap(clone_subset);
     for (map<hobject_t, interval_set<uint64_t> >::iterator i = tmp.begin();
 	 i != tmp.end();
 	 ++i) {
       hobject_t first(i->first);
-      if (first.pool == -1)
-	first.pool = pool;
       clone_subset[first].swap(i->second);
     }
   }
@@ -1252,3 +1047,45 @@ void OSDOp::merge_osd_op_vector_out_data(vector<OSDOp>& ops, bufferlist& out)
     }
   }
 }
+
+// -- coll_t --
+
+void coll_t::encode(bufferlist& bl) const
+{
+  __u8 struct_v = 3;
+  ::encode(struct_v, bl);
+  ::encode(str, bl);
+}
+
+void coll_t::decode(bufferlist::iterator& bl)
+{
+  __u8 struct_v;
+  ::decode(struct_v, bl);
+  switch (struct_v) {
+  case 3:
+    ::decode(str, bl);
+    break;
+
+  default: {
+    ostringstream oss;
+    oss << "coll_t::decode(): don't know how to decode version "
+	<< struct_v;
+    throw std::domain_error(oss.str());
+  }
+  }
+}
+
+void coll_t::dump(Formatter *f) const
+{
+  f->dump_string("name", str);
+}
+
+void coll_t::generate_test_instances(list<coll_t*>& o)
+{
+  o.push_back(new coll_t);
+  o.push_back(new coll_t("meta"));
+  o.push_back(new coll_t("temp"));
+  o.push_back(new coll_t("foo"));
+  o.push_back(new coll_t("bar"));
+}
+

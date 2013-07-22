@@ -15,6 +15,7 @@
 #ifndef CEPH_OBJECTER_H
 #define CEPH_OBJECTER_H
 
+#include <errno.h>
 #include "include/types.h"
 #include "include/buffer.h"
 #include "include/xlist.h"
@@ -734,7 +735,6 @@ public:
     object_t oid;
     object_locator_t oloc;
 
-    pg_t pgid;
     vector<int> acting;
     bool used_replica;
 
@@ -909,16 +909,6 @@ public:
     }
   };
   
-  struct PoolStatOp {
-    tid_t tid;
-    list<string> pools;
-
-    map<string,pool_stat_t> *pool_stats;
-    Context *onfinish;
-
-    utime_t last_submit;
-  };
-
   struct StatfsOp {
     tid_t tid;
     struct ceph_statfs *stats;
@@ -953,7 +943,6 @@ public:
     bufferlist *poutbl;
     string *prs;
     int target_osd;
-    pg_t target_pg;
     epoch_t map_dne_bound;
     int map_check_error;           // error to return if map check fails
     const char *map_check_error_str;
@@ -983,7 +972,6 @@ public:
     object_t oid;
     object_locator_t oloc;
 
-    pg_t pgid;
     vector<int> acting;
 
     snapid_t snap;
@@ -1076,7 +1064,6 @@ public:
   map<tid_t,Op*>            ops;
   int                       num_homeless_ops;
   map<uint64_t, LingerOp*>  linger_ops;
-  map<tid_t,PoolStatOp*>    poolstat_ops;
   map<tid_t,StatfsOp*>      statfs_ops;
   map<tid_t,PoolOp*>        pool_ops;
   map<tid_t,CommandOp*>     command_ops;
@@ -1216,7 +1203,7 @@ private:
   // public interface
  public:
   bool is_active() {
-    return !(ops.empty() && linger_ops.empty() && poolstat_ops.empty() && statfs_ops.empty());
+    return !(ops.empty() && linger_ops.empty() && statfs_ops.empty());
   }
 
   /**
@@ -1256,18 +1243,6 @@ private:
     c->target_osd = osd;
     return _submit_command(c, ptid);
   }
-  int pg_command(pg_t pgid, vector<string>& cmd, bufferlist& inbl, tid_t *ptid,
-		   bufferlist *poutbl, string *prs, Context *onfinish) {
-    CommandOp *c = new CommandOp;
-    c->cmd = cmd;
-    c->inbl = inbl;
-    c->poutbl = poutbl;
-    c->prs = prs;
-    c->onfinish = onfinish;
-    c->target_pg = pgid;
-    return _submit_command(c, ptid);
-  }
-
   // mid-level helpers
   tid_t mutate(const object_t& oid, const object_locator_t& oloc, 
 	       ObjectOperation& op,
@@ -1634,32 +1609,6 @@ private:
   }
 
   void list_objects(ListContext *p, Context *onfinish);
-
-  // -------------------------
-  // pool ops
-private:
-  void pool_op_submit(PoolOp *op);
-public:
-  int create_pool_snap(int64_t pool, string& snapName, Context *onfinish);
-  int allocate_selfmanaged_snap(int64_t pool, snapid_t *psnapid, Context *onfinish);
-  int delete_pool_snap(int64_t pool, string& snapName, Context *onfinish);
-  int delete_selfmanaged_snap(int64_t pool, snapid_t snap, Context *onfinish);
-
-  int create_pool(string& name, Context *onfinish, uint64_t auid=0,
-		  int crush_rule=-1);
-  int delete_pool(int64_t pool, Context *onfinish);
-  int change_pool_auid(int64_t pool, Context *onfinish, uint64_t auid);
-
-  void handle_pool_op_reply(MPoolOpReply *m);
-
-  // --------------------------
-  // pool stats
-private:
-  void poolstat_submit(PoolStatOp *op);
-public:
-  void handle_get_pool_stats_reply(MGetPoolStatsReply *m);
-  void get_pool_stats(list<string>& pools, map<string,pool_stat_t> *result,
-		      Context *onfinish);
 
   // ---------------------------
   // df stats

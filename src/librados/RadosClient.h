@@ -22,7 +22,6 @@
 #include "mon/MonClient.h"
 #include "msg/Dispatcher.h"
 #include "osd/OSDMap.h"
-#include "pg/PGOSDMap.h"
 
 #include "IoCtxImpl.h"
 
@@ -47,8 +46,7 @@ private:
     CONNECTED,
   } state;
 
-  /* should this be a auto_ptr<OSDMap> instead? */
-  PGOSDMap osdmap;
+  std::tr1::shared_ptr<OSDMap> osdmap;
 
   MonClient monclient;
   SimpleMessenger *messenger;
@@ -94,7 +92,6 @@ public:
   int pool_get_name(uint64_t pool_id, std::string *auid);
 
   int pool_list(std::list<string>& ls);
-  int get_pool_stats(std::list<string>& ls, map<string,::pool_stat_t>& result);
   int get_fs_stats(ceph_statfs& result);
 
   int pool_create(string& name, unsigned long long auid=0, __u8 crush_rule=0);
@@ -115,14 +112,12 @@ public:
 	          bufferlist *outbl, string *outs);
   int mon_command(int rank,
 		  const vector<string>& cmd, bufferlist &inbl,
-	          bufferlist *outbl, string *outs);
+		  bufferlist *outbl, string *outs);
   int mon_command(string name,
 		  const vector<string>& cmd, bufferlist &inbl,
-	          bufferlist *outbl, string *outs);
+		  bufferlist *outbl, string *outs);
   int osd_command(int osd, vector<string>& cmd, bufferlist& inbl,
-                  bufferlist *poutbl, string *prs);
-  int pg_command(pg_t pgid, vector<string>& cmd, bufferlist& inbl,
-	         bufferlist *poutbl, string *prs);
+		  bufferlist *poutbl, string *prs);
 
   void handle_log(MLog *m);
   int monitor_log(const string& level, rados_log_callback_t cb, void *arg);

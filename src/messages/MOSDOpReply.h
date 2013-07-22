@@ -35,7 +35,6 @@ class MOSDOpReply : public Message {
   static const int COMPAT_VERSION = 2;
 
   object_t oid;
-  pg_t pgid;
   vector<OSDOp> ops;
   int64_t flags;
   int32_t result;
@@ -45,7 +44,6 @@ class MOSDOpReply : public Message {
 
 public:
   object_t get_oid() const { return oid; }
-  pg_t     get_pg() const { return pgid; }
   int      get_flags() const { return flags; }
 
   bool     is_ondisk() const { return get_flags() & CEPH_OSD_FLAG_ONDISK; }
@@ -97,7 +95,6 @@ public:
     flags =
       (req->flags & ~(CEPH_OSD_FLAG_ONDISK|CEPH_OSD_FLAG_ONNVRAM|CEPH_OSD_FLAG_ACK)) | acktype;
     oid = req->oid;
-    pgid = req->pgid;
     osdmap_epoch = e;
     reassert_version = req->reassert_version;
     retry_attempt = req->get_retry_attempt();
@@ -118,7 +115,6 @@ public:
       header.version = 1;
       ceph_osd_reply_head head;
       memset(&head, 0, sizeof(head));
-      head.layout.ol_pgid = pgid.get_old_pg().v;
       head.flags = flags;
       head.osdmap_epoch = osdmap_epoch;
       head.result = result;
@@ -131,7 +127,6 @@ public:
       ::encode_nohead(oid.name, payload);
     } else {
       ::encode(oid, payload);
-      ::encode(pgid, payload);
       ::encode(flags, payload);
       ::encode(result, payload);
       ::encode(reassert_version, payload);
@@ -158,7 +153,6 @@ public:
 	::decode(ops[i].op, p);
       }
       ::decode_nohead(head.object_len, oid.name, p);
-      pgid = pg_t(head.layout.ol_pgid);
       result = head.result;
       flags = head.flags;
       reassert_version = head.reassert_version;
@@ -166,7 +160,6 @@ public:
       retry_attempt = -1;
     } else {
       ::decode(oid, p);
-      ::decode(pgid, p);
       ::decode(flags, p);
       ::decode(result, p);
       ::decode(reassert_version, p);

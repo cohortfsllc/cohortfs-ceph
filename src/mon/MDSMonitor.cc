@@ -59,12 +59,10 @@ void MDSMonitor::print_map(MDSMap &m, int dbl)
   *_dout << dendl;
 }
 
-void MDSMonitor::create_new_fs(MDSMap &m, int metadata_pool, int data_pool)
+void MDSMonitor::create_new_fs(MDSMap &m)
 {
   m.max_mds = g_conf->max_mds;
   m.created = ceph_clock_now(g_ceph_context);
-  m.data_pools.insert(data_pool);
-  m.metadata_pool = metadata_pool;
   m.cas_pool = -1;
   m.compat = get_mdsmap_compat_set();
 
@@ -80,7 +78,7 @@ void MDSMonitor::create_new_fs(MDSMap &m, int metadata_pool, int data_pool)
 void MDSMonitor::create_initial()
 {
   dout(10) << "create_initial" << dendl;
-  create_new_fs(pending_mdsmap, CEPH_METADATA_RULE, CEPH_DATA_RULE);
+  create_new_fs(pending_mdsmap);
 }
 
 
@@ -939,7 +937,7 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     } else {
       pending_mdsmap = newmap;
       pending_mdsmap.epoch = mdsmap.epoch + 1;
-      create_new_fs(pending_mdsmap, metadata, data);
+      create_new_fs(pending_mdsmap);
       ss << "new fs with metadata pool " << metadata << " and data pool " << data;
       string rs;
       getline(ss, rs);

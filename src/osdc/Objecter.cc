@@ -15,7 +15,6 @@
 #include "Objecter.h"
 #include "osd/OSDMap.h"
 #include "Filer.h"
-#include "pg/PGOSDMap.h"
 #include "mon/MonClient.h"
 
 #include "msg/Messenger.h"
@@ -26,11 +25,7 @@
 #include "messages/MOSDOpReply.h"
 #include "messages/MOSDMap.h"
 
-#include "messages/MPoolOp.h"
-#include "messages/MPoolOpReply.h"
 
-#include "messages/MGetPoolStats.h"
-#include "messages/MGetPoolStatsReply.h"
 #include "messages/MStatfs.h"
 #include "messages/MStatfsReply.h"
 
@@ -425,16 +420,8 @@ void Objecter::dispatch(Message *m)
     handle_osd_map(static_cast<MOSDMap*>(m));
     break;
 
-  case MSG_GETPOOLSTATSREPLY:
-    handle_get_pool_stats_reply(static_cast<MGetPoolStatsReply*>(m));
-    break;
-
   case CEPH_MSG_STATFS_REPLY:
     handle_fs_stats_reply(static_cast<MStatfsReply*>(m));
-    break;
-
-  case CEPH_MSG_POOLOP_REPLY:
-    handle_pool_op_reply(static_cast<MPoolOpReply*>(m));
     break;
 
   case MSG_COMMAND_REPLY:
@@ -731,9 +718,6 @@ void Objecter::check_op_pool_dne(Op *op)
   if (op->map_dne_bound > 0) {
     if (osdmap->get_epoch() >= op->map_dne_bound) {
       // we had a new enough map
-      ldout(cct, 10) << "check_op_pool_dne tid " << op->tid
-		     << " concluding pool " << op->pgid.pool() << " dne"
-		     << dendl;
       if (op->onack) {
 	op->onack->complete(-ENOENT);
       }
@@ -1105,19 +1089,9 @@ void Objecter::resend_mon_ops()
 {
   ldout(cct, 10) << "resend_mon_ops" << dendl;
 
-  for (map<tid_t,PoolStatOp*>::iterator p = poolstat_ops.begin(); p!=poolstat_ops.end(); ++p) {
-    poolstat_submit(p->second);
-    logger->inc(l_osdc_poolstat_resend);
-  }
-
   for (map<tid_t,StatfsOp*>::iterator p = statfs_ops.begin(); p!=statfs_ops.end(); ++p) {
     fs_stats_submit(p->second);
     logger->inc(l_osdc_statfs_resend);
-  }
-
-  for (map<tid_t,PoolOp*>::iterator p = pool_ops.begin(); p!=pool_ops.end(); ++p) {
-    pool_op_submit(p->second);
-    logger->inc(l_osdc_poolop_resend);
   }
 
   for (map<tid_t, Op*>::iterator p = check_latest_map_ops.begin();
@@ -1287,8 +1261,7 @@ bool Objecter::is_pg_changed(vector<int>& o, vector<int>& n, bool any_change)
 
 int Objecter::recalc_op_target(Op *op)
 {
-  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
-
+#if 0
   vector<int> acting;
   pg_t pgid = op->pgid;
   if (op->precalc_pgid) {
@@ -1351,11 +1324,14 @@ int Objecter::recalc_op_target(Op *op)
     }
     return RECALC_OP_TARGET_NEED_RESEND;
   }
+#endif /* 0 */
+  abort();
   return RECALC_OP_TARGET_NO_ACTION;
 }
 
 bool Objecter::recalc_linger_op_target(LingerOp *linger_op)
 {
+#if 0
   PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
 
   vector<int> acting;
@@ -1382,6 +1358,8 @@ bool Objecter::recalc_linger_op_target(LingerOp *linger_op)
     }
     return RECALC_OP_TARGET_NEED_RESEND;
   }
+#endif /* 0 */
+  abort();
   return RECALC_OP_TARGET_NO_ACTION;
 }
 
@@ -1441,7 +1419,7 @@ void Objecter::send_op(Op *op)
   op->stamp = ceph_clock_now(cct);
 
   MOSDOp *m = new MOSDOp(client_inc, op->tid, 
-			 op->oid, op->oloc, op->pgid, osdmap->get_epoch(),
+			 op->oid, op->oloc, osdmap->get_epoch(),
 			 flags);
 
   m->set_snapid(op->snapid);
@@ -1522,7 +1500,7 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
 
   ldout(cct, 7) << "handle_osd_op_reply " << tid
 		<< (m->is_ondisk() ? " ondisk":(m->is_onnvram() ? " onnvram":" ack"))
-		<< " v " << m->get_version() << " in " << m->get_pg()
+		<< " v " << m->get_version() << " in " 
 		<< " attempt " << m->get_retry_attempt()
 		<< dendl;
   Op *op = ops[tid];
@@ -1644,6 +1622,7 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
 
 
 void Objecter::list_objects(ListContext *list_context, Context *onfinish) {
+#if 0
   PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
 
   ldout(cct, 10) << "list_objects" << dendl;
@@ -1703,12 +1682,15 @@ void Objecter::list_objects(ListContext *list_context, Context *onfinish) {
   o->precalc_pgid = true;
 
   op_submit(o);
+#endif /* 0 */
+  abort();
 }
 
 
 void Objecter::_list_reply(ListContext *list_context, int r, bufferlist *bl,
 			   Context *final_finish, epoch_t reply_epoch)
 {
+#if 0
   ldout(cct, 10) << "_list_reply" << dendl;
 
   bufferlist::iterator iter = bl->begin();
@@ -1770,298 +1752,12 @@ void Objecter::_list_reply(ListContext *list_context, int r, bufferlist *bl,
   final_finish->finish(0);
   delete final_finish;
   return;
+#endif /* 0 */
+  abort();
 }
 
 
 //snapshots
-
-int Objecter::create_pool_snap(int64_t pool, string& snap_name, Context *onfinish)
-{
-  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
-  ldout(cct, 10) << "create_pool_snap; pool: " << pool << "; snap: " << snap_name << dendl;
-
-  const pg_pool_t *p = pgosdmap->get_pg_pool(pool);
-  if (!p)
-    return -EINVAL;
-  if (p->snap_exists(snap_name.c_str()))
-    return -EEXIST;
-
-  PoolOp *op = new PoolOp;
-  if (!op)
-    return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  op->name = snap_name;
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_CREATE_SNAP;
-  pool_ops[op->tid] = op;
-
-  pool_op_submit(op);
-
-  return 0;
-}
-
-struct C_SelfmanagedSnap : public Context {
-  bufferlist bl;
-  snapid_t *psnapid;
-  Context *fin;
-  C_SelfmanagedSnap(snapid_t *ps, Context *f) : psnapid(ps), fin(f) {}
-  void finish(int r) {
-    if (r == 0) {
-      bufferlist::iterator p = bl.begin();
-      ::decode(*psnapid, p);
-    }
-    fin->finish(r);
-    delete fin;
-  }
-};
-
-int Objecter::allocate_selfmanaged_snap(int64_t pool, snapid_t *psnapid,
-					Context *onfinish)
-{
-  ldout(cct, 10) << "allocate_selfmanaged_snap; pool: " << pool << dendl;
-  PoolOp *op = new PoolOp;
-  if (!op) return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  C_SelfmanagedSnap *fin = new C_SelfmanagedSnap(psnapid, onfinish);
-  op->onfinish = fin;
-  op->blp = &fin->bl;
-  op->pool_op = POOL_OP_CREATE_UNMANAGED_SNAP;
-  pool_ops[op->tid] = op;
-
-  pool_op_submit(op);
-  return 0;
-}
-
-int Objecter::delete_pool_snap(int64_t pool, string& snap_name, Context *onfinish)
-{
-  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
-  ldout(cct, 10) << "delete_pool_snap; pool: " << pool << "; snap: " << snap_name << dendl;
-
-  const pg_pool_t *p = pgosdmap->get_pg_pool(pool);
-  if (!p)
-    return -EINVAL;
-  if (!p->snap_exists(snap_name.c_str()))
-    return -ENOENT;
-
-  PoolOp *op = new PoolOp;
-  if (!op)
-    return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  op->name = snap_name;
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_DELETE_SNAP;
-  pool_ops[op->tid] = op;
-  
-  pool_op_submit(op);
-  
-  return 0;
-}
-
-int Objecter::delete_selfmanaged_snap(int64_t pool, snapid_t snap,
-				      Context *onfinish) {
-  ldout(cct, 10) << "delete_selfmanaged_snap; pool: " << pool << "; snap: " 
-	   << snap << dendl;
-  PoolOp *op = new PoolOp;
-  if (!op) return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_DELETE_UNMANAGED_SNAP;
-  op->snapid = snap;
-  pool_ops[op->tid] = op;
-
-  pool_op_submit(op);
-
-  return 0;
-}
-
-int Objecter::create_pool(string& name, Context *onfinish, uint64_t auid,
-			  int crush_rule)
-{
-  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
-  ldout(cct, 10) << "create_pool name=" << name << dendl;
-
-  if (pgosdmap->lookup_pg_pool_name(name.c_str()) >= 0)
-    return -EEXIST;
-
-  PoolOp *op = new PoolOp;
-  if (!op)
-    return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = 0;
-  op->name = name;
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_CREATE;
-  pool_ops[op->tid] = op;
-  op->auid = auid;
-  op->crush_rule = crush_rule;
-
-  pool_op_submit(op);
-
-  return 0;
-}
-
-int Objecter::delete_pool(int64_t pool, Context *onfinish)
-{
-  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
-  ldout(cct, 10) << "delete_pool " << pool << dendl;
-
-  if (!pgosdmap->have_pg_pool(pool))
-    return -ENOENT;
-
-  PoolOp *op = new PoolOp;
-  if (!op) return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  op->name = "delete";
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_DELETE;
-  pool_ops[op->tid] = op;
-
-  pool_op_submit(op);
-
-  return 0;
-}
-
-/**
- * change the auid owner of a pool by contacting the monitor.
- * This requires the current connection to have write permissions
- * on both the pool's current auid and the new (parameter) auid.
- * Uses the standard Context callback when done.
- */
-int Objecter::change_pool_auid(int64_t pool, Context *onfinish, uint64_t auid)
-{
-  ldout(cct, 10) << "change_pool_auid " << pool << " to " << auid << dendl;
-  PoolOp *op = new PoolOp;
-  if (!op) return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  op->name = "change_pool_auid";
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_AUID_CHANGE;
-  op->auid = auid;
-  pool_ops[op->tid] = op;
-
-  logger->set(l_osdc_poolop_active, pool_ops.size());
-
-  pool_op_submit(op);
-  return 0;
-}
-
-void Objecter::pool_op_submit(PoolOp *op)
-{
-  ldout(cct, 10) << "pool_op_submit " << op->tid << dendl;
-  MPoolOp *m = new MPoolOp(monc->get_fsid(), op->tid, op->pool,
-			   op->name, op->pool_op,
-			   op->auid, last_seen_osdmap_version);
-  if (op->snapid) m->snapid = op->snapid;
-  if (op->crush_rule) m->crush_rule = op->crush_rule;
-  monc->send_mon_message(m);
-  op->last_submit = ceph_clock_now(cct);
-
-  logger->inc(l_osdc_poolop_send);
-}
-
-/**
- * Handle a reply to a PoolOp message. Check that we sent the message
- * and give the caller responsibility for the returned bufferlist.
- * Then either call the finisher or stash the PoolOp, depending on if we
- * have a new enough map.
- * Lastly, clean up the message and PoolOp.
- */
-void Objecter::handle_pool_op_reply(MPoolOpReply *m)
-{
-  assert(client_lock.is_locked());
-  assert(initialized);
-  ldout(cct, 10) << "handle_pool_op_reply " << *m << dendl;
-  tid_t tid = m->get_tid();
-  if (pool_ops.count(tid)) {
-    PoolOp *op = pool_ops[tid];
-    ldout(cct, 10) << "have request " << tid << " at " << op << " Op: " << ceph_pool_op_name(op->pool_op) << dendl;
-    if (op->blp)
-      op->blp->claim(m->response_data);
-    if (m->version > last_seen_osdmap_version)
-      last_seen_osdmap_version = m->version;
-    if (osdmap->get_epoch() < m->epoch) {
-      ldout(cct, 20) << "waiting for client to reach epoch " << m->epoch << " before calling back" << dendl;
-      wait_for_new_map(op->onfinish, m->epoch, m->replyCode);
-    }
-    else {
-      op->onfinish->finish(m->replyCode);
-      delete op->onfinish;
-    }
-    op->onfinish = NULL;
-    delete op;
-    pool_ops.erase(tid);
-
-    logger->set(l_osdc_poolop_active, pool_ops.size());
-
-  } else {
-    ldout(cct, 10) << "unknown request " << tid << dendl;
-  }
-  ldout(cct, 10) << "done" << dendl;
-  m->put();
-}
-
-
-// pool stats
-
-void Objecter::get_pool_stats(list<string>& pools, map<string,pool_stat_t> *result,
-			      Context *onfinish)
-{
-  ldout(cct, 10) << "get_pool_stats " << pools << dendl;
-
-  PoolStatOp *op = new PoolStatOp;
-  op->tid = ++last_tid;
-  op->pools = pools;
-  op->pool_stats = result;
-  op->onfinish = onfinish;
-  poolstat_ops[op->tid] = op;
-
-  logger->set(l_osdc_poolstat_active, poolstat_ops.size());
-
-  poolstat_submit(op);
-}
-
-void Objecter::poolstat_submit(PoolStatOp *op)
-{
-  ldout(cct, 10) << "poolstat_submit " << op->tid << dendl;
-  monc->send_mon_message(new MGetPoolStats(monc->get_fsid(), op->tid, op->pools, last_seen_pgmap_version));
-  op->last_submit = ceph_clock_now(cct);
-
-  logger->inc(l_osdc_poolstat_send);
-}
-
-void Objecter::handle_get_pool_stats_reply(MGetPoolStatsReply *m)
-{
-  assert(client_lock.is_locked());
-  assert(initialized);
-  ldout(cct, 10) << "handle_get_pool_stats_reply " << *m << dendl;
-  tid_t tid = m->get_tid();
-
-  if (poolstat_ops.count(tid)) {
-    PoolStatOp *op = poolstat_ops[tid];
-    ldout(cct, 10) << "have request " << tid << " at " << op << dendl;
-    *op->pool_stats = m->pool_stats;
-    if (m->version > last_seen_pgmap_version)
-      last_seen_pgmap_version = m->version;
-    op->onfinish->finish(0);
-    delete op->onfinish;
-    poolstat_ops.erase(tid);
-    delete op;
-
-    logger->set(l_osdc_poolstat_active, poolstat_ops.size());
-
-  } else {
-    ldout(cct, 10) << "unknown request " << tid << dendl;
-  } 
-  ldout(cct, 10) << "done" << dendl;
-  m->put();
-}
-
 
 void Objecter::get_fs_stats(ceph_statfs& result, Context *onfinish)
 {
@@ -2190,7 +1886,7 @@ void Objecter::dump_active()
   ldout(cct, 20) << "dump_active .. " << num_homeless_ops << " homeless" << dendl;
   for (map<tid_t,Op*>::iterator p = ops.begin(); p != ops.end(); ++p) {
     Op *op = p->second;
-    ldout(cct, 20) << op->tid << "\t" << op->pgid << "\tosd." << (op->session ? op->session->osd : -1)
+    ldout(cct, 20) << op->tid << "\t" << (op->session ? op->session->osd : -1)
 	    << "\t" << op->oid << "\t" << op->ops << dendl;
   }
 }
@@ -2203,7 +1899,6 @@ void Objecter::dump_requests(Formatter& fmt) const
   dump_ops(fmt);
   dump_linger_ops(fmt);
   dump_pool_ops(fmt);
-  dump_pool_stat_ops(fmt);
   dump_statfs_ops(fmt);
   dump_command_ops(fmt);
   fmt.close_section(); // requests object
@@ -2218,7 +1913,6 @@ void Objecter::dump_ops(Formatter& fmt) const
     Op *op = p->second;
     fmt.open_object_section("op");
     fmt.dump_unsigned("tid", op->tid);
-    fmt.dump_stream("pg") << op->pgid;
     fmt.dump_int("osd", op->session ? op->session->osd : -1);
     fmt.dump_stream("last_sent") << op->stamp;
     fmt.dump_int("attempts", op->attempts);
@@ -2250,7 +1944,6 @@ void Objecter::dump_linger_ops(Formatter& fmt) const
     LingerOp *op = p->second;
     fmt.open_object_section("linger_op");
     fmt.dump_unsigned("linger_id", op->linger_id);
-    fmt.dump_stream("pg") << op->pgid;
     fmt.dump_int("osd", op->session ? op->session->osd : -1);
     fmt.dump_stream("object_id") << op->oid;
     fmt.dump_stream("object_locator") << op->oloc;
@@ -2276,10 +1969,7 @@ void Objecter::dump_command_ops(Formatter& fmt) const
     for (vector<string>::const_iterator q = op->cmd.begin(); q != op->cmd.end(); ++q)
       fmt.dump_string("word", *q);
     fmt.close_section();
-    if (op->target_osd >= 0)
-      fmt.dump_int("target_osd", op->target_osd);
-    else
-      fmt.dump_stream("target_pg") << op->target_pg;
+    fmt.dump_int("target_osd", op->target_osd);
     fmt.close_section(); // command_op object
   }
   fmt.close_section(); // command_ops array
@@ -2304,30 +1994,6 @@ void Objecter::dump_pool_ops(Formatter& fmt) const
     fmt.close_section(); // pool_op object
   }
   fmt.close_section(); // pool_ops array
-}
-
-void Objecter::dump_pool_stat_ops(Formatter& fmt) const
-{
-  fmt.open_array_section("pool_stat_ops");
-  for (map<tid_t, PoolStatOp*>::const_iterator p = poolstat_ops.begin();
-       p != poolstat_ops.end();
-       ++p) {
-    PoolStatOp *op = p->second;
-    fmt.open_object_section("pool_stat_op");
-    fmt.dump_unsigned("tid", op->tid);
-    fmt.dump_stream("last_sent") << op->last_submit;
-
-    fmt.open_array_section("pools");
-    for (list<string>::const_iterator it = op->pools.begin();
-	 it != op->pools.end();
-	 ++it) {
-      fmt.dump_string("pool", *it);
-    }
-    fmt.close_section(); // pool_op object
-
-    fmt.close_section(); // pool_stat_op object
-  }
-  fmt.close_section(); // pool_stat_ops array
 }
 
 void Objecter::dump_statfs_ops(Formatter& fmt) const
@@ -2430,6 +2096,7 @@ int Objecter::_submit_command(CommandOp *c, tid_t *ptid)
 
 int Objecter::recalc_command_target(CommandOp *c)
 {
+#if 0
   OSDSession *s = NULL;
   c->map_check_error = 0;
   if (c->target_osd >= 0) {
@@ -2468,6 +2135,8 @@ int Objecter::recalc_command_target(CommandOp *c)
     return RECALC_OP_TARGET_NEED_RESEND;
   }
   ldout(cct, 20) << "recalc_command_target " << c->tid << " no change, " << c->session << dendl;
+#endif /* 0 */
+  abort();
   return RECALC_OP_TARGET_NO_ACTION;
 }
 

@@ -36,7 +36,6 @@ struct hobject_t {
 private:
   bool max;
 public:
-  int64_t pool;
   string nspace;
 
 private:
@@ -56,18 +55,14 @@ public:
     return match_hash(hash, bits, match);
   }
   
-  hobject_t() : snap(0), hash(0), max(false), pool(-1) {}
+  hobject_t() : snap(0), hash(0), max(false) {}
 
-  hobject_t(object_t oid, const string& key, snapid_t snap, uint64_t hash,
-	    int64_t pool) : 
+  hobject_t(object_t oid, const string& key, snapid_t snap, uint64_t hash) : 
     oid(oid), snap(snap), hash(hash), max(false),
-    pool(pool),
     key(oid.name == key ? string() : key) {}
 
-  hobject_t(const sobject_t &soid, const string &key, uint32_t hash,
-	    int64_t pool) : 
+  hobject_t(const sobject_t &soid, const string &key, uint32_t hash) :
     oid(soid.oid), snap(soid.snap), hash(hash), max(false),
-    pool(pool),
     key(soid.oid.name == key ? string() : key) {}
 
   /// @return min hobject_t ret s.t. ret.hash == this->hash
@@ -81,7 +76,7 @@ public:
 
   /* Do not use when a particular hash function is needed */
   explicit hobject_t(const sobject_t &o) :
-    oid(o.oid), snap(o.snap), max(false), pool(-1) {
+    oid(o.oid), snap(o.snap), max(false) {
     hash = __gnu_cxx::hash<sobject_t>()(o);
   }
 
@@ -112,8 +107,7 @@ public:
    */
   static set<string> get_prefixes(
     uint32_t bits,
-    uint32_t mask,
-    int64_t pool);
+    uint32_t mask);
 
   filestore_hobject_key_t get_filestore_key_u32() const {
     assert(!max);
@@ -167,13 +161,12 @@ namespace __gnu_cxx {
 
 ostream& operator<<(ostream& out, const hobject_t& o);
 
-WRITE_EQ_OPERATORS_7(hobject_t, oid, get_key(), snap, hash, max, pool, nspace)
+WRITE_EQ_OPERATORS_6(hobject_t, oid, get_key(), snap, hash, max, nspace)
 // sort hobject_t's by <max, get_filestore_key(hash), key, oid, snapid>
-WRITE_CMP_OPERATORS_7(hobject_t,
+WRITE_CMP_OPERATORS_6(hobject_t,
 		      max,
 		      get_filestore_key(),
 		      nspace,
-		      pool,
 		      get_effective_key(),
 		      oid,
 		      snap)

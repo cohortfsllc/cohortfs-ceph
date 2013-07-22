@@ -18,7 +18,6 @@
 #include "OSDMonitor.h"
 #include "Monitor.h"
 #include "MDSMonitor.h"
-#include "PGMonitor.h"
 #include "osd/OSDMap.h"
 
 #include "MonitorDBStore.h"
@@ -35,10 +34,9 @@
 #include "messages/MOSDAlive.h"
 #include "messages/MPoolOp.h"
 #include "messages/MPoolOpReply.h"
-#include "messages/MOSDPGTemp.h"
 #include "messages/MMonCommand.h"
-#include "messages/MRemoveSnaps.h"
 #include "messages/MOSDScrub.h"
+#include "messages/MRemoveSnaps.h"
 
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
@@ -164,11 +162,6 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
   map<int,epoch_t>::iterator p = osd_epoch.upper_bound(osdmap->get_max_osd());
   while (p != osd_epoch.end()) {
     osd_epoch.erase(p++);
-  }
-
-  if (mon->is_leader()) {
-    // kick pgmon, make sure it's seen the latest map
-    mon->pgmon()->check_osd_map(osdmap->epoch);
   }
 
   send_to_waiting();
@@ -298,66 +291,7 @@ int OSDMonitor::reweight_by_utilization(int oload, std::string& out_str)
     return -EINVAL;
   }
 
-  // Avoid putting a small number (or 0) in the denominator when calculating
-  // average_util
-  const PGMap &pgm = mon->pgmon()->pg_map;
-  if (pgm.osd_sum.kb < 1024) {
-    ostringstream oss;
-    oss << "Refusing to reweight: we only have " << pgm.osd_sum << " kb "
-      "across all osds!\n";
-    out_str = oss.str();
-    dout(0) << "reweight_by_utilization: " << out_str << dendl;
-    return -EDOM;
-  }
-
-  if (pgm.osd_sum.kb_used < 5 * 1024) {
-    ostringstream oss;
-    oss << "Refusing to reweight: we only have " << pgm.osd_sum << " kb "
-      "used across all osds!\n";
-    out_str = oss.str();
-    dout(0) << "reweight_by_utilization: " << out_str << dendl;
-    return -EDOM;
-  }
-
-  float average_util = pgm.osd_sum.kb_used;
-  average_util /= pgm.osd_sum.kb;
-  float overload_util = average_util * oload / 100.0;
-
-  ostringstream oss;
-  char buf[128];
-  snprintf(buf, sizeof(buf), "average_util: %04f, overload_util: %04f. ",
-	   average_util, overload_util);
-  oss << buf;
-  std::string sep;
-  oss << "overloaded osds: ";
-  bool changed = false;
-  for (hash_map<int,osd_stat_t>::const_iterator p = pgm.osd_stat.begin();
-       p != pgm.osd_stat.end();
-       ++p) {
-    float util = p->second.kb_used;
-    util /= p->second.kb;
-    if (util >= overload_util) {
-      sep = ", ";
-      // Assign a lower weight to overloaded OSDs. The current weight
-      // is a factor to take into account the original weights,
-      // to represent e.g. differing storage capacities
-      unsigned weight = osdmap->get_weight(p->first);
-      unsigned new_weight = (unsigned)((average_util / util) * (float)weight);
-      pending_inc->new_weight[p->first] = new_weight;
-      char buf[128];
-      snprintf(buf, sizeof(buf), "%d [%04f -> %04f]", p->first,
-	       (float)weight / (float)0x10000,
-	       (float)new_weight / (float)0x10000);
-      oss << buf << sep;
-      changed = true;
-    }
-  }
-  if (sep.empty()) {
-    oss << "(none)";
-  }
-  out_str = oss.str();
-  dout(0) << "reweight_by_utilization: finished with " << out_str << dendl;
-  return changed;
+  return 0;
 }
 
 
@@ -1723,11 +1657,9 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
     } else if (prefix == "osd tree") {
       if (f) {
 	f->open_object_section("tree");
-	p->print_tree(NULL, f.get());
+	f.get();
 	f->close_section();
 	f->flush(ds);
-      } else {
-	p->print_tree(&ds, NULL);
       }
       rdata.append(ds);
     } else if (prefix == "osd getmap") {

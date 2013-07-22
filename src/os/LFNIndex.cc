@@ -623,10 +623,6 @@ string LFNIndex::lfn_generate_object_name(const hobject_t &hoid) {
 
   t = buf;
   end = t + sizeof(buf);
-  if (hoid.pool == -1)
-    t += snprintf(t, end - t, "none");
-  else
-    t += snprintf(t, end - t, "%llx", (long long unsigned)hoid.pool);
   full_name += string(buf);
 
   return full_name;
@@ -891,11 +887,7 @@ static int parse_object(const char *s, hobject_t& o)
 
 bool LFNIndex::lfn_parse_object_name_keyless(const string &long_name, hobject_t *out) {
   bool r = parse_object(long_name.c_str(), *out);
-  int64_t pool = -1;
-  pg_t pg;
-  if (coll().is_pg_prefix(pg))
-    pool = (int64_t)pg.pool();
-  out->pool = pool;
+
   if (!r) return r;
   string temp = lfn_generate_object_name(*out);
   return r;
@@ -982,11 +974,7 @@ bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
   sscanf(hash_str.c_str(), "%X", &hash);
 
 
-  int64_t pool = -1;
-  pg_t pg;
-  if (coll().is_pg_prefix(pg))
-    pool = (int64_t)pg.pool();
-  (*out) = hobject_t(name, key, snap, hash, pool);
+  (*out) = hobject_t(name, key, snap, hash);
   return true;
 }
 
@@ -997,7 +985,6 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, hobject_t *out) {
   string ns;
   uint32_t hash;
   snapid_t snap;
-  uint64_t pool;
 
   if (index_version == HASH_INDEX_TAG)
     return lfn_parse_object_name_keyless(long_name, out);
@@ -1067,12 +1054,7 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, hobject_t *out) {
     snap = strtoull(snap_str.c_str(), NULL, 16);
   sscanf(hash_str.c_str(), "%X", &hash);
 
-  if (pstring == "none")
-    pool = (uint64_t)-1;
-  else
-    pool = strtoull(pstring.c_str(), NULL, 16);
-
-  (*out) = hobject_t(name, key, snap, hash, (int64_t)pool);
+  (*out) = hobject_t(name, key, snap, hash);
   out->nspace = ns;
   return true;
 }

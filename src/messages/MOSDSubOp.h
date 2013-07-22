@@ -18,7 +18,6 @@
 
 #include "msg/Message.h"
 #include "osd/osd_types.h"
-#include "pg/pg_types.h"
 
 /*
  * OSD sub op - for internal ops on pobjects between primary and replicas(/stripes/whatever)
@@ -36,7 +35,6 @@ public:
   osd_reqid_t reqid;
   
   // subop
-  pg_t pgid;
   hobject_t poid;
   object_locator_t oloc;
   
@@ -56,7 +54,6 @@ public:
 
   // transaction to exec
   bufferlist logbl;
-  pg_stat_t pg_stats;
   
   // subop metadata
   eversion_t version;
@@ -98,7 +95,6 @@ public:
     bufferlist::iterator p = payload.begin();
     ::decode(map_epoch, p);
     ::decode(reqid, p);
-    ::decode(pgid, p);
     ::decode(poid, p);
 
     __u32 num_ops;
@@ -120,8 +116,6 @@ public:
     ::decode(snapset, p);
     ::decode(snapc, p);
     ::decode(logbl, p);
-    ::decode(pg_stats, p);
-    ::decode(pg_trim_to, p);
     ::decode(peer_stat, p);
     ::decode(attrset, p);
 
@@ -136,7 +130,6 @@ public:
       ::decode(oloc, p);
     if (header.version >= 4) {
       ::decode(data_included, p);
-      recovery_info.decode(p, pgid.pool());
       ::decode(recovery_progress, p);
       ::decode(current_progress, p);
     }
@@ -144,19 +137,11 @@ public:
       ::decode(omap_entries, p);
     if (header.version >= 6)
       ::decode(omap_header, p);
-
-    if (header.version < 7) {
-      // Handle hobject_t format change
-      if (poid.pool == -1)
-	poid.pool = pgid.pool();
-      hobject_incorrect_pool = true;
-    }
   }
 
   virtual void encode_payload(uint64_t features) {
     ::encode(map_epoch, payload);
     ::encode(reqid, payload);
-    ::encode(pgid, payload);
     ::encode(poid, payload);
 
     __u32 num_ops = ops.size();
@@ -176,8 +161,6 @@ public:
     ::encode(snapset, payload);
     ::encode(snapc, payload);
     ::encode(logbl, payload);
-    ::encode(pg_stats, payload);
-    ::encode(pg_trim_to, payload);
     ::encode(peer_stat, payload);
     ::encode(attrset, payload);
     ::encode(data_subset, payload);
@@ -199,12 +182,11 @@ public:
 
   MOSDSubOp()
     : Message(MSG_OSD_SUBOP, HEAD_VERSION, COMPAT_VERSION) { }
-  MOSDSubOp(osd_reqid_t r, pg_t p, const hobject_t& po, bool noop_, int aw,
+  MOSDSubOp(osd_reqid_t r, const hobject_t& po, bool noop_, int aw,
 	    epoch_t mape, tid_t rtid, eversion_t v)
     : Message(MSG_OSD_SUBOP, HEAD_VERSION, COMPAT_VERSION),
       map_epoch(mape),
       reqid(r),
-      pgid(p),
       poid(po),
       acks_wanted(aw),
       noop(noop_),   
@@ -222,7 +204,6 @@ public:
   const char *get_type_name() const { return "osd_sub_op"; }
   void print(ostream& out) const {
     out << "osd_sub_op(" << reqid
-	<< " " << pgid
 	<< " " << poid
 	<< " " << ops;
     if (noop)

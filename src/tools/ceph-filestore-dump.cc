@@ -28,27 +28,25 @@
 #include "common/Formatter.h"
 
 #include "global/global_init.h"
+#include "include/assert.h"
 #include "os/ObjectStore.h"
 #include "os/FileStore.h"
 #include "common/perf_counters.h"
 #include "common/errno.h"
-#include "pg/PG.h"
-#include "pg/PGOSD.h"
+#include "osd/SnapMapper.h"
+#include "osd/OSD.h"
 
 namespace po = boost::program_options;
 using namespace std;
 
 enum {
     TYPE_NONE = 0,
-    TYPE_PG_BEGIN,
-    TYPE_PG_END,
     TYPE_OBJECT_BEGIN,
     TYPE_OBJECT_END,
     TYPE_DATA,
     TYPE_ATTRS,
     TYPE_OMAP_HDR,
     TYPE_OMAP,
-    TYPE_PG_METADATA,
     END_OF_TYPES,	//Keep at the end
 };
 
@@ -133,24 +131,6 @@ struct footer {
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
     ::decode(magic, bl);
-    DECODE_FINISH(bl);
-  }
-};
-
-struct pg_begin {
-  pg_t pgid;
-
-  pg_begin(pg_t pg): pgid(pg) { }
-  pg_begin() { }
-
-  void encode(bufferlist& bl) const {
-    ENCODE_START(1, 1, bl);
-    ::encode(pgid, bl);
-    ENCODE_FINISH(bl);
-  }
-  void decode(bufferlist::iterator& bl) {
-    DECODE_START(1, bl);
-    ::decode(pgid, bl);
     DECODE_FINISH(bl);
   }
 };
@@ -251,15 +231,10 @@ struct omap_section {
 struct metadata_section {
   __u8 struct_ver;
   epoch_t map_epoch;
-  pg_info_t info;
-  pg_log_t log;
 
-  metadata_section(__u8 struct_ver, epoch_t map_epoch, const pg_info_t &info,
-		   const pg_log_t &log)
+  metadata_section(__u8 struct_ver, epoch_t map_epoch)
     : struct_ver(struct_ver),
-      map_epoch(map_epoch),
-      info(info),
-      log(log) { }
+      map_epoch(map_epoch) { }
   metadata_section()
     : struct_ver(0),
       map_epoch(0) { }
@@ -268,16 +243,12 @@ struct metadata_section {
     ENCODE_START(1, 1, bl);
     ::encode(struct_ver, bl);
     ::encode(map_epoch, bl);
-    ::encode(info, bl);
-    ::encode(log, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
     ::decode(struct_ver, bl);
     ::decode(map_epoch, bl);
-    ::decode(info, bl);
-    ::decode(log, bl);
     DECODE_FINISH(bl);
   }
 };
@@ -321,13 +292,12 @@ static void invalid_path(string &path)
   exit(1);
 }
 
-int get_log(ObjectStore *fs, coll_t coll, pg_t pgid, const pg_info_t &info,
-   PGLog::IndexedLog &log, pg_missing_t &missing)
+int get_log(ObjectStore *fs, coll_t coll)
 { 
   map<eversion_t, hobject_t> divergent_priors;
   try {
     ostringstream oss;
-    PGLog::read_log(fs, coll, log_oid, info, divergent_priors, log, missing, oss);
+    //PGLog::read_log(fs, coll, log_oid, info, divergent_priors, log, missing, oss);
     if (debug && oss.str().size())
       cerr << oss.str() << std::endl;
   }

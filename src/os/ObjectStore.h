@@ -14,7 +14,6 @@
 #ifndef CEPH_OBJECTSTORE_H
 #define CEPH_OBJECTSTORE_H
 
-#include "pg/pg_types.h"
 #include "include/Context.h"
 #include "include/buffer.h"
 #include "include/types.h"
@@ -165,8 +164,6 @@ public:
     uint32_t largest_data_len, largest_data_off, largest_data_off_in_tbl;
     bufferlist tbl;
     bool sobject_encoding;
-    int64_t pool_override;
-    bool use_pool_override;
     bool replica;
     bool tolerate_collection_add_enoent;
 
@@ -219,9 +216,6 @@ public:
       return C_Contexts::list_to_context(on_applied_sync);
     }
 
-    void set_pool_override(int64_t pool) {
-      pool_override = pool;
-    }
     void set_replica() {
       replica = true;
     }
@@ -297,16 +291,12 @@ public:
     class iterator {
       bufferlist::iterator p;
       bool sobject_encoding;
-      int64_t pool_override;
-      bool use_pool_override;
       bool replica;
       bool _tolerate_collection_add_enoent;
 
       iterator(Transaction *t)
 	: p(t->tbl.begin()),
 	  sobject_encoding(t->sobject_encoding),
-	  pool_override(t->pool_override),
-	  use_pool_override(t->use_pool_override),
 	  replica(t->replica),
 	  _tolerate_collection_add_enoent(
 	    t->tolerate_collection_add_enoent) {}
@@ -337,10 +327,6 @@ public:
 	  hoid.oid = soid.oid;
 	} else {
 	  ::decode(hoid, p);
-	  if (use_pool_override && pool_override != -1 &&
-	      hoid.pool == -1) {
-	    hoid.pool = pool_override;
-	  }
 	}
 	return hoid;
       }
@@ -661,21 +647,19 @@ public:
     // etc.
     Transaction() :
       ops(0), pad_unused_bytes(0), largest_data_len(0), largest_data_off(0), largest_data_off_in_tbl(0),
-      sobject_encoding(false), pool_override(-1), use_pool_override(false),
-      replica(false),
+      sobject_encoding(false), replica(false),
       tolerate_collection_add_enoent(false) {}
 
     Transaction(bufferlist::iterator &dp) :
       ops(0), pad_unused_bytes(0), largest_data_len(0), largest_data_off(0), largest_data_off_in_tbl(0),
-      sobject_encoding(false), pool_override(-1), use_pool_override(false),
-      replica(false),
+      sobject_encoding(false), replica(false),
       tolerate_collection_add_enoent(false) {
       decode(dp);
     }
 
     Transaction(bufferlist &nbl) :
       ops(0), pad_unused_bytes(0), largest_data_len(0), largest_data_off(0), largest_data_off_in_tbl(0),
-      sobject_encoding(false), pool_override(-1), use_pool_override(false),
+      sobject_encoding(false), 
       replica(false),
       tolerate_collection_add_enoent(false) {
       bufferlist::iterator dp = nbl.begin();
@@ -708,9 +692,6 @@ public:
 	::decode(largest_data_off_in_tbl, bl);
       }
       ::decode(tbl, bl);
-      if (struct_v < 6) {
-	use_pool_override = true;
-      }
       if (struct_v >= 7) {
 	::decode(tolerate_collection_add_enoent, bl);
       }
