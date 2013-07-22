@@ -61,6 +61,8 @@ class EMetaBlob {
     map<string,bufferptr> xattrs;
     string symlink;
     __u8 state;
+    inoparent_t added_parent;
+    inoparent_t removed_parent;
     typedef map<snapid_t, old_inode_t> old_inodes_t;
     old_inodes_t old_inodes;
 
@@ -73,6 +75,7 @@ class EMetaBlob {
     void encode(const inode_t &i, const pair<int, int> &iauth,
                 const vector<int> &sauth, const map<string,bufferptr> &xa,
                 const string &sym, __u8 st,
+                const inoparent_t &ap, const inoparent_t &rp,
                 const old_inodes_t *oi = NULL) const;
 
     void encode(bufferlist& bl) const;
@@ -80,7 +83,7 @@ class EMetaBlob {
     void dump(Formatter *f) const;
     static void generate_test_instances(list<EMetaBlob::Inode*>& ls);
 
-    void apply(MDS *mds, CInode *in);
+    void apply(MDS *mds, CInode *in, bool isnew);
     bool is_dirty() const { return state & STATE_DIRTY; }
 
     void print(ostream& out) const {
@@ -373,7 +376,9 @@ class EMetaBlob {
     destroyed_inodes.push_back(ino);
   }
  
-  void add_inode(CInode *in, bool dirty = false) {
+  void add_inode(CInode *in, bool dirty = false,
+                 const inoparent_t &added_parent = inoparent_t(),
+                 const inoparent_t &removed_parent = inoparent_t()) {
     // make note of where this inode was last journaled
     in->last_journaled = my_offset;
 
@@ -383,7 +388,19 @@ class EMetaBlob {
     inode.encode(*in->get_projected_inode(),
                  in->inode_auth, in->get_stripe_auth(),
                  *in->get_projected_xattrs(), in->symlink,
-                 state, &in->old_inodes);
+                 state, added_parent, removed_parent, &in->old_inodes);
+  }
+
+  void add_inode(CInode *in, CDentry *added_parent,
+                 CDentry *removed_parent = NULL)
+  {
+    inoparent_t added, removed;
+    if (added_parent)
+      added = added_parent->inoparent();
+    if (removed_parent)
+      removed = removed_parent->inoparent();
+
+    add_inode(in, true, added, removed);
   }
 
   void add_dentry(CDentry *dn, bool dirty) {
