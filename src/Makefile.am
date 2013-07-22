@@ -1417,9 +1417,6 @@ libcommon_files = \
 	osd/OSDMap.cc \
 	osd/osd_types.cc \
 	osd/PlaceSystem.cc \
-	pg/pg_types.cc \
-	pg/PGOSDMap.cc \
-	pg/PGPlaceSystem.cc \
 	mds/MDSMap.cc \
 	mds/inode_backtrace.cc \
 	mds/mdstypes.cc \
@@ -1456,6 +1453,9 @@ libcommon_files = \
 	common/pick_address.cc \
 	include/addr_parsing.c \
 	$(crush_files)
+#	pg/pg_types.cc 
+#	pg/PGOSDMap.cc
+#	pg/PGPlaceSystem.cc
 
 if WITH_PROFILER
 libcommon_files += perfglue/cpu_profiler.cc
@@ -1477,9 +1477,6 @@ libmon_a_SOURCES = \
 	mon/OSDMonitor.cc \
 	mon/MDSMonitor.cc \
 	mon/MonmapMonitor.cc \
-	mon/PGMonitor.cc \
-	mon/PGMap.cc \
-	mon/PGOSDMonitor.cc \
 	mon/VolMonitor.cc \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
@@ -1490,6 +1487,9 @@ libmon_a_SOURCES = \
 	mon/DataHealthService.cc \
 	mon/ConfigKeyService.cc \
 	common/util.cc
+#	mon/PGMonitor.cc
+#	mon/PGMap.cc
+#	mon/PGOSDMonitor.cc
 libmon_a_CXXFLAGS= ${AM_CXXFLAGS}
 noinst_LIBRARIES += libmon.a
 
@@ -1543,17 +1543,17 @@ libos_a_CXXFLAGS= ${AM_CXXFLAGS}
 noinst_LIBRARIES += libos.a
 
 libosd_a_SOURCES = \
-	pg/PG.cc \
-	pg/ReplicatedPG.cc \
-	pg/PGOSD.cc \
-	pg/Watch.cc \
-	pg/PGLog.cc \
 	osd/Ager.cc \
 	osd/OSD.cc \
 	osd/OSDCap.cc \
 	osd/ClassHandler.cc \
 	osd/OpRequest.cc \
 	osd/SnapMapper.cc
+#	pg/PG.cc
+#	pg/ReplicatedPG.cc
+#	pg/PGOSD.cc
+#	pg/Watch.cc
+#	pg/PGLog.cc
 libosd_a_CXXFLAGS= ${AM_CXXFLAGS}
 noinst_LIBRARIES += libosd.a
 
@@ -2001,9 +2001,6 @@ noinst_HEADERS = \
 	mon/MonitorStore.h\
         mon/MonitorDBStore.h\
         mon/OSDMonitor.h\
-        mon/PGMap.h\
-        mon/PGMonitor.h\
-        mon/PGOSDMonitor.h\
         mon/Paxos.h\
         mon/PaxosService.h\
 	mon/QuorumService.h\
@@ -2046,10 +2043,6 @@ noinst_HEADERS = \
         osd/ObjectVersioner.h\
 	osd/OpRequest.h\
 	osd/SnapMapper.h\
-        pg/PG.h\
-        pg/PGLog.h\
-        pg/ReplicatedPG.h\
-        pg/Watch.h\
 	osd/PlaceSystem.h\
         osd/osd_types.h\
         osdc/Blinker.h\
@@ -2062,13 +2055,6 @@ noinst_HEADERS = \
         perfglue/cpu_profiler.h\
         perfglue/heap_profiler.h\
 	rgw/logrotate.conf\
-        pg/pg_types.h\
-        pg/PG.h\
-        pg/ReplicatedPG.h\
-        pg/PGOSD.h\
-        pg/PGOSDMap.h\
-	pg/PGPlaceSystem.h\
-        pg/Watch.h\
 	rgw/rgw_acl.h\
 	rgw/rgw_acl_s3.h\
 	rgw/rgw_acl_swift.h\
@@ -2151,6 +2137,20 @@ noinst_HEADERS = \
 	os/KeyValueDB.h \
 	os/LevelDBStore.h \
 	common/cmdparse.h
+#        mon/PGMap.h
+#        mon/PGMonitor.h
+#        mon/PGOSDMonitor.
+#        pg/PG.h
+#        pg/PGLog.h
+#        pg/ReplicatedPG.h
+#        pg/Watch.h
+#        pg/pg_types.h
+#        pg/PG.h
+#        pg/ReplicatedPG.h
+#        pg/PGOSD.h
+#        pg/PGOSDMap.h
+#	pg/PGPlaceSystem.h
+#        pg/Watch.h
 
 if ENABLE_COVERAGE
 COV_DIR = $(DESTDIR)$(libdir)/ceph/coverage
