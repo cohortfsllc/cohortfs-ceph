@@ -1697,30 +1697,46 @@ void link_rollback::generate_test_instances(list<link_rollback*>& ls)
 
 void rmdir_rollback::encode(bufferlist& bl) const
 {
-  ENCODE_START(3, 3, bl);
+  ENCODE_START(4, 4, bl);
   ::encode(reqid, bl);
-  ::encode(dir, bl);
-  ::encode(dname, bl);
+  ::encode(dn, bl);
   ::encode(ino, bl);
+  ::encode(d_type, bl);
+  ::encode(stripes, bl);
   ENCODE_FINISH(bl);
 }
 
 void rmdir_rollback::decode(bufferlist::iterator& bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(4, 4, 4, bl);
   ::decode(reqid, bl);
-  ::decode(dir, bl);
-  ::decode(dname, bl);
+  ::decode(dn, bl);
   ::decode(ino, bl);
+  ::decode(d_type, bl);
+  ::decode(stripes, bl);
   DECODE_FINISH(bl);
+}
+
+static string type_string(char d_type)
+{
+  int type = DTTOIF(d_type) & S_IFMT; // convert to type entries
+  switch (type) {
+  case S_IFREG: return "file";
+  case S_IFLNK: return "symlink";
+  case S_IFDIR: return "directory";
+  default: return "UNKNOWN-" + stringify((int)type);
+  }
 }
 
 void rmdir_rollback::dump(Formatter *f) const
 {
   f->dump_stream("metareqid") << reqid;
-  f->dump_stream("directory") << dir;
-  f->dump_string("dname", dname);
+  f->open_object_section("dentry");
+  dn.dump(f);
+  f->close_section();
   f->dump_stream("inode") << ino;
+  f->dump_string("dtype", type_string(d_type));
+  f->dump_stream("stripes") << stripes;
 }
 
 void rmdir_rollback::generate_test_instances(list<rmdir_rollback*>& ls)
@@ -1758,19 +1774,7 @@ void rename_rollback::drec::dump(Formatter *f) const
   dn.dump(f);
   f->close_section();
   f->dump_stream("ino") << ino;
-  uint32_t type = DTTOIF(d_type) & S_IFMT; // convert to type entries
-  string type_string;
-  switch(type) {
-  case S_IFREG:
-    type_string = "file"; break;
-  case S_IFLNK:
-    type_string = "symlink"; break;
-  case S_IFDIR:
-    type_string = "directory"; break;
-  default:
-    type_string = "UNKNOWN-" + stringify((int)type); break;
-  }
-  f->dump_string("dtype", type_string);
+  f->dump_string("dtype", type_string(d_type));
   f->dump_stream("mtime") << mtime;
   f->dump_stream("rctime") << rctime;
   f->dump_stream("ctime") << ctime;
