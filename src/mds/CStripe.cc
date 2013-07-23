@@ -395,29 +395,37 @@ void CStripe::set_object_info(MDSCacheObjectInfo &info)
 
 void CStripe::encode_lock_state(int type, bufferlist& bl)
 {
+  if (!is_auth())
+   return;
+
   switch (type) {
   case CEPH_LOCK_SDFT:
-    if (is_auth()) // encode the raw tree for replicas
-      ::encode(dirfragtree, bl);
+    ::encode(dirfragtree, bl);
     break;
-
   case CEPH_LOCK_SLINK:
+    ::encode(fnode.fragstat, bl);
+    break;
   case CEPH_LOCK_SNEST:
+    ::encode(fnode.rstat, bl);
     break;
   }
 }
 
 void CStripe::decode_lock_state(int type, bufferlist& bl)
 {
+  if (is_auth())
+    return;
+
   bufferlist::iterator p = bl.begin();
   switch (type) {
   case CEPH_LOCK_SDFT:
-    if (!is_auth()) // take the new tree
-      ::decode(dirfragtree, p);
+    ::decode(dirfragtree, p);
     break;
-
   case CEPH_LOCK_SLINK:
+    ::decode(fnode.fragstat, p);
+    break;
   case CEPH_LOCK_SNEST:
+    ::decode(fnode.rstat, p);
     break;
   }
 }

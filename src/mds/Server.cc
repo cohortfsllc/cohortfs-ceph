@@ -2774,11 +2774,12 @@ void Server::handle_client_openc(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
 
-  le->metablob.add_dentry(inodn, true);
-  le->metablob.add_inode(in, true);
-
+  mdr->add_projected_inode(in);
+  in->project_inode();
   mdcache->predirty_journal_parents(mdr, &le->metablob, in, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
+  le->metablob.add_inode(in, true);
+  le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
   // do the open
@@ -4023,11 +4024,12 @@ void Server::handle_client_mknod(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
  
-  le->metablob.add_dentry(inodn, true);
-  le->metablob.add_inode(newi, true);
-
+  mdr->add_projected_inode(newi);
+  newi->project_inode();
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
+  le->metablob.add_inode(newi, true);
+  le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
   journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, newi, dn, inodn));
@@ -4159,11 +4161,13 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
 
-  le->metablob.add_dentry(inodn, true);
-  le->metablob.add_inode(newi, true);
-
+  mdr->add_projected_inode(newi);
+  newi->project_inode();
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
+
+  le->metablob.add_inode(newi, true);
+  le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
   // add new stripes to the journal
@@ -4457,11 +4461,12 @@ void Server::handle_client_symlink(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
 
-  le->metablob.add_dentry(inodn, true);
-  le->metablob.add_inode(newi, true);
-
+  mdr->add_projected_inode(newi);
+  newi->project_inode();
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
+  le->metablob.add_inode(newi, true);
+  le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
   journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, newi, dn, inodn));
@@ -4558,6 +4563,7 @@ void Server::_link_local(MDRequest *mdr, CDentry *dn, CInode *targeti)
   le->metablob.add_client_req(mdr->reqid, mdr->client_request->get_oldest_client_tid());
   mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, 1);      // new dn
   mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, 0, PREDIRTY_PRIMARY);           // targeti
+  le->metablob.add_inode(targeti, dn);
 
   // do this after predirty_*, to avoid funky extra dnl arg
   dn->push_projected_linkage(targeti->ino(), targeti->d_type());
@@ -5108,8 +5114,8 @@ void Server::handle_client_unlink(MDRequest *mdr)
   for (size_t i = 0; i < trace.size()-1; i++)
     rdlocks.insert(&trace[i]->lock);
   xlocks.insert(&dn->lock);
-  wrlocks.insert(&dn->get_dir()->get_inode()->filelock);
-  wrlocks.insert(&dn->get_dir()->get_inode()->nestlock);
+  wrlocks.insert(&dn->get_stripe()->linklock);
+  wrlocks.insert(&dn->get_stripe()->nestlock);
   xlocks.insert(&in->linklock);
 
   // rdlock stripes to prevent creates while verifying emptiness
@@ -5130,7 +5136,7 @@ void Server::handle_client_unlink(MDRequest *mdr)
     mdr->now = ceph_clock_now(g_ceph_context);
 
   if (in->is_dir()) {
-    // stripe auths need to be witnesses
+    // all stripe auths need to be witnesses
     set<int> witnesses(in->get_stripe_auth().begin(),
                        in->get_stripe_auth().end());
     witnesses.erase(mds->get_nodeid());
@@ -5143,11 +5149,12 @@ void Server::handle_client_unlink(MDRequest *mdr)
       else if (mdr->more()->waiting_on_slave.count(*p))
 	dout(10) << " already waiting on witness mds." << *p << dendl;
       else
-	_rmdir_prepare_witness(mdr, *p, dn);
+	_rmdir_prepare_witness(mdr, dn, in, *p);
     }
     if (!mdr->more()->waiting_on_slave.empty())
       return;  // we're waiting for a witness.
   }
+  assert(g_conf->mds_kill_link_at != 1);
 
   // ok!
   if (dnl->is_remote() && !dnl->get_inode()->is_auth())
@@ -5194,26 +5201,18 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
   mdr->add_projected_inode(in);
   pi->nlink--;
   pi->ctime = mdr->now;
+
+  mdcache->predirty_journal_parents(mdr, &le->metablob, in,
+                                    dn->get_dir(), PREDIRTY_DIR, -1);
   in->project_removed_parent(dn->inoparent());
 
   // remote link.  update remote inode.
   assert(dnl->is_remote());
 
-  mdcache->predirty_journal_parents(mdr, &le->metablob, in,
-                                    dn->get_dir(), PREDIRTY_DIR, -1);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, in,
-                                    0, PREDIRTY_PRIMARY);
-  mdcache->journal_dirty_inode(mdr, &le->metablob, in);
-
-  mdcache->journal_cow_dentry(mdr, &le->metablob, dn);
+  le->metablob.add_inode(in, NULL, dn);
 
   dn->push_projected_linkage();
   le->metablob.add_dentry(dn, true);
-
-  if (in->is_dir()) {
-    dout(10) << " noting renamed (unlinked) dir ino " << in->ino() << " in metablob" << dendl;
-    le->metablob.renamed_dirino = in->ino();
-  }
 
   journal_and_reply(mdr, 0, dn, le, new C_MDS_unlink_local_finish(mds, mdr, dn));
 }
@@ -5241,13 +5240,26 @@ void Server::_unlink_local_finish(MDRequest *mdr, CDentry *dn)
   dn->get_dir()->try_remove_unlinked_dn(dn);
 }
 
-void Server::_rmdir_prepare_witness(MDRequest *mdr, int who, CDentry *dn)
+void Server::_rmdir_prepare_witness(MDRequest *mdr, CDentry *dn,
+                                    CInode *in, int who)
 {
   dout(10) << "_rmdir_prepare_witness mds." << who << " for " << *mdr << dendl;
-  
+ 
   MMDSSlaveRequest *req = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
 					       MMDSSlaveRequest::OP_RMDIRPREP);
-  req->path = filepath(dn->name, dn->get_stripe()->dirstripe().ino);
+  // include dentry information for rollback
+  req->src.dn.stripe = dn->get_stripe()->dirstripe();
+  req->src.dn.who = dn->authority().first;
+  req->src.dn.name = dn->get_name();
+  assert(dn->get_linkage()->is_remote());
+  req->src.ino = dn->get_linkage()->get_remote_ino();
+  req->src.d_type = dn->get_linkage()->get_remote_d_type();
+
+  // stripes for this mds to remove
+  for (stripeid_t i = 0; i < in->get_stripe_count(); ++i)
+    if (in->get_stripe_auth(i) == who)
+      req->stripes.push_back(i);
+  assert(!req->stripes.empty());
 
   req->now = mdr->now;
  
@@ -5281,30 +5293,51 @@ struct C_MDS_SlaveRmdirPrep : public Context {
 
 void Server::handle_slave_rmdir_prep(MDRequest *mdr)
 {
-  filepath &path = mdr->slave_request->path;
+  MMDSSlaveRequest *req = mdr->slave_request;
 
-  dout(10) << "handle_slave_rmdir_prep " << *mdr << " " << path << dendl;
+  dout(10) << "handle_slave_rmdir_prep " << *mdr << " " << req->src.dn << dendl;
 
-  vector<CDentry*> trace;
-  CInode *in;
-  int r = mdcache->path_traverse(mdr, NULL, NULL, path, &trace,
-                                 &in, MDS_TRAVERSE_DISCOVERXLOCK);
-  assert(r == 0);
-  CDentry *dn = trace.back();
-  dout(10) << " dn " << *dn << dendl;
-  mdr->pin(dn);
+  CInode *in = mdcache->get_inode(req->src.ino);
 
-  mdr->now = mdr->slave_request->now;
+  // open all associated stripes and flag as unlinked
+  C_GatherBuilder gather(g_ceph_context);
+  vector<CStripe*> stripes;
 
+  for (vector<stripeid_t>::iterator i = req->stripes.begin();
+       i != req->stripes.end(); ++i) {
+    CStripe *stripe = in->get_or_open_stripe(*i);
+    if (!stripe->is_open())
+      stripe->fetch(gather.new_sub());
+    else
+      stripes.push_back(stripe);
+  }
+
+  if (gather.has_subs()) {
+    gather.set_finisher(new C_MDS_RetryRequest(mdcache, mdr));
+    gather.activate();
+    return;
+  }
+
+  mdr->now = req->now;
+
+  // initialize rollback
   rmdir_rollback rollback;
   rollback.reqid = mdr->reqid;
-  rollback.dir = dn->get_dir()->dirfrag();
-  rollback.dname = dn->name;
-  rollback.ino = in->ino();
+  rollback.ino = req->src.ino;
+  swap(rollback.stripes, req->stripes);
+
+  // look up stripe/dir/dentry
+  CDentry *dn = lookup_inoparent(mdcache, req->src.dn);
+  if (dn) {
+    rollback.dn = req->src.dn;
+    dout(10) << "dn " << *dn << dendl;
+    mdr->pin(dn);
+
+    dn->push_projected_linkage();
+  }
+
   ::encode(rollback, mdr->more()->rollback_bl);
   dout(20) << " rollback is " << mdr->more()->rollback_bl.length() << " bytes" << dendl;
-
-  dn->push_projected_linkage();
 
   ESlaveUpdate *le =  new ESlaveUpdate(mdlog, "slave_rmdir", mdr->reqid, mdr->slave_to_mds,
 				       ESlaveUpdate::OP_PREPARE, ESlaveUpdate::RMDIR);
@@ -5314,8 +5347,13 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
   le->commit.add_inode(in, true);
   // slave: no need to journal original dentry
 
-  dout(10) << " noting renamed (unlinked) dir ino " << in->ino() << " in metablob" << dendl;
-  le->commit.renamed_dirino = in->ino();
+  // journal each stripe as dirty/unlinked
+  for (vector<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    CStripe *stripe = *s;
+    stripe->state_set(CStripe::STATE_UNLINKED);
+    dout(10) << "stripe " << *stripe << " unlinked" << dendl;
+    le->commit.add_stripe(stripe, true, false, true);
+  }
 
   mdlog->submit_entry(le, new C_MDS_SlaveRmdirPrep(this, mdr, dn));
   mdlog->flush();
@@ -5333,12 +5371,14 @@ struct C_MDS_SlaveRmdirCommit : public Context {
 
 void Server::_logged_slave_rmdir(MDRequest *mdr, CDentry *dn)
 {
-  dout(10) << "_logged_slave_rmdir " << *mdr << " on " << *dn << dendl;
+  dout(10) << "_logged_slave_rmdir " << *mdr << dendl;
 
   // update our cache now, so we are consistent with what is in the journal
   // when we journal a subtree map
-  dn->get_dir()->unlink_inode(dn);
-  dn->pop_projected_linkage();
+  if (dn) {
+    dn->get_dir()->unlink_inode(dn);
+    dn->pop_projected_linkage();
+  }
 
   MMDSSlaveRequest *reply = new MMDSSlaveRequest(mdr->reqid, mdr->attempt,
 						 MMDSSlaveRequest::OP_RMDIRPREPACK);
@@ -5405,7 +5445,7 @@ struct C_MDS_LoggedRmdirRollback : public Context {
 
 void Server::do_rmdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
 {
-  // unlink the other rollback methods, the rmdir rollback is only
+  // unlike the other rollback methods, the rmdir rollback is only
   // needed to record the subtree changes in the journal for inode
   // replicas who are auth for empty dirfrags.  no actual changes to
   // the file system are taking place here, so there is no Mutation.
@@ -5418,25 +5458,34 @@ void Server::do_rmdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   mds->mdcache->add_rollback(rollback.reqid, master); // need to finish this update before resolve finishes
   assert(mdr || mds->is_resolve());
 
-  CDir *dir = mds->mdcache->get_dirfrag(rollback.dir);
-  CDentry *dn = dir->lookup(rollback.dname);
-  assert(dn);
-  CInode *in = mds->mdcache->get_inode(rollback.ino);
-  assert(in);
-  dout(10) << "relinking " << *dn << " to " << *in << dendl;
-
-  dn->push_projected_linkage(in);
-
   ESlaveUpdate *le = new ESlaveUpdate(mdlog, "slave_rmdir_rollback", rollback.reqid, master,
 				      ESlaveUpdate::OP_ROLLBACK, ESlaveUpdate::RMDIR);
   mdlog->start_entry(le);
 
-  le->commit.add_dentry(dn, true);
-  le->commit.add_inode(in, true);
-  // slave: no need to journal straydn
- 
-  dout(10) << " noting renamed (unlinked) dir ino " << in->ino() << " in metablob" << dendl;
-  le->commit.renamed_dirino = in->ino();
+  // relink dentry replica
+  CDentry *dn = NULL;
+  if (rollback.dn) {
+    dn = lookup_inoparent(mdcache, rollback.dn);
+    assert(dn);
+
+    dn->push_projected_linkage(rollback.ino, rollback.d_type);
+    dout(10) << "relinking " << *dn << " to " << rollback.ino << dendl;
+
+    le->commit.add_dentry(dn, false);
+  }
+
+  // roll back stripes
+  CInode *in = mdcache->get_inode(rollback.ino);
+  assert(in);
+  for (vector<stripeid_t>::iterator i = rollback.stripes.begin();
+       i != rollback.stripes.end(); ++i) {
+    CStripe *stripe = in->get_stripe(*i);
+    assert(stripe);
+    assert(stripe->is_auth());
+    stripe->state_clear(CStripe::STATE_UNLINKED);
+    dout(10) << "stripe " << *stripe << " relinked" << dendl;
+    le->commit.add_stripe(stripe, true);
+  }
 
   mdlog->submit_entry(le, new C_MDS_LoggedRmdirRollback(this, mdr, rollback.reqid, dn));
   mdlog->flush();
@@ -5446,7 +5495,8 @@ void Server::_rmdir_rollback_finish(MDRequest *mdr, metareqid_t reqid, CDentry *
 {
   dout(10) << "_rmdir_rollback_finish " << reqid << dendl;
 
-  dn->pop_projected_linkage();
+  if (dn)
+    dn->pop_projected_linkage();
 
   if (mdr)
     mds->mdcache->request_finish(mdr);
