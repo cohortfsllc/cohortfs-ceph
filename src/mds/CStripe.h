@@ -81,6 +81,7 @@ class CStripe : public MDSCacheObject {
   static const unsigned STATE_COMMITTING    = (1<<3);
   static const unsigned STATE_DIRTYFRAGSTAT = (1<<4);
   static const unsigned STATE_DIRTYRSTAT    = (1<<5);
+  static const unsigned STATE_UNLINKED      = (1<<6);
 
   // these state bits are preserved by an import/export
   static const unsigned MASK_STATE_EXPORTED =
