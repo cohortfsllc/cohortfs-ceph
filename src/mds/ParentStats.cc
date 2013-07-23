@@ -356,8 +356,16 @@ bool ParentStats::update_stripe_stats(CStripe *stripe, Projected &projected,
     return update_stripe_nest(stripe, projected, mut, blob, supdate, iupdate);
   }
 
-  // requires stripe.linklock from caller
-  assert(mut->wrlocks.count(&stripe->linklock));
+  // requires stripe.linklock
+  C_GatherBuilder gather(g_ceph_context);
+  if (!mut->wrlocks.count(&stripe->linklock) &&
+      !mds->locker->wrlock_start(&stripe->linklock, mut, &gather)) {
+    Mutation *newmut = new Mutation(mut->reqid, mut->attempt);
+    gather.set_finisher(new C_PS_StripeFrag(mds, stripe, newmut, supdate));
+    gather.activate();
+    dout(10) << "update_stripe_frag waiting on " << stripe->linklock << dendl;
+    return false;
+  }
 
   // inode.dirstat -> stripe.fragstat
   fnode_t *pf = projected.get(stripe, mut);

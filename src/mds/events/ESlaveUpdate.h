@@ -90,63 +90,58 @@ WRITE_CLASS_ENCODER(rmdir_rollback)
 
 struct rename_rollback {
   struct drec {
-    dirfrag_t dirfrag;
-    utime_t dirfrag_old_mtime;
-    utime_t dirfrag_old_rctime;
-    inodeno_t ino, remote_ino;
-    string dname;
-    char remote_d_type;
-    utime_t old_ctime;
+    inoparent_t dn;
+    inodeno_t ino;
+    char d_type;
+    utime_t mtime;
+    utime_t rctime;
+    utime_t ctime;
     
     void encode(bufferlist &bl) const {
       __u8 struct_v = 1;
       ::encode(struct_v, bl);
-      ::encode(dirfrag, bl);
-      ::encode(dirfrag_old_mtime, bl);
-      ::encode(dirfrag_old_rctime, bl);
+      ::encode(dn, bl);
       ::encode(ino, bl);
-      ::encode(remote_ino, bl);
-      ::encode(dname, bl);
-      ::encode(remote_d_type, bl);
-      ::encode(old_ctime, bl);
+      ::encode(d_type, bl);
+      ::encode(mtime, bl);
+      ::encode(rctime, bl);
+      ::encode(ctime, bl);
     }
     void decode(bufferlist::iterator &bl) {
       __u8 struct_v;
       ::decode(struct_v, bl);
-      ::decode(dirfrag, bl);
-      ::decode(dirfrag_old_mtime, bl);
-      ::decode(dirfrag_old_rctime, bl);
+      ::decode(dn, bl);
       ::decode(ino, bl);
-      ::decode(remote_ino, bl);
-      ::decode(dname, bl);
-      ::decode(remote_d_type, bl);
-      ::decode(old_ctime, bl);
+      ::decode(d_type, bl);
+      ::decode(mtime, bl);
+      ::decode(rctime, bl);
+      ::decode(ctime, bl);
     }
   };
   WRITE_CLASS_MEMBER_ENCODER(drec)
 
   metareqid_t reqid;
-  drec orig_src, orig_dest;
-  drec stray; // we know this is null, but we want dname, old mtime/rctime
+  drec src, dest;
   utime_t ctime;
+  vector<stripeid_t> stripes;
 
   void encode(bufferlist &bl) const {
     __u8 struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(reqid, bl);
-    encode(orig_src, bl);
-    encode(orig_dest, bl);
-    encode(stray, bl);
+    encode(src, bl);
+    encode(dest, bl);
     ::encode(ctime, bl);
+    ::encode(stripes, bl);
  }
   void decode(bufferlist::iterator &bl) {
     __u8 struct_v;
     ::decode(struct_v, bl);
     ::decode(reqid, bl);
-    decode(orig_src, bl);
-    decode(orig_dest, bl);
-    decode(stray, bl);
+    decode(src, bl);
+    decode(dest, bl);
     ::decode(ctime, bl);
+    ::decode(stripes, bl);
   }
 };
 WRITE_CLASS_ENCODER(rename_rollback)
@@ -155,7 +150,7 @@ WRITE_CLASS_ENCODER(rename_rollback)
 struct mkdir_rollback {
   metareqid_t reqid;
   inodeno_t ino;
-  set<stripeid_t> stripes;
+  vector<stripeid_t> stripes;
 
   void encode(bufferlist &bl) const {
     __u8 struct_v = 1;

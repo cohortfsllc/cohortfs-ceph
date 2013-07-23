@@ -520,8 +520,8 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
           // TODO: track unlinked
         } else if (dnl->is_primary())
           assert(d->ino == dnl->get_inode()->ino());
-        else
-          assert(d->ino == dnl->get_remote_ino());
+        else if (d->ino != dnl->get_remote_ino())
+          dnl->set_remote(d->ino, d->d_type);
       }
     }
   }

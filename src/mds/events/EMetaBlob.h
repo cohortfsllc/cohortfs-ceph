@@ -76,8 +76,8 @@ class EMetaBlob {
     // initialize/overwrite the encoded contents
     void encode(inode_t &i, const pair<int, int> &iauth,
                 const vector<int> &sauth, const map<string,bufferptr> &xa,
-                const string &sym, bool dr, inoparent_t *ap = NULL,
-                inoparent_t *rp = NULL, default_file_layout *defl = NULL,
+                const string &sym, bool dr, const inoparent_t *ap = NULL,
+                const inoparent_t *rp = NULL, default_file_layout *defl = NULL,
                 old_inodes_t *oi = NULL)
     {
       _enc = bufferlist(1024);
@@ -488,8 +488,8 @@ class EMetaBlob {
   }
  
   void add_inode(CInode *in, bool dirty = false,
-                 inoparent_t *added_parent = NULL,
-                 inoparent_t *removed_parent = NULL) {
+                 const inoparent_t *added_parent = NULL,
+                 const inoparent_t *removed_parent = NULL) {
     // make note of where this inode was last journaled
     in->last_journaled = my_offset;
 
