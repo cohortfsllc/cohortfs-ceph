@@ -961,8 +961,8 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
           // TODO: track unlinked
         } else if (dnl->is_primary())
           assert(d->ino == dnl->get_inode()->ino());
-        else
-          assert(d->ino == dnl->get_remote_ino());
+        else if (d->ino != dnl->get_remote_ino())
+          dnl->set_remote(d->ino, d->d_type);
       }
     }
   }
@@ -1730,41 +1730,35 @@ void rmdir_rollback::generate_test_instances(list<rmdir_rollback*>& ls)
 
 void rename_rollback::drec::encode(bufferlist &bl) const
 {
-  ENCODE_START(2, 2, bl);
-  ::encode(dirfrag, bl);
-  ::encode(dirfrag_old_mtime, bl);
-  ::encode(dirfrag_old_rctime, bl);
+  ENCODE_START(3, 3, bl);
+  ::encode(dn, bl);
   ::encode(ino, bl);
-  ::encode(remote_ino, bl);
-  ::encode(dname, bl);
-  ::encode(remote_d_type, bl);
-  ::encode(old_ctime, bl);
+  ::encode(d_type, bl);
+  ::encode(mtime, bl);
+  ::encode(rctime, bl);
+  ::encode(ctime, bl);
   ENCODE_FINISH(bl);
 }
 
 void rename_rollback::drec::decode(bufferlist::iterator &bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  ::decode(dirfrag, bl);
-  ::decode(dirfrag_old_mtime, bl);
-  ::decode(dirfrag_old_rctime, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, bl);
+  ::decode(dn, bl);
   ::decode(ino, bl);
-  ::decode(remote_ino, bl);
-  ::decode(dname, bl);
-  ::decode(remote_d_type, bl);
-  ::decode(old_ctime, bl);
+  ::decode(d_type, bl);
+  ::decode(mtime, bl);
+  ::decode(rctime, bl);
+  ::decode(ctime, bl);
   DECODE_FINISH(bl);
 }
 
 void rename_rollback::drec::dump(Formatter *f) const
 {
-  f->dump_stream("directory fragment") << dirfrag;
-  f->dump_stream("directory old mtime") << dirfrag_old_mtime;
-  f->dump_stream("directory old rctime") << dirfrag_old_rctime;
-  f->dump_int("ino", ino);
-  f->dump_int("remote ino", remote_ino);
-  f->dump_string("dname", dname);
-  uint32_t type = DTTOIF(remote_d_type) & S_IFMT; // convert to type entries
+  f->open_object_section("parent");
+  dn.dump(f);
+  f->close_section();
+  f->dump_stream("ino") << ino;
+  uint32_t type = DTTOIF(d_type) & S_IFMT; // convert to type entries
   string type_string;
   switch(type) {
   case S_IFREG:
@@ -1776,35 +1770,37 @@ void rename_rollback::drec::dump(Formatter *f) const
   default:
     type_string = "UNKNOWN-" + stringify((int)type); break;
   }
-  f->dump_string("remote dtype", type_string);
-  f->dump_stream("old ctime") << old_ctime;
+  f->dump_string("dtype", type_string);
+  f->dump_stream("mtime") << mtime;
+  f->dump_stream("rctime") << rctime;
+  f->dump_stream("ctime") << ctime;
 }
 
 void rename_rollback::drec::generate_test_instances(list<drec*>& ls)
 {
   ls.push_back(new drec());
-  ls.back()->remote_d_type = IFTODT(S_IFREG);
+  ls.back()->d_type = IFTODT(S_IFREG);
 }
 
 void rename_rollback::encode(bufferlist &bl) const
 {
-  ENCODE_START(2, 2, bl);
+  ENCODE_START(3, 3, bl);
   ::encode(reqid, bl);
-  encode(orig_src, bl);
-  encode(orig_dest, bl);
-  encode(stray, bl);
+  encode(src, bl);
+  encode(dest, bl);
   ::encode(ctime, bl);
+  ::encode(stripes, bl);
   ENCODE_FINISH(bl);
 }
 
 void rename_rollback::decode(bufferlist::iterator &bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, bl);
   ::decode(reqid, bl);
-  decode(orig_src, bl);
-  decode(orig_dest, bl);
-  decode(stray, bl);
+  decode(src, bl);
+  decode(dest, bl);
   ::decode(ctime, bl);
+  ::decode(stripes, bl);
   DECODE_FINISH(bl);
 }
 
@@ -1812,23 +1808,18 @@ void rename_rollback::dump(Formatter *f) const
 {
   f->dump_stream("request id") << reqid;
   f->open_object_section("original src drec");
-  orig_src.dump(f);
+  src.dump(f);
   f->close_section(); // original src drec
   f->open_object_section("original dest drec");
-  orig_dest.dump(f);
+  dest.dump(f);
   f->close_section(); // original dest drec
-  f->open_object_section("stray drec");
-  stray.dump(f);
-  f->close_section(); // stray drec
   f->dump_stream("ctime") << ctime;
+  f->dump_stream("stripes") << stripes;
 }
 
 void rename_rollback::generate_test_instances(list<rename_rollback*>& ls)
 {
   ls.push_back(new rename_rollback());
-  ls.back()->orig_src.remote_d_type = IFTODT(S_IFREG);
-  ls.back()->orig_dest.remote_d_type = IFTODT(S_IFREG);
-  ls.back()->stray.remote_d_type = IFTODT(S_IFREG);
 }
 
 void ESlaveUpdate::encode(bufferlist &bl) const
