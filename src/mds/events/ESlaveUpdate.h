@@ -49,9 +49,10 @@ WRITE_CLASS_ENCODER(link_rollback)
  */
 struct rmdir_rollback {
   metareqid_t reqid;
-  dirfrag_t dir;
-  string dname;
-  inodeno_t ino;
+  inoparent_t dn;
+  inodeno_t ino; // ino unlinked
+  int d_type;
+  vector<stripeid_t> stripes; // stripes removed
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
