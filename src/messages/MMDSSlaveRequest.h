@@ -46,9 +46,6 @@ class MMDSSlaveRequest : public Message {
 
   static const int OP_DROPLOCKS	= 11;
 
-  static const int OP_RENAMENOTIFY = 12;
-  static const int OP_RENAMENOTIFYACK = -12;
-
   static const int OP_FINISH = 17;  
   static const int OP_COMMITTED = -18;  
 
@@ -86,9 +83,6 @@ class MMDSSlaveRequest : public Message {
 
     case OP_DROPLOCKS: return "drop_locks";
 
-    case OP_RENAMENOTIFY: return "reame_notify";
-    case OP_RENAMENOTIFYACK: return "rename_notify_ack";
-
     case OP_ABORT: return "abort";
       //case OP_COMMIT: return "commit";
 
@@ -109,15 +103,19 @@ class MMDSSlaveRequest : public Message {
   vector<MDSCacheObjectInfo> authpins;
 
  public:
+  filepath path;
+
   // for rename prep
-  filepath srcdnpath;
-  filepath destdnpath;
-  set<__s32> witnesses;
-  bufferlist inode_export;
-  version_t inode_export_v;
-  bufferlist srci_replica;
+  struct {
+    inoparent_t dn;
+    inodeno_t ino;
+    int d_type;
+  } src, dest;
   utime_t now;
-  set<stripeid_t> stripes; // for mkdir
+
+  // mkdir
+  bufferlist srci_replica;
+  vector<stripeid_t> stripes;
 
   bufferlist stray;  // stray dir + dentry
 
@@ -152,12 +150,14 @@ public:
     ::encode(lock_type, payload);
     ::encode(object_info, payload);
     ::encode(authpins, payload);
-    ::encode(srcdnpath, payload);
-    ::encode(destdnpath, payload);
-    ::encode(witnesses, payload);
+    ::encode(path, payload);
+    ::encode(src.dn, payload);
+    ::encode(src.ino, payload);
+    ::encode(src.d_type, payload);
+    ::encode(dest.dn, payload);
+    ::encode(dest.ino, payload);
+    ::encode(dest.d_type, payload);
     ::encode(now, payload);
-    ::encode(inode_export, payload);
-    ::encode(inode_export_v, payload);
     ::encode(srci_replica, payload);
     ::encode(stripes, payload);
     ::encode(stray, payload);
@@ -170,12 +170,14 @@ public:
     ::decode(lock_type, p);
     ::decode(object_info, p);
     ::decode(authpins, p);
-    ::decode(srcdnpath, p);
-    ::decode(destdnpath, p);
-    ::decode(witnesses, p);
+    ::decode(path, p);
+    ::decode(src.dn, p);
+    ::decode(src.ino, p);
+    ::decode(src.d_type, p);
+    ::decode(dest.dn, p);
+    ::decode(dest.ino, p);
+    ::decode(dest.d_type, p);
     ::decode(now, p);
-    ::decode(inode_export, p);
-    ::decode(inode_export_v, p);
     ::decode(srci_replica, p);
     ::decode(stripes, p);
     ::decode(stray, p);

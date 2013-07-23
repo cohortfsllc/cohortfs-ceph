@@ -62,15 +62,14 @@ WRITE_CLASS_ENCODER(rmdir_rollback)
 
 struct rename_rollback {
   struct drec {
-    dirfrag_t dirfrag;
-    utime_t dirfrag_old_mtime;
-    utime_t dirfrag_old_rctime;
-    inodeno_t ino, remote_ino;
-    string dname;
-    char remote_d_type;
-    utime_t old_ctime;
+    inoparent_t dn;
+    inodeno_t ino;
+    char d_type;
+    utime_t mtime;
+    utime_t rctime;
+    utime_t ctime;
     
-    drec() : remote_d_type((char)S_IFREG) {}
+    drec() : d_type((char)S_IFREG) {}
 
     void encode(bufferlist& bl) const;
     void decode(bufferlist::iterator& bl);
@@ -80,9 +79,9 @@ struct rename_rollback {
   WRITE_CLASS_MEMBER_ENCODER(drec)
 
   metareqid_t reqid;
-  drec orig_src, orig_dest;
-  drec stray; // we know this is null, but we want dname, old mtime/rctime
+  drec src, dest;
   utime_t ctime;
+  vector<stripeid_t> stripes;
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
@@ -95,7 +94,7 @@ WRITE_CLASS_ENCODER(rename_rollback)
 struct mkdir_rollback {
   metareqid_t reqid;
   inodeno_t ino;
-  set<stripeid_t> stripes;
+  vector<stripeid_t> stripes;
 
   void encode(bufferlist &bl) const {
     __u8 struct_v = 1;
