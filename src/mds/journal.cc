@@ -437,6 +437,8 @@ void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls)
   }
   if (is_new())
     stripe->mark_new(ls);
+  if (is_unlinked())
+    stripe->state_set(CStripe::STATE_UNLINKED);
   stripe->set_fragtree(dirfragtree);
   stripe->force_dirfrags();
   dout(10) << "EMetaBlob updated stripe " << *stripe << dendl;

@@ -121,6 +121,7 @@ ostream& operator<<(ostream& out, CStripe &s)
   if (s.state_test(CStripe::STATE_FREEZING)) out << " FREEZING";
   if (s.state_test(CStripe::STATE_FROZEN)) out << " FROZEN";
   if (s.state_test(CStripe::STATE_COMMITTING)) out << " COMMITTING";
+  if (s.state_test(CStripe::STATE_UNLINKED)) out << " UNLINKED";
 
   if (s.is_rep()) out << " REP";
 

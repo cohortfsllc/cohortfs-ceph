@@ -5273,6 +5273,14 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
       }
     }
     assert(curstripe);
+    if (!curstripe->is_open()) {
+      curstripe->fetch(_get_waiter(mdr, req, fin));
+      return 1;
+    }
+    if (curstripe->state_test(CStripe::STATE_UNLINKED)) {
+      dout(7) << "traverse: " << *curstripe << " was unlinked" << dendl;
+      return -ENOENT;
+    }
 
     // open dir
     frag_t fg = curstripe->pick_dirfrag(dnhash);
