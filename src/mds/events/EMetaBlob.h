@@ -225,6 +225,7 @@ class EMetaBlob {
     static const int STATE_OPEN =   (1<<0);
     static const int STATE_DIRTY =  (1<<1);
     static const int STATE_NEW =    (1<<2);
+    static const int STATE_UNLINKED = (1<<3);
 
     dir_map dirs;
 
@@ -261,6 +262,8 @@ class EMetaBlob {
     void mark_dirty() { state |= STATE_DIRTY; }
     bool is_new() const { return state & STATE_NEW; }
     void mark_new() { state |= STATE_NEW; }
+    bool is_unlinked() const { return state & STATE_UNLINKED; }
+    void mark_unlinked() { state |= STATE_UNLINKED; }
 
     string state_string() const {
       string state_string;
@@ -273,8 +276,12 @@ class EMetaBlob {
 	state_string.append(marked_already ? "+dirty" : "dirty");
 	marked_already = true;
       }
-      if (is_new())
+      if (is_new()) {
 	state_string.append(marked_already ? "+new" : "new");
+	marked_already = true;
+      }
+      if (is_unlinked())
+	state_string.append(marked_already ? "+unlinked" : "unlinked");
       return state_string;
     }
 
@@ -434,18 +441,20 @@ class EMetaBlob {
     return s.add_dir(dir->get_frag(), dir->get_version(), true, true, true);
   }
 
-  Stripe& add_stripe(CStripe *stripe, bool dirty, bool isnew=false) {
+  Stripe& add_stripe(CStripe *stripe, bool dirty, bool isnew=false,
+                     bool unlinked=false) {
     return add_stripe(stripe->dirstripe(),
                       stripe->get_stripe_auth(),
                       stripe->get_fragtree(),
                       stripe->get_projected_fnode(),
                       stripe->get_projected_version(),
-                      stripe->is_open(), dirty, isnew);
+                      stripe->is_open(), dirty, isnew, unlinked);
   }
   Stripe& add_stripe(dirstripe_t ds, const pair<int, int> &auth,
                      const fragtree_t &dft,
                      const fnode_t *pf, version_t pv,
-                     bool open, bool dirty, bool isnew=false) {
+                     bool open, bool dirty, bool isnew=false,
+                     bool unlinked=false) {
     Stripe& s = stripes[ds];
     s.auth = auth;
     s.dirfragtree = dft;
@@ -454,6 +463,7 @@ class EMetaBlob {
     if (open) s.mark_open();
     if (dirty) s.mark_dirty();
     if (isnew) s.mark_new();
+    if (unlinked) s.mark_unlinked();
     return s;
   }
 
