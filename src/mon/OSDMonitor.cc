@@ -24,9 +24,6 @@
 
 #include "osd/PlaceSystem.h"
 
-#include "crush/CrushWrapper.h"
-#include "crush/CrushTester.h"
-
 #include "messages/MOSDFailure.h"
 #include "messages/MOSDMarkMeDown.h"
 #include "messages/MOSDMap.h"

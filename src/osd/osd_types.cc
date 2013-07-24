@@ -15,10 +15,6 @@
 #include "osd_types.h"
 #include "include/ceph_features.h"
 #include "OSDMap.h"
-extern "C" {
-#include "crush/hash.h"
-}
-// #include "pg/PG.h"
 
 // -- osd_reqid_t --
 void osd_reqid_t::encode(bufferlist &bl) const

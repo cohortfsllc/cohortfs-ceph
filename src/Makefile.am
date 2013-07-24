@@ -1341,14 +1341,14 @@ libglobal_la_CXXFLAGS= ${AM_CXXFLAGS}
 libglobal_la_LIBADD= libcommon.la
 noinst_LTLIBRARIES += libglobal.la
 
-crush_files = \
-	crush/builder.c \
-	crush/mapper.c \
-	crush/crush.c \
-	crush/hash.c \
-	crush/CrushWrapper.cc \
-	crush/CrushCompiler.cc \
-	crush/CrushTester.cc
+#crush_files = \
+#	crush/builder.c \
+#	crush/mapper.c \
+#	crush/crush.c \
+#	crush/hash.c \
+#	crush/CrushWrapper.cc \
+#	crush/CrushCompiler.cc \
+#	crush/CrushTester.cc
 
 # this list ommits the ceph_ver.c file
 libcommon_files = \
@@ -1451,8 +1451,8 @@ libcommon_files = \
 	common/ceph_json.cc \
 	common/ipaddr.cc \
 	common/pick_address.cc \
-	include/addr_parsing.c \
-	$(crush_files)
+	include/addr_parsing.c
+#	$(crush_files)
 #	pg/pg_types.cc 
 #	pg/PGOSDMap.cc
 #	pg/PGPlaceSystem.cc
@@ -1721,17 +1721,6 @@ noinst_HEADERS = \
 	common/strtol.h\
 	common/static_assert.h\
 	common/AsyncReserver.h\
-	crush/CrushCompiler.h\
-	crush/CrushTester.h\
-        crush/CrushWrapper.h\
-        crush/CrushWrapper.i\
-        crush/builder.h\
-        crush/crush.h\
-        crush/grammar.h\
-        crush/hash.h\
-        crush/mapper.h\
-        crush/sample.txt\
-        crush/types.h\
 	fetch_config\
 	include/bloom_filter.hpp\
         include/Context.h\
@@ -2151,6 +2140,17 @@ noinst_HEADERS = \
 #        pg/PGOSDMap.h
 #	pg/PGPlaceSystem.h
 #        pg/Watch.h
+#	crush/CrushCompiler.h
+#	crush/CrushTester.h
+#        crush/CrushWrapper.h
+#        crush/CrushWrapper.i
+#        crush/builder.h
+#        crush/crush.h
+#        crush/grammar.h
+#        crush/hash.h
+#        crush/mapper.h
+#        crush/sample.txt
+#        crush/types.h
 
 if ENABLE_COVERAGE
 COV_DIR = $(DESTDIR)$(libdir)/ceph/coverage
