@@ -259,10 +259,9 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
 
 /*
  * Commands handled:
- *     create <name> <crush_map_entry>
+ *     create <name>
  *     remove <uuid> <name> # force user to type both to minimize odds of mistakes
  *     rename <uuid> <name>
- *     recrush <uuid> <crush_map_entry>
  */
 
 bool VolMonitor::prepare_command(MMonCommand *m)
@@ -274,7 +273,6 @@ bool VolMonitor::prepare_command(MMonCommand *m)
   if (m->cmd.size() > 1) {
     if (m->cmd[1] == "create" && m->cmd.size() == 4) {
       const string& name = m->cmd[2];
-      const uint16_t crush_map_entry = (uint16_t) atoi(m->cmd[3].c_str());
       uuid_d uuid;
       string error_message;
 
@@ -282,10 +280,10 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 	ss << error_message;
 	r = -EINVAL;
       } else {
-	r = pending_volmap.create_volume(name, crush_map_entry, uuid);
+	r = pending_volmap.create_volume(name, uuid);
 	if (r == 0) {
 	  ss << "volume " << uuid << " created with name \"" << name << "\"";
-	  pending_inc.include_addition(uuid, name, crush_map_entry);
+	  pending_inc.include_addition(uuid, name);
 	} else if (r == -EEXIST) {
 	  ss << "volume with name \"" << name << "\" already exists";
 	} else {
@@ -337,27 +335,6 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 	  ss << "volume with name \"" << new_name << "\" already exists";
 	} else {
 	  ss << "volume could not be renamed due to error code " << -r;
-	}
-      } else {
-	ss << "provided volume specifier \"" << volspec << "\" does not specify a unique volume";
-	r = -ENOENT;
-      }
-    } else if (m->cmd[1] == "recrush" && m->cmd.size() == 4) {
-      const string& volspec = m->cmd[2];
-      const uint16_t crush_map_entry = (uint16_t) atoi(m->cmd[3].c_str());
-      uuid_d uuid;
-      const bool is_unique = pending_volmap.get_vol_uuid(volspec, uuid);
-      if (is_unique) {
-	VolMap::vol_info_t vinfo;
-	r = pending_volmap.recrush_volume(uuid,
-					  crush_map_entry,
-					  vinfo);
-	if (r == 0) {
-	  pending_inc.include_update(vinfo);
-	  ss << "volume " << uuid << " had crush map entry changed to "
-	     << crush_map_entry;
-	} else if (r == -EINVAL) {
-	  ss << "invalid crush map entry";
 	}
       } else {
 	ss << "provided volume specifier \"" << volspec << "\" does not specify a unique volume";

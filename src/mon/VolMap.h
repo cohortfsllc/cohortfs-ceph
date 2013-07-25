@@ -45,18 +45,16 @@ public:
   struct vol_info_t {
     uuid_d uuid;
     string name;
-    uint16_t crush_map_entry;
 
     vol_info_t()
-      : uuid(), name(""), crush_map_entry(0)
+      : uuid(), name("")
     {
       // empty
     }
 
     vol_info_t(uuid_d puuid,
-	       string pname,
-	       uint16_t pcrush_map_entry)
-      : uuid(puuid), name(pname), crush_map_entry(pcrush_map_entry)
+	       string pname)
+      : uuid(puuid), name(pname)
     {
       // empty
     }
@@ -107,9 +105,8 @@ public:
     }
 
     void include_addition(const uuid_d& uuid,
-			  const string& name,
-			  const uint16_t crush_map_entry) {
-      include_addition(vol_info_t(uuid, name, crush_map_entry));
+			  const string& name) {
+      include_addition(vol_info_t(uuid, name));
     }
 
     void include_removal(const uuid_d &uuid) {
@@ -129,7 +126,7 @@ public:
     void include_update(const uuid_d& uuid,
 			const string& name,
 			const uint16_t crush_map_entry) {
-      include_update(vol_info_t(uuid, name, crush_map_entry));
+      include_update(vol_info_t(uuid, name));
     }
 
     void encode(bufferlist& bl, uint64_t features) const;
@@ -164,15 +161,12 @@ public:
   epoch_t get_epoch() const { return epoch; }
   void inc_epoch() { epoch++; }
 
-  int create_volume(const string& name, uint16_t crush_map_entry, uuid_d &out);
-  int add_volume(uuid_d uuid, string name, uint16_t crush_map_entry);
+  int create_volume(const string& name, uuid_d &out);
+  int add_volume(uuid_d uuid, string name);
   int remove_volume(uuid_d uuid, const string& name_verifier = EMPTY_STRING);
   int rename_volume(uuid_d uuid, const string& name,
 		    vol_info_t& out_vinfo);
-  int recrush_volume(uuid_d uuid, uint16_t crush_map_entry,
-		     vol_info_t& out_vinfo);
-  int update_volume(uuid_d uuid, string name, uint16_t crush_map_entry,
-		    vol_info_t& out_vinfo);
+  int update_volume(uuid_d uuid, string name, vol_info_t& out_vinfo);
 
   void apply_incremental(CephContext *cct, const VolMap::Incremental& inc);
 
@@ -262,14 +256,8 @@ inline ostream& operator<<(ostream& out, const VolMap& m) {
 }
 
 inline ostream& operator<<(ostream& out, const VolMap::vol_info_t& vol_info) {
-#if 0
-  out << "vol u:" << vol_info.uuid << " cm: " << vol_info.crush_map_entry
-      << " n:" << vol_info.name;
-#else
   out << vol_info.uuid
-      << " " << setw(4) << right << vol_info.crush_map_entry 
-      << " " << vol_info.name;
-#endif
+      << " " << setw(4) << right << " " << vol_info.name;
   return out;
 }
 
