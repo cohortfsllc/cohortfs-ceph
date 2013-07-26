@@ -214,7 +214,7 @@ protected:
 
  public:
   friend class OSDMonitor;
-  friend class PGOSDMonitor;
+  friend class CohortOSDMonitor;
   friend class PGMonitor;
   friend class MDS;
 
@@ -239,7 +239,6 @@ protected:
 			  const object_t& oid,
 			  const ceph_file_layout* layout) = 0;
 
-  virtual int get_pool_replication(int64_t pool) = 0;
   virtual int get_file_stripe_address(vector<ObjectExtent>& extents,
 				      vector<entity_addr_t>& address) = 0;
 

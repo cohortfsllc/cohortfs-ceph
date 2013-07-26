@@ -9,7 +9,6 @@
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software 
  * Foundation.  See file COPYING.
- * 
  */
 
 /* Object Store Device (OSD) Monitor
@@ -20,7 +19,7 @@
 
 #include <map>
 #include <set>
-#include <memory>
+#include <tr1/memory>
 
 using namespace std;
 
@@ -117,13 +116,13 @@ struct failure_info_t {
 
 class OSDMonitor : public PaxosService {
 public:
-  auto_ptr<OSDMap> osdmap;
+  std::tr1::shared_ptr<OSDMap> osdmap;
 
 protected:
   map<epoch_t, list<PaxosServiceMessage*> > waiting_for_map;
 
   // [leader]
-  auto_ptr<OSDMap::Incremental> pending_inc;
+  std::tr1::shared_ptr<OSDMap::Incremental> pending_inc;
   map<int, failure_info_t> failure_info;
   map<int,utime_t> down_pending_out;  // osd down -> out
 

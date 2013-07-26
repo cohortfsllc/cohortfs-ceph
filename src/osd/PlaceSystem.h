@@ -90,7 +90,7 @@ public:
 
 class OSDMapPlaceSystem : public PlaceSystemBase<OSDMapPlaceSystem> {
 public:
-  
+
   OSDMapPlaceSystem(const std::string& name, const __u16 identifier) :
     PlaceSystemBase(name, identifier)
   {

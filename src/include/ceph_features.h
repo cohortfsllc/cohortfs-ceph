@@ -37,6 +37,7 @@
 #define CEPH_FEATURE_OSDHASHPSPOOL  (1<<30)
 #define CEPH_FEATURE_MON_SINGLE_PAXOS (1<<31)
 #define CEPH_FEATURE_OSD_SNAPMAPPER (1LL<<32)
+#define CEPH_FEATURE_COHORT (1LL<<33)
 
 /*
  * Features supported.  Should be everything above.
