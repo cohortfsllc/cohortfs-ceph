@@ -760,20 +760,15 @@ bool PGOSDMap::crush_ruleset_in_use(int ruleset) const
 
 
 void PGOSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
-			    int nosd, int pg_bits, int pgp_bits)
+			    int nosd)
 {
   ldout(cct, 10) << "build_simple on " << num_osd
-		 << " osds with " << pg_bits << " pg bits per osd, "
-		 << dendl;
+		 << " osds" << dendl;
   epoch = e;
   set_fsid(fsid);
   created = modified = ceph_clock_now(cct);
 
   set_max_osd(nosd);
-
-  // pgp_num <= pg_num
-  if (pgp_bits > pg_bits)
-    pgp_bits = pg_bits;
 
   // crush map
   map<int, const char*> rulesets;
@@ -793,8 +788,6 @@ void PGOSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
     pools[pool].min_size = cct->_conf->get_osd_pool_default_min_size();
     pools[pool].crush_ruleset = p->first;
     pools[pool].object_hash = CEPH_STR_HASH_RJENKINS;
-    pools[pool].set_pg_num(poolbase << pg_bits);
-    pools[pool].set_pgp_num(poolbase << pgp_bits);
     pools[pool].last_change = epoch;
     if (p->first == CEPH_DATA_RULE)
       pools[pool].crash_replay_interval = cct->_conf->osd_default_data_pool_replay_window;
@@ -861,12 +854,9 @@ void PGOSDMap::build_simple_crush_map(CephContext *cct, CrushWrapper& crush,
   crush.finalize();
 }
 
-int PGOSDMap::build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid,
-				     int pg_bits, int pgp_bits)
+int PGOSDMap::build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid)
 {
-  ldout(cct, 10) << "build_simple_from_conf with "
-		 << pg_bits << " pg bits per osd, "
-		 << dendl;
+  ldout(cct, 10) << "build_simple_from_conf" << dendl;
   epoch = e;
   set_fsid(fsid);
   created = modified = ceph_clock_now(cct);
@@ -899,10 +889,6 @@ int PGOSDMap::build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid,
 
   set_max_osd(maxosd + 1);
 
-  // pgp_num <= pg_num
-  if (pgp_bits > pg_bits)
-    pgp_bits = pg_bits;
-
   // crush map
   map<int, const char*> rulesets;
   rulesets[CEPH_DATA_RULE] = "data";
@@ -919,8 +905,6 @@ int PGOSDMap::build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid,
     pools[pool].min_size = cct->_conf->get_osd_pool_default_min_size();
     pools[pool].crush_ruleset = p->first;
     pools[pool].object_hash = CEPH_STR_HASH_RJENKINS;
-    pools[pool].set_pg_num((numosd + 1) << pg_bits);
-    pools[pool].set_pgp_num((numosd + 1) << pgp_bits);
     pools[pool].last_change = epoch;
     if (p->first == CEPH_DATA_RULE)
       pools[pool].crash_replay_interval = cct->_conf->osd_default_data_pool_replay_window;

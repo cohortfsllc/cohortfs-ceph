@@ -31,7 +31,7 @@ using namespace std;
 
 void usage()
 {
-  cout << " usage: [--print] [--createsimple <numosd> [--clobber] [--pg_bits <bitsperosd>]] <mapfilename>" << std::endl;
+  cout << " usage: [--print] [--createsimple <numosd> [--clobber] ] <mapfilename>" << std::endl;
   cout << "   --export-crush <file>   write osdmap's crush map to <file>" << std::endl;
   cout << "   --import-crush <file>   replace osdmap's crush map with <file>" << std::endl;
   cout << "   --test-map-pg <pgid>    map a pgid to osds" << std::endl;
@@ -59,8 +59,6 @@ int main(int argc, const char **argv)
   bool createsimple = false;
   bool create_from_conf = false;
   int num_osd = 0;
-  int pg_bits = g_conf->osd_pg_bits;
-  int pgp_bits = g_conf->osd_pgp_bits;
   bool clobber = false;
   bool modified = false;
   std::string export_crush, import_crush, test_map_pg, test_map_object;
@@ -92,16 +90,6 @@ int main(int argc, const char **argv)
       create_from_conf = true;
     } else if (ceph_argparse_flag(args, i, "--clobber", (char*)NULL)) {
       clobber = true;
-    } else if (ceph_argparse_withint(args, i, &pg_bits, &err, "--pg_bits", (char*)NULL)) {
-      if (!err.str().empty()) {
-	cerr << err.str() << std::endl;
-	exit(EXIT_FAILURE);
-      }
-    } else if (ceph_argparse_withint(args, i, &pgp_bits, &err, "--pgp_bits", (char*)NULL)) {
-      if (!err.str().empty()) {
-	cerr << err.str() << std::endl;
-	exit(EXIT_FAILURE);
-      }
     } else if (ceph_argparse_witharg(args, i, &val, "--export_crush", (char*)NULL)) {
       export_crush = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--import_crush", (char*)NULL)) {
@@ -189,13 +177,13 @@ int main(int argc, const char **argv)
     }
     uuid_d fsid;
     memset(&fsid, 0, sizeof(uuid_d));
-    osdmap.build_simple(g_ceph_context, 0, fsid, num_osd, pg_bits, pgp_bits);
+    osdmap.build_simple(g_ceph_context, 0, fsid, num_osd);
     modified = true;
   }
   if (create_from_conf) {
     uuid_d fsid;
     memset(&fsid, 0, sizeof(uuid_d));
-    int r = osdmap.build_simple_from_conf(g_ceph_context, 0, fsid, pg_bits, pgp_bits);
+    int r = osdmap.build_simple_from_conf(g_ceph_context, 0, fsid);
     if (r < 0)
       return -1;
     modified = true;

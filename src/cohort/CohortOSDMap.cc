@@ -81,13 +81,12 @@ int CohortOSDMap::apply_incremental_subclass(
 }
 
 void CohortOSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
-				int num_osd, int pg_bits, int pgp_bits)
+				int num_osd)
 {
 }
 
 int CohortOSDMap::build_simple_from_conf(CephContext *cct, epoch_t e,
-					 uuid_d &fsid, int pg_bits,
-					 int pgp_bits)
+					 uuid_d &fsid)
 {
   return 0;
 }

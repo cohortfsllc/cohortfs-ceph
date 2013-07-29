@@ -232,9 +232,9 @@ protected:
 
   virtual Incremental* newIncremental() const = 0;
   virtual void build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
-			    int num_osd, int pg_bits, int pgp_bits) = 0;
-  virtual int build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid,
-				     int pg_bits, int pgp_bits) = 0;
+			    int num_osd) = 0;
+  virtual int build_simple_from_conf(CephContext *cct, epoch_t e,
+				     uuid_d &fsid) = 0;
   virtual int get_oid_osd(const Objecter* objecter,
 			  const object_t& oid,
 			  const ceph_file_layout* layout) = 0;
