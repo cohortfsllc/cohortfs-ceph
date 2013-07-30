@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #include <iostream>
 #include <iomanip>
@@ -34,53 +35,82 @@ using namespace __gnu_cxx;
 #define MAX_CEPH_OBJECT_NAME_LEN 4096
 
 struct object_t {
+  uuid_d volume;
   string name;
 
   object_t() {}
-  object_t(const char *s) : name(s) {}
-  object_t(const string& s) : name(s) {}
+  object_t(uuid_d v, const char *s) : volume(v), name(s) {}
+  object_t(uuid_d v, const string& s) : volume(v), name(s) {}
 
   void swap(object_t& o) {
     name.swap(o.name);
+    std::swap(o.volume, volume);
   }
   void clear() {
+    volume.clear();
     name.clear();
   }
-  
+
   void encode(bufferlist &bl) const {
+    ::encode(volume, bl);
     ::encode(name, bl);
   }
   void decode(bufferlist::iterator &bl) {
+    ::decode(volume, bl);
     ::decode(name, bl);
   }
 };
 WRITE_CLASS_ENCODER(object_t)
 
 inline bool operator==(const object_t& l, const object_t& r) {
-  return l.name == r.name;
+  return ((l.volume == r.volume) && (l.name == r.name));
 }
 inline bool operator!=(const object_t& l, const object_t& r) {
-  return l.name != r.name;
+  return ((l.volume != r.volume) || (l.name != r.name));
 }
 inline bool operator>(const object_t& l, const object_t& r) {
-  return l.name > r.name;
+  if (l.volume > r.volume) {
+    return true;
+  } else if (l.volume < r.volume) {
+    return false;
+  } else {
+    return l.name > r.name;
+  }
 }
 inline bool operator<(const object_t& l, const object_t& r) {
-  return l.name < r.name;
+  if (l.volume < r.volume) {
+    return true;
+  } else if (l.volume > r.volume) {
+    return false;
+  } else {
+    return l.name < r.name;
+  }
 }
-inline bool operator>=(const object_t& l, const object_t& r) { 
-  return l.name >= r.name;
+inline bool operator>=(const object_t& l, const object_t& r) {
+  if (l.volume > r.volume) {
+    return true;
+  } else if (l.volume < r.volume) {
+    return false;
+  } else {
+    return l.name >= r.name;
+  }
 }
 inline bool operator<=(const object_t& l, const object_t& r) {
-  return l.name <= r.name;
+  if (l.volume < r.volume) {
+    return true;
+  } else if (l.volume > r.volume) {
+    return false;
+  } else {
+    return l.name <= r.name;
+  }
 }
 inline ostream& operator<<(ostream& out, const object_t& o) {
-  return out << o.name;
+  return out << o.volume << ":" << o.name;
 }
 
 namespace __gnu_cxx {
   template<> struct hash<object_t> {
-    size_t operator()(const object_t& r) const { 
+    size_t operator()(const object_t& r) const {
       //static hash<string> H;
       //return H(r.name);
       return ceph_str_hash_linux(r.name.c_str(), r.name.length());
@@ -88,23 +118,24 @@ namespace __gnu_cxx {
   };
 }
 
-
 struct file_object_t {
+  uuid_d vol;
   uint64_t ino, bno;
-  mutable char buf[33];
+  mutable char buf[51];
 
-  file_object_t(uint64_t i=0, uint64_t b=0) : ino(i), bno(b) {
+  file_object_t(uuid_d v = 0, uint64_t i = 0, uint64_t b = 0) :
+    vol(v), ino(i), bno(b) {
     buf[0] = 0;
   }
-  
+
   const char *c_str() const {
     if (!buf[0])
-      sprintf(buf, "%llx.%08llx", (long long unsigned)ino, (long long unsigned)bno);
+      sprintf(buf, "%"PRIx64".%08"PRIx64, ino, bno);
     return buf;
   }
 
   operator object_t() {
-    return object_t(c_str());
+    return object_t(vol, c_str());
   }
 };
 

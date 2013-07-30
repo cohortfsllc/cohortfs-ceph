@@ -127,8 +127,8 @@ int LFNIndex::lookup(const hobject_t &hoid,
   );
 }
 
-int LFNIndex::collection_list(vector<hobject_t> *ls) {
-  return _collection_list(ls);
+int LFNIndex::collection_list(const uuid_d &vol, vector<hobject_t> *ls) {
+  return _collection_list(vol, ls);
 }
 
 
@@ -919,7 +919,6 @@ static bool append_unescaped(string::const_iterator begin,
 bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
 					      hobject_t *out) {
   string name;
-  string key;
   uint32_t hash;
   snapid_t snap;
 
@@ -950,8 +949,6 @@ bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
   for ( ; end != long_name.end() && *end != '_'; ++end) ;
   if (end == long_name.end())
     return false;
-  if (!append_unescaped(current, end, &key))
-    return false;
 
   current = ++end;
   for ( ; end != long_name.end() && *end != '_'; ++end) ;
@@ -974,7 +971,7 @@ bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
   sscanf(hash_str.c_str(), "%X", &hash);
 
 
-  (*out) = hobject_t(name, key, snap, hash);
+  (*out) = hobject_t(object_t(0, name), snap, hash);
   return true;
 }
 
@@ -1054,7 +1051,7 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, hobject_t *out) {
     snap = strtoull(snap_str.c_str(), NULL, 16);
   sscanf(hash_str.c_str(), "%X", &hash);
 
-  (*out) = hobject_t(name, key, snap, hash);
+  (*out) = hobject_t(object_t(0, name), snap, hash);
   out->nspace = ns;
   return true;
 }

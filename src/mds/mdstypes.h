@@ -308,6 +308,7 @@ inline bool operator==(const client_writeable_range_t& l,
  */
 struct inode_t {
   // base (immutable)
+  uuid_d    volume;
   inodeno_t ino;
   uint32_t   rdev;    // if special file
 
@@ -349,7 +350,7 @@ struct inode_t {
 
   version_t backtrace_version;
 
-  inode_t() : ino(0), rdev(0),
+  inode_t() : volume(), ino(0), rdev(0),
 	      mode(0), uid(0), gid(0),
 	      nlink(0), anchored(false),
 	      size(0), truncate_seq(0), truncate_size(0), truncate_from(0),

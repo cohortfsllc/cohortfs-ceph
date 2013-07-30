@@ -918,12 +918,14 @@ int md_config_t::set_val_raw(const char *val, const config_option *opt)
       }
       return 0;
     }
-    case OPT_UUID: {
-      uuid_d *u = (uuid_d*)opt->conf_ptr(this);
-      if (!u->parse(val))
+    case OPT_UUID:
+      try {
+	uuid_d *u = (uuid_d*)opt->conf_ptr(this);
+	*u = uuid_d::parse(val);
+	return 0;
+      } catch (const std::invalid_argument &ia) {
 	return -EINVAL;
-      return 0;
-    }
+      }
   }
   return -ENOSYS;
 }

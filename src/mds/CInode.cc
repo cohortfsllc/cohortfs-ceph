@@ -881,8 +881,10 @@ struct C_Inode_Stored : public Context {
 object_t CInode::get_object_name(inodeno_t ino, frag_t fg, const char *suffix)
 {
   char n[60];
-  snprintf(n, sizeof(n), "%llx.%08llx%s", (long long unsigned)ino, (long long unsigned)fg, suffix ? suffix : "");
-  return object_t(n);
+  snprintf(n, sizeof(n), "%"PRIx64".%08"PRIx64"%s", (uint64_t)ino,
+	   (uint64_t)fg,
+	   suffix ? suffix : "");
+  return object_t(0, n);
 }
 
 void CInode::store(Context *fin)
@@ -902,9 +904,8 @@ void CInode::store(Context *fin)
   m.write_full(bl);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
-  object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pool());
 
-  mdcache->mds->objecter->mutate(oid, oloc, m, snapc, ceph_clock_now(g_ceph_context), 0,
+  mdcache->mds->objecter->mutate(oid, m, snapc, ceph_clock_now(g_ceph_context), 0,
 				 NULL, new C_Inode_Stored(this, get_version(), fin) );
 }
 
@@ -936,16 +937,15 @@ void CInode::fetch(Context *fin)
   C_GatherBuilder gather(g_ceph_context, c);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), "");
-  object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pool());
 
   ObjectOperation rd;
   rd.getxattr("inode", &c->bl, NULL);
 
-  mdcache->mds->objecter->read(oid, oloc, rd, CEPH_NOSNAP, (bufferlist*)NULL, 0, gather.new_sub());
+  mdcache->mds->objecter->read(oid, rd, CEPH_NOSNAP, (bufferlist*)NULL, 0, gather.new_sub());
 
   // read from separate object too
   object_t oid2 = CInode::get_object_name(ino(), frag_t(), ".inode");
-  mdcache->mds->objecter->read(oid2, oloc, 0, 0, CEPH_NOSNAP, &c->bl2, 0, gather.new_sub());
+  mdcache->mds->objecter->read(oid2, 0, 0, CEPH_NOSNAP, &c->bl2, 0, gather.new_sub());
 
   gather.activate();
 }
@@ -1033,35 +1033,23 @@ void CInode::store_backtrace(Context *fin)
 
   SnapContext snapc;
   object_t oid = get_object_name(ino(), frag_t(), "");
-  object_locator_t oloc(pool);
   Context *fin2 = new C_Inode_StoredBacktrace(this, inode.backtrace_version, fin);
 
   if (!state_test(STATE_DIRTYPOOL)) {
-    mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
+    mdcache->mds->objecter->mutate(oid, op, snapc, ceph_clock_now(g_ceph_context),
 				   0, NULL, fin2);
     return;
   }
 
   C_GatherBuilder gather(g_ceph_context, fin2);
-  mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
+  mdcache->mds->objecter->mutate(oid, op, snapc, ceph_clock_now(g_ceph_context),
 				 0, NULL, gather.new_sub());
 
-  set<int64_t> old_pools;
-  for (vector<int64_t>::iterator p = inode.old_pools.begin();
-      p != inode.old_pools.end();
-      ++p) {
-    if (*p == pool || old_pools.count(*p))
-      continue;
+  op.create(false);
+  op.setxattr("parent", bl);
 
-    ObjectOperation op;
-    op.create(false);
-    op.setxattr("parent", bl);
-
-    object_locator_t oloc(*p);
-    mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
-				   0, NULL, gather.new_sub());
-    old_pools.insert(*p);
-  }
+  mdcache->mds->objecter->mutate(oid, op, snapc, ceph_clock_now(g_ceph_context),
+				 0, NULL, gather.new_sub());
   gather.activate();
 }
 

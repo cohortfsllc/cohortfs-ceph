@@ -1995,7 +1995,9 @@ bool OSDMonitor::prepare_command(MMonCommand *m)
     uuid_d uuid;
     string uuidstr;
     if (cmd_getval(g_ceph_context, cmdmap, "uuid", uuidstr)) {
-      if (!uuid.parse(uuidstr.c_str())) {
+      try {
+	uuid = uuid_d::parse(uuidstr);
+      } catch (const std::invalid_argument& ia) {
 	err = -EINVAL;
 	goto reply;
       }

@@ -177,6 +177,7 @@ protected:
 
   /// List contents of collection.
   virtual int collection_list(
+    const uuid_d &vol,
     vector<hobject_t> *ls ///< [out] Listed Objects
     ) = 0;
 

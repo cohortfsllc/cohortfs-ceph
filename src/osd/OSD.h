@@ -403,23 +403,23 @@ public:
   static hobject_t get_osdmap_pobject_name(epoch_t epoch) { 
     char foo[20];
     snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(foo), 0)); 
+    return hobject_t(sobject_t(object_t(0, foo), 0));
   }
   static hobject_t get_inc_osdmap_pobject_name(epoch_t epoch) { 
     char foo[20];
     snprintf(foo, sizeof(foo), "inc_osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(foo), 0)); 
+    return hobject_t(sobject_t(object_t(0, foo), 0));
   }
 
   static hobject_t make_snapmapper_oid() {
     return hobject_t(
       sobject_t(
-	object_t("snapmapper"),
+	object_t(0, "snapmapper"),
 	0));
   }
 
   static hobject_t make_infos_oid() {
-    hobject_t oid(sobject_t("infos", CEPH_NOSNAP));
+    hobject_t oid(sobject_t(object_t(0, "infos"), CEPH_NOSNAP));
     return oid;
   }
 
@@ -825,15 +825,21 @@ protected:
 
   // static bits
   static int find_osd_dev(char *result, int whoami);
-  static ObjectStore *create_object_store(const std::string &dev, const std::string &jdev);
-  static int convertfs(const std::string &dev, const std::string &jdev);
+  static ObjectStore *create_object_store(const uuid_d &vol,
+					  const std::string &dev,
+					  const std::string &jdev);
+  static int convertfs(const uuid_d &vol, const std::string &dev,
+		       const std::string &jdev);
   static int do_convertfs(ObjectStore *store);
   static int convert_collection(ObjectStore *store, coll_t cid);
-  static int mkfs(const std::string &dev, const std::string &jdev,
-		  uuid_d fsid, int whoami);
-  static int mkjournal(const std::string &dev, const std::string &jdev);
-  static int flushjournal(const std::string &dev, const std::string &jdev);
-  static int dump_journal(const std::string &dev, const std::string &jdev, ostream& out);
+  static int mkfs(const uuid_d &vol, const std::string &dev,
+		  const std::string &jdev, uuid_d fsid, int whoami);
+  static int mkjournal(const uuid_d &vol, const std::string &dev,
+		       const std::string &jdev);
+  static int flushjournal(const uuid_d &vol, const std::string &dev,
+			  const std::string &jdev);
+  static int dump_journal(const uuid_d &vol, const std::string &dev,
+			  const std::string &jdev, ostream& out);
   /* remove any non-user xattrs from a map of them */
   void filter_xattrs(map<string, bufferptr>& attrs) {
     for (map<string, bufferptr>::iterator iter = attrs.begin();

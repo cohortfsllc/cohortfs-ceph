@@ -78,6 +78,7 @@ static inline void encode(const map<string,bufferptr> *attrset, bufferlist &bl) 
 class ObjectStore {
 public:
 
+  const uuid_d volume;
   Logger *logger;
 
   /**
@@ -790,7 +791,7 @@ public:
   }
 
  public:
-  ObjectStore() : logger(NULL) {}
+    ObjectStore(const uuid_d &vol) : volume(vol), logger(NULL) {}
   virtual ~ObjectStore() {}
 
   // mgmt
@@ -860,7 +861,8 @@ public:
   virtual int collection_getattr(coll_t cid, const char *name, bufferlist& bl) = 0;
   virtual int collection_getattrs(coll_t cid, map<string,bufferptr> &aset) = 0;
   virtual bool collection_empty(coll_t c) = 0;
-  virtual int collection_list(coll_t c, vector<hobject_t>& o) = 0;
+  virtual int collection_list(coll_t c,
+			      vector<hobject_t>& o) = 0;
 
   /**
    * list partial contents of collection relative to a hash offset/position

@@ -5831,12 +5831,11 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size, utime_t mtime)
 void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
 {
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
 
   dout(10) << "purge_prealloc_ino " << ino << " oid " << oid << dendl;
   SnapContext snapc;
-  mds->objecter->remove(oid, oloc, snapc, ceph_clock_now(g_ceph_context), 0, 0, fin);
-}  
+  mds->objecter->remove(oid, snapc, ceph_clock_now(g_ceph_context), 0, 0, fin);
+}
 
 
 
@@ -7945,7 +7944,7 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
 	       << ", retrying pool " << backtrace.pool << dendl;
       info.pool = backtrace.pool;
       C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-      fetch_backtrace(ino, info.pool, fin->bl, fin);
+      fetch_backtrace(ino, fin->bl, fin);
       return;
     }
   } else if (err == -ENOENT) {
@@ -7955,7 +7954,7 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
 	       << ", retrying pool " << meta_pool << dendl;
       info.pool = meta_pool;
       C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-      fetch_backtrace(ino, info.pool, fin->bl, fin);
+      fetch_backtrace(ino, fin->bl, fin);
       return;
     }
   }
@@ -8184,7 +8183,7 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
     info.checked.clear();
     info.checked.insert(mds->get_nodeid());
     C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-    fetch_backtrace(ino, info.pool, fin->bl, fin);
+    fetch_backtrace(ino, fin->bl, fin);
   } else {
     assert(!info.ancestors.empty());
     info.checking = mds->get_nodeid();
@@ -8511,10 +8510,9 @@ void MDCache::find_ino_dir(inodeno_t ino, Context *fin)
 
   // get the backtrace from the dir
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
-  
+
   C_MDS_FindInoDir *c = new C_MDS_FindInoDir(this, ino, fin);
-  mds->objecter->getxattr(oid, oloc, "path", CEPH_NOSNAP, &c->bl, 0, c);
+  mds->objecter->getxattr(oid, "path", CEPH_NOSNAP, &c->bl, 0, c);
 }
 
 void MDCache::_find_ino_dir(inodeno_t ino, Context *fin, bufferlist& bl, int r)
@@ -9260,17 +9258,17 @@ void MDCache::eval_remote(CDentry *dn)
   }
 }
 
-void MDCache::fetch_backtrace(inodeno_t ino, int64_t pool, bufferlist& bl, Context *fin)
+void MDCache::fetch_backtrace(inodeno_t ino, bufferlist& bl, Context *fin)
 {
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  mds->objecter->getxattr(oid, object_locator_t(pool), "parent", CEPH_NOSNAP, &bl, 0, fin);
+  mds->objecter->getxattr(oid, "parent", CEPH_NOSNAP, &bl, 0, fin);
 }
 
-void MDCache::remove_backtrace(inodeno_t ino, int64_t pool, Context *fin)
+void MDCache::remove_backtrace(inodeno_t ino, Context *fin)
 {
   SnapContext snapc;
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  mds->objecter->removexattr(oid, object_locator_t(pool), "parent", snapc,
+  mds->objecter->removexattr(oid, "parent", snapc,
 			     ceph_clock_now(g_ceph_context), 0, NULL, fin);
 }
 
@@ -9318,18 +9316,11 @@ void MDCache::_purge_forwarding_pointers(bufferlist& bl, CDentry *dn, int r)
   // setup gathering context
   C_GatherBuilder gather_bld(g_ceph_context);
 
-  // remove all the objects with forwarding pointer backtraces (aka sentinels)
-  for (set<int64_t>::const_iterator i = backtrace.old_pools.begin();
-       i != backtrace.old_pools.end();
-       ++i) {
-    SnapContext snapc;
-    object_t oid = CInode::get_object_name(backtrace.ino, frag_t(), "");
-    object_locator_t oloc(*i);
+  SnapContext snapc;
+  object_t oid = CInode::get_object_name(backtrace.ino, frag_t(), "");
 
-    mds->objecter->remove(oid, oloc, snapc, ceph_clock_now(g_ceph_context), 0,
-                         NULL, gather_bld.new_sub());
-  }
-
+  mds->objecter->remove(oid, snapc, ceph_clock_now(g_ceph_context), 0,
+			NULL, gather_bld.new_sub());
   if (gather_bld.has_subs()) {
     gather_bld.set_finisher(new C_MDC_PurgeStray(this, dn));
     gather_bld.activate();
@@ -9398,12 +9389,11 @@ void MDCache::purge_stray(CDentry *dn)
   if (in->is_dir()) {
     dout(10) << "purge_stray dir ... implement me!" << dendl;  // FIXME XXX
     // remove the backtrace
-    remove_backtrace(in->ino(), mds->mdsmap->get_metadata_pool(),
-		     new C_MDC_PurgeStrayPurged(this, dn));
+    remove_backtrace(in->ino(), new C_MDC_PurgeStrayPurged(this, dn));
   } else if (in->is_file()) {
     // get the backtrace before blowing away the object
     C_MDC_PurgeForwardingPointers *fin = new C_MDC_PurgeForwardingPointers(this, dn);
-    fetch_backtrace(in->ino(), in->get_inode().layout.fl_pg_pool, fin->bl, fin);
+    fetch_backtrace(in->ino(), fin->bl, fin);
   } else {
     // not a dir or file; purged!
     _purge_stray_purged(dn);

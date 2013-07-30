@@ -49,7 +49,7 @@ object_t SessionMap::get_object_name()
 {
   char s[30];
   snprintf(s, sizeof(s), "mds%d_sessionmap", mds->whoami);
-  return object_t(s);
+  return object_t(0, s);
 }
 
 class C_SM_Load : public Context {
@@ -68,15 +68,14 @@ void SessionMap::load(Context *onload)
 
   if (onload)
     waiting_for_load.push_back(onload);
-  
+
   C_SM_Load *c = new C_SM_Load(this);
   object_t oid = get_object_name();
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
-  mds->objecter->read_full(oid, oloc, CEPH_NOSNAP, &c->bl, 0, c);
+  mds->objecter->read_full(oid, CEPH_NOSNAP, &c->bl, 0, c);
 }
 
 void SessionMap::_load_finish(int r, bufferlist &bl)
-{ 
+{
   bufferlist::iterator blp = bl.begin();
   if (r < 0) {
     derr << "_load_finish got " << cpp_strerror(r) << dendl;
@@ -125,10 +124,8 @@ void SessionMap::save(Context *onsave, version_t needv)
   committing = version;
   SnapContext snapc;
   object_t oid = get_object_name();
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
 
-  mds->objecter->write_full(oid, oloc,
-			    snapc,
+  mds->objecter->write_full(oid, snapc,
 			    bl, ceph_clock_now(g_ceph_context), 0,
 			    NULL, new C_SM_Save(this, version));
 }

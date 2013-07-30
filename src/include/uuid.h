@@ -8,6 +8,7 @@
 #include "encoding.h"
 #include <ostream>
 #include <string>
+#include <stdexcept>
 
 extern "C" {
 #include <uuid/uuid.h>
@@ -23,31 +24,59 @@ struct uuid_d {
     memset(&uuid, 0, sizeof(uuid));
   }
 
+  uuid_d(uint64_t x) {
+    memset(&uuid, 0, sizeof(uint64_t));
+    memcpy(uuid + sizeof(uint64_t), &x, sizeof(uint64_t));
+  }
+
+  uuid_d(uint64_t x, uint64_t y) {
+    memcpy(uuid, &x, sizeof(uint64_t));
+    memcpy(uuid + sizeof(uint64_t), &y, sizeof(uint64_t));
+  }
+
+  uuid_d(const uuid_d &u) {
+    uuid_copy(uuid, u.uuid);
+  }
+
+  void clear() {
+    memset(&uuid, 0, sizeof(uuid));
+  }
+
   bool is_zero() const {
     return uuid_is_null(uuid);
   }
 
-  void generate_random() {
-    uuid_generate(uuid);
+  static uuid_d generate_random() {
+    uuid_d u;
+    uuid_generate(u.uuid);
+    return u;
   }
-  
-  bool parse(const char *s) {
-    return uuid_parse(s, uuid) == 0;
+
+  static uuid_d parse(const char *s) {
+    uuid_d u;
+    int i = uuid_parse(s, u.uuid);
+    if (i == 0) {
+      return u;
+    } else {
+      throw std::invalid_argument(s);
+    }
   }
+
   void print(char *s) const {
     return uuid_unparse(uuid, s);
   }
 
   // version of above functions using strings
-  bool parse(const std::string& s) {
-    return parse(s.c_str());
+  static uuid_d parse(const std::string& s) {
+    uuid_d u = parse(s.c_str());
+    return u;
   }
   void print(std::string& s) const {
     char buff[char_rep_buf_size];
     print(buff);
     s = buff;
   }
-  
+
   void encode(bufferlist& bl) const {
     ::encode_raw(uuid, bl);
   }
@@ -58,6 +87,18 @@ struct uuid_d {
   // allows uuid_d datatype to be used as key to std::map
   bool operator<(const uuid_d& r) const {
       return uuid_compare(this->uuid, r.uuid) < 0;
+  }
+
+  bool operator<=(const uuid_d& r) const {
+      return uuid_compare(this->uuid, r.uuid) <= 0;
+  }
+
+  bool operator>(const uuid_d& r) const {
+      return uuid_compare(this->uuid, r.uuid) > 0;
+  }
+
+  bool operator>=(const uuid_d& r) const {
+      return uuid_compare(this->uuid, r.uuid) >= 0;
   }
 
   operator std::string() const {

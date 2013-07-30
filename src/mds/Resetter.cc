@@ -56,14 +56,15 @@ bool Resetter::ms_dispatch(Message *m)
 }
 
 
-void Resetter::init(int rank) 
+void Resetter::init(uuid_d vol, int rank)
 {
+  volume = vol;
   osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
 
   objecter = new Objecter(g_ceph_context, messenger, monc, osdmap, lock, timer);
-  journaler = new Journaler(ino, CEPH_FS_ONDISK_MAGIC, objecter, 0, 0, &timer);
+  journaler = new Journaler(volume, ino, CEPH_FS_ONDISK_MAGIC, objecter, 0, 0, &timer);
 
   objecter->set_client_incarnation(0);
 

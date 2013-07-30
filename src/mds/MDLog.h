@@ -69,6 +69,7 @@ protected:
 
   bool capped;
 
+  uuid_d volume;
   inodeno_t ino;
   Journaler *journaler;
 
@@ -236,7 +237,7 @@ private:
   void write_head(Context *onfinish);
 
 public:
-  void create(Context *onfinish);  // fresh, empty log! 
+  void create(uuid_d volume, Context *onfinish);  // fresh, empty log!
   void open(Context *onopen);      // append() or replay() to follow!
   void append();
   void replay(Context *onfinish);

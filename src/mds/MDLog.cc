@@ -81,7 +81,7 @@ void MDLog::init_journaler()
 
   // log streamer
   if (journaler) delete journaler;
-  journaler = new Journaler(ino, CEPH_FS_ONDISK_MAGIC, mds->objecter,
+  journaler = new Journaler(volume, ino, CEPH_FS_ONDISK_MAGIC, mds->objecter,
 			    logger, l_mdl_jlat,
 			    &mds->timer);
   assert(journaler->is_readonly());
@@ -121,9 +121,10 @@ uint64_t MDLog::get_safe_pos()
 
 
 
-void MDLog::create(Context *c)
+void MDLog::create(uuid_d vol, Context *c)
 {
   dout(5) << "create empty log" << dendl;
+  volume = vol;
   init_journaler();
   journaler->set_writeable();
   journaler->create(&mds->mdcache->default_log_layout);

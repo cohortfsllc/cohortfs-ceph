@@ -872,8 +872,8 @@ public:
       eval_stray(dn);
   }
 protected:
-  void fetch_backtrace(inodeno_t ino, int64_t pool, bufferlist& bl, Context *fin);
-  void remove_backtrace(inodeno_t ino, int64_t pool, Context *fin);
+  void fetch_backtrace(inodeno_t ino, bufferlist& bl, Context *fin);
+  void remove_backtrace(inodeno_t ino, Context *fin);
   void _purge_forwarding_pointers(bufferlist& bl, CDentry *dn, int r);
   void _purge_stray(CDentry *dn, int r);
   void purge_stray(CDentry *dn);

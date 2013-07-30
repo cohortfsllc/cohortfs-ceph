@@ -316,9 +316,9 @@ int HashIndex::_lookup(const hobject_t &hoid,
   return get_mangled_name(*path, hoid, mangled_name, exists_out);
 }
 
-int HashIndex::_collection_list(vector<hobject_t> *ls) {
+int HashIndex::_collection_list(const uuid_d &vol, vector<hobject_t> *ls) {
   vector<string> path;
-  return list_by_hash(path, 0, 0, 0, 0, ls);
+  return list_by_hash(vol, path, 0, 0, 0, 0, ls);
 }
 
 int HashIndex::_collection_list_partial(const hobject_t &start,
@@ -333,7 +333,8 @@ int HashIndex::_collection_list_partial(const hobject_t &start,
     next = &_next;
   *next = start;
   dout(20) << "_collection_list_partial " << start << " " << min_count << "-" << max_count << " ls.size " << ls->size() << dendl;
-  return list_by_hash(path, min_count, max_count, seq, next, ls);
+  return list_by_hash(start.oid.volume, path, min_count, max_count, seq,
+		      next, ls);
 }
 
 int HashIndex::prep_delete() {
@@ -674,7 +675,8 @@ int HashIndex::get_path_contents_by_hash(const vector<string> &path,
   return 0;
 }
 
-int HashIndex::list_by_hash(const vector<string> &path,
+int HashIndex::list_by_hash(const uuid_d &vol,
+			    const vector<string> &path,
 			    int min_count,
 			    int max_count,
 			    snapid_t seq,
@@ -702,14 +704,15 @@ int HashIndex::list_by_hash(const vector<string> &path,
     if (j == objects.end() || j->first != *i) {
       if (min_count > 0 && out->size() > (unsigned)min_count) {
 	if (next)
-	  *next = hobject_t("", "", CEPH_NOSNAP, hash_prefix_to_hash(*i));
+	  *next = hobject_t(object_t(vol, ""), CEPH_NOSNAP, hash_prefix_to_hash(*i));
 	return 0;
       }
       *(next_path.rbegin()) = *(i->rbegin());
       hobject_t next_recurse;
       if (next)
 	next_recurse = *next;
-      r = list_by_hash(next_path,
+      r = list_by_hash(vol,
+		       next_path,
 		       min_count,
 		       max_count,
 		       seq,

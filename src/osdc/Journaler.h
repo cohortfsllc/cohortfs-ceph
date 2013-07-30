@@ -103,6 +103,7 @@ public:
 
 private:
   // me
+  uuid_d volume;
   inodeno_t ino;
   int64_t pg_pool;
   bool readonly;
@@ -241,9 +242,10 @@ private:
   void handle_write_error(int r);
 
 public:
-  Journaler(inodeno_t ino_, const char *mag, Objecter *obj, PerfCounters *l, int lkey, SafeTimer *tim) : 
+  Journaler(uuid_d vol, inodeno_t ino_, const char *mag, Objecter *obj,
+	    PerfCounters *l, int lkey, SafeTimer *tim) :
     cct(obj->cct), last_written(mag), last_committed(mag),
-    ino(ino_), readonly(true), magic(mag),
+    volume(vol), ino(ino_), readonly(true), magic(mag),
     objecter(obj), filer(objecter), logger(l), logger_key_lat(lkey),
     timer(tim), delay_flush_event(0),
     state(STATE_UNDEF), error(0),

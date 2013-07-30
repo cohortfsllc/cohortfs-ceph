@@ -386,7 +386,8 @@ int FlatIndex::collection_list_partial(const hobject_t &start,
   return 0;
 }
 
-int FlatIndex::collection_list(vector<hobject_t> *ls) {
+int FlatIndex::collection_list(const uuid_d &uuid,
+			       vector<hobject_t> *ls) {
   char dir_name[PATH_MAX], buf[PATH_MAX], new_name[PATH_MAX];
   strncpy(dir_name, base_path.c_str(), sizeof(dir_name));
   dir_name[sizeof(dir_name)-1]='\0';

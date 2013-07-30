@@ -369,7 +369,9 @@ int FileStore::lfn_unlink(coll_t cid, const hobject_t& o,
   return index->unlink(o);
 }
 
-FileStore::FileStore(const std::string &base, const std::string &jdev, const char *name, bool do_update) :
+FileStore::FileStore(const uuid_d &vol, const std::string &base,
+		     const std::string &jdev, const char *name, bool do_update) :
+  JournalingObjectStore(vol),
   internal_name(name),
   basedir(base), journalpath(jdev),
   btrfs(false),
@@ -882,8 +884,11 @@ int FileStore::read_fsid(int fd, uuid_d *uuid)
 
   if (ret > 36)
     fsid_str[36] = 0;
-  if (!uuid->parse(fsid_str))
+  try {
+    *uuid = uuid_d::parse(fsid_str);
+  } catch (const std::invalid_argument &ia) {
     return -EINVAL;
+  }
   return 0;
 }
 
@@ -4415,13 +4420,13 @@ int FileStore::collection_list_partial(coll_t c, hobject_t start,
   return 0;
 }
 
-int FileStore::collection_list(coll_t c, vector<hobject_t>& ls) 
-{  
+int FileStore::collection_list(coll_t c, vector<hobject_t>& ls)
+{
   Index index;
   int r = get_index(c, &index);
   if (r < 0)
     return r;
-  r = index->collection_list(&ls);
+  r = index->collection_list(volume, &ls);
   assert(!m_filestore_fail_eio || r != -EIO);
   return r;
 }

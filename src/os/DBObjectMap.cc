@@ -180,7 +180,7 @@ string DBObjectMap::hobject_key_v0(coll_t c, const hobject_t &hoid)
   return out;
 }
 
-bool DBObjectMap::parse_hobject_key_v0(const string &in, coll_t *c,
+bool DBObjectMap::parse_hobject_key_v0(uint64_t vol, const string &in, coll_t *c,
 				       hobject_t *hoid)
 {
   string coll;
@@ -237,7 +237,7 @@ bool DBObjectMap::parse_hobject_key_v0(const string &in, coll_t *c,
   sscanf(hash_str.c_str(), "%X", &hash);
 
   *c = coll_t(coll);
-  (*hoid) = hobject_t(name, key, snap, hash);
+  (*hoid) = hobject_t(object_t(vol, name), snap, hash);
   return true;
 }
 
@@ -926,7 +926,7 @@ int DBObjectMap::clone(const hobject_t &hoid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::upgrade()
+int DBObjectMap::upgrade(uint64_t vol)
 {
   while (1) {
     unsigned count = 0;
@@ -967,7 +967,7 @@ int DBObjectMap::upgrade()
 
       coll_t coll;
       hobject_t hoid;
-      assert(parse_hobject_key_v0(iter->key(), &coll, &hoid));
+      assert(parse_hobject_key_v0(vol, iter->key(), &coll, &hoid));
       new_map_headers[hobject_key(hoid)] = got.begin()->second;
     }
 
@@ -1017,7 +1017,7 @@ int DBObjectMap::init(bool do_upgrade)
 		<< dendl;
 	return -ENOTSUP;
       } else {
-	r = upgrade();
+	r = upgrade(0);
 	if (r < 0)
 	  return r;
       }

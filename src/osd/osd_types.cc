@@ -48,50 +48,6 @@ void osd_reqid_t::generate_test_instances(list<osd_reqid_t*>& o)
   o.push_back(new osd_reqid_t(entity_name_t::CLIENT(123), 1, 45678));
 }
 
-// -- object_locator_t --
-
-void object_locator_t::encode(bufferlist& bl) const
-{
-  ENCODE_START(4, 3, bl);
-  ::encode(pool, bl);
-  int32_t preferred = -1;  // tell old code there is no preferred osd (-1).
-  ::encode(preferred, bl);
-  ::encode(key, bl);
-  ENCODE_FINISH(bl);
-}
-
-void object_locator_t::decode(bufferlist::iterator& p)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(4, 3, 3, p);
-  if (struct_v < 2) {
-    int32_t op;
-    ::decode(op, p);
-    pool = op;
-    int16_t pref;
-    ::decode(pref, p);
-  } else {
-    ::decode(pool, p);
-    int32_t preferred;
-    ::decode(preferred, p);
-  }
-  ::decode(key, p);
-  DECODE_FINISH(p);
-}
-
-void object_locator_t::dump(Formatter *f) const
-{
-  f->dump_int("pool", pool);
-  f->dump_string("key", key);
-}
-
-void object_locator_t::generate_test_instances(list<object_locator_t*>& o)
-{
-  o.push_back(new object_locator_t);
-  o.push_back(new object_locator_t(123));
-  o.push_back(new object_locator_t(1234, "key"));
-  o.push_back(new object_locator_t(12, "key2"));
-}
-
 
 // -- osd_stat_t --
 void osd_stat_t::dump(Formatter *f) const
@@ -609,19 +565,6 @@ void object_info_t::copy_user_bits(const object_info_t& other)
   uses_tmap = other.uses_tmap;
 }
 
-ps_t object_info_t::legacy_object_locator_to_ps(const object_t &oid, 
-						const object_locator_t &loc) {
-  ps_t ps;
-  if (loc.key.length())
-    // Hack, we don't have the osd map, so we don't really know the hash...
-    ps = ceph_str_hash(CEPH_STR_HASH_RJENKINS, loc.key.c_str(), 
-		       loc.key.length());
-  else
-    ps = ceph_str_hash(CEPH_STR_HASH_RJENKINS, oid.name.c_str(),
-		       oid.name.length());
-  return ps;
-}
-
 void object_info_t::encode(bufferlist& bl) const
 {
   map<entity_name_t, watch_info_t> old_watchers;
@@ -633,7 +576,6 @@ void object_info_t::encode(bufferlist& bl) const
   }
   ENCODE_START(11, 8, bl);
   ::encode(soid, bl);
-  ::encode(oloc, bl);
   ::encode(category, bl);
   ::encode(version, bl);
   ::encode(prior_version, bl);
@@ -661,14 +603,11 @@ void object_info_t::decode(bufferlist::iterator& bl)
   if (struct_v >= 2 && struct_v <= 5) {
     sobject_t obj;
     ::decode(obj, bl);
-    ::decode(oloc, bl);
-    soid = hobject_t(obj.oid, oloc.key, obj.snap, 0);
-    soid.hash = legacy_object_locator_to_ps(soid.oid, oloc);
+    soid = hobject_t(obj.oid, obj.snap, 0);
   } else if (struct_v >= 6) {
     ::decode(soid, bl);
-    ::decode(oloc, bl);
     if (struct_v == 6) {
-      hobject_t hoid(soid.oid, oloc.key, soid.snap, soid.hash);
+      hobject_t hoid(soid.oid, soid.snap, soid.hash);
       soid = hoid;
     }
   }
@@ -718,7 +657,6 @@ void object_info_t::dump(Formatter *f) const
   soid.dump(f);
   f->close_section();
   f->open_object_section("locator");
-  oloc.dump(f);
   f->close_section();
   f->dump_string("category", category);
   f->dump_stream("version") << version;
@@ -869,16 +807,6 @@ void ObjectRecoveryInfo::decode(bufferlist::iterator &bl,
     }
   }
 }
-
-void ObjectRecoveryInfo::generate_test_instances(
-  list<ObjectRecoveryInfo*>& o)
-{
-  o.push_back(new ObjectRecoveryInfo);
-  o.back()->soid = hobject_t(sobject_t("key", CEPH_NOSNAP));
-  o.back()->version = eversion_t(0,0);
-  o.back()->size = 100;
-}
-
 
 void ObjectRecoveryInfo::dump(Formatter *f) const
 {

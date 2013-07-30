@@ -178,6 +178,7 @@ protected:
     int *exists
     );
   int _collection_list(
+    const uuid_d &vol,
     vector<hobject_t> *ls
     );
   int _collection_list_partial(
@@ -327,6 +328,7 @@ private:
 
   /// List objects in collection in hobject_t order
   int list_by_hash(
+    const uuid_d &vol,          /// [in] Volume
     const vector<string> &path, /// [in] Path to list
     int min_count,              /// [in] List at least min_count
     int max_count,              /// [in] List at most max_count

@@ -170,17 +170,19 @@ void OSDService::init()
   init_sub();
 }
 
-ObjectStore *OSD::create_object_store(const std::string &dev, const std::string &jdev)
+ObjectStore *OSD::create_object_store(const uuid_d &vol,
+				      const std::string &dev,
+				      const std::string &jdev)
 {
   struct stat st;
   if (::stat(dev.c_str(), &st) != 0)
     return 0;
 
   if (g_conf->filestore)
-    return new FileStore(dev, jdev);
+    return new FileStore(vol, dev, jdev);
 
   if (S_ISDIR(st.st_mode))
-    return new FileStore(dev, jdev);
+    return new FileStore(vol, dev, jdev);
   else
     return 0;
 }
@@ -311,22 +313,23 @@ int OSD::do_convertfs(ObjectStore *store)
   return store->umount();
 }
 
-int OSD::convertfs(const std::string &dev, const std::string &jdev)
+int OSD::convertfs(const uuid_d &vol, const std::string &dev,
+		   const std::string &jdev)
 {
   boost::scoped_ptr<ObjectStore> store(
-    new FileStore(dev, jdev, "filestore", 
-		  true));
+    new FileStore(vol, dev, jdev, "filestore", true));
   int r = do_convertfs(store.get());
   return r;
 }
 
-int OSD::mkfs(const std::string &dev, const std::string &jdev, uuid_d fsid, int whoami)
+int OSD::mkfs(const uuid_d &vol, const std::string &dev,
+	      const std::string &jdev, uuid_d fsid, int whoami)
 {
   int ret;
   ObjectStore *store = NULL;
 
   try {
-    store = create_object_store(dev, jdev);
+    store = create_object_store(vol, dev, jdev);
     if (!store) {
       ret = -ENOENT;
       goto out;
@@ -396,7 +399,7 @@ int OSD::mkfs(const std::string &dev, const std::string &jdev, uuid_d fsid, int 
 	bl.push_back(bp);
 	dout(0) << "testing disk bandwidth..." << dendl;
 	utime_t start = ceph_clock_now(g_ceph_context);
-	object_t oid("disk_bw_test");
+	object_t oid(0, "disk_bw_test");
 	for (int i=0; i<1000; i++) {
 	  ObjectStore::Transaction *t = new ObjectStore::Transaction;
 	  t->write(coll_t::META_COLL, hobject_t(sobject_t(oid, 0)), i*bl.length(), bl.length(), bl);
@@ -465,17 +468,19 @@ out:
   return ret;
 }
 
-int OSD::mkjournal(const std::string &dev, const std::string &jdev)
+int OSD::mkjournal(const uuid_d &vol, const std::string &dev,
+		   const std::string &jdev)
 {
-  ObjectStore *store = create_object_store(dev, jdev);
+  ObjectStore *store = create_object_store(vol, dev, jdev);
   if (!store)
     return -ENOENT;
   return store->mkjournal();
 }
 
-int OSD::flushjournal(const std::string &dev, const std::string &jdev)
+int OSD::flushjournal(const uuid_d &vol, const std::string &dev,
+		      const std::string &jdev)
 {
-  ObjectStore *store = create_object_store(dev, jdev);
+  ObjectStore *store = create_object_store(vol, dev, jdev);
   if (!store)
     return -ENOENT;
   int err = store->mount();
@@ -487,9 +492,10 @@ int OSD::flushjournal(const std::string &dev, const std::string &jdev)
   return err;
 }
 
-int OSD::dump_journal(const std::string &dev, const std::string &jdev, ostream& out)
+int OSD::dump_journal(const uuid_d &vol, const std::string &dev,
+		      const std::string &jdev, ostream& out)
 {
-  ObjectStore *store = create_object_store(dev, jdev);
+  ObjectStore *store = create_object_store(vol, dev, jdev);
   if (!store)
     return -ENOENT;
   int err = store->dump_journal(out);
@@ -724,9 +730,11 @@ int OSD::pre_init()
   Mutex::Locker lock(osd_lock);
   if (is_stopping())
     return 0;
-  
+
+
   assert(!store);
-  store = create_object_store(dev_path, journal_path);
+#warning Volume stuff!  Revisit
+  store = create_object_store(uuid_d(), dev_path, journal_path);
   if (!store) {
     derr << "OSD::pre_init: unable to create object store" << dendl;
     return -ENODEV;
@@ -1288,7 +1296,8 @@ int OSD::read_superblock()
 
 
 
-void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
+void OSD::recursive_remove_collection(ObjectStore *store,
+				      coll_t tmp)
 {
   OSDriver driver(
     store,
@@ -2383,7 +2392,7 @@ void OSD::do_command(Connection *con, tid_t tid, vector<string>& cmd, bufferlist
     for (int64_t pos = 0; pos < count; pos += bsize) {
       char nm[30];
       snprintf(nm, sizeof(nm), "disk_bw_test_%lld", (long long)pos);
-      object_t oid(nm);
+      object_t oid(0, nm);
       hobject_t soid(sobject_t(oid, 0));
       ObjectStore::Transaction *t = new ObjectStore::Transaction;
       t->write(coll_t::META_COLL, soid, 0, bsize, bl);

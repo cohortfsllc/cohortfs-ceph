@@ -177,19 +177,19 @@ vector<VolMap::vol_info_t> VolMap::search_vol_info(const string& searchKey,
   size_t count = 0;
   vector<VolMap::vol_info_t> result;
 
-  uuid_d uuid;
-  const bool canBeUuid = uuid.parse(searchKey);
+  try {
+    uuid_d uuid = uuid_d::parse(searchKey);
 
   // TODO : if searchKey could be a *partial* uuid, search for all
   // volumes w/ uuids that begin with that partial.
 
-  if (canBeUuid) {
     VolMap::vol_info_t vol_info;
     const bool found = get_vol_info_uuid(uuid, vol_info);
     if (found) {
       result.push_back(vol_info);
       ++count;
     }
+  } catch (const std::invalid_argument &ia) {
   }
 
   if (count < max) {
@@ -444,10 +444,12 @@ bool VolMap::is_valid_volume_name(const string& name, string& error) {
     }
   }
 
-  uuid_d test_uuid;
-  if (test_uuid.parse(name)) {
+  try {
+    uuid_d::parse(name);
     error = "volume name cannot match the form of UUIDs";
     return false;
+  } catch (const std::invalid_argument &ia) {
+    return true;
   }
 
   return true;

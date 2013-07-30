@@ -1392,10 +1392,9 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc;
       lock.Lock();
       bufferlist bl;
-      client->objecter->read(oid, oloc, off, len, CEPH_NOSNAP, &bl, 0, new C_SafeCond(&lock, &cond, &ack));
+      client->objecter->read(oid, off, len, CEPH_NOSNAP, &bl, 0, new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.Wait(lock);
       lock.Unlock();
     }
@@ -1405,13 +1404,12 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc;
       lock.Lock();
       bufferptr bp(len);
       bufferlist bl;
       bl.push_back(bp);
       SnapContext snapc;
-      client->objecter->write(oid, oloc, off, len, snapc, bl, ceph_clock_now(g_ceph_context), 0,
+      client->objecter->write(oid, off, len, snapc, bl, ceph_clock_now(g_ceph_context), 0,
 			      new C_SafeCond(&lock, &cond, &ack),
 			      safeg.new_sub());
       safeg.activate();
@@ -1424,10 +1422,9 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       int64_t len = t.get_int();
       object_t oid = file_object_t(oh, ol);
-      object_locator_t oloc;
       lock.Lock();
       SnapContext snapc;
-      client->objecter->zero(oid, oloc, off, len, snapc, ceph_clock_now(g_ceph_context), 0,
+      client->objecter->zero(oid, off, len, snapc, ceph_clock_now(g_ceph_context), 0,
 			     new C_SafeCond(&lock, &cond, &ack),
 			     safeg.new_sub());
       safeg.activate();
@@ -2130,9 +2127,8 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     if (time_to_stop()) break;
 
     object_t oid = file_object_t(999, i);
-    object_locator_t oloc;
     SnapContext snapc;
-    
+
     if (i % inflight == 0) {
       dout(6) << "create_objects " << i << "/" << (nobj+1) << dendl;
     }
@@ -2140,7 +2136,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     
     starts.push_back(ceph_clock_now(g_ceph_context));
     client->client_lock.Lock();
-    client->objecter->write(oid, oloc, 0, osize, snapc, bl, ceph_clock_now(g_ceph_context), 0,
+    client->objecter->write(oid, 0, osize, snapc, bl, ceph_clock_now(g_ceph_context), 0,
 			    new C_Ref(lock, cond, &unack),
 			    new C_Ref(lock, cond, &unsafe));
     client->client_lock.Unlock();
@@ -2231,9 +2227,8 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       o = (long)trunc(pow(r, rskew) * (double)nobj);  // exponentially skew towards 0
     }
     object_t oid = file_object_t(999, o);
-    object_locator_t oloc;
     SnapContext snapc;
-    
+
     client->client_lock.Lock();
     utime_t start = ceph_clock_now(g_ceph_context);
     if (write) {
@@ -2251,7 +2246,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
         op.op.op = CEPH_OSD_OP_STARTSYNC;
 	m.ops.push_back(op);
       }
-      client->objecter->mutate(oid, oloc, m, snapc, ceph_clock_now(g_ceph_context), 0,
+      client->objecter->mutate(oid, m, snapc, ceph_clock_now(g_ceph_context), 0,
 			       NULL, new C_Ref(lock, cond, &unack));
       /*client->objecter->write(oid, layout, 0, osize, snapc, bl, 0,
 			      new C_Ref(lock, cond, &unack),
@@ -2259,7 +2254,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     } else {
       dout(10) << "read from " << oid << dendl;
       bufferlist inbl;
-      client->objecter->read(oid, oloc, 0, osize, CEPH_NOSNAP, &inbl, 0,
+      client->objecter->read(oid, 0, osize, CEPH_NOSNAP, &inbl, 0,
 			     new C_Ref(lock, cond, &unack));
     }
     client->client_lock.Unlock();

@@ -70,6 +70,7 @@ public:
 
   /// @see CollectionIndex
   int collection_list(
+    const uuid_d &vol,
     vector<hobject_t> *ls
     );
 

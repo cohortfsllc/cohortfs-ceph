@@ -65,8 +65,7 @@ void MDSTable::save(Context *onfinish, version_t v)
   // write (async)
   SnapContext snapc;
   object_t oid = get_object_name();
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
-  mds->objecter->write_full(oid, oloc,
+  mds->objecter->write_full(oid,
 			    snapc,
 			    bl, ceph_clock_now(g_ceph_context), 0,
 			    NULL, new C_MT_Save(this, version));
@@ -116,7 +115,7 @@ object_t MDSTable::get_object_name()
     snprintf(n, sizeof(n), "mds%d_%s", mds->whoami, table_name);
   else
     snprintf(n, sizeof(n), "mds_%s", table_name);
-  return object_t(n);
+  return object_t(0, n);
 }
 
 void MDSTable::load(Context *onfinish)
@@ -128,8 +127,7 @@ void MDSTable::load(Context *onfinish)
 
   C_MT_Load *c = new C_MT_Load(this, onfinish);
   object_t oid = get_object_name();
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
-  mds->objecter->read_full(oid, oloc, CEPH_NOSNAP, &c->bl, 0, c);
+  mds->objecter->read_full(oid, CEPH_NOSNAP, &c->bl, 0, c);
 }
 
 void MDSTable::load_2(int r, bufferlist& bl, Context *onfinish)

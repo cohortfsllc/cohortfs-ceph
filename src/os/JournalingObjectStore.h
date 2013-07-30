@@ -120,10 +120,12 @@ public:
   }
 
 public:
-  JournalingObjectStore() : journal(NULL), finisher(g_ceph_context),
-			    apply_manager(journal, finisher),
-			    replaying(false) {}
-  
+  JournalingObjectStore(const uuid_d &vol) :
+    ObjectStore(vol),
+    journal(NULL), finisher(g_ceph_context),
+    apply_manager(journal, finisher),
+    replaying(false) {}
+
 };
 
 #endif

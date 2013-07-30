@@ -170,9 +170,8 @@ class ObjectCacher {
   public:
     ObjectSet *oset;
     xlist<Object*>::item set_item;
-    object_locator_t oloc;
     uint64_t truncate_size, truncate_seq;
-    
+
     bool complete;
     bool exists;
 
@@ -191,11 +190,11 @@ class ObjectCacher {
     Object(const Object& other);
     const Object& operator=(const Object& other);
 
-    Object(ObjectCacher *_oc, sobject_t o, ObjectSet *os, object_locator_t& l,
+    Object(ObjectCacher *_oc, sobject_t o, ObjectSet *os,
 	   uint64_t ts, uint64_t tq) :
       ref(0),
       oc(_oc),
-      oid(o), oset(os), set_item(this), oloc(l),
+      oid(o), oset(os), set_item(this),
       truncate_size(ts), truncate_seq(tq),
       complete(false), exists(true),
       last_write_tid(0), last_commit_tid(0),
@@ -215,9 +214,6 @@ class ObjectCacher {
     object_t get_oid() { return oid.oid; }
     snapid_t get_snap() { return oid.snap; }
     ObjectSet *get_object_set() { return oset; }
-    
-    object_locator_t& get_oloc() { return oloc; }
-    void set_object_locator(object_locator_t& l) { oloc = l; }
 
     bool can_close() {
       if (lru_is_expireable()) {
@@ -307,7 +303,6 @@ class ObjectCacher {
     inodeno_t ino;
     uint64_t truncate_seq, truncate_size;
 
-    int64_t poolid;
     xlist<Object*> objects;
 
     int dirty_or_tx;
@@ -315,7 +310,7 @@ class ObjectCacher {
 
     ObjectSet(void *p, int64_t _poolid, inodeno_t i)
       : parent(p), ino(i), truncate_seq(0),
-	truncate_size(0), poolid(_poolid), dirty_or_tx(0),
+	truncate_size(0), dirty_or_tx(0),
 	return_enoent(false) {}
 
   };
@@ -336,7 +331,7 @@ class ObjectCacher {
   flush_set_callback_t flush_set_callback;
   void *flush_set_callback_arg;
 
-  vector<hash_map<sobject_t, Object*> > objects; // indexed by pool_id
+  hash_map<sobject_t, Object*> objects; // indexed by pool_id
 
   set<BufferHead*>    dirty_bh;
   LRU   bh_lru_dirty, bh_lru_rest;
@@ -358,15 +353,17 @@ class ObjectCacher {
   Finisher finisher;
 
   // objects
-  Object *get_object_maybe(sobject_t oid, object_locator_t &l) {
-    // have it?
-    if (((uint32_t)l.pool < objects.size()) &&
-        (objects[l.pool].count(oid)))
-      return objects[l.pool][oid];
-    return NULL;
+  Object *get_object_maybe(sobject_t oid) {
+    hash_map<sobject_t, ObjectCacher::Object*>::const_iterator i
+      = objects.find(oid);
+    if (i == objects.end()) {
+      return NULL;
+    } else {
+      return i->second;
+    }
   }
 
-  Object *get_object(sobject_t oid, ObjectSet *oset, object_locator_t &l,
+  Object *get_object(sobject_t oid, ObjectSet *oset,
 		     uint64_t truncate_size, uint64_t truncate_seq);
   void close_object(Object *ob);
 
@@ -454,10 +451,10 @@ class ObjectCacher {
 	     bool external_call);
 
  public:
-  void bh_read_finish(int64_t poolid, sobject_t oid, loff_t offset,
+  void bh_read_finish(sobject_t oid, loff_t offset,
 		      uint64_t length, bufferlist &bl, int r,
 		      bool trust_enoent);
-  void bh_write_commit(int64_t poolid, sobject_t oid, loff_t offset,
+  void bh_write_commit(sobject_t oid, loff_t offset,
 		       uint64_t length, tid_t t, int r);
 
   class C_ReadFinish : public Context {
@@ -472,13 +469,13 @@ class ObjectCacher {
   public:
     bufferlist bl;
     C_ReadFinish(ObjectCacher *c, Object *ob, loff_t s, uint64_t l) :
-      oc(c), poolid(ob->oloc.pool), oid(ob->get_soid()), start(s), length(l),
+      oc(c), oid(ob->get_soid()), start(s), length(l),
       set_item(this), trust_enoent(true) {
       ob->reads.push_back(&set_item);
     }
 
     void finish(int r) {
-      oc->bh_read_finish(poolid, oid, start, length, bl, r, trust_enoent);
+      oc->bh_read_finish(oid, start, length, bl, r, trust_enoent);
       // object destructor clears the list
       if (set_item.is_on_list())
 	set_item.remove_myself();
@@ -491,16 +488,15 @@ class ObjectCacher {
 
   class C_WriteCommit : public Context {
     ObjectCacher *oc;
-    int64_t poolid;
     sobject_t oid;
     loff_t start;
     uint64_t length;
   public:
     tid_t tid;
-    C_WriteCommit(ObjectCacher *c, int64_t _poolid, sobject_t o, loff_t s, uint64_t l) :
-      oc(c), poolid(_poolid), oid(o), start(s), length(l), tid(0) {}
+    C_WriteCommit(ObjectCacher *c, sobject_t o, loff_t s, uint64_t l) :
+      oc(c), oid(o), start(s), length(l), tid(0) {}
     void finish(int r) {
-      oc->bh_write_commit(poolid, oid, start, length, tid, r);
+      oc->bh_write_commit(oid, start, length, tid, r);
     }
   };
 

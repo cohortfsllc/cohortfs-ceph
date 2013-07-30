@@ -146,7 +146,9 @@ int main(int argc, const char **argv)
     if (mc.get_monmap_privately() < 0)
       return -1;
 
-    int err = OSD::mkfs(g_conf->osd_data, g_conf->osd_journal, mc.monmap.fsid, whoami);
+#warning Volumes!  Fix me!
+    int err = OSD::mkfs(uuid_d(), g_conf->osd_data, g_conf->osd_journal,
+			mc.monmap.fsid, whoami);
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error creating empty object store in "
 	   << g_conf->osd_data << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
@@ -189,7 +191,8 @@ int main(int argc, const char **argv)
     exit(0);
   if (mkjournal) {
     common_init_finish(g_ceph_context);
-    int err = OSD::mkjournal(g_conf->osd_data, g_conf->osd_journal);
+#warning Volumes!  Fix me!
+    int err = OSD::mkjournal(uuid_d(), g_conf->osd_data, g_conf->osd_journal);
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error creating fresh journal " << g_conf->osd_journal
 	   << " for object store " << g_conf->osd_data
@@ -202,7 +205,9 @@ int main(int argc, const char **argv)
   }
   if (flushjournal) {
     common_init_finish(g_ceph_context);
-    int err = OSD::flushjournal(g_conf->osd_data, g_conf->osd_journal);
+#warning Volumes!  Fix me!
+    int err = OSD::flushjournal(uuid_d(), g_conf->osd_data,
+				g_conf->osd_journal);
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error flushing journal " << g_conf->osd_journal
 	   << " for object store " << g_conf->osd_data
@@ -216,7 +221,9 @@ int main(int argc, const char **argv)
   }
   if (dump_journal) {
     common_init_finish(g_ceph_context);
-    int err = OSD::dump_journal(g_conf->osd_data, g_conf->osd_journal, cout);
+#warning Volumes!  Fix me!
+    int err = OSD::dump_journal(uuid_d(), g_conf->osd_data,
+				g_conf->osd_journal, cout);
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error dumping journal " << g_conf->osd_journal
 	   << " for object store " << g_conf->osd_data
@@ -232,7 +239,8 @@ int main(int argc, const char **argv)
 
 
   if (convertfilestore) {
-    int err = OSD::convertfs(g_conf->osd_data, g_conf->osd_journal);
+#warning Volumes!  Fix me!
+    int err = OSD::convertfs(uuid_d(), g_conf->osd_data, g_conf->osd_journal);
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error converting store " << g_conf->osd_data
 	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
@@ -393,7 +401,8 @@ int main(int argc, const char **argv)
   common_init_finish(g_ceph_context);
 
   if (g_conf->filestore_update_to >= (int)FileStore::on_disk_version) {
-    int err = OSD::convertfs(g_conf->osd_data, g_conf->osd_journal);
+#warning Volumes!  Fix me!
+    int err = OSD::convertfs(uuid_d(), g_conf->osd_data, g_conf->osd_journal);
     if (err < 0) {
       derr << TEXT_RED << " ** ERROR: error converting store " << g_conf->osd_data
 	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;

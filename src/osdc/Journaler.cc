@@ -144,9 +144,8 @@ void Journaler::read_head(Context *on_finish, bufferlist *bl)
 {
   assert(state == STATE_READHEAD || state == STATE_REREADHEAD);
 
-  object_t oid = file_object_t(ino, 0);
-  object_locator_t oloc(pg_pool);
-  objecter->read_full(oid, oloc, CEPH_NOSNAP, bl, 0, on_finish);
+  object_t oid = file_object_t(volume, ino, 0);
+  objecter->read_full(oid, CEPH_NOSNAP, bl, 0, on_finish);
 }
 
 /**
@@ -342,17 +341,16 @@ void Journaler::write_head(Context *oncommit)
   last_written.unused_field = expire_pos;
   last_written.write_pos = safe_pos;
   ldout(cct, 10) << "write_head " << last_written << dendl;
-  
+
   last_wrote_head = ceph_clock_now(cct);
 
   bufferlist bl;
   ::encode(last_written, bl);
   SnapContext snapc;
-  
-  object_t oid = file_object_t(ino, 0);
-  object_locator_t oloc(pg_pool);
-  objecter->write_full(oid, oloc, snapc, bl, ceph_clock_now(cct), 0, 
-		       NULL, 
+
+  object_t oid = file_object_t(volume, ino, 0);
+  objecter->write_full(oid, snapc, bl, ceph_clock_now(cct), 0,
+		       NULL,
 		       new C_WriteHead(this, last_written, oncommit));
 }
 

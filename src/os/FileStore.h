@@ -276,7 +276,9 @@ public:
   int lfn_unlink(coll_t cid, const hobject_t& o, const SequencerPosition &spos);
 
  public:
-  FileStore(const std::string &base, const std::string &jdev, const char *internal_name = "filestore", bool update_to=false);
+  FileStore(const uuid_d &vol, const std::string &base,
+	    const std::string &jdev, const char *internal_name = "filestore",
+	    bool update_to = false);
   ~FileStore();
 
   int _test_fiemap();

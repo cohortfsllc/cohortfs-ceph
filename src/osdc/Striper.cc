@@ -76,7 +76,7 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
     // find oid, extent
     char buf[strlen(object_format) + 32];
     snprintf(buf, sizeof(buf), object_format, (long long unsigned)objectno);
-    object_t oid = buf;
+    object_t oid(0, buf);
 
     // map range into object
     uint64_t block_start = (stripeno % stripes_per_object) * su;
@@ -121,7 +121,7 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
     }
     ex->buffer_extents.push_back(make_pair(cur - offset + buffer_offset, x_len));
         
-    ldout(cct, 15) << "file_to_extents  " << *ex << " in " << ex->oloc << dendl;
+    ldout(cct, 15) << "file_to_extents  " << *ex << " in " << dendl;
     //ldout(cct, 0) << "map: ino " << ino << " oid " << ex.oid << " osd " << ex.osd << " offset " << ex.offset << " len " << ex.len << " ... left " << left << dendl;
     
     left -= x_len;

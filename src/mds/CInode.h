@@ -494,6 +494,7 @@ private:
   void clear_ambiguous_auth();
 
   inodeno_t ino() const { return inode.ino; }
+  uuid_d vol() const { return inode.volume; }
   vinodeno_t vino() const { return vinodeno_t(inode.ino, last); }
   int d_type() const { return IFTODT(inode.mode); }
 

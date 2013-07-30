@@ -297,12 +297,12 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 
       if (VolMap::is_valid_volume_name(name, error_message)) {
 	uuid_d uuid;
-	const bool is_uuid = uuid.parse(uuid_str);
-	if (is_uuid) {
+	try {
+	  uuid = uuid_d::parse(uuid_str);
 	  r = pending_volmap.remove_volume(uuid, name);
 	  if (r == 0) {
-	      ss << "removed volume " << uuid << " \"" << name << "\"";
-	      pending_inc.include_removal(uuid);
+	    ss << "removed volume " << uuid << " \"" << name << "\"";
+	    pending_inc.include_removal(uuid);
 	  } else if (r == -ENOENT) {
 	    ss << "no volume with provided uuid " << uuid << " exists";
 	  } else if (r == -EINVAL) {
@@ -310,7 +310,7 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 	  } else {
 	    ss << "volume could not be removed due to error code " << -r;
 	  }
-	} else {
+	} catch (const std::invalid_argument& ia) {
 	  ss << "provided volume uuid " << uuid << " is not a valid uuid";
 	  r = -EINVAL;
 	}

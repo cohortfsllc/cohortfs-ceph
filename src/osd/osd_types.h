@@ -41,7 +41,7 @@
 #define CEPH_OSD_FEATURE_INCOMPAT_LEVELDBLOG CompatSet::Feature(9, "leveldblog")
 #define CEPH_OSD_FEATURE_INCOMPAT_SNAPMAPPER CompatSet::Feature(10, "snapmapper")
 
-#define OSD_SUPERBLOCK_POBJECT hobject_t(sobject_t(object_t("osd_superblock"), 0))
+#define OSD_SUPERBLOCK_POBJECT hobject_t(sobject_t(object_t(0, "osd_superblock"), 0))
 
 
 // placement seed (a hash value)
@@ -102,52 +102,6 @@ namespace __gnu_cxx {
   };
 }
 
-
-// a locator constrains the placement of an object.  mainly, which pool
-// does it go in.
-struct object_locator_t {
-  int64_t pool;
-  string key;
-
-  explicit object_locator_t()
-    : pool(-1) {}
-  explicit object_locator_t(int64_t po)
-    : pool(po) {}
-  explicit object_locator_t(int64_t po, string s)
-    : pool(po), key(s) {}
-
-  int get_pool() const {
-    return pool;
-  }
-
-  void clear() {
-    pool = -1;
-    key = "";
-  }
-
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& p);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<object_locator_t*>& o);
-};
-WRITE_CLASS_ENCODER(object_locator_t)
-
-inline bool operator==(const object_locator_t& l, const object_locator_t& r) {
-  return l.pool == r.pool && l.key == r.key;
-}
-inline bool operator!=(const object_locator_t& l, const object_locator_t& r) {
-  return !(l == r);
-}
-
-inline ostream& operator<<(ostream& out, const object_locator_t& loc)
-{
-  out << "@" << loc.pool;
-  if (loc.key.length())
-    out << ":" << loc.key;
-  return out;
-}
-
-
 // Internal OSD op flags - set by the OSD based on the op types
 enum {
   CEPH_OSD_RMW_FLAG_READ        = (1 << 1),
@@ -156,8 +110,6 @@ enum {
   CEPH_OSD_RMW_FLAG_CLASS_WRITE = (1 << 4),
   CEPH_OSD_RMW_FLAG_PGOP        = (1 << 5),
 };
-
-#define OSD_SUPERBLOCK_POBJECT hobject_t(sobject_t(object_t("osd_superblock"), 0))
 
 // compound rados version type
 class eversion_t {
@@ -428,8 +380,6 @@ class ObjectExtent {
   uint64_t    length;    // in object
   uint64_t    truncate_size;	// in object
 
-  object_locator_t oloc;   // object locator (pool etc)
-
   vector<pair<uint64_t,uint64_t> >  buffer_extents;  // off -> len.  extents in buffer being mapped (may be fragmented bc of striping!)
   
   ObjectExtent() : objectno(0), offset(0), length(0), truncate_size(0) {}
@@ -440,7 +390,7 @@ class ObjectExtent {
 inline ostream& operator<<(ostream& out, const ObjectExtent &ex)
 {
   return out << "extent(" 
-             << ex.oid << " (" << ex.objectno << ") in " << ex.oloc
+             << ex.oid << " (" << ex.objectno << ") in " 
              << " " << ex.offset << "~" << ex.length
 	     << " -> " << ex.buffer_extents
              << ")";
@@ -569,7 +519,6 @@ static inline ostream& operator<<(ostream& out, const notify_info_t& n) {
 
 struct object_info_t {
   hobject_t soid;
-  object_locator_t oloc;
   string category;
 
   eversion_t version, prior_version;
@@ -591,9 +540,6 @@ struct object_info_t {
 
   void copy_user_bits(const object_info_t& other);
 
-  static ps_t legacy_object_locator_to_ps(const object_t &oid, 
-					  const object_locator_t &loc);
-
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   void decode(bufferlist& bl) {
@@ -608,8 +554,8 @@ struct object_info_t {
       truncate_seq(0), truncate_size(0), uses_tmap(false)
   {}
 
-  object_info_t(const hobject_t& s, const object_locator_t& o)
-    : soid(s), oloc(o), size(0),
+  object_info_t(const hobject_t& s)
+    : soid(s), size(0),
       lost(false), truncate_seq(0), truncate_size(0), uses_tmap(false) {}
 
   object_info_t(bufferlist& bl) {

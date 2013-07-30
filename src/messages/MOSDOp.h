@@ -44,7 +44,6 @@ private:
   int32_t retry_attempt;   // 0 is first attempt.  -1 if we don't know.
 
   object_t oid;
-  object_locator_t oloc;
 public:
   vector<OSDOp> ops;
 private:
@@ -77,10 +76,6 @@ public:
   
   object_t& get_oid() { return oid; }
 
-  object_locator_t get_object_locator() const {
-    return oloc;
-  }
-
   epoch_t  get_map_epoch() { return osdmap_epoch; }
 
   eversion_t get_version() { return reassert_version; }
@@ -90,12 +85,12 @@ public:
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
   MOSDOp(int inc, long tid,
-	 object_t& _oid, object_locator_t& _oloc, epoch_t _osdmap_epoch,
+	 object_t& _oid, epoch_t _osdmap_epoch,
 	 int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       client_inc(inc),
       osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),
-      oid(_oid), oloc(_oloc) {
+      oid(_oid) {
     set_tid(tid);
   }
 private:
@@ -233,7 +228,6 @@ struct ceph_osd_request_head {
       ::encode(mtime, payload);
       ::encode(reassert_version, payload);
 
-      ::encode(oloc, payload);
       ::encode(oid, payload);
 
       __u16 num_ops = ops.size();
@@ -283,14 +277,12 @@ struct ceph_osd_request_head {
 
       retry_attempt = -1;
     } else {
-      // new decode 
+      // new decode
       ::decode(client_inc, p);
       ::decode(osdmap_epoch, p);
       ::decode(flags, p);
       ::decode(mtime, p);
       ::decode(reassert_version, p);
-
-      ::decode(oloc, p);
 
       ::decode(oid, p);
 
@@ -329,9 +321,6 @@ struct ceph_osd_request_head {
 #endif
     if (snapid != CEPH_NOSNAP)
       out << "@" << snapid;
-
-    if (oloc.key.size())
-      out << " " << oloc;
 
     out << " " << ops;
     if (is_retry_attempt())

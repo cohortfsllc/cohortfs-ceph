@@ -39,6 +39,8 @@ public:
   Mutex lock;
   SafeTimer timer;
 
+  uuid_d volume;
+
   /*
    * The messenger should be a valid Messenger. You should call bind()
    * before passing it in, but not do anything else.
@@ -60,7 +62,7 @@ public:
   void ms_handle_remote_reset(Connection *con) {}
   bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
                          bool force_new);
-  void init(int rank);
+  void init(uuid_d vol, int rank);
   void shutdown();
   void reset();
 };

@@ -103,13 +103,13 @@ void Filer::_probe(Probe *probe)
   probe->probing.clear();
   Striper::file_to_extents(cct, probe->ino, &probe->layout,
 			   probe->probing_off, probe->probing_len, 0, probe->probing);
-  
+
   for (vector<ObjectExtent>::iterator p = probe->probing.begin();
        p != probe->probing.end();
        ++p) {
     ldout(cct, 10) << "_probe  probing " << p->oid << dendl;
     C_Probe *c = new C_Probe(this, probe, p->oid);
-    objecter->stat(p->oid, p->oloc, probe->snapid, &c->size, &c->mtime, 
+    objecter->stat(p->oid, probe->snapid, &c->size, &c->mtime,
 		   probe->flags | CEPH_OSD_FLAG_RWORDERED, c);
     probe->ops.insert(p->oid);
   }

@@ -36,8 +36,7 @@ public:
   
   // subop
   hobject_t poid;
-  object_locator_t oloc;
-  
+
   __u8 acks_wanted;
 
   // op to exec
@@ -121,13 +120,11 @@ public:
 
     ::decode(data_subset, p);
     ::decode(clone_subsets, p);
-    
+
     if (header.version >= 2) {
       ::decode(first, p);
       ::decode(complete, p);
     }
-    if (header.version >= 3)
-      ::decode(oloc, p);
     if (header.version >= 4) {
       ::decode(data_included, p);
       ::decode(recovery_progress, p);
@@ -171,7 +168,6 @@ public:
       header.data_off = 0;
     ::encode(first, payload);
     ::encode(complete, payload);
-    ::encode(oloc, payload);
     ::encode(data_included, payload);
     ::encode(recovery_info, payload);
     ::encode(recovery_progress, payload);

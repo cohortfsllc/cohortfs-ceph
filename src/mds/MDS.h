@@ -270,11 +270,11 @@ class MDS : public Dispatcher {
     replay_queue.pop_front();
     return true;
   }
-  
+
   // -- keepalive beacon --
-  version_t               beacon_last_seq;          // last seq sent to monitor
+  version_t beacon_last_seq;          // last seq sent to monitor
   map<version_t,utime_t>  beacon_seq_stamp;         // seq # -> time sent
-  utime_t                 beacon_last_acked_stamp;  // last time we sent a beacon that got acked
+  utime_t beacon_last_acked_stamp;  // last time we sent a beacon that got acked
   bool was_laggy;
   utime_t laggy_until;
 
@@ -362,7 +362,7 @@ class MDS : public Dispatcher {
 
   void bcast_mds_map();  // to mounted clients
 
-  void boot_create();             // i am new mds.
+  void boot_create(); // i am new mds.
   void boot_start(int step=0, int r=0);    // starting|replay
 
   void calc_recovery_set();

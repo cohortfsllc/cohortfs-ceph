@@ -116,8 +116,8 @@ public:
   // ...except if the directory is hashed, in which case none of them are!
   static const unsigned MASK_STATE_EXPORTED = 
   (STATE_COMPLETE|STATE_DIRTY);
-  static const unsigned MASK_STATE_IMPORT_KEPT = 
-  (						  
+  static const unsigned MASK_STATE_IMPORT_KEPT =
+  (
    STATE_IMPORTING
    |STATE_IMPORTBOUND|STATE_EXPORTBOUND
    |STATE_FROZENTREE
@@ -293,8 +293,9 @@ protected:
 
 
   // -- accessors --
+  uuid_d    volume()  const { return inode->vol(); }          // deprecate me?
   inodeno_t ino()     const { return inode->ino(); }          // deprecate me?
-  frag_t    get_frag()    const { return frag; }
+  frag_t    get_frag() const { return frag; }
   dirfrag_t dirfrag() const { return dirfrag_t(inode->ino(), frag); }
 
   CInode *get_inode()    { return inode; }
@@ -476,8 +477,8 @@ private:
   }
  
   // -- fetch --
-  object_t get_ondisk_object() { 
-    return file_object_t(ino(), frag);
+  object_t get_ondisk_object() {
+    return file_object_t(volume(), ino(), frag);
   }
   void fetch(Context *c, bool ignore_authpinnability=false);
   void fetch(Context *c, const string& want_dn, bool ignore_authpinnability=false);

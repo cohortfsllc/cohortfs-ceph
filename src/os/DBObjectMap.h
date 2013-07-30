@@ -156,7 +156,7 @@ public:
   int init(bool upgrade = false);
 
   /// Upgrade store to current version
-  int upgrade();
+  int upgrade(uint64_t vol);
 
   /// Consistency check, debug, there must be no parallel writes
   bool check(std::ostream &out);
@@ -271,7 +271,7 @@ public:
   /// String munging (public for testing)
   static string hobject_key(const hobject_t &hoid);
   static string hobject_key_v0(coll_t c, const hobject_t &hoid);
-  static bool parse_hobject_key_v0(const string &in,
+  static bool parse_hobject_key_v0(uint64_t vol, const string &in,
 				   coll_t *c, hobject_t *hoid);
 private:
   /// Implicit lock on Header->seq
