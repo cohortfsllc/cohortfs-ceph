@@ -26,6 +26,8 @@
 #include "CDir.h"
 #include "InodeContainer.h"
 #include "ParentStats.h"
+#include "Stray.h"
+
 #include "include/Context.h"
 #include "events/EMetaBlob.h"
 
@@ -573,6 +575,7 @@ protected:
 
   void inode_remove_replica(CInode *in, int rep, set<SimpleLock *>& gather_locks);
   void dentry_remove_replica(CDentry *dn, int rep, set<SimpleLock *>& gather_locks);
+  void stripe_remove_replica(CStripe *stripe, int rep, set<SimpleLock *>& gather_locks);
 
   void rename_file(CDentry *srcdn, CDentry *destdn);
 
@@ -758,9 +761,15 @@ protected:
   friend class C_MDC_FetchedBacktrace;
 
   // -- stray --
+ private:
+  Stray stray;
+
  public:
-  void scan_stray_dir() {}
-  void maybe_eval_stray(CInode *in) {}
+  void add_stray(CInode *in) { stray.add(in); }
+  void add_stray(CStripe *stripe) { stray.add(stripe); }
+
+  void scan_stray_dir() { stray.scan(); }
+  void maybe_eval_stray(CInode *in) { stray.eval(in); }
 
   // == messages ==
  public:

@@ -521,6 +521,8 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in, bool isnew)
 
   if (in->is_auth() && inode.rstat.version != inode.accounted_rstat.version)
     mds->mdcache->parentstats.replay_unaccounted(in);
+  if (in->is_auth() && inode.nlink == 0)
+    mds->mdcache->add_stray(in);
 
   assert(in->is_base() || static_cast<size_t>(inode.nlink) == in->inode.parents.size());
 }
@@ -748,18 +750,22 @@ void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls) const
   stripe->fnode = fnode;
   if (is_open())
     stripe->mark_open();
+  if (is_unlinked()) {
+    stripe->state_set(CStripe::STATE_UNLINKED);
+    stripe->clear_dirty_parent_stats();
+    if (stripe->is_auth())
+      mds->mdcache->add_stray(stripe);
+  }
   if (is_dirty()) {
     stripe->_mark_dirty(ls);
 
-    if (stripe->is_auth() &&
+    if (stripe->is_auth() && !stripe->state_test(CStripe::STATE_UNLINKED) &&
         (fnode.rstat.version != fnode.accounted_rstat.version ||
         fnode.fragstat.version != fnode.accounted_fragstat.version))
       mds->mdcache->parentstats.replay_unaccounted(stripe);
   }
   if (is_new())
     stripe->mark_new(ls);
-  if (is_unlinked())
-    stripe->state_set(CStripe::STATE_UNLINKED);
   stripe->set_fragtree(dirfragtree);
   stripe->force_dirfrags();
   dout(10) << "EMetaBlob updated stripe " << *stripe << dendl;
@@ -787,6 +793,7 @@ void EMetaBlob::encode(bufferlist& bl) const
   ::encode(client_reqs, bl);
   ::encode(renamed_dirino, bl);
   ::encode(renamed_dir_stripes, bl);
+  ::encode(destroyed_stripes, bl);
   ENCODE_FINISH(bl);
 }
 void EMetaBlob::decode(bufferlist::iterator &bl)
@@ -808,6 +815,7 @@ void EMetaBlob::decode(bufferlist::iterator &bl)
   ::decode(client_reqs, bl);
   ::decode(renamed_dirino, bl);
   ::decode(renamed_dir_stripes, bl);
+  ::decode(destroyed_stripes, bl);
   DECODE_FINISH(bl);
 }
 
@@ -1082,6 +1090,21 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       assert(in);
       mds->mdcache->remove_recovered_truncate(in, ls);
     }
+  }
+
+  // destroyed stripes
+  for (vector<dirstripe_t>::iterator p = destroyed_stripes.begin();
+       p != destroyed_stripes.end();
+       p++) {
+    CStripe *stripe = mds->mdcache->get_dirstripe(*p);
+    if (stripe) {
+      dout(10) << "EMetaBlob.replay destroyed " << *p
+          << ", dropping " << *stripe << dendl;
+      assert(stripe->get_inode());
+      stripe->get_inode()->close_stripe(stripe);
+    } else
+      dout(10) << "EMetaBlob.replay destroyed " << *p
+          << ", not in cache" << dendl;
   }
 
   // destroyed inodes
