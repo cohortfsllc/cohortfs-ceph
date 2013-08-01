@@ -65,6 +65,7 @@
 void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
 {
   set<CDir*> commit;
+  set<CStripe*> stripes;
 
   dout(6) << "LogSegment(" << offset << ").try_to_expire" << dendl;
 
@@ -78,6 +79,16 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
     dout(20) << " dirty_dirfrag " << **p << dendl;
     assert((*p)->is_auth());
     commit.insert(*p);
+  }
+  for (elist<CStripe*>::iterator p = new_stripes.begin(); !p.end(); ++p) {
+    dout(20) << " new_stripe " << **p << dendl;
+    assert((*p)->is_auth());
+    stripes.insert(*p);
+  }
+  for (elist<CStripe*>::iterator p = dirty_stripes.begin(); !p.end(); ++p) {
+    dout(20) << " dirty_stripe " << **p << dendl;
+    assert((*p)->is_auth());
+    stripes.insert(*p);
   }
   for (elist<CDentry*>::iterator p = dirty_dentries.begin(); !p.end(); ++p) {
     dout(20) << " dirty_dentry " << **p << dendl;
@@ -105,6 +116,22 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
       } else {
 	dout(15) << "try_to_expire waiting for unfreeze on " << *dir << dendl;
 	dir->add_waiter(CDir::WAIT_UNFREEZE, gather_bld.new_sub());
+      }
+    }
+  }
+
+  if (!stripes.empty()) {
+    for (set<CStripe*>::iterator p = stripes.begin();
+	 p != stripes.end();
+	 ++p) {
+      CStripe *stripe = *p;
+      assert(stripe->is_auth());
+      if (stripe->can_auth_pin()) {
+	dout(15) << "try_to_expire committing " << *stripe << dendl;
+	stripe->commit(gather_bld.new_sub());
+      } else {
+	dout(15) << "try_to_expire waiting for unfreeze on " << *stripe << dendl;
+	stripe->add_waiter(CStripe::WAIT_UNFREEZE, gather_bld.new_sub());
       }
     }
   }

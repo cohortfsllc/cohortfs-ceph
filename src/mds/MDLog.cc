@@ -607,6 +607,8 @@ void MDLog::standby_trim_segments()
     dout(10) << " removing segment " << seg->offset << dendl;
     seg->dirty_dirfrags.clear_list();
     seg->new_dirfrags.clear_list();
+    seg->dirty_stripes.clear_list();
+    seg->new_stripes.clear_list();
     seg->dirty_inodes.clear_list();
     seg->dirty_dentries.clear_list();
     seg->open_files.clear_list();

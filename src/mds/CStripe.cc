@@ -201,10 +201,7 @@ void CStripe::pop_and_dirty_projected_fnode(LogSegment *ls)
   delete projected_fnode.front();
   projected_fnode.pop_front();
 
-  if (!state_test(STATE_DIRTY)) {
-    state_set(STATE_DIRTY);
-    get(PIN_DIRTY);
-  }
+  _mark_dirty(ls);
 }
 
 
@@ -486,7 +483,7 @@ void CStripe::_mark_dirty(LogSegment *ls)
     ls->dirty_stripes.push_back(&item_dirty);
     // join segment's new list if never committed
     if (committed_version == 0 && !item_new.is_on_list())
-      ls->new_stripes.push_back(&item_new);
+      mark_new(ls);
   }
 }
 
