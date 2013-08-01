@@ -907,12 +907,6 @@ void Server::reply_request(MDRequest *mdr, MClientReply *reply, CInode *tracei, 
   mdcache->request_finish(mdr);
   mdr = 0;
   req = 0;
-
-  // take a closer look at tracei, if it happens to be a remote link
-  if (tracei && 
-      tracei->get_parent_dn() &&
-      tracei->get_parent_dn()->get_projected_linkage()->is_remote())
-    mdcache->eval_remote(tracei->get_parent_dn());
 }
 
 
@@ -4176,7 +4170,8 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CStripe *newstripe = *s;
     CDir *newdir = newstripe->get_dirfrag(frag_t());
-    le->metablob.add_new_dir(newdir); // dirty AND complete AND new
+    le->metablob.add_new_dir(newdir);
+    le->metablob.add_stripe(newstripe, true, true); // dirty and new
   }
 
   if (!mdr->more()->witnessed.empty()) {
@@ -4243,6 +4238,7 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
     newdir->mark_complete();
 
     le->commit.add_new_dir(newdir);
+    le->commit.add_stripe(newstripe, true, true);
   }
 
   // initialize rollback
@@ -5593,7 +5589,6 @@ void Server::handle_client_rename(MDRequest *mdr)
   const string &destname = destpath.last_dentry();
 
   vector<CDentry*>& srctrace = mdr->dn[1];
-  vector<CDentry*>& desttrace = mdr->dn[0];
 
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
 
@@ -5662,53 +5657,7 @@ void Server::handle_client_rename(MDRequest *mdr)
   }
 
   // -- some sanity checks --
-
-  // src+dest traces _must_ share a common ancestor for locking to prevent orphans
-  if (destpath.get_ino() != srcpath.get_ino() &&
-      !(req->get_source().is_mds() &&
-	MDS_INO_IS_MDSDIR(srcpath.get_ino()))) {  // <-- mds 'rename' out of stray dir is ok!
-    // do traces share a dentry?
-    CDentry *common = 0;
-    for (unsigned i=0; i < srctrace.size(); i++) {
-      for (unsigned j=0; j < desttrace.size(); j++) {
-	if (srctrace[i] == desttrace[j]) {
-	  common = srctrace[i];
-	  break;
-	}
-      }
-      if (common)
-	break;
-    }
-
-    if (common) {
-      dout(10) << "rename src and dest traces share common dentry " << *common << dendl;
-    } else {
-      CInode *srcbase = srctrace[0]->get_dir()->get_inode();
-      CInode *destbase = destdir->get_inode();
-      if (!desttrace.empty())
-	destbase = desttrace[0]->get_dir()->get_inode();
-
-      // ok, extend srctrace toward root until it is an ancestor of desttrace.
-      while (srcbase != destbase &&
-	     !srcbase->is_projected_ancestor_of(destbase)) {
-	srctrace.insert(srctrace.begin(),
-			srcbase->get_projected_parent_dn());
-	dout(10) << "rename prepending srctrace with " << *srctrace[0] << dendl;
-	srcbase = srcbase->get_projected_parent_dn()->get_dir()->get_inode();
-      }
-
-      // then, extend destpath until it shares the same parent inode as srcpath.
-      while (destbase != srcbase) {
-	desttrace.insert(desttrace.begin(),
-			 destbase->get_projected_parent_dn());
-	rdlocks.insert(&desttrace[0]->lock);
-	dout(10) << "rename prepending desttrace with " << *desttrace[0] << dendl;
-	destbase = destbase->get_projected_parent_dn()->get_dir()->get_inode();
-      }
-      dout(10) << "rename src and dest traces now share common ancestor " << *destbase << dendl;
-    }
-  }
-
+  // XXX: src+dest traces _must_ share a common ancestor for locking to prevent orphans
   // src == dest?
   if (srcdn->get_dir() == destdir && srcdn->name == destname) {
     dout(7) << "rename src=dest, noop" << dendl;
