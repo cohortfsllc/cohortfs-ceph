@@ -153,6 +153,7 @@ CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
     committed_version(0),
     item_dirty(this),
     item_new(this),
+    item_dirty_rstat(this),
     stickydir_ref(0),
     dirfragtreelock(this, &dirfragtreelock_type),
     linklock(this, &linklock_type),
