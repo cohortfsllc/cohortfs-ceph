@@ -210,8 +210,9 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
       } else {
 	ss << "volmap has " << volmap.size() << " entries" << std::endl;
 	stringstream ds;
-	for (map<string,VolMap::vol_info_t>::const_iterator i = volmap.begin();
-	     i != volmap.end();
+	for (map<string,VolMap::vol_info_t>::const_iterator i
+	       = volmap.begin_n();
+	     i != volmap.end_n();
 	     ++i) {
 	  ds << i->second << std::endl;
 	}

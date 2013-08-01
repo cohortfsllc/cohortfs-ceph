@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -155,8 +155,6 @@ public:
     : epoch(0) { }
 
   static bool is_valid_volume_name(const string& name, string& error);
-  static bool is_valid_crush_map_entry(uint16_t crush_map_entry,
-				       string& error);
 
   epoch_t get_epoch() const { return epoch; }
   void inc_epoch() { epoch++; }
@@ -170,40 +168,36 @@ public:
 
   void apply_incremental(CephContext *cct, const VolMap::Incremental& inc);
 
-  const vol_info_t& get_vol_info_uuid(const uuid_d& uuid) {
-    assert(vol_info_by_uuid.count(uuid));
-    return vol_info_by_uuid[uuid];
+  map<uuid_d,vol_info_t>::const_iterator find(const uuid_d& uuid) const {
+    return vol_info_by_uuid.find(uuid);
   }
 
-  const vol_info_t& get_vol_info_name(const string& name) {
-    assert(vol_info_by_name.count(name));
-    return vol_info_by_name[name];
+  map<string,vol_info_t>::const_iterator find(const string& name) const {
+    return vol_info_by_name.find(name);
   }
 
-  bool get_vol_info_uuid(const uuid_d& uuid, vol_info_t& vol_info) const {
-    map<uuid_d,vol_info_t>::const_iterator i = vol_info_by_uuid.find(uuid);
-    if (i == vol_info_by_uuid.end()) {
-      return false;
-    } else {
-      vol_info = i->second;
-      return true;
-    }
+  map<uuid_d,vol_info_t>::const_iterator begin_u() const {
+    return vol_info_by_uuid.begin();
   }
 
-  bool get_vol_info_name(const string& name, vol_info_t& vol_info) const {
-    map<string,vol_info_t>::const_iterator i = vol_info_by_name.find(name);
-    if (i == vol_info_by_name.end()) {
-      return false;
-    } else {
-      vol_info = i->second;
-      return true;
-    }
+  map<string,vol_info_t>::const_iterator begin_n() const {
+    return vol_info_by_name.begin();
+  }
+
+  map<uuid_d,vol_info_t>::const_iterator end_u() const {
+    return vol_info_by_uuid.end();
+  }
+
+  map<string,vol_info_t>::const_iterator end_n() const {
+    return vol_info_by_name.end();
   }
 
   /*
-   * Will search the entries by both name and uuid returning a vector of up to max entries.
+   * Will search the entries by both name and uuid returning a vector
+   * of up to max entries.
    */
-  vector<vol_info_t> search_vol_info(const string& name, size_t max = DEFAULT_MAX_SEARCH_RESULTS) const;
+  vector<vol_info_t> search_vol_info(
+    const string& name, size_t max = DEFAULT_MAX_SEARCH_RESULTS) const;
 
   /*
    * Will search for a unique volume specified by volspec (either by
@@ -212,19 +206,12 @@ public:
    */
   bool get_vol_uuid(const string& volspec, uuid_d& uuid_out) const;
 
-  map<string,vol_info_t>::const_iterator begin() const {
-    return vol_info_by_name.begin();
-  }
-
-  map<string,vol_info_t>::const_iterator end() const {
-    return vol_info_by_name.end();
-  }
-
   bool empty() const {
     return vol_info_by_uuid.empty();
   }
 
   size_t size() const {
+    assert(vol_info_by_name.size() == vol_info_by_uuid.size());
     return vol_info_by_uuid.size();
   }
 
@@ -260,6 +247,5 @@ inline ostream& operator<<(ostream& out, const VolMap::vol_info_t& vol_info) {
       << " " << setw(4) << right << " " << vol_info.name;
   return out;
 }
-
 
 #endif // CEPH_VOLMAP_H

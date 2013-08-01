@@ -183,20 +183,18 @@ vector<VolMap::vol_info_t> VolMap::search_vol_info(const string& searchKey,
   // TODO : if searchKey could be a *partial* uuid, search for all
   // volumes w/ uuids that begin with that partial.
 
-    VolMap::vol_info_t vol_info;
-    const bool found = get_vol_info_uuid(uuid, vol_info);
-    if (found) {
-      result.push_back(vol_info);
+    const map<uuid_d,vol_info_t>::const_iterator i = find(uuid);
+    if (i != end_u()) {
+      result.push_back(i->second);
       ++count;
     }
   } catch (const std::invalid_argument &ia) {
   }
 
   if (count < max) {
-    VolMap::vol_info_t vol_info;
-    const bool found = get_vol_info_name(searchKey, vol_info);
-    if (found) {
-      result.push_back(vol_info);
+    map<string,vol_info_t>::const_iterator i = find(searchKey);
+    if (i != end_n()) {
+      result.push_back(i->second);
       ++count;
     }
   }
