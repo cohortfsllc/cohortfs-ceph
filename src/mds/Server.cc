@@ -1747,25 +1747,6 @@ CDentry* Server::prepare_null_dentry(MDRequest *mdr, CDir *dir, const string& dn
   return dn;
 }
 
-CDentry* Server::prepare_stray_dentry(MDRequest *mdr, CInode *in)
-{
-  CDentry *straydn = mdr->straydn;
-  if (straydn) {
-    string name;
-    in->name_stray_dentry(name);
-    if (straydn->get_name() == name)
-      return straydn;
-
-    assert(!mdr->done_locking);
-    mdr->unpin(straydn);
-  }
-
-  straydn = mdcache->get_or_create_stray_dentry(in);
-  mdr->straydn = straydn;
-  mdr->pin(straydn);
-  return straydn;
-}
-
 // allocate an inode number for the given request
 inodeno_t Server::prepare_new_inodeno(MDRequest *mdr, inodeno_t useino)
 {

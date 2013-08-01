@@ -95,23 +95,12 @@ class MDCache {
   InodeContainer container;                // inode container dir
   SnapRealm snaprealm;
 
-  CInode *strays[NUM_STRAY];         // my stray dir
-  int stray_index;
-
-  CInode *get_stray() {
-    return strays[stray_index];
-  }
-
   set<CInode*> base_inodes;
 
 public:
   ParentStats parentstats;
 
   SnapRealm* get_snaprealm() { return &snaprealm; }
-
-  void advance_stray() {
-    stray_index = (stray_index+1)%NUM_STRAY;
-  }
 
   DecayRate decayrate;
 
@@ -500,8 +489,6 @@ public:
   void shutdown_start();
   void shutdown_check();
   bool shutdown_pass();
-  bool shutdown_export_strays();
-  bool shutdown_export_caps();
   bool shutdown();                    // clear cache (ie at shutodwn)
 
   bool did_shutdown_log_cap;
@@ -629,7 +616,6 @@ public:
   void _create_system_file_finish(Mutation *mut, CDentry *dn, Context *fin);
 
   void open_foreign_mdsdir(inodeno_t ino, Context *c);
-  CDentry *get_or_create_stray_dentry(CInode *in);
 
 
   Context *_get_waiter(MDRequest *mdr, Message *req, Context *fin);
@@ -767,37 +753,14 @@ public:
   void find_ino_dir(inodeno_t ino, Context *c);
   void _find_ino_dir(inodeno_t ino, Context *c, bufferlist& bl, int r);
 
-  // -- stray --
-public:
-  elist<CDentry*> delayed_eval_stray;
-
-  void eval_stray(CDentry *dn, bool delay=false);
-  void eval_remote(CDentry *dn);
-
-  void maybe_eval_stray(CInode *in, bool delay=false) {
-    if (in->inode.nlink > 0 || in->is_base())
-      return;
-    CDentry *dn = in->get_projected_parent_dn();
-    if (!dn->state_test(CDentry::STATE_PURGING) &&
-	dn->get_projected_linkage()->is_primary() &&
-	dn->get_dir()->get_inode()->is_stray())
-      eval_stray(dn, delay);
-  }
 protected:
-  void scan_stray_dir(dirfrag_t next=dirfrag_t());
   void fetch_backtrace(inodeno_t ino, int64_t pool, bufferlist& bl, Context *fin);
-  void purge_stray(CDentry *dn);
-  void _purge_stray_purged(CDentry *dn, int r=0);
-  void _purge_stray_logged(CDentry *dn, LogSegment *ls);
-  void _purge_stray_logged_truncate(CDentry *dn, LogSegment *ls);
-  friend class C_MDC_RetryScanStray;
   friend class C_MDC_FetchedBacktrace;
-  friend class C_MDC_PurgeStrayLogged;
-  friend class C_MDC_PurgeStrayLoggedTruncate;
-  friend class C_MDC_PurgeStrayPurged;
-  void reintegrate_stray(CDentry *dn, CDentry *rlink);
-  void migrate_stray(CDentry *dn, int dest);
 
+  // -- stray --
+ public:
+  void scan_stray_dir() {}
+  void maybe_eval_stray(CInode *in) {}
 
   // == messages ==
  public:

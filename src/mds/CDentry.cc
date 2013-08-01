@@ -528,7 +528,7 @@ void CDentry::_put()
     if (dnl->is_primary()) {
       CInode *in = dnl->get_inode();
       if (get_num_ref() == (int)is_dirty() + !!in->get_num_ref())
-	in->mdcache->maybe_eval_stray(in, true);
+	in->mdcache->maybe_eval_stray(in);
     }
   }
 }
