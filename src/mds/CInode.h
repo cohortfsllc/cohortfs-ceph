@@ -412,8 +412,6 @@ public:
   elist<CInode*>::item item_caps;
   elist<CInode*>::item item_open_file;
   elist<CInode*>::item item_renamed_file;
-  elist<CInode*>::item item_dirty_dirfrag_dir;
-  elist<CInode*>::item item_dirty_dirfrag_nest;
   elist<CInode*>::item item_dirty_rstat;
 
 private:

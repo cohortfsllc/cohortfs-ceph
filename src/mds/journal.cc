@@ -117,18 +117,6 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
     mds->mdcache->wait_for_uncommitted_master(*p, gather_bld.new_sub());
   }
 
-  // nudge scatterlocks
-  for (elist<CInode*>::iterator p = dirty_dirfrag_dir.begin(); !p.end(); ++p) {
-    CInode *in = *p;
-    dout(10) << "try_to_expire waiting for dirlock flush on " << *in << dendl;
-    // TODO: wait for accounted fragstats
-  }
-  for (elist<CInode*>::iterator p = dirty_dirfrag_nest.begin(); !p.end(); ++p) {
-    CInode *in = *p;
-    dout(10) << "try_to_expire waiting for nest flush on " << *in << dendl;
-    // TODO: wait for accounted rstats
-  }
-
   // open files
   if (!open_files.empty()) {
     assert(!mds->mdlog->is_capped()); // hmm FIXME

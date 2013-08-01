@@ -242,8 +242,6 @@ CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
     item_caps(this),
     item_open_file(this),
     item_renamed_file(this),
-    item_dirty_dirfrag_dir(this),
-    item_dirty_dirfrag_nest(this),
     auth_pins(0),
     auth_pin_freeze_allowance(0),
     authlock(this, &authlock_type),
@@ -1064,17 +1062,6 @@ void CInode::clear_scatter_dirty()
 
 void CInode::clear_dirty_scattered(int type)
 {
-  dout(10) << "clear_dirty_scattered " << type << " on " << *this << dendl;
-  switch (type) {
-  case CEPH_LOCK_IFILE:
-    item_dirty_dirfrag_dir.remove_myself();
-    break;
-  case CEPH_LOCK_INEST:
-    item_dirty_dirfrag_nest.remove_myself();
-    break;
-  default:
-    assert(0);
-  }
 }
 
 // waiting
