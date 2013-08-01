@@ -133,7 +133,8 @@ set<int> SimpleLock::empty_gather_set;
 MDCache::MDCache(MDS *m)
   : container(this),
     snaprealm(this),
-    parentstats(m)
+    parentstats(m),
+    stray(m)
 {
   mds = m;
   migrator = new Migrator(mds, this);
@@ -251,6 +252,7 @@ void MDCache::remove_inode(CInode *o)
   o->nestlock.remove_dirty();
 
   o->item_open_file.remove_myself();
+  o->item_stray.remove_myself();
 
   // remove from inode map
   inodes.erase(o->vino());    
@@ -2704,7 +2706,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
       dout(5) << " missing stripe " << *s << dendl;
     assert(stripe);
     if (survivor && stripe->is_replica(from)) 
-      stripe->remove_replica(from);
+      stripe_remove_replica(stripe, from, gather_locks);
 
     int snonce = stripe->add_replica(from);
     dout(10) << " have stripe " << *stripe << dendl;
@@ -2911,7 +2913,7 @@ void MDCache::rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack,
       if (stripe->is_auth() &&
           stripe->is_replica(from) &&
           ack->strong_stripes.count(stripe->dirstripe()) == 0) {
-        stripe->remove_replica(from);
+        stripe_remove_replica(stripe, from, gather_locks);
         dout(10) << " rem " << *stripe << dendl;
       }
 
@@ -5008,7 +5010,7 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
       // remove from our cached_by
       dout(7) << " stripe expire on " << *stripe << " from mds." << from
           << " replicas was " << stripe->get_replicas() << dendl;
-      stripe->remove_replica(from);
+      stripe_remove_replica(stripe, from, gather_locks);
     } 
     else {
       // this is an old nonce, ignore expire.
@@ -5146,6 +5148,20 @@ void MDCache::dentry_remove_replica(CDentry *dn, int from, set<SimpleLock *>& ga
   // fix lock
   if (dn->lock.remove_replica(from))
     gather_locks.insert(&dn->lock);
+}
+
+void MDCache::stripe_remove_replica(CStripe *stripe, int from, set<SimpleLock *>& gather_locks)
+{
+  stripe->remove_replica(from);
+
+  // fix locks
+  if (stripe->linklock.remove_replica(from))
+    gather_locks.insert(&stripe->linklock);
+  if (stripe->nestlock.remove_replica(from))
+    gather_locks.insert(&stripe->nestlock);
+
+  // trim?
+  stray.eval(stripe);
 }
 
 void MDCache::trim_client_leases()

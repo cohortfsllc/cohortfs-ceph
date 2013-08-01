@@ -329,6 +329,7 @@ class EMetaBlob {
   map<inodeno_t,uint64_t> truncate_finish;  // finished truncate (started in segment blah)
 
   vector<inodeno_t> destroyed_inodes;
+  vector<dirstripe_t> destroyed_stripes;
 
   // idempotent op(s)
   list<pair<metareqid_t,uint64_t> > client_reqs;
@@ -381,6 +382,9 @@ class EMetaBlob {
 
   void add_destroyed_inode(inodeno_t ino) {
     destroyed_inodes.push_back(ino);
+  }
+  void add_destroyed_stripe(dirstripe_t ds) {
+    destroyed_stripes.push_back(ds);
   }
  
   void add_inode(CInode *in, bool dirty = false,
