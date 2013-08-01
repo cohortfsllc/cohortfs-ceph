@@ -15,6 +15,9 @@
 #ifndef CEPH_PARENTSTATS_H
 #define CEPH_PARENTSTATS_H
 
+#include "include/types.h"
+#include "include/elist.h"
+
 #include "mdstypes.h"
 
 class CInode;
@@ -28,8 +31,8 @@ class ParentStats {
  private:
   MDS *mds;
 
-  set<CInode*> unaccounted_inodes;
-  set<CStripe*> unaccounted_stripes;
+  elist<CInode*> unaccounted_inodes;
+  elist<CStripe*> unaccounted_stripes;
 
   // queued async update messages
   typedef map<int, MParentStats*> dirty_stats_map;
@@ -116,7 +119,7 @@ class ParentStats {
   void account_inode(CInode *in, const nest_info_t &rstat);
 
  public:
-  ParentStats(MDS *mds) : mds(mds), tick_event(NULL) {}
+  ParentStats(MDS *mds);
 
   // update parent stats for the given object
   void update(CInode *in, Mutation *mut, EMetaBlob *blob,

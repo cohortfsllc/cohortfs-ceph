@@ -257,6 +257,14 @@ bool ParentStats::Projected::journal(EMetaBlob *blob)
 
 // ParentStats
 
+ParentStats::ParentStats(MDS *mds)
+  : mds(mds),
+    unaccounted_inodes(member_offset(CInode, item_dirty_rstat)),
+    unaccounted_stripes(member_offset(CStripe, item_dirty_rstat)),
+    tick_event(NULL)
+{
+}
+
 MParentStats* ParentStats::stats_for_mds(int who)
 {
   // find/create stats for the given mds
@@ -803,7 +811,7 @@ void ParentStats::replay_unaccounted(CStripe *stripe)
     stripe->state_set(CStripe::STATE_DIRTYRSTAT);
     stripe->get(CStripe::PIN_DIRTYRSTAT);
   }
-  unaccounted_stripes.insert(stripe);
+  unaccounted_stripes.push_back(&stripe->item_dirty_rstat);
 }
 
 void ParentStats::replay_unaccounted(CInode *in)
@@ -816,13 +824,12 @@ void ParentStats::replay_unaccounted(CInode *in)
     in->state_set(CInode::STATE_DIRTYRSTAT);
     in->get(CInode::PIN_DIRTYRSTAT);
   }
-  unaccounted_inodes.insert(in);
+  unaccounted_inodes.push_back(&in->item_dirty_rstat);
 }
 
 void ParentStats::propagate_unaccounted()
 {
-  dout(10) << "propagate_unaccounted with " << unaccounted_stripes.size()
-      << " stripes and " << unaccounted_inodes.size() << " inodes" << dendl;
+  dout(10) << "propagate_unaccounted" << dendl;
   assert(mds->mdcache->is_open());
 
   Projected projected; // projected stripes and inodes to journal
@@ -830,9 +837,10 @@ void ParentStats::propagate_unaccounted()
   Mutation *mut = new Mutation();
   EUpdate *le = new EUpdate(mds->mdlog, "replay_parent_stats");
 
-  for (set<CStripe*>::iterator s = unaccounted_stripes.begin();
-       s != unaccounted_stripes.end(); ++s) {
+  for (elist<CStripe*>::iterator s = unaccounted_stripes.begin(); !s.end(); ++s) {
     CStripe *stripe = *s;
+    stripe->item_dirty_rstat.remove_myself();
+
     fnode_t *pf = projected.get(stripe, mut);
 
     inode_stat_update_t update;
@@ -865,11 +873,12 @@ void ParentStats::propagate_unaccounted()
     if (in)
       update_inode(in, projected, mut, &le->metablob, update);
   }
-  unaccounted_stripes.clear();
+  assert(unaccounted_stripes.empty());
 
-  for (set<CInode*>::iterator i = unaccounted_inodes.begin();
-       i != unaccounted_inodes.end(); ++i) {
+  for (elist<CInode*>::iterator i = unaccounted_inodes.begin(); !i.end(); ++i) {
     CInode *in = *i;
+    in->item_dirty_rstat.remove_myself();
+
     inode_t *pi = projected.get(in, mut);
 
     stripe_stat_update_t update;
@@ -892,7 +901,7 @@ void ParentStats::propagate_unaccounted()
     if (stripe)
       update_stripe(stripe, projected, mut, &le->metablob, update);
   }
-  unaccounted_inodes.clear();
+  assert(unaccounted_inodes.empty());
 
   if (!projected.journal(&le->metablob)) {
     // no changes to journal
