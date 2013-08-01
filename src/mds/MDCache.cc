@@ -130,11 +130,6 @@ MDCache::MDCache(MDS *m) : container(this), snaprealm(this), parentstats(m)
   root = NULL;
   myin = NULL;
 
-  stray_index = 0;
-  for (int i = 0; i < NUM_STRAY; ++i) {
-    strays[i] = NULL;
-  }
-
   num_inodes_with_caps = 0;
   num_caps = 0;
 
@@ -210,11 +205,6 @@ void MDCache::add_inode(CInode *in)
       myin = in;
     else if (in->ino() == MDS_INO_CONTAINER)
       container.in = in;
-    else if (in->is_stray()) {
-      if (MDS_INO_STRAY_OWNER(in->ino()) == mds->get_nodeid()) {
-	strays[MDS_INO_STRAY_INDEX(in->ino())] = in;
-      }
-    }
     if (in->is_base())
       base_inodes.insert(in);
   }
@@ -246,11 +236,6 @@ void MDCache::remove_inode(CInode *o)
     if (o == root) root = 0;
     if (o == myin) myin = 0;
     if (o == container.get_inode()) container.in = 0;
-    if (o->is_stray()) {
-      if (MDS_INO_STRAY_OWNER(o->ino()) == mds->get_nodeid()) {
-	strays[MDS_INO_STRAY_INDEX(o->ino())] = 0;
-      }
-    }
     if (o->is_base())
       base_inodes.erase(o);
     }
@@ -402,28 +387,6 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
   CStripe *mystripe = my->get_or_open_stripe(0);
   mystripe->set_stripe_auth(mds->whoami);
   CDir *mydir = mystripe->get_or_open_dirfrag(frag_t());
-
-  // stray dir
-  for (int i = 0; i < NUM_STRAY; ++i) {
-    CInode *stray = create_system_inode(MDS_INO_STRAY(mds->whoami, i),
-                                        mds->whoami, S_IFDIR);
-    stray->set_stripe_auth(auth);
-    CStripe *straystripe = stray->get_or_open_stripe(0);
-    CDir *straydir = straystripe->get_or_open_dirfrag(frag_t());
-    stringstream name;
-    name << "stray" << i;
-    CDentry *sdn = mydir->add_primary_dentry(name.str(), stray);
-    sdn->_mark_dirty(mds->mdlog->get_current_segment());
-
-    stray->inode.dirstat = straystripe->fnode.fragstat;
-
-    mystripe->fnode.rstat.add(stray->inode.rstat);
-    mystripe->fnode.fragstat.nsubdirs++;
-    // save them
-    straydir->mark_complete();
-    straydir->mark_dirty(mds->mdlog->get_current_segment());
-    straydir->commit(0, gather->new_sub());
-  }
 
   CInode *journal = create_system_inode(MDS_INO_LOG_OFFSET + mds->whoami,
                                         mds->whoami, S_IFREG);
@@ -657,45 +620,6 @@ void MDCache::populate_mydir()
     return;
   }    
 
-  // open or create stray
-  for (int i = 0; i < NUM_STRAY; ++i) {
-    stringstream name;
-    name << "stray" << i;
-    CDentry *straydn = mydir->lookup(name.str());
-
-    // allow for older fs's with stray instead of stray0
-    if (straydn == NULL && i == 0)
-      straydn = mydir->lookup("stray");
-
-    if (!straydn || !straydn->get_linkage()->get_inode()) {
-      CInode *in = create_system_inode(MDS_INO_STRAY(mds->whoami, i),
-                                       mds->whoami, S_IFDIR);
-      _create_system_file(mydir, name.str().c_str(), in,
-                          new C_MDS_RetryOpenRoot(this));
-      return;
-    }
-    assert(straydn);
-    assert(strays[i]);
-    // we make multiple passes through this method; make sure we only pin each stray once.
-    pin_stray(strays[i]);
-    dout(20) << " stray num " << i << " is " << *strays[i] << dendl;
-
-    // open all frags
-    list<frag_t> ls;
-    CStripe *stripe = strays[i]->get_or_open_stripe(0);
-    stripe->get_fragtree().get_leaves(ls);
-    for (list<frag_t>::iterator p = ls.begin(); p != ls.end(); ++p) {
-      frag_t fg = *p;
-      CDir *dir = stripe->get_dirfrag(fg);
-      if (!dir)
-	dir = stripe->get_or_open_dirfrag(fg);
-      if (!dir->is_complete()) {
-	dir->fetch(new C_MDS_RetryOpenRoot(this));
-	return;
-      }
-    }
-  }
-
   // open or create journal file
   string jname("journal");
   CDentry *jdn = mydir->lookup(jname);
@@ -717,27 +641,6 @@ void MDCache::populate_mydir()
 void MDCache::open_foreign_mdsdir(inodeno_t ino, Context *fin)
 {
   discover_base_ino(ino, fin, ino & (MAX_MDS-1));
-}
-
-CDentry *MDCache::get_or_create_stray_dentry(CInode *in)
-{
-  string straydname;
-  in->name_stray_dentry(straydname);
-
-  CInode *strayi = get_stray();
-  assert(strayi);
-  CStripe *stripe = strayi->get_or_open_stripe(0);
-  frag_t fg = stripe->pick_dirfrag(straydname);
-  CDir *straydir = stripe->get_dirfrag(fg);
-  assert(straydir);
-  CDentry *straydn = straydir->lookup(straydname);
-  if (!straydn) {
-    straydn = straydir->add_null_dentry(straydname);
-    straydn->mark_new();
-  } else 
-    assert(straydn->get_projected_linkage()->is_null());
-
-  return straydn;
 }
 
 
@@ -4942,17 +4845,6 @@ bool MDCache::shutdown_pass()
     return false;
   }
 
-  // empty stray dir
-  if (!shutdown_export_strays()) {
-    dout(7) << "waiting for strays to migrate" << dendl;
-    return false;
-  }
-  
-  // drop our reference to our stray dir inode
-  for (int i = 0; i < NUM_STRAY; ++i)
-    if (strays[i])
-      unpin_stray(strays[i]);
-
   // drop the reference to inode container
   if (container.get_inode())
     unpin_stray(container.get_inode());
@@ -5002,57 +4894,6 @@ bool MDCache::shutdown_pass()
   // done!
   dout(2) << "shutdown done." << dendl;
   return true;
-}
-
-bool MDCache::shutdown_export_strays()
-{
-  if (mds->get_nodeid() == 0) return true;
-  
-  dout(10) << "shutdown_export_strays" << dendl;
-
-  bool done = true;
-  static set<inodeno_t> exported_strays;
-
-  list<CStripe*> stripes;
-  for (int i = 0; i < NUM_STRAY; ++i)
-    if (strays[i])
-      strays[i]->get_stripes(stripes);
-
-  list<CDir*> dfs;
-  while (!stripes.empty()) {
-    CStripe *stripe = stripes.front();
-    stripes.pop_front();
-    stripe->get_dirfrags(dfs);
-  }
-
-  while (!dfs.empty()) {
-    CDir *dir = dfs.front();
-    dfs.pop_front();
-
-    if (!dir->is_complete()) {
-      dir->fetch(0);
-      done = false;
-    }
-
-    for (CDir::map_t::iterator p = dir->items.begin();
-	 p != dir->items.end();
-	 p++) {
-      CDentry *dn = p->second;
-      CDentry::linkage_t *dnl = dn->get_linkage();
-      if (dnl->is_null()) continue;
-      done = false;
-
-      // FIXME: we'll deadlock if a rename fails.
-      if (exported_strays.count(dnl->get_inode()->ino()) == 0) {
-	exported_strays.insert(dnl->get_inode()->ino());
-	migrate_stray(dn, 0);  // send to root!
-      } else {
-	dout(10) << "already exporting " << *dn << dendl;
-      }
-    }
-  }
-
-  return done;
 }
 
 bool MDCache::shutdown_export_caps()
@@ -6228,359 +6069,6 @@ void MDCache::request_kill(MDRequest *mdr)
     dout(10) << "request_kill " << *mdr << " -- already committing, no-op" << dendl;
   }
 }
-
-
-// -------------------------------------------------------------------------------
-// STRAYS
-
-void MDCache::scan_stray_dir()
-{
-  dout(10) << "scan_stray_dir" << dendl;
-  
-  list<CStripe*> stripes;
-  for (int i = 0; i < NUM_STRAY; ++i)
-    if (strays[i])
-      strays[i]->get_stripes(stripes);
-
-  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); s++) {
-    CStripe *stripe = *s;
-    list<CDir*> dirs;
-    stripe->get_dirfrags(dirs);
-    for (list<CDir*>::iterator p = dirs.begin(); p != dirs.end(); p++) {
-      CDir *dir = *p;
-      for (CDir::map_t::iterator q = dir->items.begin(); q != dir->items.end(); q++) {
-        CDentry *dn = q->second;
-        CDentry::linkage_t *dnl = dn->get_projected_linkage();
-        if (dnl->is_primary())
-          maybe_eval_stray(dnl->get_inode());
-      }
-    }
-  }
-}
-
-struct C_MDC_EvalStray : public Context {
-  MDCache *mdcache;
-  CDentry *dn;
-  C_MDC_EvalStray(MDCache *c, CDentry *d) : mdcache(c), dn(d) {}
-  void finish(int r) {
-    mdcache->eval_stray(dn);
-  }
-};
-
-void MDCache::eval_stray(CDentry *dn)
-{
-  dout(10) << "eval_stray " << *dn << dendl;
-  CDentry::linkage_t *dnl = dn->get_projected_linkage();
-  dout(10) << " inode is " << *dnl->get_inode() << dendl;
-  assert(dnl->is_primary());
-  CInode *in = dnl->get_inode();
-  assert(in);
-
-  assert(dn->get_dir()->get_inode()->is_stray());
-
-  if (!dn->is_auth()) {
-    // has to be mine
-    // move to bottom of lru so that we trim quickly!
-    touch_dentry_bottom(dn);
-    return;
-  }
-
-  // purge?
-  if (in->inode.nlink == 0) {
-    if (dn->is_replicated()) {
-      dout(20) << " replicated" << dendl;
-      return;
-    }
-    if (dn->is_any_leases() || in->is_any_caps()) {
-      dout(20) << " caps | leases" << dendl;
-      return;  // wait
-    }
-    if (!in->has_open_stripes()) {
-      dout(20) << " open stripes" << dendl;
-      return;  // wait for dirs to close/trim
-    }
-    if (dn->state_test(CDentry::STATE_PURGING)) {
-      dout(20) << " already purging" << dendl;
-      return;  // already purging
-    }
-    if (in->state_test(CInode::STATE_NEEDSRECOVER) ||
-	in->state_test(CInode::STATE_RECOVERING)) {
-      dout(20) << " pending recovery" << dendl;
-      return;  // don't mess with file size probing
-    }
-    if (in->get_num_ref() > (int)in->is_dirty()) {
-      dout(20) << " too many inode refs" << dendl;
-      return;
-    }
-    if (dn->get_num_ref() > (int)dn->is_dirty() + !!in->get_num_ref()) {
-      dout(20) << " too many dn refs" << dendl;
-      return;
-    }
-    purge_stray(dn);
-  }
-  else if (in->inode.nlink == 1) {
-    // trivial reintegrate?
-    if (!in->remote_parents.empty()) {
-      CDentry *rlink = *in->remote_parents.begin();
-      
-      // don't do anything if the remote parent is projected, or we may
-      // break user-visible semantics!
-      // NOTE: we repeat this check in _rename(), since our submission path is racey.
-      if (!rlink->is_projected()) {
-	if (rlink->is_auth() && rlink->dir->can_auth_pin())
-	  reintegrate_stray(dn, rlink);
-	
-	if (!rlink->is_auth() && dn->is_auth())
-	  migrate_stray(dn, rlink->authority().first);
-      }
-    }
-  } else {
-    // wait for next use.
-  }
-}
-
-void MDCache::eval_remote(CDentry *dn)
-{
-  dout(10) << "eval_remote " << *dn << dendl;
-  CDentry::linkage_t *dnl = dn->get_projected_linkage();
-  assert(dnl->is_remote());
-  CInode *in = dnl->get_inode();
-  if (!in) return;
-
-  // refers to stray?
-  if (in->get_parent_dn()->get_dir()->get_inode()->is_stray()) {
-    if (in->is_auth())
-      eval_stray(in->get_parent_dn());
-    else
-      migrate_stray(in->get_parent_dn(), mds->get_nodeid());
-  }
-}
-
-class C_MDC_PurgeStrayPurged : public Context {
-  MDCache *cache;
-  CDentry *dn;
-public:
-  C_MDC_PurgeStrayPurged(MDCache *c, CDentry *d) : 
-    cache(c), dn(d) { }
-  void finish(int r) {
-    cache->_purge_stray_purged(dn, r);
-  }
-};
-
-void MDCache::purge_stray(CDentry *dn)
-{
-  CDentry::linkage_t *dnl = dn->get_projected_linkage();
-  CInode *in = dnl->get_inode();
-  dout(10) << "purge_stray " << *dn << " " << *in << dendl;
-  assert(!dn->is_replicated());
-
-  dn->state_set(CDentry::STATE_PURGING);
-  dn->get(CDentry::PIN_PURGING);
-  in->state_set(CInode::STATE_PURGING);
-
-  
-  // CHEAT.  there's no real need to journal our intent to purge, since
-  // that is implicit in the dentry's presence and non-use in the stray
-  // dir.  on recovery, we'll need to re-eval all strays anyway.
-  
-  SnapRealm *realm = get_snaprealm();
-  SnapContext nullsnap;
-  const SnapContext *snapc;
-  if (realm) {
-    dout(10) << " realm " << *realm << dendl;
-    snapc = &realm->get_snap_context();
-  } else {
-    dout(10) << " NO realm, using null context" << dendl;
-    snapc = &nullsnap;
-    assert(in->last == CEPH_NOSNAP);
-  }
-
-  if (in->is_dir()) {
-    dout(10) << "purge_stray dir ... implement me!" << dendl;  // FIXME XXX
-    _purge_stray_purged(dn);
-  } else if (in->is_file()) {
-    uint64_t period = (uint64_t)in->inode.layout.fl_object_size * (uint64_t)in->inode.layout.fl_stripe_count;
-    uint64_t cur_max_size = in->inode.get_max_size();
-    uint64_t to = MAX(in->inode.size, cur_max_size);
-    if (to && period) {
-      uint64_t num = (to + period - 1) / period;
-      dout(10) << "purge_stray 0~" << to << " objects 0~" << num << " snapc " << snapc << " on " << *in << dendl;
-      mds->filer->purge_range(in->inode.ino, &in->inode.layout, *snapc,
-			      0, num, ceph_clock_now(g_ceph_context), 0,
-			      new C_MDC_PurgeStrayPurged(this, dn));
-    } else {
-      dout(10) << "purge_stray 0 objects snapc " << snapc << " on " << *in << dendl;
-      _purge_stray_purged(dn);
-    }
-  } else {
-    // not a dir or file; purged!
-    _purge_stray_purged(dn);
-  }
-}
-
-class C_MDC_PurgeStrayLogged : public Context {
-  MDCache *cache;
-  CDentry *dn;
-  LogSegment *ls;
-public:
-  C_MDC_PurgeStrayLogged(MDCache *c, CDentry *d, LogSegment *s)
-      : cache(c), dn(d), ls(s) { }
-  void finish(int r) {
-    cache->_purge_stray_logged(dn, ls);
-  }
-};
-class C_MDC_PurgeStrayLoggedTruncate : public Context {
-  MDCache *cache;
-  CDentry *dn;
-  LogSegment *ls;
-public:
-  C_MDC_PurgeStrayLoggedTruncate(MDCache *c, CDentry *d, LogSegment *s) : 
-    cache(c), dn(d), ls(s) { }
-  void finish(int r) {
-    cache->_purge_stray_logged_truncate(dn, ls);
-  }
-};
-
-void MDCache::_purge_stray_purged(CDentry *dn, int r)
-{
-  assert (r == 0 || r == -ENOENT);
-  CInode *in = dn->get_projected_linkage()->get_inode();
-  dout(10) << "_purge_stray_purged " << *dn << " " << *in << dendl;
-
-  if (in->get_num_ref() == (int)in->is_dirty() &&
-      dn->get_num_ref() == (int)dn->is_dirty() + !!in->get_num_ref() + 1/*PIN_PURGING*/) {
-    // kill dentry.
-    dn->push_projected_linkage(); // NULL
-
-    EUpdate *le = new EUpdate(mds->mdlog, "purge_stray");
-    mds->mdlog->start_entry(le);
-
-    // update dirfrag fragstat, rstat
-    CStripe *stripe = dn->get_stripe();
-    fnode_t *pf = stripe->project_fnode();
-    if (in->is_dir())
-      pf->fragstat.nsubdirs--;
-    else
-      pf->fragstat.nfiles--;
-    pf->rstat.sub(in->inode.accounted_rstat);
-
-    le->metablob.add_stripe_context(stripe);
-    le->metablob.add_dentry(dn, true);
-    le->metablob.add_destroyed_inode(in->ino());
-
-    mds->mdlog->submit_entry(le, new C_MDC_PurgeStrayLogged(this, dn, mds->mdlog->get_current_segment()));
-  } else {
-    // new refs.. just truncate to 0
-    EUpdate *le = new EUpdate(mds->mdlog, "purge_stray truncate");
-    mds->mdlog->start_entry(le);
-    
-    inode_t *pi = in->project_inode();
-    pi->size = 0;
-    pi->client_ranges.clear();
-    pi->truncate_size = 0;
-    pi->truncate_from = 0;
-
-    le->metablob.add_stripe_context(dn->get_stripe());
-    le->metablob.add_inode(in, true);
-
-    mds->mdlog->submit_entry(le, new C_MDC_PurgeStrayLoggedTruncate(this, dn, mds->mdlog->get_current_segment()));
-  }
-}
-
-void MDCache::_purge_stray_logged(CDentry *dn, LogSegment *ls)
-{
-  CInode *in = dn->get_linkage()->get_inode();
-  dout(10) << "_purge_stray_logged " << *dn << " " << *in << dendl;
-
-  dn->state_clear(CDentry::STATE_PURGING);
-  dn->put(CDentry::PIN_PURGING);
-
-  assert(!in->state_test(CInode::STATE_RECOVERING));
-
-  // unlink
-  CDir *dir = dn->get_dir();
-  assert(dn->get_projected_linkage()->is_null());
-  dir->unlink_inode(dn);
-  dn->pop_projected_linkage();
-  dn->mark_dirty(ls);
-
-  dir->get_stripe()->pop_and_dirty_projected_fnode(ls);
-
-  // drop inode
-  if (in->is_dirty())
-    in->mark_clean();
-  remove_inode(in);
-
-  // drop dentry?
-  if (dn->is_new()) {
-    dout(20) << " dn is new, removing" << dendl;
-    dn->mark_clean();
-    dir->remove_dentry(dn);
-  } else
-    touch_dentry_bottom(dn);  // drop dn as quickly as possible.
-}
-
-void MDCache::_purge_stray_logged_truncate(CDentry *dn, LogSegment *ls)
-{
-  CInode *in = dn->get_projected_linkage()->get_inode();
-  dout(10) << "_purge_stray_logged_truncate " << *dn << " " << *in << dendl;
-
-  dn->state_clear(CDentry::STATE_PURGING);
-  dn->put(CDentry::PIN_PURGING);
-
-  in->pop_and_dirty_projected_inode(ls);
-
-  eval_stray(dn);
-}
-
-
-
-void MDCache::reintegrate_stray(CDentry *straydn, CDentry *rdn)
-{
-  dout(10) << "reintegrate_stray " << *straydn << " into " << *rdn << dendl;
-  
-  // rename it to another mds.
-  filepath src;
-  straydn->make_path(src);
-  filepath dst;
-  rdn->make_path(dst);
-
-  MClientRequest *req = new MClientRequest(CEPH_MDS_OP_RENAME);
-  req->set_filepath(dst);
-  req->set_filepath2(src);
-  req->set_tid(mds->issue_tid());
-
-  mds->send_message_mds(req, rdn->authority().first);
-}
- 
-
-void MDCache::migrate_stray(CDentry *dn, int to)
-{
-  CInode *in = dn->get_linkage()->get_inode();
-  assert(in);
-  CInode *diri = dn->dir->get_inode();
-  assert(diri->is_stray());
-  dout(10) << "migrate_stray from mds." << MDS_INO_STRAY_OWNER(diri->inode.ino)
-	   << " to mds." << to
-	   << " " << *dn << " " << *in << dendl;
-
-  // rename it to another mds.
-  filepath src;
-  dn->make_path(src);
-
-  string dname;
-  in->name_stray_dentry(dname);
-  filepath dst(dname, MDS_INO_STRAY(to, 0));
-
-  MClientRequest *req = new MClientRequest(CEPH_MDS_OP_RENAME);
-  req->set_filepath(dst);
-  req->set_filepath2(src);
-  req->set_tid(mds->issue_tid());
-
-  mds->send_message_mds(req, to);
-}
-
-
 
 
 // ========================================================================================

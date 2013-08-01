@@ -92,23 +92,12 @@ class MDCache {
   InodeContainer container;                // inode container dir
   SnapRealm snaprealm;
 
-  CInode *strays[NUM_STRAY];         // my stray dir
-  int stray_index;
-
-  CInode *get_stray() {
-    return strays[stray_index];
-  }
-
   set<CInode*> base_inodes;
 
 public:
   ParentStats parentstats;
 
   SnapRealm* get_snaprealm() { return &snaprealm; }
-
-  void advance_stray() {
-    stray_index = (stray_index+1)%NUM_STRAY;
-  }
 
   DecayRate decayrate;
 
@@ -460,7 +449,6 @@ public:
   void shutdown_start();
   void shutdown_check();
   bool shutdown_pass();
-  bool shutdown_export_strays();
   bool shutdown_export_caps();
   bool shutdown();                    // clear cache (ie at shutodwn)
 
@@ -579,7 +567,6 @@ public:
   void _create_system_file_finish(Mutation *mut, CDentry *dn, Context *fin);
 
   void open_foreign_mdsdir(inodeno_t ino, Context *c);
-  CDentry *get_or_create_stray_dentry(CInode *in);
 
 
   Context *_get_waiter(MDRequest *mdr, Message *req, Context *fin);
@@ -673,31 +660,9 @@ public:
   void _find_ino_dir(inodeno_t ino, Context *c, bufferlist& bl, int r);
 
   // -- stray --
-public:
-  void scan_stray_dir();
-  void eval_stray(CDentry *dn);
-  void eval_remote(CDentry *dn);
-
-  void maybe_eval_stray(CInode *in) {
-    if (in->inode.nlink > 0 || in->is_base())
-      return;
-    CDentry *dn = in->get_projected_parent_dn();
-    if (dn->get_projected_linkage()->is_primary() &&
-	dn->get_dir()->get_inode()->is_stray() &&
-	!dn->is_replicated())
-      eval_stray(dn);
-  }
-protected:
-  void purge_stray(CDentry *dn);
-  void _purge_stray_purged(CDentry *dn, int r=0);
-  void _purge_stray_logged(CDentry *dn, LogSegment *ls);
-  void _purge_stray_logged_truncate(CDentry *dn, LogSegment *ls);
-  friend class C_MDC_PurgeStrayLogged;
-  friend class C_MDC_PurgeStrayLoggedTruncate;
-  friend class C_MDC_PurgeStrayPurged;
-  void reintegrate_stray(CDentry *dn, CDentry *rlink);
-  void migrate_stray(CDentry *dn, int dest);
-
+ public:
+  void scan_stray_dir() {}
+  void maybe_eval_stray(CInode *in) {}
 
   // == messages ==
  public:
