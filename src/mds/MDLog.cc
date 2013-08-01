@@ -623,8 +623,6 @@ void MDLog::standby_trim_segments()
     seg->dirty_dentries.clear_list();
     seg->open_files.clear_list();
     seg->dirty_parent_inodes.clear_list();
-    seg->dirty_dirfrag_dir.clear_list();
-    seg->dirty_dirfrag_nest.clear_list();
     remove_oldest_segment();
     removed_segment = true;
   }
