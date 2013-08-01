@@ -552,7 +552,7 @@ inline bool operator==(const inoparent_t &l, const inoparent_t &r) {
   return l.stripe == r.stripe && l.name == r.name;
 }
 inline ostream& operator<<(ostream &out, const inoparent_t &p) {
-  return out << p.stripe << ':' << p.name;
+  return out << p.stripe << '/' << p.name;
 }
 
 inline void update_inoparents(list<inoparent_t> &parents,
