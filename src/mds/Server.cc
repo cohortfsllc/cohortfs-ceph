@@ -5192,6 +5192,16 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
     mds->mdcache->add_uncommitted_master(mdr->reqid, mdr->ls, mdr->more()->witnessed);
   }
 
+  // unlink local stripes
+  for (stripeid_t i = 0; i < in->get_stripe_count(); ++i) {
+    CStripe *stripe = in->get_stripe(i);
+    if (!stripe->is_auth())
+      continue;
+    assert(stripe->is_open());
+    stripe->state_set(CStripe::STATE_UNLINKED);
+    le->metablob.add_stripe(stripe, true, false, true);
+  }
+
   // the unlinked dentry
   inode_t *pi = in->project_inode();
   mdr->add_projected_inode(in);
@@ -5293,27 +5303,6 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
 
   dout(10) << "handle_slave_rmdir_prep " << *mdr << " " << req->src.dn << dendl;
 
-  CInode *in = mdcache->get_inode(req->src.ino);
-
-  // open all associated stripes and flag as unlinked
-  C_GatherBuilder gather(g_ceph_context);
-  vector<CStripe*> stripes;
-
-  for (vector<stripeid_t>::iterator i = req->stripes.begin();
-       i != req->stripes.end(); ++i) {
-    CStripe *stripe = in->get_or_open_stripe(*i);
-    if (!stripe->is_open())
-      stripe->fetch(gather.new_sub());
-    else
-      stripes.push_back(stripe);
-  }
-
-  if (gather.has_subs()) {
-    gather.set_finisher(new C_MDS_RetryRequest(mdcache, mdr));
-    gather.activate();
-    return;
-  }
-
   mdr->now = req->now;
 
   // initialize rollback
@@ -5340,14 +5329,15 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
   mdlog->start_entry(le);
   le->rollback = mdr->more()->rollback_bl;
 
-  le->commit.add_inode(in, true);
-  // slave: no need to journal original dentry
+  CInode *in = mdcache->get_inode(req->src.ino);
+  le->commit.add_inode(in, false);
 
   // journal each stripe as dirty/unlinked
-  for (vector<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CStripe *stripe = *s;
+  for (vector<stripeid_t>::iterator i = rollback.stripes.begin();
+       i != rollback.stripes.end(); ++i) {
+    CStripe *stripe = in->get_stripe(*i);
+    assert(stripe->is_open()); // master holds rdlock
     stripe->state_set(CStripe::STATE_UNLINKED);
-    dout(10) << "stripe " << *stripe << " unlinked" << dendl;
     le->commit.add_stripe(stripe, true, false, true);
   }
 
@@ -5358,8 +5348,7 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
 struct C_MDS_SlaveRmdirCommit : public Context {
   Server *server;
   MDRequest *mdr;
-  C_MDS_SlaveRmdirCommit(Server *s, MDRequest *r)
-    : server(s), mdr(r) { }
+  C_MDS_SlaveRmdirCommit(Server *s, MDRequest *r) : server(s), mdr(r) {}
   void finish(int r) {
     server->_commit_slave_rmdir(mdr, r);
   }

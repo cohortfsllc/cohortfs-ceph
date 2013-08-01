@@ -122,6 +122,7 @@ ostream& operator<<(ostream& out, CStripe &s)
   if (s.state_test(CStripe::STATE_FROZEN)) out << " FROZEN";
   if (s.state_test(CStripe::STATE_COMMITTING)) out << " COMMITTING";
   if (s.state_test(CStripe::STATE_UNLINKED)) out << " UNLINKED";
+  if (s.state_test(CStripe::STATE_PURGING)) out << " PURGING";
 
   if (s.is_rep()) out << " REP";
 
@@ -153,6 +154,7 @@ CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
     committed_version(0),
     item_dirty(this),
     item_new(this),
+    item_stray(this),
     item_dirty_rstat(this),
     stickydir_ref(0),
     dirfragtreelock(this, &dirfragtreelock_type),
@@ -504,6 +506,19 @@ void CStripe::mark_new(LogSegment *ls)
   dout(10) << "mark_new " << *this << dendl;
 
   ls->new_stripes.push_back(&item_new);
+}
+
+void CStripe::clear_dirty_parent_stats()
+{
+  if (state_test(CStripe::STATE_DIRTYFRAGSTAT)) {
+    state_clear(CStripe::STATE_DIRTYFRAGSTAT);
+    put(CStripe::PIN_DIRTYFRAGSTAT);
+  }
+  if (state_test(CStripe::STATE_DIRTYRSTAT)) {
+    state_clear(CStripe::STATE_DIRTYRSTAT);
+    put(CStripe::PIN_DIRTYRSTAT);
+  }
+  item_dirty_rstat.remove_myself();
 }
 
 

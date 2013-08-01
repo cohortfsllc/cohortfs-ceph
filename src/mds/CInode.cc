@@ -242,6 +242,7 @@ CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
     item_caps(this),
     item_open_file(this),
     item_renamed_file(this),
+    item_stray(this),
     auth_pins(0),
     auth_pin_freeze_allowance(0),
     authlock(this, &authlock_type),
@@ -476,6 +477,7 @@ void CInode::close_stripe(CStripe *stripe)
  
   if (stickystripe_ref > 0)
     stripe->put_stickydirs();
+  stripe->item_stray.remove_myself();
 
   assert(stripe->get_num_ref() == 0);
   stripes.erase(stripe->get_stripeid());

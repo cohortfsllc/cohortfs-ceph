@@ -1354,6 +1354,7 @@ libmds_a_SOURCES = \
 	mds/SnapServer.cc \
 	mds/snap.cc \
 	mds/SessionMap.cc \
+	mds/Stray.cc \
 	mds/MDLog.cc \
 	osdc/Journaler.cc
 noinst_LIBRARIES += libmds.a
@@ -1680,6 +1681,7 @@ noinst_HEADERS = \
         mds/SimpleLock.h\
         mds/SnapClient.h\
         mds/SnapServer.h\
+        mds/Stray.h\
         mds/events/ECommitted.h\
         mds/events/EExport.h\
         mds/events/EFragment.h\

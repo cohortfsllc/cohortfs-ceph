@@ -123,7 +123,11 @@ long g_num_caps = 0;
 set<int> SimpleLock::empty_gather_set;
 
 
-MDCache::MDCache(MDS *m) : container(this), snaprealm(this), parentstats(m)
+MDCache::MDCache(MDS *m)
+  : container(this),
+    snaprealm(this),
+    parentstats(m),
+    stray(m)
 {
   mds = m;
   migrator = new Migrator(mds, this);
@@ -228,6 +232,7 @@ void MDCache::remove_inode(CInode *o)
   o->nestlock.remove_dirty();
 
   o->item_open_file.remove_myself();
+  o->item_stray.remove_myself();
 
   // remove from inode map
   inodes.erase(o->vino());    
@@ -2378,7 +2383,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
       dout(5) << " missing stripe " << *s << dendl;
     assert(stripe);
     if (survivor && stripe->is_replica(from)) 
-      stripe->remove_replica(from);
+      stripe_remove_replica(stripe, from);
 
     int snonce = stripe->add_replica(from);
     dout(10) << " have stripe " << *stripe << dendl;
@@ -4697,6 +4702,20 @@ void MDCache::dentry_remove_replica(CDentry *dn, int from)
   CDentry::linkage_t *dnl = dn->get_projected_linkage();
   if (dnl->is_primary())
     maybe_eval_stray(dnl->get_inode());
+}
+
+void MDCache::stripe_remove_replica(CStripe *stripe, int from)
+{
+  stripe->remove_replica(from);
+
+  // fix locks
+  if (stripe->linklock.remove_replica(from))
+    mds->locker->eval_gather(&stripe->linklock);
+  if (stripe->nestlock.remove_replica(from))
+    mds->locker->eval_gather(&stripe->nestlock);
+
+  // trim?
+  stray.eval(stripe);
 }
 
 void MDCache::trim_client_leases()

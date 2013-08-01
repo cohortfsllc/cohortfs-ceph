@@ -82,6 +82,7 @@ class CStripe : public MDSCacheObject {
   static const unsigned STATE_DIRTYFRAGSTAT = (1<<4);
   static const unsigned STATE_DIRTYRSTAT    = (1<<5);
   static const unsigned STATE_UNLINKED      = (1<<6);
+  static const unsigned STATE_PURGING       = (1<<7);
 
   // these state bits are preserved by an import/export
   static const unsigned MASK_STATE_EXPORTED =
@@ -154,6 +155,7 @@ class CStripe : public MDSCacheObject {
 
  public:
   elist<CStripe*>::item item_dirty, item_new;
+  elist<CStripe*>::item item_stray;
   elist<CStripe*>::item item_dirty_rstat;
 
   version_t get_version() const { return fnode.version; }
@@ -182,6 +184,8 @@ class CStripe : public MDSCacheObject {
   void mark_clean();
 
   void mark_new(LogSegment *ls);
+
+  void clear_dirty_parent_stats();
 
   // -- dirfrags --
  private:
