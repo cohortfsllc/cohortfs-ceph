@@ -538,7 +538,7 @@ void CInode::last_put()
 void CInode::_put()
 {
   if (get_num_ref() == (int)is_dirty() + (int)is_dirty_parent())
-    mdcache->maybe_eval_stray(this, true);
+    mdcache->maybe_eval_stray(this);
 }
 
 void CInode::add_remote_parent(CDentry *p) 
