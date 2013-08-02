@@ -157,6 +157,7 @@ class CStripe : public MDSCacheObject {
   elist<CStripe*>::item item_dirty, item_new;
   elist<CStripe*>::item item_stray;
   elist<CStripe*>::item item_dirty_rstat;
+  elist<CStripe*>::item item_nonauth;
 
   version_t get_version() const { return fnode.version; }
   void set_version(version_t v) {

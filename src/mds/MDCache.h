@@ -679,6 +679,8 @@ public:
 
  protected:
   // -- replicas --
+  elist<CStripe*> nonauth_stripes;
+
   void handle_discover(MDiscover *dis);
   void handle_discover_reply(MDiscoverReply *m);
   friend class C_MDC_Join;

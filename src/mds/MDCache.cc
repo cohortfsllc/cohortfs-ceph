@@ -127,7 +127,8 @@ MDCache::MDCache(MDS *m)
   : container(this),
     snaprealm(this),
     parentstats(m),
-    stray(m)
+    stray(m),
+    nonauth_stripes(member_offset(CStripe, item_nonauth))
 {
   mds = m;
   migrator = new Migrator(mds, this);
@@ -1864,6 +1865,9 @@ void MDCache::rejoin_send_rejoins()
       in->get_stripes(stripes);
   }
 
+  // include inode container stripes
+  get_container()->get_inode()->get_stripes(stripes);
+
   for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CStripe *stripe = *s;
     int who = stripe->authority().first;
@@ -1873,6 +1877,7 @@ void MDCache::rejoin_send_rejoins()
 
     dout(15) << "rejoining " << *stripe << " for mds." << who << dendl;
     p->second->add_weak_stripe(stripe->dirstripe());
+    nonauth_stripes.push_back(&stripe->item_nonauth);
   }
 #if 0 
   // check all subtrees
@@ -4021,18 +4026,15 @@ bool MDCache::trim(int max)
       i != unexpirables.end();
       ++i)
     lru.lru_insert_mid(*i);
-#if 0
-  // trim non-auth, non-bound subtrees
-  for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
-       p != subtrees.end();) {
-    CStripe *stripe = p->first;
-    p++;
-    if (!stripe->is_auth() &&
-        !stripe->get_inode()->is_auth() &&
-        stripe->get_num_ref() == 1) // subtree pin
-      trim_stripe(stripe, 0, expiremap);
+
+  // trim non-auth stripes
+  for (elist<CStripe*>::iterator p = nonauth_stripes.begin(); !p.end(); ++p) {
+    CStripe *stripe = *p;
+    assert(!stripe->is_auth());
+    if (stripe->get_num_ref() == 0)
+      trim_stripe(stripe, expiremap);
   }
-#endif
+
   // trim root?
   if (max == 0 && root) {
     list<CStripe*> ls;
@@ -4170,6 +4172,7 @@ void MDCache::trim_stripe(CStripe *stripe, map<int, MCacheExpire*>& expiremap)
   // STRIPE
   if (!stripe->is_auth()) {
     pair<int,int> auth = stripe->authority();
+    stripe->item_nonauth.remove_myself();
 
     for (int p=0; p<2; p++) {
       int a = auth.first;
@@ -4542,35 +4545,6 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
     }
   }
 
-  // STRIPES
-  for (map<dirstripe_t,int>::iterator it = m->stripes.begin();
-       it != m->stripes.end();
-       it++) {
-    CStripe *stripe = get_dirstripe(it->first);
-    int nonce = it->second;
-
-    if (!stripe) {
-      dout(0) << " stripe expire on " << it->first << " from " << from 
-          << ", don't have it" << dendl;
-      assert(stripe);
-    }
-    assert(stripe->is_auth());
-
-    // check nonce
-    if (nonce == stripe->get_replica_nonce(from)) {
-      // remove from our cached_by
-      dout(7) << " stripe expire on " << *stripe << " from mds." << from
-          << " replicas was " << stripe->get_replicas() << dendl;
-      stripe->remove_replica(from);
-    } 
-    else {
-      // this is an old nonce, ignore expire.
-      dout(7) << " stripe expire on " << *stripe << " from mds." << from 
-          << " with old nonce " << nonce << " (current " << stripe->get_replica_nonce(from)
-          << "), dropping" << dendl;
-    }
-  }
-
   // DIRS
   for (map<dirfrag_t,int>::iterator it = m->dirs.begin();
        it != m->dirs.end();
@@ -4596,6 +4570,35 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
       // this is an old nonce, ignore expire.
       dout(7) << " dir expire on " << *dir << " from mds." << from 
           << " with old nonce " << nonce << " (current " << dir->get_replica_nonce(from)
+          << "), dropping" << dendl;
+    }
+  }
+
+  // STRIPES
+  for (map<dirstripe_t,int>::iterator it = m->stripes.begin();
+       it != m->stripes.end();
+       it++) {
+    CStripe *stripe = get_dirstripe(it->first);
+    int nonce = it->second;
+
+    if (!stripe) {
+      dout(0) << " stripe expire on " << it->first << " from " << from 
+          << ", don't have it" << dendl;
+      assert(stripe);
+    }
+    assert(stripe->is_auth());
+
+    // check nonce
+    if (nonce == stripe->get_replica_nonce(from)) {
+      // remove from our cached_by
+      dout(7) << " stripe expire on " << *stripe << " from mds." << from
+          << " replicas was " << stripe->get_replicas() << dendl;
+      stripe_remove_replica(stripe, from);
+    } 
+    else {
+      // this is an old nonce, ignore expire.
+      dout(7) << " stripe expire on " << *stripe << " from mds." << from 
+          << " with old nonce " << nonce << " (current " << stripe->get_replica_nonce(from)
           << "), dropping" << dendl;
     }
   }
@@ -6937,6 +6940,7 @@ CStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
     stripe->decode_replica(p, false);
     dout(7) << "add_replica_stripe had " << *stripe
         << " nonce " << stripe->get_replica_nonce() << dendl;
+    assert(stripe->item_nonauth.is_on_list());
   } else {
     assert(ds.stripeid < diri->get_stripe_count());
     stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, from));
@@ -6945,6 +6949,7 @@ CStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
         << " nonce " << stripe->get_replica_nonce() << dendl;
 
     stripe->set_stripe_auth(from);
+    nonauth_stripes.push_back(&stripe->item_nonauth);
 
     diri->take_stripe_waiting(ds.stripeid, finished);
   }
