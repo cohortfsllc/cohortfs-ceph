@@ -1007,7 +1007,8 @@ int OSD::init_super()
 
   service->init();
   service->publish_map(osdmap);
-  service->publish_superblock(superblock);
+#warning Volume!
+  service->publish_superblock(uuid_d(), superblock);
 
   osd_lock.Unlock();
 
@@ -3251,7 +3252,8 @@ void OSD::handle_osd_map(MOSDMap *m)
     _t,
     new C_OnMapApply(service.get(), _t, pinned_maps, osdmap->get_epoch()),
     0, fin);
-  service->publish_superblock(superblock);
+#warning Volume!
+  service->publish_superblock(uuid_d(), superblock);
 
   map_lock.put_write();
 

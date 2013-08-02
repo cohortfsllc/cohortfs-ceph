@@ -156,14 +156,19 @@ public:
 
   // -- superblock --
   Mutex publish_lock, pre_publish_lock;
-  OSDSuperblock superblock;
-  OSDSuperblock get_superblock() {
+  map<uuid_d,OSDSuperblock> superblocks;
+  OSDSuperblock get_superblock(const uuid_d &vol) {
     Mutex::Locker l(publish_lock);
-    return superblock;
+    map<uuid_d,OSDSuperblock>::const_iterator i = superblocks.find(vol);
+    /* TODO: Make sure callers will always know whether the volume exists. */
+    return i->second;
   }
-  void publish_superblock(const OSDSuperblock &block) {
+  void publish_superblock(const uuid_d &vol,
+			  const OSDSuperblock &block) {
     Mutex::Locker l(publish_lock);
-    superblock = block;
+    map<uuid_d,OSDSuperblock>::iterator i = superblocks.find(vol);
+    /* TODO: Make sure callers will always know whether the volume exists. */
+    i->second = block;
   }
 
   int get_nodeid() const { return whoami; }
@@ -399,7 +404,7 @@ protected:
 public:
   ClassHandler  *class_handler;
   int get_nodeid() { return whoami; }
-  
+
   static hobject_t get_osdmap_pobject_name(epoch_t epoch) { 
     char foo[20];
     snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
