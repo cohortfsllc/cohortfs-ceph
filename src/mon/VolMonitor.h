@@ -23,7 +23,7 @@ using namespace std;
 #include "PaxosService.h"
 #include "Session.h"
 
-#include "VolMap.h"
+#include "vol/VolMap.h"
 
 
 class MMonCommand;

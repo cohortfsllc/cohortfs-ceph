@@ -93,7 +93,7 @@ enum {
  - Inode has ref count for each Fh, Dir, or Dentry that points to it.
  - when Inode ref goes to 0, it's expired.
  - when Dir is empty, it's removed (and it's Inode ref--)
- 
+
 */
 
 /* getdir result */
