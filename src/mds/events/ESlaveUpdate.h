@@ -27,9 +27,7 @@ struct link_rollback {
   metareqid_t reqid;
   inodeno_t ino;
   bool was_inc;
-  utime_t old_ctime;
-  utime_t old_dir_mtime;
-  utime_t old_dir_rctime;
+  utime_t ctime;
   inoparent_t parent;
 
   link_rollback() : was_inc(false) {}
