@@ -517,16 +517,10 @@ class EMetaBlob {
                  CDentry *removed_parent = NULL)
   {
     inoparent_t added, removed;
-    if (added_parent) {
-      added.stripe = added_parent->get_stripe()->dirstripe();
-      added.who = added_parent->authority().first;
-      added.name = added_parent->get_name();
-    }
-    if (removed_parent) {
-      removed.stripe = removed_parent->get_stripe()->dirstripe();
-      removed.who = removed_parent->authority().first;
-      removed.name = removed_parent->get_name();
-    }
+    if (added_parent)
+      added = added_parent->inoparent();
+    if (removed_parent)
+      removed = removed_parent->inoparent();
     add_inode(in, true,
               added_parent ? &added : NULL,
               removed_parent ? &removed : NULL);
