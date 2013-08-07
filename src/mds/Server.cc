@@ -4433,12 +4433,15 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdr->now = ceph_clock_now(g_ceph_context);
   snapid_t follows = mdcache->get_snaprealm()->get_newest_seq();
 
+  // it's a symlink
   const unsigned mode = S_IFLNK | 0777;
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
   assert(newi);
 
-  // it's a symlink
-  dn->push_projected_linkage(newi);
+  // primary link to inode container
+  inodn->push_projected_linkage(newi);
+  // remote link to filesystem namespace
+  dn->push_projected_linkage(newi->ino(), newi->d_type());
 
   newi->symlink = req->get_path2();
   newi->inode.size = newi->symlink.length();
