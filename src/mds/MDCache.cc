@@ -6206,12 +6206,23 @@ class C_MDC_DiscoverPath : public Context {
   }
 };
 
+static __u32 pick_stripe(CInode *in, const string &dname)
+{
+  if (in->ino() == MDS_INO_CONTAINER) {
+    inodeno_t ino;
+    istringstream stream(dname);
+    stream >> hex >> ino.val;
+    return in->mdcache->get_container()->place(ino);
+  }
+
+  return in->pick_stripe(dname);
+}
+
 void MDCache::discover_path(CInode *base, snapid_t snap,
 			    const filepath &want_path, Context *onfinish,
 			    bool want_xlocked, int from)
 {
-  __u32 dnhash = base->hash_dentry_name(want_path[0]);
-  dirstripe_t ds(base->ino(), dnhash % base->get_stripe_count());
+  dirstripe_t ds(base->ino(), pick_stripe(base, want_path[0]));
 
   if (from < 0)
     from = base->get_stripe_auth(ds.stripeid);
