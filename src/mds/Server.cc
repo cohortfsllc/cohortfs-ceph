@@ -4489,10 +4489,15 @@ void Server::handle_client_link(MDRequest *mdr)
 
   CDentry *dn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks, false, false, false);
   if (!dn) return;
-  CInode *targeti = rdlock_path_pin_ref(mdr, 1, rdlocks, false);
-  if (!targeti) return;
   if (mdr->snapid != CEPH_NOSNAP) {
     reply_request(mdr, -EROFS);
+    return;
+  }
+
+  inodeno_t ino = req->get_filepath2().get_ino();
+  CInode *targeti = mdcache->get_inode(ino);
+  if (!targeti) {
+    mdcache->open_remote_ino(ino, new C_MDS_RetryRequest(mdcache, mdr));
     return;
   }
 
@@ -4634,7 +4639,7 @@ void Server::_link_remote(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti
       op = MMDSSlaveRequest::OP_UNLINKPREP;
     MMDSSlaveRequest *req = new MMDSSlaveRequest(mdr->reqid, mdr->attempt, op);
     targeti->set_object_info(req->get_object_info());
-    req->get_object_info().dname = dn->get_name();
+    req->src.dn = dn->inoparent();
     req->now = mdr->now;
     mds->send_message_mds(req, linkauth);
 
@@ -4659,17 +4664,16 @@ void Server::_link_remote(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti
   }
 
   if (inc) {
+    targeti->inode.nlink++;
     mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, 1);
     dn->push_projected_linkage(targeti->ino(), targeti->d_type());
     le->metablob.add_dentry(dn, true); // new remote
   } else {
+    targeti->inode.nlink--;
     mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, -1);
     mdcache->journal_cow_dentry(mdr, &le->metablob, dn);
     le->metablob.add_dentry(dn, true);
   }
-
-  if (mdr->more()->dst_reanchor_atid)
-    le->metablob.add_table_transaction(TABLE_ANCHOR, mdr->more()->dst_reanchor_atid);
 
   journal_and_reply(mdr, targeti, dn, le, new C_MDS_link_remote_finish(mds, mdr, inc, dn, targeti));
 }
@@ -4698,10 +4702,6 @@ void Server::_link_remote_finish(MDRequest *mdr, bool inc,
     mds->mdcache->send_dentry_link(dn);
   else
     mds->mdcache->send_dentry_unlink(dn, NULL);
-  
-  // commit anchor update?
-  if (mdr->more()->dst_reanchor_atid) 
-    mds->anchorclient->commit(mdr->more()->dst_reanchor_atid, mdr->ls);
 
   // bump target popularity
   mds->balancer->hit_inode(mdr->now, targeti, META_POP_IWR);
@@ -4735,7 +4735,8 @@ public:
 /* This function DOES put the mdr->slave_request before returning*/
 void Server::handle_slave_link_prep(MDRequest *mdr)
 {
-  MDSCacheObjectInfo &info = mdr->slave_request->get_object_info();
+  MMDSSlaveRequest *req = mdr->slave_request;
+  const MDSCacheObjectInfo &info = req->get_object_info();
 
   dout(10) << "handle_slave_link_prep " << *mdr << " on " << info << dendl;
 
@@ -4744,11 +4745,8 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
   CInode *targeti = mdcache->get_inode(info.ino);
   assert(targeti);
   dout(10) << "targeti " << *targeti << dendl;
-  CDentry *dn = targeti->get_parent_dn();
-  CDentry::linkage_t *dnl = dn->get_linkage();
-  assert(dnl->is_primary());
 
-  mdr->now = mdr->slave_request->now;
+  mdr->now = req->now;
 
   mdr->auth_pin(targeti);
 
@@ -4760,46 +4758,34 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
 				      ESlaveUpdate::OP_PREPARE, ESlaveUpdate::LINK);
   mdlog->start_entry(le);
 
-  CInode *in = dnl->get_inode();
-  inode_t *pi = in->project_inode();
-  mdr->add_projected_inode(in);
+  inode_t *pi = targeti->project_inode();
+  mdr->add_projected_inode(targeti);
 
   link_rollback rollback;
-  rollback.parent.stripe = dn->get_stripe()->dirstripe();
-  rollback.parent.who = mdr->slave_to_mds;
-  rollback.parent.name = dn->get_name();
-
-  // update journaled target inode
-  bool inc;
-  if (mdr->slave_request->get_op() == MMDSSlaveRequest::OP_LINKPREP) {
-    inc = true;
-    pi->nlink++;
-    in->project_added_parent(rollback.parent);
-    le->commit.add_inode(in, false, &rollback.parent);
-  } else {
-    inc = false;
-    pi->nlink--;
-    in->project_removed_parent(rollback.parent);
-    le->commit.add_inode(in, false, NULL, &rollback.parent);
-  }
-
   rollback.reqid = mdr->reqid;
   rollback.ino = targeti->ino();
-  rollback.old_ctime = targeti->inode.ctime;
-  fnode_t *pf = targeti->get_parent_stripe()->get_projected_fnode();
-  rollback.old_dir_mtime = pf->fragstat.mtime;
-  rollback.old_dir_rctime = pf->rstat.rctime;
-  rollback.was_inc = inc;
+  rollback.ctime = pi->ctime;
+  rollback.parent = req->src.dn;
+
+  // update journaled target inode
+  if (req->get_op() == MMDSSlaveRequest::OP_LINKPREP) {
+    rollback.was_inc = true;
+    pi->nlink++;
+    targeti->project_added_parent(rollback.parent);
+    le->commit.add_inode(targeti, false, &rollback.parent);
+  } else {
+    rollback.was_inc = false;
+    pi->nlink--;
+    targeti->project_removed_parent(rollback.parent);
+    le->commit.add_inode(targeti, false, NULL, &rollback.parent);
+  }
+
   ::encode(rollback, le->rollback);
   mdr->more()->rollback_bl = le->rollback;
 
   pi->ctime = mdr->now;
 
   dout(10) << " projected inode " << pi << " v " << pi->version << dendl;
-
-  // commit case
-  mdcache->predirty_journal_parents(mdr, &le->commit, dnl->get_inode(), 0, PREDIRTY_SHALLOW|PREDIRTY_PRIMARY, 0);
-  mdcache->journal_dirty_inode(mdr, &le->commit, targeti);
 
   mdlog->submit_entry(le, new C_MDS_SlaveLinkPrep(this, mdr, targeti));
   mdlog->flush();
@@ -4915,21 +4901,8 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   inode_t *pi = in->project_inode();
   mut->add_projected_inode(in);
 
-  // parent dir rctime
-  CDir *parent = in->get_projected_parent_dir();
-  CStripe *stripe = parent->get_stripe();
-  fnode_t *pf = stripe->project_fnode();
-  mut->add_projected_fnode(stripe);
-  if (pf->fragstat.mtime == pi->ctime) {
-    pf->fragstat.mtime = rollback.old_dir_mtime;
-    if (pf->rstat.rctime == pi->ctime)
-      pf->rstat.rctime = rollback.old_dir_rctime;
-    mut->add_updated_lock(&in->filelock);
-    mut->add_updated_lock(&in->nestlock);
-  }
-
   // inode
-  pi->ctime = rollback.old_ctime;
+  pi->ctime = rollback.ctime;
   if (rollback.was_inc) {
     pi->nlink--;
     in->project_removed_parent(rollback.parent);
@@ -4942,8 +4915,6 @@ void Server::do_link_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   ESlaveUpdate *le = new ESlaveUpdate(mdlog, "slave_link_rollback", rollback.reqid, master,
 				      ESlaveUpdate::OP_ROLLBACK, ESlaveUpdate::LINK);
   mdlog->start_entry(le);
-  le->commit.add_stripe_context(stripe);
-  le->commit.add_dentry(in->get_projected_parent_dn(), true);
   if (rollback.was_inc)
     le->commit.add_inode(in, true, &rollback.parent);
   else

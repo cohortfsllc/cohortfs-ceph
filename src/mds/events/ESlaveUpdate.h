@@ -27,9 +27,7 @@ struct link_rollback {
   metareqid_t reqid;
   inodeno_t ino;
   bool was_inc;
-  utime_t old_ctime;
-  utime_t old_dir_mtime;
-  utime_t old_dir_rctime;
+  utime_t ctime;
   inoparent_t parent;
 
   void encode(bufferlist &bl) const {
@@ -38,9 +36,7 @@ struct link_rollback {
     ::encode(reqid, bl);
     ::encode(ino, bl);
     ::encode(was_inc, bl);
-    ::encode(old_ctime, bl);
-    ::encode(old_dir_mtime, bl);
-    ::encode(old_dir_rctime, bl);
+    ::encode(ctime, bl);
     ::encode(parent, bl);
   }
   void decode(bufferlist::iterator &bl) {
@@ -49,9 +45,7 @@ struct link_rollback {
     ::decode(reqid, bl);
     ::decode(ino, bl);
     ::decode(was_inc, bl);
-    ::decode(old_ctime, bl);
-    ::decode(old_dir_mtime, bl);
-    ::decode(old_dir_rctime, bl);
+    ::decode(ctime, bl);
     ::decode(parent, bl);
   }
 };
