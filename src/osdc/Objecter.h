@@ -673,14 +673,15 @@ struct ObjectOperation {
 
 
 class Objecter {
- public:  
+ public:
   Messenger *messenger;
   MonClient *monc;
-  OSDMap    *osdmap;
+  std::tr1::shared_ptr<OSDMap> osdmap;
+  VolMapRef volmap;
   CephContext *cct;
 
   bool initialized;
- 
+
  private:
   tid_t last_tid;
   int client_inc;

@@ -40,24 +40,24 @@ void VolMonitor::create_initial()
 void VolMonitor::update_from_paxos(bool *need_bootstrap)
 {
   version_t version = get_version();
-  if (version == volmap.version)
+  if (version == volmap->version)
     return;
-  assert(version >= volmap.version);
+  assert(version >= volmap->version);
 
   /* Obtain latest full pgmap version, if available and whose version is
    * greater than the current pgmap's version.
    */
   version_t latest_full = get_version_latest_full();
-  if ((latest_full > 0) && (latest_full > volmap.version)) {
+  if ((latest_full > 0) && (latest_full > volmap->version)) {
     bufferlist latest_bl;
     int err = get_version_full(latest_full, latest_bl);
     assert(err == 0);
     dout(7) << __func__ << " loading latest full volmap v"
 	    << latest_full << dendl;
     try {
-      VolMap tmp_volmap;
+      VolMapRef tmp_volmap(new VolMap);
       bufferlist::iterator p = latest_bl.begin();
-      tmp_volmap.decode(p);
+      tmp_volmap->decode(p);
       volmap = tmp_volmap;
     } catch (const std::exception& e) {
       dout(0) << __func__ << ": error parsing update: "
@@ -68,14 +68,14 @@ void VolMonitor::update_from_paxos(bool *need_bootstrap)
   }
 
   // walk through incrementals
-  while (version > volmap.version) {
+  while (version > volmap->version) {
     bufferlist bl;
-    int err = get_version(volmap.version + 1, bl);
+    int err = get_version(volmap->version + 1, bl);
     assert(err == 0);
     assert(bl.length());
 
     dout(7) << "update_from_paxos  applying incremental "
-	    << volmap.version + 1 << dendl;
+	    << volmap->version + 1 << dendl;
     VolMap::Incremental inc;
     try {
       bufferlist::iterator p = bl.begin();
@@ -87,12 +87,12 @@ void VolMonitor::update_from_paxos(bool *need_bootstrap)
       return;
     }
 
-    volmap.apply_incremental(g_ceph_context, inc);
+    volmap->apply_incremental(g_ceph_context, inc);
 
     dout(10) << volmap << dendl;
   }
 
-  assert(version == volmap.version);
+  assert(version == volmap->version);
 
   update_trim();
 }
@@ -100,11 +100,11 @@ void VolMonitor::update_from_paxos(bool *need_bootstrap)
 
 void VolMonitor::create_pending()
 {
-  pending_volmap = volmap;
-  pending_volmap.epoch++;
+  pending_volmap.reset(new VolMap(*volmap));
+  pending_volmap->epoch++;
 
   pending_inc = VolMap::Incremental();
-  pending_inc.version = volmap.version + 1;
+  pending_inc.version = volmap->version + 1;
 
   dout(10) << "create_pending v" << pending_inc.version << dendl;
 }
@@ -124,14 +124,14 @@ void VolMonitor::encode_pending(MonitorDBStore::Transaction* t)
 
 void VolMonitor::encode_full(MonitorDBStore::Transaction* t)
 {
-  dout(10) << __func__ << " volmap v " << volmap.version << dendl;
-  assert(get_version() == volmap.version);
+  dout(10) << __func__ << " volmap v " << volmap->version << dendl;
+  assert(get_version() == volmap->version);
 
   bufferlist full_bl;
-  volmap.encode(full_bl, mon->get_quorum_features());
+  volmap->encode(full_bl, mon->get_quorum_features());
 
-  put_version_full(t, volmap.version, full_bl);
-  put_version_latest_full(t, volmap.version);
+  put_version_full(t, volmap->version, full_bl);
+  put_version_latest_full(t, volmap->version);
 }
 
 void VolMonitor::update_trim()
@@ -205,14 +205,14 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
 
   if (m->cmd.size() > 1) {
     if (m->cmd[1] == "list" && m->cmd.size() == 2) {
-      if (volmap.empty()) {
+      if (volmap->empty()) {
 	ss << "volmap is empty" << std::endl;
       } else {
-	ss << "volmap has " << volmap.size() << " entries" << std::endl;
+	ss << "volmap has " << volmap->size() << " entries" << std::endl;
 	stringstream ds;
 	for (map<string,VolMap::vol_info_t>::const_iterator i
-	       = volmap.begin_n();
-	     i != volmap.end_n();
+	       = volmap->begin_n();
+	     i != volmap->end_n();
 	     ++i) {
 	  ds << i->second << std::endl;
 	}
@@ -222,7 +222,8 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
     } else if (m->cmd[1] == "lookup" && m->cmd.size() == 3) {
       const string& searchKey = m->cmd[2];
       const size_t maxResults = 100;
-      const vector<VolMap::vol_info_t> results = volmap.search_vol_info(searchKey, maxResults);
+      const vector<VolMap::vol_info_t> results
+	= volmap->search_vol_info(searchKey, maxResults);
       if (results.empty()) {
 	ss << "no volmap entries match \"" << searchKey << "\"";
 	r = -ENOENT;
@@ -281,7 +282,7 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 	ss << error_message;
 	r = -EINVAL;
       } else {
-	r = pending_volmap.create_volume(name, uuid);
+	r = pending_volmap->create_volume(name, uuid);
 	if (r == 0) {
 	  ss << "volume " << uuid << " created with name \"" << name << "\"";
 	  pending_inc.include_addition(uuid, name);
@@ -300,7 +301,7 @@ bool VolMonitor::prepare_command(MMonCommand *m)
 	uuid_d uuid;
 	try {
 	  uuid = uuid_d::parse(uuid_str);
-	  r = pending_volmap.remove_volume(uuid, name);
+	  r = pending_volmap->remove_volume(uuid, name);
 	  if (r == 0) {
 	    ss << "removed volume " << uuid << " \"" << name << "\"";
 	    pending_inc.include_removal(uuid);
@@ -323,10 +324,10 @@ bool VolMonitor::prepare_command(MMonCommand *m)
       const string& volspec = m->cmd[2];
       const string& new_name = m->cmd[3];
       uuid_d uuid;
-      const bool is_unique = pending_volmap.get_vol_uuid(volspec, uuid);
+      const bool is_unique = pending_volmap->get_vol_uuid(volspec, uuid);
       if (is_unique) {
 	VolMap::vol_info_t vinfo_out;
-	r = pending_volmap.rename_volume(uuid, new_name, vinfo_out);
+	r = pending_volmap->rename_volume(uuid, new_name, vinfo_out);
 	if (r == 0) {
 	  pending_inc.include_update(vinfo_out);
 	  ss << "volume " << uuid << " renamed to " << new_name;

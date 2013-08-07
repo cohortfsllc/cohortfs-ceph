@@ -42,7 +42,9 @@ public:
   CohortOSDMonitor(Monitor *mn, Paxos *p, const string& service_name);
   virtual ~CohortOSDMonitor() { };
 
-  virtual CohortOSDMap* newOSDMap() const { return new CohortOSDMap(); }
+  virtual CohortOSDMap* newOSDMap(VolMapRef v) const {
+    return new CohortOSDMap(v);
+  }
 
   virtual void tick_sub(bool& do_propose);
 

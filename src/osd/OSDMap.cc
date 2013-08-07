@@ -255,7 +255,7 @@ void OSDMap::Incremental::dump(Formatter *f) const
 
   if (fullmap.length()) {
     f->open_object_section("full_map");
-    OSDMap* full = newOSDMap();
+    OSDMap* full = newOSDMap(VolMapRef());
     bufferlist fbl = fullmap;  // kludge around constness.
     bufferlist::iterator p = fbl.begin();
     full->decode(p);

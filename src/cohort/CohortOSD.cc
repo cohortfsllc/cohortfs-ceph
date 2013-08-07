@@ -92,7 +92,10 @@ bool CohortOSD::handle_sub_op_reply_sub(OpRequestRef op)
   assert(m->get_source().is_osd());
 
   // require same or newer map
-  if (!require_same_or_newer_map(op, m->get_map_epoch())) return false;
+  if (!require_same_or_newer_map(op, m->get_osdmap_epoch(),
+				 m->get_volmap_epoch())) {
+    return false;
+  }
 
   return true;
 }

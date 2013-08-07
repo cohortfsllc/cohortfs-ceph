@@ -410,6 +410,7 @@ struct ceph_osd_reply_head {
 	__le32 flags;
 	struct ceph_object_layout layout;
 	__le32 osdmap_epoch;
+	__le32 volmap_epoch;
 	struct ceph_eversion reassert_version; /* for replaying uncommitted */
 
 	__le32 result;                    /* result code */

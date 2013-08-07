@@ -43,15 +43,15 @@ public:
       decode(p);
     }
 
-    OSDMap* newOSDMap() const {
-      return new CohortOSDMap();
+    OSDMap* newOSDMap(VolMapRef v) const {
+      return new CohortOSDMap(v);
     }
   };
 
 public:
 
-  CohortOSDMap()
-    : OSDMap()
+  CohortOSDMap(VolMapRef v)
+    : OSDMap(v)
   {
     // empty for now
   }

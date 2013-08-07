@@ -31,8 +31,9 @@
 
 class MOSDSubOpReply : public Message {
 public:
-  epoch_t map_epoch;
-  
+  epoch_t osdmap_epoch;
+  epoch_t volmap_epoch;
+
   // subop metadata
   osd_reqid_t reqid;
   hobject_t poid;
@@ -51,7 +52,8 @@ public:
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    ::decode(map_epoch, p);
+    ::decode(osdmap_epoch, p);
+    ::decode(volmap_epoch, p);
     ::decode(reqid, p);
     ::decode(poid, p);
 
@@ -68,7 +70,8 @@ public:
     ::decode(attrset, p);
   }
   virtual void encode_payload(uint64_t features) {
-    ::encode(map_epoch, payload);
+    ::encode(osdmap_epoch, payload);
+    ::encode(volmap_epoch, payload);
     ::encode(reqid, payload);
     ::encode(poid, payload);
     __u32 num_ops = ops.size();
@@ -83,7 +86,8 @@ public:
     ::encode(attrset, payload);
   }
 
-  epoch_t get_map_epoch() { return map_epoch; }
+  epoch_t get_osdmap_epoch() { return osdmap_epoch; }
+  epoch_t get_volmap_epoch() { return volmap_epoch; }
 
   hobject_t get_poid() { return poid; }
 
@@ -103,9 +107,10 @@ public:
   map<string,bufferptr>& get_attrset() { return attrset; } 
 
 public:
-  MOSDSubOpReply(MOSDSubOp *req, int result_, epoch_t e, int at) :
+  MOSDSubOpReply(MOSDSubOp *req, int result_, epoch_t o, epoch_t v, int at) :
     Message(MSG_OSD_SUBOPREPLY),
-    map_epoch(e),
+    osdmap_epoch(o),
+    volmap_epoch(v),
     reqid(req->reqid),
     poid(req->poid),
     ops(req->ops),

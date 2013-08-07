@@ -49,6 +49,7 @@
 #include "include/util.h"
 #include "common/cmdparse.h"
 #include "include/str_list.h"
+#include "VolMonitor.h"
 
 using namespace std::tr1;
 
@@ -1614,7 +1615,7 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
       }
       assert(err == 0);
       assert(b.length());
-      p = newOSDMap();
+      p = newOSDMap(mon->volmon()->volmap);
       p->decode(b);
     }
     if (prefix == "osd dump") {

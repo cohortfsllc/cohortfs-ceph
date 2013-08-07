@@ -2935,6 +2935,7 @@ void OSDService::got_stop_ack()
 
 void OSD::wait_for_new_map(OpRequestRef op)
 {
+#warning Do volmap in here, too.
   // ask?
   if (waiting_for_osdmap.empty()) {
     monc->sub_want("osdmap", osdmap->get_epoch() + 1, CEPH_SUBSCRIBE_ONETIME);
@@ -3053,9 +3054,9 @@ void OSD::handle_osd_map(MOSDMap *m)
     p = m->maps.find(e);
     if (p != m->maps.end()) {
       dout(10) << "handle_osd_map  got full map for epoch " << e << dendl;
-      OSDMap *o = newOSDMap();
+      OSDMap *o = newOSDMap(volmap);
       bufferlist& bl = p->second;
-      
+
       o->decode(bl);
       pinned_maps.push_back(add_map(o));
 
@@ -3073,7 +3074,7 @@ void OSD::handle_osd_map(MOSDMap *m)
       t.write(coll_t::META_COLL, oid, 0, bl.length(), bl);
       pin_map_inc_bl(e, bl);
 
-      OSDMap *o = newOSDMap();
+      OSDMap *o = newOSDMap(volmap);
       if (e > 1) {
 	bufferlist obl;
 	OSDMapRef prev = get_map(e - 1);
@@ -3514,7 +3515,7 @@ OSDMapRef OSDService::get_map(epoch_t epoch)
     return retval;
   }
 
-  OSDMap *map = newOSDMap();
+  OSDMap *map = newOSDMap(volmap);
   if (epoch > 0) {
     dout(20) << "get_map " << epoch << " - loading and decoding "
 	     << map << dendl;
@@ -3552,22 +3553,36 @@ bool OSD::require_osd_peer(OpRequestRef op)
  * require that we have same (or newer) map, and that
  * the source is the pg primary.
  */
-bool OSD::require_same_or_newer_map(OpRequestRef op, epoch_t epoch)
+bool OSD::require_same_or_newer_map(OpRequestRef op,
+				    epoch_t osdmap_epoch,
+				    epoch_t volmap_epoch)
 {
   Message *m = op->request;
-  dout(15) << "require_same_or_newer_map " << epoch << " (i am " << osdmap->get_epoch() << ") " << m << dendl;
+  dout(15) << "require_same_or_newer_maps (" << osdmap_epoch
+	   << ", " << volmap_epoch << ") (i am (" << volmap->get_epoch()
+	   << ", " << volmap->get_epoch() << ")) " << m << dendl;
 
   assert(osd_lock.is_locked());
 
   // do they have a newer map?
-  if (epoch > osdmap->get_epoch()) {
-    dout(7) << "waiting for newer map epoch " << epoch << " > my " << osdmap->get_epoch() << " with " << m << dendl;
+  if (osdmap_epoch > osdmap->get_epoch()) {
+    dout(7) << "waiting for newer map epoch " << osdmap_epoch << " > my "
+	    << osdmap->get_epoch() << " with " << m << dendl;
     wait_for_new_map(op);
     return false;
   }
 
-  if (epoch < up_epoch) {
-    dout(7) << "from pre-up epoch " << epoch << " < " << up_epoch << dendl;
+  // do they have a newer map?
+  if (volmap_epoch > volmap->get_epoch()) {
+    dout(7) << "waiting for newer map epoch " << volmap_epoch << " > my "
+	    << volmap->get_epoch() << " with " << m << dendl;
+    wait_for_new_map(op);
+    return false;
+  }
+
+  if (osdmap_epoch < up_epoch) {
+    dout(7) << "from pre-up epoch " << osdmap_epoch
+	    << " < " << up_epoch << dendl;
     return false;
   }
 
@@ -3606,7 +3621,8 @@ void OSDService::reply_op_error(OpRequestRef op, int err, eversion_t v)
   int flags;
   flags = m->get_flags() & (CEPH_OSD_FLAG_ACK|CEPH_OSD_FLAG_ONDISK);
 
-  MOSDOpReply *reply = new MOSDOpReply(m, err, osdmap->get_epoch(), flags);
+  MOSDOpReply *reply = new MOSDOpReply(m, err, osdmap->get_epoch(),
+				       volmap->get_epoch(), flags);
   Messenger *msgr = client_messenger;
   reply->set_version(v);
   if (m->get_source().is_osd())
@@ -3627,7 +3643,8 @@ void OSD::handle_op(OpRequestRef op)
   m->clear_payload();
 
   // require same or newer map
-  if (!require_same_or_newer_map(op, m->get_map_epoch()))
+  if (!require_same_or_newer_map(op, m->get_osdmap_epoch(),
+				 m->get_volmap_epoch()))
     return;
 
   // object name too long?
@@ -3645,7 +3662,8 @@ void OSD::handle_op(OpRequestRef op)
     return;
   }
   // share our map with sender, if they're old
-  _share_map_incoming(m->get_source(), m->get_connection().get(), m->get_map_epoch(),
+  _share_map_incoming(m->get_source(), m->get_connection().get(),
+		      m->get_osdmap_epoch(),
 		      static_cast<Session *>(m->get_connection()->get_priv()));
 
   if (op->rmw_flags == 0) {

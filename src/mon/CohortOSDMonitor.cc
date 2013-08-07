@@ -3,6 +3,7 @@
 #include "messages/MRemoveSnaps.h"
 #include "CohortOSDMonitor.h"
 #include "cohort/CohortPlaceSystem.h"
+#include "VolMonitor.h"
 
 const CohortOSDMonitorPlaceSystem placeSystem(
   CohortPlaceSystem::systemName, CohortPlaceSystem::systemIdentifier);
@@ -16,7 +17,7 @@ CohortOSDMonitor::CohortOSDMonitor(Monitor *mn, Paxos *p,
 				   const string& service_name)
   : OSDMonitor(mn, p, service_name)
 {
-  osdmap.reset(newOSDMap());
+  osdmap.reset(newOSDMap(mon->volmon()->volmap));
   pending_inc.reset(new CohortOSDMap::Incremental());
 }
 

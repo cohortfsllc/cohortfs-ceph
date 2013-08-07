@@ -40,6 +40,8 @@
 #include <map>
 #include <tr1/memory>
 
+#include "vol/VolMap.h"
+
 
 using namespace std;
 
@@ -116,6 +118,8 @@ class Monitor;
  */
 class OSDMap {
 
+  VolMapRef volmap;
+
 public:
   static void dedup(const OSDMap *o, OSDMap *n);
   class Incremental {
@@ -175,7 +179,7 @@ public:
     }
     virtual ~Incremental() {}
 
-    virtual OSDMap* newOSDMap() const = 0;
+    virtual OSDMap* newOSDMap(VolMapRef v) const = 0;
   }; // class OSDMap::Incremental
 
   virtual void thrash(Monitor* mon, OSDMap::Incremental& pending_inc_orig) = 0;
@@ -219,13 +223,15 @@ protected:
   friend class MDS;
 
  public:
-  OSDMap() : epoch(0), 
-	     flags(0),
-	     num_osd(0), max_osd(0),
-	     osd_addrs(new addrs_s),
-	     osd_uuid(new vector<uuid_d>),
-	     cluster_snapshot_epoch(0),
-	     new_blacklist_entries(false) {
+  OSDMap(VolMapRef v) :
+    volmap(v),
+    epoch(0),
+    flags(0),
+    num_osd(0), max_osd(0),
+    osd_addrs(new addrs_s),
+    osd_uuid(new vector<uuid_d>),
+    cluster_snapshot_epoch(0),
+    new_blacklist_entries(false) {
     memset(&fsid, 0, sizeof(fsid));
   }
   virtual ~OSDMap() { }

@@ -40,6 +40,7 @@ class MOSDOpReply : public Message {
   int32_t result;
   eversion_t reassert_version;
   epoch_t osdmap_epoch;
+  epoch_t volmap_epoch;
   int32_t retry_attempt;
 
 public:
@@ -77,7 +78,9 @@ public:
   }
   
   // osdmap
-  epoch_t get_map_epoch() { return osdmap_epoch; }
+  epoch_t get_osdmap_epoch() { return osdmap_epoch; }
+
+  epoch_t get_volmap_epoch() { return volmap_epoch; }
 
   /*osd_reqid_t get_reqid() { return osd_reqid_t(get_dest(),
 					       head.client_inc,
@@ -87,7 +90,8 @@ public:
 public:
   MOSDOpReply()
     : Message(CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION) { }
-  MOSDOpReply(MOSDOp *req, int r, epoch_t e, int acktype)
+  MOSDOpReply(MOSDOp *req, int r, epoch_t o, epoch_t v,
+	      int acktype)
     : Message(CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION) {
     set_tid(req->get_tid());
     ops = req->ops;
@@ -95,7 +99,8 @@ public:
     flags =
       (req->flags & ~(CEPH_OSD_FLAG_ONDISK|CEPH_OSD_FLAG_ONNVRAM|CEPH_OSD_FLAG_ACK)) | acktype;
     oid = req->oid;
-    osdmap_epoch = e;
+    osdmap_epoch = o;
+    volmap_epoch = v;
     reassert_version = req->reassert_version;
     retry_attempt = req->get_retry_attempt();
 
@@ -117,6 +122,7 @@ public:
       memset(&head, 0, sizeof(head));
       head.flags = flags;
       head.osdmap_epoch = osdmap_epoch;
+      head.volmap_epoch = volmap_epoch;
       head.result = result;
       head.num_ops = ops.size();
       head.object_len = oid.name.length();
@@ -131,6 +137,7 @@ public:
       ::encode(result, payload);
       ::encode(reassert_version, payload);
       ::encode(osdmap_epoch, payload);
+      ::encode(volmap_epoch, payload);
 
       __u32 num_ops = ops.size();
       ::encode(num_ops, payload);
@@ -157,6 +164,7 @@ public:
       flags = head.flags;
       reassert_version = head.reassert_version;
       osdmap_epoch = head.osdmap_epoch;
+      volmap_epoch = head.volmap_epoch;
       retry_attempt = -1;
     } else {
       ::decode(oid, p);
@@ -164,6 +172,7 @@ public:
       ::decode(result, p);
       ::decode(reassert_version, p);
       ::decode(osdmap_epoch, p);
+      ::decode(volmap_epoch, p);
 
       __u32 num_ops = ops.size();
       ::decode(num_ops, p);

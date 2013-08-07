@@ -31,10 +31,9 @@
 // #include "include/CompatSet.h"
 #include "common/Formatter.h"
 
-
 using namespace std;
 
-
+class VolMonitor;
 class CephContext;
 
 
@@ -148,7 +147,7 @@ public:
   const static string EMPTY_STRING;
   const static size_t DEFAULT_MAX_SEARCH_RESULTS = 128;
 
-  friend class VolMonitor;
+  friend VolMonitor;
 
 public:
   VolMap()
@@ -229,6 +228,7 @@ public:
   void dump(ostream& ss) const;
 }; // class VolMap
 
+typedef std::tr1::shared_ptr<VolMap> VolMapRef;
 
 WRITE_CLASS_ENCODER(VolMap::vol_info_t);
 WRITE_CLASS_ENCODER_FEATURES(VolMap::Incremental);

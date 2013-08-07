@@ -54,7 +54,9 @@ public:
 
   CohortOSDService(CohortOSD *osd);
 
-  virtual OSDMap* newOSDMap() const { return new CohortOSDMap(); }
+  virtual OSDMap* newOSDMap(VolMapRef v) const {
+    return new CohortOSDMap(v);
+  }
   CohortOSDMapRef get_map(epoch_t e) {
     return dynamic_pointer_cast<const CohortOSDMap>(get_map(e));
   }
@@ -150,8 +152,8 @@ public:
 
   friend class PGOSDService;
 
-  OSDMap* newOSDMap() const {
-    return new CohortOSDMap();
+  OSDMap* newOSDMap(VolMapRef v) const {
+    return new CohortOSDMap(v);
   }
 
   void check_replay_queue();

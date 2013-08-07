@@ -1411,8 +1411,10 @@ void Objecter::send_op(Op *op)
   op->incarnation = op->session->incarnation;
   op->stamp = ceph_clock_now(cct);
 
-  MOSDOp *m = new MOSDOp(client_inc, op->tid, 
-			 op->oid, osdmap->get_epoch(),
+  MOSDOp *m = new MOSDOp(client_inc, op->tid,
+			 op->oid,
+			 osdmap->get_epoch(),
+			 volmap->get_epoch(),
 			 flags);
 
   m->set_snapid(op->snapid);
@@ -1532,7 +1534,7 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
   if (op->objver)
     *op->objver = m->get_version();
   if (op->reply_epoch)
-    *op->reply_epoch = m->get_map_epoch();
+    *op->reply_epoch = m->get_osdmap_epoch();
 
   // per-op result demuxing
   vector<OSDOp> out_ops;

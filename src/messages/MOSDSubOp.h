@@ -29,8 +29,9 @@ class MOSDSubOp : public Message {
   static const int COMPAT_VERSION = 1;
 
 public:
-  epoch_t map_epoch;
-  
+  epoch_t osdmap_epoch;
+  epoch_t volmap_epoch;
+
   // metadata from original request
   osd_reqid_t reqid;
   
@@ -92,7 +93,8 @@ public:
   virtual void decode_payload() {
     hobject_incorrect_pool = false;
     bufferlist::iterator p = payload.begin();
-    ::decode(map_epoch, p);
+    ::decode(osdmap_epoch, p);
+    ::decode(volmap_epoch, p);
     ::decode(reqid, p);
     ::decode(poid, p);
 
@@ -137,7 +139,8 @@ public:
   }
 
   virtual void encode_payload(uint64_t features) {
-    ::encode(map_epoch, payload);
+    ::encode(osdmap_epoch, payload);
+    ::encode(volmap_epoch, payload);
     ::encode(reqid, payload);
     ::encode(poid, payload);
 
@@ -179,13 +182,14 @@ public:
   MOSDSubOp()
     : Message(MSG_OSD_SUBOP, HEAD_VERSION, COMPAT_VERSION) { }
   MOSDSubOp(osd_reqid_t r, const hobject_t& po, bool noop_, int aw,
-	    epoch_t mape, tid_t rtid, eversion_t v)
+	    epoch_t osdmape, epoch_t volmape, tid_t rtid, eversion_t v)
     : Message(MSG_OSD_SUBOP, HEAD_VERSION, COMPAT_VERSION),
-      map_epoch(mape),
+      osdmap_epoch(osdmape),
+      volmap_epoch(volmape),
       reqid(r),
       poid(po),
       acks_wanted(aw),
-      noop(noop_),   
+      noop(noop_),
       old_exists(false), old_size(0),
       version(v),
       first(false), complete(false),

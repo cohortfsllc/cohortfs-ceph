@@ -174,6 +174,7 @@ public:
   int get_nodeid() const { return whoami; }
 
   OSDMapRef osdmap;
+  VolMapRef volmap;
   OSDMapRef get_osdmap() {
     Mutex::Locker l(publish_lock);
     return osdmap;
@@ -335,7 +336,7 @@ public:
   OSDService(OSD *osd);
   // this virtual function soley exists to make the class polymorphic
   virtual ~OSDService() { };
-  virtual OSDMap* newOSDMap() const = 0;
+  virtual OSDMap* newOSDMap(VolMapRef v) const = 0;
 
   virtual bool test_ops_sub(ObjectStore *store,
 			    std::string command,
@@ -623,7 +624,8 @@ private:
  protected:
 
   // -- osd map --
-  OSDMapRef       osdmap;
+  OSDMapRef osdmap;
+  VolMapRef volmap;
   OSDMapRef get_osdmap() {
     return osdmap;
   }
@@ -732,7 +734,9 @@ protected:
   bool require_mon_peer(Message *m);
   bool require_osd_peer(OpRequestRef op);
 
-  bool require_same_or_newer_map(OpRequestRef op, epoch_t e);
+  bool require_same_or_newer_map(OpRequestRef op,
+				 epoch_t osdmap_epoch,
+				 epoch_t volmap_epoch);
 
   // -- commands --
   struct Command {
@@ -823,7 +827,7 @@ protected:
   virtual ~OSD();
 
   virtual OSDService* newOSDService(OSD* osd) const = 0;
-  virtual OSDMap* newOSDMap() const = 0;
+  virtual OSDMap* newOSDMap(VolMapRef v) const = 0;
 
   utime_t last_stats_sent;
   bool osd_stat_updated;
