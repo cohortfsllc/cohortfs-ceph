@@ -34,12 +34,12 @@ struct MMonSubscribe : public Message {
   static const int HEAD_VERSION = 2;
 
   map<string, ceph_mon_subscribe_item> what;
-  
+
   MMonSubscribe() : Message(CEPH_MSG_MON_SUBSCRIBE, HEAD_VERSION) { }
 private:
   ~MMonSubscribe() {}
 
-public:  
+public:
   void sub_want(const char *w, version_t start, unsigned flags) {
     what[w].start = start;
     what[w].flags = flags;

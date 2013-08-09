@@ -95,6 +95,8 @@ void VolMonitor::update_from_paxos(bool *need_bootstrap)
   assert(version == volmap->version);
 
   update_trim();
+
+  check_subs();
 }
 
 
@@ -359,5 +361,37 @@ bool VolMonitor::prepare_command(MMonCommand *m)
     return true;
   } else {
     return false;
+  }
+}
+
+MVolMap *VolMonitor::build_latest_full()
+{
+  MVolMap *r = new MVolMap(mon->monmap->fsid, volmap);
+  return r;
+}
+
+void VolMonitor::check_subs()
+{
+  string type = "volmap";
+  if (mon->session_map.subs.count(type) == 0)
+    return;
+  xlist<Subscription*>::iterator p = mon->session_map.subs[type]->begin();
+  while (!p.end()) {
+    Subscription *sub = *p;
+    ++p;
+    check_sub(sub);
+  }
+}
+
+void VolMonitor::check_sub(Subscription *sub)
+{
+  if (sub->next <= volmap->get_epoch()) {
+    mon->messenger->send_message(build_latest_full(),
+				 sub->session->inst);
+
+    if (sub->onetime)
+      mon->session_map.remove_sub(sub);
+    else
+      sub->next = volmap->get_epoch() + 1;
   }
 }

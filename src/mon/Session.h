@@ -138,14 +138,15 @@ struct MonSessionMap {
     return p->second;
   }
 
-  void add_update_sub(MonSession *s, const string& what, version_t start, bool onetime, bool incremental_onetime) {
+  void add_update_sub(MonSession *s, const string& what, version_t start,
+		      bool onetime, bool incremental_onetime) {
     Subscription *sub = 0;
     if (s->sub_map.count(what)) {
       sub = s->sub_map[what];
     } else {
       sub = new Subscription(s, what);
       s->sub_map[what] = sub;
-      
+
       if (!subs.count(what))
 	subs[what] = new xlist<Subscription*>;
       subs[what]->push_back(&sub->type_item);

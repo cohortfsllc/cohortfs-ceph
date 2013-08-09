@@ -20,25 +20,41 @@
 
 class MVolMap : public Message {
 public:
-  VolMapRef volmap;
+  uuid_d fsid;
+  epoch_t epoch;
+  bufferlist encoded;
 
-  MVolMap(VolMapRef v) :
+  version_t get_epoch() const { return epoch; }
+  bufferlist& get_encoded() { return encoded; }
+
+  MVolMap() :
+    Message(CEPH_MSG_VOL_MAP) {}
+  MVolMap(const uuid_d &f, VolMapRef vm) :
     Message(CEPH_MSG_VOL_MAP),
-    volmap(v) {}
+    fsid(f) {
+    epoch = vm->get_epoch();
+    vm->encode(encoded);
+  }
 private:
   ~MVolMap() {}
 
 public:
-  const char *get_type_name() const {
-    return "vol_map";
+  const char *get_type_name() const { return "volmap"; }
+  void print(ostream& out) const {
+    out << "volmap(e " << epoch << ")";
   }
 
-  void encode_payload(uint64_t features) {
-    volmap->encode(payload);
-  }
+  // marshalling
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
-    volmap->decode(p);
+    ::decode(fsid, p);
+    ::decode(epoch, p);
+    ::decode(encoded, p);
+  }
+  void encode_payload(uint64_t features) {
+    ::encode(fsid, payload);
+    ::encode(epoch, payload);
+    ::encode(encoded, payload);
   }
 };
 

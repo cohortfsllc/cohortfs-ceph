@@ -1186,7 +1186,7 @@ void OSDMonitor::send_latest(PaxosServiceMessage *m, epoch_t start)
 
 MOSDMap *OSDMonitor::build_latest_full()
 {
-  MOSDMap *r = new MOSDMap(mon->monmap->fsid, &(*osdmap));
+  MOSDMap *r = new MOSDMap(mon->monmap->fsid, osdmap.get());
   r->oldest_map = get_first_committed();
   r->newest_map = osdmap->get_epoch();
   return r;

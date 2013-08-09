@@ -35,7 +35,7 @@ class MDRequest;
 #include "msg/Message.h"
 
 
-/* 
+/*
  * session
  */
 
@@ -43,7 +43,7 @@ class Session : public RefCountedObject {
   // -- state etc --
 public:
   /*
-                    
+
         <deleted> <-- closed <------------+
              ^         |                  |
              |         v                  |
@@ -82,16 +82,18 @@ private:
   int importing_count;
   friend class SessionMap;
 public:
-  session_info_t info;                         ///< durable bits
+  session_info_t info; ///< durable bits
 
   ConnectionRef connection;
   xlist<Session*>::item item_session_list;
 
-  list<Message*> preopen_out_queue;  ///< messages for client, queued before they connect
+  list<Message*> preopen_out_queue;  ///< messages for client, queued
+				     ///  before they connect
 
   elist<MDRequest*> requests;
 
-  interval_set<inodeno_t> pending_prealloc_inos; // journaling prealloc, will be added to prealloc_inos
+  interval_set<inodeno_t> pending_prealloc_inos; // journaling prealloc, will
+						 // be added to prealloc_inos
 
   inodeno_t next_ino() {
     if (info.prealloc_inos.empty())

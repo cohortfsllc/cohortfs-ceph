@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
@@ -24,6 +26,7 @@ using namespace std;
 #include "Session.h"
 
 #include "vol/VolMap.h"
+#include "messages/MVolMap.h"
 
 
 class MMonCommand;
@@ -57,6 +60,10 @@ class VolMonitor : public PaxosService {
   // support functions
   bool preprocess_command(MMonCommand *m);
   bool prepare_command(MMonCommand *m);
+
+  MVolMap *build_latest_full(void);
+  void check_subs(void);
+  void check_sub(Subscription *sub);
 
  private:
 

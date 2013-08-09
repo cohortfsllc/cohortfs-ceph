@@ -3812,7 +3812,7 @@ void Monitor::handle_timecheck(MTimeCheck *m)
 void Monitor::handle_subscribe(MMonSubscribe *m)
 {
   dout(10) << "handle_subscribe " << *m << dendl;
-  
+
   bool reply = false;
 
   MonSession *s = static_cast<MonSession *>(m->get_connection()->get_priv());
@@ -3827,26 +3827,31 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
   for (map<string,ceph_mon_subscribe_item>::iterator p = m->what.begin();
        p != m->what.end();
        ++p) {
-    // if there are any non-onetime subscriptions, we need to reply to start the resubscribe timer
+    // if there are any non-onetime subscriptions, we need to reply to
+    // start the resubscribe timer
     if ((p->second.flags & CEPH_SUBSCRIBE_ONETIME) == 0)
       reply = true;
 
-    session_map.add_update_sub(s, p->first, p->second.start, 
+    session_map.add_update_sub(s, p->first, p->second.start,
 			       p->second.flags & CEPH_SUBSCRIBE_ONETIME,
-			       m->get_connection()->has_feature(CEPH_FEATURE_INCSUBOSDMAP));
+			       m->get_connection()->has_feature(
+				 CEPH_FEATURE_INCSUBOSDMAP));
 
     if (p->first == "mdsmap") {
       if ((int)s->is_capable("mds", MON_CAP_R)) {
-        mdsmon()->check_sub(s->sub_map["mdsmap"]);
+	mdsmon()->check_sub(s->sub_map["mdsmap"]);
       }
     } else if (p->first == "osdmap") {
       if ((int)s->is_capable("osd", MON_CAP_R)) {
-        osdmon()->check_sub(s->sub_map["osdmap"]);
+	osdmon()->check_sub(s->sub_map["osdmap"]);
       }
     } else if (p->first == "monmap") {
       check_sub(s->sub_map["monmap"]);
     } else if (logmon()->sub_name_to_id(p->first) >= 0) {
       logmon()->check_sub(s->sub_map[p->first]);
+    } else if (p->first == "volmap") {
+      /* Todo: Allow subscribing to subsets of the volume map. */
+      volmon()->check_sub(s->sub_map["volmap"]);
     }
   }
 
