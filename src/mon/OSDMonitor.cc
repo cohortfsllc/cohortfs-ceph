@@ -29,8 +29,6 @@
 #include "messages/MOSDMap.h"
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDAlive.h"
-#include "messages/MPoolOp.h"
-#include "messages/MPoolOpReply.h"
 #include "messages/MMonCommand.h"
 #include "messages/MOSDScrub.h"
 #include "messages/MRemoveSnaps.h"

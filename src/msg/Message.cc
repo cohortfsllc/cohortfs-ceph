@@ -20,9 +20,6 @@ using namespace std;
 #include "messages/MStatfs.h"
 #include "messages/MStatfsReply.h"
 
-#include "messages/MPoolOp.h"
-#include "messages/MPoolOpReply.h"
-
 #include "messages/PaxosServiceMessage.h"
 #include "messages/MMonCommand.h"
 #include "messages/MMonCommandAck.h"
@@ -254,12 +251,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     break;
   case CEPH_MSG_STATFS_REPLY:
     m = new MStatfsReply;
-    break;
-  case CEPH_MSG_POOLOP:
-    m = new MPoolOp;
-    break;
-  case CEPH_MSG_POOLOP_REPLY:
-    m = new MPoolOpReply;
     break;
   case MSG_MON_COMMAND:
     m = new MMonCommand;

@@ -36,7 +36,6 @@ class Monitor;
 #include "messages/MMonCommand.h"
 class MOSDMap;
 #include "messages/MOSDFailure.h"
-#include "messages/MPoolOp.h"
 
 /// information about a particular peer's failure reports for one osd
 struct failure_reporter_t {

@@ -1890,8 +1890,6 @@ noinst_HEADERS = \
         messages/MExportDirPrep.h\
         messages/MExportDirPrepAck.h\
         messages/MGenericMessage.h\
-        messages/MGetPoolStats.h\
-        messages/MGetPoolStatsReply.h\
         messages/MHeartbeat.h\
         messages/MInodeFileCaps.h\
         messages/MLock.h\
@@ -1933,30 +1931,15 @@ noinst_HEADERS = \
         messages/MVolMap.h\
         messages/MOSDOp.h\
         messages/MOSDOpReply.h\
-	messages/MOSDPGBackfill.h\
-        messages/MOSDPGCreate.h\
-        messages/MOSDPGInfo.h\
-        messages/MOSDPGLog.h\
-        messages/MOSDPGMissing.h\
-        messages/MOSDPGNotify.h\
-        messages/MOSDPGQuery.h\
-        messages/MOSDPGRemove.h\
-	messages/MOSDPGScan.h\
         messages/MBackfillReserve.h\
         messages/MRecoveryReserve.h\
 	messages/MMonQuorumService.h\
-        messages/MOSDPGTemp.h\
-        messages/MOSDPGTrim.h\
         messages/MOSDPing.h\
 	messages/MOSDRepScrub.h\
 	messages/MOSDScrub.h\
         messages/MOSDSubOp.h\
         messages/MOSDSubOpReply.h\
-        messages/MPGStats.h\
-        messages/MPGStatsAck.h\
         messages/MPing.h\
-	messages/MPoolOp.h\
-	messages/MPoolOpReply.h\
         messages/MRemoveSnaps.h\
 	messages/MRoute.h\
 	messages/MForward.h\
@@ -1964,6 +1947,7 @@ noinst_HEADERS = \
         messages/MStatfsReply.h\
 	messages/MTimeCheck.h\
         messages/MWatchNotify.h\
+        messages/MVolMap.h\
 	messages/PaxosServiceMessage.h\
 	mon/AuthMonitor.h\
         mon/DataHealthService.h\
