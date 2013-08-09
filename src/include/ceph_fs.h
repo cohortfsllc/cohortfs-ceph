@@ -127,6 +127,8 @@ struct ceph_dir_layout {
 #define CEPH_MSG_OSD_OPREPLY            43
 #define CEPH_MSG_WATCH_NOTIFY           44
 
+/* Volume */
+#define CEPH_MSG_VOL_MAP 45
 
 /* watch-notify operations */
 enum {

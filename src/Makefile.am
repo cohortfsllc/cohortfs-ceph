@@ -1930,6 +1930,7 @@ noinst_HEADERS = \
         messages/MOSDFailure.h\
         messages/MOSDMarkMeDown.h\
         messages/MOSDMap.h\
+        messages/MVolMap.h\
         messages/MOSDOp.h\
         messages/MOSDOpReply.h\
 	messages/MOSDPGBackfill.h\
