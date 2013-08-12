@@ -927,6 +927,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
     ::encode(inode.ctime, bl);
     ::encode(inode.nlink, bl);
     ::encode(inode.anchored, bl);
+    ::encode(inode.parents, bl);
     break;
 
   case CEPH_LOCK_IFILE:
@@ -1003,6 +1004,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
     if (inode.ctime < tm) inode.ctime = tm;
     ::decode(inode.nlink, p);
     ::decode(inode.anchored, p);
+    ::decode(inode.parents, p);
     break;
 
   case CEPH_LOCK_IFILE:
