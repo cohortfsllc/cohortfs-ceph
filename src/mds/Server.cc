@@ -2648,15 +2648,20 @@ void Server::handle_client_openc(MDRequest *mdr)
   // remote link to filesystem namespace
   dn->push_projected_linkage(in->ino(), in->d_type());
 
-  in->inode.update_backtrace();
+  mdr->add_projected_inode(in);
+  inode_t *pi = in->project_inode();
+
+  pi->update_backtrace();
+  pi->dirstat.nfiles = pi->rstat.rfiles = 1;
+  pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
+  pi->accounted_rstat = pi->rstat;
   if (cmode & CEPH_FILE_MODE_WR) {
-    in->inode.client_ranges[client].range.first = 0;
-    in->inode.client_ranges[client].range.last = in->inode.get_layout_size_increment();
-    in->inode.client_ranges[client].follows = follows;
+    pi->client_ranges[client].range.first = 0;
+    pi->client_ranges[client].range.last = pi->get_layout_size_increment();
+    pi->client_ranges[client].follows = follows;
   }
 
-  in->inode.add_parent(dn->get_stripe()->dirstripe(),
-                       mds->get_nodeid(), dn->get_name());
+  in->project_added_parent(dn->inoparent());
 
   if (follows >= dn->first)
     dn->first = follows+1;
@@ -3845,8 +3850,9 @@ public:
     // link the inode
     dn->pop_projected_linkage();
     inodn->pop_projected_linkage();
-    newi->mark_dirty(mdr->ls);
     newi->_mark_dirty_parent(mdr->ls);
+
+    mdr->apply();
 
     // mkdir?
     if (newi->inode.is_dir()) { 
@@ -3864,8 +3870,6 @@ public:
         dir->mark_new(mdr->ls);
       }
     }
-
-    mdr->apply();
 
     mds->mdcache->send_dentry_link(dn);
     // don't send MDentryLink to nodes that got a slave_mkdir
@@ -3939,20 +3943,26 @@ void Server::handle_client_mknod(MDRequest *mdr)
   // remote link to filesystem namespace
   dn->push_projected_linkage(newi->ino(), newi->d_type());
 
-  newi->inode.rdev = req->head.args.mknod.rdev;
-  if ((newi->inode.mode & S_IFMT) == 0)
-    newi->inode.mode |= S_IFREG;
-  newi->inode.update_backtrace();
-  newi->inode.add_parent(dn->get_stripe()->dirstripe(),
-                         mds->get_nodeid(), dn->get_name());
+  mdr->add_projected_inode(newi);
+  inode_t *pi = newi->project_inode();
+
+  pi->rdev = req->head.args.mknod.rdev;
+  if ((pi->mode & S_IFMT) == 0)
+    pi->mode |= S_IFREG;
+  pi->update_backtrace();
+  newi->project_added_parent(dn->inoparent());
+
+  pi->dirstat.nfiles = pi->rstat.rfiles = 1;
+  pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
+  pi->accounted_rstat = pi->rstat;
 
   // if the client created a _regular_ file via MKNOD, it's highly likely they'll
   // want to write to it (e.g., if they are reexporting NFS)
-  if (S_ISREG(newi->inode.mode)) {
+  if (S_ISREG(pi->mode)) {
     dout(15) << " setting a client_range too, since this is a regular file" << dendl;
-    newi->inode.client_ranges[client].range.first = 0;
-    newi->inode.client_ranges[client].range.last = newi->inode.get_layout_size_increment();
-    newi->inode.client_ranges[client].follows = follows;
+    pi->client_ranges[client].range.first = 0;
+    pi->client_ranges[client].range.last = pi->get_layout_size_increment();
+    pi->client_ranges[client].follows = follows;
 
     // issue a cap on the file
     int cmode = CEPH_FILE_MODE_RDWR;
@@ -3974,7 +3984,7 @@ void Server::handle_client_mknod(MDRequest *mdr)
     dn->first = follows + 1;
   newi->first = dn->first;
 
-  dout(10) << "mknod mode " << newi->inode.mode << " rdev " << newi->inode.rdev << dendl;
+  dout(10) << "mknod mode " << pi->mode << " rdev " << pi->rdev << dendl;
 
   // prepare finisher
   mdr->ls = mdlog->get_current_segment();
@@ -3983,11 +3993,9 @@ void Server::handle_client_mknod(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
  
-  mdr->add_projected_inode(newi);
-  newi->project_inode();
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
-  le->metablob.add_inode(newi, true);
+  le->metablob.add_inode(newi, dn);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -4114,6 +4122,13 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   // remote link to filesystem namespace
   dn->push_projected_linkage(newi->ino(), newi->d_type());
 
+  mdr->add_projected_inode(newi);
+  inode_t *pi = newi->project_inode();
+
+  pi->dirstat.nsubdirs = pi->rstat.rsubdirs = 1;
+  pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
+  pi->accounted_rstat = pi->rstat;
+
   // prepare finisher
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "mkdir");
@@ -4121,12 +4136,10 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
 
-  mdr->add_projected_inode(newi);
-  newi->project_inode();
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
 
-  le->metablob.add_inode(newi, true);
+  le->metablob.add_inode(newi, dn);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -4410,11 +4423,17 @@ void Server::handle_client_symlink(MDRequest *mdr)
   dn->push_projected_linkage(newi->ino(), newi->d_type());
 
   newi->symlink = req->get_path2();
-  newi->inode.size = newi->symlink.length();
-  newi->inode.rstat.rbytes = newi->inode.size;
-  newi->inode.update_backtrace();
-  newi->inode.add_parent(dn->get_stripe()->dirstripe(),
-                         mds->get_nodeid(), dn->get_name());
+
+  mdr->add_projected_inode(newi);
+  inode_t *pi = newi->project_inode();
+
+  pi->rstat.rbytes = pi->size = newi->symlink.length();
+  pi->dirstat.nfiles = pi->rstat.rfiles = 1;
+  pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
+  pi->accounted_rstat = pi->rstat;
+
+  pi->update_backtrace();
+  newi->project_added_parent(dn->inoparent());
 
   if (follows >= dn->first)
     dn->first = follows + 1;
@@ -4427,11 +4446,9 @@ void Server::handle_client_symlink(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
 
-  mdr->add_projected_inode(newi);
-  newi->project_inode();
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(),
                                     PREDIRTY_DIR, 1);
-  le->metablob.add_inode(newi, true);
+  le->metablob.add_inode(newi, dn);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
