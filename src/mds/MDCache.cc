@@ -1163,14 +1163,6 @@ void MDCache::send_subtree_resolves()
 {
   dout(10) << "send_subtree_resolves" << dendl;
 
-  if (migrator->is_exporting() || migrator->is_importing()) {
-    dout(7) << "send_subtree_resolves waiting, imports/exports still in progress" << dendl;
-    migrator->show_importing();
-    migrator->show_exporting();
-    resolves_pending = true;
-    return;  // not now
-  }
-
   typedef map<int, MMDSResolve*> resolve_map;
   typedef resolve_map::iterator resolve_iter;
   resolve_map resolves;
@@ -1269,9 +1261,6 @@ void MDCache::handle_mds_failure(int who)
   dout(10) << " rejoin_ack_gather " << rejoin_ack_gather << dendl;
 
  
-  // tell the migrator too.
-  migrator->handle_mds_failure_or_stop(who);
-
   // clean up any requests slave to/from this node
   list<MDRequest*> finish;
   for (hash_map<metareqid_t, MDRequest*>::iterator p = active_requests.begin();
@@ -1968,9 +1957,6 @@ void MDCache::rejoin_send_rejoins()
     }
   }
   
-  assert(!migrator->is_importing());
-  assert(!migrator->is_exporting());
-
   list<CStripe*> stripes;
 
   // share inode lock state
@@ -8003,18 +7989,7 @@ void MDCache::handle_dentry_unlink(MDentryUnlink *m)
       CDentry::linkage_t *dnl = dn->get_linkage();
 
       // open inode?
-      if (dnl->is_primary()) {
-	CInode *in = dnl->get_inode();
-	dn->dir->unlink_inode(dn);
-
-	// send caps to auth (if we're not already)
-	if (in->is_any_caps() &&
-	    !in->state_test(CInode::STATE_EXPORTINGCAPS))
-	  migrator->export_caps(in);
-      } else {
-	assert(dnl->is_remote());
-	dn->dir->unlink_inode(dn);
-      }
+      dn->dir->unlink_inode(dn);
       assert(dnl->is_null());
       
       // move to bottom of lru
