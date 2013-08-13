@@ -16,7 +16,7 @@ libmds_la_SOURCES = \
 	mds/Migrator.cc \
 	mds/MDBalancer.cc \
 	mds/CDentry.cc \
-	mds/CDir.cc \
+	mds/CDirFrag.cc \
 	mds/CInode.cc \
 	mds/CStripe.cc \
 	mds/LogEvent.cc \
@@ -44,7 +44,7 @@ noinst_HEADERS += \
 	mds/AnchorClient.h \
 	mds/AnchorServer.h \
 	mds/CDentry.h \
-	mds/CDir.h \
+	mds/CDirFrag.h \
 	mds/CInode.h \
 	mds/CStripe.h \
 	mds/Capability.h \

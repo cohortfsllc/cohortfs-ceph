@@ -14,8 +14,8 @@
 
 
 
-#ifndef CEPH_CDIR_H
-#define CEPH_CDIR_H
+#ifndef CEPH_CDIRFRAG_H
+#define CEPH_CDIRFRAG_H
 
 #include "include/types.h"
 #include "include/buffer.h"
@@ -43,8 +43,8 @@ class bloom_filter;
 
 struct ObjectOperation;
 
-ostream& operator<<(ostream& out, class CDir& dir);
-class CDir : public MDSCacheObject {
+ostream& operator<<(ostream& out, class CDirFrag& dir);
+class CDirFrag : public MDSCacheObject {
   /*
    * This class uses a boost::pool to handle allocation. This is *not*
    * thread-safe, so don't do allocations from multiple threads!
@@ -140,10 +140,10 @@ public:
   ceph_seq_t mseq; // migrate sequence
 
   bool is_lt(const MDSCacheObject *r) const {
-    return dirfrag() < (static_cast<const CDir*>(r))->dirfrag();
+    return dirfrag() < (static_cast<const CDirFrag*>(r))->dirfrag();
   }
 
-  elist<CDir*>::item item_dirty, item_new;
+  elist<CDirFrag*>::item item_dirty, item_new;
 
  private:
   version_t version;
@@ -204,16 +204,16 @@ protected:
   friend class MDBalancer;
   friend class Server;
 
-  friend class CDirDiscover;
-  friend class CDirExport;
+  friend class CDirFragDiscover;
+  friend class CDirFragExport;
 
   bloom_filter *bloom;
   /* If you set up the bloom filter, you must keep it accurate!
    * It's deleted when you mark_complete() and is deliberately not serialized.*/
 
  public:
-  CDir(CStripe *stripe, frag_t frag, MDCache *mdcache, bool auth);
-  ~CDir() {
+  CDirFrag(CStripe *stripe, frag_t frag, MDCache *mdcache, bool auth);
+  ~CDirFrag() {
     remove_bloom();
     g_num_dir--;
     g_num_dirs++;
@@ -228,7 +228,7 @@ protected:
 
   CStripe *get_stripe() { return stripe; }
   CInode *get_inode() { return get_stripe()->get_inode(); }
-  CDir *get_parent_dir() { return get_inode()->get_parent_dir(); }
+  CDirFrag *get_parent_dir() { return get_inode()->get_parent_dir(); }
 
   map_t::iterator begin() { return items.begin(); }
   map_t::iterator end() { return items.end(); }
@@ -290,8 +290,8 @@ public:
 
 
 public:
-  void split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool replay);
-  void merge(list<CDir*>& subs, list<Context*>& waiters, bool replay);
+  void split(int bits, list<CDirFrag*>& subs, list<Context*>& waiters, bool replay);
+  void merge(list<CDirFrag*>& subs, list<Context*>& waiters, bool replay);
 
   bool should_split() {
     return (int)get_num_head_items() > g_conf->mds_bal_split_size;
@@ -312,7 +312,7 @@ private:
  public:
   pair<int,int> authority() { return stripe->authority(); }
 
-  bool contains(CDir *x);  // true if we are x or an ancestor of x 
+  bool contains(CDirFrag *x);  // true if we are x or an ancestor of x 
 
 
   void _encode_base(bufferlist& bl) {

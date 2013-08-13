@@ -14,7 +14,7 @@
 
 #include "Mutation.h"
 #include "ScatterLock.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 
 #include "messages/MClientRequest.h"
 #include "messages/MMDSSlaveRequest.h"

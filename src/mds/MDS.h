@@ -120,7 +120,7 @@ class MDLog;
 class MDBalancer;
 
 class CInode;
-class CDir;
+class CDirFrag;
 class CDentry;
 
 class Messenger;
