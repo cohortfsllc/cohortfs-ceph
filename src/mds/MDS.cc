@@ -778,23 +778,6 @@ void MDS::handle_command(MMonCommand *m)
         } else dout(0) << "stripe " << dirstripe_t(in->ino(), stripeid) << " not found" << dendl;
       } else dout(0) << "path " << fp << " not found" << dendl;
     } else dout(0) << "bad syntax" << dendl;
-  } else if (m->cmd[0] == "export_dir") {
-    if (m->cmd.size() == 3) {
-      filepath fp(m->cmd[1].c_str());
-      int target = atoi(m->cmd[2].c_str());
-      if (target != whoami && mdsmap->is_up(target) && mdsmap->is_in(target)) {
-	CInode *in = mdcache->cache_traverse(fp);
-	if (in) {
-          stripeid_t stripeid = atoi(m->cmd[3].c_str());
-          CStripe *stripe = in->get_stripe(stripeid);
-          if (stripe) {
-            if (stripe->is_auth()) {
-              mdcache->migrator->export_dir(stripe, target);
-            } else dout(0) << "stripe " << stripe->dirstripe() << " not auth" << dendl;
-          } else dout(0) << "stripe " << dirstripe_t(in->ino(), stripeid) << " not found" << dendl;
-        } else dout(0) << "path " << fp << " not found" << dendl;
-      } else dout(0) << "bad migrate_dir target syntax" << dendl;
-    } else dout(0) << "bad migrate_dir syntax" << dendl;
   } 
   else if (m->cmd[0] == "cpu_profiler") {
     ostringstream ss;
@@ -1061,15 +1044,6 @@ void MDS::handle_mds_map(MMDSMap *m)
       if (oldmap->have_inst(*p) &&
 	  oldmap->get_inst(*p) != mdsmap->get_inst(*p))
 	mdcache->handle_mds_failure(*p);
-  }
-  if (is_clientreplay() || is_active() || is_stopping()) {
-    // did anyone stop?
-    set<int> oldstopped, stopped;
-    oldmap->get_stopped_mds_set(oldstopped);
-    mdsmap->get_stopped_mds_set(stopped);
-    for (set<int>::iterator p = stopped.begin(); p != stopped.end(); ++p) 
-      if (oldstopped.count(*p) == 0)      // newly so?
-	mdcache->migrator->handle_mds_failure_or_stop(*p);
   }
 
   if (!is_any_replay())
@@ -1922,47 +1896,6 @@ bool MDS::_dispatch(Message *m)
       clientreplay_done();
   }
 
-  // hack: thrash exports
-  static utime_t start;
-  utime_t now = ceph_clock_now(g_ceph_context);
-  if (start == utime_t()) 
-    start = now;
-  /*double el = now - start;
-  if (el > 30.0 &&
-    el < 60.0)*/
-  for (int i=0; i<g_conf->mds_thrash_exports; i++) {
-    set<int> s;
-    if (!is_active()) break;
-    mdsmap->get_mds_set(s, MDSMap::STATE_ACTIVE);
-    if (s.size() < 2 || mdcache->get_num_inodes() < 10) 
-      break;  // need peers for this to work.
-
-    dout(7) << "mds thrashing exports pass " << (i+1) << "/" << g_conf->mds_thrash_exports << dendl;
-    
-    // pick a random dir inode
-    CInode *in = mdcache->hack_pick_random_inode();
-
-    list<CStripe*> ls;
-    in->get_stripes(ls);
-    if (ls.empty())
-      continue;                // must be an open dir.
-    list<CStripe*>::iterator p = ls.begin();
-    int n = rand() % ls.size();
-    while (n--)
-      ++p;
-    CStripe *stripe = *p;
-    if (!stripe->get_parent_stripe()) continue; // must be linked.
-    if (!stripe->is_auth()) continue;           // must be auth.
-
-    int dest;
-    do {
-      int k = rand() % s.size();
-      set<int>::iterator p = s.begin();
-      while (k--) p++;
-      dest = *p;
-    } while (dest == whoami);
-    mdcache->migrator->export_dir_nicely(stripe,dest);
-  }
   // hack: thrash fragments
   for (int i=0; i<g_conf->mds_thrash_fragments; i++) {
     if (!is_active()) break;
