@@ -28,7 +28,7 @@
 
 
 class CDentry;
-class CDir;
+class CDirFrag;
 class Context;
 class MDCache;
 
@@ -113,7 +113,7 @@ class CStripe : public MDSCacheObject {
   int auth_pins;
 
   // cache control  (defined for authority; hints for replicas)
-  bool replicate; // was CDir::dir_rep
+  bool replicate; // was CDirFrag::dir_rep
 
   friend class MDBalancer;
   friend class MDCache;
@@ -191,7 +191,7 @@ class CStripe : public MDSCacheObject {
   // -- dirfrags --
  private:
   fragtree_t dirfragtree;
-  map<frag_t, CDir*> dirfrags; // cached dir fragments under this stripe
+  map<frag_t, CDirFrag*> dirfrags; // cached dir fragments under this stripe
   int stickydir_ref;
 
  public:
@@ -205,19 +205,19 @@ class CStripe : public MDSCacheObject {
   frag_t pick_dirfrag(__u32 hash);
   frag_t pick_dirfrag(const string &dn);
 
-  CDir* get_dirfrag(frag_t fg) {
+  CDirFrag* get_dirfrag(frag_t fg) {
     if (dirfrags.count(fg)) {
       //assert(g_conf->debug_mds < 2 || dirfragtree.is_leaf(fg)); // performance hack FIXME
       return dirfrags[fg];
     } else
       return 0;
   }
-  bool get_dirfrags_under(frag_t fg, list<CDir*>& ls);
-  CDir* get_approx_dirfrag(frag_t fg);
-  void get_dirfrags(list<CDir*>& ls);
+  bool get_dirfrags_under(frag_t fg, list<CDirFrag*>& ls);
+  CDirFrag* get_approx_dirfrag(frag_t fg);
+  void get_dirfrags(list<CDirFrag*>& ls);
 
-  CDir *get_or_open_dirfrag(frag_t fg);
-  CDir *add_dirfrag(CDir *dir);
+  CDirFrag *get_or_open_dirfrag(frag_t fg);
+  CDirFrag *add_dirfrag(CDirFrag *dir);
   void close_dirfrag(frag_t fg);
   void close_dirfrags();
 

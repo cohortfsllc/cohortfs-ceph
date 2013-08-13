@@ -33,7 +33,7 @@
 #include "MDSMap.h"
 
 #include "CInode.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 
 #include "Mutation.h"
 
@@ -340,7 +340,7 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   rootstripe->state_set(CStripe::STATE_OPEN);
   rootstripe->replicate = true;
   rootstripe->set_stripe_auth(mds->whoami);
-  CDir *rootdir = rootstripe->get_or_open_dirfrag(frag_t());
+  CDirFrag *rootdir = rootstripe->get_or_open_dirfrag(frag_t());
 
   // create ceph dir
   CInode *ceph = create_system_inode(MDS_INO_CEPH, auth, S_IFDIR);
@@ -351,7 +351,7 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   CStripe *cephstripe = ceph->get_or_open_stripe(0);
   cephstripe->state_set(CStripe::STATE_OPEN);
   cephstripe->replicate = true;
-  CDir *cephdir = cephstripe->get_or_open_dirfrag(frag_t());
+  CDirFrag *cephdir = cephstripe->get_or_open_dirfrag(frag_t());
 
   ceph->inode.dirstat = cephstripe->fnode.fragstat;
   rootstripe->fnode.fragstat.nsubdirs++;
@@ -364,7 +364,7 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   inodestripe->state_set(CStripe::STATE_OPEN);
   inodestripe->replicate = true;
   inodestripe->set_stripe_auth(mds->whoami);
-  CDir *inodesdir = inodestripe->get_or_open_dirfrag(frag_t());
+  CDirFrag *inodesdir = inodestripe->get_or_open_dirfrag(frag_t());
   inodes->inode.dirstat = inodestripe->fnode.fragstat;
 
   rootstripe->fnode.accounted_fragstat = rootstripe->fnode.fragstat;
@@ -415,7 +415,7 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
   my->set_stripe_auth(auth);
   CStripe *mystripe = my->get_or_open_stripe(0);
   mystripe->set_stripe_auth(mds->whoami);
-  CDir *mydir = mystripe->get_or_open_dirfrag(frag_t());
+  CDirFrag *mydir = mystripe->get_or_open_dirfrag(frag_t());
 
   LogSegment *ls = mds->mdlog->get_current_segment();
 
@@ -453,14 +453,14 @@ struct C_MDC_CreateSystemFile : public Context {
   }
 };
 
-void MDCache::_create_system_file(CDir *dir, const char *name, CInode *in, Context *fin)
+void MDCache::_create_system_file(CDirFrag *dir, const char *name, CInode *in, Context *fin)
 {
   dout(10) << "_create_system_file " << name << " in " << *dir << dendl;
   CDentry *dn = dir->add_null_dentry(name);
 
   dn->push_projected_linkage(in);
 
-  CDir *mdir = 0;
+  CDirFrag *mdir = 0;
   if (in->inode.is_dir()) {
     in->inode.rstat.rsubdirs = 1;
 
@@ -520,7 +520,7 @@ void MDCache::_create_system_file_finish(Mutation *mut, CDentry *dn, Context *fi
     stripe->mark_dirty(mut->ls);
     stripe->mark_new(mut->ls);
 
-    CDir *dir = stripe->get_dirfrag(frag_t());
+    CDirFrag *dir = stripe->get_dirfrag(frag_t());
     assert(dir);
     dir->mark_dirty(mut->ls);
     dir->mark_new(mut->ls);
@@ -602,7 +602,7 @@ void MDCache::open_root()
     assert(root->is_auth());  
     CStripe *rootstripe = root->get_or_open_stripe(0);
     rootstripe->set_stripe_auth(mds->whoami);
-    CDir *rootdir = rootstripe->get_or_open_dirfrag(frag_t());
+    CDirFrag *rootdir = rootstripe->get_or_open_dirfrag(frag_t());
     if (!rootdir->is_complete()) {
       rootdir->fetch(new C_MDS_RetryOpenRoot(this));
       return;
@@ -615,7 +615,7 @@ void MDCache::open_root()
       return;
     }
     assert(rootstripe);
-    CDir *rootdir = rootstripe->get_dirfrag(frag_t());
+    CDirFrag *rootdir = rootstripe->get_dirfrag(frag_t());
     if (!rootdir) {
       discover_dir_frag(rootstripe, frag_t(), new C_MDS_RetryOpenRoot(this));
       return;
@@ -642,7 +642,7 @@ void MDCache::open_root()
 void MDCache::populate_mydir()
 {
   assert(myin);
-  CDir *mydir = myin->get_or_open_stripe(0)->get_or_open_dirfrag(frag_t());
+  CDirFrag *mydir = myin->get_or_open_stripe(0)->get_or_open_dirfrag(frag_t());
   assert(mydir);
 
   dout(10) << "populate_mydir " << *mydir << dendl;
@@ -688,7 +688,7 @@ MDSCacheObject *MDCache::get_object(MDSCacheObjectInfo &info)
   }
 
   // dir or dentry.
-  CDir *dir = get_dirfrag(info.dirfrag);
+  CDirFrag *dir = get_dirfrag(info.dirfrag);
   if (!dir) return 0;
     
   if (info.dname.length()) 
@@ -1407,16 +1407,16 @@ void MDCache::handle_mds_recovery(int who)
       q.pop_front();
       stripe->take_waiting(CStripe::WAIT_ANY_MASK, waiters);
 
-      list<CDir*> ls;
+      list<CDirFrag*> ls;
       stripe->get_dirfrags(ls);
-      for (list<CDir*>::iterator p = ls.begin();
+      for (list<CDirFrag*>::iterator p = ls.begin();
            p != ls.end();
            ++p) {
-        CDir *dir = *p;
-        dir->take_waiting(CDir::WAIT_ANY_MASK, waiters);
+        CDirFrag *dir = *p;
+        dir->take_waiting(CDirFrag::WAIT_ANY_MASK, waiters);
 
         // inode waiters too
-        for (CDir::map_t::iterator p = dir->items.begin();
+        for (CDirFrag::map_t::iterator p = dir->items.begin();
              p != dir->items.end();
              ++p) {
           CDentry *dn = p->second;
@@ -1816,14 +1816,14 @@ void MDCache::remove_inode_recursive(CInode *in)
       continue;
 
     dout(10) << " removing stripe " << *stripe << dendl;
-    list<CDir*> ls;
+    list<CDirFrag*> ls;
     stripe->get_dirfrags(ls);
-    list<CDir*>::iterator p = ls.begin();
+    list<CDirFrag*>::iterator p = ls.begin();
     while (p != ls.end()) {
-      CDir *subdir = *p++;
+      CDirFrag *subdir = *p++;
 
       dout(10) << " removing dirfrag " << *subdir << dendl;
-      CDir::map_t::iterator q = subdir->items.begin();
+      CDirFrag::map_t::iterator q = subdir->items.begin();
       while (q != subdir->items.end()) {
         CDentry *dn = q->second;
         ++q;
@@ -2182,12 +2182,12 @@ void MDCache::rejoin_walk(CStripe *stripe, MMDSCacheRejoin *rejoin)
   if (mds->is_rejoin()) {
     // WEAK
     rejoin->add_weak_stripe(stripe->dirstripe());
-    list<CDir*> dirs;
+    list<CDirFrag*> dirs;
     stripe->get_dirfrags(dirs);
-    for (list<CDir*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
-      CDir *dir = *d;
+    for (list<CDirFrag*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
+      CDirFrag *dir = *d;
       rejoin->add_weak_dirfrag(dir->dirfrag());
-      for (CDir::map_t::iterator p = dir->items.begin();
+      for (CDirFrag::map_t::iterator p = dir->items.begin();
            p != dir->items.end();
            ++p) {
         CDentry *dn = p->second;
@@ -2210,14 +2210,14 @@ void MDCache::rejoin_walk(CStripe *stripe, MMDSCacheRejoin *rejoin)
     dout(15) << " add_strong_stripe " << *stripe << dendl;
     rejoin->add_strong_stripe(stripe->dirstripe(), stripe->get_replica_nonce());
 
-    list<CDir*> dirs;
+    list<CDirFrag*> dirs;
     stripe->get_dirfrags(dirs);
-    for (list<CDir*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
-      CDir *dir = *d;
+    for (list<CDirFrag*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
+      CDirFrag *dir = *d;
       dout(15) << " add_strong_dirfrag " << *dir << dendl;
       rejoin->add_strong_dirfrag(dir->dirfrag(), dir->get_replica_nonce());
 
-      for (CDir::map_t::iterator p = dir->items.begin();
+      for (CDirFrag::map_t::iterator p = dir->items.begin();
            p != dir->items.end();
            ++p) {
         CDentry *dn = p->second;
@@ -2372,7 +2372,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
   // strong_dirfrag that will set them straight on the fragmentation.
   
   // walk weak map
-  set<CDir*> dirs_to_share;
+  set<CDirFrag*> dirs_to_share;
   for (set<dirfrag_t>::iterator p = weak->weak_dirfrags.begin();
        p != weak->weak_dirfrags.end();
        ++p) {
@@ -2382,7 +2382,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     assert(stripe);
     
     frag_t fg = stripe->get_fragtree()[p->frag.value()];
-    CDir *dir = stripe->get_dirfrag(fg);
+    CDirFrag *dir = stripe->get_dirfrag(fg);
     if (!dir)
       dout(0) << " missing dir for " << p->frag << " (which maps to " << fg << ") on " << *stripe << dendl;
     assert(dir);
@@ -2406,7 +2406,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     assert(stripe);
 
     // weak dentries
-    CDir *dir = 0;
+    CDirFrag *dir = 0;
     for (map<string_snap_t,MMDSCacheRejoin::dn_weak>::iterator q = p->second.begin();
 	 q != p->second.end();
 	 ++q) {
@@ -2547,7 +2547,7 @@ bool MDCache::parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& m
   C_GatherBuilder gather_bld(g_ceph_context, new C_MDC_RejoinGatherFinish(this));
 
   // scan list
-  set<CDir*> fetch_queue;
+  set<CDirFrag*> fetch_queue;
   map<inodeno_t,filepath>::iterator p = pathmap.begin();
   while (p != pathmap.end()) {
     // do we have the target already?
@@ -2574,7 +2574,7 @@ bool MDCache::parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& m
   }
 
   // do a parallel fetch
-  for (set<CDir*>::iterator p = fetch_queue.begin();
+  for (set<CDirFrag*>::iterator p = fetch_queue.begin();
        p != fetch_queue.end();
        ++p) {
     dout(10) << "parallel_fetch fetching " << **p << dendl;
@@ -2590,7 +2590,7 @@ bool MDCache::parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& m
 
 // true if we're done with this path
 bool MDCache::parallel_fetch_traverse_dir(inodeno_t ino, filepath& path,
-					  set<CDir*>& fetch_queue, set<inodeno_t>& missing,
+					  set<CDirFrag*>& fetch_queue, set<inodeno_t>& missing,
 					  C_GatherBuilder &gather_bld)
 {
   CInode *cur = get_inode(path.get_ino());
@@ -2614,7 +2614,7 @@ bool MDCache::parallel_fetch_traverse_dir(inodeno_t ino, filepath& path,
     CStripe *stripe = cur->get_or_open_stripe(stripeid);
 
     frag_t fg = stripe->pick_dirfrag(dnhash);
-    CDir *dir = stripe->get_or_open_dirfrag(fg);
+    CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
     CDentry *dn = dir->lookup(path[i]);
     CDentry::linkage_t *dnl = dn ? dn->get_linkage() : NULL;
 
@@ -2694,10 +2694,10 @@ void MDCache::rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack,
         dout(10) << " rem " << *stripe << dendl;
       }
 
-      list<CDir*> dfs;
+      list<CDirFrag*> dfs;
       stripe->get_dirfrags(dfs);
-      for (list<CDir*>::iterator p = dfs.begin(); p != dfs.end(); ++p) {
-        CDir *dir = *p;
+      for (list<CDirFrag*>::iterator p = dfs.begin(); p != dfs.end(); ++p) {
+        CDirFrag *dir = *p;
 
         if (dir->is_auth() &&
             dir->is_replica(from) &&
@@ -2707,7 +2707,7 @@ void MDCache::rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack,
         } 
 
         // dentries
-        for (CDir::map_t::iterator p = dir->items.begin();
+        for (CDirFrag::map_t::iterator p = dir->items.begin();
              p != dir->items.end();
              ++p) {
           CDentry *dn = p->second;
@@ -2727,7 +2727,7 @@ void MDCache::rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack,
 bool MDCache::rejoin_fetch_dirfrags(MMDSCacheRejoin *strong)
 {
   int skipped = 0;
-  set<CDir*> fetch_queue;
+  set<CDirFrag*> fetch_queue;
   for (map<dirfrag_t, MMDSCacheRejoin::dirfrag_strong>::iterator p = strong->strong_dirfrags.begin();
        p != strong->strong_dirfrags.end();
        ++p) {
@@ -2736,11 +2736,11 @@ bool MDCache::rejoin_fetch_dirfrags(MMDSCacheRejoin *strong)
       skipped++;
       continue;
     }
-    CDir *dir = stripe->get_dirfrag(p->first.frag);
+    CDirFrag *dir = stripe->get_dirfrag(p->first.frag);
     if (dir && dir->is_complete())
       continue;
 
-    set<CDir*> frags;
+    set<CDirFrag*> frags;
     bool refragged = false;
     if (!dir) {
       const fragtree_t &dft = stripe->get_fragtree();
@@ -2789,8 +2789,8 @@ bool MDCache::rejoin_fetch_dirfrags(MMDSCacheRejoin *strong)
     dout(10) << "rejoin_fetch_dirfrags " << fetch_queue.size() << " dirfrags" << dendl;
     strong->get();
     C_GatherBuilder gather(g_ceph_context, new C_MDS_RetryMessage(mds, strong));
-    for (set<CDir*>::iterator p = fetch_queue.begin(); p != fetch_queue.end(); p++) {
-      CDir *dir = *p;
+    for (set<CDirFrag*>::iterator p = fetch_queue.begin(); p != fetch_queue.end(); p++) {
+      CDirFrag *dir = *p;
       dir->fetch(gather.new_sub());
     }
     gather.activate();
@@ -2834,7 +2834,7 @@ void MDCache::handle_cache_rejoin_strong(MMDSCacheRejoin *strong)
        ++p) {
     CStripe *stripe = get_dirstripe(p->first.stripe);
     assert(stripe);
-    CDir *dir = stripe->get_dirfrag(p->first.frag);
+    CDirFrag *dir = stripe->get_dirfrag(p->first.frag);
     const fragtree_t &dft = stripe->get_fragtree();
     bool refragged = false;
     if (dir) {
@@ -2848,7 +2848,7 @@ void MDCache::handle_cache_rejoin_strong(MMDSCacheRejoin *strong)
 	ls.push_back(dft[p->first.frag.value()]);
       dout(10) << " maps to frag(s) " << ls << dendl;
       for (list<frag_t>::iterator q = ls.begin(); q != ls.end(); ++q) {
-	CDir *dir = stripe->get_dirfrag(*q);
+	CDirFrag *dir = stripe->get_dirfrag(*q);
         assert(dir);
         dout(10) << " have(approx) " << *dir << dendl;
 	dir->add_replica(from);
@@ -3066,7 +3066,7 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
        ++p) {
     // we may have had incorrect dir fragmentation; refragment based
     // on what they auth tells us.
-    CDir *dir = get_force_dirfrag(p->first);
+    CDirFrag *dir = get_force_dirfrag(p->first);
     if (!dir) {
       CInode *diri = get_inode(p->first.stripe.ino);
       if (!diri) {
@@ -3091,12 +3091,12 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
       }
 
       // barebones dirfrag; the full dirfrag loop below will clean up.
-      dir = stripe->add_dirfrag(new CDir(stripe, p->first.frag, this, false));
+      dir = stripe->add_dirfrag(new CDirFrag(stripe, p->first.frag, this, false));
       dout(10) << " add dirfrag " << *dir << dendl;
     }
 
     dir->set_replica_nonce(p->second.nonce);
-    dir->state_clear(CDir::STATE_REJOINING);
+    dir->state_clear(CDirFrag::STATE_REJOINING);
     dout(10) << " got " << *dir << dendl;
 
     // dentries
@@ -3170,7 +3170,7 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
   for (map<dirfrag_t, bufferlist>::iterator p = ack->dirfrag_bases.begin();
        p != ack->dirfrag_bases.end();
        ++p) {
-    CDir *dir = get_dirfrag(p->first);
+    CDirFrag *dir = get_dirfrag(p->first);
     assert(dir);
     bufferlist::iterator q = p->second.begin();
     dir->_decode_base(q);
@@ -3254,11 +3254,11 @@ void MDCache::handle_cache_rejoin_missing(MMDSCacheRejoin *missing)
        ++p) {
     // we may have had incorrect dir fragmentation; refragment based
     // on what they auth tells us.
-    CDir *dir = get_force_dirfrag(p->first);
+    CDirFrag *dir = get_force_dirfrag(p->first);
     assert(dir);
 
     dir->set_replica_nonce(p->second.nonce);
-    dir->state_clear(CDir::STATE_REJOINING);
+    dir->state_clear(CDirFrag::STATE_REJOINING);
     dout(10) << " adjusted frag on " << *dir << dendl;
   }
 
@@ -3349,15 +3349,15 @@ void MDCache::rejoin_trim_undef_inodes()
         stripe->clear_replica_map();
 
         // close dirfrags
-        list<CDir*> dfls;
+        list<CDirFrag*> dfls;
         stripe->get_dirfrags(dfls);
-        for (list<CDir*>::iterator p = dfls.begin();
+        for (list<CDirFrag*>::iterator p = dfls.begin();
              p != dfls.end();
              ++p) {
-          CDir *dir = *p;
+          CDirFrag *dir = *p;
           dir->clear_replica_map();
 
-          for (CDir::map_t::iterator p = dir->items.begin();
+          for (CDirFrag::map_t::iterator p = dir->items.begin();
                p != dir->items.end();
                ++p) {
             CDentry *dn = p->second;
@@ -3725,7 +3725,7 @@ bool MDCache::open_undef_inodes_dirfrags()
 	   << rejoin_undef_inodes.size() << " inodes "
 	   << rejoin_undef_dirfrags.size() << " dirfrags" << dendl;
 
-  set<CDir*> fetch_queue = rejoin_undef_dirfrags;
+  set<CDirFrag*> fetch_queue = rejoin_undef_dirfrags;
 
   for (set<CInode*>::iterator p = rejoin_undef_inodes.begin();
        p != rejoin_undef_inodes.end();
@@ -3739,22 +3739,22 @@ bool MDCache::open_undef_inodes_dirfrags()
     return false;
 
   C_GatherBuilder gather(g_ceph_context, new C_MDC_RejoinGatherFinish(this));
-  for (set<CDir*>::iterator p = fetch_queue.begin();
+  for (set<CDirFrag*>::iterator p = fetch_queue.begin();
        p != fetch_queue.end();
        ++p) {
-    CDir *dir = *p;
+    CDirFrag *dir = *p;
     CStripe *stripe = dir->get_stripe();
     if (stripe->state_test(CStripe::STATE_REJOINUNDEF))
       continue;
-    if (dir->state_test(CDir::STATE_REJOINUNDEF) && dir->get_frag() == frag_t()) {
+    if (dir->state_test(CDirFrag::STATE_REJOINUNDEF) && dir->get_frag() == frag_t()) {
       rejoin_undef_dirfrags.erase(dir);
-      dir->state_clear(CDir::STATE_REJOINUNDEF);
+      dir->state_clear(CDirFrag::STATE_REJOINUNDEF);
       stripe->force_dirfrags();
-      list<CDir*> ls;
+      list<CDirFrag*> ls;
       stripe->get_dirfrags(ls);
-      for (list<CDir*>::iterator q = ls.begin(); q != ls.end(); ++q) {
+      for (list<CDirFrag*>::iterator q = ls.begin(); q != ls.end(); ++q) {
 	rejoin_undef_dirfrags.insert(*q);
-	(*q)->state_set(CDir::STATE_REJOINUNDEF);
+	(*q)->state_set(CDirFrag::STATE_REJOINUNDEF);
 	(*q)->fetch(gather.new_sub());
       }
       continue;
@@ -3810,7 +3810,7 @@ void MDCache::rejoin_send_acks()
 	if (dn->is_replica(p->first))
 	  break;
 	dn->add_replica(p->first);
-	CDir *dir = dn->get_dir();
+	CDirFrag *dir = dn->get_dir();
 	if (dir->is_replica(p->first))
 	  break;
 	dir->add_replica(p->first);
@@ -4344,7 +4344,7 @@ bool MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
   
   CDentry::linkage_t *dnl = dn->get_linkage();
 
-  CDir *dir = dn->get_dir();
+  CDirFrag *dir = dn->get_dir();
   assert(dir);
 
   CStripe *stripe = dir->get_stripe();
@@ -4400,14 +4400,14 @@ bool MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
   dir->remove_dentry(dn);
 
   if (clear_complete)
-    dir->state_clear(CDir::STATE_COMPLETE);
+    dir->state_clear(CDirFrag::STATE_COMPLETE);
   
   if (mds->logger) mds->logger->inc(l_mds_iex);
   return false;
 }
 
 
-void MDCache::trim_dirfrag(CDir *dir, map<int, MCacheExpire*>& expiremap)
+void MDCache::trim_dirfrag(CDirFrag *dir, map<int, MCacheExpire*>& expiremap)
 {
   dout(15) << "trim_dirfrag " << *dir << dendl;
 
@@ -4440,9 +4440,9 @@ void MDCache::trim_stripe(CStripe *stripe, map<int, MCacheExpire*>& expiremap)
   assert(stripe->get_num_ref() == 0);
 
   // DIR
-  list<CDir*> dirs;
+  list<CDirFrag*> dirs;
   stripe->get_dirfrags(dirs);
-  for (list<CDir*>::iterator d = dirs.begin(); d != dirs.end(); ++d)
+  for (list<CDirFrag*>::iterator d = dirs.begin(); d != dirs.end(); ++d)
     trim_dirfrag(*d, expiremap);
 
   // STRIPE
@@ -4564,7 +4564,7 @@ void MDCache::trim_non_auth()
       }
     } else {
       // non-auth.  expire.
-      CDir *dir = dn->get_dir();
+      CDirFrag *dir = dn->get_dir();
       assert(dir);
 
       // unlink the dentry
@@ -4580,10 +4580,10 @@ void MDCache::trim_non_auth()
         in->get_stripes(stripes);
         for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
           CStripe *stripe = *s;
-          list<CDir*> ls;
+          list<CDirFrag*> ls;
           stripe->get_dirfrags(ls);
-          for (list<CDir*>::iterator p = ls.begin(); p != ls.end(); ++p) {
-            CDir *subdir = *p;
+          for (list<CDirFrag*>::iterator p = ls.begin(); p != ls.end(); ++p) {
+            CDirFrag *subdir = *p;
             dout(10) << " removing " << *subdir << dendl;
             stripe->close_dirfrag(subdir->get_frag());
           }
@@ -4600,7 +4600,7 @@ void MDCache::trim_non_auth()
       assert(!dir->has_bloom());
       dir->remove_dentry(dn);
       // adjust the dir state
-      dir->state_clear(CDir::STATE_COMPLETE);  // dir incomplete!
+      dir->state_clear(CDirFrag::STATE_COMPLETE);  // dir incomplete!
     }
   }
 
@@ -4619,10 +4619,10 @@ void MDCache::trim_non_auth()
         in->get_stripes(stripes);
         for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
           CStripe *stripe = *s;
-          list<CDir*> ls;
+          list<CDirFrag*> ls;
           stripe->get_dirfrags(ls);
-          for (list<CDir*>::iterator p = ls.begin(); p != ls.end(); ++p) {
-            CDir *dir = *p;
+          for (list<CDirFrag*>::iterator p = ls.begin(); p != ls.end(); ++p) {
+            CDirFrag *dir = *p;
             dout(10) << " removing " << *dir << dendl;
             assert(dir->get_num_ref() == 0);
             stripe->close_dirfrag(dir->get_frag());
@@ -4641,7 +4641,7 @@ void MDCache::trim_non_auth()
 
 /**
  * Recursively trim the subtree rooted at directory to remove all
- * CInodes/CDentrys/CDirs that aren't links to remote MDSes, or ancestors
+ * CInodes/CDentrys/CDirFrags that aren't links to remote MDSes, or ancestors
  * of those links. This is used to clear invalid data out of the cache.
  * Note that it doesn't clear the passed-in directory, since that's not
  * always safe.
@@ -4654,14 +4654,14 @@ bool MDCache::trim_non_auth_subtree(CStripe *stripe)
     return true;
 
   bool keep_stripe = false;
-  list<CDir*> dirs;
+  list<CDirFrag*> dirs;
   stripe->get_dirfrags(dirs);
-  for (list<CDir*>::iterator i = dirs.begin(); i != dirs.end(); ++i) {
-    CDir *dir = *i;
+  for (list<CDirFrag*>::iterator i = dirs.begin(); i != dirs.end(); ++i) {
+    CDirFrag *dir = *i;
     dout(10) << "trim_non_auth_subtree(" << stripe << ") Checking dir " << dir << dendl;
 
     bool keep_dir = false;
-    for (CDir::map_t::iterator j = dir->begin(); j != dir->end();) {
+    for (CDirFrag::map_t::iterator j = dir->begin(); j != dir->end();) {
       CDentry *dn = j->second;
       j++;
       dout(10) << "trim_non_auth_subtree(" << stripe << ") Checking dentry " << dn << dendl;
@@ -4763,7 +4763,7 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
   for (map<dirfrag_t,int>::iterator it = m->dirs.begin();
        it != m->dirs.end();
        ++it) {
-    CDir *dir = get_dirfrag(it->first);
+    CDirFrag *dir = get_dirfrag(it->first);
     int nonce = it->second;
 
     if (!dir) {
@@ -4824,7 +4824,7 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
     dout(10) << " dn expires in dir " << pd->first << dendl;
     CStripe *stripe = get_dirstripe(pd->first.stripe);
     assert(stripe);
-    CDir *dir = stripe->get_dirfrag(pd->first.frag);
+    CDirFrag *dir = stripe->get_dirfrag(pd->first.frag);
 
     if (!dir) {
       dout(0) << " dn expires on " << pd->first << " from " << from
@@ -4843,7 +4843,7 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
         dn = dir->lookup(p->first.first, p->first.second);
       } else {
         // which dirfrag for this dentry?
-        CDir *dir = stripe->get_dirfrag(stripe->pick_dirfrag(p->first.first));
+        CDirFrag *dir = stripe->get_dirfrag(stripe->pick_dirfrag(p->first.first));
         assert(dir); 
         assert(dir->is_auth());
         dn = dir->lookup(p->first.first, p->first.second);
@@ -5286,7 +5286,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
         // parent dir frozen_dir?
         if (cur->is_frozen()) {
           dout(7) << "traverse: " << *cur << " is frozen, waiting" << dendl;
-          cur->add_waiter(CDir::WAIT_UNFREEZE, _get_waiter(mdr, req, fin));
+          cur->add_waiter(CDirFrag::WAIT_UNFREEZE, _get_waiter(mdr, req, fin));
           return 1;
         }
         curstripe = cur->get_or_open_stripe(stripeid);
@@ -5308,7 +5308,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
 
     // open dir
     frag_t fg = curstripe->pick_dirfrag(dnhash);
-    CDir *curdir = curstripe->get_dirfrag(fg);
+    CDirFrag *curdir = curstripe->get_dirfrag(fg);
     if (!curdir) {
       if (curstripe->is_auth()) {
         // parent dir frozen_dir?
@@ -5340,7 +5340,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
     // doh!
       // FIXME: traverse is allowed?
       dout(7) << "traverse: " << *curdir << " is frozen, waiting" << dendl;
-      curdir->add_waiter(CDir::WAIT_UNFREEZE, _get_waiter(mdr, req, fin));
+      curdir->add_waiter(CDirFrag::WAIT_UNFREEZE, _get_waiter(mdr, req, fin));
       if (onfinish) delete onfinish;
       return 1;
     }
@@ -5529,7 +5529,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
 	if (curdir->is_ambiguous_auth()) {
 	  // wait
 	  dout(7) << "traverse: waiting for single auth in " << *curdir << dendl;
-	  curdir->add_waiter(CDir::WAIT_SINGLEAUTH, _get_waiter(mdr, req, fin));
+	  curdir->add_waiter(CDirFrag::WAIT_SINGLEAUTH, _get_waiter(mdr, req, fin));
 	  return 1;
 	} 
 
@@ -5592,7 +5592,7 @@ bool MDCache::path_is_mine(filepath& path)
       return cur->is_auth();
 
     frag_t fg = stripe->pick_dirfrag(dnhash);
-    CDir *dir = stripe->get_dirfrag(fg);
+    CDirFrag *dir = stripe->get_dirfrag(fg);
     if (!dir)
       return stripe->is_auth();
     CDentry *dn = dir->lookup(path[i]);
@@ -5630,7 +5630,7 @@ CInode *MDCache::cache_traverse(const filepath& fp)
 
     frag_t fg = stripe->pick_dirfrag(dname);
     dout(20) << " " << i << " " << dname << " frag " << fg << " from " << *in << dendl;
-    CDir *curdir = stripe->get_dirfrag(fg);
+    CDirFrag *curdir = stripe->get_dirfrag(fg);
     if (!curdir)
       return NULL;
     CDentry *dn = curdir->lookup(dname, CEPH_NOSNAP);
@@ -5772,7 +5772,7 @@ void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocke
   if (!stripe->is_auth()) {
     // fetch from remote stripe of inode container
     frag_t fg = stripe->pick_dirfrag(path.last_dentry());
-    CDir *dir = stripe->get_dirfrag(fg);
+    CDirFrag *dir = stripe->get_dirfrag(fg);
     if (!dir) // start from stripe
       discover_path(stripe, CEPH_NOSNAP, path, onfinish, want_xlocked);
     else // start from dir
@@ -5786,7 +5786,7 @@ void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocke
     return;
   }
   frag_t fg = stripe->pick_dirfrag(base->hash_dentry_name(path.last_dentry()));
-  CDir *dir = stripe->get_or_open_dirfrag(fg);
+  CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
   if (!dir->is_complete()) {
     dir->fetch(new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked),
                path.last_dentry());
@@ -6017,21 +6017,21 @@ void MDCache::_open_ino_traverse_dir(inodeno_t ino, open_ino_info_t& info, int r
   do_open_ino(ino, info, ret);
 }
 
-void MDCache::_open_ino_fetch_dir(inodeno_t ino, MMDSOpenIno *m, CDir *dir)
+void MDCache::_open_ino_fetch_dir(inodeno_t ino, MMDSOpenIno *m, CDirFrag *dir)
 {
-  if (dir->state_test(CDir::STATE_REJOINUNDEF) && dir->get_frag() == frag_t()) {
+  if (dir->state_test(CDirFrag::STATE_REJOINUNDEF) && dir->get_frag() == frag_t()) {
     rejoin_undef_dirfrags.erase(dir);
-    dir->state_clear(CDir::STATE_REJOINUNDEF);
+    dir->state_clear(CDirFrag::STATE_REJOINUNDEF);
 
     CStripe *stripe = dir->get_stripe();
     stripe->force_dirfrags();
-    list<CDir*> ls;
+    list<CDirFrag*> ls;
     stripe->get_dirfrags(ls);
 
     C_GatherBuilder gather(g_ceph_context, _open_ino_get_waiter(ino, m));
-    for (list<CDir*>::iterator p = ls.begin(); p != ls.end(); ++p) {
+    for (list<CDirFrag*>::iterator p = ls.begin(); p != ls.end(); ++p) {
       rejoin_undef_dirfrags.insert(*p);
-      (*p)->state_set(CDir::STATE_REJOINUNDEF);
+      (*p)->state_set(CDirFrag::STATE_REJOINUNDEF);
       (*p)->fetch(gather.new_sub());
     }
     assert(gather.has_subs());
@@ -6058,8 +6058,8 @@ int MDCache::open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
     }
 
     if (diri->state_test(CInode::STATE_REJOINUNDEF)) {
-      CDir *dir = diri->get_parent_dir();
-      while (dir->state_test(CDir::STATE_REJOINUNDEF) &&
+      CDirFrag *dir = diri->get_parent_dir();
+      while (dir->state_test(CDirFrag::STATE_REJOINUNDEF) &&
 	     dir->get_inode()->state_test(CInode::STATE_REJOINUNDEF))
 	dir = dir->get_inode()->get_parent_dir();
       _open_ino_fetch_dir(ino, m, dir);
@@ -6096,7 +6096,7 @@ int MDCache::open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
     if (stripe) {
       // pick dirfrag
       frag_t fg = stripe->pick_dirfrag(dnhash);
-      CDir *dir = stripe->get_dirfrag(fg);
+      CDirFrag *dir = stripe->get_dirfrag(fg);
       if (!dir) {
         if (stripe->is_auth()) {
           if (stripe->is_frozen()) {
@@ -6862,7 +6862,7 @@ class C_MDC_DiscoverPath : public Context {
   MDCache *mdcache;
   CInode *in;
   CStripe *stripe;
-  CDir *dir;
+  CDirFrag *dir;
   snapid_t snapid;
   filepath path;
   int from;
@@ -6877,7 +6877,7 @@ class C_MDC_DiscoverPath : public Context {
       : mdcache(mdcache), in(NULL), stripe(base), dir(NULL),
         snapid(snapid), path(path), from(-1) {}
 
-  C_MDC_DiscoverPath(MDCache *mdcache, CDir *base, snapid_t snapid,
+  C_MDC_DiscoverPath(MDCache *mdcache, CDirFrag *base, snapid_t snapid,
                      const filepath &path)
       : mdcache(mdcache), in(NULL), stripe(NULL), dir(base),
         snapid(snapid), path(path), from(-1) {}
@@ -6978,7 +6978,7 @@ void MDCache::discover_path(CStripe *base, snapid_t snap,
     base->add_dir_waiter(df.frag, onfinish);
 }
 
-void MDCache::discover_path(CDir *base, snapid_t snap,
+void MDCache::discover_path(CDirFrag *base, snapid_t snap,
                             const filepath &want_path,
 			    Context *onfinish, bool want_xlocked)
 {
@@ -6992,7 +6992,7 @@ void MDCache::discover_path(CDir *base, snapid_t snap,
     dout(7) << " waiting for single auth on " << *base << dendl;
     if (!onfinish)
       onfinish = new C_MDC_DiscoverPath(this, base, snap, want_path);
-    base->add_waiter(CDir::WAIT_SINGLEAUTH, onfinish);
+    base->add_waiter(CDirFrag::WAIT_SINGLEAUTH, onfinish);
     return;
   }
 
@@ -7014,16 +7014,16 @@ void MDCache::discover_path(CDir *base, snapid_t snap,
 
 struct C_MDC_RetryDiscoverIno : public Context {
   MDCache *mdc;
-  CDir *base;
+  CDirFrag *base;
   inodeno_t want_ino;
-  C_MDC_RetryDiscoverIno(MDCache *c, CDir *b, inodeno_t i) :
+  C_MDC_RetryDiscoverIno(MDCache *c, CDirFrag *b, inodeno_t i) :
     mdc(c), base(b), want_ino(i) {}
   void finish(int r) {
     mdc->discover_ino(base, want_ino, 0);
   }
 };
 
-void MDCache::discover_ino(CDir *base,
+void MDCache::discover_ino(CDirFrag *base,
 			   inodeno_t want_ino,
 			   Context *onfinish,
 			   bool want_xlocked)
@@ -7038,7 +7038,7 @@ void MDCache::discover_ino(CDir *base,
     dout(10) << " waiting for single auth on " << *base << dendl;
     if (!onfinish)
       onfinish = new C_MDC_RetryDiscoverIno(this, base, want_ino);
-    base->add_waiter(CDir::WAIT_SINGLEAUTH, onfinish);
+    base->add_waiter(CDirFrag::WAIT_SINGLEAUTH, onfinish);
     return;
   } 
 
@@ -7248,7 +7248,7 @@ void MDCache::handle_discover(MDiscover *dis)
       fg = dis->get_base_frag();
       assert(dis->wants_base_stripe() || dis->get_want_ino() || MDS_INO_IS_BASE(dis->get_base_ino()));
     }
-    CDir *curdir = curstripe->get_dirfrag(fg);
+    CDirFrag *curdir = curstripe->get_dirfrag(fg);
 
     // open dir?
     if (!curdir) 
@@ -7260,7 +7260,7 @@ void MDCache::handle_discover(MDiscover *dis)
     if (curdir->is_frozen()) {
       if (reply->is_empty()) {
 	dout(7) << *curdir << " is frozen, empty reply, waiting" << dendl;
-	curdir->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
+	curdir->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
 	reply->put();
 	return;
       } else {
@@ -7379,7 +7379,7 @@ void MDCache::handle_discover(MDiscover *dis)
 	dout(7) << "handle_discover allowing discovery of frozen tail " << *dnl->get_inode() << dendl;
       } else if (reply->is_empty()) {
 	dout(7) << *dnl->get_inode() << " is frozen, empty reply, waiting" << dendl;
-	dnl->get_inode()->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
+	dnl->get_inode()->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
 	reply->put();
 	return;
       } else {
@@ -7462,7 +7462,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
     assert(cur->is_dir());
     CStripe *stripe = cur->get_stripe(m->get_base_stripe());
     assert(stripe);
-    CDir *dir = stripe->get_dirfrag(m->get_base_frag());
+    CDirFrag *dir = stripe->get_dirfrag(m->get_base_frag());
     assert(dir);
     dout(7) << " flag_error on ino " << m->get_wanted_ino()
         << ", triggering ino" << dendl;
@@ -7491,7 +7491,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
   // can start, end with any type.
   while (!p.end()) {
     CStripe *curstripe;
-    CDir *curdir;
+    CDirFrag *curdir;
     if (next == MDiscoverReply::STRIPE) {
       // stripe
       curstripe = add_replica_stripe(p, cur, from, finished);
@@ -7561,7 +7561,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 
       if (stripe) {
         frag_t fg = stripe->pick_dirfrag(dnhash);
-        CDir *dir = stripe->get_dirfrag(fg);
+        CDirFrag *dir = stripe->get_dirfrag(fg);
 
         if (stripe->is_waiter_for(CStripe::WAIT_DIR)) {
           if (dir)
@@ -7599,7 +7599,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 
       if (stripe) {
         frag_t fg = m->get_base_frag();
-        CDir *dir = stripe->get_dirfrag(fg);
+        CDirFrag *dir = stripe->get_dirfrag(fg);
 
         if (stripe->is_waiter_for(CStripe::WAIT_DIR)) {
           if (cur->is_auth() || stripe)
@@ -7678,7 +7678,7 @@ CStripe *MDCache::forge_replica_stripe(CInode *diri, stripeid_t stripeid, int fr
   return stripe;
 }
 
-CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CStripe *stripe,
+CDirFrag *MDCache::add_replica_dir(bufferlist::iterator& p, CStripe *stripe,
 			       list<Context*>& finished)
 {
   dirfrag_t df;
@@ -7687,7 +7687,7 @@ CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CStripe *stripe,
   assert(stripe->dirstripe() == df.stripe);
 
   // add it (_replica_)
-  CDir *dir = stripe->get_dirfrag(df.frag);
+  CDirFrag *dir = stripe->get_dirfrag(df.frag);
 
   if (dir) {
     // had replica. update w/ new nonce.
@@ -7703,7 +7703,7 @@ CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CStripe *stripe,
     }
 
     // add replica.
-    dir = stripe->add_dirfrag( new CDir(stripe, df.frag, this, false) );
+    dir = stripe->add_dirfrag( new CDirFrag(stripe, df.frag, this, false) );
     dir->decode_replica(p);
 
     dout(7) << "add_replica_dir added " << *dir << " nonce " << dir->replica_nonce << dendl;
@@ -7715,19 +7715,19 @@ CDir *MDCache::add_replica_dir(bufferlist::iterator& p, CStripe *stripe,
   return dir;
 }
 
-CDir *MDCache::forge_replica_dir(CStripe *stripe, frag_t fg, int from)
+CDirFrag *MDCache::forge_replica_dir(CStripe *stripe, frag_t fg, int from)
 {
   assert(mds->mdsmap->get_state(from) < MDSMap::STATE_REJOIN);
  
   // forge a replica.
-  CDir *dir = stripe->add_dirfrag(new CDir(stripe, fg, this, false));
+  CDirFrag *dir = stripe->add_dirfrag(new CDirFrag(stripe, fg, this, false));
 
   dout(7) << "forge_replica_dir added " << *dir << " while mds." << from << " is down" << dendl;
 
   return dir;
 }
 
-CDentry *MDCache::add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Context*>& finished)
+CDentry *MDCache::add_replica_dentry(bufferlist::iterator& p, CDirFrag *dir, list<Context*>& finished)
 {
   string name;
   snapid_t last;
@@ -7899,7 +7899,7 @@ void MDCache::handle_dentry_link(MDentryLink *m)
 {
   int from = m->get_source().num();
   CDentry *dn = NULL;
-  CDir *dir = get_dirfrag(m->get_dirfrag());
+  CDirFrag *dir = get_dirfrag(m->get_dirfrag());
   if (!dir) {
     dout(7) << "handle_dentry_link don't have dirfrag " << m->get_dirfrag() << dendl;
   } else {
@@ -7977,7 +7977,7 @@ void MDCache::send_dentry_unlink(CDentry *dn, MDRequest *mdr)
 /* This function DOES put the passed message before returning */
 void MDCache::handle_dentry_unlink(MDentryUnlink *m)
 {
-  CDir *dir = get_dirfrag(m->get_dirfrag());
+  CDirFrag *dir = get_dirfrag(m->get_dirfrag());
   if (!dir) {
     dout(7) << "handle_dentry_unlink don't have dirfrag " << m->get_dirfrag() << dendl;
   } else {
@@ -8021,35 +8021,35 @@ void MDCache::handle_dentry_unlink(MDentryUnlink *m)
  * @param bits bit adjustment.  positive for split, negative for merge.
  */
 void MDCache::adjust_dir_fragments(CStripe *stripe, frag_t basefrag, int bits,
-				   list<CDir*>& resultfrags,
+				   list<CDirFrag*>& resultfrags,
 				   list<Context*>& waiters,
 				   bool replay)
 {
   dout(10) << "adjust_dir_fragments " << basefrag << " " << bits
 	   << " on " << *stripe << dendl;
 
-  list<CDir*> srcfrags;
+  list<CDirFrag*> srcfrags;
   stripe->get_dirfrags_under(basefrag, srcfrags);
 
   adjust_dir_fragments(stripe, srcfrags, basefrag, bits, resultfrags, waiters, replay);
 }
 
-CDir *MDCache::force_dir_fragment(CStripe *stripe, frag_t fg)
+CDirFrag *MDCache::force_dir_fragment(CStripe *stripe, frag_t fg)
 {
-  CDir *dir = stripe->get_dirfrag(fg);
+  CDirFrag *dir = stripe->get_dirfrag(fg);
   if (dir)
     return dir;
 
   dout(10) << "force_dir_fragment " << fg << " on " << *stripe << dendl;
 
-  list<CDir*> src, result;
+  list<CDirFrag*> src, result;
   list<Context*> waiters;
 
   // split a parent?
   const fragtree_t &dft = stripe->get_fragtree();
   frag_t parent = dft.get_branch_or_leaf(fg);
   while (1) {
-    CDir *pdir = stripe->get_dirfrag(parent);
+    CDirFrag *pdir = stripe->get_dirfrag(parent);
     if (pdir) {
       int split = fg.bits() - parent.bits();
       dout(10) << " splitting parent by " << split << " " << *pdir << dendl;
@@ -8081,9 +8081,9 @@ CDir *MDCache::force_dir_fragment(CStripe *stripe, frag_t fg)
 }
 
 void MDCache::adjust_dir_fragments(CStripe *stripe,
-				   list<CDir*>& srcfrags,
+				   list<CDirFrag*>& srcfrags,
 				   frag_t basefrag, int bits,
-				   list<CDir*>& resultfrags, 
+				   list<CDirFrag*>& resultfrags, 
 				   list<Context*>& waiters,
 				   bool replay)
 {
@@ -8107,12 +8107,12 @@ void MDCache::adjust_dir_fragments(CStripe *stripe,
   if (bits > 0) {
     // SPLIT
     assert(srcfrags.size() == 1);
-    CDir *dir = srcfrags.front();
+    CDirFrag *dir = srcfrags.front();
     dir->split(bits, resultfrags, waiters, replay);
     stripe->close_dirfrag(dir->get_frag());
   } else {
     // MERGE
-    CDir *f = new CDir(stripe, basefrag, this, srcfrags.front()->is_auth());
+    CDirFrag *f = new CDirFrag(stripe, basefrag, this, srcfrags.front()->is_auth());
     f->merge(srcfrags, waiters, replay);
     stripe->add_dirfrag(f);
     resultfrags.push_back(f);
@@ -8122,18 +8122,18 @@ void MDCache::adjust_dir_fragments(CStripe *stripe,
 
 class C_MDC_FragmentFrozen : public Context {
   MDCache *mdcache;
-  list<CDir*> dirs;
+  list<CDirFrag*> dirs;
   frag_t basefrag;
   int by;
 public:
-  C_MDC_FragmentFrozen(MDCache *m, list<CDir*> d, frag_t bf, int b)
+  C_MDC_FragmentFrozen(MDCache *m, list<CDirFrag*> d, frag_t bf, int b)
       : mdcache(m), dirs(d), basefrag(bf), by(b) {}
   virtual void finish(int r) {
     mdcache->fragment_frozen(dirs, basefrag, by);
   }
 };
 
-bool MDCache::can_fragment(CStripe *stripe, list<CDir*>& dirs)
+bool MDCache::can_fragment(CStripe *stripe, list<CDirFrag*>& dirs)
 {
   if (mds->mdsmap->is_degraded()) {
     dout(7) << "can_fragment: cluster degraded, no fragmenting for now" << dendl;
@@ -8145,9 +8145,9 @@ bool MDCache::can_fragment(CStripe *stripe, list<CDir*>& dirs)
     return false;
   }
 
-  for (list<CDir*>::iterator p = dirs.begin(); p != dirs.end(); ++p) {
-    CDir *dir = *p;
-    if (dir->state_test(CDir::STATE_FRAGMENTING)) {
+  for (list<CDirFrag*>::iterator p = dirs.begin(); p != dirs.end(); ++p) {
+    CDirFrag *dir = *p;
+    if (dir->state_test(CDirFrag::STATE_FRAGMENTING)) {
       dout(7) << "can_fragment: already fragmenting " << *dir << dendl;
       return false;
     }
@@ -8164,12 +8164,12 @@ bool MDCache::can_fragment(CStripe *stripe, list<CDir*>& dirs)
   return true;
 }
 
-void MDCache::split_dir(CDir *dir, int bits)
+void MDCache::split_dir(CDirFrag *dir, int bits)
 {
   dout(7) << "split_dir " << *dir << " bits " << bits << dendl;
   assert(dir->is_auth());
 
-  list<CDir*> dirs;
+  list<CDirFrag*> dirs;
   dirs.push_back(dir);
 
   if (!can_fragment(dir->get_stripe(), dirs))
@@ -8188,7 +8188,7 @@ void MDCache::merge_dir(CStripe *stripe, frag_t frag)
 {
   dout(7) << "merge_dir to " << frag << " on " << *stripe << dendl;
 
-  list<CDir*> dirs;
+  list<CDirFrag*> dirs;
   if (!stripe->get_dirfrags_under(frag, dirs)) {
     dout(7) << "don't have all frags under " << frag << " for " << *stripe << dendl;
     return;
@@ -8202,7 +8202,7 @@ void MDCache::merge_dir(CStripe *stripe, frag_t frag)
   if (!can_fragment(stripe, dirs))
     return;
 
-  CDir *first = dirs.front();
+  CDirFrag *first = dirs.front();
   int bits = first->get_frag().bits() - frag.bits();
   dout(10) << " we are merging by " << bits << " bits" << dendl;
 
@@ -8215,48 +8215,48 @@ void MDCache::merge_dir(CStripe *stripe, frag_t frag)
   fragment_mark_and_complete(dirs);
 }
 
-void MDCache::fragment_freeze_dirs(list<CDir*>& dirs, C_GatherBuilder &gather)
+void MDCache::fragment_freeze_dirs(list<CDirFrag*>& dirs, C_GatherBuilder &gather)
 {
-  for (list<CDir*>::iterator p = dirs.begin(); p != dirs.end(); ++p) {
-    CDir *dir = *p;
+  for (list<CDirFrag*>::iterator p = dirs.begin(); p != dirs.end(); ++p) {
+    CDirFrag *dir = *p;
     dir->auth_pin(dir);  // until we mark and complete them
-    dir->state_set(CDir::STATE_FRAGMENTING);
+    dir->state_set(CDirFrag::STATE_FRAGMENTING);
     dir->freeze_dir();
     assert(dir->is_freezing());
-    dir->add_waiter(CDir::WAIT_FROZEN, gather.new_sub());
+    dir->add_waiter(CDirFrag::WAIT_FROZEN, gather.new_sub());
   }
 }
 
 class C_MDC_FragmentMarking : public Context {
   MDCache *mdcache;
-  list<CDir*> dirs;
+  list<CDirFrag*> dirs;
 public:
-  C_MDC_FragmentMarking(MDCache *m, list<CDir*>& d) : mdcache(m), dirs(d) {}
+  C_MDC_FragmentMarking(MDCache *m, list<CDirFrag*>& d) : mdcache(m), dirs(d) {}
   virtual void finish(int r) {
     mdcache->fragment_mark_and_complete(dirs);
   }
 };
 
-void MDCache::fragment_mark_and_complete(list<CDir*>& dirs)
+void MDCache::fragment_mark_and_complete(list<CDirFrag*>& dirs)
 {
   dout(10) << "fragment_mark_and_complete " << dirs
       << " on " << *dirs.front()->get_stripe() << dendl;
 
   C_GatherBuilder gather(g_ceph_context);
   
-  for (list<CDir*>::iterator p = dirs.begin();
+  for (list<CDirFrag*>::iterator p = dirs.begin();
        p != dirs.end();
        ++p) {
-    CDir *dir = *p;
+    CDirFrag *dir = *p;
 
     if (!dir->is_complete()) {
       dout(15) << " fetching incomplete " << *dir << dendl;
       dir->fetch(gather.new_sub(),
 		 true);  // ignore authpinnability
     } 
-    else if (!dir->state_test(CDir::STATE_DNPINNEDFRAG)) {
+    else if (!dir->state_test(CDirFrag::STATE_DNPINNEDFRAG)) {
       dout(15) << " marking " << *dir << dendl;
-      for (CDir::map_t::iterator p = dir->items.begin();
+      for (CDirFrag::map_t::iterator p = dir->items.begin();
 	   p != dir->items.end();
 	   ++p) {
 	CDentry *dn = p->second;
@@ -8264,7 +8264,7 @@ void MDCache::fragment_mark_and_complete(list<CDir*>& dirs)
 	assert(!dn->state_test(CDentry::STATE_FRAGMENTING));
 	dn->state_set(CDentry::STATE_FRAGMENTING);
       }
-      dir->state_set(CDir::STATE_DNPINNEDFRAG);
+      dir->state_set(CDirFrag::STATE_DNPINNEDFRAG);
       dir->auth_unpin(dir);
     }
     else {
@@ -8280,20 +8280,20 @@ void MDCache::fragment_mark_and_complete(list<CDir*>& dirs)
   mds->mdlog->flush();
 }
 
-void MDCache::fragment_unmark_unfreeze_dirs(list<CDir*>& dirs)
+void MDCache::fragment_unmark_unfreeze_dirs(list<CDirFrag*>& dirs)
 {
   dout(10) << "fragment_unmark_unfreeze_dirs " << dirs << dendl;
-  for (list<CDir*>::iterator p = dirs.begin(); p != dirs.end(); ++p) {
-    CDir *dir = *p;
+  for (list<CDirFrag*>::iterator p = dirs.begin(); p != dirs.end(); ++p) {
+    CDirFrag *dir = *p;
     dout(10) << " frag " << *dir << dendl;
 
-    assert(dir->state_test(CDir::STATE_DNPINNEDFRAG));
-    dir->state_clear(CDir::STATE_DNPINNEDFRAG);
+    assert(dir->state_test(CDirFrag::STATE_DNPINNEDFRAG));
+    dir->state_clear(CDirFrag::STATE_DNPINNEDFRAG);
 
-    assert(dir->state_test(CDir::STATE_FRAGMENTING));
-    dir->state_clear(CDir::STATE_FRAGMENTING);
+    assert(dir->state_test(CDirFrag::STATE_FRAGMENTING));
+    dir->state_clear(CDirFrag::STATE_FRAGMENTING);
 
-    for (CDir::map_t::iterator p = dir->items.begin();
+    for (CDirFrag::map_t::iterator p = dir->items.begin();
 	 p != dir->items.end();
 	 ++p) {
       CDentry *dn = p->second;
@@ -8329,9 +8329,9 @@ public:
 class C_MDC_FragmentCommit : public Context {
   MDCache *mdcache;
   dirfrag_t basedirfrag;
-  list<CDir*> resultfrags;
+  list<CDirFrag*> resultfrags;
 public:
-  C_MDC_FragmentCommit(MDCache *m, dirfrag_t df, list<CDir*>& l) :
+  C_MDC_FragmentCommit(MDCache *m, dirfrag_t df, list<CDirFrag*>& l) :
     mdcache(m), basedirfrag(df) {
     resultfrags.swap(l);
   }
@@ -8343,9 +8343,9 @@ public:
 class C_MDC_FragmentFinish : public Context {
   MDCache *mdcache;
   dirfrag_t basedirfrag;
-  list<CDir*> resultfrags;
+  list<CDirFrag*> resultfrags;
 public:
-  C_MDC_FragmentFinish(MDCache *m, dirfrag_t f, list<CDir*>& l) :
+  C_MDC_FragmentFinish(MDCache *m, dirfrag_t f, list<CDirFrag*>& l) :
     mdcache(m), basedirfrag(f) {
     resultfrags.swap(l);
   }
@@ -8354,7 +8354,7 @@ public:
   }
 };
 
-void MDCache::fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits)
+void MDCache::fragment_frozen(list<CDirFrag*>& dirs, frag_t basefrag, int bits)
 {
   CStripe *stripe = dirs.front()->get_stripe();
 
@@ -8415,8 +8415,8 @@ void MDCache::dispatch_fragment_dir(MDRequest *mdr)
                                 info.dirfrag, info.bits);
   mds->mdlog->start_entry(le);
 
-  for (list<CDir*>::iterator p = info.dirs.begin(); p != info.dirs.end(); ++p) {
-    CDir *dir = *p;
+  for (list<CDirFrag*>::iterator p = info.dirs.begin(); p != info.dirs.end(); ++p) {
+    CDirFrag *dir = *p;
     le->add_orig_frag(dir->get_frag(), dir->get_version());
   }
 
@@ -8435,7 +8435,7 @@ void MDCache::dispatch_fragment_dir(MDRequest *mdr)
 
   le->metablob.add_stripe_context(stripe);
   le->metablob.add_stripe(stripe, true); // stripe is dirty
-  for (list<CDir*>::iterator p = info.resultfrags.begin();
+  for (list<CDirFrag*>::iterator p = info.resultfrags.begin();
        p != info.resultfrags.end();
        ++p) {
     le->metablob.add_dir(*p, false);
@@ -8459,15 +8459,15 @@ void MDCache::_fragment_logged(MDRequest *mdr)
   // store resulting frags
   C_GatherBuilder gather(g_ceph_context, new C_MDC_FragmentStore(this, mdr));
 
-  for (list<CDir*>::iterator p = info.resultfrags.begin();
+  for (list<CDirFrag*>::iterator p = info.resultfrags.begin();
        p != info.resultfrags.end();
        ++p) {
-    CDir *dir = *p;
+    CDirFrag *dir = *p;
     dout(10) << " storing result frag " << *dir << dendl;
 
     // freeze and store them too
     dir->auth_pin(this);
-    dir->state_set(CDir::STATE_FRAGMENTING);
+    dir->state_set(CDirFrag::STATE_FRAGMENTING);
     dir->commit(0, gather.new_sub(), true);  // ignore authpinnability
   }
 
@@ -8485,7 +8485,7 @@ void MDCache::_fragment_stored(MDRequest *mdr)
 	   << " bits " << info.bits << " on " << *stripe << dendl;
 
   // tell peers
-  CDir *first = *info.resultfrags.begin();
+  CDirFrag *first = *info.resultfrags.begin();
   for (map<int,int>::iterator p = first->replica_map.begin();
        p != first->replica_map.end();
        ++p) {
@@ -8499,13 +8499,13 @@ void MDCache::_fragment_stored(MDRequest *mdr)
   mds->locker->drop_locks(mdr);
 
   // unfreeze resulting frags
-  for (list<CDir*>::iterator p = info.resultfrags.begin();
+  for (list<CDirFrag*>::iterator p = info.resultfrags.begin();
        p != info.resultfrags.end();
        ++p) {
-    CDir *dir = *p;
+    CDirFrag *dir = *p;
     dout(10) << " result frag " << *dir << dendl;
 
-    for (CDir::map_t::iterator p = dir->items.begin();
+    for (CDirFrag::map_t::iterator p = dir->items.begin();
 	 p != dir->items.end();
 	 ++p) { 
       CDentry *dn = p->second;
@@ -8528,7 +8528,7 @@ void MDCache::_fragment_stored(MDRequest *mdr)
   request_finish(mdr);
 }
 
-void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrags)
+void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDirFrag*>& resultfrags)
 {
   dout(10) << "fragment_committed " << basedirfrag << dendl;
   map<dirfrag_t, ufragment>::iterator it = uncommitted_fragments.find(basedirfrag);
@@ -8561,7 +8561,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   gather.activate();
 }
 
-void MDCache::_fragment_finish(dirfrag_t basedirfrag, list<CDir*>& resultfrags)
+void MDCache::_fragment_finish(dirfrag_t basedirfrag, list<CDirFrag*>& resultfrags)
 {
   dout(10) << "fragment_finish " << basedirfrag << dendl;
   map<dirfrag_t, ufragment>::iterator it = uncommitted_fragments.find(basedirfrag);
@@ -8569,8 +8569,8 @@ void MDCache::_fragment_finish(dirfrag_t basedirfrag, list<CDir*>& resultfrags)
   ufragment &uf = it->second;
 
   // unmark & auth_unpin
-  for (list<CDir*>::iterator p = resultfrags.begin(); p != resultfrags.end(); ++p) {
-    (*p)->state_clear(CDir::STATE_FRAGMENTING);
+  for (list<CDirFrag*>::iterator p = resultfrags.begin(); p != resultfrags.end(); ++p) {
+    (*p)->state_clear(CDirFrag::STATE_FRAGMENTING);
     (*p)->auth_unpin(this);
   }
 
@@ -8607,7 +8607,7 @@ void MDCache::handle_fragment_notify(MMDSFragmentNotify *notify)
 
     // refragment
     list<Context*> waiters;
-    list<CDir*> resultfrags;
+    list<CDirFrag*> resultfrags;
     adjust_dir_fragments(stripe, base, bits, resultfrags, waiters, false);
     if (g_conf->mds_debug_frag)
       stripe->verify_dirfrags();
@@ -8684,12 +8684,12 @@ void MDCache::rollback_uncommitted_fragments()
     assert(stripe);
 
     if (uf.committed) {
-      list<CDir*> frags;
+      list<CDirFrag*> frags;
       stripe->get_dirfrags_under(p->first.frag, frags);
-      for (list<CDir*>::iterator q = frags.begin(); q != frags.end(); ++q) {
-	CDir *dir = *q;
+      for (list<CDirFrag*>::iterator q = frags.begin(); q != frags.end(); ++q) {
+	CDirFrag *dir = *q;
 	dir->auth_pin(this);
-	dir->state_set(CDir::STATE_FRAGMENTING);
+	dir->state_set(CDirFrag::STATE_FRAGMENTING);
       }
       _fragment_committed(p->first, frags);
       continue;
@@ -8704,7 +8704,7 @@ void MDCache::rollback_uncommitted_fragments()
     list<frag_t> old_frags;
     stripe->dirfragtree.get_leaves_under(p->first.frag, old_frags);
 
-    list<CDir*> resultfrags;
+    list<CDirFrag*> resultfrags;
     if (uf.old_frags.empty()) {
       // created by old format EFragment
       list<Context*> waiters;
@@ -8713,7 +8713,7 @@ void MDCache::rollback_uncommitted_fragments()
       le->metablob.add_stripe_context(stripe);
       for (map<frag_t, version_t>::iterator q = uf.old_frags.begin();
            q != uf.old_frags.end(); ++q) {
-	CDir *dir = force_dir_fragment(stripe, q->first);
+	CDirFrag *dir = force_dir_fragment(stripe, q->first);
 	resultfrags.push_back(dir);
 
 	dir->set_version(q->second);
@@ -8733,10 +8733,10 @@ void MDCache::rollback_uncommitted_fragments()
       uf.old_frags[*q] = 0;
     }
 
-    for (list<CDir*>::iterator q = resultfrags.begin(); q != resultfrags.end(); ++q) {
-      CDir *dir = *q;
+    for (list<CDirFrag*>::iterator q = resultfrags.begin(); q != resultfrags.end(); ++q) {
+      CDirFrag *dir = *q;
       dir->auth_pin(this);
-      dir->state_set(CDir::STATE_FRAGMENTING);
+      dir->state_set(CDirFrag::STATE_FRAGMENTING);
     }
 
     mds->mdlog->submit_entry(le);
@@ -8906,13 +8906,13 @@ void MDCache::show_cache()
       dout(7) << "  stripe " << *stripe << dendl;
 
       // dirfrags?
-      list<CDir*> dfs;
+      list<CDirFrag*> dfs;
       stripe->get_dirfrags(dfs);
-      for (list<CDir*>::iterator p = dfs.begin(); p != dfs.end(); ++p) {
-        CDir *dir = *p;
+      for (list<CDirFrag*>::iterator p = dfs.begin(); p != dfs.end(); ++p) {
+        CDirFrag *dir = *p;
         dout(7) << "  dirfrag " << *dir << dendl;
 
-        for (CDir::map_t::iterator p = dir->items.begin();
+        for (CDirFrag::map_t::iterator p = dir->items.begin();
              p != dir->items.end();
              ++p) {
           CDentry *dn = p->second;
@@ -8964,10 +8964,10 @@ void MDCache::dump_cache(const char *fn)
       if (r < 0)
         goto out;
 
-      list<CDir*> dfs;
+      list<CDirFrag*> dfs;
       stripe->get_dirfrags(dfs);
-      for (list<CDir*>::iterator p = dfs.begin(); p != dfs.end(); ++p) {
-        CDir *dir = *p;
+      for (list<CDirFrag*>::iterator p = dfs.begin(); p != dfs.end(); ++p) {
+        CDirFrag *dir = *p;
         ostringstream uu;
         uu << "  " << *dir << std::endl;
         string u = uu.str();
@@ -8975,7 +8975,7 @@ void MDCache::dump_cache(const char *fn)
         if (r < 0)
           goto out;
 
-        for (CDir::map_t::iterator q = dir->items.begin();
+        for (CDirFrag::map_t::iterator q = dir->items.begin();
              q != dir->items.end();
              ++q) {
           CDentry *dn = q->second;

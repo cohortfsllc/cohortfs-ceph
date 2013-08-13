@@ -18,7 +18,7 @@
 #include <stdio.h>
 
 #include "CInode.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 #include "CDentry.h"
 
 #include "MDS.h"
@@ -559,13 +559,13 @@ void CInode::remove_remote_parent(CDentry *p)
 
 
 
-CDir *CInode::get_parent_dir()
+CDirFrag *CInode::get_parent_dir()
 {
   if (parent)
     return parent->dir;
   return NULL;
 }
-CDir *CInode::get_projected_parent_dir()
+CDirFrag *CInode::get_projected_parent_dir()
 {
   CDentry *p = get_projected_parent_dn();
   if (p)
@@ -574,12 +574,12 @@ CDir *CInode::get_projected_parent_dir()
 }
 CStripe* CInode::get_parent_stripe()
 {
-  CDir *dir = get_parent_dir();
+  CDirFrag *dir = get_parent_dir();
   return dir ? dir->get_stripe() : NULL;
 }
 CStripe* CInode::get_projected_parent_stripe()
 {
-  CDir *dir = get_projected_parent_dir();
+  CDirFrag *dir = get_projected_parent_dir();
   return dir ? dir->get_stripe() : NULL;
 }
 CInode *CInode::get_parent_inode() 

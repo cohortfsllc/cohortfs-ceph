@@ -23,7 +23,7 @@
 
 #include "CInode.h"
 #include "CDentry.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 #include "InodeContainer.h"
 #include "ParentStats.h"
 #include "Stray.h"
@@ -163,9 +163,9 @@ public:
                      Context *onfinish, bool want_xlocked=false, int from=-1);
   void discover_path(CStripe *base, snapid_t snap, const filepath &want_path,
                      Context *onfinish, bool want_xlocked=false);
-  void discover_path(CDir *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirFrag *base, snapid_t snap, const filepath &want_path,
                      Context *onfinish, bool want_xlocked=false);
-  void discover_ino(CDir *base, inodeno_t want_ino, Context *onfinish,
+  void discover_ino(CDirFrag *base, inodeno_t want_ino, Context *onfinish,
 		    bool want_xlocked=false);
 
   void kick_discovers(int who);  // after a failure.
@@ -335,7 +335,7 @@ protected:
   
   set<CInode*> rejoin_undef_inodes;
   set<CInode*> rejoin_potential_updated_scatterlocks;
-  set<CDir*>   rejoin_undef_dirfrags;
+  set<CDirFrag*>   rejoin_undef_dirfrags;
   map<int, set<CInode*> > rejoin_unlinked_inodes;
 
   vector<CInode*> rejoin_recover_q, rejoin_check_q;
@@ -408,7 +408,7 @@ public:
   void open_snap_parents();
 
   bool open_undef_inodes_dirfrags();
-  void opened_undef_dirfrag(CDir *dir) {
+  void opened_undef_dirfrag(CDirFrag *dir) {
     rejoin_undef_dirfrags.erase(dir);
   }
   void opened_undef_inode(CInode *in) {
@@ -464,7 +464,7 @@ public:
   // trimming
   bool trim(int max = -1);   // trim cache
   bool trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap);
-  void trim_dirfrag(CDir *dir, map<int, MCacheExpire*>& expiremap);
+  void trim_dirfrag(CDirFrag *dir, map<int, MCacheExpire*>& expiremap);
   void trim_stripe(CStripe *stripe, map<int, MCacheExpire*>& expiremap);
   void trim_inode(CDentry *dn, CInode *in, map<int, MCacheExpire*>& expiremap);
   void send_expire_messages(map<int, MCacheExpire*>& expiremap);
@@ -505,17 +505,17 @@ public:
     return in->get_stripe(ds.stripeid);
   }
 
-  CDir* get_dirfrag(dirfrag_t df) {
+  CDirFrag* get_dirfrag(dirfrag_t df) {
     CStripe *stripe = get_dirstripe(df.stripe);
     if (!stripe)
       return NULL;
     return stripe->get_dirfrag(df.frag);
   }
-  CDir* get_force_dirfrag(dirfrag_t df) {
+  CDirFrag* get_force_dirfrag(dirfrag_t df) {
     CStripe *stripe = get_dirstripe(df.stripe);
     if (!stripe)
       return NULL;
-    CDir *dir = force_dir_fragment(stripe, df.frag);
+    CDirFrag *dir = force_dir_fragment(stripe, df.frag);
     if (!dir)
       dir = stripe->get_dirfrag(df.frag);
     return dir;
@@ -552,10 +552,10 @@ public:
       CInode *in = dn->get_projected_linkage()->get_inode();
       list<CStripe*> stripes;
       in->get_stripes(stripes);
-      list<CDir*> dirs;
+      list<CDirFrag*> dirs;
       for (list<CStripe*>::iterator p = stripes.begin(); p != stripes.end(); ++p)
         (*p)->get_dirfrags(dirs);
-      for (list<CDir*>::iterator p = dirs.begin(); p != dirs.end(); ++p)
+      for (list<CDirFrag*>::iterator p = dirs.begin(); p != dirs.end(); ++p)
         (*p)->touch_dentries_bottom();
     }
   }
@@ -603,7 +603,7 @@ public:
 
   InodeContainer* get_container() { return &container; }
 
-  void _create_system_file(CDir *dir, const char *name, CInode *in, Context *fin);
+  void _create_system_file(CDirFrag *dir, const char *name, CInode *in, Context *fin);
   void _create_system_file_finish(Mutation *mut, CDentry *dn, Context *fin);
 
   void open_foreign_mdsdir(inodeno_t ino, Context *c);
@@ -662,7 +662,7 @@ public:
 
   bool parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& missing);
   bool parallel_fetch_traverse_dir(inodeno_t ino, filepath& path, 
-				   set<CDir*>& fetch_queue, set<inodeno_t>& missing,
+				   set<CDirFrag*>& fetch_queue, set<inodeno_t>& missing,
 				   C_GatherBuilder &gather_bld);
 
   void open_remote_dentry(CDentry *dn, bool projected, Context *fin,
@@ -695,7 +695,7 @@ protected:
   void _open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err);
   void _open_ino_parent_opened(inodeno_t ino, int ret);
   void _open_ino_traverse_dir(inodeno_t ino, open_ino_info_t& info, int err);
-  void _open_ino_fetch_dir(inodeno_t ino, MMDSOpenIno *m, CDir *dir);
+  void _open_ino_fetch_dir(inodeno_t ino, MMDSOpenIno *m, CDirFrag *dir);
   Context* _open_ino_get_waiter(inodeno_t ino, MMDSOpenIno *m);
   int open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
 			    vector<inode_backpointer_t>& ancestors,
@@ -777,7 +777,7 @@ public:
     ::encode(ds, bl);
     stripe->encode_replica(to, bl);
   }
-  void replicate_dir(CDir *dir, int to, bufferlist& bl) {
+  void replicate_dir(CDirFrag *dir, int to, bufferlist& bl) {
     dirfrag_t df = dir->dirfrag();
     ::encode(df, bl);
     dir->encode_replica(to, bl);
@@ -796,9 +796,9 @@ public:
   CStripe* add_replica_stripe(bufferlist::iterator& p, CInode *diri,
                               int from, list<Context*>& finished);
   CStripe* forge_replica_stripe(CInode *diri, stripeid_t stripe, int from);
-  CDir* add_replica_dir(bufferlist::iterator& p, CStripe *stripe, list<Context*>& finished);
-  CDir* forge_replica_dir(CStripe *stripe, frag_t fg, int from);
-  CDentry *add_replica_dentry(bufferlist::iterator& p, CDir *dir, list<Context*>& finished);
+  CDirFrag* add_replica_dir(bufferlist::iterator& p, CStripe *stripe, list<Context*>& finished);
+  CDirFrag* forge_replica_dir(CStripe *stripe, frag_t fg, int from);
+  CDentry *add_replica_dentry(bufferlist::iterator& p, CDirFrag *dir, list<Context*>& finished);
   CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn,
                             int from, list<Context*>& finished);
 
@@ -826,32 +826,32 @@ private:
   struct fragment_info_t {
     dirfrag_t dirfrag;
     int bits;
-    list<CDir*> dirs;
-    list<CDir*> resultfrags;
+    list<CDirFrag*> dirs;
+    list<CDirFrag*> resultfrags;
   };
   map<metareqid_t, fragment_info_t> fragment_requests;
 
   void adjust_dir_fragments(CStripe *stripe, frag_t basefrag, int bits,
-			    list<CDir*>& frags, list<Context*>& waiters, bool replay);
+			    list<CDirFrag*>& frags, list<Context*>& waiters, bool replay);
   void adjust_dir_fragments(CStripe *stripe,
-			    list<CDir*>& srcfrags,
+			    list<CDirFrag*>& srcfrags,
 			    frag_t basefrag, int bits,
-			    list<CDir*>& resultfrags, 
+			    list<CDirFrag*>& resultfrags, 
 			    list<Context*>& waiters,
 			    bool replay);
-  CDir *force_dir_fragment(CStripe *stripe, frag_t fg);
+  CDirFrag *force_dir_fragment(CStripe *stripe, frag_t fg);
 
-  bool can_fragment(CStripe *stripe, list<CDir*>& dirs);
+  bool can_fragment(CStripe *stripe, list<CDirFrag*>& dirs);
 
-  void fragment_freeze_dirs(list<CDir*>& dirs, C_GatherBuilder &gather);
-  void fragment_mark_and_complete(list<CDir*>& dirs);
-  void fragment_frozen(list<CDir*>& dirs, frag_t basefrag, int bits);
-  void fragment_unmark_unfreeze_dirs(list<CDir*>& dirs);
+  void fragment_freeze_dirs(list<CDirFrag*>& dirs, C_GatherBuilder &gather);
+  void fragment_mark_and_complete(list<CDirFrag*>& dirs);
+  void fragment_frozen(list<CDirFrag*>& dirs, frag_t basefrag, int bits);
+  void fragment_unmark_unfreeze_dirs(list<CDirFrag*>& dirs);
   void dispatch_fragment_dir(MDRequest *mdr);
   void _fragment_logged(MDRequest *mdr);
   void _fragment_stored(MDRequest *mdr);
-  void _fragment_committed(dirfrag_t f, list<CDir*>& resultfrags);
-  void _fragment_finish(dirfrag_t f, list<CDir*>& resultfrags);
+  void _fragment_committed(dirfrag_t f, list<CDirFrag*>& resultfrags);
+  void _fragment_finish(dirfrag_t f, list<CDirFrag*>& resultfrags);
 
   friend class EFragment;
   friend class C_MDC_FragmentFrozen;
@@ -874,7 +874,7 @@ public:
     assert(uncommitted_fragments.count(dirfrag));
     uncommitted_fragments[dirfrag].waiters.push_back(c);
   }
-  void split_dir(CDir *dir, int byn);
+  void split_dir(CDirFrag *dir, int byn);
   void merge_dir(CStripe *stripe, frag_t fg);
   void rollback_uncommitted_fragments();
 

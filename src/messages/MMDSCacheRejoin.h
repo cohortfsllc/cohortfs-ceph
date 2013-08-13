@@ -20,7 +20,7 @@
 #include "include/types.h"
 
 #include "mds/CInode.h"
-#include "mds/CDir.h"
+#include "mds/CDirFrag.h"
 
 // sent from replica to auth
 
@@ -261,7 +261,7 @@ public:
   void add_strong_dirfrag(dirfrag_t df, int n) {
     strong_dirfrags[df] = dirfrag_strong(n);
   }
-  void add_dirfrag_base(CDir *dir) {
+  void add_dirfrag_base(CDirFrag *dir) {
     bufferlist& bl = dirfrag_bases[dir->dirfrag()];
     dir->_encode_base(bl);
   }

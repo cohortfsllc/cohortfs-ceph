@@ -17,7 +17,7 @@
 #include "MDBalancer.h"
 #include "MDS.h"
 #include "MDCache.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 
 #include "msg/Messenger.h"
 
@@ -101,12 +101,12 @@ mds_load_t MDBalancer::get_load(utime_t now)
   return load;
 }
 
-void MDBalancer::queue_split(CDir *dir)
+void MDBalancer::queue_split(CDirFrag *dir)
 {
   split_queue.insert(dir->dirfrag());
 }
 
-void MDBalancer::queue_merge(CDir *dir)
+void MDBalancer::queue_merge(CDirFrag *dir)
 {
   merge_queue.insert(dir->dirfrag());
 }
@@ -127,7 +127,7 @@ void MDBalancer::do_fragmenting()
     for (set<dirfrag_t>::iterator i = q.begin();
 	 i != q.end();
 	 ++i) {
-      CDir *dir = mds->mdcache->get_dirfrag(*i);
+      CDirFrag *dir = mds->mdcache->get_dirfrag(*i);
       if (!dir ||
 	  !dir->is_auth())
 	continue;
@@ -146,7 +146,7 @@ void MDBalancer::do_fragmenting()
     for (set<dirfrag_t>::iterator i = q.begin();
 	 i != q.end();
 	 ++i) {
-      CDir *dir = mds->mdcache->get_dirfrag(*i);
+      CDirFrag *dir = mds->mdcache->get_dirfrag(*i);
       if (!dir ||
 	  !dir->is_auth() ||
 	  dir->get_frag() == frag_t())  // ok who's the joker?
@@ -159,15 +159,15 @@ void MDBalancer::do_fragmenting()
       frag_t fg = dir->get_frag();
       while (fg != frag_t()) {
 	frag_t sibfg = fg.get_sibling();
-	list<CDir*> sibs;
+	list<CDirFrag*> sibs;
 	bool complete = stripe->get_dirfrags_under(sibfg, sibs);
 	if (!complete) {
 	  dout(10) << "  not all sibs under " << sibfg << " in cache (have " << sibs << ")" << dendl;
 	  break;
 	}
 	bool all = true;
-	for (list<CDir*>::iterator p = sibs.begin(); p != sibs.end(); ++p) {
-	  CDir *sib = *p;
+	for (list<CDirFrag*>::iterator p = sibs.begin(); p != sibs.end(); ++p) {
+	  CDirFrag *sib = *p;
 	  if (!sib->is_auth() || !sib->should_merge()) {
 	    all = false;
 	    break;
@@ -188,7 +188,7 @@ void MDBalancer::do_fragmenting()
 }
 
 
-void MDBalancer::hit_dir(utime_t now, CDir *dir, int type, int who, double amount)
+void MDBalancer::hit_dir(utime_t now, CDirFrag *dir, int type, int who, double amount)
 {
   // hit me
   double v = dir->pop_me.get(type).hit(now, amount);
