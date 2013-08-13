@@ -704,9 +704,6 @@ public:
   CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn,
                             int from, list<Context*>& finished);
 
-  void replicate_stray(CDentry *straydn, int who, bufferlist& bl);
-  CDentry *add_replica_stray(bufferlist &bl, int from);
-
   // -- namespace --
 public:
   void send_dentry_link(CDentry *dn, const vector<int> *skip = NULL);

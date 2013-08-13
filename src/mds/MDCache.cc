@@ -6873,46 +6873,6 @@ CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn,
 }
 
  
-void MDCache::replicate_stray(CDentry *straydn, int who, bufferlist& bl)
-{
-  CDir *straydir = straydn->get_dir();
-  CStripe *straystripe = straydir->get_stripe();
-  CInode *strayin = straystripe->get_inode();
-  CDentry *parentdn = strayin->get_parent_dn();
-  CDir *parentdir = parentdn->get_dir();
-  CStripe *parentstripe = parentdir->get_stripe();
-  assert(get_myin() == parentstripe->get_inode());
-
-  replicate_inode(get_myin(), who, bl);
-  replicate_stripe(parentstripe, who, bl);
-  replicate_dir(parentdir, who, bl);
-  replicate_dentry(parentdn, who, bl);
-  replicate_inode(strayin, who, bl);
-  replicate_stripe(straystripe, who, bl);
-  replicate_dir(straydir, who, bl);
-  replicate_dentry(straydn, who, bl);
-}
-   
-CDentry *MDCache::add_replica_stray(bufferlist &bl, int from)
-{
-  list<Context*> finished;
-  bufferlist::iterator p = bl.begin();
-
-  CInode *parentin = add_replica_inode(p, NULL, from, finished);
-  CStripe *parentstripe = add_replica_stripe(p, parentin, from, finished);
-  CDir *parentdir = add_replica_dir(p, parentstripe, finished);
-  CDentry *parentdn = add_replica_dentry(p, parentdir, finished);
-  CInode *strayin = add_replica_inode(p, parentdn, from, finished);
-  CStripe *straystripe = add_replica_stripe(p, strayin, from, finished);
-  CDir *straydir = add_replica_dir(p, straystripe, finished);
-  CDentry *straydn = add_replica_dentry(p, straydir, finished);
-  if (!finished.empty())
-    mds->queue_waiters(finished);
-
-  return straydn;
-}
-
-
 int MDCache::send_dir_updates(CStripe *stripe, bool bcast)
 {
   // this is an FYI, re: replication
