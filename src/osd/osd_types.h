@@ -405,7 +405,7 @@ inline ostream& operator<<(ostream& out, const ObjectExtent &ex)
 class OSDSuperblock {
 public:
   uuid_d cluster_fsid, osd_fsid;
-  int32_t whoami;    // my role in this fs.
+  int whoami;    // my role in this fs.
   epoch_t current_epoch;             // most recent epoch
   epoch_t oldest_map, newest_map;    // oldest/newest maps we have.
   double weight;

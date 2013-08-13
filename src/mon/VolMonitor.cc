@@ -212,11 +212,11 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
       } else {
 	ss << "volmap has " << volmap->size() << " entries" << std::endl;
 	stringstream ds;
-	for (map<string,VolMap::vol_info_t>::const_iterator i
+	for (map<string,VolumeRef>::const_iterator i
 	       = volmap->begin_n();
 	     i != volmap->end_n();
 	     ++i) {
-	  ds << i->second << std::endl;
+	  ds << *i->second << std::endl;
 	}
 	rdata.append(ds);
       }
@@ -224,8 +224,8 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
     } else if (m->cmd[1] == "lookup" && m->cmd.size() == 3) {
       const string& searchKey = m->cmd[2];
       const size_t maxResults = 100;
-      const vector<VolMap::vol_info_t> results
-	= volmap->search_vol_info(searchKey, maxResults);
+      const vector<VolumeCRef> results
+	= volmap->search_vol(searchKey, maxResults);
       if (results.empty()) {
 	ss << "no volmap entries match \"" << searchKey << "\"";
 	r = -ENOENT;
@@ -238,7 +238,7 @@ bool VolMonitor::preprocess_command(MMonCommand *m)
 	  ss << "matching volmap entries";
 	}
 	stringstream ds;
-	for (vector<VolMap::vol_info_t>::const_iterator i = results.begin();
+	for (vector<VolumeCRef>::const_iterator i = results.begin();
 	     i != results.end();
 	     ++i) {
 	  ds << *i << std::endl;
@@ -280,14 +280,15 @@ bool VolMonitor::prepare_command(MMonCommand *m)
       uuid_d uuid;
       string error_message;
 
-      if (!VolMap::is_valid_volume_name(name, error_message)) {
+      if (!Volume::valid_name(name, error_message)) {
 	ss << error_message;
 	r = -EINVAL;
       } else {
-	r = pending_volmap->create_volume(name, uuid);
+#warning Adapt for typed creation.
+//	r = pending_volmap->create_volume(name, uuid);
 	if (r == 0) {
 	  ss << "volume " << uuid << " created with name \"" << name << "\"";
-	  pending_inc.include_addition(uuid, name);
+//	  pending_inc.include_addition(uuid, name);
 	} else if (r == -EEXIST) {
 	  ss << "volume with name \"" << name << "\" already exists";
 	} else {
@@ -299,7 +300,7 @@ bool VolMonitor::prepare_command(MMonCommand *m)
       const string& name = m->cmd[3];
       string error_message;
 
-      if (VolMap::is_valid_volume_name(name, error_message)) {
+      if (Volume::valid_name(name, error_message)) {
 	uuid_d uuid;
 	try {
 	  uuid = uuid_d::parse(uuid_str);
@@ -328,10 +329,10 @@ bool VolMonitor::prepare_command(MMonCommand *m)
       uuid_d uuid;
       const bool is_unique = pending_volmap->get_vol_uuid(volspec, uuid);
       if (is_unique) {
-	VolMap::vol_info_t vinfo_out;
-	r = pending_volmap->rename_volume(uuid, new_name, vinfo_out);
+	r = pending_volmap->rename_volume(uuid, new_name);
 	if (r == 0) {
-	  pending_inc.include_update(vinfo_out);
+#warning And this
+//	  pending_inc.include_update(vinfo_out);
 	  ss << "volume " << uuid << " renamed to " << new_name;
 	} else if (r == -EINVAL) {
 	  ss << "volume name is invalid";

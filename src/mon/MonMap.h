@@ -180,7 +180,7 @@ class MonMap {
   void decode(bufferlist::iterator &p);
 
   void generate_fsid() {
-    fsid.generate_random();
+    fsid = uuid_d::generate_random();
   }
 
   // read from/write to a file

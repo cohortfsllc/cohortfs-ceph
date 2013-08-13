@@ -420,7 +420,7 @@ class OSDStub : public TestStub
 
     dout(10) << __func__ << " creating osd superblock" << dendl;
     sb.cluster_fsid = monc.monmap.fsid;
-    sb.osd_fsid.generate_random();
+    sb.osd_fsid = uuid_d::generate_random();
     sb.whoami = whoami;
     sb.compat_features = CompatSet();
     dout(20) << __func__ << " " << sb << dendl;

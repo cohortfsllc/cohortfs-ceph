@@ -628,7 +628,7 @@ int FileStore::mkfs()
 
   if (read_fsid(fsid_fd, &old_fsid) < 0 || old_fsid.is_zero()) {
     if (fsid.is_zero()) {
-      fsid.generate_random();
+      fsid = uuid_d::generate_random();
       dout(1) << "mkfs generated fsid " << fsid << dendl;
     } else {
       dout(1) << "mkfs using provided fsid " << fsid << dendl;

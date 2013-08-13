@@ -35,43 +35,67 @@ using namespace std;
 
 class VolMonitor;
 class CephContext;
+class VolInfo;
+class VolMap;
 
+enum vol_type {
+  VolFS,
+  VolBlock,
+  VolDeDupFS,
+  VolDeDupBlock,
+  NotAVolType
+};
 
-class VolMap {
+WRITE_RAW_ENCODER(vol_type);
+
+class Volume {
+private:
+  static const std::string typestrings[];
+  bufferlist place_text;
+  void *place_shared;
 
 public:
+  vol_type type;
+  uuid_d uuid;
+  string name;
+  epoch_t last_update;
 
-  struct vol_info_t {
-    uuid_d uuid;
-    string name;
+  Volume(const vol_type t, const string n,
+	 const bufferlist &p) :
+    place_text(p), place_shared(NULL), type(t), uuid(0),
+    name(n) { }
 
-    vol_info_t()
-      : uuid(), name("")
-    {
-      // empty
-    }
+  virtual ~Volume() { };
 
-    vol_info_t(uuid_d puuid,
-	       string pname)
-      : uuid(puuid), name(pname)
-    {
-      // empty
-    }
+  virtual void encode(bufferlist& bl) const;
+  virtual void decode(bufferlist::iterator& bl);
+  virtual void decode(bufferlist& bl);
+  virtual void dump(Formatter *f) const;
 
-    void encode(bufferlist& bl) const;
-    void decode(bufferlist::iterator& bl);
-    void decode(bufferlist& bl);
-    void dump(Formatter *f) const;
-  }; // vol_info_t
+  static bool valid_name(const string& name, string& error);
+  virtual bool valid(string& error);
 
+  /* Signature subject to change */
+  virtual int64_t place(const object_t& o,
+			uint32_t rule,
+			uint32_t replica) = 0;
+  virtual uint32_t num_rules(void) = 0;
 
+  virtual int update(std::tr1::shared_ptr<const Volume> v);
+
+  static const string& type_string(vol_type type);
+};
+
+typedef std::tr1::shared_ptr<Volume> VolumeRef;
+typedef std::tr1::shared_ptr<const Volume> VolumeCRef;
+
+class VolMap {
+public:
   class Incremental {
-
   public:
-
     struct inc_add {
       uint16_t sequence;
-      vol_info_t vol_info;
+      VolumeRef vol;
 
       void encode(bufferlist& bl, uint64_t features = -1) const;
       void decode(bufferlist::iterator& bl);
@@ -96,16 +120,11 @@ public:
 
   public:
 
-    void include_addition(const vol_info_t &vol_info) {
+    void include_addition(VolumeRef vol) {
       inc_add increment;
       increment.sequence = next_sequence++;
-      increment.vol_info = vol_info;
+      increment.vol = vol;
       additions.push_back(increment);
-    }
-
-    void include_addition(const uuid_d& uuid,
-			  const string& name) {
-      include_addition(vol_info_t(uuid, name));
     }
 
     void include_removal(const uuid_d &uuid) {
@@ -115,17 +134,11 @@ public:
       removals.push_back(increment);
     }
 
-    void include_update(const vol_info_t &vol_info) {
+    void include_update(VolumeRef vol) {
       inc_update increment;
       increment.sequence = next_sequence++;
-      increment.vol_info = vol_info;
+      increment.vol = vol;
       updates.push_back(increment);
-    }
-
-    void include_update(const uuid_d& uuid,
-			const string& name,
-			const uint16_t crush_map_entry) {
-      include_update(vol_info_t(uuid, name));
     }
 
     void encode(bufferlist& bl, uint64_t features) const;
@@ -133,14 +146,13 @@ public:
     void decode(bufferlist& bl);
   };
 
-
 protected:
 
   // base map
   epoch_t epoch;
   version_t version;
-  map<uuid_d,vol_info_t> vol_info_by_uuid;
-  map<string,vol_info_t> vol_info_by_name;
+  map<uuid_d,VolumeRef> vol_by_uuid;
+  map<string,VolumeRef> vol_by_name;
 
 public:
 
@@ -153,50 +165,48 @@ public:
   VolMap()
     : epoch(0) { }
 
-  static bool is_valid_volume_name(const string& name, string& error);
-
   epoch_t get_epoch() const { return epoch; }
   void inc_epoch() { epoch++; }
 
-  int create_volume(const string& name, uuid_d &out);
-  int add_volume(uuid_d uuid, string name);
+  int create_volume(VolumeRef volume, uuid_d& out);
+  int add_volume(VolumeRef volume);
   int remove_volume(uuid_d uuid, const string& name_verifier = EMPTY_STRING);
-  int rename_volume(uuid_d uuid, const string& name,
-		    vol_info_t& out_vinfo);
-  int update_volume(uuid_d uuid, string name, vol_info_t& out_vinfo);
+  int rename_volume(VolumeRef v, const string& name);
+  int rename_volume(uuid_d uuid, const string& name);
+  int update_volume(uuid_d uuid, VolumeRef volume);
 
   void apply_incremental(CephContext *cct, const VolMap::Incremental& inc);
 
-  map<uuid_d,vol_info_t>::const_iterator find(const uuid_d& uuid) const {
-    return vol_info_by_uuid.find(uuid);
+  map<uuid_d,VolumeRef>::const_iterator find(const uuid_d& uuid) const {
+    return vol_by_uuid.find(uuid);
   }
 
-  map<string,vol_info_t>::const_iterator find(const string& name) const {
-    return vol_info_by_name.find(name);
+  map<string,VolumeRef>::const_iterator find(const string& name) const {
+    return vol_by_name.find(name);
   }
 
-  map<uuid_d,vol_info_t>::const_iterator begin_u() const {
-    return vol_info_by_uuid.begin();
+  map<uuid_d,VolumeRef>::const_iterator begin_u() const {
+    return vol_by_uuid.begin();
   }
 
-  map<string,vol_info_t>::const_iterator begin_n() const {
-    return vol_info_by_name.begin();
+  map<string,VolumeRef>::const_iterator begin_n() const {
+    return vol_by_name.begin();
   }
 
-  map<uuid_d,vol_info_t>::const_iterator end_u() const {
-    return vol_info_by_uuid.end();
+  map<uuid_d,VolumeRef>::const_iterator end_u() const {
+    return vol_by_uuid.end();
   }
 
-  map<string,vol_info_t>::const_iterator end_n() const {
-    return vol_info_by_name.end();
+  map<string,VolumeRef>::const_iterator end_n() const {
+    return vol_by_name.end();
   }
 
   /*
    * Will search the entries by both name and uuid returning a vector
    * of up to max entries.
    */
-  vector<vol_info_t> search_vol_info(
-    const string& name, size_t max = DEFAULT_MAX_SEARCH_RESULTS) const;
+  vector<VolumeCRef> search_vol(const string& name,
+				size_t max = DEFAULT_MAX_SEARCH_RESULTS) const;
 
   /*
    * Will search for a unique volume specified by volspec (either by
@@ -206,12 +216,12 @@ public:
   bool get_vol_uuid(const string& volspec, uuid_d& uuid_out) const;
 
   bool empty() const {
-    return vol_info_by_uuid.empty();
+    return vol_by_uuid.empty();
   }
 
   size_t size() const {
-    assert(vol_info_by_name.size() == vol_info_by_uuid.size());
-    return vol_info_by_uuid.size();
+    assert(vol_by_name.size() == vol_by_uuid.size());
+    return vol_by_uuid.size();
   }
 
   void encode(bufferlist& bl, uint64_t features = -1) const;
@@ -230,7 +240,7 @@ public:
 
 typedef std::tr1::shared_ptr<VolMap> VolMapRef;
 
-WRITE_CLASS_ENCODER(VolMap::vol_info_t);
+WRITE_CLASS_ENCODER(Volume);
 WRITE_CLASS_ENCODER_FEATURES(VolMap::Incremental);
 WRITE_CLASS_ENCODER(VolMap::Incremental::inc_add);
 WRITE_CLASS_ENCODER(VolMap::Incremental::inc_remove);
@@ -242,9 +252,9 @@ inline ostream& operator<<(ostream& out, const VolMap& m) {
   return out;
 }
 
-inline ostream& operator<<(ostream& out, const VolMap::vol_info_t& vol_info) {
-  out << vol_info.uuid
-      << " " << setw(4) << right << " " << vol_info.name;
+inline ostream& operator<<(ostream& out, const Volume& volume) {
+  out << volume.uuid
+      << " " << setw(4) << right << " " << volume.name;
   return out;
 }
 
