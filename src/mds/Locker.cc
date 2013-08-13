@@ -2089,9 +2089,11 @@ bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
     pi->client_ranges = new_ranges;
   }
 
+  int64_t dsize = 0;
   if (update_size) {
     dout(10) << "check_inode_max_size size " << pi->size << " -> " << new_size << dendl;
     pi->size = new_size;
+    dsize = new_size - pi->rstat.rbytes;
     pi->rstat.rbytes = new_size;
     dout(10) << "check_inode_max_size mtime " << pi->mtime << " -> " << new_mtime << dendl;
     pi->mtime = new_mtime;
@@ -2115,7 +2117,8 @@ bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
   }
   mds->mdlog->start_entry(le);
   if (update_size) {  // FIXME if/when we do max_size nested accounting
-    mdcache->predirty_journal_parents(mut, metablob, in, 0, PREDIRTY_PRIMARY);
+    mdcache->predirty_journal_parents(mut, metablob, in, inoparent_t(),
+                                      false, 0, dsize);
     metablob->add_inode(in, true);
   } else {
     metablob->add_stripe_context(in->get_projected_parent_stripe());
@@ -2652,7 +2655,6 @@ void Locker::_do_snap_update(CInode *in, snapid_t snap, int dirty, snapid_t foll
   }
 
   mut->auth_pin(in);
-  mdcache->predirty_journal_parents(mut, &le->metablob, in, 0, PREDIRTY_PRIMARY, 0, follows);
   mdcache->journal_dirty_inode(mut, &le->metablob, in, follows);
 
   mds->mdlog->submit_entry(le);
@@ -2851,6 +2853,7 @@ bool Locker::_do_cap_update(CInode *in, Capability *cap,
   Mutation *mut = new Mutation;
   mut->ls = mds->mdlog->get_current_segment();
 
+  uint64_t old_size = pi->size;
   _update_cap_fields(in, dirty, m, pi);
 
   if (change_max) {
@@ -2886,7 +2889,8 @@ bool Locker::_do_cap_update(CInode *in, Capability *cap,
     pi->update_backtrace();
   
   mut->auth_pin(in);
-  mdcache->predirty_journal_parents(mut, &le->metablob, in, 0, PREDIRTY_PRIMARY, 0, follows);
+  mdcache->predirty_journal_parents(mut, &le->metablob, in, inoparent_t(),
+                                    false, 0, pi->size - old_size);
   mdcache->journal_dirty_inode(mut, &le->metablob, in, follows);
 
   mds->mdlog->submit_entry(le);
