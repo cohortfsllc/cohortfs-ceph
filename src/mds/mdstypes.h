@@ -340,6 +340,9 @@ inline bool operator<(const dirstripe_t &l, const dirstripe_t &r) {
 inline bool operator==(const dirstripe_t &l, const dirstripe_t &r) {
   return l.ino == r.ino && l.stripeid == r.stripeid;
 }
+inline bool operator!=(dirstripe_t l, dirstripe_t r) {
+  return l.ino != r.ino || l.stripeid != r.stripeid;
+}
 
 
 // parent stat updates
@@ -445,6 +448,9 @@ ostream& operator<<(ostream& out, const inoparent_t &p);
 inline bool operator==(const inoparent_t &l, const inoparent_t &r) {
   // ignore 'who' in comparison
   return l.stripe == r.stripe && l.name == r.name;
+}
+inline bool operator!=(const inoparent_t &l, const inoparent_t &r) {
+  return l.stripe != r.stripe || l.name != r.name;
 }
 
 inline void update_inoparents(list<inoparent_t> &parents,
