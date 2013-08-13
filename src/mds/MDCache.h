@@ -74,11 +74,6 @@ class MDRequest;
 class MDSlaveUpdate;
 
 
-// flags for predirty_journal_parents()
-static const int PREDIRTY_PRIMARY = 1; // primary dn, adjust nested accounting
-static const int PREDIRTY_DIR = 2;     // update parent dir mtime/size
-static const int PREDIRTY_SHALLOW = 4; // only go to immediate parent (for easier rollback)
-
 class MDCache {
  public:
   // my master
@@ -217,9 +212,9 @@ public:
   void journal_dirty_inode(Mutation *mut, EMetaBlob *metablob, CInode *in, snapid_t follows=CEPH_NOSNAP);
 
   void predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
-				CInode *in, CDir *parent,
-				int flags, int linkunlink=0,
-				snapid_t follows=CEPH_NOSNAP);
+                                CInode *in, const inoparent_t &parent,
+                                bool do_parent_mtime, int linkunlink=0,
+                                int64_t dsize=0);
 
   // slaves
   void add_uncommitted_master(metareqid_t reqid, LogSegment *ls, set<int> &slaves) {

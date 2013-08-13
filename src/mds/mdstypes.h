@@ -416,6 +416,9 @@ inline bool operator<(dirstripe_t l, dirstripe_t r) {
 inline bool operator==(dirstripe_t l, dirstripe_t r) {
   return l.ino == r.ino && l.stripeid == r.stripeid;
 }
+inline bool operator!=(dirstripe_t l, dirstripe_t r) {
+  return l.ino != r.ino || l.stripeid != r.stripeid;
+}
 
 
 // parent stat updates
@@ -550,6 +553,9 @@ WRITE_CLASS_ENCODER(inoparent_t)
 inline bool operator==(const inoparent_t &l, const inoparent_t &r) {
   // ignore 'who' in comparison
   return l.stripe == r.stripe && l.name == r.name;
+}
+inline bool operator!=(const inoparent_t &l, const inoparent_t &r) {
+  return l.stripe != r.stripe || l.name != r.name;
 }
 inline ostream& operator<<(ostream &out, const inoparent_t &p) {
   return out << p.stripe << '/' << p.name;

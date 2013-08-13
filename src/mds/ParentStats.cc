@@ -295,23 +295,14 @@ void ParentStats::tick()
   dirty_stats.clear();
 }
 
-CStripe* ParentStats::open_parent_stripe(CInode *in,
+CStripe* ParentStats::open_parent_stripe(const inoparent_t &parent,
                                          const stripe_stat_update_t &update)
 {
   assert(update.frag.delta.version || update.nest.delta.version);
 
-  // find first parent
-  inode_t *pi = in->get_projected_inode();
-  if (pi->parents.empty()) {
-    dout(10) << "open_parent_stripe at base inode " << pi->ino << dendl;
-    account_inode(in, update.nest.stat);
-    return NULL;
-  }
-
-  const inoparent_t &parent = pi->parents.front();
   if (parent.who != mds->get_nodeid()) {
     dout(10) << "forwarding to auth mds." << parent.who
-        << " for parent " << parent.stripe << ":" << parent.name << dendl;
+        << " for parent " << parent << dendl;
     // forward to stripe mds
     stats_for_mds(parent.who)->add_stripe(parent.stripe, update);
     return NULL;
@@ -671,7 +662,14 @@ void ParentStats::update_rstats(CInode *in, Projected &projected,
 
   dout(10) << "update_rstats " << supdate << dendl;
 
-  CStripe *stripe = open_parent_stripe(in, supdate);
+  const inode_t *pi = in->get_projected_inode();
+  if (pi->parents.empty()) {
+    dout(10) << "at base inode " << pi->ino << dendl;
+    account_inode(in, supdate.nest.stat);
+    return;
+  }
+
+  CStripe *stripe = open_parent_stripe(pi->parents.front(), supdate);
   while (stripe) {
     inode_stat_update_t iupdate;
     if (!update_stripe_nest(stripe, projected, mut, blob, supdate, iupdate))
@@ -690,39 +688,130 @@ void ParentStats::update_rstats(CInode *in, Projected &projected,
     if (!update_inode_nest(in, projected, mut, blob, iupdate, supdate))
       break;
 
+    pi = projected.get(in, mut);
+    if (pi->parents.empty()) {
+      dout(10) << "at base inode " << pi->ino << dendl;
+      account_inode(in, supdate.nest.stat);
+      return;
+    }
     // continue with next parent stripe
-    stripe = open_parent_stripe(in, supdate);
+    stripe = open_parent_stripe(pi->parents.front(), supdate);
   }
 }
 
-void ParentStats::update(CInode *in, Mutation *mut, EMetaBlob *blob,
+void ParentStats::update(const inode_t *pi, const inoparent_t &parent,
+                         Mutation *mut, EMetaBlob *blob,
                          const frag_info_t &fragstat,
                          const nest_info_t &rstat)
 {
   Projected projected; // projected stripes and inodes to journal
 
-  inode_t *pi = in->get_projected_inode();
-
   stripe_stat_update_t update;
   update.ino = pi->ino;
   update.frag.delta = fragstat;
-
-  if (rstat.version) {
-    pi->rstat.add(rstat);
-    pi->rstat.version++;
-    update.nest.delta = rstat;
-    update.nest.stat = pi->rstat;
-  }
+  update.nest.delta = rstat;
 
   if (!update.frag.delta.version && !update.nest.delta.version)
     return;
 
-  dout(10) << "update " << in->ino() << " " << update << dendl;
+  dout(10) << "update " << parent << " " << update << dendl;
 
-  // find first parent, or forward request
-  CStripe *stripe = open_parent_stripe(in, update);
+  // find parent stripe, or forward request
+  CStripe *stripe;
+  if (!parent) {
+    // pass empty inoparent to default to first parent
+    if (pi->parents.empty()) {
+      dout(10) << "at base inode " << pi->ino << dendl;
+      return;
+    }
+    stripe = open_parent_stripe(pi->parents.front(), update);
+  } else
+    stripe = open_parent_stripe(parent, update);
 
   // update stripe.fragstat and recursive stats
+  if (stripe)
+    update_stripe(stripe, projected, mut, blob, update);
+
+  // write updated stripes and inodes to the journal
+  projected.journal(blob);
+}
+
+
+void ParentStats::add(const inode_t *pi, const inoparent_t &parent,
+                      Mutation *mut, EMetaBlob *blob)
+{
+  assert(parent);
+  Projected projected; // projected stripes and inodes to journal
+
+  stripe_stat_update_t update;
+  update.ino = pi->ino;
+
+  if (pi->is_dir())
+    update.frag.delta.nsubdirs = 1;
+  else
+    update.frag.delta.nfiles = 1;
+  update.frag.delta.mtime = mut->now;
+  update.frag.delta.version = 1;
+
+  update.nest.delta.add(pi->rstat);
+  // rbytes only for first parent
+  if (!pi->parents.empty() && parent != pi->parents.front())
+    update.nest.delta.rbytes = 0;
+  update.nest.delta.version = 1;
+
+  dout(10) << "add " << parent << " " << update << dendl;
+
+  // update stripe.fragstat and recursive stats
+  CStripe *stripe = open_parent_stripe(parent, update);
+  if (stripe)
+    update_stripe(stripe, projected, mut, blob, update);
+
+  // write updated stripes and inodes to the journal
+  projected.journal(blob);
+}
+
+void ParentStats::sub(const inode_t *pi, const inoparent_t &parent,
+                      Mutation *mut, EMetaBlob *blob)
+{
+  assert(parent);
+  assert(!pi->parents.empty());
+  Projected projected; // projected stripes and inodes to journal
+
+  stripe_stat_update_t update;
+  update.ino = pi->ino;
+
+  if (pi->is_dir())
+    update.frag.delta.nsubdirs = -1;
+  else
+    update.frag.delta.nfiles = -1;
+  update.frag.delta.mtime = mut->now;
+  update.frag.delta.version = 1;
+
+  update.nest.delta.sub(pi->rstat);
+  // rbytes only for first parent
+  if (parent != pi->parents.front()) {
+    update.nest.delta.rbytes = 0;
+  } else if (pi->parents.size() > 1 && update.nest.delta.rbytes) {
+    // move rbytes to next parent
+    list<inoparent_t>::const_iterator next = ++pi->parents.begin();
+
+    stripe_stat_update_t sizeupdate;
+    sizeupdate.ino = pi->ino;
+    sizeupdate.nest.delta.rbytes = -update.nest.delta.rbytes;
+    sizeupdate.nest.delta.version = 1;
+
+    dout(10) << "sub moving " << sizeupdate.nest.delta
+        << " to next parent " << *next << dendl;
+    CStripe *stripe = open_parent_stripe(*next, sizeupdate);
+    if (stripe)
+      update_stripe(stripe, projected, mut, blob, sizeupdate);
+  }
+  update.nest.delta.version = 1;
+
+  dout(10) << "sub " << parent << " " << update << dendl;
+
+  // update stripe.fragstat and recursive stats
+  CStripe *stripe = open_parent_stripe(parent, update);
   if (stripe)
     update_stripe(stripe, projected, mut, blob, update);
 
@@ -897,7 +986,12 @@ void ParentStats::propagate_unaccounted()
     if (update.nest.delta.version == 0)
       continue;
 
-    CStripe *stripe = open_parent_stripe(in, update);
+    if (pi->parents.empty()) {
+      dout(10) << "at base inode " << pi->ino << dendl;
+      account_inode(in, update.nest.stat);
+      return;
+    }
+    CStripe *stripe = open_parent_stripe(pi->parents.front(), update);
     if (stripe)
       update_stripe(stripe, projected, mut, &le->metablob, update);
   }

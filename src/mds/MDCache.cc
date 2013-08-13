@@ -455,24 +455,25 @@ void MDCache::_create_system_file(CDir *dir, const char *name, CInode *in, Conte
   Mutation *mut = new Mutation;
 
   // force some locks.  hacky.
-  mds->locker->wrlock_force(&dir->get_stripe()->linklock, mut);
-  mds->locker->wrlock_force(&dir->get_stripe()->nestlock, mut);
+  CStripe *stripe = dir->get_stripe();
+  mds->locker->wrlock_force(&stripe->linklock, mut);
+  mds->locker->wrlock_force(&stripe->nestlock, mut);
 
   mut->ls = mds->mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mds->mdlog, "create system file");
   mds->mdlog->start_entry(le);
 
-  if (!in->is_mdsdir()) {
-    predirty_journal_parents(mut, &le->metablob, in, dir, PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
-  } else {
-    predirty_journal_parents(mut, &le->metablob, in, dir, PREDIRTY_DIR, 1);
+  predirty_journal_parents(mut, &le->metablob, in, dn->inoparent(), true, 1);
+  if (in->is_mdsdir()) {
     journal_dirty_inode(mut, &le->metablob, in);
     dn->push_projected_linkage(in->ino(), in->d_type());
   }
   le->metablob.add_dentry(dn, true);
-  le->metablob.add_inode(in, true);
-  if (mdir)
-    le->metablob.add_new_dir(mdir); // dirty AND complete AND new
+  le->metablob.add_inode(in, dn);
+  if (mdir) {
+    le->metablob.add_new_dir(mdir);
+    le->metablob.add_stripe(mdir->get_stripe(), true, true);
+  }
 
   mds->mdlog->submit_entry(le);
   mds->mdlog->wait_for_safe(new C_MDC_CreateSystemFile(this, mut, dn, fin));
@@ -904,12 +905,10 @@ void MDCache::journal_dirty_inode(Mutation *mut, EMetaBlob *metablob, CInode *in
  * rstat.  this is normal and expected.
  */
 void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
-				       CInode *in, CDir *parent,
-				       int flags, int linkunlink,
-				       snapid_t cfollows)
+				       CInode *in, const inoparent_t &parent,
+                                       bool do_parent_mtime, int linkunlink,
+                                       int64_t dsize)
 {
-  bool do_parent_mtime = flags & PREDIRTY_DIR;
-
   assert(mds->mdlog->entry_is_open());
 
   // declare now?
@@ -920,29 +919,35 @@ void MDCache::predirty_journal_parents(Mutation *mut, EMetaBlob *blob,
     return;
 
   dout(10) << "predirty_journal_parents"
-	   << (do_parent_mtime ? " do_parent_mtime":"")
-	   << " linkunlink=" <<  linkunlink
-	   << " follows " << cfollows
-	   << " " << *in << dendl;
+      << (do_parent_mtime ? " do_parent_mtime":"")
+      << " linkunlink=" << linkunlink
+      << " dsize=" << dsize << " " << *in << dendl;
 
   frag_info_t fragstat;
   nest_info_t rstat;
 
   if (linkunlink) {
-    if (in->is_dir()) {
+    assert(parent); // must specify parent to modify links
+    if (in->is_dir())
       fragstat.nsubdirs = rstat.rsubdirs = linkunlink;
-    } else {
+    else
       fragstat.nfiles = rstat.rfiles = linkunlink;
-    }
     fragstat.version = rstat.version = 1;
   }
 
   if (do_parent_mtime) {
+    assert(parent); // must specify parent to update mtime
     fragstat.mtime = rstat.rctime = mut->now;
     fragstat.version = rstat.version = 1;
   }
 
-  parentstats.update(in, mut, blob, fragstat, rstat);
+  if (dsize) {
+    rstat.rbytes = dsize;
+    rstat.version = 1;
+  }
+
+  parentstats.update(in->get_projected_inode(), parent,
+                     mut, blob, fragstat, rstat);
 }
 
 
@@ -3431,7 +3436,6 @@ void MDCache::queue_file_recover(CInode *in)
     mut->ls = mds->mdlog->get_current_segment();
     EUpdate *le = new EUpdate(mds->mdlog, "queue_file_recover cow");
     mds->mdlog->start_entry(le);
-    predirty_journal_parents(mut, &le->metablob, in, 0, PREDIRTY_PRIMARY);
 
     s.erase(*s.begin());
     while (s.size()) {

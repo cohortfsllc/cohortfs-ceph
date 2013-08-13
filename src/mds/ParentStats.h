@@ -50,7 +50,8 @@ class ParentStats {
 
 
   // open the parent object or forward stats to auth mds
-  CStripe* open_parent_stripe(CInode *in, const stripe_stat_update_t &supdate);
+  CStripe* open_parent_stripe(const inoparent_t &parent,
+                              const stripe_stat_update_t &supdate);
   CInode* open_parent_inode(CStripe *stripe, const Mutation *mut,
                             const inode_stat_update_t &iupdate);
 
@@ -122,9 +123,19 @@ class ParentStats {
   ParentStats(MDS *mds);
 
   // update parent stats for the given object
-  void update(CInode *in, Mutation *mut, EMetaBlob *blob,
+  void update(const inode_t *pi, const inoparent_t &parent,
+              Mutation *mut, EMetaBlob *blob,
               const frag_info_t &fragstat,
               const nest_info_t &rstat);
+
+  // add a link to parent.fragstat, and pi->rstat to parent.rstat
+  void add(const inode_t *pi, const inoparent_t &parent,
+           Mutation *mut, EMetaBlob *blob);
+
+  // subtract a link from parent.fragstat, and pi->rstat from parent.rstat
+  void sub(const inode_t *pi, const inoparent_t &parent,
+           Mutation *mut, EMetaBlob *blob);
+
 
   // handle remote requests to update parent stats
   void handle(MParentStats *m);
