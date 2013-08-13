@@ -17,75 +17,28 @@
 #ifndef CEPH_MDBALANCER_H
 #define CEPH_MDBALANCER_H
 
-#include <list>
-#include <map>
-using std::list;
-using std::map;
-
 #include "include/types.h"
-#include "common/Clock.h"
-#include "CInode.h"
 
 
+class CDir;
+class CInode;
+class CStripe;
 class MDS;
 class Message;
-class MHeartbeat;
-class CInode;
-class Context;
-class CDir;
-class CStripe;
 
 class MDBalancer {
- protected:
+ private:
   MDS *mds;
-  int beat_epoch;
 
-  int last_epoch_under;  
-  int last_epoch_over; 
-
-  utime_t last_heartbeat;
   utime_t last_fragment;
-  utime_t last_sample;    
-  utime_t rebalance_time; //ensure a consistent view of load for rebalance
+  set<dirfrag_t> split_queue, merge_queue;
 
-  // todo
-  set<dirfrag_t>   split_queue, merge_queue;
+ public:
+  MDBalancer(MDS *m) : mds(m) {}
 
-  // per-epoch scatter/gathered info
-  map<int, mds_load_t>  mds_load;
-  map<int, float>       mds_meta_load;
-  map<int, map<int, float> > mds_import_map;
-
-  // per-epoch state
-  double          my_load, target_load;
-  map<int,double> my_targets;
-  map<int,double> imported;
-  map<int,double> exported;
-
-  map<int32_t, int> old_prev_targets;  // # iterations they _haven't_ been targets
-  bool check_targets();
-
-  double try_match(int ex, double& maxex,
-                   int im, double& maxim);
-  double get_maxim(int im) {
-    return target_load - mds_meta_load[im] - imported[im];
-  }
-  double get_maxex(int ex) {
-    return mds_meta_load[ex] - target_load - exported[ex];    
-  }
-
-public:
-  MDBalancer(MDS *m) : 
-    mds(m),
-    beat_epoch(0),
-    last_epoch_under(0), last_epoch_over(0), my_load(0.0), target_load(0.0) { }
-  
   mds_load_t get_load(utime_t);
 
   int proc_message(Message *m);
-  
-  void send_heartbeat();
-  void handle_heartbeat(MHeartbeat *m);
 
   void tick();
 
@@ -116,9 +69,6 @@ public:
 
   void queue_split(CDir *dir);
   void queue_merge(CDir *dir);
-
 };
-
-
 
 #endif
