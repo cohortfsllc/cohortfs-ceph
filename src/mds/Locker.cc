@@ -3091,9 +3091,9 @@ void Locker::issue_client_lease(CDentry *dn, client_t client,
 			       bufferlist &bl, utime_t now, Session *session)
 {
   CInode *diri = dn->get_dir()->get_inode();
-  if (!diri->is_stray() &&  // do not issue dn leases in stray dir!
-      ((!diri->filelock.can_lease(client) &&
-	(diri->get_client_cap_pending(client) & (CEPH_CAP_FILE_SHARED | CEPH_CAP_FILE_EXCL)) == 0)) &&
+  const unsigned cap_mask = CEPH_CAP_FILE_SHARED | CEPH_CAP_FILE_EXCL;
+  if (!diri->filelock.can_lease(client) &&
+      (diri->get_client_cap_pending(client) & cap_mask) == 0 &&
       dn->lock.can_lease(client)) {
     int pool = 1;   // fixme.. do something smart!
     // issue a dentry lease

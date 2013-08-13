@@ -117,8 +117,6 @@ class MMDSSlaveRequest : public Message {
   bufferlist srci_replica;
   vector<stripeid_t> stripes;
 
-  bufferlist stray;  // stray dir + dentry
-
 public:
   metareqid_t get_reqid() { return reqid; }
   __u32 get_attempt() const { return attempt; }
@@ -160,7 +158,6 @@ public:
     ::encode(now, payload);
     ::encode(srci_replica, payload);
     ::encode(stripes, payload);
-    ::encode(stray, payload);
   }
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
@@ -180,7 +177,6 @@ public:
     ::decode(now, p);
     ::decode(srci_replica, p);
     ::decode(stripes, p);
-    ::decode(stray, p);
   }
 
   const char *get_type_name() const { return "slave_request"; }

@@ -168,7 +168,6 @@ struct MDRequest : public Mutation {
 
   // store up to two sets of dn vectors, inode pointers, for request path1 and path2.
   vector<CDentry*> dn[2];
-  CDentry *straydn;
   CInode *in[2];
   snapid_t snapid;
 
@@ -213,8 +212,6 @@ struct MDRequest : public Mutation {
     // for rename
     set<int> extra_witnesses; // replica list from srcdn auth (rename)
     int srcdn_auth_mds;
-    version_t src_reanchor_atid;  // src->dst
-    version_t dst_reanchor_atid;  // dst->stray
     bufferlist inode_import;
     version_t inode_import_v;
     CInode* rename_inode;
@@ -239,9 +236,8 @@ struct MDRequest : public Mutation {
     bufferlist rollback_bl;
 
     More() : 
-      srcdn_auth_mds(-1),
-      src_reanchor_atid(0), dst_reanchor_atid(0), inode_import_v(0),
-      rename_inode(0), is_freeze_authpin(false), is_ambiguous_auth(false),
+      srcdn_auth_mds(-1), inode_import_v(0), rename_inode(0),
+      is_freeze_authpin(false), is_ambiguous_auth(false),
       is_remote_frozen_authpin(false), is_inode_exporter(false),
       flock_was_waiting(false), stid(0), slave_commit(0) { }
   } *_more;
@@ -251,7 +247,7 @@ struct MDRequest : public Mutation {
   MDRequest() : 
     ref(1),
     session(0), item_session_request(this),
-    client_request(0), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
+    client_request(0), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
     alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
     o_trunc(false),
     getattr_caps(0),
@@ -266,7 +262,7 @@ struct MDRequest : public Mutation {
     Mutation(ri, attempt),
     ref(1),
     session(0), item_session_request(this),
-    client_request(req), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
+    client_request(req), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
     alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
     o_trunc(false),
     getattr_caps(0),
@@ -281,7 +277,7 @@ struct MDRequest : public Mutation {
     Mutation(ri, attempt, by),
     ref(1),
     session(0), item_session_request(this),
-    client_request(0), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
+    client_request(0), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
     alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
     o_trunc(false),
     getattr_caps(0),
