@@ -1080,8 +1080,6 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
   }
   bool purged_any = false;
 
-  bool stray = get_inode()->is_stray();
-
   //int num_new_inodes_loaded = 0;
   loff_t baseoff = p.get_off();
   for (unsigned i=0; i<n; i++) {
@@ -1217,12 +1215,6 @@ void CDir::_fetched(bufferlist &bl, const string& want_dn)
 	    dn = add_primary_dentry(dname, in, first, last); // link
 	  }
 	  dout(12) << "_fetched  got " << *dn << " " << *in << dendl;
-
-	  if (stray) {
-	    dn->state_set(CDentry::STATE_STRAY);
-	    if (in->inode.nlink == 0)
-	      in->state_set(CInode::STATE_ORPHAN);
-	  }
 
 	  //in->hack_accessed = false;
 	  //in->hack_load_stamp = ceph_clock_now(g_ceph_context);
@@ -1650,9 +1642,6 @@ void CDir::_committed(version_t v)
   dout(10) << "_committed v " << v << " on " << *this << dendl;
   assert(is_auth());
 
-  CInode *inode = get_inode();
-  bool stray = inode->is_stray();
-
   // take note.
   assert(v > committed_version);
   assert(v <= committing_version);
@@ -1697,10 +1686,6 @@ void CDir::_committed(version_t v)
       if (dn->is_dirty()) {
 	dout(15) << " dir " << committed_version << " >= dn " << dn->get_version() << " now clean " << *dn << dendl;
 	dn->mark_clean();
-
-	// drop clean null stray dentries immediately
-	if (stray &&  dn->get_num_ref() == 0 && dn->get_linkage()->is_null())
-	  remove_dentry(dn);
       } 
     } else {
       dout(15) << " dir " << committed_version << " < dn " << dn->get_version() << " still dirty " << *dn << dendl;

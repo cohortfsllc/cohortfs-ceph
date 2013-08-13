@@ -1227,13 +1227,6 @@ void Server::handle_slave_request(MMDSSlaveRequest *m)
   if (m->is_reply())
     return handle_slave_request_reply(m);
 
-  CDentry *straydn = NULL;
-  if (m->stray.length() > 0) {
-    straydn = mdcache->add_replica_stray(m->stray, from);
-    assert(straydn);
-    m->stray.clear();
-  }
-
   // am i a new slave?
   MDRequest *mdr = NULL;
   if (mdcache->have_request(m->get_reqid())) {
@@ -1272,11 +1265,6 @@ void Server::handle_slave_request(MMDSSlaveRequest *m)
     mdr = mdcache->request_start_slave(m->get_reqid(), m->get_attempt(), from);
   }
   assert(mdr->slave_request == 0);     // only one at a time, please!  
-
-  if (straydn) {
-    mdr->pin(straydn);
-    mdr->straydn = straydn;
-  }
 
   if (!mds->is_clientreplay() && !mds->is_active() && !mds->is_stopping()) {
     dout(3) << "not clientreplay|active yet, waiting" << dendl;
@@ -2109,15 +2097,9 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
   }
 
   CInode *diri = dir->get_inode();
-  if (!mdr->reqid.name.is_mds()) {
-    if (diri->is_system() && !diri->is_root()) {
-      reply_request(mdr, -EROFS);
-      return 0;
-    }
-    if (!diri->is_base() && diri->get_projected_parent_dir()->get_inode()->is_stray()) {
-      reply_request(mdr, -ENOENT);
-      return 0;
-    }
+  if (diri->is_system() && !diri->is_root()) {
+    reply_request(mdr, -EROFS);
+    return 0;
   }
 
   // make a null dentry?
@@ -5352,7 +5334,6 @@ void Server::_logged_slave_rmdir(MDRequest *mdr, CDentry *dn)
   // done.
   mdr->slave_request->put();
   mdr->slave_request = 0;
-  mdr->straydn = 0;
 }
 
 void Server::handle_slave_rmdir_prep_ack(MDRequest *mdr, MMDSSlaveRequest *ack)
@@ -5612,7 +5593,7 @@ void Server::handle_client_rename(MDRequest *mdr)
       return;
     }
 
-    if (srci == oldin && !srcdn->get_dir()->get_inode()->is_stray()) {
+    if (srci == oldin) {
       reply_request(mdr, 0);  // no-op.  POSIX makes no sense.
       return;
     }
@@ -5641,16 +5622,6 @@ void Server::handle_client_rename(MDRequest *mdr)
       return;
     }
     pdn = pdn->get_dir()->get_inode()->parent;
-  }
-
-  // is this a stray migration, reintegration or merge? (sanity checks!)
-  if (mdr->reqid.name.is_mds() &&
-      !(MDS_INO_IS_MDSDIR(srcpath.get_ino()) &&
-	MDS_INO_IS_STRAY(destpath.get_ino())) &&
-      !(destdnl->is_remote() &&
-	destdnl->get_remote_ino() == srci->ino())) {
-    reply_request(mdr, -EINVAL);  // actually, this won't reply, but whatev.
-    return;
   }
 
   // -- locks --
@@ -5981,7 +5952,6 @@ void Server::_logged_slave_rename(MDRequest *mdr, CDentry *srcdn,
   // done.
   mdr->slave_request->put();
   mdr->slave_request = 0;
-  mdr->straydn = 0;
 }
 
 void Server::_commit_slave_rename(MDRequest *mdr, int r)
