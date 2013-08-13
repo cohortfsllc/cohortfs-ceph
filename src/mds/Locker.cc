@@ -17,7 +17,7 @@
 #include "MDCache.h"
 #include "Locker.h"
 #include "CInode.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 #include "CDentry.h"
 #include "Mutation.h"
 
@@ -2414,7 +2414,7 @@ void Locker::process_request_cap_release(MDRequest *mdr, client_t client, const 
     __u32 dnhash = in->hash_dentry_name(dname);
     CStripe *stripe = in->get_stripe(in->pick_stripe(dnhash));
     if (stripe) {
-      CDir *dir = stripe->get_dirfrag(stripe->pick_dirfrag(dnhash));
+      CDirFrag *dir = stripe->get_dirfrag(stripe->pick_dirfrag(dnhash));
       if (dir) {
         CDentry *dn = dir->lookup(dname);
         if (dn) {
@@ -2907,7 +2907,7 @@ void Locker::handle_client_lease(MClientLease *m)
   }
 
   frag_t fg = stripe->pick_dirfrag(dnhash);
-  CDir *dir = stripe->get_dirfrag(fg);
+  CDirFrag *dir = stripe->get_dirfrag(fg);
   if (dir) 
     dn = dir->lookup(m->dname);
   if (!dn) {
@@ -3044,7 +3044,7 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
         return 0;
       }
       frag_t fg = stripe->pick_dirfrag(info.dname);
-      CDir *dir = stripe->get_dirfrag(fg);
+      CDirFrag *dir = stripe->get_dirfrag(fg);
       if (!dir) {
 	dout(7) << "get_lock doesn't have dir " << fg << dendl;
         return 0;

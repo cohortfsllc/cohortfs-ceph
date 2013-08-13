@@ -31,7 +31,7 @@ using namespace std;
 #include "SimpleLock.h"
 
 class CInode;
-class CDir;
+class CDirFrag;
 class CStripe;
 class MDRequest;
 
@@ -137,7 +137,7 @@ public:
   };
   
 protected:
-  CDir *dir;     // containing dirfrag
+  CDirFrag *dir;     // containing dirfrag
   linkage_t linkage;
   list<linkage_t> projected;
   
@@ -198,7 +198,7 @@ public:
   }
 
 
-  CDir *get_dir() const { return dir; }
+  CDirFrag *get_dir() const { return dir; }
   CStripe *get_stripe() const;
   const string& get_name() const { return name; }
 
@@ -383,7 +383,7 @@ public:
   ostream& print_db_line_prefix(ostream& out);
   void print(ostream& out);
 
-  friend class CDir;
+  friend class CDirFrag;
 };
 
 ostream& operator<<(ostream& out, CDentry& dn);

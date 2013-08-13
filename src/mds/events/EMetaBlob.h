@@ -18,7 +18,7 @@
 #include <stdlib.h>
 
 #include "../CInode.h"
-#include "../CDir.h"
+#include "../CDirFrag.h"
 #include "../CDentry.h"
 #include "../CStripe.h"
 
@@ -37,7 +37,7 @@ class MDSlaveUpdate;
 /* notes:
  *
  * - make sure you adjust the inode.version for any modified inode you
- *   journal.  CDir and CDentry maintain a projected_version, but CInode
+ *   journal.  CDirFrag and CDentry maintain a projected_version, but CInode
  *   doesn't, since the journaled inode usually has to be modifed 
  *   manually anyway (to delay the change in the MDS's cache until after
  *   it is journaled).
@@ -273,7 +273,7 @@ class EMetaBlob {
       dn_decoded = false;      // don't decode dentries unless we need them.
     }
 
-    void apply(MDS *mds, CDir *dir, LogSegment *ls);
+    void apply(MDS *mds, CDirFrag *dir, LogSegment *ls);
 
     void add_dentry(const string& name, snapid_t first, snapid_t last,
                     version_t version, inodeno_t ino,
@@ -527,7 +527,7 @@ class EMetaBlob {
   }
 
   void add_dentry(CDentry *dn, bool dirty) {
-    CDir *dir = dn->get_dir();
+    CDirFrag *dir = dn->get_dir();
 
     inodeno_t ino = 0;
     unsigned char d_type = 0;
@@ -547,11 +547,11 @@ class EMetaBlob {
                   dn->get_projected_version(), ino, d_type, dirty);
   }
 
-  Dir& add_dir(CDir *dir, bool dirty, bool complete=false) {
+  Dir& add_dir(CDirFrag *dir, bool dirty, bool complete=false) {
     Stripe &s = add_stripe(dir->get_stripe(), false);
     return s.add_dir(dir->get_frag(), dir->get_version(), dirty, complete);
   }
-  Dir& add_new_dir(CDir *dir) {
+  Dir& add_new_dir(CDirFrag *dir) {
     Stripe &s = add_stripe(dir->get_stripe(), true);
     // dirty AND complete AND new
     return s.add_dir(dir->get_frag(), dir->get_version(), true, true, true);

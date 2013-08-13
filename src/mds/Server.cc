@@ -1500,7 +1500,7 @@ void Server::handle_slave_auth_pin(MDRequest *mdr)
       if (!mdr->can_auth_pin(*p)) {
 	// wait
 	dout(10) << " waiting for authpinnable on " << **p << dendl;
-	(*p)->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
+	(*p)->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
 	mdr->drop_local_auth_pins();
 	return;
       }
@@ -1617,7 +1617,7 @@ void Server::handle_slave_auth_pin_ack(MDRequest *mdr, MMDSSlaveRequest *ack)
  * verify that the dir exists and would own the dname.
  * do not check if the dentry exists.
  */
-CDir *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string& dname)
+CDirFrag *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string& dname)
 {
   // make sure parent is a dir?
   if (!diri->is_dir()) {
@@ -1634,12 +1634,12 @@ CDir *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string& dn
     return 0;
 
   frag_t fg = stripe->pick_dirfrag(dnhash);
-  CDir *dir = stripe->get_or_open_dirfrag(fg);
+  CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
 
   // frozen?
   if (dir->is_frozen()) {
     dout(7) << "dir is frozen " << *dir << dendl;
-    dir->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
+    dir->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
     return NULL;
   }
   
@@ -1651,7 +1651,7 @@ CDir *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string& dn
  * prepare a null (or existing) dentry in given dir. 
  * wait for any dn lock.
  */
-CDentry* Server::prepare_null_dentry(MDRequest *mdr, CDir *dir, const string& dname, bool okexist)
+CDentry* Server::prepare_null_dentry(MDRequest *mdr, CDirFrag *dir, const string& dname, bool okexist)
 {
   dout(10) << "prepare_null_dentry " << dname << " in " << *dir << dendl;
   assert(dir->is_auth());
@@ -1741,7 +1741,7 @@ inodeno_t Server::prepare_new_inodeno(MDRequest *mdr, inodeno_t useino)
  *
  * create a new inode.  set c/m/atime.  hit dir pop.
  */
-CInode* Server::prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino,
+CInode* Server::prepare_new_inode(MDRequest *mdr, CDirFrag *dir, inodeno_t useino,
                                   unsigned mode, ceph_file_layout *layout)
 {
   CInode *in = new CInode(mdcache, mds->get_nodeid());
@@ -1886,7 +1886,7 @@ void Server::rollback_allocated_inos(MDRequest *mdr)
 
 
 
-CDir *Server::traverse_to_auth_dir(MDRequest *mdr, vector<CDentry*> &trace, filepath refpath)
+CDirFrag *Server::traverse_to_auth_dir(MDRequest *mdr, vector<CDentry*> &trace, filepath refpath)
 {
   // figure parent dir vs dname
   if (refpath.depth() == 0) {
@@ -1909,7 +1909,7 @@ CDir *Server::traverse_to_auth_dir(MDRequest *mdr, vector<CDentry*> &trace, file
   }
 
   // is it an auth dir?
-  CDir *dir = validate_dentry_dir(mdr, diri, dname);
+  CDirFrag *dir = validate_dentry_dir(mdr, diri, dname);
   if (!dir)
     return 0; // forwarded or waiting for freeze
 
@@ -2042,7 +2042,7 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
   if (mdr->done_locking)
     return mdr->dn[n].back();
 
-  CDir *dir = traverse_to_auth_dir(mdr, mdr->dn[n], refpath);
+  CDirFrag *dir = traverse_to_auth_dir(mdr, mdr->dn[n], refpath);
   if (!dir) return 0;
   dout(10) << "rdlock_path_xlock_dentry dir " << *dir << dendl;
 
@@ -2299,7 +2299,7 @@ void Server::handle_client_lookup_hash(MDRequest *mdr)
     }
     frag_t fg = stripe->pick_dirfrag(hash);
     dout(10) << " fg is " << fg << dendl;
-    CDir *dir = stripe->get_dirfrag(fg);
+    CDirFrag *dir = stripe->get_dirfrag(fg);
     if (!dir->is_complete()) {
       dir->fetch(new C_MDS_RetryRequest(mdcache, mdr));
       return;
@@ -2842,11 +2842,11 @@ void Server::handle_client_readdir(MDRequest *mdr)
   }
 
   // does the frag exist?
-  CDir *dir = stripe->get_or_open_dirfrag(fg);
+  CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
   if (!dir->is_complete()) {
     if (dir->is_frozen()) {
       dout(7) << "dir is frozen " << *dir << dendl;
-      dir->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
+      dir->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
       return;
     }
     // fetch
@@ -2855,7 +2855,7 @@ void Server::handle_client_readdir(MDRequest *mdr)
     return;
   }
 
-  CDir::map_t::iterator it;
+  CDirFrag::map_t::iterator it;
   if (offset_str.empty())
     it = dir->begin();
   else // first entry after 'offset_str'
@@ -2869,7 +2869,7 @@ void Server::handle_client_readdir(MDRequest *mdr)
     if (!dir->is_complete()) {
       if (dir->is_frozen()) {
         dout(7) << "dir is frozen " << *dir << dendl;
-        dir->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
+        dir->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
         return;
       }
       // fetch
@@ -2952,7 +2952,7 @@ void Server::handle_client_readdir(MDRequest *mdr)
 	continue;
       } else {
 	// touch everything i _do_ have
-	for (CDir::map_t::iterator p = dir->begin(); p != dir->end(); p++)
+	for (CDirFrag::map_t::iterator p = dir->begin(); p != dir->end(); p++)
 	  if (!p->second->get_linkage()->is_null())
 	    mdcache->lru.lru_touch(p->second);
 
@@ -3891,7 +3891,7 @@ public:
         stripe->mark_dirty(mdr->ls);
         stripe->mark_new(mdr->ls);
 
-        CDir *dir = stripe->get_dirfrag(frag_t());
+        CDirFrag *dir = stripe->get_dirfrag(frag_t());
         assert(dir);
         dir->mark_dirty(mdr->ls);
         dir->mark_new(mdr->ls);
@@ -4103,7 +4103,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
         // local request
         CStripe *newstripe = newi->get_or_open_stripe(i);
         newstripe->mark_open();
-        CDir *newdir = newstripe->get_or_open_dirfrag(frag_t());
+        CDirFrag *newdir = newstripe->get_or_open_dirfrag(frag_t());
         newdir->mark_complete();
       } else {
         // remote slave request
@@ -4173,7 +4173,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   newi->get_stripes(stripes);
   for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CStripe *newstripe = *s;
-    CDir *newdir = newstripe->get_dirfrag(frag_t());
+    CDirFrag *newdir = newstripe->get_dirfrag(frag_t());
     le->metablob.add_new_dir(newdir);
     le->metablob.add_stripe(newstripe, true, true); // dirty and new
   }
@@ -4219,7 +4219,7 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
   bufferlist::iterator blp = req->srci_replica.begin();
   CInode *container = mdcache->get_container()->get_inode();
   CStripe *stripe = mdcache->add_replica_stripe(blp, container, from, finished);
-  CDir *dir = mdcache->add_replica_dir(blp, stripe, finished);
+  CDirFrag *dir = mdcache->add_replica_dir(blp, stripe, finished);
   CDentry *dn = mdcache->add_replica_dentry(blp, dir, finished);
   CInode *in = mdcache->add_replica_inode(blp, dn, from, finished);
   mds->queue_waiters(finished);
@@ -4238,7 +4238,7 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
     CStripe *newstripe = in->add_stripe(new CStripe(in, *s, mds->get_nodeid()));
     newstripe->mark_open();
 
-    CDir *newdir = newstripe->get_or_open_dirfrag(frag_t());
+    CDirFrag *newdir = newstripe->get_or_open_dirfrag(frag_t());
     newdir->mark_complete();
 
     le->commit.add_new_dir(newdir);
@@ -4282,7 +4282,7 @@ void Server::slave_mkdir_finish(MDRequest *mdr, CInode *in)
   for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CStripe *stripe = *s;
     stripe->mark_dirty(mdr->ls);
-    CDir *dir = stripe->get_dirfrag(frag_t());
+    CDirFrag *dir = stripe->get_dirfrag(frag_t());
     dir->mark_dirty(mdr->ls);
   }
 
@@ -4509,7 +4509,7 @@ void Server::handle_client_link(MDRequest *mdr)
     return;
   }
 
-  CDir *dir = dn->get_dir();
+  CDirFrag *dir = dn->get_dir();
   dout(7) << "handle_client_link link " << dn->get_name() << " in " << *dir << dendl;
   dout(7) << "target is " << *targeti << dendl;
   if (targeti->is_dir()) {
@@ -5265,7 +5265,7 @@ CDentry* lookup_inoparent(MDCache *mdcache, const inoparent_t &parent)
   CStripe *stripe = mdcache->get_dirstripe(parent.stripe);
   if (!stripe)
     return NULL;
-  CDir *dir = stripe->get_dirfrag(stripe->pick_dirfrag(parent.name));
+  CDirFrag *dir = stripe->get_dirfrag(stripe->pick_dirfrag(parent.name));
   if (!dir)
     return NULL;
   return dir->lookup(parent.name);
@@ -5573,7 +5573,7 @@ void Server::handle_client_rename(MDRequest *mdr)
     return;
   }
   CDentry::linkage_t *destdnl = destdn->get_projected_linkage();
-  CDir *destdir = destdn->get_dir();
+  CDirFrag *destdir = destdn->get_dir();
   assert(destdir->is_auth());
 
   int r = mdcache->path_traverse(mdr, NULL, NULL, srcpath, &srctrace, NULL, MDS_TRAVERSE_DISCOVER);

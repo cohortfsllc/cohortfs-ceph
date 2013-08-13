@@ -20,7 +20,7 @@
 #include "include/types.h"
 
 
-class CDir;
+class CDirFrag;
 class CInode;
 class CStripe;
 class MDS;
@@ -39,10 +39,10 @@ class MDBalancer {
 
   void tick() {}
   void try_rebalance() {}
-  void queue_split(CDir *dir) {}
+  void queue_split(CDirFrag *dir) {}
 
   void hit_inode(utime_t now, CInode *in, int type, int who=-1) {}
-  void hit_dir(utime_t now, CDir *dir, int type,
+  void hit_dir(utime_t now, CDirFrag *dir, int type,
                int who=-1, double amount=1.0) {}
   void hit_stripe(utime_t now, CStripe *stripe, int type,
                   int who=-1, double amount=1.0) {}

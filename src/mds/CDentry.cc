@@ -16,7 +16,7 @@
 
 #include "CDentry.h"
 #include "CInode.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 #include "Anchor.h"
 
 #include "MDS.h"

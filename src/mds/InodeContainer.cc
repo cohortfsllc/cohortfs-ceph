@@ -79,12 +79,12 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
   assert(stripe);
   // pick the dirfrag
   frag_t fg = stripe->pick_dirfrag(dname);
-  CDir *dir = stripe->get_or_open_dirfrag(fg);
+  CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
   assert(dir);
 
   if (dir->is_freezing_or_frozen()) {
     dout(7) << "waiting on frozen inode container " << *dir << dendl;
-    dir->add_waiter(CDir::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
+    dir->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
     mdr->drop_local_auth_pins();
     return NULL;
   }

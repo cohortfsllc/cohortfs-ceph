@@ -17,7 +17,7 @@
 #include <stdio.h>
 
 #include "CStripe.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 #include "CDentry.h"
 
 #include "MDS.h"
@@ -170,7 +170,7 @@ CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
 unsigned CStripe::get_num_head_items()
 {
   unsigned count = 0;
-  for (map<frag_t, CDir*>::iterator i = dirfrags.begin(); i != dirfrags.end(); ++i)
+  for (map<frag_t, CDirFrag*>::iterator i = dirfrags.begin(); i != dirfrags.end(); ++i)
     count += i->second->get_num_head_items();
   return count;
 }
@@ -178,7 +178,7 @@ unsigned CStripe::get_num_head_items()
 unsigned CStripe::get_num_any()
 {
   unsigned count = 0;
-  for (map<frag_t, CDir*>::iterator i = dirfrags.begin(); i != dirfrags.end(); ++i)
+  for (map<frag_t, CDirFrag*>::iterator i = dirfrags.begin(); i != dirfrags.end(); ++i)
     count += i->second->get_num_any();
   return count;
 }
@@ -223,10 +223,10 @@ frag_t CStripe::pick_dirfrag(const string& dn)
   return dirfragtree[h];
 }
 
-bool CStripe::get_dirfrags_under(frag_t fg, list<CDir*>& ls)
+bool CStripe::get_dirfrags_under(frag_t fg, list<CDirFrag*>& ls)
 {
   bool all = true;
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
+  for (map<frag_t,CDirFrag*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
     if (fg.contains(p->first))
       ls.push_back(p->second);
     else
@@ -238,7 +238,7 @@ bool CStripe::get_dirfrags_under(frag_t fg, list<CDir*>& ls)
 void CStripe::verify_dirfrags() const
 {
   bool bad = false;
-  for (map<frag_t,CDir*>::const_iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
+  for (map<frag_t,CDirFrag*>::const_iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
     if (!dirfragtree.is_leaf(p->first)) {
       dout(0) << "have open dirfrag " << p->first << " but not leaf in " << dirfragtree
 	      << ": " << *p->second << dendl;
@@ -251,7 +251,7 @@ void CStripe::verify_dirfrags() const
 void CStripe::force_dirfrags()
 {
   bool bad = false;
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
+  for (map<frag_t,CDirFrag*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
     if (!dirfragtree.is_leaf(p->first)) {
       dout(0) << "have open dirfrag " << p->first << " but not leaf in " << dirfragtree
 	      << ": " << *p->second << dendl;
@@ -269,13 +269,13 @@ void CStripe::force_dirfrags()
   verify_dirfrags();
 }
 
-CDir *CStripe::get_approx_dirfrag(frag_t fg)
+CDirFrag *CStripe::get_approx_dirfrag(frag_t fg)
 {
-  CDir *dir = get_dirfrag(fg);
+  CDirFrag *dir = get_dirfrag(fg);
   if (dir) return dir;
 
   // find a child?
-  list<CDir*> ls;
+  list<CDirFrag*> ls;
   get_dirfrags_under(fg, ls);
   if (!ls.empty()) 
     return ls.front();
@@ -289,32 +289,32 @@ CDir *CStripe::get_approx_dirfrag(frag_t fg)
   return NULL;
 }	
 
-void CStripe::get_dirfrags(list<CDir*>& ls) 
+void CStripe::get_dirfrags(list<CDirFrag*>& ls) 
 {
   // all dirfrags
-  for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
+  for (map<frag_t,CDirFrag*>::iterator p = dirfrags.begin();
        p != dirfrags.end();
        ++p)
     ls.push_back(p->second);
 }
 
-CDir *CStripe::get_or_open_dirfrag(frag_t fg)
+CDirFrag *CStripe::get_or_open_dirfrag(frag_t fg)
 {
   // have it?
-  CDir *dir = get_dirfrag(fg);
+  CDirFrag *dir = get_dirfrag(fg);
   if (!dir) // create it.
-    dir = add_dirfrag(new CDir(this, fg, mdcache, is_auth()));
+    dir = add_dirfrag(new CDirFrag(this, fg, mdcache, is_auth()));
   return dir;
 }
 
-CDir *CStripe::add_dirfrag(CDir *dir)
+CDirFrag *CStripe::add_dirfrag(CDirFrag *dir)
 {
   assert(dirfrags.count(dir->get_frag()) == 0);
   dirfrags[dir->get_frag()] = dir;
 
   if (stickydir_ref > 0) {
-    dir->state_set(CDir::STATE_STICKY);
-    dir->get(CDir::PIN_STICKY);
+    dir->state_set(CDirFrag::STATE_STICKY);
+    dir->get(CDirFrag::PIN_STICKY);
   }
 
   return dir;
@@ -325,7 +325,7 @@ void CStripe::close_dirfrag(frag_t fg)
   dout(14) << "close_dirfrag " << fg << dendl;
   assert(dirfrags.count(fg));
   
-  CDir *dir = dirfrags[fg];
+  CDirFrag *dir = dirfrags[fg];
   dir->remove_null_dentries();
   
   // clear dirty flag
@@ -333,12 +333,12 @@ void CStripe::close_dirfrag(frag_t fg)
     dir->mark_clean();
   
   if (stickydir_ref > 0) {
-    dir->state_clear(CDir::STATE_STICKY);
-    dir->put(CDir::PIN_STICKY);
+    dir->state_clear(CDirFrag::STATE_STICKY);
+    dir->put(CDirFrag::PIN_STICKY);
   }
   
   // dump any remaining dentries, for debugging purposes
-  for (CDir::map_t::iterator p = dir->items.begin();
+  for (CDirFrag::map_t::iterator p = dir->items.begin();
        p != dir->items.end();
        ++p) 
     dout(14) << "close_dirfrag LEFTOVER dn " << *p->second << dendl;
@@ -359,11 +359,11 @@ void CStripe::get_stickydirs()
 {
   if (stickydir_ref == 0) {
     get(PIN_STICKYDIRS);
-    for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
+    for (map<frag_t,CDirFrag*>::iterator p = dirfrags.begin();
 	 p != dirfrags.end();
 	 ++p) {
-      p->second->state_set(CDir::STATE_STICKY);
-      p->second->get(CDir::PIN_STICKY);
+      p->second->state_set(CDirFrag::STATE_STICKY);
+      p->second->get(CDirFrag::PIN_STICKY);
     }
   }
   stickydir_ref++;
@@ -375,11 +375,11 @@ void CStripe::put_stickydirs()
   stickydir_ref--;
   if (stickydir_ref == 0) {
     put(PIN_STICKYDIRS);
-    for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
+    for (map<frag_t,CDirFrag*>::iterator p = dirfrags.begin();
 	 p != dirfrags.end();
 	 ++p) {
-      p->second->state_clear(CDir::STATE_STICKY);
-      p->second->put(CDir::PIN_STICKY);
+      p->second->state_clear(CDirFrag::STATE_STICKY);
+      p->second->put(CDirFrag::PIN_STICKY);
     }
   }
 }

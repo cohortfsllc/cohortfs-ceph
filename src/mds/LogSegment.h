@@ -21,7 +21,7 @@
 #include "include/Context.h"
 #include "mdstypes.h"
 #include "CDentry.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 #include "CInode.h"
 #include "CStripe.h"
 
@@ -38,7 +38,7 @@ class LogSegment {
   uint64_t trimmable_at;
 
   // dirty items
-  elist<CDir*>    dirty_dirfrags, new_dirfrags;
+  elist<CDirFrag*>    dirty_dirfrags, new_dirfrags;
   elist<CStripe*> dirty_stripes, new_stripes;
   elist<CInode*>  dirty_inodes;
   elist<CDentry*> dirty_dentries;
@@ -67,8 +67,8 @@ class LogSegment {
   // cons
   LogSegment(loff_t off) :
     offset(off), end(off), num_events(0), trimmable_at(0),
-    dirty_dirfrags(member_offset(CDir, item_dirty)),
-    new_dirfrags(member_offset(CDir, item_new)),
+    dirty_dirfrags(member_offset(CDirFrag, item_dirty)),
+    new_dirfrags(member_offset(CDirFrag, item_new)),
     dirty_stripes(member_offset(CStripe, item_dirty)),
     new_stripes(member_offset(CStripe, item_new)),
     dirty_inodes(member_offset(CInode, item_dirty)),

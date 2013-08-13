@@ -26,7 +26,7 @@
 class LogSegment;
 class Capability;
 class CInode;
-class CDir;
+class CDirFrag;
 class CDentry;
 class CStripe;
 class Session;

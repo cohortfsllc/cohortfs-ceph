@@ -441,7 +441,7 @@ int MDS::init(int wanted_state)
   dout(10) << sizeof(CDentry) << "\tCDentry" << dendl;
   dout(10) << sizeof(elist<void*>::item) << "\t elist<>::item" << dendl;
   dout(10) << sizeof(SimpleLock) << "\t SimpleLock" << dendl;
-  dout(10) << sizeof(CDir) << "\tCDir " << dendl;
+  dout(10) << sizeof(CDirFrag) << "\tCDirFrag " << dendl;
   dout(10) << sizeof(elist<void*>::item) << "\t elist<>::item   *2=" << 2*sizeof(elist<void*>::item) << dendl;
   dout(10) << sizeof(fnode_t) << "\t fnode_t " << dendl;
   dout(10) << sizeof(nest_info_t) << "\t  nest_info_t *2" << dendl;
@@ -748,7 +748,7 @@ void MDS::handle_command(MMonCommand *m)
           if (stripe->is_auth()) {
             frag_t fg;
             if (fg.parse(m->cmd[3].c_str())) {
-              CDir *dir = stripe->get_dirfrag(fg);
+              CDirFrag *dir = stripe->get_dirfrag(fg);
               if (dir) {
                 int by = atoi(m->cmd[4].c_str());
                 if (by)
@@ -1912,10 +1912,10 @@ bool MDS::_dispatch(Message *m)
     if (!stripe->get_parent_stripe()) continue; // must be linked.
     if (!stripe->is_auth()) continue;           // must be auth.
 
-    list<CDir*> ls;
+    list<CDirFrag*> ls;
     stripe->get_dirfrags(ls);
     if (ls.empty()) continue;                // must be an open dir.
-    CDir *dir = ls.front();
+    CDirFrag *dir = ls.front();
     if (dir->get_frag() == frag_t() || (rand() % 3 == 0))
       mdcache->split_dir(dir, 1);
     else

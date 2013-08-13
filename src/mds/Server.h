@@ -115,12 +115,12 @@ public:
   void handle_slave_auth_pin_ack(MDRequest *mdr, MMDSSlaveRequest *ack);
 
   // some helpers
-  CDir *validate_dentry_dir(MDRequest *mdr, CInode *diri, const string& dname);
-  CDir *traverse_to_auth_dir(MDRequest *mdr, vector<CDentry*> &trace, filepath refpath);
-  CDentry *prepare_null_dentry(MDRequest *mdr, CDir *dir, const string& dname, bool okexist=false);
+  CDirFrag *validate_dentry_dir(MDRequest *mdr, CInode *diri, const string& dname);
+  CDirFrag *traverse_to_auth_dir(MDRequest *mdr, vector<CDentry*> &trace, filepath refpath);
+  CDentry *prepare_null_dentry(MDRequest *mdr, CDirFrag *dir, const string& dname, bool okexist=false);
 
   inodeno_t prepare_new_inodeno(MDRequest *mdr, inodeno_t useino);
-  CInode* prepare_new_inode(MDRequest *mdr, CDir *dir, inodeno_t useino, unsigned mode,
+  CInode* prepare_new_inode(MDRequest *mdr, CDirFrag *dir, inodeno_t useino, unsigned mode,
 			    ceph_file_layout *layout=NULL);
 
   void journal_allocated_inos(MDRequest *mdr, EMetaBlob *blob);

@@ -64,18 +64,18 @@
 
 void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
 {
-  set<CDir*> commit;
+  set<CDirFrag*> commit;
   set<CStripe*> stripes;
 
   dout(6) << "LogSegment(" << offset << ").try_to_expire" << dendl;
 
   // commit dirs
-  for (elist<CDir*>::iterator p = new_dirfrags.begin(); !p.end(); ++p) {
+  for (elist<CDirFrag*>::iterator p = new_dirfrags.begin(); !p.end(); ++p) {
     dout(20) << " new_dirfrag " << **p << dendl;
     assert((*p)->is_auth());
     commit.insert(*p);
   }
-  for (elist<CDir*>::iterator p = dirty_dirfrags.begin(); !p.end(); ++p) {
+  for (elist<CDirFrag*>::iterator p = dirty_dirfrags.begin(); !p.end(); ++p) {
     dout(20) << " dirty_dirfrag " << **p << dendl;
     assert((*p)->is_auth());
     commit.insert(*p);
@@ -105,17 +105,17 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
   }
 
   if (!commit.empty()) {
-    for (set<CDir*>::iterator p = commit.begin();
+    for (set<CDirFrag*>::iterator p = commit.begin();
 	 p != commit.end();
 	 ++p) {
-      CDir *dir = *p;
+      CDirFrag *dir = *p;
       assert(dir->is_auth());
       if (dir->can_auth_pin()) {
 	dout(15) << "try_to_expire committing " << *dir << dendl;
 	dir->commit(0, gather_bld.new_sub());
       } else {
 	dout(15) << "try_to_expire waiting for unfreeze on " << *dir << dendl;
-	dir->add_waiter(CDir::WAIT_UNFREEZE, gather_bld.new_sub());
+	dir->add_waiter(CDirFrag::WAIT_UNFREEZE, gather_bld.new_sub());
       }
     }
   }
@@ -389,7 +389,7 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in, bool isnew)
   assert(in->is_base() || static_cast<size_t>(inode.nlink) == in->inode.parents.size());
 }
 
-void EMetaBlob::Dir::apply(MDS *mds, CDir *dir, LogSegment *ls)
+void EMetaBlob::Dir::apply(MDS *mds, CDirFrag *dir, LogSegment *ls)
 {
   dir->set_version(version);
 
@@ -496,7 +496,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     dir_map &dirs = s->second.get_dirs();
     for (dir_map::iterator f = dirs.begin(); f != dirs.end(); ++f) {
       // open the fragment
-      CDir *dir = stripe->get_dirfrag(f->first);
+      CDirFrag *dir = stripe->get_dirfrag(f->first);
       if (!dir) {
         dir = stripe->get_or_open_dirfrag(f->first);
         dout(10) << "EMetaBlob.replay added " << *dir << dendl;
@@ -998,7 +998,7 @@ void EFragment::replay(MDS *mds)
 {
   dout(10) << "EFragment.replay " << op_name(op) << " " << dirfrag << " by " << bits << dendl;
 
-  list<CDir*> resultfrags;
+  list<CDirFrag*> resultfrags;
   list<Context*> waiters;
   pair<dirfrag_t,int> desc(dirfrag, bits);
 

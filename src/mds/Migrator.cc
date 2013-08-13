@@ -15,7 +15,7 @@
 #include "MDS.h"
 #include "MDCache.h"
 #include "CInode.h"
-#include "CDir.h"
+#include "CDirFrag.h"
 #include "CDentry.h"
 #include "Migrator.h"
 #include "Locker.h"

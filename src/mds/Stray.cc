@@ -132,12 +132,12 @@ void Stray::eval(CStripe *stripe)
     dout(20) << " already purging" << dendl;
     return;
   }
-  list<CDir*> dirs;
+  list<CDirFrag*> dirs;
   stripe->get_dirfrags(dirs);
-  for (list<CDir*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
-    CDir *dir = *d;
+  for (list<CDirFrag*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
+    CDirFrag *dir = *d;
     // allow pins that are dropped by CStripe::close_dirfrag()
-    int allowed = dir->is_dirty() + dir->state_test(CDir::STATE_STICKY);
+    int allowed = dir->is_dirty() + dir->state_test(CDirFrag::STATE_STICKY);
     if (dir->get_num_ref() > allowed) {
       dout(20) << " open dirfrag " << *dir << dendl;
       return;
@@ -265,7 +265,7 @@ void Stray::purge(CStripe *stripe)
   list<frag_t> frags;
   stripe->get_fragtree().get_leaves(frags);
   for (list<frag_t>::iterator fg = frags.begin(); fg != frags.end(); ++fg) {
-    CDir *dir = stripe->get_dirfrag(*fg);
+    CDirFrag *dir = stripe->get_dirfrag(*fg);
     if (dir && !dir->item_new.empty())
       continue;
     dout(10) << "removing dir " << ds << "." << *fg << dendl;
@@ -340,7 +340,7 @@ void Stray::logged(CDentry *dn, CInode *in)
   assert(!in->state_test(CInode::STATE_RECOVERING));
 
   // unlink
-  CDir *dir = dn->get_dir();
+  CDirFrag *dir = dn->get_dir();
   assert(dn->get_projected_linkage()->is_null());
   dir->unlink_inode(dn);
   dn->pop_projected_linkage();

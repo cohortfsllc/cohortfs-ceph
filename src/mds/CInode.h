@@ -41,7 +41,7 @@ using namespace std;
 
 class Context;
 class CDentry;
-class CDir;
+class CDirFrag;
 class CInode;
 class CStripe;
 class Message;
@@ -429,7 +429,7 @@ public:
   friend class Locker;
   friend class Migrator;
   friend class MDCache;
-  friend class CDir;
+  friend class CDirFrag;
   friend class CInodeExport;
   friend class EMetaBlob;
 
@@ -472,8 +472,8 @@ public:
   inode_t& get_inode() { return inode; }
   CDentry* get_parent_dn() { return parent; }
   CDentry* get_projected_parent_dn() { return !projected_parent.empty() ? projected_parent.back() : parent; }
-  CDir *get_parent_dir();
-  CDir *get_projected_parent_dir();
+  CDirFrag *get_parent_dir();
+  CDirFrag *get_projected_parent_dir();
   CStripe *get_parent_stripe();
   CStripe *get_projected_parent_stripe();
   CInode *get_parent_inode();

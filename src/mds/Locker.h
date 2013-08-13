@@ -26,7 +26,7 @@ using std::set;
 
 class MDS;
 class Session;
-class CDir;
+class CDirFrag;
 class CInode;
 class CDentry;
 class Mutation;
