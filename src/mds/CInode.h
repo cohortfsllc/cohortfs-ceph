@@ -448,7 +448,6 @@ public:
   bool is_unanchoring() { return state_test(STATE_UNANCHORING); }
   
   bool is_root() { return inode.ino == MDS_INO_ROOT; }
-  bool is_stray() { return MDS_INO_IS_STRAY(inode.ino); }
   bool is_mdsdir() { return MDS_INO_IS_MDSDIR(inode.ino); }
   bool is_base() { return MDS_INO_IS_BASE(inode.ino); }
   bool is_system() { return inode.ino < MDS_INO_SYSTEM_BASE; }
@@ -491,7 +490,6 @@ public:
   void make_path_string_projected(string& s);  
   void make_path(filepath& s);
   void make_anchor_trace(vector<class Anchor>& trace);
-  void name_stray_dentry(string& dname);
 
 
   static object_t get_object_name(inodeno_t ino, frag_t fg, const char *suffix);

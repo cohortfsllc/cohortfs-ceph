@@ -1630,7 +1630,6 @@ void CDir::_committed(version_t v, version_t lrv)
   assert(is_auth());
 
   CInode *inode = get_inode();
-  bool stray = inode->is_stray();
 
   // did we update the parent pointer too?
   if (get_frag() == frag_t() &&     // only counts on first frag
@@ -1686,10 +1685,6 @@ void CDir::_committed(version_t v, version_t lrv)
       if (dn->is_dirty()) {
 	dout(15) << " dir " << committed_version << " >= dn " << dn->get_version() << " now clean " << *dn << dendl;
 	dn->mark_clean();
-
-	// drop clean null stray dentries immediately
-	if (stray &&  dn->get_num_ref() == 0 && dn->get_linkage()->is_null())
-	  remove_dentry(dn);
       } 
     } else {
       dout(15) << " dir " << committed_version << " < dn " << dn->get_version() << " still dirty " << *dn << dendl;

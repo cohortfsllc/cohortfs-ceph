@@ -2054,15 +2054,9 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
   }
 
   CInode *diri = dir->get_inode();
-  if (!mdr->reqid.name.is_mds()) {
-    if (diri->is_system() && !diri->is_root()) {
-      reply_request(mdr, -EROFS);
-      return 0;
-    }
-    if (!diri->is_base() && diri->get_projected_parent_dir()->get_inode()->is_stray()) {
-      reply_request(mdr, -ENOENT);
-      return 0;
-    }
+  if (diri->is_system() && !diri->is_root()) {
+    reply_request(mdr, -EROFS);
+    return 0;
   }
 
   // make a null dentry?
@@ -5625,7 +5619,7 @@ void Server::handle_client_rename(MDRequest *mdr)
       return;
     }
 
-    if (srci == oldin && !srcdn->get_dir()->get_inode()->is_stray()) {
+    if (srci == oldin) {
       reply_request(mdr, 0);  // no-op.  POSIX makes no sense.
       return;
     }
@@ -5654,16 +5648,6 @@ void Server::handle_client_rename(MDRequest *mdr)
       return;
     }
     pdn = pdn->get_dir()->get_inode()->parent;
-  }
-
-  // is this a stray migration, reintegration or merge? (sanity checks!)
-  if (mdr->reqid.name.is_mds() &&
-      !(MDS_INO_IS_MDSDIR(srcpath.get_ino()) &&
-	MDS_INO_IS_STRAY(destpath.get_ino())) &&
-      !(destdnl->is_remote() &&
-	destdnl->get_remote_ino() == srci->ino())) {
-    reply_request(mdr, -EINVAL);  // actually, this won't reply, but whatev.
-    return;
   }
 
   // -- locks --

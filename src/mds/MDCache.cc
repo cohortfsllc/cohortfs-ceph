@@ -7240,13 +7240,6 @@ bool MDCache::can_fragment(CStripe *stripe, list<CDir*>& dirs)
     dout(7) << "can_fragment: cluster degraded, no fragmenting for now" << dendl;
     return false;
   }
-#if 0
-  if (diri->get_parent_dir() &&
-      diri->get_parent_dir()->get_inode()->is_stray()) {
-    dout(7) << "can_fragment: i won't merge|split anything in stray" << dendl;
-    return false;
-  }
-#endif
   inodeno_t ino = stripe->dirstripe().ino;
   if (MDS_INO_IS_MDSDIR(ino) || ino == MDS_INO_CEPH) {
     dout(7) << "can_fragment: i won't fragment the mdsdir or .ceph" << dendl;
@@ -7737,8 +7730,6 @@ void MDCache::show_subtrees(int dbl)
       assert(diri == container.get_inode());
     if (diri->ino() == MDS_INO_MDSDIR(mds->get_nodeid()))
       assert(diri == myin);
-    if (diri->is_stray() && (MDS_INO_STRAY_OWNER(diri->ino()) == mds->get_nodeid()))
-      assert(diri == strays[MDS_INO_STRAY_INDEX(diri->ino())]);
 
     // nested items?
     if (!subtrees[stripe].empty()) {

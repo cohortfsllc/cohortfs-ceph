@@ -650,14 +650,6 @@ void CInode::make_anchor_trace(vector<Anchor>& trace)
     assert(is_base());
 }
 
-void CInode::name_stray_dentry(string& dname)
-{
-  char s[20];
-  snprintf(s, sizeof(s), "%llx", (unsigned long long)inode.ino.val);
-  dname = s;
-}
-
-
 void CInode::_mark_dirty(LogSegment *ls)
 {
   if (!state_test(STATE_DIRTY)) {
