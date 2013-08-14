@@ -65,7 +65,7 @@
 void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
 {
   set<CDirFrag*> commit;
-  set<CStripe*> stripes;
+  set<CDirStripe*> stripes;
 
   dout(6) << "LogSegment(" << offset << ").try_to_expire" << dendl;
 
@@ -80,12 +80,12 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
     assert((*p)->is_auth());
     commit.insert(*p);
   }
-  for (elist<CStripe*>::iterator p = new_stripes.begin(); !p.end(); ++p) {
+  for (elist<CDirStripe*>::iterator p = new_stripes.begin(); !p.end(); ++p) {
     dout(20) << " new_stripe " << **p << dendl;
     assert((*p)->is_auth());
     stripes.insert(*p);
   }
-  for (elist<CStripe*>::iterator p = dirty_stripes.begin(); !p.end(); ++p) {
+  for (elist<CDirStripe*>::iterator p = dirty_stripes.begin(); !p.end(); ++p) {
     dout(20) << " dirty_stripe " << **p << dendl;
     assert((*p)->is_auth());
     stripes.insert(*p);
@@ -121,17 +121,17 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
   }
 
   if (!stripes.empty()) {
-    for (set<CStripe*>::iterator p = stripes.begin();
+    for (set<CDirStripe*>::iterator p = stripes.begin();
 	 p != stripes.end();
 	 ++p) {
-      CStripe *stripe = *p;
+      CDirStripe *stripe = *p;
       assert(stripe->is_auth());
       if (stripe->can_auth_pin()) {
 	dout(15) << "try_to_expire committing " << *stripe << dendl;
 	stripe->commit(gather_bld.new_sub());
       } else {
 	dout(15) << "try_to_expire waiting for unfreeze on " << *stripe << dendl;
-	stripe->add_waiter(CStripe::WAIT_UNFREEZE, gather_bld.new_sub());
+	stripe->add_waiter(CDirStripe::WAIT_UNFREEZE, gather_bld.new_sub());
       }
     }
   }
@@ -296,7 +296,7 @@ EMetaBlob::EMetaBlob(MDLog *mdlog)
 {
 }
 
-void EMetaBlob::add_stripe_context(CStripe *stripe, int mode)
+void EMetaBlob::add_stripe_context(CDirStripe *stripe, int mode)
 {
   MDS *mds = stripe->get_inode()->mdcache->mds;
 
@@ -403,7 +403,7 @@ void EMetaBlob::Dir::apply(MDS *mds, CDirFrag *dir, LogSegment *ls)
   dout(10) << "EMetaBlob.replay updated dir " << *dir << dendl;
 }
 
-static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
+static CDirStripe* open_stripe(MDS *mds, dirstripe_t ds)
 {
   // find/create the inode
   CInode *diri = mds->mdcache->get_inode(ds.ino);
@@ -423,29 +423,29 @@ static CStripe* open_stripe(MDS *mds, dirstripe_t ds)
   }
 
   // find/create the stripe
-  CStripe *stripe = diri->get_stripe(ds.stripeid);
+  CDirStripe *stripe = diri->get_stripe(ds.stripeid);
   if (stripe) {
     dout(10) << "EMetaBlob had " << *stripe << dendl;
   } else {
     int auth = diri->get_stripe_auth(ds.stripeid);
-    stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, auth));
+    stripe = diri->add_stripe(new CDirStripe(diri, ds.stripeid, auth));
     dout(10) << "EMetaBlob added " << *stripe << dendl;
   }
   return stripe;
 }
 
-void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls)
+void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
 {
   stripe->set_stripe_auth(auth);
   if (auth.first == mds->get_nodeid())
-    stripe->state_set(CStripe::STATE_AUTH);
+    stripe->state_set(CDirStripe::STATE_AUTH);
   else
-    stripe->state_clear(CStripe::STATE_AUTH);
+    stripe->state_clear(CDirStripe::STATE_AUTH);
   stripe->fnode = fnode;
   if (is_open())
     stripe->mark_open();
   if (is_unlinked()) {
-    stripe->state_set(CStripe::STATE_UNLINKED);
+    stripe->state_set(CDirStripe::STATE_UNLINKED);
     stripe->clear_dirty_parent_stats();
     if (stripe->is_auth())
       mds->mdcache->add_stray(stripe);
@@ -453,7 +453,7 @@ void EMetaBlob::Stripe::apply(MDS *mds, CStripe *stripe, LogSegment *ls)
   if (is_dirty()) {
     stripe->_mark_dirty(ls);
 
-    if (stripe->is_auth() && !stripe->state_test(CStripe::STATE_UNLINKED) &&
+    if (stripe->is_auth() && !stripe->state_test(CDirStripe::STATE_UNLINKED) &&
         (fnode.rstat.version != fnode.accounted_rstat.version ||
         fnode.fragstat.version != fnode.accounted_fragstat.version))
       mds->mdcache->parentstats.replay_unaccounted(stripe);
@@ -488,7 +488,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   // replay stripes->dirfrags->dentries
   for (stripe_map::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     // open the stripe
-    CStripe *stripe = open_stripe(mds, s->first);
+    CDirStripe *stripe = open_stripe(mds, s->first);
     assert(stripe);
 
     s->second.apply(mds, stripe, logseg);
@@ -651,7 +651,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   for (vector<dirstripe_t>::iterator p = destroyed_stripes.begin();
        p != destroyed_stripes.end();
        p++) {
-    CStripe *stripe = mds->mdcache->get_dirstripe(*p);
+    CDirStripe *stripe = mds->mdcache->get_dirstripe(*p);
     if (stripe) {
       dout(10) << "EMetaBlob.replay destroyed " << *p
           << ", dropping " << *stripe << dendl;
@@ -1005,7 +1005,7 @@ void EFragment::replay(MDS *mds)
   // in may be NULL if it wasn't in our cache yet.  if it's a prepare
   // it will be once we replay the metablob , but first we need to
   // refragment anything we already have in the cache.
-  CStripe *stripe = mds->mdcache->get_dirstripe(dirfrag.stripe);
+  CDirStripe *stripe = mds->mdcache->get_dirstripe(dirfrag.stripe);
 
   switch (op) {
   case OP_PREPARE:
@@ -1047,11 +1047,11 @@ void EResetJournal::replay(MDS *mds)
   mds->inotable->replay_reset();
 
   if (mds->mdsmap->get_root() == mds->whoami) {
-    CStripe *rootstripe = mds->mdcache->get_root()->get_or_open_stripe(0);
+    CDirStripe *rootstripe = mds->mdcache->get_root()->get_or_open_stripe(0);
     rootstripe->set_stripe_auth(mds->whoami);
   }
 
-  CStripe *mystripe = mds->mdcache->get_myin()->get_or_open_stripe(0);
+  CDirStripe *mystripe = mds->mdcache->get_myin()->get_or_open_stripe(0);
   mystripe->set_stripe_auth(mds->whoami);
 }
 

@@ -16,7 +16,7 @@
 #include <string>
 #include <stdio.h>
 
-#include "CStripe.h"
+#include "CDirStripe.h"
 #include "CDirFrag.h"
 #include "CDentry.h"
 
@@ -48,18 +48,18 @@
 #define dout_prefix *_dout << "mds." << mdcache->mds->get_nodeid() << ".cache.stripe(" << dirstripe() << ") "
 
 
-boost::pool<> CStripe::pool(sizeof(CStripe));
+boost::pool<> CDirStripe::pool(sizeof(CDirStripe));
 
-LockType CStripe::dirfragtreelock_type(CEPH_LOCK_SDFT);
-LockType CStripe::linklock_type(CEPH_LOCK_SLINK);
-LockType CStripe::nestlock_type(CEPH_LOCK_SNEST);
+LockType CDirStripe::dirfragtreelock_type(CEPH_LOCK_SDFT);
+LockType CDirStripe::linklock_type(CEPH_LOCK_SLINK);
+LockType CDirStripe::nestlock_type(CEPH_LOCK_SNEST);
 
-ostream& CStripe::print_db_line_prefix(ostream& out)
+ostream& CDirStripe::print_db_line_prefix(ostream& out)
 {
   return out << ceph_clock_now(g_ceph_context) << " mds." << mdcache->mds->get_nodeid() << ".cache.stripe(" << dirstripe() << ") ";
 }
 
-ostream& operator<<(ostream& out, CStripe &s)
+ostream& operator<<(ostream& out, CDirStripe &s)
 {
   string path;
   s.get_inode()->make_path_string_projected(path);
@@ -116,13 +116,13 @@ ostream& operator<<(ostream& out, CStripe &s)
       out << "/" << pf->accounted_rstat;
   }
 
-  if (s.state_test(CStripe::STATE_OPEN)) out << " OPEN";
-  if (s.state_test(CStripe::STATE_DIRTY)) out << " DIRTY";
-  if (s.state_test(CStripe::STATE_FREEZING)) out << " FREEZING";
-  if (s.state_test(CStripe::STATE_FROZEN)) out << " FROZEN";
-  if (s.state_test(CStripe::STATE_COMMITTING)) out << " COMMITTING";
-  if (s.state_test(CStripe::STATE_UNLINKED)) out << " UNLINKED";
-  if (s.state_test(CStripe::STATE_PURGING)) out << " PURGING";
+  if (s.state_test(CDirStripe::STATE_OPEN)) out << " OPEN";
+  if (s.state_test(CDirStripe::STATE_DIRTY)) out << " DIRTY";
+  if (s.state_test(CDirStripe::STATE_FREEZING)) out << " FREEZING";
+  if (s.state_test(CDirStripe::STATE_FROZEN)) out << " FROZEN";
+  if (s.state_test(CDirStripe::STATE_COMMITTING)) out << " COMMITTING";
+  if (s.state_test(CDirStripe::STATE_UNLINKED)) out << " UNLINKED";
+  if (s.state_test(CDirStripe::STATE_PURGING)) out << " PURGING";
 
   if (s.is_rep()) out << " REP";
 
@@ -136,13 +136,13 @@ ostream& operator<<(ostream& out, CStripe &s)
   return out;
 }
 
-void CStripe::print(ostream& out)
+void CDirStripe::print(ostream& out)
 {
   out << *this;
 }
 
 
-CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
+CDirStripe::CDirStripe(CInode *in, stripeid_t stripeid, int auth)
   : mdcache(in->mdcache),
     inode(in),
     ds(in->ino(), stripeid),
@@ -167,7 +167,7 @@ CStripe::CStripe(CInode *in, stripeid_t stripeid, int auth)
 }
 
 
-unsigned CStripe::get_num_head_items()
+unsigned CDirStripe::get_num_head_items()
 {
   unsigned count = 0;
   for (map<frag_t, CDirFrag*>::iterator i = dirfrags.begin(); i != dirfrags.end(); ++i)
@@ -175,7 +175,7 @@ unsigned CStripe::get_num_head_items()
   return count;
 }
 
-unsigned CStripe::get_num_any()
+unsigned CDirStripe::get_num_any()
 {
   unsigned count = 0;
   for (map<frag_t, CDirFrag*>::iterator i = dirfrags.begin(); i != dirfrags.end(); ++i)
@@ -184,7 +184,7 @@ unsigned CStripe::get_num_any()
 }
 
 // fragstat/rstat
-fnode_t *CStripe::project_fnode()
+fnode_t *CDirStripe::project_fnode()
 {
   fnode_t *p = new fnode_t;
   *p = *get_projected_fnode();
@@ -194,7 +194,7 @@ fnode_t *CStripe::project_fnode()
   return p;
 }
 
-void CStripe::pop_and_dirty_projected_fnode(LogSegment *ls)
+void CDirStripe::pop_and_dirty_projected_fnode(LogSegment *ls)
 {
   assert(!projected_fnode.empty());
   dout(15) << "pop_and_dirty_projected_fnode " << projected_fnode.front()
@@ -209,12 +209,12 @@ void CStripe::pop_and_dirty_projected_fnode(LogSegment *ls)
 
 // dirfrags
 
-frag_t CStripe::pick_dirfrag(__u32 dnhash)
+frag_t CDirStripe::pick_dirfrag(__u32 dnhash)
 {
   return dirfragtree[dnhash];
 }
 
-frag_t CStripe::pick_dirfrag(const string& dn)
+frag_t CDirStripe::pick_dirfrag(const string& dn)
 {
   if (dirfragtree.empty())
     return frag_t();          // avoid the string hash if we can.
@@ -223,7 +223,7 @@ frag_t CStripe::pick_dirfrag(const string& dn)
   return dirfragtree[h];
 }
 
-bool CStripe::get_dirfrags_under(frag_t fg, list<CDirFrag*>& ls)
+bool CDirStripe::get_dirfrags_under(frag_t fg, list<CDirFrag*>& ls)
 {
   bool all = true;
   for (map<frag_t,CDirFrag*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
@@ -235,7 +235,7 @@ bool CStripe::get_dirfrags_under(frag_t fg, list<CDirFrag*>& ls)
   return all;
 }
 
-void CStripe::verify_dirfrags() const
+void CDirStripe::verify_dirfrags() const
 {
   bool bad = false;
   for (map<frag_t,CDirFrag*>::const_iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
@@ -248,7 +248,7 @@ void CStripe::verify_dirfrags() const
   assert(!bad);
 }
 
-void CStripe::force_dirfrags()
+void CDirStripe::force_dirfrags()
 {
   bool bad = false;
   for (map<frag_t,CDirFrag*>::iterator p = dirfrags.begin(); p != dirfrags.end(); ++p) {
@@ -269,7 +269,7 @@ void CStripe::force_dirfrags()
   verify_dirfrags();
 }
 
-CDirFrag *CStripe::get_approx_dirfrag(frag_t fg)
+CDirFrag *CDirStripe::get_approx_dirfrag(frag_t fg)
 {
   CDirFrag *dir = get_dirfrag(fg);
   if (dir) return dir;
@@ -289,7 +289,7 @@ CDirFrag *CStripe::get_approx_dirfrag(frag_t fg)
   return NULL;
 }	
 
-void CStripe::get_dirfrags(list<CDirFrag*>& ls) 
+void CDirStripe::get_dirfrags(list<CDirFrag*>& ls) 
 {
   // all dirfrags
   for (map<frag_t,CDirFrag*>::iterator p = dirfrags.begin();
@@ -298,7 +298,7 @@ void CStripe::get_dirfrags(list<CDirFrag*>& ls)
     ls.push_back(p->second);
 }
 
-CDirFrag *CStripe::get_or_open_dirfrag(frag_t fg)
+CDirFrag *CDirStripe::get_or_open_dirfrag(frag_t fg)
 {
   // have it?
   CDirFrag *dir = get_dirfrag(fg);
@@ -307,7 +307,7 @@ CDirFrag *CStripe::get_or_open_dirfrag(frag_t fg)
   return dir;
 }
 
-CDirFrag *CStripe::add_dirfrag(CDirFrag *dir)
+CDirFrag *CDirStripe::add_dirfrag(CDirFrag *dir)
 {
   assert(dirfrags.count(dir->get_frag()) == 0);
   dirfrags[dir->get_frag()] = dir;
@@ -320,7 +320,7 @@ CDirFrag *CStripe::add_dirfrag(CDirFrag *dir)
   return dir;
 }
 
-void CStripe::close_dirfrag(frag_t fg)
+void CDirStripe::close_dirfrag(frag_t fg)
 {
   dout(14) << "close_dirfrag " << fg << dendl;
   assert(dirfrags.count(fg));
@@ -348,14 +348,14 @@ void CStripe::close_dirfrag(frag_t fg)
   dirfrags.erase(fg);
 }
 
-void CStripe::close_dirfrags()
+void CDirStripe::close_dirfrags()
 {
   while (!dirfrags.empty()) 
     close_dirfrag(dirfrags.begin()->first);
 }
 
 
-void CStripe::get_stickydirs()
+void CDirStripe::get_stickydirs()
 {
   if (stickydir_ref == 0) {
     get(PIN_STICKYDIRS);
@@ -369,7 +369,7 @@ void CStripe::get_stickydirs()
   stickydir_ref++;
 }
 
-void CStripe::put_stickydirs()
+void CDirStripe::put_stickydirs()
 {
   assert(stickydir_ref > 0);
   stickydir_ref--;
@@ -387,13 +387,13 @@ void CStripe::put_stickydirs()
 
 // locks
 
-void CStripe::set_object_info(MDSCacheObjectInfo &info)
+void CDirStripe::set_object_info(MDSCacheObjectInfo &info)
 {
   info.ino = ds.ino;
   info.dirfrag.stripe = ds;
 }
 
-void CStripe::encode_lock_state(int type, bufferlist& bl)
+void CDirStripe::encode_lock_state(int type, bufferlist& bl)
 {
   if (!is_auth())
    return;
@@ -411,7 +411,7 @@ void CStripe::encode_lock_state(int type, bufferlist& bl)
   }
 }
 
-void CStripe::decode_lock_state(int type, bufferlist& bl)
+void CDirStripe::decode_lock_state(int type, bufferlist& bl)
 {
   if (is_auth())
     return;
@@ -433,27 +433,27 @@ void CStripe::decode_lock_state(int type, bufferlist& bl)
 
 // pins
 
-void CStripe::first_get()
+void CDirStripe::first_get()
 {
   inode->get(CInode::PIN_STRIPE);
 }
 
-void CStripe::last_put()
+void CDirStripe::last_put()
 {
   inode->put(CInode::PIN_STRIPE);
 }
 
-CStripe *CStripe::get_parent_stripe()
+CDirStripe *CDirStripe::get_parent_stripe()
 {
   return inode ? inode->get_parent_stripe() : NULL;
 }
 
-CStripe *CStripe::get_projected_parent_stripe()
+CDirStripe *CDirStripe::get_projected_parent_stripe()
 {
   return inode ? inode->get_projected_parent_stripe() : NULL;
 }
 
-bool CStripe::contains(CStripe *stripe)
+bool CDirStripe::contains(CDirStripe *stripe)
 {
   while (stripe) {
     if (stripe == this)
@@ -464,14 +464,14 @@ bool CStripe::contains(CStripe *stripe)
 }
 
 
-void CStripe::mark_dirty(LogSegment *ls)
+void CDirStripe::mark_dirty(LogSegment *ls)
 {
   fnode.version++;
   dout(10) << "mark_dirty " << *this << dendl;
   _mark_dirty(ls);
 }
 
-void CStripe::_mark_dirty(LogSegment *ls)
+void CDirStripe::_mark_dirty(LogSegment *ls)
 {
   if (!state_test(STATE_DIRTY)) {
     state_set(STATE_DIRTY);
@@ -489,7 +489,7 @@ void CStripe::_mark_dirty(LogSegment *ls)
   }
 }
 
-void CStripe::mark_clean()
+void CDirStripe::mark_clean()
 {
   dout(10) << "mark_clean " << *this << dendl;
   if (state_test(STATE_DIRTY)) {
@@ -501,22 +501,22 @@ void CStripe::mark_clean()
   }
 }
 
-void CStripe::mark_new(LogSegment *ls)
+void CDirStripe::mark_new(LogSegment *ls)
 {
   dout(10) << "mark_new " << *this << dendl;
 
   ls->new_stripes.push_back(&item_new);
 }
 
-void CStripe::clear_dirty_parent_stats()
+void CDirStripe::clear_dirty_parent_stats()
 {
-  if (state_test(CStripe::STATE_DIRTYFRAGSTAT)) {
-    state_clear(CStripe::STATE_DIRTYFRAGSTAT);
-    put(CStripe::PIN_DIRTYFRAGSTAT);
+  if (state_test(CDirStripe::STATE_DIRTYFRAGSTAT)) {
+    state_clear(CDirStripe::STATE_DIRTYFRAGSTAT);
+    put(CDirStripe::PIN_DIRTYFRAGSTAT);
   }
-  if (state_test(CStripe::STATE_DIRTYRSTAT)) {
-    state_clear(CStripe::STATE_DIRTYRSTAT);
-    put(CStripe::PIN_DIRTYRSTAT);
+  if (state_test(CDirStripe::STATE_DIRTYRSTAT)) {
+    state_clear(CDirStripe::STATE_DIRTYRSTAT);
+    put(CDirStripe::PIN_DIRTYRSTAT);
   }
   item_dirty_rstat.remove_myself();
 }
@@ -526,9 +526,9 @@ void CStripe::clear_dirty_parent_stats()
 // stripe storage
 
 struct C_Stripe_Committed : public Context {
-  CStripe *stripe;
+  CDirStripe *stripe;
   Context *fin;
-  C_Stripe_Committed(CStripe *stripe, Context *fin)
+  C_Stripe_Committed(CDirStripe *stripe, Context *fin)
       : stripe(stripe), fin(fin) {}
   void finish(int r) {
     stripe->_committed();
@@ -536,7 +536,7 @@ struct C_Stripe_Committed : public Context {
   }
 };
 
-void CStripe::commit(Context *fin)
+void CDirStripe::commit(Context *fin)
 {
   dout(10) << "commit " << *this << dendl;
 
@@ -565,7 +565,7 @@ void CStripe::commit(Context *fin)
 				 new C_Stripe_Committed(this, fin));
 }
 
-void CStripe::_committed()
+void CDirStripe::_committed()
 {
   assert(state_test(STATE_COMMITTING));
   state_clear(STATE_COMMITTING);
@@ -575,10 +575,10 @@ void CStripe::_committed()
 }
 
 struct C_Stripe_Fetched : public Context {
-  CStripe *stripe;
+  CDirStripe *stripe;
   bufferlist bl;
   Context *fin;
-  C_Stripe_Fetched(CStripe *stripe, Context *fin)
+  C_Stripe_Fetched(CDirStripe *stripe, Context *fin)
       : stripe(stripe), fin(fin) {}
   void finish(int r) {
     assert(r == 0);
@@ -587,7 +587,7 @@ struct C_Stripe_Fetched : public Context {
   }
 };
 
-void CStripe::fetch(Context *fin)
+void CDirStripe::fetch(Context *fin)
 {
   dout(10) << "fetch" << dendl;
   assert(is_auth());
@@ -599,7 +599,7 @@ void CStripe::fetch(Context *fin)
   mdcache->mds->objecter->read(oid, oloc, 0, 0, CEPH_NOSNAP, &c->bl, 0, c);
 }
 
-int CStripe::_fetched(bufferlist& bl)
+int CDirStripe::_fetched(bufferlist& bl)
 {
   dout(10) << "_fetched got " << bl.length() << dendl;
 
@@ -624,7 +624,7 @@ int CStripe::_fetched(bufferlist& bl)
 
 // replication
 
-void CStripe::encode_export(bufferlist& bl)
+void CDirStripe::encode_export(bufferlist& bl)
 {
   assert(!is_projected());
   ::encode(first, bl);
@@ -639,7 +639,7 @@ void CStripe::encode_export(bufferlist& bl)
   get(PIN_TEMPEXPORTING);
 }
 
-void CStripe::decode_import(bufferlist::iterator& blp, utime_t now)
+void CDirStripe::decode_import(bufferlist::iterator& blp, utime_t now)
 {
   ::decode(first, blp);
   ::decode(fnode, blp);
@@ -660,12 +660,12 @@ void CStripe::decode_import(bufferlist::iterator& blp, utime_t now)
   replica_nonce = 0;  // no longer defined
 }
 
-void CStripe::finish_export(utime_t now)
+void CDirStripe::finish_export(utime_t now)
 {
   put(PIN_TEMPEXPORTING);
 }
 
-void CStripe::abort_export()
+void CDirStripe::abort_export()
 {
   put(PIN_TEMPEXPORTING);
 }
@@ -673,7 +673,7 @@ void CStripe::abort_export()
 
 // freezing
 
-bool CStripe::freeze()
+bool CDirStripe::freeze()
 {
   auth_pin(this); // auth pin while freezing
   if (auth_pins > 1) {
@@ -687,7 +687,7 @@ bool CStripe::freeze()
   return true;
 }
 
-void CStripe::_freeze()
+void CDirStripe::_freeze()
 {
   state_clear(STATE_FREEZING);
   state_set(STATE_FROZEN);
@@ -696,7 +696,7 @@ void CStripe::_freeze()
   dout(10) << "stripe frozen " << *this << dendl;
 }
 
-void CStripe::unfreeze()
+void CDirStripe::unfreeze()
 {
   if (state_test(STATE_FROZEN)) {
     state_clear(STATE_FROZEN);
@@ -716,7 +716,7 @@ void CStripe::unfreeze()
   }
 }
 
-void CStripe::maybe_finish_freeze()
+void CDirStripe::maybe_finish_freeze()
 {
   if (is_freezing() && auth_pins == 1) {
     _freeze();
@@ -725,7 +725,7 @@ void CStripe::maybe_finish_freeze()
   }
 }
 
-void CStripe::add_waiter(uint64_t tag, Context *c)
+void CDirStripe::add_waiter(uint64_t tag, Context *c)
 {
   dout(10) << "add_waiter tag " << std::hex << tag << std::dec << " " << c
 	   << " !ambig " << !is_ambiguous_stripe_auth()
@@ -746,7 +746,7 @@ void CStripe::add_waiter(uint64_t tag, Context *c)
 
 // auth_pins
 
-void CStripe::auth_pin(void *by)
+void CDirStripe::auth_pin(void *by)
 {
   if (auth_pins == 0)
     get(PIN_AUTHPIN);
@@ -760,7 +760,7 @@ void CStripe::auth_pin(void *by)
 	   << " now " << auth_pins << dendl;
 }
 
-void CStripe::auth_unpin(void *by) 
+void CDirStripe::auth_unpin(void *by) 
 {
   auth_pins--;
 
@@ -781,7 +781,7 @@ void CStripe::auth_unpin(void *by)
 }
 
 
-void CStripe::set_stripe_auth(const pair<int, int> &a)
+void CDirStripe::set_stripe_auth(const pair<int, int> &a)
 {
   dout(10) << "setting stripe_auth=" << a
       << " from " << stripe_auth << " on " << *this << dendl;

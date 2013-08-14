@@ -28,7 +28,7 @@ class Capability;
 class CInode;
 class CDirFrag;
 class CDentry;
-class CStripe;
+class CDirStripe;
 class Session;
 class ScatterLock;
 class MClientRequest;
@@ -74,7 +74,7 @@ struct Mutation {
 
   // for applying projected inode changes
   list<CInode*> projected_inodes;
-  list<CStripe*> projected_fnodes;
+  list<CDirStripe*> projected_fnodes;
   list<ScatterLock*> updated_locks;
 
   list<CInode*> dirty_cow_inodes;
@@ -129,7 +129,7 @@ struct Mutation {
   void drop_local_auth_pins();
   void add_projected_inode(CInode *in);
   void pop_and_dirty_projected_inodes();
-  void add_projected_fnode(CStripe *stripe);
+  void add_projected_fnode(CDirStripe *stripe);
   void pop_and_dirty_projected_fnodes();
   void add_updated_lock(ScatterLock *lock);
   void add_cow_inode(CInode *in);
@@ -299,7 +299,7 @@ struct MDSlaveUpdate {
   bufferlist rollback;
   elist<MDSlaveUpdate*>::item item;
   Context *waiter;
-  set<CStripe*> oldstripes;
+  set<CDirStripe*> oldstripes;
   set<CInode*> unlinked;
   MDSlaveUpdate(int oo, bufferlist &rbl, elist<MDSlaveUpdate*> &list) :
     origop(oo),

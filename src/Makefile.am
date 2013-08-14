@@ -1342,8 +1342,8 @@ libmds_a_SOURCES = \
 	mds/MDBalancer.cc \
 	mds/CDentry.cc \
 	mds/CDirFrag.cc \
+	mds/CDirStripe.cc \
 	mds/CInode.cc \
-	mds/CStripe.cc \
 	mds/LogEvent.cc \
 	mds/MDSTable.cc \
 	mds/InoTable.cc \
@@ -1654,8 +1654,8 @@ noinst_HEADERS = \
         mds/AnchorServer.h\
         mds/CDentry.h\
         mds/CDirFrag.h\
+        mds/CDirStripe.h\
         mds/CInode.h\
-        mds/CStripe.h\
         mds/Capability.h\
 	mds/Dumper.h\
         mds/InoTable.h\

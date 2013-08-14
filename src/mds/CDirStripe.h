@@ -12,8 +12,8 @@
  * 
  */
 
-#ifndef CEPH_CSTRIPE_H
-#define CEPH_CSTRIPE_H
+#ifndef CEPH_CDIRSTRIPE_H
+#define CEPH_CDIRSTRIPE_H
 
 #include "include/types.h"
 #include "include/buffer.h"
@@ -32,8 +32,8 @@ class CDirFrag;
 class Context;
 class MDCache;
 
-ostream& operator<<(ostream& out, class CStripe& stripe);
-class CStripe : public MDSCacheObject {
+ostream& operator<<(ostream& out, class CDirStripe& stripe);
+class CDirStripe : public MDSCacheObject {
   /*
    * This class uses a boost::pool to handle allocation. This is *not*
    * thread-safe, so don't do allocations from multiple threads!
@@ -120,10 +120,10 @@ class CStripe : public MDSCacheObject {
   friend class Migrator;
 
  public:
-  CStripe(CInode *in, stripeid_t stripe, int auth);
+  CDirStripe(CInode *in, stripeid_t stripe, int auth);
 
   bool is_lt(const MDSCacheObject *r) const {
-    return dirstripe() < ((const CStripe*)r)->dirstripe();
+    return dirstripe() < ((const CDirStripe*)r)->dirstripe();
   }
 
 
@@ -132,10 +132,10 @@ class CStripe : public MDSCacheObject {
   dirstripe_t dirstripe() const { return ds; }
   stripeid_t get_stripeid() const { return ds.stripeid; }
 
-  CStripe* get_parent_stripe();
-  CStripe* get_projected_parent_stripe();
+  CDirStripe* get_parent_stripe();
+  CDirStripe* get_projected_parent_stripe();
 
-  bool contains(CStripe *stripe);
+  bool contains(CDirStripe *stripe);
 
   void first_get();
   void last_put();
@@ -154,10 +154,10 @@ class CStripe : public MDSCacheObject {
   list<fnode_t*> projected_fnode;
 
  public:
-  elist<CStripe*>::item item_dirty, item_new;
-  elist<CStripe*>::item item_stray;
-  elist<CStripe*>::item item_dirty_rstat;
-  elist<CStripe*>::item item_nonauth;
+  elist<CDirStripe*>::item item_dirty, item_new;
+  elist<CDirStripe*>::item item_stray;
+  elist<CDirStripe*>::item item_dirty_rstat;
+  elist<CDirStripe*>::item item_nonauth;
 
   version_t get_version() const { return fnode.version; }
   void set_version(version_t v) {

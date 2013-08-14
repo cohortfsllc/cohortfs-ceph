@@ -20,7 +20,7 @@
 
 class CDentry;
 class CInode;
-class CStripe;
+class CDirStripe;
 class Context;
 class MDCache;
 class MDRequest;
@@ -34,7 +34,7 @@ class InodeContainer {
   MDCache *mdcache;
 
   CInode *in; // container inode or replica
-  CStripe *stripe; // container stripe for this mds
+  CDirStripe *stripe; // container stripe for this mds
 
   std::set<int> pending_restripe_ack; // mds nodes pending restripe_ack
   Context *pending_restripe_finish;
@@ -52,7 +52,7 @@ class InodeContainer {
         pending_restripe_finish(0) {}
 
   CInode* get_inode() { return in; }
-  CStripe* get_stripe() { return stripe; }
+  CDirStripe* get_stripe() { return stripe; }
 
   // create the container inode
   CInode* create();

@@ -22,7 +22,7 @@
 
 class CDirFrag;
 class CInode;
-class CStripe;
+class CDirStripe;
 class MDS;
 class Message;
 
@@ -44,7 +44,7 @@ class MDBalancer {
   void hit_inode(utime_t now, CInode *in, int type, int who=-1) {}
   void hit_dir(utime_t now, CDirFrag *dir, int type,
                int who=-1, double amount=1.0) {}
-  void hit_stripe(utime_t now, CStripe *stripe, int type,
+  void hit_stripe(utime_t now, CDirStripe *stripe, int type,
                   int who=-1, double amount=1.0) {}
 };
 

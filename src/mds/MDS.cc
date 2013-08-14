@@ -743,7 +743,7 @@ void MDS::handle_command(MMonCommand *m)
       CInode *in = mdcache->cache_traverse(fp);
       if (in) {
         stripeid_t stripeid = atoi(m->cmd[2].c_str());
-        CStripe *stripe = in->get_stripe(stripeid);
+        CDirStripe *stripe = in->get_stripe(stripeid);
         if (stripe) {
           if (stripe->is_auth()) {
             frag_t fg;
@@ -767,7 +767,7 @@ void MDS::handle_command(MMonCommand *m)
       CInode *in = mdcache->cache_traverse(fp);
       if (in) {
         stripeid_t stripeid = atoi(m->cmd[2].c_str());
-        CStripe *stripe = in->get_stripe(stripeid);
+        CDirStripe *stripe = in->get_stripe(stripeid);
         if (stripe) {
           if (stripe->is_auth()) {
             frag_t fg;
@@ -1905,10 +1905,10 @@ bool MDS::_dispatch(Message *m)
     CInode *in = mdcache->hack_pick_random_inode();
 
     // random stripe
-    list<CStripe*> stripes;
+    list<CDirStripe*> stripes;
     in->get_stripes(stripes);
     if (stripes.empty()) continue;
-    CStripe *stripe = stripes.front();
+    CDirStripe *stripe = stripes.front();
     if (!stripe->get_parent_stripe()) continue; // must be linked.
     if (!stripe->is_auth()) continue;           // must be auth.
 

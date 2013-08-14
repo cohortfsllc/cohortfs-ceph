@@ -26,7 +26,7 @@ using std::list;
 
 
 class MDS;
-class CStripe;
+class CDirStripe;
 class CInode;
 class CDentry;
 

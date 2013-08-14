@@ -16,7 +16,7 @@
 
 #include "CDentry.h"
 #include "CInode.h"
-#include "CStripe.h"
+#include "CDirStripe.h"
 #include "MDCache.h"
 #include "MDLog.h"
 #include "MDS.h"
@@ -34,7 +34,7 @@
 Stray::Stray(MDS *mds)
   : mds(mds),
     inodes(member_offset(CInode, item_stray)),
-    stripes(member_offset(CStripe, item_stray))
+    stripes(member_offset(CDirStripe, item_stray))
 {
 }
 
@@ -43,7 +43,7 @@ void Stray::add(CInode *in)
   inodes.push_back(&in->item_stray);
 }
 
-void Stray::add(CStripe *stripe)
+void Stray::add(CDirStripe *stripe)
 {
   stripes.push_back(&stripe->item_stray);
 }
@@ -52,8 +52,8 @@ void Stray::scan()
 {
   dout(10) << "scan" << dendl;
 
-  for (elist<CStripe*>::iterator s = stripes.begin(); !s.end(); ++s) {
-    CStripe *stripe = *s;
+  for (elist<CDirStripe*>::iterator s = stripes.begin(); !s.end(); ++s) {
+    CDirStripe *stripe = *s;
     stripe->item_stray.remove_myself();
     eval(stripe);
   }
@@ -91,11 +91,11 @@ void Stray::eval(CInode *in)
     dout(20) << " caps | leases" << dendl;
     return; // wait
   }
-  list<CStripe*> stripes;
+  list<CDirStripe*> stripes;
   in->get_stripes(stripes);
   if (!stripes.empty()) {
     dout(20) << " open stripes" << dendl;
-    for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s)
+    for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s)
       eval(*s);
     return; // wait for stripes to close/trim
   }
@@ -120,15 +120,15 @@ void Stray::eval(CInode *in)
   purge(in);
 }
 
-void Stray::eval(CStripe *stripe)
+void Stray::eval(CDirStripe *stripe)
 {
   dout(10) << "eval " << *stripe << dendl;
 
-  if (!stripe->state_test(CStripe::STATE_UNLINKED)) { // rmdir rollback
+  if (!stripe->state_test(CDirStripe::STATE_UNLINKED)) { // rmdir rollback
     dout(20) << " linked" << dendl;
     return;
   }
-  if (stripe->state_test(CStripe::STATE_PURGING)) {
+  if (stripe->state_test(CDirStripe::STATE_PURGING)) {
     dout(20) << " already purging" << dendl;
     return;
   }
@@ -136,7 +136,7 @@ void Stray::eval(CStripe *stripe)
   stripe->get_dirfrags(dirs);
   for (list<CDirFrag*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
     CDirFrag *dir = *d;
-    // allow pins that are dropped by CStripe::close_dirfrag()
+    // allow pins that are dropped by CDirStripe::close_dirfrag()
     int allowed = dir->is_dirty() + dir->state_test(CDirFrag::STATE_STICKY);
     if (dir->get_num_ref() > allowed) {
       dout(20) << " open dirfrag " << *dir << dendl;
@@ -145,8 +145,8 @@ void Stray::eval(CStripe *stripe)
   }
   // allow pins that are dropped by CInode::close_stripe()
   int allowed = stripe->is_dirty() + dirs.size() +
-      !!stripe->state_test(CStripe::STATE_DIRTYFRAGSTAT) +
-      !!stripe->state_test(CStripe::STATE_DIRTYRSTAT);
+      !!stripe->state_test(CDirStripe::STATE_DIRTYFRAGSTAT) +
+      !!stripe->state_test(CDirStripe::STATE_DIRTYRSTAT);
   if (stripe->get_num_ref() > allowed) {
     dout(20) << " too many refs: " << stripe->get_num_ref()
        << " > " << allowed << dendl;
@@ -161,11 +161,11 @@ class C_StrayPurged : public Context {
  private:
   Stray *stray;
   CInode *in;
-  CStripe *stripe;
+  CDirStripe *stripe;
  public:
   C_StrayPurged(Stray *stray, CInode *in)
       : stray(stray), in(in), stripe(NULL) {}
-  C_StrayPurged(Stray *stray, CStripe *stripe)
+  C_StrayPurged(Stray *stray, CDirStripe *stripe)
       : stray(stray), in(NULL), stripe(stripe) {}
 
   void finish(int r) {
@@ -240,11 +240,11 @@ class C_AssertRemoved : public Context {
   }
 };
 
-void Stray::purge(CStripe *stripe)
+void Stray::purge(CDirStripe *stripe)
 {
   dout(10) << "purge " << *stripe << dendl;
 
-  stripe->state_set(CStripe::STATE_PURGING);
+  stripe->state_set(CDirStripe::STATE_PURGING);
 
   C_GatherBuilder gather(g_ceph_context, new C_StrayPurged(this, stripe));
 
@@ -289,11 +289,11 @@ class C_StrayLogged : public Context {
   Stray *stray;
   CDentry *dn;
   CInode *in;
-  CStripe *stripe;
+  CDirStripe *stripe;
  public:
   C_StrayLogged(Stray *stray, CDentry *dn, CInode *in)
       : stray(stray), dn(dn), in(in), stripe(NULL) {}
-  C_StrayLogged(Stray *stray, CStripe *stripe)
+  C_StrayLogged(Stray *stray, CDirStripe *stripe)
       : stray(stray), dn(NULL), in(NULL), stripe(stripe) {}
   void finish(int r) {
     if (stripe)
@@ -318,7 +318,7 @@ void Stray::purged(CInode *in)
   mds->mdlog->start_submit_entry(le, new C_StrayLogged(this, dn, in));
 }
 
-void Stray::purged(CStripe *stripe)
+void Stray::purged(CDirStripe *stripe)
 {
   dout(10) << "purged " << *stripe << dendl;
 
@@ -360,7 +360,7 @@ void Stray::logged(CDentry *dn, CInode *in)
     mds->mdcache->touch_dentry_bottom(dn); // drop dn as quickly as possible.
 }
 
-void Stray::logged(CStripe *stripe)
+void Stray::logged(CDirStripe *stripe)
 {
   dout(10) << "logged " << *stripe << dendl;
 

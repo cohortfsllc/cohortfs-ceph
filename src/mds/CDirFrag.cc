@@ -111,7 +111,7 @@ ostream& CDirFrag::print_db_line_prefix(ostream& out)
 // -------------------------------------------------------------------
 // CDirFrag
 
-CDirFrag::CDirFrag(CStripe *stripe, frag_t frag, MDCache *mdcache, bool auth)
+CDirFrag::CDirFrag(CDirStripe *stripe, frag_t frag, MDCache *mdcache, bool auth)
   : cache(mdcache),
     stripe(stripe),
     frag(frag),
@@ -923,12 +923,12 @@ void CDirFrag::mark_complete() {
 
 void CDirFrag::first_get()
 {
-  stripe->get(CStripe::PIN_DIRFRAG);
+  stripe->get(CDirStripe::PIN_DIRFRAG);
 }
 
 void CDirFrag::last_put()
 {
-  stripe->put(CStripe::PIN_DIRFRAG);
+  stripe->put(CDirStripe::PIN_DIRFRAG);
 }
 
 

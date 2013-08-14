@@ -43,7 +43,7 @@ class Context;
 class CDentry;
 class CDirFrag;
 class CInode;
-class CStripe;
+class CDirStripe;
 class Message;
 class MDCache;
 class LogSegment;
@@ -343,7 +343,7 @@ public:
   // -- cache infrastructure --
 private:
   vector<int> stripe_auth;
-  typedef map<stripeid_t, CStripe*> stripe_map;
+  typedef map<stripeid_t, CDirStripe*> stripe_map;
   stripe_map stripes;
   int stickystripe_ref;
 
@@ -369,12 +369,12 @@ public:
 
   bool has_open_stripes() const;
 
-  void get_stripes(list<CStripe*> &stripes);
+  void get_stripes(list<CDirStripe*> &stripes);
 
-  CStripe* get_stripe(stripeid_t stripeid);
-  CStripe* get_or_open_stripe(stripeid_t stripeid);
-  CStripe* add_stripe(CStripe *stripe);
-  void close_stripe(CStripe *stripe);
+  CDirStripe* get_stripe(stripeid_t stripeid);
+  CDirStripe* get_or_open_stripe(stripeid_t stripeid);
+  CDirStripe* add_stripe(CDirStripe *stripe);
+  void close_stripe(CDirStripe *stripe);
   void close_stripes();
 
   void get_stickystripes();
@@ -474,8 +474,8 @@ public:
   CDentry* get_projected_parent_dn() { return !projected_parent.empty() ? projected_parent.back() : parent; }
   CDirFrag *get_parent_dir();
   CDirFrag *get_projected_parent_dir();
-  CStripe *get_parent_stripe();
-  CStripe *get_projected_parent_stripe();
+  CDirStripe *get_parent_stripe();
+  CDirStripe *get_projected_parent_stripe();
   CInode *get_parent_inode();
   
   bool is_lt(const MDSCacheObject *r) const {

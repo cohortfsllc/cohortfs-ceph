@@ -863,7 +863,7 @@ void Locker::try_eval(MDSCacheObject *p, int mask)
     eval_any(&dn->lock, &need_issue);
   } else if (mask & (CEPH_LOCK_SDFT|CEPH_LOCK_SLINK|CEPH_LOCK_SNEST)) {
     bool need_issue = false;  // ignore this, no caps on stripes
-    CStripe *stripe = (CStripe*)p;
+    CDirStripe *stripe = (CDirStripe*)p;
     if (mask & CEPH_LOCK_SDFT)
       eval_any(&stripe->dirfragtreelock, &need_issue);
     if (mask & CEPH_LOCK_SLINK)
@@ -2412,7 +2412,7 @@ void Locker::process_request_cap_release(MDRequest *mdr, client_t client, const 
 
   if (dname.length()) {
     __u32 dnhash = in->hash_dentry_name(dname);
-    CStripe *stripe = in->get_stripe(in->pick_stripe(dnhash));
+    CDirStripe *stripe = in->get_stripe(in->pick_stripe(dnhash));
     if (stripe) {
       CDirFrag *dir = stripe->get_dirfrag(stripe->pick_dirfrag(dnhash));
       if (dir) {
@@ -2898,7 +2898,7 @@ void Locker::handle_client_lease(MClientLease *m)
 
   __u32 dnhash = in->hash_dentry_name(m->dname);
   stripeid_t stripeid = in->pick_stripe(dnhash);
-  CStripe *stripe = in->get_stripe(stripeid);
+  CDirStripe *stripe = in->get_stripe(stripeid);
   if (!stripe) {
     dout(7) << "handle_client_lease don't have stripe " << stripeid
         << " for " << in << dendl;
@@ -3038,7 +3038,7 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
     {
       // be careful; info.dirfrag may have incorrect frag; recalculate based on dname.
       // XXX: need get_inode() and pick_stripe() here?
-      CStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
+      CDirStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
       if (!stripe) {
 	dout(7) << "get_lock doesn't have stripe " << info.dirfrag.stripe << dendl;
         return 0;
@@ -3061,7 +3061,7 @@ SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info)
   case CEPH_LOCK_SLINK:
   case CEPH_LOCK_SNEST:
     {
-      CStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
+      CDirStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
       if (!stripe) {
         dout(7) << "get_lock doesn't have stripe " << info.dirfrag.stripe << dendl;
         return 0;

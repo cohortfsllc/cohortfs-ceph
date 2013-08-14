@@ -128,7 +128,7 @@ MDCache::MDCache(MDS *m)
     snaprealm(this),
     parentstats(m),
     stray(m),
-    nonauth_stripes(member_offset(CStripe, item_nonauth))
+    nonauth_stripes(member_offset(CDirStripe, item_nonauth))
 {
   mds = m;
   migrator = new Migrator(mds, this);
@@ -313,8 +313,8 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
 
   // force empty root dir
   root->set_stripe_auth(stripe_auth);
-  CStripe *rootstripe = root->get_or_open_stripe(0);
-  rootstripe->state_set(CStripe::STATE_OPEN);
+  CDirStripe *rootstripe = root->get_or_open_stripe(0);
+  rootstripe->state_set(CDirStripe::STATE_OPEN);
   rootstripe->replicate = true;
   rootstripe->set_stripe_auth(mds->whoami);
   CDirFrag *rootdir = rootstripe->get_or_open_dirfrag(frag_t());
@@ -325,8 +325,8 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   dn->_mark_dirty(ls);
 
   ceph->set_stripe_auth(stripe_auth);
-  CStripe *cephstripe = ceph->get_or_open_stripe(0);
-  cephstripe->state_set(CStripe::STATE_OPEN);
+  CDirStripe *cephstripe = ceph->get_or_open_stripe(0);
+  cephstripe->state_set(CDirStripe::STATE_OPEN);
   cephstripe->replicate = true;
   CDirFrag *cephdir = cephstripe->get_or_open_dirfrag(frag_t());
 
@@ -337,8 +337,8 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   // create inodes dir
   CInode *inodes = container.create();
   inodes->set_stripe_auth(stripe_auth);
-  CStripe *inodestripe = inodes->get_or_open_stripe(0);
-  inodestripe->state_set(CStripe::STATE_OPEN);
+  CDirStripe *inodestripe = inodes->get_or_open_stripe(0);
+  inodestripe->state_set(CDirStripe::STATE_OPEN);
   inodestripe->replicate = true;
   inodestripe->set_stripe_auth(mds->whoami);
   CDirFrag *inodesdir = inodestripe->get_or_open_dirfrag(frag_t());
@@ -390,7 +390,7 @@ void MDCache::create_mydir_hierarchy(C_Gather *gather)
 
   const vector<int> auth(1, mds->whoami);
   my->set_stripe_auth(auth);
-  CStripe *mystripe = my->get_or_open_stripe(0);
+  CDirStripe *mystripe = my->get_or_open_stripe(0);
   mystripe->set_stripe_auth(mds->whoami);
   CDirFrag *mydir = mystripe->get_or_open_dirfrag(frag_t());
 
@@ -441,7 +441,7 @@ void MDCache::_create_system_file(CDirFrag *dir, const char *name, CInode *in, C
     in->inode.rstat.rsubdirs = 1;
 
     in->set_stripe_auth(vector<int>(1, mds->whoami));
-    CStripe *stripe = in->get_or_open_stripe(0);
+    CDirStripe *stripe = in->get_or_open_stripe(0);
     stripe->mark_open();
 
     mdir = stripe->get_or_open_dirfrag(frag_t());
@@ -455,7 +455,7 @@ void MDCache::_create_system_file(CDirFrag *dir, const char *name, CInode *in, C
   Mutation *mut = new Mutation;
 
   // force some locks.  hacky.
-  CStripe *stripe = dir->get_stripe();
+  CDirStripe *stripe = dir->get_stripe();
   mds->locker->wrlock_force(&stripe->linklock, mut);
   mds->locker->wrlock_force(&stripe->nestlock, mut);
 
@@ -491,7 +491,7 @@ void MDCache::_create_system_file_finish(Mutation *mut, CDentry *dn, Context *fi
   in->mark_dirty(mut->ls);
 
   if (in->inode.is_dir()) {
-    CStripe *stripe = in->get_stripe(0);
+    CDirStripe *stripe = in->get_stripe(0);
     stripe->mark_dirty(mut->ls);
     stripe->mark_new(mut->ls);
 
@@ -575,7 +575,7 @@ void MDCache::open_root()
   pin_stray(container.get_inode());
   if (mds->whoami == mds->mdsmap->get_root()) {
     assert(root->is_auth());  
-    CStripe *rootstripe = root->get_or_open_stripe(0);
+    CDirStripe *rootstripe = root->get_or_open_stripe(0);
     rootstripe->set_stripe_auth(mds->whoami);
     CDirFrag *rootdir = rootstripe->get_or_open_dirfrag(frag_t());
     if (!rootdir->is_complete()) {
@@ -584,7 +584,7 @@ void MDCache::open_root()
     }
   } else {
     assert(!root->is_auth());
-    CStripe *rootstripe = root->get_stripe(0);
+    CDirStripe *rootstripe = root->get_stripe(0);
     if (!rootstripe) {
       discover_dir_stripe(root, 0, new C_MDS_RetryOpenRoot(this));
       return;
@@ -608,7 +608,7 @@ void MDCache::open_root()
     in->fetch(new C_MDS_RetryOpenRoot(this));
     return;
   }
-  CStripe *mystripe = myin->get_or_open_stripe(0);
+  CDirStripe *mystripe = myin->get_or_open_stripe(0);
   mystripe->set_stripe_auth(mds->whoami);
 
   populate_mydir();
@@ -1200,10 +1200,10 @@ void MDCache::handle_mds_recovery(int who)
   list<Context*> waiters;
 #if 0
   // wake up any waiters in their subtrees
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
+  for (map<CDirStripe*,set<CDirStripe*> >::iterator p = subtrees.begin();
        p != subtrees.end();
        ++p) {
-    CStripe *stripe = p->first;
+    CDirStripe *stripe = p->first;
 
     if (stripe->authority().first != who ||
 	stripe->authority().second == mds->whoami)
@@ -1211,13 +1211,13 @@ void MDCache::handle_mds_recovery(int who)
     assert(!stripe->is_auth());
    
     // wake any waiters
-    list<CStripe*> q;
+    list<CDirStripe*> q;
     q.push_back(stripe);
 
     while (!q.empty()) {
-      CStripe *stripe = q.front();
+      CDirStripe *stripe = q.front();
       q.pop_front();
-      stripe->take_waiting(CStripe::WAIT_ANY_MASK, waiters);
+      stripe->take_waiting(CDirStripe::WAIT_ANY_MASK, waiters);
 
       list<CDirFrag*> ls;
       stripe->get_dirfrags(ls);
@@ -1242,7 +1242,7 @@ void MDCache::handle_mds_recovery(int who)
 	  // recurse?
           int count = in->get_stripe_count();
           for (int i = 0; i < count; i++) {
-            CStripe *substripe = in->get_stripe(i);
+            CDirStripe *substripe = in->get_stripe(i);
             if (substripe && !substripe->is_subtree_root())
 	      q.push_back(substripe);
           }
@@ -1438,7 +1438,7 @@ void MDCache::add_uncommitted_slave_update(metareqid_t reqid, int master, MDSlav
 {
   assert(uncommitted_slave_updates[master].count(reqid) == 0);
   uncommitted_slave_updates[master][reqid] = su;
-  for(set<CStripe*>::iterator p = su->oldstripes.begin(); p != su->oldstripes.end(); p++)
+  for(set<CDirStripe*>::iterator p = su->oldstripes.begin(); p != su->oldstripes.end(); p++)
     uncommitted_slave_rename_oldstripe[*p]++;
   for(set<CInode*>::iterator p = su->unlinked.begin(); p != su->unlinked.end(); p++)
     uncommitted_slave_unlink[*p]++;
@@ -1453,8 +1453,8 @@ void MDCache::finish_uncommitted_slave_update(metareqid_t reqid, int master)
   if (uncommitted_slave_updates[master].empty())
     uncommitted_slave_updates.erase(master);
   // discard the non-auth subtree we renamed out of
-  for(set<CStripe*>::iterator p = su->oldstripes.begin(); p != su->oldstripes.end(); p++) {
-    CStripe *stripe = *p;
+  for(set<CDirStripe*>::iterator p = su->oldstripes.begin(); p != su->oldstripes.end(); p++) {
+    CDirStripe *stripe = *p;
     uncommitted_slave_rename_oldstripe[stripe]--;
     if (uncommitted_slave_rename_oldstripe[stripe] == 0)
       uncommitted_slave_rename_oldstripe.erase(stripe);
@@ -1498,7 +1498,7 @@ void MDCache::remove_inode_recursive(CInode *in)
 
   int count = in->get_stripe_count();
   for (int i = 0; i < count; i++) {
-    CStripe *stripe = in->get_stripe(i);
+    CDirStripe *stripe = in->get_stripe(i);
     if (stripe == NULL)
       continue;
 
@@ -1621,7 +1621,7 @@ void MDCache::rejoin_send_rejoins()
       rejoins[*p] = new MMDSCacheRejoin(MMDSCacheRejoin::OP_STRONG);
   }	
   
-  list<CStripe*> stripes;
+  list<CDirStripe*> stripes;
 
   // share inode lock state
   for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
@@ -1648,8 +1648,8 @@ void MDCache::rejoin_send_rejoins()
   // include inode container stripes
   get_container()->get_inode()->get_stripes(stripes);
 
-  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CStripe *stripe = *s;
+  for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    CDirStripe *stripe = *s;
     int who = stripe->authority().first;
     rejoin_map::iterator p = rejoins.find(who);
     if (p == rejoins.end())
@@ -1661,10 +1661,10 @@ void MDCache::rejoin_send_rejoins()
   }
 #if 0 
   // check all subtrees
-  for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
+  for (map<CDirStripe*, set<CDirStripe*> >::iterator p = subtrees.begin();
        p != subtrees.end();
        ++p) {
-    CStripe *stripe = p->first;
+    CDirStripe *stripe = p->first;
     assert(stripe->is_subtree_root());
     assert(!stripe->is_ambiguous_stripe_auth());
 
@@ -1850,11 +1850,11 @@ void MDCache::rejoin_send_rejoins()
  *  strong dentries (no connectivity!)
  *  strong inodes
  */
-void MDCache::rejoin_walk(CStripe *stripe, MMDSCacheRejoin *rejoin)
+void MDCache::rejoin_walk(CDirStripe *stripe, MMDSCacheRejoin *rejoin)
 {
   dout(10) << "rejoin_walk " << *stripe << dendl;
 
-  list<CStripe*> nested;  // finish this stripe, then do nested items
+  list<CDirStripe*> nested;  // finish this stripe, then do nested items
  
   if (mds->is_rejoin()) {
     // WEAK
@@ -1924,7 +1924,7 @@ void MDCache::rejoin_walk(CStripe *stripe, MMDSCacheRejoin *rejoin)
   }
 
   // recurse into nested stripes
-  for (list<CStripe*>::iterator p = nested.begin(); p != nested.end(); ++p)
+  for (list<CDirStripe*>::iterator p = nested.begin(); p != nested.end(); ++p)
     rejoin_walk(*p, rejoin);
 }
 #endif
@@ -2062,7 +2062,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
   for (set<dirfrag_t>::iterator p = weak->weak_dirfrags.begin();
        p != weak->weak_dirfrags.end();
        ++p) {
-    CStripe *stripe = get_dirstripe(p->stripe);
+    CDirStripe *stripe = get_dirstripe(p->stripe);
     if (!stripe)
       dout(0) << " missing dir stripe " << p->stripe << dendl;
     assert(stripe);
@@ -2086,7 +2086,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
   for (map<dirstripe_t,map<string_snap_t,MMDSCacheRejoin::dn_weak> >::iterator p = weak->weak.begin();
        p != weak->weak.end();
        ++p) {
-    CStripe *stripe = get_dirstripe(p->first);
+    CDirStripe *stripe = get_dirstripe(p->first);
     if (!stripe)
       dout(0) << " missing dir stripe " << p->first << dendl;
     assert(stripe);
@@ -2163,7 +2163,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
 
   for (set<dirstripe_t>::iterator s = weak->weak_stripes.begin();
        s != weak->weak_stripes.end(); ++s) {
-    CStripe *stripe = get_dirstripe(*s);
+    CDirStripe *stripe = get_dirstripe(*s);
     if (!stripe)
       dout(5) << " missing stripe " << *s << dendl;
     assert(stripe);
@@ -2290,7 +2290,7 @@ bool MDCache::parallel_fetch_traverse_dir(inodeno_t ino, filepath& path,
 
     __u32 dnhash = cur->hash_dentry_name(path[i]);
     stripeid_t stripeid = cur->pick_stripe(dnhash);
-    CStripe *stripe = cur->get_or_open_stripe(stripeid);
+    CDirStripe *stripe = cur->get_or_open_stripe(stripeid);
 
     frag_t fg = stripe->pick_dirfrag(dnhash);
     CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
@@ -2356,10 +2356,10 @@ void MDCache::rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack, set
 
     if (!in->is_dir()) continue;
 
-    list<CStripe*> stripes;
+    list<CDirStripe*> stripes;
     in->get_stripes(stripes);
-    for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-      CStripe *stripe = *s;
+    for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+      CDirStripe *stripe = *s;
 
       if (stripe->is_auth() &&
           stripe->is_replica(from) &&
@@ -2405,7 +2405,7 @@ bool MDCache::rejoin_fetch_dirfrags(MMDSCacheRejoin *strong)
   for (map<dirfrag_t, MMDSCacheRejoin::dirfrag_strong>::iterator p = strong->strong_dirfrags.begin();
        p != strong->strong_dirfrags.end();
        ++p) {
-    CStripe *stripe = get_dirstripe(p->first.stripe);
+    CDirStripe *stripe = get_dirstripe(p->first.stripe);
     if (!stripe) {
       skipped++;
       continue;
@@ -2509,7 +2509,7 @@ void MDCache::handle_cache_rejoin_strong(MMDSCacheRejoin *strong)
   for (map<dirfrag_t, MMDSCacheRejoin::dirfrag_strong>::iterator p = strong->strong_dirfrags.begin();
        p != strong->strong_dirfrags.end();
        ++p) {
-    CStripe *stripe = get_dirstripe(p->first.stripe);
+    CDirStripe *stripe = get_dirstripe(p->first.stripe);
     assert(stripe);
     CDirFrag *dir = stripe->get_dirfrag(p->first.frag);
     const fragtree_t &dft = stripe->get_fragtree();
@@ -2941,10 +2941,10 @@ void MDCache::rejoin_trim_undef_inodes()
     
     if (in->is_dir()) {
       // close stripes
-      list<CStripe*> dsls;
+      list<CDirStripe*> dsls;
       in->get_stripes(dsls);
-      for (list<CStripe*>::iterator s = dsls.begin(); s != dsls.end(); ++s) {
-        CStripe *stripe = *s;
+      for (list<CDirStripe*>::iterator s = dsls.begin(); s != dsls.end(); ++s) {
+        CDirStripe *stripe = *s;
         stripe->clear_replica_map();
 
         // close dirfrags
@@ -3266,10 +3266,10 @@ void MDCache::rejoin_send_acks()
     ack[*p] = new MMDSCacheRejoin(MMDSCacheRejoin::OP_ACK);
 #if 0 
   // walk subtrees
-  for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
+  for (map<CDirStripe*,set<CDirStripe*> >::iterator p = subtrees.begin();
        p != subtrees.end();
        p++) {
-    CStripe *root = p->first;
+    CDirStripe *root = p->first;
     if (!root->is_auth())
       continue;
     dout(10) << "subtree " << *root << dendl;
@@ -3325,11 +3325,11 @@ void MDCache::rejoin_send_acks()
 	}
 
 	// subdirs in this subtree?
-        list<CStripe*> stripes;
+        list<CDirStripe*> stripes;
         in->get_nested_stripes(stripes);
-        for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+        for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
           // stripe
-          CStripe *stripe = *s;
+          CDirStripe *stripe = *s;
           for (map<int,int>::iterator r = stripe->replicas_begin();
                r != stripe->replicas_end();
                ++r)
@@ -3342,7 +3342,7 @@ void MDCache::rejoin_send_acks()
   }
 #endif
 
-  list<CStripe*> stripes;
+  list<CDirStripe*> stripes;
   typedef map<int,int>::iterator rep_iter;
   for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
     CInode *in = i->second;
@@ -3356,8 +3356,8 @@ void MDCache::rejoin_send_acks()
     in->get_stripes(stripes);
   }
 
-  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CStripe *stripe = *s;
+  for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    CDirStripe *stripe = *s;
     if (!stripe->is_auth())
       continue;
 
@@ -3807,8 +3807,8 @@ bool MDCache::trim(int max)
     lru.lru_insert_mid(*i);
 
   // trim non-auth stripes
-  for (elist<CStripe*>::iterator p = nonauth_stripes.begin(); !p.end(); ++p) {
-    CStripe *stripe = *p;
+  for (elist<CDirStripe*>::iterator p = nonauth_stripes.begin(); !p.end(); ++p) {
+    CDirStripe *stripe = *p;
     assert(!stripe->is_auth());
     if (stripe->get_num_ref() == 0)
       trim_stripe(stripe, expiremap);
@@ -3816,10 +3816,10 @@ bool MDCache::trim(int max)
 
   // trim root?
   if (max == 0 && root) {
-    list<CStripe*> ls;
+    list<CDirStripe*> ls;
     root->get_stripes(ls);
-    for (list<CStripe*>::iterator p = ls.begin(); p != ls.end(); ++p) {
-      CStripe *stripe = *p;
+    for (list<CDirStripe*>::iterator p = ls.begin(); p != ls.end(); ++p) {
+      CDirStripe *stripe = *p;
       if (stripe->get_num_ref() == 1)  // subtree pin
 	trim_stripe(stripe, expiremap);
     }
@@ -3854,7 +3854,7 @@ void MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
   CDirFrag *dir = dn->get_dir();
   assert(dir);
 
-  CStripe *stripe = dir->get_stripe();
+  CDirStripe *stripe = dir->get_stripe();
   assert(stripe);
 
   // notify dentry authority?
@@ -3936,7 +3936,7 @@ void MDCache::trim_dirfrag(CDirFrag *dir, map<int, MCacheExpire*>& expiremap)
   dir->get_stripe()->close_dirfrag(dir->get_frag());
 }
 
-void MDCache::trim_stripe(CStripe *stripe, map<int, MCacheExpire*>& expiremap)
+void MDCache::trim_stripe(CDirStripe *stripe, map<int, MCacheExpire*>& expiremap)
 {
   dout(15) << "trim_stripe " << *stripe << dendl;
 
@@ -3977,9 +3977,9 @@ void MDCache::trim_inode(CDentry *dn, CInode *in,
   assert(in->get_num_ref() == 0);
 
   // STRIPE
-  list<CStripe*> stripes;
+  list<CDirStripe*> stripes;
   in->get_stripes(stripes);
-  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s)
+  for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s)
     trim_stripe(*s, expiremap);
 
   // INODE
@@ -4073,10 +4073,10 @@ void MDCache::trim_non_auth()
 	CInode *in = dnl->get_inode();
         warn_str_dirs << in->get_parent_dn()->get_name() << "\n";
 
-        list<CStripe*> stripes;
+        list<CDirStripe*> stripes;
         in->get_stripes(stripes);
-        for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-          CStripe *stripe = *s;
+        for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+          CDirStripe *stripe = *s;
           list<CDirFrag*> ls;
           stripe->get_dirfrags(ls);
           for (list<CDirFrag*>::iterator p = ls.begin(); p != ls.end(); ++p) {
@@ -4113,10 +4113,10 @@ void MDCache::trim_non_auth()
       ++next;
       CInode *in = p->second;
       if (!in->is_auth() && in->ino() != MDS_INO_CONTAINER) {
-        list<CStripe*> stripes;
+        list<CDirStripe*> stripes;
         in->get_stripes(stripes);
-        for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-          CStripe *stripe = *s;
+        for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+          CDirStripe *stripe = *s;
           list<CDirFrag*> ls;
           stripe->get_dirfrags(ls);
           for (list<CDirFrag*>::iterator p = ls.begin();
@@ -4156,7 +4156,7 @@ void MDCache::trim_non_auth()
  * Note that it doesn't clear the passed-in directory, since that's not
  * always safe.
  */
-bool MDCache::trim_non_auth_subtree(CStripe *stripe)
+bool MDCache::trim_non_auth_subtree(CDirStripe *stripe)
 {
   dout(10) << "trim_non_auth_subtree(" << stripe << ") " << *stripe << dendl;
 
@@ -4180,10 +4180,10 @@ bool MDCache::trim_non_auth_subtree(CStripe *stripe)
         CInode *in = dnl->get_inode();
         bool keep_inode = false;
         if (in->is_dir()) {
-          list<CStripe*> stripes;
+          list<CDirStripe*> stripes;
           in->get_stripes(stripes);
-          for (list<CStripe*>::iterator sub = stripes.begin(); sub != stripes.end(); ++sub) {
-            CStripe *substripe = *sub;
+          for (list<CDirStripe*>::iterator sub = stripes.begin(); sub != stripes.end(); ++sub) {
+            CDirStripe *substripe = *sub;
             if (uncommitted_slave_rename_oldstripe.count(substripe)) {
               // preserve the stripe for rollback
               keep_inode = true;
@@ -4232,15 +4232,15 @@ bool MDCache::trim_non_auth_subtree(CStripe *stripe)
  * to the root, the fact that we can trim this tree may mean that our
  * children or parents can also be trimmed.
  */
-void MDCache::try_trim_non_auth_subtree(CStripe *stripe)
+void MDCache::try_trim_non_auth_subtree(CDirStripe *stripe)
 {
   dout(10) << "try_trim_nonauth_subtree " << *stripe << dendl;
 
   // can we now trim child subtrees?
-  set<CStripe*> bounds;
+  set<CDirStripe*> bounds;
   get_subtree_bounds(stripe, bounds);
-  for (set<CStripe*>::iterator p = bounds.begin(); p != bounds.end(); p++) {
-    CStripe *bd = *p;
+  for (set<CDirStripe*>::iterator p = bounds.begin(); p != bounds.end(); p++) {
+    CDirStripe *bd = *p;
     if (bd->get_stripe_auth().first != mds->whoami && // we are not auth
 	bd->get_num_any() == 0) {                     // and empty
       CInode *bi = bd->get_inode();
@@ -4261,7 +4261,7 @@ void MDCache::try_trim_non_auth_subtree(CStripe *stripe)
       if (diri->is_base())
 	break;
 
-      CStripe *psub = get_subtree_root(diri->get_parent_stripe());
+      CDirStripe *psub = get_subtree_root(diri->get_parent_stripe());
       dout(10) << " parent subtree is " << *psub << dendl;
       if (psub->get_stripe_auth().first == mds->whoami)
 	break;  // we are auth, keep.
@@ -4357,7 +4357,7 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
   for (map<dirstripe_t,int>::iterator it = m->stripes.begin();
        it != m->stripes.end();
        it++) {
-    CStripe *stripe = get_dirstripe(it->first);
+    CDirStripe *stripe = get_dirstripe(it->first);
     int nonce = it->second;
 
     if (!stripe) {
@@ -4387,7 +4387,7 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
        pd != m->dentries.end();
        ++pd) {
     dout(10) << " dn expires in dir " << pd->first << dendl;
-    CStripe *stripe = get_dirstripe(pd->first.stripe);
+    CDirStripe *stripe = get_dirstripe(pd->first.stripe);
     assert(stripe);
     CDirFrag *dir = stripe->get_dirfrag(pd->first.frag);
 
@@ -4433,7 +4433,7 @@ void MDCache::handle_cache_expire(MCacheExpire *m)
   m->put();
 }
 
-void MDCache::process_delayed_expire(CStripe *stripe)
+void MDCache::process_delayed_expire(CDirStripe *stripe)
 {
   dout(7) << "process_delayed_expire on " << *stripe << dendl;
   for (map<int,MCacheExpire*>::iterator p = delayed_expire[stripe].begin();
@@ -4443,7 +4443,7 @@ void MDCache::process_delayed_expire(CStripe *stripe)
   delayed_expire.erase(stripe);  
 }
 
-void MDCache::discard_delayed_expire(CStripe *stripe)
+void MDCache::discard_delayed_expire(CDirStripe *stripe)
 {
   dout(7) << "discard_delayed_expire on " << *stripe << dendl;
   for (map<int,MCacheExpire*>::iterator p = delayed_expire[stripe].begin();
@@ -4486,7 +4486,7 @@ void MDCache::dentry_remove_replica(CDentry *dn, int from)
     maybe_eval_stray(dnl->get_inode());
 }
 
-void MDCache::stripe_remove_replica(CStripe *stripe, int from)
+void MDCache::stripe_remove_replica(CDirStripe *stripe, int from)
 {
   stripe->remove_replica(from);
 
@@ -4703,13 +4703,13 @@ bool MDCache::shutdown_export_caps()
   // export caps?
   //  note: this runs more often than it should.
   static bool exported_caps = false;
-  static set<CStripe*> exported_caps_in;
+  static set<CDirStripe*> exported_caps_in;
   if (!exported_caps) {
     dout(7) << "searching for caps to export" << dendl;
     exported_caps = true;
 
-    list<CStripe*> stripes;
-    for (map<CStripe*,set<CStripe*> >::iterator p = subtrees.begin();
+    list<CDirStripe*> stripes;
+    for (map<CDirStripe*,set<CDirStripe*> >::iterator p = subtrees.begin();
 	 p != subtrees.end();
 	 ++p) {
       if (exported_caps_in.count(p->first)) continue;
@@ -4722,7 +4722,7 @@ bool MDCache::shutdown_export_caps()
       }
     }
     while (!stripes.empty()) {
-      CStripe *stripe = stripes.front();
+      CDirStripe *stripe = stripes.front();
       stripes.pop_front();
 
       list<CDirFrag*> dirs;
@@ -4898,7 +4898,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
     // open stripe
     __u32 dnhash = cur->hash_dentry_name(path[depth]);
     stripeid_t stripeid = cur->pick_stripe(dnhash);
-    CStripe *curstripe = cur->get_stripe(stripeid);
+    CDirStripe *curstripe = cur->get_stripe(stripeid);
     if (!curstripe) {
       int stripe_auth = cur->get_stripe_auth(stripeid);
       if (stripe_auth == mds->get_nodeid()) {
@@ -4919,7 +4919,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
       curstripe->fetch(_get_waiter(mdr, req, fin));
       return 1;
     }
-    if (curstripe->state_test(CStripe::STATE_UNLINKED)) {
+    if (curstripe->state_test(CDirStripe::STATE_UNLINKED)) {
       dout(7) << "traverse: " << *curstripe << " was unlinked" << dendl;
       return -ENOENT;
     }
@@ -4932,7 +4932,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
         // parent dir frozen_dir?
         if (curstripe->is_frozen()) {
           dout(7) << "traverse: " << *curstripe << " is frozen, waiting" << dendl;
-          curstripe->add_waiter(CStripe::WAIT_UNFREEZE, _get_waiter(mdr, req, fin));
+          curstripe->add_waiter(CDirStripe::WAIT_UNFREEZE, _get_waiter(mdr, req, fin));
           return 1;
         }
         curdir = curstripe->get_or_open_dirfrag(fg);
@@ -5202,7 +5202,7 @@ bool MDCache::path_is_mine(filepath& path)
     dout(15) << "path_is_mine seg " << i << ": " << path[i] << " under " << *cur << dendl;
     __u32 dnhash = cur->hash_dentry_name(path[i]);
     stripeid_t stripeid = cur->pick_stripe(dnhash);
-    CStripe *stripe = cur->get_stripe(stripeid);
+    CDirStripe *stripe = cur->get_stripe(stripeid);
     if (!stripe)
       return cur->is_auth();
 
@@ -5238,7 +5238,7 @@ CInode *MDCache::cache_traverse(const filepath& fp)
     const string& dname = fp[i];
     __u32 dnhash = in->hash_dentry_name(dname);
     stripeid_t stripeid = in->pick_stripe(dnhash);
-    CStripe *stripe = in->get_stripe(stripeid);
+    CDirStripe *stripe = in->get_stripe(stripeid);
     if (!stripe)
       return NULL;
 
@@ -5293,7 +5293,7 @@ void MDCache::open_remote_dirstripe(CInode *diri, stripeid_t stripeid, Context *
  * @param approxfg approximate fragment.
  * @param fin completion callback
  */
-void MDCache::open_remote_dirfrag(CStripe *stripe, frag_t approxfg, Context *fin) 
+void MDCache::open_remote_dirfrag(CDirStripe *stripe, frag_t approxfg, Context *fin) 
 {
   dout(10) << "open_remote_dirfrag on " << *stripe << dendl;
 
@@ -5376,7 +5376,7 @@ void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocke
   const filepath path(dname, base->ino());
 
   stripeid_t stripeid = get_container()->place(ino);
-  CStripe *stripe = base->get_stripe(stripeid);
+  CDirStripe *stripe = base->get_stripe(stripeid);
   if (!stripe) {
     // fetch from remote stripe of inode container
     int who = base->get_stripe_auth(stripeid);
@@ -5926,7 +5926,7 @@ void MDCache::discover_dir_stripe(CInode *base, stripeid_t stripeid,
     base->add_stripe_waiter(stripeid, onfinish);
 }
 
-void MDCache::discover_dir_frag(CStripe *base,
+void MDCache::discover_dir_frag(CDirStripe *base,
 				frag_t approx_fg,
 				Context *onfinish,
 				int from)
@@ -5938,7 +5938,7 @@ void MDCache::discover_dir_frag(CStripe *base,
   dout(7) << "discover_dir_frag " << df
 	  << " from mds." << from << dendl;
 
-  if (!base->is_waiter_for(CStripe::WAIT_DIR) || !onfinish) {  // FIXME: this is kind of weak!
+  if (!base->is_waiter_for(CDirStripe::WAIT_DIR) || !onfinish) {  // FIXME: this is kind of weak!
     discover_info_t& d = _create_discover(from);
     d.base.stripe = base->dirstripe();
     d.base.frag = approx_fg;
@@ -5947,14 +5947,14 @@ void MDCache::discover_dir_frag(CStripe *base,
   }
 
   if (onfinish) 
-    base->add_waiter(CStripe::WAIT_DIR, onfinish);
+    base->add_waiter(CDirStripe::WAIT_DIR, onfinish);
 }
 
 class C_MDC_DiscoverPath : public Context {
  private:
   MDCache *mdcache;
   CInode *in;
-  CStripe *stripe;
+  CDirStripe *stripe;
   CDirFrag *dir;
   snapid_t snapid;
   filepath path;
@@ -5965,7 +5965,7 @@ class C_MDC_DiscoverPath : public Context {
       : mdcache(mdcache), in(base), stripe(NULL), dir(NULL),
         snapid(snapid), path(path), from(from) {}
 
-  C_MDC_DiscoverPath(MDCache *mdcache, CStripe *base, snapid_t snapid,
+  C_MDC_DiscoverPath(MDCache *mdcache, CDirStripe *base, snapid_t snapid,
                      const filepath &path)
       : mdcache(mdcache), in(NULL), stripe(base), dir(NULL),
         snapid(snapid), path(path), from(-1) {}
@@ -6035,7 +6035,7 @@ void MDCache::discover_path(CInode *base, snapid_t snap,
     base->add_stripe_waiter(ds.stripeid, onfinish);
 }
 
-void MDCache::discover_path(CStripe *base, snapid_t snap,
+void MDCache::discover_path(CDirStripe *base, snapid_t snap,
 			    const filepath &want_path, Context *onfinish,
 			    bool want_xlocked)
 {
@@ -6051,7 +6051,7 @@ void MDCache::discover_path(CStripe *base, snapid_t snap,
     dout(10) << " waiting for single auth on " << *base << dendl;
     if (!onfinish)
       onfinish = new C_MDC_DiscoverPath(this, base, snap, want_path);
-    base->add_waiter(CStripe::WAIT_SINGLEAUTH, onfinish);
+    base->add_waiter(CDirStripe::WAIT_SINGLEAUTH, onfinish);
     return;
   } 
 
@@ -6296,14 +6296,14 @@ void MDCache::handle_discover(MDiscover *dis)
     }
 
     // open stripe?
-    CStripe *curstripe = cur->get_or_open_stripe(stripeid);
+    CDirStripe *curstripe = cur->get_or_open_stripe(stripeid);
     assert(curstripe);
     assert(curstripe->is_auth());
 
     if (curstripe->is_frozen()) {
       if (reply->is_empty()) {
 	dout(7) << *curstripe << " is frozen, empty reply, waiting" << dendl;
-	curstripe->add_waiter(CStripe::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
+	curstripe->add_waiter(CDirStripe::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
 	reply->put();
 	return;
       } else {
@@ -6543,7 +6543,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
   // discover ino error
   if (p.end() && m->is_flag_error_ino()) {
     assert(cur->is_dir());
-    CStripe *stripe = cur->get_stripe(m->get_base_stripe());
+    CDirStripe *stripe = cur->get_stripe(m->get_base_stripe());
     assert(stripe);
     CDirFrag *dir = stripe->get_dirfrag(m->get_base_frag());
     assert(dir);
@@ -6573,7 +6573,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
   // indexes follow each ([[stripe] dir] dentry] inode) 
   // can start, end with any type.
   while (!p.end()) {
-    CStripe *curstripe;
+    CDirStripe *curstripe;
     CDirFrag *curdir;
     if (next == MDiscoverReply::STRIPE) {
       // stripe
@@ -6632,7 +6632,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 
       __u32 dnhash = cur->hash_dentry_name(dname);
       stripeid_t stripeid = cur->pick_stripe(dnhash);
-      CStripe *stripe = cur->get_stripe(stripeid);
+      CDirStripe *stripe = cur->get_stripe(stripeid);
 
       if (cur->is_waiting_for_stripe(stripeid)) {
 	if (cur->is_auth() || stripe)
@@ -6646,9 +6646,9 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
         frag_t fg = stripe->pick_dirfrag(dnhash);
         CDirFrag *dir = stripe->get_dirfrag(fg);
 
-        if (stripe->is_waiter_for(CStripe::WAIT_DIR)) {
+        if (stripe->is_waiter_for(CDirStripe::WAIT_DIR)) {
           if (dir)
-            stripe->take_waiting(CStripe::WAIT_DIR, finished);
+            stripe->take_waiting(CDirStripe::WAIT_DIR, finished);
           else
             discover_path(cur, m->get_wanted_snapid(), relpath,
                           0, m->get_wanted_xlocked(), who);
@@ -6671,7 +6671,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
     } else {
       // wanted dir or ino
       stripeid_t stripeid = m->get_base_stripe();
-      CStripe *stripe = cur->get_stripe(stripeid);
+      CDirStripe *stripe = cur->get_stripe(stripeid);
       if (cur->is_waiting_for_stripe(stripeid)) {
 	if (cur->is_auth() || stripe)
 	  cur->take_stripe_waiting(stripeid, finished);
@@ -6684,9 +6684,9 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
         frag_t fg = m->get_base_frag();
         CDirFrag *dir = stripe->get_dirfrag(fg);
 
-        if (stripe->is_waiter_for(CStripe::WAIT_DIR)) {
+        if (stripe->is_waiter_for(CDirStripe::WAIT_DIR)) {
           if (cur->is_auth() || stripe)
-            stripe->take_waiting(CStripe::WAIT_DIR, finished);
+            stripe->take_waiting(CDirStripe::WAIT_DIR, finished);
           else
             discover_dir_frag(stripe, fg, 0, who);
         } else
@@ -6717,7 +6717,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 // ----------------------------
 // REPLICAS
 
-CStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
+CDirStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
                                      int from, list<Context*>& finished)
 {
   dirstripe_t ds;
@@ -6725,7 +6725,7 @@ CStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
 
   assert(diri->ino() == ds.ino);
 
-  CStripe *stripe = get_dirstripe(ds);
+  CDirStripe *stripe = get_dirstripe(ds);
   if (stripe) {
     stripe->decode_replica(p, false);
     dout(7) << "add_replica_stripe had " << *stripe
@@ -6733,7 +6733,7 @@ CStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
     assert(stripe->item_nonauth.is_on_list());
   } else {
     assert(ds.stripeid < diri->get_stripe_count());
-    stripe = diri->add_stripe(new CStripe(diri, ds.stripeid, from));
+    stripe = diri->add_stripe(new CDirStripe(diri, ds.stripeid, from));
     stripe->decode_replica(p, true);
     dout(7) << "add_replica_stripe added " << *stripe
         << " nonce " << stripe->get_replica_nonce() << dendl;
@@ -6746,12 +6746,12 @@ CStripe* MDCache::add_replica_stripe(bufferlist::iterator& p, CInode *diri,
   return stripe;
 }
 
-CStripe *MDCache::forge_replica_stripe(CInode *diri, stripeid_t stripeid, int from)
+CDirStripe *MDCache::forge_replica_stripe(CInode *diri, stripeid_t stripeid, int from)
 {
   assert(mds->mdsmap->get_state(from) < MDSMap::STATE_REJOIN);
  
   // forge a replica.
-  CStripe *stripe = diri->add_stripe(new CStripe(diri, stripeid, from));
+  CDirStripe *stripe = diri->add_stripe(new CDirStripe(diri, stripeid, from));
  
   // i'm assuming this is a subtree root. 
   stripe->set_stripe_auth(from);
@@ -6761,7 +6761,7 @@ CStripe *MDCache::forge_replica_stripe(CInode *diri, stripeid_t stripeid, int fr
   return stripe;
 }
 
-CDirFrag *MDCache::add_replica_dir(bufferlist::iterator& p, CStripe *stripe,
+CDirFrag *MDCache::add_replica_dir(bufferlist::iterator& p, CDirStripe *stripe,
 			       list<Context*>& finished)
 {
   dirfrag_t df;
@@ -6792,13 +6792,13 @@ CDirFrag *MDCache::add_replica_dir(bufferlist::iterator& p, CStripe *stripe,
     dout(7) << "add_replica_dir added " << *dir << " nonce " << dir->replica_nonce << dendl;
 
     // get waiters
-    stripe->take_waiting(CStripe::WAIT_DIR, finished);
+    stripe->take_waiting(CDirStripe::WAIT_DIR, finished);
   }
 
   return dir;
 }
 
-CDirFrag *MDCache::forge_replica_dir(CStripe *stripe, frag_t fg, int from)
+CDirFrag *MDCache::forge_replica_dir(CDirStripe *stripe, frag_t fg, int from)
 {
   assert(mds->mdsmap->get_state(from) < MDSMap::STATE_REJOIN);
  
@@ -6867,7 +6867,7 @@ CInode *MDCache::add_replica_inode(bufferlist::iterator& p, CDentry *dn,
 }
 
  
-int MDCache::send_dir_updates(CStripe *stripe, bool bcast)
+int MDCache::send_dir_updates(CDirStripe *stripe, bool bcast)
 {
   // this is an FYI, re: replication
 
@@ -6906,7 +6906,7 @@ int MDCache::send_dir_updates(CStripe *stripe, bool bcast)
 void MDCache::handle_dir_update(MDirUpdate *m)
 {
   dirstripe_t ds = m->get_dirstripe();
-  CStripe *stripe = get_dirstripe(ds);
+  CDirStripe *stripe = get_dirstripe(ds);
   if (!stripe) {
     dout(5) << "dir_update on " << ds << ", don't have it" << dendl;
 
@@ -7094,7 +7094,7 @@ void MDCache::handle_dentry_unlink(MDentryUnlink *m)
  * @param basefrag base fragment
  * @param bits bit adjustment.  positive for split, negative for merge.
  */
-void MDCache::adjust_dir_fragments(CStripe *stripe, frag_t basefrag, int bits,
+void MDCache::adjust_dir_fragments(CDirStripe *stripe, frag_t basefrag, int bits,
 				   list<CDirFrag*>& resultfrags,
 				   list<Context*>& waiters,
 				   bool replay)
@@ -7108,7 +7108,7 @@ void MDCache::adjust_dir_fragments(CStripe *stripe, frag_t basefrag, int bits,
   adjust_dir_fragments(stripe, srcfrags, basefrag, bits, resultfrags, waiters, replay);
 }
 
-CDirFrag *MDCache::force_dir_fragment(CStripe *stripe, frag_t fg)
+CDirFrag *MDCache::force_dir_fragment(CDirStripe *stripe, frag_t fg)
 {
   CDirFrag *dir = stripe->get_dirfrag(fg);
   if (dir)
@@ -7153,7 +7153,7 @@ CDirFrag *MDCache::force_dir_fragment(CStripe *stripe, frag_t fg)
   return dir;
 }
 
-void MDCache::adjust_dir_fragments(CStripe *stripe,
+void MDCache::adjust_dir_fragments(CDirStripe *stripe,
 				   list<CDirFrag*>& srcfrags,
 				   frag_t basefrag, int bits,
 				   list<CDirFrag*>& resultfrags, 
@@ -7207,7 +7207,7 @@ public:
 };
 
 
-bool MDCache::can_fragment_lock(CStripe *stripe)
+bool MDCache::can_fragment_lock(CDirStripe *stripe)
 {
   if (!stripe->dirfragtreelock.can_wrlock(-1)) {
     dout(7) << "can_fragment: can't wrlock dftlock" << dendl;
@@ -7217,7 +7217,7 @@ bool MDCache::can_fragment_lock(CStripe *stripe)
   return true;
 }
 
-bool MDCache::can_fragment(CStripe *stripe, list<CDirFrag*>& dirs)
+bool MDCache::can_fragment(CDirStripe *stripe, list<CDirFrag*>& dirs)
 {
   if (mds->mdsmap->is_degraded()) {
     dout(7) << "can_fragment: cluster degraded, no fragmenting for now" << dendl;
@@ -7273,7 +7273,7 @@ void MDCache::split_dir(CDirFrag *dir, int bits)
   fragment_mark_and_complete(dirs);
 }
 
-void MDCache::merge_dir(CStripe *stripe, frag_t frag)
+void MDCache::merge_dir(CDirStripe *stripe, frag_t frag)
 {
   dout(7) << "merge_dir to " << frag << " on " << *stripe << dendl;
 
@@ -7416,7 +7416,7 @@ public:
 
 void MDCache::fragment_frozen(list<CDirFrag*>& dirs, frag_t basefrag, int bits)
 {
-  CStripe *stripe = dirs.front()->get_stripe();
+  CDirStripe *stripe = dirs.front()->get_stripe();
 
   if (bits > 0) {
     assert(dirs.size() == 1);
@@ -7477,7 +7477,7 @@ void MDCache::fragment_frozen(list<CDirFrag*>& dirs, frag_t basefrag, int bits)
 
 void MDCache::fragment_logged_and_stored(Mutation *mut, list<CDirFrag*>& resultfrags, frag_t basefrag, int bits)
 {
-  CStripe *stripe = resultfrags.front()->get_stripe();
+  CDirStripe *stripe = resultfrags.front()->get_stripe();
   dirfrag_t dirfrag(stripe->dirstripe(), basefrag);
 
   dout(10) << "fragment_logged_and_stored " << resultfrags
@@ -7539,7 +7539,7 @@ void MDCache::handle_fragment_notify(MMDSFragmentNotify *notify)
     return;
   }
 
-  CStripe *stripe = get_dirstripe(notify->get_dirstripe());
+  CDirStripe *stripe = get_dirstripe(notify->get_dirstripe());
   if (stripe) {
     frag_t base = notify->get_frag();
     int bits = notify->get_bits();
@@ -7580,7 +7580,7 @@ void MDCache::rollback_uncommitted_fragments()
   for (set< pair<dirfrag_t,int> >::iterator p = uncommitted_fragments.begin();
        p != uncommitted_fragments.end();
        ++p) {
-    CStripe *stripe = get_dirstripe(p->first.stripe);
+    CDirStripe *stripe = get_dirstripe(p->first.stripe);
     assert(stripe);
     dout(10) << " rolling back " << p->first << " refragment by " << p->second << " bits" << dendl;
     list<CDirFrag*> resultfrags;
@@ -7615,7 +7615,7 @@ void MDCache::show_subtrees(int dbl)
   }
 
   // root frags
-  list<CStripe*> basestripes;
+  list<CDirStripe*> basestripes;
   for (set<CInode*>::iterator p = base_inodes.begin();
        p != base_inodes.end();
        p++)
@@ -7624,21 +7624,21 @@ void MDCache::show_subtrees(int dbl)
   dout(15) << "show_subtrees" << dendl;
 
   // queue stuff
-  list<pair<CStripe*,int> > q;
+  list<pair<CDirStripe*,int> > q;
   string indent;
-  set<CStripe*> seen;
+  set<CDirStripe*> seen;
 
   // calc max depth
-  for (list<CStripe*>::iterator p = basestripes.begin();
+  for (list<CDirStripe*>::iterator p = basestripes.begin();
        p != basestripes.end();
        ++p)
     q.push_back(make_pair(*p, 0));
 
-  set<CStripe*> subtrees_seen;
+  set<CDirStripe*> subtrees_seen;
 
   int depth = 0;
   while (!q.empty()) {
-    CStripe *stripe = q.front().first;
+    CDirStripe *stripe = q.front().first;
     int d = q.front().second;
     q.pop_front();
 
@@ -7656,7 +7656,7 @@ void MDCache::show_subtrees(int dbl)
 
     // nested items?
     if (!subtrees[stripe].empty()) {
-      for (set<CStripe*>::iterator p = subtrees[stripe].begin();
+      for (set<CDirStripe*>::iterator p = subtrees[stripe].begin();
 	   p != subtrees[stripe].end();
 	   ++p) {
 	//dout(25) << " saw sub " << **p << dendl;
@@ -7667,11 +7667,11 @@ void MDCache::show_subtrees(int dbl)
 
 
   // print tree
-  for (list<CStripe*>::iterator p = basestripes.begin(); p != basestripes.end(); ++p) 
+  for (list<CDirStripe*>::iterator p = basestripes.begin(); p != basestripes.end(); ++p) 
     q.push_back(make_pair(*p, 0));
 
   while (!q.empty()) {
-    CStripe *stripe = q.front().first;
+    CDirStripe *stripe = q.front().first;
     int d = q.front().second;
     q.pop_front();
 
@@ -7722,7 +7722,7 @@ void MDCache::show_subtrees(int dbl)
       else
 	indent += "  ";
 
-      for (set<CStripe*>::iterator p = subtrees[stripe].begin();
+      for (set<CDirStripe*>::iterator p = subtrees[stripe].begin();
 	   p != subtrees[stripe].end();
 	   ++p) 
 	q.push_front(make_pair(*p, d+2));
@@ -7731,7 +7731,7 @@ void MDCache::show_subtrees(int dbl)
 
   // verify there isn't stray crap in subtree map
   int lost = 0;
-  for (map<CStripe*, set<CStripe*> >::iterator p = subtrees.begin();
+  for (map<CDirStripe*, set<CDirStripe*> >::iterator p = subtrees.begin();
        p != subtrees.end();
        ++p) {
     if (subtrees_seen.count(p->first)) continue;
@@ -7752,10 +7752,10 @@ void MDCache::show_cache()
       dout(7) << " unlinked " << *it->second << dendl;
 
     // stripes
-    list<CStripe*> stripes;
+    list<CDirStripe*> stripes;
     it->second->get_stripes(stripes);
-    for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-      CStripe *stripe = *s;
+    for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+      CDirStripe *stripe = *s;
       dout(7) << "  stripe " << *stripe << dendl;
 
       // dirfrags?
@@ -7797,10 +7797,10 @@ void MDCache::dump_cache(const char *fn)
     CInode *in = it->second;
     myfile << *in << std::endl;
 
-    list<CStripe*> stripes;
+    list<CDirStripe*> stripes;
     in->get_stripes(stripes);
-    for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-      CStripe *stripe = *s;
+    for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+      CDirStripe *stripe = *s;
       myfile << "  " << *stripe << std::endl;
 
       list<CDirFrag*> dfs;

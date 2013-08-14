@@ -20,7 +20,7 @@
 #include "../CInode.h"
 #include "../CDirFrag.h"
 #include "../CDentry.h"
-#include "../CStripe.h"
+#include "../CDirStripe.h"
 
 #include "include/triple.h"
 #include "include/interval_set.h"
@@ -347,7 +347,7 @@ class EMetaBlob {
       df_decoded = false;
     }
 
-    void apply(MDS *mds, CStripe *stripe, LogSegment *ls);
+    void apply(MDS *mds, CDirStripe *stripe, LogSegment *ls);
 
     Dir& add_dir(frag_t frag, version_t v, bool dirty,
                  bool complete=false, bool isnew=false) {
@@ -557,7 +557,7 @@ class EMetaBlob {
     return s.add_dir(dir->get_frag(), dir->get_version(), true, true, true);
   }
 
-  Stripe& add_stripe(CStripe *stripe, bool dirty, bool isnew=false,
+  Stripe& add_stripe(CDirStripe *stripe, bool dirty, bool isnew=false,
                      bool unlinked=false) {
     return add_stripe(stripe->dirstripe(),
                       stripe->get_stripe_auth(),
@@ -587,7 +587,7 @@ class EMetaBlob {
   static const int TO_AUTH_SUBTREE_ROOT = 0;  // default.
   static const int TO_ROOT = 1;
   
-  void add_stripe_context(CStripe *stripe, int mode = TO_AUTH_SUBTREE_ROOT);
+  void add_stripe_context(CDirStripe *stripe, int mode = TO_AUTH_SUBTREE_ROOT);
  
   void print(ostream& out) const {
     out << "[metablob";
@@ -611,7 +611,7 @@ class EMetaBlob {
 
   void update_segment(LogSegment *ls);
   void update_stripe(MDS *mds, LogSegment *ls,
-                     CStripe *stripe, Stripe &lump);
+                     CDirStripe *stripe, Stripe &lump);
   void replay(MDS *mds, LogSegment *ls, MDSlaveUpdate *su=NULL);
 };
 WRITE_CLASS_ENCODER(EMetaBlob)

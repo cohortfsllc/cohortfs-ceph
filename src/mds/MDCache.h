@@ -154,11 +154,11 @@ public:
 
   void discover_base_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
   void discover_dir_stripe(CInode *base, stripeid_t stripeid, Context *onfinish, int from=-1);
-  void discover_dir_frag(CStripe *stripe, frag_t approx_fg, Context *onfinish,
+  void discover_dir_frag(CDirStripe *stripe, frag_t approx_fg, Context *onfinish,
 			 int from=-1);
   void discover_path(CInode *base, snapid_t snap, const filepath &want_path,
                      Context *onfinish, bool want_xlocked=false, int from=-1);
-  void discover_path(CStripe *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirStripe *base, snapid_t snap, const filepath &want_path,
                      Context *onfinish, bool want_xlocked=false);
   void discover_path(CDirFrag *base, snapid_t snap, const filepath &want_path,
                      Context *onfinish, bool want_xlocked=false);
@@ -174,7 +174,7 @@ public:
 
 protected:
   // delayed cache expire
-  map<CStripe*, map<int, MCacheExpire*> > delayed_expire; // subtree root -> expire msg
+  map<CDirStripe*, map<int, MCacheExpire*> > delayed_expire; // subtree root -> expire msg
 
 
   // -- requests --
@@ -246,7 +246,7 @@ protected:
   typedef map<int, req_slave_update_map> mds_slave_update_map;
   mds_slave_update_map uncommitted_slave_updates;  // slave: for replay.
 
-  map<CStripe*, int> uncommitted_slave_rename_oldstripe;  // slave: preserve the non-auth dir until seeing commit.
+  map<CDirStripe*, int> uncommitted_slave_rename_oldstripe;  // slave: preserve the non-auth dir until seeing commit.
   map<CInode*, int> uncommitted_slave_unlink;  // slave: preserve the unlinked inode until seeing commit.
 
   // track master requests whose slaves haven't acknowledged commit
@@ -315,7 +315,7 @@ protected:
   vector<CInode*> rejoin_recover_q, rejoin_check_q;
   list<Context*> rejoin_waiters;
 
-  void rejoin_walk(CStripe *stripe, MMDSCacheRejoin *rejoin);
+  void rejoin_walk(CDirStripe *stripe, MMDSCacheRejoin *rejoin);
   void handle_cache_rejoin(MMDSCacheRejoin *m);
   void handle_cache_rejoin_weak(MMDSCacheRejoin *m);
   bool rejoin_fetch_dirfrags(MMDSCacheRejoin *m);
@@ -425,12 +425,12 @@ public:
   bool trim(int max = -1);   // trim cache
   void trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap);
   void trim_dirfrag(CDirFrag *dir, map<int, MCacheExpire*>& expiremap);
-  void trim_stripe(CStripe *stripe, map<int, MCacheExpire*>& expiremap);
+  void trim_stripe(CDirStripe *stripe, map<int, MCacheExpire*>& expiremap);
   void trim_inode(CDentry *dn, CInode *in, map<int, MCacheExpire*>& expiremap);
   void send_expire_messages(map<int, MCacheExpire*>& expiremap);
   void trim_non_auth();      // trim out trimmable non-auth items
-  bool trim_non_auth_subtree(CStripe *stripe);
-  void try_trim_non_auth_subtree(CStripe *stripe);
+  bool trim_non_auth_subtree(CDirStripe *stripe);
+  void try_trim_non_auth_subtree(CDirStripe *stripe);
 
   void trim_client_leases();
   void check_memory_usage();
@@ -459,7 +459,7 @@ public:
     return get_inode(vinodeno_t(ino, s));
   }
 
-  CStripe *get_dirstripe(dirstripe_t ds) {
+  CDirStripe *get_dirstripe(dirstripe_t ds) {
     CInode *in = get_inode(ds.ino);
     if (!in)
       return NULL;
@@ -467,13 +467,13 @@ public:
   }
 
   CDirFrag* get_dirfrag(dirfrag_t df) {
-    CStripe *stripe = get_dirstripe(df.stripe);
+    CDirStripe *stripe = get_dirstripe(df.stripe);
     if (!stripe)
       return NULL;
     return stripe->get_dirfrag(df.frag);
   }
   CDirFrag* get_force_dirfrag(dirfrag_t df) {
-    CStripe *stripe = get_dirstripe(df.stripe);
+    CDirStripe *stripe = get_dirstripe(df.stripe);
     if (!stripe)
       return NULL;
     CDirFrag *dir = force_dir_fragment(stripe, df.frag);
@@ -514,7 +514,7 @@ protected:
 
   void inode_remove_replica(CInode *in, int rep);
   void dentry_remove_replica(CDentry *dn, int rep);
-  void stripe_remove_replica(CStripe *stripe, int rep);
+  void stripe_remove_replica(CDirStripe *stripe, int rep);
 
   void rename_file(CDentry *srcdn, CDentry *destdn);
 
@@ -607,7 +607,7 @@ public:
   CInode *cache_traverse(const filepath& path);
 
   void open_remote_dirstripe(CInode *diri, stripeid_t stripeid, Context *fin);
-  void open_remote_dirfrag(CStripe *stripe, frag_t fg, Context *fin);
+  void open_remote_dirfrag(CDirStripe *stripe, frag_t fg, Context *fin);
   CInode *get_dentry_inode(CDentry *dn, MDRequest *mdr, bool projected=false);
   void open_remote_ino(inodeno_t ino, Context *fin, bool want_xlocked=false);
   void open_remote_dentry(CDentry *dn, bool projected, Context *fin);
@@ -656,7 +656,7 @@ public:
 
  public:
   void add_stray(CInode *in) { stray.add(in); }
-  void add_stray(CStripe *stripe) { stray.add(stripe); }
+  void add_stray(CDirStripe *stripe) { stray.add(stripe); }
 
   void scan_stray_dir() { stray.scan(); }
   void maybe_eval_stray(CInode *in) { stray.eval(in); }
@@ -667,14 +667,14 @@ public:
 
  protected:
   // -- replicas --
-  elist<CStripe*> nonauth_stripes;
+  elist<CDirStripe*> nonauth_stripes;
 
   void handle_discover(MDiscover *dis);
   void handle_discover_reply(MDiscoverReply *m);
   friend class C_MDC_Join;
 
 public:
-  void replicate_stripe(CStripe *stripe, int to, bufferlist& bl) {
+  void replicate_stripe(CDirStripe *stripe, int to, bufferlist& bl) {
     dirstripe_t ds = stripe->dirstripe();
     ::encode(ds, bl);
     stripe->encode_replica(to, bl);
@@ -695,11 +695,11 @@ public:
     in->encode_replica(to, bl);
   }
 
-  CStripe* add_replica_stripe(bufferlist::iterator& p, CInode *diri,
+  CDirStripe* add_replica_stripe(bufferlist::iterator& p, CInode *diri,
                               int from, list<Context*>& finished);
-  CStripe* forge_replica_stripe(CInode *diri, stripeid_t stripe, int from);
-  CDirFrag* add_replica_dir(bufferlist::iterator& p, CStripe *stripe, list<Context*>& finished);
-  CDirFrag* forge_replica_dir(CStripe *stripe, frag_t fg, int from);
+  CDirStripe* forge_replica_stripe(CInode *diri, stripeid_t stripe, int from);
+  CDirFrag* add_replica_dir(bufferlist::iterator& p, CDirStripe *stripe, list<Context*>& finished);
+  CDirFrag* forge_replica_dir(CDirStripe *stripe, frag_t fg, int from);
   CDentry *add_replica_dentry(bufferlist::iterator& p, CDirFrag *dir, list<Context*>& finished);
   CInode *add_replica_inode(bufferlist::iterator& p, CDentry *dn,
                             int from, list<Context*>& finished);
@@ -718,25 +718,25 @@ public:
   set< pair<dirfrag_t,int> > uncommitted_fragments;  // prepared but uncommitted refragmentations
 
 private:
-  void adjust_dir_fragments(CStripe *stripe, frag_t basefrag, int bits,
+  void adjust_dir_fragments(CDirStripe *stripe, frag_t basefrag, int bits,
 			    list<CDirFrag*>& frags, list<Context*>& waiters, bool replay);
-  void adjust_dir_fragments(CStripe *stripe,
+  void adjust_dir_fragments(CDirStripe *stripe,
 			    list<CDirFrag*>& srcfrags,
 			    frag_t basefrag, int bits,
 			    list<CDirFrag*>& resultfrags, 
 			    list<Context*>& waiters,
 			    bool replay);
-  CDirFrag *force_dir_fragment(CStripe *stripe, frag_t fg);
+  CDirFrag *force_dir_fragment(CDirStripe *stripe, frag_t fg);
 
 
   friend class EFragment;
 
-  bool can_fragment_lock(CStripe *stripe);
-  bool can_fragment(CStripe *stripe, list<CDirFrag*>& dirs);
+  bool can_fragment_lock(CDirStripe *stripe);
+  bool can_fragment(CDirStripe *stripe, list<CDirFrag*>& dirs);
 
 public:
   void split_dir(CDirFrag *dir, int byn);
-  void merge_dir(CStripe *stripe, frag_t fg);
+  void merge_dir(CDirStripe *stripe, frag_t fg);
 
 private:
   void fragment_freeze_dirs(list<CDirFrag*>& dirs, C_GatherBuilder &gather);
@@ -759,13 +759,13 @@ private:
   //int send_inode_updates(CInode *in);
   //void handle_inode_update(MInodeUpdate *m);
 
-  int send_dir_updates(CStripe *stripe, bool bcast=false);
+  int send_dir_updates(CDirStripe *stripe, bool bcast=false);
   void handle_dir_update(MDirUpdate *m);
 
   // -- cache expiration --
   void handle_cache_expire(MCacheExpire *m);
-  void process_delayed_expire(CStripe *stripe);
-  void discard_delayed_expire(CStripe *stripe);
+  void process_delayed_expire(CDirStripe *stripe);
+  void discard_delayed_expire(CDirStripe *stripe);
 
 
   // == crap fns ==

@@ -23,7 +23,7 @@
 #include "CDentry.h"
 #include "CDirFrag.h"
 #include "CInode.h"
-#include "CStripe.h"
+#include "CDirStripe.h"
 
 #include <ext/hash_set>
 using __gnu_cxx::hash_set;
@@ -39,7 +39,7 @@ class LogSegment {
 
   // dirty items
   elist<CDirFrag*>    dirty_dirfrags, new_dirfrags;
-  elist<CStripe*> dirty_stripes, new_stripes;
+  elist<CDirStripe*> dirty_stripes, new_stripes;
   elist<CInode*>  dirty_inodes;
   elist<CDentry*> dirty_dentries;
 
@@ -69,8 +69,8 @@ class LogSegment {
     offset(off), end(off), num_events(0), trimmable_at(0),
     dirty_dirfrags(member_offset(CDirFrag, item_dirty)),
     new_dirfrags(member_offset(CDirFrag, item_new)),
-    dirty_stripes(member_offset(CStripe, item_dirty)),
-    new_stripes(member_offset(CStripe, item_new)),
+    dirty_stripes(member_offset(CDirStripe, item_dirty)),
+    new_stripes(member_offset(CDirStripe, item_new)),
     dirty_inodes(member_offset(CInode, item_dirty)),
     dirty_dentries(member_offset(CDentry, item_dirty)),
     open_files(member_offset(CInode, item_open_file)),
