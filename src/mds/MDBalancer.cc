@@ -154,7 +154,7 @@ void MDBalancer::do_fragmenting()
 
       dout(10) << "do_fragmenting merging " << *dir << dendl;
 
-      CStripe *stripe = dir->get_stripe();
+      CDirStripe *stripe = dir->get_stripe();
 
       frag_t fg = dir->get_frag();
       while (fg != frag_t()) {

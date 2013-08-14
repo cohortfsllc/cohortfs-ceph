@@ -32,7 +32,7 @@ using namespace std;
 
 class CInode;
 class CDirFrag;
-class CStripe;
+class CDirStripe;
 struct MDRequest;
 
 class Message;
@@ -202,7 +202,7 @@ public:
 
 
   CDirFrag *get_dir() const { return dir; }
-  CStripe *get_stripe() const;
+  CDirStripe *get_stripe() const;
   const string& get_name() const { return name; }
 
   inoparent_t inoparent();

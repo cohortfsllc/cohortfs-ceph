@@ -201,7 +201,7 @@ void CDentry::mark_new()
   state_set(STATE_NEW);
 }
 
-CStripe* CDentry::get_stripe() const
+CDirStripe* CDentry::get_stripe() const
 {
   return dir->get_stripe();
 }

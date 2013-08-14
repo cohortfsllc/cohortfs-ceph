@@ -22,7 +22,7 @@
 
 class CDirFrag;
 class CInode;
-class CStripe;
+class CDirStripe;
 class MDS;
 class Message;
 
@@ -52,17 +52,17 @@ class MDBalancer {
     if it has then do the actual export. Otherwise send off our
     export targets message again*/
   void try_rebalance() {}
-  void find_exports(CStripe *stripe, double amount, 
-                    list<CStripe*>& exports, double& have,
-                    set<CStripe*>& already_exporting);
+  void find_exports(CDirStripe *stripe, double amount, 
+                    list<CDirStripe*>& exports, double& have,
+                    set<CDirStripe*>& already_exporting);
 
 
-  void subtract_export(CStripe *ex, utime_t now);
-  void add_import(CStripe *im, utime_t now);
+  void subtract_export(CDirStripe *ex, utime_t now);
+  void add_import(CDirStripe *im, utime_t now);
 
   void hit_inode(utime_t now, CInode *in, int type, int who=-1) {}
   void hit_dir(utime_t now, CDirFrag *dir, int type, int who=-1, double amount=1.0);
-  void hit_stripe(utime_t now, CStripe *stripe, int type, int who=-1, double amount=1.0) {}
+  void hit_stripe(utime_t now, CDirStripe *stripe, int type, int who=-1, double amount=1.0) {}
 
 
   void show_imports(bool external=false);

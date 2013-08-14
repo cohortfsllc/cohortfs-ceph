@@ -20,7 +20,7 @@
 #include "../CInode.h"
 #include "../CDirFrag.h"
 #include "../CDentry.h"
-#include "../CStripe.h"
+#include "../CDirStripe.h"
 
 #include "include/triple.h"
 #include "include/interval_set.h"
@@ -285,7 +285,7 @@ class EMetaBlob {
       return state_string;
     }
 
-    void apply(MDS *mds, CStripe *stripe, LogSegment *ls) const;
+    void apply(MDS *mds, CDirStripe *stripe, LogSegment *ls) const;
 
     Dir& add_dir(frag_t frag, version_t v, bool dirty,
                  bool complete=false, bool isnew=false) {
@@ -445,7 +445,7 @@ class EMetaBlob {
     return s.add_dir(dir->get_frag(), dir->get_version(), true, true, true);
   }
 
-  Stripe& add_stripe(CStripe *stripe, bool dirty, bool isnew=false,
+  Stripe& add_stripe(CDirStripe *stripe, bool dirty, bool isnew=false,
                      bool unlinked=false) {
     return add_stripe(stripe->dirstripe(),
                       stripe->get_stripe_auth(),
@@ -475,8 +475,8 @@ class EMetaBlob {
   static const int TO_AUTH_SUBTREE_ROOT = 0;  // default.
   static const int TO_ROOT = 1;
   
-  void add_stripe_context(CStripe *stripe, int mode = TO_AUTH_SUBTREE_ROOT);
-
+  void add_stripe_context(CDirStripe *stripe, int mode = TO_AUTH_SUBTREE_ROOT);
+ 
   void print(ostream& out) const {
     out << "[metablob";
     if (!inodes.empty()) 

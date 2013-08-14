@@ -116,7 +116,7 @@ void Mutation::pop_and_dirty_projected_inodes()
   }
 }
 
-void Mutation::add_projected_fnode(CStripe *stripe)
+void Mutation::add_projected_fnode(CDirStripe *stripe)
 {
   projected_fnodes.push_back(stripe);
 }
@@ -124,7 +124,7 @@ void Mutation::add_projected_fnode(CStripe *stripe)
 void Mutation::pop_and_dirty_projected_fnodes()
 {
   while (!projected_fnodes.empty()) {
-    CStripe *stripe = projected_fnodes.front();
+    CDirStripe *stripe = projected_fnodes.front();
     projected_fnodes.pop_front();
     stripe->pop_and_dirty_projected_fnode(ls);
   }

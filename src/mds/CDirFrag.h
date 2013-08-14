@@ -32,7 +32,7 @@
 using namespace std;
 
 
-#include "CStripe.h"
+#include "CDirStripe.h"
 
 class CDentry;
 class CInode;
@@ -134,7 +134,7 @@ public:
   // context
   MDCache *cache;
 
-  CStripe *stripe; // my stripe
+  CDirStripe *stripe; // my stripe
   frag_t frag; // my frag
   snapid_t first;
   ceph_seq_t mseq; // migrate sequence
@@ -198,7 +198,7 @@ protected:
   // friends
   friend class Migrator;
   friend class CInode;
-  friend class CStripe;
+  friend class CDirStripe;
   friend class MDCache;
   friend class MDiscover;
   friend class MDBalancer;
@@ -212,7 +212,7 @@ protected:
    * It's deleted when you mark_complete() and is deliberately not serialized.*/
 
  public:
-  CDirFrag(CStripe *stripe, frag_t frag, MDCache *mdcache, bool auth);
+  CDirFrag(CDirStripe *stripe, frag_t frag, MDCache *mdcache, bool auth);
   ~CDirFrag() {
     remove_bloom();
     g_num_dir--;
@@ -226,7 +226,7 @@ protected:
   frag_t get_frag() const { return frag; }
   dirfrag_t dirfrag() const { return dirfrag_t(stripe->dirstripe(), frag); }
 
-  CStripe *get_stripe() { return stripe; }
+  CDirStripe *get_stripe() { return stripe; }
   CInode *get_inode() { return get_stripe()->get_inode(); }
   CDirFrag *get_parent_dir() { return get_inode()->get_parent_dir(); }
 

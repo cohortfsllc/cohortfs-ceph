@@ -13,7 +13,7 @@
  */
 
 #include "ParentStats.h"
-#include "CStripe.h"
+#include "CDirStripe.h"
 #include "Locker.h"
 #include "MDCache.h"
 #include "MDLog.h"
@@ -58,11 +58,11 @@ class C_PS_Finish : public Context {
 class C_PS_StripeFrag : public Context {
  private:
   MDS *mds;
-  CStripe *stripe;
+  CDirStripe *stripe;
   Mutation *mut;
   const stripe_stat_update_t supdate;
  public:
-  C_PS_StripeFrag(MDS *mds, CStripe *stripe, Mutation *mut,
+  C_PS_StripeFrag(MDS *mds, CDirStripe *stripe, Mutation *mut,
                   const stripe_stat_update_t &supdate)
       : mds(mds), stripe(stripe), mut(mut), supdate(supdate) {}
   ~C_PS_StripeFrag() { delete mut; }
@@ -90,11 +90,11 @@ class C_PS_StripeFrag : public Context {
 class C_PS_StripeNest : public Context {
  private:
   MDS *mds;
-  CStripe *stripe;
+  CDirStripe *stripe;
   Mutation *mut;
   stripe_stat_update_t supdate;
  public:
-  C_PS_StripeNest(MDS *mds, CStripe *stripe, Mutation *mut,
+  C_PS_StripeNest(MDS *mds, CDirStripe *stripe, Mutation *mut,
                   const stripe_stat_update_t &update)
       : mds(mds), stripe(stripe), mut(mut), supdate(update)
   {
@@ -223,7 +223,7 @@ class C_PS_InodeNest : public Context {
 
 
 // Projected helpers
-fnode_t* ParentStats::Projected::get(CStripe *stripe, Mutation *mut)
+fnode_t* ParentStats::Projected::get(CDirStripe *stripe, Mutation *mut)
 {
   if (!stripes.insert(stripe).second) // already projected
     return stripe->get_projected_fnode();
@@ -247,7 +247,7 @@ inode_t* ParentStats::Projected::get(CInode *in, Mutation *mut)
 
 bool ParentStats::Projected::journal(EMetaBlob *blob)
 {
-  for (set<CStripe*>::iterator p = stripes.begin(); p != stripes.end(); ++p)
+  for (set<CDirStripe*>::iterator p = stripes.begin(); p != stripes.end(); ++p)
     blob->add_stripe(*p, true);
   for (set<CInode*>::iterator p = inodes.begin(); p != inodes.end(); ++p)
     blob->add_inode(*p, true);
@@ -260,7 +260,7 @@ bool ParentStats::Projected::journal(EMetaBlob *blob)
 ParentStats::ParentStats(MDS *mds)
   : mds(mds),
     unaccounted_inodes(member_offset(CInode, item_dirty_rstat)),
-    unaccounted_stripes(member_offset(CStripe, item_dirty_rstat)),
+    unaccounted_stripes(member_offset(CDirStripe, item_dirty_rstat)),
     tick_event(NULL)
 {
 }
@@ -295,7 +295,7 @@ void ParentStats::tick()
   dirty_stats.clear();
 }
 
-CStripe* ParentStats::open_parent_stripe(const inoparent_t &parent,
+CDirStripe* ParentStats::open_parent_stripe(const inoparent_t &parent,
                                          const stripe_stat_update_t &update)
 {
   assert(update.frag.delta.version || update.nest.delta.version);
@@ -308,12 +308,12 @@ CStripe* ParentStats::open_parent_stripe(const inoparent_t &parent,
     return NULL;
   }
 
-  CStripe *stripe = mds->mdcache->get_dirstripe(parent.stripe);
+  CDirStripe *stripe = mds->mdcache->get_dirstripe(parent.stripe);
   assert(stripe); // TODO: fetch stripe and continue
   return stripe;
 }
 
-CInode* ParentStats::open_parent_inode(CStripe *stripe,
+CInode* ParentStats::open_parent_inode(CDirStripe *stripe,
                                        const Mutation *mut,
                                        const inode_stat_update_t &update)
 {
@@ -344,7 +344,7 @@ CInode* ParentStats::open_parent_inode(CStripe *stripe,
 
 
 // stripe.fragstat and stripe.rstat
-bool ParentStats::update_stripe_stats(CStripe *stripe, Projected &projected,
+bool ParentStats::update_stripe_stats(CDirStripe *stripe, Projected &projected,
                                       Mutation *mut, EMetaBlob *blob,
                                       const stripe_stat_update_t &supdate,
                                       inode_stat_update_t &iupdate)
@@ -373,9 +373,9 @@ bool ParentStats::update_stripe_stats(CStripe *stripe, Projected &projected,
   pf->fragstat.version++;
 
   // pin until accounted
-  if (!stripe->state_test(CStripe::STATE_DIRTYFRAGSTAT)) {
-    stripe->state_set(CStripe::STATE_DIRTYFRAGSTAT);
-    stripe->get(CStripe::PIN_DIRTYFRAGSTAT);
+  if (!stripe->state_test(CDirStripe::STATE_DIRTYFRAGSTAT)) {
+    stripe->state_set(CDirStripe::STATE_DIRTYFRAGSTAT);
+    stripe->get(CDirStripe::PIN_DIRTYFRAGSTAT);
   }
 
   iupdate.frag.delta = frag.delta;
@@ -388,7 +388,7 @@ bool ParentStats::update_stripe_stats(CStripe *stripe, Projected &projected,
 }
 
 // stripe.rstat
-bool ParentStats::update_stripe_nest(CStripe *stripe, Projected &projected,
+bool ParentStats::update_stripe_nest(CDirStripe *stripe, Projected &projected,
                                      Mutation *mut, EMetaBlob *blob,
                                      const stripe_stat_update_t &supdate,
                                      inode_stat_update_t &iupdate)
@@ -417,9 +417,9 @@ bool ParentStats::update_stripe_nest(CStripe *stripe, Projected &projected,
   pf->rstat.version++;
 
   // pin until accounted
-  if (!stripe->state_test(CStripe::STATE_DIRTYRSTAT)) {
-    stripe->state_set(CStripe::STATE_DIRTYRSTAT);
-    stripe->get(CStripe::PIN_DIRTYRSTAT);
+  if (!stripe->state_test(CDirStripe::STATE_DIRTYRSTAT)) {
+    stripe->state_set(CDirStripe::STATE_DIRTYRSTAT);
+    stripe->get(CDirStripe::PIN_DIRTYRSTAT);
   }
 
   iupdate.stripeid = stripe->get_stripeid();
@@ -531,7 +531,7 @@ void ParentStats::update_accounted(dirstripe_t ds, int who,
                                    const nest_info_t &rstat)
 {
   if (who == mds->get_nodeid()) {
-    CStripe *stripe = mds->mdcache->get_dirstripe(ds);
+    CDirStripe *stripe = mds->mdcache->get_dirstripe(ds);
     if (!stripe) // must be accounted already if it isn't pinned
       return;
 
@@ -567,7 +567,7 @@ void ParentStats::update_accounted(inodeno_t ino, Projected &projected,
   }
 }
 
-void ParentStats::account_stripe(CStripe *stripe, const frag_info_t &fragstat,
+void ParentStats::account_stripe(CDirStripe *stripe, const frag_info_t &fragstat,
                                  const nest_info_t &rstat)
 {
   fnode_t *pf = stripe->get_projected_fnode();
@@ -578,10 +578,10 @@ void ParentStats::account_stripe(CStripe *stripe, const frag_info_t &fragstat,
     dout(10) << "fragstat accounted " << pf->accounted_fragstat
         << " for stripe " << stripe->dirstripe() << dendl;
 
-    if (stripe->state_test(CStripe::STATE_DIRTYFRAGSTAT) &&
+    if (stripe->state_test(CDirStripe::STATE_DIRTYFRAGSTAT) &&
         pf->accounted_fragstat.version == pf->fragstat.version) {
-      stripe->state_clear(CStripe::STATE_DIRTYFRAGSTAT);
-      stripe->put(CStripe::PIN_DIRTYFRAGSTAT);
+      stripe->state_clear(CDirStripe::STATE_DIRTYFRAGSTAT);
+      stripe->put(CDirStripe::PIN_DIRTYFRAGSTAT);
       dout(15) << "fragstat fully accounted for "
           << stripe->dirstripe() << dendl;
     }
@@ -593,10 +593,10 @@ void ParentStats::account_stripe(CStripe *stripe, const frag_info_t &fragstat,
     dout(10) << "rstat accounted " << pf->accounted_rstat
         << " for stripe " << stripe->dirstripe() << dendl;
 
-    if (stripe->state_test(CStripe::STATE_DIRTYRSTAT) &&
+    if (stripe->state_test(CDirStripe::STATE_DIRTYRSTAT) &&
         pf->accounted_rstat.version == pf->rstat.version) {
-      stripe->state_clear(CStripe::STATE_DIRTYRSTAT);
-      stripe->put(CStripe::PIN_DIRTYRSTAT);
+      stripe->state_clear(CDirStripe::STATE_DIRTYRSTAT);
+      stripe->put(CDirStripe::PIN_DIRTYRSTAT);
       dout(15) << "rstat fully accounted for "
           << stripe->dirstripe() << dendl;
     }
@@ -624,7 +624,7 @@ void ParentStats::account_inode(CInode *in, const nest_info_t &rstat)
 
 // recursive versions
 // stripe stats -> inode stats
-void ParentStats::update_stripe(CStripe *stripe, Projected &projected,
+void ParentStats::update_stripe(CDirStripe *stripe, Projected &projected,
                                 Mutation *mut, EMetaBlob *blob,
                                 const stripe_stat_update_t &supdate)
 {
@@ -669,7 +669,7 @@ void ParentStats::update_rstats(CInode *in, Projected &projected,
     return;
   }
 
-  CStripe *stripe = open_parent_stripe(pi->parents.front(), supdate);
+  CDirStripe *stripe = open_parent_stripe(pi->parents.front(), supdate);
   while (stripe) {
     inode_stat_update_t iupdate;
     if (!update_stripe_nest(stripe, projected, mut, blob, supdate, iupdate))
@@ -717,7 +717,7 @@ void ParentStats::update(const inode_t *pi, const inoparent_t &parent,
   dout(10) << "update " << parent << " " << update << dendl;
 
   // find parent stripe, or forward request
-  CStripe *stripe;
+  CDirStripe *stripe;
   if (!parent) {
     // pass empty inoparent to default to first parent
     if (pi->parents.empty()) {
@@ -762,7 +762,7 @@ void ParentStats::add(const inode_t *pi, const inoparent_t &parent,
   dout(10) << "add " << parent << " " << update << dendl;
 
   // update stripe.fragstat and recursive stats
-  CStripe *stripe = open_parent_stripe(parent, update);
+  CDirStripe *stripe = open_parent_stripe(parent, update);
   if (stripe)
     update_stripe(stripe, projected, mut, blob, update);
 
@@ -802,7 +802,7 @@ void ParentStats::sub(const inode_t *pi, const inoparent_t &parent,
 
     dout(10) << "sub moving " << sizeupdate.nest.delta
         << " to next parent " << *next << dendl;
-    CStripe *stripe = open_parent_stripe(*next, sizeupdate);
+    CDirStripe *stripe = open_parent_stripe(*next, sizeupdate);
     if (stripe)
       update_stripe(stripe, projected, mut, blob, sizeupdate);
   }
@@ -811,7 +811,7 @@ void ParentStats::sub(const inode_t *pi, const inoparent_t &parent,
   dout(10) << "sub " << parent << " " << update << dendl;
 
   // update stripe.fragstat and recursive stats
-  CStripe *stripe = open_parent_stripe(parent, update);
+  CDirStripe *stripe = open_parent_stripe(parent, update);
   if (stripe)
     update_stripe(stripe, projected, mut, blob, update);
 
@@ -862,7 +862,7 @@ void ParentStats::handle(MParentStats *m)
   for (stripe_iter s = m->stripes.begin(); s != m->stripes.end(); ++s) {
     dout(15) << "stripe " << s->first << ": " << s->second << dendl;
 
-    CStripe *stripe = mds->mdcache->get_dirstripe(s->first);
+    CDirStripe *stripe = mds->mdcache->get_dirstripe(s->first);
     assert(stripe); // TODO: fetch from disk
     assert(stripe->is_auth());
 
@@ -885,20 +885,20 @@ void ParentStats::handle(MParentStats *m)
 
 
 // replay/rejoin
-void ParentStats::replay_unaccounted(CStripe *stripe)
+void ParentStats::replay_unaccounted(CDirStripe *stripe)
 {
   fnode_t *pf = stripe->get_projected_fnode();
 
   // get pins for dirty parent stats
   if (pf->accounted_fragstat.version != pf->fragstat.version &&
-      !stripe->state_test(CStripe::STATE_DIRTYFRAGSTAT)) {
-    stripe->state_set(CStripe::STATE_DIRTYFRAGSTAT);
-    stripe->get(CStripe::PIN_DIRTYFRAGSTAT);
+      !stripe->state_test(CDirStripe::STATE_DIRTYFRAGSTAT)) {
+    stripe->state_set(CDirStripe::STATE_DIRTYFRAGSTAT);
+    stripe->get(CDirStripe::PIN_DIRTYFRAGSTAT);
   }
   if (pf->accounted_rstat.version != pf->rstat.version &&
-      !stripe->state_test(CStripe::STATE_DIRTYRSTAT)) {
-    stripe->state_set(CStripe::STATE_DIRTYRSTAT);
-    stripe->get(CStripe::PIN_DIRTYRSTAT);
+      !stripe->state_test(CDirStripe::STATE_DIRTYRSTAT)) {
+    stripe->state_set(CDirStripe::STATE_DIRTYRSTAT);
+    stripe->get(CDirStripe::PIN_DIRTYRSTAT);
   }
   unaccounted_stripes.push_back(&stripe->item_dirty_rstat);
 }
@@ -926,8 +926,8 @@ void ParentStats::propagate_unaccounted()
   Mutation *mut = new Mutation();
   EUpdate *le = new EUpdate(mds->mdlog, "replay_parent_stats");
 
-  for (elist<CStripe*>::iterator s = unaccounted_stripes.begin(); !s.end(); ++s) {
-    CStripe *stripe = *s;
+  for (elist<CDirStripe*>::iterator s = unaccounted_stripes.begin(); !s.end(); ++s) {
+    CDirStripe *stripe = *s;
     stripe->item_dirty_rstat.remove_myself();
 
     fnode_t *pf = projected.get(stripe, mut);
@@ -941,18 +941,18 @@ void ParentStats::propagate_unaccounted()
       update.frag.delta.add_delta(pf->fragstat, pf->accounted_fragstat, mtime);
       update.frag.delta.version = 1;
       update.frag.stat = pf->fragstat;
-    } else if (stripe->state_test(CStripe::STATE_DIRTYFRAGSTAT)) {
-      stripe->state_clear(CStripe::STATE_DIRTYFRAGSTAT);
-      stripe->put(CStripe::PIN_DIRTYFRAGSTAT);
+    } else if (stripe->state_test(CDirStripe::STATE_DIRTYFRAGSTAT)) {
+      stripe->state_clear(CDirStripe::STATE_DIRTYFRAGSTAT);
+      stripe->put(CDirStripe::PIN_DIRTYFRAGSTAT);
     }
     // get rstat delta, or drop dirty rstat pin
     if (pf->rstat.version != pf->accounted_rstat.version) {
       update.nest.delta.add_delta(pf->rstat, pf->accounted_rstat);
       update.nest.delta.version = 1;
       update.nest.stat = pf->rstat;
-    } else if (stripe->state_test(CStripe::STATE_DIRTYRSTAT)) {
-      stripe->state_clear(CStripe::STATE_DIRTYRSTAT);
-      stripe->put(CStripe::PIN_DIRTYRSTAT);
+    } else if (stripe->state_test(CDirStripe::STATE_DIRTYRSTAT)) {
+      stripe->state_clear(CDirStripe::STATE_DIRTYRSTAT);
+      stripe->put(CDirStripe::PIN_DIRTYRSTAT);
     }
 
     if (update.frag.delta.version == 0 && update.nest.delta.version == 0)
@@ -991,7 +991,7 @@ void ParentStats::propagate_unaccounted()
       account_inode(in, update.nest.stat);
       return;
     }
-    CStripe *stripe = open_parent_stripe(pi->parents.front(), update);
+    CDirStripe *stripe = open_parent_stripe(pi->parents.front(), update);
     if (stripe)
       update_stripe(stripe, projected, mut, &le->metablob, update);
   }
