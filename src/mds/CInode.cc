@@ -432,34 +432,34 @@ bool CInode::has_subtree_root_stripe(int auth) const
   return false;
 }
 
-void CInode::get_stripes(list<CStripe*>& ls)
+void CInode::get_stripes(list<CDirStripe*>& ls)
 {
   for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
     ls.push_back(p->second);
 }
 
 
-CStripe* CInode::get_stripe(stripeid_t stripeid)
+CDirStripe* CInode::get_stripe(stripeid_t stripeid)
 {
   assert(stripeid < stripe_auth.size());
   stripe_map::iterator i = stripes.find(stripeid);
   return i == stripes.end() ? NULL : i->second;
 }
 
-CStripe* CInode::get_or_open_stripe(stripeid_t stripeid)
+CDirStripe* CInode::get_or_open_stripe(stripeid_t stripeid)
 {
   // have it?
-  CStripe *stripe = get_stripe(stripeid);
+  CDirStripe *stripe = get_stripe(stripeid);
   if (!stripe) {
     // create it.
     //assert(get_stripe_auth(stripeid) == mdcache->mds->get_nodeid());
-    stripe = new CStripe(this, stripeid, get_stripe_auth(stripeid));
+    stripe = new CDirStripe(this, stripeid, get_stripe_auth(stripeid));
     add_stripe(stripe);
   }
   return stripe;
 }
 
-CStripe* CInode::add_stripe(CStripe *stripe)
+CDirStripe* CInode::add_stripe(CDirStripe *stripe)
 {
   assert(stripes.count(stripe->get_stripeid()) == 0);
   stripes[stripe->get_stripeid()] = stripe;
@@ -470,7 +470,7 @@ CStripe* CInode::add_stripe(CStripe *stripe)
   return stripe;
 }
 
-void CInode::close_stripe(CStripe *stripe)
+void CInode::close_stripe(CDirStripe *stripe)
 {
   dout(14) << "close_stripe " << *stripe << dendl;
   assert(stripes.count(stripe->get_stripeid()));
@@ -572,12 +572,12 @@ CDirFrag *CInode::get_projected_parent_dir()
     return p->dir;
   return NULL;
 }
-CStripe* CInode::get_parent_stripe()
+CDirStripe* CInode::get_parent_stripe()
 {
   CDirFrag *dir = get_parent_dir();
   return dir ? dir->get_stripe() : NULL;
 }
-CStripe* CInode::get_projected_parent_stripe()
+CDirStripe* CInode::get_projected_parent_stripe()
 {
   CDirFrag *dir = get_projected_parent_dir();
   return dir ? dir->get_stripe() : NULL;

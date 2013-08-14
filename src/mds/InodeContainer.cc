@@ -154,7 +154,7 @@ void InodeContainer::restripe(const set<int> &nodes, bool replay)
     if (to == mds->get_nodeid()) {
       stripe = in->get_stripe(i);
       if (stripe == NULL) {
-        stripe = in->add_stripe(new CStripe(in, i, to));
+        stripe = in->add_stripe(new CDirStripe(in, i, to));
         if (le)
           le->metablob.add_stripe(stripe, false);
         else
@@ -206,7 +206,7 @@ void InodeContainer::handle_restripe(MMDSRestripe *m)
   // open my inode container stripe and claim auth
   stripe = in->get_stripe(m->stripeid);
   if (!stripe) {
-    stripe = in->add_stripe(new CStripe(in, m->stripeid, mds->get_nodeid()));
+    stripe = in->add_stripe(new CDirStripe(in, m->stripeid, mds->get_nodeid()));
     stripe->set_stripe_auth(mds->get_nodeid());
   }
 

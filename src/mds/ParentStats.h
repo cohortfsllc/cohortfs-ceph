@@ -21,7 +21,7 @@
 #include "mdstypes.h"
 
 class CInode;
-class CStripe;
+class CDirStripe;
 class EMetaBlob;
 class MDS;
 class MParentStats;
@@ -32,7 +32,7 @@ class ParentStats {
   MDS *mds;
 
   elist<CInode*> unaccounted_inodes;
-  elist<CStripe*> unaccounted_stripes;
+  elist<CDirStripe*> unaccounted_stripes;
 
   // queued async update messages
   typedef map<int, MParentStats*> dirty_stats_map;
@@ -50,29 +50,29 @@ class ParentStats {
 
 
   // open the parent object or forward stats to auth mds
-  CStripe* open_parent_stripe(const inoparent_t &parent,
+  CDirStripe* open_parent_stripe(const inoparent_t &parent,
                               const stripe_stat_update_t &supdate);
-  CInode* open_parent_inode(CStripe *stripe, const Mutation *mut,
+  CInode* open_parent_inode(CDirStripe *stripe, const Mutation *mut,
                             const inode_stat_update_t &iupdate);
 
   // set of projected stripes/inodes
   class Projected {
    private:
-    set<CStripe*> stripes;
+    set<CDirStripe*> stripes;
     set<CInode*> inodes;
    public:
-    fnode_t* get(CStripe *stripe, Mutation *mut);
+    fnode_t* get(CDirStripe *stripe, Mutation *mut);
     inode_t* get(CInode *in, Mutation *mut);
     bool journal(EMetaBlob *blob);
   };
 
   // stripe fragstat/rstat
-  bool update_stripe_stats(CStripe *stripe, Projected &projected,
+  bool update_stripe_stats(CDirStripe *stripe, Projected &projected,
                            Mutation *mut, EMetaBlob *blob,
                            const stripe_stat_update_t &supdate,
                            inode_stat_update_t &iupdate);
   // stripe rstat
-  bool update_stripe_nest(CStripe *stripe, Projected &projected,
+  bool update_stripe_nest(CDirStripe *stripe, Projected &projected,
                           Mutation *mut, EMetaBlob *blob,
                           const stripe_stat_update_t &supdate,
                           inode_stat_update_t &iupdate);
@@ -88,7 +88,7 @@ class ParentStats {
                          stripe_stat_update_t &supdate);
 
   // recursive versions, terminated by non-recursive loop in update_rstats()
-  void update_stripe(CStripe *stripe, Projected &projected,
+  void update_stripe(CDirStripe *stripe, Projected &projected,
                      Mutation *mut, EMetaBlob *blob,
                      const stripe_stat_update_t &supdate);
 
@@ -115,7 +115,7 @@ class ParentStats {
   void update_accounted(inodeno_t ino, Projected &projected, Mutation *mut,
                         const nest_info_t &accounted_rstat);
 
-  void account_stripe(CStripe *stripe, const frag_info_t &fragstat,
+  void account_stripe(CDirStripe *stripe, const frag_info_t &fragstat,
                       const nest_info_t &rstat);
   void account_inode(CInode *in, const nest_info_t &rstat);
 
@@ -141,7 +141,7 @@ class ParentStats {
   void handle(MParentStats *m);
 
   // collect the set of unaccounted parent stats during replay
-  void replay_unaccounted(CStripe *stripe);
+  void replay_unaccounted(CDirStripe *stripe);
   void replay_unaccounted(CInode *in);
 
   // start to propagate unaccounted parent stats from replay

@@ -969,7 +969,7 @@ void Server::set_trace_dist(Session *session, MClientReply *reply,
   // dir + dentry?
   if (dn) {
     reply->head.is_dentry = 1;
-    CStripe *stripe = dn->get_stripe();
+    CDirStripe *stripe = dn->get_stripe();
     CInode *diri = stripe->get_inode();
 
     diri->encode_inodestat(bl, session, NULL, snapid);
@@ -1670,7 +1670,7 @@ CDirFrag *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string
   // XXX: avoid taking the hash when stripe count is 1 and fragtree is empty
   __u32 dnhash = diri->hash_dentry_name(dname);
   int stripeid = diri->pick_stripe(dnhash);
-  CStripe *stripe = try_open_auth_stripe(diri, stripeid, mdr);
+  CDirStripe *stripe = try_open_auth_stripe(diri, stripeid, mdr);
   if (!stripe)
     return 0;
 
@@ -2165,7 +2165,7 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
  * @param mdr request
  * @returns the pointer, or NULL if it had to be delayed (but mdr is taken care of)
  */
-CStripe* Server::try_open_auth_stripe(CInode *diri, int stripeid, MDRequest *mdr)
+CDirStripe* Server::try_open_auth_stripe(CInode *diri, int stripeid, MDRequest *mdr)
 {
   // are we the stripe auth?
   int who = diri->get_stripe_auth(stripeid);
@@ -2177,7 +2177,7 @@ CStripe* Server::try_open_auth_stripe(CInode *diri, int stripeid, MDRequest *mdr
   }
 
   // fetch the stripe if it's not open
-  CStripe *stripe = diri->get_or_open_stripe(stripeid);
+  CDirStripe *stripe = diri->get_or_open_stripe(stripeid);
   if (!stripe->is_open()) {
     stripe->fetch(new C_MDS_RetryRequest(mdcache, mdr));
     return 0;
@@ -2703,7 +2703,7 @@ void Server::handle_client_readdir(MDRequest *mdr)
   stripeid_t stripeid = req->head.args.readdir.stripe;
   const string &offset_str = req->get_path2();
 
-  CStripe *stripe = try_open_auth_stripe(diri, stripeid, mdr);
+  CDirStripe *stripe = try_open_auth_stripe(diri, stripeid, mdr);
   if (!stripe) return;
 
   dout(10) << "handle_client_readdir on " << *stripe
@@ -3832,10 +3832,10 @@ public:
 
     // mkdir?
     if (newi->inode.is_dir()) { 
-      list<CStripe*> stripes;
+      list<CDirStripe*> stripes;
       newi->get_stripes(stripes);
-      for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-        CStripe *stripe = *s;
+      for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+        CDirStripe *stripe = *s;
         assert(stripe);
         stripe->mark_dirty(mdr->ls);
         stripe->mark_new(mdr->ls);
@@ -4052,7 +4052,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
 
       if (who == mds->get_nodeid()) {
         // local request
-        CStripe *newstripe = newi->get_or_open_stripe(i);
+        CDirStripe *newstripe = newi->get_or_open_stripe(i);
         newstripe->mark_open();
         CDirFrag *newdir = newstripe->get_or_open_dirfrag(frag_t());
         newdir->mark_complete();
@@ -4120,10 +4120,10 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   le->metablob.add_dentry(dn, true);
 
   // add new stripes to the journal
-  list<CStripe*> stripes;
+  list<CDirStripe*> stripes;
   newi->get_stripes(stripes);
-  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CStripe *newstripe = *s;
+  for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    CDirStripe *newstripe = *s;
     CDirFrag *newdir = newstripe->get_dirfrag(frag_t());
     le->metablob.add_new_dir(newdir);
     le->metablob.add_stripe(newstripe, true, true); // dirty and new
@@ -4169,7 +4169,7 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
   list<Context*> finished;
   bufferlist::iterator blp = req->srci_replica.begin();
   CInode *container = mdcache->get_container()->get_inode();
-  CStripe *stripe = mdcache->add_replica_stripe(blp, container, from, finished);
+  CDirStripe *stripe = mdcache->add_replica_stripe(blp, container, from, finished);
   CDirFrag *dir = mdcache->add_replica_dir(blp, stripe, finished);
   CDentry *dn = mdcache->add_replica_dentry(blp, dir, finished);
   CInode *in = mdcache->add_replica_inode(blp, dn, from, finished);
@@ -4186,7 +4186,7 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
 
   for (vector<stripeid_t>::iterator s = req->stripes.begin();
        s != req->stripes.end(); ++s) {
-    CStripe *newstripe = in->add_stripe(new CStripe(in, *s, mds->get_nodeid()));
+    CDirStripe *newstripe = in->add_stripe(new CDirStripe(in, *s, mds->get_nodeid()));
     newstripe->mark_open();
 
     CDirFrag *newdir = newstripe->get_or_open_dirfrag(frag_t());
@@ -4228,10 +4228,10 @@ void Server::slave_mkdir_finish(MDRequest *mdr, CInode *in)
   dout(10) << "slave_mkdir_finish " << *mdr << dendl;
 
   // mark new stripes dirty
-  list<CStripe*> stripes;
+  list<CDirStripe*> stripes;
   in->get_stripes(stripes);
-  for (list<CStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CStripe *stripe = *s;
+  for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    CDirStripe *stripe = *s;
     stripe->mark_dirty(mdr->ls);
     CDirFrag *dir = stripe->get_dirfrag(frag_t());
     dir->mark_dirty(mdr->ls);
@@ -4332,7 +4332,7 @@ void Server::do_mkdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   // remove the stripes created by handle_slave_mkdir()
   for (vector<stripeid_t>::iterator s = rollback.stripes.begin();
        s != rollback.stripes.end(); ++s) {
-    CStripe *stripe = in->get_stripe(*s);
+    CDirStripe *stripe = in->get_stripe(*s);
     assert(stripe);
     in->close_stripe(stripe);
   }
@@ -4947,7 +4947,7 @@ bool _discover_all_stripes(MDRequest *mdr, CInode *in)
 
   // discover any stripes that aren't already cached
   for (size_t stripeid = 0; stripeid < in->get_stripe_count(); ++stripeid) {
-    CStripe *stripe = in->get_stripe(stripeid);
+    CDirStripe *stripe = in->get_stripe(stripeid);
     if (!stripe)
       mdcache->discover_dir_stripe(in, stripeid, gather.new_sub(),
                                    in->get_stripe_auth(stripeid));
@@ -4971,7 +4971,7 @@ bool _dir_is_nonempty(MDRequest *mdr, CInode *in)
   dout(10) << "dir_is_nonempty " << *in << dendl;
 
   for (size_t stripeid = 0; stripeid < in->get_stripe_count(); ++stripeid) {
-    CStripe *stripe = in->get_stripe(stripeid);
+    CDirStripe *stripe = in->get_stripe(stripeid);
     assert(stripe);
     fnode_t *pf = stripe->get_projected_fnode();
     if (pf->fragstat.size() > 0) {
@@ -5141,11 +5141,11 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
 
   // unlink local stripes
   for (stripeid_t i = 0; i < in->get_stripe_count(); ++i) {
-    CStripe *stripe = in->get_stripe(i);
+    CDirStripe *stripe = in->get_stripe(i);
     if (!stripe->is_auth())
       continue;
     assert(stripe->is_open());
-    stripe->state_set(CStripe::STATE_UNLINKED);
+    stripe->state_set(CDirStripe::STATE_UNLINKED);
     le->metablob.add_stripe(stripe, true, false, true);
   }
 
@@ -5236,7 +5236,7 @@ bool Server::_rmdir_prepare_witness(MDRequest *mdr, CDentry *dn,
 
 CDentry* lookup_inoparent(MDCache *mdcache, const inoparent_t &parent)
 {
-  CStripe *stripe = mdcache->get_dirstripe(parent.stripe);
+  CDirStripe *stripe = mdcache->get_dirstripe(parent.stripe);
   if (!stripe)
     return NULL;
   CDirFrag *dir = stripe->get_dirfrag(stripe->pick_dirfrag(parent.name));
@@ -5294,9 +5294,9 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
   // journal each stripe as dirty/unlinked
   for (vector<stripeid_t>::iterator i = rollback.stripes.begin();
        i != rollback.stripes.end(); ++i) {
-    CStripe *stripe = in->get_stripe(*i);
+    CDirStripe *stripe = in->get_stripe(*i);
     assert(stripe->is_open()); // master holds rdlock
-    stripe->state_set(CStripe::STATE_UNLINKED);
+    stripe->state_set(CDirStripe::STATE_UNLINKED);
     le->commit.add_stripe(stripe, true, false, true);
   }
 
@@ -5423,10 +5423,10 @@ void Server::do_rmdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   assert(in);
   for (vector<stripeid_t>::iterator i = rollback.stripes.begin();
        i != rollback.stripes.end(); ++i) {
-    CStripe *stripe = in->get_stripe(*i);
+    CDirStripe *stripe = in->get_stripe(*i);
     assert(stripe);
     assert(stripe->is_auth());
-    stripe->state_clear(CStripe::STATE_UNLINKED);
+    stripe->state_clear(CDirStripe::STATE_UNLINKED);
     dout(10) << "stripe " << *stripe << " relinked" << dendl;
     le->commit.add_stripe(stripe, true);
   }
@@ -5904,12 +5904,12 @@ void Server::handle_slave_rename_prep(MDRequest *mdr)
   for (vector<stripeid_t>::iterator s = req->stripes.begin();
        s != req->stripes.end(); ++s) {
     assert(destin);
-    CStripe *stripe = destin->get_stripe(*s);
+    CDirStripe *stripe = destin->get_stripe(*s);
     assert(stripe);
     assert(stripe->is_auth());
 
     // flag and journal as unlinked
-    stripe->state_set(CStripe::STATE_UNLINKED);
+    stripe->state_set(CDirStripe::STATE_UNLINKED);
 
     le->commit.add_stripe(stripe, true, false, true);
   }
@@ -6111,11 +6111,11 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr,
     // clear and journal unlinked flag
     for (vector<stripeid_t>::iterator s = rollback.stripes.begin();
          s != rollback.stripes.end(); ++s) {
-      CStripe *stripe = target->get_stripe(*s);
+      CDirStripe *stripe = target->get_stripe(*s);
       assert(stripe);
       assert(stripe->is_auth());
 
-      stripe->state_clear(CStripe::STATE_UNLINKED);
+      stripe->state_clear(CDirStripe::STATE_UNLINKED);
 
       le->commit.add_stripe(stripe, true);
     }
