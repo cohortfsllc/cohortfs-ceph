@@ -13,81 +13,24 @@
  */
 
 
-#ifndef CEPH_VOLMAP_H
-#define CEPH_VOLMAP_H
+#ifndef VOL_VOLMAP_H
+#define VOL_VOLMAP_H
 
 #include <errno.h>
-
-// #include "include/types.h"
-// #include "common/Clock.h"
 #include "msg/Message.h"
-
 #include <string>
 #include <map>
 #include <vector>
 
+#include "Volume.h"
 #include "common/config.h"
-
-// #include "include/CompatSet.h"
 #include "common/Formatter.h"
 
 using namespace std;
 
 class VolMonitor;
 class CephContext;
-class VolInfo;
 class VolMap;
-
-enum vol_type {
-  VolFS,
-  VolBlock,
-  VolDeDupFS,
-  VolDeDupBlock,
-  NotAVolType
-};
-
-WRITE_RAW_ENCODER(vol_type);
-
-class Volume {
-private:
-  static const std::string typestrings[];
-  bufferlist place_text;
-  void *place_shared;
-
-public:
-  vol_type type;
-  uuid_d uuid;
-  string name;
-  epoch_t last_update;
-
-  Volume(const vol_type t, const string n,
-	 const bufferlist &p) :
-    place_text(p), place_shared(NULL), type(t), uuid(0),
-    name(n) { }
-
-  virtual ~Volume() { };
-
-  virtual void encode(bufferlist& bl) const;
-  virtual void decode(bufferlist::iterator& bl);
-  virtual void decode(bufferlist& bl);
-  virtual void dump(Formatter *f) const;
-
-  static bool valid_name(const string& name, string& error);
-  virtual bool valid(string& error);
-
-  /* Signature subject to change */
-  virtual int64_t place(const object_t& o,
-			uint32_t rule,
-			uint32_t replica) = 0;
-  virtual uint32_t num_rules(void) = 0;
-
-  virtual int update(std::tr1::shared_ptr<const Volume> v);
-
-  static const string& type_string(vol_type type);
-};
-
-typedef std::tr1::shared_ptr<Volume> VolumeRef;
-typedef std::tr1::shared_ptr<const Volume> VolumeCRef;
 
 class VolMap {
 public:
@@ -258,4 +201,4 @@ inline ostream& operator<<(ostream& out, const Volume& volume) {
   return out;
 }
 
-#endif // CEPH_VOLMAP_H
+#endif // VOL_VOLMAP_H

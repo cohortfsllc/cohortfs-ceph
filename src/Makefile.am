@@ -1406,6 +1406,7 @@ libcommon_files = \
 	mon/MonMap.cc \
 	msg/Accepter.cc \
 	msg/DispatchQueue.cc \
+	vol/Volume.cc \
 	vol/VolMap.cc \
 	msg/Message.cc \
 	common/RefCountedObj.cc \
@@ -1972,6 +1973,7 @@ noinst_HEADERS = \
 	mon/QuorumService.h\
         mon/Session.h\
         mon/VolMonitor.h\
+        vol/Volume.h\
         vol/VolMap.h\
         mon/mon_types.h\
 	mount/canonicalize.c\

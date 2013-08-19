@@ -14,7 +14,6 @@
 
 
 #include "VolMap.h"
-
 #include <sstream>
 
 #ifdef USING_UNICODE
@@ -27,68 +26,11 @@
 #define L_IS_PRINTABLE(c) (isprint(c))
 #endif
 
-
 #define dout_subsys ceph_subsys_mon
 
 using std::stringstream;
 
 const string VolMap::EMPTY_STRING = "";
-
-const std::string Volume::typestrings[] = {
-  "VolFS", "VolBlock", "VolDeDupFS", "VolDeDupBlock","NotAVolType"};
-
-bool Volume::valid_name(const string &name, string &error)
-{
-  if (name.empty()) {
-    error = "volume name may not be empty";
-    return false;
-  }
-
-  if (L_IS_WHITESPACE(*name.begin())) {
-    error = "volume name may not begin with space characters";
-    return false;
-  }
-
-  if (L_IS_WHITESPACE(*name.rbegin())) {
-    error = "volume name may not end with space characters";
-    return false;
-  }
-
-  for (string::const_iterator c = name.begin(); c != name.end(); ++c) {
-    if (!L_IS_PRINTABLE(*c)) {
-      error = "volume name can only contain printable characters";
-      return false;
-    }
-  }
-
-  try {
-    uuid_d::parse(name);
-    error = "volume name cannot match the form of UUIDs";
-    return false;
-  } catch (const std::invalid_argument &ia) {
-    return true;
-  }
-
-}
-
-bool Volume::valid(string& error)
-{
-  if (!valid_name(name, error)) {
-    return false;
-  }
-
-  if (uuid == 0) {
-    error = "UUID may not be 0.";
-    return false;
-  }
-
-  return true;
-}
-
-int Volume::update(std::tr1::shared_ptr<const Volume> v)
-{
-#warning To be done.
-}
 
 void VolMap::encode(bufferlist& bl, uint64_t features) const {
   __u8 v = 1;
@@ -305,27 +247,6 @@ bool VolMap::get_vol_uuid(const string& volspec, uuid_d& uuid_out) const
   }
 }
 
-const string& Volume::type_string(vol_type type)
-{
-  if ((type < 0) || (type >= NotAVolType)) {
-    return typestrings[NotAVolType];
-  } else {
-    return typestrings[type];
-  }
-}
-
-void Volume::dump(Formatter *f) const
-{
-  char uuid_buf[uuid_d::uuid_d::char_rep_buf_size];
-  uuid.print(uuid_buf);
-  string uuid_str(uuid_buf);
-  f->dump_string("uuid", uuid_str);
-  f->dump_string("name", name);
-  f->dump_string("type", type_string(type));
-  /* We don't yet dump the placement text.  It's doubtful that there's
-     actually any reason to bother. */
-}
-
 void VolMap::dump(Formatter *f) const
 {
   f->dump_int("epoch", epoch);
@@ -381,35 +302,6 @@ void VolMap::dump(ostream& out) const
 {
   print_summary(out);
 }
-
-void Volume::encode(bufferlist& bl) const
-{
-  __u8 v = 1;
-  ::encode(v, bl);
-  ::encode(type, bl);
-  ::encode(uuid, bl);
-  ::encode(name, bl);
-  ::encode(last_update, bl);
-  ::encode(place_text, bl);
-}
-
-void Volume::decode(bufferlist::iterator& bl)
-{
-  __u8 v;
-  ::decode(v, bl);
-  ::decode(type, bl);
-  ::decode(uuid, bl);
-  ::decode(name, bl);
-  ::decode(last_update, bl);
-  ::decode(place_text, bl);
-}
-
-void Volume::decode(bufferlist& bl)
-{
-  bufferlist::iterator p = bl.begin();
-  decode(p);
-}
-
 
 void VolMap::Incremental::inc_add::encode(bufferlist& bl,
 					  uint64_t features) const {
