@@ -1140,8 +1140,7 @@ void MDS::boot_create()
 
   // start with a fresh journal
   dout(10) << "boot_create creating fresh journal" << dendl;
-#warning Volumes, to be done later!
-  mdlog->create(uuid_d(), fin.new_sub());
+  mdlog->create(fin.new_sub());
   mdlog->start_new_segment(fin.new_sub());
 
   if (whoami == mdsmap->get_root()) {

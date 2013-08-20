@@ -120,8 +120,8 @@ public:
   }
 
 public:
-  JournalingObjectStore(const uuid_d &vol) :
-    ObjectStore(vol),
+  JournalingObjectStore() :
+    ObjectStore(),
     journal(NULL), finisher(g_ceph_context),
     apply_manager(journal, finisher),
     replaying(false) {}

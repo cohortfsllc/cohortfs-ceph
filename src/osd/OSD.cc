@@ -170,8 +170,7 @@ void OSDService::init()
   init_sub();
 }
 
-ObjectStore *OSD::create_object_store(const uuid_d &vol,
-				      const std::string &dev,
+ObjectStore *OSD::create_object_store(const std::string &dev,
 				      const std::string &jdev)
 {
   struct stat st;
@@ -179,10 +178,10 @@ ObjectStore *OSD::create_object_store(const uuid_d &vol,
     return 0;
 
   if (g_conf->filestore)
-    return new FileStore(vol, dev, jdev);
+    return new FileStore(dev, jdev);
 
   if (S_ISDIR(st.st_mode))
-    return new FileStore(vol, dev, jdev);
+    return new FileStore(dev, jdev);
   else
     return 0;
 }
@@ -313,23 +312,23 @@ int OSD::do_convertfs(ObjectStore *store)
   return store->umount();
 }
 
-int OSD::convertfs(const uuid_d &vol, const std::string &dev,
+int OSD::convertfs(const std::string &dev,
 		   const std::string &jdev)
 {
   boost::scoped_ptr<ObjectStore> store(
-    new FileStore(vol, dev, jdev, "filestore", true));
+    new FileStore(dev, jdev, "filestore", true));
   int r = do_convertfs(store.get());
   return r;
 }
 
-int OSD::mkfs(const uuid_d &vol, const std::string &dev,
+int OSD::mkfs(const std::string &dev,
 	      const std::string &jdev, uuid_d fsid, int whoami)
 {
   int ret;
   ObjectStore *store = NULL;
 
   try {
-    store = create_object_store(vol, dev, jdev);
+    store = create_object_store(dev, jdev);
     if (!store) {
       ret = -ENOENT;
       goto out;
@@ -468,19 +467,19 @@ out:
   return ret;
 }
 
-int OSD::mkjournal(const uuid_d &vol, const std::string &dev,
+int OSD::mkjournal(const std::string &dev,
 		   const std::string &jdev)
 {
-  ObjectStore *store = create_object_store(vol, dev, jdev);
+  ObjectStore *store = create_object_store(dev, jdev);
   if (!store)
     return -ENOENT;
   return store->mkjournal();
 }
 
-int OSD::flushjournal(const uuid_d &vol, const std::string &dev,
+int OSD::flushjournal(const std::string &dev,
 		      const std::string &jdev)
 {
-  ObjectStore *store = create_object_store(vol, dev, jdev);
+  ObjectStore *store = create_object_store(dev, jdev);
   if (!store)
     return -ENOENT;
   int err = store->mount();
@@ -492,10 +491,10 @@ int OSD::flushjournal(const uuid_d &vol, const std::string &dev,
   return err;
 }
 
-int OSD::dump_journal(const uuid_d &vol, const std::string &dev,
+int OSD::dump_journal(const std::string &dev,
 		      const std::string &jdev, ostream& out)
 {
-  ObjectStore *store = create_object_store(vol, dev, jdev);
+  ObjectStore *store = create_object_store(dev, jdev);
   if (!store)
     return -ENOENT;
   int err = store->dump_journal(out);
@@ -733,8 +732,7 @@ int OSD::pre_init()
 
 
   assert(!store);
-#warning Volume stuff!  Revisit
-  store = create_object_store(uuid_d(), dev_path, journal_path);
+  store = create_object_store(dev_path, journal_path);
   if (!store) {
     derr << "OSD::pre_init: unable to create object store" << dendl;
     return -ENODEV;
@@ -1007,8 +1005,7 @@ int OSD::init_super()
 
   service->init();
   service->publish_map(osdmap);
-#warning Volume!
-  service->publish_superblock(uuid_d(), superblock);
+  service->publish_superblock(superblock);
 
   osd_lock.Unlock();
 
@@ -3253,8 +3250,7 @@ void OSD::handle_osd_map(MOSDMap *m)
     _t,
     new C_OnMapApply(service.get(), _t, pinned_maps, osdmap->get_epoch()),
     0, fin);
-#warning Volume!
-  service->publish_superblock(uuid_d(), superblock);
+  service->publish_superblock(superblock);
 
   map_lock.put_write();
 

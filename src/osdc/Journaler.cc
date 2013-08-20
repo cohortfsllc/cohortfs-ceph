@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "common/perf_counters.h"
@@ -144,7 +144,7 @@ void Journaler::read_head(Context *on_finish, bufferlist *bl)
 {
   assert(state == STATE_READHEAD || state == STATE_REREADHEAD);
 
-  object_t oid = file_object_t(volume, ino, 0);
+  object_t oid = file_object_t(uuid_d(), ino, 0);
   objecter->read_full(oid, CEPH_NOSNAP, bl, 0, on_finish);
 }
 
@@ -348,7 +348,8 @@ void Journaler::write_head(Context *oncommit)
   ::encode(last_written, bl);
   SnapContext snapc;
 
-  object_t oid = file_object_t(volume, ino, 0);
+#warning Look into this, later.
+  object_t oid = file_object_t(uuid_d(), ino, 0);
   objecter->write_full(oid, snapc, bl, ceph_clock_now(cct), 0,
 		       NULL,
 		       new C_WriteHead(this, last_written, oncommit));

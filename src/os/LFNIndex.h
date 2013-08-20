@@ -183,7 +183,6 @@ public:
 
   /// @see CollectionIndex
   int collection_list(
-    const uuid_d &volume,
     vector<hobject_t> *ls
     );
 
@@ -253,7 +252,6 @@ protected:
    */
   /// List contents of collection.
   virtual int _collection_list(
-    const uuid_d &vol,
     vector<hobject_t> *ls ///< [out] Listed objects.
     ) = 0;
 

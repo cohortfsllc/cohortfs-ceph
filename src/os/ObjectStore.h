@@ -78,7 +78,6 @@ static inline void encode(const map<string,bufferptr> *attrset, bufferlist &bl) 
 class ObjectStore {
 public:
 
-  const uuid_d volume;
   Logger *logger;
 
   /**
@@ -791,7 +790,7 @@ public:
   }
 
  public:
-    ObjectStore(const uuid_d &vol) : volume(vol), logger(NULL) {}
+    ObjectStore() : logger(NULL) {}
   virtual ~ObjectStore() {}
 
   // mgmt

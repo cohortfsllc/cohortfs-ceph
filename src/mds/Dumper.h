@@ -38,7 +38,6 @@ public:
   MonClient *monc;
   Mutex lock;
   SafeTimer timer;
-  uuid_d vol;
 
   int rank;
 
@@ -79,8 +78,8 @@ public:
   bool ms_handle_reset(Connection *con) { return false; }
   void ms_handle_remote_reset(Connection *con) {}
   bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
-                         bool force_new);
-  void init(uuid_d v, int rank);
+			 bool force_new);
+  void init(int rank);
   void shutdown();
   void dump(const char *dumpfile);
   void undump(const char *dumpfile);

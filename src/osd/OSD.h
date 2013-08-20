@@ -156,19 +156,13 @@ public:
 
   // -- superblock --
   Mutex publish_lock, pre_publish_lock;
-  map<uuid_d,OSDSuperblock> superblocks;
-  OSDSuperblock get_superblock(const uuid_d &vol) {
-    Mutex::Locker l(publish_lock);
-    map<uuid_d,OSDSuperblock>::const_iterator i = superblocks.find(vol);
-    /* TODO: Make sure callers will always know whether the volume exists. */
-    return i->second;
+  OSDSuperblock superblock;
+  OSDSuperblock get_superblock(void) {
+    return superblock;
   }
-  void publish_superblock(const uuid_d &vol,
-			  const OSDSuperblock &block) {
+  void publish_superblock(const OSDSuperblock &block) {
     Mutex::Locker l(publish_lock);
-    map<uuid_d,OSDSuperblock>::iterator i = superblocks.find(vol);
-    /* TODO: Make sure callers will always know whether the volume exists. */
-    i->second = block;
+    superblock = block;
   }
 
   int get_nodeid() const { return whoami; }
@@ -834,20 +828,19 @@ protected:
 
   // static bits
   static int find_osd_dev(char *result, int whoami);
-  static ObjectStore *create_object_store(const uuid_d &vol,
-					  const std::string &dev,
+  static ObjectStore *create_object_store(const std::string &dev,
 					  const std::string &jdev);
-  static int convertfs(const uuid_d &vol, const std::string &dev,
+  static int convertfs(const std::string &dev,
 		       const std::string &jdev);
   static int do_convertfs(ObjectStore *store);
   static int convert_collection(ObjectStore *store, coll_t cid);
-  static int mkfs(const uuid_d &vol, const std::string &dev,
+  static int mkfs(const std::string &dev,
 		  const std::string &jdev, uuid_d fsid, int whoami);
-  static int mkjournal(const uuid_d &vol, const std::string &dev,
+  static int mkjournal(const std::string &dev,
 		       const std::string &jdev);
-  static int flushjournal(const uuid_d &vol, const std::string &dev,
+  static int flushjournal(const std::string &dev,
 			  const std::string &jdev);
-  static int dump_journal(const uuid_d &vol, const std::string &dev,
+  static int dump_journal(const std::string &dev,
 			  const std::string &jdev, ostream& out);
   /* remove any non-user xattrs from a map of them */
   void filter_xattrs(map<string, bufferptr>& attrs) {

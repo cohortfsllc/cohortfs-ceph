@@ -127,8 +127,8 @@ int LFNIndex::lookup(const hobject_t &hoid,
   );
 }
 
-int LFNIndex::collection_list(const uuid_d &vol, vector<hobject_t> *ls) {
-  return _collection_list(vol, ls);
+int LFNIndex::collection_list(vector<hobject_t> *ls) {
+  return _collection_list(ls);
 }
 
 

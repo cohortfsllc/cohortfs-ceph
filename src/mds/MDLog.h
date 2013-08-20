@@ -69,7 +69,6 @@ protected:
 
   bool capped;
 
-  uuid_d volume;
   inodeno_t ino;
   Journaler *journaler;
 
@@ -185,7 +184,7 @@ public:
   void flush_logger();
 
   size_t get_num_events() { return num_events; }
-  size_t get_num_segments() { return segments.size(); }  
+  size_t get_num_segments() { return segments.size(); }
 
   uint64_t get_read_pos();
   uint64_t get_write_pos();
@@ -237,7 +236,7 @@ private:
   void write_head(Context *onfinish);
 
 public:
-  void create(uuid_d volume, Context *onfinish);  // fresh, empty log!
+  void create(Context *onfinish);  // fresh, empty log!
   void open(Context *onopen);      // append() or replay() to follow!
   void append();
   void replay(Context *onfinish);

@@ -85,24 +85,21 @@ static int do_cmds_special_action(const std::string &action,
   if (action == "dump-journal") {
     dout(0) << "dumping journal for mds." << rank << " to " << dump_file << dendl;
     Dumper *journal_dumper = new Dumper(messenger, &mc);
-#warning Volumes!  Fix me!
-    journal_dumper->init(uuid_d(), rank);
+    journal_dumper->init(rank);
     journal_dumper->dump(dump_file.c_str());
     mc.shutdown();
   }
   else if (action == "undump-journal") {
     dout(0) << "undumping journal for mds." << rank << " from " << dump_file << dendl;
     Dumper *journal_dumper = new Dumper(messenger, &mc);
-#warning Volumes!  Fix me!
-    journal_dumper->init(uuid_d(), rank);
+    journal_dumper->init(rank);
     journal_dumper->undump(dump_file.c_str());
     mc.shutdown();
   }
   else if (action == "reset-journal") {
     dout(0) << "resetting journal" << dendl;
     Resetter *jr = new Resetter(messenger, &mc);
-#warning Volumes!  Fix me!
-    jr->init(uuid_d(), rank);
+    jr->init(rank);
     jr->reset();
     mc.shutdown();
   }

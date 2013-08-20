@@ -48,14 +48,13 @@ bool Dumper::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
   return *authorizer != NULL;
 }
 
-void Dumper::init(uuid_d v, int rank)
+void Dumper::init(int rank)
 {
-  vol = v;
   osdmap = OSDMapPlaceSystem::getSystem().newOSDMap();;
 
   inodeno_t ino = MDS_INO_LOG_OFFSET + rank;
   objecter = new Objecter(g_ceph_context, messenger, monc, osdmap, lock, timer);
-  journaler = new Journaler(vol, ino, CEPH_FS_ONDISK_MAGIC,
+  journaler = new Journaler(ino, CEPH_FS_ONDISK_MAGIC,
 			    objecter, 0, 0, &timer);
 
   objecter->set_client_incarnation(0);
@@ -209,7 +208,7 @@ void Dumper::undump(const char *dump_file)
   bufferlist hbl;
   ::encode(h, hbl);
 
-  object_t oid = file_object_t(vol, ino, 0);
+  object_t oid = file_object_t(uuid_d(), ino, 0);
   SnapContext snapc;
 
   bool done = false;
