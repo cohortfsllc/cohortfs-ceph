@@ -47,8 +47,7 @@ private:
   static const std::string typestrings[];
 
 protected:
-  Volume(const vol_type t, const string n,
-	 const bufferlist &p) :
+  Volume(const vol_type t, const string n) :
     type(t), uuid(0), name(n) { }
 
 

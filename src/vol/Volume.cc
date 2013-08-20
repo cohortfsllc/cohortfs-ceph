@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -31,6 +31,32 @@ using std::stringstream;
 
 const std::string Volume::typestrings[] = {
   "VolFS", "VolBlock", "VolDeDupFS", "VolDeDupBlock","NotAVolType"};
+
+void Volume::encode(bufferlist& bl) const
+{
+  __u8 v = 1;
+  ::encode(v, bl);
+  ::encode(type, bl);
+  ::encode(uuid, bl);
+  ::encode(name, bl);
+  ::encode(last_update, bl);
+}
+
+void Volume::decode(bufferlist::iterator& bl)
+{
+  __u8 v;
+  ::decode(v, bl);
+  ::decode(type, bl);
+  ::decode(uuid, bl);
+  ::decode(name, bl);
+  ::decode(last_update, bl);
+}
+
+void Volume::decode(bufferlist& bl)
+{
+  bufferlist::iterator p = bl.begin();
+  decode(p);
+}
 
 bool Volume::valid_name(const string &name, string &error)
 {
@@ -105,28 +131,3 @@ void Volume::dump(Formatter *f) const
   f->dump_string("type", type_string(type));
 }
 
-void Volume::encode(bufferlist& bl) const
-{
-  __u8 v = 1;
-  ::encode(v, bl);
-  ::encode(type, bl);
-  ::encode(uuid, bl);
-  ::encode(name, bl);
-  ::encode(last_update, bl);
-}
-
-void Volume::decode(bufferlist::iterator& bl)
-{
-  __u8 v;
-  ::decode(v, bl);
-  ::decode(type, bl);
-  ::decode(uuid, bl);
-  ::decode(name, bl);
-  ::decode(last_update, bl);
-}
-
-void Volume::decode(bufferlist& bl)
-{
-  bufferlist::iterator p = bl.begin();
-  decode(p);
-}
