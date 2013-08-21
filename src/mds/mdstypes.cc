@@ -447,6 +447,7 @@ void inode_t::encode(bufferlist &bl) const
   ::encode(nlink, bl);
   ::encode(anchored, bl);
 
+  ceph_dir_layout dir_layout; // ignored
   ::encode(dir_layout, bl);
   ::encode(layout, bl);
   ::encode(size, bl);
@@ -489,10 +490,10 @@ void inode_t::decode(bufferlist::iterator &p)
   ::decode(nlink, p);
   ::decode(anchored, p);
 
-  if (struct_v >= 4)
+  if (struct_v >= 4) {
+    ceph_dir_layout dir_layout; // ignored
     ::decode(dir_layout, p);
-  else
-    memset(&dir_layout, 0, sizeof(dir_layout));
+  }
   ::decode(layout, p);
   ::decode(size, p);
   ::decode(truncate_seq, p);
@@ -545,10 +546,6 @@ void inode_t::dump(Formatter *f) const
   f->dump_unsigned("gid", gid);
   f->dump_unsigned("nlink", nlink);
   f->dump_unsigned("anchored", (int)anchored);
-
-  f->open_object_section("dir_layout");
-  ::dump(dir_layout, f);
-  f->close_section();
 
   f->open_object_section("layout");
   ::dump(layout, f);

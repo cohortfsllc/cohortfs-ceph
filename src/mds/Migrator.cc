@@ -155,10 +155,6 @@ void Migrator::finish_export_inode(CInode *in, utime_t now, list<Context*>& fini
   assert(in->is_auth());
   in->state_clear(CInode::STATE_AUTH);
   in->replica_nonce = CInode::EXPORT_NONCE;
-  
-  // no more auth subtree? clear scatter dirty
-  if (!in->has_subtree_root_stripe(mds->get_nodeid()))
-    in->clear_scatter_dirty();
 
   in->item_open_file.remove_myself();
 

@@ -37,14 +37,6 @@ void Mutation::unpin(MDSCacheObject *o)
   pins.erase(o);
 }
 
-void Mutation::set_stickystripes(CInode *in)
-{
-  if (stickystripes.count(in) == 0) {
-    in->get_stickystripes();
-    stickystripes.insert(in);
-  }
-}
-
 void Mutation::drop_pins()
 {
   for (set<MDSCacheObject*>::iterator it = pins.begin();

@@ -14,6 +14,7 @@
 
 #include "ParentStats.h"
 #include "CDirStripe.h"
+#include "CInode.h"
 #include "Locker.h"
 #include "MDCache.h"
 #include "MDLog.h"
@@ -319,26 +320,29 @@ CInode* ParentStats::open_parent_inode(CDirStripe *stripe,
 {
   assert(update.frag.delta.version || update.nest.delta.version);
 
-  CInode *in = stripe->get_inode();
-  assert(in);
+  CDirPlacement *placement = stripe->get_placement();
+  assert(placement);
 
-  if (in->is_ambiguous_auth()) {
+  if (placement->is_ambiguous_auth()) {
     // retry on single auth
     Mutation *newmut = new Mutation(mut->reqid, mut->attempt);
-    in->add_waiter(CInode::WAIT_SINGLEAUTH,
-                   new C_PS_InodeAmbig(mds, in, newmut, update));
-    dout(10) << "waiting on single auth for " << *in << dendl;
+    placement->add_waiter(CDirPlacement::WAIT_SINGLEAUTH,
+                          new C_PS_InodeAmbig(mds, placement->get_inode(),
+                                              newmut, update));
+    dout(10) << "waiting on single auth for " << *placement << dendl;
     return NULL;
   }
-  if (!in->is_auth()) {
+  if (!placement->is_auth()) {
     // forward to auth mds
-    int who = in->authority().first;
+    int who = placement->authority().first;
     dout(10) << "forwarding to auth mds." << who
-        << " for parent inode " << in->ino() << dendl;
-    stats_for_mds(who)->add_inode(in->ino(), update);
+        << " for parent inode " << placement->ino() << dendl;
+    stats_for_mds(who)->add_inode(placement->ino(), update);
     return NULL;
   }
 
+  CInode *in = placement->mdcache->get_inode(placement->ino());
+  assert(in); // TODO: load from inode container
   return in;
 }
 
@@ -470,7 +474,7 @@ bool ParentStats::update_inode_stats(CInode *in, Projected &projected,
 
   // ack for stripe.accounted_fragstat
   dirstripe_t ds(in->ino(), iupdate.stripeid);
-  int who = in->get_stripe_auth(ds.stripeid);
+  int who = in->get_placement()->get_stripe_auth(ds.stripeid);
   update_accounted(ds, who, projected, mut, frag.stat, nest_info_t());
 
   return update_inode_nest(in, projected, mut, blob, iupdate, supdate);
@@ -518,7 +522,7 @@ bool ParentStats::update_inode_nest(CInode *in, Projected &projected,
 
   // ack for stripe.accounted_rstat
   dirstripe_t ds(in->ino(), iupdate.stripeid);
-  int who = in->get_stripe_auth(ds.stripeid);
+  int who = in->get_placement()->get_stripe_auth(ds.stripeid);
   update_accounted(ds, who, projected, mut, frag_info_t(), nest.stat);
   return true;
 }
@@ -551,8 +555,9 @@ void ParentStats::update_accounted(inodeno_t ino, Projected &projected,
   // check cache, or use placement algorithm to locate inode
   CInode *in = mds->mdcache->get_inode(ino);
   InodeContainer *container = mds->mdcache->get_container();
+  CDirPlacement *placement = container->get_inode()->get_placement();
   int who = in ? in->authority().first :
-      container->get_inode()->get_stripe_auth(container->place(ino));
+      placement->get_stripe_auth(container->place(ino));
   if (who == mds->get_nodeid()) {
     if (!in) // must be accounted already if it isn't pinned
       return;

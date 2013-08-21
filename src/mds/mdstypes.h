@@ -486,7 +486,6 @@ struct inode_t {
   bool       anchored;          // auth only?
 
   // file (data access)
-  ceph_dir_layout  dir_layout;    // [dir only]
   ceph_file_layout layout;
   vector <int64_t> old_pools;
   uint64_t   size;        // on directory, # dentries
@@ -522,7 +521,6 @@ struct inode_t {
 	      time_warp_seq(0),
 	      version(0), file_data_version(0), xattr_version(0), backtrace_version(0) {
     clear_layout();
-    memset(&dir_layout, 0, sizeof(dir_layout));
   }
 
   // file type

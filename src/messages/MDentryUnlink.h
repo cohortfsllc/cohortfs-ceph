@@ -21,8 +21,8 @@ class MDentryUnlink : public Message {
   string dn;
 
  public:
-  dirfrag_t get_dirfrag() { return dirfrag; }
-  string& get_dn() { return dn; }
+  dirfrag_t get_dirfrag() const { return dirfrag; }
+  const string& get_dn() const { return dn; }
 
   MDentryUnlink() :
     Message(MSG_MDS_DENTRYUNLINK) { }

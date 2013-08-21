@@ -18,8 +18,9 @@
 #include <stdlib.h>
 
 #include "../CInode.h"
-#include "../CDirFrag.h"
 #include "../CDentry.h"
+#include "../CDirFrag.h"
+#include "../CDirPlacement.h"
 #include "../CDirStripe.h"
 
 #include "include/triple.h"
@@ -395,9 +396,12 @@ class EMetaBlob {
 
     __u8 state = Inode::make_state(dirty);
 
+    static const vector<int> empty_stripe_auth;
+    const vector<int> &stripe_auth = in->is_dir() ?
+        in->get_placement()->get_stripe_auth() : empty_stripe_auth;
+
     Inode &inode = inodes[in->ino()];
-    inode.encode(*in->get_projected_inode(),
-                 in->inode_auth, in->get_stripe_auth(),
+    inode.encode(*in->get_projected_inode(), in->inode_auth, stripe_auth,
                  *in->get_projected_xattrs(), in->symlink,
                  state, added_parent, removed_parent, &in->old_inodes);
   }
@@ -422,7 +426,7 @@ class EMetaBlob {
 
     CDentry::linkage_t *dnl = dn->get_projected_linkage();
     if (dnl->is_primary()) {
-      assert(dir->dirfrag().stripe.ino == MDS_INO_CONTAINER);
+      assert(dir->ino() == MDS_INO_CONTAINER);
       ino = dnl->get_inode()->ino();
       d_type = dnl->get_inode()->d_type();
     } else if (dnl->is_remote()) {
@@ -475,8 +479,6 @@ class EMetaBlob {
   static const int TO_AUTH_SUBTREE_ROOT = 0;  // default.
   static const int TO_ROOT = 1;
   
-  void add_stripe_context(CDirStripe *stripe, int mode = TO_AUTH_SUBTREE_ROOT);
- 
   void print(ostream& out) const {
     out << "[metablob";
     if (!inodes.empty()) 

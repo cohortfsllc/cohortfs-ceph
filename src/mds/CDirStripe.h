@@ -17,19 +17,22 @@
 
 #include "include/types.h"
 #include "include/buffer.h"
+#include "include/elist.h"
 #include "mdstypes.h"
 #include "common/config.h"
 
 #include <iostream>
-
 #include <map>
 
-#include "CInode.h"
+#include "ScatterLock.h"
 
 
 class CDentry;
 class CDirFrag;
+class CDirPlacement;
+class CInode;
 class Context;
+class LogSegment;
 class MDCache;
 
 ostream& operator<<(ostream& out, class CDirStripe& stripe);
@@ -105,7 +108,7 @@ class CDirStripe : public MDSCacheObject {
  private:
   MDCache *mdcache;
 
-  CInode *inode; // my inode
+  CDirPlacement *placement;
   dirstripe_t ds; // { ino, stripe index }
 
   pair<int,int> stripe_auth;
@@ -120,7 +123,7 @@ class CDirStripe : public MDSCacheObject {
   friend class Migrator;
 
  public:
-  CDirStripe(CInode *in, stripeid_t stripe, int auth);
+  CDirStripe(CDirPlacement *placement, stripeid_t stripe, int auth);
 
   bool is_lt(const MDSCacheObject *r) const {
     return dirstripe() < ((const CDirStripe*)r)->dirstripe();
@@ -128,14 +131,11 @@ class CDirStripe : public MDSCacheObject {
 
 
   // -- accessors --
-  CInode* get_inode() { return inode; }
+  CInode* get_inode(); // TODO: deprecate
+  CDirPlacement* get_placement() { return placement; }
   dirstripe_t dirstripe() const { return ds; }
+  inodeno_t ino() const { return ds.ino; }
   stripeid_t get_stripeid() const { return ds.stripeid; }
-
-  CDirStripe* get_parent_stripe();
-  CDirStripe* get_projected_parent_stripe();
-
-  bool contains(CDirStripe *stripe);
 
   void first_get();
   void last_put();
@@ -147,7 +147,6 @@ class CDirStripe : public MDSCacheObject {
  public:
   fnode_t fnode;
   snapid_t first;
-  map<snapid_t,old_rstat_t> dirty_old_rstat;  // [value.first,key]
 
  private:
   version_t committing_version, committed_version;
@@ -324,7 +323,7 @@ class CDirStripe : public MDSCacheObject {
  private:
   object_t get_ondisk_object() {
     uint64_t bno = get_stripeid();
-    return file_object_t(get_inode()->ino(), bno << 32);
+    return file_object_t(ds.ino, bno << 32);
   }
 
   int _fetched(bufferlist &bl);

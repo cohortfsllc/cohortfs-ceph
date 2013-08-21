@@ -142,10 +142,10 @@ void CDirStripe::print(ostream& out)
 }
 
 
-CDirStripe::CDirStripe(CInode *in, stripeid_t stripeid, int auth)
-  : mdcache(in->mdcache),
-    inode(in),
-    ds(in->ino(), stripeid),
+CDirStripe::CDirStripe(CDirPlacement *placement, stripeid_t stripeid, int auth)
+  : mdcache(placement->mdcache),
+    placement(placement),
+    ds(placement->ino(), stripeid),
     stripe_auth(auth, CDIR_AUTH_UNKNOWN),
     auth_pins(0),
     replicate(false),
@@ -166,6 +166,10 @@ CDirStripe::CDirStripe(CInode *in, stripeid_t stripeid, int auth)
     state_set(STATE_AUTH);
 }
 
+CInode* CDirStripe::get_inode()
+{
+  return placement->get_inode();
+}
 
 unsigned CDirStripe::get_num_head_items()
 {
@@ -219,7 +223,7 @@ frag_t CDirStripe::pick_dirfrag(const string& dn)
   if (dirfragtree.empty())
     return frag_t();          // avoid the string hash if we can.
 
-  __u32 h = get_inode()->hash_dentry_name(dn);
+  __u32 h = get_placement()->hash_dentry_name(dn);
   return dirfragtree[h];
 }
 
@@ -435,32 +439,12 @@ void CDirStripe::decode_lock_state(int type, bufferlist& bl)
 
 void CDirStripe::first_get()
 {
-  inode->get(CInode::PIN_STRIPE);
+  placement->get(CDirPlacement::PIN_STRIPE);
 }
 
 void CDirStripe::last_put()
 {
-  inode->put(CInode::PIN_STRIPE);
-}
-
-CDirStripe *CDirStripe::get_parent_stripe()
-{
-  return inode ? inode->get_parent_stripe() : NULL;
-}
-
-CDirStripe *CDirStripe::get_projected_parent_stripe()
-{
-  return inode ? inode->get_projected_parent_stripe() : NULL;
-}
-
-bool CDirStripe::contains(CDirStripe *stripe)
-{
-  while (stripe) {
-    if (stripe == this)
-      return true;
-    stripe = stripe->get_parent_stripe();
-  }
-  return false;
+  placement->put(CDirPlacement::PIN_STRIPE);
 }
 
 
@@ -583,7 +567,8 @@ struct C_Stripe_Fetched : public Context {
   void finish(int r) {
     assert(r == 0);
     r = stripe->_fetched(bl);
-    fin->complete(r);
+    if (fin)
+      fin->complete(r);
   }
 };
 
@@ -737,7 +722,7 @@ void CDirStripe::add_waiter(uint64_t tag, Context *c)
   if (((tag & WAIT_SINGLEAUTH) && !is_ambiguous_stripe_auth()) ||
       ((tag & WAIT_UNFREEZE) && !is_freezing() && !is_frozen())) {
     dout(15) << "passing waiter up tree" << dendl;
-    inode->add_waiter(tag, c);
+    placement->add_waiter(tag, c);
     return;
   }
   dout(15) << "taking waiter here" << dendl;
