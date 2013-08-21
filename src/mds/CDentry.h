@@ -36,7 +36,6 @@ class CDirStripe;
 class MDRequest;
 
 class Message;
-class Anchor;
 
 class CDentry;
 class LogSegment;
@@ -273,7 +272,6 @@ public:
   // misc
   void make_path_string(string& s);
   void make_path(filepath& fp);
-  void make_anchor_trace(vector<class Anchor>& trace, CInode *in);
 
   // -- version --
   version_t get_version() const { return version; }

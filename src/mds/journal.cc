@@ -296,50 +296,6 @@ EMetaBlob::EMetaBlob(MDLog *mdlog)
 {
 }
 
-void EMetaBlob::add_stripe_context(CDirStripe *stripe, int mode)
-{
-  MDS *mds = stripe->get_inode()->mdcache->mds;
-
-  list<CDentry*> parents;
-
-  while (true) {
-    // already have this stripe?  (we must always add in order)
-    if (stripes.count(stripe->dirstripe())) {
-      dout(20) << "EMetaBlob::add_stripe_context(" << stripe
-          << ") have lump " << stripe->dirstripe() << dendl;
-      break;
-    }
-
-    // stop at root/stray
-    CInode *diri = stripe->get_inode();
-    CDentry *parent = diri->get_projected_parent_dn();
-
-    if (!parent)
-      break;
-
-    if (mode == TO_AUTH_SUBTREE_ROOT) {
-      // was the inode journaled in this blob?
-      if (my_offset && diri->last_journaled == my_offset) {
-	dout(20) << "EMetaBlob::add_stripe_context(" << stripe
-            << ") already have diri this blob " << *diri << dendl;
-	break;
-      }
-    }
-
-    dout(25) << "EMetaBlob::add_stripe_context(" << stripe
-        << ") definitely " << *parent << dendl;
-    parents.push_front(parent);
-
-    stripe = parent->get_stripe();
-  }
-
-  dout(20) << "EMetaBlob::add_stripe_context final: " << parents << dendl;
-  for (list<CDentry*>::iterator p = parents.begin(); p != parents.end(); p++) {
-    assert((*p)->get_projected_linkage()->is_primary());
-    add_dentry(*p, false);
-  }
-}
-
 void EMetaBlob::update_segment(LogSegment *ls)
 {
   if (inotablev)
@@ -370,7 +326,7 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in, bool isnew)
   else
     in->state_clear(CInode::STATE_AUTH);
   in->xattrs = xattrs;
-  if (in->inode.is_dir()) {
+  if (in->is_dir()) {
     in->set_stripe_auth(stripe_auth);
 
     delete in->default_layout;
@@ -405,6 +361,10 @@ void EMetaBlob::Dir::apply(MDS *mds, CDirFrag *dir, LogSegment *ls)
 
 static CDirStripe* open_stripe(MDS *mds, dirstripe_t ds)
 {
+#if 1
+  CDirPlacement *placement = mds->mdcache->get_dir_placement(ds.ino);
+  assert(placement);
+#else
   // find/create the inode
   CInode *diri = mds->mdcache->get_inode(ds.ino);
   if (!diri) {
@@ -421,14 +381,14 @@ static CDirStripe* open_stripe(MDS *mds, dirstripe_t ds)
       assert(diri);
     }
   }
-
+#endif
   // find/create the stripe
-  CDirStripe *stripe = diri->get_stripe(ds.stripeid);
+  CDirStripe *stripe = placement->get_stripe(ds.stripeid);
   if (stripe) {
     dout(10) << "EMetaBlob had " << *stripe << dendl;
   } else {
-    int auth = diri->get_stripe_auth(ds.stripeid);
-    stripe = diri->add_stripe(new CDirStripe(diri, ds.stripeid, auth));
+    int auth = placement->get_stripe_auth(ds.stripeid);
+    stripe = placement->add_stripe(new CDirStripe(placement, ds.stripeid, auth));
     dout(10) << "EMetaBlob added " << *stripe << dendl;
   }
   return stripe;
@@ -539,9 +499,11 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
         } else if (d->ino == 0) {
           dir->unlink_inode(dn);
           // TODO: track unlinked
-        } else if (dnl->is_primary())
+        } else if (dnl->is_primary()) {
+          dout(10) << "primary d->ino " << d->ino
+              << " -> " << *dnl->get_inode() << dendl;
           assert(d->ino == dnl->get_inode()->ino());
-        else if (d->ino != dnl->get_remote_ino())
+        } else if (d->ino != dnl->get_remote_ino())
           dnl->set_remote(d->ino, d->d_type);
       }
     }
@@ -655,8 +617,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     if (stripe) {
       dout(10) << "EMetaBlob.replay destroyed " << *p
           << ", dropping " << *stripe << dendl;
-      assert(stripe->get_inode());
-      stripe->get_inode()->close_stripe(stripe);
+      stripe->get_placement()->close_stripe(stripe);
     } else
       dout(10) << "EMetaBlob.replay destroyed " << *p
           << ", not in cache" << dendl;
@@ -1045,7 +1006,7 @@ void EResetJournal::replay(MDS *mds)
 
   mds->sessionmap.wipe();
   mds->inotable->replay_reset();
-
+#if 0
   if (mds->mdsmap->get_root() == mds->whoami) {
     CDirStripe *rootstripe = mds->mdcache->get_root()->get_or_open_stripe(0);
     rootstripe->set_stripe_auth(mds->whoami);
@@ -1053,5 +1014,6 @@ void EResetJournal::replay(MDS *mds)
 
   CDirStripe *mystripe = mds->mdcache->get_myin()->get_or_open_stripe(0);
   mystripe->set_stripe_auth(mds->whoami);
+#endif
 }
 

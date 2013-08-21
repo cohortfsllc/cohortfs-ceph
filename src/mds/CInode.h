@@ -42,8 +42,9 @@ using namespace std;
 class Context;
 class CDentry;
 class CDirFrag;
-class CInode;
+class CDirPlacement;
 class CDirStripe;
+class CInode;
 class Message;
 class MDCache;
 class LogSegment;
@@ -119,7 +120,7 @@ public:
 
  public:
   // -- pins --
-  static const int PIN_STRIPE =          -1; 
+  static const int PIN_PLACEMENT =        1; 
   static const int PIN_CAPS =             2;  // client caps
   static const int PIN_IMPORTING =       -4;  // importing
   static const int PIN_ANCHORING =        5;
@@ -144,7 +145,7 @@ public:
 
   const char *pin_name(int p) {
     switch (p) {
-    case PIN_STRIPE: return "stripe";
+    case PIN_PLACEMENT: return "placement";
     case PIN_CAPS: return "caps";
     case PIN_IMPORTING: return "importing";
     case PIN_ANCHORING: return "anchoring";
@@ -188,7 +189,7 @@ public:
   static const int STATE_FROZENAUTHPIN = (1<<17);
 
   // -- waiters --
-  static const uint64_t WAIT_STRIPE      = (1<<0);
+  static const uint64_t WAIT_PLACEMENT   = (1<<0);
   static const uint64_t WAIT_ANCHORED    = (1<<1);
   static const uint64_t WAIT_UNANCHORED  = (1<<2);
   static const uint64_t WAIT_FROZEN      = (1<<3);
@@ -207,6 +208,7 @@ public:
 
   // inode contents proper
   inode_t          inode;        // the inode itself
+  CDirPlacement    *placement;   // stripe placement, if directory
   string           symlink;      // symlink dest, if symlink
   map<string, bufferptr> xattrs;
 
@@ -340,45 +342,6 @@ public:
   void pre_cow_old_inode();
   void purge_stale_snap_data(const set<snapid_t>& snaps);
 
-  // -- cache infrastructure --
-private:
-  vector<int> stripe_auth;
-  typedef map<stripeid_t, CDirStripe*> stripe_map;
-  stripe_map stripes;
-  int stickystripe_ref;
-
-public:
-  size_t get_stripe_count() const { return stripe_auth.size(); }
-  int get_stripe_auth(stripeid_t stripeid) const {
-    assert(stripeid < stripe_auth.size());
-    return stripe_auth[stripeid];
-  }
-  const vector<int>& get_stripe_auth() const { return stripe_auth; }
-  void set_stripe_auth(const vector<int> &auth) {
-    assert(stripes.lower_bound(auth.size()) == stripes.end()); // don't erase any open stripes
-    stripe_auth = auth;
-  }
-  void set_stripe_auth(stripeid_t stripeid, int auth) {
-    assert(stripeid < stripe_auth.size());
-    stripe_auth[stripeid] = auth;
-  }
-
-  __u32 hash_dentry_name(const string &dn);
-  stripeid_t pick_stripe(__u32 hash);
-  stripeid_t pick_stripe(const string &dn);
-
-  bool has_open_stripes() const;
-
-  void get_stripes(list<CDirStripe*> &stripes);
-
-  CDirStripe* get_stripe(stripeid_t stripeid);
-  CDirStripe* get_or_open_stripe(stripeid_t stripeid);
-  CDirStripe* add_stripe(CDirStripe *stripe);
-  void close_stripe(CDirStripe *stripe);
-  void close_stripes();
-
-  void get_stickystripes();
-  void put_stickystripes();
 
  protected:
   // parent dentries in cache
@@ -484,12 +447,16 @@ public:
       (ino() == o->ino() && last < o->last);
   }
 
+  // stripe placement
+  CDirPlacement* get_placement() { return placement; }
+  void set_stripe_auth(const vector<int> &stripe_auth);
+  void close_placement();
+
   // -- misc -- 
   bool is_projected_ancestor_of(CInode *other);
   void make_path_string(string& s, bool force=false, CDentry *use_parent=NULL);
   void make_path_string_projected(string& s);  
   void make_path(filepath& s);
-  void make_anchor_trace(vector<class Anchor>& trace);
 
 
   static object_t get_object_name(inodeno_t ino, frag_t fg, const char *suffix);
@@ -513,99 +480,15 @@ public:
   void build_backtrace(inode_backtrace_t& bt);
   unsigned encode_parent_mutation(ObjectOperation& m);
 
-  void encode_store(bufferlist& bl) {
-    __u8 struct_v = 3;
-    ::encode(struct_v, bl);
-    ::encode(inode, bl);
-    if (is_symlink())
-      ::encode(symlink, bl);
-    ::encode(xattrs, bl);
-    ::encode(old_inodes, bl);
-    if (inode.is_dir()) {
-      ::encode(stripe_auth, bl);
-      ::encode((default_layout ? true : false), bl);
-      if (default_layout)
-        ::encode(*default_layout, bl);
-    }
-  }
-  void decode_store(bufferlist::iterator& bl) {
-    __u8 struct_v;
-    ::decode(struct_v, bl);
-    ::decode(inode, bl);
-    if (is_symlink())
-      ::decode(symlink, bl);
-    ::decode(xattrs, bl);
-    ::decode(old_inodes, bl);
-    if (struct_v >= 2 && inode.is_dir()) {
-      ::decode(stripe_auth, bl);
-      bool default_layout_exists;
-      ::decode(default_layout_exists, bl);
-      if (default_layout_exists) {
-        delete default_layout;
-        default_layout = new default_file_layout;
-        ::decode(*default_layout, bl);
-      }
-    }
-  }
+  void encode_store(bufferlist& bl);
+  void decode_store(bufferlist::iterator& bl);
 
-  void encode_replica(int rep, bufferlist& bl) {
-    assert(is_auth());
-    
-    // relax locks?
-    if (!is_replicated())
-      replicate_relax_locks();
-    
-    __u32 nonce = add_replica(rep);
-    ::encode(nonce, bl);
-    
-    _encode_base(bl);
-    _encode_locks_state_for_replica(bl);
-    if (inode.is_dir()) {
-      ::encode((default_layout ? true : false), bl);
-      if (default_layout)
-        ::encode(*default_layout, bl);
-    }
-  }
-  void decode_replica(bufferlist::iterator& p, bool is_new) {
-    __u32 nonce;
-    ::decode(nonce, p);
-    replica_nonce = nonce;
-    
-    _decode_base(p);
-    _decode_locks_state(p, is_new);
-    if (inode.is_dir()) {
-      bool default_layout_exists;
-      ::decode(default_layout_exists, p);
-      if (default_layout_exists) {
-        delete default_layout;
-        default_layout = new default_file_layout;
-        ::decode(*default_layout, p);
-      }
-    }
-  }
+  void encode_replica(int rep, bufferlist& bl);
+  void decode_replica(bufferlist::iterator& p, bool is_new);
 
 
   // -- waiting --
- private:
-  map<stripeid_t, list<Context*> > waiting_on_stripe;
-
- public:
-  bool is_waiting_for_stripe(stripeid_t stripeid) {
-    return waiting_on_stripe.count(stripeid);
-  }
-  void add_stripe_waiter(stripeid_t stripeid, Context *c) {
-    waiting_on_stripe[stripeid].push_back(c);
-  }
-  void take_stripe_waiting(stripeid_t stripeid, list<Context*>& ls) {
-    map<stripeid_t, list<Context*> >::iterator i = waiting_on_stripe.find(stripeid);
-    if (i != waiting_on_stripe.end()) {
-      ls.splice(ls.end(), i->second);
-      waiting_on_stripe.erase(i);
-    }
-  }
-
   void add_waiter(uint64_t tag, Context *c);
-  void take_waiting(uint64_t mask, list<Context*> &ls);
 
 
   // -- encode/decode helpers --

@@ -741,9 +741,9 @@ void MDS::handle_command(MMonCommand *m)
     if (m->cmd.size() == 5) {
       filepath fp(m->cmd[1].c_str());
       CInode *in = mdcache->cache_traverse(fp);
-      if (in) {
+      if (in && in->is_dir()) {
         stripeid_t stripeid = atoi(m->cmd[2].c_str());
-        CDirStripe *stripe = in->get_stripe(stripeid);
+        CDirStripe *stripe = in->get_placement()->get_stripe(stripeid);
         if (stripe) {
           if (stripe->is_auth()) {
             frag_t fg;
@@ -765,9 +765,9 @@ void MDS::handle_command(MMonCommand *m)
     if (m->cmd.size() == 4) {
       filepath fp(m->cmd[1].c_str());
       CInode *in = mdcache->cache_traverse(fp);
-      if (in) {
+      if (in && in->is_dir()) {
         stripeid_t stripeid = atoi(m->cmd[2].c_str());
-        CDirStripe *stripe = in->get_stripe(stripeid);
+        CDirStripe *stripe = in->get_placement()->get_stripe(stripeid);
         if (stripe) {
           if (stripe->is_auth()) {
             frag_t fg;
@@ -1903,13 +1903,13 @@ bool MDS::_dispatch(Message *m)
     
     // pick a random dir inode
     CInode *in = mdcache->hack_pick_random_inode();
+    if (!in->is_dir()) continue;
 
     // random stripe
     list<CDirStripe*> stripes;
-    in->get_stripes(stripes);
+    in->get_placement()->get_stripes(stripes);
     if (stripes.empty()) continue;
     CDirStripe *stripe = stripes.front();
-    if (!stripe->get_parent_stripe()) continue; // must be linked.
     if (!stripe->is_auth()) continue;           // must be auth.
 
     list<CDirFrag*> ls;

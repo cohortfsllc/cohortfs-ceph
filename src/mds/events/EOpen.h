@@ -33,7 +33,6 @@ public:
 
   void add_clean_inode(CInode *in) {
     if (!in->is_base()) {
-      metablob.add_stripe_context(in->get_projected_parent_stripe());
       metablob.add_inode(in);
       inos.push_back(in->ino());
     }

@@ -214,54 +214,22 @@ inoparent_t CDentry::inoparent()
 void CDentry::make_path_string(string& s)
 {
   if (dir) {
-    dir->get_inode()->make_path_string(s);
+    char n[40];
+    uint64_t eino(dir->ino());
+    snprintf(n, sizeof(n), "#%" PRIx64, eino);
+    s += n;
   } else {
     s = "???";
   }
   s += "/";
-  s.append(name.data(), name.length());
+  s.append(name.begin(), name.end());
 }
 
 void CDentry::make_path(filepath& fp)
 {
   assert(dir);
-  if (dir->get_inode()->is_base())
-    fp = filepath(dir->get_inode()->ino());               // base case
-  else if (dir->get_inode()->get_parent_dn())
-    dir->get_inode()->get_parent_dn()->make_path(fp);  // recurse
-  else
-    fp = filepath(dir->get_inode()->ino());               // relative but not base?  hrm!
+  fp = filepath(dir->ino());
   fp.push_dentry(name);
-}
-
-/*
-void CDentry::make_path(string& s, inodeno_t tobase)
-{
-  assert(dir);
-  
-  if (dir->get_inode()->is_root()) {
-    s += "/";  // make it an absolute path (no matter what) if we hit the root.
-  } 
-  else if (dir->get_inode()->get_parent_dn() &&
-	   dir->get_inode()->ino() != tobase) {
-    dir->get_inode()->get_parent_dn()->make_path(s, tobase);
-    s += "/";
-  }
-  s += name;
-}
-*/
-
-/** make_anchor_trace
- * construct an anchor trace for this dentry, as if it were linked to *in.
- */
-void CDentry::make_anchor_trace(vector<Anchor>& trace, CInode *in)
-{
-  // start with parent dir inode
-  dir->get_inode()->make_anchor_trace(trace);
-
-  // add this inode (in my dirfrag) to the end
-  trace.push_back(Anchor(in->ino(), dir->ino(), get_hash(), 0, 0));
-  dout(10) << "make_anchor_trace added " << trace.back() << dendl;
 }
 
 

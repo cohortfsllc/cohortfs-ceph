@@ -20,14 +20,14 @@
 
 #include "mdstypes.h"
 
+#include "CInode.h"
 #include "SimpleLock.h"
 #include "Capability.h"
 
 class LogSegment;
 class Capability;
-class CInode;
-class CDirFrag;
 class CDentry;
+class CDirFrag;
 class CDirStripe;
 class Session;
 class ScatterLock;
@@ -46,7 +46,6 @@ struct Mutation {
   // -- my pins and locks --
   // cache pins (so things don't expire)
   set< MDSCacheObject* > pins;
-  set<CInode*> stickystripes;
 
   // auth pins
   set< MDSCacheObject* > remote_auth_pins;
@@ -116,7 +115,6 @@ struct Mutation {
 
   // pin items in cache
   void pin(MDSCacheObject *o);
-  void set_stickystripes(CInode *in);
   void drop_pins();
 
   void start_locking(SimpleLock *lock, int target=-1);

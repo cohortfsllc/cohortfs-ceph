@@ -21,12 +21,12 @@ class MDentryUnlink : public Message {
   string dn;
 
  public:
-  dirfrag_t get_dirfrag() { return dirfrag; }
-  string& get_dn() { return dn; }
+  dirfrag_t get_dirfrag() const { return dirfrag; }
+  const string& get_dn() const { return dn; }
 
   MDentryUnlink() :
     Message(MSG_MDS_DENTRYUNLINK) { }
-  MDentryUnlink(dirfrag_t df, string& n) :
+  MDentryUnlink(dirfrag_t df, const string& n) :
     Message(MSG_MDS_DENTRYUNLINK),
     dirfrag(df),
     dn(n) {}

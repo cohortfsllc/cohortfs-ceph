@@ -167,10 +167,10 @@ public:
 
 public:
   typedef map<dentry_key_t, CDentry*> map_t;
-protected:
 
   // contents of this directory
   map_t items;       // non-null AND null
+protected:
   unsigned num_head_items;
   unsigned num_head_null;
   unsigned num_snap_items;
@@ -217,13 +217,13 @@ protected:
 
 
   // -- accessors --
-  inodeno_t ino() const { return stripe->get_inode()->ino(); } // deprecate me?
+  inodeno_t ino() const { return stripe->ino(); } // deprecate me?
   frag_t get_frag() const { return frag; }
   dirfrag_t dirfrag() const { return dirfrag_t(stripe->dirstripe(), frag); }
 
   CDirStripe *get_stripe() { return stripe; }
-  CInode *get_inode() { return get_stripe()->get_inode(); }
-  CDirFrag *get_parent_dir() { return get_inode()->get_parent_dir(); }
+  CDirPlacement *get_placement() { return stripe->get_placement(); }
+  CInode* get_inode() { return stripe->get_inode(); }
 
   map_t::iterator begin() { return items.begin(); }
   map_t::iterator end() { return items.end(); }

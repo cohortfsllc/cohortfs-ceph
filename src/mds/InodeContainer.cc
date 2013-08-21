@@ -65,16 +65,17 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
 
   dout(12) << "xlock_dentry " << ino << dendl;
 
+  CDirPlacement *placement = in->get_placement();
   if (!stripe) {
     // find our stripeid and open it
-    const vector<int> &stripe_auth = in->get_stripe_auth();
+    const vector<int> &stripe_auth = placement->get_stripe_auth();
     vector<int>::const_iterator i = find(stripe_auth.begin(),
                                          stripe_auth.end(),
                                          mds->get_nodeid());
     assert(i != stripe_auth.end());
 
     stripeid_t stripeid = i - stripe_auth.begin();
-    stripe = in->get_stripe(stripeid);
+    stripe = placement->get_stripe(stripeid);
   }
   assert(stripe);
   // pick the dirfrag
@@ -86,6 +87,12 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
     dout(7) << "waiting on frozen inode container " << *dir << dendl;
     dir->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
     mdr->drop_local_auth_pins();
+    return NULL;
+  }
+
+  if (!dir->is_complete()) {
+    dout(7) << "waiting on incomplete inode container " << *dir << dendl;
+    dir->fetch(new C_MDS_RetryRequest(mdcache, mdr));
     return NULL;
   }
 
@@ -105,7 +112,7 @@ stripeid_t InodeContainer::place(inodeno_t ino) const
 {
   static const uint64_t SHIFT = 40; // see InoTable
   assert(in);
-  return ((ino >> SHIFT) - 1) % in->get_stripe_count();
+  return ((ino >> SHIFT) - 1) % in->get_placement()->get_stripe_count();
 }
 
 
@@ -139,7 +146,7 @@ void InodeContainer::restripe(const set<int> &nodes, bool replay)
 
   EUpdate *le = NULL;
   if (replay) // no journal for replay
-    assert(in->get_stripe_auth() == stripe_auth);
+    assert(in->get_placement()->get_stripe_auth() == stripe_auth);
   else {
     in->set_stripe_auth(stripe_auth);
 
@@ -149,12 +156,13 @@ void InodeContainer::restripe(const set<int> &nodes, bool replay)
 
   C_GatherBuilder gather(g_ceph_context, new C_IC_RestripeFinish(this));
 
+  CDirPlacement *placement = in->get_placement();
   for (size_t i = 0; i < stripe_auth.size(); i++) {
     int to = stripe_auth[i];
     if (to == mds->get_nodeid()) {
-      stripe = in->get_stripe(i);
+      stripe = placement->get_stripe(i);
       if (stripe == NULL) {
-        stripe = in->add_stripe(new CDirStripe(in, i, to));
+        stripe = placement->add_stripe(new CDirStripe(placement, i, to));
         if (le)
           le->metablob.add_stripe(stripe, false);
         else
@@ -166,6 +174,7 @@ void InodeContainer::restripe(const set<int> &nodes, bool replay)
       MMDSRestripe *m = new MMDSRestripe(i, replay);
       // include a replica with the updated stripe_auth
       mdcache->replicate_inode(in, to, m->container);
+      mdcache->replicate_placement(placement, to, m->container);
 
       dout(7) << "restripe sending " << *m << " to mds." << to << dendl;
       mds->send_message_mds(m, to);
@@ -202,11 +211,14 @@ void InodeContainer::handle_restripe(MMDSRestripe *m)
   std::list<Context*> unused;
   in = mdcache->add_replica_inode(p, NULL, from, unused);
   assert(in);
+  CDirPlacement *placement = mdcache->add_replica_placement(p, in, from, unused);
+  assert(placement);
 
   // open my inode container stripe and claim auth
-  stripe = in->get_stripe(m->stripeid);
+  stripe = placement->get_stripe(m->stripeid);
   if (!stripe) {
-    stripe = in->add_stripe(new CDirStripe(in, m->stripeid, mds->get_nodeid()));
+    stripe = placement->add_stripe(
+        new CDirStripe(placement, m->stripeid, mds->get_nodeid()));
     stripe->set_stripe_auth(mds->get_nodeid());
   }
 
@@ -225,6 +237,7 @@ void InodeContainer::handle_restripe(MMDSRestripe *m)
     EUpdate *le = new EUpdate(mds->mdlog, "restripe");
     le->metablob.add_inode(in, false);
     le->metablob.add_stripe(stripe, false, false);
+    // TODO: journal placement object
     mds->mdlog->start_submit_entry(le, gather.new_sub());
   }
 

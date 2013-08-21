@@ -2049,7 +2049,6 @@ bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
                                       false, 0, dsize);
     metablob->add_inode(in, true);
   } else {
-    metablob->add_stripe_context(in->get_projected_parent_stripe());
     mdcache->journal_dirty_inode(mut, metablob, in);
   }
   mds->mdlog->submit_entry(le, new C_Locker_FileUpdate_finish(this, in, mut, true));
@@ -2411,8 +2410,10 @@ void Locker::process_request_cap_release(MDRequest *mdr, client_t client, const 
     return;
 
   if (dname.length()) {
-    __u32 dnhash = in->hash_dentry_name(dname);
-    CDirStripe *stripe = in->get_stripe(in->pick_stripe(dnhash));
+    CDirPlacement *placement = in->get_placement();
+    __u32 dnhash = placement->hash_dentry_name(dname);
+    stripeid_t stripeid = placement->pick_stripe(dnhash);
+    CDirStripe *stripe = placement->get_stripe(stripeid);
     if (stripe) {
       CDirFrag *dir = stripe->get_dirfrag(stripe->pick_dirfrag(dnhash));
       if (dir) {
@@ -2894,22 +2895,21 @@ void Locker::handle_client_lease(MClientLease *m)
     m->put();
     return;
   }
-  CDentry *dn = 0;
 
-  __u32 dnhash = in->hash_dentry_name(m->dname);
-  stripeid_t stripeid = in->pick_stripe(dnhash);
-  CDirStripe *stripe = in->get_stripe(stripeid);
+  CDirPlacement *placement = in->get_placement();
+  __u32 dnhash = placement->hash_dentry_name(m->dname);
+  stripeid_t stripeid = placement->pick_stripe(dnhash);
+  CDirStripe *stripe = placement->get_stripe(stripeid);
   if (!stripe) {
     dout(7) << "handle_client_lease don't have stripe " << stripeid
-        << " for " << in << dendl;
+        << " for " << *placement << dendl;
     m->put();
     return;
   }
 
   frag_t fg = stripe->pick_dirfrag(dnhash);
   CDirFrag *dir = stripe->get_dirfrag(fg);
-  if (dir) 
-    dn = dir->lookup(m->dname);
+  CDentry *dn = dir ? dir->lookup(m->dname) : 0;
   if (!dn) {
     dout(7) << "handle_client_lease don't have dn " << m->get_ino() << " " << m->dname << dendl;
     m->put();

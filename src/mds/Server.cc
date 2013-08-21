@@ -1627,9 +1627,10 @@ CDirFrag *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string
   }
 
   // XXX: avoid taking the hash when stripe count is 1 and fragtree is empty
-  __u32 dnhash = diri->hash_dentry_name(dname);
-  int stripeid = diri->pick_stripe(dnhash);
-  CDirStripe *stripe = try_open_auth_stripe(diri, stripeid, mdr);
+  CDirPlacement *placement = diri->get_placement();
+  __u32 dnhash = placement->hash_dentry_name(dname);
+  int stripeid = placement->pick_stripe(dnhash);
+  CDirStripe *stripe = try_open_auth_stripe(placement, stripeid, mdr);
   if (!stripe)
     return 0;
 
@@ -1752,13 +1753,9 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDirFrag *dir, inodeno_t usein
 
   in->inode.mode = mode;
 
-  memset(&in->inode.dir_layout, 0, sizeof(in->inode.dir_layout));
-  if (in->inode.is_dir())
-    in->inode.dir_layout.dl_dir_hash = g_conf->mds_default_dir_hash;
-
   if (layout)
     in->inode.layout = *layout;
-  else if (in->inode.is_dir())
+  else if (in->is_dir())
     memset(&in->inode.layout, 0, sizeof(in->inode.layout));
   else
     in->inode.layout = mds->mdcache->default_file_layout;
@@ -2122,10 +2119,11 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
  * @param mdr request
  * @returns the pointer, or NULL if it had to be delayed (but mdr is taken care of)
  */
-CDirStripe* Server::try_open_auth_stripe(CInode *diri, int stripeid, MDRequest *mdr)
+CDirStripe* Server::try_open_auth_stripe(CDirPlacement *placement,
+                                         int stripeid, MDRequest *mdr)
 {
   // are we the stripe auth?
-  int who = diri->get_stripe_auth(stripeid);
+  int who = placement->get_stripe_auth(stripeid);
   if (who != mds->get_nodeid())
   {
     dout(7) << "try_open_auth_stripe: fw to stripe auth mds." << who << dendl;
@@ -2134,7 +2132,7 @@ CDirStripe* Server::try_open_auth_stripe(CInode *diri, int stripeid, MDRequest *
   }
 
   // fetch the stripe if it's not open
-  CDirStripe *stripe = diri->get_or_open_stripe(stripeid);
+  CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
   if (!stripe->is_open()) {
     stripe->fetch(new C_MDS_RetryRequest(mdcache, mdr));
     return 0;
@@ -2269,9 +2267,11 @@ void Server::handle_client_lookup_hash(MDRequest *mdr)
       return;
     }
     dout(10) << " have diri " << *diri << dendl;
+    assert(diri->is_dir());
+    CDirPlacement *placement = diri->get_placement();
     unsigned hash = atoi(req->get_filepath2()[0].c_str());
-    int stripeid = diri->pick_stripe(hash);
-    CDirStripe *stripe = diri->get_stripe(stripeid);
+    int stripeid = placement->pick_stripe(hash);
+    CDirStripe *stripe = placement->get_stripe(stripeid);
     if (!stripe) {
       if (!diri->is_auth()) {
 	if (diri->is_ambiguous_auth()) {
@@ -2283,7 +2283,7 @@ void Server::handle_client_lookup_hash(MDRequest *mdr)
 	mdcache->request_forward(mdr, diri->authority().first);
 	return;
       }
-      stripe = diri->get_or_open_stripe(stripeid);
+      stripe = placement->get_or_open_stripe(stripeid);
     }
     assert(stripe);
     dout(10) << " have stripe " << *stripe << dendl;
@@ -2767,8 +2767,6 @@ void Server::handle_client_openc(MDRequest *mdr)
   le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
   journal_allocated_inos(mdr, &le->metablob);
 
-  mdr->add_projected_inode(in);
-  in->project_inode();
   mdcache->predirty_journal_parents(mdr, &le->metablob, in,
                                     dn->inoparent(), true, 1);
   le->metablob.add_inode(in, true);
@@ -2817,7 +2815,8 @@ void Server::handle_client_readdir(MDRequest *mdr)
   stripeid_t stripeid = req->head.args.readdir.stripe;
   dout(10) << " stripe " << stripeid << dendl;
 
-  CDirStripe *stripe = try_open_auth_stripe(diri, stripeid, mdr);
+  CDirStripe *stripe = try_open_auth_stripe(diri->get_placement(),
+                                            stripeid, mdr);
   if (!stripe) return;
 
   rdlocks.insert(&diri->filelock);
@@ -3882,9 +3881,13 @@ public:
     mdr->apply();
 
     // mkdir?
-    if (newi->inode.is_dir()) { 
+    CDirPlacement *placement = newi->get_placement();
+    const vector<int> *stripe_auth = NULL;
+    if (newi->is_dir()) { 
+      stripe_auth = &placement->get_stripe_auth();
+      // TODO: journal placement object
       list<CDirStripe*> stripes;
-      newi->get_stripes(stripes);
+      placement->get_stripes(stripes);
       for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
         CDirStripe *stripe = *s;
         assert(stripe);
@@ -3900,9 +3903,9 @@ public:
 
     mds->mdcache->send_dentry_link(dn);
     // don't send MDentryLink to nodes that got a slave_mkdir
-    mds->mdcache->send_dentry_link(inodn, &newi->get_stripe_auth());
+    mds->mdcache->send_dentry_link(inodn, stripe_auth);
 
-    if (newi->inode.is_file())
+    if (newi->is_file())
       mds->locker->share_inode_max_size(newi);
 
     // hit pop
@@ -4095,13 +4098,15 @@ void Server::handle_client_mkdir(MDRequest *mdr)
     vector<int> stripe_auth(nodes.begin(), nodes.end());
     newi->set_stripe_auth(stripe_auth);
 
+    CDirPlacement *placement = newi->get_placement();
+
     // send slave requests to create stripes on other nodes
     for (size_t i = 0; i < stripe_auth.size(); i++) {
       int who = stripe_auth[i];
 
       if (who == mds->get_nodeid()) {
         // local request
-        CDirStripe *newstripe = newi->get_or_open_stripe(i);
+        CDirStripe *newstripe = placement->get_or_open_stripe(i);
         newstripe->mark_open();
         CDirFrag *newdir = newstripe->get_or_open_dirfrag(frag_t());
         newdir->mark_complete();
@@ -4120,6 +4125,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
         mdcache->replicate_dir(inodn->get_dir(), who, req->srci_replica);
         mdcache->replicate_dentry(inodn, who, req->srci_replica);
         mdcache->replicate_inode(newi, who, req->srci_replica);
+        mdcache->replicate_placement(placement, who, req->srci_replica);
         mds->send_message_mds(req, who);
 
         assert(mdr->more()->waiting_on_slave.count(who) == 0);
@@ -4167,16 +4173,18 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   le->metablob.add_inode(newi, dn);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
+  dout(10) << "mkdir " << *inodn << " -> " << *newi << dendl;
 
   // add new stripes to the journal
   list<CDirStripe*> stripes;
-  newi->get_stripes(stripes);
+  newi->get_placement()->get_stripes(stripes);
   for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CDirStripe *newstripe = *s;
     CDirFrag *newdir = newstripe->get_dirfrag(frag_t());
     le->metablob.add_new_dir(newdir);
     le->metablob.add_stripe(newstripe, true, true); // dirty and new
   }
+  // TODO: journal placement object
 
   if (!mdr->more()->witnessed.empty()) {
     dout(20) << " noting uncommitted_slaves " << mdr->more()->witnessed << dendl;
@@ -4218,10 +4226,13 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
   list<Context*> finished;
   bufferlist::iterator blp = req->srci_replica.begin();
   CInode *container = mdcache->get_container()->get_inode();
-  CDirStripe *stripe = mdcache->add_replica_stripe(blp, container, from, finished);
+  CDirStripe *stripe = mdcache->add_replica_stripe(
+      blp, container->get_placement(), from, finished);
   CDirFrag *dir = mdcache->add_replica_dir(blp, stripe, finished);
   CDentry *dn = mdcache->add_replica_dentry(blp, dir, finished);
   CInode *in = mdcache->add_replica_inode(blp, dn, from, finished);
+  CDirPlacement *placement = mdcache->add_replica_placement(
+      blp, in, from, finished);
   mds->queue_waiters(finished);
 
   // journal new stripes
@@ -4230,12 +4241,14 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
       mdlog, "slave_mkdir", mdr->reqid, mdr->slave_to_mds,
       ESlaveUpdate::OP_PREPARE, ESlaveUpdate::MKDIR);
 
-  le->commit.add_dentry(dn, false);
   le->commit.add_inode(in, false);
+  le->commit.add_dentry(dn, false);
+  dout(10) << "slave_mkdir " << *dn << " -> " << *in << dendl;
 
   for (vector<stripeid_t>::iterator s = req->stripes.begin();
        s != req->stripes.end(); ++s) {
-    CDirStripe *newstripe = in->add_stripe(new CDirStripe(in, *s, mds->get_nodeid()));
+    CDirStripe *newstripe = placement->add_stripe(
+        new CDirStripe(placement, *s, mds->get_nodeid()));
     newstripe->mark_open();
 
     CDirFrag *newdir = newstripe->get_or_open_dirfrag(frag_t());
@@ -4244,6 +4257,7 @@ void Server::handle_slave_mkdir(MDRequest *mdr)
     le->commit.add_new_dir(newdir);
     le->commit.add_stripe(newstripe, true, true);
   }
+  // TODO: journal placement object
 
   // initialize rollback
   mkdir_rollback rollback;
@@ -4278,7 +4292,7 @@ void Server::slave_mkdir_finish(MDRequest *mdr, CInode *in)
 
   // mark new stripes dirty
   list<CDirStripe*> stripes;
-  in->get_stripes(stripes);
+  in->get_placement()->get_stripes(stripes);
   for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CDirStripe *stripe = *s;
     stripe->mark_dirty(mdr->ls);
@@ -4378,13 +4392,16 @@ void Server::do_mkdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   assert(in);
   dout(10) << " target is " << *in << dendl;
 
+  CDirPlacement *placement = in->get_placement();
+
   // remove the stripes created by handle_slave_mkdir()
   for (vector<stripeid_t>::iterator s = rollback.stripes.begin();
        s != rollback.stripes.end(); ++s) {
-    CDirStripe *stripe = in->get_stripe(*s);
+    CDirStripe *stripe = placement->get_stripe(*s);
     assert(stripe);
-    in->close_stripe(stripe);
+    placement->close_stripe(stripe);
   }
+  // TODO: close placement object
 
   // journal it
   ESlaveUpdate *le = new ESlaveUpdate(
@@ -4979,17 +4996,17 @@ void Server::handle_slave_link_prep_ack(MDRequest *mdr, MMDSSlaveRequest *m)
 }
 
 
-bool _discover_all_stripes(MDRequest *mdr, CInode *in)
+bool _discover_all_stripes(MDRequest *mdr, CDirPlacement *placement)
 {
   C_GatherBuilder gather(g_ceph_context);
-  MDCache *mdcache = in->mdcache;
+  MDCache *mdcache = placement->mdcache;
 
   // discover any stripes that aren't already cached
-  for (size_t stripeid = 0; stripeid < in->get_stripe_count(); ++stripeid) {
-    CDirStripe *stripe = in->get_stripe(stripeid);
+  for (size_t i = 0; i < placement->get_stripe_count(); ++i) {
+    CDirStripe *stripe = placement->get_stripe(i);
     if (!stripe)
-      mdcache->discover_dir_stripe(in, stripeid, gather.new_sub(),
-                                   in->get_stripe_auth(stripeid));
+      mdcache->discover_dir_stripe(placement, i, gather.new_sub(),
+                                   placement->get_stripe_auth(i));
     else
       mdr->pin(stripe);
   }
@@ -5003,19 +5020,19 @@ bool _discover_all_stripes(MDRequest *mdr, CInode *in)
 }
 
 // check if a directory is non-empty (i.e. we can rmdir it).
-bool _dir_is_nonempty(MDRequest *mdr, CInode *in)
+bool _dir_is_nonempty(MDRequest *mdr, CDirPlacement *placement)
 {
-  MDS *mds = in->mdcache->mds;
+  MDS *mds = placement->mdcache->mds;
 
-  dout(10) << "dir_is_nonempty " << *in << dendl;
+  dout(10) << "dir_is_nonempty " << *placement << dendl;
 
-  for (size_t stripeid = 0; stripeid < in->get_stripe_count(); ++stripeid) {
-    CDirStripe *stripe = in->get_stripe(stripeid);
+  for (size_t i = 0; i < placement->get_stripe_count(); ++i) {
+    CDirStripe *stripe = placement->get_stripe(i);
     assert(stripe);
     fnode_t *pf = stripe->get_projected_fnode();
     if (pf->fragstat.size() > 0) {
       dout(10) << "dir_is_nonempty projected dir size still "
-          << pf->fragstat.size() << " on " << *in << dendl;
+          << pf->fragstat.size() << " in " << *placement << dendl;
       return true;
     }
   }
@@ -5071,6 +5088,8 @@ void Server::handle_client_unlink(MDRequest *mdr)
   }
   dout(7) << "dn links to " << *in << dendl;
 
+  CDirPlacement *placement = in->get_placement();
+
   // rmdir vs is_dir
   if (in->is_dir()) {
     if (!rmdir) {
@@ -5079,7 +5098,7 @@ void Server::handle_client_unlink(MDRequest *mdr)
       return;
     }
     // discover stripes for empty directory checks
-    if (!_discover_all_stripes(mdr, in))
+    if (!_discover_all_stripes(mdr, placement))
       return;
   } else {
     if (rmdir) {
@@ -5101,14 +5120,14 @@ void Server::handle_client_unlink(MDRequest *mdr)
   xlocks.insert(&in->linklock);
 
   // rdlock stripes to prevent creates while verifying emptiness
-  for (size_t i = 0; i < in->get_stripe_count(); ++i)
-    rdlocks.insert(&in->get_stripe(i)->linklock);
+  if (in->is_dir())
+    for (size_t i = 0; i < placement->get_stripe_count(); ++i)
+      rdlocks.insert(&placement->get_stripe(i)->linklock);
 
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
-  if (in->is_dir() &&
-      _dir_is_nonempty(mdr, in)) {
+  if (in->is_dir() && _dir_is_nonempty(mdr, placement)) {
     reply_request(mdr, -ENOTEMPTY);
     return;
   }
@@ -5119,8 +5138,8 @@ void Server::handle_client_unlink(MDRequest *mdr)
 
   if (in->is_dir()) {
     // all stripe auths need to be witnesses
-    set<int> witnesses(in->get_stripe_auth().begin(),
-                       in->get_stripe_auth().end());
+    set<int> witnesses(placement->get_stripe_auth().begin(),
+                       placement->get_stripe_auth().end());
     witnesses.erase(mds->get_nodeid());
 
     dout(10) << " witnesses " << witnesses << ", have " << mdr->more()->witnessed << dendl;
@@ -5179,13 +5198,16 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
   }
 
   // unlink local stripes
-  for (stripeid_t i = 0; i < in->get_stripe_count(); ++i) {
-    CDirStripe *stripe = in->get_stripe(i);
-    if (!stripe->is_auth())
-      continue;
-    assert(stripe->is_open());
-    stripe->state_set(CDirStripe::STATE_UNLINKED);
-    le->metablob.add_stripe(stripe, true, false, true);
+  if (in->is_dir()) {
+    CDirPlacement *placement = in->get_placement();
+    for (stripeid_t i = 0; i < placement->get_stripe_count(); ++i) {
+      CDirStripe *stripe = placement->get_stripe(i);
+      if (!stripe->is_auth())
+        continue;
+      assert(stripe->is_open());
+      stripe->state_set(CDirStripe::STATE_UNLINKED);
+      le->metablob.add_stripe(stripe, true, false, true);
+    }
   }
 
   // the unlinked dentry
@@ -5247,8 +5269,9 @@ void Server::_rmdir_prepare_witness(MDRequest *mdr, CDentry *dn,
   req->src.d_type = dn->get_linkage()->get_remote_d_type();
 
   // stripes for this mds to remove
-  for (stripeid_t i = 0; i < in->get_stripe_count(); ++i)
-    if (in->get_stripe_auth(i) == who)
+  CDirPlacement *placement = in->get_placement();
+  for (stripeid_t i = 0; i < placement->get_stripe_count(); ++i)
+    if (placement->get_stripe_auth(i) == who)
       req->stripes.push_back(i);
   assert(!req->stripes.empty());
 
@@ -5320,7 +5343,7 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
   // journal each stripe as dirty/unlinked
   for (vector<stripeid_t>::iterator i = rollback.stripes.begin();
        i != rollback.stripes.end(); ++i) {
-    CDirStripe *stripe = in->get_stripe(*i);
+    CDirStripe *stripe = in->get_placement()->get_stripe(*i);
     assert(stripe->is_open()); // master holds rdlock
     stripe->state_set(CDirStripe::STATE_UNLINKED);
     le->commit.add_stripe(stripe, true, false, true);
@@ -5449,7 +5472,8 @@ void Server::do_rmdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
   assert(in);
   for (vector<stripeid_t>::iterator i = rollback.stripes.begin();
        i != rollback.stripes.end(); ++i) {
-    CDirStripe *stripe = in->get_stripe(*i);
+    assert(in->is_dir());
+    CDirStripe *stripe = in->get_placement()->get_stripe(*i);
     assert(stripe);
     assert(stripe->is_auth());
     stripe->state_clear(CDirStripe::STATE_UNLINKED);
@@ -5509,9 +5533,11 @@ void _rename_slaves(MDS *mds, MDRequest *mdr,
       req->dest.ino = destin->ino();
 
       // list stripes to remove
-      for (stripeid_t i = 0; i < destin->get_stripe_count(); ++i)
-        if (*s == destin->get_stripe_auth(i))
-          req->stripes.push_back(*s);
+      CDirPlacement *placement = destin->get_placement();
+      if (placement)
+        for (stripeid_t i = 0; i < placement->get_stripe_count(); ++i)
+          if (*s == placement->get_stripe_auth(i))
+            req->stripes.push_back(*s);
     }
 
     mds->send_message_mds(req, *s);
@@ -5625,7 +5651,7 @@ void Server::handle_client_rename(MDRequest *mdr)
     }
 
     // get replicas of its stripes for rdlocking
-    if (oldin->is_dir() && !_discover_all_stripes(mdr, oldin))
+    if (oldin->is_dir() && !_discover_all_stripes(mdr, oldin->get_placement()))
       return;
   }
 
@@ -5675,8 +5701,9 @@ void Server::handle_client_rename(MDRequest *mdr)
     xlocks.insert(&oldin->linklock);
 
     // rdlock oldin stripes to prevent creates while verifying emptiness
-    for (size_t i = 0; i < oldin->get_stripe_count(); ++i)
-      rdlocks.insert(&oldin->get_stripe(i)->linklock);
+    CDirPlacement *placement = oldin->get_placement();
+    for (size_t i = 0; i < placement->get_stripe_count(); ++i)
+      rdlocks.insert(&placement->get_stripe(i)->linklock);
   }
 
   CInode *auth_pin_freeze = !srcdn->is_auth() && srcdnl->is_primary() ? srci : NULL;
@@ -5684,9 +5711,8 @@ void Server::handle_client_rename(MDRequest *mdr)
 				  &remote_wrlocks, NULL, auth_pin_freeze))
     return;
 
-  if (oldin &&
-      oldin->is_dir() &&
-      _dir_is_nonempty(mdr, oldin)) {
+  if (oldin && oldin->is_dir() &&
+      _dir_is_nonempty(mdr, oldin->get_placement())) {
     reply_request(mdr, -ENOTEMPTY);
     return;
   }
@@ -5801,7 +5827,7 @@ void Server::_rename_finish(MDRequest *mdr, CDentry *srcdn, CDentry *destdn)
 bool Server::_need_force_journal(CInode *diri)
 {
   // journal the directory inode if we're auth for any of its stripes
-  const vector<int> &auth = diri->get_stripe_auth();
+  const vector<int> &auth = diri->get_placement()->get_stripe_auth();
   return find(auth.begin(), auth.end(), mds->whoami) != auth.end();
 }
 
@@ -5928,7 +5954,8 @@ void Server::handle_slave_rename_prep(MDRequest *mdr)
   for (vector<stripeid_t>::iterator s = req->stripes.begin();
        s != req->stripes.end(); ++s) {
     assert(destin);
-    CDirStripe *stripe = destin->get_stripe(*s);
+    assert(destin->is_dir());
+    CDirStripe *stripe = destin->get_placement()->get_stripe(*s);
     assert(stripe);
     assert(stripe->is_auth());
 
@@ -6118,7 +6145,7 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr)
     // clear and journal unlinked flag
     for (vector<stripeid_t>::iterator s = rollback.stripes.begin();
          s != rollback.stripes.end(); ++s) {
-      CDirStripe *stripe = target->get_stripe(*s);
+      CDirStripe *stripe = target->get_placement()->get_stripe(*s);
       assert(stripe);
       assert(stripe->is_auth());
 

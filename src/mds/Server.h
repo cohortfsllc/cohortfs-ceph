@@ -135,7 +135,8 @@ public:
 				    set<SimpleLock*>& xlocks, bool okexist, bool mustexist, bool alwaysxlock,
 				    ceph_file_layout **layout=NULL);
 
-  CDirStripe* try_open_auth_stripe(CInode *diri, int stripeid, MDRequest *mdr);
+  CDirStripe* try_open_auth_stripe(CDirPlacement *diri, int stripeid,
+                                   MDRequest *mdr);
 
 
   // requests on existing inodes.

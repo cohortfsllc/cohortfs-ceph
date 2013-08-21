@@ -23,6 +23,7 @@
 #include "CInode.h"
 #include "CDentry.h"
 #include "CDirFrag.h"
+#include "CDirPlacement.h"
 #include "InodeContainer.h"
 #include "ParentStats.h"
 #include "Stray.h"
@@ -91,6 +92,9 @@ class MDCache {
 
   set<CInode*> base_inodes;
 
+  typedef hash_map<inodeno_t,CDirPlacement*> dir_placement_map;
+  dir_placement_map dirs;
+
 public:
   ParentStats parentstats;
 
@@ -153,10 +157,12 @@ public:
   map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
 
   void discover_base_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
-  void discover_dir_stripe(CInode *base, stripeid_t stripeid, Context *onfinish, int from=-1);
+  void discover_dir_placement(CInode *base, Context *onfinish, int from=-1);
+  void discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
+                           Context *onfinish, int from=-1);
   void discover_dir_frag(CDirStripe *stripe, frag_t approx_fg, Context *onfinish,
 			 int from=-1);
-  void discover_path(CInode *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirPlacement *base, snapid_t snap, const filepath &want_path,
                      Context *onfinish, bool want_xlocked=false, int from=-1);
   void discover_path(CDirStripe *base, snapid_t snap, const filepath &want_path,
                      Context *onfinish, bool want_xlocked=false);
@@ -426,6 +432,8 @@ public:
   void trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap);
   void trim_dirfrag(CDirFrag *dir, map<int, MCacheExpire*>& expiremap);
   void trim_stripe(CDirStripe *stripe, map<int, MCacheExpire*>& expiremap);
+  void trim_placement(CDirPlacement *placement,
+                      map<int, MCacheExpire*>& expiremap);
   void trim_inode(CDentry *dn, CInode *in, map<int, MCacheExpire*>& expiremap);
   void send_expire_messages(map<int, MCacheExpire*>& expiremap);
   void trim_non_auth();      // trim out trimmable non-auth items
@@ -459,11 +467,16 @@ public:
     return get_inode(vinodeno_t(ino, s));
   }
 
+  CDirPlacement* get_dir_placement(inodeno_t ino) {
+    dir_placement_map::iterator i = dirs.find(ino);
+    return i == dirs.end() ? NULL : i->second;
+  }
+
   CDirStripe *get_dirstripe(dirstripe_t ds) {
-    CInode *in = get_inode(ds.ino);
-    if (!in)
+    CDirPlacement *placement = get_dir_placement(ds.ino);
+    if (!placement)
       return NULL;
-    return in->get_stripe(ds.stripeid);
+    return placement->get_stripe(ds.stripeid);
   }
 
   CDirFrag* get_dirfrag(dirfrag_t df) {
@@ -488,8 +501,11 @@ public:
 
  public:
   void add_inode(CInode *in);
-
   void remove_inode(CInode *in);
+
+  void add_dir_placement(CDirPlacement *placement);
+  void remove_dir_placement(CDirPlacement *placement);
+
  protected:
   void touch_inode(CInode *in) {
     if (in->get_parent_dn())
@@ -497,11 +513,6 @@ public:
   }
 public:
   void touch_dentry(CDentry *dn) {
-    // touch ancestors
-    if (dn->get_dir()->get_inode()->get_projected_parent_dn())
-      touch_dentry(dn->get_dir()->get_inode()->get_projected_parent_dn());
-    
-    // touch me
     if (dn->is_auth())
       lru.lru_touch(dn);
     else
@@ -606,7 +617,8 @@ public:
 
   CInode *cache_traverse(const filepath& path);
 
-  void open_remote_dirstripe(CInode *diri, stripeid_t stripeid, Context *fin);
+  void open_remote_dir_placement(CInode *diri, Context *fin);
+  void open_remote_dirstripe(CDirPlacement *placement, stripeid_t stripeid, Context *fin);
   void open_remote_dirfrag(CDirStripe *stripe, frag_t fg, Context *fin);
   CInode *get_dentry_inode(CDentry *dn, MDRequest *mdr, bool projected=false);
   void open_remote_ino(inodeno_t ino, Context *fin, bool want_xlocked=false);
@@ -674,6 +686,11 @@ public:
   friend class C_MDC_Join;
 
 public:
+  void replicate_placement(CDirPlacement *placement, int to, bufferlist& bl) {
+    inodeno_t ino = placement->ino();
+    ::encode(ino, bl);
+    placement->encode_replica(to, bl);
+  }
   void replicate_stripe(CDirStripe *stripe, int to, bufferlist& bl) {
     dirstripe_t ds = stripe->dirstripe();
     ::encode(ds, bl);
@@ -695,9 +712,14 @@ public:
     in->encode_replica(to, bl);
   }
 
-  CDirStripe* add_replica_stripe(bufferlist::iterator& p, CInode *diri,
-                              int from, list<Context*>& finished);
-  CDirStripe* forge_replica_stripe(CInode *diri, stripeid_t stripe, int from);
+  CDirPlacement* add_replica_placement(bufferlist::iterator& p, CInode *diri,
+                                       int from, list<Context*>& finished);
+  CDirPlacement* forge_replica_placement(CInode *diri, int from);
+  CDirStripe* add_replica_stripe(bufferlist::iterator& p,
+                                 CDirPlacement *placement,
+                                 int from, list<Context*>& finished);
+  CDirStripe* forge_replica_stripe(CDirPlacement *diri, stripeid_t stripe,
+                                   int from);
   CDirFrag* add_replica_dir(bufferlist::iterator& p, CDirStripe *stripe, list<Context*>& finished);
   CDirFrag* forge_replica_dir(CDirStripe *stripe, frag_t fg, int from);
   CDentry *add_replica_dentry(bufferlist::iterator& p, CDirFrag *dir, list<Context*>& finished);
