@@ -26,7 +26,7 @@ class MDentryUnlink : public Message {
 
   MDentryUnlink() :
     Message(MSG_MDS_DENTRYUNLINK) { }
-  MDentryUnlink(dirfrag_t df, string& n) :
+  MDentryUnlink(dirfrag_t df, const string& n) :
     Message(MSG_MDS_DENTRYUNLINK),
     dirfrag(df),
     dn(n) {}
