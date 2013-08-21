@@ -9,6 +9,7 @@
 #ifndef COHORT_COHORTVOLUME_H
 #define COHORT_COHORTVOLUME_H
 
+#include "common/Mutex.h"
 #include "vol/Volume.h"
 
 /* Superclass of all Cohort volume types, supporting dynamically
@@ -17,15 +18,19 @@
 class CohortVolume : public Volume {
   typedef Volume inherited;
 protected:
+  Mutex compile_lock;
   void compile(void);
 
   bufferlist place_text;
   void *place_shared;
+  epoch_t compiled_epoch;
 
   CohortVolume(const vol_type t, const string n,
 	       const bufferlist &p) :
     Volume(t, n),
-    place_text(p), place_shared(NULL) { }
+    compile_lock("CohortVolume::compile_lock"),
+    place_text(p), place_shared(NULL),
+    compiled_epoch(0) { }
 
 public:
 
