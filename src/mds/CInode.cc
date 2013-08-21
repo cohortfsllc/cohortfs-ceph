@@ -1,4 +1,3 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -102,9 +101,6 @@ ostream& operator<<(ostream& out, CInode& in)
       out << "," << a.second;
     out << "." << in.get_replica_nonce();
   }
-
-  if (!in.get_stripe_auth().empty())
-    out << " stripes=" << in.get_stripe_auth();
 
   if (in.is_symlink())
     out << " symlink='" << in.symlink << "'";
@@ -232,10 +228,10 @@ void CInode::print(ostream& out)
 
 CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
   : mdcache(c),
+    placement(NULL),
     first(f), last(l),
     inode_auth(auth, CDIR_AUTH_UNKNOWN),
     last_journaled(0),
-    stickystripe_ref(0),
     parent(0),
     replica_caps_wanted(0),
     item_dirty(this),
@@ -265,9 +261,29 @@ CInode::~CInode()
 {
   g_num_ino--;
   g_num_inos++;
-  close_stripes();
+  close_placement();
 }
 
+void CInode::set_stripe_auth(const vector<int> &stripe_auth)
+{
+  assert(is_dir());
+  if (placement)
+    placement->set_stripe_auth(stripe_auth);
+  else {
+    placement = new CDirPlacement(mdcache, this, stripe_auth);
+    mdcache->add_dir_placement(placement);
+  }
+}
+
+void CInode::close_placement()
+{
+  if (placement) {
+    assert(placement->get_num_ref() == 0);
+    mdcache->remove_dir_placement(placement);
+    delete placement;
+    placement = NULL;
+  }
+}
 
 void CInode::add_need_snapflush(CInode *snapin, snapid_t snapid, client_t client)
 {
@@ -391,134 +407,6 @@ void CInode::project_renamed_parent(const inoparent_t &removed,
   projected_nodes.back()->added_parent = added;
   get_projected_parents(projected_nodes.back()->inode->parents);
 }
-
-
-// ====== CInode =======
-
-// stripes
-
-__u32 CInode::hash_dentry_name(const string &dn)
-{
-  int which = inode.dir_layout.dl_dir_hash;
-  if (!which)
-    which = CEPH_STR_HASH_LINUX;
-  return ceph_str_hash(which, dn.data(), dn.length());
-}
-
-stripeid_t CInode::pick_stripe(__u32 dnhash)
-{
-  return stripeid_t(dnhash % stripe_auth.size());
-}
-
-stripeid_t CInode::pick_stripe(const string &dname)
-{
-  if (stripes.size() == 1)
-    return 0;
-  __u32 dnhash = hash_dentry_name(dname);
-  return stripeid_t(dnhash % stripes.size());
-}
-
-bool CInode::has_open_stripes() const
-{
-  return !stripes.empty();
-}
-
-bool CInode::has_subtree_root_stripe(int auth) const
-{
-  for (stripeid_t i = 0; i < get_stripe_count(); i++)
-    if (auth != mdcache->mds->get_nodeid() &&
-        (auth == -1 || get_stripe_auth(i) == auth))
-      return true;
-  return false;
-}
-
-void CInode::get_stripes(list<CDirStripe*>& ls)
-{
-  for (stripe_map::const_iterator p = stripes.begin(); p != stripes.end(); ++p)
-    ls.push_back(p->second);
-}
-
-
-CDirStripe* CInode::get_stripe(stripeid_t stripeid)
-{
-  assert(stripeid < stripe_auth.size());
-  stripe_map::iterator i = stripes.find(stripeid);
-  return i == stripes.end() ? NULL : i->second;
-}
-
-CDirStripe* CInode::get_or_open_stripe(stripeid_t stripeid)
-{
-  // have it?
-  CDirStripe *stripe = get_stripe(stripeid);
-  if (!stripe) {
-    // create it.
-    //assert(get_stripe_auth(stripeid) == mdcache->mds->get_nodeid());
-    stripe = new CDirStripe(this, stripeid, get_stripe_auth(stripeid));
-    add_stripe(stripe);
-  }
-  return stripe;
-}
-
-CDirStripe* CInode::add_stripe(CDirStripe *stripe)
-{
-  assert(stripes.count(stripe->get_stripeid()) == 0);
-  stripes[stripe->get_stripeid()] = stripe;
-
-  if (stickystripe_ref > 0)
-    stripe->get_stickydirs();
-
-  return stripe;
-}
-
-void CInode::close_stripe(CDirStripe *stripe)
-{
-  dout(14) << "close_stripe " << *stripe << dendl;
-  assert(stripes.count(stripe->get_stripeid()));
-
-  stripe->close_dirfrags();
-
-  // clear dirty flag
-  if (stripe->is_dirty())
-    stripe->mark_clean();
- 
-  if (stickystripe_ref > 0)
-    stripe->put_stickydirs();
-  stripe->item_stray.remove_myself();
-
-  assert(stripe->get_num_ref() == 0);
-  stripes.erase(stripe->get_stripeid());
-  delete stripe;
-}
-
-void CInode::close_stripes()
-{
-  while (!stripes.empty())
-    close_stripe(stripes.begin()->second);
-}
-
-void CInode::get_stickystripes()
-{
-  if (stickystripe_ref == 0) {
-    get(PIN_STICKYSTRIPES);
-    for (stripe_map::iterator p = stripes.begin(); p != stripes.end(); ++p)
-      p->second->get_stickydirs();
-  }
-  stickystripe_ref++;
-}
-
-void CInode::put_stickystripes()
-{
-  assert(stickystripe_ref > 0);
-  stickystripe_ref--;
-  if (stickystripe_ref == 0) {
-    put(PIN_STICKYSTRIPES);
-    for (stripe_map::iterator p = stripes.begin(); p != stripes.end(); ++p)
-      p->second->put_stickydirs();
-  }
-}
-
-
-
 
 
 // pins
@@ -652,14 +540,6 @@ void CInode::make_path(filepath& fp)
     parent->make_path(fp);
   else
     fp = filepath(ino());
-}
-
-void CInode::make_anchor_trace(vector<Anchor>& trace)
-{
-  if (get_projected_parent_dn())
-    get_projected_parent_dn()->make_anchor_trace(trace, this);
-  else 
-    assert(is_base());
 }
 
 void CInode::_mark_dirty(LogSegment *ls)
@@ -956,7 +836,10 @@ void CInode::encode_store(bufferlist& bl)
   ::encode(inode, bl);
   if (is_symlink())
     ::encode(symlink, bl);
-  ::encode(stripe_auth, bl);
+  if (is_dir()) {
+    assert(placement);
+    ::encode(placement->get_stripe_auth(), bl);
+  }
   ::encode(xattrs, bl);
   ::encode(old_inodes, bl);
   ENCODE_FINISH(bl);
@@ -967,7 +850,11 @@ void CInode::decode_store(bufferlist::iterator& bl) {
   ::decode(inode, bl);
   if (is_symlink())
     ::decode(symlink, bl);
-  ::decode(stripe_auth, bl);
+  if (is_dir()) {
+    vector<int> stripe_auth;
+    ::decode(stripe_auth, bl);
+    set_stripe_auth(stripe_auth);
+  }
   ::decode(xattrs, bl);
   ::decode(old_inodes, bl);
   DECODE_FINISH(bl);
@@ -1184,20 +1071,6 @@ void CInode::add_waiter(uint64_t tag, Context *c)
   }
   dout(15) << "taking waiter here" << dendl;
   MDSCacheObject::add_waiter(tag, c);
-}
-
-void CInode::take_waiting(uint64_t mask, list<Context*> &ls)
-{
-  if (mask & WAIT_STRIPE) {
-    for (map<stripeid_t, list<Context*> >::iterator i = waiting_on_stripe.begin();
-         i != waiting_on_stripe.end();
-         ++i)
-      ls.splice(ls.end(), i->second);
-
-    waiting_on_stripe.clear();
-  }
-
-  MDSCacheObject::take_waiting(mask, ls);
 }
 
 bool CInode::freeze_inode(int auth_pin_allowance)
@@ -1916,7 +1789,8 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   if (max_bytes) {
     unsigned bytes = sizeof(e);
     bytes += sizeof(__u32);
-    bytes += sizeof(__u32) * stripe_auth.size();
+    if (is_dir())
+      bytes += sizeof(__u32) * placement->get_stripe_count();
     bytes += sizeof(__u32) + symlink.length();
     bytes += sizeof(__u32) + xbl.length();
     if (bytes > max_bytes)
@@ -2000,15 +1874,16 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   }
 
   // encode
-  e.stripes = stripe_auth.size();
+  e.stripes = is_dir() ? placement->get_stripe_count() : 0;
   ::encode(e, bl);
-  for (vector<int>::iterator p = stripe_auth.begin(); p != stripe_auth.end(); ++p)
-    ::encode(*p, bl);
-  ::encode(symlink, bl);
-  if (session->connection->has_feature(CEPH_FEATURE_DIRLAYOUTHASH)) {
-    i = pfile ? pi : oi;
-    ::encode(i->dir_layout, bl);
+
+  if (is_dir()) {
+    ::encode(placement->get_layout(), bl);
+    const vector<int> &sauth = placement->get_stripe_auth();
+    for (vector<int>::const_iterator p = sauth.begin(); p != sauth.end(); ++p)
+      ::encode(*p, bl);
   }
+  ::encode(symlink, bl);
   ::encode(xbl, bl);
 
   return valid;
@@ -2073,7 +1948,8 @@ void CInode::_encode_base(bufferlist& bl)
   ::encode(first, bl);
   ::encode(inode, bl);
   ::encode(symlink, bl);
-  ::encode(stripe_auth, bl);
+  if (is_dir())
+    ::encode(placement->get_stripe_auth(), bl);
   ::encode(xattrs, bl);
   ::encode(old_inodes, bl);
 }
@@ -2082,7 +1958,11 @@ void CInode::_decode_base(bufferlist::iterator& p)
   ::decode(first, p);
   ::decode(inode, p);
   ::decode(symlink, p);
-  ::decode(stripe_auth, p);
+  if (is_dir()) {
+    vector<int> stripe_auth;
+    ::decode(stripe_auth, p);
+    set_stripe_auth(stripe_auth);
+  }
   ::decode(xattrs, p);
   ::decode(old_inodes, p);
 }
@@ -2194,3 +2074,4 @@ void CInode::decode_import(bufferlist::iterator& p,
   _decode_locks_full(p);
   DECODE_FINISH(p);
 }
+

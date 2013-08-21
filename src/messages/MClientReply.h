@@ -134,16 +134,15 @@ struct InodeStat {
     rstat.rsubdirs = e.rsubdirs;
 
     int n = e.stripes;
-    stripe_auth.resize(n);
-    for (int i = 0; i < n; i++)
-      ::decode(stripe_auth[i], p);
+    if (n) {
+      ::decode(dir_layout, p);
+      stripe_auth.resize(n);
+      for (int i = 0; i < n; i++)
+        ::decode(stripe_auth[i], p);
+    } else
+      memset(&dir_layout, 0, sizeof(dir_layout));
 
     ::decode(symlink, p);
-    
-    if (features & CEPH_FEATURE_DIRLAYOUTHASH)
-      ::decode(dir_layout, p);
-    else
-      memset(&dir_layout, 0, sizeof(dir_layout));
 
     xattr_version = e.xattr_version;
     ::decode(xattrbl, p);

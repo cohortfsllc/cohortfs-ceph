@@ -162,13 +162,14 @@ CDentry* CDirFrag::lookup(const string &name, snapid_t snap)
  */
 
 CDentry* CDirFrag::add_null_dentry(const string& dname,
-			       snapid_t first, snapid_t last)
+                                   snapid_t first, snapid_t last)
 {
   // foreign
   assert(lookup_exact_snap(dname, last) == 0);
    
   // create dentry
-  CDentry* dn = new CDentry(dname, get_inode()->hash_dentry_name(dname), first, last);
+  __u32 dnhash = get_placement()->hash_dentry_name(dname);
+  CDentry* dn = new CDentry(dname, dnhash, first, last);
   if (is_auth()) 
     dn->state_set(CDentry::STATE_AUTH);
   cache->lru.lru_insert_mid(dn);
@@ -203,13 +204,14 @@ CDentry* CDirFrag::add_null_dentry(const string& dname,
 
 
 CDentry* CDirFrag::add_primary_dentry(const string& dname, CInode *in,
-				  snapid_t first, snapid_t last) 
+                                      snapid_t first, snapid_t last) 
 {
   // primary
   assert(lookup_exact_snap(dname, last) == 0);
   
   // create dentry
-  CDentry* dn = new CDentry(dname, get_inode()->hash_dentry_name(dname), first, last);
+  __u32 dnhash = get_placement()->hash_dentry_name(dname);
+  CDentry* dn = new CDentry(dname, dnhash, first, last);
   if (is_auth()) 
     dn->state_set(CDentry::STATE_AUTH);
   cache->lru.lru_insert_mid(dn);
@@ -248,13 +250,14 @@ CDentry* CDirFrag::add_primary_dentry(const string& dname, CInode *in,
 }
 
 CDentry* CDirFrag::add_remote_dentry(const string& dname, inodeno_t ino, unsigned char d_type,
-				 snapid_t first, snapid_t last) 
+                                     snapid_t first, snapid_t last) 
 {
   // foreign
   assert(lookup_exact_snap(dname, last) == 0);
 
   // create dentry
-  CDentry* dn = new CDentry(dname, get_inode()->hash_dentry_name(dname), ino, d_type, first, last);
+  __u32 dnhash = get_placement()->hash_dentry_name(dname);
+  CDentry* dn = new CDentry(dname, dnhash, ino, d_type, first, last);
   if (is_auth()) 
     dn->state_set(CDentry::STATE_AUTH);
   cache->lru.lru_insert_mid(dn);
@@ -742,7 +745,7 @@ void CDirFrag::add_dentry_waiter(const string& dname, snapid_t snapid, Context *
 }
 
 void CDirFrag::take_dentry_waiting(const string& dname, snapid_t first, snapid_t last,
-			       list<Context*>& ls)
+                                   list<Context*>& ls)
 {
   if (waiting_on_dentry.empty())
     return;
@@ -1470,7 +1473,7 @@ CDirFrag::map_t::iterator CDirFrag::_commit_partial(ObjectOperation& m,
 }
 
 void CDirFrag::_encode_dentry(CDentry *dn, bufferlist& bl,
-			  const set<snapid_t> *snaps)
+                              const set<snapid_t> *snaps)
 {
   // clear dentry NEW flag, if any.  we can no longer silently drop it.
   dn->clear_new();
@@ -1510,7 +1513,7 @@ void CDirFrag::_encode_dentry(CDentry *dn, bufferlist& bl,
       ::encode(in->symlink, bl);
     }
     if (in->is_dir())
-      ::encode(in->get_stripe_auth(), bl);
+      ::encode(in->get_placement()->get_stripe_auth(), bl);
 
     ::encode(in->xattrs, bl);
 

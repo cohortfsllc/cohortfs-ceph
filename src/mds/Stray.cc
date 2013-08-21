@@ -72,6 +72,10 @@ void Stray::eval(CInode *in)
 {
   dout(10) << "eval " << *in << dendl;
 
+  if (!in->is_auth()) {
+    dout(20) << " not auth" << dendl;
+    return;
+  }
   if (in->is_base()) {
     dout(20) << " is base" << dendl;
     return;
@@ -92,7 +96,8 @@ void Stray::eval(CInode *in)
     return; // wait
   }
   list<CDirStripe*> stripes;
-  in->get_stripes(stripes);
+  if (in->is_dir())
+    in->get_placement()->get_stripes(stripes);
   if (!stripes.empty()) {
     dout(20) << " open stripes" << dendl;
     for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s)
@@ -124,6 +129,10 @@ void Stray::eval(CDirStripe *stripe)
 {
   dout(10) << "eval " << *stripe << dendl;
 
+  if (!stripe->is_auth()) {
+    dout(20) << " not auth" << dendl;
+    return;
+  }
   if (!stripe->state_test(CDirStripe::STATE_UNLINKED)) { // rmdir rollback
     dout(20) << " linked" << dendl;
     return;
@@ -312,7 +321,7 @@ void Stray::purged(CInode *in)
 
   dn->push_projected_linkage();
 
-  le->metablob.add_dentry(dn, true);
+  le->metablob.add_dentry(dn, false);
   le->metablob.add_destroyed_inode(in->ino());
 
   mds->mdlog->start_submit_entry(le, new C_StrayLogged(this, dn, in));
@@ -366,9 +375,9 @@ void Stray::logged(CDirStripe *stripe)
 
   stripe->clear_dirty_parent_stats();
 
-  CInode *in = stripe->get_inode();
-  in->close_stripe(stripe);
+  CDirPlacement *placement = stripe->get_placement();
+  placement->close_stripe(stripe);
 
-  eval(in);
+  eval(placement->get_inode());
 }
 
