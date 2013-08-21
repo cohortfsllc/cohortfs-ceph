@@ -2859,7 +2859,7 @@ void Server::handle_client_readdir(MDRequest *mdr)
   if (offset_str.empty())
     it = dir->begin();
   else // first entry after 'offset_str'
-    it = dir->items.upper_bound(dentry_key_t(snapid, offset_str.c_str()));
+    it = dir->items.upper_bound(dentry_key_t(snapid, &offset_str));
 
   // if we're at the end of a fragment, find the next non-empty one
   while (it == dir->end() && !fg.is_rightmost()) {
@@ -2972,7 +2972,7 @@ void Server::handle_client_readdir(MDRequest *mdr)
     }
     assert(in);
 
-    if ((int)(dnbl.length() + dn->name.length() + sizeof(__u32) + sizeof(LeaseStat)) > bytes_left) {
+    if ((int)(dnbl.length() + dn->get_name().length() + sizeof(__u32) + sizeof(LeaseStat)) > bytes_left) {
       dout(10) << " ran out of room, stopping at " << dnbl.length() << " < " << bytes_left << dendl;
       break;
     }
@@ -2981,7 +2981,7 @@ void Server::handle_client_readdir(MDRequest *mdr)
 
     // dentry
     dout(12) << "including    dn " << *dn << dendl;
-    ::encode(dn->name, dnbl);
+    ::encode(dn->get_name(), dnbl);
     mds->locker->issue_client_lease(dn, client, dnbl, mdr->now, mdr->session);
 
     // inode
@@ -5632,7 +5632,7 @@ void Server::handle_client_rename(MDRequest *mdr)
   // -- some sanity checks --
   // XXX: src+dest traces _must_ share a common ancestor for locking to prevent orphans
   // src == dest?
-  if (srcdn->get_dir() == destdir && srcdn->name == destname) {
+  if (srcdn->get_dir() == destdir && srcdn->get_name() == destname) {
     dout(7) << "rename src=dest, noop" << dendl;
     reply_request(mdr, 0);
     return;

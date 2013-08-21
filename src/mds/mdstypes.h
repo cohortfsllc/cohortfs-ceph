@@ -867,14 +867,14 @@ inline ostream& operator<<(ostream& out, const old_rstat_t& o) {
 
 struct dentry_key_t {
   snapid_t snapid;
-  const char *name;
+  const string *name;
   dentry_key_t() : snapid(0), name(0) {}
-  dentry_key_t(snapid_t s, const char *n) : snapid(s), name(n) {}
+  dentry_key_t(snapid_t s, const string *n) : snapid(s), name(n) {}
 
   // encode into something that can be decoded as a string.
   // name_ (head) or name_%x (!head)
   void encode(bufferlist& bl) const {
-    __u32 l = strlen(name) + 1;
+    __u32 l = name->length() + 1;
     char b[20];
     if (snapid != CEPH_NOSNAP) {
       uint64_t val(snapid);
@@ -885,7 +885,7 @@ struct dentry_key_t {
       l += 4;
     }
     ::encode(l, bl);
-    bl.append(name, strlen(name));
+    bl.append(name->c_str(), name->length());
     bl.append("_", 1);
     bl.append(b);
   }
@@ -910,13 +910,13 @@ struct dentry_key_t {
       sscanf(foo.c_str() + i + 1, "%llx", &x);
       sn = x;
     }  
-    nm = string(foo.c_str(), i);
+    nm.assign(foo.begin(), foo.begin() + i);
   }
 };
 
 inline ostream& operator<<(ostream& out, const dentry_key_t &k)
 {
-  return out << "(" << k.name << "," << k.snapid << ")";
+  return out << "(" << *k.name << "," << k.snapid << ")";
 }
 
 inline bool operator<(const dentry_key_t& k1, const dentry_key_t& k2)
@@ -924,7 +924,7 @@ inline bool operator<(const dentry_key_t& k1, const dentry_key_t& k2)
   /*
    * order by name, then snap
    */
-  int c = strcmp(k1.name, k2.name);
+  int c = k1.name->compare(*k2.name);
   return 
     c < 0 || (c == 0 && k1.snapid < k2.snapid);
 }

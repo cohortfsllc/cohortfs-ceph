@@ -137,10 +137,10 @@ CDirFrag::CDirFrag(CDirStripe *stripe, frag_t frag, MDCache *mdcache, bool auth)
     state_set(STATE_AUTH);
 }
 
-CDentry *CDirFrag::lookup(const char *name, snapid_t snap)
+CDentry* CDirFrag::lookup(const string &name, snapid_t snap)
 { 
   dout(20) << "lookup (" << snap << ", '" << name << "')" << dendl;
-  map_t::iterator iter = items.lower_bound(dentry_key_t(snap, name));
+  map_t::iterator iter = items.lower_bound(dentry_key_t(snap, &name));
   if (iter == items.end())
     return 0;
   if (iter->second->name == name &&

@@ -101,13 +101,14 @@ public:
     return *this < *(CDentry*)r;
   }
 
-public:
-  string name;
+private:
+  const string name;
   __u32 hash;
+public:
   snapid_t first, last;
 
   dentry_key_t key() { 
-    return dentry_key_t(last, name.c_str()); 
+    return dentry_key_t(last, &name); 
   }
 
 public:
