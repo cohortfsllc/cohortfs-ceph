@@ -1626,6 +1626,8 @@ void MDCache::rejoin_send_rejoins()
   // share inode lock state
   for (inode_map::iterator i = inodes.begin(); i != inodes.end(); ++i) {
     CInode *in = i->second;
+    if (in->is_dir())
+      in->get_placement()->get_stripes(stripes);
     int who = in->authority().first;
     rejoin_map::iterator p = rejoins.find(who);
     if (p == rejoins.end())
@@ -1641,12 +1643,7 @@ void MDCache::rejoin_send_rejoins()
 
     if (in->is_dirty_scattered())
       p->second->add_scatterlock_state(in);
-    if (in->is_dir())
-      in->get_stripes(stripes);
   }
-
-  // include inode container stripes
-  get_container()->get_inode()->get_stripes(stripes);
 
   for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
     CDirStripe *stripe = *s;
@@ -1658,6 +1655,26 @@ void MDCache::rejoin_send_rejoins()
     dout(15) << "rejoining " << *stripe << " for mds." << who << dendl;
     p->second->add_weak_stripe(stripe->dirstripe());
     nonauth_stripes.push_back(&stripe->item_nonauth);
+
+    list<CDirFrag*> frags;
+    stripe->get_dirfrags(frags);
+    for (list<CDirFrag*>::iterator f = frags.begin(); f != frags.end(); ++f) {
+      CDirFrag *dir = *f;
+      dout(15) << "rejoining " << *dir << " for mds." << who << dendl;
+      const dirfrag_t df = dir->dirfrag();
+      p->second->add_weak_dirfrag(df);
+
+      for (CDirFrag::map_t::iterator d = dir->begin(); d != dir->end(); ++d) {
+        CDentry *dn = d->second;
+        dout(15) << "rejoining " << *dn << " for mds." << who << dendl;
+        CDentry::linkage_t *dnl = dn->get_linkage();
+        inodeno_t ino = dnl->is_primary()
+            ? dnl->get_inode()->ino()
+            : dnl->get_remote_ino();
+        p->second->add_weak_primary_dentry(df, dn->get_name(), dn->last,
+                                           dn->first, ino);
+      }
+    }
   }
 #if 0 
   // check all subtrees
@@ -1679,7 +1696,7 @@ void MDCache::rejoin_send_rejoins()
 
     rejoin_walk(stripe, rejoins[auth]);
   }
-
+#endif
   // rejoin root inodes, too
   for (map<int, MMDSCacheRejoin*>::iterator p = rejoins.begin();
        p != rejoins.end();
@@ -1744,7 +1761,7 @@ void MDCache::rejoin_send_rejoins()
       }
     }
   }  
-#endif
+
   if (!mds->is_rejoin()) {
     // i am survivor.  send strong rejoin.
     // note request remote_auth_pins, xlocks
@@ -2083,62 +2100,45 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     }
   }
 
-  for (map<dirstripe_t,map<string_snap_t,MMDSCacheRejoin::dn_weak> >::iterator p = weak->weak.begin();
-       p != weak->weak.end();
-       ++p) {
-    CDirStripe *stripe = get_dirstripe(p->first);
-    if (!stripe)
-      dout(0) << " missing dir stripe " << p->first << dendl;
-    assert(stripe);
+  typedef map<string_snap_t,MMDSCacheRejoin::dn_weak> dn_map;
+  typedef map<dirfrag_t,dn_map> dir_map;
+  for (dir_map::iterator p = weak->weak.begin(); p != weak->weak.end(); ++p) {
+    CDirFrag *dir = get_dirfrag(p->first);
+    assert(dir);
+    assert(dirs_to_share.count(dir));
 
-    // weak dentries
-    CDirFrag *dir = 0;
-    for (map<string_snap_t,MMDSCacheRejoin::dn_weak>::iterator q = p->second.begin();
-	 q != p->second.end();
-	 ++q) {
-      // locate proper dirfrag.
-      //  optimize for common case (one dirfrag) to avoid dirs_to_share set check
-      frag_t fg = stripe->pick_dirfrag(q->first.name);
-      if (!dir || dir->get_frag() != fg) {
-	dir = stripe->get_dirfrag(fg);
-	if (!dir)
-	  dout(0) << " missing dir frag " << fg << " on " << *stripe << dendl;
-	assert(dir);
-	assert(dirs_to_share.count(dir));
-      }
-
-      // and dentry
+    for (dn_map::iterator q = p->second.begin(); q != p->second.end(); ++q) {
       CDentry *dn = dir->lookup(q->first.name, q->first.snapid);
       assert(dn);
       CDentry::linkage_t *dnl = dn->get_linkage();
       assert(dnl->is_primary());
-      
+
       if (survivor && dn->is_replica(from)) 
-	dentry_remove_replica(dn, from);  // this induces a lock gather completion
+        dentry_remove_replica(dn, from);  // this induces a lock gather completion
       int dnonce = dn->add_replica(from);
       dout(10) << " have " << *dn << dendl;
       if (ack) 
-	ack->add_strong_dentry(dir->dirfrag(), dn->name, dn->first, dn->last,
-			       dnl->get_inode()->ino(), inodeno_t(0), 0, 
-			       dnonce, dn->lock.get_replica_state());
+        ack->add_strong_dentry(dir->dirfrag(), dn->name, dn->first, dn->last,
+                               dnl->get_inode()->ino(), inodeno_t(0), 0, 
+                               dnonce, dn->lock.get_replica_state());
 
       // inode
       CInode *in = dnl->get_inode();
       assert(in);
 
       if (survivor && in->is_replica(from)) 
-	inode_remove_replica(in, from);
+        inode_remove_replica(in, from);
       int inonce = in->add_replica(from);
       dout(10) << " have " << *in << dendl;
 
       // scatter the dirlock, just in case?
       if (!survivor && in->is_dir())
-	in->filelock.set_state(LOCK_MIX);
+        in->filelock.set_state(LOCK_MIX);
 
       if (ack) {
-	acked_inodes.insert(in->vino());
-	ack->add_inode_base(in);
-	ack->add_inode_locks(in, inonce);
+        acked_inodes.insert(in->vino());
+        ack->add_inode_base(in);
+        ack->add_inode_locks(in, inonce);
       }
     }
   }
