@@ -154,7 +154,6 @@ class EMetaBlob {
     }
   };
   WRITE_CLASS_ENCODER(Inode)
-  typedef map<inodeno_t, Inode> inode_map;
 
   // journal entry for a dentry
   class Dentry {
@@ -201,17 +200,20 @@ class EMetaBlob {
       ::decode(d_type, bl);
       ::decode(dirty, bl);
     }
+
+    void apply(MDS *mds, CDirFrag *dir, CDentry *dn, LogSegment *ls);
+
     void print(ostream& out) {
       out << " dn " << name << " [" << first << "," << last << "] v " << version
 	  << " ino " << ino << " dirty=" << dirty << std::endl;
     }
   };
   WRITE_CLASS_ENCODER(Dentry)
-  typedef vector<Dentry> dentry_vec;
 
   // journal entry for a dir fragment
   class Dir {
    private:
+    typedef vector<Dentry> dentry_vec;
     dentry_vec dentries;
 
     mutable bufferlist dnbl;
@@ -283,11 +285,11 @@ class EMetaBlob {
     }
   };
   WRITE_CLASS_ENCODER(Dir)
-  typedef map<frag_t, Dir> dir_map;
 
   // journal entry for a dir stripe
   class Stripe {
    private:
+    typedef map<frag_t, Dir> dir_map;
     dir_map dirs;
 
     mutable bufferlist dfbl;
@@ -361,10 +363,11 @@ class EMetaBlob {
     }
   };
   WRITE_CLASS_ENCODER(Stripe)
-  typedef map<dirstripe_t, Stripe> stripe_map;
 
  private:
+  typedef map<inodeno_t, Inode> inode_map;
   inode_map inodes;
+  typedef map<dirstripe_t, Stripe> stripe_map;
   stripe_map stripes;
 
   list<pair<__u8,version_t> > table_tids;  // tableclient transactions

@@ -345,6 +345,32 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in, bool isnew)
   assert(in->is_base() || static_cast<size_t>(inode.nlink) == in->inode.parents.size());
 }
 
+void EMetaBlob::Dentry::apply(MDS *mds, CDirFrag *dir,
+                              CDentry *dn, LogSegment *ls)
+{
+  // update linkage
+  CDentry::linkage_t *dnl = dn->get_linkage();
+  if (dnl->is_null()) {
+    assert(ino); // don't journal a null dentry unless unlinking
+    CInode *in = mds->mdcache->get_inode(ino, last);
+    if (dir->ino() == MDS_INO_CONTAINER) {
+      // primary links in inode container
+      assert(in);
+      dir->link_primary_inode(dn, in);
+    } else if (in)
+      dir->link_remote_inode(dn, in);
+    else
+      dir->link_remote_inode(dn, ino, d_type);
+  } else if (ino == 0) {
+    dir->unlink_inode(dn);
+  } else if (dnl->is_primary()) {
+    assert(ino == dnl->get_inode()->ino());
+  } else if (ino != dnl->get_remote_ino())
+    dnl->set_remote(ino, d_type);
+
+  dout(10) << "EMetaBlob.replay updated " << *dn << dendl;
+}
+
 void EMetaBlob::Dir::apply(MDS *mds, CDirFrag *dir, LogSegment *ls)
 {
   dir->set_version(version);
@@ -356,32 +382,33 @@ void EMetaBlob::Dir::apply(MDS *mds, CDirFrag *dir, LogSegment *ls)
   if (is_complete())
     dir->mark_complete();
 
-  dout(10) << "EMetaBlob.replay updated dir " << *dir << dendl;
+  dout(10) << "EMetaBlob.replay updated " << *dir << dendl;
+
+  decode_dentries();
+  for (dentry_vec::iterator d = dentries.begin(); d != dentries.end(); ++d) {
+    // open the dentry
+    CDentry *dn = dir->lookup_exact_snap(d->name, d->last);
+    if (!dn) {
+      dn = dir->add_null_dentry(d->name, d->first, d->last);
+      dn->set_version(d->version);
+      if (d->dirty) dn->_mark_dirty(ls);
+      dout(10) << "EMetaBlob.replay added " << *dn << dendl;
+    } else {
+      dn->set_version(d->version);
+      if (d->dirty) dn->_mark_dirty(ls);
+      dout(10) << "EMetaBlob.replay had " << *dn << dendl;
+      dn->first = d->first;
+      assert(dn->last == d->last);
+    }
+
+    d->apply(mds, dir, dn, ls);
+  }
 }
 
 static CDirStripe* open_stripe(MDS *mds, dirstripe_t ds)
 {
-#if 1
   CDirPlacement *placement = mds->mdcache->get_dir_placement(ds.ino);
   assert(placement);
-#else
-  // find/create the inode
-  CInode *diri = mds->mdcache->get_inode(ds.ino);
-  if (!diri) {
-    if (MDS_INO_IS_BASE(ds.ino)) {
-      int auth;
-      if (MDS_INO_IS_MDSDIR(ds.ino))
-        auth = ds.ino - MDS_INO_MDSDIR_OFFSET;
-      else
-        auth = mds->mdsmap->get_root();
-      diri = mds->mdcache->create_system_inode(ds.ino, auth, S_IFDIR|0755);
-      dout(10) << "EMetaBlob.replay created base " << *diri << dendl;
-    } else {
-      dout(0) << "EMetaBlob.replay missing dir ino " << ds.ino << dendl;
-      assert(diri);
-    }
-  }
-#endif
   // find/create the stripe
   CDirStripe *stripe = placement->get_stripe(ds.stripeid);
   if (stripe) {
@@ -423,6 +450,20 @@ void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
   stripe->set_fragtree(dirfragtree);
   stripe->force_dirfrags();
   dout(10) << "EMetaBlob updated stripe " << *stripe << dendl;
+
+  decode_dirs();
+  for (dir_map::iterator f = dirs.begin(); f != dirs.end(); ++f) {
+    // open the fragment
+    CDirFrag *dir = stripe->get_dirfrag(f->first);
+    if (!dir) {
+      dir = stripe->get_or_open_dirfrag(f->first);
+      dout(10) << "EMetaBlob.replay added " << *dir << dendl;
+    } else {
+      dout(10) << "EMetaBlob.replay had " << *dir << dendl;
+    }
+
+    f->second.apply(mds, dir, ls);
+  }
 }
 
 void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
@@ -452,61 +493,6 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     assert(stripe);
 
     s->second.apply(mds, stripe, logseg);
-
-    dir_map &dirs = s->second.get_dirs();
-    for (dir_map::iterator f = dirs.begin(); f != dirs.end(); ++f) {
-      // open the fragment
-      CDirFrag *dir = stripe->get_dirfrag(f->first);
-      if (!dir) {
-        dir = stripe->get_or_open_dirfrag(f->first);
-        dout(10) << "EMetaBlob.replay added " << *dir << dendl;
-      } else {
-        dout(10) << "EMetaBlob.replay had " << *dir << dendl;
-      }
-
-      f->second.apply(mds, dir, logseg);
-
-      dentry_vec &dns = f->second.get_dentries();
-      for (dentry_vec::iterator d = dns.begin(); d != dns.end(); ++d) {
-        // open the dentry
-        CDentry *dn = dir->lookup_exact_snap(d->name, d->last);
-        if (!dn) {
-          dn = dir->add_null_dentry(d->name, d->first, d->last);
-          dn->set_version(d->version);
-          if (d->dirty) dn->_mark_dirty(logseg);
-          dout(10) << "EMetaBlob.replay added " << *dn << dendl;
-        } else {
-          dn->set_version(d->version);
-          if (d->dirty) dn->_mark_dirty(logseg);
-          dout(10) << "EMetaBlob.replay had " << *dn << dendl;
-          dn->first = d->first;
-          assert(dn->last == d->last);
-        }
-
-        // update linkage
-        CDentry::linkage_t *dnl = dn->get_linkage();
-        if (dnl->is_null()) {
-          assert(d->ino); // don't journal a null dentry unless unlinking
-          CInode *in = mds->mdcache->get_inode(d->ino, d->last);
-          if (s->first.ino == MDS_INO_CONTAINER) {
-            // primary links in inode container
-            assert(in);
-            dir->link_primary_inode(dn, in);
-          } else if (in)
-            dir->link_remote_inode(dn, in);
-          else
-            dir->link_remote_inode(dn, d->ino, d->d_type);
-        } else if (d->ino == 0) {
-          dir->unlink_inode(dn);
-          // TODO: track unlinked
-        } else if (dnl->is_primary()) {
-          dout(10) << "primary d->ino " << d->ino
-              << " -> " << *dnl->get_inode() << dendl;
-          assert(d->ino == dnl->get_inode()->ino());
-        } else if (d->ino != dnl->get_remote_ino())
-          dnl->set_remote(d->ino, d->d_type);
-      }
-    }
   }
 
   // table client transactions
