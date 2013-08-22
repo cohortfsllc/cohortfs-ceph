@@ -1653,6 +1653,8 @@ void MDCache::rejoin_send_rejoins()
 
     dout(15) << "rejoining " << *in << " for mds." << who << dendl;
     p->second->add_weak_inode(in->vino());
+    if (in->is_dir())
+      p->second->add_weak_placement(in->ino());
     if (!mds->is_rejoin())
       p->second->add_strong_inode(in->vino(),
                                   in->get_caps_wanted(),
@@ -2179,6 +2181,21 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     }
   }
 
+  for (set<inodeno_t>::iterator p = weak->weak_placements.begin();
+       p != weak->weak_placements.end(); ++p) {
+    CDirPlacement *placement = get_dir_placement(*p);
+    if (!placement)
+      dout(5) << " missing placement for " << *p << dendl;
+    assert(placement);
+    if (survivor && placement->is_replica(from)) 
+      placement->remove_replica(from);
+
+    int snonce = placement->add_replica(from);
+    dout(10) << " have placement " << *placement << dendl;
+    if (ack)
+      ack->add_strong_placement(*p, snonce);
+  }
+
   for (set<dirstripe_t>::iterator s = weak->weak_stripes.begin();
        s != weak->weak_stripes.end(); ++s) {
     CDirStripe *stripe = get_dirstripe(*s);
@@ -2376,6 +2393,13 @@ void MDCache::rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack, set
     if (!in->is_dir()) continue;
 
     CDirPlacement *placement = in->get_placement();
+    if (placement->is_auth() &&
+	placement->is_replica(from) &&
+	ack->strong_placements.count(placement->ino()) == 0) {
+      placement->remove_replica(from);
+      dout(10) << " rem " << *placement << dendl;
+    }
+
     list<CDirStripe*> stripes;
     placement->get_stripes(stripes);
     for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
