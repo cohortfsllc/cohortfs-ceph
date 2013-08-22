@@ -704,27 +704,19 @@ void EMetaBlob::Stripe::dump(Formatter *f) const
   fnode.dump(f);
   f->close_section(); // fnode
   f->dump_string("state", state_string());
+ 
+  f->open_array_section("frags");
+  for (dir_map::const_iterator i = dirs.begin(); i != dirs.end(); ++i) {
+    f->open_object_section("frag");
+    i->second.dump(f);
+    f->close_section(); // frag
+  }
+  f->close_section(); // frags
 }
 
 void EMetaBlob::Stripe::generate_test_instances(list<Stripe*>& ls)
 {
   ls.push_back(new Stripe());
-}
-
-static CDirStripe* open_stripe(MDS *mds, dirstripe_t ds)
-{
-  CDirPlacement *placement = mds->mdcache->get_dir_placement(ds.ino);
-  assert(placement);
-  // find/create the stripe
-  CDirStripe *stripe = placement->get_stripe(ds.stripeid);
-  if (stripe) {
-    dout(10) << "EMetaBlob had " << *stripe << dendl;
-  } else {
-    int auth = placement->get_stripe_auth(ds.stripeid);
-    stripe = placement->add_stripe(new CDirStripe(placement, ds.stripeid, auth));
-    dout(10) << "EMetaBlob added " << *stripe << dendl;
-  }
-  return stripe;
 }
 
 void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
@@ -772,14 +764,78 @@ void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
   }
 }
 
+// EMetaBlob::Placement
+
+void EMetaBlob::Placement::encode(bufferlist& bl) const
+{
+  ENCODE_START(1, 1, bl);
+  ::encode(stripes, bl);
+  ::encode(stripe_auth, bl);
+  ::encode(layout, bl);
+  ENCODE_FINISH(bl);
+}
+
+void EMetaBlob::Placement::decode(bufferlist::iterator& bl)
+{
+  DECODE_START_LEGACY_COMPAT_LEN(1, 1, 1, bl)
+  ::decode(stripes, bl);
+  ::decode(stripe_auth, bl);
+  ::decode(layout, bl);
+  DECODE_FINISH(bl);
+}
+
+void EMetaBlob::Placement::dump(Formatter *f) const
+{
+  f->dump_stream("stripe auth") << stripe_auth;
+  f->open_object_section("layout");
+  ::dump(layout, f);
+  f->close_section(); // layout
+ 
+  f->open_array_section("stripes");
+  for (stripe_map::const_iterator i = stripes.begin(); i != stripes.end(); ++i) {
+    f->open_object_section("stripe");
+    i->second.dump(f);
+    f->close_section(); // stripe
+  }
+  f->close_section(); // stripes
+}
+
+void EMetaBlob::Placement::generate_test_instances(list<Placement*>& ls)
+{
+  ls.push_back(new Placement());
+}
+
+void EMetaBlob::Placement::apply(MDS *mds, CDirPlacement *placement,
+                                 LogSegment *ls)
+{
+  placement->set_stripe_auth(stripe_auth);
+  placement->set_layout(layout);
+  dout(10) << "EMetaBlob updated placement " << *placement << dendl;
+
+  for (stripe_map::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    // find/create the stripe
+    CDirStripe *stripe = placement->get_stripe(s->first);
+    if (stripe) {
+      dout(10) << "EMetaBlob had " << *stripe << dendl;
+    } else {
+      int auth = placement->get_stripe_auth(s->first);
+      stripe = placement->add_stripe(new CDirStripe(placement, s->first, auth));
+      dout(10) << "EMetaBlob added " << *stripe << dendl;
+    }
+    assert(stripe);
+
+    s->second.apply(mds, stripe, ls);
+  }
+}
+
 /**
  * EMetaBlob proper
  */
 void EMetaBlob::encode(bufferlist& bl) const
 {
-  ENCODE_START(9, 9, bl);
+  ENCODE_START(10, 10, bl);
   ::encode(inodes, bl);
-  ::encode(stripes, bl);
+  ::encode(dirs, bl);
   ::encode(table_tids, bl);
   ::encode(opened_ino, bl);
   ::encode(allocated_ino, bl);
@@ -799,9 +855,9 @@ void EMetaBlob::encode(bufferlist& bl) const
 }
 void EMetaBlob::decode(bufferlist::iterator &bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(9, 9, 9, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(10, 10, 10, bl);
   ::decode(inodes, bl);
-  ::decode(stripes, bl);
+  ::decode(dirs, bl);
   ::decode(table_tids, bl);
   ::decode(opened_ino, bl);
   ::decode(allocated_ino, bl);
@@ -830,13 +886,13 @@ void EMetaBlob::dump(Formatter *f) const
   }
   f->close_section(); // inodes
   
-  f->open_array_section("stripes");
-  for (stripe_map::const_iterator i = stripes.begin(); i != stripes.end(); ++i) {
-    f->open_object_section("stripe");
+  f->open_array_section("dirs");
+  for (placement_map::const_iterator i = dirs.begin(); i != dirs.end(); ++i) {
+    f->open_object_section("dir");
     i->second.dump(f);
-    f->close_section(); // stripe
+    f->close_section(); // dir
   }
-  f->close_section(); // stripes
+  f->close_section(); // dirs
 
   f->open_array_section("tableclient tranactions");
   for (list<pair<__u8,version_t> >::const_iterator i = table_tids.begin();
@@ -910,7 +966,7 @@ void EMetaBlob::generate_test_instances(list<EMetaBlob*>& ls)
 void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 {
   dout(10) << "EMetaBlob.replay " << inodes.size() << " inodes, "
-      << stripes.size() << " stripes by " << client_name << dendl;
+      << dirs.size() << " dirs by " << client_name << dendl;
 
   assert(logseg);
 
@@ -929,13 +985,12 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     dout(10) << "EMetaBlob.replay " << (isnew ? " added ":" updated ") << *in << dendl;
   }
 
-  // replay stripes->dirfrags->dentries
-  for (stripe_map::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    // open the stripe
-    CDirStripe *stripe = open_stripe(mds, s->first);
-    assert(stripe);
-
-    s->second.apply(mds, stripe, logseg);
+  // replay all dirs
+  for (placement_map::iterator p = dirs.begin(); p != dirs.end(); ++p) {
+    // open the placement object
+    CDirPlacement *placement = mds->mdcache->get_dir_placement(p->first);
+    assert(placement);
+    p->second.apply(mds, placement, logseg);
   }
 
   assert(g_conf->mds_kill_journal_replay_at != 2);
