@@ -364,11 +364,59 @@ class EMetaBlob {
   };
   WRITE_CLASS_ENCODER(Stripe)
 
+  class Placement {
+   private:
+    typedef map<stripeid_t, Stripe> stripe_map;
+    stripe_map stripes;
+    vector<int> stripe_auth;
+    ceph_dir_layout layout;
+
+   public:
+    stripe_map& get_stripes() { return stripes; }
+
+    void set_stripe_auth(const vector<int> &auth) { stripe_auth = auth; }
+    const vector<int>& get_stripe_auth() const { return stripe_auth; }
+
+    void set_layout(ceph_dir_layout lo) { layout = lo; }
+    const ceph_dir_layout& get_layout() const { return layout; }
+
+    void encode(bufferlist &bl) const {
+      ::encode(stripes, bl);
+      ::encode(stripe_auth, bl);
+      ::encode(layout, bl);
+    }
+    void decode(bufferlist::iterator &p) {
+      ::decode(stripes, p);
+      ::decode(stripe_auth, p);
+      ::decode(layout, p);
+    }
+
+    void apply(MDS *mds, CDirPlacement *stripe, LogSegment *ls);
+
+    Stripe& add_stripe(stripeid_t id, const pair<int, int> &auth,
+                       const fragtree_t &dft,
+                       const fnode_t *pf, version_t pv,
+                       bool open, bool dirty, bool isnew=false,
+                       bool unlinked=false) {
+      Stripe& s = stripes[id];
+      s.auth = auth;
+      s.dirfragtree = dft;
+      s.fnode = *pf;
+      s.fnode.version = pv;
+      if (open) s.mark_open();
+      if (dirty) s.mark_dirty();
+      if (isnew) s.mark_new();
+      if (unlinked) s.mark_unlinked();
+      return s;
+    }
+  };
+  WRITE_CLASS_ENCODER(Placement)
+
  private:
   typedef map<inodeno_t, Inode> inode_map;
   inode_map inodes;
-  typedef map<dirstripe_t, Stripe> stripe_map;
-  stripe_map stripes;
+  typedef map<inodeno_t, Placement> placement_map;
+  placement_map dirs;
 
   list<pair<__u8,version_t> > table_tids;  // tableclient transactions
 
@@ -400,7 +448,7 @@ class EMetaBlob {
     __u8 struct_v = 4;
     ::encode(struct_v, bl);
     ::encode(inodes, bl);
-    ::encode(stripes, bl);
+    ::encode(dirs, bl);
     ::encode(table_tids, bl);
     ::encode(opened_ino, bl);
     ::encode(allocated_ino, bl);
@@ -421,7 +469,7 @@ class EMetaBlob {
     __u8 struct_v;
     ::decode(struct_v, bl);
     ::decode(inodes, bl);
-    ::decode(stripes, bl);
+    ::decode(dirs, bl);
     ::decode(table_tids, bl);
     ::decode(opened_ino, bl);
     ::decode(allocated_ino, bl);
@@ -566,28 +614,25 @@ class EMetaBlob {
 
   Stripe& add_stripe(CDirStripe *stripe, bool dirty, bool isnew=false,
                      bool unlinked=false) {
-    return add_stripe(stripe->dirstripe(),
-                      stripe->get_stripe_auth(),
-                      stripe->get_fragtree(),
-                      stripe->get_projected_fnode(),
-                      stripe->get_projected_version(),
-                      stripe->is_open(), dirty, isnew, unlinked);
+    Placement &p = add_placement(stripe->get_placement());
+    return p.add_stripe(stripe->get_stripeid(),
+                        stripe->get_stripe_auth(),
+                        stripe->get_fragtree(),
+                        stripe->get_projected_fnode(),
+                        stripe->get_projected_version(),
+                        stripe->is_open(), dirty, isnew, unlinked);
   }
-  Stripe& add_stripe(dirstripe_t ds, const pair<int, int> &auth,
-                     const fragtree_t &dft,
-                     const fnode_t *pf, version_t pv,
-                     bool open, bool dirty, bool isnew=false,
-                     bool unlinked=false) {
-    Stripe& s = stripes[ds];
-    s.auth = auth;
-    s.dirfragtree = dft;
-    s.fnode = *pf;
-    s.fnode.version = pv;
-    if (open) s.mark_open();
-    if (dirty) s.mark_dirty();
-    if (isnew) s.mark_new();
-    if (unlinked) s.mark_unlinked();
-    return s;
+
+  Placement& add_placement(CDirPlacement *placement) {
+    return add_placement(placement->ino(), placement->get_stripe_auth(),
+                         placement->get_layout());
+  }
+  Placement& add_placement(inodeno_t ino, const vector<int> &stripe_auth,
+                           const ceph_dir_layout &layout) {
+    Placement &p = dirs[ino];
+    p.set_stripe_auth(stripe_auth);
+    p.set_layout(layout);
+    return p;
   }
 
 
@@ -598,8 +643,8 @@ class EMetaBlob {
     out << "[metablob";
     if (!inodes.empty()) 
       out << " " << inodes.size() << " inodes";
-    if (!stripes.empty()) 
-      out << " " << stripes.size() << " stripes";
+    if (!dirs.empty()) 
+      out << " " << dirs.size() << " dirs";
     if (!table_tids.empty())
       out << " table_tids=" << table_tids;
     if (allocated_ino || preallocated_inos.size()) {
@@ -624,6 +669,7 @@ WRITE_CLASS_ENCODER(EMetaBlob::Inode)
 WRITE_CLASS_ENCODER(EMetaBlob::Dentry)
 WRITE_CLASS_ENCODER(EMetaBlob::Dir)
 WRITE_CLASS_ENCODER(EMetaBlob::Stripe)
+WRITE_CLASS_ENCODER(EMetaBlob::Placement)
 
 inline ostream& operator<<(ostream& out, const EMetaBlob& t) {
   t.print(out);

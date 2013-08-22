@@ -405,22 +405,6 @@ void EMetaBlob::Dir::apply(MDS *mds, CDirFrag *dir, LogSegment *ls)
   }
 }
 
-static CDirStripe* open_stripe(MDS *mds, dirstripe_t ds)
-{
-  CDirPlacement *placement = mds->mdcache->get_dir_placement(ds.ino);
-  assert(placement);
-  // find/create the stripe
-  CDirStripe *stripe = placement->get_stripe(ds.stripeid);
-  if (stripe) {
-    dout(10) << "EMetaBlob had " << *stripe << dendl;
-  } else {
-    int auth = placement->get_stripe_auth(ds.stripeid);
-    stripe = placement->add_stripe(new CDirStripe(placement, ds.stripeid, auth));
-    dout(10) << "EMetaBlob added " << *stripe << dendl;
-  }
-  return stripe;
-}
-
 void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
 {
   stripe->set_stripe_auth(auth);
@@ -466,10 +450,33 @@ void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
   }
 }
 
+void EMetaBlob::Placement::apply(MDS *mds, CDirPlacement *placement,
+                                 LogSegment *ls)
+{
+  placement->set_stripe_auth(stripe_auth);
+  placement->set_layout(layout);
+  dout(10) << "EMetaBlob updated placement " << *placement << dendl;
+
+  for (stripe_map::iterator s = stripes.begin(); s != stripes.end(); ++s) {
+    // find/create the stripe
+    CDirStripe *stripe = placement->get_stripe(s->first);
+    if (stripe) {
+      dout(10) << "EMetaBlob had " << *stripe << dendl;
+    } else {
+      int auth = placement->get_stripe_auth(s->first);
+      stripe = placement->add_stripe(new CDirStripe(placement, s->first, auth));
+      dout(10) << "EMetaBlob added " << *stripe << dendl;
+    }
+    assert(stripe);
+
+    s->second.apply(mds, stripe, ls);
+  }
+}
+
 void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 {
   dout(10) << "EMetaBlob.replay " << inodes.size() << " inodes, "
-      << stripes.size() << " stripes by " << client_name << dendl;
+      << dirs.size() << " dirs by " << client_name << dendl;
 
   assert(logseg);
 
@@ -486,13 +493,12 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     dout(10) << "EMetaBlob.replay " << (isnew ? " added ":" updated ") << *in << dendl;
   }
 
-  // replay stripes->dirfrags->dentries
-  for (stripe_map::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    // open the stripe
-    CDirStripe *stripe = open_stripe(mds, s->first);
-    assert(stripe);
-
-    s->second.apply(mds, stripe, logseg);
+  // replay all dirs
+  for (placement_map::iterator p = dirs.begin(); p != dirs.end(); ++p) {
+    // open the placement object
+    CDirPlacement *placement = mds->mdcache->get_dir_placement(p->first);
+    assert(placement);
+    p->second.apply(mds, placement, logseg);
   }
 
   // table client transactions
