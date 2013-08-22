@@ -149,12 +149,14 @@ class MMDSCacheRejoin : public Message {
 
   // weak
   map<dirfrag_t, map<string_snap_t, dn_weak> > weak;
+  set<inodeno_t> weak_placements;
   set<dirstripe_t> weak_stripes;
   set<dirfrag_t> weak_dirfrags;
   set<vinodeno_t> weak_inodes;
   map<inodeno_t, lock_bls> inode_scatterlocks;
 
   // strong
+  map<inodeno_t, int> strong_placements;
   map<dirstripe_t, int> strong_stripes;
   map<dirfrag_t, dirfrag_strong> strong_dirfrags;
   map<dirfrag_t, map<string_snap_t, dn_strong> > strong_dentries;
@@ -249,6 +251,14 @@ public:
     in->encode_lock_state(CEPH_LOCK_INEST, inode_scatterlocks[in->ino()].nest);
   }
 
+  // placement
+  void add_weak_placement(inodeno_t ino) {
+    weak_placements.insert(ino);
+  }
+  void add_strong_placement(inodeno_t ino, int n) {
+    strong_placements[ino] = n;
+  }
+
   // stripes
   void add_weak_stripe(dirstripe_t ds) {
     weak_stripes.insert(ds);
@@ -300,10 +310,12 @@ public:
     ::encode(xlocked_inodes, payload);
     ::encode(wrlocked_inodes, payload);
     ::encode(cap_exports, payload);
+    ::encode(strong_placements, payload);
     ::encode(strong_stripes, payload);
     ::encode(strong_dirfrags, payload);
     ::encode(dirfrag_bases, payload);
     ::encode(weak, payload);
+    ::encode(weak_placements, payload);
     ::encode(weak_stripes, payload);
     ::encode(weak_dirfrags, payload);
     ::encode(weak_inodes, payload);
@@ -323,10 +335,12 @@ public:
     ::decode(xlocked_inodes, p);
     ::decode(wrlocked_inodes, p);
     ::decode(cap_exports, p);
+    ::decode(strong_placements, p);
     ::decode(strong_stripes, p);
     ::decode(strong_dirfrags, p);
     ::decode(dirfrag_bases, p);
     ::decode(weak, p);
+    ::decode(weak_placements, p);
     ::decode(weak_stripes, p);
     ::decode(weak_dirfrags, p);
     ::decode(weak_inodes, p);
