@@ -130,6 +130,7 @@ class CDirPlacement : public MDSCacheObject {
 
  public:
   const ceph_dir_layout& get_layout() const { return layout; }
+  void set_layout(const ceph_dir_layout &lo) { layout = lo; }
 
   __u32 hash_dentry_name(const string &dn);
   stripeid_t pick_stripe(__u32 hash);
