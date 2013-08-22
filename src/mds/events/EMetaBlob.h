@@ -104,7 +104,6 @@ class EMetaBlob {
     }
   };
   WRITE_CLASS_ENCODER(Inode)
-  typedef map<inodeno_t, Inode> inode_map;
 
   // journal entry for a dentry
   class Dentry {
@@ -128,6 +127,9 @@ class EMetaBlob {
 
     void encode(bufferlist& bl) const;
     void decode(bufferlist::iterator &bl);
+
+    void apply(MDS *mds, CDirFrag *dir, CDentry *dn, LogSegment *ls) const;
+
     void print(ostream& out) {
       out << " dn " << name << " [" << first << "," << last << "] v " << version
 	  << " ino " << ino << " dirty=" << dirty << std::endl;
@@ -136,7 +138,6 @@ class EMetaBlob {
     static void generate_test_instances(list<Dentry*>& ls);
   };
   WRITE_CLASS_ENCODER(Dentry)
-  typedef vector<Dentry> dentry_vec;
 
   // journal entry for a dir fragment
   class Dir {
@@ -145,6 +146,7 @@ class EMetaBlob {
     static const int STATE_DIRTY =       (1<<2);  // dirty due to THIS journal item, that is!
     static const int STATE_NEW =         (1<<3);  // new directory
 
+    typedef vector<Dentry> dentry_vec;
     dentry_vec dentries;
 
     mutable bufferlist dnbl;
@@ -208,7 +210,7 @@ class EMetaBlob {
     void dump(Formatter *f) const;
     static void generate_test_instances(list<Dir*>& ls);
 
-    void apply(MDS *mds, CDirFrag *dir, LogSegment *ls) const;
+    void apply(MDS *mds, CDirFrag *dir, LogSegment *ls);
 
     void add_dentry(const string& name, snapid_t first, snapid_t last,
                     version_t version, inodeno_t ino,
@@ -218,7 +220,6 @@ class EMetaBlob {
     }
   };
   WRITE_CLASS_ENCODER(Dir)
-  typedef map<frag_t, Dir> dir_map;
 
   // journal entry for a dir stripe
   class Stripe {
@@ -228,6 +229,7 @@ class EMetaBlob {
     static const int STATE_NEW =    (1<<2);
     static const int STATE_UNLINKED = (1<<3);
 
+    typedef map<frag_t, Dir> dir_map;
     dir_map dirs;
 
     mutable bufferlist dfbl;
@@ -286,7 +288,7 @@ class EMetaBlob {
       return state_string;
     }
 
-    void apply(MDS *mds, CDirStripe *stripe, LogSegment *ls) const;
+    void apply(MDS *mds, CDirStripe *stripe, LogSegment *ls);
 
     Dir& add_dir(frag_t frag, version_t v, bool dirty,
                  bool complete=false, bool isnew=false) {
@@ -304,10 +306,11 @@ class EMetaBlob {
     static void generate_test_instances(list<Stripe*>& ls);
   };
   WRITE_CLASS_ENCODER(Stripe)
-  typedef map<dirstripe_t, Stripe> stripe_map;
 
  private:
+  typedef map<inodeno_t, Inode> inode_map;
   inode_map inodes;
+  typedef map<dirstripe_t, Stripe> stripe_map;
   stripe_map stripes;
 
   list<pair<__u8,version_t> > table_tids;  // tableclient transactions
