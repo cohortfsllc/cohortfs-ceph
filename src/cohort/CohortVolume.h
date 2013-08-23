@@ -24,13 +24,17 @@ protected:
   bufferlist place_text;
   void *place_shared;
   epoch_t compiled_epoch;
+  vector<string> symbols;
+  vector<void *> entry_points;
 
   CohortVolume(const vol_type t, const string n,
-	       const bufferlist &p) :
+	       const bufferlist &p,
+	       const vector<string> &s) :
     Volume(t, n),
     compile_lock("CohortVolume::compile_lock"),
     place_text(p), place_shared(NULL),
-    compiled_epoch(0) { }
+    compiled_epoch(0),
+    symbols(s), entry_points(symbols.size()) { }
 
 public:
 

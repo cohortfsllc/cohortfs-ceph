@@ -88,6 +88,13 @@ void CohortVolume::compile(void)
   place_shared = dlopen(sofilename, RTLD_LAZY | RTLD_GLOBAL);
 
   unlink(sofilename);
+
+  for(vector<string>::size_type i = 0;
+      i < symbols.size();
+      ++i) {
+    entry_points[i]
+      = dlsym(place_shared, symbols[i].c_str());
+  }
 }
 
 CohortVolume::~CohortVolume(void)
