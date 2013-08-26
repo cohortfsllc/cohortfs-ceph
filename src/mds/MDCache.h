@@ -131,17 +131,17 @@ public:
 
 
   // -- discover --
+  enum discover_object { PLACEMENT, STRIPE, FRAG, DENTRY, INODE };
   struct discover_info_t {
     tid_t tid;
     int mds;
     dirfrag_t base;
     snapid_t snap;
-    filepath want_path;
-    inodeno_t want_ino;
-    bool want_base_stripe;
-    bool want_xlocked;
+    string name;
+    pair<discover_object, discover_object> want;
+    bool xlock;
 
-    discover_info_t() : tid(0), mds(-1), snap(CEPH_NOSNAP), want_base_stripe(false), want_xlocked(false) {}
+    discover_info_t() : tid(0), mds(-1), snap(CEPH_NOSNAP) {}
   };
 
   map<tid_t, discover_info_t> discovers;
@@ -159,20 +159,18 @@ public:
   // waiters
   map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
 
-  void discover_base_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
+  void discover_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
   void discover_dir_placement(CInode *base, Context *onfinish, int from=-1);
   void discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
                            Context *onfinish, int from=-1);
   void discover_dir_frag(CDirStripe *stripe, frag_t approx_fg, Context *onfinish,
 			 int from=-1);
-  void discover_path(CDirPlacement *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirPlacement *base, snapid_t snap, const string &dname,
                      Context *onfinish, bool want_xlocked=false, int from=-1);
-  void discover_path(CDirStripe *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirStripe *base, snapid_t snap, const string &dname,
                      Context *onfinish, bool want_xlocked=false);
-  void discover_path(CDirFrag *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirFrag *base, snapid_t snap, const string &dname,
                      Context *onfinish, bool want_xlocked=false);
-  void discover_ino(CDirFrag *base, inodeno_t want_ino, Context *onfinish,
-		    bool want_xlocked=false);
 
   void kick_discovers(int who);  // after a failure.
 
@@ -672,17 +670,14 @@ public:
   void open_remote_dirstripe(CDirPlacement *placement, stripeid_t stripeid, Context *fin);
   void open_remote_dirfrag(CDirStripe *stripe, frag_t fg, Context *fin);
   CInode *get_dentry_inode(CDentry *dn, MDRequest *mdr, bool projected=false);
-  void open_remote_ino(inodeno_t ino, Context *fin, bool want_xlocked=false);
+  void open_remote_ino(inodeno_t ino, Context *fin);
 
   bool parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& missing);
   bool parallel_fetch_traverse_dir(inodeno_t ino, filepath& path, 
 				   set<CDirFrag*>& fetch_queue, set<inodeno_t>& missing,
 				   C_GatherBuilder &gather_bld);
 
-  void open_remote_dentry(CDentry *dn, bool projected, Context *fin,
-			  bool want_xlocked=false);
-  void _open_remote_dentry_finish(CDentry *dn, inodeno_t ino, Context *fin,
-				  bool want_xlocked, int mode, int r);
+  void open_remote_dentry(CDentry *dn, bool projected, Context *fin);
 
   void make_trace(vector<CDentry*>& trace, CInode *in);
 
@@ -782,6 +777,7 @@ protected:
   elist<CDirStripe*> nonauth_stripes;
 
   void handle_discover(MDiscover *dis);
+  bool process_discover(MDiscover *dis, MDiscoverReply *reply);
   void handle_discover_reply(MDiscoverReply *m);
   friend class C_MDC_Join;
 
