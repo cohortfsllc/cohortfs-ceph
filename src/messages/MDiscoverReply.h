@@ -69,83 +69,39 @@ class MDiscoverReply : public Message {
 
   static const int HEAD_VERSION = 2;
 
+ public:
   // info about original request
   dirfrag_t base;
-  bool wanted_base_stripe;
-  bool wanted_xlocked;
-  inodeno_t wanted_ino;
-  snapid_t wanted_snapid;
+  bool xlock;
+  snapid_t snapid;
+  pair<__u8,__u8> want;
 
   // and the response
-  bool flag_error_dn;
-  bool flag_error_ino;
-  bool flag_error_stripe;
-  bool flag_error_dir;
+  static const int FLAG_ERR_DN =        (1<<0);
+  static const int FLAG_ERR_INO =       (1<<1);
+  static const int FLAG_ERR_PLACEMENT = (1<<2);
+  static const int FLAG_ERR_STRIPE =    (1<<3);
+  static const int FLAG_ERR_DIR =       (1<<4);
+  __u8 flags;
+
   string error_dentry;   // dentry that was not found (to trigger waiters on asker)
-  bool unsolicited;
 
   __s32 auth_hint;
 
- public:
-  __u8 starts_with;
+  pair<__u8,__u8> contains;
   bufferlist trace;
-
-  enum { STRIPE, DIR, DENTRY, INODE };
-
-  // accessors
-  dirfrag_t get_base_dirfrag() const { return base; }
-  inodeno_t get_base_ino() const { return base.stripe.ino; }
-  stripeid_t get_base_stripe() const { return base.stripe.stripeid; }
-  frag_t get_base_frag() const { return base.frag; }
-  bool get_wanted_base_stripe() const { return wanted_base_stripe; }
-  bool get_wanted_xlocked() const { return wanted_xlocked; }
-  inodeno_t get_wanted_ino() const { return wanted_ino; }
-  snapid_t get_wanted_snapid() const { return wanted_snapid; }
-
-  bool is_flag_error_dn() const { return flag_error_dn; }
-  bool is_flag_error_ino() const { return flag_error_ino; }
-  bool is_flag_error_stripe() const { return flag_error_stripe; }
-  bool is_flag_error_dir() const { return flag_error_dir; }
-  const string& get_error_dentry() const { return error_dentry; }
-
-  int get_starts_with() const { return starts_with; }
-
-  int get_auth_hint() const { return auth_hint; }
-
-  bool is_unsolicited() const { return unsolicited; }
-  void mark_unsolicited() { unsolicited = true; }
-
-  void set_base_frag(frag_t df) { base.frag = df; }
 
   // cons
   MDiscoverReply() : Message(MSG_MDS_DISCOVERREPLY, HEAD_VERSION) { }
-  MDiscoverReply(const MDiscover *dis) :
-    Message(MSG_MDS_DISCOVERREPLY, HEAD_VERSION),
-    base(dis->get_base_dirfrag()),
-    wanted_base_stripe(dis->wants_base_stripe()),
-    wanted_xlocked(dis->wants_xlocked()),
-    wanted_ino(dis->get_want_ino()),
-    wanted_snapid(dis->get_snapid()),
-    flag_error_dn(false),
-    flag_error_ino(false),
-    flag_error_stripe(false),
-    flag_error_dir(false),
-    auth_hint(CDIR_AUTH_UNKNOWN) {
+  MDiscoverReply(const MDiscover *dis)
+      : Message(MSG_MDS_DISCOVERREPLY, HEAD_VERSION),
+        base(dis->base),
+        xlock(dis->xlock),
+        snapid(dis->snapid),
+        want(dis->want),
+        flags(0),
+        auth_hint(CDIR_AUTH_UNKNOWN) {
     header.tid = dis->get_tid();
-  }
-  MDiscoverReply(dirfrag_t df) :
-    Message(MSG_MDS_DISCOVERREPLY, HEAD_VERSION),
-    base(df),
-    wanted_base_stripe(false),
-    wanted_xlocked(false),
-    wanted_ino(inodeno_t()),
-    wanted_snapid(CEPH_NOSNAP),
-    flag_error_dn(false),
-    flag_error_ino(false),
-    flag_error_stripe(false),
-    flag_error_dir(false),
-    auth_hint(CDIR_AUTH_UNKNOWN) {
-    header.tid = 0;
   }
 private:
   ~MDiscoverReply() {}
@@ -155,75 +111,54 @@ public:
   void print(ostream& out) const {
     out << "discover_reply(" << header.tid << " " << base << ")";
   }
-  
-  // builders
-  bool is_empty() {
-    return trace.length() == 0 &&
-      !flag_error_dn &&
-      !flag_error_ino &&
-      !flag_error_stripe &&
-      !flag_error_dir &&
-      auth_hint == CDIR_AUTH_UNKNOWN;
+
+  bool is_empty() const {
+    return trace.length() == 0 && flags == 0
+        && auth_hint == CDIR_AUTH_UNKNOWN;
   }
 
-  //  void set_flag_forward() { flag_forward = true; }
+  bool is_flag_error_dn() const { return flags & FLAG_ERR_DN; }
+  bool is_flag_error_ino() const { return flags & FLAG_ERR_INO; }
+  bool is_flag_error_placement() const { return flags & FLAG_ERR_PLACEMENT; }
+  bool is_flag_error_stripe() const { return flags & FLAG_ERR_STRIPE; }
+  bool is_flag_error_dir() const { return flags & FLAG_ERR_DIR; }
+
   void set_flag_error_dn(const string& dn) {
-    flag_error_dn = true;
+    flags &= FLAG_ERR_DN;
     error_dentry = dn;
   }
-  void set_flag_error_ino() {
-    flag_error_ino = true;
-  }
-  void set_flag_error_stripe() {
-    flag_error_stripe = true;
-  }
-  void set_flag_error_dir() {
-    flag_error_dir = true;
-  }
+  void set_flag_error_ino() { flags &= FLAG_ERR_INO; }
+  void set_flag_error_placement() { flags &= FLAG_ERR_PLACEMENT; }
+  void set_flag_error_stripe() { flags &= FLAG_ERR_STRIPE; }
+  void set_flag_error_dir() { flags &= FLAG_ERR_DIR; }
+
   void set_auth_hint(int a) {
     auth_hint = a;
   }
-  void set_error_dentry(const string& dn) {
-    error_dentry = dn;
-  }
-
 
   // ...
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(base, p);
-    ::decode(wanted_base_stripe, p);
-    ::decode(wanted_xlocked, p);
-    ::decode(wanted_snapid, p);
-    ::decode(flag_error_dn, p);
-    ::decode(flag_error_ino, p);
-    ::decode(flag_error_stripe, p);
-    ::decode(flag_error_dir, p);
+    ::decode(xlock, p);
+    ::decode(snapid, p);
+    ::decode(want, p);
+    ::decode(flags, p);
     ::decode(error_dentry, p);
     ::decode(auth_hint, p);
-    ::decode(unsolicited, p);
-
-    ::decode(starts_with, p);
+    ::decode(contains, p);
     ::decode(trace, p);
-    if (header.version >= 2)
-      ::decode(wanted_ino, p);
   }
   void encode_payload(uint64_t features) {
     ::encode(base, payload);
-    ::encode(wanted_base_stripe, payload);
-    ::encode(wanted_xlocked, payload);
-    ::encode(wanted_snapid, payload);
-    ::encode(flag_error_dn, payload);
-    ::encode(flag_error_ino, payload);
-    ::encode(flag_error_stripe, payload);
-    ::encode(flag_error_dir, payload);
+    ::encode(xlock, payload);
+    ::encode(snapid, payload);
+    ::encode(want, payload);
+    ::encode(flags, payload);
     ::encode(error_dentry, payload);
     ::encode(auth_hint, payload);
-    ::encode(unsolicited, payload);
-
-    ::encode(starts_with, payload);
+    ::encode(contains, payload);
     ::encode(trace, payload);
-    ::encode(wanted_ino, payload);
   }
 
 };
