@@ -5528,9 +5528,11 @@ void _rename_slaves(MDS *mds, MDRequest *mdr,
     req->now = mdr->now;
     req->src.dn = srcdn->inoparent();
     req->src.ino = srcin->ino();
+    req->src.d_type = srcin->d_type();
     req->dest.dn = destdn->inoparent();
     if (destin) {
       req->dest.ino = destin->ino();
+      req->dest.d_type = destin->d_type();
 
       // list stripes to remove
       CDirPlacement *placement = destin->get_placement();
@@ -5886,7 +5888,8 @@ void Server::handle_slave_rename_prep(MDRequest *mdr)
     rollback.src.mtime = pf->fragstat.mtime;
     rollback.src.rctime = pf->rstat.rctime;
 
-    CDentry::linkage_t *dnl = srcdn->get_projected_linkage();
+    CDentry::linkage_t *dnl = srcdn->get_linkage();
+    assert(dnl->is_remote());
     rollback.src.ino = dnl->get_remote_ino();
     rollback.src.d_type = dnl->get_remote_d_type();
 
@@ -5899,13 +5902,16 @@ void Server::handle_slave_rename_prep(MDRequest *mdr)
   rollback.dest.dn = req->dest.dn;
   CDentry *destdn = lookup_inoparent(mdcache, req->dest.dn);
   if (destdn) {
-    fnode_t *pf = destdn->get_stripe()->get_projected_fnode();
-    rollback.dest.mtime = pf->fragstat.mtime;
-    rollback.dest.rctime = pf->rstat.rctime;
+    CDentry::linkage_t *dnl = destdn->get_linkage();
+    if (!dnl->is_null()) {
+      fnode_t *pf = destdn->get_stripe()->get_projected_fnode();
+      rollback.dest.mtime = pf->fragstat.mtime;
+      rollback.dest.rctime = pf->rstat.rctime;
 
-    CDentry::linkage_t *dnl = destdn->get_projected_linkage();
-    rollback.dest.ino = dnl->get_remote_ino();
-    rollback.dest.d_type = dnl->get_remote_d_type();
+      assert(dnl->is_remote());
+      rollback.dest.ino = dnl->get_remote_ino();
+      rollback.dest.d_type = dnl->get_remote_d_type();
+    }
 
     // change linkage from destino to srcino
     destdn->push_projected_linkage(req->src.ino, req->src.d_type);
@@ -5990,7 +5996,8 @@ void Server::_logged_slave_rename(MDRequest *mdr, CDentry *srcdn,
     srcdn->pop_projected_linkage();
   }
   if (destdn) {
-    destdn->get_dir()->unlink_inode(destdn);
+    if (!destdn->get_linkage()->is_null())
+      destdn->get_dir()->unlink_inode(destdn);
     destdn->pop_projected_linkage();
   }
   mdr->apply();
