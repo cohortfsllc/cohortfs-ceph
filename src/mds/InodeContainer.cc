@@ -50,7 +50,7 @@ void InodeContainer::open(Context *c)
     create()->fetch(c);
   } else {
     dout(7) << "open discovering" << dendl;
-    mdcache->discover_base_ino(MDS_INO_CONTAINER, c, mds->mdsmap->get_root());
+    mdcache->discover_ino(MDS_INO_CONTAINER, c, mds->mdsmap->get_root());
   }
 }
 

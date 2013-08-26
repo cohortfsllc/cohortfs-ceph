@@ -128,17 +128,17 @@ public:
 
 
   // -- discover --
+  enum discover_object { PLACEMENT, STRIPE, FRAG, DENTRY, INODE };
   struct discover_info_t {
     tid_t tid;
     int mds;
     dirfrag_t base;
     snapid_t snap;
-    filepath want_path;
-    inodeno_t want_ino;
-    bool want_base_stripe;
-    bool want_xlocked;
+    string name;
+    pair<discover_object, discover_object> want;
+    bool xlock;
 
-    discover_info_t() : tid(0), mds(-1), snap(CEPH_NOSNAP), want_base_stripe(false), want_xlocked(false) {}
+    discover_info_t() : tid(0), mds(-1), snap(CEPH_NOSNAP) {}
   };
 
   map<tid_t, discover_info_t> discovers;
@@ -156,20 +156,18 @@ public:
   // waiters
   map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
 
-  void discover_base_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
+  void discover_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
   void discover_dir_placement(CInode *base, Context *onfinish, int from=-1);
   void discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
                            Context *onfinish, int from=-1);
   void discover_dir_frag(CDirStripe *stripe, frag_t approx_fg, Context *onfinish,
 			 int from=-1);
-  void discover_path(CDirPlacement *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirPlacement *base, snapid_t snap, const string &dname,
                      Context *onfinish, bool want_xlocked=false, int from=-1);
-  void discover_path(CDirStripe *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirStripe *base, snapid_t snap, const string &dname,
                      Context *onfinish, bool want_xlocked=false);
-  void discover_path(CDirFrag *base, snapid_t snap, const filepath &want_path,
+  void discover_path(CDirFrag *base, snapid_t snap, const string &dname,
                      Context *onfinish, bool want_xlocked=false);
-  void discover_ino(CDirFrag *base, inodeno_t want_ino, Context *onfinish,
-		    bool want_xlocked=false);
 
   void kick_discovers(int who);  // after a failure.
 
@@ -682,6 +680,7 @@ public:
   elist<CDirStripe*> nonauth_stripes;
 
   void handle_discover(MDiscover *dis);
+  bool process_discover(MDiscover *dis, MDiscoverReply *reply);
   void handle_discover_reply(MDiscoverReply *m);
   friend class C_MDC_Join;
 

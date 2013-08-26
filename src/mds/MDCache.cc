@@ -536,7 +536,7 @@ void MDCache::open_root_inode(Context *c)
     in = create_system_inode(MDS_INO_ROOT, mds->whoami, S_IFDIR|0755);  // initially inaccurate!
     in->fetch(c);
   } else {
-    discover_base_ino(MDS_INO_ROOT, c, mds->mdsmap->get_root());
+    discover_ino(MDS_INO_ROOT, c, mds->mdsmap->get_root());
   }
 }
 
@@ -609,7 +609,7 @@ void MDCache::open_root()
 #endif
     if (container.get_inode()->get_replica_nonce() == 0) {
       // must register with root mds as a replica
-      discover_base_ino(MDS_INO_CONTAINER, new C_MDS_RetryOpenRoot(this), 0);
+      discover_ino(MDS_INO_CONTAINER, new C_MDS_RetryOpenRoot(this), 0);
       return;
     }
   }
@@ -663,7 +663,7 @@ void MDCache::populate_mydir()
 
 void MDCache::open_foreign_mdsdir(inodeno_t ino, Context *fin)
 {
-  discover_base_ino(ino, fin, ino & (MAX_MDS-1));
+  discover_ino(ino, fin, ino & (MAX_MDS-1));
 }
 
 
@@ -5204,7 +5204,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
 
       if ((discover || null_okay)) {
 	dout(7) << "traverse: discover from " << path[depth] << " from " << *curdir << dendl;
-	discover_path(curdir, snapid, path.postfixpath(depth), _get_waiter(mdr, req, fin),
+	discover_path(curdir, snapid, path[depth], _get_waiter(mdr, req, fin),
 		      null_okay);
 	if (mds->logger) mds->logger->inc(l_mds_tdis);
         return 1;
@@ -5446,47 +5446,10 @@ void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocke
   dout(7) << "open_remote_ino on " << ino << (want_xlocked ? " want_xlocked":"") << dendl;
 
   // discover the inode from the inode container
-  CInode *base = get_container()->get_inode();
-  CDirPlacement *placement = base->get_placement();
-  char dname[20];
-  snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
-  const filepath path(dname, base->ino());
-
+  CDirPlacement *placement = get_container()->get_inode()->get_placement();
   stripeid_t stripeid = get_container()->place(ino);
-  CDirStripe *stripe = placement->get_stripe(stripeid);
-  if (!stripe) {
-    // fetch from remote stripe of inode container
-    int who = placement->get_stripe_auth(stripeid);
-    discover_path(placement, CEPH_NOSNAP, path, onfinish, want_xlocked, who);
-    return;
-  }
-
-  if (!stripe->is_auth()) {
-    // fetch from remote stripe of inode container
-    frag_t fg = stripe->pick_dirfrag(path.last_dentry());
-    CDirFrag *dir = stripe->get_dirfrag(fg);
-    if (!dir) // start from stripe
-      discover_path(stripe, CEPH_NOSNAP, path, onfinish, want_xlocked);
-    else // start from dir
-      discover_path(dir, CEPH_NOSNAP, path, onfinish, want_xlocked);
-    return;
-  }
-
-  // local stripe of inode container
-  if (!stripe->is_open()) {
-    stripe->fetch(new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked));
-    return;
-  }
-  __u32 dnhash = placement->hash_dentry_name(path.last_dentry());
-  frag_t fg = stripe->pick_dirfrag(dnhash);
-  CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
-  if (!dir->is_complete()) {
-    dir->fetch(new C_MDC_RetryOpenRemoteIno(this, ino, onfinish, want_xlocked),
-               path.last_dentry());
-    return;
-  }
-  assert(get_inode(ino));
-  onfinish->complete(0);
+  int who = placement->get_stripe_auth(stripeid);
+  discover_ino(ino, onfinish, who);
 }
 
 
@@ -5957,23 +5920,22 @@ void MDCache::request_kill(MDRequest *mdr)
 
 void MDCache::_send_discover(discover_info_t& d)
 {
-  MDiscover *dis = new MDiscover(d.base, d.snap, d.want_path, d.want_ino,
-                                 d.want_base_stripe, d.want_xlocked);
+  MDiscover *dis = new MDiscover(d.base, d.snap, d.name,
+                                 d.want.first, d.want.second, d.xlock);
   dis->set_tid(d.tid);
   mds->send_message_mds(dis, d.mds);
 }
 
-void MDCache::discover_base_ino(inodeno_t want_ino,
-				Context *onfinish,
-				int from) 
+void MDCache::discover_ino(inodeno_t ino, Context *onfinish, int from) 
 {
-  dout(7) << "discover_base_ino " << want_ino << " from mds." << from << dendl;
-  if (waiting_for_base_ino[from].count(want_ino) == 0) {
+  dout(7) << "discover_ino " << ino << " from mds." << from << dendl;
+  if (waiting_for_base_ino[from].count(ino) == 0) {
     discover_info_t& d = _create_discover(from);
-    d.base.stripe.ino = want_ino;
+    d.base.stripe.ino = ino;
+    d.want.first = d.want.second = INODE;
     _send_discover(d);
   }
-  waiting_for_base_ino[from][want_ino].push_back(onfinish);
+  waiting_for_base_ino[from][ino].push_back(onfinish);
 }
 
 
@@ -5988,6 +5950,7 @@ void MDCache::discover_dir_placement(CInode *base, Context *onfinish, int from)
   if (!base->is_waiter_for(CInode::WAIT_PLACEMENT) || !onfinish) {
     discover_info_t& d = _create_discover(from);
     d.base.stripe.ino = base->ino();
+    d.want.first = d.want.second = PLACEMENT;
     _send_discover(d);
   }
 
@@ -6008,7 +5971,7 @@ void MDCache::discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
     discover_info_t& d = _create_discover(from);
     d.base.stripe.ino = base->ino();
     d.base.stripe.stripeid = stripeid;
-    d.want_base_stripe = true;
+    d.want.first = d.want.second = STRIPE;
     _send_discover(d);
   }
 
@@ -6032,7 +5995,7 @@ void MDCache::discover_dir_frag(CDirStripe *base,
     discover_info_t& d = _create_discover(from);
     d.base.stripe = base->dirstripe();
     d.base.frag = approx_fg;
-    d.want_base_stripe = true;
+    d.want.first = d.want.second = FRAG;
     _send_discover(d);
   }
 
@@ -6047,35 +6010,36 @@ class C_MDC_DiscoverPath : public Context {
   CDirStripe *stripe;
   CDirFrag *dir;
   snapid_t snapid;
-  filepath path;
+  string dname;
+  bool xlock;
   int from;
  public:
   C_MDC_DiscoverPath(MDCache *mdcache, CDirPlacement *base, snapid_t snapid,
-                     const filepath &path, int from)
+                     const string &dname, bool xlock, int from)
       : mdcache(mdcache), placement(base), stripe(NULL), dir(NULL),
-        snapid(snapid), path(path), from(from) {}
+        snapid(snapid), dname(dname), xlock(xlock), from(from) {}
 
   C_MDC_DiscoverPath(MDCache *mdcache, CDirStripe *base, snapid_t snapid,
-                     const filepath &path)
+                     const string &dname, bool xlock)
       : mdcache(mdcache), placement(NULL), stripe(base), dir(NULL),
-        snapid(snapid), path(path), from(-1) {}
+        snapid(snapid), dname(dname), xlock(xlock), from(-1) {}
 
   C_MDC_DiscoverPath(MDCache *mdcache, CDirFrag *base, snapid_t snapid,
-                     const filepath &path)
+                     const string &dname, bool xlock)
       : mdcache(mdcache), placement(NULL), stripe(NULL), dir(base),
-        snapid(snapid), path(path), from(-1) {}
+        snapid(snapid), dname(dname), xlock(xlock), from(-1) {}
 
   void finish(int r) {
     if (placement)
-      mdcache->discover_path(placement, snapid, path, 0, from);
+      mdcache->discover_path(placement, snapid, dname, 0, xlock, from);
     else if (stripe)
-      mdcache->discover_path(stripe, snapid, path, 0);
+      mdcache->discover_path(stripe, snapid, dname, 0, xlock);
     else
-      mdcache->discover_path(dir, snapid, path, 0);
+      mdcache->discover_path(dir, snapid, dname, 0, xlock);
   }
 };
 
-static __u32 pick_stripe(CDirPlacement *placement, const string &dname)
+static stripeid_t pick_stripe(CDirPlacement *placement, const string &dname)
 {
   if (placement->ino() == MDS_INO_CONTAINER) {
     inodeno_t ino;
@@ -6088,35 +6052,35 @@ static __u32 pick_stripe(CDirPlacement *placement, const string &dname)
 }
 
 void MDCache::discover_path(CDirPlacement *base, snapid_t snap,
-			    const filepath &want_path, Context *onfinish,
-			    bool want_xlocked, int from)
+			    const string &dname, Context *onfinish,
+			    bool xlock, int from)
 {
-  dirstripe_t ds(base->ino(), pick_stripe(base, want_path[0]));
+  dirstripe_t ds(base->ino(), pick_stripe(base, dname));
 
   if (from < 0)
     from = base->get_stripe_auth(ds.stripeid);
 
-  dout(7) << "discover_path " << ds << " " << want_path
+  dout(7) << "discover_path " << ds << " " << dname
 	  << " snap " << snap << " from mds." << from
-	  << (want_xlocked ? " want_xlocked":"")
+	  << (xlock ? " want_xlocked":"")
 	  << dendl;
 
   if (base->is_ambiguous_auth()) {
     dout(10) << " waiting for single auth on " << *base << dendl;
     if (!onfinish)
-      onfinish = new C_MDC_DiscoverPath(this, base, snap, want_path, from);
+      onfinish = new C_MDC_DiscoverPath(this, base, snap, dname, xlock, from);
     base->add_waiter(CInode::WAIT_SINGLEAUTH, onfinish);
     return;
-  } 
+  }
 
-  if ((want_xlocked && want_path.depth() == 1) ||
-      !base->is_waiting_for_stripe(ds.stripeid) || !onfinish) {
+  if (xlock || !onfinish || !base->is_waiting_for_stripe(ds.stripeid)) {
     discover_info_t& d = _create_discover(from);
     d.base.stripe = ds;
     d.snap = snap;
-    d.want_path = want_path;
-    d.want_base_stripe = true;
-    d.want_xlocked = want_xlocked;
+    d.name = dname;
+    d.want.first = STRIPE;
+    d.want.second = DENTRY;
+    d.xlock = xlock;
     _send_discover(d);
   }
 
@@ -6126,33 +6090,33 @@ void MDCache::discover_path(CDirPlacement *base, snapid_t snap,
 }
 
 void MDCache::discover_path(CDirStripe *base, snapid_t snap,
-			    const filepath &want_path, Context *onfinish,
-			    bool want_xlocked)
+			    const string &dname, Context *onfinish,
+			    bool xlock)
 {
   int from = base->authority().first;
-  dirfrag_t df(base->dirstripe(), base->pick_dirfrag(want_path[0]));
+  dirfrag_t df(base->dirstripe(), base->pick_dirfrag(dname));
 
-  dout(7) << "discover_path " << df << " " << want_path
+  dout(7) << "discover_path " << df << " " << dname
 	  << " snap " << snap << " from mds." << from
-	  << (want_xlocked ? " want_xlocked":"")
+	  << (xlock ? " want_xlocked":"")
 	  << dendl;
 
   if (base->is_ambiguous_auth()) {
     dout(10) << " waiting for single auth on " << *base << dendl;
     if (!onfinish)
-      onfinish = new C_MDC_DiscoverPath(this, base, snap, want_path);
+      onfinish = new C_MDC_DiscoverPath(this, base, snap, dname, xlock);
     base->add_waiter(CDirStripe::WAIT_SINGLEAUTH, onfinish);
     return;
-  } 
+  }
 
-  if ((want_xlocked && want_path.depth() == 1) ||
-      !base->is_waiting_for_dir(df.frag) || !onfinish) {
+  if (xlock || !onfinish || !base->is_waiting_for_dir(df.frag)) {
     discover_info_t& d = _create_discover(from);
     d.base = df;
     d.snap = snap;
-    d.want_path = want_path;
-    d.want_base_stripe = true;
-    d.want_xlocked = want_xlocked;
+    d.name = dname;
+    d.want.first = FRAG;
+    d.want.second = DENTRY;
+    d.xlock = xlock;
     _send_discover(d);
   }
 
@@ -6162,83 +6126,38 @@ void MDCache::discover_path(CDirStripe *base, snapid_t snap,
 }
 
 void MDCache::discover_path(CDirFrag *base, snapid_t snap,
-                            const filepath &want_path,
-			    Context *onfinish, bool want_xlocked)
+                            const string &dname, Context *onfinish,
+                            bool xlock)
 {
   int from = base->authority().first;
 
-  dout(7) << "discover_path " << base->dirfrag() << " " << want_path << " snap " << snap << " from mds." << from
-	  << (want_xlocked ? " want_xlocked":"")
+  dout(7) << "discover_path " << base->dirfrag() << " " << dname
+	  << " snap " << snap << " from mds." << from
+	  << (xlock ? " want_xlocked":"")
 	  << dendl;
 
   if (base->is_ambiguous_auth()) {
     dout(7) << " waiting for single auth on " << *base << dendl;
     if (!onfinish)
-      onfinish = new C_MDC_DiscoverPath(this, base, snap, want_path);
+      onfinish = new C_MDC_DiscoverPath(this, base, snap, dname, xlock);
     base->add_waiter(CDirFrag::WAIT_SINGLEAUTH, onfinish);
     return;
   }
 
-  if ((want_xlocked && want_path.depth() == 1) ||
-      !base->is_waiting_for_dentry(want_path[0].c_str(), snap) || !onfinish) {
+  if (xlock || !onfinish || !base->is_waiting_for_dentry(dname.c_str(), snap)) {
     discover_info_t& d = _create_discover(from);
     d.base = base->dirfrag();
     d.snap = snap;
-    d.want_path = want_path;
-    d.want_base_stripe = false;
-    d.want_xlocked = want_xlocked;
+    d.name = dname;
+    d.want.first = d.want.second = DENTRY;
+    d.xlock = xlock;
     _send_discover(d);
   }
 
   // register + wait
   if (onfinish)
-    base->add_dentry_waiter(want_path[0], snap, onfinish);
+    base->add_dentry_waiter(dname, snap, onfinish);
 }
-
-struct C_MDC_RetryDiscoverIno : public Context {
-  MDCache *mdc;
-  CDirFrag *base;
-  inodeno_t want_ino;
-  C_MDC_RetryDiscoverIno(MDCache *c, CDirFrag *b, inodeno_t i) :
-    mdc(c), base(b), want_ino(i) {}
-  void finish(int r) {
-    mdc->discover_ino(base, want_ino, 0);
-  }
-};
-
-void MDCache::discover_ino(CDirFrag *base,
-			   inodeno_t want_ino,
-			   Context *onfinish,
-			   bool want_xlocked)
-{
-  int from = base->authority().first;
-
-  dout(7) << "discover_ino " << base->dirfrag() << " " << want_ino << " from mds." << from
-	  << (want_xlocked ? " want_xlocked":"")
-	  << dendl;
-  
-  if (base->is_ambiguous_auth()) {
-    dout(10) << " waiting for single auth on " << *base << dendl;
-    if (!onfinish)
-      onfinish = new C_MDC_RetryDiscoverIno(this, base, want_ino);
-    base->add_waiter(CDirFrag::WAIT_SINGLEAUTH, onfinish);
-    return;
-  } 
-
-  if (want_xlocked || !base->is_waiting_for_ino(want_ino) || !onfinish) {
-    discover_info_t& d = _create_discover(from);
-    d.base = base->dirfrag();
-    d.want_ino = want_ino;
-    d.want_base_stripe = false;
-    d.want_xlocked = want_xlocked;
-    _send_discover(d);
-  }
-
-  // register + wait
-  if (onfinish)
-    base->add_ino_waiter(want_ino, onfinish);
-}
-
 
 
 void MDCache::kick_discovers(int who)
@@ -6249,17 +6168,213 @@ void MDCache::kick_discovers(int who)
     _send_discover(p->second);
 }
 
+static bool fetch_inode_from_container(MDS *mds, inodeno_t ino,
+                                       MDiscover *dis, MDiscoverReply *reply)
+{
+  InodeContainer *container = mds->mdcache->get_container();
+  CDirPlacement *placement = container->get_inode()->get_placement();
+  stripeid_t stripeid = container->place(ino);
+  int who = placement->get_stripe_auth(stripeid);
+  if (who != mds->get_nodeid()) {
+    reply->set_flag_error_ino();
+    reply->auth_hint = who;
+    return true;
+  }
+  CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
+  if (!stripe->is_open()) {
+    stripe->fetch(new C_MDS_RetryMessage(mds, dis));
+    return false;
+  }
+  char dname[20];
+  snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
+  frag_t fg = stripe->pick_dirfrag(dname);
+  CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
+  if (!dir->is_complete()) {
+    dir->fetch(new C_MDS_RetryMessage(mds, dis), string(dname));
+    return false;
+  }
+  reply->set_flag_error_ino();
+  return true;
+}
+
+bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
+{
+  int from = dis->get_source().num();
+
+  CInode *in = NULL;
+
+  __u8 type = dis->want.first;
+  if (type == INODE) {
+    inodeno_t ino = dis->base.stripe.ino;
+    in = get_inode(ino, dis->snapid);
+    if (!in) {
+      if (MDS_INO_IS_BASE(ino)) {
+        // TODO: verify auth mds
+        in = create_system_inode(ino, mds->get_nodeid(), S_IFDIR|0755);
+        in->fetch(new C_MDS_RetryMessage(mds, dis));
+        return false;
+      }
+      return fetch_inode_from_container(mds, ino, dis, reply);
+    }
+
+    assert(in->is_auth());
+    reply->contains.first = INODE;
+
+    // replicate parent objects if necessary
+    if (!in->is_base()) {
+      // must already have replicas of container
+      CInode *container = get_container()->get_inode();
+      assert(!container->is_auth() || container->is_replica(from));
+      CDirPlacement *placement = container->get_placement();
+      assert(!placement->is_auth() || placement->is_replica(from));
+
+      CDirStripe *stripe = in->get_parent_stripe();
+      CDirFrag *dir = in->get_parent_dir();
+      CDentry *dn = in->get_parent_dn();
+
+      if (stripe->is_auth() && !stripe->is_replica(from)) {
+        reply->contains.first = STRIPE;
+        replicate_stripe(stripe, from, reply->trace);
+        replicate_dir(dir, from, reply->trace);
+        replicate_dentry(dn, from, reply->trace);
+      } else if (dir->is_auth() && !dir->is_replica(from)) {
+        reply->contains.first = FRAG;
+        replicate_dir(dir, from, reply->trace);
+        replicate_dentry(dn, from, reply->trace);
+      } else if (dn->is_auth() && !dn->is_replica(from)) {
+        reply->contains.first = DENTRY;
+        replicate_dentry(dn, from, reply->trace);
+      }
+    }
+
+    replicate_inode(in, from, reply->trace);
+    reply->contains.second = INODE;
+    if (dis->want.second == INODE)
+      return true;
+    type = PLACEMENT;
+  }
+
+  CDirPlacement *placement = NULL;
+
+  if (type == PLACEMENT) {
+    if (!in) {
+      inodeno_t ino = dis->base.stripe.ino;
+      in = get_inode(ino, dis->snapid);
+      if (!in) {
+        if (MDS_INO_IS_BASE(ino)) {
+          // TODO: verify auth mds
+          in = create_system_inode(ino, mds->get_nodeid(), S_IFDIR|0755);
+          in->fetch(new C_MDS_RetryMessage(mds, dis));
+          return false;
+        }
+        return fetch_inode_from_container(mds, ino, dis, reply);
+      }
+      reply->contains.first = PLACEMENT;
+    }
+    if (!in->is_dir()) {
+      reply->set_flag_error_placement();
+      return true;
+    }
+    placement = in->get_placement();
+    assert(placement);
+    assert(placement->is_auth());
+    replicate_placement(placement, from, reply->trace);
+    reply->contains.second = PLACEMENT;
+    if (dis->want.second == PLACEMENT)
+      return true;
+    type = STRIPE;
+    if (!dis->name.empty())
+      dis->base.stripe.stripeid = pick_stripe(placement, dis->name);
+  }
+
+  CDirStripe *stripe = NULL;
+
+  if (type == STRIPE) {
+    if (!placement) {
+      placement = get_dir_placement(dis->base.stripe.ino);
+      reply->contains.first = STRIPE;
+    }
+    assert(placement);
+    int auth = placement->get_stripe_auth(dis->base.stripe.stripeid);
+    if (auth != mds->get_nodeid()) {
+      reply->set_flag_error_stripe();
+      reply->set_auth_hint(auth);
+      return true;
+    }
+    stripe = placement->get_stripe(dis->base.stripe.stripeid);
+    assert(stripe); // TODO: fetch from osd
+    assert(stripe->is_auth());
+    replicate_stripe(stripe, from, reply->trace);
+    reply->contains.second = STRIPE;
+    if (dis->want.second == STRIPE)
+      return true;
+    type = FRAG;
+    if (!dis->name.empty())
+      dis->base.frag = stripe->pick_dirfrag(dis->name);
+  }
+
+  CDirFrag *dir = NULL;
+
+  if (type == FRAG) {
+    if (!stripe) {
+      stripe = get_dirstripe(dis->base.stripe);
+      reply->contains.first = FRAG;
+    }
+    assert(stripe);
+    assert(stripe->is_auth());
+    dir = stripe->get_dirfrag(dis->base.frag);
+    assert(dir);
+    assert(dir->is_auth());
+    replicate_dir(dir, from, reply->trace);
+    reply->contains.second = FRAG;
+    if (dis->want.second == FRAG)
+      return true;
+    type = DENTRY;
+  }
+
+  assert(type == DENTRY);
+  assert(!dis->name.empty());
+
+  if (!dir) {
+    dir = get_dirfrag(dis->base);
+    reply->contains.first = DENTRY;
+  }
+  assert(dir);
+  assert(dir->is_auth());
+  CDentry *dn = dir->lookup(dis->name, dis->snapid);
+  if (!dn) {
+    if (!dir->is_complete()) {
+      dout(7) << "incomplete " << *dir << ", fetching" << dendl;
+      if (reply->is_empty()) {
+        // fetch and wait
+        dir->fetch(new C_MDS_RetryMessage(mds, dis));
+        return false;
+      }
+
+      // initiate fetch, but send what we have so far
+      dir->fetch(0);
+      return true;
+    }
+    // send null dentry
+    dn = dir->add_null_dentry(dis->name);
+  }
+  assert(dn);
+  assert(dn->is_auth());
+  replicate_dentry(dn, from, reply->trace);
+  reply->contains.second = DENTRY;
+  assert(dis->want.second == DENTRY);
+  return true;
+}
 
 /* This function DOES put the passed message before returning */
 void MDCache::handle_discover(MDiscover *dis) 
 {
   int whoami = mds->get_nodeid();
-  int from = dis->get_source_inst().name._num;
+  int from = dis->get_source().num();
 
   assert(from != whoami);
 
   if (mds->get_state() <= MDSMap::STATE_REJOIN) {
-    int from = dis->get_source().num();
     // proceed if requester is in the REJOIN stage, the request is from parallel_fetch().
     // delay processing request from survivor because we may not yet choose lock states.
     if (mds->get_state() < MDSMap::STATE_REJOIN ||
@@ -6271,317 +6386,10 @@ void MDCache::handle_discover(MDiscover *dis)
   }
 
 
-  CInode *cur = 0;
   MDiscoverReply *reply = new MDiscoverReply(dis);
-
-  snapid_t snapid = dis->get_snapid();
-
-  // get started.
-  if (MDS_INO_IS_BASE(dis->get_base_ino())) {
-    // wants root
-    dout(7) << "handle_discover from mds." << from
-	    << " wants base + " << dis->get_want().get_path()
-	    << " snap " << snapid
-	    << dendl;
-
-    cur = get_inode(dis->get_base_ino());
-
-    if (cur->is_auth()) {
-      // add root
-      reply->starts_with = MDiscoverReply::INODE;
-      replicate_inode(cur, from, reply->trace);
-    dout(10) << "added base " << *cur << dendl;
-    }
-  }
-  else {
-    // there's a base inode
-    cur = get_inode(dis->get_base_ino(), snapid);
-    if (!cur && snapid != CEPH_NOSNAP) {
-      cur = get_inode(dis->get_base_ino());
-      if (!cur->is_multiversion())
-	cur = NULL;  // nope!
-    }
-    
-    if (!cur) {
-      dout(7) << "handle_discover mds." << from 
-	      << " don't have base ino " << dis->get_base_ino() << "." << snapid
-	      << dendl;
-      if (!dis->wants_base_stripe() && dis->get_want().depth() > 0)
-	reply->set_error_dentry(dis->get_dentry(0));
-      reply->set_flag_error_dir();
-    } else if (dis->wants_base_stripe()) {
-      dout(7) << "handle_discover mds." << from
-	      << " wants basedir+" << dis->get_want().get_path()
-	      << " has " << *cur
-	      << dendl;
-    } else {
-      dout(7) << "handle_discover mds." << from
-	      << " wants " << dis->get_want().get_path()
-	      << " has " << *cur
-	      << dendl;
-    }
-  }
-
-  assert(reply);
-  
-  // add content
-  // do some fidgeting to include a dir if they asked for the base dir, or just root.
-  for (unsigned i = 0; 
-       cur && (i < dis->get_want().depth() || dis->get_want().depth() == 0); 
-       i++) {
-
-    // -- figure out the dir
-
-    // is *cur even a dir at all?
-    if (!cur->is_dir()) {
-      dout(7) << *cur << " not a dir" << dendl;
-      reply->set_flag_error_dir();
-      break;
-    }
-
-    // pick stripe
-    CDirPlacement *placement = cur->get_placement();
-
-    __u32 dnhash;
-    stripeid_t stripeid;
-    if (dis->get_want().depth()) {
-      dnhash = placement->hash_dentry_name(dis->get_dentry(i));
-
-      if (cur->ino() == MDS_INO_CONTAINER) {
-        // use inode placement rules
-        inodeno_t ino;
-        istringstream stream(dis->get_dentry(i));
-        stream >> hex >> ino.val;
-        stripeid = get_container()->place(ino);
-      } else
-        stripeid = placement->pick_stripe(dnhash);
-    } else {
-      stripeid = dis->get_base_stripe();
-      assert(dis->wants_base_stripe() || dis->get_want_ino() || MDS_INO_IS_BASE(dis->get_base_ino()));
-    }
-    int stripe_auth = placement->get_stripe_auth(stripeid);
-    if (stripe_auth != mds->get_nodeid()) {
-	/* before:
-	 * ONLY set flag if empty!!
-	 * otherwise requester will wake up waiter(s) _and_ continue with discover,
-	 * resulting in duplicate discovers in flight,
-	 * which can wreak havoc when discovering rename srcdn (which may move)
-	 */
-
-      if (reply->is_empty()) {
-	// only hint if empty.
-	//  someday this could be better, but right now the waiter logic isn't smart enough.
-
-	// hint
-        dout(7) << " not stripe auth, setting auth_hint for "
-            << stripe_auth << dendl;
-        reply->set_auth_hint(stripe_auth);
-
-	// note error dentry, if any
-	//  NOTE: important, as it allows requester to issue an equivalent discover
-	//        to whomever we hint at.
-	if (dis->get_want().depth() > i)
-	  reply->set_error_dentry(dis->get_dentry(i));
-      }
-
-      break;
-    }
-
-    // open stripe?
-    CDirStripe *curstripe = placement->get_or_open_stripe(stripeid);
-    assert(curstripe);
-    assert(curstripe->is_auth());
-
-    if (curstripe->is_frozen()) {
-      if (reply->is_empty()) {
-	dout(7) << *curstripe << " is frozen, empty reply, waiting" << dendl;
-	curstripe->add_waiter(CDirStripe::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
-	reply->put();
-	return;
-      } else {
-	dout(7) << *curstripe << " is frozen, non-empty reply, stopping" << dendl;
-	break;
-      }
-    }
-
-    if (!curstripe->is_open()) {
-      dout(7) << "incomplete stripe contents for " << *curstripe << ", fetching" << dendl;
-      if (reply->is_empty()) {
-        curstripe->fetch(new C_MDS_RetryMessage(mds, dis));
-        reply->put();
-        return;
-      } else {
-        // initiate fetch, but send what we have so far
-        curstripe->fetch(0);
-        break;
-      }
-    }
-    if (!reply->trace.length())
-      reply->starts_with = MDiscoverReply::STRIPE;
-    replicate_stripe(curstripe, from, reply->trace);
-    dout(7) << "handle_discover added stripe " << *curstripe << dendl;
-
-    // pick frag
-    frag_t fg;
-    if (dis->get_want().depth()) {
-      // dentry specifies
-      fg = curstripe->pick_dirfrag(dnhash);
-    } else {
-      // requester explicity specified the frag
-      fg = dis->get_base_frag();
-      assert(dis->wants_base_stripe() || dis->get_want_ino() || MDS_INO_IS_BASE(dis->get_base_ino()));
-    }
-    CDirFrag *curdir = curstripe->get_dirfrag(fg);
-
-    // open dir?
-    if (!curdir) 
-      curdir = curstripe->get_or_open_dirfrag(fg);
-    assert(curdir);
-    assert(curdir->is_auth());
-    
-    // is dir frozen?
-    if (curdir->is_frozen()) {
-      if (reply->is_empty()) {
-	dout(7) << *curdir << " is frozen, empty reply, waiting" << dendl;
-	curdir->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
-	reply->put();
-	return;
-      } else {
-	dout(7) << *curdir << " is frozen, non-empty reply, stopping" << dendl;
-	break;
-      }
-    }
-    
-    // add dir
-    if (reply->is_empty() && !dis->wants_base_stripe()) {
-      dout(7) << "handle_discover not adding unwanted base dir " << *curdir << dendl;
-      // make sure the base frag is correct, though, in there was a refragment since the
-      // original request was sent.
-      reply->set_base_frag(curdir->get_frag());
-    } else {
-      assert(!curdir->is_ambiguous_auth()); // would be frozen.
-      if (!reply->trace.length())
-	reply->starts_with = MDiscoverReply::DIR;
-      replicate_dir(curdir, from, reply->trace);
-      dout(7) << "handle_discover added dir " << *curdir << dendl;
-    }
-
-    // lookup
-    CDentry *dn = 0;
-    if (dis->get_want_ino()) {
-      // lookup by ino
-      CInode *in = get_inode(dis->get_want_ino(), snapid);
-      if (in && in->is_auth() && in->get_parent_dn()->get_dir() == curdir)
-	dn = in->get_parent_dn();
-    } else if (dis->get_want().depth() > 0) {
-      // lookup dentry
-      dn = curdir->lookup(dis->get_dentry(i), snapid);
-    } else 
-      break; // done!
-          
-    // incomplete dir?
-    if (!dn) {
-      if (!curdir->is_complete()) {
-	// readdir
-	dout(7) << "incomplete dir contents for " << *curdir << ", fetching" << dendl;
-	if (reply->is_empty()) {
-	  // fetch and wait
-	  curdir->fetch(new C_MDS_RetryMessage(mds, dis));
-	  reply->put();
-	  return;
-	} else {
-	  // initiate fetch, but send what we have so far
-	  curdir->fetch(0);
-	  break;
-	}
-      }
-      
-      // don't have wanted ino in this dir?
-      if (dis->get_want_ino()) {
-	// set error flag in reply
-	dout(7) << "no ino " << dis->get_want_ino() << " in this dir, flagging error in "
-		<< *curdir << dendl;
-	reply->set_flag_error_ino();
-	break;
-      }
-      
-      // is this a new mds dir?
-      /*
-      if (curdir->ino() == MDS_INO_CEPH) {
-	char t[10];
-	snprintf(t, sizeof(t), "mds%d", from);
-	if (t == dis->get_dentry(i)) {
-	  // yes.
-	  _create_mdsdir_dentry(curdir, from, t, new C_MDS_RetryMessage(mds, dis));
-	  //_create_system_file(curdir, t, create_system_inode(MDS_INO_MDSDIR(from), S_IFDIR),
-	  //new C_MDS_RetryMessage(mds, dis));
-	  reply->put();
-	  return;
-	}
-      }	
-      */
-      
-      // send null dentry
-      dout(7) << "dentry " << dis->get_dentry(i) << " dne, returning null in "
-	      << *curdir << dendl;
-      dn = curdir->add_null_dentry(dis->get_dentry(i));
-    }
-    assert(dn);
-
-    CDentry::linkage_t *dnl = dn->get_linkage();
-
-    // xlocked dentry?
-    //  ...always block on non-tail items (they are unrelated)
-    //  ...allow xlocked tail disocvery _only_ if explicitly requested
-    bool tailitem = (dis->get_want().depth() == 0) || (i == dis->get_want().depth() - 1);
-    if (dn->lock.is_xlocked()) {
-      // is this the last (tail) item in the discover traversal?
-      if (tailitem && dis->wants_xlocked()) {
-	dout(7) << "handle_discover allowing discovery of xlocked tail " << *dn << dendl;
-      } else if (reply->is_empty()) {
-	dout(7) << "handle_discover blocking on xlocked " << *dn << dendl;
-	dn->lock.add_waiter(SimpleLock::WAIT_RD, new C_MDS_RetryMessage(mds, dis));
-	reply->put();
-	return;
-      } else {
-	dout(7) << "handle_discover non-empty reply, xlocked tail " << *dn << dendl;
-	break;
-      }
-    }
-
-    // frozen inode?
-    if (dnl->is_primary() && dnl->get_inode()->is_frozen()) {
-      if (tailitem && dis->wants_xlocked()) {
-	dout(7) << "handle_discover allowing discovery of frozen tail " << *dnl->get_inode() << dendl;
-      } else if (reply->is_empty()) {
-	dout(7) << *dnl->get_inode() << " is frozen, empty reply, waiting" << dendl;
-	dnl->get_inode()->add_waiter(CDirFrag::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, dis));
-	reply->put();
-	return;
-      } else {
-	dout(7) << *dnl->get_inode() << " is frozen, non-empty reply, stopping" << dendl;
-	break;
-      }
-    }
-
-    // add dentry
-    if (!reply->trace.length())
-      reply->starts_with = MDiscoverReply::DENTRY;
-    replicate_dentry(dn, from, reply->trace);
-    dout(7) << "handle_discover added dentry " << *dn << dendl;
-    
-    if (!dnl->is_primary()) break;  // stop on null or remote link.
-    
-    // add inode
-    CInode *next = dnl->get_inode();
-    assert(next->is_auth());
-    
-    replicate_inode(next, from, reply->trace);
-    dout(7) << "handle_discover added inode " << *next << dendl;
-    
-    // descend, keep going.
-    cur = next;
-    continue;
+  if (!process_discover(dis, reply)) {
+    reply->put();
+    return;
   }
 
   // how did we do?
@@ -6602,24 +6410,19 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
     return;
   }
   */
+  inodeno_t ino = m->base.stripe.ino;
   dout(7) << "discover_reply " << *m << dendl;
   if (m->is_flag_error_stripe()) 
     dout(7) << " flag error, stripe" << dendl;
   if (m->is_flag_error_dir()) 
     dout(7) << " flag error, dir" << dendl;
   if (m->is_flag_error_dn()) 
-    dout(7) << " flag error, dentry = " << m->get_error_dentry() << dendl;
+    dout(7) << " flag error, dentry = " << m->error_dentry << dendl;
   if (m->is_flag_error_ino()) 
-    dout(7) << " flag error, ino = " << m->get_wanted_ino() << dendl;
+    dout(7) << " flag error, ino = " << ino << dendl;
 
   list<Context*> finished, error;
   int from = m->get_source().num();
-
-  // starting point
-  CInode *cur = get_inode(m->get_base_ino());
-  bufferlist::iterator p = m->trace.begin();
-
-  int next = m->starts_with;
 
   // decrement discover counters
   if (m->get_tid()) {
@@ -6632,172 +6435,128 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
     }
   }
 
-  // discover ino error
-  if (p.end() && m->is_flag_error_ino()) {
-    assert(cur->is_dir());
-    CDirPlacement *placement = cur->get_placement();
-    CDirStripe *stripe = placement->get_stripe(m->get_base_stripe());
-    assert(stripe);
-    CDirFrag *dir = stripe->get_dirfrag(m->get_base_frag());
-    assert(dir);
-    dout(7) << " flag_error on ino " << m->get_wanted_ino()
-        << ", triggering ino" << dendl;
-    dir->take_ino_waiting(m->get_wanted_ino(), error);
-  }
+  CInode *in = NULL;
+  CDirPlacement *placement = NULL;
+  CDirStripe *stripe = NULL;
+  CDirFrag *dir = NULL;
+  CDentry *dn = NULL;
+  bufferlist::iterator p = m->trace.begin();
 
-  // discover may start with an inode
-  if (!p.end() && next == MDiscoverReply::INODE) {
-    cur = add_replica_inode(p, NULL, from, finished);
-    dout(7) << "discover_reply got base inode " << *cur << dendl;
-    assert(cur->is_base());
-    
-    next = MDiscoverReply::STRIPE;
-    
+  // starting point
+  int next = m->contains.first;
+  if (m->want.first == INODE) {
+    if (!MDS_INO_IS_BASE(ino)) {
+      placement = get_container()->get_inode()->get_placement();
+
+      // does the reply include parent objects from the inode container?
+      if (next == STRIPE) {
+        stripe = add_replica_stripe(p, placement, from, finished);
+        dout(7) << "discover_reply got " << *stripe << dendl;
+        next = FRAG;
+      } else {
+        stripeid_t stripeid = get_container()->place(ino);
+        stripe = placement->get_stripe(stripeid);
+        assert(stripe);
+      }
+
+      char dname[20];
+      snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
+
+      if (next == FRAG) {
+        dir = add_replica_dir(p, stripe, finished);
+        dout(7) << "discover_reply got " << *dir << dendl;
+        next = DENTRY;
+      } else {
+        frag_t fg = stripe->pick_dirfrag(dname);
+        dir = stripe->get_dirfrag(fg);
+        assert(dir);
+      }
+
+      if (next == DENTRY) {
+        dn = add_replica_dentry(p, dir, finished);
+        dout(7) << "discover_reply got " << *dn << dendl;
+        next = INODE;
+      } else if (!MDS_INO_IS_BASE(ino)) {
+        dn = dir->lookup(dname, m->snapid);
+        assert(dn);
+      }
+    }
+
+    assert(next == INODE);
+    in = add_replica_inode(p, dn, from, finished);
+    dout(7) << "discover_reply got " << *in << dendl;
+
+    next = PLACEMENT;
+
     // take waiters?
-    if (cur->is_base() &&
-	waiting_for_base_ino[from].count(cur->ino())) {
-      finished.swap(waiting_for_base_ino[from][cur->ino()]);
-      waiting_for_base_ino[from].erase(cur->ino());
+    map<int, map<inodeno_t, list<Context*> > >::iterator i =
+        waiting_for_base_ino.find(from);
+    if (i != waiting_for_base_ino.end()) {
+      map<inodeno_t, list<Context*> >::iterator j = i->second.find(ino);
+      if (j != i->second.end()) {
+        dout(7) << "taking " << j->second.size() << " waiters" << dendl;
+        finished.splice(finished.end(), j->second);
+        i->second.erase(j);
+        if (i->second.empty())
+          waiting_for_base_ino.erase(i);
+      }
     }
+  } else {
+    in = get_inode(ino, m->snapid);
   }
-  assert(cur);
-  
-  // loop over discover results.
-  // indexes follow each ([[stripe] dir] dentry] inode) 
-  // can start, end with any type.
-  while (!p.end()) {
-    CDirPlacement *placement = cur->get_placement();
-    CDirStripe *curstripe;
-    CDirFrag *curdir;
-    if (next == MDiscoverReply::STRIPE) {
-      // stripe
-      curstripe = add_replica_stripe(p, placement, from, finished);
-      if (p.end())
-        break;
+  assert(in);
 
-      // dir
-      curdir = add_replica_dir(p, curstripe, finished);
-      if (p.end())
-        break;
-    } else if (p.end() && m->is_flag_error_dn()) {
-      // note: this can only happen our first way around this loop.
-      __u32 dnhash = placement->hash_dentry_name(m->get_error_dentry());
-      stripeid_t stripeid = placement->pick_stripe(dnhash);
-      curstripe = placement->get_stripe(stripeid);
-      assert(curstripe);
-
-      frag_t fg = curstripe->pick_dirfrag(dnhash);
-      curdir = curstripe->get_dirfrag(fg);
-      assert(curdir);
-    } else {
-      curstripe = placement->get_stripe(m->get_base_stripe());
-      assert(curstripe);
-      curdir = curstripe->get_dirfrag(m->get_base_frag());
-      assert(curdir);
+  if (next == PLACEMENT) {
+    if (m->is_flag_error_placement()) {
+      if (!in->is_dir()) {
+        in->take_waiting(CInode::WAIT_PLACEMENT, error);
+        dout(7) << *in << " not a directory" << dendl;
+      } else {
+        assert(m->auth_hint != CDIR_AUTH_UNKNOWN);
+        // TODO: resend to 'who'
+      }
+    } else if (!p.end()) {
+      placement = add_replica_placement(p, in, from, finished);
+      dout(7) << "discover_reply got " << *placement << dendl;
+      next = STRIPE;
     }
-
-    // dentry
-    CDentry *dn = add_replica_dentry(p, curdir, finished);
-    if (p.end())
-      break;
-
-    // inode
-    cur = add_replica_inode(p, dn, from, finished);
-
-    next = MDiscoverReply::STRIPE;
+  } else if (!p.end()) {
+    placement = in->get_placement();
+    assert(placement);
   }
 
-  CDirPlacement *placement = cur->get_placement();
+  if (next == STRIPE) {
+    if (m->is_flag_error_stripe()) {
+      placement->take_stripe_waiting(m->base.stripe.stripeid, error);
+    } else if (!p.end()) {
+      stripe = add_replica_stripe(p, placement, from, finished);
+      dout(7) << "discover_reply got " << *stripe << dendl;
+      next = FRAG;
+    }
+  } else if (!p.end()) {
+    stripe = placement->get_stripe(m->base.stripe.stripeid);
+    assert(stripe);
+  }
 
-  // dir error?
-  // or dir_auth hint?
-  if (m->is_flag_error_dir() && !cur->is_dir()) {
-    // not a dir.
-    cur->take_waiting(CInode::WAIT_PLACEMENT, error);
-  } else if (m->is_flag_error_dir() || m->get_auth_hint() != CDIR_AUTH_UNKNOWN) {
-    int who = m->get_auth_hint();
-    if (who == mds->get_nodeid()) who = -1;
-    if (who >= 0)
-      dout(7) << " auth_hint is " << who << dendl;
+  if (next == FRAG) {
+    if (m->is_flag_error_dir()) {
+      stripe->take_waiting(CDirStripe::WAIT_DIR, error);
+    } else if (!p.end()) {
+      dir = add_replica_dir(p, stripe, finished);
+      dout(7) << "discover_reply got " << *dir << dendl;
+      next = DENTRY;
+    }
+  } else if (!p.end()) {
+    dir = stripe->get_dirfrag(m->base.frag);
+    assert(dir);
+  }
 
-    // try again?
-    if (m->get_error_dentry().length()) {
-      // wanted a dentry
-      const string &dname = m->get_error_dentry();
-      filepath relpath(dname, 0);
-
-      __u32 dnhash = placement->hash_dentry_name(dname);
-      stripeid_t stripeid = placement->pick_stripe(dnhash);
-      CDirStripe *stripe = placement->get_stripe(stripeid);
-
-      if (placement->is_waiting_for_stripe(stripeid)) {
-	if (placement->is_auth() || stripe)
-	  placement->take_stripe_waiting(stripeid, finished);
-	else
-	  discover_path(placement, m->get_wanted_snapid(), relpath, 0,
-                        m->get_wanted_xlocked(), who);
-      } else
-	  dout(7) << " doing nothing, nobody is waiting for stripe " << stripeid << dendl;
-
-      if (stripe) {
-        frag_t fg = stripe->pick_dirfrag(dnhash);
-        CDirFrag *dir = stripe->get_dirfrag(fg);
-
-        if (stripe->is_waiter_for(CDirStripe::WAIT_DIR)) {
-          if (dir)
-            stripe->take_waiting(CDirStripe::WAIT_DIR, finished);
-          else
-            discover_path(stripe, m->get_wanted_snapid(), relpath,
-                          0, m->get_wanted_xlocked());
-        } else
-	  dout(7) << " doing nothing, nobody is waiting for dir " << fg << dendl;
-
-        if (dir) {
-          // don't actaully need the hint, now
-          if (dir->is_waiting_for_dentry(dname.c_str(), m->get_wanted_snapid())) {
-            if (dir->is_auth() || dir->lookup(dname))
-              dir->take_dentry_waiting(dname, m->get_wanted_snapid(),
-                                       m->get_wanted_snapid(), finished);
-            else
-              discover_path(dir, m->get_wanted_snapid(), relpath, 0, m->get_wanted_xlocked());
-          } else
-            dout(7) << " doing nothing, have dir but nobody is waiting on dentry "
-                << dname << dendl;
-        }
-      }
-    } else {
-      // wanted dir or ino
-      stripeid_t stripeid = m->get_base_stripe();
-      CDirStripe *stripe = placement->get_stripe(stripeid);
-      if (placement->is_waiting_for_stripe(stripeid)) {
-	if (placement->is_auth() || stripe)
-	  placement->take_stripe_waiting(stripeid, finished);
-	else
-	  discover_dir_stripe(placement, stripeid, 0, who);
-      } else
-	dout(7) << " doing nothing, nobody is waiting for stripe " << stripeid << dendl;
-
-      if (stripe) {
-        frag_t fg = m->get_base_frag();
-        CDirFrag *dir = stripe->get_dirfrag(fg);
-
-        if (stripe->is_waiter_for(CDirStripe::WAIT_DIR)) {
-          if (cur->is_auth() || stripe)
-            stripe->take_waiting(CDirStripe::WAIT_DIR, finished);
-          else
-            discover_dir_frag(stripe, fg, 0, who);
-        } else
-          dout(7) << " doing nothing, nobody is waiting for dir " << fg << dendl;
-
-        inodeno_t wanted_ino = m->get_wanted_ino();
-        if (dir && wanted_ino && dir->is_waiting_for_ino(wanted_ino)) {
-          if (dir->is_auth() || get_inode(wanted_ino))
-            dir->take_ino_waiting(wanted_ino, finished);
-          else
-            discover_ino(dir, wanted_ino, 0, m->get_wanted_xlocked());
-        } else
-          dout(7) << " doing nothing, nobody is waiting for ino " << wanted_ino << dendl;
-      }
+  if (next == DENTRY) {
+    if (m->is_flag_error_dn()) {
+      dir->take_dentry_waiting(m->error_dentry, m->snapid, m->snapid, error);
+    } else if (!p.end()) {
+      dn = add_replica_dentry(p, dir, finished);
+      dout(7) << "discover_reply got " << *dn << dendl;
     }
   }
 
