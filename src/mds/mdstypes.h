@@ -680,10 +680,6 @@ struct inode_t {
     }
   }
 
-  void add_parent(dirstripe_t stripe, int who, const string &name) {
-    parents.push_back(inoparent_t(stripe, who, name));
-  }
-
   void encode(bufferlist &bl) const {
     __u8 v = 6;
     ::encode(v, bl);

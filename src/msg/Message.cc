@@ -109,8 +109,6 @@ using namespace std;
 #include "messages/MMDSCacheRejoin.h"
 #include "messages/MMDSFindIno.h"
 #include "messages/MMDSFindInoReply.h"
-#include "messages/MMDSRestripe.h"
-#include "messages/MMDSRestripeAck.h"
 #include "messages/MParentStats.h"
 
 #include "messages/MDirUpdate.h"
@@ -525,13 +523,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     break;
   case MSG_MDS_FINDINOREPLY:
     m = new MMDSFindInoReply;
-    break;
-
-  case MSG_MDS_RESTRIPE:
-    m = new MMDSRestripe;
-    break;
-  case MSG_MDS_RESTRIPEACK:
-    m = new MMDSRestripeAck;
     break;
 
   case MSG_MDS_PARENTSTATS:

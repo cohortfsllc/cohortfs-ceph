@@ -267,11 +267,13 @@ CInode::~CInode()
 void CInode::set_stripe_auth(const vector<int> &stripe_auth)
 {
   assert(is_dir());
-  if (placement)
+  if (placement) {
     placement->set_stripe_auth(stripe_auth);
-  else {
+    dout(10) << "set_stripe_auth existing " << *placement << dendl;
+  } else {
     placement = new CDirPlacement(mdcache, this, stripe_auth);
     mdcache->add_dir_placement(placement);
+    dout(10) << "set_stripe_auth created " << *placement << dendl;
   }
 }
 
@@ -280,6 +282,7 @@ void CInode::close_placement()
   if (placement) {
     assert(placement->get_num_ref() == 0);
     mdcache->remove_dir_placement(placement);
+    dout(10) << "close_placement " << *placement << dendl;
     delete placement;
     placement = NULL;
   }
@@ -1868,8 +1871,6 @@ void CInode::_encode_base(bufferlist& bl)
   ::encode(first, bl);
   ::encode(inode, bl);
   ::encode(symlink, bl);
-  if (is_dir())
-    ::encode(placement->get_stripe_auth(), bl);
   ::encode(xattrs, bl);
   ::encode(old_inodes, bl);
 }
@@ -1878,11 +1879,6 @@ void CInode::_decode_base(bufferlist::iterator& p)
   ::decode(first, p);
   ::decode(inode, p);
   ::decode(symlink, p);
-  if (is_dir()) {
-    vector<int> stripe_auth;
-    ::decode(stripe_auth, p);
-    set_stripe_auth(stripe_auth);
-  }
   ::decode(xattrs, p);
   ::decode(old_inodes, p);
 }

@@ -346,12 +346,6 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
 
   // create inodes dir
   CInode *inodes = container.create();
-  inodes->set_stripe_auth(stripe_auth);
-  CDirStripe *inodestripe = inodes->get_placement()->get_or_open_stripe(0);
-  inodestripe->state_set(CDirStripe::STATE_OPEN);
-  inodestripe->replicate = true;
-  CDirFrag *inodesdir = inodestripe->get_or_open_dirfrag(frag_t());
-  inodes->inode.dirstat = inodestripe->fnode.fragstat;
 
   rootstripe->fnode.accounted_fragstat = rootstripe->fnode.fragstat;
   rootstripe->fnode.accounted_rstat = rootstripe->fnode.rstat;
@@ -364,10 +358,6 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   cephdir->mark_dirty(ls);
   cephdir->commit(0, gather->new_sub());
 
-  inodesdir->mark_complete();
-  inodesdir->mark_dirty(ls);
-  inodesdir->commit(0, gather->new_sub());
-
   rootdir->mark_complete();
   rootdir->mark_dirty(ls);
   rootdir->commit(0, gather->new_sub());
@@ -375,10 +365,6 @@ void MDCache::create_empty_hierarchy(C_Gather *gather)
   cephstripe->mark_open();
   cephstripe->mark_dirty(ls);
   cephstripe->commit(gather->new_sub());
-
-  inodestripe->mark_open();
-  inodestripe->mark_dirty(ls);
-  inodestripe->commit(gather->new_sub());
 
   rootstripe->mark_open();
   rootstripe->mark_dirty(ls);
@@ -1416,9 +1402,6 @@ void MDCache::handle_resolve_ack(MMDSResolveAck *ack)
 	break;
       case ESlaveUpdate::RMDIR:
 	mds->server->do_rmdir_rollback(su->rollback, from, 0);
-	break;
-      case ESlaveUpdate::MKDIR:
-	mds->server->do_mkdir_rollback(su->rollback, from, 0);
 	break;
       default:
 	assert(0);
@@ -4878,12 +4861,6 @@ void MDCache::dispatch(Message *m)
     handle_find_ino_reply((MMDSFindInoReply *)m);
     break;
 
-  case MSG_MDS_RESTRIPE:
-    container.handle_restripe((MMDSRestripe*)m);
-    break;
-  case MSG_MDS_RESTRIPEACK:
-    container.handle_restripe_ack((MMDSRestripeAck*)m);
-    break;
 
   case MSG_MDS_PARENTSTATS:
     if (!is_open())
@@ -4939,10 +4916,8 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
   if (cur == NULL) {
     if (MDS_INO_IS_MDSDIR(path.get_ino())) 
       open_foreign_mdsdir(path.get_ino(), _get_waiter(mdr, req, fin));
-    else {
-      //assert(0);  // hrm.. broken
-      return -ESTALE;
-    }
+    else
+      open_remote_ino(path.get_ino(), _get_waiter(mdr, req, fin));
     return 1;
   }
   if (cur->state_test(CInode::STATE_PURGING))
@@ -4966,6 +4941,12 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
 
     // open stripe
     CDirPlacement *placement = cur->get_placement();
+    if (!placement) {
+      assert(!cur->is_auth());
+      discover_dir_placement(cur, _get_waiter(mdr, req, fin));
+      return 1;
+    }
+
     __u32 dnhash = placement->hash_dentry_name(path[depth]);
     stripeid_t stripeid = placement->pick_stripe(dnhash);
     CDirStripe *curstripe = placement->get_stripe(stripeid);
@@ -6214,8 +6195,10 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
         in->fetch(new C_MDS_RetryMessage(mds, dis));
         return false;
       }
+      dout(7) << "fetching inode " << ino << " from container" << dendl;
       return fetch_inode_from_container(mds, ino, dis, reply);
     }
+    dout(7) << "have " << *in << dendl;
 
     assert(in->is_auth());
     reply->contains.first = INODE;
@@ -6226,27 +6209,35 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
       CInode *container = get_container()->get_inode();
       assert(!container->is_auth() || container->is_replica(from));
       CDirPlacement *placement = container->get_placement();
+      assert(placement);
       assert(!placement->is_auth() || placement->is_replica(from));
 
-      CDirStripe *stripe = in->get_parent_stripe();
-      CDirFrag *dir = in->get_parent_dir();
-      CDentry *dn = in->get_parent_dn();
+      CDentry *dn = in->get_projected_parent_dn();
+      assert(dn);
+      CDirFrag *dir = dn->get_dir();
+      assert(dir);
+      CDirStripe *stripe = dir->get_stripe();
+      assert(stripe);
 
       if (stripe->is_auth() && !stripe->is_replica(from)) {
+        dout(7) << "replicating parent " << *stripe << dendl;
         reply->contains.first = STRIPE;
         replicate_stripe(stripe, from, reply->trace);
         replicate_dir(dir, from, reply->trace);
         replicate_dentry(dn, from, reply->trace);
       } else if (dir->is_auth() && !dir->is_replica(from)) {
+        dout(7) << "replicating parent " << *dir << dendl;
         reply->contains.first = FRAG;
         replicate_dir(dir, from, reply->trace);
         replicate_dentry(dn, from, reply->trace);
       } else if (dn->is_auth() && !dn->is_replica(from)) {
+        dout(7) << "replicating parent " << *dn << dendl;
         reply->contains.first = DENTRY;
         replicate_dentry(dn, from, reply->trace);
       }
     }
 
+    dout(7) << "replicating " << *in << dendl;
     replicate_inode(in, from, reply->trace);
     reply->contains.second = INODE;
     if (dis->want.second == INODE)
@@ -6267,17 +6258,20 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
           in->fetch(new C_MDS_RetryMessage(mds, dis));
           return false;
         }
+        dout(7) << "fetching inode " << ino << " from container" << dendl;
         return fetch_inode_from_container(mds, ino, dis, reply);
       }
       reply->contains.first = PLACEMENT;
     }
     if (!in->is_dir()) {
+      dout(7) << "no placement for " << *in << ", not a directory" << dendl;
       reply->set_flag_error_placement();
       return true;
     }
     placement = in->get_placement();
     assert(placement);
     assert(placement->is_auth());
+    dout(7) << "replicating " << *placement << dendl;
     replicate_placement(placement, from, reply->trace);
     reply->contains.second = PLACEMENT;
     if (dis->want.second == PLACEMENT)
@@ -6299,11 +6293,14 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
     if (auth != mds->get_nodeid()) {
       reply->set_flag_error_stripe();
       reply->set_auth_hint(auth);
+      dout(7) << "not auth for stripe " << dis->base.stripe.stripeid
+          << " -> mds." << auth << dendl;
       return true;
     }
     stripe = placement->get_stripe(dis->base.stripe.stripeid);
     assert(stripe); // TODO: fetch from osd
     assert(stripe->is_auth());
+    dout(7) << "replicating " << *stripe << dendl;
     replicate_stripe(stripe, from, reply->trace);
     reply->contains.second = STRIPE;
     if (dis->want.second == STRIPE)
@@ -6325,6 +6322,7 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
     dir = stripe->get_dirfrag(dis->base.frag);
     assert(dir);
     assert(dir->is_auth());
+    dout(7) << "replicating " << *dir << dendl;
     replicate_dir(dir, from, reply->trace);
     reply->contains.second = FRAG;
     if (dis->want.second == FRAG)
@@ -6360,6 +6358,7 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
   }
   assert(dn);
   assert(dn->is_auth());
+  dout(7) << "replicating " << *dn << dendl;
   replicate_dentry(dn, from, reply->trace);
   reply->contains.second = DENTRY;
   assert(dis->want.second == DENTRY);
@@ -6843,15 +6842,13 @@ void MDCache::handle_dir_update(MDirUpdate *m)
 
 // LINK
 
-void MDCache::send_dentry_link(CDentry *dn, const vector<int> *skip)
+void MDCache::send_dentry_link(CDentry *dn)
 {
   dout(7) << "send_dentry_link " << *dn << dendl;
 
   for (map<int,int>::iterator p = dn->replicas_begin(); 
        p != dn->replicas_end(); 
        p++) {
-    if (skip && find(skip->begin(), skip->end(), p->first) != skip->end())
-      continue;
     if (mds->mdsmap->get_state(p->first) < MDSMap::STATE_REJOIN) 
       continue;
     CDentry::linkage_t *dnl = dn->get_linkage();
@@ -6886,10 +6883,11 @@ void MDCache::handle_dentry_link(MDentryLink *m)
       dout(7) << "handle_dentry_link don't have dentry " << *dir << " dn " << m->get_dn() << dendl;
     } else {
       dout(7) << "handle_dentry_link on " << *dn << dendl;
-      CDentry::linkage_t *dnl = dn->get_linkage();
 
       assert(!dn->is_auth());
-      assert(dnl->is_null());
+      /* XXX: may race with discovery
+      CDentry::linkage_t *dnl = dn->get_linkage();
+      assert(dnl->is_null()); */
     }
   }
 

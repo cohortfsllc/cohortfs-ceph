@@ -52,7 +52,7 @@ ostream& operator<<(ostream& out, CDirFrag& dir)
 {
   string path;
   dir.get_inode()->make_path_string_projected(path);
-  out << "[dir " << dir.dirfrag() << " " << path << "/"
+  out << "[frag " << dir.dirfrag() << " " << path << "/"
       << " [" << dir.first << ",head]";
   if (dir.is_auth()) {
     out << " auth";

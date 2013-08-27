@@ -1316,10 +1316,6 @@ void Server::handle_slave_request_reply(MMDSSlaveRequest *m)
     handle_slave_link_prep_ack(mdr, m);
     break;
 
-  case MMDSSlaveRequest::OP_MKDIRACK:
-    handle_slave_mkdir_ack(mdr, m);
-    break;
-
   case MMDSSlaveRequest::OP_RMDIRPREPACK:
     handle_slave_rmdir_prep_ack(mdr, m);
     break;
@@ -1438,10 +1434,6 @@ void Server::dispatch_slave_request(MDRequest *mdr)
   case MMDSSlaveRequest::OP_LINKPREP:
   case MMDSSlaveRequest::OP_UNLINKPREP:
     handle_slave_link_prep(mdr);
-    break;
-
-  case MMDSSlaveRequest::OP_MKDIR:
-    handle_slave_mkdir(mdr);
     break;
 
   case MMDSSlaveRequest::OP_RMDIRPREP:
@@ -1626,13 +1618,19 @@ CDirFrag *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string
     return NULL;
   }
 
-  // XXX: avoid taking the hash when stripe count is 1 and fragtree is empty
   CDirPlacement *placement = diri->get_placement();
+  if (!placement) {
+    assert(!diri->is_auth());
+    mdcache->discover_dir_placement(diri, new C_MDS_RetryRequest(mdcache, mdr));
+    return NULL;
+  }
+
+  // XXX: avoid taking the hash when stripe count is 1 and fragtree is empty
   __u32 dnhash = placement->hash_dentry_name(dname);
   int stripeid = placement->pick_stripe(dnhash);
   CDirStripe *stripe = try_open_auth_stripe(placement, stripeid, mdr);
   if (!stripe)
-    return 0;
+    return NULL;
 
   frag_t fg = stripe->pick_dirfrag(dnhash);
   CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
@@ -2742,8 +2740,8 @@ void Server::handle_client_openc(MDRequest *mdr)
   // remote link to filesystem namespace
   dn->push_projected_linkage(in->ino(), in->d_type());
 
-  mdr->add_projected_inode(in);
-  inode_t *pi = in->project_inode();
+  inode_t *pi = &in->inode;
+  pi->parents.push_back(dn->inoparent());
 
   pi->dirstat.nfiles = pi->rstat.rfiles = 1;
   pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
@@ -2753,8 +2751,6 @@ void Server::handle_client_openc(MDRequest *mdr)
     pi->client_ranges[client].range.last = pi->get_layout_size_increment();
     pi->client_ranges[client].follows = follows;
   }
-
-  in->project_added_parent(dn->inoparent());
 
   if (follows >= dn->first)
     dn->first = follows+1;
@@ -2770,6 +2766,8 @@ void Server::handle_client_openc(MDRequest *mdr)
   mdcache->predirty_journal_parents(mdr, &le->metablob, in,
                                     dn->inoparent(), true, 1);
   le->metablob.add_inode(in, true);
+  if (!diri->is_base())
+    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -2811,12 +2809,18 @@ void Server::handle_client_readdir(MDRequest *mdr)
     reply_request(mdr, -ENOTDIR);
     return;
   }
+  CDirPlacement *placement = diri->get_placement();
+  if (!placement) {
+    assert(!diri->is_auth());
+    mdcache->discover_dir_placement(diri, new C_MDS_RetryRequest(mdcache, mdr));
+    return;
+  }
+
   // which stripe?
   stripeid_t stripeid = req->head.args.readdir.stripe;
   dout(10) << " stripe " << stripeid << dendl;
 
-  CDirStripe *stripe = try_open_auth_stripe(diri->get_placement(),
-                                            stripeid, mdr);
+  CDirStripe *stripe = try_open_auth_stripe(placement, stripeid, mdr);
   if (!stripe) return;
 
   rdlocks.insert(&diri->filelock);
@@ -3878,32 +3882,12 @@ public:
     dn->pop_projected_linkage();
     inodn->pop_projected_linkage();
 
+    newi->mark_dirty(mdr->ls);
+
     mdr->apply();
 
-    // mkdir?
-    CDirPlacement *placement = newi->get_placement();
-    const vector<int> *stripe_auth = NULL;
-    if (newi->is_dir()) { 
-      stripe_auth = &placement->get_stripe_auth();
-      // TODO: journal placement object
-      list<CDirStripe*> stripes;
-      placement->get_stripes(stripes);
-      for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-        CDirStripe *stripe = *s;
-        assert(stripe);
-        stripe->mark_dirty(mdr->ls);
-        stripe->mark_new(mdr->ls);
-
-        CDirFrag *dir = stripe->get_dirfrag(frag_t());
-        assert(dir);
-        dir->mark_dirty(mdr->ls);
-        dir->mark_new(mdr->ls);
-      }
-    }
-
     mds->mdcache->send_dentry_link(dn);
-    // don't send MDentryLink to nodes that got a slave_mkdir
-    mds->mdcache->send_dentry_link(inodn, stripe_auth);
+    mds->mdcache->send_dentry_link(inodn);
 
     if (newi->is_file())
       mds->locker->share_inode_max_size(newi);
@@ -3973,13 +3957,12 @@ void Server::handle_client_mknod(MDRequest *mdr)
   // remote link to filesystem namespace
   dn->push_projected_linkage(newi->ino(), newi->d_type());
 
-  mdr->add_projected_inode(newi);
-  inode_t *pi = newi->project_inode();
+  inode_t *pi = &newi->inode;
+  pi->parents.push_back(dn->inoparent());
 
   pi->rdev = req->head.args.mknod.rdev;
   if ((pi->mode & S_IFMT) == 0)
     pi->mode |= S_IFREG;
-  newi->project_added_parent(dn->inoparent());
 
   pi->dirstat.nfiles = pi->rstat.rfiles = 1;
   pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
@@ -4064,84 +4047,17 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   snapid_t follows = realm->get_newest_seq();
   mdr->now = ceph_clock_now(g_ceph_context);
 
-  CInode *newi = mdr->in[0];
-  if (!newi) {
-    // initialize the inode on the first pass
-    unsigned mode = req->head.args.mkdir.mode;
-    mode &= ~S_IFMT;
-    mode |= S_IFDIR;
-    mdr->in[0] = newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
+  unsigned mode = req->head.args.mkdir.mode;
+  mode &= ~S_IFMT;
+  mode |= S_IFDIR;
+  CInode *newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
 
-    newi->inode.add_parent(dn->get_stripe()->dirstripe(),
-                           mds->get_nodeid(), dn->get_name());
+  // stripe over all active nodes
+  set<int> nodes;
+  mds->mdsmap->get_active_mds_set(nodes);
 
-    // issue a cap on the directory.  do this before initializing
-    // stripes, so replicas get the correct lock state
-    int cmode = CEPH_FILE_MODE_RDWR;
-    Capability *cap = mds->locker->issue_new_caps(
-        newi, cmode, mdr->session, realm, req->is_replay());
-    if (cap) {
-      cap->set_wanted(0);
-
-      // put locks in excl mode
-      newi->filelock.set_state(LOCK_EXCL);
-      newi->authlock.set_state(LOCK_EXCL);
-      newi->xattrlock.set_state(LOCK_EXCL);
-      cap->issue_norevoke(CEPH_CAP_AUTH_EXCL|CEPH_CAP_AUTH_SHARED|
-                          CEPH_CAP_XATTR_EXCL|CEPH_CAP_XATTR_SHARED);
-    }
-
-    // stripe over all active nodes
-    set<int> nodes;
-    mds->mdsmap->get_active_mds_set(nodes);
-
-    vector<int> stripe_auth(nodes.begin(), nodes.end());
-    newi->set_stripe_auth(stripe_auth);
-
-    CDirPlacement *placement = newi->get_placement();
-
-    // send slave requests to create stripes on other nodes
-    for (size_t i = 0; i < stripe_auth.size(); i++) {
-      int who = stripe_auth[i];
-
-      if (who == mds->get_nodeid()) {
-        // local request
-        CDirStripe *newstripe = placement->get_or_open_stripe(i);
-        newstripe->mark_open();
-        CDirFrag *newdir = newstripe->get_or_open_dirfrag(frag_t());
-        newdir->mark_complete();
-      } else {
-        // remote slave request
-        MMDSSlaveRequest *req = new MMDSSlaveRequest(
-            mdr->reqid, mdr->attempt, MMDSSlaveRequest::OP_MKDIR);
-        dn->set_object_info(req->get_object_info());
-        // construct a path so the slave can discover
-        dn->make_path(req->path);
-        req->now = mdr->now;
-        // stripe ids to create
-        req->stripes.push_back(i);
-        // send replicas
-        mdcache->replicate_stripe(inodn->get_stripe(), who, req->srci_replica);
-        mdcache->replicate_dir(inodn->get_dir(), who, req->srci_replica);
-        mdcache->replicate_dentry(inodn, who, req->srci_replica);
-        mdcache->replicate_inode(newi, who, req->srci_replica);
-        mdcache->replicate_placement(placement, who, req->srci_replica);
-        mds->send_message_mds(req, who);
-
-        assert(mdr->more()->waiting_on_slave.count(who) == 0);
-        mdr->more()->waiting_on_slave.insert(who);
-      }
-    }
-
-    // wait for slave acks
-    if (!mdr->more()->waiting_on_slave.empty()) {
-      dout(15) << "waiting on dirstripe creation from "
-          << mdr->more()->waiting_on_slave << dendl;
-      return;
-    }
-  }
-  assert(newi);
-  assert(mdr->more()->waiting_on_slave.empty());
+  vector<int> stripe_auth(nodes.begin(), nodes.end());
+  newi->set_stripe_auth(stripe_auth);
 
   dout(12) << " follows " << follows << dendl;
   if (follows >= dn->first)
@@ -4153,8 +4069,8 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   // remote link to filesystem namespace
   dn->push_projected_linkage(newi->ino(), newi->d_type());
 
-  mdr->add_projected_inode(newi);
-  inode_t *pi = newi->project_inode();
+  inode_t *pi = &newi->inode;
+  pi->parents.push_back(dn->inoparent());
 
   pi->dirstat.nsubdirs = pi->rstat.rsubdirs = 1;
   pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
@@ -4171,26 +4087,25 @@ void Server::handle_client_mkdir(MDRequest *mdr)
                                     dn->inoparent(), true, 1);
 
   le->metablob.add_inode(newi, dn);
+  le->metablob.add_placement(newi->get_placement());
+  if (!diri->is_base())
+    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
-  dout(10) << "mkdir " << *inodn << " -> " << *newi << dendl;
 
-  // add new stripes to the journal
-  list<CDirStripe*> stripes;
-  newi->get_placement()->get_stripes(stripes);
-  for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CDirStripe *newstripe = *s;
-    CDirFrag *newdir = newstripe->get_dirfrag(frag_t());
-    le->metablob.add_new_dir(newdir);
-    le->metablob.add_stripe(newstripe, true, true); // dirty and new
-  }
-  // TODO: journal placement object
+  // issue a cap on the directory.
+  int cmode = CEPH_FILE_MODE_RDWR;
+  Capability *cap = mds->locker->issue_new_caps(
+      newi, cmode, mdr->session, realm, req->is_replay());
+  if (cap) {
+    cap->set_wanted(0);
 
-  if (!mdr->more()->witnessed.empty()) {
-    dout(20) << " noting uncommitted_slaves " << mdr->more()->witnessed << dendl;
-    le->reqid = mdr->reqid;
-    le->had_slaves = true;
-    mds->mdcache->add_uncommitted_master(mdr->reqid, mdr->ls, mdr->more()->witnessed);
+    // put locks in excl mode
+    newi->filelock.set_state(LOCK_EXCL);
+    newi->authlock.set_state(LOCK_EXCL);
+    newi->xattrlock.set_state(LOCK_EXCL);
+    cap->issue_norevoke(CEPH_CAP_AUTH_EXCL|CEPH_CAP_AUTH_SHARED|
+                        CEPH_CAP_XATTR_EXCL|CEPH_CAP_XATTR_SHARED);
   }
 
   // make sure this inode gets into the journal
@@ -4201,229 +4116,6 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, newi, dn, inodn));
 }
 
-class C_MDS_SlaveMkdirFinish : public Context {
- private:
-  Server *server;
-  MDRequest *mdr;
-  CInode *in;
- public:
-  C_MDS_SlaveMkdirFinish(Server *server, MDRequest *mdr, CInode *in)
-      : server(server), mdr(mdr), in(in) {}
-  void finish(int r) {
-    server->slave_mkdir_finish(mdr, in);
-  }
-};
-
-void Server::handle_slave_mkdir(MDRequest *mdr)
-{
-  MMDSSlaveRequest *req = mdr->slave_request;
-  int from = req->get_source().num();
-
-  dout(7) << "handle_slave_mkdir " << *mdr
-      << " from mds." << from << dendl;
-
-  // decode replicas
-  list<Context*> finished;
-  bufferlist::iterator blp = req->srci_replica.begin();
-  CInode *container = mdcache->get_container()->get_inode();
-  CDirStripe *stripe = mdcache->add_replica_stripe(
-      blp, container->get_placement(), from, finished);
-  CDirFrag *dir = mdcache->add_replica_dir(blp, stripe, finished);
-  CDentry *dn = mdcache->add_replica_dentry(blp, dir, finished);
-  CInode *in = mdcache->add_replica_inode(blp, dn, from, finished);
-  CDirPlacement *placement = mdcache->add_replica_placement(
-      blp, in, from, finished);
-  mds->queue_waiters(finished);
-
-  // journal new stripes
-  mdr->ls = mdlog->get_current_segment();
-  ESlaveUpdate *le = new ESlaveUpdate(
-      mdlog, "slave_mkdir", mdr->reqid, mdr->slave_to_mds,
-      ESlaveUpdate::OP_PREPARE, ESlaveUpdate::MKDIR);
-
-  le->commit.add_inode(in, false);
-  le->commit.add_dentry(dn, false);
-  dout(10) << "slave_mkdir " << *dn << " -> " << *in << dendl;
-
-  for (vector<stripeid_t>::iterator s = req->stripes.begin();
-       s != req->stripes.end(); ++s) {
-    CDirStripe *newstripe = placement->add_stripe(
-        new CDirStripe(placement, *s, mds->get_nodeid()));
-    newstripe->mark_open();
-
-    CDirFrag *newdir = newstripe->get_or_open_dirfrag(frag_t());
-    newdir->mark_complete();
-
-    le->commit.add_new_dir(newdir);
-    le->commit.add_stripe(newstripe, true, true);
-  }
-  // TODO: journal placement object
-
-  // initialize rollback
-  mkdir_rollback rollback;
-  rollback.reqid = mdr->reqid;
-  rollback.ino = in->ino();
-  swap(rollback.stripes, req->stripes);
-  ::encode(rollback, le->rollback);
-  mdr->more()->rollback_bl = le->rollback;
-
-  mdlog->start_submit_entry(le, new C_MDS_SlaveMkdirFinish(this, mdr, in));
-}
-
-class C_MDS_SlaveMkdirCommit : public Context {
- private:
-  Server *server;
-  MDRequest *mdr;
- public:
-  C_MDS_SlaveMkdirCommit(Server *server, MDRequest *mdr)
-      : server(server), mdr(mdr) {}
-  void finish(int r) {
-    if (r == 0)
-      server->slave_mkdir_commit(mdr);
-    else
-      server->do_mkdir_rollback(mdr->more()->rollback_bl,
-                                mdr->slave_to_mds, mdr);
-  }
-};
-
-void Server::slave_mkdir_finish(MDRequest *mdr, CInode *in)
-{
-  dout(10) << "slave_mkdir_finish " << *mdr << dendl;
-
-  // mark new stripes dirty
-  list<CDirStripe*> stripes;
-  in->get_placement()->get_stripes(stripes);
-  for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s) {
-    CDirStripe *stripe = *s;
-    stripe->mark_dirty(mdr->ls);
-    CDirFrag *dir = stripe->get_dirfrag(frag_t());
-    dir->mark_dirty(mdr->ls);
-  }
-
-  // reply with an ack
-  MMDSSlaveRequest *ack = new MMDSSlaveRequest(
-      mdr->reqid, mdr->attempt, MMDSSlaveRequest::OP_MKDIRACK);
-  mds->send_message_mds(ack, mdr->slave_to_mds);
-
-  // set up commit waiter
-  mdr->more()->slave_commit = new C_MDS_SlaveMkdirCommit(this, mdr);
-
-  mdr->slave_request->put();
-  mdr->slave_request = 0;
-}
-
-struct C_MDS_CommittedSlave : public Context {
-  Server *server;
-  MDRequest *mdr;
-  C_MDS_CommittedSlave(Server *s, MDRequest *m) : server(s), mdr(m) {}
-  void finish(int r) {
-    server->_committed_slave(mdr);
-  }
-};
-
-void Server::slave_mkdir_commit(MDRequest *mdr)
-{
-  dout(10) << "slave_mkdir_commit " << *mdr << dendl;
-
-  // drop our pins, etc.
-  mdr->cleanup();
-
-  // write a commit to the journal
-  ESlaveUpdate *le = new ESlaveUpdate(
-      mdlog, "slave_mkdir_commit", mdr->reqid, mdr->slave_to_mds,
-      ESlaveUpdate::OP_COMMIT, ESlaveUpdate::MKDIR);
-  mdlog->start_submit_entry(le, new C_MDS_CommittedSlave(this, mdr));
-  mdlog->flush();
-}
-
-void Server::handle_slave_mkdir_ack(MDRequest *mdr, MMDSSlaveRequest *req)
-{
-  int from = req->get_source().num();
-
-  dout(7) << "handle_slave_mkdir_ack " << *req << " " << *mdr
-      << " from mds." << from << dendl;
-
-  // note slave
-  mdr->more()->slaves.insert(from);
-  
-  // witnessed!
-  assert(mdr->more()->witnessed.count(from) == 0);
-  mdr->more()->witnessed.insert(from);
-
-  set<int> &waiters = mdr->more()->waiting_on_slave;
-  assert(waiters.count(from));
-  waiters.erase(from);
-
-  if (waiters.empty())
-    dispatch_client_request(mdr);
-  else
-    dout(15) << "mkdir still waiting on " << waiters << dendl;
-}
-
-class C_MDS_MkdirRollback : public Context {
- private:
-  Server *server;
-  Mutation *mut;
-  MDRequest *mdr;
- public:
-  C_MDS_MkdirRollback(Server *server, Mutation *mut, MDRequest *mdr)
-      : server(server), mut(mut), mdr(mdr) {}
-  void finish(int r) {
-    server->_mkdir_rollback_finish(mut, mdr);
-  }
-};
-
-void Server::do_mkdir_rollback(bufferlist &rbl, int master, MDRequest *mdr)
-{
-  mkdir_rollback rollback;
-  bufferlist::iterator p = rbl.begin();
-  ::decode(rollback, p);
-
-  dout(10) << "do_mkdir_rollback on " << rollback.ino
-      << " stripes " << rollback.stripes << dendl;
-
-  mdcache->add_rollback(rollback.reqid, master);
-  assert(mdr || mds->is_resolve());
-
-  Mutation *mut = new Mutation(rollback.reqid);
-  mut->ls = mdlog->get_current_segment();
-
-  CInode *in = mdcache->get_inode(rollback.ino);
-  assert(in);
-  dout(10) << " target is " << *in << dendl;
-
-  CDirPlacement *placement = in->get_placement();
-
-  // remove the stripes created by handle_slave_mkdir()
-  for (vector<stripeid_t>::iterator s = rollback.stripes.begin();
-       s != rollback.stripes.end(); ++s) {
-    CDirStripe *stripe = placement->get_stripe(*s);
-    assert(stripe);
-    placement->close_stripe(stripe);
-  }
-  // TODO: close placement object
-
-  // journal it
-  ESlaveUpdate *le = new ESlaveUpdate(
-      mdlog, "slave_mkdir_rollback", rollback.reqid, master,
-      ESlaveUpdate::OP_ROLLBACK, ESlaveUpdate::MKDIR);
-  mdlog->start_submit_entry(le, new C_MDS_MkdirRollback(this, mut, mdr));
-  mdlog->flush();
-}
-
-void Server::_mkdir_rollback_finish(Mutation *mut, MDRequest *mdr)
-{
-  dout(10) << "_mkdir_rollback_finish" << dendl;
-
-  mut->apply();
-  if (mdr)
-    mdcache->request_finish(mdr);
-
-  mdcache->finish_rollback(mut->reqid);
-
-  mut->cleanup();
-  delete mut;
-}
 
 // SYMLINK
 
@@ -4466,15 +4158,13 @@ void Server::handle_client_symlink(MDRequest *mdr)
 
   newi->symlink = req->get_path2();
 
-  mdr->add_projected_inode(newi);
-  inode_t *pi = newi->project_inode();
+  inode_t *pi = &newi->inode;
+  pi->parents.push_back(dn->inoparent());
 
   pi->rstat.rbytes = pi->size = newi->symlink.length();
   pi->dirstat.nfiles = pi->rstat.rfiles = 1;
   pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
   pi->accounted_rstat = pi->rstat;
-
-  newi->project_added_parent(dn->inoparent());
 
   if (follows >= dn->first)
     dn->first = follows + 1;
@@ -4490,6 +4180,8 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi,
                                     dn->inoparent(), true, 1, pi->size);
   le->metablob.add_inode(newi, dn);
+  if (!diri->is_base())
+    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -4858,6 +4550,14 @@ void Server::_logged_slave_link(MDRequest *mdr, CInode *targeti)
   mdr->slave_request = 0;
 }
 
+struct C_MDS_CommittedSlave : public Context {
+  Server *server;
+  MDRequest *mdr;
+  C_MDS_CommittedSlave(Server *s, MDRequest *m) : server(s), mdr(m) {}
+  void finish(int r) {
+    server->_committed_slave(mdr);
+  }
+};
 
 void Server::_commit_slave_link(MDRequest *mdr, int r, CInode *targeti)
 {  

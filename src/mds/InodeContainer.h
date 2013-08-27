@@ -24,35 +24,19 @@ class CDirStripe;
 class Context;
 class MDCache;
 class MDRequest;
-class MMDSRestripe;
-class MMDSRestripeAck;
 class SimpleLock;
 
 class InodeContainer {
  private:
-  friend class MDCache; // allow MDCache to set inode and dir
+  friend class MDCache; // allow MDCache to set inode
   MDCache *mdcache;
 
   CInode *in; // container inode or replica
-  CDirStripe *stripe; // container stripe for this mds
-
-  std::set<int> pending_restripe_ack; // mds nodes pending restripe_ack
-  Context *pending_restripe_finish;
-
-  // handle restripe messages
-  void handle_restripe(MMDSRestripe *m);
-  void handle_restripe_ack(MMDSRestripeAck *m);
-
-  friend class C_IC_RestripeFinish;
-  void restripe_finish();
 
  public:
-  InodeContainer(MDCache *mdcache)
-      : mdcache(mdcache), in(0), stripe(0),
-        pending_restripe_finish(0) {}
+  InodeContainer(MDCache *mdcache) : mdcache(mdcache), in(0) {}
 
   CInode* get_inode() { return in; }
-  CDirStripe* get_stripe() { return stripe; }
 
   // create the container inode
   CInode* create();
@@ -66,9 +50,6 @@ class InodeContainer {
 
   // run the placement algorithm for the given inode number
   stripeid_t place(inodeno_t ino) const;
-
-  // initiate restriping over the new vector of nodes (root mds only)
-  void restripe(const std::set<int> &nodes, bool replay);
 };
 
 #endif

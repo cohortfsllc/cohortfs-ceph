@@ -317,8 +317,6 @@ void EMetaBlob::Inode::apply(MDS *mds, CInode *in, bool isnew)
     swap(in->inode.parents, existing_parents);
     update_inoparents(in->inode.parents, removed_parent, added_parent);
   }
-  dout(10) << "inode " << in->ino() << " links " << inode.nlink
-      << " inoparents " << in->inode.parents << dendl;
 
   in->inode_auth = inode_auth;
   if (inode_auth.first == mds->get_nodeid())

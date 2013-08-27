@@ -624,6 +624,7 @@ class EMetaBlob {
   }
 
   Placement& add_placement(CDirPlacement *placement) {
+    add_inode(placement->get_inode());
     return add_placement(placement->ino(), placement->get_stripe_auth(),
                          placement->get_layout());
   }

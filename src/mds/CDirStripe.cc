@@ -561,31 +561,46 @@ void CDirStripe::_committed()
 struct C_Stripe_Fetched : public Context {
   CDirStripe *stripe;
   bufferlist bl;
-  Context *fin;
-  C_Stripe_Fetched(CDirStripe *stripe, Context *fin)
-      : stripe(stripe), fin(fin) {}
+  C_Stripe_Fetched(CDirStripe *stripe) : stripe(stripe) {}
   void finish(int r) {
-    assert(r == 0);
-    r = stripe->_fetched(bl);
-    if (fin)
-      fin->complete(r);
+    stripe->_fetched(bl);
   }
 };
 
 void CDirStripe::fetch(Context *fin)
 {
-  dout(10) << "fetch" << dendl;
   assert(is_auth());
+  if (fin)
+    fetch_waiters.push_back(fin);
+
+  if (state_test(STATE_FETCHING)) {
+    dout(10) << "already fetching " << *this << dendl;
+    return;
+  }
+  state_set(STATE_FETCHING);
+
+  dout(10) << "fetching " << *this << dendl;
 
   object_t oid = get_ondisk_object();
   object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pool());
 
-  C_Stripe_Fetched *c = new C_Stripe_Fetched(this, fin);
+  C_Stripe_Fetched *c = new C_Stripe_Fetched(this);
   mdcache->mds->objecter->read(oid, oloc, 0, 0, CEPH_NOSNAP, &c->bl, 0, c);
 }
 
 int CDirStripe::_fetched(bufferlist& bl)
 {
+  state_clear(STATE_FETCHING);
+  mdcache->mds->queue_waiters(fetch_waiters);
+
+  if (bl.length() == 0) {
+    LogSegment *ls = mdcache->mds->mdlog->get_current_segment();
+    ls->new_stripes.push_back(&item_new);
+    state_set(STATE_OPEN);
+    dout(10) << "stripe not found, marking new/open " << *this << dendl;
+    return 0;
+  }
+
   dout(10) << "_fetched got " << bl.length() << dendl;
 
   bufferlist::iterator p = bl.begin();
