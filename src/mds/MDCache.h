@@ -39,7 +39,6 @@ class PerfCounters;
 
 class MDS;
 class Session;
-class Migrator;
 
 class Message;
 class Session;
@@ -412,7 +411,6 @@ public:
   
 
   friend class Locker;
-  friend class Migrator;
   friend class MDBalancer;
 
 
@@ -432,12 +430,6 @@ public:
 
   void purge_prealloc_ino(inodeno_t ino, Context *fin);
 
-
-
-public:
-
-  // subsystems
-  Migrator *migrator;
 
  public:
   MDCache(MDS *m);

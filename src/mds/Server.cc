@@ -24,7 +24,6 @@
 #include "Locker.h"
 #include "MDCache.h"
 #include "MDLog.h"
-#include "Migrator.h"
 #include "MDBalancer.h"
 #include "AnchorClient.h"
 #include "InoTable.h"
