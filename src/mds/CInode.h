@@ -390,7 +390,6 @@ public:
   // friends
   friend class Server;
   friend class Locker;
-  friend class Migrator;
   friend class MDCache;
   friend class CDirFrag;
   friend class CInodeExport;

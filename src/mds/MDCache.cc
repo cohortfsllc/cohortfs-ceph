@@ -25,7 +25,6 @@
 #include "Locker.h"
 #include "MDLog.h"
 #include "MDBalancer.h"
-#include "Migrator.h"
 
 #include "AnchorClient.h"
 #include "SnapClient.h"
@@ -131,7 +130,6 @@ MDCache::MDCache(MDS *m)
     nonauth_stripes(member_offset(CDirStripe, item_nonauth))
 {
   mds = m;
-  migrator = new Migrator(mds, this);
   root = NULL;
   myin = NULL;
 
@@ -164,7 +162,6 @@ MDCache::MDCache(MDS *m)
 
 MDCache::~MDCache() 
 {
-  delete migrator;
   //delete renamer;
 }
 
@@ -4633,60 +4630,6 @@ bool MDCache::shutdown_pass()
   dout(2) << "shutdown done." << dendl;
   return true;
 }
-
-bool MDCache::shutdown_export_caps()
-{
-#if 0
-  // export caps?
-  //  note: this runs more often than it should.
-  static bool exported_caps = false;
-  static set<CDirStripe*> exported_caps_in;
-  if (!exported_caps) {
-    dout(7) << "searching for caps to export" << dendl;
-    exported_caps = true;
-
-    list<CDirStripe*> stripes;
-    for (map<CDirStripe*,set<CDirStripe*> >::iterator p = subtrees.begin();
-	 p != subtrees.end();
-	 ++p) {
-      if (exported_caps_in.count(p->first)) continue;
-      if (p->first->is_auth() ||
-	  p->first->is_ambiguous_auth())
-	exported_caps = false; // we'll have to try again
-      else {
-	stripes.push_back(p->first);
-	exported_caps_in.insert(p->first);
-      }
-    }
-    while (!stripes.empty()) {
-      CDirStripe *stripe = stripes.front();
-      stripes.pop_front();
-
-      list<CDirFrag*> dirs;
-      stripe->get_dirfrags(dirs);
-      for (list<CDirFrag*>::iterator d = dirs.begin(); d != dirs.end(); ++d) {
-        CDirFrag *dir = *d;
-        for (CDirFrag::map_t::iterator p = dir->items.begin();
-             p != dir->items.end();
-             ++p) {
-          CDentry *dn = p->second;
-          CDentry::linkage_t *dnl = dn->get_linkage();
-          if (!dnl->is_primary()) continue;
-          CInode *in = dnl->get_inode();
-          if (in->is_dir())
-            in->get_nested_stripes(stripes);
-          if (in->is_any_caps() && !in->state_test(CInode::STATE_EXPORTINGCAPS))
-            migrator->export_caps(in);
-        }
-      }
-    }
-  }
-#endif
-  return true;
-}
-
-
-
 
 
 // ========= messaging ==============

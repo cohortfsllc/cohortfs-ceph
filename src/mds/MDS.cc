@@ -40,7 +40,6 @@
 #include "MDCache.h"
 #include "MDLog.h"
 #include "MDBalancer.h"
-#include "Migrator.h"
 
 #include "AnchorServer.h"
 #include "AnchorClient.h"
@@ -1704,11 +1703,6 @@ bool MDS::handle_deferrable_message(Message *m)
     mdcache->dispatch(m);
     break;
     
-  case MDS_PORT_MIGRATOR:
-    ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MDS);
-    mdcache->migrator->dispatch(m);
-    break;
-    
   default:
     switch (m->get_type()) {
       // SERVER
@@ -1888,18 +1882,6 @@ bool MDS::_dispatch(Message *m)
     else
       balancer->queue_split(dir);
   }
-
-  // hack: force hash root?
-  /*
-  if (false &&
-      mdcache->get_root() &&
-      mdcache->get_root()->dir &&
-      !(mdcache->get_root()->dir->is_hashed() || 
-        mdcache->get_root()->dir->is_hashing())) {
-    dout(0) << "hashing root" << dendl;
-    mdcache->migrator->hash_dir(mdcache->get_root()->dir);
-  }
-  */
 
   if (mlogger) {
     mlogger->set(l_mdm_ino, g_num_ino);

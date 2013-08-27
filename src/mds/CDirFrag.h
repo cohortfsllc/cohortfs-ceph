@@ -192,7 +192,6 @@ protected:
 
 
   // friends
-  friend class Migrator;
   friend class CInode;
   friend class CDirStripe;
   friend class MDCache;

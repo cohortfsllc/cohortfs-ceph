@@ -42,7 +42,6 @@
 #include "MDLog.h"
 #include "MDCache.h"
 #include "Server.h"
-#include "Migrator.h"
 #include "Mutation.h"
 
 #include "InoTable.h"

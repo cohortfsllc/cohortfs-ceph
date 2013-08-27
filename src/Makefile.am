@@ -1338,7 +1338,6 @@ libmds_a_SOURCES = \
 	mds/InodeContainer.cc \
 	mds/ParentStats.cc \
 	mds/Locker.cc \
-	mds/Migrator.cc \
 	mds/MDBalancer.cc \
 	mds/CDentry.cc \
 	mds/CDirFrag.cc \
@@ -1675,7 +1674,6 @@ noinst_HEADERS = \
 	mds/MDSTableServer.h\
 	mds/MDSTableClient.h\
 	mds/Mutation.h\
-        mds/Migrator.h\
 	mds/Resetter.h\
         mds/ScatterLock.h\
         mds/Server.h\

@@ -38,7 +38,6 @@ class PerfCounters;
 
 class MDS;
 class Session;
-class Migrator;
 
 class Message;
 class Session;
@@ -375,7 +374,6 @@ public:
   
 
   friend class Locker;
-  friend class Migrator;
   friend class MDBalancer;
 
 
@@ -395,12 +393,6 @@ public:
 
   void purge_prealloc_ino(inodeno_t ino, Context *fin);
 
-
-
-public:
-
-  // subsystems
-  Migrator *migrator;
 
  public:
   MDCache(MDS *m);
@@ -437,7 +429,6 @@ public:
   void shutdown_start();
   void shutdown_check();
   bool shutdown_pass();
-  bool shutdown_export_caps();
   bool shutdown();                    // clear cache (ie at shutodwn)
 
   bool did_shutdown_log_cap;
