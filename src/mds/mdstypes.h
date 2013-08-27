@@ -597,10 +597,6 @@ struct inode_t {
     backtrace_version = version;
   }
 
-  void add_parent(dirstripe_t stripe, int who, const string &name) {
-    parents.push_back(inoparent_t(stripe, who, name));
-  }
-
   void add_old_pool(int64_t l) {
     backtrace_version = version;
     old_pools.push_back(l);
