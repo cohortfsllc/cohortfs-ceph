@@ -121,7 +121,6 @@ class CDirStripe : public MDSCacheObject {
 
   friend class MDBalancer;
   friend class MDCache;
-  friend class Migrator;
 
  public:
   CDirStripe(CDirPlacement *placement, stripeid_t stripe, int auth);

@@ -25,7 +25,6 @@
 #include "Locker.h"
 #include "MDLog.h"
 #include "MDBalancer.h"
-#include "Migrator.h"
 
 #include "AnchorClient.h"
 #include "SnapClient.h"
@@ -135,7 +134,6 @@ MDCache::MDCache(MDS *m)
     nonauth_stripes(member_offset(CDirStripe, item_nonauth))
 {
   mds = m;
-  migrator = new Migrator(mds, this);
   root = NULL;
   myin = NULL;
 
@@ -173,7 +171,6 @@ MDCache::MDCache(MDS *m)
 
 MDCache::~MDCache() 
 {
-  delete migrator;
   //delete renamer;
 }
 
