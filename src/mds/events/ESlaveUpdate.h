@@ -89,29 +89,6 @@ struct rename_rollback {
 };
 WRITE_CLASS_ENCODER(rename_rollback)
 
-// mkdir rollback just needs to remove the stripes it created
-struct mkdir_rollback {
-  metareqid_t reqid;
-  inodeno_t ino;
-  vector<stripeid_t> stripes;
-
-  void encode(bufferlist &bl) const {
-    __u8 struct_v = 1;
-    ::encode(struct_v, bl);
-    ::encode(reqid, bl);
-    ::encode(ino, bl);
-    ::encode(stripes, bl);
-  }
-  void decode(bufferlist::iterator &bl) {
-    __u8 struct_v;
-    ::decode(struct_v, bl);
-    ::decode(reqid, bl);
-    ::decode(ino, bl);
-    ::decode(stripes, bl);
-  }
-};
-WRITE_CLASS_ENCODER(mkdir_rollback)
-
 
 class ESlaveUpdate : public LogEvent {
 public:
@@ -122,7 +99,6 @@ public:
   const static int LINK = 1;
   const static int RENAME = 2;
   const static int RMDIR = 3;
-  const static int MKDIR = 4;
 
   /*
    * we journal a rollback metablob that contains the unmodified metadata
@@ -154,7 +130,6 @@ public:
     if (origop == LINK) out << " link";
     else if (origop == RENAME) out << " rename";
     else if (origop == RMDIR) out << " rmdir";
-    else if (origop == MKDIR) out << " mkdir";
     out << " " << reqid;
     out << " for mds." << master;
     out << commit;

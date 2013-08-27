@@ -967,8 +967,6 @@ void MDS::handle_mds_map(MMDSMap *m)
         active_start();
       } else if (is_any_replay()) {
         replay_start();
-      } else if (is_restripe()) {
-        restripe_start();
       } else if (is_resolve()) {
         resolve_start();
       } else if (is_reconnect()) {
@@ -988,15 +986,6 @@ void MDS::handle_mds_map(MMDSMap *m)
     }
   }
 
-  // RESTRIPE
-  if (is_restripe() && whoami == mdsmap->get_root()
-      && !oldmap->is_restriping() && mdsmap->is_restriping()) {
-    set<int> nodes;
-    mdsmap->get_mds_set(nodes, MDSMap::STATE_RESTRIPE);
-    bool replay = last_state != MDSMap::STATE_CREATING;
-    mdcache->get_container()->restripe(nodes, replay);
-  }
-  
   // RESOLVE
   // is someone else newly resolving?
   if (is_resolve() || is_rejoin() || is_clientreplay() || is_active() || is_stopping()) {
@@ -1182,12 +1171,7 @@ void MDS::creating_done()
 {
   dout(1)<< "creating_done" << dendl;
 
-  if (mdsmap->get_num_in_mds() == 1 &&
-      mdsmap->get_num_failed_mds() == 0) { // just me!
-    request_state(MDSMap::STATE_ACTIVE);
-  } else {
-    request_state(MDSMap::STATE_RESTRIPE);
-  }
+  request_state(MDSMap::STATE_ACTIVE);
 }
 
 
@@ -1434,8 +1418,8 @@ void MDS::replay_done()
     dout(2) << "i am alone, moving to state reconnect" << dendl;      
     request_state(MDSMap::STATE_RECONNECT);
   } else {
-    dout(2) << "i am not alone, moving to state restripe" << dendl;
-    request_state(MDSMap::STATE_RESTRIPE);
+    dout(2) << "i am not alone, moving to state resolve" << dendl;
+    request_state(MDSMap::STATE_RESOLVE);
   }
 }
 
@@ -1445,22 +1429,6 @@ void MDS::reopen_log()
   mdcache->rollback_uncommitted_fragments();
 }
 
-
-void MDS::restripe_start()
-{
-  dout(1) << "restripe_start" << dendl;
-
-  reopen_log();
-}
-void MDS::restripe_done()
-{
-  dout(1) << "restripe_done" << dendl;
-
-  if (last_state == MDSMap::STATE_CREATING)
-    request_state(MDSMap::STATE_ACTIVE);
-  else
-    request_state(MDSMap::STATE_RESOLVE);
-}
 
 void MDS::resolve_start()
 {
@@ -1537,7 +1505,7 @@ void MDS::active_start()
 {
   dout(1) << "active_start" << dendl;
 
-  if (last_state == MDSMap::STATE_RESTRIPE)
+  if (last_state == MDSMap::STATE_CREATING)
     mdcache->open_root();
 
   mdcache->clean_open_file_lists();

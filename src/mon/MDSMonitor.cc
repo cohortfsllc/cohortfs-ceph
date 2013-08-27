@@ -1154,7 +1154,6 @@ void MDSMonitor::tick()
 	  si.state = info.state;
 	  break;
 	case MDSMap::STATE_REPLAY:
-	case MDSMap::STATE_RESTRIPE:
 	case MDSMap::STATE_RESOLVE:
 	case MDSMap::STATE_RECONNECT:
 	case MDSMap::STATE_REJOIN:

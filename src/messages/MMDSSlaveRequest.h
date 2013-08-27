@@ -31,9 +31,6 @@ class MMDSSlaveRequest : public Message {
   static const int OP_UNLINKPREP =   5;
   static const int OP_LINKPREPACK = -4;
 
-  static const int OP_MKDIR =        6;
-  static const int OP_MKDIRACK =    -6;
-
   static const int OP_RENAMEPREP =     7;
   static const int OP_RENAMEPREPACK = -7;
 
@@ -64,9 +61,6 @@ class MMDSSlaveRequest : public Message {
     case OP_LINKPREP: return "link_prep";
     case OP_LINKPREPACK: return "link_prep_ack";
     case OP_UNLINKPREP: return "unlink_prep";
-
-    case OP_MKDIR: return "mkdir";
-    case OP_MKDIRACK: return "mkdir_ack";
 
     case OP_RENAMEPREP: return "rename_prep";
     case OP_RENAMEPREPACK: return "rename_prep_ack";

@@ -81,11 +81,12 @@ class CDirStripe : public MDSCacheObject {
   static const unsigned STATE_OPEN          = (1<<0); // has been loaded from disk
   static const unsigned STATE_FROZEN        = (1<<1);
   static const unsigned STATE_FREEZING      = (1<<2);
-  static const unsigned STATE_COMMITTING    = (1<<3);
-  static const unsigned STATE_DIRTYFRAGSTAT = (1<<4);
-  static const unsigned STATE_DIRTYRSTAT    = (1<<5);
-  static const unsigned STATE_UNLINKED      = (1<<6);
-  static const unsigned STATE_PURGING       = (1<<7);
+  static const unsigned STATE_FETCHING      = (1<<3);
+  static const unsigned STATE_COMMITTING    = (1<<4);
+  static const unsigned STATE_DIRTYFRAGSTAT = (1<<5);
+  static const unsigned STATE_DIRTYRSTAT    = (1<<6);
+  static const unsigned STATE_UNLINKED      = (1<<7);
+  static const unsigned STATE_PURGING       = (1<<8);
 
   // these state bits are preserved by an import/export
   static const unsigned MASK_STATE_EXPORTED =
@@ -321,6 +322,8 @@ class CDirStripe : public MDSCacheObject {
 
   // -- fetch / commit --
  private:
+  list<Context*> fetch_waiters;
+
   object_t get_ondisk_object() {
     uint64_t bno = get_stripeid();
     return file_object_t(ds.ino, bno << 32);

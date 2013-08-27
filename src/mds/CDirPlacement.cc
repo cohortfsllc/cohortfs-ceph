@@ -54,6 +54,8 @@ ostream& operator<<(ostream& out, CDirPlacement& dir)
     out << "." << dir.get_replica_nonce();
   }
 
+  out << " stripes=" << dir.get_stripe_auth();
+
   out << " state=" << dir.get_state();
   if (dir.state_test(CDirPlacement::STATE_FROZEN)) out << "|frozen";
 
@@ -147,7 +149,8 @@ CDirStripe* CDirPlacement::get_or_open_stripe(stripeid_t stripeid)
   CDirStripe *stripe = get_stripe(stripeid);
   if (!stripe) {
     // create it.
-    stripe = new CDirStripe(this, stripeid, get_stripe_auth(stripeid));
+    int auth = get_stripe_auth(stripeid);
+    stripe = new CDirStripe(this, stripeid, auth);
     add_stripe(stripe);
   }
   return stripe;
