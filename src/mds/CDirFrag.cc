@@ -1053,12 +1053,6 @@ void CDirFrag::_fetched(bufferlist &bl, const string& want_dn)
   if (get_version() == 0) {
     assert(!state_test(STATE_COMMITTING));
     committing_version = committed_version = version = got_version;
-
-    if (state_test(STATE_REJOINUNDEF)) {
-      assert(cache->mds->is_rejoin());
-      state_clear(STATE_REJOINUNDEF);
-      cache->opened_undef_dirfrag(this);
-    }
   }
 
   // purge stale snaps?

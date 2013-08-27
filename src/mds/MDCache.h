@@ -312,9 +312,7 @@ protected:
   map<inodeno_t,filepath> cap_import_paths;
   set<inodeno_t> cap_imports_missing;
   
-  set<CInode*> rejoin_undef_inodes;
   set<CInode*> rejoin_potential_updated_scatterlocks;
-  set<CDirFrag*>   rejoin_undef_dirfrags;
 
   vector<CInode*> rejoin_recover_q, rejoin_check_q;
   list<Context*> rejoin_waiters;
@@ -330,7 +328,6 @@ protected:
   void handle_cache_rejoin_missing(MMDSCacheRejoin *m);
   void handle_cache_rejoin_full(MMDSCacheRejoin *m);
   void rejoin_send_acks();
-  void rejoin_trim_undef_inodes();
 public:
   void rejoin_gather_finish();
   void rejoin_send_rejoins();
@@ -373,11 +370,6 @@ public:
   void do_delayed_cap_imports();
   void check_realm_past_parents(SnapRealm *realm);
   void open_snap_parents();
-
-  void open_undef_dirfrags();
-  void opened_undef_dirfrag(CDirFrag *dir) {
-    rejoin_undef_dirfrags.erase(dir);
-  }
 
   void reissue_all_caps();
   

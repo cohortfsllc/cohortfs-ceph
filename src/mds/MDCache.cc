@@ -2854,7 +2854,6 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
     if (rejoin_gather.empty() &&     // make sure we've gotten our FULL inodes, too.
 	rejoin_ack_gather.empty()) {
       do_delayed_cap_imports();
-      open_undef_dirfrags();
     } else {
       dout(7) << "still need rejoin from (" << rejoin_gather << ")"
 	      << ", rejoin_ack from (" << rejoin_ack_gather << ")" << dendl;
@@ -2925,16 +2924,6 @@ void MDCache::handle_cache_rejoin_full(MMDSCacheRejoin *full)
     assert(in);
     bufferlist::iterator pp = basebl.begin();
     in->_decode_base(pp);
-
-    set<CInode*>::iterator q = rejoin_undef_inodes.find(in);
-    if (q != rejoin_undef_inodes.end()) {
-      CInode *in = *q;
-      in->state_clear(CInode::STATE_REJOINUNDEF);
-      dout(10) << " got full " << *in << dendl;
-      rejoin_undef_inodes.erase(q);
-    } else {
-      dout(10) << " had full " << *in << dendl;
-    }
   }
 
   // done?
@@ -2947,79 +2936,10 @@ void MDCache::handle_cache_rejoin_full(MMDSCacheRejoin *full)
   }
 }
 
-
-
-/**
- * rejoin_trim_undef_inodes() -- remove REJOINUNDEF flagged inodes
- *
- * FIXME: wait, can this actually happen?  a survivor should generate cache trim
- * messages that clean these guys up...
- */
-void MDCache::rejoin_trim_undef_inodes()
-{
-  dout(10) << "rejoin_trim_undef_inodes" << dendl;
-
-  while (!rejoin_undef_inodes.empty()) {
-    set<CInode*>::iterator p = rejoin_undef_inodes.begin();
-    CInode *in = *p;
-    rejoin_undef_inodes.erase(p);
-
-    in->clear_replica_map();
-    
-    if (in->is_dir()) {
-      CDirPlacement *placement = in->get_placement();
-      // close stripes
-      list<CDirStripe*> dsls;
-      placement->get_stripes(dsls);
-      for (list<CDirStripe*>::iterator s = dsls.begin(); s != dsls.end(); ++s) {
-        CDirStripe *stripe = *s;
-        stripe->clear_replica_map();
-
-        // close dirfrags
-        list<CDirFrag*> dfls;
-        stripe->get_dirfrags(dfls);
-        for (list<CDirFrag*>::iterator p = dfls.begin();
-             p != dfls.end();
-             ++p) {
-          CDirFrag *dir = *p;
-          dir->clear_replica_map();
-
-          for (CDirFrag::map_t::iterator p = dir->begin(); p != dir->end(); ++p) {
-            CDentry *dn = p->second;
-            dn->clear_replica_map();
-
-            dout(10) << " trimming " << *dn << dendl;
-            dir->remove_dentry(dn);
-          }
-
-          dout(10) << " trimming " << *dir << dendl;
-          stripe->close_dirfrag(dir->get_frag());
-        }
-        placement->close_stripe(stripe);
-      }
-      in->close_placement();
-    }
-    
-    CDentry *dn = in->get_parent_dn();
-    if (dn) {
-      dn->clear_replica_map();
-      dout(10) << " trimming " << *dn << dendl;
-      dn->dir->remove_dentry(dn);
-    } else {
-      dout(10) << " trimming " << *in << dendl;
-      remove_inode(in);
-    }
-  }
-
-  assert(rejoin_undef_inodes.empty());
-}
-
 void MDCache::rejoin_gather_finish() 
 {
   dout(10) << "rejoin_gather_finish" << dendl;
   assert(mds->is_rejoin());
-
-  rejoin_trim_undef_inodes();
 
   // fetch paths?
   //  do this before ack, since some inodes we may have already gotten
@@ -3043,10 +2963,8 @@ void MDCache::rejoin_gather_finish()
 
   // did we already get our acks too?
   // this happens when the rejoin_gather has to wait on a MISSING/FULL exchange.
-  if (rejoin_ack_gather.empty()) {
+  if (rejoin_ack_gather.empty())
     do_delayed_cap_imports();
-    open_undef_dirfrags();
-  }
 }
 
 void MDCache::process_imported_caps()
@@ -3217,14 +3135,6 @@ void MDCache::do_delayed_cap_imports()
   }    
 }
 
-struct C_MDC_OpenUndefDirfragsFinish : public Context {
-  MDCache *cache;
-  C_MDC_OpenUndefDirfragsFinish(MDCache *c) : cache(c) {}
-  void finish(int r) {
-    cache->open_undef_dirfrags();
-  }
-};
-
 struct C_MDC_StartParentStats : public Context {
   ParentStats *stats;
   C_MDC_StartParentStats(ParentStats *stats) : stats(stats) {}
@@ -3232,31 +3142,6 @@ struct C_MDC_StartParentStats : public Context {
     stats->propagate_unaccounted();
   }
 };
-
-void MDCache::open_undef_dirfrags()
-{
-  dout(10) << "open_undef_dirfrags " << rejoin_undef_dirfrags.size() << " dirfrags" << dendl;
-  
-  C_GatherBuilder gather(g_ceph_context);
-  for (set<CDirFrag*>::iterator p = rejoin_undef_dirfrags.begin();
-       p != rejoin_undef_dirfrags.end();
-       p++) {
-    CDirFrag *dir = *p;
-    dir->fetch(gather.new_sub());
-  }
-
-  if (gather.has_subs()) {
-    gather.set_finisher(new C_MDC_OpenUndefDirfragsFinish(this));
-    gather.activate();
-  }
-  else {
-    start_files_to_recover(rejoin_recover_q, rejoin_check_q);
-    // start parent stats when root opens
-    wait_for_open(new C_MDC_StartParentStats(&parentstats));
-    mds->queue_waiters(rejoin_waiters);
-    mds->rejoin_done();
-  }
-}
 
 void MDCache::finish_snaprealm_reconnect(client_t client, SnapRealm *realm, snapid_t seq)
 {
