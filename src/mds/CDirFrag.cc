@@ -1063,12 +1063,6 @@ void CDirFrag::_fetched(bufferlist &bl, const string& want_dn)
   if (get_version() == 0) {
     assert(!state_test(STATE_COMMITTING));
     committing_version = committed_version = version = got_version;
-
-    if (state_test(STATE_REJOINUNDEF)) {
-      assert(cache->mds->is_rejoin());
-      state_clear(STATE_REJOINUNDEF);
-      cache->opened_undef_dirfrag(this);
-    }
   }
 
   // purge stale snaps?
@@ -1176,47 +1170,31 @@ void CDirFrag::_fetched(bufferlist &bl, const string& want_dn)
       if (stale)
 	continue;
 
-      bool undef_inode = false;
       if (dn) {
 	CInode *in = dn->get_linkage()->get_inode();
-	if (in) {
+	if (in)
 	  dout(12) << "_fetched  had dentry " << *dn << dendl;
-	  if (in->state_test(CInode::STATE_REJOINUNDEF)) {
-	    assert(cache->mds->is_rejoin());
-	    assert(in->vino() == vinodeno_t(inode.ino, last));
-	    in->state_clear(CInode::STATE_REJOINUNDEF);
-	    cache->opened_undef_inode(in);
-	    undef_inode = true;
-	  }
-	} else
+	else
 	  dout(12) << "_fetched  had NEG dentry " << *dn << dendl;
-      }
-
-      if (!dn || undef_inode) {
+      } else {
 	// add inode
 	CInode *in = cache->get_inode(inode.ino, last);
-	if (!in || undef_inode) {
-	  if (undef_inode && in)
-	    in->first = first;
-	  else
-	    in = new CInode(cache, cache->mds->get_nodeid(), first, last);
-	  
+	if (!in) {
+          in = new CInode(cache, cache->mds->get_nodeid(), first, last);
 	  in->inode = inode;
 	  // symlink?
 	  if (in->is_symlink()) 
 	    in->symlink = symlink;
           if (in->is_dir())
             in->set_stripe_auth(stripe_auth);
-	  
+
 	  in->xattrs.swap(xattrs);
 	  in->old_inodes.swap(old_inodes);
 	  if (snaps)
 	    in->purge_stale_snap_data(*snaps);
 
-	  if (!undef_inode) {
-	    cache->add_inode( in ); // add
-	    dn = add_primary_dentry(dname, in, first, last); // link
-	  }
+          cache->add_inode(in); // add
+          dn = add_primary_dentry(dname, in, first, last); // link
 	  dout(12) << "_fetched  got " << *dn << " " << *in << dendl;
 
 	  //in->hack_accessed = false;
