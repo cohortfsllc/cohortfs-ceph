@@ -337,9 +337,7 @@ protected:
   set<inodeno_t> cap_imports_missing;
   int cap_imports_num_opening;
   
-  set<CInode*> rejoin_undef_inodes;
   set<CInode*> rejoin_potential_updated_scatterlocks;
-  set<CDirFrag*>   rejoin_undef_dirfrags;
   map<int, set<CInode*> > rejoin_unlinked_inodes;
 
   vector<CInode*> rejoin_recover_q, rejoin_check_q;
@@ -358,7 +356,6 @@ protected:
   void handle_cache_rejoin_missing(MMDSCacheRejoin *m);
   void handle_cache_rejoin_full(MMDSCacheRejoin *m);
   void rejoin_send_acks();
-  void rejoin_trim_undef_inodes();
   void maybe_send_pending_rejoins() {
     if (rejoins_pending)
       rejoin_send_rejoins();
@@ -410,14 +407,6 @@ public:
   void do_delayed_cap_imports();
   void check_realm_past_parents(SnapRealm *realm);
   void open_snap_parents();
-
-  bool open_undef_inodes_dirfrags();
-  void opened_undef_dirfrag(CDirFrag *dir) {
-    rejoin_undef_dirfrags.erase(dir);
-  }
-  void opened_undef_inode(CInode *in) {
-    rejoin_undef_inodes.erase(in);
-  }
 
   void reissue_all_caps();
   
@@ -704,7 +693,6 @@ protected:
   void _open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err);
   void _open_ino_parent_opened(inodeno_t ino, int ret);
   void _open_ino_traverse_dir(inodeno_t ino, open_ino_info_t& info, int err);
-  void _open_ino_fetch_dir(inodeno_t ino, MMDSOpenIno *m, CDirFrag *dir);
   Context* _open_ino_get_waiter(inodeno_t ino, MMDSOpenIno *m);
   int open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
 			    vector<inode_backpointer_t>& ancestors,

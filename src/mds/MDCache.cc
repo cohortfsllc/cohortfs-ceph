@@ -3254,7 +3254,6 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
     if (rejoin_gather.empty() &&     // make sure we've gotten our FULL inodes, too.
 	rejoin_ack_gather.empty()) {
       do_delayed_cap_imports();
-      open_undef_inodes_dirfrags();
     } else {
       dout(7) << "still need rejoin from (" << rejoin_gather << ")"
 	      << ", rejoin_ack from (" << rejoin_ack_gather << ")" << dendl;
@@ -3325,16 +3324,6 @@ void MDCache::handle_cache_rejoin_full(MMDSCacheRejoin *full)
     assert(in);
     bufferlist::iterator pp = basebl.begin();
     in->_decode_base(pp);
-
-    set<CInode*>::iterator q = rejoin_undef_inodes.find(in);
-    if (q != rejoin_undef_inodes.end()) {
-      CInode *in = *q;
-      in->state_clear(CInode::STATE_REJOINUNDEF);
-      dout(10) << " got full " << *in << dendl;
-      rejoin_undef_inodes.erase(q);
-    } else {
-      dout(10) << " had full " << *in << dendl;
-    }
   }
 
   // done?
@@ -3345,73 +3334,6 @@ void MDCache::handle_cache_rejoin_full(MMDSCacheRejoin *full)
   } else {
     dout(7) << "still need rejoin from (" << rejoin_gather << ")" << dendl;
   }
-}
-
-
-
-/**
- * rejoin_trim_undef_inodes() -- remove REJOINUNDEF flagged inodes
- *
- * FIXME: wait, can this actually happen?  a survivor should generate cache trim
- * messages that clean these guys up...
- */
-void MDCache::rejoin_trim_undef_inodes()
-{
-  dout(10) << "rejoin_trim_undef_inodes" << dendl;
-
-  while (!rejoin_undef_inodes.empty()) {
-    set<CInode*>::iterator p = rejoin_undef_inodes.begin();
-    CInode *in = *p;
-    rejoin_undef_inodes.erase(p);
-
-    in->clear_replica_map();
-    
-    if (in->is_dir()) {
-      CDirPlacement *placement = in->get_placement();
-      // close stripes
-      list<CDirStripe*> dsls;
-      placement->get_stripes(dsls);
-      for (list<CDirStripe*>::iterator s = dsls.begin(); s != dsls.end(); ++s) {
-        CDirStripe *stripe = *s;
-        stripe->clear_replica_map();
-
-        // close dirfrags
-        list<CDirFrag*> dfls;
-        stripe->get_dirfrags(dfls);
-        for (list<CDirFrag*>::iterator p = dfls.begin();
-             p != dfls.end();
-             ++p) {
-          CDirFrag *dir = *p;
-          dir->clear_replica_map();
-
-          for (CDirFrag::map_t::iterator p = dir->begin(); p != dir->end(); ++p) {
-            CDentry *dn = p->second;
-            dn->clear_replica_map();
-
-            dout(10) << " trimming " << *dn << dendl;
-            dir->remove_dentry(dn);
-          }
-
-          dout(10) << " trimming " << *dir << dendl;
-          stripe->close_dirfrag(dir->get_frag());
-        }
-        placement->close_stripe(stripe);
-      }
-      in->close_placement();
-    }
-    
-    CDentry *dn = in->get_parent_dn();
-    if (dn) {
-      dn->clear_replica_map();
-      dout(10) << " trimming " << *dn << dendl;
-      dn->dir->remove_dentry(dn);
-    } else {
-      dout(10) << " trimming " << *in << dendl;
-      remove_inode(in);
-    }
-  }
-
-  assert(rejoin_undef_inodes.empty());
 }
 
 struct C_MDC_StartParentStats : public Context {
@@ -3426,9 +3348,6 @@ void MDCache::rejoin_gather_finish()
 {
   dout(10) << "rejoin_gather_finish" << dendl;
   assert(mds->is_rejoin());
-
-  if (open_undef_inodes_dirfrags())
-    return;
 
   if (process_imported_caps())
     return;
@@ -3743,53 +3662,6 @@ void MDCache::do_delayed_cap_imports()
 	mds->locker->issue_caps(in);
     }
   }    
-}
-
-bool MDCache::open_undef_inodes_dirfrags()
-{
-  dout(10) << "open_undef_inodes_dirfrags "
-	   << rejoin_undef_inodes.size() << " inodes "
-	   << rejoin_undef_dirfrags.size() << " dirfrags" << dendl;
-
-  set<CDirFrag*> fetch_queue = rejoin_undef_dirfrags;
-
-  for (set<CInode*>::iterator p = rejoin_undef_inodes.begin();
-       p != rejoin_undef_inodes.end();
-       ++p) {
-    CInode *in = *p;
-    assert(!in->is_base());
-    fetch_queue.insert(in->get_parent_dir());
-  }
-
-  if (fetch_queue.empty())
-    return false;
-
-  C_GatherBuilder gather(g_ceph_context, new C_MDC_RejoinGatherFinish(this));
-  for (set<CDirFrag*>::iterator p = fetch_queue.begin();
-       p != fetch_queue.end();
-       ++p) {
-    CDirFrag *dir = *p;
-    CDirStripe *stripe = dir->get_stripe();
-    if (stripe->state_test(CDirStripe::STATE_REJOINUNDEF))
-      continue;
-    if (dir->state_test(CDirFrag::STATE_REJOINUNDEF) && dir->get_frag() == frag_t()) {
-      rejoin_undef_dirfrags.erase(dir);
-      dir->state_clear(CDirFrag::STATE_REJOINUNDEF);
-      stripe->force_dirfrags();
-      list<CDirFrag*> ls;
-      stripe->get_dirfrags(ls);
-      for (list<CDirFrag*>::iterator q = ls.begin(); q != ls.end(); ++q) {
-	rejoin_undef_dirfrags.insert(*q);
-	(*q)->state_set(CDirFrag::STATE_REJOINUNDEF);
-	(*q)->fetch(gather.new_sub());
-      }
-      continue;
-    }
-    dir->fetch(gather.new_sub());
-  }
-  assert(gather.has_subs());
-  gather.activate();
-  return true;
 }
 
 void MDCache::finish_snaprealm_reconnect(client_t client, SnapRealm *realm, snapid_t seq)
@@ -5942,29 +5814,6 @@ void MDCache::_open_ino_traverse_dir(inodeno_t ino, open_ino_info_t& info, int r
   do_open_ino(ino, info, ret);
 }
 
-void MDCache::_open_ino_fetch_dir(inodeno_t ino, MMDSOpenIno *m, CDirFrag *dir)
-{
-  if (dir->state_test(CDirFrag::STATE_REJOINUNDEF) && dir->get_frag() == frag_t()) {
-    rejoin_undef_dirfrags.erase(dir);
-    dir->state_clear(CDirFrag::STATE_REJOINUNDEF);
-
-    CDirStripe *stripe = dir->get_stripe();
-    stripe->force_dirfrags();
-    list<CDirFrag*> ls;
-    stripe->get_dirfrags(ls);
-
-    C_GatherBuilder gather(g_ceph_context, _open_ino_get_waiter(ino, m));
-    for (list<CDirFrag*>::iterator p = ls.begin(); p != ls.end(); ++p) {
-      rejoin_undef_dirfrags.insert(*p);
-      (*p)->state_set(CDirFrag::STATE_REJOINUNDEF);
-      (*p)->fetch(gather.new_sub());
-    }
-    assert(gather.has_subs());
-    gather.activate();
-  } else
-    dir->fetch(_open_ino_get_waiter(ino, m));
-}
-
 int MDCache::open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
 				   vector<inode_backpointer_t>& ancestors,
 				   bool discover, bool want_xlocked, int *hint)
@@ -5980,15 +5829,6 @@ int MDCache::open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
 	return 1;
       }
       continue;
-    }
-
-    if (diri->state_test(CInode::STATE_REJOINUNDEF)) {
-      CDirFrag *dir = diri->get_parent_dir();
-      while (dir->state_test(CDirFrag::STATE_REJOINUNDEF) &&
-	     dir->get_inode()->state_test(CInode::STATE_REJOINUNDEF))
-	dir = dir->get_inode()->get_parent_dir();
-      _open_ino_fetch_dir(ino, m, dir);
-      return 1;
     }
 
     if (!diri->is_dir()) {
@@ -6044,17 +5884,10 @@ int MDCache::open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
           CDentry *dn = dir->lookup(name);
           CDentry::linkage_t *dnl = dn ? dn->get_linkage() : NULL;
 
-          if (dnl && dnl->is_primary() &&
-              dnl->get_inode()->state_test(CInode::STATE_REJOINUNDEF)) {
-            dout(10) << " fetching undef " << *dnl->get_inode() << dendl;
-            _open_ino_fetch_dir(ino, m, dir);
-            return 1;
-          }
-
           if (!dnl && !dir->is_complete() &&
               (!dir->has_bloom() || dir->is_in_bloom(name))) {
             dout(10) << " fetching incomplete " << *dir << dendl;
-            _open_ino_fetch_dir(ino, m, dir);
+            dir->fetch(_open_ino_get_waiter(ino, m));
             return 1;
           }
 

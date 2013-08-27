@@ -1303,7 +1303,6 @@ class MDSCacheObject {
   const static int STATE_DIRTY     = (1<<29);
   const static int STATE_NOTIFYREF = (1<<28); // notify dropping ref drop through _put()
   const static int STATE_REJOINING = (1<<27);  // replica has not joined w/ primary copy
-  const static int STATE_REJOINUNDEF = (1<<26);  // contents undefined.
 
 
   // -- wait --
