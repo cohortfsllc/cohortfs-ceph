@@ -53,6 +53,7 @@
 #include "messages/MOSDOpReply.h"
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDMap.h"
+#include "messages/MVolMap.h"
 #include "messages/MBackfillReserve.h"
 #include "messages/MRecoveryReserve.h"
 #include "messages/MOSDAlive.h"
@@ -2781,6 +2782,11 @@ void OSD::_dispatch(Message *m)
     handle_osd_map(static_cast<MOSDMap*>(m));
     break;
 
+    // Volume Map
+  case CEPH_MSG_VOL_MAP:
+    handle_vol_map(static_cast<MVolMap*>(m));
+    break;
+
     // osd
   case CEPH_MSG_SHUTDOWN:
     session = static_cast<Session *>(m->get_connection()->get_priv());
@@ -3282,6 +3288,33 @@ void OSD::handle_osd_map(MOSDMap *m)
     shutdown();
 
   m->put();
+}
+
+void OSD::handle_vol_map(MVolMap *m)
+{
+  assert(osd_lock.is_locked());
+
+  Session *session = static_cast<Session *>(m->get_connection()->get_priv());
+  /* We probably won't have other OSDs be sending us map updates since
+     those only change in response to a monitor command/activity. */
+  if (session && !(session->entity_name.is_mon())) {
+    /* This person has no business telling us about the volume map. */
+    m->put();
+    session->put();
+    return;
+  }
+  if (session)
+    session->put();
+
+  epoch_t epoch = m->epoch;
+
+  if (epoch <= volmap->get_epoch()) {
+    m->put();
+    return;
+  }
+
+  volmap->decode(m->encoded);
+  return;
 }
 
 void OSD::check_osdmap_features()
