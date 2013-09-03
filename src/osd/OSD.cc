@@ -134,9 +134,6 @@ OSDService::OSDService(OSD *osd) :
   pre_publish_lock("OSDService::pre_publish_lock"),
   sched_scrub_lock("OSDService::sched_scrub_lock"), scrubs_pending(0),
   scrubs_active(0),
-  watch_lock("OSD::watch_lock"),
-  watch_timer(osd->client_messenger->cct, watch_lock),
-  next_notif_id(0),
   backfill_request_lock("OSD::backfill_request_lock"),
   backfill_request_timer(g_ceph_context, backfill_request_lock, false),
   last_tid(0),
@@ -1171,9 +1168,6 @@ int OSD::shutdown_super()
   test_ops_hook = NULL;
 
   osd_lock.Unlock();
-  service->watch_lock.Lock();
-  service->watch_timer.shutdown();
-  service->watch_lock.Unlock();
 
   heartbeat_lock.Lock();
   heartbeat_stop = true;

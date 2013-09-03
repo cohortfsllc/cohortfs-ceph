@@ -8,6 +8,7 @@ bool CohortOSDService::test_ops_sub(ObjectStore *store,
 				    std::string args,
 				    ostream &ss)
 {
+  /* Maybe come back to this later, it's not really important. */
   return false;
 }
 

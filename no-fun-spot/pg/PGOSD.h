@@ -203,6 +203,16 @@ public:
   Mutex pg_temp_lock;
   map<pg_t, vector<int> > pg_temp_wanted;
 
+  // -- Watch --
+  Mutex watch_lock;
+  SafeTimer watch_timer;
+  uint64_t next_notif_id;
+  uint64_t get_next_id(epoch_t cur_epoch) {
+    Mutex::Locker l(watch_lock);
+    return (((uint64_t)cur_epoch) << 32) | ((uint64_t)(next_notif_id++));
+  }
+
+
   // -- backfill_reservation --
   Finisher reserver_finisher;
   AsyncReserver<pg_t> local_reserver;

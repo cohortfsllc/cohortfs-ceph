@@ -64,6 +64,9 @@ const PGOSDPlaceSystem placeSystem(PGPlaceSystem::systemName,
 PGOSDService::PGOSDService(PGOSD *osd) :
   OSDService(osd),
   pg_recovery_stats(osd->pg_recovery_stats),
+  watch_lock("PGOSD::watch_lock"),
+  watch_timer(osd->client_messenger->cct, watch_lock),
+  next_notif_id(0),
   op_wq(osd->op_wq),
   peering_wq(osd->peering_wq),
   recovery_wq(osd->recovery_wq),
@@ -164,10 +167,9 @@ void PGOSDService::send_pg_temp()
 void PGOSDService::shutdown_sub()
 {
   reserver_finisher.stop();
-  {
-    Mutex::Locker l(watch_lock);
-    watch_timer.shutdown();
-  }
+  service->watch_lock.Lock();
+  service->watch_timer.shutdown();
+  service->watch_lock.Unlock();
   {
     Mutex::Locker l(backfill_request_lock);
     backfill_request_timer.shutdown();
