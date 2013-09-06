@@ -464,6 +464,8 @@ bool ParentStats::update_inode_stats(CInode *in, Projected &projected,
   inode_t *pi = projected.get(in, mut);
   pi->dirstat.add(frag.delta);
   pi->dirstat.version++;
+  if (pi->mtime < pi->dirstat.mtime)
+    pi->mtime = pi->dirstat.mtime;
 
   // frag info does not propagate recursively
   supdate.ino = pi->ino;
