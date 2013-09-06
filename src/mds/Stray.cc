@@ -255,7 +255,7 @@ void Stray::purge(CDirStripe *stripe)
 
   stripe->state_set(CDirStripe::STATE_PURGING);
 
-  C_GatherBuilder gather(g_ceph_context, new C_StrayPurged(this, stripe));
+  C_GatherBuilder gather(g_ceph_context);
 
   const object_locator_t oloc(mds->mdsmap->get_metadata_pool());
   const SnapContext nullsnap;
