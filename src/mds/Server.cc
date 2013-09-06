@@ -4703,11 +4703,13 @@ bool _discover_all_stripes(MDRequest *mdr, CDirPlacement *placement)
   // discover any stripes that aren't already cached
   for (size_t i = 0; i < placement->get_stripe_count(); ++i) {
     CDirStripe *stripe = placement->get_stripe(i);
-    if (!stripe)
+    if (stripe)
+      mdr->pin(stripe);
+    else if (placement->get_stripe_auth(i) == mdcache->mds->get_nodeid())
+      placement->get_or_open_stripe(i)->fetch(gather.new_sub());
+    else
       mdcache->discover_dir_stripe(placement, i, gather.new_sub(),
                                    placement->get_stripe_auth(i));
-    else
-      mdr->pin(stripe);
   }
 
   if (!gather.has_subs())

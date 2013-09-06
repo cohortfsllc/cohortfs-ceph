@@ -177,6 +177,7 @@ void CDirPlacement::close_stripe(CDirStripe *stripe)
     stripe->mark_clean();
 
   stripe->item_stray.remove_myself();
+  stripe->item_new.remove_myself();
 
   assert(stripe->get_num_ref() == 0);
   stripes.erase(s);
