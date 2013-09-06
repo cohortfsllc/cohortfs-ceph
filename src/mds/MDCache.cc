@@ -2736,6 +2736,14 @@ void MDCache::handle_cache_rejoin_strong(MMDSCacheRejoin *strong)
   }
 }
 
+struct C_MDC_StartParentStats : public Context {
+  ParentStats *stats;
+  C_MDC_StartParentStats(ParentStats *stats) : stats(stats) {}
+  void finish(int r) {
+    stats->propagate_unaccounted();
+  }
+};
+
 /* This functions DOES NOT put the passed message before returning */
 void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
 {
@@ -2848,12 +2856,17 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
   assert(rejoin_ack_gather.count(from));
   rejoin_ack_gather.erase(from);
   if (mds->is_rejoin()) {
-    if (rejoin_gather.empty() &&     // make sure we've gotten our FULL inodes, too.
-	rejoin_ack_gather.empty()) {
-      do_delayed_cap_imports();
-    } else {
+    if (!rejoin_gather.empty() || !rejoin_ack_gather.empty()) {
+        // make sure we've gotten our FULL inodes, too.
       dout(7) << "still need rejoin from (" << rejoin_gather << ")"
 	      << ", rejoin_ack from (" << rejoin_ack_gather << ")" << dendl;
+    } else {
+      do_delayed_cap_imports();
+      start_files_to_recover(rejoin_recover_q, rejoin_check_q);
+      // start parent stats when root opens
+      wait_for_open(new C_MDC_StartParentStats(&parentstats));
+      mds->queue_waiters(rejoin_waiters);
+      mds->rejoin_done();
     }
   } else {
     // survivor.
@@ -3131,14 +3144,6 @@ void MDCache::do_delayed_cap_imports()
     }
   }    
 }
-
-struct C_MDC_StartParentStats : public Context {
-  ParentStats *stats;
-  C_MDC_StartParentStats(ParentStats *stats) : stats(stats) {}
-  void finish(int r) {
-    stats->propagate_unaccounted();
-  }
-};
 
 void MDCache::finish_snaprealm_reconnect(client_t client, SnapRealm *realm, snapid_t seq)
 {
