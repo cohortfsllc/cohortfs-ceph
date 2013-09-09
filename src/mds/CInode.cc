@@ -1855,33 +1855,33 @@ void CInode::encode_cap_message(MClientCaps *m, Capability *cap)
   inode_t *oi = &inode;
   inode_t *pi = get_projected_inode();
   inode_t *i = (pfile|pauth|plink|pxattr) ? pi : oi;
-  i->ctime.encode_timeval(&m->head.ctime);
+  i->ctime.encode_timeval(&m->inode.ctime);
   
   dout(20) << "encode_cap_message pfile " << pfile
 	   << " pauth " << pauth << " plink " << plink << " pxattr " << pxattr
 	   << " ctime " << i->ctime << dendl;
 
   i = pfile ? pi:oi;
-  m->head.layout = i->layout;
-  m->head.size = i->size;
-  m->head.truncate_seq = i->truncate_seq;
-  m->head.truncate_size = i->truncate_size;
-  i->mtime.encode_timeval(&m->head.mtime);
-  i->atime.encode_timeval(&m->head.atime);
-  m->head.time_warp_seq = i->time_warp_seq;
+  m->inode.layout = i->layout;
+  m->inode.size = i->size;
+  m->inode.truncate_seq = i->truncate_seq;
+  m->inode.truncate_size = i->truncate_size;
+  i->mtime.encode_timeval(&m->inode.mtime);
+  i->atime.encode_timeval(&m->inode.atime);
+  m->inode.time_warp_seq = i->time_warp_seq;
 
   // max_size is min of projected, actual.
   uint64_t oldms = oi->client_ranges.count(client) ? oi->client_ranges[client].range.last : 0;
   uint64_t newms = pi->client_ranges.count(client) ? pi->client_ranges[client].range.last : 0;
-  m->head.max_size = MIN(oldms, newms);
+  m->inode.max_size = MIN(oldms, newms);
 
   i = pauth ? pi:oi;
-  m->head.mode = i->mode;
-  m->head.uid = i->uid;
-  m->head.gid = i->gid;
+  m->inode.mode = i->mode;
+  m->inode.uid = i->uid;
+  m->inode.gid = i->gid;
 
   i = plink ? pi:oi;
-  m->head.nlink = i->nlink;
+  m->inode.nlink = i->nlink;
 
   i = pxattr ? pi:oi;
   map<string,bufferptr> *ix = pxattr ? get_projected_xattrs() : &xattrs;
@@ -1889,7 +1889,7 @@ void CInode::encode_cap_message(MClientCaps *m, Capability *cap)
       i->xattr_version > cap->client_xattr_version) {
     dout(10) << "    including xattrs v " << i->xattr_version << dendl;
     ::encode(*ix, m->xattrbl);
-    m->head.xattr_version = i->xattr_version;
+    m->inode.xattr_version = i->xattr_version;
     cap->client_xattr_version = i->xattr_version;
   }
 }

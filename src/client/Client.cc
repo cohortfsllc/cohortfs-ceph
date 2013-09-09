@@ -2164,26 +2164,26 @@ void Client::send_cap(Inode *in, int mds, Cap *cap, int used, int want, int reta
   m->head.issue_seq = cap->issue_seq;
   m->set_tid(flush_tid);
 
-  m->head.uid = in->uid;
-  m->head.gid = in->gid;
-  m->head.mode = in->mode;
+  m->inode.uid = in->uid;
+  m->inode.gid = in->gid;
+  m->inode.mode = in->mode;
   
-  m->head.nlink = in->nlink;
+  m->inode.nlink = in->nlink;
   
   if (flush & CEPH_CAP_XATTR_EXCL) {
     ::encode(in->xattrs, m->xattrbl);
-    m->head.xattr_version = in->xattr_version;
+    m->inode.xattr_version = in->xattr_version;
   }
   
-  m->head.layout = in->layout;
-  m->head.size = in->size;
-  m->head.max_size = in->max_size;
-  m->head.truncate_seq = in->truncate_seq;
-  m->head.truncate_size = in->truncate_size;
-  in->mtime.encode_timeval(&m->head.mtime);
-  in->atime.encode_timeval(&m->head.atime);
-  in->ctime.encode_timeval(&m->head.ctime);
-  m->head.time_warp_seq = in->time_warp_seq;
+  m->inode.layout = in->layout;
+  m->inode.size = in->size;
+  m->inode.max_size = in->max_size;
+  m->inode.truncate_seq = in->truncate_seq;
+  m->inode.truncate_size = in->truncate_size;
+  in->mtime.encode_timeval(&m->inode.mtime);
+  in->atime.encode_timeval(&m->inode.atime);
+  in->ctime.encode_timeval(&m->inode.ctime);
+  m->inode.time_warp_seq = in->time_warp_seq;
     
   in->reported_size = in->size;
   m->set_snap_follows(follows);
@@ -2410,19 +2410,19 @@ void Client::flush_snaps(Inode *in, bool all_again, CapSnap *again)
     m->head.caps = capsnap->issued;
     m->head.dirty = capsnap->dirty;
 
-    m->head.uid = capsnap->uid;
-    m->head.gid = capsnap->gid;
-    m->head.mode = capsnap->mode;
+    m->inode.uid = capsnap->uid;
+    m->inode.gid = capsnap->gid;
+    m->inode.mode = capsnap->mode;
 
-    m->head.size = capsnap->size;
+    m->inode.size = capsnap->size;
 
-    m->head.xattr_version = capsnap->xattr_version;
+    m->inode.xattr_version = capsnap->xattr_version;
     ::encode(capsnap->xattrs, m->xattrbl);
 
-    capsnap->ctime.encode_timeval(&m->head.ctime);
-    capsnap->mtime.encode_timeval(&m->head.mtime);
-    capsnap->atime.encode_timeval(&m->head.atime);
-    m->head.time_warp_seq = capsnap->time_warp_seq;
+    capsnap->ctime.encode_timeval(&m->inode.ctime);
+    capsnap->mtime.encode_timeval(&m->inode.mtime);
+    capsnap->atime.encode_timeval(&m->inode.atime);
+    m->inode.time_warp_seq = capsnap->time_warp_seq;
 
     messenger->send_message(m, mdsmap->get_inst(mds));
   }
@@ -3272,8 +3272,9 @@ void Client::handle_cap_trunc(Inode *in, MClientCaps *m)
   int issued = in->caps_issued(&implemented) | in->caps_dirty();
   issued |= implemented;
   update_inode_file_bits(in, m->get_truncate_seq(), m->get_truncate_size(),
-                         m->get_size(), m->get_time_warp_seq(), m->get_ctime(),
-                         m->get_mtime(), m->get_atime(), issued);
+                         m->get_size(), m->get_time_warp_seq(),
+                         m->get_inode_ctime(), m->get_inode_mtime(),
+                         m->get_inode_atime(), issued);
   m->put();
 }
 
@@ -3363,22 +3364,24 @@ void Client::handle_cap_grant(Inode *in, int mds, Cap *cap, MClientCaps *m)
   issued |= implemented;
 
   if ((issued & CEPH_CAP_AUTH_EXCL) == 0) {
-    in->mode = m->head.mode;
-    in->uid = m->head.uid;
-    in->gid = m->head.gid;
+    in->mode = m->inode.mode;
+    in->uid = m->inode.uid;
+    in->gid = m->inode.gid;
   }
   if ((issued & CEPH_CAP_LINK_EXCL) == 0) {
-    in->nlink = m->head.nlink;
+    in->nlink = m->inode.nlink;
   }
   if ((issued & CEPH_CAP_XATTR_EXCL) == 0 &&
       m->xattrbl.length() &&
-      m->head.xattr_version > in->xattr_version) {
+      m->inode.xattr_version > in->xattr_version) {
     bufferlist::iterator p = m->xattrbl.begin();
     ::decode(in->xattrs, p);
-    in->xattr_version = m->head.xattr_version;
+    in->xattr_version = m->inode.xattr_version;
   }
-  update_inode_file_bits(in, m->get_truncate_seq(), m->get_truncate_size(), m->get_size(),
-			 m->get_time_warp_seq(), m->get_ctime(), m->get_mtime(), m->get_atime(), issued);
+  update_inode_file_bits(in, m->get_truncate_seq(), m->get_truncate_size(),
+                         m->get_size(), m->get_time_warp_seq(),
+                         m->get_inode_ctime(), m->get_inode_mtime(),
+                         m->get_inode_atime(), issued);
 
   // max_size
   if (cap == in->auth_cap &&

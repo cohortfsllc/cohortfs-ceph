@@ -641,7 +641,9 @@ struct ceph_mds_caps {
 	__le32 migrate_seq;
 	__le64 snap_follows;
 	__le32 snap_trace_len;
+} __attribute__ ((packed));
 
+struct ceph_mds_caps_inode {
 	/* authlock */
 	__le32 uid, gid, mode;
 

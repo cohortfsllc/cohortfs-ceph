@@ -2657,7 +2657,7 @@ void Locker::_do_snap_update(CInode *in, snapid_t snap, int dirty, snapid_t foll
   map<string,bufferptr> *px = 0;
   if ((dirty & CEPH_CAP_XATTR_EXCL) && 
       m->xattrbl.length() &&
-      m->head.xattr_version > in->get_projected_inode()->xattr_version)
+      m->inode.xattr_version > in->get_projected_inode()->xattr_version)
     xattrs = true;
 
   old_inode_t *oi = 0;
@@ -2680,9 +2680,9 @@ void Locker::_do_snap_update(CInode *in, snapid_t snap, int dirty, snapid_t foll
 
   // xattr
   if (px) {
-    dout(7) << " xattrs v" << pi->xattr_version << " -> " << m->head.xattr_version
+    dout(7) << " xattrs v" << pi->xattr_version << " -> " << m->inode.xattr_version
 	    << " len " << m->xattrbl.length() << dendl;
-    pi->xattr_version = m->head.xattr_version;
+    pi->xattr_version = m->inode.xattr_version;
     bufferlist::iterator p = m->xattrbl.begin();
     ::decode(*px, p);
   }
@@ -2747,23 +2747,23 @@ void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *
   }
   // auth
   if (dirty & CEPH_CAP_AUTH_EXCL) {
-    if (m->head.uid != pi->uid) {
+    if (m->inode.uid != pi->uid) {
       dout(7) << "  uid " << pi->uid
-	      << " -> " << m->head.uid
+	      << " -> " << m->inode.uid
 	      << " for " << *in << dendl;
-      pi->uid = m->head.uid;
+      pi->uid = m->inode.uid;
     }
-    if (m->head.gid != pi->gid) {
+    if (m->inode.gid != pi->gid) {
       dout(7) << "  gid " << pi->gid
-	      << " -> " << m->head.gid
+	      << " -> " << m->inode.gid
 	      << " for " << *in << dendl;
-      pi->gid = m->head.gid;
+      pi->gid = m->inode.gid;
     }
-    if (m->head.mode != pi->mode) {
+    if (m->inode.mode != pi->mode) {
       dout(7) << "  mode " << oct << pi->mode
-	      << " -> " << m->head.mode << dec
+	      << " -> " << m->inode.mode << dec
 	      << " for " << *in << dendl;
-      pi->mode = m->head.mode;
+      pi->mode = m->inode.mode;
     }
   }
 
@@ -2878,7 +2878,7 @@ bool Locker::_do_cap_update(CInode *in, Capability *cap,
   map<string,bufferptr> *px = 0;
   if ((dirty & CEPH_CAP_XATTR_EXCL) && 
       m->xattrbl.length() &&
-      m->head.xattr_version > in->get_projected_inode()->xattr_version)
+      m->inode.xattr_version > in->get_projected_inode()->xattr_version)
     px = new map<string,bufferptr>;
 
   inode_t *pi = in->project_inode(px);
@@ -2909,8 +2909,8 @@ bool Locker::_do_cap_update(CInode *in, Capability *cap,
 
   // xattr
   if (px) {
-    dout(7) << " xattrs v" << pi->xattr_version << " -> " << m->head.xattr_version << dendl;
-    pi->xattr_version = m->head.xattr_version;
+    dout(7) << " xattrs v" << pi->xattr_version << " -> " << m->inode.xattr_version << dendl;
+    pi->xattr_version = m->inode.xattr_version;
     bufferlist::iterator p = m->xattrbl.begin();
     ::decode(*px, p);
 

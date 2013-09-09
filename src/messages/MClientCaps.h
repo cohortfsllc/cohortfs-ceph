@@ -26,64 +26,61 @@ class MClientCaps : public Message {
 
  public:
   struct ceph_mds_caps head;
+  struct ceph_mds_caps_inode inode;
   bufferlist snapbl;
   bufferlist xattrbl;
   bufferlist flockbl;
 
-  int      get_caps() { return head.caps; }
-  int      get_wanted() { return head.wanted; }
-  int      get_dirty() { return head.dirty; }
-  ceph_seq_t get_seq() { return head.seq; }
-  ceph_seq_t get_issue_seq() { return head.issue_seq; }
-  ceph_seq_t get_mseq() { return head.migrate_seq; }
+  int get_caps() const { return head.caps; }
+  int get_wanted() const { return head.wanted; }
+  int get_dirty() const { return head.dirty; }
+  ceph_seq_t get_seq() const { return head.seq; }
+  ceph_seq_t get_issue_seq() const { return head.issue_seq; }
+  ceph_seq_t get_mseq() const { return head.migrate_seq; }
 
-  inodeno_t get_ino() { return inodeno_t(head.ino); }
-  inodeno_t get_realm() { return inodeno_t(head.realm); }
-  uint64_t get_cap_id() { return head.cap_id; }
+  inodeno_t get_ino() const { return inodeno_t(head.ino); }
+  inodeno_t get_realm() const { return inodeno_t(head.realm); }
+  uint64_t get_cap_id() const { return head.cap_id; }
 
-  uint64_t get_size() { return head.size;  }
-  uint64_t get_max_size() { return head.max_size;  }
-  __u32 get_truncate_seq() { return head.truncate_seq; }
-  uint64_t get_truncate_size() { return head.truncate_size; }
-  utime_t get_ctime() { return utime_t(head.ctime); }
-  utime_t get_mtime() { return utime_t(head.mtime); }
-  utime_t get_atime() { return utime_t(head.atime); }
-  __u32 get_time_warp_seq() { return head.time_warp_seq; }
+  int get_migrate_seq() const { return head.migrate_seq; }
+  int get_op() const { return head.op; }
 
-  ceph_file_layout& get_layout() { return head.layout; }
-
-  int       get_migrate_seq() { return head.migrate_seq; }
-  int       get_op() { return head.op; }
-
-  uint64_t get_client_tid() { return get_tid(); }
+  uint64_t get_client_tid() const { return get_tid(); }
   void set_client_tid(uint64_t s) { set_tid(s); }
 
-  snapid_t get_snap_follows() { return snapid_t(head.snap_follows); }
+  snapid_t get_snap_follows() const { return snapid_t(head.snap_follows); }
   void set_snap_follows(snapid_t s) { head.snap_follows = s; }
 
   void set_caps(int c) { head.caps = c; }
   void set_wanted(int w) { head.wanted = w; }
 
-  void set_max_size(uint64_t ms) { head.max_size = ms; }
-
   void set_migrate_seq(unsigned m) { head.migrate_seq = m; }
   void set_op(int o) { head.op = o; }
 
-  void set_size(loff_t s) { head.size = s; }
-  void set_mtime(const utime_t &t) { t.encode_timeval(&head.mtime); }
-  void set_atime(const utime_t &t) { t.encode_timeval(&head.atime); }
+
+  // inode
+
+  uint64_t get_size() const { return inode.size; }
+  uint64_t get_max_size() const { return inode.max_size;  }
+  __u32 get_truncate_seq() const { return inode.truncate_seq; }
+  uint64_t get_truncate_size() const { return inode.truncate_size; }
+  utime_t get_ctime() const { return utime_t(inode.ctime); }
+  utime_t get_mtime() const { return utime_t(inode.mtime); }
+  utime_t get_atime() const { return utime_t(inode.atime); }
+  __u32 get_time_warp_seq() const { return inode.time_warp_seq; }
+
+  ceph_file_layout& get_layout() { return inode.layout; }
+
+  void set_size(loff_t s) { inode.size = s; }
+  void set_max_size(uint64_t ms) { inode.max_size = ms; }
+  void set_inode_mtime(const utime_t &t) { t.encode_timeval(&inode.mtime); }
+  void set_inode_atime(const utime_t &t) { t.encode_timeval(&inode.atime); }
+
 
   MClientCaps()
-    : Message(CEPH_MSG_CLIENT_CAPS, HEAD_VERSION, COMPAT_VERSION) { }
-  MClientCaps(int op,
-	      inodeno_t ino,
-	      inodeno_t realm,
-	      uint64_t id,
-	      long seq,
-	      int caps,
-	      int wanted,
-	      int dirty,
-	      int mseq)
+    : Message(CEPH_MSG_CLIENT_CAPS, HEAD_VERSION, COMPAT_VERSION) {}
+  MClientCaps(int op, inodeno_t ino, inodeno_t realm, uint64_t id,
+	      long seq, int caps, int wanted, int dirty, int mseq)
     : Message(CEPH_MSG_CLIENT_CAPS, HEAD_VERSION, COMPAT_VERSION) {
     memset(&head, 0, sizeof(head));
     head.op = op;
@@ -96,9 +93,7 @@ class MClientCaps : public Message {
     head.dirty = dirty;
     head.migrate_seq = mseq;
   }
-  MClientCaps(int op,
-	      inodeno_t ino, inodeno_t realm,
-	      uint64_t id, int mseq)
+  MClientCaps(int op, inodeno_t ino, inodeno_t realm, uint64_t id, int mseq)
     : Message(CEPH_MSG_CLIENT_CAPS, HEAD_VERSION) {
     memset(&head, 0, sizeof(head));
     head.op = op;
@@ -113,9 +108,9 @@ private:
 public:
   const char *get_type_name() const { return "Cfcap";}
   void print(ostream& out) const {
-    out << "client_caps(" << ceph_cap_op_name(head.op)
-	<< " ino " << inodeno_t(head.ino)
-	<< " " << head.cap_id
+    out << "client_caps(" << ceph_cap_op_name(head.op);
+    out << " ino " << inodeno_t(head.ino);
+    out << " " << head.cap_id
 	<< " seq " << head.seq;
     if (get_tid())
       out << " tid " << get_tid();
@@ -126,27 +121,25 @@ public:
     if (head.migrate_seq)
       out << " mseq " << head.migrate_seq;
 
-    out << " size " << head.size << "/" << head.max_size;
-    if (head.truncate_seq)
-      out << " ts " << head.truncate_seq;
-    out << " mtime " << utime_t(head.mtime);
-    if (head.time_warp_seq)
-      out << " tws " << head.time_warp_seq;
-
-    if (head.xattr_version)
-      out << " xattrs(v=" << head.xattr_version << " l=" << xattrbl.length() << ")";
-
+    out << " size " << inode.size << "/" << inode.max_size;
+    if (inode.truncate_seq)
+      out << " ts " << inode.truncate_seq;
+    out << " mtime " << utime_t(inode.mtime);
+    if (inode.time_warp_seq)
+      out << " tws " << inode.time_warp_seq;
+    if (inode.xattr_version)
+      out << " xattrs(v=" << inode.xattr_version << " l=" << xattrbl.length() << ")";
     out << ")";
   }
   
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(head, p);
-    ::decode_nohead(head.snap_trace_len, snapbl, p);
-
-    assert(middle.length() == head.xattr_len);
-    if (head.xattr_len)
+    ::decode(inode, p);
+    assert(middle.length() == inode.xattr_len);
+    if (inode.xattr_len)
       xattrbl = middle;
+    ::decode_nohead(head.snap_trace_len, snapbl, p);
 
     // conditionally decode flock metadata
     if (header.version >= 2)
@@ -154,8 +147,12 @@ public:
   }
   void encode_payload(uint64_t features) {
     head.snap_trace_len = snapbl.length();
-    head.xattr_len = xattrbl.length();
     ::encode(head, payload);
+    if (is_inode()) {
+      inode.xattr_len = xattrbl.length();
+      ::encode(inode, payload);
+    } else
+      ::encode(stripe, payload);
     ::encode_nohead(snapbl, payload);
 
     middle = xattrbl;
