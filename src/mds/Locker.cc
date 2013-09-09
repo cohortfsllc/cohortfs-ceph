@@ -2710,9 +2710,9 @@ void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *
 {
   // file
   if (dirty & (CEPH_CAP_FILE_EXCL|CEPH_CAP_FILE_WR)) {
-    utime_t atime = m->get_atime();
-    utime_t mtime = m->get_mtime();
-    utime_t ctime = m->get_ctime();
+    utime_t atime = m->get_inode_atime();
+    utime_t mtime = m->get_inode_mtime();
+    utime_t ctime = m->get_inode_ctime();
     uint64_t size = m->get_size();
     
     if (((dirty & CEPH_CAP_FILE_WR) && mtime > pi->mtime) ||

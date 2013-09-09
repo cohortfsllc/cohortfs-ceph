@@ -629,12 +629,15 @@ enum {
 
 extern const char *ceph_cap_op_name(int op);
 
+#define CEPH_CAP_OBJECT_INODE ((__le64)-1)
+
 /*
  * caps message, used for capability callbacks, acks, requests, etc.
  */
 struct ceph_mds_caps {
 	__le32 op;                  /* CEPH_CAP_OP_* */
 	__le64 ino, realm;
+  __le64 stripeid;            /* stripe index, or -1 for inode cap */
 	__le64 cap_id;
 	__le32 seq, issue_seq;
 	__le32 caps, wanted, dirty; /* latest issued/wanted/dirty */
