@@ -665,6 +665,12 @@ struct ceph_mds_caps_inode {
 	__le32 time_warp_seq;
 } __attribute__ ((packed));
 
+struct ceph_mds_caps_stripe {
+  /* linklock */
+  __le32 nfiles, nsubdirs;
+	struct ceph_timespec mtime;
+} __attribute__ ((packed));
+
 /* cap release msg head */
 struct ceph_mds_cap_release {
 	__le32 num;                /* number of cap_items that follow */

@@ -27,6 +27,7 @@ class MClientCaps : public Message {
  public:
   struct ceph_mds_caps head;
   struct ceph_mds_caps_inode inode;
+  struct ceph_mds_caps_stripe stripe;
   bufferlist snapbl;
   bufferlist xattrbl;
   bufferlist flockbl;
@@ -58,6 +59,7 @@ class MClientCaps : public Message {
   void set_op(int o) { head.op = o; }
 
   bool is_inode() const { return head.stripeid == CEPH_CAP_OBJECT_INODE; }
+  bool is_stripe() const { return head.stripeid != CEPH_CAP_OBJECT_INODE; }
 
   // inode
 
@@ -76,6 +78,13 @@ class MClientCaps : public Message {
   void set_max_size(uint64_t ms) { inode.max_size = ms; }
   void set_inode_mtime(const utime_t &t) { t.encode_timeval(&inode.mtime); }
   void set_inode_atime(const utime_t &t) { t.encode_timeval(&inode.atime); }
+
+  // stripe
+
+  stripeid_t get_stripeid() const { return stripeid_t(head.stripeid); }
+  utime_t get_stripe_mtime() const { return utime_t(stripe.mtime); }
+  uint64_t get_stripe_nfiles() const { return stripe.nfiles; }
+  uint64_t get_stripe_nsubdirs() const { return stripe.nsubdirs; }
 
 
   MClientCaps()
@@ -136,6 +145,10 @@ public:
         out << " tws " << inode.time_warp_seq;
       if (inode.xattr_version)
         out << " xattrs(v=" << inode.xattr_version << " l=" << xattrbl.length() << ")";
+    } else { // stripe
+      out << " files " << stripe.nfiles
+          << " subdirs " << stripe.nsubdirs
+          << " mtime " << utime_t(stripe.mtime);
     }
     out << ")";
   }
@@ -148,7 +161,8 @@ public:
       assert(middle.length() == inode.xattr_len);
       if (inode.xattr_len)
         xattrbl = middle;
-    }
+    } else
+      ::decode(stripe, p);
     ::decode_nohead(head.snap_trace_len, snapbl, p);
 
     // conditionally decode flock metadata
