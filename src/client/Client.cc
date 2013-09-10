@@ -3494,8 +3494,8 @@ void Client::handle_cap_trunc(MetaSession *session, Inode *in, MClientCaps *m)
   issued |= implemented;
   update_inode_file_bits(in, m->get_truncate_seq(), m->get_truncate_size(),
                          m->get_size(), m->get_time_warp_seq(),
-                         m->get_ctime(), m->get_mtime(),
-                         m->get_atime(), issued);
+                         m->get_inode_ctime(), m->get_inode_mtime(),
+                         m->get_inode_atime(), issued);
   m->put();
 }
 
@@ -3645,8 +3645,8 @@ void Client::handle_cap_grant(MetaSession *session, Inode *in, Cap *cap, MClient
   }
   update_inode_file_bits(in, m->get_truncate_seq(), m->get_truncate_size(),
                          m->get_size(), m->get_time_warp_seq(),
-                         m->get_ctime(), m->get_mtime(),
-                         m->get_atime(), issued);
+                         m->get_inode_ctime(), m->get_inode_mtime(),
+                         m->get_inode_atime(), issued);
 
   // max_size
   if (cap == in->auth_cap &&
