@@ -1399,6 +1399,7 @@ libclient_la_SOURCES = \
 	client/Client.cc \
 	client/Inode.cc \
 	client/Dentry.cc \
+	client/DirStripe.cc \
 	client/MetaRequest.cc \
 	client/SnapRealm.cc \
 	client/MetaSession.cc \
@@ -1447,7 +1448,7 @@ noinst_HEADERS = \
 	bash_completion/radosgw-admin\
         client/Client.h\
 	client/Dentry.h\
-	client/Dir.h\
+	client/DirStripe.h\
 	client/Fh.h\
 	client/Inode.h\
 	client/MetaRequest.h\

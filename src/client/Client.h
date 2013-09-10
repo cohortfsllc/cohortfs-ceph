@@ -89,9 +89,9 @@ enum {
    
  - Dentries live in an LRU loop.  they get expired based on last access.
       see include/lru.h.  items can be bumped to "mid" or "top" of list, etc.
- - Inode has ref count for each Fh, Dir, or Dentry that points to it.
+ - Inode has ref count for each Fh, DirStripe, or Dentry that points to it.
  - when Inode ref goes to 0, it's expired.
- - when Dir is empty, it's removed (and it's Inode ref--)
+ - when DirStripes are empty, they're removed (and it's Inode ref--)
  
 */
 
@@ -106,7 +106,7 @@ struct DirEntry {
 
 class Inode;
 struct Cap;
-class Dir;
+class DirStripe;
 class Dentry;
 class SnapRealm;
 class Fh;
@@ -332,7 +332,7 @@ protected:
 
   // decrease inode ref.  delete if dangling.
   void put_inode(Inode *in, int n=1);
-  void close_dir(Dir *dir);
+  void close_stripe(DirStripe *stripe);
 
   friend class C_Client_PutInode; // calls put_inode()
   friend class C_Client_CacheInvalidate;  // calls ino_invalidate_cb
@@ -345,7 +345,7 @@ protected:
    * leave dn set to default NULL unless you're trying to add
    * a new inode to a pre-created Dentry
    */
-  Dentry* link(Dir *dir, const string& name, Inode *in, Dentry *dn);
+  Dentry* link(DirStripe *stripe, const string& name, Inode *in, Dentry *dn);
   void unlink(Dentry *dn, bool keepdir);
 
   // path traversal for high-level interface
@@ -461,7 +461,7 @@ protected:
 			      uint64_t time_warp_seq, utime_t ctime, utime_t mtime, utime_t atime,
 			      int issued);
   Inode *add_update_inode(InodeStat *st, utime_t ttl, int mds);
-  Dentry *insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dlease, 
+  Dentry *insert_dentry_inode(DirStripe *stripe, const string& dname, LeaseStat *dlease, 
 			      Inode *in, utime_t from, int mds, bool set_offset,
 			      Dentry *old_dentry = NULL);
   void update_dentry_lease(Dentry *dn, LeaseStat *dlease, utime_t from, int mds);

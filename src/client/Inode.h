@@ -15,7 +15,7 @@
 
 class MetaSession;
 class Dentry;
-class Dir;
+class DirStripe;
 class SnapRealm;
 class Inode;
 
@@ -158,12 +158,12 @@ class Inode {
 
   int       _ref;      // ref count. 1 for each dentry, fh that links to me.
   int       ll_ref;   // separate ref count for ll client
-  Dir       *dir;     // if i'm a dir.
   set<Dentry*> dn_set;      // if i'm linked to a dentry.
   string    symlink;  // symlink content, if it's a symlink
   map<string,bufferptr> xattrs;
 
   vector<int> stripe_auth;
+  vector<DirStripe*> stripes; // if i'm a dir.
 
   list<Cond*>       waitfor_caps;
   list<Cond*>       waitfor_commit;
@@ -214,8 +214,7 @@ class Inode {
       snaprealm(0), snaprealm_item(this), snapdir_parent(0),
       oset((void *)this, newlayout->fl_pg_pool, ino),
       reported_size(0), wanted_max_size(0), requested_max_size(0),
-      _ref(0), ll_ref(0), 
-      dir(0), dn_set()
+      _ref(0), ll_ref(0)
   {
     memset(&dir_layout, 0, sizeof(dir_layout));
     memset(&layout, 0, sizeof(layout));
@@ -254,7 +253,8 @@ class Inode {
   int caps_dirty();
 
   bool have_valid_size();
-  Dir *open_dir();
+  stripeid_t pick_stripe(const string &dname);
+  DirStripe *open_stripe(stripeid_t stripeid);
 
   void dump(Formatter *f) const;
 };

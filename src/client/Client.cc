@@ -72,7 +72,7 @@ using namespace std;
 #include "Client.h"
 #include "Inode.h"
 #include "Dentry.h"
-#include "Dir.h"
+#include "DirStripe.h"
 #include "SnapRealm.h"
 #include "Fh.h"
 #include "MetaSession.h"
@@ -281,19 +281,24 @@ void Client::dump_inode(Formatter *f, Inode *in, set<Inode*>& did, bool disconne
   }
 
   did.insert(in);
-  if (in->dir) {
-    ldout(cct, 1) << "  dir " << in->dir << " size " << in->dir->dentries.size() << dendl;
-    for (hash_map<string, Dentry*>::iterator it = in->dir->dentries.begin();
-         it != in->dir->dentries.end();
-         it++) {
-      ldout(cct, 1) << "   " << in->ino << " dn " << it->first << " " << it->second << " ref " << it->second->ref << dendl;
-      if (f) {
-	f->open_object_section("dentry");
-	it->second->dump(f);
-	f->close_section();
-      }	
-      if (it->second->inode)
-	dump_inode(f, it->second->inode, did, false);
+  for (vector<DirStripe*>::iterator s = in->stripes.begin();
+       s != in->stripes.end();
+       ++s) {
+    DirStripe *stripe = *s;
+    if (stripe) {
+      ldout(cct, 1) << "  stripe " << *stripe << dendl;
+      for (dn_hashmap::iterator it = stripe->dentries.begin();
+           it != stripe->dentries.end();
+           it++) {
+        ldout(cct, 1) << "   " << stripe->ds << " dn " << it->first << " " << it->second << " ref " << it->second->ref << dendl;
+        if (f) {
+          f->open_object_section("dentry");
+          it->second->dump(f);
+          f->close_section();
+        }	
+        if (it->second->inode)
+          dump_inode(f, it->second->inode, did, false);
+      }
     }
   }
 }
@@ -464,13 +469,14 @@ void Client::trim_cache()
 
 void Client::trim_dentry(Dentry *dn)
 {
-  ldout(cct, 15) << "trim_dentry unlinking dn " << dn->name 
-		 << " in dir " << hex << dn->dir->parent_inode->ino 
-		 << dendl;
-  if (dn->dir->parent_inode->flags & I_COMPLETE) {
-    ldout(cct, 10) << " clearing I_COMPLETE on " << *dn->dir->parent_inode << dendl;
-    dn->dir->parent_inode->flags &= ~I_COMPLETE;
-    dn->dir->release_count++;
+  DirStripe *stripe = dn->stripe;
+  Inode *diri = stripe->parent_inode;
+  ldout(cct, 15) << "trim_dentry unlinking dn " << dn->name
+		 << " in stripe " << stripe->ds << dendl;
+  if (diri->flags & I_COMPLETE) {
+    ldout(cct, 10) << " clearing I_COMPLETE on " << *diri << dendl;
+    diri->flags &= ~I_COMPLETE;
+    stripe->release_count++;
   }
   unlink(dn, false);
 }
@@ -647,6 +653,7 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
 
   // copy stripe auth array
   in->stripe_auth = st->stripe_auth;
+  in->stripes.resize(in->stripe_auth.size());
 
   if (in->snapid == CEPH_NOSNAP)
     add_update_cap(in, mds, st->cap.cap_id, st->cap.caps, st->cap.seq, st->cap.mseq, inodeno_t(st->cap.realm), st->cap.flags);
@@ -662,14 +669,19 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
       in->dirstat.nsubdirs == 0) {
     ldout(cct, 10) << " marking I_COMPLETE on empty dir " << *in << dendl;
     in->flags |= I_COMPLETE;
-    if (in->dir) {
-      ldout(cct, 10) << " dir is open on empty dir " << in->ino << " with "
-		     << in->dir->dentry_map.size() << " entries, tearing down" << dendl;
-      while (!in->dir->dentry_map.empty())
-	unlink(in->dir->dentry_map.begin()->second, true);
-      close_dir(in->dir);
+    for (vector<DirStripe*>::iterator s = in->stripes.begin();
+         s != in->stripes.end();
+         ++s) {
+      DirStripe *stripe = *s;
+      if (stripe) {
+        ldout(cct, 10) << " stripe " << *stripe
+            << " is open on empty dir, tearing down" << dendl;
+        while (!stripe->dentry_map.empty())
+          unlink(stripe->dentry_map.begin()->second, true);
+        close_stripe(stripe);
+      }
     }
-  }  
+  }
 
   return in;
 }
@@ -678,18 +690,16 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
 /*
  * insert_dentry_inode - insert + link a single dentry + inode into the metadata cache.
  */
-Dentry *Client::insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dlease, 
+Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname, LeaseStat *dlease, 
 				    Inode *in, utime_t from, int mds, bool set_offset,
 				    Dentry *old_dentry)
 {
-  Dentry *dn = NULL;
-  if (dir->dentries.count(dname))
-    dn = dir->dentries[dname];
-  
+  dn_hashmap::iterator d = stripe->dentries.find(dname);
+  Dentry *dn = d == stripe->dentries.end() ? NULL : d->second;
+ 
   ldout(cct, 12) << "insert_dentry_inode '" << dname << "' vino " << in->vino()
-		 << " in dir " << dir->parent_inode->vino() << " dn " << dn
-		 << dendl;
-  
+      << " in stripe " << stripe->ds << " dn " << dn << dendl;
+ 
   if (dn && dn->inode) {
     if (dn->inode->vino() == in->vino()) {
       touch_dn(dn);
@@ -704,16 +714,16 @@ Dentry *Client::insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dl
       dn = NULL;
     }
   }
-  
+ 
   if (!dn || dn->inode == 0) {
     in->get();
     if (old_dentry)
-      unlink(old_dentry, dir == old_dentry->dir);  // keep dir open if its the same dir
-    dn = link(dir, dname, in, dn);
+      unlink(old_dentry, stripe == old_dentry->stripe); // keep dir open if its the same dir
+    dn = link(stripe, dname, in, dn);
     in->put();
     if (set_offset) {
-      ldout(cct, 15) << " setting dn offset to " << dir->max_offset << dendl;
-      dn->offset = dir->max_offset++;
+      ldout(cct, 15) << " setting dn offset to " << stripe->max_offset << dendl;
+      dn->offset = stripe->max_offset++;
     }
   }
 
@@ -738,7 +748,7 @@ void Client::update_dentry_lease(Dentry *dn, LeaseStat *dlease, utime_t from, in
       dn->lease_gen = mds_sessions[mds]->cap_gen;
     }
   }
-  dn->cap_shared_gen = dn->dir->parent_inode->shared_gen;
+  dn->cap_shared_gen = dn->stripe->parent_inode->shared_gen;
 }
 
 
@@ -763,8 +773,8 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
     }
 
     // only open dir if we're actually adding stuff to it!
-    Dir *dir = diri->open_dir();
-    assert(dir);
+    DirStripe *stripe = diri->open_stripe(request->readdir_stripe);
+    assert(stripe);
 
     // dirstat
     __u32 numdn;
@@ -780,9 +790,7 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
     request->readdir_end = end;
     request->readdir_num = numdn;
 
-    map<string,Dentry*>::iterator pd = dir->dentry_map.upper_bound(request->readdir_start);
-
-    stripeid_t stripe = request->readdir_stripe;
+    dn_map::iterator pd = stripe->dentry_map.upper_bound(request->readdir_start);
 
     string dname;
     LeaseStat dlease;
@@ -794,12 +802,9 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
       ldout(cct, 15) << "" << i << ": '" << dname << "'" << dendl;
 
       // remove any skipped names
-      while (pd != dir->dentry_map.end() && pd->first < dname) {
-        __u32 dnhash = ceph_str_hash(diri->dir_layout.dl_dir_hash,
-                                     pd->first.data(), pd->first.length());
-        stripeid_t dnstripe = dnhash % diri->stripe_auth.size();
-        // do not remove items in earlier frags
-        if (stripe == dnstripe) {
+      while (pd != stripe->dentry_map.end() && pd->first < dname) {
+        // do not remove items in earlier stripes
+        if (request->readdir_stripe == diri->pick_stripe(pd->first)) {
 	  ldout(cct, 15) << "insert_trace  unlink '" << pd->first << "'" << dendl;
 	  Dentry *dn = pd->second;
 	  pd++;
@@ -809,21 +814,21 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
 	}
       }
 
-      if (pd == dir->dentry_map.end())
+      if (pd == stripe->dentry_map.end())
 	ldout(cct, 15) << " pd is at end" << dendl;
       else
 	ldout(cct, 15) << " pd is '" << pd->first << "' dn " << pd->second << dendl;
 
       Inode *in = add_update_inode(&ist, request->sent_stamp, mds);
       Dentry *dn;
-      if (pd != dir->dentry_map.end() &&
+      if (pd != stripe->dentry_map.end() &&
 	  pd->first == dname) {
 	Dentry *olddn = pd->second;
 	if (pd->second->inode != in) {
 	  // replace incorrect dentry
 	  pd++;  // we are about to unlink this guy, move past it.
 	  unlink(olddn, true);
-	  dn = link(dir, dname, in, NULL);
+	  dn = link(stripe, dname, in, NULL);
 	} else {
 	  // keep existing dn
 	  dn = olddn;
@@ -832,7 +837,7 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
 	}
       } else {
 	// new dn
-	dn = link(dir, dname, in, NULL);
+	dn = link(stripe, dname, in, NULL);
       }
       update_dentry_lease(dn, &dlease, request->sent_stamp, mds);
       dn->offset = dir_result_t::make_fpos(request->readdir_stripe,
@@ -848,11 +853,8 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
 
     // remove trailing names
     if (end) {
-      while (pd != dir->dentry_map.end()) {
-        __u32 dnhash = ceph_str_hash(diri->dir_layout.dl_dir_hash,
-                                     pd->first.data(), pd->first.length());
-        stripeid_t dnstripe = dnhash % diri->stripe_auth.size();
-	if (stripe == dnstripe) {
+      while (pd != stripe->dentry_map.end()) {
+	if (request->readdir_stripe == diri->pick_stripe(pd->first)) {
 	  ldout(cct, 15) << "insert_trace  unlink '" << pd->first << "'" << dendl;
 	  Dentry *dn = pd->second;
 	  pd++;
@@ -862,8 +864,8 @@ void Client::insert_readdir_results(MetaRequest *request, int mds, Inode *diri) 
       }
     }
 
-    if (dir->is_empty())
-      close_dir(dir);
+    if (stripe->is_empty())
+      close_stripe(stripe);
   }
 }
 
@@ -919,18 +921,20 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
 
   if (reply->head.is_dentry) {
     Inode *diri = add_update_inode(&dirst, request->sent_stamp, mds);
+    stripeid_t stripeid = diri->pick_stripe(dname);
 
     if (in) {
-      Dir *dir = diri->open_dir();
-      insert_dentry_inode(dir, dname, &dlease, in, request->sent_stamp, mds, true,
+      DirStripe *stripe = diri->open_stripe(stripeid);
+      insert_dentry_inode(stripe, dname, &dlease, in, request->sent_stamp, mds, true,
                           ((request->head.op == CEPH_MDS_OP_RENAME) ?
                                         request->old_dentry : NULL));
     } else {
-      Dentry *dn = NULL;
-      if (diri->dir && diri->dir->dentries.count(dname)) {
-	dn = diri->dir->dentries[dname];
-	if (dn->inode)
-	  unlink(dn, false);
+      assert(stripeid < diri->stripes.size());
+      DirStripe *stripe = diri->stripes[stripeid];
+      if (stripe) {
+        dn_hashmap::iterator d = stripe->dentries.find(dname);
+        if (d != stripe->dentries.end() && d->second->inode)
+          unlink(d->second, false);
       }
     }
   } else if (reply->head.op == CEPH_MDS_OP_LOOKUPSNAP ||
@@ -941,21 +945,23 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
     vino.snapid = CEPH_SNAPDIR;
     assert(inode_map.count(vino));
     Inode *diri = inode_map[vino];
-    
+
     string dname = request->path.last_dentry();
-    
+    stripeid_t stripeid = diri->pick_stripe(dname);
+
     LeaseStat dlease;
     dlease.duration_ms = 0;
 
     if (in) {
-      Dir *dir = diri->open_dir();
-      insert_dentry_inode(dir, dname, &dlease, in, request->sent_stamp, mds, true);
+      DirStripe *stripe = diri->open_stripe(stripeid);
+      insert_dentry_inode(stripe, dname, &dlease, in, request->sent_stamp, mds, true);
     } else {
-      Dentry *dn = NULL;
-      if (diri->dir && diri->dir->dentries.count(dname)) {
-	dn = diri->dir->dentries[dname];
-	if (dn->inode)
-	  unlink(dn, false);
+      assert(stripeid < diri->stripes.size());
+      DirStripe *stripe = diri->stripes[stripeid];
+      if (stripe) {
+        dn_hashmap::iterator d = stripe->dentries.find(dname);
+        if (d != stripe->dentries.end() && d->second->inode)
+          unlink(d->second, false);
       }
     }
   }
@@ -1007,7 +1013,7 @@ int Client::choose_target_mds(MetaRequest *req)
       in = req->dentry->inode;
       ldout(cct, 20) << "choose_target_mds starting with req->dentry inode " << *in << dendl;
     } else {
-      in = req->dentry->dir->parent_inode;
+      in = req->dentry->stripe->parent_inode;
       hash = ceph_str_hash(in->dir_layout.dl_dir_hash,
 			   req->dentry->name.data(),
 			   req->dentry->name.length());
@@ -1026,7 +1032,7 @@ int Client::choose_target_mds(MetaRequest *req)
         /* In most cases there will only be one dentry, so getting it
          * will be the correct action. If there are multiple hard links,
          * I think the MDS should be able to redirect as needed*/
-	in = in->get_first_parent()->dir->parent_inode;
+	in = in->get_first_parent()->stripe->parent_inode;
       else {
         ldout(cct, 10) << "got unlinked inode, can't look at parent" << dendl;
         break;
@@ -1279,8 +1285,8 @@ void Client::encode_dentry_release(Dentry *dn, MetaRequest *req,
   ldout(cct, 20) << "encode_dentry_release enter(dn:"
 	   << dn << ")" << dendl;
   int released = 0;
-  if (dn->dir)
-    released = encode_inode_release(dn->dir->parent_inode, req,
+  if (dn->stripe)
+    released = encode_inode_release(dn->stripe->parent_inode, req,
 				    mds, drop, unless, 1);
   if (released && dn->lease_mds == mds) {
     ldout(cct, 25) << "preemptively releasing dn to mds" << dendl;
@@ -1461,8 +1467,8 @@ MClientRequest* Client::build_client_request(MetaRequest *request)
     else if (request->dentry) {
       if (request->dentry->inode)
 	request->dentry->inode->make_nosnap_relative_path(request->path);
-      else if (request->dentry->dir) {
-	request->dentry->dir->parent_inode->make_nosnap_relative_path(request->path);
+      else if (request->dentry->stripe) {
+	request->dentry->stripe->parent_inode->make_nosnap_relative_path(request->path);
 	request->path.push_dentry(request->dentry->name);
       }
       else ldout(cct, 1) << "Warning -- unable to construct a filepath!"
@@ -1873,15 +1879,25 @@ void Client::handle_lease(MClientLease *m)
   in = inode_map[vino];
 
   if (m->get_mask() & CEPH_LOCK_DN) {
-    if (!in->dir || in->dir->dentries.count(m->dname) == 0) {
-      ldout(cct, 10) << " don't have dir|dentry " << m->get_ino() << "/" << m->dname <<dendl;
+    stripeid_t stripeid = in->pick_stripe(m->dname);
+    DirStripe *stripe = in->stripes[stripeid];
+    if (!stripe) {
+      ldout(cct, 10) << " don't have stripe "
+          << m->get_ino() << ':' << stripeid
+          << " for " << m->dname << dendl;
       goto revoke;
     }
-    Dentry *dn = in->dir->dentries[m->dname];
-    ldout(cct, 10) << " revoked DN lease on " << dn << dendl;
-    dn->lease_mds = -1;
-  } 
-  
+    dn_hashmap::iterator d = stripe->dentries.find(m->dname);
+    if (d == stripe->dentries.end()) {
+      ldout(cct, 10) << " don't have dentry "
+          << m->get_ino() << "/" << m->dname << dendl;
+      goto revoke;
+    }
+
+    ldout(cct, 10) << " revoked DN lease on " << d->second << dendl;
+    d->second->lease_mds = -1;
+  }
+
  revoke:
   messenger->send_message(new MClientLease(CEPH_MDS_LEASE_RELEASE, seq,
 					   m->get_mask(), m->get_ino(), m->get_first(), m->get_last(), m->dname),
@@ -1932,18 +1948,21 @@ void Client::put_inode(Inode *in, int n)
   }
 }
 
-void Client::close_dir(Dir *dir)
+void Client::close_stripe(DirStripe *stripe)
 {
-  Inode *in = dir->parent_inode;
-  ldout(cct, 15) << "close_dir dir " << dir << " on " << in << dendl;
-  assert(dir->is_empty());
-  assert(in->dir == dir);
+  Inode *in = stripe->parent_inode;
+  ldout(cct, 15) << "close_stripe " << *stripe << " on " << *in << dendl;
+  assert(stripe->is_empty());
+
+  vector<DirStripe*>::iterator s = in->stripes.begin() + stripe->ds.stripeid;
+  assert(*s == stripe);
+
   assert(in->dn_set.size() < 2);     // dirs can't be hard-linked
   if (!in->dn_set.empty())
     in->get_first_parent()->put();   // unpin dentry
-  
-  delete in->dir;
-  in->dir = 0;
+ 
+  delete stripe;
+  *s = 0;
   put_inode(in);               // unpin inode
 }
 
@@ -1952,7 +1971,7 @@ void Client::close_dir(Dir *dir)
    * leave dn set to default NULL unless you're trying to add
    * a new inode to a pre-created Dentry
    */
-Dentry* Client::link(Dir *dir, const string& name, Inode *in, Dentry *dn)
+Dentry* Client::link(DirStripe *stripe, const string& name, Inode *in, Dentry *dn)
 {
   if (!dn) {
     // create a new Dentry
@@ -1960,30 +1979,32 @@ Dentry* Client::link(Dir *dir, const string& name, Inode *in, Dentry *dn)
     dn->name = name;
     
     // link to dir
-    dn->dir = dir;
-    dir->dentries[dn->name] = dn;
-    dir->dentry_map[dn->name] = dn;
+    dn->stripe = stripe;
+    stripe->dentries[dn->name] = dn;
+    stripe->dentry_map[dn->name] = dn;
     lru.lru_insert_mid(dn);    // mid or top?
 
-    ldout(cct, 15) << "link dir " << dir->parent_inode << " '" << name << "' to inode " << in
-		   << " dn " << dn << " (new dn)" << dendl;
+    ldout(cct, 15) << "link stripe " << stripe->ds << " '" << name
+        << "' to inode " << in << " dn " << dn << " (new dn)" << dendl;
   } else {
-    ldout(cct, 15) << "link dir " << dir->parent_inode << " '" << name << "' to inode " << in
-		   << " dn " << dn << " (old dn)" << dendl;
+    ldout(cct, 15) << "link stripe " << stripe->ds << " '" << name
+        << "' to inode " << in << " dn " << dn << " (old dn)" << dendl;
   }
 
   if (in) {    // link to inode
     dn->inode = in;
     in->get();
-    if (in->dir)
-      dn->get();  // dir -> dn pin
+    // dn pin for each open stripe
+    for (vector<DirStripe*>::iterator s = in->stripes.begin(); s != in->stripes.end(); ++s)
+      if (*s)
+        dn->get();
 
     assert(in->dn_set.count(dn) == 0);
 
     // only one parent for directories!
     if (in->is_dir() && !in->dn_set.empty()) {
       Dentry *olddn = in->get_first_parent();
-      assert(olddn->dir != dir || olddn->name != name);
+      assert(olddn->stripe != stripe || olddn->name != name);
       unlink(olddn, false);
     }
 
@@ -1998,26 +2019,30 @@ Dentry* Client::link(Dir *dir, const string& name, Inode *in, Dentry *dn)
 void Client::unlink(Dentry *dn, bool keepdir)
 {
   Inode *in = dn->inode;
-  ldout(cct, 15) << "unlink dir " << dn->dir->parent_inode << " '" << dn->name << "' dn " << dn
+  ldout(cct, 15) << "unlink dir " << dn->stripe->parent_inode << " '" << dn->name << "' dn " << dn
 		 << " inode " << dn->inode << dendl;
 
   // unlink from inode
   if (in) {
-    if (in->dir)
-      dn->put();        // dir -> dn pin
+    // dn pin for each open stripe
+    for (vector<DirStripe*>::iterator s = in->stripes.begin(); s != in->stripes.end(); ++s)
+      if (*s)
+        dn->put();
     dn->inode = 0;
-    assert(in->dn_set.count(dn));
-    in->dn_set.erase(dn);
+
+    set<Dentry*>::iterator d = in->dn_set.find(dn);
+    assert(d != in->dn_set.end());
+    in->dn_set.erase(d);
     ldout(cct, 20) << "unlink  inode " << in << " parents now " << in->dn_set << dendl; 
     put_inode(in);
   }
         
   // unlink from dir
-  dn->dir->dentries.erase(dn->name);
-  dn->dir->dentry_map.erase(dn->name);
-  if (dn->dir->is_empty() && !keepdir) 
-    close_dir(dn->dir);
-  dn->dir = 0;
+  dn->stripe->dentries.erase(dn->name);
+  dn->stripe->dentry_map.erase(dn->name);
+  if (dn->stripe->is_empty() && !keepdir) 
+    close_stripe(dn->stripe);
+  dn->stripe = 0;
 
   // delete den
   lru.lru_remove(dn);
@@ -3746,6 +3771,7 @@ int Client::_do_lookup(Inode *dir, const char *name, Inode **target)
 int Client::_lookup(Inode *dir, const string& dname, Inode **target)
 {
   int r = 0;
+  DirStripe *stripe;
 
   if (!dir->is_dir()) {
     r = -ENOTDIR;
@@ -3756,7 +3782,7 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
     if (dir->dn_set.empty())
       r = -ENOENT;
     else
-      *target = dir->get_first_parent()->dir->parent_inode; //dirs can't be hard-linked
+      *target = dir->get_first_parent()->stripe->parent_inode; //dirs can't be hard-linked
     goto done;
   }
 
@@ -3776,9 +3802,9 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
     goto done;
   }
 
-  if (dir->dir &&
-      dir->dir->dentries.count(dname)) {
-    Dentry *dn = dir->dir->dentries[dname];
+  stripe = dir->stripes[dir->pick_stripe(dname)];
+  if (stripe && stripe->dentries.count(dname)) {
+    Dentry *dn = stripe->dentries[dname];
 
     ldout(cct, 20) << "_lookup have dn " << dname << " mds." << dn->lease_mds << " ttl " << dn->lease_ttl
 	     << " seq " << dn->lease_seq
@@ -3833,10 +3859,11 @@ int Client::get_or_create(Inode *dir, const char* name,
 {
   // lookup
   ldout(cct, 20) << "get_or_create " << *dir << " name " << name << dendl;
-  dir->open_dir();
-  if (dir->dir->dentries.count(name)) {
-    Dentry *dn = dir->dir->dentries[name];
-    
+  DirStripe *stripe = dir->open_stripe(dir->pick_stripe(name));
+  dn_hashmap::iterator d = stripe->dentries.find(name);
+  if (d != stripe->dentries.end()) {
+    Dentry *dn = d->second;
+
     // is dn lease valid?
     utime_t now = ceph_clock_now(cct);
     if (dn->inode &&
@@ -3853,7 +3880,7 @@ int Client::get_or_create(Inode *dir, const char* name,
     *pdn = dn;
   } else {
     // otherwise link up a new one
-    *pdn = link(dir->dir, name, NULL, NULL);
+    *pdn = link(stripe, name, NULL, NULL);
   }
 
   // success
@@ -4501,8 +4528,8 @@ int Client::_opendir(Inode *in, dir_result_t **dirpp, int uid, int gid)
     return -ENOTDIR;
   *dirpp = new dir_result_t(in);
   (*dirpp)->set_stripe(0);
-  if (in->dir)
-    (*dirpp)->release_count = in->dir->release_count;
+  if (in->stripes[0])
+    (*dirpp)->release_count = in->stripes[0]->release_count;
   (*dirpp)->start_shared_gen = in->shared_gen;
   ldout(cct, 3) << "_opendir(" << in->ino << ") = " << 0 << " (" << *dirpp << ")" << dendl;
   return 0;
@@ -4694,26 +4721,28 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
   ldout(cct, 10) << "_readdir_cache_cb " << dirp << " on " << dirp->inode->ino
 	   << " at_cache_name " << dirp->at_cache_name << " offset " << hex << dirp->offset << dec
 	   << dendl;
-  Dir *dir = dirp->inode->dir;
 
-  if (!dir) {
-    ldout(cct, 10) << " dir is empty" << dendl;
+  stripeid_t stripeid = dirp->get_stripe();
+  DirStripe *stripe = dirp->inode->stripes[stripeid];
+
+  if (!stripe) {
+    ldout(cct, 10) << " stripe " << stripeid << " is empty" << dendl;
     dirp->set_end();
     return 0;
   }
 
-  map<string,Dentry*>::iterator pd;
+  dn_map::iterator pd;
   if (dirp->at_cache_name.length()) {
-    pd = dir->dentry_map.find(dirp->at_cache_name);
-    if (pd == dir->dentry_map.end())
+    pd = stripe->dentry_map.find(dirp->at_cache_name);
+    if (pd == stripe->dentry_map.end())
       return -EAGAIN;  // weird, i give up
     pd++;
   } else {
-    pd = dir->dentry_map.begin();
+    pd = stripe->dentry_map.begin();
   }
 
   string prev_name;
-  while (pd != dir->dentry_map.end()) {
+  while (pd != stripe->dentry_map.end()) {
     Dentry *dn = pd->second;
     if (dn->inode == NULL) {
       ldout(cct, 15) << " skipping null '" << pd->first << "'" << dendl;
@@ -4728,7 +4757,7 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
 
     uint64_t next_off = dn->offset + 1;
     pd++;
-    if (pd == dir->dentry_map.end())
+    if (pd == stripe->dentry_map.end())
       next_off = dir_result_t::END;
 
     client_lock.Unlock();
@@ -4756,12 +4785,12 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
 {
   Mutex::Locker lock(client_lock);
 
-  stripeid_t stripe = dirp->get_stripe();
+  stripeid_t stripeid = dirp->get_stripe();
   uint32_t off = dirp->get_pos();
 
   Inode *diri = dirp->inode;
 
-  ldout(cct, 10) << "readdir_r_cb " << diri << " stripe " << stripe
+  ldout(cct, 10) << "readdir_r_cb " << diri << " stripe " << stripeid
       << " pos " << hex << off << dec
       << " at_end=" << dirp->at_end() << dendl;
 
@@ -4840,14 +4869,14 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
       int r = _readdir_get_frag(dirp);
       if (r)
 	return r;
-      stripe = dirp->buffer_stripe;
+      stripeid = dirp->buffer_stripe;
     }
 
     ldout(cct, 10) << "off " << off << " this_offset " << hex << dirp->this_offset << dec
-        << " size " << dirp->buffer.size() << " stripe " << stripe << dendl;
+        << " size " << dirp->buffer.size() << " stripe " << stripeid << dendl;
     while (off >= dirp->this_offset &&
 	   off - dirp->this_offset < dirp->buffer.size()) {
-      uint64_t pos = dir_result_t::make_fpos(stripe, off);
+      uint64_t pos = dir_result_t::make_fpos(stripeid, off);
       pair<string,Inode*>& ent = dirp->buffer[off - dirp->this_offset];
 
       int stmask = fill_stat(ent.second, &st);
@@ -4872,23 +4901,22 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
       continue;  // more!
     }
 
-    if (stripe < diri->stripe_auth.size() - 1) {
+    if (stripeid < diri->stripe_auth.size() - 1) {
       // next stripe!
       dirp->next_stripe();
       off = 0;
-      ldout(cct, 10) << " advancing to next stripe: " << stripe
+      ldout(cct, 10) << " advancing to next stripe: " << stripeid
           << " -> " << dirp->get_stripe() << dendl;
-      stripe = dirp->get_stripe();
+      stripeid = dirp->get_stripe();
       continue;
     }
 
-    if (diri->dir &&
-	diri->dir->release_count == dirp->release_count &&
+    DirStripe *stripe = diri->stripes[stripeid];
+    if (stripe && stripe->release_count == dirp->release_count &&
 	diri->shared_gen == dirp->start_shared_gen) {
       ldout(cct, 10) << " marking I_COMPLETE on " << *diri << dendl;
       diri->flags |= I_COMPLETE;
-      if (diri->dir)
-	diri->dir->max_offset = dirp->offset;
+      stripe->max_offset = dirp->offset;
     }
 
     dirp->set_end();
@@ -5927,7 +5955,7 @@ void Client::getcwd(string& dir)
       continue;
     }
     path.push_front_dentry(dn->name);
-    in = dn->dir->parent_inode;
+    in = dn->stripe->parent_inode;
   }
   dir = "/";
   dir += path.get_path();
@@ -6688,7 +6716,8 @@ int Client::ll_mknod(vinodeno_t parent, const char *name, mode_t mode, dev_t rde
   int r = _mknod(diri, name, mode, rdev, uid, gid);
   if (r == 0) {
     string dname(name);
-    Inode *in = diri->dir->dentries[dname]->inode;
+    DirStripe *stripe = diri->open_stripe(diri->pick_stripe(dname));
+    Inode *in = stripe->dentries[dname]->inode;
     fill_stat(in, attr);
     _ll_get(in);
   }
@@ -6846,7 +6875,8 @@ int Client::ll_mkdir(vinodeno_t parent, const char *name, mode_t mode, struct st
   int r = _mkdir(diri, name, mode, uid, gid);
   if (r == 0) {
     string dname(name);
-    Inode *in = diri->dir->dentries[dname]->inode;
+    DirStripe *stripe = diri->open_stripe(diri->pick_stripe(dname));
+    Inode *in = stripe->dentries[dname]->inode;
     fill_stat(in, attr);
     _ll_get(in);
   }
@@ -6908,7 +6938,8 @@ int Client::ll_symlink(vinodeno_t parent, const char *name, const char *value, s
   int r = _symlink(diri, name, value, uid, gid);
   if (r == 0) {
     string dname(name);
-    Inode *in = diri->dir->dentries[dname]->inode;
+    DirStripe *stripe = diri->open_stripe(diri->pick_stripe(dname));
+    Inode *in = stripe->dentries[dname]->inode;
     fill_stat(in, attr);
     _ll_get(in);
   }
@@ -6946,9 +6977,11 @@ int Client::_unlink(Inode *dir, const char *name, int uid, int gid)
 
   res = make_request(req, uid, gid);
   if (res == 0) {
-    if (dir->dir && dir->dir->dentries.count(name)) {
-      Dentry *dn = dir->dir->dentries[name];
-      unlink(dn, false);
+    DirStripe *stripe = dir->stripes[dir->pick_stripe(name)];
+    if (stripe) {
+      dn_hashmap::iterator d = stripe->dentries.find(name);
+      if (d != stripe->dentries.end())
+        unlink(d->second, false);
     }
   }
   ldout(cct, 10) << "unlink result is " << res << dendl;
@@ -7000,12 +7033,20 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
 
   res = make_request(req, uid, gid);
   if (res == 0) {
-    if (dir->dir && dir->dir->dentries.count(name) ) {
-      Dentry *dn = dir->dir->dentries[name];
-      if (dn->inode->dir && dn->inode->dir->is_empty() &&
-          (dn->inode->dn_set.size() == 1))
-	close_dir(dn->inode->dir);  // FIXME: maybe i shoudl proactively hose the whole subtree from cache?
-      unlink(dn, false);
+    DirStripe *stripe = dir->stripes[dir->pick_stripe(name)];
+    if (stripe) {
+      dn_hashmap::iterator d = stripe->dentries.find(name);
+      if (d != stripe->dentries.end()) {
+        Inode *in = d->second->inode;
+        // close stripes
+        for (vector<DirStripe*>::iterator s = in->stripes.begin();
+             s != in->stripes.end(); ++s) {
+          DirStripe *stripe = *s;
+          if (stripe && stripe->is_empty() && in->dn_set.size() == 1)
+            close_stripe(stripe); // FIXME: maybe i shoudl proactively hose the whole subtree from cache?
+        }
+        unlink(d->second, false);
+      }
     }
   }
 

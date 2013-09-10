@@ -3,14 +3,14 @@
 
 #include "include/lru.h"
 
-class Dir;
+class DirStripe;
 class Inode;
 
 class Dentry : public LRUObject {
  public:
   string  name;                      // sort of lame
   //const char *name;
-  Dir     *dir;
+  DirStripe *stripe;
   Inode   *inode;
   int     ref;                       // 1 if there's a dir beneath me.
   uint64_t offset;
@@ -41,7 +41,7 @@ class Dentry : public LRUObject {
 
   void dump(Formatter *f) const;
   
-  Dentry() : dir(0), inode(0), ref(1), offset(0), lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) { }
+  Dentry() : stripe(0), inode(0), ref(1), offset(0), lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) { }
 private:
   ~Dentry() {
     assert(ref == 0);

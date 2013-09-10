@@ -4,7 +4,7 @@
 #include "MetaSession.h"
 #include "Inode.h"
 #include "Dentry.h"
-#include "Dir.h"
+#include "DirStripe.h"
 #include "SnapRealm.h"
 
 ostream& operator<<(ostream &out, Inode &in)
@@ -51,9 +51,10 @@ ostream& operator<<(ostream &out, Inode &in)
 void Inode::make_long_path(filepath& p)
 {
   if (!dn_set.empty()) {
-    assert((*dn_set.begin())->dir && (*dn_set.begin())->dir->parent_inode);
-    (*dn_set.begin())->dir->parent_inode->make_long_path(p);
-    p.push_dentry((*dn_set.begin())->name);
+    Dentry *dn = *dn_set.begin();
+    assert(dn->stripe && dn->stripe->parent_inode);
+    dn->stripe->parent_inode->make_long_path(p);
+    p.push_dentry(dn->name);
   } else if (snapdir_parent) {
     snapdir_parent->make_nosnap_relative_path(p);
     string empty;
@@ -76,9 +77,10 @@ void Inode::make_nosnap_relative_path(filepath& p)
     string empty;
     p.push_dentry(empty);
   } else if (!dn_set.empty()) {
-    assert((*dn_set.begin())->dir && (*dn_set.begin())->dir->parent_inode);
-    (*dn_set.begin())->dir->parent_inode->make_nosnap_relative_path(p);
-    p.push_dentry((*dn_set.begin())->name);
+    Dentry *dn = *dn_set.begin();
+    assert(dn->stripe && dn->stripe->parent_inode);
+    dn->stripe->parent_inode->make_nosnap_relative_path(p);
+    p.push_dentry(dn->name);
   } else {
     p = filepath(ino);
   }
@@ -261,18 +263,27 @@ bool Inode::have_valid_size()
   return false;
 }
 
-// open Dir for an inode.  if it's not open, allocated it (and pin dentry in memory).
-Dir *Inode::open_dir()
+stripeid_t Inode::pick_stripe(const string &dname)
 {
-  if (!dir) {
-    dir = new Dir(this);
-    lsubdout(cct, mds, 15) << "open_dir " << dir << " on " << this << dendl;
+  __u32 dnhash = ceph_str_hash(dir_layout.dl_dir_hash,
+                               dname.data(), dname.length());
+  return stripeid_t(dnhash % stripe_auth.size());
+}
+
+// open DirStripe for an inode.  if it's not open, allocated it (and pin dentry in memory).
+DirStripe* Inode::open_stripe(stripeid_t stripeid)
+{
+  assert(stripeid < stripes.size());
+  vector<DirStripe*>::iterator s = stripes.begin() + stripeid;
+  if (!*s) {
+    *s = new DirStripe(this, stripeid);
+    lsubdout(cct, mds, 15) << "open_stripe " << **s << " on " << *this << dendl;
     assert(dn_set.size() < 2); // dirs can't be hard-linked
     if (!dn_set.empty())
       (*dn_set.begin())->get();      // pin dentry
     get();                  // pin inode
   }
-  return dir;
+  return *s;
 }
 
 bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, uint32_t rflags)
@@ -351,7 +362,7 @@ void Inode::dump(Formatter *f) const
 
   if (is_dir()) {
     if (!dir_contacts.empty()) {
-      f->open_object_section("dir_contants");
+      f->open_object_section("dir_contacts");
       for (set<int>::iterator p = dir_contacts.begin(); p != dir_contacts.end(); ++p)
 	f->dump_int("mds", *p);
       f->close_section();
@@ -449,7 +460,8 @@ void Inode::dump(Formatter *f) const
     f->open_array_section("parents");
     for (set<Dentry*>::const_iterator p = dn_set.begin(); p != dn_set.end(); ++p) {
       f->open_object_section("dentry");
-      f->dump_stream("dir_ino") << (*p)->dir->parent_inode->ino;
+      f->dump_stream("dir_ino") << (*p)->stripe->parent_inode->ino;
+      f->dump_stream("dir_stripe") << (*p)->stripe->ds.stripeid;
       f->dump_string("name", (*p)->name);
       f->close_section();
     }

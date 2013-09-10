@@ -5,7 +5,7 @@
 #include "include/utime.h"
 
 #include "Dentry.h"
-#include "Dir.h"
+#include "DirStripe.h"
 #include "Inode.h"
 
 #include "common/Formatter.h"
@@ -13,7 +13,7 @@
 void Dentry::dump(Formatter *f) const
 {
   f->dump_string("name", name);
-  f->dump_stream("dir") << dir->parent_inode->ino;
+  f->dump_stream("stripe") << stripe->ds;
   if (inode)
     f->dump_stream("ino") << inode->ino;
   f->dump_int("ref", ref);
