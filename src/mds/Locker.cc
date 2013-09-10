@@ -1915,26 +1915,29 @@ void Locker::revoke_stale_caps(Session *session)
     cap->set_stale(true);
     CInode *in = cap->get_inode();
     int issued = cap->issued();
-    if (issued) {
-      dout(10) << " revoking " << ccap_string(issued) << " on " << *in << dendl;      
-      cap->revoke();
+    if (in) {
+      // inode caps
+      if (issued) {
+        dout(10) << " revoking " << ccap_string(issued) << " on " << *in << dendl;      
+        cap->revoke();
 
-      if (in->is_auth() &&
-	  in->inode.client_ranges.count(client))
-	in->state_set(CInode::STATE_NEEDSRECOVER);
+        if (in->is_auth() &&
+            in->inode.client_ranges.count(client))
+          in->state_set(CInode::STATE_NEEDSRECOVER);
 
-      if (!in->filelock.is_stable()) eval_gather(&in->filelock);
-      if (!in->linklock.is_stable()) eval_gather(&in->linklock);
-      if (!in->authlock.is_stable()) eval_gather(&in->authlock);
-      if (!in->xattrlock.is_stable()) eval_gather(&in->xattrlock);
+        if (!in->filelock.is_stable()) eval_gather(&in->filelock);
+        if (!in->linklock.is_stable()) eval_gather(&in->linklock);
+        if (!in->authlock.is_stable()) eval_gather(&in->authlock);
+        if (!in->xattrlock.is_stable()) eval_gather(&in->xattrlock);
 
-      if (in->is_auth()) {
-	try_eval(in, CEPH_CAP_LOCKS);
+        if (in->is_auth()) {
+          try_eval(in, CEPH_CAP_LOCKS);
+        } else {
+          request_inode_file_caps(in);
+        }
       } else {
-	request_inode_file_caps(in);
+        dout(10) << " nothing issued on " << *in << dendl;
       }
-    } else {
-      dout(10) << " nothing issued on " << *in << dendl;
     }
   }
 }
@@ -2236,7 +2239,7 @@ void Locker::adjust_cap_wanted(Capability *cap, int wanted, int issue_seq)
   }
 
   CInode *cur = cap->get_inode();
-  if (!cur->is_auth())
+  if (!cur || !cur->is_auth())
     return;
   if (cap->wanted() == 0) {
     if (cur->item_open_file.is_on_list() &&
