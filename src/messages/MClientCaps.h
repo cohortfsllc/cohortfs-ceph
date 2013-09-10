@@ -172,8 +172,11 @@ public:
   void encode_payload(uint64_t features) {
     head.snap_trace_len = snapbl.length();
     ::encode(head, payload);
-    inode.xattr_len = xattrbl.length();
-    ::encode(inode, payload);
+    if (is_inode()) {
+      inode.xattr_len = xattrbl.length();
+      ::encode(inode, payload);
+    } else
+      ::encode(stripe, payload);
     ::encode_nohead(snapbl, payload);
 
     middle = xattrbl;
