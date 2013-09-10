@@ -252,14 +252,14 @@ void Client::tear_down_cache()
   assert(lru.lru_get_size() == 0);
 
   // close root ino
-  assert(inode_map.size() <= 1);
-  if (root && inode_map.size() == 1) {
+  assert(inodes.size() <= 1);
+  if (root && inodes.size() == 1) {
     delete root;
     root = 0;
-    inode_map.clear();
+    inodes.clear();
   }
 
-  assert(inode_map.empty());
+  assert(inodes.empty());
 }
 
 inodeno_t Client::get_root_ino()
@@ -332,9 +332,7 @@ void Client::dump_cache(Formatter *f)
     dump_inode(f, root, did, true);
 
   // make a second pass to catch anything disconnected
-  for (hash_map<vinodeno_t, Inode*>::iterator it = inode_map.begin();
-       it != inode_map.end();
-       ++it) {
+  for (inode_hashmap::iterator it = inodes.begin(); it != inodes.end(); ++it) {
     if (did.count(it->second))
       continue;
     dump_inode(f, it->second, did, true);
@@ -484,11 +482,11 @@ void Client::trim_cache()
   }
 
   // hose root?
-  if (lru.lru_get_size() == 0 && root && root->get_num_ref() == 0 && inode_map.size() == 1) {
+  if (lru.lru_get_size() == 0 && root && root->get_num_ref() == 0 && inodes.size() == 1) {
     ldout(cct, 15) << "trim_cache trimmed root " << root << dendl;
     delete root;
     root = 0;
-    inode_map.clear();
+    inodes.clear();
   }
 }
 
@@ -600,12 +598,14 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from,
 {
   Inode *in;
   bool was_new = false;
-  if (inode_map.count(st->vino)) {
-    in = inode_map[st->vino];
+  pair<inode_hashmap::iterator, bool> result =
+      inodes.insert(make_pair(st->vino, (Inode*)NULL));
+  if (!result.second) {
+    in = result.first->second;
     ldout(cct, 12) << "add_update_inode had " << *in << " caps " << ccap_string(st->cap.caps) << dendl;
   } else {
-    in = new Inode(cct, st->vino, &st->layout);
-    inode_map[st->vino] = in;
+    result.first->second = new Inode(cct, st->vino, &st->layout);
+    in = result.first->second;
     if (!root) {
       root = in;
       cwd = root;
@@ -980,8 +980,9 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
     // fake it for snap lookup
     vinodeno_t vino = ist.vino;
     vino.snapid = CEPH_SNAPDIR;
-    assert(inode_map.count(vino));
-    Inode *diri = inode_map[vino];
+    inode_hashmap::iterator i = inodes.find(vino);
+    assert(i != inodes.end());
+    Inode *diri = i->second;
 
     string dname = request->path.last_dentry();
     stripeid_t stripeid = diri->pick_stripe(dname);
@@ -1163,7 +1164,7 @@ int Client::verify_reply_trace(int r,
   bufferlist extra_bl;
   inodeno_t created_ino;
   bool got_created_ino = false;
-  hash_map<vinodeno_t, Inode*>::iterator p;
+  inode_hashmap::iterator p;
 
   extra_bl.claim(reply->get_extra_bl());
   if (extra_bl.length() >= 8) {
@@ -1182,7 +1183,7 @@ int Client::verify_reply_trace(int r,
     *ptarget = request->target;
     ldout(cct, 20) << "make_request target is " << *request->target << dendl;
   } else {
-    if (got_created_ino && (p = inode_map.find(vinodeno_t(created_ino, CEPH_NOSNAP))) != inode_map.end()) {
+    if (got_created_ino && (p = inodes.find(vinodeno_t(created_ino, CEPH_NOSNAP))) != inodes.end()) {
       (*ptarget) = p->second;
       ldout(cct, 20) << "make_request created, target is " << **ptarget << dendl;
     } else {
@@ -1850,15 +1851,15 @@ bool Client::ms_dispatch(Message *m)
   // unmounting?
   if (unmounting) {
     ldout(cct, 10) << "unmounting: trim pass, size was " << lru.lru_get_size() 
-             << "+" << inode_map.size() << dendl;
-    long unsigned size = lru.lru_get_size() + inode_map.size();
+             << "+" << inodes.size() << dendl;
+    long unsigned size = lru.lru_get_size() + inodes.size();
     trim_cache();
-    if (size < lru.lru_get_size() + inode_map.size()) {
+    if (size < lru.lru_get_size() + inodes.size()) {
       ldout(cct, 10) << "unmounting: trim pass, cache shrank, poking unmount()" << dendl;
       mount_cond.Signal();
     } else {
       ldout(cct, 10) << "unmounting: trim pass, size still " << lru.lru_get_size() 
-               << "+" << inode_map.size() << dendl;
+               << "+" << inodes.size() << dendl;
     }
   }
 
@@ -1933,9 +1934,7 @@ void Client::send_reconnect(MetaSession *session)
 
   // i have an open session.
   hash_set<inodeno_t> did_snaprealm;
-  for (hash_map<vinodeno_t, Inode*>::iterator p = inode_map.begin();
-       p != inode_map.end();
-       ++p) {
+  for (inode_hashmap::iterator p = inodes.begin(); p != inodes.end(); ++p) {
     Inode *in = p->second;
     if (in->caps.count(mds)) {
       ldout(cct, 10) << " caps on " << p->first
@@ -2064,11 +2063,12 @@ void Client::handle_lease(MClientLease *m)
 
   Inode *in;
   vinodeno_t vino(m->get_ino(), CEPH_NOSNAP);
-  if (inode_map.count(vino) == 0) {
+  inode_hashmap::iterator i = inodes.find(vino);
+  if (i == inodes.end()) {
     ldout(cct, 10) << " don't have vino " << vino << dendl;
     goto revoke;
   }
-  in = inode_map[vino];
+  in = i->second;
 
   if (m->get_mask() & CEPH_LOCK_DN) {
     stripeid_t stripeid = in->pick_stripe(m->dname);
@@ -2110,7 +2110,7 @@ void Client::put_inode(Inode *in, int n)
     assert(!unclean);
     if (in->snapdir_parent)
       put_inode(in->snapdir_parent);
-    inode_map.erase(in->vino());
+    inodes.erase(in->vino());
     in->cap_item.remove_myself();
     in->snaprealm_item.remove_myself();
     if (in == root)
@@ -3319,8 +3319,9 @@ void Client::handle_snap(MClientSnap *m)
 	 p != m->split_inos.end();
 	 ++p) {
       vinodeno_t vino(*p, CEPH_NOSNAP);
-      if (inode_map.count(vino)) {
-	Inode *in = inode_map[vino];
+      inode_hashmap::iterator i = inodes.find(vino);
+      if (i != inodes.end()) {
+	Inode *in = i->second;
 	if (!in->snaprealm || in->snaprealm == realm)
 	  continue;
 	if (in->snaprealm->created > info.created()) {
@@ -3379,11 +3380,9 @@ void Client::handle_caps(MClientCaps *m)
 
   m->clear_payload();  // for if/when we send back to MDS
 
-  Inode *in = 0;
   vinodeno_t vino(m->get_ino(), CEPH_NOSNAP);
-  if (inode_map.count(vino))
-    in = inode_map[vino];
-  if (!in) {
+  inode_hashmap::iterator p = inodes.find(vino);
+  if (p == inodes.end()) {
     if (m->get_op() == CEPH_CAP_OP_IMPORT) {
       ldout(cct, 5) << "handle_caps don't have vino " << vino << " on IMPORT, immediately releasing" << dendl;
       if (!session->release)
@@ -3403,6 +3402,7 @@ void Client::handle_caps(MClientCaps *m)
     flush_cap_releases();
     return;
   }
+  Inode *in = p->second;
 
   switch (m->get_op()) {
   case CEPH_CAP_OP_IMPORT: return handle_cap_import(session, in, m);
@@ -3873,15 +3873,13 @@ void Client::unmount()
 
   if (cct->_conf->client_oc) {
     // flush/release all buffered data
-    hash_map<vinodeno_t, Inode*>::iterator next;
-    for (hash_map<vinodeno_t, Inode*>::iterator p = inode_map.begin();
-	 p != inode_map.end();
-	 p = next) {
+    inode_hashmap::iterator p, next;
+    for (p = inodes.begin(); p != inodes.end(); p = next) {
       next = p;
       ++next;
       Inode *in = p->second;
       if (!in) {
-	ldout(cct, 0) << "null inode_map entry ino " << p->first << dendl;
+	ldout(cct, 0) << "null inode entry ino " << p->first << dendl;
 	assert(in);
       }
       if (!in->caps.empty()) {
@@ -3900,10 +3898,9 @@ void Client::unmount()
   lru.lru_set_max(0);
   trim_cache();
 
-  while (lru.lru_get_size() > 0 || 
-         !inode_map.empty()) {
-    ldout(cct, 2) << "cache still has " << lru.lru_get_size() 
-            << "+" << inode_map.size() << " items" 
+  while (lru.lru_get_size() > 0 || !inodes.empty()) {
+    ldout(cct, 2) << "cache still has " << lru.lru_get_size()
+            << "+" << inodes.size() << " items"
 	    << ", waiting (for caps to release?)"
             << dendl;
     utime_t until = ceph_clock_now(cct) + utime_t(5, 0);
@@ -3913,7 +3910,7 @@ void Client::unmount()
     }
   }
   assert(lru.lru_get_size() == 0);
-  assert(inode_map.empty());
+  assert(inodes.empty());
 
   // stop tracing
   if (!cct->_conf->client_trace.empty()) {
@@ -6554,9 +6551,12 @@ Inode *Client::open_snapdir(Inode *diri)
 {
   Inode *in;
   vinodeno_t vino(diri->ino, CEPH_SNAPDIR);
-  if (!inode_map.count(vino)) {
-    in = new Inode(cct, vino, &diri->layout);
+  pair<inode_hashmap::iterator, bool> result =
+      inodes.insert(make_pair(vino, (Inode*)NULL));
+  if (result.second) {
+    result.first->second = new Inode(cct, vino, &diri->layout);
 
+    in = result.first->second;
     in->ino = diri->ino;
     in->snapid = CEPH_SNAPDIR;
     in->mode = diri->mode;
@@ -6566,12 +6566,11 @@ Inode *Client::open_snapdir(Inode *diri)
     in->ctime = diri->ctime;
     in->size = diri->size;
 
-    inode_map[vino] = in;
     in->snapdir_parent = diri;
     diri->get();
     ldout(cct, 10) << "open_snapdir created snapshot inode " << *in << dendl;
   } else {
-    in = inode_map[vino];
+    in = result.first->second;
     ldout(cct, 10) << "open_snapdir had snapshot inode " << *in << dendl;
   }
   return in;
@@ -6657,12 +6656,10 @@ int Client::_ll_put(Inode *in, int num)
 void Client::_ll_drop_pins()
 {
   ldout(cct, 10) << "_ll_drop_pins" << dendl;
-  hash_map<vinodeno_t, Inode*>::iterator next;
-  for (hash_map<vinodeno_t, Inode*>::iterator it = inode_map.begin();
-       it != inode_map.end();
-       it = next) {
-    Inode *in = it->second;
-    next = it;
+  inode_hashmap::iterator i, next;
+  for (i = inodes.begin(); i != inodes.end(); i = next) {
+    Inode *in = i->second;
+    next = i;
     ++next;
     if (in->ll_ref)
       _ll_put(in, in->ll_ref);
@@ -6710,10 +6707,10 @@ snapid_t Client::ll_get_snapid(Inode *in)
 Inode *Client::ll_get_inode(vinodeno_t vino)
 {
   Mutex::Locker lock(client_lock);
-  hash_map<vinodeno_t,Inode*>::iterator p = inode_map.find(vino);
-  if (p == inode_map.end())
+  inode_hashmap::iterator i = inodes.find(vino);
+  if (i == inodes.end())
     return NULL;
-  Inode *in = p->second;
+  Inode *in = i->second;
   _ll_get(in);
   return in;
 }
