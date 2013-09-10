@@ -3,6 +3,7 @@ libclient_la_SOURCES = \
 	client/barrier.cc \
 	client/Inode.cc \
 	client/Dentry.cc \
+	client/DirStripe.cc \
 	client/MetaRequest.cc \
 	client/ClientSnapRealm.cc \
 	client/MetaSession.cc \
@@ -13,7 +14,7 @@ noinst_LTLIBRARIES += libclient.la
 noinst_HEADERS += \
 	client/Client.h \
 	client/Dentry.h \
-	client/Dir.h \
+	client/DirStripe.h \
 	client/Fh.h \
 	client/Inode.h \
 	client/MetaRequest.h \
