@@ -115,6 +115,7 @@ class CapSnap;
 class MetaSession;
 class MetaRequest;
 
+typedef hash_map<vinodeno_t, Inode*> inode_hashmap;
 
 typedef void (*client_ino_callback_t)(void *handle, vinodeno_t ino, int64_t off, int64_t len);
 
@@ -276,7 +277,7 @@ protected:
   WritebackHandler      *writeback_handler;
 
   // cache
-  hash_map<vinodeno_t, Inode*> inode_map;
+  inode_hashmap          inodes;
   Inode*                 root;
   LRU                    lru;    // lru list of Dentry's in our local metadata cache.
 
