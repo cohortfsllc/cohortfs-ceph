@@ -248,6 +248,7 @@ CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
     nestlock(this, &nestlock_type),
     flocklock(this, &flocklock_type),
     policylock(this, &policylock_type),
+    cap_update_mask(0),
     loner_cap(-1),
     want_loner_cap(-1)
 {

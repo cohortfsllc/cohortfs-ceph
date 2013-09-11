@@ -142,6 +142,22 @@ private:
   __u32 _pending, _issued;
   list<revoke_info> _revokes;
 
+  // waiters
+  struct seq_cmp {
+    bool operator()(ceph_seq_t a, ceph_seq_t b) {
+      return ceph_seq_cmp(a, b) < 0;
+    }
+  };
+  typedef map<ceph_seq_t, list<Context*>, seq_cmp> seq_wait_map;
+  seq_wait_map waiting_on_confirm;
+
+  void finish_confirm_waiters(ceph_seq_t seq) {
+    // finish waiters for all seq numbers <= seq
+    seq_wait_map::iterator end = waiting_on_confirm.upper_bound(seq);
+    for (seq_wait_map::iterator i = waiting_on_confirm.begin(); i != end; ++i)
+      finish_contexts(g_ceph_context, i->second);
+    waiting_on_confirm.erase(waiting_on_confirm.begin(), end);
+  }
 public:
   int pending() { return _pending; }
   int issued() {
@@ -189,6 +205,10 @@ public:
     for (list<revoke_info>::iterator p = _revokes.begin(); p != _revokes.end(); ++p)
       _issued |= p->before;
   }
+
+  void add_confirm_waiter(ceph_seq_t seq, Context *c) {
+    waiting_on_confirm[seq].push_back(c);
+  }
   void confirm_receipt(ceph_seq_t seq, unsigned caps) {
     if (seq == last_sent) {
       _pending = caps;
@@ -201,6 +221,7 @@ public:
 	_revokes.pop_front();
       _calc_issued();
     }
+    finish_confirm_waiters(seq);
     //check_rdcaps_list();
   }
   // we may get a release racing with revocations, which means our revokes will be ignored

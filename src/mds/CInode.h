@@ -396,6 +396,7 @@ public:
   friend class EMetaBlob;
 
  public:
+
   CInode(MDCache *mdcache, int auth,
          snapid_t first = 2, snapid_t last = CEPH_NOSNAP);
   ~CInode();
@@ -557,7 +558,12 @@ public:
   bool is_dirty_scattered();
   void clear_scatter_dirty();  // on rejoin ack
 
-  // -- caps -- (new)
+  // cap callbacks; force issue_caps() to send a CEPH_CAP_OP_SYNC_UPDATE
+  // message to all clients matching cap_update_mask, and finish once all
+  // updates are acked with CEPH_CAP_OP_UPDATE
+  list<Context*> cap_updates;
+  int cap_update_mask;
+
   // client caps
   client_t loner_cap, want_loner_cap;
 
