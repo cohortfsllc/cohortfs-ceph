@@ -1694,7 +1694,7 @@ void Locker::issue_caps_set(set<CInode*>& inset)
     issue_caps(*p);
 }
 
-bool Locker::issue_caps(CInode *in, Capability *only_cap)
+void Locker::issue_caps(CInode *in, Capability *only_cap)
 {
   // allowed caps are determined by the lock mode.
   int all_allowed = in->get_caps_allowed_by_type(CAP_ANY);
@@ -1715,9 +1715,6 @@ bool Locker::issue_caps(CInode *in, Capability *only_cap)
   }
 
   assert(in->is_head());
-
-  // count conflicts with
-  int nissued = 0;        
 
   // client caps
   map<client_t, Capability*>::iterator it, end;
@@ -1766,9 +1763,6 @@ bool Locker::issue_caps(CInode *in, Capability *only_cap)
     // or do we need to revoke?
     if (((wanted & allowed) & ~pending) ||  // missing wanted+allowed caps
 	(pending & ~allowed)) {             // need to revoke ~allowed caps.
-      // issue
-      nissued++;
-
       // include caps that clients generally like, while we're at it.
       int likes = in->get_caps_liked();      
       int before = pending;
@@ -1797,8 +1791,6 @@ bool Locker::issue_caps(CInode *in, Capability *only_cap)
       }
     }
   }
-
-  return (nissued == 0);  // true if no re-issued, no callbacks
 }
 
 void Locker::issue_truncate(CInode *in)
