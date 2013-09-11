@@ -8,6 +8,7 @@
 #include "common/snap_types.h"
 #include "include/xlist.h"
 
+class CapObject;
 class Inode;
 
 struct SnapRealm {
@@ -29,7 +30,7 @@ private:
   friend ostream& operator<<(ostream& out, const SnapRealm& r);
 
 public:
-  xlist<Inode*> inodes_with_caps;
+  xlist<CapObject*> inodes_with_caps;
 
   SnapRealm(inodeno_t i) : 
     ino(i), nref(0), created(0), seq(0),
