@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 
 #include "CohortOSD.h"
+#include "messages/MOSDOp.h"
+#include "messages/MOSDSubOp.h"
 #include "messages/MOSDSubOpReply.h"
 
 bool CohortOSDService::test_ops_sub(ObjectStore *store,
@@ -42,7 +44,9 @@ CohortOSD::CohortOSD(int id, Messenger *internal, Messenger *external,
 		     const std::string &dev,
 		     const std::string &jdev) :
   OSD(id, internal, external, hb_client, hb_front_server, hb_back_server,
-      mc, dev, jdev)
+      mc, dev, jdev),
+  op_wq(this, g_conf->osd_op_thread_timeout, &op_tp)
+
 {
 }
 
@@ -76,9 +80,41 @@ bool CohortOSD::do_command_debug_sub(vector<string>& cmd,
   return true;
 }
 
+bool CohortOSD::op_must_wait_for_map(OpRequestRef op)
+{
+  switch (op->request->get_type()) {
+  case CEPH_MSG_OSD_OP:
+    return !have_same_or_newer_map(
+      static_cast<MOSDOp*>(op->request)->get_osdmap_epoch());
+
+  case MSG_OSD_SUBOP:
+    return !have_same_or_newer_map(
+      static_cast<MOSDSubOp*>(op->request)->osdmap_epoch);
+
+  case MSG_OSD_SUBOPREPLY:
+    return !have_same_or_newer_map(
+      static_cast<MOSDSubOpReply*>(op->request)->osdmap_epoch);
+  }
+  assert(0);
+  return false;
+}
+
 void CohortOSD::handle_op_sub(OpRequestRef op)
 {
-//  MOSDOp *m = (MOSDOp*)op->request;
+  RWLock::RLocker l(map_lock);
+
+  /* Possibly break out op queues per-volume. */
+
+  if (!waiting_for_map.empty()) {
+    // preserve ordering
+    waiting_for_map.push_back(op);
+    return;
+  }
+  if (op_must_wait_for_map(op)) {
+    waiting_for_map.push_back(op);
+    return;
+  }
+  op_wq.queue(op);
 }
 
 bool CohortOSD::handle_sub_op_reply_sub(OpRequestRef op)
@@ -164,4 +200,53 @@ void CohortOSD::check_replay_queue()
 
 void CohortOSD::sched_scrub()
 {
+}
+
+void CohortOSD::OpWQ::_enqueue(OpRequestRef request)
+{
+  Message *message = request->request;
+  unsigned priority = message->get_priority();
+  unsigned cost = message->get_cost();
+
+  if (priority >= CEPH_MSG_PRIO_LOW)
+    pqueue.enqueue_strict(message->get_source_inst(), priority, request);
+  else
+    pqueue.enqueue(message->get_source_inst(), priority, cost, request);
+  osd->logger->set(l_osd_opq, pqueue.length());
+}
+
+void CohortOSD::OpWQ::_enqueue_front(OpRequestRef request)
+{
+  Message *message = request->request;
+  unsigned priority = message->get_priority();
+  unsigned cost = message->get_cost();
+  if (priority >= CEPH_MSG_PRIO_LOW)
+    pqueue.enqueue_strict_front(message->get_source_inst(),
+				priority, request);
+  else
+    pqueue.enqueue_front(message->get_source_inst(),
+			 priority, cost, request);
+  osd->logger->set(l_osd_opq, pqueue.length());
+}
+
+OpRequestRef CohortOSD::OpWQ::_dequeue()
+{
+  assert(!pqueue.empty());
+  Mutex::Locker l(qlock);
+  OpRequestRef ret = pqueue.dequeue();
+  osd->logger->set(l_osd_opq, pqueue.length());
+  return ret;
+}
+
+bool CohortOSD::OpWQ::_empty()
+{
+  Mutex::Locker l(qlock);
+  return pqueue.empty();
+}
+
+void CohortOSD::OpWQ::_process(void)
+{
+  OpRequestRef op;
+  Mutex::Locker l(qlock);
+  #warning Actually do things here.
 }

@@ -58,7 +58,7 @@ public:
     return new CohortOSDMap(v);
   }
   CohortOSDMapRef get_map(epoch_t e) {
-    return dynamic_pointer_cast<const CohortOSDMap>(get_map(e));
+    return static_pointer_cast<const CohortOSDMap>(get_map(e));
   }
 
   const CohortOSDMapRef cohortosdmap() {
@@ -73,6 +73,38 @@ class CohortOSD : public OSD {
 private:
 
   typedef OSD inherited;
+
+  CohortOSDMapRef get_osdmap_with_maplock() const {
+    assert(osdmap);
+    return static_pointer_cast<const CohortOSDMap>(osdmap);
+  }
+
+  list<OpRequestRef> waiting_for_map;
+
+  struct OpWQ : public ThreadPool::WorkQueueVal<OpRequestRef> {
+    Mutex qlock;
+    CohortOSD *osd;
+    PrioritizedQueue<OpRequestRef, entity_inst_t> pqueue;
+
+    OpWQ(CohortOSD *o, time_t ti, ThreadPool *tp)
+      : ThreadPool::WorkQueueVal<OpRequestRef> (
+	"CohortOSD::OpWQ", ti, ti*10, tp),
+	qlock("OpWQ::qlock"),
+	osd(o),
+	pqueue(o->cct->_conf->osd_op_pq_max_tokens_per_priority,
+	       o->cct->_conf->osd_op_pq_min_cost)
+      {}
+
+    void dump(Formatter *f) {
+      Mutex::Locker l(qlock);
+      pqueue.dump(f);
+    }
+    void _enqueue_front(OpRequestRef item);
+    void _enqueue(OpRequestRef item);
+    OpRequestRef _dequeue();
+    bool _empty();
+    void _process(void);
+  } op_wq;
 
 public:
 
@@ -109,6 +141,10 @@ public:
 				    int& r,
 				    ostringstream& ss);
 
+  bool have_same_or_newer_map(epoch_t e) {
+    return e <= osdmap->get_epoch();
+  };
+  bool op_must_wait_for_map(OpRequestRef op);
   virtual void handle_op_sub(OpRequestRef op);
   virtual bool handle_sub_op_sub(OpRequestRef op);
   virtual bool handle_sub_op_reply_sub(OpRequestRef op);

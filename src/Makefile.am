@@ -1,4 +1,4 @@
-AUTOMAKE_OPTIONS = gnu
+AUTOMAKE_OPTIONS = gnu subdir-objects
 SUBDIRS = ocf java
 DIST_SUBDIRS = gtest ocf libs3 java
 
