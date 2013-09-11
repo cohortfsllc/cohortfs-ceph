@@ -47,6 +47,7 @@ using namespace __gnu_cxx;
 #include "common/compiler_extensions.h"
 
 #include "osdc/ObjectCacher.h"
+#include "CapClient.h"
 
 class MDSMap;
 class OSDMap;
@@ -105,7 +106,6 @@ struct DirEntry {
 };
 
 class Inode;
-struct Cap;
 class DirStripe;
 class Dentry;
 class SnapRealm;
@@ -179,7 +179,7 @@ struct dir_result_t {
   }
 };
 
-class Client : public Dispatcher {
+class Client : public Dispatcher, public CapClient {
  public:
   CephContext *cct;
 
@@ -281,9 +281,6 @@ protected:
   Inode*                 root;
   LRU                    lru;    // lru list of Dentry's in our local metadata cache.
 
-  // all inodes with caps sit on either cap_list or delayed_caps.
-  xlist<Inode*> delayed_caps, cap_list;
-  int num_flushing_caps;
   hash_map<inodeno_t,SnapRealm*> snap_realms;
 
   SnapRealm *get_snap_realm(inodeno_t r);
@@ -411,9 +408,9 @@ protected:
   void remove_all_caps(Inode *in);
   void remove_session_caps(MetaSession *session);
   void mark_caps_dirty(Inode *in, int caps);
-  int mark_caps_flushing(Inode *in);
-  void flush_caps();
-  void flush_caps(Inode *in, int mds);
+  virtual int mark_caps_flushing(CapObject *o);
+  virtual void flush_caps();
+  void flush_caps(CapObject *o, int mds);
   void kick_flushing_caps(int mds);
   int get_caps(Inode *in, int need, int want, int *have, loff_t endoff);
 
@@ -428,9 +425,9 @@ protected:
   void handle_cap_flush_ack(Inode *in, int mds, Cap *cap, class MClientCaps *m);
   void handle_cap_flushsnap_ack(Inode *in, class MClientCaps *m);
   void handle_cap_grant(Inode *in, int mds, Cap *cap, class MClientCaps *m);
-  void cap_delay_requeue(Inode *in);
-  void send_cap(Inode *in, int mds, Cap *cap, int used, int want, int retain, int flush);
-  void check_caps(Inode *in, bool is_delayed);
+  virtual void cap_delay_requeue(CapObject *o);
+  virtual void send_cap(Cap *cap, int used, int want, int retain, int flush);
+  void check_caps(CapObject *o, bool is_delayed);
   void get_cap_ref(Inode *in, int cap);
   void put_cap_ref(Inode *in, int cap);
   void flush_snaps(Inode *in, bool all_again=false, CapSnap *again=0);

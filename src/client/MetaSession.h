@@ -12,6 +12,7 @@
 #include "messages/MClientCapRelease.h"
 
 class Cap;
+class CapObject;
 class Inode;
 class CapSnap;
 class MetaRequest;
@@ -29,7 +30,7 @@ struct MetaSession {
   bool was_stale;
 
   xlist<Cap*> caps;
-  xlist<Inode*> flushing_caps;
+  xlist<CapObject*> flushing_caps;
   xlist<CapSnap*> flushing_capsnaps;
   xlist<MetaRequest*> requests;
   xlist<MetaRequest*> unsafe_requests;

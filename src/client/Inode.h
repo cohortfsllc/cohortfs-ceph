@@ -12,31 +12,13 @@
 
 #include "osdc/ObjectCacher.h"
 #include "include/assert.h"
+#include "Capability.h"
 
 class MetaSession;
 class Dentry;
 class DirStripe;
 class SnapRealm;
 class Inode;
-
-struct Cap {
-  MetaSession *session;
-  Inode *inode;
-  xlist<Cap*>::item cap_item;
-
-  uint64_t cap_id;
-  unsigned issued;
-  unsigned implemented;
-  unsigned wanted;   // as known to mds.
-  uint64_t seq, issue_seq;
-  __u32 mseq;  // migration seq
-  __u32 gen;
-
-  Cap() : session(NULL), inode(NULL), cap_item(this), cap_id(0), issued(0),
-	       implemented(0), wanted(0), seq(0), issue_seq(0), mseq(0), gen(0) {}
-
-  void dump(Formatter *f) const;
-};
 
 struct CapSnap {
   //snapid_t follows;  // map key
@@ -71,13 +53,8 @@ struct CapSnap {
 // inode flags
 #define I_COMPLETE 1
 
-class Inode {
+class Inode : public CapObject {
  public:
-  CephContext *cct;
-
-  // -- the actual inode --
-  inodeno_t ino;
-  snapid_t  snapid;
   uint32_t   rdev;    // if special file
 
   // affected by any inode change...
@@ -128,29 +105,11 @@ class Inode {
   set<int>  dir_contacts;
   bool      dir_hashed, dir_replicated;
 
-  // per-mds caps
-  map<int,Cap*> caps;            // mds -> Cap
-  Cap *auth_cap;
-  unsigned dirty_caps, flushing_caps;
-  uint64_t flushing_cap_seq;
-  __u16 flushing_cap_tid[CEPH_CAP_BITS];
-  int shared_gen, cache_gen;
-  int snap_caps, snap_cap_refs;
-  unsigned exporting_issued;
-  int exporting_mds;
-  ceph_seq_t exporting_mseq;
-  utime_t hold_caps_until;
-  xlist<Inode*>::item cap_item, flushing_cap_item;
-  tid_t last_flush_tid;
-
-  SnapRealm *snaprealm;
-  xlist<Inode*>::item snaprealm_item;
   Inode *snapdir_parent;  // only if we are a snapdir inode
   map<snapid_t,CapSnap*> cap_snaps;   // pending flush to mds
 
   //int open_by_mode[CEPH_FILE_MODE_NUM];
   map<int,int> open_by_mode;
-  map<int,int> cap_refs;
 
   ObjectCacher::ObjectSet oset;
 
@@ -165,7 +124,6 @@ class Inode {
   vector<int> stripe_auth;
   vector<DirStripe*> stripes; // if i'm a dir.
 
-  list<Cond*>       waitfor_caps;
   list<Cond*>       waitfor_commit;
 
   Dentry *get_first_parent() {
@@ -200,25 +158,19 @@ class Inode {
     ll_ref -= n;
   }
 
-  Inode(CephContext *cct_, vinodeno_t vino, ceph_file_layout *newlayout)
-    : cct(cct_), ino(vino.ino), snapid(vino.snapid),
+  Inode(CephContext *cct, CapClient *client,
+        vinodeno_t vino, ceph_file_layout *newlayout)
+    : CapObject(cct, client, vino),
       rdev(0), mode(0), uid(0), gid(0), nlink(0),
       size(0), truncate_seq(1), truncate_size(-1),
       time_warp_seq(0), max_size(0), version(0), xattr_version(0),
-      flags(0),
-      dir_hashed(false), dir_replicated(false), auth_cap(NULL),
-      dirty_caps(0), flushing_caps(0), flushing_cap_seq(0), shared_gen(0), cache_gen(0),
-      snap_caps(0), snap_cap_refs(0),
-      exporting_issued(0), exporting_mds(-1), exporting_mseq(0),
-      cap_item(this), flushing_cap_item(this), last_flush_tid(0),
-      snaprealm(0), snaprealm_item(this), snapdir_parent(0),
-      oset((void *)this, newlayout->fl_pg_pool, ino),
+      flags(0), dir_hashed(false), dir_replicated(false),
+      snapdir_parent(0), oset((void *)this, newlayout->fl_pg_pool, ino),
       reported_size(0), wanted_max_size(0), requested_max_size(0),
       _ref(0), ll_ref(0)
   {
     memset(&dir_layout, 0, sizeof(dir_layout));
     memset(&layout, 0, sizeof(layout));
-    memset(&flushing_cap_tid, 0, sizeof(__u16)*CEPH_CAP_BITS);
   }
   ~Inode() { }
 
@@ -239,18 +191,11 @@ class Inode {
   void get_open_ref(int mode);
   bool put_open_ref(int mode);
 
-  void get_cap_ref(int cap);
-  bool put_cap_ref(int cap);
-  bool is_any_caps();
-  bool cap_is_valid(Cap* cap);
-  int caps_issued(int *implemented = 0);
-  void touch_cap(Cap *cap);
-  void try_touch_cap(int mds);
-  bool caps_issued_mask(unsigned mask);
-  int caps_used();
-  int caps_file_wanted();
-  int caps_wanted();
-  int caps_dirty();
+
+  virtual int caps_wanted() const;
+  virtual bool check_cap(const Cap *cap, int retain, bool unmounting) const;
+  virtual void fill_caps(const Cap *cap, MClientCaps *m, int mask);
+  virtual void print(ostream &out);
 
   bool have_valid_size();
   stripeid_t pick_stripe(const string &dname);
@@ -259,6 +204,9 @@ class Inode {
   void dump(Formatter *f) const;
 };
 
-ostream& operator<<(ostream &out, Inode &in);
+inline ostream& operator<<(ostream &out, Inode &in) {
+  in.print(out);
+  return out;
+}
 
 #endif

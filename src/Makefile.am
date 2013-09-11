@@ -1397,6 +1397,7 @@ noinst_LTLIBRARIES += libosdc.la
 
 libclient_la_SOURCES = \
 	client/Client.cc \
+	client/Capability.cc \
 	client/Inode.cc \
 	client/Dentry.cc \
 	client/DirStripe.cc \

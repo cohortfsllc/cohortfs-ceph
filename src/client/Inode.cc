@@ -6,45 +6,35 @@
 #include "Dentry.h"
 #include "DirStripe.h"
 #include "SnapRealm.h"
+#include "messages/MClientCaps.h"
 
-ostream& operator<<(ostream &out, Inode &in)
+#define dout_subsys ceph_subsys_client
+
+void Inode::print(ostream &out)
 {
-  out << in.vino() << "("
-      << "ref=" << in._ref
-      << " cap_refs=" << in.cap_refs
-      << " open=" << in.open_by_mode
-      << " mode=" << oct << in.mode << dec
-      << " size=" << in.size
-      << " mtime=" << in.mtime
-      << " caps=" << ccap_string(in.caps_issued());
-  if (!in.caps.empty()) {
-    out << "(";
-    for (map<int,Cap*>::iterator p = in.caps.begin(); p != in.caps.end(); ++p) {
-      if (p != in.caps.begin())
-	out << ',';
-      out << p->first << '=' << ccap_string(p->second->issued);
-    }
-    out << ")";
-  }
-  if (in.dirty_caps)
-    out << " dirty_caps=" << ccap_string(in.dirty_caps);
-  if (in.flushing_caps)
-    out << " flushing_caps=" << ccap_string(in.flushing_caps);
+  out << vino() << "("
+      << "ref=" << _ref
+      << " open=" << open_by_mode
+      << " mode=" << oct << mode << dec
+      << " size=" << size
+      << " mtime=" << mtime
+      << " caps=(";
+  CapObject::print(out);
+  out << ')';
 
-  if (in.flags & I_COMPLETE)
+  if (flags & I_COMPLETE)
     out << " COMPLETE";
 
-  if (in.is_file())
-    out << " " << in.oset;
+  if (is_file())
+    out << " " << oset;
 
-  if (!in.dn_set.empty())
-    out << " parents=" << in.dn_set;
+  if (!dn_set.empty())
+    out << " parents=" << dn_set;
 
-  if (in.is_dir() && in.has_dir_layout())
+  if (is_dir() && has_dir_layout())
     out << " has_dir_layout";
 
-  out << ' ' << &in << ")";
-  return out;
+  out << ' ' << this << ")";
 }
 
 
@@ -99,160 +89,68 @@ bool Inode::put_open_ref(int mode)
   return false;
 }
 
-void Inode::get_cap_ref(int cap)
+int Inode::caps_wanted() const
 {
-  int n = 0;
-  while (cap) {
-    if (cap & 1) {
-      int c = 1 << n;
-      cap_refs[c]++;
-      //cout << "inode " << *this << " get " << cap_string(c) << " " << (cap_refs[c]-1) << " -> " << cap_refs[c] << std::endl;
-    }
-    cap >>= 1;
-    n++;
-  }
-}
-
-bool Inode::put_cap_ref(int cap)
-{
-  // if cap is always a single bit (which it seems to be)
-  // all this logic is equivalent to:
-  // if (--cap_refs[c]) return false; else return true;
-  bool last = false;
-  int n = 0;
-  while (cap) {
-    if (cap & 1) {
-      int c = 1 << n;
-      if (cap_refs[c] <= 0) {
-	lderr(cct) << "put_cap_ref " << ccap_string(c) << " went negative on " << *this << dendl;
-	assert(cap_refs[c] > 0);
-      }
-      if (--cap_refs[c] == 0)
-	last = true;      
-      //cout << "inode " << *this << " put " << cap_string(c) << " " << (cap_refs[c]+1) << " -> " << cap_refs[c] << std::endl;
-    }
-    cap >>= 1;
-    n++;
-  }
-  return last;
-}
-
-bool Inode::is_any_caps()
-{
-  return caps.size() || exporting_mds >= 0;
-}
-
-bool Inode::cap_is_valid(Cap* cap) 
-{
-  /*cout << "cap_gen     " << cap->session-> cap_gen << std::endl
-    << "session gen " << cap->gen << std::endl
-    << "cap expire  " << cap->session->cap_ttl << std::endl
-    << "cur time    " << ceph_clock_now(cct) << std::endl;*/
-  if ((cap->session->cap_gen <= cap->gen)
-      && (ceph_clock_now(cct) < cap->session->cap_ttl)) {
-    return true;
-  }
-  //if we make it here, the capabilities aren't up-to-date
-  cap->session->was_stale = true;
-  return true;
-}
-
-int Inode::caps_issued(int *implemented)
-{
-  int c = exporting_issued | snap_caps;
-  int i = 0;
-  for (map<int,Cap*>::iterator it = caps.begin();
-       it != caps.end();
-       it++)
-    if (cap_is_valid(it->second)) {
-      c |= it->second->issued;
-      i |= it->second->implemented;
-    }
-  if (implemented)
-    *implemented = i;
-  return c;
-}
-
-void Inode::touch_cap(Cap *cap)
-{
-  // move to back of LRU
-  cap->session->caps.push_back(&cap->cap_item);
-}
-
-void Inode::try_touch_cap(int mds)
-{
-  if (caps.count(mds))
-    touch_cap(caps[mds]);
-}
-
-bool Inode::caps_issued_mask(unsigned mask)
-{
-  int c = exporting_issued | snap_caps;
-  if ((c & mask) == mask)
-    return true;
-  // prefer auth cap
-  if (auth_cap &&
-      cap_is_valid(auth_cap) &&
-      (auth_cap->issued & mask) == mask) {
-    touch_cap(auth_cap);
-    return true;
-  }
-  // try any cap
-  for (map<int,Cap*>::iterator it = caps.begin();
-       it != caps.end();
-       it++) {
-    if (cap_is_valid(it->second)) {
-      if ((it->second->issued & mask) == mask) {
-	touch_cap(it->second);
-	return true;
-      }
-      c |= it->second->issued;
-    }
-  }
-  if ((c & mask) == mask) {
-    // bah.. touch them all
-    for (map<int,Cap*>::iterator it = caps.begin();
-	 it != caps.end();
-	 it++)
-      touch_cap(it->second);
-    return true;
-  }
-  return false;
-}
-
-int Inode::caps_used()
-{
-  int w = 0;
-  for (map<int,int>::iterator p = cap_refs.begin();
-       p != cap_refs.end();
-       p++)
-    if (p->second)
-      w |= p->first;
-  return w;
-}
-
-int Inode::caps_file_wanted()
-{
-  int want = 0;
-  for (map<int,int>::iterator p = open_by_mode.begin();
+  int want = CapObject::caps_wanted();
+  for (map<int,int>::const_iterator p = open_by_mode.begin();
        p != open_by_mode.end();
-       p++)
+       ++p)
     if (p->second)
       want |= ceph_caps_for_mode(p->first);
-  return want;
-}
-
-int Inode::caps_wanted()
-{
-  int want = caps_file_wanted() | caps_used();
   if (want & CEPH_CAP_FILE_BUFFER)
     want |= CEPH_CAP_FILE_EXCL;
   return want;
 }
 
-int Inode::caps_dirty()
+bool Inode::check_cap(const Cap *cap, int retain, bool unmounting) const
 {
-  return dirty_caps | flushing_caps;
+  if (wanted_max_size > max_size &&
+      wanted_max_size > requested_max_size &&
+      cap == auth_cap)
+    return true;
+
+  /* approaching file_max? */
+  if ((cap->issued & CEPH_CAP_FILE_WR) &&
+      (size << 1) >= max_size &&
+      (reported_size << 1) < max_size &&
+      cap == auth_cap) {
+    ldout(cct, 10) << "size " << size << " approaching max_size " << max_size
+        << ", reported " << reported_size << dendl;
+    return true;
+  }
+
+  return CapObject::check_cap(cap, retain, unmounting);
+}
+
+void Inode::fill_caps(const Cap *cap, MClientCaps *m, int mask)
+{
+  m->inode.uid = uid;
+  m->inode.gid = gid;
+  m->inode.mode = mode;
+
+  m->inode.nlink = nlink;
+
+  if (mask & CEPH_CAP_XATTR_EXCL) {
+    ::encode(xattrs, m->xattrbl);
+    m->inode.xattr_version = xattr_version;
+  }
+
+  m->inode.layout = layout;
+  m->inode.size = size;
+  m->inode.max_size = max_size;
+  m->inode.truncate_seq = truncate_seq;
+  m->inode.truncate_size = truncate_size;
+  mtime.encode_timeval(&m->inode.mtime);
+  atime.encode_timeval(&m->inode.atime);
+  ctime.encode_timeval(&m->inode.ctime);
+  m->inode.time_warp_seq = time_warp_seq;
+
+  reported_size = size;
+  if (cap == auth_cap) {
+    m->set_max_size(wanted_max_size);
+    requested_max_size = wanted_max_size;
+    ldout(cct, 15) << "auth cap, setting max_size = " << requested_max_size << dendl;
+  }
 }
 
 bool Inode::have_valid_size()
@@ -371,51 +269,8 @@ void Inode::dump(Formatter *f) const
     f->dump_int("dir_replicated", (int)dir_replicated);
   }
 
-  f->open_array_section("caps");
-  for (map<int,Cap*>::const_iterator p = caps.begin(); p != caps.end(); ++p) {
-    f->open_object_section("cap");
-    f->dump_int("mds", p->first);
-    if (p->second == auth_cap)
-      f->dump_int("auth", 1);
-    p->second->dump(f);
-    f->close_section();
-  }
-  f->close_section();
-  if (auth_cap)
-    f->dump_int("auth_cap", auth_cap->session->mds_num);
+  CapObject::dump(f);
 
-  f->dump_stream("dirty_caps") << ccap_string(dirty_caps);
-  if (flushing_caps) {
-    f->dump_stream("flushings_caps") << ccap_string(flushing_caps);
-    f->dump_unsigned("flushing_cap_seq", flushing_cap_seq);
-    f->open_object_section("flushing_cap_tid");
-    for (unsigned bit = 0; bit < CEPH_CAP_BITS; bit++) {
-      if (flushing_caps & (1 << bit)) {
-	string n(ccap_string(1 << bit));
-	f->dump_unsigned(n.c_str(), flushing_cap_tid[bit]);
-      }
-    }
-    f->close_section();
-  }
-  f->dump_int("shared_gen", shared_gen);
-  f->dump_int("cache_gen", cache_gen);
-  if (snap_caps) {
-    f->dump_int("snap_caps", snap_caps);
-    f->dump_int("snap_cap_refs", snap_cap_refs);
-  }
-  if (exporting_issued || exporting_mseq) {
-    f->dump_stream("exporting_issued") << ccap_string(exporting_issued);
-    f->dump_int("exporting_mseq", exporting_mds);
-  }
-
-  f->dump_stream("hold_caps_until") << hold_caps_until;
-  f->dump_unsigned("last_flush_tid", last_flush_tid);
-
-  if (snaprealm) {
-    f->open_object_section("snaprealm");
-    snaprealm->dump(f);
-    f->close_section();
-  }
   if (!cap_snaps.empty()) {
     for (map<snapid_t,CapSnap*>::const_iterator p = cap_snaps.begin(); p != cap_snaps.end(); ++p) {
       f->open_object_section("cap_snap");
@@ -432,16 +287,6 @@ void Inode::dump(Formatter *f) const
       f->open_object_section("ref");
       f->dump_unsigned("mode", p->first);
       f->dump_unsigned("refs", p->second);
-      f->close_section();
-    }
-    f->close_section();
-  }
-  if (!cap_refs.empty()) {
-    f->open_array_section("cap_refs");
-    for (map<int,int>::const_iterator p = cap_refs.begin(); p != cap_refs.end(); ++p) {
-      f->open_object_section("cap_ref");
-      f->dump_stream("cap") << ccap_string(p->first);
-      f->dump_int("refs", p->second);
       f->close_section();
     }
     f->close_section();
@@ -467,21 +312,6 @@ void Inode::dump(Formatter *f) const
     }
     f->close_section();
   }
-}
-
-void Cap::dump(Formatter *f) const
-{
-  f->dump_int("mds", session->mds_num);
-  f->dump_stream("ino") << inode->ino;
-  f->dump_unsigned("cap_id", cap_id);
-  f->dump_stream("issued") << ccap_string(issued);
-  if (implemented != issued)
-    f->dump_stream("implemented") << ccap_string(implemented);
-  f->dump_stream("wanted") << ccap_string(wanted);
-  f->dump_unsigned("seq", seq);
-  f->dump_unsigned("issue_seq", issue_seq);
-  f->dump_unsigned("mseq", mseq);
-  f->dump_unsigned("gen", gen);
 }
 
 void CapSnap::dump(Formatter *f) const
