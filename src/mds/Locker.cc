@@ -1681,12 +1681,15 @@ bool Locker::issue_caps(CInode *in, Capability *only_cap)
   int nissued = 0;        
 
   // client caps
-  map<client_t, Capability*>::iterator it;
-  if (only_cap)
-    it = in->client_caps.find(only_cap->get_client());
-  else
+  map<client_t, Capability*>::iterator it, end;
+  if (only_cap) {
+    end = it = in->client_caps.find(only_cap->get_client());
+    ++end;
+  } else {
     it = in->client_caps.begin();
-  for (; it != in->client_caps.end(); it++) {
+    end = in->client_caps.end();
+  }
+  for (; it != end; ++it) {
     Capability *cap = it->second;
     if (cap->is_stale())
       continue;
@@ -1750,9 +1753,6 @@ bool Locker::issue_caps(CInode *in, Capability *only_cap)
 	mds->send_message_client_counted(m, it->first);
       }
     }
-
-    if (only_cap)
-      break;
   }
 
   return (nissued == 0);  // true if no re-issued, no callbacks
