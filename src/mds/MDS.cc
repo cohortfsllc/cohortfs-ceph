@@ -724,9 +724,8 @@ void MDS::handle_command(MMonCommand *m)
     long inum = strtol(m->cmd[1].c_str(), 0, 10);
     CInode *in = mdcache->get_inode(inodeno_t(inum));
     if (in) {
-      bool r = locker->issue_caps(in);
-      dout(20) << "called issue_caps on inode "  << inum
-	       << " with result " << r << dendl;
+      locker->issue_caps(in);
+      dout(20) << "called issue_caps on inode "  << inum << dendl;
     } else dout(15) << "inode " << inum << " not in mdcache!" << dendl;
   } else if (m->cmd[0] == "try_eval") {
     long inum = strtol(m->cmd[1].c_str(), 0, 10);
