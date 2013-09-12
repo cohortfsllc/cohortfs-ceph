@@ -4235,23 +4235,16 @@ int Client::_setattr(Inode *in, struct stat *attr, int mask, int uid, int gid)
   req->set_filepath(path);
   req->inode = in;
 
-  if (mask & CEPH_SETATTR_MODE) {
+  if (mask & CEPH_SETATTR_MODE)
     req->head.args.setattr.mode = attr->st_mode;
-    req->inode_drop |= CEPH_CAP_AUTH_SHARED;
-  }
-  if (mask & CEPH_SETATTR_UID) {
+  if (mask & CEPH_SETATTR_UID)
     req->head.args.setattr.uid = attr->st_uid;
-    req->inode_drop |= CEPH_CAP_AUTH_SHARED;
-  }
-  if (mask & CEPH_SETATTR_GID) {
+  if (mask & CEPH_SETATTR_GID)
     req->head.args.setattr.gid = attr->st_gid;
-    req->inode_drop |= CEPH_CAP_AUTH_SHARED;
-  }
   if (mask & CEPH_SETATTR_MTIME) {
     req->head.args.setattr.mtime =
       utime_t(attr->st_mtim.tv_sec, attr->st_mtim.tv_nsec);
-    req->inode_drop |= CEPH_CAP_AUTH_SHARED | CEPH_CAP_FILE_RD |
-      CEPH_CAP_FILE_WR;
+    req->inode_drop |= CEPH_CAP_FILE_RD | CEPH_CAP_FILE_WR;
   }
   if (mask & CEPH_SETATTR_ATIME) {
     req->head.args.setattr.atime =
@@ -4266,8 +4259,7 @@ int Client::_setattr(Inode *in, struct stat *attr, int mask, int uid, int gid)
       delete req;
       return -EFBIG;
     }
-    req->inode_drop |= CEPH_CAP_AUTH_SHARED | CEPH_CAP_FILE_RD |
-      CEPH_CAP_FILE_WR;
+    req->inode_drop |= CEPH_CAP_FILE_RD | CEPH_CAP_FILE_WR;
   }
   req->head.args.setattr.mask = mask;
 
