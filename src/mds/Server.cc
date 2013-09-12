@@ -4810,7 +4810,7 @@ void Server::handle_client_unlink(MDRequest *mdr)
 	dout(10) << " already witnessed by mds." << *p << dendl;
       else if (mdr->more()->waiting_on_slave.count(*p))
 	dout(10) << " already waiting on witness mds." << *p << dendl;
-      else if (!_rmdir_prepare_witness(mdr, dn, in, *p))
+      else if (!_rmdir_prepare_witness(mdr, dn, dnl, in, *p))
         return;
     }
     if (!mdr->more()->waiting_on_slave.empty())
@@ -4920,6 +4920,7 @@ void Server::_unlink_local_finish(MDRequest *mdr, CDentry *dn)
 }
 
 bool Server::_rmdir_prepare_witness(MDRequest *mdr, CDentry *dn,
+                                    CDentry::linkage_t *dnl,
                                     CInode *in, int who)
 {
   if (!mds->mdsmap->is_clientreplay_or_active_or_stopping(who)) {
@@ -4937,9 +4938,9 @@ bool Server::_rmdir_prepare_witness(MDRequest *mdr, CDentry *dn,
   req->src.dn.stripe = dn->get_stripe()->dirstripe();
   req->src.dn.who = dn->authority().first;
   req->src.dn.name = dn->get_name();
-  assert(dn->get_linkage()->is_remote());
-  req->src.ino = dn->get_linkage()->get_remote_ino();
-  req->src.d_type = dn->get_linkage()->get_remote_d_type();
+  assert(dnl->is_remote());
+  req->src.ino = dnl->get_remote_ino();
+  req->src.d_type = dnl->get_remote_d_type();
 
   // stripes for this mds to remove
   CDirPlacement *placement = in->get_placement();

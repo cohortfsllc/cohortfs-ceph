@@ -3346,14 +3346,6 @@ void MDCache::handle_cache_rejoin_full(MMDSCacheRejoin *full)
   }
 }
 
-struct C_MDC_StartParentStats : public Context {
-  ParentStats *stats;
-  C_MDC_StartParentStats(ParentStats *stats) : stats(stats) {}
-  void finish(int r) {
-    stats->propagate_unaccounted();
-  }
-};
-
 void MDCache::rejoin_gather_finish() 
 {
   dout(10) << "rejoin_gather_finish" << dendl;
