@@ -136,6 +136,12 @@ public:
   void xlock_export(SimpleLock *lock, Mutation *mut);
   void xlock_import(SimpleLock *lock, Mutation *mut);
 
+private:
+  friend class C_Locker_WrlockCallback;
+  friend class C_Locker_XlockCallback;
+  void _wrlock_finished(SimpleLock *lock, bool *pneed_issue);
+  void _xlock_finished(SimpleLock *lock, bool *pneed_issue);
+
 
   // simple
 public:

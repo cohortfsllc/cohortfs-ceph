@@ -1234,14 +1234,48 @@ bool Locker::wrlock_start(SimpleLock *lock, Mutation *mut,
   return false;
 }
 
+class C_Locker_WrlockCallback : public Context {
+  Locker *locker;
+  SimpleLock *lock;
+ public:
+  C_Locker_WrlockCallback(Locker *locker, SimpleLock *lock)
+      : locker(locker), lock(lock) {}
+  void finish(int r) { locker->_wrlock_finished(lock, NULL); }
+};
+
 void Locker::wrlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
 {
   dout(7) << "wrlock_finish on " << *lock << " on " << *lock->get_parent() << dendl;
-  lock->put_wrlock();
+
   if (mut) {
     mut->wrlocks.erase(lock);
     mut->locks.erase(lock);
   }
+
+  if (!lock->get_parent()->is_auth() ||
+      !lock->get_cap_shift()) {
+    _wrlock_finished(lock, pneed_issue);
+    return;
+  }
+
+  // send a cap update to any clients caching this lock
+  CInode *in = (CInode*)lock->get_parent();
+  in->cap_update_mask |= (CEPH_CAP_GSHARED << lock->get_cap_shift());
+  in->cap_updates.push_back(new C_Locker_WrlockCallback(this, lock));
+  dout(7) << "wrlock_finish requesting callbacks on "
+      << ccap_string(in->cap_update_mask) << dendl;
+
+  if (pneed_issue)
+    *pneed_issue = true;
+  else
+    issue_caps(in);
+}
+
+void Locker::_wrlock_finished(SimpleLock *lock, bool *pneed_issue)
+{
+  dout(7) << "_wrlock_finished on " << *lock << " on " << *lock->get_parent() << dendl;
+
+  lock->put_wrlock();
 
   if (!lock->is_wrlocked()) {
     if (!lock->is_stable())
@@ -1382,16 +1416,48 @@ void Locker::_finish_xlock(SimpleLock *lock, bool *pneed_issue)
   lock->get_parent()->auth_unpin(lock);
 }
 
+class C_Locker_XlockCallback : public Context {
+  Locker *locker;
+  SimpleLock *lock;
+ public:
+  C_Locker_XlockCallback(Locker *locker, SimpleLock *lock)
+      : locker(locker), lock(lock) {}
+  void finish(int r) { locker->_xlock_finished(lock, NULL); }
+};
+
 void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
 {
   dout(10) << "xlock_finish on " << *lock << " " << *lock->get_parent() << dendl;
   assert(lock->get_parent()->is_auth());
 
-  // drop ref
-  lock->put_xlock();
   assert(mut);
   mut->xlocks.erase(lock);
   mut->locks.erase(lock);
+ 
+  if (!lock->get_cap_shift()) {
+    _xlock_finished(lock, pneed_issue);
+    return;
+  }
+
+  // send a cap update to any clients caching this lock
+  CInode *in = (CInode*)lock->get_parent();
+  in->cap_update_mask |= (CEPH_CAP_GSHARED << lock->get_cap_shift());
+  in->cap_updates.push_back(new C_Locker_XlockCallback(this, lock));
+  dout(7) << "xlock_finish requesting callbacks on "
+      << ccap_string(in->cap_update_mask) << dendl;
+
+  if (pneed_issue)
+    *pneed_issue = true;
+  else
+    issue_caps(in);
+}
+
+void Locker::_xlock_finished(SimpleLock *lock, bool *pneed_issue)
+{
+  dout(10) << "_xlock_finished on " << *lock << " " << *lock->get_parent() << dendl;
+
+  // drop ref
+  lock->put_xlock();
  
   bool do_issue = false;
 
