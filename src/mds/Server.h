@@ -202,7 +202,8 @@ public:
   void handle_client_unlink(MDRequest *mdr);
   void _unlink_local(MDRequest *mdr, CDentry *dn);
   void _unlink_local_finish(MDRequest *mdr, CDentry *dn);
-  void _rmdir_prepare_witness(MDRequest *mdr, CDentry *dn, CInode *in, int who);
+  void _rmdir_prepare_witness(MDRequest *mdr, CDentry *dn,
+                              CDentry::linkage_t *dnl, CInode *in, int who);
   void handle_slave_rmdir_prep(MDRequest *mdr);
   void _logged_slave_rmdir(MDRequest *mdr, CDentry *srcdn);
   void _commit_slave_rmdir(MDRequest *mdr, int r);
