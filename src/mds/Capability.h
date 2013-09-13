@@ -233,6 +233,7 @@ public:
   
   xlist<Capability*>::item item_session_caps;
   xlist<Capability*>::item item_snaprealm_caps;
+  xlist<Capability*>::item item_parent_lru;
 
   Capability(CInode *i = NULL, uint64_t id = 0, client_t c = 0) : 
     inode(i), client(c),
@@ -244,7 +245,9 @@ public:
     mseq(0),
     suppress(0), stale(false),
     client_follows(0), client_xattr_version(0),
-    item_session_caps(this), item_snaprealm_caps(this) {
+    item_session_caps(this),
+    item_snaprealm_caps(this),
+    item_parent_lru(this) {
     g_num_cap++;
     g_num_capa++;
   }
