@@ -1329,6 +1329,34 @@ Capability *CInode::add_client_cap(client_t client, Session *session, SnapRealm 
   return cap;
 }
 
+void CInode::update_cap_lru()
+{
+  int target = g_conf->mds_cap_update_lru_target;
+
+  // can we free up space in the blacklist?
+  while (cap_blacklist.size() && shared_cap_lru.size() < target) {
+    Capability *cap = cap_blacklist.front();
+    cap_blacklist.remove(&cap->item_parent_lru);
+  }
+
+  // limit the number of clients that need callbacks
+  if (cap_update_mask && target) {
+    // drop no more than half of the caps until we reach the target
+    if (target < shared_cap_lru.size() / 2)
+      target = shared_cap_lru.size() / 2;
+    while (shared_cap_lru.size() > target) {
+      // move to blacklist
+      Capability *cap = shared_cap_lru.front();
+      cap_blacklist.push_back(&cap->item_parent_lru);
+    }
+  }
+}
+
+bool CInode::is_cap_blacklisted(Capability *cap) const
+{
+  return cap->item_parent_lru.get_list() == &cap_blacklist;
+}
+
 void CInode::remove_client_cap(client_t client)
 {
   assert(client_caps.count(client) == 1);
@@ -1340,6 +1368,7 @@ void CInode::remove_client_cap(client_t client)
   if (client == loner_cap)
     loner_cap = -1;
 
+  cap->item_parent_lru.remove_myself();
   delete cap;
   client_caps.erase(client);
   if (client_caps.empty()) {

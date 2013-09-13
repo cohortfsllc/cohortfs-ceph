@@ -1745,6 +1745,8 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
 
   C_GatherBuilder gather(g_ceph_context);
 
+  in->update_cap_lru();
+
   // client caps
   map<client_t, Capability*>::iterator it, end;
   if (only_cap) {
@@ -1769,6 +1771,10 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
 
     // add in any xlocker-only caps (for locks this client is the xlocker for)
     allowed |= xlocker_allowed & in->get_xlocker_mask(it->first);
+
+    // revoke blacklisted caps
+    if (in->is_cap_blacklisted(cap))
+      allowed = 0;
 
     int pending = cap->pending();
     int wanted = cap->wanted();
@@ -1812,6 +1818,13 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
       op = CEPH_CAP_OP_SYNC_UPDATE;
       cap->add_confirm_waiter(seq, gather.new_sub());
     }
+
+    // update cap lru
+    if ((~before & after) & CEPH_CAP_ANY_SHARED) // new shared caps?
+      in->shared_cap_lru.push_back(&cap->item_parent_lru);
+    else if ((after & CEPH_CAP_ANY_SHARED) == 0 && // no more shared caps?
+             !in->is_cap_blacklisted(cap))
+      cap->item_parent_lru.remove_myself();
 
     dout(7) << "   sending MClientCaps to client." << it->first
         << " seq " << cap->get_last_seq()

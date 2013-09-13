@@ -564,6 +564,12 @@ public:
   list<Context*> cap_updates;
   int cap_update_mask;
 
+  xlist<Capability*> shared_cap_lru; // lru of caps with CEPH_CAP_ANY_SHARED
+  xlist<Capability*> cap_blacklist; // caps blacklisted because of lru
+
+  void update_cap_lru();
+  bool is_cap_blacklisted(Capability *cap) const;
+
   // client caps
   client_t loner_cap, want_loner_cap;
 
