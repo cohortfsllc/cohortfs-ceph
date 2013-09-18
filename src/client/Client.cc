@@ -3171,7 +3171,7 @@ void Client::handle_caps(MClientCaps *m)
 
   switch (m->get_op()) {
   case CEPH_CAP_OP_TRUNC: return handle_cap_trunc(in, m);
-  case CEPH_CAP_OP_REVOKE:
+  case CEPH_CAP_OP_SYNC_UPDATE:
   case CEPH_CAP_OP_GRANT: return handle_cap_grant(in, mds, cap, m);
   case CEPH_CAP_OP_FLUSH_ACK: return handle_cap_flush_ack(in, mds, cap, m);
   default:
@@ -3415,6 +3415,14 @@ void Client::handle_cap_grant(Inode *in, int mds, Cap *cap, MClientCaps *m)
     ldout(cct, 10) << "  grant, new caps are " << ccap_string(new_caps & ~old_caps) << dendl;
     cap->issued = new_caps;
     cap->implemented |= new_caps;
+  }
+
+  if (m->get_op() == CEPH_CAP_OP_SYNC_UPDATE) {
+    // reply with an ack
+    int mds = m->get_source().num();
+    int wanted = in->caps_wanted();
+    int retain = wanted | CEPH_CAP_PIN;
+    send_cap(in, mds, cap, in->caps_used(), wanted, retain, in->flushing_caps);
   }
 
   // wake up waiters

@@ -184,7 +184,7 @@ const char *ceph_cap_op_name(int op)
 {
 	switch (op) {
 	case CEPH_CAP_OP_GRANT: return "grant";
-	case CEPH_CAP_OP_REVOKE: return "revoke";
+	case CEPH_CAP_OP_SYNC_UPDATE: return "sync-update";
 	case CEPH_CAP_OP_TRUNC: return "trunc";
 	case CEPH_CAP_OP_EXPORT: return "export";
 	case CEPH_CAP_OP_IMPORT: return "import";

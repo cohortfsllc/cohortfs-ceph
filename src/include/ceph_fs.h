@@ -613,7 +613,7 @@ int ceph_caps_for_mode(int mode);
 
 enum {
 	CEPH_CAP_OP_GRANT,         /* mds->client grant */
-	CEPH_CAP_OP_REVOKE,        /* mds->client revoke */
+	CEPH_CAP_OP_SYNC_UPDATE,   /* mds->client sync update (requires ack) */
 	CEPH_CAP_OP_TRUNC,         /* mds->client trunc notify */
 	CEPH_CAP_OP_EXPORT,        /* mds has exported the cap */
 	CEPH_CAP_OP_IMPORT,        /* mds has imported the cap */
