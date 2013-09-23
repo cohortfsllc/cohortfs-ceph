@@ -1235,12 +1235,18 @@ bool Locker::wrlock_start(SimpleLock *lock, Mutation *mut,
 }
 
 class C_Locker_WrlockCallback : public Context {
+  MDS *mds;
   Locker *locker;
   SimpleLock *lock;
  public:
-  C_Locker_WrlockCallback(Locker *locker, SimpleLock *lock)
-      : locker(locker), lock(lock) {}
-  void finish(int r) { locker->_wrlock_finished(lock, NULL); }
+  C_Locker_WrlockCallback(MDS *mds, Locker *locker, SimpleLock *lock)
+      : mds(mds), locker(locker), lock(lock) {}
+  void finish(int r) {
+    CInode *in = (CInode*)lock->get_parent();
+    dout(10) << "wrlock_finish callbacks received for " << in->ino()
+        << " on " << *lock << dendl;
+    locker->_wrlock_finished(lock, NULL);
+  }
 };
 
 void Locker::wrlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
@@ -1260,10 +1266,11 @@ void Locker::wrlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
 
   // send a cap update to any clients caching this lock
   CInode *in = (CInode*)lock->get_parent();
-  in->cap_update_mask |= (CEPH_CAP_GSHARED << lock->get_cap_shift());
-  in->cap_updates.push_back(new C_Locker_WrlockCallback(this, lock));
-  dout(7) << "wrlock_finish requesting callbacks on "
-      << ccap_string(in->cap_update_mask) << dendl;
+  const int mask = (CEPH_CAP_GSHARED << lock->get_cap_shift());
+  in->cap_update_mask |= mask;
+  in->cap_updates.push_back(new C_Locker_WrlockCallback(mds, this, lock));
+  dout(7) << "wrlock_finish callbacks requested for " << in->ino()
+      << " on " << *lock << " for caps " << ccap_string(mask) << dendl;
 
   if (pneed_issue)
     *pneed_issue = true;
@@ -1417,12 +1424,18 @@ void Locker::_finish_xlock(SimpleLock *lock, bool *pneed_issue)
 }
 
 class C_Locker_XlockCallback : public Context {
+  MDS *mds;
   Locker *locker;
   SimpleLock *lock;
  public:
-  C_Locker_XlockCallback(Locker *locker, SimpleLock *lock)
-      : locker(locker), lock(lock) {}
-  void finish(int r) { locker->_xlock_finished(lock, NULL); }
+  C_Locker_XlockCallback(MDS *mds, Locker *locker, SimpleLock *lock)
+      : mds(mds), locker(locker), lock(lock) {}
+  void finish(int r) {
+    CInode *in = (CInode*)lock->get_parent();
+    dout(10) << "xlock_finish callbacks received for " << in->ino()
+        << " on " << *lock << dendl;
+    locker->_xlock_finished(lock, NULL);
+  }
 };
 
 void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
@@ -1441,10 +1454,11 @@ void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
 
   // send a cap update to any clients caching this lock
   CInode *in = (CInode*)lock->get_parent();
-  in->cap_update_mask |= (CEPH_CAP_GSHARED << lock->get_cap_shift());
-  in->cap_updates.push_back(new C_Locker_XlockCallback(this, lock));
-  dout(7) << "xlock_finish requesting callbacks on "
-      << ccap_string(in->cap_update_mask) << dendl;
+  const int mask = (CEPH_CAP_GSHARED << lock->get_cap_shift());
+  in->cap_update_mask |= mask;
+  in->cap_updates.push_back(new C_Locker_XlockCallback(mds, this, lock));
+  dout(7) << "xlock_finish callbacks requested for " << in->ino()
+      << " on " << *lock << " for caps " << ccap_string(mask) << dendl;
 
   if (pneed_issue)
     *pneed_issue = true;
@@ -1721,6 +1735,20 @@ void Locker::issue_caps_set(set<CInode*>& inset)
     issue_caps(*p);
 }
 
+class C_Locker_CapUpdate : public Context {
+  MDS *mds;
+  inodeno_t ino;
+  ceph_seq_t seq;
+  Context *fin;
+ public:
+  C_Locker_CapUpdate(MDS *mds, inodeno_t ino, ceph_seq_t seq, Context *fin)
+    : mds(mds), ino(ino), seq(seq), fin(fin) {}
+  void finish(int r) {
+    dout(10) << "cap update reply for " << ino << ':' << seq << dendl;
+    fin->complete(r);
+  }
+};
+
 void Locker::issue_caps(CInode *in, Capability *only_cap)
 {
   // allowed caps are determined by the lock mode.
@@ -1816,7 +1844,10 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
     if ((before|after) & in->cap_update_mask) {
       // use SYNC_UPDATE if we're expecting a callback
       op = CEPH_CAP_OP_SYNC_UPDATE;
-      cap->add_confirm_waiter(seq, gather.new_sub());
+      inodeno_t ino = in->ino();
+      dout(10) << "cap update requested for " << ino << ':' << seq << dendl;
+      cap->add_confirm_waiter(seq, new C_Locker_CapUpdate(mds, ino, seq,
+                                                          gather.new_sub()));
     }
 
     // update cap lru
