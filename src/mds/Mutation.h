@@ -75,6 +75,7 @@ struct Mutation {
   list<CInode*> projected_inodes;
   list<CDirStripe*> projected_fnodes;
   list<ScatterLock*> updated_locks;
+  list<Capability*> suppressed_caps;
 
   list<CInode*> dirty_cow_inodes;
   list<CDentry*> dirty_cow_dentries;
@@ -130,6 +131,8 @@ struct Mutation {
   void add_projected_fnode(CDirStripe *stripe);
   void pop_and_dirty_projected_fnodes();
   void add_updated_lock(ScatterLock *lock);
+  void suppress_cap(Capability *cap);
+  void suppress_cap(CInode *in);
   void add_cow_inode(CInode *in);
   void add_cow_dentry(CDentry *dn);
   void apply();

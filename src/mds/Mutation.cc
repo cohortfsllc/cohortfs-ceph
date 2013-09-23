@@ -120,6 +120,19 @@ void Mutation::add_updated_lock(ScatterLock *lock)
   updated_locks.push_back(lock);
 }
 
+void Mutation::suppress_cap(Capability *cap)
+{
+  cap->inc_suppress();
+  suppressed_caps.push_back(cap);
+}
+
+void Mutation::suppress_cap(CInode *in)
+{
+  Capability *cap = in->get_client_cap(get_client());
+  if (cap)
+    suppress_cap(cap);
+}
+
 void Mutation::add_cow_inode(CInode *in)
 {
   pin(in);
@@ -154,6 +167,12 @@ void Mutation::apply()
 
 void Mutation::cleanup()
 {
+  // clear suppressed caps in cleanup, after locks have been dropped
+  for (list<Capability*>::iterator p = suppressed_caps.begin();
+       p != suppressed_caps.end();
+       ++p)
+    (*p)->dec_suppress();
+
   drop_local_auth_pins();
   drop_pins();
 }

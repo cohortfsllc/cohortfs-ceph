@@ -5682,13 +5682,7 @@ void MDCache::request_cleanup(MDRequest *mdr)
 
   request_drop_locks(mdr);
 
-  // drop (local) auth pins
-  mdr->drop_local_auth_pins();
-
   mds->locker->kick_cap_releases(mdr);
-
-  // drop cache pins
-  mdr->drop_pins();
 
   // remove from session
   mdr->item_session_request.remove_myself();
@@ -5697,6 +5691,7 @@ void MDCache::request_cleanup(MDRequest *mdr)
 
   // remove from map
   active_requests.erase(mdr->reqid);
+  mdr->cleanup();
   mdr->put();
 
   // fail-safe!

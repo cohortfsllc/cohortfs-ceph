@@ -811,8 +811,7 @@ void Server::early_reply(MDRequest *mdr, CInode *tracei, CDentry *tracedn)
     if (tracedn)
       mdr->cap_releases.erase(tracedn->get_dir()->get_inode()->vino());
 
-    set_trace_dist(mdr->session, reply, tracei, tracedn, mdr->snapid,
-		   mdr->client_request->get_dentry_wanted());
+    set_trace_dist(mdr, reply, tracei, tracedn);
   }
 
   reply->set_extra_bl(mdr->reply_extra_bl);
@@ -848,7 +847,6 @@ void Server::reply_request(MDRequest *mdr, MClientReply *reply, CInode *tracei, 
   apply_allocated_inos(mdr);
 
   // get tracei/tracedn from mdr?
-  snapid_t snapid = mdr->snapid;
   if (!tracei)
     tracei = mdr->tracei;
   if (!tracedn)
@@ -858,7 +856,6 @@ void Server::reply_request(MDRequest *mdr, MClientReply *reply, CInode *tracei, 
   bool did_early_reply = mdr->did_early_reply;
   Session *session = mdr->session;
   entity_inst_t client_inst = req->get_source_inst();
-  int dentry_wanted = req->get_dentry_wanted();
 
   if (!did_early_reply && !is_replay) {
 
@@ -893,7 +890,7 @@ void Server::reply_request(MDRequest *mdr, MClientReply *reply, CInode *tracei, 
 	  mdcache->try_reconnect_cap(tracei, session);
       } else {
 	// include metadata in reply
-	set_trace_dist(session, reply, tracei, tracedn, snapid, dentry_wanted);
+	set_trace_dist(mdr, reply, tracei, tracedn);
       }
     }
 
@@ -935,19 +932,14 @@ void Server::encode_null_lease(bufferlist& bl)
  *
  * trace is in reverse order (i.e. root inode comes last)
  */
-void Server::set_trace_dist(Session *session, MClientReply *reply,
-			    CInode *in, CDentry *dn,
-			    snapid_t snapid,
-			    int dentry_wanted)
+void Server::set_trace_dist(MDRequest *mdr, MClientReply *reply,
+			    CInode *in, CDentry *dn)
 {
   // inode, dentry, dir, ..., inode
   bufferlist bl;
-  client_t client = session->get_client();
   utime_t now = ceph_clock_now(g_ceph_context);
 
-  dout(20) << "set_trace_dist snapid " << snapid << dendl;
-
-  //assert((bool)dn == (bool)dentry_wanted);  // not true for snapshot lookups
+  dout(20) << "set_trace_dist snapid " << mdr->snapid << dendl;
 
   // realm
   SnapRealm *realm = mdcache->get_snaprealm();
@@ -960,21 +952,24 @@ void Server::set_trace_dist(Session *session, MClientReply *reply,
     CDirStripe *stripe = dn->get_stripe();
     CInode *diri = stripe->get_inode();
 
-    diri->encode_inodestat(bl, session, NULL, snapid);
+    mdr->suppress_cap(diri);
+    diri->encode_inodestat(bl, mdr->session, NULL, mdr->snapid);
     dout(20) << "set_trace_dist added diri " << *diri << dendl;
 
     ::encode(dn->get_name(), bl);
-    if (snapid == CEPH_NOSNAP)
-      mds->locker->issue_client_lease(dn, client, bl, now, session);
+    if (mdr->snapid == CEPH_NOSNAP)
+      mds->locker->issue_client_lease(dn, mdr->get_client(),
+                                      bl, now, mdr->session);
     else
       encode_null_lease(bl);
-    dout(20) << "set_trace_dist added dn   " << snapid << " " << *dn << dendl;
+    dout(20) << "set_trace_dist added dn   " << mdr->snapid << " " << *dn << dendl;
   } else
     reply->head.is_dentry = 0;
 
   // inode
   if (in) {
-    in->encode_inodestat(bl, session, NULL, snapid);
+    mdr->suppress_cap(in);
+    in->encode_inodestat(bl, mdr->session, NULL, mdr->snapid);
     dout(20) << "set_trace_dist added in   " << *in << dendl;
     reply->head.is_target = 1;
   } else
