@@ -122,11 +122,16 @@ else ()
 	${libcommon_files}) 
 endif (${WITH_PROFILER})
 
-add_definitions("-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE")
+add_definitions("-D__linux__ -DHAVE_CONFIG_H -D__CEPH__ -DUSE_CRYPTOPP -DCEPH_LIBDIR=${LIBRARY_OUTPUT_PATH} -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE")
 
 include_directories("..")
 
 add_library (libcommon ${libcommon_files})
+set_property(
+   DIRECTORY
+   PROPERTY COMPILE_DEFINITIONS HAVE_CONFIG_H __CEPH__ __linux__ USE_CRYPTOPP CEPH_LIBDIR=${LIBRARY_OUTPUT_PATH} _FILE_OFFSET_BITS=64 _REENTRANT _THREAD_SAFE __STDC_FORMAT_MACROS _GNU_SOURCE
+   )
+cotire(libcommon)
 
 if (${WITH_PROFILER})
   target_link_libraries(libcommon profiler)
@@ -135,6 +140,4 @@ endif(${WITH_PROFILER})
 target_link_libraries(libcommon ${CRYPTO_LIBS} rt ${Boost_LIBRARIES}) 
 
 message( STATUS "libcommon is here" )
-
-
 

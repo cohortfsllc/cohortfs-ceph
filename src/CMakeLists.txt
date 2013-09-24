@@ -1,12 +1,12 @@
-add_definitions("-DCEPH_LIBDIR=${LIBRARY_OUTPUT_PATH}")
 
-set(AM_COMMON_FLAGS "-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE -rdynamic -Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -fPIC")
+add_definitions("-D__linux__ -DHAVE_CONFIG_H -D__CEPH__ -DUSE_CRYPTOPP -DCEPH_LIBDIR=${LIBRARY_OUTPUT_PATH} -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE")
 
-set(CMAKE_CXX_FLAGS "-Wno-invalid-offsetof -Wnon-virtual-dtor -Wno-invalid-offsetof -Wstrict-null-sentinel")
+set_property(
+   DIRECTORY
+   PROPERTY COMPILE_DEFINITIONS HAVE_CONFIG_H __CEPH__ __linux__ USE_CRYPTOPP CEPH_LIBDIR=${LIBRARY_OUTPUT_PATH} _FILE_OFFSET_BITS=64 _REENTRANT _THREAD_SAFE __STDC_FORMAT_MACROS _GNU_SOURCE
+   )
 
-add_definitions("${AM_COMMON_FLAGS}")
-
-
+set(CMAKE_CXX_FLAGS " -rdynamic -Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -Wno-invalid-offsetof -Wnon-virtual-dtor -Wno-invalid-offsetof -Wstrict-null-sentinel")
 
 set(EXTRALIBS uuid rt profiler)
 
@@ -47,6 +47,7 @@ set(ceph_mon_srcs
 )
 
 add_executable(ceph-mon ${ceph_mon_srcs})
+cotire(ceph-mon)
 
 target_link_libraries(ceph-mon libmon boost_thread libcommon libos libglobal ${TCMALLOC_LIBS})
 
@@ -59,6 +60,7 @@ set(ceph_osd_srcs
 )
 
 add_executable(ceph-osd ${ceph_osd_srcs})
+cotire(ceph-osd)
 
 target_link_libraries(ceph-osd libosd libos libglobal ${TCMALLOC_LIBS})
 
@@ -68,6 +70,7 @@ set(ceph_mds_srcs
 	${TCMALLOC_srcs}
 )
 add_executable(ceph-mds ${ceph_mds_srcs})
+cotire(ceph-mds)
 
 target_link_libraries(ceph-mds libmds libosdc ${CMAKE_DL_LIBS} libglobal ${TCMALLOC_LIBS} boost_thread)
 
@@ -79,6 +82,7 @@ set(ceph_conf_srcs
 )
 
 add_executable(ceph-conf ${ceph_conf_srcs})
+cotire(ceph-conf)
 target_link_libraries(ceph-conf libglobal)
 
 #ceph-authtool
@@ -95,6 +99,7 @@ set(cephfs_srcs
 )
 
 add_executable(cephfs ${cephfs_srcs})
+cotire(cephfs)
 
 target_link_libraries(cephfs libcommon)
 
@@ -105,6 +110,7 @@ set(ceph_syn_srcs
 )
 
 add_executable(ceph-syn ${ceph_syn_srcs})
+cotire(ceph-syn)
 target_link_libraries(ceph-syn libclient libglobal)
 
 #rados
@@ -116,6 +122,7 @@ set(rados_srcs
 	common/obj_bencher.cc
 )
 add_executable(rados ${rados_srcs})
+cotire(rados)
 target_link_libraries(rados cls_lock librados libglobal)
 
 #librados_config_srcs
@@ -133,6 +140,7 @@ set(ceph_osdomap_tool_srcs
 )
 
 add_executable(ceph-osdomap-tool ${ceph_osdomap_tool_srcs})
+cotire(ceph-osdomap-tool)
 target_link_libraries(ceph-osdomap-tool libos libglobal -lboost_program_options)
 # has these: ${UNITTEST_CXXFLAGS}
 

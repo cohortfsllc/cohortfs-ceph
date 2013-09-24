@@ -4,6 +4,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
 project(Ceph)
 
+include(cotire)
 include(CheckIncludeFiles)
 
 CHECK_INCLUDE_FILES("stdint.h" HAVE_STDINT_H)

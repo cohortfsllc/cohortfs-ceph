@@ -24,7 +24,7 @@ namespace ceph {
     void init(CephContext *cct);
     void shutdown();
 
-    using CryptoPP::Weak::MD5;
+    using CryptoPP::Weak1::MD5;
     using CryptoPP::SHA1;
     using CryptoPP::SHA256;
 
