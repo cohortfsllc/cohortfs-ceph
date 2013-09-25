@@ -13,7 +13,8 @@ CHECK_INCLUDE_FILES("atomic_ops.h" HAVE_ATOMIC_OPS)
 
 add_definitions(-D__linux__)
 
-set(Boost_USE_STATIC_LIBS   ON)
+# cant use static Boost to build shared ceph-osd
+set(Boost_USE_STATIC_LIBS OFF)
 set(Boost_USE_MULTITHREADED ON)
 find_package(Boost COMPONENTS thread system REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})

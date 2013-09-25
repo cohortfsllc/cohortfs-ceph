@@ -6,8 +6,6 @@ set(CMAKE_CXX_FLAGS "-Wno-invalid-offsetof -Wnon-virtual-dtor -Wno-invalid-offse
 
 add_definitions("${AM_COMMON_FLAGS}")
 
-
-
 set(EXTRALIBS uuid rt profiler)
 
 set(CRYPTO_LIBS cryptopp)
@@ -59,21 +57,37 @@ set(ceph_osd_srcs
 )
 
 add_executable(ceph-osd ${ceph_osd_srcs})
-
 target_link_libraries(ceph-osd libosd libos libglobal ${TCMALLOC_LIBS})
 
-#mds
+#osd shared library
+set(lib_ceph_osd_srcs
+	osd/PG.cc 
+	osd/PGLog.cc 
+	osd/ReplicatedPG.cc 
+	osd/Ager.cc 
+	osd/OSD.cc 
+	osd/OSDCap.cc 
+	osd/Watch.cc 
+	osd/ClassHandler.cc 
+	osd/OpRequest.cc 
+	osd/SnapMapper.cc
+	${ceph_osd_srcs}
+)
+
+add_library(shared-ceph-osd SHARED ${lib_ceph_osd_srcs})
+target_link_libraries(ceph-osd libos libglobal ${TCMALLOC_LIBS})
+
+# mds
 set(ceph_mds_srcs
 	ceph_mds.cc
 	${TCMALLOC_srcs}
 )
 add_executable(ceph-mds ${ceph_mds_srcs})
-
 target_link_libraries(ceph-mds libmds libosdc ${CMAKE_DL_LIBS} libglobal ${TCMALLOC_LIBS} boost_thread)
 
 # admin tools
 
-#ceph-conf
+# ceph-conf
 set(ceph_conf_srcs
 	ceph_conf.cc
 )
@@ -81,7 +95,7 @@ set(ceph_conf_srcs
 add_executable(ceph-conf ${ceph_conf_srcs})
 target_link_libraries(ceph-conf libglobal)
 
-#ceph-authtool
+# ceph-authtool
 set(ceph_authtool_srcs
 	ceph_authtool.cc
 )
@@ -89,7 +103,7 @@ set(ceph_authtool_srcs
 add_executable(ceph-authtool ${ceph_authtool_srcs})
 target_link_libraries(ceph-authtool libglobal)
 
-#cephfs
+# cephfs
 set(cephfs_srcs 
 	cephfs.cc
 )
@@ -107,7 +121,7 @@ set(ceph_syn_srcs
 add_executable(ceph-syn ${ceph_syn_srcs})
 target_link_libraries(ceph-syn libclient libglobal)
 
-#rados
+# rados
 set(rados_srcs
 	rados.cc 
 	rados_import.cc 
@@ -118,7 +132,7 @@ set(rados_srcs
 add_executable(rados ${rados_srcs})
 target_link_libraries(rados cls_lock librados libglobal)
 
-#librados_config_srcs
+# librados_config_srcs
 set(librados_config_srcs
 	librados-config.cc 
 )
