@@ -50,7 +50,7 @@ target_link_libraries(ceph-mon libmon boost_thread libcommon libos libglobal ${T
 
 # osd
 set(ceph_osd_srcs
-	ceph_osd.cc 
+	ceph_osd.cc
 	objclass/class_debug.cc 
 	objclass/class_api.cc
 	${TCMALLOC_srcs}
@@ -71,7 +71,10 @@ set(lib_ceph_osd_srcs
 	osd/ClassHandler.cc 
 	osd/OpRequest.cc 
 	osd/SnapMapper.cc
-	${ceph_osd_srcs}
+	lib_ceph_osd.cc 
+	objclass/class_debug.cc 
+	objclass/class_api.cc
+	${TCMALLOC_srcs}
 )
 
 add_library(shared-ceph-osd SHARED ${lib_ceph_osd_srcs})
