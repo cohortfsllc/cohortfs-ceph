@@ -10,20 +10,26 @@
 
 #define dout_subsys ceph_subsys_client
 
-void CapObject::print(ostream &out)
+ostream& operator<<(ostream &out, CapObject &o)
 {
-  out << "refs=" << cap_refs
-      << " issued=" << ccap_string(caps_issued())
+  out << "refs=" << o.cap_refs
+      << " issued=" << ccap_string(o.caps_issued())
       << " {";
-  for (cap_map::const_iterator i = caps.begin(); i != caps.end(); ++i) {
-    if (i != caps.begin()) out << ",";
+  for (cap_map::const_iterator i = o.caps.begin(); i != o.caps.end(); ++i) {
+    if (i != o.caps.begin()) out << ",";
     out << i->first << "=" << ccap_string(i->second->issued);
   }
   out << '}';
-  if (dirty_caps)
-    out << " dirty=" << ccap_string(dirty_caps);
-  if (flushing_caps)
-    out << " flushing=" << ccap_string(flushing_caps);
+  if (o.dirty_caps)
+    out << " dirty=" << ccap_string(o.dirty_caps);
+  if (o.flushing_caps)
+    out << " flushing=" << ccap_string(o.flushing_caps);
+  return out;
+}
+
+void CapObject::print(ostream &out)
+{
+  out << *this;
 }
 
 CapObject::CapObject(CephContext *cct, CapClient *client, vinodeno_t vino)
