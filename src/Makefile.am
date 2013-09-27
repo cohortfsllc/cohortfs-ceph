@@ -2009,6 +2009,7 @@ noinst_HEADERS = \
 	osd/ClassHandler.h\
         osd/OSD.h\
         cohort/CohortOSD.h\
+        cohort/erasure.h\
         osd/OSDCap.h\
         osd/OSDMap.h\
         cohort/CohortOSDMap.h\
