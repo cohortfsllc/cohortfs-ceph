@@ -108,9 +108,6 @@ class CapObject {
   void dump(Formatter *f) const;
 };
 
-inline ostream& operator<<(ostream &out, CapObject &c) {
-  c.print(out);
-  return out;
-}
+ostream& operator<<(ostream &out, CapObject &c);
 
 #endif
