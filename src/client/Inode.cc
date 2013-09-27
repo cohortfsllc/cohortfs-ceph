@@ -10,33 +10,35 @@
 
 #define dout_subsys ceph_subsys_client
 
-void Inode::print(ostream &out)
+ostream& operator<<(ostream &out, Inode &in)
 {
-  out << vino() << "("
-      << "ref=" << _ref
-      << " open=" << open_by_mode
-      << " mode=" << oct << mode << dec
-      << " size=" << size
-      << " mtime=" << mtime
-      << " caps=(";
-  CapObject::print(out);
-  out << ')';
+  out << in.vino() << "("
+      << "ref=" << in._ref
+      << " open=" << in.open_by_mode
+      << " mode=" << oct << in.mode << dec
+      << " size=" << in.size
+      << " mtime=" << in.mtime
+      << " caps=(" << (CapObject&)in << ')';
 
-  if (flags & I_COMPLETE)
+  if (in.flags & I_COMPLETE)
     out << " COMPLETE";
 
-  if (is_file())
-    out << " " << oset;
+  if (in.is_file())
+    out << " " << in.oset;
 
-  if (!dn_set.empty())
-    out << " parents=" << dn_set;
+  if (!in.dn_set.empty())
+    out << " parents=" << in.dn_set;
 
-  if (is_dir() && has_dir_layout())
+  if (in.is_dir() && in.has_dir_layout())
     out << " has_dir_layout";
 
-  out << ' ' << this << ")";
+  return out << ' ' << &in << ")";
 }
 
+void Inode::print(ostream &out)
+{
+  out << *this;
+}
 
 void Inode::make_long_path(filepath& p)
 {

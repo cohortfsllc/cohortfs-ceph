@@ -204,9 +204,6 @@ class Inode : public CapObject {
   void dump(Formatter *f) const;
 };
 
-inline ostream& operator<<(ostream &out, Inode &in) {
-  in.print(out);
-  return out;
-}
+ostream& operator<<(ostream &out, Inode &in);
 
 #endif
