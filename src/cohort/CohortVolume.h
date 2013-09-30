@@ -11,6 +11,7 @@
 
 #include "common/Mutex.h"
 #include "vol/Volume.h"
+#include "cohort/erasure.h"
 
 /* Superclass of all Cohort volume types, supporting dynamically
    generated placement. */
@@ -26,6 +27,7 @@ protected:
   epoch_t compiled_epoch;
   vector<string> symbols;
   vector<void *> entry_points;
+  erasure_params erasure;
 
   CohortVolume(const vol_type t, const string n,
 	       const bufferlist &p,

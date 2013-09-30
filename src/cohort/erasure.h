@@ -6,13 +6,13 @@
  * DO NOT DISTRIBUTE THIS FILE.  EVER.
  */
 
-#ifndef COHORT_COHORTVOLUME_H
-#define COHORT_COHORTVOLUME_H
+#ifndef COHORT_ERASURE_H
+#define COHORT_ERASURE_H
 
 /* Currently the set of encodings supported by Jerasure, but I reserve
    the right to add more in the future. */
 
-enum encoders {
+enum erasure_encoders {
   reed_solomon_vandermonde, /* Classic Reed-Solomon with a
 			       Vandermonde matrix, using arithmetic in
 			       GF(2^w). */
@@ -31,7 +31,7 @@ enum encoders {
    Jerasure uses. */
 
 struct erasure_params {
-  encoders type; /* Type of encoding to use */
+  erasure_encoders type; /* Type of encoding to use */
   int k; /* Count of data stripes in a block/object */
   int m; /* Count of coding stripes in a block/object */
   int w; /* Word size */
@@ -39,4 +39,4 @@ struct erasure_params {
   int size; /* Size of each stripe, in bytes. */
 };
 
-#endif /* COHORT_ERASURE_H */
+#endif /* !COHORT_ERASURE_H */
