@@ -283,11 +283,11 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
     // kill any lingering capabilities, leases, requests
     while (!session->caps.empty()) {
       Capability *cap = session->caps.front();
-      CInode *in = cap->get_inode();
-      if (in) {
+      CapObject *o = cap->get_parent();
+      if (o) {
         dout(20) << " killing capability " << ccap_string(cap->issued())
-            << " on " << *in << dendl;
-        mds->locker->remove_client_cap(in, session->inst.name.num());
+            << " on " << *o << dendl;
+        o->remove_client_cap(session->inst.name.num());
       }
     }
     while (!session->leases.empty()) {

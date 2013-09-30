@@ -1339,6 +1339,7 @@ libmds_a_SOURCES = \
 	mds/ParentStats.cc \
 	mds/Locker.cc \
 	mds/MDBalancer.cc \
+	mds/CapObject.cc \
 	mds/CDentry.cc \
 	mds/CDirFrag.cc \
 	mds/CDirPlacement.cc \
@@ -1654,6 +1655,7 @@ noinst_HEADERS = \
         mds/Anchor.h\
         mds/AnchorClient.h\
         mds/AnchorServer.h\
+        mds/CapObject.h\
         mds/CDentry.h\
         mds/CDirFrag.h\
 	mds/CDirPlacement.h\

@@ -55,7 +55,39 @@
 
  */
 
-class CInode;
+class CapObject;
+
+struct CapExport {
+  int32_t wanted;
+  int32_t issued;
+  int32_t pending;
+  snapid_t client_follows;
+  ceph_seq_t mseq;
+  utime_t last_issue_stamp;
+  CapExport() {}
+  CapExport(int w, int i, int p, snapid_t cf, ceph_seq_t s, utime_t lis) : 
+      wanted(w), issued(i), pending(p), client_follows(cf), mseq(s), last_issue_stamp(lis) {}
+  void encode(bufferlist &bl) const {
+    __u8 struct_v = 1;
+    ::encode(struct_v, bl);
+    ::encode(wanted, bl);
+    ::encode(issued, bl);
+    ::encode(pending, bl);
+    ::encode(client_follows, bl);
+    ::encode(mseq, bl);
+    ::encode(last_issue_stamp, bl);
+  }
+  void decode(bufferlist::iterator &p) {
+    __u8 struct_v;
+    ::decode(struct_v, p);
+    ::decode(wanted, p);
+    ::decode(issued, p);
+    ::decode(pending, p);
+    ::decode(client_follows, p);
+    ::decode(mseq, p);
+    ::decode(last_issue_stamp, p);
+  }
+};
 
 class Capability {
 private:
@@ -71,40 +103,9 @@ public:
     pool.free(p);
   }
 public:
-  struct Export {
-    int32_t wanted;
-    int32_t issued;
-    int32_t pending;
-    snapid_t client_follows;
-    ceph_seq_t mseq;
-    utime_t last_issue_stamp;
-    Export() {}
-    Export(int w, int i, int p, snapid_t cf, ceph_seq_t s, utime_t lis) : 
-      wanted(w), issued(i), pending(p), client_follows(cf), mseq(s), last_issue_stamp(lis) {}
-    void encode(bufferlist &bl) const {
-      __u8 struct_v = 1;
-      ::encode(struct_v, bl);
-      ::encode(wanted, bl);
-      ::encode(issued, bl);
-      ::encode(pending, bl);
-      ::encode(client_follows, bl);
-      ::encode(mseq, bl);
-      ::encode(last_issue_stamp, bl);
-    }
-    void decode(bufferlist::iterator &p) {
-      __u8 struct_v;
-      ::decode(struct_v, p);
-      ::decode(wanted, p);
-      ::decode(issued, p);
-      ::decode(pending, p);
-      ::decode(client_follows, p);
-      ::decode(mseq, p);
-      ::decode(last_issue_stamp, p);
-    }
-  };
 
 private:
-  CInode *inode;
+  CapObject *parent;
   client_t client;
 
   uint64_t cap_id;
@@ -253,8 +254,8 @@ public:
   xlist<Capability*>::item item_snaprealm_caps;
   xlist<Capability*>::item item_parent_lru;
 
-  Capability(CInode *i, uint64_t id, client_t c) : 
-    inode(i), client(c),
+  Capability(CapObject *parent, uint64_t id, client_t c) : 
+    parent(parent), client(c),
     cap_id(id),
     _wanted(0),
     _pending(0), _issued(0),
@@ -294,7 +295,7 @@ public:
   bool is_stale() { return stale; }
   void set_stale(bool b) { stale = b; }
 
-  CInode *get_inode() { return inode; }
+  CapObject* get_parent() { return parent; }
   client_t get_client() { return client; }
 
   // caps this client wants to hold
@@ -313,10 +314,10 @@ public:
   }
   
   // -- exports --
-  Export make_export() {
-    return Export(_wanted, issued(), pending(), client_follows, mseq+1, last_issue_stamp);
+  CapExport make_export() {
+    return CapExport(_wanted, issued(), pending(), client_follows, mseq+1, last_issue_stamp);
   }
-  void merge(Export& other) {
+  void merge(CapExport& other) {
     // issued + pending
     int newpending = other.pending | pending();
     if (other.issued & ~newpending)
@@ -375,7 +376,7 @@ public:
   
 };
 
-WRITE_CLASS_ENCODER(Capability::Export)
+WRITE_CLASS_ENCODER(CapExport)
 WRITE_CLASS_ENCODER(Capability::revoke_info)
 WRITE_CLASS_ENCODER(Capability)
 

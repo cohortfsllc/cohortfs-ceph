@@ -26,6 +26,7 @@
 #include "mdstypes.h"
 #include "flock.h"
 
+#include "CapObject.h"
 #include "CDentry.h"
 #include "SimpleLock.h"
 #include "ScatterLock.h"
@@ -96,7 +97,7 @@ WRITE_CLASS_ENCODER(default_file_layout);
 
 
 // cached inode wrapper
-class CInode : public MDSCacheObject {
+class CInode : public CapObject {
   /*
    * This class uses a boost::pool to handle allocation. This is *not*
    * thread-safe, so don't do allocations from multiple threads!
@@ -121,7 +122,6 @@ public:
  public:
   // -- pins --
   static const int PIN_PLACEMENT =        1; 
-  static const int PIN_CAPS =             2;  // client caps
   static const int PIN_IMPORTING =       -4;  // importing
   static const int PIN_ANCHORING =        5;
   static const int PIN_UNANCHORING =      6;
@@ -146,7 +146,6 @@ public:
   const char *pin_name(int p) {
     switch (p) {
     case PIN_PLACEMENT: return "placement";
-    case PIN_CAPS: return "caps";
     case PIN_IMPORTING: return "importing";
     case PIN_ANCHORING: return "anchoring";
     case PIN_UNANCHORING: return "unanchoring";
@@ -204,16 +203,12 @@ public:
   ostream& print_db_line_prefix(ostream& out);
 
  public:
-  MDCache *mdcache;
-
   // inode contents proper
   inode_t          inode;        // the inode itself
   CDirPlacement    *placement;   // stripe placement, if directory
   string           symlink;      // symlink dest, if symlink
   map<string, bufferptr> xattrs;
 
-  SnapRealm        *containing_realm;
-  snapid_t          first, last;
   map<snapid_t, old_inode_t> old_inodes;  // key = last, value.first = first
   set<snapid_t> dirty_old_rstats;
 
@@ -352,10 +347,6 @@ public:
 
   // -- distributed state --
 protected:
-  // file capabilities
-  map<client_t, Capability*> client_caps;         // client -> caps
-  map<int, int>         mds_caps_wanted;     // [auth] mds -> caps wanted
-  int                   replica_caps_wanted; // [replica] what i've requested from auth
 
   map<int, set<client_t> > client_snap_caps;     // [auth] [snap] dirty metadata we still need from the head
 public:
@@ -372,7 +363,6 @@ protected:
   // LogSegment dlists i (may) belong to
 public:
   elist<CInode*>::item item_dirty;
-  elist<CInode*>::item item_caps;
   elist<CInode*>::item item_open_file;
   elist<CInode*>::item item_renamed_file;
   elist<CInode*>::item item_dirty_rstat;
@@ -558,103 +548,12 @@ public:
   bool is_dirty_scattered();
   void clear_scatter_dirty();  // on rejoin ack
 
-  // cap callbacks; force issue_caps() to send a CEPH_CAP_OP_SYNC_UPDATE
-  // message to all clients matching cap_update_mask, and finish once all
-  // updates are acked with CEPH_CAP_OP_UPDATE
-  list<Context*> cap_updates;
-  int cap_update_mask;
+  // -- caps --
+  virtual Capability *add_client_cap(client_t client, Session *session, SnapRealm *conrealm=0);
+  virtual void remove_client_cap(client_t client);
+  virtual int get_caps_liked();
+  virtual int get_caps_allowed_ever();
 
-  xlist<Capability*> shared_cap_lru; // lru of caps with CEPH_CAP_ANY_SHARED
-  xlist<Capability*> cap_blacklist; // caps blacklisted because of lru
-
-  void update_cap_lru();
-  bool is_cap_blacklisted(Capability *cap) const;
-
-  // client caps
-  client_t loner_cap, want_loner_cap;
-
-  client_t get_loner() { return loner_cap; }
-  client_t get_wanted_loner() { return want_loner_cap; }
-
-  // this is the loner state our locks should aim for
-  client_t get_target_loner() {
-    if (loner_cap == want_loner_cap)
-      return loner_cap;
-    else
-      return -1;
-  }
-
-  client_t calc_ideal_loner();
-  client_t choose_ideal_loner();
-  bool try_set_loner();
-  void set_loner_cap(client_t l);
-  bool try_drop_loner();
-
-  // choose new lock state during recovery, based on issued caps
-  void choose_lock_state(SimpleLock *lock, int allissued);
-  void choose_lock_states();
-
-  int count_nonstale_caps() {
-    int n = 0;
-    for (map<client_t,Capability*>::iterator it = client_caps.begin();
-         it != client_caps.end();
-         it++) 
-      if (!it->second->is_stale())
-	n++;
-    return n;
-  }
-  bool multiple_nonstale_caps() {
-    int n = 0;
-    for (map<client_t,Capability*>::iterator it = client_caps.begin();
-         it != client_caps.end();
-         it++) 
-      if (!it->second->is_stale()) {
-	if (n)
-	  return true;
-	n++;
-      }
-    return false;
-  }
-
-  bool is_any_caps() { return !client_caps.empty(); }
-  bool is_any_nonstale_caps() { return count_nonstale_caps(); }
-
-  map<int,int>& get_mds_caps_wanted() { return mds_caps_wanted; }
-
-  map<client_t,Capability*>& get_client_caps() { return client_caps; }
-  Capability *get_client_cap(client_t client) {
-    if (client_caps.count(client))
-      return client_caps[client];
-    return 0;
-  }
-  int get_client_cap_pending(client_t client) {
-    Capability *c = get_client_cap(client);
-    if (c) return c->pending();
-    return 0;
-  }
-
-  Capability *add_client_cap(client_t client, Session *session, SnapRealm *conrealm=0);
-  void remove_client_cap(client_t client);
-  void move_to_realm(SnapRealm *realm);
-
-  Capability *reconnect_cap(client_t client, ceph_mds_cap_reconnect& icr, Session *session);
-  void clear_client_caps_after_export();
-  void export_client_caps(map<client_t,Capability::Export>& cl);
-
-  // caps allowed
-  int get_caps_liked();
-  int get_caps_allowed_ever();
-  int get_caps_allowed_by_type(int type);
-  int get_caps_careful();
-  int get_xlocker_mask(client_t client);
-  int get_caps_allowed_for_client(client_t client);
-
-  // caps issued, wanted
-  int get_caps_issued(int *ploner = 0, int *pother = 0, int *pxlocker = 0,
-		      int shift = 0, int mask = 0xffff);
-  bool is_any_caps_wanted();
-  int get_caps_wanted(int *ploner = 0, int *pother = 0, int shift = 0, int mask = 0xffff);
-  bool issued_caps_need_gather(SimpleLock *lock);
   void replicate_relax_locks();
 
 
@@ -737,7 +636,7 @@ public:
     projected_parent.pop_front();
   }
 
-  void print(ostream& out);
+  virtual void print(ostream& out);
 
 };
 

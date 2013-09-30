@@ -58,7 +58,6 @@ inline ostream& operator<<(ostream& out, const SnapInfo &sn) {
  */
 struct SnapRealm;
 struct CapabilityGroup;
-class CInode;
 class MDCache;
 class MDRequest;
 
@@ -138,10 +137,9 @@ struct SnapRealm {
 
   bufferlist cached_snap_trace;
 
-  elist<CInode*> inodes_with_caps;             // for efficient realm splits
   map<client_t, xlist<Capability*>* > client_caps;   // to identify clients who need snap notifications
 
-  SnapRealm(MDCache *c) : srnode(), mdcache(c), inodes_with_caps(0) {}
+  SnapRealm(MDCache *c) : srnode(), mdcache(c) {}
 
   bool exists(const string &name) {
     for (map<snapid_t,SnapInfo>::iterator p = srnode.snaps.begin();

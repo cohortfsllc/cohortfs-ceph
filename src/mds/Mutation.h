@@ -213,7 +213,7 @@ struct MDRequest : public Mutation {
 
     map<client_t,entity_inst_t> imported_client_map;
     map<client_t,uint64_t> sseq_map;
-    map<CInode*, map<client_t,Capability::Export> > cap_imports;
+    map<CInode*, map<client_t,CapExport> > cap_imports;
     
     // for lock/flock
     bool flock_was_waiting;

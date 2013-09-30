@@ -78,164 +78,132 @@ int num_cinode_locks = 5;
 
 
 
-ostream& operator<<(ostream& out, CInode& in)
+void CInode::print(ostream& out)
 {
   string path;
-  in.make_path_string_projected(path);
+  make_path_string_projected(path);
 
-  out << "[inode " << in.inode.ino;
+  out << "[inode " << inode.ino;
   out << " [" 
-      << (in.is_multiversion() ? "...":"")
-      << in.first << "," << in.last << "]";
-  out << " " << path << (in.is_dir() ? "/":"");
+      << (is_multiversion() ? "...":"")
+      << first << "," << last << "]";
+  out << " " << path << (is_dir() ? "/":"");
 
-  if (in.is_auth()) {
+  if (is_auth()) {
     out << " auth";
-    if (in.is_replicated()) 
-      out << in.get_replicas();
+    if (is_replicated()) 
+      out << get_replicas();
   } else {
-    pair<int,int> a = in.authority();
+    pair<int,int> a = authority();
     out << " rep@" << a.first;
     if (a.second != CDIR_AUTH_UNKNOWN)
       out << "," << a.second;
-    out << "." << in.get_replica_nonce();
+    out << "." << get_replica_nonce();
   }
 
-  if (in.is_symlink())
-    out << " symlink='" << in.symlink << "'";
+  if (is_symlink())
+    out << " symlink='" << symlink << "'";
  
-  out << " v" << in.get_version();
-  if (in.get_projected_version() > in.get_version())
-    out << " pv" << in.get_projected_version();
+  out << " v" << get_version();
+  if (get_projected_version() > get_version())
+    out << " pv" << get_projected_version();
 
-  if (in.is_auth_pinned()) {
-    out << " ap=" << in.get_num_auth_pins();
+  if (is_auth_pinned()) {
+    out << " ap=" << get_num_auth_pins();
 #ifdef MDS_AUTHPIN_SET
-    out << "(" << in.auth_pin_set << ")";
+    out << "(" << auth_pin_set << ")";
 #endif
   }
 
-  if (in.state_test(CInode::STATE_AMBIGUOUSAUTH)) out << " AMBIGAUTH";
-  if (in.state_test(CInode::STATE_NEEDSRECOVER)) out << " needsrecover";
-  if (in.state_test(CInode::STATE_RECOVERING)) out << " recovering";
-  if (in.state_test(CInode::STATE_DIRTYPARENT)) out << " dirtyparent";
-  if (in.is_freezing_inode()) out << " FREEZING=" << in.auth_pin_freeze_allowance;
-  if (in.is_frozen_inode()) out << " FROZEN";
-  if (in.is_frozen_auth_pin()) out << " FROZEN_AUTHPIN";
+  if (state_test(CInode::STATE_AMBIGUOUSAUTH)) out << " AMBIGAUTH";
+  if (state_test(CInode::STATE_NEEDSRECOVER)) out << " needsrecover";
+  if (state_test(CInode::STATE_RECOVERING)) out << " recovering";
+  if (state_test(CInode::STATE_DIRTYPARENT)) out << " dirtyparent";
+  if (is_freezing_inode()) out << " FREEZING=" << auth_pin_freeze_allowance;
+  if (is_frozen_inode()) out << " FROZEN";
+  if (is_frozen_auth_pin()) out << " FROZEN_AUTHPIN";
 
-  inode_t *pi = in.get_projected_inode();
+  inode_t *pi = get_projected_inode();
   if (pi->is_truncating())
     out << " truncating(" << pi->truncate_from << " to " << pi->truncate_size << ")";
 
-  if (in.inode.is_dir()) {
-    out << " " << in.inode.dirstat;
-    if (g_conf->mds_debug_scatterstat && in.is_projected()) {
-      inode_t *pi = in.get_projected_inode();
+  if (inode.is_dir()) {
+    out << " " << inode.dirstat;
+    if (g_conf->mds_debug_scatterstat && is_projected()) {
+      inode_t *pi = get_projected_inode();
       out << "->" << pi->dirstat;
     }
   } else {
-    out << " s=" << in.inode.size;
-    if (in.inode.nlink != 1)
-      out << " nl=" << in.inode.nlink;
+    out << " s=" << inode.size;
+    if (inode.nlink != 1)
+      out << " nl=" << inode.nlink;
   }
 
   // rstat
-  out << " " << in.inode.rstat;
-  if (!(in.inode.rstat == in.inode.accounted_rstat))
-    out << "/" << in.inode.accounted_rstat;
-  if (g_conf->mds_debug_scatterstat && in.is_projected()) {
-    inode_t *pi = in.get_projected_inode();
+  out << " " << inode.rstat;
+  if (!(inode.rstat == inode.accounted_rstat))
+    out << "/" << inode.accounted_rstat;
+  if (g_conf->mds_debug_scatterstat && is_projected()) {
+    inode_t *pi = get_projected_inode();
     out << "->" << pi->rstat;
     if (!(pi->rstat == pi->accounted_rstat))
       out << "/" << pi->accounted_rstat;
   }
 
-  if (!in.client_need_snapflush.empty())
-    out << " need_snapflush=" << in.client_need_snapflush;
+  if (!client_need_snapflush.empty())
+    out << " need_snapflush=" << client_need_snapflush;
 
 
   // locks
-  if (!in.authlock.is_sync_and_unlocked())
-    out << " " << in.authlock;
-  if (!in.linklock.is_sync_and_unlocked())
-    out << " " << in.linklock;
-  if (in.inode.is_dir()) {
-    if (!in.nestlock.is_sync_and_unlocked())
-      out << " " << in.nestlock;
-    if (!in.policylock.is_sync_and_unlocked())
-      out << " " << in.policylock;
+  if (!authlock.is_sync_and_unlocked())
+    out << " " << authlock;
+  if (!linklock.is_sync_and_unlocked())
+    out << " " << linklock;
+  if (inode.is_dir()) {
+    if (!nestlock.is_sync_and_unlocked())
+      out << " " << nestlock;
+    if (!policylock.is_sync_and_unlocked())
+      out << " " << policylock;
   } else  {
-    if (!in.flocklock.is_sync_and_unlocked())
-      out << " " << in.flocklock;
+    if (!flocklock.is_sync_and_unlocked())
+      out << " " << flocklock;
   }
-  if (!in.filelock.is_sync_and_unlocked())
-    out << " " << in.filelock;
-  if (!in.xattrlock.is_sync_and_unlocked())
-    out << " " << in.xattrlock;
+  if (!filelock.is_sync_and_unlocked())
+    out << " " << filelock;
+  if (!xattrlock.is_sync_and_unlocked())
+    out << " " << xattrlock;
 
   // hack: spit out crap on which clients have caps
-  if (in.inode.client_ranges.size())
-    out << " cr=" << in.inode.client_ranges;
+  if (inode.client_ranges.size())
+    out << " cr=" << inode.client_ranges;
 
-  if (!in.get_client_caps().empty()) {
-    out << " caps={";
-    for (map<client_t,Capability*>::iterator it = in.get_client_caps().begin();
-         it != in.get_client_caps().end();
-         it++) {
-      if (it != in.get_client_caps().begin()) out << ",";
-      out << it->first << "="
-	  << ccap_string(it->second->pending());
-      if (it->second->issued() != it->second->pending())
-	out << "/" << ccap_string(it->second->issued());
-      out << "/" << ccap_string(it->second->wanted())
-	  << "@" << it->second->get_last_sent();
-    }
-    out << "}";
-    if (in.get_loner() >= 0 || in.get_wanted_loner() >= 0) {
-      out << ",l=" << in.get_loner();
-      if (in.get_loner() != in.get_wanted_loner())
-	out << "(" << in.get_wanted_loner() << ")";
-    }
-  }
-  if (!in.get_mds_caps_wanted().empty()) {
-    out << " mcw={";
-    for (map<int,int>::iterator p = in.get_mds_caps_wanted().begin();
-	 p != in.get_mds_caps_wanted().end(); ++p) {
-      if (p != in.get_mds_caps_wanted().begin())
-	out << ',';
-      out << p->first << '=' << ccap_string(p->second);
-    }
-    out << '}';
-  }
+  CapObject::print(out);
 
-  if (in.get_num_ref()) {
+  if (get_num_ref()) {
     out << " |";
-    in.print_pin_set(out);
+    print_pin_set(out);
   }
 
-  out << " " << &in;
+  out << " " << this;
   out << "]";
+}
+
+
+ostream& operator<<(ostream& out, CInode& in)
+{
+  in.print(out);
   return out;
 }
 
 
-void CInode::print(ostream& out)
-{
-  out << *this;
-}
-
-
 CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
-  : mdcache(c),
+  : CapObject(c, f, l),
     placement(NULL),
-    first(f), last(l),
     inode_auth(auth, CDIR_AUTH_UNKNOWN),
     last_journaled(0),
     default_layout(NULL),
     parent(0),
-    replica_caps_wanted(0),
     item_dirty(this),
-    item_caps(this),
     item_open_file(this),
     item_renamed_file(this),
     item_stray(this),
@@ -247,15 +215,19 @@ CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
     xattrlock(this, &xattrlock_type),
     nestlock(this, &nestlock_type),
     flocklock(this, &flocklock_type),
-    policylock(this, &policylock_type),
-    cap_update_mask(0),
-    loner_cap(-1),
-    want_loner_cap(-1)
+    policylock(this, &policylock_type)
 {
   g_num_ino++;
   g_num_inoa++;
   if (auth == mdcache->mds->get_nodeid())
     state_set(STATE_AUTH);
+
+  // register locks with CapObject
+  cap_locks.push_back(&authlock);
+  cap_locks.push_back(&linklock);
+  cap_locks.push_back(&filelock);
+  cap_locks.push_back(&xattrlock);
+  cap_locks.push_back(&nestlock);
 };
 
 CInode::~CInode()
@@ -1199,249 +1171,46 @@ old_inode_t * CInode::pick_old_inode(snapid_t snap)
 
 // =============================================
 
-client_t CInode::calc_ideal_loner()
+Capability* CInode::add_client_cap(client_t client, Session *session,
+                                   SnapRealm *conrealm)
 {
-  if (!mds_caps_wanted.empty())
-    return -1;
-  
-  int n = 0;
-  client_t loner = -1;
-  for (map<client_t,Capability*>::iterator it = client_caps.begin();
-       it != client_caps.end();
-       it++) 
-    if (!it->second->is_stale() &&
-        (it->second->wanted() & (CEPH_CAP_ANY_WR|CEPH_CAP_FILE_WR|CEPH_CAP_FILE_RD))) {
-      if (n)
-	return -1;
-      n++;
-      loner = it->first;
-    }
-  return loner;
-}
-
-client_t CInode::choose_ideal_loner()
-{
-  want_loner_cap = calc_ideal_loner();
-  return want_loner_cap;
-}
-
-bool CInode::try_set_loner()
-{
-  assert(want_loner_cap >= 0);
-  if (loner_cap >= 0 && loner_cap != want_loner_cap)
-    return false;
-  set_loner_cap(want_loner_cap);
-  return true;
-}
-
-void CInode::set_loner_cap(client_t l)
-{
-  loner_cap = l;
-  authlock.set_excl_client(loner_cap);
-  filelock.set_excl_client(loner_cap);
-  linklock.set_excl_client(loner_cap);
-  xattrlock.set_excl_client(loner_cap);
-}
-
-bool CInode::try_drop_loner()
-{
-  if (loner_cap < 0)
-    return true;
-
-  int other_allowed = get_caps_allowed_by_type(CAP_ANY);
-  Capability *cap = get_client_cap(loner_cap);
-  if (!cap ||
-      (cap->issued() & ~other_allowed) == 0) {
-    set_loner_cap(-1);
-    return true;
-  }
-  return false;
-}
-
-
-// choose new lock state during recovery, based on issued caps
-void CInode::choose_lock_state(SimpleLock *lock, int allissued)
-{
-  int shift = lock->get_cap_shift();
-  int issued = (allissued >> shift) & lock->get_cap_mask();
-  if (is_auth()) {
-    if (lock->is_xlocked()) {
-      // do nothing here
-    } else {
-      if (issued & CEPH_CAP_GEXCL)
-	lock->set_state(LOCK_EXCL);
-      else if (issued & CEPH_CAP_GWR)
-	lock->set_state(LOCK_MIX);
-      else if (lock->is_dirty()) {
-	if (is_replicated())
-	  lock->set_state(LOCK_MIX);
-	else
-	  lock->set_state(LOCK_LOCK);
-      } else
-	lock->set_state(LOCK_SYNC);
-    }
-  } else {
-    // our states have already been chosen during rejoin.
-    if (lock->is_xlocked())
-      assert(lock->get_state() == LOCK_LOCK);
-  }
-}
- 
-void CInode::choose_lock_states()
-{
-  int issued = get_caps_issued();
-  if (is_auth() && (issued & (CEPH_CAP_ANY_EXCL|CEPH_CAP_ANY_WR)) &&
-      choose_ideal_loner() >= 0)
-    try_set_loner();
-  choose_lock_state(&filelock, issued);
-  choose_lock_state(&nestlock, issued);
-  choose_lock_state(&authlock, issued);
-  choose_lock_state(&xattrlock, issued);
-  choose_lock_state(&linklock, issued);
-}
-
-Capability *CInode::add_client_cap(client_t client, Session *session, SnapRealm *conrealm)
-{
-  if (client_caps.empty()) {
-    get(PIN_CAPS);
-    if (conrealm)
-      containing_realm = conrealm;
-    else
-      containing_realm = mdcache->get_snaprealm();
-    containing_realm->inodes_with_caps.push_back(&item_caps);
-    dout(10) << "add_client_cap first cap, joining realm " << *containing_realm << dendl;
-  }
-
-  mdcache->num_caps++;
   if (client_caps.empty())
     mdcache->num_inodes_with_caps++;
-  
-  Capability *cap = new Capability(this, ++mdcache->last_cap_id, client);
-  assert(client_caps.count(client) == 0);
-  client_caps[client] = cap;
-  if (session)
-    session->add_cap(cap);
-  
-  cap->client_follows = first-1;
-  
-  containing_realm->add_cap(client, cap);
-  
-  return cap;
-}
 
-void CInode::update_cap_lru()
-{
-  int target = g_conf->mds_cap_update_lru_target;
-
-  // can we free up space in the blacklist?
-  while (cap_blacklist.size() && shared_cap_lru.size() < target) {
-    Capability *cap = cap_blacklist.front();
-    cap_blacklist.remove(&cap->item_parent_lru);
-  }
-
-  // limit the number of clients that need callbacks
-  if (cap_update_mask && target) {
-    // drop no more than half of the caps until we reach the target
-    if (target < shared_cap_lru.size() / 2)
-      target = shared_cap_lru.size() / 2;
-    while (shared_cap_lru.size() > target) {
-      // move to blacklist
-      Capability *cap = shared_cap_lru.front();
-      cap_blacklist.push_back(&cap->item_parent_lru);
-    }
-  }
-}
-
-bool CInode::is_cap_blacklisted(Capability *cap) const
-{
-  return cap->item_parent_lru.get_list() == &cap_blacklist;
+  return CapObject::add_client_cap(client, session, conrealm);
 }
 
 void CInode::remove_client_cap(client_t client)
 {
-  assert(client_caps.count(client) == 1);
-  Capability *cap = client_caps[client];
-  
-  cap->item_session_caps.remove_myself();
-  containing_realm->remove_cap(client, cap);
-  
-  if (client == loner_cap)
-    loner_cap = -1;
+  dout(10) << "remove_client_cap " << client << dendl;
 
-  cap->item_parent_lru.remove_myself();
-  delete cap;
-  client_caps.erase(client);
-  if (client_caps.empty()) {
-    dout(10) << "remove_client_cap last cap, leaving realm " << *containing_realm << dendl;
-    put(PIN_CAPS);
-    item_caps.remove_myself();
-    containing_realm = NULL;
-    item_open_file.remove_myself();  // unpin logsegment
-    mdcache->num_inodes_with_caps--;
-  }
-  mdcache->num_caps--;
+  Locker *locker = mdcache->mds->locker;
 
-  //clean up advisory locks
-  bool fcntl_removed = fcntl_locks.remove_all_from(client);
-  bool flock_removed = flock_locks.remove_all_from(client);
-  if (fcntl_removed || flock_removed) {
-    list<Context*> waiters;
-    take_waiting(CInode::WAIT_FLOCK, waiters);
-    mdcache->mds->queue_waiters(waiters);
-  }
-}
+  // clean out any pending snapflush state
+  if (!client_need_snapflush.empty())
+    locker->do_null_snapflush(this, client, 0);
 
-void CInode::move_to_realm(SnapRealm *realm)
-{
-  dout(10) << "move_to_realm joining realm " << *realm
-	   << ", leaving realm " << *containing_realm << dendl;
-  for (map<client_t,Capability*>::iterator q = client_caps.begin();
-       q != client_caps.end();
-       q++) {
-    containing_realm->remove_cap(q->first, q->second);
-    realm->add_cap(q->first, q->second);
-  }
-  item_caps.remove_myself();
-  realm->inodes_with_caps.push_back(&item_caps);
-  containing_realm = realm;
-}
+  CapObject::remove_client_cap(client);
 
-Capability *CInode::reconnect_cap(client_t client, ceph_mds_cap_reconnect& icr, Session *session)
-{
-  Capability *cap = get_client_cap(client);
-  if (cap) {
-    // FIXME?
-    cap->merge(icr.wanted, icr.issued);
+  if (is_auth()) {
+    // make sure we clear out the client byte range
+    if (get_projected_inode()->client_ranges.count(client)
+        && !(inode.nlink == 0 && !is_any_caps()))
+      // unless it's unlink + stray
+      locker->check_inode_max_size(this);
   } else {
-    cap = add_client_cap(client, session);
-    cap->set_wanted(icr.wanted);
-    cap->issue_norevoke(icr.issued);
-    cap->reset_seq();
+    locker->request_inode_file_caps(this);
   }
-  cap->set_cap_id(icr.cap_id);
-  cap->set_last_issue_stamp(ceph_clock_now(g_ceph_context));
-  return cap;
+
+  locker->try_eval(this, CEPH_CAP_LOCKS);
+
+  mdcache->maybe_eval_stray(this);
+
+  if (client_caps.empty())
+    mdcache->num_inodes_with_caps--;
 }
 
-void CInode::clear_client_caps_after_export()
-{
-  while (!client_caps.empty())
-    remove_client_cap(client_caps.begin()->first);
-  loner_cap = -1;
-  want_loner_cap = -1;
-  mds_caps_wanted.clear();
-}
-
-void CInode::export_client_caps(map<client_t,Capability::Export>& cl)
-{
-  for (map<client_t,Capability*>::iterator it = client_caps.begin();
-       it != client_caps.end();
-       it++) {
-    cl[it->first] = it->second->make_export();
-  }
-}
-
-  // caps allowed
+// caps allowed
 int CInode::get_caps_liked()
 {
   if (is_dir())
@@ -1457,131 +1226,7 @@ int CInode::get_caps_allowed_ever()
     allowed = CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED;
   else
     allowed = CEPH_CAP_ANY;
-  return allowed & 
-    (CEPH_CAP_PIN |
-     (filelock.gcaps_allowed_ever() << filelock.get_cap_shift()) |
-     (authlock.gcaps_allowed_ever() << authlock.get_cap_shift()) |
-     (xattrlock.gcaps_allowed_ever() << xattrlock.get_cap_shift()) |
-     (linklock.gcaps_allowed_ever() << linklock.get_cap_shift()));
-}
-
-int CInode::get_caps_allowed_by_type(int type)
-{
-  return 
-    CEPH_CAP_PIN |
-    (filelock.gcaps_allowed(type) << filelock.get_cap_shift()) |
-    (authlock.gcaps_allowed(type) << authlock.get_cap_shift()) |
-    (xattrlock.gcaps_allowed(type) << xattrlock.get_cap_shift()) |
-    (linklock.gcaps_allowed(type) << linklock.get_cap_shift());
-}
-
-int CInode::get_caps_careful()
-{
-  return 
-    (filelock.gcaps_careful() << filelock.get_cap_shift()) |
-    (authlock.gcaps_careful() << authlock.get_cap_shift()) |
-    (xattrlock.gcaps_careful() << xattrlock.get_cap_shift()) |
-    (linklock.gcaps_careful() << linklock.get_cap_shift());
-}
-
-int CInode::get_xlocker_mask(client_t client)
-{
-  return 
-    (filelock.gcaps_xlocker_mask(client) << filelock.get_cap_shift()) |
-    (authlock.gcaps_xlocker_mask(client) << authlock.get_cap_shift()) |
-    (xattrlock.gcaps_xlocker_mask(client) << xattrlock.get_cap_shift()) |
-    (linklock.gcaps_xlocker_mask(client) << linklock.get_cap_shift());
-}
-
-int CInode::get_caps_allowed_for_client(client_t client)
-{
-  int allowed;
-  if (client == get_loner()) {
-    // as the loner, we get the loner_caps AND any xlocker_caps for things we have xlocked
-    allowed =
-      get_caps_allowed_by_type(CAP_LONER) |
-      (get_caps_allowed_by_type(CAP_XLOCKER) & get_xlocker_mask(client));
-  } else {
-    allowed = get_caps_allowed_by_type(CAP_ANY);
-  }
-  return allowed;
-}
-
-// caps issued, wanted
-int CInode::get_caps_issued(int *ploner, int *pother, int *pxlocker,
-			    int shift, int mask)
-{
-  int c = 0;
-  int loner = 0, other = 0, xlocker = 0;
-  if (!is_auth())
-    loner_cap = -1;
-  for (map<client_t,Capability*>::iterator it = client_caps.begin();
-       it != client_caps.end();
-       it++) {
-    int i = it->second->issued();
-    c |= i;
-    if (it->first == loner_cap)
-      loner |= i;
-    else
-      other |= i;
-    xlocker |= get_xlocker_mask(it->first) & i;
-  }
-  if (ploner) *ploner = (loner >> shift) & mask;
-  if (pother) *pother = (other >> shift) & mask;
-  if (pxlocker) *pxlocker = (xlocker >> shift) & mask;
-  return (c >> shift) & mask;
-}
-
-bool CInode::is_any_caps_wanted()
-{
-  for (map<client_t,Capability*>::iterator it = client_caps.begin();
-       it != client_caps.end();
-       it++)
-    if (it->second->wanted())
-      return true;
-  return false;
-}
-
-int CInode::get_caps_wanted(int *ploner, int *pother, int shift, int mask)
-{
-  int w = 0;
-  int loner = 0, other = 0;
-  for (map<client_t,Capability*>::iterator it = client_caps.begin();
-       it != client_caps.end();
-       it++) {
-    if (!it->second->is_stale()) {
-      int t = it->second->wanted();
-      w |= t;
-      if (it->first == loner_cap)
-	loner |= t;
-      else
-	other |= t;	
-    }
-    //cout << " get_caps_wanted client " << it->first << " " << cap_string(it->second.wanted()) << endl;
-  }
-  if (is_auth())
-    for (map<int,int>::iterator it = mds_caps_wanted.begin();
-	 it != mds_caps_wanted.end();
-	 it++) {
-      w |= it->second;
-      other |= it->second;
-      //cout << " get_caps_wanted mds " << it->first << " " << cap_string(it->second) << endl;
-    }
-  if (ploner) *ploner = (loner >> shift) & mask;
-  if (pother) *pother = (other >> shift) & mask;
-  return (w >> shift) & mask;
-}
-
-bool CInode::issued_caps_need_gather(SimpleLock *lock)
-{
-  int loner_issued, other_issued, xlocker_issued;
-  get_caps_issued(&loner_issued, &other_issued, &xlocker_issued,
-		  lock->get_cap_shift(), lock->get_cap_mask());
-  if ((loner_issued & ~lock->gcaps_allowed(CAP_LONER)) ||
-      (other_issued & ~lock->gcaps_allowed(CAP_ANY)) ||
-      (xlocker_issued & ~lock->gcaps_allowed(CAP_XLOCKER)))
-    return true;
-  return false;
+  return allowed & CapObject::get_caps_allowed_ever();
 }
 
 void CInode::replicate_relax_locks()
