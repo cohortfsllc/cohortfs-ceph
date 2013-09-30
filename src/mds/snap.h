@@ -43,7 +43,6 @@ ostream& operator<<(ostream& out, const SnapInfo &sn);
  */
 struct SnapRealm;
 struct CapabilityGroup;
-class CInode;
 class MDCache;
 struct MDRequest;
 
