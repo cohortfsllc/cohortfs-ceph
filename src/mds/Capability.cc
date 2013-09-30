@@ -18,10 +18,10 @@
 
 
 /*
- * Capability::Export
+ * CapExport
  */
 
-void Capability::Export::encode(bufferlist &bl) const
+void CapExport::encode(bufferlist &bl) const
 {
   ENCODE_START(2, 2, bl);
   ::encode(wanted, bl);
@@ -33,7 +33,7 @@ void Capability::Export::encode(bufferlist &bl) const
   ENCODE_FINISH(bl);
 }
 
-void Capability::Export::decode(bufferlist::iterator &p)
+void CapExport::decode(bufferlist::iterator &p)
 {
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, p);
   ::decode(wanted, p);
@@ -45,7 +45,7 @@ void Capability::Export::decode(bufferlist::iterator &p)
   DECODE_FINISH(p);
 }
 
-void Capability::Export::dump(Formatter *f) const
+void CapExport::dump(Formatter *f) const
 {
   f->dump_unsigned("wanted", wanted);
   f->dump_unsigned("issued", issued);
@@ -55,10 +55,10 @@ void Capability::Export::dump(Formatter *f) const
   f->dump_stream("last_issue_stamp") << last_issue_stamp;
 }
 
-void Capability::Export::generate_test_instances(list<Capability::Export*>& ls)
+void CapExport::generate_test_instances(list<CapExport*>& ls)
 {
-  ls.push_back(new Export);
-  ls.push_back(new Export);
+  ls.push_back(new CapExport);
+  ls.push_back(new CapExport);
   ls.back()->wanted = 1;
   ls.back()->issued = 2;
   ls.back()->pending = 3;

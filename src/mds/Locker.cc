@@ -1956,7 +1956,7 @@ void Locker::revoke_stale_caps(Session *session)
   for (xlist<Capability*>::iterator p = session->caps.begin(); !p.end(); ++p) {
     Capability *cap = *p;
     cap->set_stale(true);
-    CInode *in = cap->get_inode();
+    CInode *in = (CInode*)cap->get_parent();
     int issued = cap->issued();
     if (in) {
       // inode caps
@@ -1991,7 +1991,7 @@ void Locker::resume_stale_caps(Session *session)
 
   for (xlist<Capability*>::iterator p = session->caps.begin(); !p.end(); ++p) {
     Capability *cap = *p;
-    CInode *in = cap->get_inode();
+    CInode *in = (CInode*)cap->get_parent();
     assert(in->is_head());
     if (cap->is_stale()) {
       dout(10) << " clearing stale flag on " << *in << dendl;
@@ -2314,7 +2314,7 @@ void Locker::adjust_cap_wanted(Capability *cap, int wanted, int issue_seq)
     return;
   }
 
-  CInode *cur = cap->get_inode();
+  CInode *cur = static_cast<CInode*>(cap->get_parent());
   if (!cur)
     return;
   if (!cur->is_auth()) {
@@ -2344,9 +2344,9 @@ void Locker::adjust_cap_wanted(Capability *cap, int wanted, int issue_seq)
 
 
 
-void Locker::_do_null_snapflush(CInode *head_in, client_t client, snapid_t follows)
+void Locker::do_null_snapflush(CInode *head_in, client_t client, snapid_t follows)
 {
-  dout(10) << "_do_null_snapflish client." << client << " follows " << follows << " on " << *head_in << dendl;
+  dout(10) << "do_null_snapflish client." << client << " follows " << follows << " on " << *head_in << dendl;
   map<snapid_t, set<client_t> >::iterator p = head_in->client_need_snapflush.begin();
   while (p != head_in->client_need_snapflush.end()) {
     snapid_t snapid = p->first;
@@ -2536,7 +2536,7 @@ void Locker::handle_client_caps(MClientCaps *m)
     //  update/release).
     if (!head_in->client_need_snapflush.empty()) {
       if ((cap->issued() & CEPH_CAP_ANY_FILE_WR) == 0) {
-	_do_null_snapflush(head_in, client, follows);
+	do_null_snapflush(head_in, client, follows);
       } else {
 	dout(10) << " revocation in progress, not making any conclusions about null snapflushes" << dendl;
       }
@@ -3107,31 +3107,10 @@ void Locker::_do_cap_release(client_t client, inodeno_t ino, uint64_t cap_id,
     eval_cap_gather(in);
     return;
   }
-  remove_client_cap(in, client);
+  in->remove_client_cap(client);
 }
 
 /* This function DOES put the passed message before returning */
-
-void Locker::remove_client_cap(CInode *in, client_t client)
-{
-  // clean out any pending snapflush state
-  if (!in->client_need_snapflush.empty())
-    _do_null_snapflush(in, client, 0);
-
-  in->remove_client_cap(client);
-
-  if (in->is_auth()) {
-    // make sure we clear out the client byte range
-    if (in->get_projected_inode()->client_ranges.count(client) &&
-	!(in->inode.nlink == 0 && !in->is_any_caps()))    // unless it's unlink + stray
-      check_inode_max_size(in);
-  } else {
-    request_inode_file_caps(in);
-  }
-  
-  try_eval(in, CEPH_CAP_LOCKS);
-}
-
 
 void Locker::handle_client_lease(MClientLease *m)
 {

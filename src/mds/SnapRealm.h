@@ -21,6 +21,8 @@
 #include "include/elist.h"
 #include "common/snap_types.h"
 
+class CInode;
+
 struct SnapRealm {
   // realm state
 
