@@ -3806,10 +3806,6 @@ int OSD::init_op_flags(OpRequestRef op)
     if (iter->soid.oid.name.length())
       op->set_read();
 
-    // set PGOP flag if there are PG ops
-    if (ceph_osd_op_type_pg(iter->op.op))
-      op->set_pg_op();
-
     switch (iter->op.op) {
     case CEPH_OSD_OP_CALL:
       {

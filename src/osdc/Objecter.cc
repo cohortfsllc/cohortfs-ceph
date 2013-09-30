@@ -60,7 +60,6 @@ enum {
   l_osdc_op_r,
   l_osdc_op_w,
   l_osdc_op_rmw,
-  l_osdc_op_pg,
 
   l_osdc_osdop_stat,
   l_osdc_osdop_create,
@@ -143,7 +142,6 @@ void Objecter::init_unlocked()
     pcb.add_u64_counter(l_osdc_op_r, "op_r");
     pcb.add_u64_counter(l_osdc_op_w, "op_w");
     pcb.add_u64_counter(l_osdc_op_rmw, "op_rmw");
-    pcb.add_u64_counter(l_osdc_op_pg, "op_pg");
 
     pcb.add_u64_counter(l_osdc_osdop_stat, "osdop_stat");
     pcb.add_u64_counter(l_osdc_osdop_create, "osdop_create");
@@ -1164,9 +1162,6 @@ tid_t Objecter::_op_submit(Op *op)
     logger->inc(l_osdc_op_w);
   else if (op->flags & CEPH_OSD_FLAG_READ)
     logger->inc(l_osdc_op_r);
-
-  if (op->flags & CEPH_OSD_FLAG_PGOP)
-    logger->inc(l_osdc_op_pg);
 
   for (vector<OSDOp>::iterator p = op->ops.begin(); p != op->ops.end(); ++p) {
     int code = l_osdc_osdop_other;

@@ -36,64 +36,6 @@ struct ceph_timespec {
 
 
 /*
- * object layout - how objects are mapped into PGs
- */
-#define CEPH_OBJECT_LAYOUT_HASH     1
-#define CEPH_OBJECT_LAYOUT_LINEAR   2
-#define CEPH_OBJECT_LAYOUT_HASHINO  3
-
-/*
- * pg layout -- how PGs are mapped onto (sets of) OSDs
- */
-#define CEPH_PG_LAYOUT_CRUSH  0
-#define CEPH_PG_LAYOUT_HASH   1
-#define CEPH_PG_LAYOUT_LINEAR 2
-#define CEPH_PG_LAYOUT_HYBRID 3
-
-#define CEPH_PG_MAX_SIZE      16  /* max # osds in a single pg */
-
-/*
- * placement group.
- * we encode this into one __le64.
- */
-struct ceph_pg {
-	__le16 preferred; /* preferred primary osd */
-	__le16 ps;        /* placement seed */
-	__le32 pool;      /* object pool */
-} __attribute__ ((packed));
-
-/*
- * pg pool types
- */
-#define CEPH_PG_TYPE_REP     1
-#define CEPH_PG_TYPE_RAID4   2
-
-/*
- * stable_mod func is used to control number of placement groups.
- * similar to straight-up modulo, but produces a stable mapping as b
- * increases over time.  b is the number of bins, and bmask is the
- * containing power of 2 minus 1.
- *
- * b <= bmask and bmask=(2**n)-1
- * e.g., b=12 -> bmask=15, b=123 -> bmask=127
- */
-static inline int ceph_stable_mod(int x, int b, int bmask)
-{
-	if ((x & bmask) < b)
-		return x & bmask;
-	else
-		return x & (bmask >> 1);
-}
-
-/*
- * object layout - how a given object should be stored.
- */
-struct ceph_object_layout {
-	struct ceph_pg ol_pgid;   /* raw pg, with _full_ ps precision. */
-	__le32 ol_stripe_unit;    /* for per-object parity, if any */
-} __attribute__ ((packed));
-
-/*
  * compound epoch+version, used by storage layer to serialize mutations
  */
 struct ceph_eversion {
@@ -116,7 +58,6 @@ extern const char *ceph_osd_state_name(int s);
 /* osd weights.  fixed point value: 0x10000 == 1.0 ("in"), 0 == "out" */
 #define CEPH_OSD_IN  0x10000
 #define CEPH_OSD_OUT 0
-
 
 /*
  * osd map flag bits
@@ -159,7 +100,6 @@ extern const char *ceph_osd_state_name(int s);
 #define CEPH_OSD_OP_TYPE_DATA  0x0200
 #define CEPH_OSD_OP_TYPE_ATTR  0x0300
 #define CEPH_OSD_OP_TYPE_EXEC  0x0400
-#define CEPH_OSD_OP_TYPE_PG    0x0500
 #define CEPH_OSD_OP_TYPE_MULTI 0x0600 /* multiobject */
 
 enum {
@@ -256,10 +196,6 @@ enum {
 	/** exec **/
 	/* note: the RD bit here is wrong; see special-case below in helper */
 	CEPH_OSD_OP_CALL    = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_EXEC | 1,
-
-	/** pg **/
-	CEPH_OSD_OP_PGLS      = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_PG | 1,
-	CEPH_OSD_OP_PGLS_FILTER = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_PG | 2,
 };
 
 static inline int ceph_osd_op_type_lock(int op)
@@ -277,10 +213,6 @@ static inline int ceph_osd_op_type_attr(int op)
 static inline int ceph_osd_op_type_exec(int op)
 {
 	return (op & CEPH_OSD_OP_TYPE) == CEPH_OSD_OP_TYPE_EXEC;
-}
-static inline int ceph_osd_op_type_pg(int op)
-{
-	return (op & CEPH_OSD_OP_TYPE) == CEPH_OSD_OP_TYPE_PG;
 }
 static inline int ceph_osd_op_type_multi(int op)
 {
@@ -329,7 +261,6 @@ enum {
 	CEPH_OSD_FLAG_PEERSTAT_OLD =   0x0080,  /* DEPRECATED msg includes osd_peer_stat */
 	CEPH_OSD_FLAG_BALANCE_READS =  0x0100,
 	CEPH_OSD_FLAG_PARALLELEXEC =   0x0200,  /* execute op in parallel */
-	CEPH_OSD_FLAG_PGOP =           0x0400,  /* pg op, no object */
 	CEPH_OSD_FLAG_EXEC =           0x0800,  /* op may exec */
 	CEPH_OSD_FLAG_EXEC_PUBLIC =    0x1000,  /* DEPRECATED op may exec (public) */
 	CEPH_OSD_FLAG_LOCALIZE_READS = 0x2000,  /* read from nearby replica, if any */
@@ -408,7 +339,6 @@ struct ceph_osd_op {
 struct ceph_osd_reply_head {
 	__le32 client_inc;                /* client incarnation */
 	__le32 flags;
-	struct ceph_object_layout layout;
 	__le32 osdmap_epoch;
 	__le32 volmap_epoch;
 	struct ceph_eversion reassert_version; /* for replaying uncommitted */
