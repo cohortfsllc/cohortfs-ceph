@@ -164,6 +164,7 @@ class CDirPlacement : public MDSCacheObject {
   void last_put();
 
   bool can_auth_pin() { return is_auth() && !is_freezing_or_frozen(); }
+  int get_num_auth_pins() const { return auth_pins; }
   void auth_pin(void *who);
   void auth_unpin(void *who);
 

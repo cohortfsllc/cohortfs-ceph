@@ -275,12 +275,10 @@ class CDirStripe : public CapObject {
     multiset<void*> auth_pin_set;
 #endif
  public:
-  bool is_auth_pinned() const { return auth_pins; }
+  int get_num_auth_pins() const { return auth_pins; }
   bool can_auth_pin() { return is_auth() && !is_freezing_or_frozen(); }
   void auth_pin(void *by);
   void auth_unpin(void *by);
-
-  int get_num_auth_pins() const { return auth_pins; }
 
   // -- freezing --
  private:

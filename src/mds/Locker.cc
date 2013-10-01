@@ -928,26 +928,22 @@ void Locker::try_eval(SimpleLock *lock, bool *pneed_issue)
   eval(lock, pneed_issue);
 }
 
-void Locker::eval_cap_gather(CInode *in, set<CapObject*> *issue_set)
+void Locker::eval_cap_gather(CapObject *o, set<CapObject*> *issue_set)
 {
   bool need_issue = false;
   list<Context*> finishers;
 
   // kick locks now
-  if (!in->filelock.is_stable())
-    eval_gather(&in->filelock, false, &need_issue, &finishers);
-  if (!in->authlock.is_stable())
-    eval_gather(&in->authlock, false, &need_issue, &finishers);
-  if (!in->linklock.is_stable())
-    eval_gather(&in->linklock, false, &need_issue, &finishers);
-  if (!in->xattrlock.is_stable())
-    eval_gather(&in->xattrlock, false, &need_issue, &finishers);
+  typedef vector<SimpleLock*>::iterator lock_iter;
+  for (lock_iter i = o->cap_locks.begin(); i != o->cap_locks.end(); ++i)
+    if (!(*i)->is_stable())
+      eval_gather(*i, false, &need_issue, &finishers);
 
-  if (need_issue && in->is_head()) {
+  if (need_issue && o->is_head()) {
     if (issue_set)
-      issue_set->insert(in);
+      issue_set->insert(o);
     else
-      issue_caps(in);
+      issue_caps(o);
   }
 
   finish_contexts(g_ceph_context, finishers);
@@ -2339,7 +2335,7 @@ void Locker::do_null_snapflush(CInode *head_in, client_t client, snapid_t follow
 }
 
 
-bool Locker::should_defer_client_cap_frozen(CInode *in)
+bool Locker::should_defer_client_cap_frozen(CapObject *o)
 {
   /*
    * This policy needs to be AT LEAST as permissive as allowing a client request
@@ -2354,7 +2350,7 @@ bool Locker::should_defer_client_cap_frozen(CInode *in)
    * auth_pins==0 implies no unstable lock and not auth pinnned by
    * client request, otherwise continue even it's freezing.
    */
-  return (in->is_freezing() && in->get_num_auth_pins() == 0) || in->is_frozen();
+  return (o->is_freezing() && o->get_num_auth_pins() == 0) || o->is_frozen();
 }
 
 /*
@@ -3007,7 +3003,7 @@ void Locker::handle_client_cap_release(MClientCapRelease *m)
   }
 
   for (vector<ceph_mds_cap_item>::iterator p = m->caps.begin(); p != m->caps.end(); ++p)
-    _do_cap_release(client, inodeno_t((uint64_t)p->ino) , p->cap_id, p->migrate_seq, p->seq);
+    _do_cap_release(client, *p);
 
   m->put();
 }
@@ -3015,56 +3011,65 @@ void Locker::handle_client_cap_release(MClientCapRelease *m)
 class C_Locker_RetryCapRelease : public Context {
   Locker *locker;
   client_t client;
-  inodeno_t ino;
-  uint64_t cap_id;
-  ceph_seq_t migrate_seq;
-  ceph_seq_t issue_seq;
+  const ceph_mds_cap_item item;
 public:
-  C_Locker_RetryCapRelease(Locker *l, client_t c, inodeno_t i, uint64_t id,
-			   ceph_seq_t mseq, ceph_seq_t seq) :
-    locker(l), client(c), ino(i), cap_id(id), migrate_seq(mseq), issue_seq(seq) {}
+  C_Locker_RetryCapRelease(Locker *l, client_t c, const ceph_mds_cap_item &i)
+      : locker(l), client(c), item(i) {}
   void finish(int r) {
-    locker->_do_cap_release(client, ino, cap_id, migrate_seq, issue_seq);
+    locker->_do_cap_release(client, item);
   }
 };
 
-void Locker::_do_cap_release(client_t client, inodeno_t ino, uint64_t cap_id,
-			     ceph_seq_t mseq, ceph_seq_t seq)
+void Locker::_do_cap_release(client_t client, const ceph_mds_cap_item &item)
 {
-  CInode *in = mdcache->get_inode(ino);
-  if (!in) {
-    dout(7) << "_do_cap_release missing ino " << ino << dendl;
-    return;
+  inodeno_t ino((uint64_t)item.ino);
+  CapObject *o;
+  if (item.stripeid == CEPH_CAP_OBJECT_INODE) {
+    o = mdcache->get_inode(ino);
+    if (!o) {
+      dout(10) << " missing ino " << ino << dendl;
+      return;
+    }
+  } else {
+    dirstripe_t ds(ino, item.stripeid);
+    o = mdcache->get_dirstripe(ds);
+    if (!o) {
+      dout(10) << " missing stripe " << ds << dendl;
+      return;
+    }
   }
-  Capability *cap = in->get_client_cap(client);
+
+  Capability *cap = o->get_client_cap(client);
   if (!cap) {
-    dout(7) << "_do_cap_release no cap for client" << client << " on "<< *in << dendl;
+    dout(7) << "_do_cap_release no cap for client" << client << " on "<< *o << dendl;
     return;
   }
 
-  dout(7) << "_do_cap_release for client." << client << " on "<< *in << dendl;
-  if (cap->get_cap_id() != cap_id) {
-    dout(7) << " capid " << cap_id << " != " << cap->get_cap_id() << ", ignore" << dendl;
+  dout(7) << "_do_cap_release for client." << client << " on "<< *o << dendl;
+  if (cap->get_cap_id() != item.cap_id) {
+    dout(7) << " capid " << item.cap_id << " != " << cap->get_cap_id() << ", ignore" << dendl;
     return;
   }
-  if (ceph_seq_cmp(mseq, cap->get_mseq()) < 0) {
-    dout(7) << " mseq " << mseq << " < " << cap->get_mseq() << ", ignore" << dendl;
+  if (ceph_seq_cmp(item.migrate_seq, cap->get_mseq()) < 0) {
+    dout(7) << " mseq " << item.migrate_seq << " < " << cap->get_mseq() << ", ignore" << dendl;
     return;
   }
-  if (should_defer_client_cap_frozen(in)) {
+  if (should_defer_client_cap_frozen(o)) {
     dout(7) << " freezing|frozen, deferring" << dendl;
-    in->add_waiter(CInode::WAIT_UNFREEZE,
-                  new C_Locker_RetryCapRelease(this, client, ino, cap_id, mseq, seq));
+    o->add_waiter(CapObject::WAIT_UNFREEZE,
+                  new C_Locker_RetryCapRelease(this, client, item));
     return;
   }
-  if (seq != cap->get_last_issue()) {
-    dout(7) << " issue_seq " << seq << " != " << cap->get_last_issue() << dendl;
+  if (item.seq != cap->get_last_issue()) {
+    dout(7) << " issue_seq " << item.seq << " != " << cap->get_last_issue() << dendl;
     // clean out any old revoke history
-    cap->clean_revoke_from(seq);
-    eval_cap_gather(in);
+    cap->clean_revoke_from(item.seq);
+    eval_cap_gather(o);
     return;
   }
-  in->remove_client_cap(client);
+
+  dout(7) << "removing cap on " << *o << dendl;
+  o->remove_client_cap(client);
 }
 
 /* This function DOES put the passed message before returning */

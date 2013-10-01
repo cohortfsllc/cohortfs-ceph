@@ -91,7 +91,7 @@ ostream& operator<<(ostream& out, CDentry& dn)
     out << " pv=" << dn.get_projected_version();
   out << " v=" << dn.get_version();
 
-  if (dn.is_auth_pinned())
+  if (dn.get_num_auth_pins())
     out << " ap=" << dn.get_num_auth_pins();
 
   out << " inode=" << dn.get_linkage()->get_inode();

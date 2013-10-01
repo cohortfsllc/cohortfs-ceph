@@ -70,8 +70,8 @@ ostream& operator<<(ostream& out, CDirFrag& dir)
     out << "." << dir.get_replica_nonce();
   }
 
-  if (dir.get_auth_pins())
-    out << " ap=" << dir.get_auth_pins();
+  if (dir.get_num_auth_pins())
+    out << " ap=" << dir.get_num_auth_pins();
 
   out << " state=" << dir.get_state();
   if (dir.state_test(CDirFrag::STATE_COMPLETE)) out << "|complete";

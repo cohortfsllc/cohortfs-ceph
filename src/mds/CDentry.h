@@ -262,8 +262,7 @@ public:
   void adjust_nested_auth_pins(int adjustment, int diradj, void *by);
   bool is_frozen();
   bool is_freezing();
-  bool is_auth_pinned() { return auth_pins; }
-  int get_num_auth_pins() { return auth_pins; }
+  int get_num_auth_pins() const { return auth_pins; }
 
   // remote links
   void link_remote(linkage_t *dnl, CInode *in);

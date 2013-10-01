@@ -538,8 +538,7 @@ public:
 
 
   // -- auth pins --
-  bool is_auth_pinned() { return auth_pins; }
-  int get_num_auth_pins() { return auth_pins; }
+  int get_num_auth_pins() const { return auth_pins; }
   bool can_auth_pin();
   void auth_pin(void *by);
   void auth_unpin(void *by);
