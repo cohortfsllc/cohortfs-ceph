@@ -221,9 +221,9 @@ public:
   void remove_stale_leases(Session *session);
 
 public:
-  void request_inode_file_caps(CInode *in);
+  void request_mds_caps(CapObject *o);
 protected:
-  void handle_inode_file_caps(class MInodeFileCaps *m);
+  void handle_mds_caps(class MMDSCaps *m);
 
   void file_update_finish(CInode *in, Mutation *mut, bool share, client_t client, Capability *cap,
 			  MClientCaps *ack);

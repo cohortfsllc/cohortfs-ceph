@@ -476,7 +476,7 @@ public:
     return dir;
   }
 
-  MDSCacheObject *get_object(MDSCacheObjectInfo &info);
+  MDSCacheObject *get_object(const MDSCacheObjectInfo &info);
 
   
 

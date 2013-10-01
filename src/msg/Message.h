@@ -125,7 +125,7 @@
 #define MSG_MDS_PARENTSTATS        0x212
 
 #define MSG_MDS_LOCK               0x300
-#define MSG_MDS_INODEFILECAPS      0x301
+#define MSG_MDS_MDSCAPS            0x301
 
 #define MSG_MDS_EXPORTDIRDISCOVER     0x449
 #define MSG_MDS_EXPORTDIRDISCOVERACK  0x450

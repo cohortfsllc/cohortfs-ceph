@@ -1737,7 +1737,7 @@ bool MDS::handle_deferrable_message(Message *m)
       break;
 
     case MSG_MDS_LOCK:
-    case MSG_MDS_INODEFILECAPS:
+    case MSG_MDS_MDSCAPS:
       ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MDS);
       locker->dispatch(m);
       break;

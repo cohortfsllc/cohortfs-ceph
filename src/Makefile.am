@@ -1740,7 +1740,7 @@ noinst_HEADERS = \
         messages/MGetPoolStats.h\
         messages/MGetPoolStatsReply.h\
         messages/MHeartbeat.h\
-        messages/MInodeFileCaps.h\
+        messages/MMDSCaps.h\
         messages/MLock.h\
 	messages/MLog.h\
 	messages/MLogAck.h\

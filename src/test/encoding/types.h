@@ -225,8 +225,8 @@ MESSAGE(MGetPoolStats)
 MESSAGE(MGetPoolStatsReply)
 #include "messages/MHeartbeat.h"
 MESSAGE(MHeartbeat)
-#include "messages/MInodeFileCaps.h"
-MESSAGE(MInodeFileCaps)
+#include "messages/MMDSCaps.h"
+MESSAGE(MMDSCaps)
 #include "messages/MLock.h"
 MESSAGE(MLock)
 #include "messages/MLog.h"

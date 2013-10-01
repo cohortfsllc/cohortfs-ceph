@@ -68,7 +68,7 @@
 #include "messages/MDirUpdate.h"
 #include "messages/MCacheExpire.h"
 
-#include "messages/MInodeFileCaps.h"
+#include "messages/MMDSCaps.h"
 
 #include "messages/MLock.h"
 #include "messages/MDentryLink.h"
@@ -650,7 +650,7 @@ void MDCache::open_foreign_mdsdir(inodeno_t ino, Context *fin)
 }
 
 
-MDSCacheObject *MDCache::get_object(MDSCacheObjectInfo &info)
+MDSCacheObject *MDCache::get_object(const MDSCacheObjectInfo &info)
 {
   // inode?
   if (info.ino) {

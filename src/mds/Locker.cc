@@ -38,7 +38,7 @@
 
 #include "messages/MDirUpdate.h"
 
-#include "messages/MInodeFileCaps.h"
+#include "messages/MMDSCaps.h"
 
 #include "messages/MLock.h"
 #include "messages/MClientLease.h"
@@ -76,8 +76,8 @@ void Locker::dispatch(Message *m)
     handle_lock((MLock*)m);
     break;
     // inter-mds caps
-  case MSG_MDS_INODEFILECAPS:
-    handle_inode_file_caps((MInodeFileCaps*)m);
+  case MSG_MDS_MDSCAPS:
+    handle_mds_caps((MMDSCaps*)m);
     break;
 
     // client sync
@@ -1708,7 +1708,7 @@ Capability* Locker::issue_new_caps(CInode *in,
 
   } else {
     // [replica] tell auth about any new caps wanted
-    request_inode_file_caps(in);
+    request_mds_caps(in);
   }
 
   // issue caps (pot. incl new one)
@@ -1925,7 +1925,7 @@ void Locker::revoke_stale_caps(Session *session)
         if (in->is_auth()) {
           try_eval(in, CEPH_CAP_LOCKS);
         } else {
-          request_inode_file_caps(in);
+          request_mds_caps(in);
         }
       } else {
         dout(10) << " nothing issued on " << *in << dendl;
@@ -1965,75 +1965,78 @@ void Locker::remove_stale_leases(Session *session)
 }
 
 
-class C_MDL_RequestInodeFileCaps : public Context {
+class C_MDL_RequestMDSCaps : public Context {
   Locker *locker;
-  CInode *in;
+  CapObject *o;
 public:
-  C_MDL_RequestInodeFileCaps(Locker *l, CInode *i) : locker(l), in(i) {
-    in->get(CInode::PIN_PTRWAITER);
+  C_MDL_RequestMDSCaps(Locker *l, CapObject *o) : locker(l), o(o) {
+    o->get(CapObject::PIN_PTRWAITER);
   }
   void finish(int r) {
-    in->put(CInode::PIN_PTRWAITER);
-    if (!in->is_auth())
-      locker->request_inode_file_caps(in);
+    o->put(CapObject::PIN_PTRWAITER);
+    if (!o->is_auth())
+      locker->request_mds_caps(o);
   }
 };
 
-void Locker::request_inode_file_caps(CInode *in)
+void Locker::request_mds_caps(CapObject *o)
 {
-  assert(!in->is_auth());
+  assert(!o->is_auth());
 
-  int wanted = in->get_caps_wanted();
-  if (wanted != in->replica_caps_wanted) {
-    // wait for single auth
-    if (in->is_ambiguous_auth()) {
-      in->add_waiter(MDSCacheObject::WAIT_SINGLEAUTH, 
-                     new C_MDL_RequestInodeFileCaps(this, in));
-      return;
-    }
+  int wanted = o->get_caps_wanted();
+  if (wanted == o->replica_caps_wanted)
+    return;
 
-    int auth = in->authority().first;
-    dout(7) << "request_inode_file_caps " << ccap_string(wanted)
-            << " was " << ccap_string(in->replica_caps_wanted) 
-            << " on " << *in << " to mds." << auth << dendl;
-
-    in->replica_caps_wanted = wanted;
-
-    if (mds->mdsmap->get_state(auth) >= MDSMap::STATE_REJOIN)
-      mds->send_message_mds(new MInodeFileCaps(in->ino(), in->replica_caps_wanted),
-			    auth);
+  // wait for single auth
+  if (o->is_ambiguous_auth()) {
+    o->add_waiter(MDSCacheObject::WAIT_SINGLEAUTH, 
+                  new C_MDL_RequestMDSCaps(this, o));
+    return;
   }
+
+  int auth = o->authority().first;
+  dout(7) << "request_mds_caps " << ccap_string(wanted)
+      << " was " << ccap_string(o->replica_caps_wanted) 
+      << " on " << *o << " to mds." << auth << dendl;
+
+  o->replica_caps_wanted = wanted;
+
+  MDSCacheObjectInfo info;
+  o->set_object_info(info);
+
+  if (mds->mdsmap->get_state(auth) >= MDSMap::STATE_REJOIN)
+    mds->send_message_mds(new MMDSCaps(info, o->replica_caps_wanted), auth);
 }
 
 /* This function DOES put the passed message before returning */
-void Locker::handle_inode_file_caps(MInodeFileCaps *m)
+void Locker::handle_mds_caps(MMDSCaps *m)
 {
   // nobody should be talking to us during recovery.
   assert(mds->is_rejoin() || mds->is_clientreplay() || mds->is_active() || mds->is_stopping());
 
   // ok
-  CInode *in = mdcache->get_inode(m->get_ino());
+  CapObject *o = (CapObject*)mdcache->get_object(m->get_info());
   int from = m->get_source().num();
 
-  assert(in);
-  assert(in->is_auth());
+  assert(o);
+  assert(o->is_auth());
 
-  if (mds->is_rejoin() &&
-      in->is_rejoining()) {
-    dout(7) << "handle_inode_file_caps still rejoining " << *in << ", dropping " << *m << dendl;
+  if (mds->is_rejoin() && o->is_rejoining()) {
+    dout(7) << "handle_mds_caps still rejoining " << *o
+        << ", dropping " << *m << dendl;
     m->put();
     return;
   }
 
-  
-  dout(7) << "handle_inode_file_caps replica mds." << from << " wants caps " << ccap_string(m->get_caps()) << " on " << *in << dendl;
+  dout(7) << "handle_mds_caps replica mds." << from << " wants caps "
+      << ccap_string(m->get_caps()) << " on " << *o << dendl;
 
   if (m->get_caps())
-    in->mds_caps_wanted[from] = m->get_caps();
+    o->mds_caps_wanted[from] = m->get_caps();
   else
-    in->mds_caps_wanted.erase(from);
+    o->mds_caps_wanted.erase(from);
 
-  try_eval(in, CEPH_CAP_LOCKS);
+  try_eval(o, CEPH_CAP_LOCKS);
   m->put();
 }
 
