@@ -109,7 +109,7 @@ void CInode::print(ostream& out)
   if (get_projected_version() > get_version())
     out << " pv" << get_projected_version();
 
-  if (is_auth_pinned()) {
+  if (get_num_auth_pins()) {
     out << " ap=" << get_num_auth_pins();
 #ifdef MDS_AUTHPIN_SET
     out << "(" << auth_pin_set << ")";

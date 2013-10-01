@@ -104,7 +104,7 @@ public:
 
   void eval_scatter_gathers(CInode *in);
 
-  void eval_cap_gather(CInode *in, set<CapObject*> *issue_set=0);
+  void eval_cap_gather(CapObject *in, set<CapObject*> *issue_set=0);
 
   bool eval(CapObject *o, int mask);
   void try_eval(MDSCacheObject *p, int mask);
@@ -178,7 +178,7 @@ public:
   // when to defer processing client cap release or writeback due to being
   // frozen.  the condition must be consistent across handle_client_caps and
   // process_request_cap_release to preserve ordering.
-  bool should_defer_client_cap_frozen(CInode *in);
+  bool should_defer_client_cap_frozen(CapObject *o);
 
   void process_request_cap_release(MDRequest *mdr, client_t client, const ceph_mds_request_release& r,
 				   const string &dname);
@@ -195,7 +195,7 @@ public:
   bool _do_cap_update(CInode *in, Capability *cap, int dirty, snapid_t follows, MClientCaps *m,
 		      MClientCaps *ack=0);
   void handle_client_cap_release(class MClientCapRelease *m);
-  void _do_cap_release(client_t client, inodeno_t ino, uint64_t cap_id, ceph_seq_t mseq, ceph_seq_t seq);
+  void _do_cap_release(client_t client, const ceph_mds_cap_item &item);
 
 
   // file

@@ -1448,6 +1448,7 @@ protected:
   virtual bool can_auth_pin() = 0;
   virtual void auth_pin(void *who) = 0;
   virtual void auth_unpin(void *who) = 0;
+  virtual int get_num_auth_pins() const = 0;
   virtual bool is_frozen() = 0;
   virtual bool is_freezing() = 0;
   virtual bool is_freezing_or_frozen() {

@@ -419,7 +419,7 @@ public:
 
   // -- auth pins --
   bool can_auth_pin() { return is_auth() && !is_freezing_or_frozen(); }
-  int get_auth_pins() { return auth_pins; }
+  int get_num_auth_pins() const { return auth_pins; }
   void auth_pin(void *who);
   void auth_unpin(void *who);
 
