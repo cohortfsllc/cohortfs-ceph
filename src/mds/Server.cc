@@ -609,9 +609,8 @@ void Server::handle_client_reconnect(MClientReconnect *m)
 	      << ", will pass off to authority" << dendl;
       
       // mark client caps stale.
-      inode_t fake_inode;
-      fake_inode.ino = p->first;
-      MClientCaps *stale = new MClientCaps(CEPH_CAP_OP_EXPORT, p->first, 0, 0, 0);
+      MClientCaps *stale = new MClientCaps(CEPH_CAP_OP_EXPORT, 0, 0, 0);
+      stale->head.ino = p->first;
       //stale->head.migrate_seq = 0; // FIXME ******
       mds->send_message_client_counted(stale, session);
 

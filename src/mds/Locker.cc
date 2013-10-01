@@ -1737,53 +1737,53 @@ void Locker::issue_caps_set(set<CInode*>& inset)
 
 class C_Locker_CapUpdate : public Context {
   MDS *mds;
-  inodeno_t ino;
+  CapObject *o;
   ceph_seq_t seq;
   Context *fin;
  public:
-  C_Locker_CapUpdate(MDS *mds, inodeno_t ino, ceph_seq_t seq, Context *fin)
-    : mds(mds), ino(ino), seq(seq), fin(fin) {}
+  C_Locker_CapUpdate(MDS *mds, CapObject *o, ceph_seq_t seq, Context *fin)
+    : mds(mds), o(o), seq(seq), fin(fin) {}
   void finish(int r) {
-    dout(10) << "cap update reply for " << ino << ':' << seq << dendl;
+    dout(10) << "cap update reply for " << *o << ':' << seq << dendl;
     fin->complete(r);
   }
 };
 
-void Locker::issue_caps(CInode *in, Capability *only_cap)
+void Locker::issue_caps(CapObject *o, Capability *only_cap)
 {
   // allowed caps are determined by the lock mode.
-  int all_allowed = in->get_caps_allowed_by_type(CAP_ANY);
-  int loner_allowed = in->get_caps_allowed_by_type(CAP_LONER);
-  int xlocker_allowed = in->get_caps_allowed_by_type(CAP_XLOCKER);
+  int all_allowed = o->get_caps_allowed_by_type(CAP_ANY);
+  int loner_allowed = o->get_caps_allowed_by_type(CAP_LONER);
+  int xlocker_allowed = o->get_caps_allowed_by_type(CAP_XLOCKER);
 
-  client_t loner = in->get_loner();
+  client_t loner = o->get_loner();
   if (loner >= 0) {
     dout(7) << "issue_caps loner client." << loner
 	    << " allowed=" << ccap_string(loner_allowed) 
 	    << ", xlocker allowed=" << ccap_string(xlocker_allowed)
 	    << ", others allowed=" << ccap_string(all_allowed)
-	    << " on " << *in << dendl;
+	    << " on " << *o << dendl;
   } else {
     dout(7) << "issue_caps allowed=" << ccap_string(all_allowed) 
 	    << ", xlocker allowed=" << ccap_string(xlocker_allowed)
-	    << " on " << *in << dendl;
+	    << " on " << *o << dendl;
   }
 
-  assert(in->is_head());
+  assert(o->is_head());
 
   C_GatherBuilder gather(g_ceph_context);
 
-  in->update_cap_lru();
+  o->update_cap_lru();
 
   // client caps
   map<client_t, Capability*>::iterator it, end;
   if (only_cap) {
-    assert(!in->cap_update_mask); // don't skip callbacks
-    end = it = in->client_caps.find(only_cap->get_client());
+    assert(!o->cap_update_mask); // don't skip callbacks
+    end = it = o->client_caps.find(only_cap->get_client());
     ++end;
   } else {
-    it = in->client_caps.begin();
-    end = in->client_caps.end();
+    it = o->client_caps.begin();
+    end = o->client_caps.end();
   }
   for (; it != end; ++it) {
     Capability *cap = it->second;
@@ -1798,10 +1798,10 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
       allowed = all_allowed;
 
     // add in any xlocker-only caps (for locks this client is the xlocker for)
-    allowed |= xlocker_allowed & in->get_xlocker_mask(it->first);
+    allowed |= xlocker_allowed & o->get_xlocker_mask(it->first);
 
     // revoke blacklisted caps
-    if (in->is_cap_blacklisted(cap))
+    if (o->is_cap_blacklisted(cap))
       allowed = 0;
 
     int pending = cap->pending();
@@ -1820,7 +1820,7 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
     }
 
     // include caps that clients generally like, while we're at it.
-    int likes = in->get_caps_liked();
+    int likes = o->get_caps_liked();
     int before = pending;
 
     // are there caps that the client _wants_ and can have, but aren't pending?
@@ -1830,7 +1830,7 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
       seq = cap->issue((wanted|likes) & allowed & pending); // no new caps
     else if ((wanted & allowed) & ~pending) // missing wanted+allowed caps
       seq = cap->issue((wanted|likes) & allowed);
-    else if (pending & in->cap_update_mask) // needs sync update
+    else if (pending & o->cap_update_mask) // needs sync update
       seq = cap->issue_norevoke(0); // bump seq
     else // no caps changed
       continue;
@@ -1841,20 +1841,19 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
     int op = CEPH_CAP_OP_GRANT;
 
     // wait for confirmation on matching caps, both current and revoked
-    if ((before|after) & in->cap_update_mask) {
+    if ((before|after) & o->cap_update_mask) {
       // use SYNC_UPDATE if we're expecting a callback
       op = CEPH_CAP_OP_SYNC_UPDATE;
-      inodeno_t ino = in->ino();
-      dout(10) << "cap update requested for " << ino << ':' << seq << dendl;
-      cap->add_confirm_waiter(seq, new C_Locker_CapUpdate(mds, ino, seq,
+      dout(10) << "cap update requested for " << *o << ':' << seq << dendl;
+      cap->add_confirm_waiter(seq, new C_Locker_CapUpdate(mds, o, seq,
                                                           gather.new_sub()));
     }
 
     // update cap lru
     if ((~before & after) & CEPH_CAP_ANY_SHARED) // new shared caps?
-      in->shared_cap_lru.push_back(&cap->item_parent_lru);
+      o->shared_cap_lru.push_back(&cap->item_parent_lru);
     else if ((after & CEPH_CAP_ANY_SHARED) == 0 && // no more shared caps?
-             !in->is_cap_blacklisted(cap))
+             !o->is_cap_blacklisted(cap))
       cap->item_parent_lru.remove_myself();
 
     dout(7) << "   sending MClientCaps to client." << it->first
@@ -1862,17 +1861,17 @@ void Locker::issue_caps(CInode *in, Capability *only_cap)
         << " new pending " << ccap_string(after) << " was " << ccap_string(before) 
         << dendl;
 
-    MClientCaps *m = new MClientCaps(op, in->ino(), MDS_INO_ROOT,
+    MClientCaps *m = new MClientCaps(op, MDS_INO_ROOT,
                                      cap->get_cap_id(), cap->get_last_seq(),
                                      after, wanted, 0, cap->get_mseq());
-    in->encode_cap_message(m, cap);
+    o->encode_cap_message(m, cap);
 
     mds->send_message_client_counted(m, it->first);
   }
 
   C_Contexts *fin = new C_Contexts(g_ceph_context);
-  fin->take(in->cap_updates);
-  in->cap_update_mask = 0;
+  fin->take(o->cap_updates);
+  o->cap_update_mask = 0;
 
   // finish cap callbacks once all updates are acked
   if (gather.has_subs()) {
@@ -1890,13 +1889,11 @@ void Locker::issue_truncate(CInode *in)
        it != in->client_caps.end();
        it++) {
     Capability *cap = it->second;
-    MClientCaps *m = new MClientCaps(CEPH_CAP_OP_TRUNC,
-				     in->ino(),
-				     MDS_INO_ROOT,
+    MClientCaps *m = new MClientCaps(CEPH_CAP_OP_TRUNC, MDS_INO_ROOT,
 				     cap->get_cap_id(), cap->get_last_seq(),
 				     cap->pending(), cap->wanted(), 0,
 				     cap->get_mseq());
-    in->encode_cap_message(m, cap);			     
+    in->encode_cap_message(m, cap);
     mds->send_message_client_counted(m, it->first);
   }
 
@@ -2207,9 +2204,7 @@ void Locker::share_inode_max_size(CInode *in)
       continue;
     if (cap->pending() & (CEPH_CAP_FILE_WR|CEPH_CAP_FILE_BUFFER)) {
       dout(10) << "share_inode_max_size with client." << client << dendl;
-      MClientCaps *m = new MClientCaps(CEPH_CAP_OP_GRANT,
-				       in->ino(),
-				       MDS_INO_ROOT,
+      MClientCaps *m = new MClientCaps(CEPH_CAP_OP_GRANT, MDS_INO_ROOT,
 				       cap->get_cap_id(), cap->get_last_seq(),
 				       cap->pending(), cap->wanted(), 0,
 				       cap->get_mseq());
@@ -2405,7 +2400,9 @@ void Locker::handle_client_caps(MClientCaps *m)
       // case we get a dup response, so whatever.)
       MClientCaps *ack = 0;
       if (m->get_dirty()) {
-	ack = new MClientCaps(CEPH_CAP_OP_FLUSHSNAP_ACK, in->ino(), 0, 0, 0, 0, 0, m->get_dirty(), 0);
+	ack = new MClientCaps(CEPH_CAP_OP_FLUSHSNAP_ACK, 0, 0, 0, 0, 0,
+                              m->get_dirty(), 0);
+        ack->head.ino = in->ino();
 	ack->set_snap_follows(follows);
 	ack->set_client_tid(m->get_client_tid());
       }
@@ -2467,8 +2464,9 @@ void Locker::handle_client_caps(MClientCaps *m)
     if (m->get_dirty() && in->is_auth()) {
       dout(7) << " flush client." << client << " dirty " << ccap_string(m->get_dirty()) 
 	      << " seq " << m->get_seq() << " on " << *in << dendl;
-      ack = new MClientCaps(CEPH_CAP_OP_FLUSH_ACK, in->ino(), 0, cap->get_cap_id(), m->get_seq(),
+      ack = new MClientCaps(CEPH_CAP_OP_FLUSH_ACK, 0, cap->get_cap_id(), m->get_seq(),
 			    m->get_caps(), 0, m->get_dirty(), 0);
+      ack->head.ino = in->ino();
       ack->set_client_tid(m->get_client_tid());
     }
 

@@ -405,8 +405,6 @@ public:
   bool is_base() { return MDS_INO_IS_BASE(inode.ino); }
   bool is_system() { return inode.ino < MDS_INO_SYSTEM_BASE; }
 
-  bool is_head() { return last == CEPH_NOSNAP; }
-
   // note: this overloads MDSCacheObject
   bool is_ambiguous_auth() {
     return state_test(STATE_AMBIGUOUSAUTH) ||
@@ -506,7 +504,7 @@ public:
   // for giving to clients
   int encode_inodestat(bufferlist& bl, Session *session, SnapRealm *realm,
 		       snapid_t snapid=CEPH_NOSNAP, unsigned max_bytes=0);
-  void encode_cap_message(MClientCaps *m, Capability *cap);
+  virtual void encode_cap_message(MClientCaps *m, Capability *cap);
 
 
   // -- locks --

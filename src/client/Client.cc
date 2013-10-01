@@ -2167,14 +2167,13 @@ void Client::send_cap(Cap *cap, int used, int want, int retain, int flush)
   cap->implemented &= cap->issued | used;
   cap->wanted = want;
 
-  MClientCaps *m = new MClientCaps(CEPH_CAP_OP_UPDATE,
-				   parent->ino,
-				   0,
+  MClientCaps *m = new MClientCaps(CEPH_CAP_OP_UPDATE, 0,
 				   cap->cap_id, cap->seq,
 				   cap->issued,
 				   want,
 				   flush,
 				   cap->mseq);
+  m->head.ino = parent->ino;
   m->head.issue_seq = cap->issue_seq;
   if (flush) {
     ++parent->last_flush_tid;
@@ -2365,7 +2364,8 @@ void Client::flush_snaps(Inode *in, bool all_again, CapSnap *again)
     in->auth_cap->session->flushing_capsnaps.push_back(&capsnap->flushing_item);
 
     capsnap->flush_tid = ++in->last_flush_tid;
-    MClientCaps *m = new MClientCaps(CEPH_CAP_OP_FLUSHSNAP, in->ino, in->snaprealm->ino, 0, mseq);
+    MClientCaps *m = new MClientCaps(CEPH_CAP_OP_FLUSHSNAP, in->snaprealm->ino, 0, mseq);
+    m->head.ino = in->ino;
     m->set_client_tid(capsnap->flush_tid);
     m->head.snap_follows = p->first;
 

@@ -51,7 +51,10 @@ class CapObject : public MDSCacheObject {
   CapObject(MDCache *mdcache, snapid_t first, snapid_t last);
   virtual ~CapObject() {}
 
-  
+  bool is_head() const { return last == CEPH_NOSNAP; }
+
+  virtual void encode_cap_message(MClientCaps *m, Capability *cap) = 0;
+ 
   // cap callbacks; force issue_caps() to send a CEPH_CAP_OP_SYNC_UPDATE
   // message to all clients matching cap_update_mask, and finish once all
   // updates are acked with CEPH_CAP_OP_UPDATE

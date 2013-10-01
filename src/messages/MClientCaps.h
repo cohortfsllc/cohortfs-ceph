@@ -89,12 +89,11 @@ class MClientCaps : public Message {
 
   MClientCaps()
     : Message(CEPH_MSG_CLIENT_CAPS, HEAD_VERSION, COMPAT_VERSION) {}
-  MClientCaps(int op, inodeno_t ino, inodeno_t realm, uint64_t id,
-	      long seq, int caps, int wanted, int dirty, int mseq)
+  MClientCaps(int op, inodeno_t realm, uint64_t id, long seq,
+	      int caps, int wanted, int dirty, int mseq)
     : Message(CEPH_MSG_CLIENT_CAPS, HEAD_VERSION, COMPAT_VERSION) {
     memset(&head, 0, sizeof(head));
     head.op = op;
-    head.ino = ino;
     head.realm = realm;
     head.stripeid = CEPH_CAP_OBJECT_INODE;
     head.cap_id = id;
@@ -104,11 +103,10 @@ class MClientCaps : public Message {
     head.dirty = dirty;
     head.migrate_seq = mseq;
   }
-  MClientCaps(int op, inodeno_t ino, inodeno_t realm, uint64_t id, int mseq)
+  MClientCaps(int op, inodeno_t realm, uint64_t id, int mseq)
     : Message(CEPH_MSG_CLIENT_CAPS, HEAD_VERSION) {
     memset(&head, 0, sizeof(head));
     head.op = op;
-    head.ino = ino;
     head.realm = realm;
     head.stripeid = CEPH_CAP_OBJECT_INODE;
     head.cap_id = id;

@@ -3104,9 +3104,7 @@ void MDCache::do_cap_import(Session *session, CInode *in, Capability *cap)
   dout(10) << "do_cap_import " << session->inst.name
       << " mseq " << cap->get_mseq() << " on " << *in << dendl;
   cap->set_last_issue();
-  MClientCaps *reap = new MClientCaps(CEPH_CAP_OP_IMPORT,
-                                      in->ino(),
-                                      MDS_INO_ROOT,
+  MClientCaps *reap = new MClientCaps(CEPH_CAP_OP_IMPORT, MDS_INO_ROOT,
                                       cap->get_cap_id(), cap->get_last_seq(),
                                       cap->pending(), cap->wanted(), 0,
                                       cap->get_mseq());

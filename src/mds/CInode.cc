@@ -1491,6 +1491,8 @@ void CInode::encode_cap_message(MClientCaps *m, Capability *cap)
 {
   client_t client = cap->get_client();
 
+  m->head.ino = inode.ino;
+
   bool pfile = filelock.is_xlocked_by_client(client) ||
     (cap && (cap->issued() & CEPH_CAP_FILE_EXCL));
   bool pauth = authlock.is_xlocked_by_client(client);
