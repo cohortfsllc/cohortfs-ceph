@@ -147,7 +147,7 @@ using namespace std;
 
 //#include "messages/MInodeUpdate.h"
 #include "messages/MCacheExpire.h"
-#include "messages/MInodeFileCaps.h"
+#include "messages/MMDSCaps.h"
 
 #include "messages/MLock.h"
 
@@ -644,8 +644,8 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     break;
 	*/
 
-  case MSG_MDS_INODEFILECAPS:
-    m = new MInodeFileCaps();
+  case MSG_MDS_MDSCAPS:
+    m = new MMDSCaps();
     break;
 
   case MSG_MDS_LOCK:

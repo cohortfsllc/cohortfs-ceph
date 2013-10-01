@@ -842,6 +842,7 @@ void CInode::decode_store(bufferlist::iterator& bl) {
 void CInode::set_object_info(MDSCacheObjectInfo &info)
 {
   info.ino = ino();
+  info.dirfrag.stripe.stripeid = CEPH_CAP_OBJECT_INODE;
   info.snapid = last;
 }
 
@@ -1281,7 +1282,7 @@ void CInode::remove_client_cap(client_t client)
       // unless it's unlink + stray
       locker->check_inode_max_size(this);
   } else {
-    locker->request_inode_file_caps(this);
+    locker->request_mds_caps(this);
   }
 
   locker->try_eval(this, CEPH_CAP_LOCKS);
