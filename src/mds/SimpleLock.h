@@ -285,6 +285,7 @@ public:
   int get_cap_shift() const {
     switch (get_type()) {
     case CEPH_LOCK_IAUTH: return CEPH_CAP_SAUTH;
+    case CEPH_LOCK_SLINK:
     case CEPH_LOCK_ILINK: return CEPH_CAP_SLINK;
     case CEPH_LOCK_IFILE: return CEPH_CAP_SFILE;
     case CEPH_LOCK_IXATTR: return CEPH_CAP_SXATTR;

@@ -76,8 +76,8 @@ protected:
   void send_lock_message(SimpleLock *lock, int msg, const bufferlist &data);
 
   // -- locks --
-  void _drop_rdlocks(Mutation *mut, set<CInode*> *pneed_issue);
-  void _drop_non_rdlocks(Mutation *mut, set<CInode*> *pneed_issue);
+  void _drop_rdlocks(Mutation *mut, set<CapObject*> *pneed_issue);
+  void _drop_non_rdlocks(Mutation *mut, set<CapObject*> *pneed_issue);
 public:
   bool acquire_locks(MDRequest *mdr,
 		     set<SimpleLock*> &rdlocks,
@@ -87,11 +87,11 @@ public:
 		     map<SimpleLock*,int> *remote_xlocks=NULL,
 		     CInode *auth_pin_freeze=NULL);
 
-  void cancel_locking(Mutation *mut, set<CInode*> *pneed_issue);
-  void drop_locks(Mutation *mut, set<CInode*> *pneed_issue=0);
+  void cancel_locking(Mutation *mut, set<CapObject*> *pneed_issue);
+  void drop_locks(Mutation *mut, set<CapObject*> *pneed_issue=0);
   void set_xlocks_done(Mutation *mut, bool skip_dentry=false);
-  void drop_non_rdlocks(Mutation *mut, set<CInode*> *pneed_issue=0);
-  void drop_rdlocks(Mutation *mut, set<CInode*> *pneed_issue=0);
+  void drop_non_rdlocks(Mutation *mut, set<CapObject*> *pneed_issue=0);
+  void drop_rdlocks(Mutation *mut, set<CapObject*> *pneed_issue=0);
 
   void eval_gather(SimpleLock *lock, bool first=false, bool *need_issue=0, list<Context*> *pfinishers=0);
   void eval(SimpleLock *lock, bool *need_issue);
@@ -104,9 +104,9 @@ public:
 
   void eval_scatter_gathers(CInode *in);
 
-  void eval_cap_gather(CInode *in, set<CInode*> *issue_set=0);
+  void eval_cap_gather(CInode *in, set<CapObject*> *issue_set=0);
 
-  bool eval(CInode *in, int mask, bool caps_imported=false);
+  bool eval(CInode *in, int mask);
   void try_eval(MDSCacheObject *p, int mask);
   void try_eval(SimpleLock *lock, bool *pneed_issue);
 
@@ -213,8 +213,8 @@ public:
  public:
   version_t issue_file_data_version(CInode *in);
   Capability* issue_new_caps(CInode *in, int mode, Session *session, SnapRealm *conrealm, bool is_replay);
-  void issue_caps_set(set<CInode*>& inset);
   void issue_caps(CapObject *o, Capability *only_cap=0);
+  void issue_caps_set(set<CapObject*>& inset);
   void issue_truncate(CInode *in);
   void revoke_stale_caps(Session *session);
   void resume_stale_caps(Session *session);
