@@ -267,6 +267,7 @@ class CDirStripe : public CapObject {
   // -- caps --
   virtual int get_caps_liked();
   virtual int get_caps_allowed_ever();
+  virtual void encode_cap_message(MClientCaps *m, Capability *cap);
 
   // -- auth pins --
  private:
