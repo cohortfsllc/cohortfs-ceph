@@ -106,7 +106,7 @@ public:
 
   void eval_cap_gather(CInode *in, set<CapObject*> *issue_set=0);
 
-  bool eval(CInode *in, int mask);
+  bool eval(CapObject *o, int mask);
   void try_eval(MDSCacheObject *p, int mask);
   void try_eval(SimpleLock *lock, bool *pneed_issue);
 
