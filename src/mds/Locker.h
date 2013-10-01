@@ -104,7 +104,7 @@ public:
 
   void eval_scatter_gathers(CInode *in);
 
-  void eval_cap_gather(CInode *in, set<CapObject*> *issue_set=0);
+  void eval_cap_gather(CapObject *in, set<CapObject*> *issue_set=0);
 
   bool eval(CapObject *o, int mask);
   void try_eval(MDSCacheObject *p, int mask);
