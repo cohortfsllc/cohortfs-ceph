@@ -3478,7 +3478,7 @@ bool MDCache::process_imported_caps()
 	Session *session = mds->sessionmap.get_session(entity_name_t::CLIENT(r->first.v));
 	assert(session);
 	// mark client caps stale.
-	MClientCaps *m = new MClientCaps(CEPH_CAP_OP_EXPORT, q->first, 0, 0, 0);
+	MClientCaps *m = new MClientCaps(CEPH_CAP_OP_EXPORT, q->first, 0, 0);
 	mds->send_message_client_counted(m, session);
       }
     }
@@ -3579,7 +3579,7 @@ void MDCache::export_remaining_imported_caps()
       Session *session = mds->sessionmap.get_session(entity_name_t::CLIENT(q->first.v));
       if (session) {
 	// mark client caps stale.
-	MClientCaps *stale = new MClientCaps(CEPH_CAP_OP_EXPORT, p->first, 0, 0, 0);
+	MClientCaps *stale = new MClientCaps(CEPH_CAP_OP_EXPORT, p->first, 0, 0);
 	mds->send_message_client_counted(stale, q->first);
       }
     }
@@ -3625,9 +3625,7 @@ void MDCache::do_cap_import(Session *session, CInode *in, Capability *cap)
   dout(10) << "do_cap_import " << session->info.inst.name
       << " mseq " << cap->get_mseq() << " on " << *in << dendl;
   cap->set_last_issue();
-  MClientCaps *reap = new MClientCaps(CEPH_CAP_OP_IMPORT,
-                                      in->ino(),
-                                      MDS_INO_ROOT,
+  MClientCaps *reap = new MClientCaps(CEPH_CAP_OP_IMPORT, MDS_INO_ROOT,
                                       cap->get_cap_id(), cap->get_last_seq(),
                                       cap->pending(), cap->wanted(), 0,
                                       cap->get_mseq());

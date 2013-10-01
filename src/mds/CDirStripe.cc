@@ -449,6 +449,22 @@ int CDirStripe::get_caps_allowed_ever()
       CapObject::get_caps_allowed_ever();
 }
 
+void CDirStripe::encode_cap_message(MClientCaps *m, Capability *cap)
+{
+  client_t client = cap->get_client();
+
+  m->head.ino = ds.ino;
+  m->head.stripeid = ds.stripeid;
+
+  bool plink = linklock.is_xlocked_by_client(client) ||
+      (cap->issued() & CEPH_CAP_LINK_EXCL);
+
+  fnode_t *f = plink ? get_projected_fnode() : &fnode;
+  m->stripe.nfiles = f->fragstat.nfiles;
+  m->stripe.nsubdirs = f->fragstat.nsubdirs;
+  f->fragstat.mtime.encode_timeval(&m->stripe.mtime);
+}
+
 // pins
 
 void CDirStripe::first_get()
