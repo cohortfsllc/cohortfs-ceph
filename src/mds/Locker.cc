@@ -757,56 +757,47 @@ void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<C
   }
 }
 
-bool Locker::eval(CInode *in, int mask)
+bool Locker::eval(CapObject *o, int mask)
 {
   bool need_issue = false;
   list<Context*> finishers;
-  
-  dout(10) << "eval " << mask << " " << *in << dendl;
+
+  dout(10) << "eval " << mask << " " << *o << dendl;
 
   // choose loner?
-  if (in->is_auth() && in->is_head()) {
-    if (in->choose_ideal_loner() >= 0) {
-      if (in->try_set_loner()) {
-	dout(10) << "eval set loner to client." << in->get_loner() << dendl;
+  if (o->is_auth() && o->is_head()) {
+    if (o->choose_ideal_loner() >= 0) {
+      if (o->try_set_loner()) {
+	dout(10) << "eval set loner to client." << o->get_loner() << dendl;
 	need_issue = true;
 	mask = -1;
       } else
-	dout(10) << "eval want loner client." << in->get_wanted_loner() << " but failed to set it" << dendl;
+	dout(10) << "eval want loner client." << o->get_wanted_loner() << " but failed to set it" << dendl;
     } else
       dout(10) << "eval doesn't want loner" << dendl;
   }
 
  retry:
-  if (mask & CEPH_LOCK_IFILE)
-    eval_any(&in->filelock, &need_issue, &finishers);
-  if (mask & CEPH_LOCK_IAUTH)
-    eval_any(&in->authlock, &need_issue, &finishers);
-  if (mask & CEPH_LOCK_ILINK)
-    eval_any(&in->linklock, &need_issue, &finishers);
-  if (mask & CEPH_LOCK_IXATTR)
-    eval_any(&in->xattrlock, &need_issue, &finishers);
-  if (mask & CEPH_LOCK_INEST)
-    eval_any(&in->nestlock, &need_issue, &finishers);
-  if (mask & CEPH_LOCK_IFLOCK)
-    eval_any(&in->flocklock, &need_issue, &finishers);
-  if (mask & CEPH_LOCK_IPOLICY)
-    eval_any(&in->policylock, &need_issue, &finishers);
+  // evaluate matching cap locks
+  typedef vector<SimpleLock*>::iterator lock_iter;
+  for (lock_iter i = o->cap_locks.begin(); i != o->cap_locks.end(); ++i)
+    if (mask & (*i)->get_type())
+      eval_any(*i, &need_issue, &finishers);
 
   // drop loner?
-  if (in->is_auth() && in->is_head() && in->get_wanted_loner() != in->get_loner()) {
+  if (o->is_auth() && o->is_head() && o->get_wanted_loner() != o->get_loner()) {
     dout(10) << "  trying to drop loner" << dendl;
-    if (in->try_drop_loner()) {
+    if (o->try_drop_loner()) {
       dout(10) << "  dropped loner" << dendl;
       need_issue = true;
 
-      if (in->get_wanted_loner() >= 0) {
-	if (in->try_set_loner()) {
-	  dout(10) << "eval end set loner to client." << in->get_loner() << dendl;
+      if (o->get_wanted_loner() >= 0) {
+	if (o->try_set_loner()) {
+	  dout(10) << "eval end set loner to client." << o->get_loner() << dendl;
 	  mask = -1;
 	  goto retry;
 	} else {
-	  dout(10) << "eval want loner client." << in->get_wanted_loner() << " but failed to set it" << dendl;
+	  dout(10) << "eval want loner client." << o->get_wanted_loner() << " but failed to set it" << dendl;
 	}
       }
     }
@@ -814,8 +805,8 @@ bool Locker::eval(CInode *in, int mask)
 
   finish_contexts(g_ceph_context, finishers);
 
-  if (need_issue && in->is_head())
-    issue_caps(in);
+  if (need_issue && o->is_head())
+    issue_caps(o);
 
   dout(10) << "eval done" << dendl;
   return need_issue;
@@ -855,18 +846,8 @@ void Locker::try_eval(MDSCacheObject *p, int mask)
     bool need_issue = false;  // ignore this, no caps on dentries
     CDentry *dn = (CDentry *)p;
     eval_any(&dn->lock, &need_issue);
-  } else if (mask & (CEPH_LOCK_SDFT|CEPH_LOCK_SLINK|CEPH_LOCK_SNEST)) {
-    bool need_issue = false;  // ignore this, no caps on stripes
-    CDirStripe *stripe = (CDirStripe*)p;
-    if (mask & CEPH_LOCK_SDFT)
-      eval_any(&stripe->dirfragtreelock, &need_issue);
-    if (mask & CEPH_LOCK_SLINK)
-      eval_any(&stripe->linklock, &need_issue);
-    if (mask & CEPH_LOCK_SNEST)
-      eval_any(&stripe->nestlock, &need_issue);
   } else {
-    CInode *in = (CInode *)p;
-    eval(in, mask);
+    eval((CapObject*)p, mask);
   }
 }
 
