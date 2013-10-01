@@ -59,97 +59,99 @@ ostream& CDirStripe::print_db_line_prefix(ostream& out)
   return out << ceph_clock_now(g_ceph_context) << " mds." << mdcache->mds->get_nodeid() << ".cache.stripe(" << dirstripe() << ") ";
 }
 
-ostream& operator<<(ostream& out, CDirStripe &s)
+void CDirStripe::print(ostream& out)
 {
   string path;
-  s.get_inode()->make_path_string_projected(path);
-  out << "[stripe " << s.dirstripe() << " " << path << "/";
+  get_inode()->make_path_string_projected(path);
+  out << "[stripe " << dirstripe() << " " << path << "/";
 
-  if (s.is_auth()) {
+  if (is_auth()) {
     out << " auth";
-    if (s.is_replicated()) 
-      out << s.get_replicas();
+    if (is_replicated()) 
+      out << get_replicas();
   } else {
-    pair<int,int> a = s.authority();
+    pair<int,int> a = authority();
     out << " rep@" << a.first;
     if (a.second != CDIR_AUTH_UNKNOWN)
       out << "," << a.second;
-    out << "." << s.get_replica_nonce();
+    out << "." << get_replica_nonce();
   }
 
-  out << " v" << s.get_version();
-  if (s.get_projected_version() > s.get_version())
-    out << " pv" << s.get_projected_version();
+  out << " v" << get_version();
+  if (get_projected_version() > get_version())
+    out << " pv" << get_projected_version();
 
-  if (s.is_auth_pinned())
-    out << " ap=" << s.get_num_auth_pins();
+  if (is_auth_pinned())
+    out << " ap=" << get_num_auth_pins();
 
-  if (!s.get_fragtree().empty())
-    out << " " << s.get_fragtree();
-  if (!s.dirfragtreelock.is_sync_and_unlocked())
-    out << " " << s.dirfragtreelock;
-  if (!s.linklock.is_sync_and_unlocked())
-    out << " " << s.linklock;
-  if (!s.nestlock.is_sync_and_unlocked())
-    out << " " << s.nestlock;
+  if (!get_fragtree().empty())
+    out << " " << get_fragtree();
+  if (!dirfragtreelock.is_sync_and_unlocked())
+    out << " " << dirfragtreelock;
+  if (!linklock.is_sync_and_unlocked())
+    out << " " << linklock;
+  if (!nestlock.is_sync_and_unlocked())
+    out << " " << nestlock;
 
   // fragstat
-  out << " " << s.fnode.fragstat;
-  if (s.fnode.fragstat.version != s.fnode.accounted_fragstat.version)
-    out << "/" << s.fnode.accounted_fragstat;
-  if (g_conf->mds_debug_scatterstat && s.is_projected()) {
-    fnode_t *pf = s.get_projected_fnode();
+  out << " " << fnode.fragstat;
+  if (fnode.fragstat.version != fnode.accounted_fragstat.version)
+    out << "/" << fnode.accounted_fragstat;
+  if (g_conf->mds_debug_scatterstat && is_projected()) {
+    fnode_t *pf = get_projected_fnode();
     out << "->" << pf->fragstat;
     if (!(pf->fragstat == pf->accounted_fragstat))
       out << "/" << pf->accounted_fragstat;
   }
 
   // rstat
-  out << " " << s.fnode.rstat;
-  if (s.fnode.rstat.version != s.fnode.accounted_rstat.version)
-    out << "/" << s.fnode.accounted_rstat;
-  if (g_conf->mds_debug_scatterstat && s.is_projected())
+  out << " " << fnode.rstat;
+  if (fnode.rstat.version != fnode.accounted_rstat.version)
+    out << "/" << fnode.accounted_rstat;
+  if (g_conf->mds_debug_scatterstat && is_projected())
   {
-    fnode_t *pf = s.get_projected_fnode();
+    fnode_t *pf = get_projected_fnode();
     out << "->" << pf->rstat;
     if (!(pf->rstat == pf->accounted_rstat))
       out << "/" << pf->accounted_rstat;
   }
 
-  if (s.state_test(CDirStripe::STATE_OPEN)) out << " OPEN";
-  if (s.state_test(CDirStripe::STATE_DIRTY)) out << " DIRTY";
-  if (s.state_test(CDirStripe::STATE_FREEZING)) out << " FREEZING";
-  if (s.state_test(CDirStripe::STATE_FROZEN)) out << " FROZEN";
-  if (s.state_test(CDirStripe::STATE_COMMITTING)) out << " COMMITTING";
-  if (s.state_test(CDirStripe::STATE_UNLINKED)) out << " UNLINKED";
-  if (s.state_test(CDirStripe::STATE_PURGING)) out << " PURGING";
+  CapObject::print(out);
 
-  if (s.is_rep()) out << " REP";
+  if (state_test(CDirStripe::STATE_OPEN)) out << " OPEN";
+  if (state_test(CDirStripe::STATE_DIRTY)) out << " DIRTY";
+  if (state_test(CDirStripe::STATE_FREEZING)) out << " FREEZING";
+  if (state_test(CDirStripe::STATE_FROZEN)) out << " FROZEN";
+  if (state_test(CDirStripe::STATE_COMMITTING)) out << " COMMITTING";
+  if (state_test(CDirStripe::STATE_UNLINKED)) out << " UNLINKED";
+  if (state_test(CDirStripe::STATE_PURGING)) out << " PURGING";
 
-  if (s.get_num_ref()) {
+  if (is_rep()) out << " REP";
+
+  if (get_num_ref()) {
     out << " |";
-    s.print_pin_set(out);
+    print_pin_set(out);
   }
 
-  out << " " << &s;
+  out << " " << this;
   out << "]";
-  return out;
 }
 
-void CDirStripe::print(ostream& out)
+ostream& operator<<(ostream& out, CDirStripe &s)
 {
-  out << *this;
+  s.print(out);
+  return out;
 }
 
 
 CDirStripe::CDirStripe(CDirPlacement *placement, stripeid_t stripeid, int auth)
-  : mdcache(placement->mdcache),
+  : CapObject(placement->mdcache, placement->get_inode()->first,
+              placement->get_inode()->last),
     placement(placement),
     ds(placement->ino(), stripeid),
     stripe_auth(auth, CDIR_AUTH_UNKNOWN),
     auth_pins(0),
     replicate(false),
-    first(2),
     committing_version(0),
     committed_version(0),
     item_dirty(this),
@@ -434,6 +436,18 @@ void CDirStripe::decode_lock_state(int type, bufferlist& bl)
   }
 }
 
+
+// caps
+int CDirStripe::get_caps_liked()
+{
+  return CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED;
+}
+
+int CDirStripe::get_caps_allowed_ever()
+{
+  return (CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED) &
+      CapObject::get_caps_allowed_ever();
+}
 
 // pins
 

@@ -24,6 +24,7 @@
 #include <iostream>
 #include <map>
 
+#include "CapObject.h"
 #include "ScatterLock.h"
 
 
@@ -36,7 +37,8 @@ class LogSegment;
 class MDCache;
 
 ostream& operator<<(ostream& out, class CDirStripe& stripe);
-class CDirStripe : public MDSCacheObject {
+
+class CDirStripe : public CapObject {
   /*
    * This class uses a boost::pool to handle allocation. This is *not*
    * thread-safe, so don't do allocations from multiple threads!
@@ -107,8 +109,6 @@ class CDirStripe : public MDSCacheObject {
   static const int EXPORT_NONCE = 1;
 
  private:
-  MDCache *mdcache;
-
   CDirPlacement *placement;
   dirstripe_t ds; // { ino, stripe index }
 
@@ -146,7 +146,6 @@ class CDirStripe : public MDSCacheObject {
   // -- fragstat/rstat --
  public:
   fnode_t fnode;
-  snapid_t first;
 
  private:
   version_t committing_version, committed_version;
@@ -264,6 +263,10 @@ class CDirStripe : public MDSCacheObject {
   void set_object_info(MDSCacheObjectInfo &info);
   void encode_lock_state(int type, bufferlist& bl);
   void decode_lock_state(int type, bufferlist& bl);
+
+  // -- caps --
+  virtual int get_caps_liked();
+  virtual int get_caps_allowed_ever();
 
   // -- auth pins --
  private:
