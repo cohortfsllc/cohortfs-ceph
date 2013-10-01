@@ -2348,7 +2348,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
 	dout(10) << " claiming cap import " << p->first << " client." << q->first << " on " << *in << dendl;
 	rejoin_import_cap(in, q->first, q->second, from);
       }
-      mds->locker->eval(in, CEPH_CAP_LOCKS, true);
+      mds->locker->eval(in, CEPH_CAP_LOCKS);
     }
   } else {
     assert(mds->is_rejoin());
@@ -3478,7 +3478,7 @@ bool MDCache::process_imported_caps()
 	Session *session = mds->sessionmap.get_session(entity_name_t::CLIENT(r->first.v));
 	assert(session);
 	// mark client caps stale.
-	MClientCaps *m = new MClientCaps(CEPH_CAP_OP_EXPORT, q->first, 0, 0, 0);
+	MClientCaps *m = new MClientCaps(CEPH_CAP_OP_EXPORT, q->first, 0, 0);
 	mds->send_message_client_counted(m, session);
       }
     }
@@ -3579,7 +3579,7 @@ void MDCache::export_remaining_imported_caps()
       Session *session = mds->sessionmap.get_session(entity_name_t::CLIENT(q->first.v));
       if (session) {
 	// mark client caps stale.
-	MClientCaps *stale = new MClientCaps(CEPH_CAP_OP_EXPORT, p->first, 0, 0, 0);
+	MClientCaps *stale = new MClientCaps(CEPH_CAP_OP_EXPORT, p->first, 0, 0);
 	mds->send_message_client_counted(stale, q->first);
       }
     }

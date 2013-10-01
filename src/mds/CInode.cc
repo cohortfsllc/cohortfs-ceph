@@ -1295,10 +1295,17 @@ void CInode::remove_client_cap(client_t client)
 // caps allowed
 int CInode::get_caps_liked()
 {
+  int liked = 0;
+
+  // notify clients about deleted inode, to make sure they release caps ASAP.
+  if (inode.nlink == 0)
+    liked |= CEPH_CAP_LINK_SHARED;
+
   if (is_dir())
-    return CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED;  // but not, say, FILE_RD|WR|WRBUFFER
+    liked |= CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED;  // but not, say, FILE_RD|WR|WRBUFFER
   else
-    return CEPH_CAP_ANY & ~CEPH_CAP_FILE_LAZYIO;
+    liked |= CEPH_CAP_ANY & ~CEPH_CAP_FILE_LAZYIO;
+  return liked;
 }
 
 int CInode::get_caps_allowed_ever()
