@@ -2310,35 +2310,36 @@ void Locker::handle_client_caps(MClientCaps *m)
     return;
   }
 
-  CInode *head_in = mdcache->get_inode(m->get_ino());
-  if (!head_in) {
-    dout(7) << "handle_client_caps on unknown ino " << m->get_ino() << ", dropping" << dendl;
+  CapObject *o = NULL;
+  if (m->is_inode()) {
+    o = mdcache->get_inode(m->get_ino());
+    if (!o) {
+      dout(7) << "handle_client_caps on unknown ino " << m->get_ino() << ", dropping" << dendl;
+      m->put();
+      return;
+    }
+  } else {
+    dirstripe_t ds(m->get_ino(), m->get_stripeid());
+    o = mdcache->get_dirstripe(ds);
+    if (!o) {
+      dout(7) << "handle_client_caps on unknown stripe " << ds << ", dropping" << dendl;
+      m->put();
+      return;
+    }
+  }
+
+  Capability *cap = o->get_client_cap(client);
+  if (!cap) {
+    dout(7) << "handle_client_caps no cap for client." << client << " on " << *o << dendl;
     m->put();
     return;
   }
-
-  CInode *in = 0;
-  in = mdcache->pick_inode_snap(head_in, follows);
-  if (in != head_in)
-    dout(10) << " head inode " << *head_in << dendl;
-  dout(10) << "  cap inode " << *in << dendl;
-
-  Capability *cap = 0;
-  if (in) 
-    cap = in->get_client_cap(client);
-  if (!cap && in != head_in)
-    cap = head_in->get_client_cap(client);
-  if (!cap) {
-    dout(7) << "handle_client_caps no cap for client." << client << " on " << *in << dendl;
-    m->put();
-    return;
-  }  
   assert(cap);
 
   // freezing|frozen?
-  if (should_defer_client_cap_frozen(in)) {
-    dout(7) << "handle_client_caps freezing|frozen on " << *in << dendl;
-    in->add_waiter(CInode::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, m));
+  if (m->is_inode() && should_defer_client_cap_frozen((CInode*)o)) {
+    dout(7) << "handle_client_caps freezing|frozen on " << *o << dendl;
+    o->add_waiter(CapObject::WAIT_UNFREEZE, new C_MDS_RetryMessage(mds, m));
     return;
   }
   if (ceph_seq_cmp(m->get_mseq(), cap->get_mseq()) < 0) {
@@ -2348,136 +2349,70 @@ void Locker::handle_client_caps(MClientCaps *m)
     return;
   }
 
-  int op = m->get_op();
-
-  // flushsnap?
-  if (op == CEPH_CAP_OP_FLUSHSNAP) {
-    if (!in->is_auth()) {
-      dout(7) << " not auth, ignoring flushsnap on " << *in << dendl;
-      goto out;
-    }
-
-    SnapRealm *realm = mds->mdcache->get_snaprealm();
-    snapid_t snap = realm->get_snap_following(follows);
-    dout(10) << "  flushsnap follows " << follows << " -> snap " << snap << dendl;
-
-    if (in == head_in ||
-	(head_in->client_need_snapflush.count(snap) &&
-	 head_in->client_need_snapflush[snap].count(client))) {
-      dout(7) << " flushsnap snap " << snap
-	      << " client." << client << " on " << *in << dendl;
-
-      // this cap now follows a later snap (i.e. the one initiating this flush, or later)
-      cap->client_follows = MAX(follows, in->first) + 1;
-   
-      // we can prepare the ack now, since this FLUSHEDSNAP is independent of any
-      // other cap ops.  (except possibly duplicate FLUSHSNAP requests, but worst
-      // case we get a dup response, so whatever.)
-      MClientCaps *ack = 0;
-      if (m->get_dirty()) {
-	ack = new MClientCaps(CEPH_CAP_OP_FLUSHSNAP_ACK, 0, 0, 0, 0, 0,
-                              m->get_dirty(), 0);
-        ack->head.ino = in->ino();
-	ack->set_snap_follows(follows);
-	ack->set_client_tid(m->get_client_tid());
-      }
-
-      _do_snap_update(in, snap, m->get_dirty(), follows, client, m, ack);
-
-      if (in != head_in)
-	head_in->remove_need_snapflush(in, snap, client);
-      
-    } else
-      dout(7) << " not expecting flushsnap " << snap << " from client." << client << " on " << *in << dendl;
-    goto out;
-  }
-
   if (cap->get_cap_id() != m->get_cap_id()) {
     dout(7) << " ignoring client capid " << m->get_cap_id() << " != my " << cap->get_cap_id() << dendl;
-  } else {
-    // intermediate snap inodes
-    while (in != head_in) {
-      assert(in->last != CEPH_NOSNAP);
-      if (in->is_auth() && m->get_dirty()) {
-	dout(10) << " updating intermediate snapped inode " << *in << dendl;
-	_do_cap_update(in, NULL, m->get_dirty(), follows, m, NULL);
-      }
-      in = mdcache->pick_inode_snap(head_in, in->last);
-    }
- 
-    // head inode, and cap
-    MClientCaps *ack = 0;
-
-    int caps = m->get_caps();
-    if (caps & ~cap->issued()) {
-      dout(10) << " confirming not issued caps " << ccap_string(caps & ~cap->issued()) << dendl;
-      caps &= cap->issued();
-    }
-    
-    cap->confirm_receipt(m->get_seq(), caps);
-    dout(10) << " follows " << follows
-	     << " retains " << ccap_string(m->get_caps())
-	     << " dirty " << ccap_string(m->get_dirty())
-	     << " on " << *in << dendl;
-
-
-    // missing/skipped snapflush?
-    //  The client MAY send a snapflush if it is issued WR/EXCL caps, but
-    //  presently only does so when it has actual dirty metadata.  But, we
-    //  set up the need_snapflush stuff based on the issued caps.
-    //  We can infer that the client WONT send a FLUSHSNAP once they have
-    //  released all WR/EXCL caps (the FLUSHSNAP always comes before the cap
-    //  update/release).
-    if (head_in->client_need_snapflush.size()) {
-      if ((cap->issued() & CEPH_CAP_ANY_FILE_WR) == 0) {
-	do_null_snapflush(head_in, client, follows);
-      } else {
-	dout(10) << " revocation in progress, not making any conclusions about null snapflushes" << dendl;
-      }
-    }
-    
-    if (m->get_dirty() && in->is_auth()) {
-      dout(7) << " flush client." << client << " dirty " << ccap_string(m->get_dirty()) 
-	      << " seq " << m->get_seq() << " on " << *in << dendl;
-      ack = new MClientCaps(CEPH_CAP_OP_FLUSH_ACK, 0, cap->get_cap_id(), m->get_seq(),
-			    m->get_caps(), 0, m->get_dirty(), 0);
-      ack->head.ino = in->ino();
-      ack->set_client_tid(m->get_client_tid());
-    }
-
-    // filter wanted based on what we could ever give out (given auth/replica status)
-    int new_wanted = m->get_wanted() & head_in->get_caps_allowed_ever();
-    if (new_wanted != cap->wanted()) {
-      if (new_wanted & ~cap->wanted()) {
-	// exapnding caps.  make sure we aren't waiting for a log flush
-	if (!in->filelock.is_stable() ||
-	    !in->authlock.is_stable() ||
-	    !in->xattrlock.is_stable())
-	  mds->mdlog->flush();
-      }
-
-      adjust_cap_wanted(cap, new_wanted, m->get_issue_seq());
-    }
-      
-    if (in->is_auth() &&
-	_do_cap_update(in, cap, m->get_dirty(), follows, m, ack)) {
-      // updated
-      eval(in, CEPH_CAP_LOCKS);
-      
-      if (cap->wanted() & ~cap->pending())
-	mds->mdlog->flush();
-    } else {
-      // no update, ack now.
-      if (ack)
-	mds->send_message_client_counted(ack, m->get_connection());
-      
-      bool did_issue = eval(in, CEPH_CAP_LOCKS);
-      if (!did_issue && (cap->wanted() & ~cap->pending()))
-	issue_caps(in, cap);
-    }
+    m->put();
+    return;
   }
 
- out:
+  MClientCaps *ack = 0;
+
+  int caps = m->get_caps();
+  if (caps & ~cap->issued()) {
+    dout(10) << " confirming not issued caps " << ccap_string(caps & ~cap->issued()) << dendl;
+    caps &= cap->issued();
+  }
+
+  cap->confirm_receipt(m->get_seq(), caps);
+  dout(10) << " follows " << follows
+      << " retains " << ccap_string(m->get_caps())
+      << " dirty " << ccap_string(m->get_dirty())
+      << " on " << *o << dendl;
+
+  if (m->get_dirty() && o->is_auth()) {
+    dout(7) << " flush client." << client << " dirty " << ccap_string(m->get_dirty())
+        << " seq " << m->get_seq() << " on " << *o << dendl;
+    ack = new MClientCaps(CEPH_CAP_OP_FLUSH_ACK, 0, cap->get_cap_id(), m->get_seq(),
+                          m->get_caps(), 0, m->get_dirty(), 0);
+    ack->head.ino = m->get_ino();
+    ack->head.stripeid = m->get_stripeid();
+    ack->set_client_tid(m->get_client_tid());
+  }
+
+  // filter wanted based on what we could ever give out (given auth/replica status)
+  int new_wanted = m->get_wanted() & o->get_caps_allowed_ever();
+  if (new_wanted != cap->wanted()) {
+    if (new_wanted & ~cap->wanted()) {
+      // expanding caps.  make sure we aren't waiting for a log flush
+      typedef vector<SimpleLock*>::iterator lock_iter;
+      for (lock_iter i = o->cap_locks.begin(); i != o->cap_locks.end(); ++i) {
+        if (!(*i)->is_stable()) {
+          mds->mdlog->flush();
+          break;
+        }
+      }
+    }
+
+    adjust_cap_wanted(cap, new_wanted, m->get_issue_seq());
+  }
+
+  if (o->is_auth() && m->is_inode() &&
+      _do_cap_update((CInode*)o, cap, m->get_dirty(), follows, m, ack)) {
+    // updated
+    eval(o, CEPH_CAP_LOCKS);
+
+    if (cap->wanted() & ~cap->pending())
+      mds->mdlog->flush();
+  } else {
+    // no update, ack now.
+    if (ack)
+      mds->send_message_client_counted(ack, m->get_connection());
+
+    bool did_issue = eval(o, CEPH_CAP_LOCKS);
+    if (!did_issue && (cap->wanted() & ~cap->pending()))
+      issue_caps(o, cap);
+  }
+
   m->put();
 }
 
