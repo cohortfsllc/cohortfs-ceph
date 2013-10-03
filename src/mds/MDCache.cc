@@ -2016,13 +2016,17 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     for (map<dirstripe_t,map<client_t,ceph_mds_cap_reconnect> >::iterator p = weak->cap_exports.begin();
 	 p != weak->cap_exports.end();
 	 ++p) {
-      CInode *in = get_inode(p->first.ino);
-      if (!in || !in->is_auth()) continue;
+      CapObject *o;
+      if (p->first.stripeid == CEPH_CAP_OBJECT_INODE)
+        o = get_inode(p->first.ino);
+      else
+        o = get_dirstripe(p->first);
+      if (!o || !o->is_auth()) continue;
       for (map<client_t,ceph_mds_cap_reconnect>::iterator q = p->second.begin();
 	   q != p->second.end();
 	   ++q) {
-	dout(10) << " claiming cap import " << p->first.ino << " client." << q->first << " on " << *in << dendl;
-	rejoin_import_cap(in, q->first, q->second, from);
+	dout(10) << " claiming cap import " << p->first << " client." << q->first << " on " << *o << dendl;
+	rejoin_import_cap(o, q->first, q->second, from);
       }
     }
   } else {
@@ -2032,14 +2036,25 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     for (map<dirstripe_t,map<client_t,ceph_mds_cap_reconnect> >::iterator p = weak->cap_exports.begin();
 	 p != weak->cap_exports.end();
 	 ++p) {
-      CInode *in = get_inode(p->first.ino);
-      if (!in) {
-        stripeid_t stripeid = get_container()->place(p->first.ino);
-        CInode *container = get_container()->get_inode();
-        int auth_mds = container->get_placement()->get_stripe_auth(stripeid);
-        if (auth_mds != mds->get_nodeid())
-          continue;
-      } else if (!in->is_auth())
+      int auth_mds;
+      if (p->first.stripeid == CEPH_CAP_OBJECT_INODE) {
+        CInode *in = get_inode(p->first.ino);
+        if (!in) {
+          stripeid_t stripeid = get_container()->place(p->first.ino);
+          CInode *container = get_container()->get_inode();
+          auth_mds = container->get_placement()->get_stripe_auth(stripeid);
+        } else
+          auth_mds = in->authority().first;
+      } else {
+        CDirPlacement *placement = get_dir_placement(p->first.ino);
+        assert(placement);
+        CDirStripe *stripe = placement->get_stripe(p->first.stripeid);
+        if (!stripe)
+          auth_mds = placement->get_stripe_auth(p->first.stripeid);
+        else
+          auth_mds = stripe->authority().first;
+      }
+      if (auth_mds != mds->get_nodeid())
         continue;
 
       // note
@@ -2852,61 +2867,88 @@ bool MDCache::process_imported_caps()
   struct {
     set<CDirStripe*> stripes;
     set<CDirFrag*> frags;
+    set<inodeno_t> placements;
   } fetch;
 
   // process cap imports
   //  object -> client -> frommds -> capex
   map<dirstripe_t,map<client_t, map<int,ceph_mds_cap_reconnect> > >::iterator p = cap_imports.begin();
   while (p != cap_imports.end()) {
-    CInode *in = get_inode(p->first.ino);
-    if (!in) {
-      // fetch from inode container
-      InodeContainer *container = mds->mdcache->get_container();
-      CDirPlacement *placement = container->get_inode()->get_placement();
-      stripeid_t stripeid = container->place(p->first.ino);
-      int who = placement->get_stripe_auth(stripeid);
-      if (who != mds->get_nodeid()) {
-        dout(10) << "process_imported_caps not auth for " << p->first.ino << dendl;
-        cap_imports.erase(p++);
-        continue;
-      }
-      CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
-      if (!stripe->is_open()) {
-        dout(10) << "process_imported_caps still missing " << p->first.ino
-            << ", fetching " << *stripe << dendl;
-        fetch.stripes.insert(stripe);
+    CapObject *o;
+    if (p->first.stripeid == CEPH_CAP_OBJECT_INODE) {
+      o = get_inode(p->first.ino);
+      if (!o) {
+        // fetch from inode container
+        InodeContainer *container = mds->mdcache->get_container();
+        CDirPlacement *placement = container->get_inode()->get_placement();
+        stripeid_t stripeid = container->place(p->first.ino);
+        int who = placement->get_stripe_auth(stripeid);
+        if (who != mds->get_nodeid()) {
+          dout(10) << "process_imported_caps not auth for " << p->first << dendl;
+          cap_imports.erase(p++);
+          continue;
+        }
+        CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
+        if (!stripe->is_open()) {
+          dout(10) << "process_imported_caps still missing " << p->first
+              << ", fetching " << *stripe << dendl;
+          fetch.stripes.insert(stripe);
+          p++;
+          continue;
+        }
+        char dname[20];
+        snprintf(dname, sizeof(dname), "%llx", (unsigned long long)p->first.ino.val);
+        frag_t fg = stripe->pick_dirfrag(dname);
+        CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
+        assert(!dir->is_complete());
+        dout(10) << "process_imported_caps still missing " << p->first
+            << ", fetching " << *dir << dendl;
+        fetch.frags.insert(dir);
         p++;
         continue;
       }
-      char dname[20];
-      snprintf(dname, sizeof(dname), "%llx", (unsigned long long)p->first.ino.val);
-      frag_t fg = stripe->pick_dirfrag(dname);
-      CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
-      assert(!dir->is_complete());
-      dout(10) << "process_imported_caps still missing " << p->first.ino
-          << ", fetching " << *dir << dendl;
-      fetch.frags.insert(dir);
-      p++;
-      continue;
+    } else {
+      CDirPlacement *placement = get_dir_placement(p->first.ino);
+      if (!placement) {
+        fetch.placements.insert(p->first.ino);
+        dout(10) << "process_imported_caps missing placement for "
+            << p->first << ", will discover" << dendl;
+        p++;
+        continue;
+      }
+      CDirStripe *stripe = placement->get_or_open_stripe(p->first.stripeid);
+      if (!stripe->is_open()) {
+        fetch.stripes.insert(stripe);
+        dout(10) << "process_imported_caps missing " << p->first
+            << ", will fetch " << *stripe << dendl;
+        p++;
+        continue;
+      }
+      o = stripe;
     }
+
+    dout(10) << "process_imported_caps imported " << *o << dendl;
     for (map<client_t, map<int,ceph_mds_cap_reconnect> >::iterator q = p->second.begin();
 	 q != p->second.end();
 	 ++q) 
       for (map<int,ceph_mds_cap_reconnect>::iterator r = q->second.begin();
 	   r != q->second.end();
 	   ++r) {
-	rejoin_import_cap(in, q->first, r->second, r->first);
+	rejoin_import_cap(o, q->first, r->second, r->first);
       }
     cap_imports.erase(p++);  // remove and move on
   }
 
-  // fetch the objects we need
+  // fetch/discover the objects we need
   C_GatherBuilder gather(g_ceph_context);
   for (set<CDirStripe*>::iterator i = fetch.stripes.begin(); i != fetch.stripes.end(); ++i)
     (*i)->fetch(gather.new_sub());
 
   for (set<CDirFrag*>::iterator i = fetch.frags.begin(); i != fetch.frags.end(); ++i)
     (*i)->fetch(gather.new_sub());
+
+  for (set<inodeno_t>::iterator i = fetch.placements.begin(); i != fetch.placements.end(); ++i)
+    open_remote_ino(*i, gather.new_sub());
 
   if (gather.has_subs()) {
     gather.set_finisher(new C_MDC_RejoinGatherFinish(this));
@@ -2970,17 +3012,17 @@ void MDCache::clean_open_file_lists()
 
 
 
-void MDCache::rejoin_import_cap(CInode *in, client_t client, ceph_mds_cap_reconnect& icr, int frommds)
+void MDCache::rejoin_import_cap(CapObject *o, client_t client, ceph_mds_cap_reconnect& icr, int frommds)
 {
   dout(10) << "rejoin_import_cap for client." << client << " from mds." << frommds
-	   << " on " << *in << dendl;
+	   << " on " << *o << dendl;
   Session *session = mds->sessionmap.get_session(entity_name_t::CLIENT(client.v));
   assert(session);
 
-  Capability *cap = in->reconnect_cap(client, icr, session);
+  Capability *cap = o->reconnect_cap(client, icr, session);
 
   if (frommds >= 0)
-    do_cap_import(session, in, cap);
+    do_cap_import(session, o, cap);
 }
 
 void MDCache::try_reconnect_cap(CInode *in, Session *session)
@@ -3010,17 +3052,17 @@ void MDCache::try_reconnect_cap(CInode *in, Session *session)
 // -------
 // cap imports and delayed snap parent opens
 
-void MDCache::do_cap_import(Session *session, CInode *in, Capability *cap)
+void MDCache::do_cap_import(Session *session, CapObject *o, Capability *cap)
 {
   SnapRealm *realm = get_snaprealm();
   dout(10) << "do_cap_import " << session->inst.name
-      << " mseq " << cap->get_mseq() << " on " << *in << dendl;
+      << " mseq " << cap->get_mseq() << " on " << *o << dendl;
   cap->set_last_issue();
   MClientCaps *reap = new MClientCaps(CEPH_CAP_OP_IMPORT, MDS_INO_ROOT,
                                       cap->get_cap_id(), cap->get_last_seq(),
                                       cap->pending(), cap->wanted(), 0,
                                       cap->get_mseq());
-  in->encode_cap_message(reap, cap);
+  o->encode_cap_message(reap, cap);
   realm->build_snap_trace(reap->snapbl);
   mds->send_message_client_counted(reap, session);
 }

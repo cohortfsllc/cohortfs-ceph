@@ -359,7 +359,7 @@ public:
   // [reconnect/rejoin caps]
   bool process_imported_caps();
   void choose_lock_states();
-  void rejoin_import_cap(CInode *in, client_t client, ceph_mds_cap_reconnect& icr, int frommds);
+  void rejoin_import_cap(CapObject *o, client_t client, ceph_mds_cap_reconnect& icr, int frommds);
   void finish_snaprealm_reconnect(client_t client, SnapRealm *realm, snapid_t seq);
   void try_reconnect_cap(CInode *in, Session *session);
 
@@ -368,7 +368,7 @@ public:
   map<CInode*,map<client_t, set<inodeno_t> > > missing_snap_parents; 
   map<client_t,set<CInode*> > delayed_imported_caps;
 
-  void do_cap_import(Session *session, CInode *in, Capability *cap);
+  void do_cap_import(Session *session, CapObject *o, Capability *cap);
   void do_delayed_cap_imports();
   void check_realm_past_parents(SnapRealm *realm);
   void open_snap_parents();

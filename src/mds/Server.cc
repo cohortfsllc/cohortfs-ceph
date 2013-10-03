@@ -588,33 +588,51 @@ void Server::handle_client_reconnect(MClientReconnect *m)
     // make sure our last_cap_id is MAX over all issued caps
     if (p->second.capinfo.cap_id > mdcache->last_cap_id)
       mdcache->last_cap_id = p->second.capinfo.cap_id;
-    
-    CInode *in = mdcache->get_inode(p->first.ino);
+
     int auth_mds;
-    if (in) {
-      if (in->state_test(CInode::STATE_PURGING))
-        continue;
-      if (in->is_auth()) {
+    if (p->first.stripeid == CEPH_CAP_OBJECT_INODE) {
+      // inode caps
+      CInode *in = mdcache->get_inode(p->first.ino);
+      if (in) {
+        if (in->state_test(CInode::STATE_PURGING))
+          continue;
+        if (in->is_auth()) {
+          // we recovered it, and it's ours.  take note.
+          dout(15) << "open cap realm " << inodeno_t(p->second.capinfo.snaprealm)
+              << " on " << *in << dendl;
+          in->reconnect_cap(from, p->second.capinfo, session);
+          recover_filelocks(in, p->second.flockbl, m->get_orig_source().num());
+          continue;
+        }
+        auth_mds = in->authority().first;
+      } else {
+        // run inode placement to determine authority
+        stripeid_t stripeid = mdcache->get_container()->place(p->first.ino);
+        CInode *container = mdcache->get_container()->get_inode();
+        auth_mds = container->get_placement()->get_stripe_auth(stripeid);
+      }
+      dout(10) << "inode cap on " << p->first.ino << " for mds." << auth_mds << dendl;
+    } else {
+      // stripe caps
+      CDirPlacement *placement = mdcache->get_dir_placement(p->first.ino);
+      assert(placement);
+      CDirStripe *stripe = placement->get_stripe(p->first.stripeid);
+      if (stripe && stripe->is_auth()) {
         // we recovered it, and it's ours.  take note.
         dout(15) << "open cap realm " << inodeno_t(p->second.capinfo.snaprealm)
-            << " on " << *in << dendl;
-        in->reconnect_cap(from, p->second.capinfo, session);
-        recover_filelocks(in, p->second.flockbl, m->get_orig_source().num());
+            << " on " << *stripe << dendl;
+        stripe->reconnect_cap(from, p->second.capinfo, session);
         continue;
       }
-      auth_mds = in->authority().first;
-    } else {
-      // run inode placement to determine authority
-      stripeid_t stripeid = mdcache->get_container()->place(p->first.ino);
-      CInode *container = mdcache->get_container()->get_inode();
-      auth_mds = container->get_placement()->get_stripe_auth(stripeid);
+      auth_mds = placement->get_stripe_auth(p->first.stripeid);
+      dout(10) << "stripe cap on " << p->first << " for mds." << auth_mds << dendl;
     }
-      
+
     if (auth_mds != mds->get_nodeid()) {
       // not mine.
       dout(0) << "non-auth " << p->first
-	      << ", will pass off to mds." << auth_mds << dendl;
-      
+          << ", will pass off to mds." << auth_mds << dendl;
+
       // mark client caps stale.
       MClientCaps *stale = new MClientCaps(CEPH_CAP_OP_EXPORT, 0, 0, 0);
       stale->head.ino = p->first.ino;

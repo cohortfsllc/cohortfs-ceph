@@ -2859,6 +2859,7 @@ void Locker::handle_client_cap_release(MClientCapRelease *m)
     inodeno_t ino((uint64_t)p->ino);
     CapObject *o;
     if (p->stripeid == CEPH_CAP_OBJECT_INODE) {
+      dout(10) << " cap_release for ino " << ino << dendl;
       o = mdcache->get_inode(ino);
       if (!o) {
         dout(10) << " missing ino " << ino << dendl;
@@ -2866,6 +2867,7 @@ void Locker::handle_client_cap_release(MClientCapRelease *m)
       }
     } else {
       dirstripe_t ds(ino, p->stripeid);
+      dout(10) << " cap_release for stripe " << ds << dendl;
       o = mdcache->get_dirstripe(ds);
       if (!o) {
         dout(10) << " missing stripe " << ds << dendl;
