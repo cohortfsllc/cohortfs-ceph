@@ -151,6 +151,40 @@ struct InodeStat {
   // see CInode::encode_inodestat for encoder.
 };
 
+struct StripeStat {
+  vinodeno_t vino;
+  stripeid_t stripeid;
+  version_t version;
+  ceph_mds_reply_cap cap;
+  frag_info_t dirstat;
+  nest_info_t rstat;
+
+  StripeStat() {}
+  StripeStat(bufferlist::iterator& p, uint64_t features) {
+    decode(p, features);
+  }
+
+  void decode(bufferlist::iterator &p, uint64_t features) {
+    struct ceph_mds_reply_stripe e;
+    ::decode(e, p);
+    vino.ino = inodeno_t(e.ino);
+    vino.snapid = snapid_t(e.snapid);
+    stripeid = e.stripeid;
+    version = e.version;
+    cap = e.cap;
+
+    dirstat.nfiles = e.nfiles;
+    dirstat.nsubdirs = e.nsubdirs;
+
+    rstat.rctime.decode_timeval(&e.rctime);
+    rstat.rbytes = e.rbytes;
+    rstat.rfiles = e.rfiles;
+    rstat.rsubdirs = e.rsubdirs;
+  }
+
+  // see CDirStripe::encode_stripestat for encoder.
+};
+
 
 class MClientReply : public Message {
   // reply data
