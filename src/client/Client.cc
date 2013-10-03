@@ -1942,7 +1942,6 @@ void Client::send_reconnect(MetaSession *session)
       in->caps[mds]->issue_seq = 0;  // reset seq.
       m->add_cap(p->first.ino, 
 		 in->caps[mds]->cap_id,
-		 path.get_ino(), path.get_path(),   // ino
 		 in->caps_wanted(), // wanted
 		 in->caps[mds]->issued,     // issued
 		 in->snaprealm->ino);

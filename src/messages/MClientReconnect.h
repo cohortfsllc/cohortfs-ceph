@@ -39,10 +39,9 @@ public:
 	<< caps.size() << " caps)";
   }
 
-  void add_cap(inodeno_t ino, uint64_t cap_id, inodeno_t pathbase, const string& path,
-	       int wanted, int issued,
+  void add_cap(inodeno_t ino, uint64_t cap_id, int wanted, int issued,
 	       inodeno_t sr) {
-    caps[ino] = cap_reconnect_t(cap_id, pathbase, path, wanted, issued, sr);
+    caps[ino] = cap_reconnect_t(cap_id, wanted, issued, sr);
   }
   void add_snaprealm(inodeno_t ino, snapid_t seq, inodeno_t parent) {
     ceph_mds_snaprealm_reconnect r;
@@ -62,7 +61,7 @@ public:
       ::encode(n, data);
       for (map<inodeno_t,cap_reconnect_t>::iterator p = caps.begin(); p != caps.end(); ++p) {
 	::encode(p->first, data);
-	p->second.encode_old(data);
+	p->second.encode(data);
       }
       header.version = 2;
     } else {
@@ -86,7 +85,7 @@ public:
       inodeno_t ino;
       while (n--) {
 	::decode(ino, p);
-	caps[ino].decode_old(p);
+	caps[ino].decode(p);
       }
     } else {
       // compat crap
