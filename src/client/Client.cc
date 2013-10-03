@@ -2657,6 +2657,7 @@ void Client::remove_cap(Cap *cap)
     session->release = new MClientCapRelease;
   ceph_mds_cap_item i;
   i.ino = parent->ino;
+  i.stripeid = CEPH_CAP_OBJECT_INODE;
   i.cap_id = cap->cap_id;
   i.seq = cap->seq;
   i.migrate_seq = cap->mseq;
@@ -3104,6 +3105,7 @@ void Client::handle_caps(MClientCaps *m)
 	session->release = new MClientCapRelease;
       ceph_mds_cap_item i;
       i.ino = m->get_ino();
+      i.stripeid = m->get_stripeid();
       i.cap_id = m->get_cap_id();
       i.seq = m->get_seq();
       i.migrate_seq = m->get_mseq();
