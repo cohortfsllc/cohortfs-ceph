@@ -328,13 +328,16 @@ protected:
   set<int> rejoin_sent;        // nodes i sent a rejoin to
   set<int> rejoin_ack_gather;  // nodes from whom i need a rejoin ack
 
-  map<inodeno_t,map<client_t,ceph_mds_cap_reconnect> > cap_exports; // ino -> client -> capex
+  typedef map<client_t, ceph_mds_cap_reconnect> client_cap_export_map;
+  typedef map<inodeno_t, client_cap_export_map> inode_cap_export_map;
+  inode_cap_export_map cap_exports; // ino -> client -> capex
   map<inodeno_t,int> cap_export_targets; // ino -> auth mds
 
-  map<inodeno_t,map<client_t,map<int,ceph_mds_cap_reconnect> > > cap_imports;  // ino -> client -> frommds -> capex
-  map<inodeno_t,filepath> cap_import_paths;
-  set<inodeno_t> cap_imports_missing;
-  int cap_imports_num_opening;
+  typedef map<int, ceph_mds_cap_reconnect> mds_cap_import_map;
+  typedef map<client_t, mds_cap_import_map> client_cap_import_map;
+  typedef map<inodeno_t, client_cap_import_map> inode_cap_import_map;
+  inode_cap_import_map cap_imports;  // ino -> client -> frommds -> capex
+  int cap_imports_num_fetching;
   
   set<CInode*> rejoin_potential_updated_scatterlocks;
   map<int, set<CInode*> > rejoin_unlinked_inodes;
@@ -371,7 +374,6 @@ public:
   void rejoin_recovered_caps(inodeno_t ino, client_t client, cap_reconnect_t& icr, 
 			     int frommds=-1) {
     cap_imports[ino][client][frommds] = icr.capinfo;
-    cap_import_paths[ino] = filepath(icr.path, (uint64_t)icr.capinfo.pathbase);
   }
   ceph_mds_cap_reconnect *get_replay_cap_reconnect(inodeno_t ino, client_t client) {
     if (cap_imports.count(ino) &&
@@ -388,9 +390,11 @@ public:
   }
 
   // [reconnect/rejoin caps]
-  friend class C_MDC_RejoinOpenInoFinish;
-  void rejoin_open_ino_finish(inodeno_t ino, int ret);
-  bool process_imported_caps();
+  bool fetch_imported_cap_inodes();
+  void fetched_imported_cap_inodes(int count);
+
+  void process_exported_caps();
+  void process_imported_caps();
   void choose_lock_states();
   void rejoin_import_cap(CInode *in, client_t client, ceph_mds_cap_reconnect& icr, int frommds);
   void finish_snaprealm_reconnect(client_t client, SnapRealm *realm, snapid_t seq);
@@ -652,12 +656,6 @@ public:
   void open_remote_dirfrag(CDirStripe *stripe, frag_t fg, Context *fin);
   CInode *get_dentry_inode(CDentry *dn, MDRequest *mdr, bool projected=false);
   void open_remote_ino(inodeno_t ino, Context *fin);
-
-  bool parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& missing);
-  bool parallel_fetch_traverse_dir(inodeno_t ino, filepath& path, 
-				   set<CDirFrag*>& fetch_queue, set<inodeno_t>& missing,
-				   C_GatherBuilder &gather_bld);
-
   void open_remote_dentry(CDentry *dn, bool projected, Context *fin);
 
   void make_trace(vector<CDentry*>& trace, CInode *in);

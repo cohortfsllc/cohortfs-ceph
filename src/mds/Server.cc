@@ -602,20 +602,31 @@ void Server::handle_client_reconnect(MClientReconnect *m)
       mdcache->last_cap_id = p->second.capinfo.cap_id;
     
     CInode *in = mdcache->get_inode(p->first);
-    if (in && in->state_test(CInode::STATE_PURGING))
-      continue;
-    if (in && in->is_auth()) {
-      // we recovered it, and it's ours.  take note.
-      dout(15) << "open cap realm " << inodeno_t(p->second.capinfo.snaprealm)
-	       << " on " << *in << dendl;
-      in->reconnect_cap(from, p->second.capinfo, session);
-      recover_filelocks(in, p->second.flockbl, m->get_orig_source().num());
-      continue;
+    int auth_mds;
+    if (in) {
+      if (in->state_test(CInode::STATE_PURGING))
+        continue;
+      if (in->is_auth()) {
+        // we recovered it, and it's ours.  take note.
+        dout(15) << "open cap realm " << inodeno_t(p->second.capinfo.snaprealm)
+            << " on " << *in << dendl;
+        in->reconnect_cap(from, p->second.capinfo, session);
+        recover_filelocks(in, p->second.flockbl, m->get_orig_source().num());
+        continue;
+      }
+      auth_mds = in->authority().first;
+    } else {
+      // run inode placement to determine authority
+      stripeid_t stripeid = mdcache->get_container()->place(p->first);
+      CInode *container = mdcache->get_container()->get_inode();
+      auth_mds = container->get_placement()->get_stripe_auth(stripeid);
     }
       
-    if (in && !in->is_auth()) {
+    if (auth_mds != mds->get_nodeid()) {
       // not mine.
-      dout(10) << "non-auth " << *in << ", will pass off to authority" << dendl;
+      dout(0) << "non-auth " << p->first
+	      << ", will pass off to mds." << auth_mds << dendl;
+      
       // add to cap export list.
       mdcache->rejoin_export_caps(p->first, from, p->second.capinfo,
 				  in->authority().first);

@@ -852,27 +852,21 @@ namespace __gnu_cxx {
 
 // cap info for client reconnect
 struct cap_reconnect_t {
-  string path;
   mutable ceph_mds_cap_reconnect capinfo;
   bufferlist flockbl;
 
   cap_reconnect_t() {
     memset(&capinfo, 0, sizeof(capinfo));
   }
-  cap_reconnect_t(uint64_t cap_id, inodeno_t pino, const string& p, int w, int i, inodeno_t sr) : 
-    path(p) {
+  cap_reconnect_t(uint64_t cap_id, int wanted, int issued, inodeno_t sr) {
     capinfo.cap_id = cap_id;
-    capinfo.wanted = w;
-    capinfo.issued = i;
+    capinfo.wanted = wanted;
+    capinfo.issued = issued;
     capinfo.snaprealm = sr;
-    capinfo.pathbase = pino;
     capinfo.flock_len = 0;
   }
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
-  void encode_old(bufferlist& bl) const;
-  void decode_old(bufferlist::iterator& bl);
-
   void dump(Formatter *f) const;
   static void generate_test_instances(list<cap_reconnect_t*>& ls);
 };
@@ -887,40 +881,32 @@ struct old_ceph_mds_cap_reconnect {
   __le64 old_size;
   struct ceph_timespec old_mtime, old_atime;
 	__le64 snaprealm;
-	__le64 pathbase;        /* base ino for our path to this ino */
 } __attribute__ ((packed));
 WRITE_RAW_ENCODER(old_ceph_mds_cap_reconnect)
 
 struct old_cap_reconnect_t {
-  string path;
   old_ceph_mds_cap_reconnect capinfo;
 
   const old_cap_reconnect_t& operator=(const cap_reconnect_t& n) {
-    path = n.path;
     capinfo.cap_id = n.capinfo.cap_id;
     capinfo.wanted = n.capinfo.wanted;
     capinfo.issued = n.capinfo.issued;
     capinfo.snaprealm = n.capinfo.snaprealm;
-    capinfo.pathbase = n.capinfo.pathbase;
     return *this;
   }
   operator cap_reconnect_t() {
     cap_reconnect_t n;
-    n.path = path;
     n.capinfo.cap_id = capinfo.cap_id;
     n.capinfo.wanted = capinfo.wanted;
     n.capinfo.issued = capinfo.issued;
     n.capinfo.snaprealm = capinfo.snaprealm;
-    n.capinfo.pathbase = capinfo.pathbase;
     return n;
   }
 
   void encode(bufferlist& bl) const {
-    ::encode(path, bl);
     ::encode(capinfo, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    ::decode(path, bl);
     ::decode(capinfo, bl);
   }
 };
