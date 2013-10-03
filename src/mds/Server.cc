@@ -548,9 +548,10 @@ void Server::reconnect_clients()
 void Server::handle_client_reconnect(MClientReconnect *m)
 {
   dout(7) << "handle_client_reconnect " << m->get_source() << dendl;
-  int from = m->get_source().num();
   Session *session = get_session(m);
   assert(session);
+
+  client_t client = session->get_client();
 
   if (!mds->is_reconnect() && mds->get_want_state() == CEPH_MDS_STATE_RECONNECT) {
     dout(10) << " we're almost in reconnect state (mdsmap delivery race?); waiting" << dendl;
@@ -567,8 +568,8 @@ void Server::handle_client_reconnect(MClientReconnect *m)
     dout(1) << " no longer in reconnect state, ignoring reconnect, sending close" << dendl;
     mds->clog.info() << "denied reconnect attempt (mds is "
        << ceph_mds_state_name(mds->get_state())
-       << ") from " << m->get_source_inst()
-       << " after " << delay << " (allowed interval " << g_conf->mds_reconnect_timeout << ")\n";
+       << ") from " << client << " after " << delay
+       << " (allowed interval " << g_conf->mds_reconnect_timeout << ")\n";
     mds->messenger->send_message(new MClientSession(CEPH_SESSION_CLOSE), m->get_connection());
     m->put();
     return;
@@ -594,14 +595,14 @@ void Server::handle_client_reconnect(MClientReconnect *m)
   }
 
   // caps
-  for (map<inodeno_t, cap_reconnect_t>::iterator p = m->caps.begin();
+  for (map<dirstripe_t, cap_reconnect_t>::iterator p = m->caps.begin();
        p != m->caps.end();
        ++p) {
     // make sure our last_cap_id is MAX over all issued caps
     if (p->second.capinfo.cap_id > mdcache->last_cap_id)
       mdcache->last_cap_id = p->second.capinfo.cap_id;
     
-    CInode *in = mdcache->get_inode(p->first);
+    CInode *in = mdcache->get_inode(p->first.ino);
     int auth_mds;
     if (in) {
       if (in->state_test(CInode::STATE_PURGING))
@@ -610,14 +611,14 @@ void Server::handle_client_reconnect(MClientReconnect *m)
         // we recovered it, and it's ours.  take note.
         dout(15) << "open cap realm " << inodeno_t(p->second.capinfo.snaprealm)
             << " on " << *in << dendl;
-        in->reconnect_cap(from, p->second.capinfo, session);
+        in->reconnect_cap(client, p->second.capinfo, session);
         recover_filelocks(in, p->second.flockbl, m->get_orig_source().num());
         continue;
       }
       auth_mds = in->authority().first;
     } else {
       // run inode placement to determine authority
-      stripeid_t stripeid = mdcache->get_container()->place(p->first);
+      stripeid_t stripeid = mdcache->get_container()->place(p->first.ino);
       CInode *container = mdcache->get_container()->get_inode();
       auth_mds = container->get_placement()->get_stripe_auth(stripeid);
     }
@@ -626,19 +627,18 @@ void Server::handle_client_reconnect(MClientReconnect *m)
       // not mine.
       dout(0) << "non-auth " << p->first
 	      << ", will pass off to mds." << auth_mds << dendl;
-      
+
       // add to cap export list.
-      mdcache->rejoin_export_caps(p->first, from, p->second.capinfo,
-				  in->authority().first);
+      mdcache->rejoin_export_caps(p->first, client, p->second.capinfo, auth_mds);
     } else {
       // don't know if the inode is mine
       dout(10) << "missing ino " << p->first << ", will load later" << dendl;
-      mdcache->rejoin_recovered_caps(p->first, from, p->second, -1);
+      mdcache->rejoin_recovered_caps(p->first, client, p->second, -1);
     }
   }
 
   // remove from gather set
-  client_reconnect_gather.erase(from);
+  client_reconnect_gather.erase(client);
   if (client_reconnect_gather.empty())
     reconnect_gather_finish();
 

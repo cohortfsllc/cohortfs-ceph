@@ -163,7 +163,7 @@ class MMDSCacheRejoin : public Message {
   map<vinodeno_t, inode_strong> strong_inodes;
 
   // open
-  map<inodeno_t,map<client_t, ceph_mds_cap_reconnect> > cap_exports;
+  map<dirstripe_t, map<client_t, ceph_mds_cap_reconnect> > cap_exports;
 
   // full
   bufferlist inode_base;

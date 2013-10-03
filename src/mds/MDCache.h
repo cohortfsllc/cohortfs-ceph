@@ -329,14 +329,14 @@ protected:
   set<int> rejoin_ack_gather;  // nodes from whom i need a rejoin ack
 
   typedef map<client_t, ceph_mds_cap_reconnect> client_cap_export_map;
-  typedef map<inodeno_t, client_cap_export_map> inode_cap_export_map;
-  inode_cap_export_map cap_exports; // ino -> client -> capex
-  map<inodeno_t,int> cap_export_targets; // ino -> auth mds
+  typedef map<dirstripe_t, client_cap_export_map> cap_export_map;
+  cap_export_map cap_exports; // object -> client -> capex
+  map<dirstripe_t, int> cap_export_targets; // ino -> auth mds
 
   typedef map<int, ceph_mds_cap_reconnect> mds_cap_import_map;
   typedef map<client_t, mds_cap_import_map> client_cap_import_map;
-  typedef map<inodeno_t, client_cap_import_map> inode_cap_import_map;
-  inode_cap_import_map cap_imports;  // ino -> client -> frommds -> capex
+  typedef map<dirstripe_t, client_cap_import_map> cap_import_map;
+  cap_import_map cap_imports;  // object -> client -> frommds -> capex
   int cap_imports_num_fetching;
   
   set<CInode*> rejoin_potential_updated_scatterlocks;
@@ -366,27 +366,35 @@ public:
   void rejoin_start();
   void rejoin_gather_finish();
   void rejoin_send_rejoins();
-  void rejoin_export_caps(inodeno_t ino, client_t client, ceph_mds_cap_reconnect& capinfo,
-			  int target=-1) {
-    cap_exports[ino][client] = capinfo;
-    cap_export_targets[ino] = target;
+  void rejoin_export_caps(dirstripe_t ds, client_t client,
+                          ceph_mds_cap_reconnect& capinfo, int target=-1) {
+    cap_exports[ds][client] = capinfo;
+    cap_export_targets[ds] = target;
   }
-  void rejoin_recovered_caps(inodeno_t ino, client_t client, cap_reconnect_t& icr, 
+  void rejoin_recovered_caps(dirstripe_t ds, client_t client, cap_reconnect_t& icr, 
 			     int frommds=-1) {
-    cap_imports[ino][client][frommds] = icr.capinfo;
+    cap_imports[ds][client][frommds] = icr.capinfo;
   }
   ceph_mds_cap_reconnect *get_replay_cap_reconnect(inodeno_t ino, client_t client) {
-    if (cap_imports.count(ino) &&
-	cap_imports[ino].count(client) &&
-	cap_imports[ino][client].count(-1)) {
-      return &cap_imports[ino][client][-1];
+    dirstripe_t ds(ino, CEPH_CAP_OBJECT_INODE);
+    return get_replay_cap_reconnect(ds, client);
+  }
+  ceph_mds_cap_reconnect *get_replay_cap_reconnect(dirstripe_t ds, client_t client) {
+    if (cap_imports.count(ds) &&
+	cap_imports[ds].count(client) &&
+	cap_imports[ds][client].count(-1)) {
+      return &cap_imports[ds][client][-1];
     }
     return NULL;
   }
   void remove_replay_cap_reconnect(inodeno_t ino, client_t client) {
-    assert(cap_imports[ino].size() == 1);
-    assert(cap_imports[ino][client].size() == 1);
-    cap_imports.erase(ino);
+    dirstripe_t ds(ino, CEPH_CAP_OBJECT_INODE);
+    remove_replay_cap_reconnect(ds, client);
+  }
+  void remove_replay_cap_reconnect(dirstripe_t ds, client_t client) {
+    assert(cap_imports[ds].size() == 1);
+    assert(cap_imports[ds][client].size() == 1);
+    cap_imports.erase(ds);
   }
 
   // [reconnect/rejoin caps]
