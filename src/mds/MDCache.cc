@@ -2013,15 +2013,15 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     ack = new MMDSCacheRejoin(MMDSCacheRejoin::OP_ACK);
 
     // check cap exports
-    for (map<inodeno_t,map<client_t,ceph_mds_cap_reconnect> >::iterator p = weak->cap_exports.begin();
+    for (map<dirstripe_t,map<client_t,ceph_mds_cap_reconnect> >::iterator p = weak->cap_exports.begin();
 	 p != weak->cap_exports.end();
 	 ++p) {
-      CInode *in = get_inode(p->first);
+      CInode *in = get_inode(p->first.ino);
       if (!in || !in->is_auth()) continue;
       for (map<client_t,ceph_mds_cap_reconnect>::iterator q = p->second.begin();
 	   q != p->second.end();
 	   ++q) {
-	dout(10) << " claiming cap import " << p->first << " client." << q->first << " on " << *in << dendl;
+	dout(10) << " claiming cap import " << p->first.ino << " client." << q->first << " on " << *in << dendl;
 	rejoin_import_cap(in, q->first, q->second, from);
       }
     }
@@ -2029,12 +2029,12 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
     assert(mds->is_rejoin());
 
     // check cap exports.
-    for (map<inodeno_t,map<client_t,ceph_mds_cap_reconnect> >::iterator p = weak->cap_exports.begin();
+    for (map<dirstripe_t,map<client_t,ceph_mds_cap_reconnect> >::iterator p = weak->cap_exports.begin();
 	 p != weak->cap_exports.end();
 	 ++p) {
-      CInode *in = get_inode(p->first);
+      CInode *in = get_inode(p->first.ino);
       if (!in) {
-        stripeid_t stripeid = get_container()->place(p->first);
+        stripeid_t stripeid = get_container()->place(p->first.ino);
         CInode *container = get_container()->get_inode();
         int auth_mds = container->get_placement()->get_stripe_auth(stripeid);
         if (auth_mds != mds->get_nodeid())
@@ -2855,35 +2855,35 @@ bool MDCache::process_imported_caps()
   } fetch;
 
   // process cap imports
-  //  ino -> client -> frommds -> capex
-  map<inodeno_t,map<client_t, map<int,ceph_mds_cap_reconnect> > >::iterator p = cap_imports.begin();
+  //  object -> client -> frommds -> capex
+  map<dirstripe_t,map<client_t, map<int,ceph_mds_cap_reconnect> > >::iterator p = cap_imports.begin();
   while (p != cap_imports.end()) {
-    CInode *in = get_inode(p->first);
+    CInode *in = get_inode(p->first.ino);
     if (!in) {
       // fetch from inode container
       InodeContainer *container = mds->mdcache->get_container();
       CDirPlacement *placement = container->get_inode()->get_placement();
-      stripeid_t stripeid = container->place(p->first);
+      stripeid_t stripeid = container->place(p->first.ino);
       int who = placement->get_stripe_auth(stripeid);
       if (who != mds->get_nodeid()) {
-        dout(10) << "process_imported_caps not auth for " << p->first << dendl;
+        dout(10) << "process_imported_caps not auth for " << p->first.ino << dendl;
         cap_imports.erase(p++);
         continue;
       }
       CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
       if (!stripe->is_open()) {
-        dout(10) << "process_imported_caps still missing " << p->first
+        dout(10) << "process_imported_caps still missing " << p->first.ino
             << ", fetching " << *stripe << dendl;
         fetch.stripes.insert(stripe);
         p++;
         continue;
       }
       char dname[20];
-      snprintf(dname, sizeof(dname), "%llx", (unsigned long long)p->first.val);
+      snprintf(dname, sizeof(dname), "%llx", (unsigned long long)p->first.ino.val);
       frag_t fg = stripe->pick_dirfrag(dname);
       CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
       assert(!dir->is_complete());
-      dout(10) << "process_imported_caps still missing " << p->first
+      dout(10) << "process_imported_caps still missing " << p->first.ino
           << ", fetching " << *dir << dendl;
       fetch.frags.insert(dir);
       p++;
@@ -2985,15 +2985,16 @@ void MDCache::rejoin_import_cap(CInode *in, client_t client, ceph_mds_cap_reconn
 
 void MDCache::try_reconnect_cap(CInode *in, Session *session)
 {
+  dirstripe_t ds(in->ino(), CEPH_CAP_OBJECT_INODE);
   client_t client = session->get_client();
-  ceph_mds_cap_reconnect *rc = get_replay_cap_reconnect(in->ino(), client);
+  ceph_mds_cap_reconnect *rc = get_replay_cap_reconnect(ds, client);
   if (rc) {
     in->reconnect_cap(client, *rc, session);
     dout(10) << "try_reconnect_cap client." << client
 	     << " reconnect wanted " << ccap_string(rc->wanted)
 	     << " issue " << ccap_string(rc->issued)
 	     << " on " << *in << dendl;
-    remove_replay_cap_reconnect(in->ino(), client);
+    remove_replay_cap_reconnect(ds, client);
 
     if (in->is_replicated()) {
       mds->locker->try_eval(in, CEPH_CAP_LOCKS);

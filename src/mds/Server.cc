@@ -582,14 +582,14 @@ void Server::handle_client_reconnect(MClientReconnect *m)
   }
 
   // caps
-  for (map<inodeno_t, cap_reconnect_t>::iterator p = m->caps.begin();
+  for (map<dirstripe_t, cap_reconnect_t>::iterator p = m->caps.begin();
        p != m->caps.end();
        ++p) {
     // make sure our last_cap_id is MAX over all issued caps
     if (p->second.capinfo.cap_id > mdcache->last_cap_id)
       mdcache->last_cap_id = p->second.capinfo.cap_id;
     
-    CInode *in = mdcache->get_inode(p->first);
+    CInode *in = mdcache->get_inode(p->first.ino);
     int auth_mds;
     if (in) {
       if (in->state_test(CInode::STATE_PURGING))
@@ -605,7 +605,7 @@ void Server::handle_client_reconnect(MClientReconnect *m)
       auth_mds = in->authority().first;
     } else {
       // run inode placement to determine authority
-      stripeid_t stripeid = mdcache->get_container()->place(p->first);
+      stripeid_t stripeid = mdcache->get_container()->place(p->first.ino);
       CInode *container = mdcache->get_container()->get_inode();
       auth_mds = container->get_placement()->get_stripe_auth(stripeid);
     }
@@ -617,7 +617,8 @@ void Server::handle_client_reconnect(MClientReconnect *m)
       
       // mark client caps stale.
       MClientCaps *stale = new MClientCaps(CEPH_CAP_OP_EXPORT, 0, 0, 0);
-      stale->head.ino = p->first;
+      stale->head.ino = p->first.ino;
+      stale->head.stripeid = p->first.stripeid;
       //stale->head.migrate_seq = 0; // FIXME ******
       mds->send_message_client_counted(stale, session);
 

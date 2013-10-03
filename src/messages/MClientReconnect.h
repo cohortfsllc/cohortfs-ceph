@@ -25,7 +25,7 @@ class MClientReconnect : public Message {
   const static int HEAD_VERSION = 2;
 
 public:
-  map<inodeno_t, cap_reconnect_t>  caps;   // only head inodes
+  map<dirstripe_t, cap_reconnect_t> caps;
   vector<ceph_mds_snaprealm_reconnect> realms;
 
   MClientReconnect() : Message(CEPH_MSG_CLIENT_RECONNECT, HEAD_VERSION) { }
@@ -35,13 +35,17 @@ private:
 public:
   const char *get_type_name() const { return "client_reconnect"; }
   void print(ostream& out) const {
-    out << "client_reconnect("
-	<< caps.size() << " caps)";
+    out << "client_reconnect(" << caps.size() << " caps)";
   }
 
   void add_cap(inodeno_t ino, uint64_t cap_id, int wanted, int issued,
 	       inodeno_t sr) {
-    caps[ino] = cap_reconnect_t(cap_id, wanted, issued, sr);
+    dirstripe_t ds(ino, CEPH_CAP_OBJECT_INODE);
+    caps[ds] = cap_reconnect_t(cap_id, wanted, issued, sr);
+  }
+  void add_cap(dirstripe_t ds, uint64_t cap_id, int wanted, int issued,
+	       inodeno_t sr) {
+    caps[ds] = cap_reconnect_t(cap_id, wanted, issued, sr);
   }
   void add_snaprealm(inodeno_t ino, snapid_t seq, inodeno_t parent) {
     ceph_mds_snaprealm_reconnect r;
@@ -58,8 +62,8 @@ public:
     } else {
       // compat crap
       header.version = 1;
-      map<inodeno_t, old_cap_reconnect_t> ocaps;
-      for (map<inodeno_t,cap_reconnect_t>::iterator p = caps.begin(); p != caps.end(); p++)
+      map<dirstripe_t, old_cap_reconnect_t> ocaps;
+      for (map<dirstripe_t,cap_reconnect_t>::iterator p = caps.begin(); p != caps.end(); p++)
 	ocaps[p->first] = p->second;
       ::encode(ocaps, data);
     }
@@ -72,9 +76,9 @@ public:
       ::decode(caps, p);
     } else {
       // compat crap
-      map<inodeno_t, old_cap_reconnect_t> ocaps;
+      map<dirstripe_t, old_cap_reconnect_t> ocaps;
       ::decode(ocaps, p);
-      for (map<inodeno_t,old_cap_reconnect_t>::iterator q = ocaps.begin(); q != ocaps.end(); q++)
+      for (map<dirstripe_t,old_cap_reconnect_t>::iterator q = ocaps.begin(); q != ocaps.end(); q++)
 	caps[q->first] = q->second;
     }
     while (p.end()) {
