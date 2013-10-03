@@ -449,20 +449,93 @@ int CDirStripe::get_caps_allowed_ever()
       CapObject::get_caps_allowed_ever();
 }
 
+int CDirStripe::encode_stripestat(bufferlist &bl, Session *session,
+                                  SnapRealm *dir_realm, snapid_t snapid,
+                                  unsigned max_bytes)
+{
+  if (max_bytes && sizeof(ceph_mds_reply_stripe) > max_bytes)
+    return -ENOSPC;
+
+  struct ceph_mds_reply_stripe e;
+  e.ino = ds.ino;
+  e.stripeid = ds.stripeid;
+  e.snapid = snapid;
+
+  // "fake" a version that is old (stable) version, +1 if projected.
+  e.version = (fnode.version * 2) + is_projected();
+
+  client_t client = session->get_client();
+  bool plink = linklock.is_xlocked_by_client(client) || get_loner() == client;
+  fnode_t *f = plink ? get_projected_fnode() : &fnode;
+
+  e.nfiles = f->fragstat.nfiles;
+  e.nsubdirs = f->fragstat.nsubdirs;
+  f->fragstat.mtime.encode_timeval(&e.mtime);
+
+  e.rbytes = f->rstat.rbytes;
+  e.rfiles = f->rstat.rfiles;
+  e.rsubdirs = f->rstat.rsubdirs;
+  f->rstat.rctime.encode_timeval(&e.rctime);
+
+  // caps
+  if (snapid != CEPH_NOSNAP) {
+    e.cap.caps = is_auth() ? get_caps_allowed_by_type(CAP_ANY) : CEPH_CAP_PIN;
+    if (last == CEPH_NOSNAP || is_any_caps())
+      e.cap.caps = e.cap.caps & get_caps_allowed_for_client(client);
+    e.cap.seq = 0;
+    e.cap.mseq = 0;
+    e.cap.realm = 0;
+  } else {
+    Capability *cap = get_client_cap(client);
+    if (!cap) {
+      cap = add_client_cap(client, session, containing_realm);
+      if (is_auth()) {
+        if (choose_ideal_loner() >= 0)
+          try_set_loner();
+        else if (get_wanted_loner() < 0)
+          try_drop_loner();
+      }
+    }
+
+    int likes = get_caps_liked();
+    int allowed = get_caps_allowed_for_client(client);
+    int issue = (cap->wanted() | likes) & allowed;
+    cap->issue_norevoke(issue);
+    issue = cap->pending();
+    cap->set_last_issue();
+    cap->set_last_issue_stamp(ceph_clock_now(g_ceph_context));
+    e.cap.caps = issue;
+    e.cap.wanted = cap->wanted();
+    e.cap.cap_id = cap->get_cap_id();
+    e.cap.seq = cap->get_last_seq();
+    dout(10) << "encode_stripestat issueing " << ccap_string(issue) << " seq " << cap->get_last_seq() << dendl;
+    e.cap.mseq = cap->get_mseq();
+    e.cap.realm = MDS_INO_ROOT;
+  }
+  e.cap.flags = is_auth() ? CEPH_CAP_FLAG_AUTH:0;
+  dout(10) << "encode_stripestat caps " << ccap_string(e.cap.caps)
+      << " seq " << e.cap.seq << " mseq " << e.cap.mseq << dendl;
+  return 1;
+}
+
 void CDirStripe::encode_cap_message(MClientCaps *m, Capability *cap)
 {
-  client_t client = cap->get_client();
-
   m->head.ino = ds.ino;
   m->head.stripeid = ds.stripeid;
 
+  client_t client = cap->get_client();
   bool plink = linklock.is_xlocked_by_client(client) ||
       (cap->issued() & CEPH_CAP_LINK_EXCL);
-
   fnode_t *f = plink ? get_projected_fnode() : &fnode;
+
   m->stripe.nfiles = f->fragstat.nfiles;
   m->stripe.nsubdirs = f->fragstat.nsubdirs;
   f->fragstat.mtime.encode_timeval(&m->stripe.mtime);
+
+  m->stripe.rbytes = f->rstat.rbytes;
+  m->stripe.rfiles = f->rstat.rfiles;
+  m->stripe.rsubdirs = f->rstat.rsubdirs;
+  f->rstat.rctime.encode_timeval(&m->stripe.rctime);
 }
 
 // pins

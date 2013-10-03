@@ -267,6 +267,8 @@ class CDirStripe : public CapObject {
   // -- caps --
   virtual int get_caps_liked();
   virtual int get_caps_allowed_ever();
+  int encode_stripestat(bufferlist &bl, Session *session, SnapRealm *dir_realm,
+                        snapid_t snapid, unsigned max_bytes=0);
   virtual void encode_cap_message(MClientCaps *m, Capability *cap);
 
   // -- auth pins --

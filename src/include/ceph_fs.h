@@ -482,6 +482,16 @@ struct ceph_mds_reply_inode {
 } __attribute__ ((packed));
 /* followed by frag array, symlink string, dir layout, xattr blob */
 
+struct ceph_mds_reply_stripe {
+  __le64 ino;
+  __le32 stripeid;
+  __le64 snapid;
+  __le64 version;
+  struct ceph_mds_reply_cap cap;
+  __le32 nfiles, nsubdirs, rbytes, rfiles, rsubdirs;
+  struct ceph_timespec mtime, rctime;
+} __attribute__ ((packed));
+
 /* reply_lease follows dname, and reply_inode */
 struct ceph_mds_reply_lease {
 	__le16 mask;            /* lease type(s) */
@@ -667,8 +677,8 @@ struct ceph_mds_caps_inode {
 
 struct ceph_mds_caps_stripe {
   /* linklock */
-  __le32 nfiles, nsubdirs;
-	struct ceph_timespec mtime;
+  __le32 nfiles, nsubdirs, rbytes, rfiles, rsubdirs;
+  struct ceph_timespec mtime, rctime;
 } __attribute__ ((packed));
 
 /* cap release msg head */
