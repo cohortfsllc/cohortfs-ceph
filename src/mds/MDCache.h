@@ -305,10 +305,8 @@ protected:
   set<int> rejoin_ack_gather;  // nodes from whom i need a rejoin ack
 
   map<inodeno_t,map<client_t,ceph_mds_cap_reconnect> > cap_exports; // ino -> client -> capex
-  map<inodeno_t,filepath> cap_export_paths;
 
   map<inodeno_t,map<client_t,map<int,ceph_mds_cap_reconnect> > > cap_imports;  // ino -> client -> frommds -> capex
-  map<inodeno_t,filepath> cap_import_paths;
   set<inodeno_t> cap_imports_missing;
   
   set<CInode*> rejoin_potential_updated_scatterlocks;
@@ -332,12 +330,10 @@ public:
   void rejoin_send_rejoins();
   void rejoin_export_caps(inodeno_t ino, client_t client, cap_reconnect_t& icr) {
     cap_exports[ino][client] = icr.capinfo;
-    cap_export_paths[ino] = filepath(icr.path, (uint64_t)icr.capinfo.pathbase);
   }
   void rejoin_recovered_caps(inodeno_t ino, client_t client, cap_reconnect_t& icr, 
 			     int frommds=-1) {
     cap_imports[ino][client][frommds] = icr.capinfo;
-    cap_import_paths[ino] = filepath(icr.path, (uint64_t)icr.capinfo.pathbase);
   }
   ceph_mds_cap_reconnect *get_replay_cap_reconnect(inodeno_t ino, client_t client) {
     if (cap_imports.count(ino) &&
@@ -354,7 +350,7 @@ public:
   }
 
   // [reconnect/rejoin caps]
-  void process_imported_caps();
+  bool process_imported_caps();
   void choose_lock_states();
   void rejoin_import_cap(CInode *in, client_t client, ceph_mds_cap_reconnect& icr, int frommds);
   void finish_snaprealm_reconnect(client_t client, SnapRealm *realm, snapid_t seq);
@@ -605,11 +601,6 @@ public:
   void open_remote_ino(inodeno_t ino, Context *fin, bool want_xlocked=false);
   void open_remote_dentry(CDentry *dn, bool projected, Context *fin);
   void _open_remote_dentry_finish(int r, CDentry *dn, bool projected, Context *fin);
-
-  bool parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& missing);
-  bool parallel_fetch_traverse_dir(inodeno_t ino, filepath& path, 
-				   set<CDirFrag*>& fetch_queue, set<inodeno_t>& missing,
-				   C_GatherBuilder &gather_bld);
 
   void make_trace(vector<CDentry*>& trace, CInode *in);
   

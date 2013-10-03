@@ -1599,10 +1599,8 @@ void MDCache::rejoin_send_rejoins()
 
   // encode cap list once.
   bufferlist cap_export_bl;
-  if (mds->is_rejoin()) {
+  if (mds->is_rejoin())
     ::encode(cap_exports, cap_export_bl);
-    ::encode(cap_export_paths, cap_export_bl);
-  }
 
   // if i am rejoining, send a rejoin to everyone.
   // otherwise, just send to others who are rejoining.
@@ -2035,16 +2033,15 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
 	 p != weak->cap_exports.end();
 	 ++p) {
       CInode *in = get_inode(p->first);
-      if (in && !in->is_auth())
-	continue;
-      filepath& path = weak->cap_export_paths[p->first];
       if (!in) {
-	if (!path_is_mine(path))
-	  continue;
-	cap_import_paths[p->first] = path;
-	dout(10) << " noting cap import " << p->first << " path " << path << dendl;
-      }
-      
+        stripeid_t stripeid = get_container()->place(p->first);
+        CInode *container = get_container()->get_inode();
+        int auth_mds = container->get_placement()->get_stripe_auth(stripeid);
+        if (auth_mds != mds->get_nodeid())
+          continue;
+      } else if (!in->is_auth())
+        continue;
+
       // note
       for (map<client_t,ceph_mds_cap_reconnect>::iterator q = p->second.begin();
 	   q != p->second.end();
@@ -2224,127 +2221,6 @@ public:
     cache->rejoin_gather_finish();
   }
 };
-
-/**
- * parallel_fetch -- make a pass at fetching a bunch of paths in parallel
- *
- * @param pathmap map of inodeno to full pathnames.  we remove items
- *            from this map as we discover we have them.
- *
- *	      returns true if there is work to do, false otherwise.
- */
-
-bool MDCache::parallel_fetch(map<inodeno_t,filepath>& pathmap, set<inodeno_t>& missing)
-{
-  dout(10) << "parallel_fetch on " << pathmap.size() << " paths" << dendl;
-
-  C_GatherBuilder gather_bld(g_ceph_context, new C_MDC_RejoinGatherFinish(this));
-
-  // scan list
-  set<CDirFrag*> fetch_queue;
-  map<inodeno_t,filepath>::iterator p = pathmap.begin();
-  while (p != pathmap.end()) {
-    // do we have the target already?
-    CInode *cur = get_inode(p->first);
-    if (cur) {
-      dout(15) << " have " << *cur << dendl;
-      pathmap.erase(p++);
-      continue;
-    }
-
-    // traverse
-    dout(17) << " missing " << p->first << " at " << p->second << dendl;
-    if (parallel_fetch_traverse_dir(p->first, p->second, fetch_queue,
-				    missing, gather_bld))
-      pathmap.erase(p++);
-    else
-      p++;
-  }
-
-  if (pathmap.empty() && (!gather_bld.has_subs())) {
-    dout(10) << "parallel_fetch done" << dendl;
-    assert(fetch_queue.empty());
-    return false;
-  }
-
-  // do a parallel fetch
-  for (set<CDirFrag*>::iterator p = fetch_queue.begin();
-       p != fetch_queue.end();
-       ++p) {
-    dout(10) << "parallel_fetch fetching " << **p << dendl;
-    (*p)->fetch(gather_bld.new_sub());
-  }
-  
-  if (gather_bld.get()) {
-    gather_bld.activate();
-    return true;
-  }
-  return false;
-}
-
-// true if we're done with this path
-bool MDCache::parallel_fetch_traverse_dir(inodeno_t ino, filepath& path,
-					  set<CDirFrag*>& fetch_queue, set<inodeno_t>& missing,
-					  C_GatherBuilder &gather_bld)
-{
-  CInode *cur = get_inode(path.get_ino());
-  if (!cur) {
-    dout(5) << " missing " << path << " base ino " << path.get_ino() << dendl;
-    missing.insert(ino);
-    return true;
-  }
-
-  for (unsigned i=0; i<path.depth(); i++) {
-    dout(20) << " path " << path << " seg " << i << "/" << path.depth() << ": " << path[i]
-	     << " under " << *cur << dendl;
-    if (!cur->is_dir()) {
-      dout(5) << " bad path " << path << " ENOTDIR at " << path[i] << dendl;
-      missing.insert(ino);
-      return true;
-    }
-
-    CDirPlacement *placement = cur->get_placement();
-    __u32 dnhash = placement->hash_dentry_name(path[i]);
-    stripeid_t stripeid = placement->pick_stripe(dnhash);
-    CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
-
-    frag_t fg = stripe->pick_dirfrag(dnhash);
-    CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
-    CDentry *dn = dir->lookup(path[i]);
-    CDentry::linkage_t *dnl = dn->get_linkage();
-    if (!dn || dnl->is_null()) {
-      if (!dir->is_complete()) {
-	// fetch dir
-	fetch_queue.insert(dir);
-	return false;
-      } else {
-	// probably because the client created it and held a cap but it never committed
-	// to the journal, and the op hasn't replayed yet.
-	dout(5) << " dne (not created yet?) " << ino << " at " << path << dendl;
-	missing.insert(ino);
-	return true;
-      }
-    }
-    cur = dnl->get_inode();
-    if (!cur) {
-      assert(dnl->is_remote());
-      cur = get_inode(dnl->get_remote_ino());
-      if (cur) {
-	dn->link_remote(dnl, cur);
-      } else {
-	// open remote ino
-	open_remote_ino(dnl->get_remote_ino(), gather_bld.new_sub());
-	return false;
-      }
-    }
-  }
-
-  dout(5) << " ino not found " << ino << " at " << path << dendl;
-  missing.insert(ino);
-  return true;
-}
-
-
 
 
 /*
@@ -2951,16 +2827,8 @@ void MDCache::rejoin_gather_finish()
   dout(10) << "rejoin_gather_finish" << dendl;
   assert(mds->is_rejoin());
 
-  // fetch paths?
-  //  do this before ack, since some inodes we may have already gotten
-  //  from surviving MDSs.
-  if (!cap_import_paths.empty()) {
-    if (parallel_fetch(cap_import_paths, cap_imports_missing)) {
-      return;
-    }
-  }
-  
-  process_imported_caps();
+  if (!process_imported_caps())
+    return;
   choose_lock_states();
 
   vector<CInode*> recover_q, check_q;
@@ -2977,9 +2845,14 @@ void MDCache::rejoin_gather_finish()
     do_delayed_cap_imports();
 }
 
-void MDCache::process_imported_caps()
+bool MDCache::process_imported_caps()
 {
   dout(10) << "process_imported_caps" << dendl;
+
+  struct {
+    set<CDirStripe*> stripes;
+    set<CDirFrag*> frags;
+  } fetch;
 
   // process cap imports
   //  ino -> client -> frommds -> capex
@@ -2987,9 +2860,32 @@ void MDCache::process_imported_caps()
   while (p != cap_imports.end()) {
     CInode *in = get_inode(p->first);
     if (!in) {
+      // fetch from inode container
+      InodeContainer *container = mds->mdcache->get_container();
+      CDirPlacement *placement = container->get_inode()->get_placement();
+      stripeid_t stripeid = container->place(p->first);
+      int who = placement->get_stripe_auth(stripeid);
+      if (who != mds->get_nodeid()) {
+        dout(10) << "process_imported_caps not auth for " << p->first << dendl;
+        cap_imports.erase(p++);
+        continue;
+      }
+      CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
+      if (!stripe->is_open()) {
+        dout(10) << "process_imported_caps still missing " << p->first
+            << ", fetching " << *stripe << dendl;
+        fetch.stripes.insert(stripe);
+        p++;
+        continue;
+      }
+      char dname[20];
+      snprintf(dname, sizeof(dname), "%llx", (unsigned long long)p->first.val);
+      frag_t fg = stripe->pick_dirfrag(dname);
+      CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
+      assert(!dir->is_complete());
       dout(10) << "process_imported_caps still missing " << p->first
-	       << ", will try again after replayed client requests"
-	       << dendl;
+          << ", fetching " << *dir << dendl;
+      fetch.frags.insert(dir);
       p++;
       continue;
     }
@@ -3003,6 +2899,21 @@ void MDCache::process_imported_caps()
       }
     cap_imports.erase(p++);  // remove and move on
   }
+
+  // fetch the objects we need
+  C_GatherBuilder gather(g_ceph_context);
+  for (set<CDirStripe*>::iterator i = fetch.stripes.begin(); i != fetch.stripes.end(); ++i)
+    (*i)->fetch(gather.new_sub());
+
+  for (set<CDirFrag*>::iterator i = fetch.frags.begin(); i != fetch.frags.end(); ++i)
+    (*i)->fetch(gather.new_sub());
+
+  if (gather.has_subs()) {
+    gather.set_finisher(new C_MDC_RejoinGatherFinish(this));
+    gather.activate();
+    return false;
+  }
+  return true;
 }
 
 /*

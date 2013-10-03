@@ -707,7 +707,6 @@ struct ceph_mds_cap_reconnect {
 	__le32 wanted;
 	__le32 issued;
 	__le64 snaprealm;
-	__le64 pathbase;        /* base ino for our path to this ino */
 	__le32 flock_len;       /* size of flock state blob, if any */
 } __attribute__ ((packed));
 /* followed by flock blob */
