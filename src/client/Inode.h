@@ -158,9 +158,8 @@ class Inode : public CapObject {
     ll_ref -= n;
   }
 
-  Inode(CephContext *cct, CapClient *client,
-        vinodeno_t vino, ceph_file_layout *newlayout)
-    : CapObject(cct, client, vino),
+  Inode(CephContext *cct, vinodeno_t vino, ceph_file_layout *newlayout)
+    : CapObject(cct, vino),
       rdev(0), mode(0), uid(0), gid(0), nlink(0),
       size(0), truncate_seq(1), truncate_size(-1),
       time_warp_seq(0), max_size(0), version(0), xattr_version(0),

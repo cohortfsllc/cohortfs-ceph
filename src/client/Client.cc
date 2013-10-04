@@ -157,6 +157,7 @@ Client::Client(Messenger *m, MonClient *mc)
     initialized(false), mounted(false), unmounting(false),
     local_osd(-1), local_osd_epoch(0),
     unsafe_sync_write(0),
+    num_flushing_caps(0),
     client_lock("Client::client_lock")
 {
   monclient->set_messenger(m);
@@ -578,7 +579,7 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
     in = result.first->second;
     ldout(cct, 12) << "add_update_inode had " << *in << " caps " << ccap_string(st->cap.caps) << dendl;
   } else {
-    result.first->second = new Inode(cct, this, st->vino, &st->layout);
+    result.first->second = new Inode(cct, st->vino, &st->layout);
     in = result.first->second;
     if (!root) {
       root = in;
@@ -6085,7 +6086,7 @@ Inode *Client::open_snapdir(Inode *diri)
   pair<inode_hashmap::iterator, bool> result =
       inodes.insert(make_pair(vino, (Inode*)NULL));
   if (result.second) {
-    result.first->second = new Inode(cct, this, vino, &diri->layout);
+    result.first->second = new Inode(cct, vino, &diri->layout);
 
     in = result.first->second;
     in->ino = diri->ino;

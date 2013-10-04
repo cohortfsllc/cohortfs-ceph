@@ -4,7 +4,6 @@
 #include "common/Formatter.h"
 
 #include "Capability.h"
-#include "CapClient.h"
 #include "MetaSession.h"
 #include "SnapRealm.h"
 
@@ -32,9 +31,8 @@ void CapObject::print(ostream &out)
   out << *this;
 }
 
-CapObject::CapObject(CephContext *cct, CapClient *client, vinodeno_t vino)
+CapObject::CapObject(CephContext *cct, vinodeno_t vino)
   : cct(cct),
-    client(client),
     ino(vino.ino),
     snaprealm(NULL),
     snapid(vino.snapid),
