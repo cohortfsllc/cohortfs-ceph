@@ -276,3 +276,15 @@ void CohortOSD::OpWQ::_process(OSDVolRef vol)
   osd->dequeue_op(vol, op);
 //  vol->unlock();
 }
+
+void CohortOSD::enqueue_op(OSDVolRef vol, OpRequestRef op)
+{
+  vol->queue_op(op);
+}
+
+void PGOSD::dequeue_op(OSDVolRef vol, OpRequestRef op)
+{
+  op->mark_reached_vol();
+
+  vol->do_request(op);
+}

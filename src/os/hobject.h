@@ -77,6 +77,12 @@ public:
     hash = __gnu_cxx::hash<sobject_t>()(o);
   }
 
+  /* Do not use when a particular hash function is needed */
+  explicit hobject_t(const object_t &o, uint64_t snapid) :
+    oid(oid), snap(snapid), max(false) {
+    hash = __gnu_cxx::hash<object_t>()(o);
+  }
+
   // maximum sorted value.
   static hobject_t get_max() {
     hobject_t h;

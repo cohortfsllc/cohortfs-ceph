@@ -91,11 +91,8 @@ public:
   static epoch_t peek_map_epoch(ObjectStore *store, coll_t coll,
 				hobject_t &infos_oid, bufferlist *bl);
 
-
   // OpRequest queueing
   bool can_discard_op(OpRequestRef op);
-  bool can_discard_scan(OpRequestRef op);
-  bool can_discard_subop(OpRequestRef op);
   bool can_discard_request(OpRequestRef op);
 
   static bool op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op);
@@ -111,31 +108,9 @@ public:
 
   bool op_has_sufficient_caps(OpRequestRef op);
 
-
-  virtual void on_removal(ObjectStore::Transaction *t) = 0;
-
-  // abstract bits
   void do_request(OpRequestRef op);
 
-  virtual void do_op(OpRequestRef op) = 0;
-  virtual void do_sub_op(OpRequestRef op) = 0;
-  virtual void do_sub_op_reply(OpRequestRef op) = 0;
-  virtual void do_scan(OpRequestRef op) = 0;
-
-  virtual int do_command(vector<string>& cmd, ostream& ss,
-			 bufferlist& idata, bufferlist& odata) = 0;
-
-  virtual bool same_for_read_since(epoch_t e) = 0;
-  virtual bool same_for_modify_since(epoch_t e) = 0;
-  virtual bool same_for_rep_modify_since(epoch_t e) = 0;
-
-  virtual void on_role_change() = 0;
-  virtual void on_change() = 0;
-  virtual void on_activate() = 0;
-  virtual void on_flushed() = 0;
-  virtual void on_shutdown() = 0;
-  virtual void check_blacklisted_watchers() = 0;
-  virtual void get_watchers(std::list<obj_watch_item_t>&) = 0;
+  void do_op(OpRequestRef op);
 };
 
 ostream& operator <<(ostream& out, const OSDVol& pg);
