@@ -46,12 +46,12 @@ using namespace __gnu_cxx;
 
 #include "common/Mutex.h"
 #include "common/Timer.h"
-#include "common/Finisher.h"
 
 #include "common/compiler_extensions.h"
 #include "common/cmdparse.h"
 
 #include "osdc/ObjectCacher.h"
+#include "InodeCache.h"
 
 class MDSMap;
 class OSDMap;
@@ -69,10 +69,13 @@ class MClientCapRelease;
 
 struct LeaseStat;
 struct InodeStat;
+struct StripeStat;
 
 class Filer;
 class Objecter;
+class ObjectCacher;
 class WritebackHandler;
+class InodeCache;
 
 class PerfCounters;
 
@@ -113,6 +116,7 @@ class Inode;
 class DirStripe;
 class Dentry;
 struct SnapRealm;
+class SnapRealmInfo;
 struct Fh;
 class Cap;
 class CapObject;
@@ -122,8 +126,6 @@ struct MetaSession;
 struct MetaRequest;
 
 typedef hash_map<vinodeno_t, Inode*> inode_hashmap;
-
-typedef void (*client_ino_callback_t)(void *handle, vinodeno_t ino, int64_t off, int64_t len);
 
 typedef void (*client_dentry_callback_t)(void *handle, vinodeno_t dirino,
 					 vinodeno_t ino, string& name);
@@ -209,8 +211,7 @@ class Client : public Dispatcher {
 
   SafeTimer timer;
 
-  client_ino_callback_t ino_invalidate_cb;
-  void *ino_invalidate_cb_handle;
+  InodeCache *inodecache;
 
   client_dentry_callback_t dentry_invalidate_cb;
   void *dentry_invalidate_cb_handle;
@@ -218,7 +219,6 @@ class Client : public Dispatcher {
   client_getgroups_callback_t getgroups_cb;
   void *getgroups_cb_handle;
 
-  Finisher async_ino_invalidator;
   Finisher async_dentry_invalidator;
 
   Context *tick_event;
@@ -364,8 +364,8 @@ protected:
   void put_inode(Inode *in, int n=1);
   void close_stripe(DirStripe *stripe);
 
-  friend class C_Client_PutInode; // calls put_inode()
-  friend class C_Client_CacheInvalidate;  // calls ino_invalidate_cb
+  friend class C_PutInode; // calls put_inode()
+  friend class InodeCache;
   friend class C_Client_DentryInvalidate;  // calls dentry_invalidate_cb
   friend class C_Block_Sync; // Calls block map and protected helpers
 
@@ -474,28 +474,6 @@ protected:
   void _schedule_invalidate_dentry_callback(Dentry *dn);
   void _async_dentry_invalidate(vinodeno_t dirino, vinodeno_t ino, string& name);
   void _invalidate_inode_parents(Inode *in);
-
-  void _schedule_invalidate_callback(Inode *in, int64_t off, int64_t len, bool keep_caps);
-  void _invalidate_inode_cache(Inode *in, bool keep_caps);
-  void _invalidate_inode_cache(Inode *in, int64_t off, int64_t len, bool keep_caps);
-  void _async_invalidate(Inode *in, int64_t off, int64_t len, bool keep_caps);
-  void _release(Inode *in);
-  
-  /**
-   * Initiate a flush of the data associated with the given inode.
-   * If you specify a Context, you are responsible for holding an inode
-   * reference for the duration of the flush. If not, _flush() will
-   * take the reference for you.
-   * @param in The Inode whose data you wish to flush.
-   * @param c The Context you wish us to complete once the data is
-   * flushed. If already flushed, this will be called in-line.
-   * 
-   * @returns true if the data was already flushed, false otherwise.
-   */
-  bool _flush(Inode *in, Context *c=NULL);
-  void _flush_range(Inode *in, int64_t off, uint64_t size);
-  void _flushed(Inode *in);
-  void flush_set_callback(ObjectCacher::ObjectSet *oset);
 
   void close_release(Inode *in);
   void close_safe(Inode *in);
@@ -792,7 +770,7 @@ public:
   int ll_num_osds(void);
   int ll_osdaddr(int osd, uint32_t *addr);
   int ll_osdaddr(int osd, char* buf, size_t size);
-  void ll_register_ino_invalidate_cb(client_ino_callback_t cb, void *handle);
+  void ll_register_ino_invalidate_cb(ino_cache_callback_t cb, void *handle);
 
   void ll_register_dentry_invalidate_cb(client_dentry_callback_t cb, void *handle);
 
