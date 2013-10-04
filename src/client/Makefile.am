@@ -14,7 +14,6 @@ noinst_LTLIBRARIES += libclient.la
 
 noinst_HEADERS += \
 	client/Capability.h \
-	client/CapClient.h \
 	client/Client.h \
 	client/Dentry.h \
 	client/DirStripe.h \
