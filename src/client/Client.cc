@@ -91,7 +91,7 @@ using namespace std;
 void client_flush_set_callback(void *p, ObjectCacher::ObjectSet *oset)
 {
   Client *client = (Client*)p;
-  client->flush_set_callback(oset);
+  client->inodecache->flush_set_callback(oset);
 }
 
 
@@ -147,11 +147,8 @@ Client::Client(Messenger *m, MonClient *mc)
     logger(NULL),
     m_command_hook(this),
     timer(m->cct, client_lock),
-    ino_invalidate_cb(NULL),
-    ino_invalidate_cb_handle(NULL),
     getgroups_cb(NULL),
     getgroups_cb_handle(NULL),
-    async_ino_invalidator(m->cct),
     tick_event(NULL),
     monclient(mc), messenger(m), whoami(m->get_myname().num()),
     initialized(false), mounted(false), unmounting(false),
@@ -195,6 +192,7 @@ Client::Client(Messenger *m, MonClient *mc)
 				  cct->_conf->client_oc_max_dirty,
 				  cct->_conf->client_oc_target_dirty,
 				  cct->_conf->client_oc_max_dirty_age);
+  inodecache = new InodeCache(this, client_lock, objectcacher);
   filer = new Filer(objecter);
 }
 
@@ -205,6 +203,7 @@ Client::~Client()
 
   tear_down_cache();
 
+  delete inodecache;
   delete objectcacher;
   delete writeback_handler;
 
@@ -410,12 +409,7 @@ void Client::shutdown()
   admin_socket->unregister_command("mds_sessions");
   admin_socket->unregister_command("dump_cache");
 
-  if (ino_invalidate_cb) {
-    ldout(cct, 10) << "shutdown stopping invalidator finisher" << dendl;
-    async_ino_invalidator.wait_for_empty();
-    async_ino_invalidator.stop();
-  }
-
+  inodecache->shutdown();
   objectcacher->stop();  // outside of client_lock! this does a join.
 
   client_lock.Lock();
@@ -510,7 +504,7 @@ void Client::update_inode_file_bits(Inode *in,
 
       // truncate cached file data
       if (prior_size > size) {
-	_invalidate_inode_cache(in, truncate_size, prior_size - truncate_size, true);
+	inodecache->invalidate(in, truncate_size, prior_size - truncate_size, true);
       }
     }
   }
@@ -579,7 +573,7 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
     in = result.first->second;
     ldout(cct, 12) << "add_update_inode had " << *in << " caps " << ccap_string(st->cap.caps) << dendl;
   } else {
-    result.first->second = new Inode(cct, st->vino, &st->layout);
+    result.first->second = new Inode(cct, inodecache, st->vino, &st->layout);
     in = result.first->second;
     if (!root) {
       root = in;
@@ -2417,173 +2411,6 @@ void Client::wake_inode_waiters(int mds_num)
 }
 
 
-// flush dirty data (from objectcache)
-
-class C_Client_CacheInvalidate : public Context  {
-private:
-  Client *client;
-  Inode *inode;
-  int64_t offset, length;
-  bool keep_caps;
-public:
-  C_Client_CacheInvalidate(Client *c, Inode *in, int64_t off, int64_t len, bool keep) :
-			   client(c), inode(in), offset(off), length(len), keep_caps(keep) {
-    inode->get();
-  }
-  void finish(int r) {
-    client->_async_invalidate(inode, offset, length, keep_caps);
-  }
-};
-
-void Client::_async_invalidate(Inode *in, int64_t off, int64_t len, bool keep_caps) {
-
-    ino_invalidate_cb(ino_invalidate_cb_handle, in->vino(), off, len);
-
-    client_lock.Lock();
-    if (!keep_caps) {
-      put_cap_ref(in, CEPH_CAP_FILE_CACHE);
-    }
-    put_inode(in);
-    client_lock.Unlock();
-}
-
-void Client::_schedule_invalidate_callback(Inode *in, int64_t off, int64_t len, bool keep_caps) {
-
-  if (ino_invalidate_cb)
-    // we queue the invalidate, which calls the callback and decrements the ref
-    async_ino_invalidator.queue(new C_Client_CacheInvalidate(this, in, off, len, keep_caps));
-  else if (!keep_caps)
-    // if not set, we just decrement the cap ref here
-    in->put_cap_ref(CEPH_CAP_FILE_CACHE);
-}
-
-void Client::_invalidate_inode_cache(Inode *in, bool keep_caps)
-{
-  ldout(cct, 10) << "_invalidate_inode_cache " << *in << dendl;
-
-  // invalidate our userspace inode cache
-  if (cct->_conf->client_oc)
-    objectcacher->release_set(&in->oset);
-
-  _schedule_invalidate_callback(in, 0, 0, keep_caps);
-}
-
-void Client::_invalidate_inode_cache(Inode *in, int64_t off, int64_t len, bool keep_caps)
-{
-  ldout(cct, 10) << "_invalidate_inode_cache " << *in << " " << off << "~" << len << dendl;
-
-  // invalidate our userspace inode cache
-  if (cct->_conf->client_oc) {
-    vector<ObjectExtent> ls;
-    Striper::file_to_extents(cct, in->ino, &in->layout, off, len, ls);
-    objectcacher->discard_set(&in->oset, ls);
-  }
-
-  _schedule_invalidate_callback(in, off, len, keep_caps);
-}
-
-void Client::_release(Inode *in)
-{
-  if (in->cap_refs[CEPH_CAP_FILE_CACHE]) {
-    _invalidate_inode_cache(in, false);
-  }
-}
-
-
-class C_Client_PutInode : public Context {
-  Client *client;
-  Inode *in;
-public:
-  C_Client_PutInode(Client *c, Inode *i) : client(c), in(i) {
-    in->get();
-  }
-  void finish(int) {
-    client->put_inode(in);
-  }
-};
-
-bool Client::_flush(Inode *in)
-{
-  ldout(cct, 10) << "_flush " << *in << dendl;
-
-  if (!in->oset.dirty_or_tx) {
-    ldout(cct, 10) << " nothing to flush" << dendl;
-    return true;
-  }
-
-  Context *onfinish = new C_Client_PutInode(this, in);
-  bool safe = objectcacher->flush_set(&in->oset, onfinish);
-  if (safe) {
-    onfinish->complete(0);
-  }
-  return safe;
-}
-
-void Client::_flush_range(Inode *in, int64_t offset, uint64_t size)
-{
-  assert(client_lock.is_locked());
-  if (!in->oset.dirty_or_tx) {
-    ldout(cct, 10) << " nothing to flush" << dendl;
-    return;
-  }
-
-  Mutex flock("Client::_flush_range flock");
-  Cond cond;
-  bool safe = false;
-  Context *onflush = new C_SafeCond(&flock, &cond, &safe);
-  safe = objectcacher->file_flush(&in->oset, &in->layout, in->snaprealm->get_snap_context(),
-				  offset, size, onflush);
-  if (safe)
-    return;
-
-  // wait for flush
-  client_lock.Unlock();
-  flock.Lock();
-  while (!safe)
-    cond.Wait(flock);
-  flock.Unlock();
-  client_lock.Lock();
-}
-
-void Client::flush_set_callback(ObjectCacher::ObjectSet *oset)
-{
-  //  Mutex::Locker l(client_lock);
-  assert(client_lock.is_locked());   // will be called via dispatch() -> objecter -> ...
-  Inode *in = (Inode *)oset->parent;
-  assert(in);
-  _flushed(in);
-}
-
-void Client::_flushed(Inode *in)
-{
-  ldout(cct, 10) << "_flushed " << *in << dendl;
-
-  // release clean pages too, if we dont hold RDCACHE reference
-  if (in->cap_refs[CEPH_CAP_FILE_CACHE] == 0) {
-    _invalidate_inode_cache(in, true);
-  }
-
-  put_cap_ref(in, CEPH_CAP_FILE_BUFFER);
-}
-
-
-
-// checks common to add_update_cap, handle_cap_grant
-void Client::check_cap_issue(Inode *in, Cap *cap, unsigned issued)
-{
-  unsigned had = in->caps_issued();
-
-  if ((issued & CEPH_CAP_FILE_SHARED) &&
-      !(had & CEPH_CAP_FILE_SHARED)) {
-    in->shared_gen++;
-
-    if (in->is_dir() && (in->flags & I_COMPLETE)) {
-      ldout(cct, 10) << " clearing I_COMPLETE on " << *in << dendl;
-      in->flags &= ~I_COMPLETE;
-    }
-  }
-}
-
 void Client::add_update_cap(Inode *in, int mds, uint64_t cap_id,
 			    unsigned issued, unsigned seq, unsigned mseq, inodeno_t realm,
 			    int flags)
@@ -3364,10 +3191,10 @@ void Client::handle_cap_grant(Inode *in, int mds, Cap *cap, MClientCaps *m)
     cap->issued = new_caps;
 
     if ((~cap->issued & old_caps) & CEPH_CAP_FILE_CACHE)
-      _release(in);
+      inodecache->release(in);
     
     if (((used & ~new_caps) & CEPH_CAP_FILE_BUFFER) &&
-	!_flush(in)) {
+	!inodecache->flush(in)) {
       // waitin' for flush
     } else {
       cap->wanted = 0; // don't let check_caps skip sending a response to MDS
@@ -3536,8 +3363,8 @@ void Client::unmount()
       }      
       if (!in->caps.empty()) {
 	in->get();
-	_release(in);
-	_flush(in);
+	inodecache->release(in);
+	inodecache->flush(in);
 	put_inode(in);
       }
     }
@@ -5169,7 +4996,7 @@ int Client::_release_fh(Fh *f)
 
   if (in->snapid == CEPH_NOSNAP) {
     if (in->put_open_ref(f->mode)) {
-      _flush(in);
+      inodecache->flush(in);
       check_caps(in, false);
     }
   } else {
@@ -5363,7 +5190,7 @@ int Client::_read(Fh *f, int64_t offset, uint64_t size, bufferlist *bl)
   if (!conf->client_debug_force_sync_read && have & CEPH_CAP_FILE_CACHE) {
 
     if (f->flags & O_RSYNC) {
-      _flush_range(in, offset, size);
+      inodecache->flush_range(in, offset, size);
     }
     r = _read_async(f, offset, size, bl);
   } else {
@@ -5681,7 +5508,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     // O_DSYNC == O_SYNC on linux < 2.6.33
     // O_SYNC = __O_SYNC | O_DSYNC on linux >= 2.6.33
     if (f->flags & O_SYNC || f->flags & O_DSYNC) {
-      _flush_range(in, offset, size);
+      inodecache->flush_range(in, offset, size);
     }
   } else {
     // simple, non-atomic sync write
@@ -5796,7 +5623,7 @@ int Client::_fsync(Fh *f, bool syncdataonly)
   ldout(cct, 3) << "_fsync(" << f << ", " << (syncdataonly ? "dataonly)":"data+metadata)") << dendl;
   
   if (cct->_conf->client_oc)
-    _flush(in);
+    inodecache->flush(in);
   
   if (!syncdataonly && (in->dirty_caps & ~CEPH_CAP_ANY_FILE_WR)) {
     for (map<int, Cap*>::iterator iter = in->caps.begin(); iter != in->caps.end(); ++iter) {
@@ -5943,15 +5770,13 @@ int Client::ll_statfs(vinodeno_t vino, struct statvfs *stbuf)
   return statfs(0, stbuf);
 }
 
-void Client::ll_register_ino_invalidate_cb(client_ino_callback_t cb, void *handle)
+void Client::ll_register_ino_invalidate_cb(ino_cache_callback_t cb, void *handle)
 {
   Mutex::Locker l(client_lock);
-  ldout(cct, 10) << "ll_register_ino_invalidate_cb cb " << (void*)cb << " p " << (void*)handle << dendl;
-  if (cb == NULL)
-    return;
-  ino_invalidate_cb = cb;
-  ino_invalidate_cb_handle = handle;
-  async_ino_invalidator.start();
+  ldout(cct, 10) << "ll_register_ino_invalidate_cb cb " << (void*)cb
+      << " p " << handle << dendl;
+  if (cb)
+    inodecache->register_callback(cb, handle);
 }
 
 void Client::ll_register_getgroups_cb(client_getgroups_callback_t cb, void *handle)
@@ -6019,7 +5844,7 @@ int Client::lazyio_synchronize(int fd, loff_t offset, size_t count)
   Inode *in = f->inode;
   
   _fsync(f, true);
-  _release(in);
+  inodecache->release(in);
   return 0;
 }
 
@@ -6082,7 +5907,7 @@ Inode *Client::open_snapdir(Inode *diri)
   pair<inode_hashmap::iterator, bool> result =
       inodes.insert(make_pair(vino, (Inode*)NULL));
   if (result.second) {
-    result.first->second = new Inode(cct, vino, &diri->layout);
+    result.first->second = new Inode(cct, inodecache, vino, &diri->layout);
 
     in = result.first->second;
     in->ino = diri->ino;

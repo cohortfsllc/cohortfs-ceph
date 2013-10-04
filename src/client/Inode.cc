@@ -3,6 +3,7 @@
 
 #include "MetaSession.h"
 #include "Inode.h"
+#include "InodeCache.h"
 #include "Dentry.h"
 #include "DirStripe.h"
 #include "SnapRealm.h"

@@ -19,6 +19,7 @@ class Dentry;
 class DirStripe;
 class SnapRealm;
 class Inode;
+class InodeCache;
 
 struct CapSnap {
   //snapid_t follows;  // map key
@@ -54,6 +55,8 @@ struct CapSnap {
 #define I_COMPLETE 1
 
 class Inode : public CapObject {
+ private:
+  InodeCache *cache;
  public:
   uint32_t   rdev;    // if special file
 
@@ -158,8 +161,9 @@ class Inode : public CapObject {
     ll_ref -= n;
   }
 
-  Inode(CephContext *cct, vinodeno_t vino, ceph_file_layout *newlayout)
-    : CapObject(cct, vino),
+  Inode(CephContext *cct, InodeCache *cache, vinodeno_t vino,
+        ceph_file_layout *newlayout)
+    : CapObject(cct, vino), cache(cache),
       rdev(0), mode(0), uid(0), gid(0), nlink(0),
       size(0), truncate_seq(1), truncate_size(-1),
       time_warp_seq(0), max_size(0), version(0), xattr_version(0),

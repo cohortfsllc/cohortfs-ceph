@@ -42,11 +42,11 @@ using namespace __gnu_cxx;
 
 #include "common/Mutex.h"
 #include "common/Timer.h"
-#include "common/Finisher.h"
 
 #include "common/compiler_extensions.h"
 
 #include "osdc/ObjectCacher.h"
+#include "InodeCache.h"
 
 class MDSMap;
 class OSDMap;
@@ -64,10 +64,13 @@ class MClientCapRelease;
 
 class LeaseStat;
 class InodeStat;
+class StripeStat;
 
 class Filer;
 class Objecter;
+class ObjectCacher;
 class WritebackHandler;
+class InodeCache;
 
 class PerfCounters;
 
@@ -108,6 +111,7 @@ class Inode;
 class DirStripe;
 class Dentry;
 class SnapRealm;
+class SnapRealmInfo;
 class Fh;
 class Cap;
 class CapObject;
@@ -117,8 +121,6 @@ class MetaSession;
 class MetaRequest;
 
 typedef hash_map<vinodeno_t, Inode*> inode_hashmap;
-
-typedef void (*client_ino_callback_t)(void *handle, vinodeno_t ino, int64_t off, int64_t len);
 
 typedef int (*client_getgroups_callback_t)(void *handle, uid_t uid, gid_t **sgids);
 
@@ -200,13 +202,10 @@ class Client : public Dispatcher {
 
   SafeTimer timer;
 
-  client_ino_callback_t ino_invalidate_cb;
-  void *ino_invalidate_cb_handle;
+  InodeCache *inodecache;
 
   client_getgroups_callback_t getgroups_cb;
   void *getgroups_cb_handle;
-
-  Finisher async_ino_invalidator;
 
   Context *tick_event;
   utime_t last_cap_renew;
@@ -336,8 +335,8 @@ protected:
   void put_inode(Inode *in, int n=1);
   void close_stripe(DirStripe *stripe);
 
-  friend class C_Client_PutInode; // calls put_inode()
-  friend class C_Client_CacheInvalidate;  // calls ino_invalidate_cb
+  friend class C_PutInode;
+  friend class InodeCache;
 
   //int get_cache_size() { return lru.lru_get_size(); }
   //void set_cache_size(int m) { lru.lru_set_max(m); }
@@ -439,16 +438,6 @@ protected:
   void queue_cap_snap(Inode *in, snapid_t seq=0);
   void finish_cap_snap(Inode *in, CapSnap *capsnap, int used);
   void _flushed_cap_snap(Inode *in, snapid_t seq);
-
-  void _schedule_invalidate_callback(Inode *in, int64_t off, int64_t len, bool keep_caps);
-  void _invalidate_inode_cache(Inode *in, bool keep_caps);
-  void _invalidate_inode_cache(Inode *in, int64_t off, int64_t len, bool keep_caps);
-  void _async_invalidate(Inode *in, int64_t off, int64_t len, bool keep_caps);
-  void _release(Inode *in);
-  bool _flush(Inode *in);
-  void _flush_range(Inode *in, int64_t off, uint64_t size);
-  void _flushed(Inode *in);
-  void flush_set_callback(ObjectCacher::ObjectSet *oset);
 
   void close_release(Inode *in);
   void close_safe(Inode *in);
@@ -687,7 +676,7 @@ public:
   int ll_release(Fh *fh);
   int ll_statfs(vinodeno_t vino, struct statvfs *stbuf);
 
-  void ll_register_ino_invalidate_cb(client_ino_callback_t cb, void *handle);
+  void ll_register_ino_invalidate_cb(ino_cache_callback_t cb, void *handle);
 
   void ll_register_getgroups_cb(client_getgroups_callback_t cb, void *handle);
 };
