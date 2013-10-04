@@ -2573,10 +2573,6 @@ void Client::check_cap_issue(Inode *in, Cap *cap, unsigned issued)
 {
   unsigned had = in->caps_issued();
 
-  if ((issued & CEPH_CAP_FILE_CACHE) &&
-      !(had & CEPH_CAP_FILE_CACHE))
-    in->cache_gen++;
-
   if ((issued & CEPH_CAP_FILE_SHARED) &&
       !(had & CEPH_CAP_FILE_SHARED)) {
     in->shared_gen++;

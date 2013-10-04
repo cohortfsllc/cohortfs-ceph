@@ -56,7 +56,7 @@ class CapObject {
   unsigned dirty_caps, flushing_caps;
   tid_t flushing_cap_seq;
   __u16 flushing_cap_tid[CEPH_CAP_BITS];
-  int shared_gen, cache_gen;
+  int shared_gen;
   int snap_caps, snap_cap_refs;
   unsigned exporting_issued;
   int exporting_mds;

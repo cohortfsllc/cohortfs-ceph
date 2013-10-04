@@ -42,7 +42,6 @@ CapObject::CapObject(CephContext *cct, vinodeno_t vino)
     flushing_caps(0),
     flushing_cap_seq(0),
     shared_gen(0),
-    cache_gen(0),
     snap_caps(0),
     snap_cap_refs(0),
     exporting_issued(0),
@@ -238,7 +237,6 @@ void CapObject::dump(Formatter *f) const
     f->close_section();
   }
   f->dump_int("shared_gen", shared_gen);
-  f->dump_int("cache_gen", cache_gen);
   if (snap_caps) {
     f->dump_int("snap_caps", snap_caps);
     f->dump_int("snap_cap_refs", snap_cap_refs);
