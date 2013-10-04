@@ -74,12 +74,14 @@ public:
   }
   int get_client_inc() { return client_inc; }
   tid_t get_client_tid() { return header.tid; }
-  
+
   object_t& get_oid() { return oid; }
 
-  epoch_t  get_osdmap_epoch() { return osdmap_epoch; }
+  uuid_d get_volume() { return oid.volume; }
 
-  epoch_t  get_volmap_epoch() { return volmap_epoch; }
+  epoch_t get_osdmap_epoch() { return osdmap_epoch; }
+
+  epoch_t get_volmap_epoch() { return volmap_epoch; }
 
   eversion_t get_version() { return reassert_version; }
   

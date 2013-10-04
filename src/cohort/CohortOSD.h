@@ -31,6 +31,7 @@ using namespace __gnu_cxx;
 #include "osd/OSD.h"
 #include "common/AsyncReserver.h"
 #include "cohort/CohortOSDMap.h"
+#include "OSDVol.h"
 
 class CohortOSD;
 class CohortOSDService;
@@ -70,6 +71,7 @@ typedef shared_ptr<CohortOSDService> CohortOSDServiceRef;
 
 
 class CohortOSD : public OSD {
+  OSDVolRef get_volume(const uuid_d volid);
 private:
 
   typedef OSD inherited;
@@ -81,13 +83,14 @@ private:
 
   list<OpRequestRef> waiting_for_map;
 
-  struct OpWQ : public ThreadPool::WorkQueueVal<OpRequestRef> {
+  struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
+					       OSDVolRef> {
     Mutex qlock;
+    map<OSDVolRef, list<OpRequestRef> > vol_for_processing;
     CohortOSD *osd;
-    PrioritizedQueue<OpRequestRef, entity_inst_t> pqueue;
-
+    PrioritizedQueue<pair<OSDVolRef, OpRequestRef>, entity_inst_t > pqueue;
     OpWQ(CohortOSD *o, time_t ti, ThreadPool *tp)
-      : ThreadPool::WorkQueueVal<OpRequestRef> (
+      : ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef >(
 	"CohortOSD::OpWQ", ti, ti*10, tp),
 	qlock("OpWQ::qlock"),
 	osd(o),
@@ -99,12 +102,48 @@ private:
       Mutex::Locker l(qlock);
       pqueue.dump(f);
     }
-    void _enqueue_front(OpRequestRef item);
-    void _enqueue(OpRequestRef item);
-    OpRequestRef _dequeue();
-    bool _empty();
-    void _process(void);
+
+    void _enqueue_front(pair<OSDVolRef, OpRequestRef> item);
+    void _enqueue(pair<OSDVolRef, OpRequestRef> item);
+    OSDVolRef _dequeue();
+
+    struct Pred {
+      OSDVolRef vol;
+      Pred(OSDVolRef vol) : vol(vol) {}
+      bool operator()(const pair<OSDVolRef, OpRequestRef> &op) {
+	return op.first == vol;
+      }
+    };
+    void dequeue(OSDVolRef vol, list<OpRequestRef> *dequeued = 0) {
+      lock();
+      if (!dequeued) {
+	pqueue.remove_by_filter(Pred(vol));
+	vol_for_processing.erase(vol);
+      } else {
+	list<pair<OSDVolRef, OpRequestRef> > _dequeued;
+	pqueue.remove_by_filter(Pred(vol), &_dequeued);
+	for (list<pair<OSDVolRef, OpRequestRef> >::iterator i
+	       = _dequeued.begin();
+	     i != _dequeued.end();
+	     ++i) {
+	  dequeued->push_back(i->second);
+	}
+	if (vol_for_processing.count(vol)) {
+	  dequeued->splice(dequeued->begin(),
+			   vol_for_processing[vol]);
+	  vol_for_processing.erase(vol);
+	}
+      }
+      unlock();
+    }
+    bool _empty() {
+      return pqueue.empty();
+    }
+    void _process(OSDVolRef vol);
   } op_wq;
+
+  void enqueue_op(OSDVolRef vol, OpRequestRef op);
+  void dequeue_op(OSDVolRef vol, OpRequestRef op);
 
 public:
 

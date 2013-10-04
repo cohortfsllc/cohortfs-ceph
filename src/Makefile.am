@@ -2013,6 +2013,7 @@ noinst_HEADERS = \
         osd/OSDCap.h\
         osd/OSDMap.h\
         cohort/CohortOSDMap.h\
+        cohort/OSDVol.h\
         osd/ObjectVersioner.h\
 	osd/OpRequest.h\
 	osd/SnapMapper.h\

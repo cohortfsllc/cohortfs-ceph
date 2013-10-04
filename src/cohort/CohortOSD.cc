@@ -101,20 +101,24 @@ bool CohortOSD::op_must_wait_for_map(OpRequestRef op)
 
 void CohortOSD::handle_op_sub(OpRequestRef op)
 {
-  RWLock::RLocker l(map_lock);
+  MOSDOp *m = (MOSDOp*)op->request;
 
-  /* Possibly break out op queues per-volume. */
+  uuid_d volid = m->get_volume();
 
-  if (!waiting_for_map.empty()) {
-    // preserve ordering
-    waiting_for_map.push_back(op);
+  // get and lock *pg.
+  OSDVolRef vol = get_volume(volid);
+
+  if (!vol) {
+    /* No such volume */
+    if (m->get_volmap_epoch() > volmap->get_epoch()) {
+      /* Should wait for new volmap */
+      return;
+    }
+    service->reply_op_error(op, -ENXIO);
     return;
   }
-  if (op_must_wait_for_map(op)) {
-    waiting_for_map.push_back(op);
-    return;
-  }
-  op_wq.queue(op);
+
+  enqueue_op(vol, op);
 }
 
 bool CohortOSD::handle_sub_op_reply_sub(OpRequestRef op)
@@ -202,51 +206,73 @@ void CohortOSD::sched_scrub()
 {
 }
 
-void CohortOSD::OpWQ::_enqueue(OpRequestRef request)
+void CohortOSD::OpWQ::_enqueue(pair<OSDVolRef, OpRequestRef> item)
 {
-  Message *message = request->request;
-  unsigned priority = message->get_priority();
-  unsigned cost = message->get_cost();
-
+  unsigned priority = item.second->request->get_priority();
+  unsigned cost = item.second->request->get_cost();
   if (priority >= CEPH_MSG_PRIO_LOW)
-    pqueue.enqueue_strict(message->get_source_inst(), priority, request);
+    pqueue.enqueue_strict(
+      item.second->request->get_source_inst(),
+      priority, item);
   else
-    pqueue.enqueue(message->get_source_inst(), priority, cost, request);
+    pqueue.enqueue(item.second->request->get_source_inst(),
+      priority, cost, item);
   osd->logger->set(l_osd_opq, pqueue.length());
 }
 
-void CohortOSD::OpWQ::_enqueue_front(OpRequestRef request)
+void CohortOSD::OpWQ::_enqueue_front(pair<OSDVolRef, OpRequestRef> item)
 {
-  Message *message = request->request;
-  unsigned priority = message->get_priority();
-  unsigned cost = message->get_cost();
+  {
+    Mutex::Locker l(qlock);
+    if (vol_for_processing.count(item.first)) {
+      vol_for_processing[(item.first)].push_front(item.second);
+      item.second = vol_for_processing[item.first].back();
+      vol_for_processing[item.first].pop_back();
+    }
+  }
+  unsigned priority = item.second->request->get_priority();
+  unsigned cost = item.second->request->get_cost();
   if (priority >= CEPH_MSG_PRIO_LOW)
-    pqueue.enqueue_strict_front(message->get_source_inst(),
-				priority, request);
+    pqueue.enqueue_strict_front(
+      item.second->request->get_source_inst(),
+      priority, item);
   else
-    pqueue.enqueue_front(message->get_source_inst(),
-			 priority, cost, request);
+    pqueue.enqueue_front(item.second->request->get_source_inst(),
+      priority, cost, item);
   osd->logger->set(l_osd_opq, pqueue.length());
 }
 
-OpRequestRef CohortOSD::OpWQ::_dequeue()
+OSDVolRef CohortOSD::OpWQ::_dequeue()
 {
   assert(!pqueue.empty());
-  Mutex::Locker l(qlock);
-  OpRequestRef ret = pqueue.dequeue();
+  OSDVolRef vol;
+  {
+    Mutex::Locker l(qlock);
+    pair<OSDVolRef, OpRequestRef> ret = pqueue.dequeue();
+    vol = ret.first;
+    vol_for_processing[vol].push_back(ret.second);
+  }
   osd->logger->set(l_osd_opq, pqueue.length());
-  return ret;
+  return vol;
 }
 
-bool CohortOSD::OpWQ::_empty()
+void CohortOSD::OpWQ::_process(OSDVolRef vol)
 {
-  Mutex::Locker l(qlock);
-  return pqueue.empty();
-}
-
-void CohortOSD::OpWQ::_process(void)
-{
+#warning Needed?
+//  vol->lock();
   OpRequestRef op;
-  Mutex::Locker l(qlock);
-  #warning Actually do things here.
+  {
+    Mutex::Locker l(qlock);
+    if (!vol_for_processing.count(vol)) {
+//      vol->unlock();
+      return;
+    }
+    assert(vol_for_processing[vol].size());
+    op = vol_for_processing[vol].front();
+    vol_for_processing[vol].pop_front();
+    if (!(vol_for_processing[vol].size()))
+      vol_for_processing.erase(vol);
+  }
+  osd->dequeue_op(vol, op);
+//  vol->unlock();
 }

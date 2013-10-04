@@ -124,6 +124,14 @@ public:
     return vol_by_uuid.find(uuid);
   }
 
+  VolumeRef get(const uuid_d& uuid) const {
+    map<uuid_d,VolumeRef>::const_iterator i = vol_by_uuid.find(uuid);
+    if (i == vol_by_uuid.end())
+      return VolumeRef();
+    else
+      return i->second;
+  }
+
   map<string,VolumeRef>::const_iterator find(const string& name) const {
     return vol_by_name.find(name);
   }
