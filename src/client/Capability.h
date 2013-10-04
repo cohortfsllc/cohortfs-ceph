@@ -16,7 +16,6 @@ class Messenger;
 class SnapRealm;
 
 class CapObject;
-class CapClient;
 
 class Cap {
  public:
@@ -45,7 +44,6 @@ typedef map<int, Cap*> cap_map; // mds -> Cap
 class CapObject {
  public:
   CephContext *cct;
-  CapClient *client;
 
   inodeno_t ino;
 
@@ -72,7 +70,7 @@ class CapObject {
   typedef map<int,int> ref_map;
   ref_map cap_refs;
 
-  CapObject(CephContext *cct, CapClient *client, vinodeno_t vino);
+  CapObject(CephContext *cct, vinodeno_t vino);
   virtual ~CapObject() {}
 
   bool is_inode() const { return true; }

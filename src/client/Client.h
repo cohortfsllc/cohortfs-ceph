@@ -48,7 +48,6 @@ using namespace __gnu_cxx;
 #include "common/cmdparse.h"
 
 #include "osdc/ObjectCacher.h"
-#include "CapClient.h"
 
 class MDSMap;
 class OSDMap;
@@ -111,6 +110,8 @@ class DirStripe;
 class Dentry;
 struct SnapRealm;
 struct Fh;
+class Cap;
+class CapObject;
 struct CapSnap;
 
 struct MetaSession;
@@ -183,7 +184,7 @@ struct dir_result_t {
   }
 };
 
-class Client : public Dispatcher, public CapClient {
+class Client : public Dispatcher {
  public:
   CephContext *cct;
 
@@ -299,6 +300,9 @@ protected:
   Inode*                 root;
   LRU                    lru;    // lru list of Dentry's in our local metadata cache.
 
+  // all inodes with caps sit on either cap_list or delayed_caps.
+  xlist<CapObject*> delayed_caps, cap_list;
+  int num_flushing_caps;
   hash_map<inodeno_t,SnapRealm*> snap_realms;
 
   SnapRealm *get_snap_realm(inodeno_t r);
@@ -428,8 +432,8 @@ protected:
   void remove_all_caps(Inode *in);
   void remove_session_caps(MetaSession *session);
   void mark_caps_dirty(Inode *in, int caps);
-  virtual int mark_caps_flushing(CapObject *o);
-  virtual void flush_caps();
+  int mark_caps_flushing(CapObject *o);
+  void flush_caps();
   void flush_caps(CapObject *o, MetaSession *session);
   void kick_flushing_caps(MetaSession *session);
   void kick_maxsize_requests(MetaSession *session);
@@ -447,8 +451,8 @@ protected:
   void handle_cap_flush_ack(MetaSession *session, Inode *in, Cap *cap, class MClientCaps *m);
   void handle_cap_flushsnap_ack(MetaSession *session, Inode *in, class MClientCaps *m);
   void handle_cap_grant(MetaSession *session, Inode *in, Cap *cap, class MClientCaps *m);
-  virtual void cap_delay_requeue(CapObject *o);
-  virtual void send_cap(Cap *cap, int used, int want, int retain, int flush);
+  void cap_delay_requeue(CapObject *o);
+  void send_cap(Cap *cap, int used, int want, int retain, int flush);
   void check_caps(CapObject *o, bool is_delayed);
   void get_cap_ref(Inode *in, int cap);
   void put_cap_ref(Inode *in, int cap);
