@@ -2,6 +2,7 @@ libclient_la_SOURCES = \
 	client/Capability.cc \
 	client/Client.cc \
 	client/Inode.cc \
+	client/InodeCache.cc \
 	client/Dentry.cc \
 	client/DirStripe.cc \
 	client/MetaRequest.cc \
@@ -18,6 +19,7 @@ noinst_HEADERS += \
 	client/DirStripe.h \
 	client/Fh.h \
 	client/Inode.h \
+	client/InodeCache.h \
 	client/MetaRequest.h \
 	client/MetaSession.h \
 	client/ClientSnapRealm.h \
