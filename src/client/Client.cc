@@ -463,107 +463,18 @@ void Client::trim_cache()
 void Client::trim_dentry(Dentry *dn)
 {
   DirStripe *stripe = dn->stripe;
-  Inode *diri = stripe->parent_inode;
   ldout(cct, 15) << "trim_dentry unlinking dn " << dn->name
 		 << " in stripe " << stripe->ds << dendl;
-  if (diri->flags & I_COMPLETE) {
-    ldout(cct, 10) << " clearing I_COMPLETE on " << *diri << dendl;
-    diri->flags &= ~I_COMPLETE;
+  if (stripe->is_complete()) {
+    ldout(cct, 10) << " clearing I_COMPLETE on " << *stripe << dendl;
+    stripe->reset_complete();
     stripe->release_count++;
   }
   unlink(dn, false);
 }
 
 
-void Client::update_inode_file_bits(Inode *in,
-				    uint64_t truncate_seq, uint64_t truncate_size,
-				    uint64_t size,
-				    uint64_t time_warp_seq, utime_t ctime,
-				    utime_t mtime,
-				    utime_t atime,
-				    int issued)
-{
-  bool warn = false;
-  ldout(cct, 10) << "update_inode_file_bits " << *in << " " << ccap_string(issued)
-	   << " mtime " << mtime << dendl;
-  ldout(cct, 25) << "truncate_seq: mds " << truncate_seq <<  " local "
-	   << in->truncate_seq << " time_warp_seq: mds " << time_warp_seq
-	   << " local " << in->time_warp_seq << dendl;
-  uint64_t prior_size = in->size;
-
-  if (truncate_seq > in->truncate_seq ||
-      (truncate_seq == in->truncate_seq && size > in->size)) {
-    ldout(cct, 10) << "size " << in->size << " -> " << size << dendl;
-    in->size = size;
-    in->reported_size = size;
-    if (truncate_seq != in->truncate_seq) {
-      ldout(cct, 10) << "truncate_seq " << in->truncate_seq << " -> "
-	       << truncate_seq << dendl;
-      in->truncate_seq = truncate_seq;
-      in->oset.truncate_seq = truncate_seq;
-
-      // truncate cached file data
-      if (prior_size > size) {
-	inodecache->invalidate(in, truncate_size, prior_size - truncate_size, true);
-      }
-    }
-  }
-  if (truncate_seq >= in->truncate_seq &&
-      in->truncate_size != truncate_size) {
-    if (in->is_file()) {
-      ldout(cct, 10) << "truncate_size " << in->truncate_size << " -> "
-	       << truncate_size << dendl;
-      in->truncate_size = truncate_size;
-      in->oset.truncate_size = truncate_size;
-    } else {
-      ldout(cct, 0) << "Hmmm, truncate_seq && truncate_size changed on non-file inode!" << dendl;
-    }
-  }
-  
-  // be careful with size, mtime, atime
-  if (issued & (CEPH_CAP_FILE_EXCL|
-		CEPH_CAP_FILE_WR|
-		CEPH_CAP_FILE_BUFFER|
-		CEPH_CAP_AUTH_EXCL|
-		CEPH_CAP_XATTR_EXCL)) {
-    ldout(cct, 30) << "Yay have enough caps to look at our times" << dendl;
-    if (ctime > in->ctime) 
-      in->ctime = ctime;
-    if (time_warp_seq > in->time_warp_seq) {
-      ldout(cct, 10) << "mds time_warp_seq " << time_warp_seq << " on inode " << *in
-	       << " is higher than local time_warp_seq "
-	       << in->time_warp_seq << dendl;
-      //the mds updated times, so take those!
-      in->mtime = mtime;
-      in->atime = atime;
-      in->time_warp_seq = time_warp_seq;
-    } else if (time_warp_seq == in->time_warp_seq) {
-      //take max times
-      if (mtime > in->mtime)
-	in->mtime = mtime;
-      if (atime > in->atime)
-	in->atime = atime;
-    } else if (issued & CEPH_CAP_FILE_EXCL) {
-      //ignore mds values as we have a higher seq
-    } else warn = true;
-  } else {
-    ldout(cct, 30) << "Don't have enough caps, just taking mds' time values" << dendl;
-    if (time_warp_seq >= in->time_warp_seq) {
-      in->ctime = ctime;
-      in->mtime = mtime;
-      in->atime = atime;
-      in->time_warp_seq = time_warp_seq;
-    } else warn = true;
-  }
-  if (warn) {
-    ldout(cct, 0) << "WARNING: " << *in << " mds time_warp_seq "
-	    << time_warp_seq << " is lower than local time_warp_seq "
-	    << in->time_warp_seq
-	    << dendl;
-  }
-}
-
-Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
+Inode* Client::add_update_inode(InodeStat *st, utime_t from, int mds)
 {
   Inode *in;
   bool was_new = false;
@@ -599,14 +510,9 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
     return in;   // as with readdir returning indoes in different snaprealms (no caps!)
 
   // only update inode if mds info is strictly newer, or it is the same and projected (odd).
-  bool updating_inode = false;
-  int issued = 0;
-  if (st->version == 0 ||
-      (in->version & ~1) < st->version) {
-    updating_inode = true;
-
-    int implemented = 0;
-    issued = in->caps_issued(&implemented) | in->caps_dirty();
+  if (st->version == 0 || (in->version & ~1) < st->version) {
+    unsigned implemented = 0;
+    unsigned issued = in->caps_issued(&implemented) | in->caps_dirty();
     issued |= implemented;
 
     in->version = st->version;
@@ -641,9 +547,9 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
     in->ctime = st->ctime;
     in->max_size = st->max_size;  // right?
   
-    update_inode_file_bits(in, st->truncate_seq, st->truncate_size, st->size,
-			   st->time_warp_seq, st->ctime, st->mtime, st->atime,
-			   issued);
+    in->update_file_bits(st->truncate_seq, st->truncate_size, st->size,
+                         st->time_warp_seq, st->ctime, st->mtime, st->atime,
+                         issued);
   }
 
   // copy stripe auth array
@@ -655,30 +561,51 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from, int mds)
   else
     in->snap_caps |= st->cap.caps;
 
-  // setting I_COMPLETE needs to happen after adding the cap
-  if (updating_inode &&
-      in->is_dir() &&
-      (st->cap.caps & CEPH_CAP_FILE_SHARED) &&
-      (issued & CEPH_CAP_FILE_EXCL) == 0 &&
-      in->dirstat.nfiles == 0 &&
-      in->dirstat.nsubdirs == 0) {
-    ldout(cct, 10) << " marking I_COMPLETE on empty dir " << *in << dendl;
-    in->flags |= I_COMPLETE;
-    for (vector<DirStripe*>::iterator s = in->stripes.begin();
-         s != in->stripes.end();
-         ++s) {
-      DirStripe *stripe = *s;
-      if (stripe) {
-        ldout(cct, 10) << " stripe " << *stripe
-            << " is open on empty dir, tearing down" << dendl;
-        while (!stripe->dentry_map.empty())
-          unlink(stripe->dentry_map.begin()->second, true);
-        close_stripe(stripe);
-      }
+  return in;
+}
+
+DirStripe* Client::add_update_stripe(Inode *diri, const StripeStat &st, int mds)
+{
+  DirStripe *stripe = diri->open_stripe(st.stripeid);
+
+  ldout(cct, 12) << "add_update_stripe " << *stripe
+      << " v" << stripe->version << "->" << st.version
+      << " " << st.fragstat << " " << st.rstat
+      << " caps " << ccap_string(st.cap.caps) << dendl;
+
+  if (!st.cap.caps)
+    return stripe;
+
+  bool updated_fragstat = false;
+  if (st.version == 0 || (stripe->version & ~1) < st.version) {
+    unsigned implemented = 0;
+    unsigned issued = stripe->caps_issued(&implemented) | stripe->caps_dirty();
+    issued |= implemented;
+
+    stripe->version = st.version;
+
+    if ((issued & CEPH_CAP_LINK_EXCL) == 0) {
+      stripe->fragstat = st.fragstat;
+      stripe->rstat = st.rstat;
+      updated_fragstat = true;
     }
   }
 
-  return in;
+  add_update_cap(stripe, mds, st.cap.cap_id, st.cap.caps, st.cap.seq,
+                 st.cap.mseq, inodeno_t(st.cap.realm), st.cap.flags);
+
+  // setting I_COMPLETE needs to happen after adding the cap
+  if ((st.cap.caps & CEPH_CAP_LINK_SHARED) &&
+      updated_fragstat && stripe->fragstat.size() == 0) {
+    ldout(cct, 10) << " marking I_COMPLETE on empty dir " << *stripe << dendl;
+    stripe->set_complete();
+    ldout(cct, 10) << " stripe " << *stripe
+        << " is open on empty dir, tearing down" << dendl;
+    while (!stripe->dentry_map.empty())
+      unlink(stripe->dentry_map.begin()->second, true);
+  }
+
+  return stripe;
 }
 
 
@@ -743,7 +670,7 @@ void Client::update_dentry_lease(Dentry *dn, LeaseStat *dlease, utime_t from, in
       dn->lease_gen = mds_sessions[mds]->cap_gen;
     }
   }
-  dn->cap_shared_gen = dn->stripe->parent_inode->shared_gen;
+  dn->cap_shared_gen = dn->stripe->shared_gen;
 }
 
 
@@ -897,12 +824,14 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
 	   << dendl;
 
   InodeStat dirst;
+  StripeStat sst;
   string dname;
   LeaseStat dlease;
   InodeStat ist;
 
   if (reply->head.is_dentry) {
     dirst.decode(p, features);
+    sst.decode(p, features);
     ::decode(dname, p);
     ::decode(dlease, p);
   }
@@ -916,21 +845,15 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
 
   if (reply->head.is_dentry) {
     Inode *diri = add_update_inode(&dirst, request->sent_stamp, mds);
-    stripeid_t stripeid = diri->pick_stripe(dname);
-
+    DirStripe *stripe = add_update_stripe(diri, sst, mds);
     if (in) {
-      DirStripe *stripe = diri->open_stripe(stripeid);
       insert_dentry_inode(stripe, dname, &dlease, in, request->sent_stamp, mds, true,
                           ((request->head.op == CEPH_MDS_OP_RENAME) ?
                                         request->old_dentry : NULL));
     } else {
-      assert(stripeid < diri->stripes.size());
-      DirStripe *stripe = diri->stripes[stripeid];
-      if (stripe) {
-        dn_hashmap::iterator d = stripe->dentries.find(dname);
-        if (d != stripe->dentries.end() && d->second->inode)
-          unlink(d->second, false);
-      }
+      dn_hashmap::iterator d = stripe->dentries.find(dname);
+      if (d != stripe->dentries.end() && d->second->inode)
+        unlink(d->second, false);
     }
   } else if (reply->head.op == CEPH_MDS_OP_LOOKUPSNAP ||
 	     reply->head.op == CEPH_MDS_OP_MKSNAP) {
@@ -2047,7 +1970,7 @@ void Client::unlink(Dentry *dn, bool keepdir)
  * caps
  */
 
-void Client::get_cap_ref(Inode *in, int cap)
+void Client::get_cap_ref(Inode *in, unsigned cap)
 {
   if ((cap & CEPH_CAP_FILE_BUFFER) &&
       in->cap_refs[CEPH_CAP_FILE_BUFFER] == 0) {
@@ -2057,7 +1980,7 @@ void Client::get_cap_ref(Inode *in, int cap)
   in->get_cap_ref(cap);
 }
 
-void Client::put_cap_ref(Inode *in, int cap)
+void Client::put_cap_ref(Inode *in, unsigned cap)
 {
   bool last = in->put_cap_ref(cap);
   if (last) {
@@ -2089,7 +2012,8 @@ void Client::put_cap_ref(Inode *in, int cap)
 }
 
 
-int Client::get_caps(Inode *in, int need, int want, int *phave, loff_t endoff)
+int Client::get_caps(Inode *in, unsigned need, unsigned want,
+                     unsigned *phave, loff_t endoff)
 {
   while (1) {
     if (endoff > 0 &&
@@ -2106,11 +2030,11 @@ int Client::get_caps(Inode *in, int need, int want, int *phave, loff_t endoff)
     } else if (!in->cap_snaps.empty() && in->cap_snaps.rbegin()->second->writing) {
       ldout(cct, 10) << "waiting on cap_snap write to complete" << dendl;
     } else {
-      int implemented;
-      int have = in->caps_issued(&implemented);
+      unsigned implemented;
+      unsigned have = in->caps_issued(&implemented);
       if ((have & need) == need) {
-	int butnot = want & ~(have & need);
-	int revoking = implemented & ~have;
+	unsigned butnot = want & ~(have & need);
+	unsigned revoking = implemented & ~have;
 	ldout(cct, 10) << "get_caps " << *in << " have " << ccap_string(have)
 		 << " need " << ccap_string(need) << " want " << ccap_string(want)
 		 << " but not " << ccap_string(butnot) << " revoking " << ccap_string(revoking)
@@ -2137,14 +2061,15 @@ void Client::cap_delay_requeue(CapObject *o)
   delayed_caps.push_back(&o->cap_item);
 }
 
-void Client::send_cap(Cap *cap, int used, int want, int retain, int flush)
+void Client::send_cap(Cap *cap, unsigned used, unsigned want,
+                      unsigned retain, unsigned flush)
 {
   CapObject *parent = cap->parent;
   int mds = cap->session->mds_num;
-  int held = cap->issued | cap->implemented;
-  int revoking = cap->implemented & ~cap->issued;
+  unsigned held = cap->issued | cap->implemented;
+  unsigned revoking = cap->implemented & ~cap->issued;
   retain &= ~revoking;
-  int dropping = cap->issued & ~retain;
+  unsigned dropping = cap->issued & ~retain;
 
   ldout(cct, 10) << "send_cap " << *parent
 	   << " mds." << mds << " seq " << cap->seq
@@ -2179,7 +2104,7 @@ void Client::send_cap(Cap *cap, int used, int want, int retain, int flush)
     m->set_snap_follows(parent->snaprealm->get_snap_context().seq);
   }
 
-  parent->fill_caps(cap, m, flush);
+  parent->write_client_caps(cap, m, flush);
 
   messenger->send_message(m, mdsmap->get_inst(mds));
 }
@@ -2292,7 +2217,7 @@ void Client::queue_cap_snap(Inode *in, snapid_t seq)
   }
 }
 
-void Client::finish_cap_snap(Inode *in, CapSnap *capsnap, int used)
+void Client::finish_cap_snap(Inode *in, CapSnap *capsnap, unsigned used)
 {
   ldout(cct, 10) << "finish_cap_snap " << *in << " capsnap " << (void*)capsnap << " used " << ccap_string(used) << dendl;
   capsnap->size = in->size;
@@ -2411,44 +2336,49 @@ void Client::wake_inode_waiters(int mds_num)
 }
 
 
-void Client::add_update_cap(Inode *in, int mds, uint64_t cap_id,
-			    unsigned issued, unsigned seq, unsigned mseq, inodeno_t realm,
-			    int flags)
+void Client::add_update_cap(CapObject *o, int mds, uint64_t cap_id,
+			    unsigned issued, unsigned seq, unsigned mseq,
+                            inodeno_t realm, int flags)
 {
   Cap *cap = 0;
   MetaSession *mds_session = mds_sessions[mds];
-  if (in->caps.count(mds)) {
-    cap = in->caps[mds];
+  if (o->caps.count(mds)) {
+    cap = o->caps[mds];
   } else {
     mds_session->num_caps++;
-    if (!in->is_any_caps()) {
-      assert(in->snaprealm == 0);
-      in->snaprealm = get_snap_realm(realm);
-      in->snaprealm->inodes_with_caps.push_back(&in->snaprealm_item);
-      ldout(cct, 15) << "add_update_cap first one, opened snaprealm " << in->snaprealm << dendl;
+    if (!o->is_any_caps()) {
+      assert(o->snaprealm == 0);
+      o->snaprealm = get_snap_realm(realm);
+      o->snaprealm->inodes_with_caps.push_back(&o->snaprealm_item);
+      ldout(cct, 15) << "add_update_cap first one, opened snaprealm " << o->snaprealm << dendl;
     }
-    if (in->exporting_mds == mds) {
+    if (o->exporting_mds == mds) {
       ldout(cct, 10) << "add_update_cap clearing exporting_caps on " << mds << dendl;
-      in->exporting_mds = -1;
-      in->exporting_issued = 0;
-      in->exporting_mseq = 0;
+      o->exporting_mds = -1;
+      o->exporting_issued = 0;
+      o->exporting_mseq = 0;
     }
-    in->caps[mds] = cap = new Cap(mds_session, in);
+    o->caps[mds] = cap = new Cap(mds_session, o);
     mds_session->caps.push_back(&cap->cap_item);
     cap->gen = mds_session->cap_gen;
-    cap_list.push_back(&in->cap_item);
+    cap_list.push_back(&o->cap_item);
   }
 
-  check_cap_issue(in, cap, issued);
+  unsigned new_caps = issued & ~o->caps_issued();
+  ldout(cct, 10) << "add_update_cap have " << ccap_string(o->caps_issued())
+      << " issued " << ccap_string(issued)
+      << " new " << ccap_string(new_caps) << dendl;
+  if (new_caps)
+    o->on_caps_granted(new_caps);
 
   if (flags & CEPH_CAP_FLAG_AUTH) {
-    if (in->auth_cap != cap &&
-        (!in->auth_cap || in->auth_cap->mseq < mseq)) {
-      if (in->auth_cap && in->flushing_cap_item.is_on_list()) {
+    if (o->auth_cap != cap &&
+        (!o->auth_cap || o->auth_cap->mseq < mseq)) {
+      if (o->auth_cap && o->flushing_cap_item.is_on_list()) {
 	ldout(cct, 10) << "add_update_cap changing auth cap: removing myself from flush_caps list" << dendl;
-	in->flushing_cap_item.remove_myself();
+	o->flushing_cap_item.remove_myself();
       }
-      in->auth_cap = cap;
+      o->auth_cap = cap;
     }
   }
 
@@ -2459,13 +2389,12 @@ void Client::add_update_cap(Inode *in, int mds, uint64_t cap_id,
   cap->seq = seq;
   cap->issue_seq = seq;
   cap->mseq = mseq;
-  ldout(cct, 10) << "add_update_cap issued " << ccap_string(old_caps) << " -> " << ccap_string(cap->issued)
-	   << " from mds." << mds
-	   << " on " << *in
-	   << dendl;
+  ldout(cct, 10) << "add_update_cap issued " << ccap_string(old_caps)
+      << " -> " << ccap_string(cap->issued)
+      << " from mds." << mds << " on " << *o << dendl;
 
   if (issued & ~old_caps)
-    signal_cond_list(in->waitfor_caps);
+    signal_cond_list(o->waitfor_caps);
 }
 
 void Client::remove_cap(Cap *cap)
@@ -2562,7 +2491,7 @@ void Client::trim_caps(int mds, int max)
   }
 }
 
-void Client::mark_caps_dirty(Inode *in, int caps)
+void Client::mark_caps_dirty(Inode *in, unsigned caps)
 {
   ldout(cct, 10) << "mark_caps_dirty " << *in << " " << ccap_string(in->dirty_caps) << " -> "
 	   << ccap_string(in->dirty_caps | caps) << dendl;
@@ -2575,7 +2504,7 @@ int Client::mark_caps_flushing(CapObject *o)
 {
   MetaSession *session = o->auth_cap->session;
 
-  int flushing = o->dirty_caps;
+  unsigned flushing = o->dirty_caps;
   assert(flushing);
 
   if (flushing && !o->flushing_caps) {
@@ -2621,8 +2550,8 @@ void Client::flush_caps(CapObject *o, int mds)
   Cap *cap = o->auth_cap;
   assert(cap->session->mds_num == mds);
 
-  int wanted = o->caps_wanted();
-  int retain = wanted | CEPH_CAP_PIN;
+  unsigned wanted = o->caps_wanted();
+  unsigned retain = wanted | CEPH_CAP_PIN;
 
   send_cap(cap, o->caps_used(), wanted, retain, o->flushing_caps);
 }
@@ -2920,7 +2849,15 @@ void Client::handle_caps(MClientCaps *m)
 
   vinodeno_t vino(m->get_ino(), CEPH_NOSNAP);
   inode_hashmap::iterator p = inodes.find(vino);
-  if (p == inodes.end()) {
+  CapObject *o;
+  if (p == inodes.end())
+    o = NULL;
+  else if (m->is_stripe())
+    o = p->second->stripes[m->get_stripeid()];
+  else
+    o = p->second;
+
+  if (!o) {
     if (m->get_op() == CEPH_CAP_OP_IMPORT) {
       ldout(cct, 5) << "handle_caps don't have vino " << vino << " on IMPORT, immediately releasing" << dendl;
       MetaSession *session = mds_sessions[mds];
@@ -2942,76 +2879,79 @@ void Client::handle_caps(MClientCaps *m)
     flush_cap_releases();
     return;
   }
-  Inode *in = p->second;
 
   switch (m->get_op()) {
-  case CEPH_CAP_OP_IMPORT: return handle_cap_import(in, m);
-  case CEPH_CAP_OP_EXPORT: return handle_cap_export(in, m);
-  case CEPH_CAP_OP_FLUSHSNAP_ACK: return handle_cap_flushsnap_ack(in, m);
+  case CEPH_CAP_OP_IMPORT: return handle_cap_import(o, m);
+  case CEPH_CAP_OP_EXPORT: return handle_cap_export(o, m);
+  case CEPH_CAP_OP_FLUSHSNAP_ACK:
+    assert(m->is_inode());
+    return handle_cap_flushsnap_ack(p->second, m);
   }
 
-  if (in->caps.count(mds) == 0) {
-    ldout(cct, 5) << "handle_caps don't have " << *in << " cap on mds." << mds << dendl;
+  if (o->caps.count(mds) == 0) {
+    ldout(cct, 5) << "handle_caps don't have " << *o << " cap on mds." << mds << dendl;
     m->put();
     return;
   }
 
-  Cap *cap = in->caps[mds];
+  Cap *cap = o->caps[mds];
 
   switch (m->get_op()) {
-  case CEPH_CAP_OP_TRUNC: return handle_cap_trunc(in, m);
+  case CEPH_CAP_OP_TRUNC:
+    assert(m->is_inode());
+    return handle_cap_trunc(p->second, m);
   case CEPH_CAP_OP_SYNC_UPDATE:
-  case CEPH_CAP_OP_GRANT: return handle_cap_grant(in, mds, cap, m);
-  case CEPH_CAP_OP_FLUSH_ACK: return handle_cap_flush_ack(in, mds, cap, m);
+  case CEPH_CAP_OP_GRANT: return handle_cap_grant(o, mds, cap, m);
+  case CEPH_CAP_OP_FLUSH_ACK: return handle_cap_flush_ack(o, mds, cap, m);
   default:
     m->put();
   }
 }
 
-void Client::handle_cap_import(Inode *in, MClientCaps *m)
+void Client::handle_cap_import(CapObject *o, MClientCaps *m)
 {
   int mds = m->get_source().num();
 
   // add/update it
   update_snap_trace(m->snapbl);
-  add_update_cap(in, mds, m->get_cap_id(),
+  add_update_cap(o, mds, m->get_cap_id(),
 		 m->get_caps(), m->get_seq(), m->get_mseq(), m->get_realm(),
 		 CEPH_CAP_FLAG_AUTH);
   
-  if (in->auth_cap && in->auth_cap->session->mds_num == mds) {
+  if (o->auth_cap && o->auth_cap->session->mds_num == mds) {
     // reflush any/all caps (if we are now the auth_cap)
-    if (in->cap_snaps.size())
-      flush_snaps(in, true);
-    if (in->flushing_caps)
-      flush_caps(in, mds);
+    if (o->is_inode())
+      flush_snaps((Inode*)o, true);
+    if (o->flushing_caps)
+      flush_caps(o, mds);
   }
 
-  if (m->get_mseq() > in->exporting_mseq) {
+  if (m->get_mseq() > o->exporting_mseq) {
     ldout(cct, 5) << "handle_cap_import ino " << m->get_ino() << " mseq " << m->get_mseq()
 	    << " IMPORT from mds." << mds
-	    << ", clearing exporting_issued " << ccap_string(in->exporting_issued) 
-	    << " mseq " << in->exporting_mseq << dendl;
-    in->exporting_issued = 0;
-    in->exporting_mseq = 0;
-    in->exporting_mds = -1;
+	    << ", clearing exporting_issued " << ccap_string(o->exporting_issued) 
+	    << " mseq " << o->exporting_mseq << dendl;
+    o->exporting_issued = 0;
+    o->exporting_mseq = 0;
+    o->exporting_mds = -1;
   } else {
     ldout(cct, 5) << "handle_cap_import ino " << m->get_ino() << " mseq " << m->get_mseq()
 	    << " IMPORT from mds." << mds 
-	    << ", keeping exporting_issued " << ccap_string(in->exporting_issued) 
-	    << " mseq " << in->exporting_mseq << " by mds." << in->exporting_mds << dendl;
+	    << ", keeping exporting_issued " << ccap_string(o->exporting_issued) 
+	    << " mseq " << o->exporting_mseq << " by mds." << o->exporting_mds << dendl;
   }
   m->put();
 }
 
-void Client::handle_cap_export(Inode *in, MClientCaps *m)
+void Client::handle_cap_export(CapObject *o, MClientCaps *m)
 {
   int mds = m->get_source().num();
   Cap *cap = NULL;
 
   // note?
   bool found_higher_mseq = false;
-  for (map<int,Cap*>::iterator p = in->caps.begin();
-       p != in->caps.end();
+  for (map<int,Cap*>::iterator p = o->caps.begin();
+       p != o->caps.end();
        p++) {
     if (p->first == mds)
       cap = p->second;
@@ -3028,9 +2968,9 @@ void Client::handle_cap_export(Inode *in, MClientCaps *m)
       ldout(cct, 5) << "handle_cap_export ino " << m->get_ino() << " mseq " << m->get_mseq() 
 	      << " EXPORT from mds." << mds
 	      << ", setting exporting_issued " << ccap_string(cap->issued) << dendl;
-      in->exporting_issued = cap->issued;
-      in->exporting_mseq = m->get_mseq();
-      in->exporting_mds = mds;
+      o->exporting_issued = cap->issued;
+      o->exporting_mseq = m->get_mseq();
+      o->exporting_mds = mds;
     } else 
       ldout(cct, 5) << "handle_cap_export ino " << m->get_ino() << " mseq " << m->get_mseq() 
 	      << " EXPORT from mds." << mds
@@ -3057,49 +2997,50 @@ void Client::handle_cap_trunc(Inode *in, MClientCaps *m)
 	   << " size " << in->size << " -> " << m->get_size()
 	   << dendl;
   
-  int implemented = 0;
-  int issued = in->caps_issued(&implemented) | in->caps_dirty();
+  unsigned implemented = 0;
+  unsigned issued = in->caps_issued(&implemented) | in->caps_dirty();
   issued |= implemented;
-  update_inode_file_bits(in, m->get_truncate_seq(), m->get_truncate_size(),
-                         m->get_size(), m->get_time_warp_seq(),
-                         m->get_inode_ctime(), m->get_inode_mtime(),
-                         m->get_inode_atime(), issued);
+  in->update_file_bits(m->get_truncate_seq(), m->get_truncate_size(),
+                       m->get_size(), m->get_time_warp_seq(),
+                       m->get_inode_ctime(), m->get_inode_mtime(),
+                       m->get_inode_atime(), issued);
   m->put();
 }
 
-void Client::handle_cap_flush_ack(Inode *in, int mds, Cap *cap, MClientCaps *m)
+void Client::handle_cap_flush_ack(CapObject *o, int mds,
+                                  Cap *cap, MClientCaps *m)
 {
-  int dirty = m->get_dirty();
-  int cleaned = 0;
+  unsigned dirty = m->get_dirty();
+  unsigned cleaned = 0;
   for (int i = 0; i < CEPH_CAP_BITS; ++i) {
     if ((dirty & (1 << i)) &&
-	(m->get_client_tid() == in->flushing_cap_tid[i]))
+	(m->get_client_tid() == o->flushing_cap_tid[i]))
       cleaned |= 1 << i;
   }
 
   ldout(cct, 5) << "handle_cap_flush_ack mds." << mds
-	  << " cleaned " << ccap_string(cleaned) << " on " << *in
+	  << " cleaned " << ccap_string(cleaned) << " on " << *o
 	  << " with " << ccap_string(dirty) << dendl;
 
 
   if (!cleaned) {
     ldout(cct, 10) << " tid " << m->get_client_tid() << " != any cap bit tids" << dendl;
   } else {
-    if (in->flushing_caps) {
-      ldout(cct, 5) << "  flushing_caps " << ccap_string(in->flushing_caps)
-	      << " -> " << ccap_string(in->flushing_caps & ~cleaned) << dendl;
-      in->flushing_caps &= ~cleaned;
-      if (in->flushing_caps == 0) {
-	ldout(cct, 10) << " " << *in << " !flushing" << dendl;
-	in->flushing_cap_item.remove_myself();
+    if (o->flushing_caps) {
+      ldout(cct, 5) << "  flushing_caps " << ccap_string(o->flushing_caps)
+	      << " -> " << ccap_string(o->flushing_caps & ~cleaned) << dendl;
+      o->flushing_caps &= ~cleaned;
+      if (o->flushing_caps == 0) {
+	ldout(cct, 10) << " " << *o << " !flushing" << dendl;
+	o->flushing_cap_item.remove_myself();
 	num_flushing_caps--;
 	sync_cond.Signal();
       }
-      if (!in->caps_dirty())
-	put_inode(in);
+      if (!o->caps_dirty() && o->is_inode())
+	put_inode((Inode*)o);
     }
   }
-  
+
   m->put();
 }
 
@@ -3132,74 +3073,33 @@ void Client::handle_cap_flushsnap_ack(Inode *in, MClientCaps *m)
 }
 
 
-void Client::handle_cap_grant(Inode *in, int mds, Cap *cap, MClientCaps *m)
+void Client::handle_cap_grant(CapObject *o, int mds, Cap *cap, MClientCaps *m)
 {
-  int used = in->caps_used();
-
-  const int old_caps = cap->issued;
-  const int new_caps = m->get_caps();
-  ldout(cct, 5) << "handle_cap_grant on in " << m->get_ino() 
+  const unsigned old_caps = cap->issued;
+  const unsigned new_caps = m->get_caps();
+  ldout(cct, 5) << "handle_cap_grant on " << *o
           << " mds." << mds << " seq " << m->get_seq() 
           << " caps now " << ccap_string(new_caps) 
           << " was " << ccap_string(old_caps) << dendl;
 
   cap->seq = m->get_seq();
 
-  in->layout = m->get_layout();
-  
-  // update inode
-  int implemented = 0;
-  int issued = in->caps_issued(&implemented) | in->caps_dirty();
-  issued |= implemented;
-
-  if ((issued & CEPH_CAP_AUTH_EXCL) == 0) {
-    in->mode = m->inode.mode;
-    in->uid = m->inode.uid;
-    in->gid = m->inode.gid;
-  }
-  if ((issued & CEPH_CAP_LINK_EXCL) == 0) {
-    in->nlink = m->inode.nlink;
-  }
-  if ((issued & CEPH_CAP_XATTR_EXCL) == 0 &&
-      m->xattrbl.length() &&
-      m->inode.xattr_version > in->xattr_version) {
-    bufferlist::iterator p = m->xattrbl.begin();
-    ::decode(in->xattrs, p);
-    in->xattr_version = m->inode.xattr_version;
-  }
-  update_inode_file_bits(in, m->get_truncate_seq(), m->get_truncate_size(),
-                         m->get_size(), m->get_time_warp_seq(),
-                         m->get_inode_ctime(), m->get_inode_mtime(),
-                         m->get_inode_atime(), issued);
-
-  // max_size
-  if (cap == in->auth_cap &&
-      m->get_max_size() != in->max_size) {
-    ldout(cct, 10) << "max_size " << in->max_size << " -> " << m->get_max_size() << dendl;
-    in->max_size = m->get_max_size();
-    if (in->max_size > in->wanted_max_size) {
-      in->wanted_max_size = 0;
-      in->requested_max_size = 0;
-    }
-  }
-
-  check_cap_issue(in, cap, issued);
+  o->read_client_caps(cap, m);
 
   // update caps
-  if (old_caps & ~new_caps) { 
-    ldout(cct, 10) << "  revocation of " << ccap_string(~new_caps & old_caps) << dendl;
+  const unsigned granted = new_caps & ~old_caps;
+  if (granted)
+    o->on_caps_granted(granted);
+
+  const unsigned revoked = old_caps & ~new_caps;
+  if (revoked) { 
+    ldout(cct, 10) << "  revocation of " << ccap_string(revoked) << dendl;
     cap->issued = new_caps;
 
-    if ((~cap->issued & old_caps) & CEPH_CAP_FILE_CACHE)
-      inodecache->release(in);
-    
-    if (((used & ~new_caps) & CEPH_CAP_FILE_BUFFER) &&
-	!inodecache->flush(in)) {
-      // waitin' for flush
-    } else {
+    if (o->on_caps_revoked(revoked)) {
       cap->wanted = 0; // don't let check_caps skip sending a response to MDS
-      check_caps(in, true);
-    }
+      check_caps(o, true);
+    } // else waiting for flush
 
   } else if (old_caps == new_caps) {
     ldout(cct, 10) << "  caps unchanged at " << ccap_string(old_caps) << dendl;
@@ -3211,14 +3111,14 @@ void Client::handle_cap_grant(Inode *in, int mds, Cap *cap, MClientCaps *m)
 
   if (m->get_op() == CEPH_CAP_OP_SYNC_UPDATE) {
     // reply with an ack
-    int wanted = in->caps_wanted();
-    int retain = wanted | CEPH_CAP_PIN;
-    send_cap(cap, in->caps_used(), wanted, retain, 0);
+    unsigned wanted = o->caps_wanted();
+    unsigned retain = wanted | CEPH_CAP_PIN;
+    send_cap(cap, o->caps_used(), wanted, retain, 0);
   }
 
   // wake up waiters
   if (new_caps)
-    signal_cond_list(in->waitfor_caps);
+    signal_cond_list(o->waitfor_caps);
 
   m->put();
 }
@@ -3589,19 +3489,18 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
 	       << " vs lease_gen " << dn->lease_gen << dendl;
     }
     // dir lease?
-    if (dir->caps_issued_mask(CEPH_CAP_FILE_SHARED) &&
-	dn->cap_shared_gen == dir->shared_gen) {
+    if (stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED) &&
+	dn->cap_shared_gen == stripe->shared_gen) {
       *target = dn->inode;
       touch_dn(dn);
       goto done;
     }
-  } else {
     // can we conclude ENOENT locally?
-    if (dir->caps_issued_mask(CEPH_CAP_FILE_SHARED) &&
-	(dir->flags & I_COMPLETE)) {
-      ldout(cct, 10) << "_lookup concluded ENOENT locally for " << *dir << " dn '" << dname << "'" << dendl;
-      return -ENOENT;
-    }
+  } else if (stripe && stripe->is_complete() &&
+             stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED)) {
+    ldout(cct, 10) << "_lookup concluded ENOENT locally for "
+        << *stripe << " dn '" << dname << "'" << dendl;
+    return -ENOENT;
   }
 
   r = _do_lookup(dir, dname.c_str(), target);
@@ -4288,9 +4187,10 @@ int Client::_opendir(Inode *in, dir_result_t **dirpp, int uid, int gid)
     return -ENOTDIR;
   *dirpp = new dir_result_t(in);
   (*dirpp)->set_stripe(0);
-  if (in->stripes[0])
+  if (in->stripes[0]) {
     (*dirpp)->release_count = in->stripes[0]->release_count;
-  (*dirpp)->start_shared_gen = in->shared_gen;
+    (*dirpp)->start_shared_gen = in->stripes[0]->shared_gen;
+  }
   ldout(cct, 3) << "_opendir(" << in->ino << ") = " << 0 << " (" << *dirpp << ")" << dendl;
   return 0;
 }
@@ -4549,6 +4449,7 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
   uint32_t off = dirp->get_pos();
 
   Inode *diri = dirp->inode;
+  DirStripe *stripe = diri->stripes[stripeid];
 
   ldout(cct, 10) << "readdir_r_cb " << diri << " stripe " << stripeid
       << " pos " << hex << off << dec
@@ -4605,13 +4506,12 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
 
   // can we read from our cache?
   ldout(cct, 10) << "offset " << hex << dirp->offset << dec << " at_cache_name " << dirp->at_cache_name
-	   << " snapid " << dirp->inode->snapid << " complete " << (bool)(dirp->inode->flags & I_COMPLETE)
+	   << " snapid " << dirp->inode->snapid << " complete " << stripe->is_complete()
 	   << " issued " << ccap_string(dirp->inode->caps_issued())
 	   << dendl;
   if ((dirp->offset == 2 || dirp->at_cache_name.length()) &&
-      dirp->inode->snapid != CEPH_SNAPDIR &&
-      (dirp->inode->flags & I_COMPLETE) &&
-      dirp->inode->caps_issued_mask(CEPH_CAP_FILE_SHARED)) {
+      dirp->inode->snapid != CEPH_SNAPDIR && stripe->is_complete() &&
+      stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED)) {
     int err = _readdir_cache_cb(dirp, cb, p);
     if (err != -EAGAIN)
       return err;
@@ -4673,9 +4573,9 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
 
     DirStripe *stripe = diri->stripes[stripeid];
     if (stripe && stripe->release_count == dirp->release_count &&
-	diri->shared_gen == dirp->start_shared_gen) {
-      ldout(cct, 10) << " marking I_COMPLETE on " << *diri << dendl;
-      diri->flags |= I_COMPLETE;
+	stripe->shared_gen == dirp->start_shared_gen) {
+      ldout(cct, 10) << " marking I_COMPLETE on " << *stripe << dendl;
+      stripe->set_complete();
       stripe->max_offset = dirp->offset;
     }
 
@@ -5175,7 +5075,7 @@ int Client::_read(Fh *f, int64_t offset, uint64_t size, bufferlist *bl)
 
   //bool lazy = f->mode == CEPH_FILE_MODE_LAZY;
 
-  int have;
+  unsigned have;
   int r = get_caps(in, CEPH_CAP_FILE_RD, CEPH_CAP_FILE_CACHE, &have, -1);
   if (r < 0)
     return r;
@@ -5480,7 +5380,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
   utime_t lat;
   uint64_t totalwritten;
   uint64_t endoff = offset + size;
-  int have;
+  unsigned have;
   int r = get_caps(in, CEPH_CAP_FILE_WR, CEPH_CAP_FILE_BUFFER, &have, endoff);
   if (r < 0)
     return r;

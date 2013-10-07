@@ -11,34 +11,39 @@
 
 #define dout_subsys ceph_subsys_client
 
-ostream& operator<<(ostream &out, Inode &in)
-{
-  out << in.vino() << "("
-      << "ref=" << in._ref
-      << " open=" << in.open_by_mode
-      << " mode=" << oct << in.mode << dec
-      << " size=" << in.size
-      << " mtime=" << in.mtime
-      << " caps=(" << (CapObject&)in << ')';
-
-  if (in.flags & I_COMPLETE)
-    out << " COMPLETE";
-
-  if (in.is_file())
-    out << " " << in.oset;
-
-  if (!in.dn_set.empty())
-    out << " parents=" << in.dn_set;
-
-  if (in.is_dir() && in.has_dir_layout())
-    out << " has_dir_layout";
-
-  return out << ' ' << &in << ")";
-}
+#undef dout_prefix
+#define dout_prefix *_dout << "client.ino(" << ino << ") "
 
 void Inode::print(ostream &out)
 {
-  out << *this;
+  out << vino() << "("
+      << "ref=" << _ref
+      << " open=" << open_by_mode
+      << " mode=" << oct << mode << dec
+      << " size=" << size
+      << " mtime=" << mtime
+      << " caps=(";
+  CapObject::print(out);
+  out << ')';
+
+  if (is_file())
+    out << " " << oset;
+  if (is_dir())
+    out << " stripes=" << stripes;
+
+  if (!dn_set.empty())
+    out << " parents=" << dn_set;
+
+  if (is_dir() && has_dir_layout())
+    out << " has_dir_layout";
+
+  out << ' ' << this << ")";
+}
+
+ostream& operator<<(ostream &out, Inode &in)
+{
+  in.print(out);
+  return out;
 }
 
 void Inode::make_long_path(filepath& p)
@@ -92,9 +97,9 @@ bool Inode::put_open_ref(int mode)
   return false;
 }
 
-int Inode::caps_wanted() const
+unsigned Inode::caps_wanted() const
 {
-  int want = CapObject::caps_wanted();
+  unsigned want = CapObject::caps_wanted();
   for (map<int,int>::const_iterator p = open_by_mode.begin();
        p != open_by_mode.end();
        ++p)
@@ -105,7 +110,60 @@ int Inode::caps_wanted() const
   return want;
 }
 
-bool Inode::check_cap(const Cap *cap, int retain, bool unmounting) const
+void Inode::read_client_caps(const Cap *cap, MClientCaps *m)
+{
+  layout = m->get_layout();
+
+  // update inode
+  unsigned implemented = 0;
+  unsigned issued = caps_issued(&implemented) | caps_dirty();
+  issued |= implemented;
+
+  if ((issued & CEPH_CAP_AUTH_EXCL) == 0) {
+    mode = m->inode.mode;
+    uid = m->inode.uid;
+    gid = m->inode.gid;
+  }
+  if ((issued & CEPH_CAP_LINK_EXCL) == 0) {
+    nlink = m->inode.nlink;
+  }
+  if ((issued & CEPH_CAP_XATTR_EXCL) == 0 &&
+      m->xattrbl.length() &&
+      m->inode.xattr_version > xattr_version) {
+    bufferlist::iterator p = m->xattrbl.begin();
+    ::decode(xattrs, p);
+    xattr_version = m->inode.xattr_version;
+  }
+
+  update_file_bits(m->get_truncate_seq(), m->get_truncate_size(),
+                   m->get_size(), m->get_time_warp_seq(),
+                   m->get_inode_ctime(), m->get_inode_mtime(),
+                   m->get_inode_atime(), issued);
+
+  // max size
+  if (cap == auth_cap &&
+      m->get_max_size() != max_size) {
+    ldout(cct, 10) << "max_size " << max_size << " -> " << m->get_max_size() << dendl;
+    max_size = m->get_max_size();
+    if (max_size > wanted_max_size) {
+      wanted_max_size = 0;
+      requested_max_size = 0;
+    }
+  }
+}
+
+bool Inode::on_caps_revoked(unsigned revoked)
+{
+  if (revoked & CEPH_CAP_FILE_CACHE)
+    cache->release(this);
+
+  if (caps_used() & revoked & CEPH_CAP_FILE_BUFFER)
+    return cache->flush(this); // waiting for flush?
+
+  return true;
+}
+
+bool Inode::check_cap(const Cap *cap, unsigned retain, bool unmounting) const
 {
   if (wanted_max_size > max_size &&
       wanted_max_size > requested_max_size &&
@@ -125,7 +183,7 @@ bool Inode::check_cap(const Cap *cap, int retain, bool unmounting) const
   return CapObject::check_cap(cap, retain, unmounting);
 }
 
-void Inode::fill_caps(const Cap *cap, MClientCaps *m, int mask)
+void Inode::write_client_caps(const Cap *cap, MClientCaps *m, unsigned mask)
 {
   m->inode.uid = uid;
   m->inode.gid = gid;
@@ -154,6 +212,83 @@ void Inode::fill_caps(const Cap *cap, MClientCaps *m, int mask)
     requested_max_size = wanted_max_size;
     ldout(cct, 15) << "auth cap, setting max_size = " << requested_max_size << dendl;
   }
+}
+
+void Inode::update_file_bits(uint64_t trunc_seq, uint64_t trunc_size,
+                             uint64_t sz, uint64_t warp_seq,
+                             utime_t ct, utime_t mt, utime_t at,
+                             unsigned issued)
+{
+  bool warn = false;
+  ldout(cct, 10) << "update_file_bits " << *this << " " << ccap_string(issued)
+	   << " mtime " << mt << dendl;
+  ldout(cct, 25) << "truncate_seq: mds " << trunc_seq <<  " local "
+	   << truncate_seq << " time_warp_seq: mds " << warp_seq
+	   << " local " << time_warp_seq << dendl;
+  uint64_t prior_size = size;
+
+  if (trunc_seq > truncate_seq ||
+      (trunc_seq == truncate_seq && sz > size)) {
+    ldout(cct, 10) << "size " << size << " -> " << sz << dendl;
+    size = reported_size = sz;
+    if (trunc_seq != truncate_seq) {
+      ldout(cct, 10) << "truncate_seq " << truncate_seq << " -> "
+	       << trunc_seq << dendl;
+      truncate_seq = oset.truncate_seq = trunc_seq;
+
+      // truncate cached file data
+      if (prior_size > sz)
+	cache->invalidate(this, trunc_size, prior_size - trunc_size, true);
+    }
+  }
+  if (trunc_seq >= truncate_seq && trunc_size != truncate_size) {
+    if (is_file()) {
+      ldout(cct, 10) << "truncate_size " << truncate_size << " -> "
+	       << trunc_size << dendl;
+      truncate_size = oset.truncate_size = trunc_size;
+    } else {
+      ldout(cct, 0) << "Hmmm, truncate_seq && truncate_size changed on non-file inode!" << dendl;
+    }
+  }
+  
+  // be careful with size, mtime, atime
+  if (issued & (CEPH_CAP_FILE_EXCL|
+                CEPH_CAP_FILE_WR|
+                CEPH_CAP_FILE_BUFFER|
+                CEPH_CAP_AUTH_EXCL|
+                CEPH_CAP_XATTR_EXCL)) {
+    ldout(cct, 30) << "Yay have enough caps to look at our times" << dendl;
+    if (ct > ctime) 
+      ctime = ct;
+    if (warp_seq > time_warp_seq) {
+      ldout(cct, 10) << "mds time_warp_seq " << warp_seq
+          << " on inode " << *this << " is higher than local time_warp_seq "
+          << time_warp_seq << dendl;
+      // the mds updated times, so take those!
+      mtime = mt;
+      atime = at;
+      time_warp_seq = warp_seq;
+    } else if (warp_seq == time_warp_seq) {
+      // take max times
+      if (mt > mtime)
+	mtime = mt;
+      if (at > atime)
+	atime = at;
+    } else if (issued & CEPH_CAP_FILE_EXCL) {
+      // ignore mds values as we have a higher seq
+    } else warn = true;
+  } else {
+    ldout(cct, 30) << "Don't have enough caps, just taking mds' time values" << dendl;
+    if (warp_seq >= time_warp_seq) {
+      ctime = ct;
+      mtime = mt;
+      atime = at;
+      time_warp_seq = warp_seq;
+    } else warn = true;
+  }
+  if (warn)
+    ldout(cct, 0) << "WARNING: " << *this << " mds time_warp_seq " << warp_seq
+        << " is lower than local time_warp_seq " << time_warp_seq << dendl;
 }
 
 bool Inode::have_valid_size()
@@ -259,7 +394,6 @@ void Inode::dump(Formatter *f) const
 
   f->dump_unsigned("version", version);
   f->dump_unsigned("xattr_version", xattr_version);
-  f->dump_unsigned("flags", flags);
 
   if (is_dir()) {
     if (!dir_contacts.empty()) {

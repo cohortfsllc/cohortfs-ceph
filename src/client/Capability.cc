@@ -9,26 +9,26 @@
 
 #define dout_subsys ceph_subsys_client
 
-ostream& operator<<(ostream &out, CapObject &o)
+void CapObject::print(ostream &out)
 {
-  out << "refs=" << o.cap_refs
-      << " issued=" << ccap_string(o.caps_issued())
+  out << "refs=" << cap_refs
+      << " issued=" << ccap_string(caps_issued())
       << " {";
-  for (cap_map::const_iterator i = o.caps.begin(); i != o.caps.end(); ++i) {
-    if (i != o.caps.begin()) out << ",";
+  for (cap_map::const_iterator i = caps.begin(); i != caps.end(); ++i) {
+    if (i != caps.begin()) out << ",";
     out << i->first << "=" << ccap_string(i->second->issued);
   }
   out << '}';
-  if (o.dirty_caps)
-    out << " dirty=" << ccap_string(o.dirty_caps);
-  if (o.flushing_caps)
-    out << " flushing=" << ccap_string(o.flushing_caps);
-  return out;
+  if (dirty_caps)
+    out << " dirty=" << ccap_string(dirty_caps);
+  if (flushing_caps)
+    out << " flushing=" << ccap_string(flushing_caps);
 }
 
-void CapObject::print(ostream &out)
+ostream& operator<<(ostream &out, CapObject &o)
 {
-  out << *this;
+  o.print(out);
+  return out;
 }
 
 CapObject::CapObject(CephContext *cct, vinodeno_t vino)
@@ -41,7 +41,6 @@ CapObject::CapObject(CephContext *cct, vinodeno_t vino)
     dirty_caps(0),
     flushing_caps(0),
     flushing_cap_seq(0),
-    shared_gen(0),
     snap_caps(0),
     snap_cap_refs(0),
     exporting_issued(0),
@@ -54,12 +53,12 @@ CapObject::CapObject(CephContext *cct, vinodeno_t vino)
   memset(&flushing_cap_tid, 0, sizeof(flushing_cap_tid));
 }
 
-void CapObject::get_cap_ref(int cap)
+void CapObject::get_cap_ref(unsigned cap)
 {
-  int n = 0;
+  unsigned n = 0;
   while (cap) {
     if (cap & 1) {
-      int c = 1 << n;
+      unsigned c = 1 << n;
       cap_refs[c]++;
     }
     cap >>= 1;
@@ -67,16 +66,16 @@ void CapObject::get_cap_ref(int cap)
   }
 }
 
-bool CapObject::put_cap_ref(int cap)
+bool CapObject::put_cap_ref(unsigned cap)
 {
   // if cap is always a single bit (which it seems to be)
   // all this logic is equivalent to:
   // if (--cap_refs[c]) return false; else return true;
   bool last = false;
-  int n = 0;
+  unsigned n = 0;
   while (cap) {
     if (cap & 1) {
-      int c = 1 << n;
+      unsigned c = 1 << n;
       assert(cap_refs[c] > 0);
       if (--cap_refs[c] == 0)
 	last = true;
@@ -103,14 +102,14 @@ bool CapObject::cap_is_valid(Cap *cap)
   return true;
 }
 
-int CapObject::caps_issued(int *implemented)
+unsigned CapObject::caps_issued(unsigned *implemented)
 {
-  int c = exporting_issued | snap_caps;
-  int i = 0;
-  for (cap_map::const_iterator i = caps.begin(); i != caps.end(); ++i)
-    if (cap_is_valid(i->second)) {
-      c |= i->second->issued;
-      c |= i->second->implemented;
+  unsigned c = exporting_issued | snap_caps;
+  unsigned i = 0;
+  for (cap_map::const_iterator it = caps.begin(); it != caps.end(); ++it)
+    if (cap_is_valid(it->second)) {
+      c |= it->second->issued;
+      i |= it->second->implemented;
     }
   if (implemented)
     *implemented = i;
@@ -132,7 +131,7 @@ void CapObject::try_touch_cap(int mds)
 
 bool CapObject::caps_issued_mask(unsigned mask)
 {
-  int c = exporting_issued | snap_caps;
+  unsigned c = exporting_issued | snap_caps;
   if ((c & mask) == mask)
     return true;
   // prefer auth cap
@@ -161,29 +160,29 @@ bool CapObject::caps_issued_mask(unsigned mask)
   return false;
 }
 
-int CapObject::caps_used() const
+unsigned CapObject::caps_used() const
 {
-  int w = 0;
+  unsigned w = 0;
   for (ref_map::const_iterator p = cap_refs.begin(); p != cap_refs.end(); ++p)
     if (p->second)
       w |= p->first;
   return w;
 }
 
-int CapObject::caps_wanted() const
+unsigned CapObject::caps_wanted() const
 {
   return caps_used();
 }
 
-int CapObject::caps_dirty() const
+unsigned CapObject::caps_dirty() const
 {
   return dirty_caps | flushing_caps;
 }
 
-bool CapObject::check_cap(const Cap *cap, int retain, bool unmounting) const
+bool CapObject::check_cap(const Cap *cap, unsigned retain, bool unmounting) const
 {
-  int revoking = cap->implemented & ~cap->issued;
-  int used = caps_used();
+  unsigned revoking = cap->implemented & ~cap->issued;
+  unsigned used = caps_used();
 
   // completed revocation?
   if (revoking && (revoking & used) == 0) {
@@ -236,7 +235,6 @@ void CapObject::dump(Formatter *f) const
     }
     f->close_section();
   }
-  f->dump_int("shared_gen", shared_gen);
   if (snap_caps) {
     f->dump_int("snap_caps", snap_caps);
     f->dump_int("snap_cap_refs", snap_cap_refs);

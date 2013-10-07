@@ -56,7 +56,6 @@ class CapObject {
   unsigned dirty_caps, flushing_caps;
   tid_t flushing_cap_seq;
   __u16 flushing_cap_tid[CEPH_CAP_BITS];
-  int shared_gen;
   int snap_caps, snap_cap_refs;
   unsigned exporting_issued;
   int exporting_mds;
@@ -67,7 +66,7 @@ class CapObject {
 
   list<Cond*> waitfor_caps;
 
-  typedef map<int,int> ref_map;
+  typedef map<unsigned,int> ref_map;
   ref_map cap_refs;
 
   CapObject(CephContext *cct, vinodeno_t vino);
@@ -78,27 +77,35 @@ class CapObject {
   bool is_any_caps() const;
   bool cap_is_valid(Cap *cap);
 
-  int caps_issued(int *implemented = 0);
+  unsigned caps_issued(unsigned *implemented = 0);
   bool caps_issued_mask(unsigned mask);
 
-  int caps_used() const;
-  int caps_dirty() const;
+  unsigned caps_used() const;
+  unsigned caps_dirty() const;
 
   void touch_cap(Cap *cap);
   void try_touch_cap(int mds);
 
-  void get_cap_ref(int cap);
-  bool put_cap_ref(int cap);
+  void get_cap_ref(unsigned cap);
+  bool put_cap_ref(unsigned cap);
 
 
   // virtual interface
-  virtual int caps_wanted() const;
+  virtual unsigned caps_wanted() const;
 
-  // return true if the cap needs to be sent
-  virtual bool check_cap(const Cap *cap, int retain, bool unmounting) const;
+  // update cache with new data from MClientCaps
+  virtual void read_client_caps(const Cap *cap, MClientCaps *m) = 0;
 
   // initialize the fields of MClientCaps associated with this object
-  virtual void fill_caps(const Cap *cap, MClientCaps *m, int mask) = 0;
+  virtual void write_client_caps(const Cap *cap, MClientCaps *m, unsigned mask) = 0;
+
+  virtual void on_caps_granted(unsigned issued) {}
+
+  // invalidate cached data; return false if we're waiting for a flush
+  virtual bool on_caps_revoked(unsigned revoked) { return true; }
+
+  // return true if the cap needs to be sent
+  virtual bool check_cap(const Cap *cap, unsigned retain, bool unmounting) const;
 
   virtual void print(ostream &out);
 

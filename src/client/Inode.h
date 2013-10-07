@@ -51,9 +51,6 @@ struct CapSnap {
 };
 
 
-// inode flags
-#define I_COMPLETE 1
-
 class Inode : public CapObject {
  private:
   InodeCache *cache;
@@ -101,8 +98,6 @@ class Inode : public CapObject {
 	return true;
     return false;
   }
-
-  unsigned flags;
 
   // about the dir (if this is one!)
   set<int>  dir_contacts;
@@ -167,7 +162,7 @@ class Inode : public CapObject {
       rdev(0), mode(0), uid(0), gid(0), nlink(0),
       size(0), truncate_seq(1), truncate_size(-1),
       time_warp_seq(0), max_size(0), version(0), xattr_version(0),
-      flags(0), dir_hashed(false), dir_replicated(false),
+      dir_hashed(false), dir_replicated(false),
       snapdir_parent(0), oset((void *)this, newlayout->fl_pg_pool, ino),
       reported_size(0), wanted_max_size(0), requested_max_size(0),
       _ref(0), ll_ref(0)
@@ -194,16 +189,22 @@ class Inode : public CapObject {
   void get_open_ref(int mode);
   bool put_open_ref(int mode);
 
+  virtual unsigned caps_wanted() const;
+  virtual void read_client_caps(const Cap *cap, MClientCaps *m);
+  virtual void write_client_caps(const Cap *cap, MClientCaps *m, unsigned mask);
+  virtual bool on_caps_revoked(unsigned revoked);
+  virtual bool check_cap(const Cap *cap, unsigned retain, bool unmounting) const;
 
-  virtual int caps_wanted() const;
-  virtual bool check_cap(const Cap *cap, int retain, bool unmounting) const;
-  virtual void fill_caps(const Cap *cap, MClientCaps *m, int mask);
-  virtual void print(ostream &out);
+  void update_file_bits(uint64_t truncate_seq, uint64_t truncate_size,
+                        uint64_t size, uint64_t time_warp_seq,
+                        utime_t ctime, utime_t mtime, utime_t atime,
+                        unsigned issued);
 
   bool have_valid_size();
   stripeid_t pick_stripe(const string &dname);
   DirStripe *open_stripe(stripeid_t stripeid);
 
+  virtual void print(ostream &out);
   void dump(Formatter *f) const;
 };
 

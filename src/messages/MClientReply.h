@@ -156,7 +156,7 @@ struct StripeStat {
   stripeid_t stripeid;
   version_t version;
   ceph_mds_reply_cap cap;
-  frag_info_t dirstat;
+  frag_info_t fragstat;
   nest_info_t rstat;
 
   StripeStat() {}
@@ -173,8 +173,8 @@ struct StripeStat {
     version = e.version;
     cap = e.cap;
 
-    dirstat.nfiles = e.nfiles;
-    dirstat.nsubdirs = e.nsubdirs;
+    fragstat.nfiles = e.nfiles;
+    fragstat.nsubdirs = e.nsubdirs;
 
     rstat.rctime.decode_timeval(&e.rctime);
     rstat.rbytes = e.rbytes;
