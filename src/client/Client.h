@@ -66,6 +66,7 @@ class MClientRequestForward;
 struct MClientLease;
 class MClientCaps;
 class MClientCapRelease;
+class MClientSnap;
 
 struct LeaseStat;
 struct InodeStat;
@@ -433,14 +434,13 @@ protected:
   void handle_lease(MClientLease *m);
 
   // file caps
-  void check_cap_issue(Inode *in, Cap *cap, unsigned issued);
-  void add_update_cap(Inode *in, MetaSession *session, uint64_t cap_id,
-		      unsigned issued, unsigned seq, unsigned mseq, inodeno_t realm,
-		      int flags);
+  void add_update_cap(CapObject *o, MetaSession *session, uint64_t cap_id,
+		      unsigned issued, unsigned seq, unsigned mseq,
+                      inodeno_t realm, int flags);
   void remove_cap(Cap *cap);
   void remove_all_caps(Inode *in);
   void remove_session_caps(MetaSession *session);
-  void mark_caps_dirty(Inode *in, int caps);
+  void mark_caps_dirty(Inode *in, unsigned caps);
   int mark_caps_flushing(CapObject *o);
   void flush_caps();
   void flush_caps(CapObject *o, MetaSession *session);
@@ -454,21 +454,22 @@ protected:
 
   void handle_snap(struct MClientSnap *m);
   void handle_caps(class MClientCaps *m);
-  void handle_cap_import(MetaSession *session, Inode *in, class MClientCaps *m);
-  void handle_cap_export(MetaSession *session, Inode *in, class MClientCaps *m);
+  void handle_cap_import(MetaSession *session, CapObject *o, class MClientCaps *m);
+  void handle_cap_export(MetaSession *session, CapObject *o, class MClientCaps *m);
   void handle_cap_trunc(MetaSession *session, Inode *in, class MClientCaps *m);
-  void handle_cap_flush_ack(MetaSession *session, Inode *in, Cap *cap, class MClientCaps *m);
+  void handle_cap_flush_ack(MetaSession *session, CapObject *o, Cap *cap, class MClientCaps *m);
   void handle_cap_flushsnap_ack(MetaSession *session, Inode *in, class MClientCaps *m);
-  void handle_cap_grant(MetaSession *session, Inode *in, Cap *cap, class MClientCaps *m);
+  void handle_cap_grant(MetaSession *session, CapObject *o, Cap *cap, class MClientCaps *m);
   void cap_delay_requeue(CapObject *o);
-  void send_cap(Cap *cap, int used, int want, int retain, int flush);
+  void send_cap(Cap *cap, unsigned used, unsigned want,
+                unsigned retain, unsigned flush);
   void check_caps(CapObject *o, bool is_delayed);
-  void get_cap_ref(Inode *in, int cap);
-  void put_cap_ref(Inode *in, int cap);
+  void get_cap_ref(Inode *in, unsigned cap);
+  void put_cap_ref(Inode *in, unsigned cap);
   void flush_snaps(Inode *in, bool all_again=false, CapSnap *again=0);
   void wait_sync_caps(uint64_t want);
   void queue_cap_snap(Inode *in, snapid_t seq=0);
-  void finish_cap_snap(Inode *in, CapSnap *capsnap, int used);
+  void finish_cap_snap(Inode *in, CapSnap *capsnap, unsigned used);
   void _flushed_cap_snap(Inode *in, snapid_t seq);
 
   void _schedule_invalidate_dentry_callback(Dentry *dn);
@@ -483,11 +484,9 @@ protected:
   
   void insert_readdir_results(MetaRequest *request, MetaSession *session, Inode *diri);
   Inode* insert_trace(MetaRequest *request, MetaSession *session);
-  void update_inode_file_bits(Inode *in,
-			      uint64_t truncate_seq, uint64_t truncate_size, uint64_t size,
-			      uint64_t time_warp_seq, utime_t ctime, utime_t mtime, utime_t atime,
-			      int issued);
   Inode *add_update_inode(InodeStat *st, utime_t ttl, MetaSession *session);
+  DirStripe* add_update_stripe(Inode *diri, const StripeStat &st,
+                               MetaSession *session);
   Dentry *insert_dentry_inode(DirStripe *stripe, const string& dname, LeaseStat *dlease, 
 			      Inode *in, utime_t from, MetaSession *session, bool set_offset,
 			      Dentry *old_dentry = NULL);

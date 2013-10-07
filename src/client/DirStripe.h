@@ -11,9 +11,11 @@ class Inode;
 typedef hash_map<string, Dentry*> dn_hashmap;
 typedef map<string, Dentry*> dn_map;
 
+#define I_COMPLETE 1
+
 class DirStripe : public CapObject {
  public:
-  Inode *parent_inode;  // my inode
+  Inode *parent_inode; // my inode
   dirstripe_t ds;
   version_t version;
   dn_hashmap dentries;
@@ -23,12 +25,24 @@ class DirStripe : public CapObject {
 
   frag_info_t fragstat;
   nest_info_t rstat;
+  int shared_gen;
+  unsigned flags;
 
   DirStripe(Inode *in, stripeid_t stripeid);
 
-  bool is_empty() {  return dentries.empty(); }
+  bool is_empty() const {  return dentries.empty(); }
 
-  virtual void fill_caps(const Cap *cap, MClientCaps *m, int mask);
+  bool is_complete() const { return flags & I_COMPLETE; }
+  void set_complete() { flags |= I_COMPLETE; }
+  void reset_complete() { flags &= ~I_COMPLETE; }
+
+  // CapObject
+  virtual unsigned caps_wanted() const;
+  virtual void read_client_caps(const Cap *cap, MClientCaps *m);
+  virtual void write_client_caps(const Cap *cap, MClientCaps *m, unsigned mask);
+  virtual void on_caps_granted(unsigned issued);
+
+  virtual void print(ostream &out);
 };
 
 ostream& operator<<(ostream &out, DirStripe &stripe);
