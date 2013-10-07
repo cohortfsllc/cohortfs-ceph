@@ -79,7 +79,7 @@ public:
 
   /* Do not use when a particular hash function is needed */
   explicit hobject_t(const object_t &o, uint64_t snapid) :
-    oid(oid), snap(snapid), max(false) {
+    oid(o), snap(snapid), max(false) {
     hash = __gnu_cxx::hash<object_t>()(o);
   }
 

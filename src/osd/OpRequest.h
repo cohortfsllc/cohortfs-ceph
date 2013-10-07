@@ -106,7 +106,6 @@ struct OpRequest : public TrackedOp {
   }
   bool may_read() { return need_read_cap() || need_class_read_cap(); }
   bool may_write() { return need_write_cap() || need_class_write_cap(); }
-  bool includes_pg_op() { return check_rmw(CEPH_OSD_RMW_FLAG_PGOP); }
   bool need_read_cap() {
     return check_rmw(CEPH_OSD_RMW_FLAG_READ);
   }
@@ -123,7 +122,6 @@ struct OpRequest : public TrackedOp {
   void set_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_WRITE; }
   void set_class_read() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_READ; }
   void set_class_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_WRITE; }
-  void set_pg_op() { rmw_flags |= CEPH_OSD_RMW_FLAG_PGOP; }
 
   utime_t received_time;
   uint8_t warn_interval_multiplier;
@@ -147,8 +145,8 @@ private:
   uint8_t hit_flag_points;
   uint8_t latest_flag_point;
   uint64_t seq;
-  static const uint8_t flag_queued_for_pg=1 << 0;
-  static const uint8_t flag_reached_pg =  1 << 1;
+  static const uint8_t flag_queued_for_vol = 1 << 0;
+  static const uint8_t flag_reached_vol = 1 << 1;
   static const uint8_t flag_delayed =     1 << 2;
   static const uint8_t flag_started =     1 << 3;
   static const uint8_t flag_sub_op_sent = 1 << 4;
@@ -171,14 +169,14 @@ public:
     request->put();
   }
 
-  bool been_queued_for_pg() { return hit_flag_points & flag_queued_for_pg; }
-  bool been_reached_pg() { return hit_flag_points & flag_reached_pg; }
+  bool been_queued_for_vol() { return hit_flag_points & flag_queued_for_vol; }
+  bool been_reached_vol() { return hit_flag_points & flag_reached_vol; }
   bool been_delayed() { return hit_flag_points & flag_delayed; }
   bool been_started() { return hit_flag_points & flag_started; }
   bool been_sub_op_sent() { return hit_flag_points & flag_sub_op_sent; }
   bool been_commit_sent() { return hit_flag_points & flag_commit_sent; }
-  bool currently_queued_for_pg() { return latest_flag_point & flag_queued_for_pg; }
-  bool currently_reached_pg() { return latest_flag_point & flag_reached_pg; }
+  bool currently_queued_for_vol() { return latest_flag_point & flag_queued_for_vol; }
+  bool currently_reached_vol() { return latest_flag_point & flag_reached_vol; }
   bool currently_delayed() { return latest_flag_point & flag_delayed; }
   bool currently_started() { return latest_flag_point & flag_started; }
   bool currently_sub_op_sent() { return latest_flag_point & flag_sub_op_sent; }
@@ -186,8 +184,8 @@ public:
 
   const char *state_string() const {
     switch(latest_flag_point) {
-    case flag_queued_for_pg: return "queued for pg";
-    case flag_reached_pg: return "reached pg";
+    case flag_queued_for_vol: return "queued for vol";
+    case flag_reached_vol: return "reached vol";
     case flag_delayed: return "delayed";
     case flag_started: return "started";
     case flag_sub_op_sent: return "waiting for sub ops";
@@ -197,17 +195,17 @@ public:
     return "no flag points reached";
   }
 
-  void mark_queued_for_pg() {
-    mark_event("queued_for_pg");
-    current = "queued for pg";
-    hit_flag_points |= flag_queued_for_pg;
-    latest_flag_point = flag_queued_for_pg;
+  void mark_queued_for_vol() {
+    mark_event("queued_for_vol");
+    current = "queued for vol";
+    hit_flag_points |= flag_queued_for_vol;
+    latest_flag_point = flag_queued_for_vol;
   }
-  void mark_reached_pg() {
-    mark_event("reached_pg");
-    current = "reached pg";
-    hit_flag_points |= flag_reached_pg;
-    latest_flag_point = flag_reached_pg;
+  void mark_reached_vol() {
+    mark_event("reached_vol");
+    current = "reached vol";
+    hit_flag_points |= flag_reached_vol;
+    latest_flag_point = flag_reached_vol;
   }
   void mark_delayed(string s) {
     mark_event(s);
