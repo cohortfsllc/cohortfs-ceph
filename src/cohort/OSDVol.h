@@ -20,6 +20,7 @@ class OSDVol {
 
 protected:
   uuid_d volume_id;
+  Mutex vol_lock;
 
   // Ops waiting for map, should be queued at back
   Mutex map_lock;
@@ -62,6 +63,13 @@ public:
   void _activate_committed(epoch_t e);
   void all_activated_and_committed();
 
+  void lock() {
+    vol_lock.Lock();
+  }
+
+  void unlock() {
+    vol_lock.Unlock();
+  }
 public:
   OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
 	 uuid_d u, const hobject_t& loid, const hobject_t& ioid);

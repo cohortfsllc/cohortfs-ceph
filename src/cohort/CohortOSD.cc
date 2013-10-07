@@ -258,13 +258,12 @@ OSDVolRef CohortOSD::OpWQ::_dequeue()
 
 void CohortOSD::OpWQ::_process(OSDVolRef vol)
 {
-#warning Needed?
-//  vol->lock();
+  vol->lock();
   OpRequestRef op;
   {
     Mutex::Locker l(qlock);
     if (!vol_for_processing.count(vol)) {
-//      vol->unlock();
+      vol->unlock();
       return;
     }
     assert(vol_for_processing[vol].size());
@@ -274,7 +273,7 @@ void CohortOSD::OpWQ::_process(OSDVolRef vol)
       vol_for_processing.erase(vol);
   }
   osd->dequeue_op(vol, op);
-//  vol->unlock();
+  vol->unlock();
 }
 
 void CohortOSD::enqueue_op(OSDVolRef vol, OpRequestRef op)
