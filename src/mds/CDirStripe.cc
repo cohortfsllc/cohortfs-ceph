@@ -166,6 +166,9 @@ CDirStripe::CDirStripe(CDirPlacement *placement, stripeid_t stripeid, int auth)
   memset(&fnode, 0, sizeof(fnode));
   if (auth == mdcache->mds->get_nodeid())
     state_set(STATE_AUTH);
+
+  cap_locks.push_back(&linklock);
+  cap_locks.push_back(&nestlock);
 }
 
 CInode* CDirStripe::get_inode()
@@ -515,6 +518,7 @@ int CDirStripe::encode_stripestat(bufferlist &bl, Session *session,
   e.cap.flags = is_auth() ? CEPH_CAP_FLAG_AUTH:0;
   dout(10) << "encode_stripestat caps " << ccap_string(e.cap.caps)
       << " seq " << e.cap.seq << " mseq " << e.cap.mseq << dendl;
+  ::encode(e, bl);
   return 1;
 }
 

@@ -26,6 +26,7 @@
 
 class LogSegment;
 class Capability;
+class CapObject;
 class CDentry;
 class CDirFrag;
 class CDirStripe;
@@ -132,7 +133,7 @@ struct Mutation {
   void pop_and_dirty_projected_fnodes();
   void add_updated_lock(ScatterLock *lock);
   void suppress_cap(Capability *cap);
-  void suppress_cap(CInode *in);
+  void suppress_cap(CapObject *in);
   void add_cow_inode(CInode *in);
   void add_cow_dentry(CDentry *dn);
   void apply();

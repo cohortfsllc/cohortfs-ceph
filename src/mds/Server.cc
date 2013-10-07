@@ -978,10 +978,13 @@ void Server::set_trace_dist(MDRequest *mdr, MClientReply *reply,
     reply->head.is_dentry = 1;
     CDirStripe *stripe = dn->get_stripe();
     CInode *diri = stripe->get_inode();
-
     mdr->suppress_cap(diri);
     diri->encode_inodestat(bl, mdr->session, NULL, mdr->snapid);
     dout(20) << "set_trace_dist added diri " << *diri << dendl;
+
+    mdr->suppress_cap(stripe);
+    stripe->encode_stripestat(bl, mdr->session, NULL, mdr->snapid);
+    dout(20) << "set_trace_dist added stripe " << *stripe << dendl;
 
     ::encode(dn->get_name(), bl);
     if (mdr->snapid == CEPH_NOSNAP)

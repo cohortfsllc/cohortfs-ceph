@@ -126,9 +126,9 @@ void Mutation::suppress_cap(Capability *cap)
   suppressed_caps.push_back(cap);
 }
 
-void Mutation::suppress_cap(CInode *in)
+void Mutation::suppress_cap(CapObject *o)
 {
-  Capability *cap = in->get_client_cap(get_client());
+  Capability *cap = o->get_client_cap(get_client());
   if (cap)
     suppress_cap(cap);
 }
