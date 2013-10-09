@@ -169,7 +169,8 @@ struct dir_result_t {
   stripeid_t get_stripe() const { return (offset >> SHIFT); }
   unsigned get_pos() const { return offset & MASK; }
 
-  void next_stripe();
+  int64_t next_stripe_offset() const;
+  void next_stripe() { offset = next_stripe_offset(); }
   void set_stripe(stripeid_t stripe) {
     offset = (uint64_t)stripe << SHIFT;
     assert(sizeof(offset) == 8);
