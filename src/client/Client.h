@@ -165,13 +165,14 @@ struct dir_result_t {
   stripeid_t get_stripe() const { return (offset >> SHIFT); }
   unsigned get_pos() const { return offset & MASK; }
 
-  void next_stripe();
+  int64_t next_stripe_offset() const;
+  void next_stripe() { offset = next_stripe_offset(); }
   void set_stripe(stripeid_t stripe) {
     offset = (uint64_t)stripe << SHIFT;
     assert(sizeof(offset) == 8);
   }
   void set_end() { offset = END; }
-  bool at_end() { return (offset == END); }
+  bool at_end() const { return (offset == END); }
 
   void reset() {
     last_name.clear();
