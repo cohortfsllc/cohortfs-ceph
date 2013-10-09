@@ -31,9 +31,10 @@ ostream& operator<<(ostream &out, CapObject &o)
   return out;
 }
 
-CapObject::CapObject(CephContext *cct, vinodeno_t vino)
+CapObject::CapObject(CephContext *cct, vinodeno_t vino, stripeid_t stripeid)
   : cct(cct),
     ino(vino.ino),
+    stripeid(stripeid),
     snaprealm(NULL),
     snapid(vino.snapid),
     snaprealm_item(this),

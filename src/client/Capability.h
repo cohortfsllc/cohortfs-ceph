@@ -46,6 +46,7 @@ class CapObject {
   CephContext *cct;
 
   inodeno_t ino;
+  stripeid_t stripeid;
 
   SnapRealm *snaprealm;
   snapid_t snapid;
@@ -69,10 +70,11 @@ class CapObject {
   typedef map<unsigned,int> ref_map;
   ref_map cap_refs;
 
-  CapObject(CephContext *cct, vinodeno_t vino);
+  CapObject(CephContext *cct, vinodeno_t vino,
+            stripeid_t stripeid = CEPH_CAP_OBJECT_INODE);
   virtual ~CapObject() {}
 
-  bool is_inode() const { return true; }
+  bool is_inode() const { return stripeid == CEPH_CAP_OBJECT_INODE; }
 
   bool is_any_caps() const;
   bool cap_is_valid(Cap *cap);
