@@ -16,7 +16,6 @@ typedef map<string, Dentry*> dn_map;
 class DirStripe : public CapObject {
  public:
   Inode *parent_inode; // my inode
-  dirstripe_t ds;
   version_t version;
   dn_hashmap dentries;
   dn_map dentry_map;
@@ -29,6 +28,8 @@ class DirStripe : public CapObject {
   unsigned flags;
 
   DirStripe(Inode *in, stripeid_t stripeid);
+
+  dirstripe_t dirstripe() const { return dirstripe_t(ino, stripeid); }
 
   bool is_empty() const {  return dentries.empty(); }
 

@@ -13,7 +13,7 @@
 void Dentry::dump(Formatter *f) const
 {
   f->dump_string("name", name);
-  f->dump_stream("stripe") << stripe->ds;
+  f->dump_stream("stripe") << stripe->dirstripe();
   if (inode)
     f->dump_stream("ino") << inode->ino;
   f->dump_int("ref", ref);

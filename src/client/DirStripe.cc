@@ -8,14 +8,18 @@
 #define dout_subsys ceph_subsys_client
 
 #undef dout_prefix
-#define dout_prefix *_dout << "client.stripe(" << ds << ") "
+#define dout_prefix *_dout << "client.stripe(" << dirstripe() << ") "
 
 void DirStripe::print(ostream &out)
 {
-  out << ds << '('
+  out << dirstripe() << '('
       << "dentries=" << dentry_map.size()
       << " complete=" << is_complete()
-      << ' ' << this << ')';
+      << ' ' << fragstat
+      << ' ' << rstat
+      << " caps=(";
+  CapObject::print(out);
+  out << ") " << this << ')';
 }
 
 ostream& operator<<(ostream &out, DirStripe &stripe)
@@ -25,8 +29,7 @@ ostream& operator<<(ostream &out, DirStripe &stripe)
 }
 
 DirStripe::DirStripe(Inode *in, stripeid_t stripeid)
-  : CapObject(in->cct, in->vino()),
-    parent_inode(in), ds(in->ino, stripeid), version(0),
+  : CapObject(in->cct, in->vino(), stripeid), parent_inode(in), version(0),
     release_count(0), max_offset(2), shared_gen(0), flags(0)
 {
 }

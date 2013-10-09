@@ -442,8 +442,8 @@ void Inode::dump(Formatter *f) const
     f->open_array_section("parents");
     for (set<Dentry*>::const_iterator p = dn_set.begin(); p != dn_set.end(); ++p) {
       f->open_object_section("dentry");
-      f->dump_stream("dir_ino") << (*p)->stripe->parent_inode->ino;
-      f->dump_stream("dir_stripe") << (*p)->stripe->ds.stripeid;
+      f->dump_stream("dir_ino") << (*p)->stripe->ino;
+      f->dump_stream("dir_stripe") << (*p)->stripe->stripeid;
       f->dump_string("name", (*p)->name);
       f->close_section();
     }

@@ -290,7 +290,9 @@ void Client::dump_inode(Formatter *f, Inode *in, set<Inode*>& did, bool disconne
       for (dn_hashmap::iterator it = stripe->dentries.begin();
            it != stripe->dentries.end();
            it++) {
-        ldout(cct, 1) << "   " << stripe->ds << " dn " << it->first << " " << it->second << " ref " << it->second->ref << dendl;
+        ldout(cct, 1) << "   " << stripe->dirstripe()
+            << " dn " << it->first << " " << it->second
+            << " ref " << it->second->ref << dendl;
         if (f) {
           f->open_object_section("dentry");
           it->second->dump(f);
@@ -464,7 +466,7 @@ void Client::trim_dentry(Dentry *dn)
 {
   DirStripe *stripe = dn->stripe;
   ldout(cct, 15) << "trim_dentry unlinking dn " << dn->name
-		 << " in stripe " << stripe->ds << dendl;
+		 << " in stripe " << stripe->dirstripe() << dendl;
   if (stripe->is_complete()) {
     ldout(cct, 10) << " clearing I_COMPLETE on " << *stripe << dendl;
     stripe->reset_complete();
@@ -620,7 +622,7 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname, Leas
   Dentry *dn = d == stripe->dentries.end() ? NULL : d->second;
  
   ldout(cct, 12) << "insert_dentry_inode '" << dname << "' vino " << in->vino()
-      << " in stripe " << stripe->ds << " dn " << dn << dendl;
+      << " in stripe " << stripe->dirstripe() << " dn " << dn << dendl;
  
   if (dn && dn->inode) {
     if (dn->inode->vino() == in->vino()) {
@@ -1870,13 +1872,18 @@ void Client::close_stripe(DirStripe *stripe)
   ldout(cct, 15) << "close_stripe " << *stripe << " on " << *in << dendl;
   assert(stripe->is_empty());
 
-  vector<DirStripe*>::iterator s = in->stripes.begin() + stripe->ds.stripeid;
+  // release any caps
+  remove_all_caps(stripe);
+
+  vector<DirStripe*>::iterator s = in->stripes.begin() + stripe->stripeid;
   assert(*s == stripe);
 
   assert(in->dn_set.size() < 2);     // dirs can't be hard-linked
   if (!in->dn_set.empty())
     in->get_first_parent()->put();   // unpin dentry
  
+  stripe->cap_item.remove_myself();
+  stripe->snaprealm_item.remove_myself();
   delete stripe;
   *s = 0;
   put_inode(in);               // unpin inode
@@ -1900,10 +1907,10 @@ Dentry* Client::link(DirStripe *stripe, const string& name, Inode *in, Dentry *d
     stripe->dentry_map[dn->name] = dn;
     lru.lru_insert_mid(dn);    // mid or top?
 
-    ldout(cct, 15) << "link stripe " << stripe->ds << " '" << name
+    ldout(cct, 15) << "link stripe " << stripe->dirstripe() << " '" << name
         << "' to inode " << in << " dn " << dn << " (new dn)" << dendl;
   } else {
-    ldout(cct, 15) << "link stripe " << stripe->ds << " '" << name
+    ldout(cct, 15) << "link stripe " << stripe->dirstripe() << " '" << name
         << "' to inode " << in << " dn " << dn << " (old dn)" << dendl;
   }
 
@@ -1952,11 +1959,11 @@ void Client::unlink(Dentry *dn, bool keepdir)
     ldout(cct, 20) << "unlink  inode " << in << " parents now " << in->dn_set << dendl; 
     put_inode(in);
   }
-        
+
   // unlink from dir
   dn->stripe->dentries.erase(dn->name);
   dn->stripe->dentry_map.erase(dn->name);
-  if (dn->stripe->is_empty() && !keepdir) 
+  if (dn->stripe->is_empty() && !keepdir)
     close_stripe(dn->stripe);
   dn->stripe = 0;
 
@@ -2093,6 +2100,7 @@ void Client::send_cap(Cap *cap, unsigned used, unsigned want,
 				   flush,
 				   cap->mseq);
   m->head.ino = parent->ino;
+  m->head.stripeid = parent->stripeid;
   m->head.issue_seq = cap->issue_seq;
   if (flush) {
     ++parent->last_flush_tid;
@@ -2285,6 +2293,7 @@ void Client::flush_snaps(Inode *in, bool all_again, CapSnap *again)
     capsnap->flush_tid = ++in->last_flush_tid;
     MClientCaps *m = new MClientCaps(CEPH_CAP_OP_FLUSHSNAP, in->snaprealm->ino, 0, mseq);
     m->head.ino = in->ino;
+    m->head.stripeid = in->stripeid;
     m->set_client_tid(capsnap->flush_tid);
     m->head.snap_follows = p->first;
 
@@ -2409,7 +2418,7 @@ void Client::remove_cap(Cap *cap)
     session->release = new MClientCapRelease;
   ceph_mds_cap_item i;
   i.ino = parent->ino;
-  i.stripeid = CEPH_CAP_OBJECT_INODE;
+  i.stripeid = parent->stripeid;
   i.cap_id = cap->cap_id;
   i.seq = cap->seq;
   i.migrate_seq = cap->mseq;
@@ -2436,10 +2445,10 @@ void Client::remove_cap(Cap *cap)
   }
 }
 
-void Client::remove_all_caps(Inode *in)
+void Client::remove_all_caps(CapObject *o)
 {
-  while (in->caps.size())
-    remove_cap(in->caps.begin()->second);
+  while (o->caps.size())
+    remove_cap(o->caps.begin()->second);
 }
 
 void Client::remove_session_caps(MetaSession *mds) 
