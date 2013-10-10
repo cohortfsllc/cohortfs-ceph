@@ -468,19 +468,9 @@ int CDirStripe::encode_stripestat(bufferlist &bl, Session *session,
   e.version = (fnode.version * 2) + is_projected();
 
   client_t client = session->get_client();
-  bool plink = linklock.is_xlocked_by_client(client) || get_loner() == client;
-  fnode_t *f = plink ? get_projected_fnode() : &fnode;
-
-  e.nfiles = f->fragstat.nfiles;
-  e.nsubdirs = f->fragstat.nsubdirs;
-  f->fragstat.mtime.encode_timeval(&e.mtime);
-
-  e.rbytes = f->rstat.rbytes;
-  e.rfiles = f->rstat.rfiles;
-  e.rsubdirs = f->rstat.rsubdirs;
-  f->rstat.rctime.encode_timeval(&e.rctime);
 
   // caps
+  Capability *cap = NULL;
   if (snapid != CEPH_NOSNAP) {
     e.cap.caps = is_auth() ? get_caps_allowed_by_type(CAP_ANY) : CEPH_CAP_PIN;
     if (last == CEPH_NOSNAP || is_any_caps())
@@ -489,7 +479,7 @@ int CDirStripe::encode_stripestat(bufferlist &bl, Session *session,
     e.cap.mseq = 0;
     e.cap.realm = 0;
   } else {
-    Capability *cap = get_client_cap(client);
+    cap = get_client_cap(client);
     if (!cap) {
       cap = add_client_cap(client, session, containing_realm);
       if (is_auth()) {
@@ -516,8 +506,24 @@ int CDirStripe::encode_stripestat(bufferlist &bl, Session *session,
     e.cap.realm = MDS_INO_ROOT;
   }
   e.cap.flags = is_auth() ? CEPH_CAP_FLAG_AUTH:0;
+
+  bool plink = linklock.is_xlocked_by_client(client) || get_loner() == client ||
+      (cap && cap->is_suppress());
+  fnode_t *f = plink ? get_projected_fnode() : &fnode;
+
+  e.nfiles = f->fragstat.nfiles;
+  e.nsubdirs = f->fragstat.nsubdirs;
+  f->fragstat.mtime.encode_timeval(&e.mtime);
+
+  e.rbytes = f->rstat.rbytes;
+  e.rfiles = f->rstat.rfiles;
+  e.rsubdirs = f->rstat.rsubdirs;
+  f->rstat.rctime.encode_timeval(&e.rctime);
+
   dout(10) << "encode_stripestat caps " << ccap_string(e.cap.caps)
-      << " seq " << e.cap.seq << " mseq " << e.cap.mseq << dendl;
+      << " seq " << e.cap.seq << " mseq " << e.cap.mseq
+      << " projected=" << plink << ' ' << f->fragstat << ' ' << f->rstat
+      << dendl;
   ::encode(e, bl);
   return 1;
 }
