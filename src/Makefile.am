@@ -165,9 +165,9 @@ cephfs_SOURCES = cephfs.cc
 cephfs_LDADD = libcommon.la
 bin_PROGRAMS += cephfs
 
-#librados_config_SOURCES = librados-config.cc
-#librados_config_LDADD = librados.la $(LIBGLOBAL_LDA)
-#bin_PROGRAMS += librados-config
+librados_config_SOURCES = librados-config.cc
+librados_config_LDADD = librados.la $(LIBGLOBAL_LDA)
+bin_PROGRAMS += librados-config
 
 # synthetic client
 ceph_syn_SOURCES = ceph_syn.cc client/SyntheticClient.cc
@@ -189,10 +189,10 @@ ceph_fuse_LDADD = -lfuse libclient.la $(LIBGLOBAL_LDA)
 ceph_fuse_CXXFLAGS = ${AM_CXXFLAGS}
 bin_PROGRAMS += ceph-fuse
 
-#rbd_fuse_SOURCES = rbd_fuse/rbd-fuse.c
-#rbd_fuse_LDADD = -lfuse librados.la librbd.la $(LIBGLOBAL_LDA)
-#rbd_fuse_CXXFLAGS = ${AM_CXXFLAGS}
-#bin_PROGRAMS += rbd-fuse
+rbd_fuse_SOURCES = rbd_fuse/rbd-fuse.c
+rbd_fuse_LDADD = -lfuse librados.la librbd.la $(LIBGLOBAL_LDA)
+rbd_fuse_CXXFLAGS = ${AM_CXXFLAGS}
+bin_PROGRAMS += rbd-fuse
 
 endif
 
@@ -346,21 +346,21 @@ ceph_test_signal_handlers_LDADD = $(LIBGLOBAL_LDA)
 bin_DEBUGPROGRAMS += ceph_test_signal_handlers
 
 # librados
-#librados_SOURCES = \
-#	librados/librados.cc \
-#	librados/RadosClient.cc \
-#	librados/IoCtxImpl.cc \
-#	osdc/Objecter.cc \
-#	osdc/Striper.cc \
-#	cls/lock/cls_lock_client.cc \
-#	cls/lock/cls_lock_types.cc \
-#	cls/lock/cls_lock_ops.cc
-#librados_la_SOURCES = ${librados_SOURCES}
-#librados_la_CFLAGS = ${CRYPTO_CFLAGS} ${AM_CFLAGS}
-#librados_la_CXXFLAGS = ${AM_CXXFLAGS}
-#librados_la_LIBADD = libcommon.la $(PTHREAD_LIBS) $(CRYPTO_LIBS) $(EXTRALIBS)
-#librados_la_LDFLAGS = ${AM_LDFLAGS} -version-info 2:0:0 -export-symbols-regex '^rados_.*'
-#lib_LTLIBRARIES += librados.la
+librados_SOURCES = \
+	librados/librados.cc \
+	librados/RadosClient.cc \
+	librados/IoCtxImpl.cc \
+	osdc/Objecter.cc \
+	osdc/Striper.cc \
+	cls/lock/cls_lock_client.cc \
+	cls/lock/cls_lock_types.cc \
+	cls/lock/cls_lock_ops.cc
+librados_la_SOURCES = ${librados_SOURCES}
+librados_la_CFLAGS = ${CRYPTO_CFLAGS} ${AM_CFLAGS}
+librados_la_CXXFLAGS = ${AM_CXXFLAGS}
+librados_la_LIBADD = libcommon.la $(PTHREAD_LIBS) $(CRYPTO_LIBS) $(EXTRALIBS)
+librados_la_LDFLAGS = ${AM_LDFLAGS} -version-info 2:0:0 -export-symbols-regex '^rados_.*'
+lib_LTLIBRARIES += librados.la
 
 if WITH_RADOSGW
 
@@ -434,32 +434,32 @@ bin_DEBUGPROGRAMS += ceph_rgw_jsonparser
 endif
 
 # librbd
-#librbd_la_SOURCES = \
-#	librbd/librbd.cc \
-#	librbd/AioCompletion.cc \
-#	librbd/AioRequest.cc \
-#	cls/rbd/cls_rbd_client.cc \
-#	librbd/ImageCtx.cc \
-#	librbd/internal.cc \
-#	librbd/LibrbdWriteback.cc \
-#	librbd/WatchCtx.cc \
-#	osdc/ObjectCacher.cc \
-#	osdc/Striper.cc \
-#	librados/snap_set_diff.cc \
-#	cls/lock/cls_lock_client.cc \
-#	cls/lock/cls_lock_types.cc \
-#	cls/lock/cls_lock_ops.cc \
-#	common/util.cc
-#librbd_la_CFLAGS = ${AM_CFLAGS} ${CRYPTO_CFLAGS}
-#librbd_la_CXXFLAGS = ${AM_CXXFLAGS}
-#librbd_la_LIBADD = librados.la
-#librbd_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 \
+librbd_la_SOURCES = \
+	librbd/librbd.cc \
+	librbd/AioCompletion.cc \
+	librbd/AioRequest.cc \
+	cls/rbd/cls_rbd_client.cc \
+	librbd/ImageCtx.cc \
+	librbd/internal.cc \
+	librbd/LibrbdWriteback.cc \
+	librbd/WatchCtx.cc \
+	osdc/ObjectCacher.cc \
+	osdc/Striper.cc \
+	librados/snap_set_diff.cc \
+	cls/lock/cls_lock_client.cc \
+	cls/lock/cls_lock_types.cc \
+	cls/lock/cls_lock_ops.cc \
+	common/util.cc
+librbd_la_CFLAGS = ${AM_CFLAGS} ${CRYPTO_CFLAGS}
+librbd_la_CXXFLAGS = ${AM_CXXFLAGS}
+librbd_la_LIBADD = librados.la
+librbd_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 \
 	-export-symbols-regex '^rbd_.*' $(PTHREAD_LIBS) $(EXTRALIBS) 
-#lib_LTLIBRARIES += librbd.la
+lib_LTLIBRARIES += librbd.la
 
-#rados_SOURCES = rados.cc rados_import.cc rados_export.cc rados_sync.cc common/obj_bencher.cc
-#rados_LDADD = libcls_lock_client.a librados.la $(LIBGLOBAL_LDA)
-#bin_PROGRAMS += rados
+rados_SOURCES = rados.cc rados_import.cc rados_export.cc rados_sync.cc common/obj_bencher.cc
+rados_LDADD = libcls_lock_client.a librados.la $(LIBGLOBAL_LDA)
+bin_PROGRAMS += rados
 
 if WITH_REST_BENCH
 
@@ -486,12 +486,12 @@ ceph_radosacl_SOURCES = radosacl.cc
 ceph_radosacl_LDADD = librados.la $(PTHREAD_LIBS) -lm $(CRYPTO_LIBS) $(EXTRALIBS)
 bin_DEBUGPROGRAMS += ceph_scratchtool ceph_scratchtoolpp ceph_radosacl
 
-#rbd_SOURCES = rbd.cc common/fiemap.cc common/secret.c common/TextTable.cc common/util.cc
-#rbd_CXXFLAGS = ${AM_CXXFLAGS}
-#rbd_LDADD = librbd.la librados.la $(LIBGLOBAL_LDA) -lkeyutils
-#if LINUX
-#bin_PROGRAMS += rbd
-#endif
+rbd_SOURCES = rbd.cc common/fiemap.cc common/secret.c common/TextTable.cc common/util.cc
+rbd_CXXFLAGS = ${AM_CXXFLAGS}
+rbd_LDADD = librbd.la librados.la $(LIBGLOBAL_LDA) -lkeyutils
+if LINUX
+bin_PROGRAMS += rbd
+endif
 
 
 ceph_test_crypto_SOURCES = testcrypto.cc
@@ -514,45 +514,45 @@ endif
 ## rados object classes
 
 # rbd: rados block device class
-#libcls_rbd_la_SOURCES = cls/rbd/cls_rbd.cc
-#libcls_rbd_la_CFLAGS = ${AM_CFLAGS}
-#libcls_rbd_la_CXXFLAGS= ${AM_CXXFLAGS}
-#libcls_rbd_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
-#libcls_rbd_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
+libcls_rbd_la_SOURCES = cls/rbd/cls_rbd.cc
+libcls_rbd_la_CFLAGS = ${AM_CFLAGS}
+libcls_rbd_la_CXXFLAGS= ${AM_CXXFLAGS}
+libcls_rbd_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
+libcls_rbd_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
 
-#radoslibdir = $(libdir)/rados-classes
-#radoslib_LTLIBRARIES = libcls_rbd.la
+radoslibdir = $(libdir)/rados-classes
+radoslib_LTLIBRARIES = libcls_rbd.la
 
 
 # lock class
-#libcls_lock_la_SOURCES = cls/lock/cls_lock.cc
-#libcls_lock_la_CFLAGS = ${AM_CFLAGS}
-#libcls_lock_la_CXXFLAGS= ${AM_CXXFLAGS}
-#libcls_lock_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
-#libcls_lock_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
+libcls_lock_la_SOURCES = cls/lock/cls_lock.cc
+libcls_lock_la_CFLAGS = ${AM_CFLAGS}
+libcls_lock_la_CXXFLAGS= ${AM_CXXFLAGS}
+libcls_lock_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
+libcls_lock_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
 
-#radoslib_LTLIBRARIES += libcls_lock.la
+radoslib_LTLIBRARIES += libcls_lock.la
 
 # refcount class
-#libcls_refcount_la_SOURCES = cls/refcount/cls_refcount.cc
-#libcls_refcount_la_CFLAGS = ${AM_CFLAGS}
-#libcls_refcount_la_CXXFLAGS= ${AM_CXXFLAGS}
-#libcls_refcount_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
-#libcls_refcount_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
+libcls_refcount_la_SOURCES = cls/refcount/cls_refcount.cc
+libcls_refcount_la_CFLAGS = ${AM_CFLAGS}
+libcls_refcount_la_CXXFLAGS= ${AM_CXXFLAGS}
+libcls_refcount_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
+libcls_refcount_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
 
-#radoslib_LTLIBRARIES += libcls_refcount.la
+radoslib_LTLIBRARIES += libcls_refcount.la
 
 
-#if WITH_RADOSGW
+if WITH_RADOSGW
 # rgw: rados gateway
-#libcls_rgw_la_SOURCES = cls/rgw/cls_rgw.cc
-#libcls_rgw_la_CFLAGS = ${AM_CFLAGS}
-#libcls_rgw_la_CXXFLAGS= ${AM_CXXFLAGS}
-#libcls_rgw_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
-#libcls_rgw_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
+libcls_rgw_la_SOURCES = cls/rgw/cls_rgw.cc
+libcls_rgw_la_CFLAGS = ${AM_CFLAGS}
+libcls_rgw_la_CXXFLAGS= ${AM_CXXFLAGS}
+libcls_rgw_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
+libcls_rgw_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
 
-#radoslib_LTLIBRARIES += libcls_rgw.la
-#endif
+radoslib_LTLIBRARIES += libcls_rgw.la
+endif
 
 libcls_lock_client_a_SOURCES =  \
 	cls/lock/cls_lock_client.cc  \
@@ -601,13 +601,13 @@ endif
 ## key_value_store classes
 
 # key_value_store: key value store class
-#libcls_kvs_la_SOURCES = key_value_store/cls_kvs.cc
-#libcls_kvs_la_CFLAGS = ${AM_CFLAGS}
-#libcls_kvs_la_CXXFLAGS= ${AM_CXXFLAGS}
-#libcls_kvs_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
-#libcls_kvs_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
+libcls_kvs_la_SOURCES = key_value_store/cls_kvs.cc
+libcls_kvs_la_CFLAGS = ${AM_CFLAGS}
+libcls_kvs_la_CXXFLAGS= ${AM_CXXFLAGS}
+libcls_kvs_la_LIBADD = $(PTHREAD_LIBS) $(EXTRALIBS)
+libcls_kvs_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '.*__cls_.*'
 
-#radoslib_LTLIBRARIES += libcls_kvs.la
+radoslib_LTLIBRARIES += libcls_kvs.la
 
 ## System tests
 libsystest_la_SOURCES = \
