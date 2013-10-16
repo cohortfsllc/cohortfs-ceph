@@ -1318,7 +1318,7 @@ class C_Dir_Committed : public Context {
   CDirFrag *dir;
   version_t version;
 public:
-  C_Dir_Committed(CDirFrag *d, version_t v) : dir(d), version(v) { }
+  C_Dir_Committed(CDirFrag *d, version_t v) : dir(d), version(v) {}
   void finish(int r) {
     dir->_committed(version);
   }

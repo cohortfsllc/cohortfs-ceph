@@ -240,8 +240,6 @@ void MDCache::remove_inode(CInode *o)
 
   if (o->is_dirty())
     o->mark_clean();
-  if (o->is_dirty_parent())
-    o->clear_dirty_parent();
 
   o->filelock.remove_dirty();
   o->nestlock.remove_dirty();

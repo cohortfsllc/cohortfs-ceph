@@ -44,7 +44,6 @@ class LogSegment {
   elist<CDentry*> dirty_dentries;
 
   elist<CInode*>  open_files;
-  elist<CInode*>  dirty_parent_inodes;
 
   elist<MDSlaveUpdate*> slave_updates;
   
@@ -75,7 +74,6 @@ class LogSegment {
     dirty_inodes(member_offset(CInode, item_dirty)),
     dirty_dentries(member_offset(CDentry, item_dirty)),
     open_files(member_offset(CInode, item_open_file)),
-    dirty_parent_inodes(member_offset(CInode, item_dirty_parent)),
     slave_updates(0), // passed to begin() manually
     inotablev(0), sessionmapv(0)
   { }

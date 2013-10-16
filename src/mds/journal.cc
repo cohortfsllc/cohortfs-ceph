@@ -199,21 +199,6 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
 
   assert(g_conf->mds_kill_journal_expire_at != 3);
 
-  // backtraces to be stored/updated
-  for (elist<CInode*>::iterator p = dirty_parent_inodes.begin(); !p.end(); ++p) {
-    CInode *in = *p;
-    assert(in->is_auth());
-    if (in->can_auth_pin()) {
-      dout(15) << "try_to_expire waiting for storing backtrace on " << *in << dendl;
-      in->store_backtrace(gather_bld.new_sub());
-    } else {
-      dout(15) << "try_to_expire waiting for unfreeze on " << *in << dendl;
-      in->add_waiter(CInode::WAIT_UNFREEZE, gather_bld.new_sub());
-    }
-  }
-
-  assert(g_conf->mds_kill_journal_expire_at != 4);
-
   // slave updates
   for (elist<MDSlaveUpdate*>::iterator p = slave_updates.begin(member_offset(MDSlaveUpdate,
 									     item));

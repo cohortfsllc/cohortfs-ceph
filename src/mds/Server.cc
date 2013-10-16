@@ -2497,7 +2497,6 @@ public:
 
     // dirty inode, dn, dir
     newi->mark_dirty(mdr->ls);
-    newi->_mark_dirty_parent(mdr->ls);
 
     mdr->apply();
 
@@ -3847,7 +3846,6 @@ public:
     // link the inode
     dn->pop_projected_linkage();
     inodn->pop_projected_linkage();
-    newi->_mark_dirty_parent(mdr->ls);
 
     newi->mark_dirty(mdr->ls);
 

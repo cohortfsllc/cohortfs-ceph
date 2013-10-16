@@ -110,7 +110,6 @@ public:
   static const int PIN_NEEDSNAPFLUSH =    20;
   static const int PIN_DIRTYRSTAT =       21; // has unaccounted rstat
   static const int PIN_EXPORTINGCAPS =    22;
-  static const int PIN_DIRTYPARENT =      23;
 
   const char *pin_name(int p) {
     switch (p) {
@@ -134,7 +133,6 @@ public:
     case PIN_STRAY: return "stray";
     case PIN_NEEDSNAPFLUSH: return "needsnapflush";
     case PIN_DIRTYRSTAT: return "dirtyrstat";
-    case PIN_DIRTYPARENT: return "dirtyparent";
     default: return generic_pin_name(p);
     }
   }
@@ -151,16 +149,14 @@ public:
   static const int STATE_NEEDSRECOVER = (1<<11);
   static const int STATE_RECOVERING =   (1<<12);
   static const int STATE_PURGING =     (1<<13);
-  static const int STATE_DIRTYPARENT =  (1<<14);
   static const int STATE_DIRTYRSTAT =  (1<<15);
   static const int STATE_STRAYPINNED = (1<<16);
   static const int STATE_FROZENAUTHPIN = (1<<17);
-  static const int STATE_DIRTYPOOL =   (1<<18);
   // orphan inode needs notification of releasing reference
   static const int STATE_ORPHAN =	STATE_NOTIFYREF;
 
   static const int MASK_STATE_EXPORTED =
-    (STATE_DIRTY|STATE_NEEDSRECOVER|STATE_DIRTYPARENT|STATE_DIRTYPOOL);
+    (STATE_DIRTY|STATE_NEEDSRECOVER);
   static const int MASK_STATE_EXPORT_KEPT =
     (STATE_FROZEN|STATE_AMBIGUOUSAUTH|STATE_EXPORTINGCAPS);
 
@@ -321,7 +317,6 @@ protected:
 public:
   elist<CInode*>::item item_dirty;
   elist<CInode*>::item item_open_file;
-  elist<CInode*>::item item_dirty_parent;
   elist<CInode*>::item item_dirty_rstat;
   elist<CInode*>::item item_stray;
 
@@ -415,14 +410,6 @@ public:
   void _stored(version_t cv, Context *fin);
   void fetch(Context *fin);
   void _fetched(bufferlist& bl, bufferlist& bl2, Context *fin);  
-
-  void build_backtrace(int64_t pool, inode_backtrace_t& bt);
-  void store_backtrace(Context *fin);
-  void _stored_backtrace(version_t v, Context *fin);
-  void _mark_dirty_parent(LogSegment *ls, bool dirty_pool=false);
-  void clear_dirty_parent();
-  bool is_dirty_parent() { return state_test(STATE_DIRTYPARENT); }
-  bool is_dirty_pool() { return state_test(STATE_DIRTYPOOL); }
 
   void encode_store(bufferlist& bl);
   void decode_store(bufferlist::iterator& bl);
