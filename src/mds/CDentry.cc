@@ -45,11 +45,13 @@ LockType CDentry::lock_type(CEPH_LOCK_DN);
 
 ostream& operator<<(ostream& out, CDentry& dn)
 {
-  filepath path;
-  dn.make_path(path);
-  
-  out << "[dentry " << path;
-  
+  out << "[dentry ";
+  if (dn.get_dir())
+    out << dn.get_dir()->dirfrag();
+  else
+    out << "???";
+  out << '/' << dn.get_name();
+
   if (true || dn.first != 0 || dn.last != CEPH_NOSNAP) {
     out << " [" << dn.first << ",";
     if (dn.last == CEPH_NOSNAP) 
@@ -209,27 +211,6 @@ CDirStripe* CDentry::get_stripe() const
 inoparent_t CDentry::inoparent()
 {
   return inoparent_t(get_stripe()->dirstripe(), authority().first, get_name());
-}
-
-void CDentry::make_path_string(string& s)
-{
-  if (dir) {
-    char n[40];
-    uint64_t eino(dir->ino());
-    snprintf(n, sizeof(n), "#%" PRIx64, eino);
-    s += n;
-  } else {
-    s = "???";
-  }
-  s += "/";
-  s.append(name.begin(), name.end());
-}
-
-void CDentry::make_path(filepath& fp)
-{
-  assert(dir);
-  fp = filepath(dir->ino());
-  fp.push_dentry(name);
 }
 
 

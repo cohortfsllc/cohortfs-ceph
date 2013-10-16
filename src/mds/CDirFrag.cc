@@ -50,10 +50,7 @@ boost::pool<> CDirFrag::pool(sizeof(CDirFrag));
 
 ostream& operator<<(ostream& out, CDirFrag& dir)
 {
-  string path;
-  dir.get_inode()->make_path_string_projected(path);
-  out << "[frag " << dir.dirfrag() << " " << path << "/"
-      << " [" << dir.first << ",head]";
+  out << "[frag " << dir.dirfrag() << "/ [" << dir.first << ",head]";
   if (dir.is_auth()) {
     out << " auth";
     if (dir.is_replicated())
@@ -1179,41 +1176,38 @@ void CDirFrag::_fetched(bufferlist &bl, const string& want_dn)
       } else {
 	// add inode
 	CInode *in = cache->get_inode(inode.ino, last);
-	if (!in) {
-          in = new CInode(cache, cache->mds->get_nodeid(), first, last);
-	  in->inode = inode;
-	  // symlink?
-	  if (in->is_symlink()) 
-	    in->symlink = symlink;
-          if (in->is_dir())
-            in->set_stripe_auth(stripe_auth);
-
-	  in->xattrs.swap(xattrs);
-	  in->old_inodes.swap(old_inodes);
-	  if (snaps)
-	    in->purge_stale_snap_data(*snaps);
-
-          cache->add_inode(in); // add
-          dn = add_primary_dentry(dname, in, first, last); // link
-	  dout(12) << "_fetched  got " << *dn << " " << *in << dendl;
-
-	  //in->hack_accessed = false;
-	  //in->hack_load_stamp = ceph_clock_now(g_ceph_context);
-	  //num_new_inodes_loaded++;
-	} else {
+	if (in) {
 	  dout(0) << "_fetched  badness: got (but i already had) " << *in
 		  << " mode " << in->inode.mode
 		  << " mtime " << in->inode.mtime << dendl;
-	  string dirpath, inopath;
-	  get_inode()->make_path_string(dirpath);
-	  in->make_path_string(inopath);
 	  clog.error() << "loaded dup inode " << inode.ino
 	    << " [" << first << "," << last << "] v" << inode.version
-	    << " at " << dirpath << "/" << dname
+	    << " at " << stripe->dirstripe() << "/" << dname
 	    << ", but inode " << in->vino() << " v" << in->inode.version
-	    << " already exists at " << inopath << "\n";
+	    << " already exists\n";
 	  continue;
 	}
+        // inode
+        in = new CInode(cache, cache->mds->get_nodeid(), first, last);
+        in->inode = inode;
+        // symlink?
+        if (in->is_symlink()) 
+          in->symlink = symlink;
+        if (in->is_dir())
+          in->set_stripe_auth(stripe_auth);
+
+        in->xattrs.swap(xattrs);
+        in->old_inodes.swap(old_inodes);
+        if (snaps)
+          in->purge_stale_snap_data(*snaps);
+
+        cache->add_inode(in); // add
+        dn = add_primary_dentry(dname, in, first, last); // link
+        dout(12) << "_fetched  got " << *dn << " " << *in << dendl;
+
+        //in->hack_accessed = false;
+        //in->hack_load_stamp = ceph_clock_now(g_ceph_context);
+        //num_new_inodes_loaded++;
       }
     } else {
       dout(1) << "corrupt directory, i got tag char '" << type << "' val " << (int)(type)

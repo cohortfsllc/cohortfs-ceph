@@ -61,9 +61,7 @@ ostream& CDirStripe::print_db_line_prefix(ostream& out)
 
 void CDirStripe::print(ostream& out)
 {
-  string path;
-  get_inode()->make_path_string_projected(path);
-  out << "[stripe " << dirstripe() << " " << path << "/";
+  out << "[stripe " << dirstripe();
 
   if (is_auth()) {
     out << " auth";
