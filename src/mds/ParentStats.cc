@@ -125,25 +125,27 @@ class C_PS_StripeNest : public Context {
   }
 };
 
-class C_PS_InodeAmbig : public Context {
+class C_PS_PlacementAmbig : public Context {
  private:
   MDS *mds;
-  CInode *in;
+  CDirPlacement *placement;
   Mutation *mut;
   const inode_stat_update_t iupdate;
  public:
-  C_PS_InodeAmbig(MDS *mds, CInode *in, Mutation *mut,
-                  const inode_stat_update_t &iupdate)
-      : mds(mds), in(in), mut(mut), iupdate(iupdate) {}
-  ~C_PS_InodeAmbig() { delete mut; }
+  C_PS_PlacementAmbig(MDS *mds, CDirPlacement *placement, Mutation *mut,
+                      const inode_stat_update_t &iupdate)
+      : mds(mds), placement(placement), mut(mut), iupdate(iupdate) {}
+  ~C_PS_PlacementAmbig() { delete mut; }
   void finish(int r) {
-    assert(!in->is_ambiguous_auth());
+    assert(!placement->is_ambiguous_auth());
     ParentStats &ps = mds->mdcache->parentstats;
-    if (!in->is_auth()) {
-      int who = in->authority().first;
+    if (!placement->is_auth()) {
+      int who = placement->authority().first;
       dout(10) << "forwarding to parent auth mds." << who << dendl;
-      ps.stats_for_mds(who)->add_inode(in->ino(), iupdate);
+      ps.stats_for_mds(who)->add_inode(placement->ino(), iupdate);
     } else {
+      CInode *in = mds->mdcache->get_inode(placement->ino());
+      assert(in && in->is_auth());
       ParentStats::Projected projected;
       EUpdate *le = new EUpdate(mds->mdlog, "parent_stats");
       ps.update_inode(in, projected, mut, &le->metablob, iupdate);
@@ -327,8 +329,8 @@ CInode* ParentStats::open_parent_inode(CDirStripe *stripe,
     // retry on single auth
     Mutation *newmut = new Mutation(mut->reqid, mut->attempt);
     placement->add_waiter(CDirPlacement::WAIT_SINGLEAUTH,
-                          new C_PS_InodeAmbig(mds, placement->get_inode(),
-                                              newmut, update));
+                          new C_PS_PlacementAmbig(mds, placement,
+                                                  newmut, update));
     dout(10) << "waiting on single auth for " << *placement << dendl;
     return NULL;
   }
