@@ -103,7 +103,7 @@ class ParentStats {
 
   friend class C_PS_StripeFrag;
   friend class C_PS_StripeNest;
-  friend class C_PS_InodeAmbig;
+  friend class C_PS_PlacementAmbig;
   friend class C_PS_InodeFrag;
   friend class C_PS_InodeNest;
 
