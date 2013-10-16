@@ -37,8 +37,6 @@ class CapObject : public MDSCacheObject {
  public:
   MDCache *mdcache;
 
-  int base_caps_allowed;
-
   map<client_t, Capability*> client_caps; // client -> caps
   map<int, int> mds_caps_wanted; // [auth] mds -> caps wanted
   int replica_caps_wanted; // [replica] what i've requested from auth
@@ -119,6 +117,7 @@ class CapObject : public MDSCacheObject {
   // caps allowed
   virtual int get_caps_liked() = 0;
   virtual int get_caps_allowed_ever();
+  virtual void wanted_caps_adjusted(Capability *cap) {}
 
   int get_caps_allowed_by_type(int type);
   int get_caps_careful();
