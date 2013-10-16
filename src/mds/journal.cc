@@ -442,6 +442,12 @@ void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
 void EMetaBlob::Placement::apply(MDS *mds, CDirPlacement *placement,
                                  LogSegment *ls)
 {
+  placement->set_inode_auth(inode_auth);
+  if (inode_auth == mds->get_nodeid())
+    placement->state_set(CDirPlacement::STATE_AUTH);
+  else
+    placement->state_clear(CDirPlacement::STATE_AUTH);
+
   placement->set_stripe_auth(stripe_auth);
   placement->set_layout(layout);
   dout(10) << "EMetaBlob updated placement " << *placement << dendl;
@@ -486,7 +492,13 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   for (placement_map::iterator p = dirs.begin(); p != dirs.end(); ++p) {
     // open the placement object
     CDirPlacement *placement = mds->mdcache->get_dir_placement(p->first);
-    assert(placement);
+    if (!placement) {
+      placement = new CDirPlacement(mds->mdcache, p->first,
+                                    p->second.get_inode_auth(),
+                                    p->second.get_stripe_auth());
+      mds->mdcache->add_dir_placement(placement);
+      dout(10) << "EMetaBlob.replay added " << *placement << dendl;
+    }
     p->second.apply(mds, placement, logseg);
   }
 

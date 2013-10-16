@@ -29,7 +29,7 @@
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
-#define dout_prefix *_dout << "mds." << mdcache->mds->get_nodeid() << ".cache.dir(" << this->ino() << ") "
+#define dout_prefix *_dout << "mds." << mdcache->mds->get_nodeid() << ".cache.dir(" << get_ino() << ") "
 
 
 
@@ -39,7 +39,7 @@ boost::pool<> CDirPlacement::pool(sizeof(CDirPlacement));
 ostream& operator<<(ostream& out, CDirPlacement& dir)
 {
   string path;
-  out << "[dir " << dir.ino();
+  out << "[dir " << dir.get_ino();
   if (dir.is_auth()) {
     out << " auth";
     if (dir.is_replicated())
@@ -75,37 +75,27 @@ void CDirPlacement::print(ostream& out)
 
 ostream& CDirPlacement::print_db_line_prefix(ostream& out) 
 {
-  return out << ceph_clock_now(g_ceph_context) << " mds." << mdcache->mds->get_nodeid() << ".cache.dir(" << this->ino() << ") ";
+  return out << ceph_clock_now(g_ceph_context) << " mds." << mdcache->mds->get_nodeid() << ".cache.dir(" << get_ino() << ") ";
 }
 
 
 // constructor
 
-CDirPlacement::CDirPlacement(MDCache *mdcache, CInode *inode,
+CDirPlacement::CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
                              const vector<int> &stripe_auth)
   : mdcache(mdcache),
-    inode(inode),
+    ino(ino),
+    inode_auth(inode_auth, CDIR_AUTH_UNKNOWN),
     version(0),
     stripe_auth(stripe_auth),
     auth_pins(0)
 {
-  if (inode->is_auth())
+  if (inode_auth == mdcache->mds->get_nodeid())
     state_set(STATE_AUTH);
 
   memset(&layout, 0, sizeof(layout));
   layout.dl_dir_hash = g_conf->mds_default_dir_hash;
 }
-
-inodeno_t CDirPlacement::ino() const
-{
-  return inode->ino();
-}
-
-pair<int,int> CDirPlacement::authority()
-{
-  return inode->authority();
-}
-
 
 __u32 CDirPlacement::hash_dentry_name(const string &dn)
 { 
@@ -216,16 +206,6 @@ void CDirPlacement::take_stripe_waiting(stripeid_t stripeid, list<Context*>& ls)
 
 
 // pins
-
-void CDirPlacement::first_get()
-{
-  inode->get(CInode::PIN_PLACEMENT);
-}
-
-void CDirPlacement::last_put()
-{
-  inode->put(CInode::PIN_PLACEMENT);
-}
 
 void CDirPlacement::auth_pin(void *by) 
 {

@@ -59,6 +59,11 @@ struct C_IC_ReOpen : public Context {
   }
 };
 
+bool InodeContainer::is_open()
+{
+  return in && in->get_placement();
+}
+
 void InodeContainer::open(Context *c)
 {
   MDS *mds = mdcache->mds;
@@ -71,7 +76,7 @@ void InodeContainer::open(Context *c)
     mdcache->discover_ino(MDS_INO_CONTAINER, new C_IC_ReOpen(this, c), root);
   } else if (!in->get_placement()) {
     dout(7) << "open discovering placement" << dendl;
-    mdcache->discover_dir_placement(in, c, root);
+    mdcache->discover_dir_placement(MDS_INO_CONTAINER, c, root);
   } else {
     dout(7) << "open has placement " << *in->get_placement() << dendl;
     c->complete(0);

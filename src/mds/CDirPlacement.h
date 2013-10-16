@@ -56,10 +56,12 @@ class CDirPlacement : public MDSCacheObject {
 
  public:
   // -- pins --
-  static const int PIN_STRIPE =         -1;
-  static const int PIN_STRIPEWAITER =   2;
+  static const int PIN_INODE =          1;
+  static const int PIN_STRIPE =        -2;
+  static const int PIN_STRIPEWAITER =   3;
   const char *pin_name(int p) {
     switch (p) {
+      case PIN_INODE: return "inode";
       case PIN_STRIPE: return "stripe";
       case PIN_STRIPEWAITER: return "stripewaiter";
       default: return generic_pin_name(p);
@@ -77,27 +79,27 @@ class CDirPlacement : public MDSCacheObject {
  public:
   MDCache *mdcache;
 
-  CDirPlacement(MDCache *mdcache, CInode *inode,
+  CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
                 const vector<int> &stripe_auth);
   virtual ~CDirPlacement() {}
 
   bool is_lt(const MDSCacheObject *r) const {
-    return ino() < ((const CDirPlacement*)r)->ino();
+    return get_ino() < ((const CDirPlacement*)r)->get_ino();
   }
 
   bool is_freezing() { return state_test(STATE_FREEZING); }
   bool is_frozen() { return state_test(STATE_FROZEN); }
 
  private:
-  CInode *inode;
+  inodeno_t ino;
+  pair<int,int> inode_auth;
   version_t version;
 
  public:
-  CInode* get_inode() { return inode; } // TODO: deprecate
-  inodeno_t ino() const;
-
-  pair<int,int> authority();
-
+  inodeno_t get_ino() const { return ino; }
+  void set_inode_auth(int auth) { inode_auth.first = auth; }
+  void set_inode_auth(const pair<int,int> &auth) { inode_auth = auth; }
+  pair<int,int> authority() { return inode_auth; }
   void set_version(version_t v) { version = v; }
   version_t get_version() const { return version; }
 
@@ -160,9 +162,6 @@ class CDirPlacement : public MDSCacheObject {
 #endif
 
  public:
-  void first_get();
-  void last_put();
-
   bool can_auth_pin() { return is_auth() && !is_freezing_or_frozen(); }
   void auth_pin(void *who);
   void auth_unpin(void *who);

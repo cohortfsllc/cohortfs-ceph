@@ -1730,21 +1730,6 @@ void CDirFrag::decode_import(bufferlist::iterator& blp, utime_t now)
 }
 
 
-/** contains(x)
- * true if we are x, or an ancestor of x
- */
-bool CDirFrag::contains(CDirFrag *x)
-{
-  while (1) {
-    if (x == this)
-      return true;
-    x = x->get_inode()->get_projected_parent_dir();
-    if (x == 0)
-      return false;    
-  }
-}
-
-
 /*****************************************
  * AUTH PINS and FREEZING
  *

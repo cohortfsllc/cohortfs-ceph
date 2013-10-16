@@ -121,7 +121,6 @@ public:
 
  public:
   // -- pins --
-  static const int PIN_PLACEMENT =        1; 
   static const int PIN_IMPORTING =       -4;  // importing
   static const int PIN_ANCHORING =        5;
   static const int PIN_UNANCHORING =      6;
@@ -144,7 +143,6 @@ public:
 
   const char *pin_name(int p) {
     switch (p) {
-    case PIN_PLACEMENT: return "placement";
     case PIN_IMPORTING: return "importing";
     case PIN_ANCHORING: return "anchoring";
     case PIN_UNANCHORING: return "unanchoring";
@@ -185,7 +183,6 @@ public:
   static const int STATE_FROZENAUTHPIN = (1<<17);
 
   // -- waiters --
-  static const uint64_t WAIT_PLACEMENT   = (1<<0);
   static const uint64_t WAIT_ANCHORED    = (1<<1);
   static const uint64_t WAIT_UNANCHORED  = (1<<2);
   static const uint64_t WAIT_FROZEN      = (1<<3);
@@ -423,7 +420,6 @@ public:
   CDirFrag *get_projected_parent_dir();
   CDirStripe *get_parent_stripe();
   CDirStripe *get_projected_parent_stripe();
-  CInode *get_parent_inode();
   
   bool is_lt(const MDSCacheObject *r) const {
     CInode *o = (CInode*)r;
@@ -432,12 +428,8 @@ public:
   }
 
   // stripe placement
-  CDirPlacement* get_placement() { return placement; }
   void set_stripe_auth(const vector<int> &stripe_auth);
-  void close_placement();
-
-  // -- misc -- 
-  bool is_projected_ancestor_of(CInode *other);
+  CDirPlacement* get_placement();
 
 
   static object_t get_object_name(inodeno_t ino, frag_t fg, const char *suffix);

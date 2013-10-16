@@ -366,12 +366,16 @@ class EMetaBlob {
 
   class Placement {
    private:
+    int inode_auth;
     typedef map<stripeid_t, Stripe> stripe_map;
     stripe_map stripes;
     vector<int> stripe_auth;
     ceph_dir_layout layout;
 
    public:
+    void set_inode_auth(int auth) { inode_auth = auth; }
+    int get_inode_auth() const { return inode_auth; }
+
     stripe_map& get_stripes() { return stripes; }
 
     void set_stripe_auth(const vector<int> &auth) { stripe_auth = auth; }
@@ -381,11 +385,13 @@ class EMetaBlob {
     const ceph_dir_layout& get_layout() const { return layout; }
 
     void encode(bufferlist &bl) const {
+      ::encode(inode_auth, bl);
       ::encode(stripes, bl);
       ::encode(stripe_auth, bl);
       ::encode(layout, bl);
     }
     void decode(bufferlist::iterator &p) {
+      ::decode(inode_auth, p);
       ::decode(stripes, p);
       ::decode(stripe_auth, p);
       ::decode(layout, p);
@@ -624,13 +630,14 @@ class EMetaBlob {
   }
 
   Placement& add_placement(CDirPlacement *placement) {
-    add_inode(placement->get_inode());
-    return add_placement(placement->ino(), placement->get_stripe_auth(),
-                         placement->get_layout());
+    return add_placement(placement->get_ino(), placement->authority().first,
+                         placement->get_stripe_auth(), placement->get_layout());
   }
-  Placement& add_placement(inodeno_t ino, const vector<int> &stripe_auth,
+  Placement& add_placement(inodeno_t ino, int inode_auth,
+                           const vector<int> &stripe_auth,
                            const ceph_dir_layout &layout) {
     Placement &p = dirs[ino];
+    p.set_inode_auth(inode_auth);
     p.set_stripe_auth(stripe_auth);
     p.set_layout(layout);
     return p;

@@ -198,7 +198,6 @@ ostream& operator<<(ostream& out, CInode& in)
 
 CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
   : CapObject(c, f, l),
-    placement(NULL),
     inode_auth(auth, CDIR_AUTH_UNKNOWN),
     last_journaled(0),
     default_layout(NULL),
@@ -233,31 +232,32 @@ CInode::~CInode()
 {
   g_num_ino--;
   g_num_inos++;
-  close_placement();
 }
 
 void CInode::set_stripe_auth(const vector<int> &stripe_auth)
 {
   assert(is_dir());
-  if (placement) {
+  if (get_placement()) {
     placement->set_stripe_auth(stripe_auth);
     dout(10) << "set_stripe_auth existing " << *placement << dendl;
   } else {
-    placement = new CDirPlacement(mdcache, this, stripe_auth);
+    placement = new CDirPlacement(mdcache, ino(), authority().first,
+                                  stripe_auth);
     mdcache->add_dir_placement(placement);
     dout(10) << "set_stripe_auth created " << *placement << dendl;
   }
 }
 
-void CInode::close_placement()
+CDirPlacement* CInode::get_placement()
 {
-  if (placement) {
-    assert(placement->get_num_ref() == 0);
-    mdcache->remove_dir_placement(placement);
-    dout(10) << "close_placement " << *placement << dendl;
-    delete placement;
-    placement = NULL;
+  if (!placement) {
+    placement = mdcache->get_dir_placement(ino());
+    if (placement) {
+      placement->get(CDirPlacement::PIN_INODE);
+      dout(10) << "get_placement found cached " << *placement << dendl;
+    }
   }
+  return placement;
 }
 
 void CInode::add_need_snapflush(CInode *snapin, snapid_t snapid, client_t client)
@@ -441,24 +441,6 @@ CDirStripe* CInode::get_projected_parent_stripe()
 {
   CDirFrag *dir = get_projected_parent_dir();
   return dir ? dir->get_stripe() : NULL;
-}
-CInode *CInode::get_parent_inode() 
-{
-  if (parent) 
-    return parent->dir->get_inode();
-  return NULL;
-}
-
-bool CInode::is_projected_ancestor_of(CInode *other)
-{
-  while (other) {
-    if (other == this)
-      return true;
-    if (!other->get_projected_parent_dn())
-      break;
-    other = other->get_projected_parent_dn()->get_dir()->get_inode();
-  }
-  return false;
 }
 
 void CInode::_mark_dirty(LogSegment *ls)

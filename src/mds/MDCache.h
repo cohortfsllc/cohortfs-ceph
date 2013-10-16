@@ -94,6 +94,9 @@ class MDCache {
   typedef hash_map<inodeno_t,CDirPlacement*> dir_placement_map;
   dir_placement_map dirs;
 
+  typedef map<inodeno_t,list<Context*> > placement_wait_map;
+  placement_wait_map waiting_on_placement;
+
 public:
   ParentStats parentstats;
 
@@ -156,7 +159,7 @@ public:
   map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
 
   void discover_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
-  void discover_dir_placement(CInode *base, Context *onfinish, int from=-1);
+  void discover_dir_placement(inodeno_t ino, Context *onfinish, int from);
   void discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
                            Context *onfinish, int from=-1);
   void discover_dir_frag(CDirStripe *stripe, frag_t approx_fg, Context *onfinish,
@@ -488,7 +491,11 @@ public:
   void remove_inode(CInode *in);
 
   void add_dir_placement(CDirPlacement *placement);
-  void remove_dir_placement(CDirPlacement *placement);
+  void remove_dir_placement(inodeno_t ino);
+
+  bool is_placement_waiter(inodeno_t ino) const;
+  void add_placement_waiter(inodeno_t ino, Context *fin);
+  void take_placement_waiters(inodeno_t ino, list<Context*> &waiters);
 
  protected:
   void touch_inode(CInode *in) {
@@ -667,7 +674,7 @@ public:
 
 public:
   void replicate_placement(CDirPlacement *placement, int to, bufferlist& bl) {
-    inodeno_t ino = placement->ino();
+    inodeno_t ino = placement->get_ino();
     ::encode(ino, bl);
     placement->encode_replica(to, bl);
   }
@@ -692,8 +699,8 @@ public:
     in->encode_replica(to, bl);
   }
 
-  CDirPlacement* add_replica_placement(bufferlist::iterator& p, CInode *diri,
-                                       int from, list<Context*>& finished);
+  CDirPlacement* add_replica_placement(bufferlist::iterator& p, int from,
+                                       list<Context*>& finished);
   CDirPlacement* forge_replica_placement(CInode *diri, int from);
   CDirStripe* add_replica_stripe(bufferlist::iterator& p,
                                  CDirPlacement *placement,

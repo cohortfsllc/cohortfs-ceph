@@ -131,7 +131,6 @@ class CDirStripe : public CapObject {
 
 
   // -- accessors --
-  CInode* get_inode(); // TODO: deprecate
   CDirPlacement* get_placement() { return placement; }
   dirstripe_t dirstripe() const { return ds; }
   inodeno_t ino() const { return ds.ino; }

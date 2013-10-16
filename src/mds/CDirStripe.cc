@@ -123,6 +123,7 @@ void CDirStripe::print(ostream& out)
   if (state_test(CDirStripe::STATE_COMMITTING)) out << " COMMITTING";
   if (state_test(CDirStripe::STATE_UNLINKED)) out << " UNLINKED";
   if (state_test(CDirStripe::STATE_PURGING)) out << " PURGING";
+  if (item_new.is_on_list()) out << " NEW";
 
   if (is_rep()) out << " REP";
 
@@ -143,10 +144,9 @@ ostream& operator<<(ostream& out, CDirStripe &s)
 
 
 CDirStripe::CDirStripe(CDirPlacement *placement, stripeid_t stripeid, int auth)
-  : CapObject(placement->mdcache, placement->get_inode()->first,
-              placement->get_inode()->last),
+  : CapObject(placement->mdcache, 2, CEPH_NOSNAP),
     placement(placement),
-    ds(placement->ino(), stripeid),
+    ds(placement->get_ino(), stripeid),
     stripe_auth(auth, CDIR_AUTH_UNKNOWN),
     auth_pins(0),
     replicate(false),
@@ -167,11 +167,6 @@ CDirStripe::CDirStripe(CDirPlacement *placement, stripeid_t stripeid, int auth)
 
   cap_locks.push_back(&linklock);
   cap_locks.push_back(&nestlock);
-}
-
-CInode* CDirStripe::get_inode()
-{
-  return placement->get_inode();
 }
 
 unsigned CDirStripe::get_num_head_items()
@@ -351,6 +346,7 @@ void CDirStripe::close_dirfrag(frag_t fg)
     dout(14) << "close_dirfrag LEFTOVER dn " << *p->second << dendl;
 
   assert(dir->get_num_ref() == 0);
+  dir->item_new.remove_myself();
   delete dir;
   dirfrags.erase(fg);
 }
@@ -708,7 +704,10 @@ int CDirStripe::_fetched(bufferlist& bl)
     LogSegment *ls = mdcache->mds->mdlog->get_current_segment();
     ls->new_stripes.push_back(&item_new);
     state_set(STATE_OPEN);
-    dout(10) << "stripe not found, marking new/open " << *this << dendl;
+    CDirFrag *dir = get_or_open_dirfrag(frag_t());
+    dir->mark_new(ls);
+    dout(10) << "stripe not found, marking new/open " << *this
+        << " and " << *dir << dendl;
     return 0;
   }
 

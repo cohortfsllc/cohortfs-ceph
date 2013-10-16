@@ -142,9 +142,9 @@ class C_PS_PlacementAmbig : public Context {
     if (!placement->is_auth()) {
       int who = placement->authority().first;
       dout(10) << "forwarding to parent auth mds." << who << dendl;
-      ps.stats_for_mds(who)->add_inode(placement->ino(), iupdate);
+      ps.stats_for_mds(who)->add_inode(placement->get_ino(), iupdate);
     } else {
-      CInode *in = mds->mdcache->get_inode(placement->ino());
+      CInode *in = mds->mdcache->get_inode(placement->get_ino());
       assert(in && in->is_auth());
       ParentStats::Projected projected;
       EUpdate *le = new EUpdate(mds->mdlog, "parent_stats");
@@ -312,6 +312,8 @@ CDirStripe* ParentStats::open_parent_stripe(const inoparent_t &parent,
   }
 
   CDirStripe *stripe = mds->mdcache->get_dirstripe(parent.stripe);
+  if (!stripe)
+    dout(10) << "missing stripe for " << parent << dendl;
   assert(stripe); // TODO: fetch stripe and continue
   return stripe;
 }
@@ -338,12 +340,12 @@ CInode* ParentStats::open_parent_inode(CDirStripe *stripe,
     // forward to auth mds
     int who = placement->authority().first;
     dout(10) << "forwarding to auth mds." << who
-        << " for parent inode " << placement->ino() << dendl;
-    stats_for_mds(who)->add_inode(placement->ino(), update);
+        << " for parent inode " << placement->get_ino() << dendl;
+    stats_for_mds(who)->add_inode(placement->get_ino(), update);
     return NULL;
   }
 
-  CInode *in = placement->mdcache->get_inode(placement->ino());
+  CInode *in = placement->mdcache->get_inode(placement->get_ino());
   assert(in); // TODO: load from inode container
   return in;
 }
@@ -559,6 +561,7 @@ void ParentStats::update_accounted(inodeno_t ino, Projected &projected,
   // check cache, or use placement algorithm to locate inode
   CInode *in = mds->mdcache->get_inode(ino);
   InodeContainer *container = mds->mdcache->get_container();
+  assert(container->get_inode());
   CDirPlacement *placement = container->get_inode()->get_placement();
   int who = in ? in->authority().first :
       placement->get_stripe_auth(container->place(ino));

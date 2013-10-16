@@ -836,7 +836,8 @@ void Server::early_reply(MDRequest *mdr, CInode *tracei, CDentry *tracedn)
     if (tracei)
       mdr->cap_releases.erase(tracei->vino());
     if (tracedn)
-      mdr->cap_releases.erase(tracedn->get_dir()->get_inode()->vino());
+      mdr->cap_releases.erase(vinodeno_t(tracedn->get_dir()->ino(),
+                                         CEPH_NOSNAP));
 
     set_trace_dist(mdr, reply, tracei, tracedn);
   }
@@ -894,7 +895,8 @@ void Server::reply_request(MDRequest *mdr, MClientReply *reply, CInode *tracei, 
     if (tracei)
       mdr->cap_releases.erase(tracei->vino());
     if (tracedn)
-      mdr->cap_releases.erase(tracedn->get_dir()->get_inode()->vino());
+      mdr->cap_releases.erase(vinodeno_t(tracedn->get_dir()->ino(),
+                                         CEPH_NOSNAP));
   }
 
   // note client connection to direct my reply
@@ -1640,7 +1642,9 @@ CDirFrag *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string
   CDirPlacement *placement = diri->get_placement();
   if (!placement) {
     assert(!diri->is_auth());
-    mdcache->discover_dir_placement(diri, new C_MDS_RetryRequest(mdcache, mdr));
+    mdcache->discover_dir_placement(diri->ino(),
+                                    new C_MDS_RetryRequest(mdcache, mdr),
+                                    diri->authority().first);
     return NULL;
   }
 
@@ -1780,11 +1784,8 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDirFrag *dir, inodeno_t usein
   in->inode.truncate_size = -1ull;  // not truncated, yet!
   in->inode.truncate_seq = 1; /* starting with 1, 0 is kept for no-truncation logic */
 
-  CInode *diri = dir->get_inode();
-
-  dout(10) << oct << " dir mode 0" << diri->inode.mode << " new mode 0" << mode << dec << dendl;
-
   MClientRequest *req = mdr->client_request;
+#if 0
   if (diri->inode.mode & S_ISGID) {
     dout(10) << " dir is sticky" << dendl;
     in->inode.gid = diri->inode.gid;
@@ -1793,6 +1794,7 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDirFrag *dir, inodeno_t usein
       in->inode.mode |= S_ISGID;
     }
   } else 
+#endif
     in->inode.gid = req->get_caller_gid();
 
   in->inode.uid = req->get_caller_uid();
@@ -2067,8 +2069,7 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
     return 0;
   }
 
-  CInode *diri = dir->get_inode();
-  if (diri->is_system() && !diri->is_root()) {
+  if (dir->ino() < MDS_INO_SYSTEM_BASE && dir->ino() != MDS_INO_ROOT) {
     reply_request(mdr, -EROFS);
     return 0;
   }
@@ -2726,8 +2727,6 @@ void Server::handle_client_openc(MDRequest *mdr)
   if (!inodn)
     return;
 
-  CInode *diri = dn->get_dir()->get_inode();
-  rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -2785,8 +2784,6 @@ void Server::handle_client_openc(MDRequest *mdr)
   mdcache->predirty_journal_parents(mdr, &le->metablob, in,
                                     dn->inoparent(), true, 1);
   le->metablob.add_inode(in, true);
-  if (!diri->is_base())
-    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -2831,7 +2828,9 @@ void Server::handle_client_readdir(MDRequest *mdr)
   CDirPlacement *placement = diri->get_placement();
   if (!placement) {
     assert(!diri->is_auth());
-    mdcache->discover_dir_placement(diri, new C_MDS_RetryRequest(mdcache, mdr));
+    mdcache->discover_dir_placement(diri->ino(),
+                                    new C_MDS_RetryRequest(mdcache, mdr),
+                                    diri->authority().first);
     return;
   }
 
@@ -3945,8 +3944,6 @@ void Server::handle_client_mknod(MDRequest *mdr)
   if (!inodn)
     return;
 
-  CInode *diri = dn->get_dir()->get_inode();
-  rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4056,8 +4053,6 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   if (!inodn)
     return;
 
-  CInode *diri = dn->get_dir()->get_inode();
-  rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4107,8 +4102,6 @@ void Server::handle_client_mkdir(MDRequest *mdr)
 
   le->metablob.add_inode(newi, dn);
   le->metablob.add_placement(newi->get_placement());
-  if (!diri->is_base())
-    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -4157,8 +4150,6 @@ void Server::handle_client_symlink(MDRequest *mdr)
   if (!inodn)
     return;
 
-  CInode *diri = dn->get_dir()->get_inode();
-  rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4199,8 +4190,6 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi,
                                     dn->inoparent(), true, 1, pi->size);
   le->metablob.add_inode(newi, dn);
-  if (!diri->is_base())
-    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -5059,13 +5048,13 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
   mdlog->start_entry(le);
   le->rollback = mdr->more()->rollback_bl;
 
-  CInode *in = mdcache->get_inode(req->src.ino);
-  le->commit.add_inode(in, false);
+  CDirPlacement *placement = mdcache->get_dir_placement(req->src.ino);
+  le->commit.add_placement(placement);
 
   // journal each stripe as dirty/unlinked
   for (vector<stripeid_t>::iterator i = rollback.stripes.begin();
        i != rollback.stripes.end(); ++i) {
-    CDirStripe *stripe = in->get_placement()->get_stripe(*i);
+    CDirStripe *stripe = placement->get_stripe(*i);
     assert(stripe->is_open()); // master holds rdlock
     stripe->state_set(CDirStripe::STATE_UNLINKED);
     le->commit.add_stripe(stripe, true, false, true);
@@ -5388,17 +5377,7 @@ void Server::handle_client_rename(MDRequest *mdr)
     return;
   }
 
-  // dest a child of src?
-  // e.g. mv /usr /usr/foo
-  CDentry *pdn = destdir->get_inode()->parent;
-  while (pdn) {
-    if (pdn == srcdn) {
-      dout(7) << "cannot rename item to be a child of itself" << dendl;
-      reply_request(mdr, -EINVAL);
-      return;
-    }
-    pdn = pdn->get_dir()->get_inode()->parent;
-  }
+  // TODO: dest a child of src? e.g. mv /usr /usr/foo
 
   // -- locks --
   map<SimpleLock*, int> remote_wrlocks;
@@ -5407,7 +5386,7 @@ void Server::handle_client_rename(MDRequest *mdr)
   for (int i=0; i<(int)srctrace.size(); i++) 
     rdlocks.insert(&srctrace[i]->lock);
   xlocks.insert(&srcdn->lock);
-  int srcdirauth = srcdn->get_dir()->authority().first;
+  int srcdirauth = srcdn->get_stripe()->authority().first;
   if (srcdirauth != mds->whoami) {
     dout(10) << " will remote_wrlock srcdir scatterlocks on mds." << srcdirauth << dendl;
     remote_wrlocks[&srcdn->get_stripe()->linklock] = srcdirauth;
