@@ -6110,11 +6110,7 @@ void MDCache::handle_find_ino(MMDSFindIno *m)
 {
   dout(10) << "handle_find_ino " << *m << dendl;
   MMDSFindInoReply *r = new MMDSFindInoReply(m->tid);
-  CInode *in = get_inode(m->ino);
-  if (in) {
-    in->make_path(r->path);
-    dout(10) << " have " << r->path << " " << *in << dendl;
-  }
+  // XXX: disabled, use lookup by ino
   mds->messenger->send_message(r, m->get_connection());
   m->put();
 }
@@ -7353,8 +7349,7 @@ int MDCache::send_dir_updates(CDirStripe *stripe, bool bcast)
   
   dout(7) << "sending dir_update on " << *stripe << " bcast " << bcast << " to " << who << dendl;
 
-  filepath path;
-  stripe->get_inode()->make_path(path);
+  filepath path(stripe->ino());
 
   int whoami = mds->get_nodeid();
   for (set<int>::iterator it = who.begin();
