@@ -227,7 +227,6 @@ protected:
 
   CDirStripe *get_stripe() { return stripe; }
   CDirPlacement *get_placement() { return stripe->get_placement(); }
-  CInode* get_inode() { return stripe->get_inode(); }
 
   map_t::iterator begin() { return items.begin(); }
   map_t::iterator end() { return items.end(); }
@@ -307,8 +306,6 @@ private:
   // -- authority --
  public:
   pair<int,int> authority() { return stripe->authority(); }
-
-  bool contains(CDirFrag *x);  // true if we are x or an ancestor of x 
 
 
   void _encode_base(bufferlist& bl) {

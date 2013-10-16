@@ -145,8 +145,6 @@ MDCache::MDCache(MDS *m)
                         (0.9 *(g_conf->osd_max_write_size << 20));
 
   discover_last_tid = 0;
-  open_ino_last_tid = 0;
-  find_ino_peer_last_tid = 0;
 
   last_cap_id = 0;
 
@@ -247,7 +245,7 @@ void MDCache::remove_inode(CInode *o)
   o->item_open_file.remove_myself();
   o->item_stray.remove_myself();
 
-  o->close_placement();
+  remove_dir_placement(o->ino());
 
   // remove from inode map
   inodes.erase(o->vino());    
@@ -258,7 +256,7 @@ void MDCache::remove_inode(CInode *o)
     if (o == container.get_inode()) container.in = 0;
     if (o->is_base())
       base_inodes.erase(o);
-    }
+  }
 
   // delete it
   assert(o->get_num_ref() == 0);
@@ -267,14 +265,43 @@ void MDCache::remove_inode(CInode *o)
 
 void MDCache::add_dir_placement(CDirPlacement *placement)
 {
+  dout(10) << "add_dir_placement " << *placement << dendl;
   pair<dir_placement_map::iterator, bool> inserted = dirs.insert(
-      make_pair(placement->ino(), placement));
+      make_pair(placement->get_ino(), placement));
   assert(inserted.second); // should be no dup inos!
 }
 
-void MDCache::remove_dir_placement(CDirPlacement *placement)
+void MDCache::remove_dir_placement(inodeno_t ino)
 {
-  dirs.erase(placement->ino());
+  dir_placement_map::iterator p = dirs.find(ino);
+  if (p != dirs.end()) {
+    dout(10) << "remove_dir_placement " << *p->second << dendl;
+    assert(p->second->get_num_ref() == 0);
+    delete p->second;
+    dirs.erase(p);
+  }
+}
+
+bool MDCache::is_placement_waiter(inodeno_t ino) const
+{
+  return waiting_on_placement.find(ino) != waiting_on_placement.end();
+}
+
+void MDCache::add_placement_waiter(inodeno_t ino, Context *fin)
+{
+  pair<placement_wait_map::iterator, bool> result =
+      waiting_on_placement.insert(make_pair(ino, list<Context*>()));
+  result.first->second.push_back(fin);
+}
+
+void MDCache::take_placement_waiters(inodeno_t ino, list<Context*> &waiters)
+{
+  placement_wait_map::iterator p = waiting_on_placement.find(ino);
+  if (p == waiting_on_placement.end())
+    return;
+
+  waiters.splice(waiters.end(), p->second);
+  waiting_on_placement.erase(p);
 }
 
 
@@ -576,7 +603,7 @@ void MDCache::open_root()
     open_root_inode(new C_MDS_RetryOpenRoot(this));
     return;
   }
-  if (!container.get_inode()) {
+  if (!container.is_open()) {
     container.open(new C_MDS_RetryOpenRoot(this));
     return;
   }
@@ -594,22 +621,10 @@ void MDCache::open_root()
     assert(!root->is_auth());
     CDirPlacement *placement = root->get_placement();
     if (!placement) {
-      discover_dir_placement(root, new C_MDS_RetryOpenRoot(this));
+      discover_dir_placement(MDS_INO_ROOT, new C_MDS_RetryOpenRoot(this),
+                             mds->mdsmap->get_root());
       return;
     }
-#if 0
-    CDirStripe *stripe = placement->get_stripe(0);
-    if (!stripe) {
-      discover_dir_stripe(placement, 0, new C_MDS_RetryOpenRoot(this));
-      return;
-    }
-    assert(stripe);
-    CDirFrag *dir = stripe->get_dirfrag(frag_t());
-    if (!dir) {
-      discover_dir_frag(stripe, frag_t(), new C_MDS_RetryOpenRoot(this));
-      return;
-    }
-#endif
     if (container.get_inode()->get_replica_nonce() == 0) {
       // must register with root mds as a replica
       discover_ino(MDS_INO_CONTAINER, new C_MDS_RetryOpenRoot(this), 0);
@@ -1361,13 +1376,6 @@ void MDCache::handle_mds_failure(int who)
     request_finish(finish.front());
     finish.pop_front();
   }
-
-  kick_find_ino_peers(who);
-  kick_open_ino_peers(who);
-
-#if 0
-  show_subtrees();  
-#endif
 }
 
 /*
@@ -1433,8 +1441,6 @@ void MDCache::handle_mds_recovery(int who)
   }
 #endif
   kick_discovers(who);
-  kick_open_ino_peers(who);
-  kick_find_ino_peers(who);
 
   // queue them up.
   mds->queue_waiters(waiters);
@@ -2584,7 +2590,7 @@ void MDCache::rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack,
     CDirPlacement *placement = in->get_placement();
     if (placement->is_auth() &&
 	placement->is_replica(from) &&
-	ack->strong_placements.count(placement->ino()) == 0) {
+	ack->strong_placements.count(placement->get_ino()) == 0) {
       placement->remove_replica(from);
       dout(10) << " rem " << *placement << dendl;
     }
@@ -3628,21 +3634,23 @@ void MDCache::rejoin_send_acks()
       // inode expired
       if (!in->is_replica(p->first))
 	continue;
-      while (1) {
-	CDentry *dn = in->get_parent_dn();
-	if (dn->is_replica(p->first))
-	  break;
-	dn->add_replica(p->first);
-	CDirFrag *dir = dn->get_dir();
-	if (dir->is_replica(p->first))
-	  break;
-	dir->add_replica(p->first);
-	in = dir->get_inode();
-	if (in->is_replica(p->first))
-	  break;
-	if (in->is_base())
-	  break;
-      }
+
+      CDentry *dn = in->get_parent_dn();
+      if (dn->is_replica(p->first))
+        continue;
+      dn->add_replica(p->first);
+      CDirFrag *dir = dn->get_dir();
+      if (dir->is_replica(p->first))
+        continue;
+      dir->add_replica(p->first);
+      CDirStripe *stripe = dir->get_stripe();
+      if (stripe->is_replica(p->first))
+        continue;
+      stripe->add_replica(p->first);
+      CDirPlacement *placement = stripe->get_placement();
+      if (placement->is_replica(p->first))
+        continue;
+      placement->add_replica(p->first);
     }
   }
   rejoin_unlinked_inodes.clear();
@@ -4307,7 +4315,7 @@ void MDCache::trim_placement(CDirPlacement *placement,
   for (list<CDirStripe*>::iterator s = stripes.begin(); s != stripes.end(); ++s)
     trim_stripe(*s, expiremap);
 
-  placement->get_inode()->close_placement();
+  remove_dir_placement(placement->get_ino());
 }
 
 void MDCache::trim_inode(CDentry *dn, CInode *in,
@@ -4433,7 +4441,7 @@ void MDCache::trim_non_auth()
             dout(10) << " removing " << *stripe << dendl;
             placement->close_stripe(stripe);
           }
-          in->close_placement();
+          remove_dir_placement(in->ino());
         }
         dir->unlink_inode(dn);
         remove_inode(in);
@@ -4476,7 +4484,7 @@ void MDCache::trim_non_auth()
           assert(stripe->get_num_ref() == 0);
           placement->close_stripe(stripe);
         }
-        in->close_placement();
+        remove_dir_placement(in->ino());
 	dout(10) << " removing " << *in << dendl;
 	assert(in->get_num_ref() == 0);
 	remove_inode(in);
@@ -5024,20 +5032,6 @@ void MDCache::dispatch(Message *m)
     handle_fragment_notify(static_cast<MMDSFragmentNotify*>(m));
     break;
 
-  case MSG_MDS_FINDINO:
-    handle_find_ino(static_cast<MMDSFindIno *>(m));
-    break;
-  case MSG_MDS_FINDINOREPLY:
-    handle_find_ino_reply(static_cast<MMDSFindInoReply *>(m));
-    break;
-
-  case MSG_MDS_OPENINO:
-    handle_open_ino(static_cast<MMDSOpenIno *>(m));
-    break;
-  case MSG_MDS_OPENINOREPLY:
-    handle_open_ino_reply(static_cast<MMDSOpenInoReply *>(m));
-    break;
-
   case MSG_MDS_PARENTSTATS:
     if (!is_open())
       wait_for_open(new C_MDS_RetryMessage(mds, m));
@@ -5119,7 +5113,8 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
     CDirPlacement *placement = cur->get_placement();
     if (!placement) {
       assert(!cur->is_auth());
-      discover_dir_placement(cur, _get_waiter(mdr, req, fin));
+      discover_dir_placement(cur->ino(), _get_waiter(mdr, req, fin),
+                             cur->authority().first);
       return 1;
     }
 
@@ -5567,660 +5562,6 @@ void MDCache::open_remote_dentry(CDentry *dn, bool projected, Context *fin)
   open_remote_ino(dnl->get_remote_ino(), fin);
 }
 
-void MDCache::make_trace(vector<CDentry*>& trace, CInode *in)
-{
-  // empty trace if we're a base inode
-  if (in->is_base())
-    return;
-
-  CInode *parent = in->get_parent_inode();
-  assert(parent);
-  make_trace(trace, parent);
-
-  CDentry *dn = in->get_parent_dn();
-  dout(15) << "make_trace adding " << *dn << dendl;
-  trace.push_back(dn);
-}
-
-
-// -------------------------------------------------------------------------------
-// Open inode by inode number
-
-class C_MDC_OpenInoBacktraceFetched : public Context {
-  MDCache *cache;
-  inodeno_t ino;
-  public:
-  bufferlist bl;
-  C_MDC_OpenInoBacktraceFetched(MDCache *c, inodeno_t i) :
-    cache(c), ino(i) {}
-  void finish(int r) {
-    cache->_open_ino_backtrace_fetched(ino, bl, r);
-  }
-};
-
-struct C_MDC_OpenInoTraverseDir : public Context {
-  MDCache *cache;
-  inodeno_t ino;
-  public:
-  C_MDC_OpenInoTraverseDir(MDCache *c, inodeno_t i) : cache(c), ino(i) {}
-  void finish(int r) {
-    assert(cache->opening_inodes.count(ino));
-    cache->_open_ino_traverse_dir(ino, cache->opening_inodes[ino], r);
-  }
-};
-
-struct C_MDC_OpenInoParentOpened : public Context {
-  MDCache *cache;
-  inodeno_t ino;
-  public:
-  C_MDC_OpenInoParentOpened(MDCache *c, inodeno_t i) : cache(c), ino(i) {}
-  void finish(int r) {
-    cache->_open_ino_parent_opened(ino, r);
-  }
-};
-
-void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err)
-{
-  dout(10) << "_open_ino_backtrace_fetched ino " << ino << " errno " << err << dendl;
-
-  assert(opening_inodes.count(ino));
-  open_ino_info_t& info = opening_inodes[ino];
-
-  CInode *in = get_inode(ino);
-  if (in) {
-    dout(10) << " found cached " << *in << dendl;
-    open_ino_finish(ino, info, in->authority().first);
-    return;
-  }
-
-  inode_backtrace_t backtrace;
-  if (err == 0) {
-    ::decode(backtrace, bl);
-    if (backtrace.pool != info.pool && backtrace.pool != -1) {
-      dout(10) << " old object in pool " << info.pool
-	       << ", retrying pool " << backtrace.pool << dendl;
-      info.pool = backtrace.pool;
-      C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-      fetch_backtrace(ino, info.pool, fin->bl, fin);
-      return;
-    }
-  } else if (err == -ENOENT) {
-    int64_t meta_pool = mds->mdsmap->get_metadata_pool();
-    if (info.pool != meta_pool) {
-      dout(10) << " no object in pool " << info.pool
-	       << ", retrying pool " << meta_pool << dendl;
-      info.pool = meta_pool;
-      C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-      fetch_backtrace(ino, info.pool, fin->bl, fin);
-      return;
-    }
-  }
-
-  if (err == 0) {
-    if (backtrace.ancestors.empty()) {
-      dout(10) << " got empty backtrace " << dendl;
-      err = -EIO;
-    } else if (!info.ancestors.empty()) {
-      if (info.ancestors[0] == backtrace.ancestors[0]) {
-	dout(10) << " got same parents " << info.ancestors[0] << " 2 times" << dendl;
-	err = -EINVAL;
-      }
-    }
-  }
-  if (err) {
-    dout(10) << " failed to open ino " << ino << dendl;
-    open_ino_finish(ino, info, err);
-    return;
-  }
-
-  dout(10) << " got backtrace " << backtrace << dendl;
-  info.ancestors = backtrace.ancestors;
-
-  _open_ino_traverse_dir(ino, info, 0);
-}
-
-void MDCache::_open_ino_parent_opened(inodeno_t ino, int ret)
-{
-  dout(10) << "_open_ino_parent_opened ino " << ino << " ret " << ret << dendl;
-
-  assert(opening_inodes.count(ino));
-  open_ino_info_t& info = opening_inodes[ino];
-
-  CInode *in = get_inode(ino);
-  if (in) {
-    dout(10) << " found cached " << *in << dendl;
-    open_ino_finish(ino, info, in->authority().first);
-    return;
-  }
-
-  if (ret == mds->get_nodeid()) {
-    _open_ino_traverse_dir(ino, info, 0);
-  } else {
-    if (ret >= 0) {
-      info.check_peers = true;
-      info.auth_hint = ret;
-      info.checked.erase(ret);
-    }
-    do_open_ino(ino, info, ret);
-  }
-}
-
-Context* MDCache::_open_ino_get_waiter(inodeno_t ino, MMDSOpenIno *m)
-{
-  if (m)
-    return new C_MDS_RetryMessage(mds, m);
-  else
-    return new C_MDC_OpenInoTraverseDir(this, ino);
-}
-
-void MDCache::_open_ino_traverse_dir(inodeno_t ino, open_ino_info_t& info, int ret)
-{
-  dout(10) << "_open_ino_trvserse_dir ino " << ino << " ret " << ret << dendl;
-
-  CInode *in = get_inode(ino);
-  if (in) {
-    dout(10) << " found cached " << *in << dendl;
-    open_ino_finish(ino, info, in->authority().first);
-    return;
-  }
-
-  if (ret) {
-    do_open_ino(ino, info, ret);
-    return;
-  }
-
-  int hint = info.auth_hint;
-  ret = open_ino_traverse_dir(ino, NULL, info.ancestors,
-			      info.discover, info.want_xlocked, &hint);
-  if (ret > 0)
-    return;
-  if (hint != mds->get_nodeid())
-    info.auth_hint = hint;
-  do_open_ino(ino, info, ret);
-}
-
-int MDCache::open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
-				   vector<inode_backpointer_t>& ancestors,
-				   bool discover, bool want_xlocked, int *hint)
-{
-  dout(10) << "open_ino_traverse_dir ino " << ino << " " << ancestors << dendl;
-  int err = 0;
-  for (unsigned i = 0; i < ancestors.size(); i++) {
-    CInode *diri = get_inode(ancestors[i].dirino);
-
-    if (!diri) {
-      if (discover && MDS_INO_IS_MDSDIR(ancestors[i].dirino)) {
-	open_foreign_mdsdir(ancestors[i].dirino, _open_ino_get_waiter(ino, m));
-	return 1;
-      }
-      continue;
-    }
-
-    if (!diri->is_dir()) {
-      dout(10) << " " << *diri << " is not dir" << dendl;
-      if (i == 0)
-	err = -ENOTDIR;
-      break;
-    }
-
-    const string &name = ancestors[i].dname;
-    CDirPlacement *placement = diri->get_placement();
-    __u32 dnhash = placement->hash_dentry_name(name);
-
-    // pick stripe
-    stripeid_t stripeid = placement->pick_stripe(dnhash);
-    CDirStripe *stripe = placement->get_stripe(stripeid);
-    if (!stripe) {
-      if (placement->get_stripe_auth(stripeid) == mds->get_nodeid()) {
-	if (placement->is_frozen()) {
-	  dout(10) << " " << *placement << " is frozen, waiting " << dendl;
-	  placement->add_waiter(CDirPlacement::WAIT_UNFREEZE,
-                                _open_ino_get_waiter(ino, m));
-	  return 1;
-	}
-        stripe = placement->get_or_open_stripe(stripeid);
-      } else if (discover) {
-        open_remote_dirstripe(placement, stripeid,
-                              _open_ino_get_waiter(ino, m));
-        return 1;
-      }
-    }
-
-    if (stripe) {
-      // pick dirfrag
-      frag_t fg = stripe->pick_dirfrag(dnhash);
-      CDirFrag *dir = stripe->get_dirfrag(fg);
-      if (!dir) {
-        if (stripe->is_auth()) {
-          if (stripe->is_frozen()) {
-            dout(10) << " " << *stripe << " is frozen, waiting " << dendl;
-            stripe->add_waiter(CDirStripe::WAIT_UNFREEZE, _open_ino_get_waiter(ino, m));
-            return 1;
-          }
-          dir = stripe->get_or_open_dirfrag(fg);
-        } else if (discover) {
-          open_remote_dirfrag(stripe, fg, _open_ino_get_waiter(ino, m));
-          return 1;
-        }
-      }
-      if (dir) {
-        inodeno_t next_ino = i > 0 ? ancestors[i - 1].dirino : ino;
-        if (dir->is_auth()) {
-          CDentry *dn = dir->lookup(name);
-          CDentry::linkage_t *dnl = dn ? dn->get_linkage() : NULL;
-
-          if (!dnl && !dir->is_complete() &&
-              (!dir->has_bloom() || dir->is_in_bloom(name))) {
-            dout(10) << " fetching incomplete " << *dir << dendl;
-            dir->fetch(_open_ino_get_waiter(ino, m));
-            return 1;
-          }
-
-          dout(10) << " no ino " << next_ino << " in " << *dir << dendl;
-          if (i == 0)
-            err = -ENOENT;
-        } else if (discover) {
-          open_remote_ino(next_ino, _open_ino_get_waiter(ino, m));
-          return 1;
-        }
-        else if (hint && i == 0)
-          *hint = dir->authority().first;
-      }
-      else if (hint && i == 0)
-        *hint = stripe->authority().first;
-    }
-    else if (hint && i == 0)
-      *hint = placement->get_stripe_auth(stripeid);
-    break;
-  }
-  return err;
-}
-
-void MDCache::open_ino_finish(inodeno_t ino, open_ino_info_t& info, int ret)
-{
-  dout(10) << "open_ino_finish ino " << ino << " ret " << ret << dendl;
-
-  finish_contexts(g_ceph_context, info.waiters, ret);
-  opening_inodes.erase(ino);
-}
-
-void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
-{
-  if (err < 0) {
-    info.checked.clear();
-    info.checked.insert(mds->get_nodeid());
-    info.checking = -1;
-    info.check_peers = true;
-    info.fetch_backtrace = true;
-    if (info.discover) {
-      info.discover = false;
-      info.ancestors.clear();
-    }
-  }
-
-  if (info.check_peers) {
-    info.check_peers = false;
-    info.checking = -1;
-    do_open_ino_peer(ino, info);
-  } else if (info.fetch_backtrace) {
-    info.check_peers = true;
-    info.fetch_backtrace = false;
-    info.checking = mds->get_nodeid();
-    info.checked.clear();
-    info.checked.insert(mds->get_nodeid());
-    C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-    fetch_backtrace(ino, info.pool, fin->bl, fin);
-  } else {
-    assert(!info.ancestors.empty());
-    info.checking = mds->get_nodeid();
-    open_ino(info.ancestors[0].dirino, mds->mdsmap->get_metadata_pool(),
-	     new C_MDC_OpenInoParentOpened(this, ino), info.want_replica);
-  }
-}
-
-void MDCache::do_open_ino_peer(inodeno_t ino, open_ino_info_t& info)
-{
-  set<int> all, active;
-  mds->mdsmap->get_mds_set(all);
-  mds->mdsmap->get_clientreplay_or_active_or_stopping_mds_set(active);
-  if (mds->get_state() == MDSMap::STATE_REJOIN)
-    mds->mdsmap->get_mds_set(active, MDSMap::STATE_REJOIN);
-
-  dout(10) << "do_open_ino_peer " << ino << " active " << active
-	   << " all " << all << " checked " << info.checked << dendl;
-
-  int peer = -1;
-  if (info.auth_hint >= 0) {
-    if (active.count(info.auth_hint)) {
-      peer = info.auth_hint;
-      info.auth_hint = -1;
-    }
-  } else {
-    for (set<int>::iterator p = active.begin(); p != active.end(); ++p)
-      if (*p != mds->get_nodeid() && info.checked.count(*p) == 0) {
-	peer = *p;
-	break;
-      }
-  }
-  if (peer < 0) {
-    if (all.size() > active.size() && all != info.checked) {
-      dout(10) << " waiting for more peers to be active" << dendl;
-    } else {
-      dout(10) << " all MDS peers have been checked " << dendl;
-      do_open_ino(ino, info, 0);
-    }
-  } else {
-    info.checking = peer;
-    mds->send_message_mds(new MMDSOpenIno(info.tid, ino, info.ancestors), peer);
-  }
-}
-
-void MDCache::handle_open_ino(MMDSOpenIno *m)
-{
-  dout(10) << "handle_open_ino " << *m << dendl;
-
-  inodeno_t ino = m->ino;
-  MMDSOpenInoReply *reply;
-  CInode *in = get_inode(ino);
-  if (in) {
-    dout(10) << " have " << *in << dendl;
-    reply = new MMDSOpenInoReply(m->get_tid(), ino, 0);
-    if (in->is_auth()) {
-      touch_inode(in);
-      while (1) {
-	CDentry *pdn = in->get_parent_dn();
-	if (!pdn)
-	  break;
-	CInode *diri = pdn->get_dir()->get_inode();
-	reply->ancestors.push_back(inode_backpointer_t(diri->ino(), pdn->name,
-						       in->inode.version));
-	in = diri;
-      }
-    } else {
-      reply->hint = in->authority().first;
-    }
-  } else {
-    int hint = -1;
-    int ret = open_ino_traverse_dir(ino, m, m->ancestors, false, false, &hint);
-    if (ret > 0)
-      return;
-    reply = new MMDSOpenInoReply(m->get_tid(), ino, hint, ret);
-  }
-  mds->messenger->send_message(reply, m->get_connection());
-  m->put();
-}
-
-void MDCache::handle_open_ino_reply(MMDSOpenInoReply *m)
-{
-  dout(10) << "handle_open_ino_reply " << *m << dendl;
-
-  inodeno_t ino = m->ino;
-  int from = m->get_source().num();
-  if (opening_inodes.count(ino)) {
-    open_ino_info_t& info = opening_inodes[ino];
-
-    if (info.checking == from)
-	info.checking = -1;
-    info.checked.insert(from);
-
-    CInode *in = get_inode(ino);
-    if (in) {
-      dout(10) << " found cached " << *in << dendl;
-      open_ino_finish(ino, info, in->authority().first);
-    } else if (!m->ancestors.empty()) {
-      dout(10) << " found ino " << ino << " on mds." << from << dendl;
-      if (!info.want_replica) {
-	open_ino_finish(ino, info, from);
-	return;
-      }
-
-      info.ancestors = m->ancestors;
-      info.auth_hint = from;
-      info.checking = mds->get_nodeid();
-      info.discover = true;
-      _open_ino_traverse_dir(ino, info, 0);
-    } else if (m->error) {
-      dout(10) << " error " << m->error << " from mds." << from << dendl;
-      do_open_ino(ino, info, m->error);
-    } else {
-      if (m->hint >= 0 && m->hint != mds->get_nodeid()) {
-	info.auth_hint = m->hint;
-	info.checked.erase(m->hint);
-      }
-      do_open_ino_peer(ino, info);
-    }
-  }
-  m->put();
-}
-
-void MDCache::kick_open_ino_peers(int who)
-{
-  dout(10) << "kick_open_ino_peers mds." << who << dendl;
-
-  for (map<inodeno_t, open_ino_info_t>::iterator p = opening_inodes.begin();
-       p != opening_inodes.end();
-       ++p) {
-    open_ino_info_t& info = p->second;
-    if (info.checking == who) {
-      dout(10) << "  kicking ino " << p->first << " who was checking mds." << who << dendl;
-      info.checking = -1;
-      do_open_ino_peer(p->first, info);
-    } else if (info.checking == -1) {
-      dout(10) << "  kicking ino " << p->first << " who was waiting" << dendl;
-      do_open_ino_peer(p->first, info);
-    }
-  }
-}
-
-void MDCache::open_ino(inodeno_t ino, int64_t pool, Context* fin,
-		       bool want_replica, bool want_xlocked)
-{
-  dout(10) << "open_ino " << ino << " pool " << pool << " want_replica "
-	   << want_replica << dendl;
-
-  if (opening_inodes.count(ino)) {
-    open_ino_info_t& info = opening_inodes[ino];
-    if (want_replica) {
-      info.want_replica = true;
-      if (want_xlocked)
-	info.want_xlocked = true;
-    }
-    info.waiters.push_back(fin);
-  } else {
-    open_ino_info_t& info = opening_inodes[ino];
-    info.checked.insert(mds->get_nodeid());
-    info.want_replica = want_replica;
-    info.want_xlocked = want_xlocked;
-    info.tid = ++open_ino_last_tid;
-    info.pool = pool >= 0 ? pool : mds->mdsmap->get_first_data_pool();
-    info.waiters.push_back(fin);
-    do_open_ino(ino, info, 0);
-  }
-}
-
-/* ---------------------------- */
-
-/*
- * search for a given inode on MDS peers.  optionally start with the given node.
-
-
- TODO 
-  - recover from mds node failure, recovery
-  - traverse path
-
- */
-void MDCache::find_ino_peers(inodeno_t ino, Context *c, int hint)
-{
-  dout(5) << "find_ino_peers " << ino << " hint " << hint << dendl;
-  assert(!have_inode(ino));
-  
-  tid_t tid = ++find_ino_peer_last_tid;
-  find_ino_peer_info_t& fip = find_ino_peer[tid];
-  fip.ino = ino;
-  fip.tid = tid;
-  fip.fin = c;
-  fip.hint = hint;
-  fip.checked.insert(mds->whoami);
-  _do_find_ino_peer(fip);
-}
-
-void MDCache::_do_find_ino_peer(find_ino_peer_info_t& fip)
-{
-  set<int> all, active;
-  mds->mdsmap->get_mds_set(all);
-  mds->mdsmap->get_active_mds_set(active);
-  mds->mdsmap->get_mds_set(active, MDSMap::STATE_STOPPING);
-
-  dout(10) << "_do_find_ino_peer " << fip.tid << " " << fip.ino
-	   << " active " << active << " all " << all
-	   << " checked " << fip.checked
-	   << dendl;
-    
-  int m = -1;
-  if (fip.hint >= 0) {
-    m = fip.hint;
-    fip.hint = -1;
-  } else {
-    for (set<int>::iterator p = active.begin(); p != active.end(); ++p)
-      if (*p != mds->whoami &&
-	  fip.checked.count(*p) == 0) {
-	m = *p;
-	break;
-      }
-  }
-  if (m < 0) {
-    if (all.size() > active.size()) {
-      dout(10) << "_do_find_ino_peer waiting for more peers to be active" << dendl;
-    } else {
-      dout(10) << "_do_find_ino_peer failed on " << fip.ino << dendl;
-      fip.fin->complete(-ESTALE);
-      find_ino_peer.erase(fip.tid);
-    }
-  } else {
-    fip.checking = m;
-    mds->send_message_mds(new MMDSFindIno(fip.tid, fip.ino), m);
-  }
-}
-
-void MDCache::handle_find_ino(MMDSFindIno *m)
-{
-  dout(10) << "handle_find_ino " << *m << dendl;
-  MMDSFindInoReply *r = new MMDSFindInoReply(m->tid);
-  // XXX: disabled, use lookup by ino
-  mds->messenger->send_message(r, m->get_connection());
-  m->put();
-}
-
-
-void MDCache::handle_find_ino_reply(MMDSFindInoReply *m)
-{
-  map<tid_t, find_ino_peer_info_t>::iterator p = find_ino_peer.find(m->tid);
-  if (p != find_ino_peer.end()) {
-    dout(10) << "handle_find_ino_reply " << *m << dendl;
-    find_ino_peer_info_t& fip = p->second;
-
-    // success?
-    if (get_inode(fip.ino)) {
-      dout(10) << "handle_find_ino_reply successfully found " << fip.ino << dendl;
-      mds->queue_waiter(fip.fin);
-      find_ino_peer.erase(p);
-      m->put();
-      return;
-    }
-
-    int from = m->get_source().num();
-    if (fip.checking == from)
-      fip.checking = -1;
-    fip.checked.insert(from);
-
-    if (!m->path.empty()) {
-      // we got a path!
-      vector<CDentry*> trace;
-      int r = path_traverse(NULL, m, NULL, m->path, &trace, NULL, MDS_TRAVERSE_DISCOVER);
-      if (r > 0)
-	return; 
-      dout(0) << "handle_find_ino_reply failed with " << r << " on " << m->path 
-	      << ", retrying" << dendl;
-      fip.checked.clear();
-      _do_find_ino_peer(fip);
-    } else {
-      // nope, continue.
-      _do_find_ino_peer(fip);
-    }      
-  } else {
-    dout(10) << "handle_find_ino_reply tid " << m->tid << " dne" << dendl;
-  }  
-  m->put();
-}
-
-void MDCache::kick_find_ino_peers(int who)
-{
-  // find_ino_peers requests we should move on from
-  for (map<tid_t,find_ino_peer_info_t>::iterator p = find_ino_peer.begin();
-       p != find_ino_peer.end();
-       ++p) {
-    find_ino_peer_info_t& fip = p->second;
-    if (fip.checking == who) {
-      dout(10) << "kicking find_ino_peer " << fip.tid << " who was checking mds." << who << dendl;
-      fip.checking = -1;
-      _do_find_ino_peer(fip);
-    } else if (fip.checking == -1) {
-      dout(10) << "kicking find_ino_peer " << fip.tid << " who was waiting" << dendl;
-      _do_find_ino_peer(fip);
-    }
-  }
-}
-
-/* ---------------------------- */
-
-struct C_MDS_FindInoDir : public Context {
-  MDCache *mdcache;
-  inodeno_t ino;
-  Context *fin;
-  bufferlist bl;
-  C_MDS_FindInoDir(MDCache *m, inodeno_t i, Context *f) : mdcache(m), ino(i), fin(f) {}
-  void finish(int r) {
-    mdcache->_find_ino_dir(ino, fin, bl, r);
-  }
-};
-
-void MDCache::find_ino_dir(inodeno_t ino, Context *fin)
-{
-  dout(10) << "find_ino_dir " << ino << dendl;
-  assert(!have_inode(ino));
-
-  // get the backtrace from the dir
-  object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
-  
-  C_MDS_FindInoDir *c = new C_MDS_FindInoDir(this, ino, fin);
-  mds->objecter->getxattr(oid, oloc, "path", CEPH_NOSNAP, &c->bl, 0, c);
-}
-
-void MDCache::_find_ino_dir(inodeno_t ino, Context *fin, bufferlist& bl, int r)
-{
-  dout(10) << "_find_ino_dir " << ino << " got " << r << " " << bl.length() << " bytes" << dendl;
-  if (r < 0) {
-    fin->complete(r);
-    return;
-  }
-
-  string s(bl.c_str(), bl.length());
-  filepath path(s.c_str());
-  vector<CDentry*> trace;
-
-  dout(10) << "_find_ino_dir traversing to path " << path << dendl;
-
-  C_MDS_FindInoDir *c = new C_MDS_FindInoDir(this, ino, fin);
-  c->bl = bl;
-  r = path_traverse(NULL, NULL, c, path, &trace, NULL, MDS_TRAVERSE_DISCOVER);
-  if (r > 0)
-    return;
-  delete c;  // path_traverse doesn't clean it up for us for r <= 0
-  
-  fin->complete(r);
-}
-
 
 /* ---------------------------- */
 
@@ -6442,13 +5783,6 @@ void MDCache::request_kill(MDRequest *mdr)
 }
 
 
-void MDCache::fetch_backtrace(inodeno_t ino, int64_t pool, bufferlist& bl, Context *fin)
-{
-  object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  mds->objecter->getxattr(oid, object_locator_t(pool), "parent", CEPH_NOSNAP, &bl, 0, fin);
-}
-
-
 // ========================================================================================
 // DISCOVER
 /*
@@ -6481,23 +5815,20 @@ void MDCache::discover_ino(inodeno_t ino, Context *onfinish, int from)
 }
 
 
-void MDCache::discover_dir_placement(CInode *base, Context *onfinish, int from)
+void MDCache::discover_dir_placement(inodeno_t ino, Context *onfinish, int from)
 {
-  if (from < 0)
-    from = base->authority().first;
-
-  dout(7) << "discover_dir_placement for " << *base
+  dout(7) << "discover_dir_placement for " << ino
       << " from mds." << from << dendl;
 
-  if (!base->is_waiter_for(CInode::WAIT_PLACEMENT) || !onfinish) {
+  if (!is_placement_waiter(ino) || !onfinish) {
     discover_info_t& d = _create_discover(from);
-    d.base.stripe.ino = base->ino();
+    d.base.stripe.ino = ino;
     d.want.first = d.want.second = MDSCacheObjectInfo::PLACEMENT;
     _send_discover(d);
   }
 
   if (onfinish)
-    base->add_waiter(CInode::WAIT_PLACEMENT, onfinish);
+    add_placement_waiter(ino, onfinish);
 }
 
 void MDCache::discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
@@ -6506,12 +5837,12 @@ void MDCache::discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
   if (from < 0)
     from = base->authority().first;
 
-  dout(7) << "discover_dir_stripe " << dirstripe_t(base->ino(), stripeid)
+  dout(7) << "discover_dir_stripe " << dirstripe_t(base->get_ino(), stripeid)
       << " under " << *base << " from mds." << from << dendl;
 
   if (!base->is_waiting_for_stripe(stripeid) || !onfinish) {
     discover_info_t& d = _create_discover(from);
-    d.base.stripe.ino = base->ino();
+    d.base.stripe.ino = base->get_ino();
     d.base.stripe.stripeid = stripeid;
     d.want.first = d.want.second = MDSCacheObjectInfo::STRIPE;
     _send_discover(d);
@@ -6583,7 +5914,7 @@ class C_MDC_DiscoverPath : public Context {
 
 static stripeid_t pick_stripe(CDirPlacement *placement, const string &dname)
 {
-  if (placement->ino() == MDS_INO_CONTAINER) {
+  if (placement->get_ino() == MDS_INO_CONTAINER) {
     inodeno_t ino;
     istringstream stream(dname);
     stream >> hex >> ino.val;
@@ -6597,7 +5928,7 @@ void MDCache::discover_path(CDirPlacement *base, snapid_t snap,
 			    const string &dname, Context *onfinish,
 			    bool xlock, int from)
 {
-  dirstripe_t ds(base->ino(), pick_stripe(base, dname));
+  dirstripe_t ds(base->get_ino(), pick_stripe(base, dname));
 
   if (from < 0)
     from = base->get_stripe_auth(ds.stripeid);
@@ -6847,6 +6178,14 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
   if (type == MDSCacheObjectInfo::STRIPE) {
     if (!placement) {
       placement = get_dir_placement(dis->base.stripe.ino);
+      if (!placement) {
+        dout(10) << "discover stripe failed to find placement for ino "
+            << dis->base.stripe.ino << dendl;
+        discover_dir_placement(dis->base.stripe.ino,
+                               new C_MDS_RetryMessage(mds, dis),
+                               get_container()->place(dis->base.stripe.ino));
+        return false;
+      }
       reply->contains.first = MDSCacheObjectInfo::STRIPE;
     }
     assert(placement);
@@ -6859,8 +6198,13 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
       return true;
     }
     stripe = placement->get_stripe(dis->base.stripe.stripeid);
-    assert(stripe); // TODO: fetch from osd
+    if (!stripe)
+      stripe = placement->get_or_open_stripe(dis->base.stripe.stripeid);
     assert(stripe->is_auth());
+    if (!stripe->is_open()) {
+      stripe->fetch(new C_MDS_RetryMessage(mds, dis));
+      return false;
+    }
     dout(7) << "replicating " << *stripe << dendl;
     replicate_stripe(stripe, from, reply->trace);
     reply->contains.second = MDSCacheObjectInfo::STRIPE;
@@ -7065,23 +6409,23 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
   } else {
     in = get_inode(ino, m->snapid);
   }
-  assert(in);
 
   if (next == MDSCacheObjectInfo::PLACEMENT) {
     if (m->is_flag_error_placement()) {
-      if (!in->is_dir()) {
-        in->take_waiting(CInode::WAIT_PLACEMENT, error);
+      if (in && !in->is_dir()) {
+        take_placement_waiters(in->ino(), error);
         dout(7) << *in << " not a directory" << dendl;
       } else {
         assert(m->auth_hint != CDIR_AUTH_UNKNOWN);
         // TODO: resend to 'who'
       }
     } else if (!p.end()) {
-      placement = add_replica_placement(p, in, from, finished);
+      placement = add_replica_placement(p, from, finished);
       dout(7) << "discover_reply got " << *placement << dendl;
       next = MDSCacheObjectInfo::STRIPE;
     }
   } else if (!p.end()) {
+    assert(in);
     placement = in->get_placement();
     assert(placement);
   }
@@ -7134,14 +6478,11 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 // ----------------------------
 // REPLICAS
 
-CDirPlacement* MDCache::add_replica_placement(bufferlist::iterator& p,
-                                              CInode *diri, int from,
+CDirPlacement* MDCache::add_replica_placement(bufferlist::iterator& p, int from,
                                               list<Context*>& finished)
 {
   inodeno_t ino;
   ::decode(ino, p);
-
-  assert(diri->ino() == ino);
 
   CDirPlacement *placement = get_dir_placement(ino);
   if (placement) {
@@ -7150,13 +6491,13 @@ CDirPlacement* MDCache::add_replica_placement(bufferlist::iterator& p,
         << " nonce " << placement->get_replica_nonce() << dendl;
   } else {
     const vector<int> empty_stripe_auth;
-    diri->set_stripe_auth(empty_stripe_auth);
-    placement = diri->get_placement();
+    placement = new CDirPlacement(this, ino, from, empty_stripe_auth);
     placement->decode_replica(p, true);
     dout(7) << "add_replica_placement added " << *placement
         << " nonce " << placement->get_replica_nonce() << dendl;
+    add_dir_placement(placement);
 
-    diri->take_waiting(CInode::WAIT_PLACEMENT, finished);
+    take_placement_waiters(ino, finished);
   }
   return placement;
 }
@@ -7183,7 +6524,7 @@ CDirStripe* MDCache::add_replica_stripe(bufferlist::iterator& p,
   dirstripe_t ds;
   ::decode(ds, p);
 
-  assert(placement->ino() == ds.ino);
+  assert(placement->get_ino() == ds.ino);
 
   CDirStripe *stripe = get_dirstripe(ds);
   if (stripe) {
@@ -7990,10 +7331,10 @@ void MDCache::_fragment_logged(MDRequest *mdr)
   map<metareqid_t, fragment_info_t>::iterator it = fragment_requests.find(mdr->reqid);
   assert(it != fragment_requests.end());
   fragment_info_t &info = it->second;
-  CInode *diri = info.resultfrags.front()->get_inode();
+  CDirStripe *stripe = info.resultfrags.front()->get_stripe();
 
   dout(10) << "fragment_logged " << info.resultfrags << " " << info.dirfrag
-	   << " bits " << info.bits << " on " << *diri << dendl;
+	   << " bits " << info.bits << " on " << *stripe << dendl;
 
   // store resulting frags
   C_GatherBuilder gather(g_ceph_context, new C_MDC_FragmentStore(this, mdr));

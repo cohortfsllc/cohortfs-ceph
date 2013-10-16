@@ -841,7 +841,8 @@ void Server::early_reply(MDRequest *mdr, CInode *tracei, CDentry *tracedn)
     if (tracei)
       mdr->cap_releases.erase(tracei->vino());
     if (tracedn)
-      mdr->cap_releases.erase(tracedn->get_dir()->get_inode()->vino());
+      mdr->cap_releases.erase(vinodeno_t(tracedn->get_dir()->ino(),
+                                         CEPH_NOSNAP));
 
     set_trace_dist(mdr, reply, tracei, tracedn);
   }
@@ -900,7 +901,8 @@ void Server::reply_request(MDRequest *mdr, MClientReply *reply, CInode *tracei, 
     if (tracei)
       mdr->cap_releases.erase(tracei->vino());
     if (tracedn)
-      mdr->cap_releases.erase(tracedn->get_dir()->get_inode()->vino());
+      mdr->cap_releases.erase(vinodeno_t(tracedn->get_dir()->ino(),
+                                         CEPH_NOSNAP));
   }
 
   // note client connection to direct my reply
@@ -1683,7 +1685,9 @@ CDirFrag *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string
   CDirPlacement *placement = diri->get_placement();
   if (!placement) {
     assert(!diri->is_auth());
-    mdcache->discover_dir_placement(diri, new C_MDS_RetryRequest(mdcache, mdr));
+    mdcache->discover_dir_placement(diri->ino(),
+                                    new C_MDS_RetryRequest(mdcache, mdr),
+                                    diri->authority().first);
     return NULL;
   }
 
@@ -1823,11 +1827,8 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDirFrag *dir, inodeno_t usein
   in->inode.truncate_size = -1ull;  // not truncated, yet!
   in->inode.truncate_seq = 1; /* starting with 1, 0 is kept for no-truncation logic */
 
-  CInode *diri = dir->get_inode();
-
-  dout(10) << oct << " dir mode 0" << diri->inode.mode << " new mode 0" << mode << dec << dendl;
-
   MClientRequest *req = mdr->client_request;
+#if 0
   if (diri->inode.mode & S_ISGID) {
     dout(10) << " dir is sticky" << dendl;
     in->inode.gid = diri->inode.gid;
@@ -1836,6 +1837,7 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDirFrag *dir, inodeno_t usein
       in->inode.mode |= S_ISGID;
     }
   } else 
+#endif
     in->inode.gid = req->get_caller_gid();
 
   in->inode.uid = req->get_caller_uid();
@@ -2016,10 +2018,6 @@ CInode* Server::rdlock_path_pin_ref(MDRequest *mdr, int n,
   if (r < 0) {  // error
     if (r == -ENOENT && n == 0 && mdr->dn[n].size()) {
       reply_request(mdr, r, NULL, no_lookup ? NULL : mdr->dn[n][mdr->dn[n].size()-1]);
-    } else if (r == -ESTALE) {
-      dout(10) << "FAIL on ESTALE but attempting recovery" << dendl;
-      Context *c = new C_MDS_TryFindInode(this, mdr);
-      mdcache->find_ino_peers(refpath.get_ino(), c);
     } else {
       dout(10) << "FAIL on error " << r << dendl;
       reply_request(mdr, r);
@@ -2112,8 +2110,7 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequest *mdr, int n,
     return 0;
   }
 
-  CInode *diri = dir->get_inode();
-  if (diri->is_system() && !diri->is_root()) {
+  if (dir->ino() < MDS_INO_SYSTEM_BASE && dir->ino() != MDS_INO_ROOT) {
     reply_request(mdr, -EROFS);
     return 0;
   }
@@ -2287,15 +2284,6 @@ void Server::handle_client_lookup_parent(MDRequest *mdr)
   reply_request(mdr, 0, in, dn);  // reply
 }
 
-struct C_MDS_LookupIno2 : public Context {
-  Server *server;
-  MDRequest *mdr;
-  C_MDS_LookupIno2(Server *s, MDRequest *r) : server(s), mdr(r) {}
-  void finish(int r) {
-    server->_lookup_ino_2(mdr, r);
-  }
-};
-
 /* This function DOES clean up the mdr before returning*/
 /*
  * filepath:  ino
@@ -2306,36 +2294,44 @@ void Server::handle_client_lookup_ino(MDRequest *mdr)
 
   inodeno_t ino = req->get_filepath().get_ino();
   CInode *in = mdcache->get_inode(ino);
-  if (in && in->state_test(CInode::STATE_PURGING)) {
-    reply_request(mdr, -ESTALE);
-    return;
-  }
-  if (!in) {
-    mdcache->open_ino(ino, (int64_t)-1, new C_MDS_LookupIno2(this, mdr), false);
-    return;
-  }
-
-  dout(10) << "reply to lookup_ino " << *in << dendl;
-  MClientReply *reply = new MClientReply(req, 0);
-  reply_request(mdr, reply, in, NULL);
-}
-
-void Server::_lookup_ino_2(MDRequest *mdr, int r)
-{
-  inodeno_t ino = mdr->client_request->get_filepath().get_ino();
-  dout(10) << "_lookup_ino_2 " << mdr << " ino " << ino << " r=" << r << dendl;
-  if (r >= 0) {
-    if (r == mds->get_nodeid())
-      dispatch_client_request(mdr);
-    else
-      mdcache->request_forward(mdr, r);
+  if (in) {
+    if (in->state_test(CInode::STATE_PURGING)) {
+      dout(10) << "lookup_ino is purging " << *in << dendl;
+      reply_request(mdr, -ESTALE);
+    } else {
+      dout(10) << "lookup_ino replying with " << *in << dendl;
+      reply_request(mdr, 0, in);
+    }
     return;
   }
 
-  // give up
-  if (r == -ENOENT || r == -ENODATA)
-    r = -ESTALE;
-  reply_request(mdr, r);
+  InodeContainer *container = mdcache->get_container();
+  CDirPlacement *placement = container->get_inode()->get_placement();
+  stripeid_t stripeid = container->place(ino);
+  int who = placement->get_stripe_auth(stripeid);
+  if (who != mds->get_nodeid()) {
+    dout(10) << "lookup_ino " << ino << " forwarding to mds." << who << dendl;
+    mdcache->request_forward(mdr, who);
+    return;
+  }
+
+  CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
+  if (!stripe->is_open()) {
+    stripe->fetch(new C_MDS_RetryRequest(mdcache, mdr));
+    return;
+  }
+
+  char dname[20];
+  snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
+  frag_t fg = stripe->pick_dirfrag(dname);
+  CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
+  if (!dir->is_complete()) {
+    dir->fetch(new C_MDS_RetryRequest(mdcache, mdr), string(dname));
+    return;
+  }
+
+  dout(10) << "lookup_ino " << ino << " not found" << dendl;
+  reply_request(mdr, -ESTALE);
 }
 
 
@@ -2550,14 +2546,8 @@ void Server::handle_client_openc(MDRequest *mdr)
       return;
     }
     if (r < 0 && r != -ENOENT) {
-      if (r == -ESTALE) {
-	dout(10) << "FAIL on ESTALE but attempting recovery" << dendl;
-	Context *c = new C_MDS_TryFindInode(this, mdr);
-	mdcache->find_ino_peers(req->get_filepath().get_ino(), c);
-      } else {
-	dout(10) << "FAIL on error " << r << dendl;
-	reply_request(mdr, r);
-      }
+      dout(10) << "FAIL on error " << r << dendl;
+      reply_request(mdr, r);
       return;
     }
     // r == -ENOENT
@@ -2722,7 +2712,9 @@ void Server::handle_client_readdir(MDRequest *mdr)
   CDirPlacement *placement = diri->get_placement();
   if (!placement) {
     assert(!diri->is_auth());
-    mdcache->discover_dir_placement(diri, new C_MDS_RetryRequest(mdcache, mdr));
+    mdcache->discover_dir_placement(diri->ino(),
+                                    new C_MDS_RetryRequest(mdcache, mdr),
+                                    diri->authority().first);
     return;
   }
 
@@ -5044,13 +5036,13 @@ void Server::handle_slave_rmdir_prep(MDRequest *mdr)
   mdlog->start_entry(le);
   le->rollback = mdr->more()->rollback_bl;
 
-  CInode *in = mdcache->get_inode(req->src.ino);
-  le->commit.add_inode(in, false);
+  CDirPlacement *placement = mdcache->get_dir_placement(req->src.ino);
+  le->commit.add_placement(placement);
 
   // journal each stripe as dirty/unlinked
   for (vector<stripeid_t>::iterator i = rollback.stripes.begin();
        i != rollback.stripes.end(); ++i) {
-    CDirStripe *stripe = in->get_placement()->get_stripe(*i);
+    CDirStripe *stripe = placement->get_stripe(*i);
     assert(stripe->is_open()); // master holds rdlock
     stripe->state_set(CDirStripe::STATE_UNLINKED);
     le->commit.add_stripe(stripe, true, false, true);
@@ -5315,14 +5307,8 @@ void Server::handle_client_rename(MDRequest *mdr)
   if (r > 0)
     return; // delayed
   if (r < 0) {
-    if (r == -ESTALE) {
-      dout(10) << "FAIL on ESTALE but attempting recovery" << dendl;
-      Context *c = new C_MDS_TryFindInode(this, mdr);
-      mdcache->find_ino_peers(srcpath.get_ino(), c);
-    } else {
-      dout(10) << "FAIL on error " << r << dendl;
-      reply_request(mdr, r);
-    }
+    dout(10) << "FAIL on error " << r << dendl;
+    reply_request(mdr, r);
     return;
 
   }
@@ -5373,17 +5359,7 @@ void Server::handle_client_rename(MDRequest *mdr)
     return;
   }
 
-  // dest a child of src?
-  // e.g. mv /usr /usr/foo
-  CDentry *pdn = destdir->get_inode()->parent;
-  while (pdn) {
-    if (pdn == srcdn) {
-      dout(7) << "cannot rename item to be a child of itself" << dendl;
-      reply_request(mdr, -EINVAL);
-      return;
-    }
-    pdn = pdn->get_dir()->get_inode()->parent;
-  }
+  // TODO: dest a child of src? e.g. mv /usr /usr/foo
 
   // -- locks --
   map<SimpleLock*, int> remote_wrlocks;
@@ -5392,7 +5368,7 @@ void Server::handle_client_rename(MDRequest *mdr)
   for (int i=0; i<(int)srctrace.size(); i++) 
     rdlocks.insert(&srctrace[i]->lock);
   xlocks.insert(&srcdn->lock);
-  int srcdirauth = srcdn->get_dir()->authority().first;
+  int srcdirauth = srcdn->get_stripe()->authority().first;
   if (srcdirauth != mds->whoami) {
     dout(10) << " will remote_wrlock srcdir scatterlocks on mds." << srcdirauth << dendl;
     remote_wrlocks[&srcdn->get_stripe()->linklock] = srcdirauth;

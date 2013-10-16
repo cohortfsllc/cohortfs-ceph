@@ -495,13 +495,12 @@ void CDirFrag::remove_null_dentries() {
   assert(get_num_any() == items.size());
 }
 
-void CDirFrag::touch_dentries_bottom() {
+void CDirFrag::touch_dentries_bottom()
+{
   dout(12) << "touch_dentries_bottom " << *this << dendl;
 
-  for (CDirFrag::map_t::iterator p = items.begin();
-       p != items.end();
-       ++p)
-    get_inode()->mdcache->touch_dentry_bottom(p->second);
+  for (CDirFrag::map_t::iterator p = items.begin(); p != items.end(); ++p)
+    cache->touch_dentry_bottom(p->second);
 }
 
 bool CDirFrag::try_trim_snap_dentry(CDentry *dn, const set<snapid_t>& snaps)
@@ -1738,21 +1737,6 @@ void CDirFrag::decode_import(bufferlist::iterator& blp, utime_t now, LogSegment 
   if (!replica_map.empty()) get(PIN_REPLICATED);
 
   replica_nonce = 0;  // no longer defined
-}
-
-
-/** contains(x)
- * true if we are x, or an ancestor of x
- */
-bool CDirFrag::contains(CDirFrag *x)
-{
-  while (1) {
-    if (x == this)
-      return true;
-    x = x->get_inode()->get_projected_parent_dir();
-    if (x == 0)
-      return false;    
-  }
 }
 
 

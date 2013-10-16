@@ -1020,7 +1020,6 @@ void MDS::handle_mds_map(MMDSMap *m)
       if (*p != whoami &&            // not me
 	  olddis.count(*p) == 0) {  // newly so?
 	mdcache->kick_discovers(*p);
-	mdcache->kick_open_ino_peers(*p);
       }
   }
 
@@ -1238,6 +1237,7 @@ void MDS::boot_start(int step, int r)
       } else {
 	// replay.  make up fake root inode to start with
 	mdcache->create_root_inode();
+        mdcache->get_container()->create();
       }
       gather.activate();
     }

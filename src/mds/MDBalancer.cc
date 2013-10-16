@@ -198,7 +198,6 @@ void MDBalancer::hit_dir(utime_t now, CDirFrag *dir, int type, int who, double a
 
   // split/merge
   if (g_conf->mds_bal_frag && g_conf->mds_bal_fragment_interval > 0 &&
-      !dir->get_inode()->is_base() && // not root/base (for now at least)
       dir->is_auth()) {
 
     dout(20) << "hit_dir " << type << " pop is " << v << ", frag " << dir->dirfrag()
