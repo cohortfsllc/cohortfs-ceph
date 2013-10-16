@@ -269,10 +269,6 @@ public:
   CDentry(const CDentry& m);
   const CDentry& operator= (const CDentry& right);
 
-  // misc
-  void make_path_string(string& s);
-  void make_path(filepath& fp);
-
   // -- version --
   version_t get_version() const { return version; }
   void set_version(version_t v) { version = v; }

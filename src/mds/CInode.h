@@ -442,9 +442,6 @@ public:
 
   // -- misc -- 
   bool is_projected_ancestor_of(CInode *other);
-  void make_path_string(string& s, bool force=false, CDentry *use_parent=NULL);
-  void make_path_string_projected(string& s);  
-  void make_path(filepath& s);
 
 
   static object_t get_object_name(inodeno_t ino, frag_t fg, const char *suffix);

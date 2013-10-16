@@ -50,10 +50,7 @@ boost::pool<> CDirFrag::pool(sizeof(CDirFrag));
 
 ostream& operator<<(ostream& out, CDirFrag& dir)
 {
-  string path;
-  dir.get_inode()->make_path_string_projected(path);
-  out << "[frag " << dir.dirfrag() << " " << path << "/"
-      << " [" << dir.first << ",head]";
+  out << "[frag " << dir.dirfrag() << "/ [" << dir.first << ",head]";
   if (dir.is_auth()) {
     out << " auth";
     if (dir.is_replicated())
@@ -1174,14 +1171,11 @@ void CDirFrag::_fetched(bufferlist &bl, const string& want_dn)
 	  dout(0) << "_fetched  badness: got (but i already had) " << *in
 		  << " mode " << in->inode.mode
 		  << " mtime " << in->inode.mtime << dendl;
-	  string dirpath, inopath;
-	  get_inode()->make_path_string(dirpath);
-	  in->make_path_string(inopath);
 	  clog.error() << "loaded dup inode " << inode.ino
 	    << " [" << first << "," << last << "] v" << inode.version
-	    << " at " << dirpath << "/" << dname
+	    << " at " << stripe->dirstripe() << "/" << dname
 	    << ", but inode " << in->vino() << " v" << in->inode.version
-	    << " already exists at " << inopath << "\n";
+	    << " already exists\n";
 	  continue;
 	} else {
 	  // inode

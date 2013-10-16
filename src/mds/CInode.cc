@@ -80,14 +80,14 @@ int num_cinode_locks = 5;
 
 void CInode::print(ostream& out)
 {
-  string path;
-  make_path_string_projected(path);
-
   out << "[inode " << inode.ino;
   out << " [" 
       << (is_multiversion() ? "...":"")
       << first << "," << last << "]";
-  out << " " << path << (is_dir() ? "/":"");
+
+  for (list<inoparent_t>::iterator i = inode.parents.begin();
+       i != inode.parents.end(); ++i)
+    out << " " << *i << (is_dir() ? "/":"");
 
   if (is_auth()) {
     out << " auth";
@@ -460,59 +460,6 @@ bool CInode::is_projected_ancestor_of(CInode *other)
     other = other->get_projected_parent_dn()->get_dir()->get_inode();
   }
   return false;
-}
-
-void CInode::make_path_string(string& s, bool force, CDentry *use_parent)
-{
-  if (!force)
-    use_parent = parent;
-
-  if (use_parent) {
-    use_parent->make_path_string(s);
-  } 
-  else if (is_root()) {
-    s = "";  // root
-  } 
-  else if (is_mdsdir()) {
-    char t[40];
-    uint64_t eino(ino());
-    eino -= MDS_INO_MDSDIR_OFFSET;
-    snprintf(t, sizeof(t), "~mds%" PRId64, eino);
-    s = t;
-  }
-  else {
-    char n[40];
-    uint64_t eino(ino());
-    snprintf(n, sizeof(n), "#%" PRIx64, eino);
-    s += n;
-  }
-}
-void CInode::make_path_string_projected(string& s)
-{
-  make_path_string(s);
-  
-  if (projected_parent.size()) {
-    string q;
-    q.swap(s);
-    s = "{" + q;
-    for (list<CDentry*>::iterator p = projected_parent.begin();
-	 p != projected_parent.end();
-	 p++) {
-      string q;
-      make_path_string(q, true, *p);
-      s += " ";
-      s += q;
-    }
-    s += "}";
-  }
-}
-
-void CInode::make_path(filepath& fp)
-{
-  if (parent) 
-    parent->make_path(fp);
-  else
-    fp = filepath(ino());
 }
 
 void CInode::_mark_dirty(LogSegment *ls)

@@ -3967,9 +3967,7 @@ void MDCache::trim_non_auth()
             stripe->get_dirfrags(ls);
             for (list<CDirFrag*>::iterator p = ls.begin(); p != ls.end(); ++p) {
               CDirFrag *subdir = *p;
-              filepath fp;
-              subdir->get_inode()->make_path(fp);
-              warn_str_dirs << fp << "\n";
+              warn_str_dirs << subdir->dirfrag() << "\n";
               stripe->close_dirfrag(subdir->get_frag());
             }
             placement->close_stripe(stripe);
@@ -4013,9 +4011,7 @@ void MDCache::trim_non_auth()
                ++p) {
             CDirFrag *dir = *p;
             dout(0) << " ... " << *dir << dendl;
-            filepath fp;
-            in->make_path(fp);
-            warn_str_dirs << fp << "\n";
+            warn_str_dirs << dir->dirfrag() << "\n";
             assert(dir->get_num_ref() == 0);
             stripe->close_dirfrag(dir->get_frag());
           }
@@ -6563,8 +6559,7 @@ int MDCache::send_dir_updates(CDirStripe *stripe, bool bcast)
   
   dout(7) << "sending dir_update on " << *stripe << " bcast " << bcast << " to " << who << dendl;
 
-  filepath path;
-  stripe->get_inode()->make_path(path);
+  filepath path(stripe->ino());
 
   int whoami = mds->get_nodeid();
   for (set<int>::iterator it = who.begin();
