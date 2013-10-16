@@ -637,13 +637,6 @@ int librados::IoCtx::get_auid(uint64_t *auid_)
   return rados_ioctx_pool_get_auid(io_ctx_impl, auid_);
 }
 
-std::string librados::IoCtx::get_pool_name()
-{
-  std::string s;
-  io_ctx_impl->client->pool_get_name(get_id(), &s);
-  return s;
-}
-
 int librados::IoCtx::create(const std::string& oid, bool exclusive)
 {
   object_t obj(oid);
@@ -1230,11 +1223,6 @@ void librados::IoCtx::set_assert_src_version(const std::string& oid, uint64_t ve
 {
   object_t obj(oid);
   io_ctx_impl->set_assert_src_version(obj, ver);
-}
-
-const std::string& librados::IoCtx::get_pool_name() const
-{
-  return io_ctx_impl->pool_name;
 }
 
 void librados::IoCtx::locator_set_key(const string& key)

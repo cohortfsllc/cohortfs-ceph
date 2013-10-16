@@ -6716,13 +6716,6 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
 		     (long unsigned)in->layout.fl_stripe_unit,
 		     (long unsigned)in->layout.fl_stripe_count,
 		     (long unsigned)in->layout.fl_object_size);
-#warning Hello, friend
-#if 0
-	if (osdmap->have_pg_pool(in->layout.fl_pg_pool))
-	  r += snprintf(buf + r, sizeof(buf) - r, "%s",
-			osdmap->get_pool_name(in->layout.fl_pg_pool));
-	else
-#endif /* 0 */
 	  r += snprintf(buf + r, sizeof(buf) - r, "%lu",
 			(long unsigned)in->layout.fl_pg_pool);
       } else if (rest == "layout.stripe_unit") {
@@ -6731,15 +6724,6 @@ int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
 	r = snprintf(buf, sizeof(buf), "%lu", (long unsigned)in->layout.fl_stripe_count);
       } else if (rest == "layout.object_size") {
 	r = snprintf(buf, sizeof(buf), "%lu", (long unsigned)in->layout.fl_object_size);
-      } else if (rest == "layout.pool") {
-#if 0
-	if (osdmap->have_pg_pool(in->layout.fl_pg_pool))
-	  r = snprintf(buf, sizeof(buf), "%s",
-		       osdmap->get_pool_name(in->layout.fl_pg_pool));
-	else
-#endif /* 0 */
-	  r = snprintf(buf, sizeof(buf), "%lu",
-		       (long unsigned)in->layout.fl_pg_pool);
       }
     }
     if (size != 0) {
@@ -7733,22 +7717,6 @@ int64_t Client::get_pool_id(const char *pool_name)
 {
   Mutex::Locker lock(client_lock);
   return osdmap->lookup_pg_pool_name(pool_name);
-}
-
-string Client::get_pool_name(int64_t pool)
-{
-  Mutex::Locker lock(client_lock);
-  if (!osdmap->have_pg_pool(pool))
-    return string();
-  return osdmap->get_pool_name(pool);
-}
-
-int Client::get_pool_replication(int64_t pool)
-{
-  Mutex::Locker lock(client_lock);
-  if (!osdmap->have_pg_pool(pool))
-    return -ENOENT;
-  return osdmap->get_pg_pool(pool)->get_size();
 }
 
 int Client::get_file_extent_osds(int fd, loff_t off, loff_t *len, vector<int>& osds)

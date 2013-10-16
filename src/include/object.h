@@ -15,7 +15,6 @@
 #ifndef CEPH_OBJECT_H
 #define CEPH_OBJECT_H
 
-#include <stdint.h>
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -34,11 +33,20 @@ using namespace __gnu_cxx;
 /// Maximum supported object name length for Ceph, in bytes.
 #define MAX_CEPH_OBJECT_NAME_LEN 4096
 
+static const uuid_d OSD_PSEUDO_VOLUME = uuid_d();
+static const uuid_d INVALID_VOLUME = uuid_d(~0, ~0);
+
 struct object_t {
   uuid_d volume;
   string name;
 
-  object_t() {}
+  /* Not ideal, but it saves us from having to throw out and rewrite
+     every interface.  We can create objects with an invalid volume
+     for things like ObjectOperation and then have the IoCtx put the
+     volume it has stored in */
+  object_t() : volume(INVALID_VOLUME) {}
+  object_t(const char *s) : volume(INVALID_VOLUME), name(s) {}
+  object_t(const string& s) : volume(INVALID_VOLUME), name(s) {}
   object_t(uuid_d v, const char *s) : volume(v), name(s) {}
   object_t(uuid_d v, const string& s) : volume(v), name(s) {}
 

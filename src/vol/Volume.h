@@ -43,6 +43,7 @@ typedef shared_ptr<Volume> VolumeRef;
 typedef shared_ptr<const Volume> VolumeCRef;
 
 class Volume {
+
 private:
   static const std::string typestrings[];
 
@@ -52,6 +53,7 @@ protected:
 
 
 public:
+
   vol_type type;
   uuid_d uuid;
   string name;

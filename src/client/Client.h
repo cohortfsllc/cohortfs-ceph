@@ -678,11 +678,10 @@ public:
   int get_file_extent_osds(int fd, loff_t off, loff_t *len, vector<int>& osds);
   int get_osd_addr(int osd, entity_addr_t& addr);
 
-  // expose osdmap 
+  // expose osdmap
   int get_local_osd();
   int get_pool_replication(int64_t pool);
   int64_t get_pool_id(const char *pool_name);
-  string get_pool_name(int64_t pool);
   int get_osd_crush_location(int id, vector<pair<string, string> >& path);
 
   int enumerate_layout(int fd, vector<ObjectExtent>& result,

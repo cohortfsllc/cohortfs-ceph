@@ -411,8 +411,6 @@ namespace librados
     // get pool auid
     int get_auid(uint64_t *auid_);
 
-    std::string get_pool_name();
-
     // create an object
     int create(const std::string& oid, bool exclusive);
     int create(const std::string& oid, bool exclusive, const std::string& category);
@@ -650,8 +648,6 @@ namespace librados
     // assert version for next sync operations
     void set_assert_version(uint64_t ver);
     void set_assert_src_version(const std::string& o, uint64_t ver);
-
-    const std::string& get_pool_name() const;
 
     void locator_set_key(const std::string& key);
 

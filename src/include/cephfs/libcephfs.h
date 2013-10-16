@@ -630,12 +630,10 @@ int ceph_open(struct ceph_mount_info *cmount, const char *path, int flags, mode_
  * @param stripe_unit the stripe unit size (option, 0 for default)
  * @param stripe_count the stripe count (optional, 0 for default)
  * @param object_size the object size (optional, 0 for default)
- * @param data_pool name of target data pool name (optional, NULL or empty string for default)
  * @returns a non-negative file descriptor number on success or a negative error code on failure.
  */
 int ceph_open_layout(struct ceph_mount_info *cmount, const char *path, int flags,
- 		     mode_t mode, int stripe_unit, int stripe_count, int object_size,
- 		     const char *data_pool);
+ 		     mode_t mode, int stripe_unit, int stripe_count, int object_size);
 
 /**
  * Close the open file.
@@ -895,65 +893,6 @@ int ceph_get_file_object_size(struct ceph_mount_info *cmount, int fh);
 int ceph_get_path_object_size(struct ceph_mount_info *cmount, const char *path);
 
 /**
- * Get the file pool information from an open file descriptor.
- *
- * @param cmount the ceph mount handle to use.
- * @param fh the open file descriptor referring to the file to get the pool information of.
- * @returns the ceph pool id that the file is in
- */
-int ceph_get_file_pool(struct ceph_mount_info *cmount, int fh);
-
-/**
- * Get the file pool information.
- *
- * @param cmount the ceph mount handle to use.
- * @param path the path of the file/directory get the pool information of.
- * @returns the ceph pool id that the file is in
- */
-int ceph_get_path_pool(struct ceph_mount_info *cmount, const char *path);
-
-/**
- * Get the name of the pool a opened file is stored in,
- *
- * Write the name of the file's pool to the buffer.  If buflen is 0, return
- * a suggested length for the buffer.
- *
- * @param cmount the ceph mount handle to use.
- * @param fh the open file descriptor referring to the file
- * @param buf buffer to store the name in
- * @param buflen size of the buffer
- * @returns length in bytes of the pool name, or -ERANGE if the buffer is not large enough.
- */
-int ceph_get_file_pool_name(struct ceph_mount_info *cmount, int fh, char *buf, size_t buflen);
-
-/**
- * get the name of a pool by id
- *
- * Given a pool's numeric identifier, get the pool's alphanumeric name.
- *
- * @param cmount the ceph mount handle to use
- * @param pool the numeric pool id
- * @param buf buffer to sore the name in
- * @param buflen size of the buffer
- * @returns length in bytes of the pool name, or -ERANGE if the buffer is not large enough
- */
-int ceph_get_pool_name(struct ceph_mount_info *cmount, int pool, char *buf, size_t buflen);
-
-/**
- * Get the name of the pool a file is stored in
- *
- * Write the name of the file's pool to the buffer.  If buflen is 0, return
- * a suggested length for the buffer.
- *
- * @param cmount the ceph mount handle to use.
- * @param path the path of the file/directory
- * @param buf buffer to store the name in
- * @param buflen size of the buffer
- * @returns length in bytes of the pool name, or -ERANGE if the buffer is not large enough.
- */
-int ceph_get_path_pool_name(struct ceph_mount_info *cmount, const char *path, char *buf, size_t buflen);
-
-/**
  * Get the file layout from an open file descriptor.
  *
  * @param cmount the ceph mount handle to use.
@@ -961,10 +900,9 @@ int ceph_get_path_pool_name(struct ceph_mount_info *cmount, const char *path, ch
  * @param stripe_unit where to store the striping unit of the file
  * @param stripe_count where to store the striping count of the file
  * @param object_size where to store the object size of the file
- * @param pg_pool where to store the ceph pool id that the file is in
  * @returns 0 on success or a negative error code on failure.
  */
-int ceph_get_file_layout(struct ceph_mount_info *cmount, int fh, int *stripe_unit, int *stripe_count, int *object_size, int *pg_pool);
+int ceph_get_file_layout(struct ceph_mount_info *cmount, int fh, int *stripe_unit, int *stripe_count, int *object_size);
 
 /**
  * Get the file layout.
@@ -974,10 +912,9 @@ int ceph_get_file_layout(struct ceph_mount_info *cmount, int fh, int *stripe_uni
  * @param stripe_unit where to store the striping unit of the file
  * @param stripe_count where to store the striping count of the file
  * @param object_size where to store the object size of the file
- * @param pg_pool where to store the ceph pool id that the file is in
  * @returns 0 on success or a negative error code on failure.
  */
-int ceph_get_path_layout(struct ceph_mount_info *cmount, const char *path, int *stripe_unit, int *stripe_count, int *object_size, int *pg_pool);
+int ceph_get_path_layout(struct ceph_mount_info *cmount, const char *path, int *stripe_unit, int *stripe_count, int *object_size);
 
 /**
  * Get the file replication information from an open file descriptor.
@@ -996,24 +933,6 @@ int ceph_get_file_replication(struct ceph_mount_info *cmount, int fh);
  * @returns the replication factor of the file.
  */
 int ceph_get_path_replication(struct ceph_mount_info *cmount, const char *path);
-
-/**
- * Get the id of the named pool.
- *
- * @param cmount the ceph mount handle to use.
- * @param pool_name the name of the pool.
- * @returns the pool id, or a negative error code on failure.
- */
-int ceph_get_pool_id(struct ceph_mount_info *cmount, const char *pool_name);
-
-/**
- * Get the pool replication factor.
- *
- * @param cmount the ceph mount handle to use.
- * @param pool_id the pool id to look up
- * @returns the replication factor, or a negative error code on failure.
- */
-int ceph_get_pool_replication(struct ceph_mount_info *cmount, int pool_id);
 
 /**
  * Get the OSD address where the primary copy of a file stripe is located.
