@@ -1312,11 +1312,11 @@ public:
 
 class C_Dir_Committed : public Context {
   CDirFrag *dir;
-  version_t version, last_renamed_version;
+  version_t version;
 public:
-  C_Dir_Committed(CDirFrag *d, version_t v, version_t lrv) : dir(d), version(v), last_renamed_version(lrv) { }
+  C_Dir_Committed(CDirFrag *d, version_t v) : dir(d), version(v) {}
   void finish(int r) {
-    dir->_committed(version, last_renamed_version);
+    dir->_committed(version);
   }
 };
 
@@ -1559,12 +1559,6 @@ void CDirFrag::_commit(version_t want)
   map_t::iterator committed_dn;
   unsigned max_write_size = cache->max_dir_commit_size;
 
-  // update parent pointer while we're here.
-  //  NOTE: the pointer is ONLY required to be valid for the first frag.  we put the xattr
-  //        on other frags too because it can't hurt, but it won't necessarily be up to date
-  //        in that case!!
-  max_write_size -= get_inode()->encode_parent_mutation(m);
-
   if (is_complete() &&
       (num_dirty > (num_head_items*g_conf->mds_dir_commit_ratio))) {
     snap_purged_thru = realm->get_last_destroyed();
@@ -1580,13 +1574,12 @@ void CDirFrag::_commit(version_t want)
   m.priority = CEPH_MSG_PRIO_LOW;  // set priority lower than journal!
 
   if (committed_dn == items.end())
-    cache->mds->objecter->mutate(oid, oloc, m, snapc, ceph_clock_now(g_ceph_context), 0, NULL,
-                                 new C_Dir_Committed(this, get_version(),
-                                       get_inode()->inode.last_renamed_version));
+    cache->mds->objecter->mutate(oid, oloc, m, snapc,
+                                 ceph_clock_now(g_ceph_context), 0, NULL,
+                                 new C_Dir_Committed(this, get_version()));
   else { // send in a different Context
-    C_GatherBuilder gather(g_ceph_context, 
-	    new C_Dir_Committed(this, get_version(),
-		      get_inode()->inode.last_renamed_version));
+    C_GatherBuilder gather(g_ceph_context,
+                           new C_Dir_Committed(this, get_version()));
     while (committed_dn != items.end()) {
       ObjectOperation n = ObjectOperation();
       committed_dn = _commit_partial(n, snaps, max_write_size, committed_dn);
@@ -1615,23 +1608,11 @@ void CDirFrag::_commit(version_t want)
  *
  * @param v version i just committed
  */
-void CDirFrag::_committed(version_t v, version_t lrv)
+void CDirFrag::_committed(version_t v)
 {
-  dout(10) << "_committed v " << v << " (last renamed " << lrv << ") on " << *this << dendl;
+  dout(10) << "_committed v " << v << " on " << *this << dendl;
   assert(is_auth());
 
-  CInode *inode = get_inode();
-
-  // did we update the parent pointer too?
-  if (get_frag() == frag_t() &&     // only counts on first frag
-      inode->state_test(CInode::STATE_DIRTYPARENT) &&
-      lrv == inode->inode.last_renamed_version) {
-    inode->item_renamed_file.remove_myself();
-    inode->state_clear(CInode::STATE_DIRTYPARENT);
-    inode->put(CInode::PIN_DIRTYPARENT);
-    dout(10) << "_committed  stored parent pointer, removed from renamed_files list " << *inode << dendl;
-  }
-  
   // take note.
   assert(v > committed_version);
   assert(v <= committing_version);

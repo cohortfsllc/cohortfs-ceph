@@ -141,7 +141,6 @@ public:
   static const int PIN_NEEDSNAPFLUSH =    20;
   static const int PIN_DIRTYRSTAT =       21; // has unaccounted rstat
   static const int PIN_EXPORTINGCAPS =    22;
-  static const int PIN_DIRTYPARENT =      23;
 
   const char *pin_name(int p) {
     switch (p) {
@@ -165,7 +164,6 @@ public:
     case PIN_STRAY: return "stray";
     case PIN_NEEDSNAPFLUSH: return "needsnapflush";
     case PIN_DIRTYRSTAT: return "dirtyrstat";
-    case PIN_DIRTYPARENT: return "dirtyparent";
     default: return generic_pin_name(p);
     }
   }
@@ -182,7 +180,6 @@ public:
   static const int STATE_NEEDSRECOVER = (1<<11);
   static const int STATE_RECOVERING =   (1<<12);
   static const int STATE_PURGING =     (1<<13);
-  static const int STATE_DIRTYPARENT =  (1<<14);
   static const int STATE_DIRTYRSTAT =  (1<<15);
   static const int STATE_STRAYPINNED = (1<<16);
   static const int STATE_FROZENAUTHPIN = (1<<17);
@@ -364,7 +361,6 @@ protected:
 public:
   elist<CInode*>::item item_dirty;
   elist<CInode*>::item item_open_file;
-  elist<CInode*>::item item_renamed_file;
   elist<CInode*>::item item_dirty_rstat;
   elist<CInode*>::item item_stray;
 
@@ -458,12 +454,6 @@ public:
   void _stored(version_t cv, Context *fin);
   void fetch(Context *fin);
   void _fetched(bufferlist& bl, bufferlist& bl2, Context *fin);  
-
-  void store_parent(Context *fin);
-  void _stored_parent(version_t v, Context *fin);
-
-  void build_backtrace(inode_backtrace_t& bt);
-  unsigned encode_parent_mutation(ObjectOperation& m);
 
   void encode_store(bufferlist& bl);
   void decode_store(bufferlist::iterator& bl);

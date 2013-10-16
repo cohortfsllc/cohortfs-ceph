@@ -188,14 +188,6 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld)
     }
   }
 
-  // parent pointers on renamed dirs
-  for (elist<CInode*>::iterator p = renamed_files.begin(); !p.end(); ++p) {
-    CInode *in = *p;
-    dout(10) << "try_to_expire waiting for dir parent pointer update on " << *in << dendl;
-    assert(in->state_test(CInode::STATE_DIRTYPARENT));
-    in->store_parent(gather_bld.new_sub());
-  }
-
   // slave updates
   for (elist<MDSlaveUpdate*>::iterator p = slave_updates.begin(member_offset(MDSlaveUpdate,
 									     item));
