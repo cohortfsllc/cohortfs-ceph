@@ -538,6 +538,7 @@ public:
   virtual void remove_client_cap(client_t client);
   virtual int get_caps_liked();
   virtual int get_caps_allowed_ever();
+  virtual void wanted_caps_adjusted(Capability *cap);
 
   void replicate_relax_locks();
 

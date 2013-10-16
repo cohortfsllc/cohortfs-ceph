@@ -26,6 +26,7 @@
 #include "Mutation.h"
 
 #include "events/EUpdate.h"
+#include "events/EOpen.h"
 
 #include "osdc/Objecter.h"
 
@@ -1089,6 +1090,27 @@ int CInode::get_caps_allowed_ever()
   else
     allowed = CEPH_CAP_ANY;
   return allowed & CapObject::get_caps_allowed_ever();
+}
+
+void CInode::wanted_caps_adjusted(Capability *cap)
+{
+  if (cap->wanted() == 0) {
+    if (item_open_file.is_on_list() && !is_any_caps_wanted()) {
+      dout(10) << " removing unwanted file from open file list "
+          << *this << dendl;
+      item_open_file.remove_myself();
+    }
+  } else if (!item_open_file.is_on_list()) {
+    dout(10) << " adding to open file list " << *this << dendl;
+    assert(is_head());
+    MDLog *mdlog = mdcache->mds->mdlog;
+    LogSegment *ls = mdlog->get_current_segment();
+    EOpen *le = new EOpen(mdlog);
+    mdlog->start_entry(le);
+    le->add_clean_inode(this);
+    ls->open_files.push_back(&item_open_file);
+    mdlog->submit_entry(le);
+  }
 }
 
 void CInode::replicate_relax_locks()

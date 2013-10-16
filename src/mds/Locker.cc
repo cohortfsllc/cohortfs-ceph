@@ -1881,33 +1881,32 @@ void Locker::revoke_stale_caps(Session *session)
 
   for (xlist<Capability*>::iterator p = session->caps.begin(); !p.end(); ++p) {
     Capability *cap = *p;
+    CapObject *o = cap->get_parent();
     cap->set_stale(true);
-    CInode *in = (CInode*)cap->get_parent();
+
     int issued = cap->issued();
-    if (in) {
-      // inode caps
-      if (issued) {
-        dout(10) << " revoking " << ccap_string(issued) << " on " << *in << dendl;      
-        cap->revoke();
-
-        if (in->is_auth() &&
-            in->inode.client_ranges.count(client))
-          in->state_set(CInode::STATE_NEEDSRECOVER);
-
-        if (!in->filelock.is_stable()) eval_gather(&in->filelock);
-        if (!in->linklock.is_stable()) eval_gather(&in->linklock);
-        if (!in->authlock.is_stable()) eval_gather(&in->authlock);
-        if (!in->xattrlock.is_stable()) eval_gather(&in->xattrlock);
-
-        if (in->is_auth()) {
-          try_eval(in, CEPH_CAP_LOCKS);
-        } else {
-          request_mds_caps(in);
-        }
-      } else {
-        dout(10) << " nothing issued on " << *in << dendl;
-      }
+    if (!issued) {
+      dout(10) << " nothing issued on " << *o << dendl;
+      continue;
     }
+
+    dout(10) << " revoking " << ccap_string(issued) << " on " << *o << dendl;
+
+    if (o->is_auth() && (issued & CEPH_CAP_ANY_FILE_WR) &&
+        ((CInode*)o)->inode.client_ranges.count(client))
+      o->state_set(CInode::STATE_NEEDSRECOVER);
+
+    cap->revoke();
+
+    typedef vector<SimpleLock*>::iterator lock_iter;
+    for (lock_iter i = o->cap_locks.begin(); i != o->cap_locks.end(); ++i)
+      if (!(*i)->is_stable())
+        eval_gather(*i);
+
+    if (o->is_auth())
+      try_eval(o, CEPH_CAP_LOCKS);
+    else
+      request_mds_caps(o);
   }
 }
 
@@ -1917,13 +1916,13 @@ void Locker::resume_stale_caps(Session *session)
 
   for (xlist<Capability*>::iterator p = session->caps.begin(); !p.end(); ++p) {
     Capability *cap = *p;
-    CInode *in = (CInode*)cap->get_parent();
-    assert(in->is_head());
+    CapObject *o = cap->get_parent();
+    assert(o->is_head());
     if (cap->is_stale()) {
-      dout(10) << " clearing stale flag on " << *in << dendl;
+      dout(10) << " clearing stale flag on " << *o << dendl;
       cap->set_stale(false);
-      if (!in->is_auth() || !eval(in, CEPH_CAP_LOCKS))
-	issue_caps(in, cap);
+      if (!o->is_auth() || !eval(o, CEPH_CAP_LOCKS))
+	issue_caps(o, cap);
     }
   }
 }
@@ -2208,28 +2207,9 @@ void Locker::adjust_cap_wanted(Capability *cap, int wanted, int issue_seq)
     return;
   }
 
-  CInode *cur = (CInode*)cap->get_parent();
-  if (!cur || !cur->is_auth())
-    return;
-  if (cap->wanted() == 0) {
-    if (cur->item_open_file.is_on_list() &&
-	!cur->is_any_caps_wanted()) {
-      dout(10) << " removing unwanted file from open file list " << *cur << dendl;
-      cur->item_open_file.remove_myself();
-    }
-  } else {
-    if (!cur->item_open_file.is_on_list()) {
-      dout(10) << " adding to open file list " << *cur << dendl;
-      assert(cur->last == CEPH_NOSNAP);
-      LogSegment *ls = mds->mdlog->get_current_segment();
-      EOpen *le = new EOpen(mds->mdlog);
-      mds->mdlog->start_entry(le);
-      le->add_clean_inode(cur);
-      ls->open_files.push_back(&cur->item_open_file);
-      mds->mdlog->submit_entry(le);
-    }
-  }
-
+  CapObject *o = cap->get_parent();
+  if (o->is_auth())
+    o->wanted_caps_adjusted(cap);
 }
 
 
