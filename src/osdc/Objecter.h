@@ -777,7 +777,7 @@ public:
       budgeted(false),
       should_resend(true) {
       ops.swap(op);
-      
+
       /* initialize out_* to match op vector */
       out_bl.resize(ops.size());
       out_rval.resize(ops.size());

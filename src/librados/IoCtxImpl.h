@@ -31,15 +31,13 @@ class RadosClient;
 struct librados::IoCtxImpl {
   atomic_t ref_cnt;
   RadosClient *client;
-  int64_t poolid;
-  string pool_name;
+  uuid_d volume;
   snapid_t snap_seq;
   ::SnapContext snapc;
   uint64_t assert_ver;
   map<object_t, uint64_t> assert_src_version;
   eversion_t last_objver;
   uint32_t notify_timeout;
-  object_locator_t oloc;
 
   Mutex aio_write_list_lock;
   tid_t aio_write_seq;
@@ -52,20 +50,18 @@ struct librados::IoCtxImpl {
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
-	    int poolid, const char *pool_name, snapid_t s);
+	    uuid_d volid, snapid_t s);
 
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count
     client = rhs.client;
-    poolid = rhs.poolid;
-    pool_name = rhs.pool_name;
+    volume = rhs.volume;
     snap_seq = rhs.snap_seq;
     snapc = rhs.snapc;
     assert_ver = rhs.assert_ver;
     assert_src_version = rhs.assert_src_version;
     last_objver = rhs.last_objver;
     notify_timeout = rhs.notify_timeout;
-    oloc = rhs.oloc;
     lock = rhs.lock;
     objecter = rhs.objecter;
   }
@@ -87,8 +83,8 @@ struct librados::IoCtxImpl {
   void flush_aio_writes_async(AioCompletionImpl *c);
   void flush_aio_writes();
 
-  int64_t get_id() {
-    return poolid;
+  const uuid_d& get_volume() {
+    return volume;
   }
 
 

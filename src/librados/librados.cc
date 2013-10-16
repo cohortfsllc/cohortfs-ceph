@@ -110,7 +110,7 @@ void librados::ObjectOperation::src_cmpxattr(const std::string& src_oid,
 }
 
 void librados::ObjectOperation::src_cmpxattr(const std::string& src_oid,
-					 const char *name, int op, uint64_t val)
+					     const char *name, int op, uint64_t val)
 {
   ::ObjectOperation *o = (::ObjectOperation *)impl;
   object_t oid(src_oid);
