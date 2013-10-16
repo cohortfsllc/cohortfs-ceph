@@ -2712,6 +2712,7 @@ void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *
   }
   // auth
   if (dirty & CEPH_CAP_AUTH_EXCL) {
+    CDirPlacement *placement = in->is_dir() ? in->get_placement() : NULL;
     if (m->inode.uid != pi->uid) {
       dout(7) << "  uid " << pi->uid
 	      << " -> " << m->inode.uid
@@ -2723,12 +2724,16 @@ void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *
 	      << " -> " << m->inode.gid
 	      << " for " << *in << dendl;
       pi->gid = m->inode.gid;
+      if (placement)
+        placement->set_gid(pi->gid);
     }
     if (m->inode.mode != pi->mode) {
       dout(7) << "  mode " << oct << pi->mode
 	      << " -> " << m->inode.mode << dec
 	      << " for " << *in << dendl;
       pi->mode = m->inode.mode;
+      if (placement)
+        placement->set_mode(pi->mode);
     }
   }
 
@@ -3085,10 +3090,10 @@ void Locker::handle_client_lease(MClientLease *m)
 void Locker::issue_client_lease(CDentry *dn, client_t client,
 			       bufferlist &bl, utime_t now, Session *session)
 {
-  CInode *diri = dn->get_dir()->get_inode();
-  const unsigned cap_mask = CEPH_CAP_FILE_SHARED | CEPH_CAP_FILE_EXCL;
-  if (!diri->filelock.can_lease(client) &&
-      (diri->get_client_cap_pending(client) & cap_mask) == 0 &&
+  CDirStripe *stripe = dn->get_stripe();
+  const unsigned cap_mask = CEPH_CAP_LINK_SHARED | CEPH_CAP_LINK_EXCL;
+  if (!stripe->linklock.can_lease(client) &&
+      (stripe->get_client_cap_pending(client) & cap_mask) == 0 &&
       dn->lock.can_lease(client)) {
     int pool = 1;   // fixme.. do something smart!
     // issue a dentry lease
@@ -3120,26 +3125,22 @@ void Locker::issue_client_lease(CDentry *dn, client_t client,
 void Locker::revoke_client_leases(SimpleLock *lock)
 {
   int n = 0;
+  assert(lock->get_type() == CEPH_LOCK_DN);
   CDentry *dn = static_cast<CDentry*>(lock->get_parent());
   for (map<client_t, ClientLease*>::iterator p = dn->client_lease_map.begin();
        p != dn->client_lease_map.end();
        ++p) {
     ClientLease *l = p->second;
-    
     n++;
-    assert(lock->get_type() == CEPH_LOCK_DN);
-
-    CDentry *dn = static_cast<CDentry*>(lock->get_parent());
     int mask = 1 | CEPH_LOCK_DN; // old and new bits
-    
+
     // i should also revoke the dir ICONTENT lease, if they have it!
-    CInode *diri = dn->get_dir()->get_inode();
-    mds->send_message_client_counted(new MClientLease(CEPH_MDS_LEASE_REVOKE, l->seq,
-					      mask,
-					      diri->ino(),
-					      diri->first, CEPH_NOSNAP,
-					      dn->get_name()),
-			     l->client);
+    mds->send_message_client_counted(new MClientLease(CEPH_MDS_LEASE_REVOKE,
+                                                      l->seq, mask,
+                                                      dn->get_dir()->ino(),
+                                                      2, CEPH_NOSNAP,
+                                                      dn->get_name()),
+                                     l->client);
   }
   assert(n == lock->get_num_client_lease());
 }

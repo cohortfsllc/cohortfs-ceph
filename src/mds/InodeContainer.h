@@ -37,6 +37,7 @@ class InodeContainer {
   InodeContainer(MDCache *mdcache) : mdcache(mdcache), in(0) {}
 
   CInode* get_inode() { return in; }
+  bool is_open();
 
   // create the container inode
   CInode* create();

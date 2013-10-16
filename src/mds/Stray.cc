@@ -378,6 +378,8 @@ void Stray::logged(CDirStripe *stripe)
   CDirPlacement *placement = stripe->get_placement();
   placement->close_stripe(stripe);
 
-  eval(placement->get_inode());
+  CInode *in = mds->mdcache->get_inode(placement->get_ino());
+  if (in)
+    eval(in);
 }
 

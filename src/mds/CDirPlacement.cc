@@ -29,7 +29,7 @@
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
-#define dout_prefix *_dout << "mds." << mdcache->mds->get_nodeid() << ".cache.dir(" << this->ino() << ") "
+#define dout_prefix *_dout << "mds." << mdcache->mds->get_nodeid() << ".cache.dir(" << get_ino() << ") "
 
 
 
@@ -41,7 +41,7 @@ LockType CDirPlacement::authlock_type(CEPH_LOCK_DAUTH);
 void CDirPlacement::print(ostream& out) 
 {
   string path;
-  out << "[dir " << ino();
+  out << "[dir " << get_ino();
   if (is_auth()) {
     out << " auth";
     if (is_replicated())
@@ -81,40 +81,30 @@ ostream& operator<<(ostream& out, CDirPlacement& dir)
 
 ostream& CDirPlacement::print_db_line_prefix(ostream& out) 
 {
-  return out << ceph_clock_now(g_ceph_context) << " mds." << mdcache->mds->get_nodeid() << ".cache.dir(" << this->ino() << ") ";
+  return out << ceph_clock_now(g_ceph_context) << " mds." << mdcache->mds->get_nodeid() << ".cache.dir(" << get_ino() << ") ";
 }
 
 
 // constructor
 
-CDirPlacement::CDirPlacement(MDCache *mdcache, CInode *inode,
+CDirPlacement::CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
                              const vector<int> &stripe_auth)
   : mdcache(mdcache),
-    inode(inode),
+    ino(ino),
+    inode_auth(inode_auth, CDIR_AUTH_UNKNOWN),
     version(0),
     stripe_auth(stripe_auth),
-    mode(inode->inode.mode),
-    gid(inode->inode.gid),
+    mode(0),
+    gid(0),
     auth_pins(0),
     authlock(this, &authlock_type)
 {
-  if (inode->is_auth())
+  if (inode_auth == mdcache->mds->get_nodeid())
     state_set(STATE_AUTH);
 
   memset(&layout, 0, sizeof(layout));
   layout.dl_dir_hash = g_conf->mds_default_dir_hash;
 }
-
-inodeno_t CDirPlacement::ino() const
-{
-  return inode->ino();
-}
-
-pair<int,int> CDirPlacement::authority()
-{
-  return inode->authority();
-}
-
 
 __u32 CDirPlacement::hash_dentry_name(const string &dn)
 { 
@@ -226,16 +216,6 @@ void CDirPlacement::take_stripe_waiting(stripeid_t stripeid, list<Context*>& ls)
 
 // pins
 
-void CDirPlacement::first_get()
-{
-  inode->get(CInode::PIN_PLACEMENT);
-}
-
-void CDirPlacement::last_put()
-{
-  inode->put(CInode::PIN_PLACEMENT);
-}
-
 void CDirPlacement::auth_pin(void *by) 
 {
   if (auth_pins == 0)
@@ -271,7 +251,7 @@ void CDirPlacement::auth_unpin(void *by)
 
 void CDirPlacement::set_object_info(MDSCacheObjectInfo &info)
 {
-  info.dirfrag.stripe.ino = ino();
+  info.dirfrag.stripe.ino = get_ino();
   info.snapid = CEPH_NOSNAP;
   info.type = MDSCacheObjectInfo::PLACEMENT;
 }

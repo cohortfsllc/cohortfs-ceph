@@ -97,6 +97,9 @@ class MDCache {
   typedef hash_map<inodeno_t,CDirPlacement*> dir_placement_map;
   dir_placement_map dirs;
 
+  typedef map<inodeno_t,list<Context*> > placement_wait_map;
+  placement_wait_map waiting_on_placement;
+
 public:
   ParentStats parentstats;
 
@@ -159,7 +162,7 @@ public:
   map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
 
   void discover_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
-  void discover_dir_placement(CInode *base, Context *onfinish, int from=-1);
+  void discover_dir_placement(inodeno_t ino, Context *onfinish, int from);
   void discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
                            Context *onfinish, int from=-1);
   void discover_dir_frag(CDirStripe *stripe, frag_t approx_fg, Context *onfinish,
@@ -533,7 +536,11 @@ public:
   void remove_inode(CInode *in);
 
   void add_dir_placement(CDirPlacement *placement);
-  void remove_dir_placement(CDirPlacement *placement);
+  void remove_dir_placement(inodeno_t ino);
+
+  bool is_placement_waiter(inodeno_t ino) const;
+  void add_placement_waiter(inodeno_t ino, Context *fin);
+  void take_placement_waiters(inodeno_t ino, list<Context*> &waiters);
 
  protected:
   void touch_inode(CInode *in) {
@@ -665,83 +672,6 @@ public:
   void open_remote_ino(inodeno_t ino, Context *fin);
   void open_remote_dentry(CDentry *dn, bool projected, Context *fin);
 
-  void make_trace(vector<CDentry*>& trace, CInode *in);
-
-protected:
-  struct open_ino_info_t {
-    vector<inode_backpointer_t> ancestors;
-    set<int> checked;
-    int checking;
-    int auth_hint;
-    bool check_peers;
-    bool fetch_backtrace;
-    bool discover;
-    bool want_replica;
-    bool want_xlocked;
-    version_t tid;
-    int64_t pool;
-    list<Context*> waiters;
-    open_ino_info_t() : checking(-1), auth_hint(-1),
-      check_peers(true), fetch_backtrace(true), discover(false) {}
-  };
-  tid_t open_ino_last_tid;
-  map<inodeno_t,open_ino_info_t> opening_inodes;
-
-  void _open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err);
-  void _open_ino_parent_opened(inodeno_t ino, int ret);
-  void _open_ino_traverse_dir(inodeno_t ino, open_ino_info_t& info, int err);
-  Context* _open_ino_get_waiter(inodeno_t ino, MMDSOpenIno *m);
-  int open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
-			    vector<inode_backpointer_t>& ancestors,
-			    bool discover, bool want_xlocked, int *hint);
-  void open_ino_finish(inodeno_t ino, open_ino_info_t& info, int err);
-  void do_open_ino(inodeno_t ino, open_ino_info_t& info, int err);
-  void do_open_ino_peer(inodeno_t ino, open_ino_info_t& info);
-  void handle_open_ino(MMDSOpenIno *m);
-  void handle_open_ino_reply(MMDSOpenInoReply *m);
-  friend class C_MDC_OpenInoBacktraceFetched;
-  friend struct C_MDC_OpenInoTraverseDir;
-  friend struct C_MDC_OpenInoParentOpened;
-
-public:
-  void kick_open_ino_peers(int who);
-  void open_ino(inodeno_t ino, int64_t pool, Context *fin,
-		bool want_replica=true, bool want_xlocked=false);
-  
-  // -- find_ino_peer --
-  struct find_ino_peer_info_t {
-    inodeno_t ino;
-    tid_t tid;
-    Context *fin;
-    int hint;
-    int checking;
-    set<int> checked;
-
-    find_ino_peer_info_t() : tid(0), fin(NULL), hint(-1), checking(-1) {}
-  };
-
-  map<tid_t, find_ino_peer_info_t> find_ino_peer;
-  tid_t find_ino_peer_last_tid;
-
-  void find_ino_peers(inodeno_t ino, Context *c, int hint=-1);
-  void _do_find_ino_peer(find_ino_peer_info_t& fip);
-  void handle_find_ino(MMDSFindIno *m);
-  void handle_find_ino_reply(MMDSFindInoReply *m);
-  void kick_find_ino_peers(int who);
-
-  // -- find_ino_dir --
-  struct find_ino_dir_info_t {
-    inodeno_t ino;
-    Context *fin;
-  };
-
-  void find_ino_dir(inodeno_t ino, Context *c);
-  void _find_ino_dir(inodeno_t ino, Context *c, bufferlist& bl, int r);
-
-protected:
-  void fetch_backtrace(inodeno_t ino, int64_t pool, bufferlist& bl, Context *fin);
-  friend class C_MDC_FetchedBacktrace;
-
   // -- stray --
  private:
   Stray stray;
@@ -768,7 +698,7 @@ protected:
 
 public:
   void replicate_placement(CDirPlacement *placement, int to, bufferlist& bl) {
-    inodeno_t ino = placement->ino();
+    inodeno_t ino = placement->get_ino();
     ::encode(ino, bl);
     placement->encode_replica(to, bl);
   }
@@ -793,8 +723,8 @@ public:
     in->encode_replica(to, bl);
   }
 
-  CDirPlacement* add_replica_placement(bufferlist::iterator& p, CInode *diri,
-                                       int from, list<Context*>& finished);
+  CDirPlacement* add_replica_placement(bufferlist::iterator& p, int from,
+                                       list<Context*>& finished);
   CDirPlacement* forge_replica_placement(CInode *diri, int from);
   CDirStripe* add_replica_stripe(bufferlist::iterator& p,
                                  CDirPlacement *placement,

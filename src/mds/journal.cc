@@ -751,6 +751,7 @@ void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
 void EMetaBlob::Placement::encode(bufferlist& bl) const
 {
   ENCODE_START(2, 2, bl);
+  ::encode(inode_auth, bl);
   ::encode(mode, bl);
   ::encode(gid, bl);
   ::encode(stripes, bl);
@@ -762,6 +763,7 @@ void EMetaBlob::Placement::encode(bufferlist& bl) const
 void EMetaBlob::Placement::decode(bufferlist::iterator& bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl)
+  ::decode(inode_auth, bl);
   ::decode(mode, bl);
   ::decode(gid, bl);
   ::decode(stripes, bl);
@@ -772,6 +774,7 @@ void EMetaBlob::Placement::decode(bufferlist::iterator& bl)
 
 void EMetaBlob::Placement::dump(Formatter *f) const
 {
+  f->dump_unsigned("inode auth", inode_auth);
   f->dump_stream("mode") << oct << mode << dec;
   f->dump_unsigned("gid", gid);
   f->dump_stream("stripe auth") << stripe_auth;
@@ -796,6 +799,12 @@ void EMetaBlob::Placement::generate_test_instances(list<Placement*>& ls)
 void EMetaBlob::Placement::apply(MDS *mds, CDirPlacement *placement,
                                  LogSegment *ls)
 {
+  placement->set_inode_auth(inode_auth);
+  if (inode_auth == mds->get_nodeid())
+    placement->state_set(CDirPlacement::STATE_AUTH);
+  else
+    placement->state_clear(CDirPlacement::STATE_AUTH);
+
   placement->set_mode(mode);
   placement->set_gid(gid);
   placement->set_stripe_auth(stripe_auth);
@@ -979,7 +988,13 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   for (placement_map::iterator p = dirs.begin(); p != dirs.end(); ++p) {
     // open the placement object
     CDirPlacement *placement = mds->mdcache->get_dir_placement(p->first);
-    assert(placement);
+    if (!placement) {
+      placement = new CDirPlacement(mds->mdcache, p->first,
+                                    p->second.get_inode_auth(),
+                                    p->second.get_stripe_auth());
+      mds->mdcache->add_dir_placement(placement);
+      dout(10) << "EMetaBlob.replay added " << *placement << dendl;
+    }
     p->second.apply(mds, placement, logseg);
   }
 
