@@ -4406,10 +4406,12 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
     pd = stripe->dentry_map.find(dirp->at_cache_name);
     if (pd == stripe->dentry_map.end())
       return -EAGAIN;  // weird, i give up
-    pd++;
+    ++pd;
   } else {
     pd = stripe->dentry_map.begin();
   }
+  if (pd == stripe->dentry_map.end())
+    dirp->next_stripe();
 
   string prev_name;
   while (pd != stripe->dentry_map.end()) {
