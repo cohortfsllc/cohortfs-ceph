@@ -825,14 +825,12 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
 	   << " is_dentry=" << (int)reply->head.is_dentry
 	   << dendl;
 
-  InodeStat dirst;
   StripeStat sst;
   string dname;
   LeaseStat dlease;
   InodeStat ist;
 
   if (reply->head.is_dentry) {
-    dirst.decode(p, features);
     sst.decode(p, features);
     ::decode(dname, p);
     ::decode(dlease, p);
@@ -846,7 +844,9 @@ Inode* Client::insert_trace(MetaRequest *request, int mds)
   }
 
   if (reply->head.is_dentry) {
-    Inode *diri = add_update_inode(&dirst, request->sent_stamp, mds);
+    inode_hashmap::iterator i = inodes.find(sst.vino);
+    assert(i != inodes.end());
+    Inode *diri = i->second;
     DirStripe *stripe = add_update_stripe(diri, sst, mds);
     if (in) {
       insert_dentry_inode(stripe, dname, &dlease, in, request->sent_stamp, mds, true,
