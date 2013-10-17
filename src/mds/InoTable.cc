@@ -27,14 +27,10 @@ void InoTable::reset_state()
 {
   // use generic range. FIXME THIS IS CRAP
   free.clear();
-  //#ifdef __LP64__
-  uint64_t start = (uint64_t)(mds->get_nodeid()+1) << 40;
-  uint64_t end = ((uint64_t)(mds->get_nodeid()+2) << 40) - 1;
-  //#else
-  //# warning this looks like a 32-bit system, using small inode numbers.
-  //  uint64_t start = (uint64_t)(mds->get_nodeid()+1) << 25;
-  //  uint64_t end = ((uint64_t)(mds->get_nodeid()+2) << 25) - 1;
-  //#endif
+  const ceph_inode_placement &p = mds->mdsmap->get_inode_placement();
+  uint64_t start = (uint64_t)(mds->get_nodeid()+p.delta) << p.shift;
+  uint64_t end = ((uint64_t)(mds->get_nodeid()+p.delta+1) << p.shift) - 1;
+  dout(10) << "reset_state " << hex << start << "->" << end << dec << dendl;
   free.insert(start, end);
 
   projected_free = free;

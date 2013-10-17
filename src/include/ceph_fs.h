@@ -64,6 +64,21 @@ struct ceph_dir_layout {
 	__u32  dl_unused3;
 } __attribute__ ((packed));
 
+/* inode placement: stripeid = (ino >> shift) % mod + delta */
+struct ceph_inode_placement {
+  __u8 shift;
+  __u8 delta;
+  __u16 mod; /* (optional) */
+} __attribute__ ((packed));
+
+/* return the stripe that contains the given inode */
+static inline __u32 ceph_place_inode(const struct ceph_inode_placement *p,
+                                     __u64 ino) {
+  if (p->mod)
+    return (ino >> p->shift) % p->mod - p->delta;
+  return (ino >> p->shift) - p->delta;
+}
+
 /* crypto algorithms */
 #define CEPH_CRYPTO_NONE 0x0
 #define CEPH_CRYPTO_AES  0x1
@@ -304,9 +319,7 @@ struct ceph_mds_session_head {
 enum {
 	CEPH_MDS_OP_LOOKUP     = 0x00100,
 	CEPH_MDS_OP_GETATTR    = 0x00101,
-	CEPH_MDS_OP_LOOKUPHASH = 0x00102,
-	CEPH_MDS_OP_LOOKUPPARENT = 0x00103,
-	CEPH_MDS_OP_LOOKUPINO  = 0x00104,
+	CEPH_MDS_OP_LOOKUPPARENT = 0x00102,
 
 	CEPH_MDS_OP_SETXATTR   = 0x01105,
 	CEPH_MDS_OP_RMXATTR    = 0x01106,

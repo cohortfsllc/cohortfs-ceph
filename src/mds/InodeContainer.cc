@@ -88,7 +88,7 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
 {
   MDS *mds = mdcache->mds;
 
-  stripeid_t stripeid = place(ino);
+  stripeid_t stripeid = mds->mdsmap->place_inode(ino);
   CDirPlacement *placement = in->get_placement();
   CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
   assert(stripe);
@@ -131,13 +131,5 @@ CDentry* InodeContainer::xlock_dentry(MDRequest *mdr, inodeno_t ino,
 
   xlocks.insert(&dn->lock);
   return dn;
-}
-
-
-stripeid_t InodeContainer::place(inodeno_t ino) const
-{
-  static const uint64_t SHIFT = 40; // see InoTable
-  assert(in);
-  return ((ino >> SHIFT) - 1) % in->get_placement()->get_stripe_count();
 }
 

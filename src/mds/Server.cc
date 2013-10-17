@@ -607,9 +607,7 @@ void Server::handle_client_reconnect(MClientReconnect *m)
         auth_mds = in->authority().first;
       } else {
         // run inode placement to determine authority
-        stripeid_t stripeid = mdcache->get_container()->place(p->first.ino);
-        CInode *container = mdcache->get_container()->get_inode();
-        auth_mds = container->get_placement()->get_stripe_auth(stripeid);
+        auth_mds = mds->mdsmap->place_inode_stripe(p->first.ino);
       }
       dout(10) << "inode cap on " << p->first.ino << " for mds." << auth_mds << dendl;
     } else {
@@ -1114,13 +1112,6 @@ void Server::dispatch_client_request(MDRequest *mdr)
   assert(mdr->more()->waiting_on_slave.empty());
   
   switch (req->get_op()) {
-  case CEPH_MDS_OP_LOOKUPHASH:
-    handle_client_lookup_hash(mdr);
-    break;
-
-  case CEPH_MDS_OP_LOOKUPINO:
-    handle_client_lookup_ino(mdr);
-    break;
 
     // inodes ops.
   case CEPH_MDS_OP_LOOKUP:
@@ -1933,22 +1924,6 @@ CDirFrag *Server::traverse_to_auth_dir(MDRequest *mdr, vector<CDentry*> &trace, 
   return dir;
 }
 
-class C_MDS_TryFindInode : public Context {
-  Server *server;
-  MDRequest *mdr;
-public:
-  C_MDS_TryFindInode(Server *s, MDRequest *r) : server(s), mdr(r) {
-    mdr->get();
-  }
-  virtual void finish(int r) {
-    if (r == -ESTALE) // :( find_ino_peers failed
-      server->reply_request(mdr, r);
-    else
-      server->dispatch_client_request(mdr);
-    mdr->put();
-  }
-};
-
 /* If this returns null, the request has been handled
  * as appropriate: forwarded on, or the client's been replied to */
 CInode* Server::rdlock_path_pin_ref(MDRequest *mdr, int n,
@@ -1973,10 +1948,6 @@ CInode* Server::rdlock_path_pin_ref(MDRequest *mdr, int n,
   if (r < 0) {  // error
     if (r == -ENOENT && n == 0 && mdr->dn[n].size()) {
       reply_request(mdr, r, NULL, no_lookup ? NULL : mdr->dn[n][mdr->dn[n].size()-1]);
-    } else if (r == -ESTALE) {
-      dout(10) << "FAIL on ESTALE but attempting recovery" << dendl;
-      Context *c = new C_MDS_TryFindInode(this, mdr);
-      mdcache->find_ino_peers(refpath.get_ino(), c);
     } else {
       dout(10) << "FAIL on error " << r << dendl;
       reply_request(mdr, r);
@@ -2235,220 +2206,6 @@ void Server::handle_client_lookup_parent(MDRequest *mdr)
   reply_request(mdr, 0, in, dn);  // reply
 }
 
-struct C_MDS_LookupHash2 : public Context {
-  Server *server;
-  MDRequest *mdr;
-  C_MDS_LookupHash2(Server *s, MDRequest *r) : server(s), mdr(r) {}
-  void finish(int r) {
-    server->_lookup_hash_2(mdr, r);
-  }
-};
-
-/* This function DOES clean up the mdr before returning*/
-/*
- * filepath:  ino
- * filepath2: dirino/<hash as base-10 %d>
- *
- * This dirino+hash is optional.
- */
-void Server::handle_client_lookup_hash(MDRequest *mdr)
-{
-  MClientRequest *req = mdr->client_request;
-
-  inodeno_t ino = req->get_filepath().get_ino();
-  inodeno_t dirino = req->get_filepath2().get_ino();
-
-  CInode *in = 0;
-
-  if (ino) {
-    in = mdcache->get_inode(ino);
-    if (in && in->state_test(CInode::STATE_PURGING)) {
-      reply_request(mdr, -ESTALE);
-      return;
-    }
-    if (!in && !dirino) {
-      dout(10) << " no dirino, looking up ino " << ino << " directly" << dendl;
-      _lookup_ino(mdr);
-      return;
-    }
-  }
-  if (!in) {
-    // try the directory
-    CInode *diri = mdcache->get_inode(dirino);
-    if (!diri) {
-      mdcache->find_ino_peers(dirino,
-			      new C_MDS_LookupHash2(this, mdr), -1);
-      return;
-    }
-    if (diri->state_test(CInode::STATE_PURGING)) {
-      reply_request(mdr, -ESTALE);
-      return;
-    }
-    dout(10) << " have diri " << *diri << dendl;
-    assert(diri->is_dir());
-    CDirPlacement *placement = diri->get_placement();
-    unsigned hash = atoi(req->get_filepath2()[0].c_str());
-    int stripeid = placement->pick_stripe(hash);
-    CDirStripe *stripe = placement->get_stripe(stripeid);
-    if (!stripe) {
-      if (!diri->is_auth()) {
-	if (diri->is_ambiguous_auth()) {
-	  // wait
-	  dout(7) << " waiting for single auth in " << *diri << dendl;
-	  diri->add_waiter(CInode::WAIT_SINGLEAUTH, new C_MDS_RetryRequest(mdcache, mdr));
-	  return;
-	} 
-	mdcache->request_forward(mdr, diri->authority().first);
-	return;
-      }
-      stripe = placement->get_or_open_stripe(stripeid);
-    }
-    assert(stripe);
-    dout(10) << " have stripe " << *stripe << dendl;
-    if (!stripe->is_auth()) {
-      if (stripe->is_ambiguous_auth()) {
-	// wait
-	dout(7) << " waiting for single auth in " << *stripe << dendl;
-	stripe->add_waiter(CDirStripe::WAIT_SINGLEAUTH, new C_MDS_RetryRequest(mdcache, mdr));
-	return;
-      } 
-      mdcache->request_forward(mdr, stripe->authority().first);
-      return;
-    }
-    frag_t fg = stripe->pick_dirfrag(hash);
-    dout(10) << " fg is " << fg << dendl;
-    CDirFrag *dir = stripe->get_dirfrag(fg);
-    if (!dir->is_complete()) {
-      dir->fetch(new C_MDS_RetryRequest(mdcache, mdr));
-      return;
-    }
-    reply_request(mdr, -ESTALE);
-    return;
-  }
-
-  dout(10) << "reply to lookup_hash on " << *in << dendl;
-  MClientReply *reply = new MClientReply(req, 0);
-  reply_request(mdr, reply, in, in->get_parent_dn());
-}
-
-struct C_MDS_LookupHash3 : public Context {
-  Server *server;
-  MDRequest *mdr;
-  C_MDS_LookupHash3(Server *s, MDRequest *r) : server(s), mdr(r) {}
-  void finish(int r) {
-    server->_lookup_hash_3(mdr, r);
-  }
-};
-
-void Server::_lookup_hash_2(MDRequest *mdr, int r)
-{
-  inodeno_t dirino = mdr->client_request->get_filepath2().get_ino();
-  dout(10) << "_lookup_hash_2 " << mdr << " checked peers for dirino " << dirino << " and got r=" << r << dendl;
-  if (r == 0) {
-    dispatch_client_request(mdr);
-    return;
-  }
-
-  // okay fine, try the dir object then!
-  mdcache->find_ino_dir(dirino, new C_MDS_LookupHash3(this, mdr));
-}
-
-void Server::_lookup_hash_3(MDRequest *mdr, int r)
-{
-  inodeno_t dirino = mdr->client_request->get_filepath2().get_ino();
-  dout(10) << "_lookup_hash_3 " << mdr << " checked dir object for dirino " << dirino
-	   << " and got r=" << r << dendl;
-  if (r == 0) {
-    dispatch_client_request(mdr);
-    return;
-  }
-  dout(10) << "_lookup_hash_3 " << mdr << " trying the ino itself" << dendl;
-  _lookup_ino(mdr);
-}
-
-/***************/
-
-struct C_MDS_LookupIno2 : public Context {
-  Server *server;
-  MDRequest *mdr;
-  C_MDS_LookupIno2(Server *s, MDRequest *r) : server(s), mdr(r) {}
-  void finish(int r) {
-    server->_lookup_ino_2(mdr, r);
-  }
-};
-
-/* This function DOES clean up the mdr before returning*/
-/*
- * filepath:  ino
- */
-void Server::handle_client_lookup_ino(MDRequest *mdr)
-{
-  MClientRequest *req = mdr->client_request;
-
-  inodeno_t ino = req->get_filepath().get_ino();
-  CInode *in = mdcache->get_inode(ino);
-  if (in && in->state_test(CInode::STATE_PURGING)) {
-    reply_request(mdr, -ESTALE);
-    return;
-  }
-  if (!in) {
-    _lookup_ino(mdr);
-    return;
-  }
-
-  dout(10) << "reply to lookup_ino " << *in << dendl;
-  MClientReply *reply = new MClientReply(req, 0);
-  reply_request(mdr, reply, in, in->get_parent_dn());
-}
-
-void Server::_lookup_ino(MDRequest *mdr)
-{
-  inodeno_t ino = mdr->client_request->get_filepath().get_ino();
-  dout(10) << "_lookup_ino " << mdr << " checking peers for ino " << ino << dendl;
-  mdcache->find_ino_peers(ino,
-			  new C_MDS_LookupIno2(this, mdr), -1);
-}
-
-struct C_MDS_LookupIno3 : public Context {
-  Server *server;
-  MDRequest *mdr;
-  C_MDS_LookupIno3(Server *s, MDRequest *r) : server(s), mdr(r) {}
-  void finish(int r) {
-    server->_lookup_ino_3(mdr, r);
-  }
-};
-
-void Server::_lookup_ino_2(MDRequest *mdr, int r)
-{
-  inodeno_t ino = mdr->client_request->get_filepath().get_ino();
-  dout(10) << "_lookup_ino_2 " << mdr << " checked peers for ino " << ino
-	   << " and got r=" << r << dendl;
-  if (r == 0) {
-    dispatch_client_request(mdr);
-    return;
-  }
-
-  // okay fine, maybe it's a directory though...
-  mdcache->find_ino_dir(ino, new C_MDS_LookupIno3(this, mdr));
-}
-
-void Server::_lookup_ino_3(MDRequest *mdr, int r)
-{
-  inodeno_t ino = mdr->client_request->get_filepath().get_ino();
-  dout(10) << "_lookup_ino_3 " << mdr << " checked dir obj for ino " << ino
-	   << " and got r=" << r << dendl;
-  if (r == 0) {
-    dispatch_client_request(mdr);
-    return;
-  }
-
-  // give up
-  if (r == -ENOENT || r == -ENODATA)
-    r = -ESTALE;
-  reply_request(mdr, r);
-}
-
-
 /* This function takes responsibility for the passed mdr*/
 void Server::handle_client_open(MDRequest *mdr)
 {
@@ -2660,14 +2417,8 @@ void Server::handle_client_openc(MDRequest *mdr)
       return;
     }
     if (r < 0 && r != -ENOENT) {
-      if (r == -ESTALE) {
-	dout(10) << "FAIL on ESTALE but attempting recovery" << dendl;
-	Context *c = new C_MDS_TryFindInode(this, mdr);
-	mdcache->find_ino_peers(req->get_filepath().get_ino(), c);
-      } else {
-	dout(10) << "FAIL on error " << r << dendl;
-	reply_request(mdr, r);
-      }
+      dout(10) << "FAIL on error " << r << dendl;
+      reply_request(mdr, r);
       return;
     }
     // r == -ENOENT
@@ -5319,14 +5070,8 @@ void Server::handle_client_rename(MDRequest *mdr)
   if (r > 0)
     return; // delayed
   if (r < 0) {
-    if (r == -ESTALE) {
-      dout(10) << "FAIL on ESTALE but attempting recovery" << dendl;
-      Context *c = new C_MDS_TryFindInode(this, mdr);
-      mdcache->find_ino_peers(srcpath.get_ino(), c);
-    } else {
-      dout(10) << "FAIL on error " << r << dendl;
-      reply_request(mdr, r);
-    }
+    dout(10) << "FAIL on error " << r << dendl;
+    reply_request(mdr, r);
     return;
 
   }

@@ -616,38 +616,6 @@ public:
   void open_remote_dentry(CDentry *dn, bool projected, Context *fin);
   void _open_remote_dentry_finish(int r, CDentry *dn, bool projected, Context *fin);
 
-  void make_trace(vector<CDentry*>& trace, CInode *in);
-  
-  // -- find_ino_peer --
-  struct find_ino_peer_info_t {
-    inodeno_t ino;
-    tid_t tid;
-    Context *fin;
-    int hint;
-    int checking;
-    set<int> checked;
-
-    find_ino_peer_info_t() : tid(0), fin(NULL), hint(-1), checking(-1) {}
-  };
-
-  map<tid_t, find_ino_peer_info_t> find_ino_peer;
-  tid_t find_ino_peer_last_tid;
-
-  void find_ino_peers(inodeno_t ino, Context *c, int hint=-1);
-  void _do_find_ino_peer(find_ino_peer_info_t& fip);
-  void handle_find_ino(MMDSFindIno *m);
-  void handle_find_ino_reply(MMDSFindInoReply *m);
-  void kick_find_ino_peers(int who);
-
-  // -- find_ino_dir --
-  struct find_ino_dir_info_t {
-    inodeno_t ino;
-    Context *fin;
-  };
-
-  void find_ino_dir(inodeno_t ino, Context *c);
-  void _find_ino_dir(inodeno_t ino, Context *c, bufferlist& bl, int r);
-
   // -- stray --
  private:
   Stray stray;

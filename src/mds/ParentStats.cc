@@ -560,11 +560,7 @@ void ParentStats::update_accounted(inodeno_t ino, Projected &projected,
 {
   // check cache, or use placement algorithm to locate inode
   CInode *in = mds->mdcache->get_inode(ino);
-  InodeContainer *container = mds->mdcache->get_container();
-  assert(container->get_inode());
-  CDirPlacement *placement = container->get_inode()->get_placement();
-  int who = in ? in->authority().first :
-      placement->get_stripe_auth(container->place(ino));
+  int who = in ? in->authority().first : mds->mdsmap->place_inode_stripe(ino);
   if (who == mds->get_nodeid()) {
     if (!in) // must be accounted already if it isn't pinned
       return;

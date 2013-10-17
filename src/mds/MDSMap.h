@@ -195,6 +195,7 @@ protected:
   set<int32_t> failed, stopped; // which roles are failed or stopped
   map<int32_t,uint64_t> up;        // who is in those roles
   map<uint64_t,mds_info_t> mds_info;
+  ceph_inode_placement inode_placement;
 
 public:
   CompatSet compat;
@@ -257,17 +258,30 @@ public:
     return mds_info[up[m]];
   }
 
+  const ceph_inode_placement& get_inode_placement() const {
+    return inode_placement;
+  }
+  uint32_t place_inode(inodeno_t ino) const {
+    return ceph_place_inode(&inode_placement, ino);
+  }
+  int place_stripe(uint32_t stripeid) const {
+    return stripeid % get_num_in_mds();
+  }
+  int place_inode_stripe(inodeno_t ino) const {
+    return place_stripe(place_inode(ino));
+  }
+
   // counts
-  unsigned get_num_in_mds() {
+  unsigned get_num_in_mds() const {
     return in.size();
   }
-  unsigned get_num_up_mds() {
+  unsigned get_num_up_mds() const {
     return up.size();
   }
-  int get_num_failed_mds() {
+  int get_num_failed_mds() const {
     return failed.size();
   }
-  unsigned get_num_mds(int state) {
+  unsigned get_num_mds(int state) const {
     unsigned n = 0;
     for (map<uint64_t,mds_info_t>::const_iterator p = mds_info.begin();
 	 p != mds_info.end();
@@ -527,7 +541,7 @@ public:
     ::encode(m, bl);
   }
   void encode(bufferlist& bl) const {
-    __u16 v = 3;
+    __u16 v = 4;
     ::encode(v, bl);
     ::encode(epoch, bl);
     ::encode(flags, bl);
@@ -540,6 +554,7 @@ public:
     ::encode(mds_info, bl);
     ::encode(data_pools, bl);
     ::encode(cas_pool, bl);
+    ::encode(inode_placement, bl);
 
     // kclient ignores everything from here
     __u16 ev = 5;
@@ -583,6 +598,8 @@ public:
       ::decode(data_pools, p);
       ::decode(cas_pool, p);
     }
+    if (v >= 4)
+      ::decode(inode_placement, p);
 
     // kclient ignores everything from here
     __u16 ev = 1;

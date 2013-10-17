@@ -141,7 +141,6 @@ MDCache::MDCache(MDS *m)
                         (0.9 *(g_conf->osd_max_write_size << 20));
 
   discover_last_tid = 0;
-  find_ino_peer_last_tid = 0;
 
   last_cap_id = 0;
 
@@ -2052,11 +2051,9 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
       int auth_mds;
       if (p->first.stripeid == CEPH_CAP_OBJECT_INODE) {
         CInode *in = get_inode(p->first.ino);
-        if (!in) {
-          stripeid_t stripeid = get_container()->place(p->first.ino);
-          CInode *container = get_container()->get_inode();
-          auth_mds = container->get_placement()->get_stripe_auth(stripeid);
-        } else
+        if (!in)
+          auth_mds = mds->mdsmap->place_inode_stripe(p->first.ino);
+        else
           auth_mds = in->authority().first;
       } else {
         CDirPlacement *placement = get_dir_placement(p->first.ino);
@@ -2892,19 +2889,20 @@ bool MDCache::process_imported_caps()
       o = get_inode(p->first.ino);
       if (!o) {
         // fetch from inode container
-        InodeContainer *container = mds->mdcache->get_container();
-        CDirPlacement *placement = container->get_inode()->get_placement();
-        stripeid_t stripeid = container->place(p->first.ino);
-        int who = placement->get_stripe_auth(stripeid);
+        stripeid_t stripeid = mds->mdsmap->place_inode(p->first.ino);
+        int who = mds->mdsmap->place_stripe(stripeid);
+        dout(10) << "process_imported_caps ino " << p->first.ino
+           << " -> stripe " << stripeid << " -> mds." << who << dendl;
         if (who != mds->get_nodeid()) {
           dout(10) << "process_imported_caps not auth for " << p->first << dendl;
           cap_imports.erase(p++);
           continue;
         }
+        InodeContainer *container = mds->mdcache->get_container();
+        CDirPlacement *placement = container->get_inode()->get_placement();
         CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
         if (!stripe->is_open()) {
-          dout(10) << "process_imported_caps still missing " << p->first
-              << ", fetching " << *stripe << dendl;
+          dout(10) << "process_imported_caps fetching " << *stripe << dendl;
           fetch.stripes.insert(stripe);
           p++;
           continue;
@@ -2914,8 +2912,7 @@ bool MDCache::process_imported_caps()
         frag_t fg = stripe->pick_dirfrag(dname);
         CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
         assert(!dir->is_complete());
-        dout(10) << "process_imported_caps still missing " << p->first
-            << ", fetching " << *dir << dendl;
+        dout(10) << "process_imported_caps fetching " << *dir << dendl;
         fetch.frags.insert(dir);
         p++;
         continue;
@@ -2932,8 +2929,7 @@ bool MDCache::process_imported_caps()
       CDirStripe *stripe = placement->get_or_open_stripe(p->first.stripeid);
       if (!stripe->is_open()) {
         fetch.stripes.insert(stripe);
-        dout(10) << "process_imported_caps missing " << p->first
-            << ", will fetch " << *stripe << dendl;
+        dout(10) << "process_imported_caps fetching " << *stripe << dendl;
         p++;
         continue;
       }
@@ -4648,14 +4644,6 @@ void MDCache::dispatch(Message *m)
     break;
     
 
-  case MSG_MDS_FINDINO:
-    handle_find_ino((MMDSFindIno *)m);
-    break;
-  case MSG_MDS_FINDINOREPLY:
-    handle_find_ino_reply((MMDSFindInoReply *)m);
-    break;
-
-
   case MSG_MDS_PARENTSTATS:
     if (!is_open())
       wait_for_open(new C_MDS_RetryMessage(mds, m));
@@ -5222,10 +5210,7 @@ void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish, bool want_xlocke
   dout(7) << "open_remote_ino on " << ino << (want_xlocked ? " want_xlocked":"") << dendl;
 
   // discover the inode from the inode container
-  CDirPlacement *placement = get_container()->get_inode()->get_placement();
-  stripeid_t stripeid = get_container()->place(ino);
-  int who = placement->get_stripe_auth(stripeid);
-  discover_ino(ino, onfinish, who);
+  discover_ino(ino, onfinish, mds->mdsmap->place_inode_stripe(ino));
 }
 
 
@@ -5256,197 +5241,6 @@ void MDCache::_open_remote_dentry_finish(int r, CDentry *dn, bool projected, Con
     dn->state_set(CDentry::STATE_BADREMOTEINO);
   } else if (r != 0)
     assert(0);
-  fin->finish(r);
-  delete fin;
-}
-
-
-/* ---------------------------- */
-
-/*
- * search for a given inode on MDS peers.  optionally start with the given node.
-
-
- TODO 
-  - recover from mds node failure, recovery
-  - traverse path
-
- */
-void MDCache::find_ino_peers(inodeno_t ino, Context *c, int hint)
-{
-  dout(5) << "find_ino_peers " << ino << " hint " << hint << dendl;
-  assert(!have_inode(ino));
-  
-  tid_t tid = ++find_ino_peer_last_tid;
-  find_ino_peer_info_t& fip = find_ino_peer[tid];
-  fip.ino = ino;
-  fip.tid = tid;
-  fip.fin = c;
-  fip.hint = hint;
-  fip.checked.insert(mds->whoami);
-  _do_find_ino_peer(fip);
-}
-
-void MDCache::_do_find_ino_peer(find_ino_peer_info_t& fip)
-{
-  set<int> all, active;
-  mds->mdsmap->get_mds_set(all);
-  mds->mdsmap->get_active_mds_set(active);
-  mds->mdsmap->get_mds_set(active, MDSMap::STATE_STOPPING);
-
-  dout(10) << "_do_find_ino_peer " << fip.tid << " " << fip.ino
-	   << " active " << active << " all " << all
-	   << " checked " << fip.checked
-	   << dendl;
-    
-  int m = -1;
-  if (fip.hint >= 0) {
-    m = fip.hint;
-    fip.hint = -1;
-  } else {
-    for (set<int>::iterator p = active.begin(); p != active.end(); p++)
-      if (*p != mds->whoami &&
-	  fip.checked.count(*p) == 0) {
-	m = *p;
-	break;
-      }
-  }
-  if (m < 0) {
-    if (all.size() > active.size()) {
-      dout(10) << "_do_find_ino_peer waiting for more peers to be active" << dendl;
-    } else {
-      dout(10) << "_do_find_ino_peer failed on " << fip.ino << dendl;
-      fip.fin->finish(-ESTALE);
-      delete fip.fin;
-      find_ino_peer.erase(fip.tid);
-    }
-  } else {
-    fip.checking = m;
-    mds->send_message_mds(new MMDSFindIno(fip.tid, fip.ino), m);
-  }
-}
-
-void MDCache::handle_find_ino(MMDSFindIno *m)
-{
-  dout(10) << "handle_find_ino " << *m << dendl;
-  MMDSFindInoReply *r = new MMDSFindInoReply(m->tid);
-  CInode *in = get_inode(m->ino);
-  if (in) {
-    r->path.set_path("", m->ino);
-    dout(10) << " have " << r->path << " " << *in << dendl;
-  }
-  mds->messenger->send_message(r, m->get_connection());
-  m->put();
-}
-
-
-void MDCache::handle_find_ino_reply(MMDSFindInoReply *m)
-{
-  map<tid_t, find_ino_peer_info_t>::iterator p = find_ino_peer.find(m->tid);
-  if (p != find_ino_peer.end()) {
-    dout(10) << "handle_find_ino_reply " << *m << dendl;
-    find_ino_peer_info_t& fip = p->second;
-
-    // success?
-    if (get_inode(fip.ino)) {
-      dout(10) << "handle_find_ino_reply successfully found " << fip.ino << dendl;
-      mds->queue_waiter(fip.fin);
-      find_ino_peer.erase(p);
-      m->put();
-      return;
-    }
-
-    int from = m->get_source().num();
-    if (fip.checking == from)
-      fip.checking = -1;
-    fip.checked.insert(from);
-
-    if (!m->path.empty()) {
-      // we got a path!
-      vector<CDentry*> trace;
-      int r = path_traverse(NULL, m, NULL, m->path, &trace, NULL, MDS_TRAVERSE_DISCOVER);
-      if (r > 0)
-	return; 
-      dout(0) << "handle_find_ino_reply failed with " << r << " on " << m->path 
-	      << ", retrying" << dendl;
-      fip.checked.clear();
-      _do_find_ino_peer(fip);
-    } else {
-      // nope, continue.
-      _do_find_ino_peer(fip);
-    }      
-  } else {
-    dout(10) << "handle_find_ino_reply tid " << m->tid << " dne" << dendl;
-  }  
-  m->put();
-}
-
-void MDCache::kick_find_ino_peers(int who)
-{
-  // find_ino_peers requests we should move on from
-  for (map<tid_t,find_ino_peer_info_t>::iterator p = find_ino_peer.begin();
-       p != find_ino_peer.end();
-       ++p) {
-    find_ino_peer_info_t& fip = p->second;
-    if (fip.checking == who) {
-      dout(10) << "kicking find_ino_peer " << fip.tid << " who was checking mds." << who << dendl;
-      fip.checking = -1;
-      _do_find_ino_peer(fip);
-    } else if (fip.checking == -1) {
-      dout(10) << "kicking find_ino_peer " << fip.tid << " who was waiting" << dendl;
-      _do_find_ino_peer(fip);
-    }
-  }
-}
-
-/* ---------------------------- */
-
-struct C_MDS_FindInoDir : public Context {
-  MDCache *mdcache;
-  inodeno_t ino;
-  Context *fin;
-  bufferlist bl;
-  C_MDS_FindInoDir(MDCache *m, inodeno_t i, Context *f) : mdcache(m), ino(i), fin(f) {}
-  void finish(int r) {
-    mdcache->_find_ino_dir(ino, fin, bl, r);
-  }
-};
-
-void MDCache::find_ino_dir(inodeno_t ino, Context *fin)
-{
-  dout(10) << "find_ino_dir " << ino << dendl;
-  assert(!have_inode(ino));
-
-  // get the backtrace from the dir
-  object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
-  
-  C_MDS_FindInoDir *c = new C_MDS_FindInoDir(this, ino, fin);
-  mds->objecter->getxattr(oid, oloc, "path", CEPH_NOSNAP, &c->bl, 0, c);
-}
-
-void MDCache::_find_ino_dir(inodeno_t ino, Context *fin, bufferlist& bl, int r)
-{
-  dout(10) << "_find_ino_dir " << ino << " got " << r << " " << bl.length() << " bytes" << dendl;
-  if (r < 0) {
-    fin->finish(r);
-    delete fin;
-    return;
-  }
-
-  string s(bl.c_str(), bl.length());
-  filepath path(s.c_str());
-  vector<CDentry*> trace;
-
-  dout(10) << "_find_ino_dir traversing to path " << path << dendl;
-
-  C_MDS_FindInoDir *c = new C_MDS_FindInoDir(this, ino, fin);
-  c->bl = bl;
-  r = path_traverse(NULL, NULL, c, path, &trace, NULL, MDS_TRAVERSE_DISCOVER);
-  if (r > 0)
-    return; 
-  delete c;  // path_traverse doesn't clean it up for us.
-  
   fin->finish(r);
   delete fin;
 }
@@ -5796,7 +5590,7 @@ static stripeid_t pick_stripe(CDirPlacement *placement, const string &dname)
     inodeno_t ino;
     istringstream stream(dname);
     stream >> hex >> ino.val;
-    return placement->mdcache->get_container()->place(ino);
+    return placement->mdcache->mds->mdsmap->place_inode(ino);
   }
 
   return placement->pick_stripe(dname);
@@ -5924,8 +5718,8 @@ static bool fetch_inode_from_container(MDS *mds, inodeno_t ino,
 {
   InodeContainer *container = mds->mdcache->get_container();
   CDirPlacement *placement = container->get_inode()->get_placement();
-  stripeid_t stripeid = container->place(ino);
-  int who = placement->get_stripe_auth(stripeid);
+  stripeid_t stripeid = mds->mdsmap->place_inode(ino);
+  int who = mds->mdsmap->place_stripe(stripeid);
   if (who != mds->get_nodeid()) {
     reply->set_flag_error_ino();
     reply->auth_hint = who;
@@ -6059,9 +5853,10 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
       if (!placement) {
         dout(10) << "discover stripe failed to find placement for ino "
             << dis->base.stripe.ino << dendl;
+        stripeid_t stripeid = mds->mdsmap->place_inode(dis->base.stripe.ino);
+        int who = mds->mdsmap->place_inode(stripeid);
         discover_dir_placement(dis->base.stripe.ino,
-                               new C_MDS_RetryMessage(mds, dis),
-                               get_container()->place(dis->base.stripe.ino));
+                               new C_MDS_RetryMessage(mds, dis), who);
         return false;
       }
       reply->contains.first = STRIPE;
@@ -6237,7 +6032,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
         dout(7) << "discover_reply got " << *stripe << dendl;
         next = FRAG;
       } else {
-        stripeid_t stripeid = get_container()->place(ino);
+        stripeid_t stripeid = mds->mdsmap->place_inode(ino);
         stripe = placement->get_stripe(stripeid);
         assert(stripe);
       }
