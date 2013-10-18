@@ -2911,9 +2911,12 @@ bool MDCache::process_imported_caps()
         snprintf(dname, sizeof(dname), "%llx", (unsigned long long)p->first.ino.val);
         frag_t fg = stripe->pick_dirfrag(dname);
         CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
-        assert(!dir->is_complete());
-        dout(10) << "process_imported_caps fetching " << *dir << dendl;
-        fetch.frags.insert(dir);
+        if (!dir->is_complete()) {
+          dout(10) << "process_imported_caps fetching " << *dir << dendl;
+          fetch.frags.insert(dir);
+        } else
+          dout(10) << "process_imported_caps still missing " << p->first.ino
+             << ", will try again after replayed client requests" << dendl;
         p++;
         continue;
       }
