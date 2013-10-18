@@ -3244,6 +3244,7 @@ void Locker::handle_lock(MLock *m)
   case CEPH_LOCK_IXATTR:
   case CEPH_LOCK_IFLOCK:
   case CEPH_LOCK_IPOLICY:
+  case CEPH_LOCK_DAUTH:
     handle_simple_lock(lock, m);
     break;
     

@@ -309,6 +309,8 @@ class EMetaBlob {
 
   class Placement {
    private:
+    unsigned mode;
+    unsigned gid;
     typedef map<stripeid_t, Stripe> stripe_map;
     stripe_map stripes;
     vector<int> stripe_auth;
@@ -316,6 +318,12 @@ class EMetaBlob {
 
    public:
     stripe_map& get_stripes() { return stripes; }
+
+    void set_mode(unsigned m) { mode = m; }
+    unsigned get_mode() const { return mode; }
+
+    void set_gid(unsigned g) { gid = g; }
+    unsigned get_gid() const { return gid; }
 
     void set_stripe_auth(const vector<int> &auth) { stripe_auth = auth; }
     const vector<int>& get_stripe_auth() const { return stripe_auth; }
@@ -507,12 +515,16 @@ class EMetaBlob {
 
   Placement& add_placement(CDirPlacement *placement) {
     add_inode(placement->get_inode());
-    return add_placement(placement->ino(), placement->get_stripe_auth(),
+    return add_placement(placement->ino(), placement->get_mode(),
+                         placement->get_gid(), placement->get_stripe_auth(),
                          placement->get_layout());
   }
-  Placement& add_placement(inodeno_t ino, const vector<int> &stripe_auth,
+  Placement& add_placement(inodeno_t ino, unsigned mode, unsigned gid,
+                           const vector<int> &stripe_auth,
                            const ceph_dir_layout &layout) {
     Placement &p = dirs[ino];
+    p.set_mode(mode);
+    p.set_gid(gid);
     p.set_stripe_auth(stripe_auth);
     p.set_layout(layout);
     return p;

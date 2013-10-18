@@ -750,7 +750,9 @@ void EMetaBlob::Stripe::apply(MDS *mds, CDirStripe *stripe, LogSegment *ls)
 
 void EMetaBlob::Placement::encode(bufferlist& bl) const
 {
-  ENCODE_START(1, 1, bl);
+  ENCODE_START(2, 2, bl);
+  ::encode(mode, bl);
+  ::encode(gid, bl);
   ::encode(stripes, bl);
   ::encode(stripe_auth, bl);
   ::encode(layout, bl);
@@ -759,7 +761,9 @@ void EMetaBlob::Placement::encode(bufferlist& bl) const
 
 void EMetaBlob::Placement::decode(bufferlist::iterator& bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(1, 1, 1, bl)
+  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl)
+  ::decode(mode, bl);
+  ::decode(gid, bl);
   ::decode(stripes, bl);
   ::decode(stripe_auth, bl);
   ::decode(layout, bl);
@@ -768,6 +772,8 @@ void EMetaBlob::Placement::decode(bufferlist::iterator& bl)
 
 void EMetaBlob::Placement::dump(Formatter *f) const
 {
+  f->dump_stream("mode") << oct << mode << dec;
+  f->dump_unsigned("gid", gid);
   f->dump_stream("stripe auth") << stripe_auth;
   f->open_object_section("layout");
   ::dump(layout, f);
@@ -790,6 +796,8 @@ void EMetaBlob::Placement::generate_test_instances(list<Placement*>& ls)
 void EMetaBlob::Placement::apply(MDS *mds, CDirPlacement *placement,
                                  LogSegment *ls)
 {
+  placement->set_mode(mode);
+  placement->set_gid(gid);
   placement->set_stripe_auth(stripe_auth);
   placement->set_layout(layout);
   dout(10) << "EMetaBlob updated placement " << *placement << dendl;

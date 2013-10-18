@@ -35,42 +35,48 @@
 
 boost::pool<> CDirPlacement::pool(sizeof(CDirPlacement));
 
+LockType CDirPlacement::authlock_type(CEPH_LOCK_DAUTH);
 
-ostream& operator<<(ostream& out, CDirPlacement& dir)
-{
-  string path;
-  out << "[dir " << dir.ino();
-  if (dir.is_auth()) {
-    out << " auth";
-    if (dir.is_replicated())
-      out << dir.get_replicas();
-
-    out << " v=" << dir.get_version();
-  } else {
-    pair<int,int> a = dir.authority();
-    out << " rep@" << a.first;
-    if (a.second != CDIR_AUTH_UNKNOWN)
-      out << "," << a.second;
-    out << "." << dir.get_replica_nonce();
-  }
-
-  out << " stripes=" << dir.get_stripe_auth();
-
-  out << " state=" << dir.get_state();
-  if (dir.state_test(CDirPlacement::STATE_FROZEN)) out << "|frozen";
-
-  if (dir.get_num_ref()) {
-    out << " |";
-    dir.print_pin_set(out);
-  }
-
-  out << " " << &dir;
-  return out << "]";
-}
 
 void CDirPlacement::print(ostream& out) 
 {
-  out << *this;
+  string path;
+  out << "[dir " << ino();
+  if (is_auth()) {
+    out << " auth";
+    if (is_replicated())
+      out << get_replicas();
+
+    out << " v=" << get_version();
+  } else {
+    pair<int,int> a = authority();
+    out << " rep@" << a.first;
+    if (a.second != CDIR_AUTH_UNKNOWN)
+      out << "," << a.second;
+    out << "." << get_replica_nonce();
+  }
+
+  out << " stripes=" << get_stripe_auth();
+
+  if (!authlock.is_sync_and_unlocked())
+    out << ' ' << authlock;
+
+  out << " state=" << get_state();
+  if (state_test(CDirPlacement::STATE_FROZEN)) out << "|frozen";
+
+  if (get_num_ref()) {
+    out << " |";
+    print_pin_set(out);
+  }
+
+  out << ' ' << this;
+  out << ']';
+}
+
+ostream& operator<<(ostream& out, CDirPlacement& dir)
+{
+  dir.print(out);
+  return out;
 }
 
 ostream& CDirPlacement::print_db_line_prefix(ostream& out) 
@@ -87,7 +93,10 @@ CDirPlacement::CDirPlacement(MDCache *mdcache, CInode *inode,
     inode(inode),
     version(0),
     stripe_auth(stripe_auth),
-    auth_pins(0)
+    mode(inode->inode.mode),
+    gid(inode->inode.gid),
+    auth_pins(0),
+    authlock(this, &authlock_type)
 {
   if (inode->is_auth())
     state_set(STATE_AUTH);
@@ -255,5 +264,32 @@ void CDirPlacement::auth_unpin(void *by)
   dout(10) << "auth_unpin by " << by << " on " << *this
 	   << " count now " << auth_pins << dendl;
   assert(auth_pins >= 0);
+}
+
+
+// locks
+
+void CDirPlacement::set_object_info(MDSCacheObjectInfo &info)
+{
+  info.dirfrag.stripe.ino = ino();
+}
+
+void CDirPlacement::encode_lock_state(int type, bufferlist& bl)
+{
+  assert(type == CEPH_LOCK_DAUTH);
+  if (is_auth()) {
+    ::encode(mode, bl);
+    ::encode(gid, bl);
+  }
+}
+
+void CDirPlacement::decode_lock_state(int type, bufferlist& bl)
+{
+  assert(type == CEPH_LOCK_DAUTH);
+  if (!is_auth()) {
+    bufferlist::iterator p = bl.begin();
+    ::decode(mode, p);
+    ::decode(gid, p);
+  }
 }
 
