@@ -2238,7 +2238,11 @@ void Server::handle_client_getattr(MDRequest *mdr, bool is_lookup)
 
   int mask = req->head.args.getattr.mask;
   if ((mask & CEPH_CAP_LINK_SHARED) && (issued & CEPH_CAP_LINK_EXCL) == 0) rdlocks.insert(&ref->linklock);
-  if ((mask & CEPH_CAP_AUTH_SHARED) && (issued & CEPH_CAP_AUTH_EXCL) == 0) rdlocks.insert(&ref->authlock);
+  if ((mask & CEPH_CAP_AUTH_SHARED) && (issued & CEPH_CAP_AUTH_EXCL) == 0) {
+    rdlocks.insert(&ref->authlock);
+    if (ref->is_dir())
+      rdlocks.insert(&ref->get_placement()->authlock);
+  }
   if ((mask & CEPH_CAP_FILE_SHARED) && (issued & CEPH_CAP_FILE_EXCL) == 0) rdlocks.insert(&ref->filelock);
   if ((mask & CEPH_CAP_XATTR_SHARED) && (issued & CEPH_CAP_XATTR_EXCL) == 0) rdlocks.insert(&ref->xattrlock);
 
@@ -2613,8 +2617,8 @@ void Server::handle_client_openc(MDRequest *mdr)
   if (!inodn)
     return;
 
-  CInode *diri = dn->get_dir()->get_inode();
-  rdlocks.insert(&diri->authlock);
+  CDirPlacement *placement = dn->get_dir()->get_placement();
+  rdlocks.insert(&placement->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -2673,8 +2677,6 @@ void Server::handle_client_openc(MDRequest *mdr)
   mdcache->predirty_journal_parents(mdr, &le->metablob, in,
                                     dn->inoparent(), true, 1);
   le->metablob.add_inode(in, true);
-  if (!diri->is_base())
-    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -3150,10 +3152,14 @@ void Server::handle_client_setattr(MDRequest *mdr)
   }
 
   __u32 mask = req->head.args.setattr.mask;
+  CDirPlacement *placement = cur->is_dir() ? cur->get_placement() : NULL;
 
   // xlock inode
-  if (mask & (CEPH_SETATTR_MODE|CEPH_SETATTR_UID|CEPH_SETATTR_GID))
+  if (mask & (CEPH_SETATTR_MODE|CEPH_SETATTR_UID|CEPH_SETATTR_GID)) {
     xlocks.insert(&cur->authlock);
+    if (placement)
+      xlocks.insert(&placement->authlock);
+  }
   if (mask & (CEPH_SETATTR_MTIME|CEPH_SETATTR_ATIME|CEPH_SETATTR_SIZE))
     xlocks.insert(&cur->filelock);
 
@@ -3187,12 +3193,18 @@ void Server::handle_client_setattr(MDRequest *mdr)
 
   utime_t now = ceph_clock_now(g_ceph_context);
 
-  if (mask & CEPH_SETATTR_MODE)
+  if (mask & CEPH_SETATTR_MODE) {
     pi->mode = (pi->mode & ~07777) | (req->head.args.setattr.mode & 07777);
+    if (placement)
+      placement->set_mode(pi->mode);
+  }
   if (mask & CEPH_SETATTR_UID)
     pi->uid = req->head.args.setattr.uid;
-  if (mask & CEPH_SETATTR_GID)
+  if (mask & CEPH_SETATTR_GID) {
     pi->gid = req->head.args.setattr.gid;
+    if (placement)
+      placement->set_gid(pi->gid);
+  }
 
   if (mask & CEPH_SETATTR_MTIME)
     pi->mtime = req->head.args.setattr.mtime;
@@ -3896,8 +3908,8 @@ void Server::handle_client_mknod(MDRequest *mdr)
   if (!inodn)
     return;
 
-  CInode *diri = dn->get_dir()->get_inode();
-  rdlocks.insert(&diri->authlock);
+  CDirPlacement *placement = dn->get_dir()->get_placement();
+  rdlocks.insert(&placement->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4009,8 +4021,8 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   if (!inodn)
     return;
 
-  CInode *diri = dn->get_dir()->get_inode();
-  rdlocks.insert(&diri->authlock);
+  CDirPlacement *placement = dn->get_dir()->get_placement();
+  rdlocks.insert(&placement->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4061,8 +4073,6 @@ void Server::handle_client_mkdir(MDRequest *mdr)
 
   le->metablob.add_inode(newi, dn);
   le->metablob.add_placement(newi->get_placement());
-  if (!diri->is_base())
-    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
@@ -4111,8 +4121,8 @@ void Server::handle_client_symlink(MDRequest *mdr)
   if (!inodn)
     return;
 
-  CInode *diri = dn->get_dir()->get_inode();
-  rdlocks.insert(&diri->authlock);
+  CDirPlacement *placement = dn->get_dir()->get_placement();
+  rdlocks.insert(&placement->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4154,8 +4164,6 @@ void Server::handle_client_symlink(MDRequest *mdr)
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi,
                                     dn->inoparent(), true, 1, pi->size);
   le->metablob.add_inode(newi, dn);
-  if (!diri->is_base())
-    le->metablob.add_dentry(diri->get_projected_parent_dn(), false);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
