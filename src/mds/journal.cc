@@ -448,6 +448,8 @@ void EMetaBlob::Placement::apply(MDS *mds, CDirPlacement *placement,
   else
     placement->state_clear(CDirPlacement::STATE_AUTH);
 
+  placement->set_mode(mode);
+  placement->set_gid(gid);
   placement->set_stripe_auth(stripe_auth);
   placement->set_layout(layout);
   dout(10) << "EMetaBlob updated placement " << *placement << dendl;
@@ -494,8 +496,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     CDirPlacement *placement = mds->mdcache->get_dir_placement(p->first);
     if (!placement) {
       placement = new CDirPlacement(mds->mdcache, p->first,
-                                    p->second.get_inode_auth(),
-                                    p->second.get_stripe_auth());
+                                    p->second.get_inode_auth());
       mds->mdcache->add_dir_placement(placement);
       dout(10) << "EMetaBlob.replay added " << *placement << dendl;
     }

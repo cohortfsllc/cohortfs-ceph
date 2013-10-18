@@ -6163,8 +6163,7 @@ CDirPlacement* MDCache::add_replica_placement(bufferlist::iterator& p, int from,
     dout(7) << "add_replica_placement had " << *placement
         << " nonce " << placement->get_replica_nonce() << dendl;
   } else {
-    const vector<int> empty_stripe_auth;
-    placement = new CDirPlacement(this, ino, from, empty_stripe_auth);
+    placement = new CDirPlacement(this, ino, from);
     placement->decode_replica(p, true);
     dout(7) << "add_replica_placement added " << *placement
         << " nonce " << placement->get_replica_nonce() << dendl;

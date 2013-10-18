@@ -286,6 +286,7 @@ extern const char *ceph_mds_state_name(int s);
 #define CEPH_LOCK_IPOLICY     (1<<10) /* policy lock on dirs. MDS internal */
 #define CEPH_LOCK_SLINK       (1<<11)
 #define CEPH_LOCK_SNEST       (1<<12)
+#define CEPH_LOCK_DAUTH       (1<<13)
 
 /* client_session ops */
 enum {

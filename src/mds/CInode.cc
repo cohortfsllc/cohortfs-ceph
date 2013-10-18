@@ -241,8 +241,10 @@ void CInode::set_stripe_auth(const vector<int> &stripe_auth)
     placement->set_stripe_auth(stripe_auth);
     dout(10) << "set_stripe_auth existing " << *placement << dendl;
   } else {
-    placement = new CDirPlacement(mdcache, ino(), authority().first,
-                                  stripe_auth);
+    placement = new CDirPlacement(mdcache, ino(), authority().first);
+    placement->set_mode(inode.mode);
+    placement->set_gid(inode.gid);
+    placement->set_stripe_auth(stripe_auth);
     mdcache->add_dir_placement(placement);
     dout(10) << "set_stripe_auth created " << *placement << dendl;
   }

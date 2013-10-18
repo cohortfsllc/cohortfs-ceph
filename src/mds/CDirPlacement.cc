@@ -35,6 +35,8 @@
 
 boost::pool<> CDirPlacement::pool(sizeof(CDirPlacement));
 
+LockType CDirPlacement::authlock_type(CEPH_LOCK_DAUTH);
+
 
 ostream& operator<<(ostream& out, CDirPlacement& dir)
 {
@@ -81,14 +83,15 @@ ostream& CDirPlacement::print_db_line_prefix(ostream& out)
 
 // constructor
 
-CDirPlacement::CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
-                             const vector<int> &stripe_auth)
+CDirPlacement::CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth)
   : mdcache(mdcache),
     ino(ino),
     inode_auth(inode_auth, CDIR_AUTH_UNKNOWN),
     version(0),
-    stripe_auth(stripe_auth),
-    auth_pins(0)
+    mode(0),
+    gid(0),
+    auth_pins(0),
+    authlock(this, &authlock_type)
 {
   if (inode_auth == mdcache->mds->get_nodeid())
     state_set(STATE_AUTH);
@@ -235,5 +238,27 @@ void CDirPlacement::auth_unpin(void *by)
   dout(10) << "auth_unpin by " << by << " on " << *this
 	   << " count now " << auth_pins << dendl;
   assert(auth_pins >= 0);
+}
+
+
+// locks
+
+void CDirPlacement::encode_lock_state(int type, bufferlist& bl)
+{
+  assert(type == CEPH_LOCK_DAUTH);
+  if (is_auth()) {
+    ::encode(mode, bl);
+    ::encode(gid, bl);
+  }
+}
+
+void CDirPlacement::decode_lock_state(int type, bufferlist& bl)
+{
+  assert(type == CEPH_LOCK_DAUTH);
+  if (!is_auth()) {
+    bufferlist::iterator p = bl.begin();
+    ::decode(mode, p);
+    ::decode(gid, p);
+  }
 }
 

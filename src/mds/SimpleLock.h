@@ -34,6 +34,7 @@ inline const char *get_lock_type_name(int t) {
   case CEPH_LOCK_IPOLICY: return "ipolicy";
   case CEPH_LOCK_SLINK: return "slink";
   case CEPH_LOCK_SNEST: return "snest";
+  case CEPH_LOCK_DAUTH: return "dauth";
   default: assert(0); return 0;
   }
 }
@@ -277,6 +278,7 @@ public:
     case CEPH_LOCK_IPOLICY:  return 8 + 9*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_SLINK:    return 8 +10*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_SNEST:    return 8 +11*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_DAUTH:    return 8 +12*SimpleLock::WAIT_BITS;
     default:
       assert(0);
     }

@@ -21,6 +21,7 @@
 #include "mdstypes.h"
 #include "common/config.h"
 
+#include "SimpleLock.h"
 
 #include <list>
 #include <map>
@@ -79,8 +80,7 @@ class CDirPlacement : public MDSCacheObject {
  public:
   MDCache *mdcache;
 
-  CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
-                const vector<int> &stripe_auth);
+  CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth);
   virtual ~CDirPlacement() {}
 
   bool is_lt(const MDSCacheObject *r) const {
@@ -154,6 +154,20 @@ class CDirPlacement : public MDSCacheObject {
   void close_stripes();
 
 
+  // permissions
+ private:
+  unsigned mode; // inode mode
+  unsigned gid; // gid for S_ISGID
+
+ public:
+  void set_mode(unsigned m) { mode = m; }
+  unsigned get_mode() const { return mode; }
+  bool is_sticky_gid() const { return mode & S_ISGID; }
+
+  void set_gid(unsigned g) { gid = g; }
+  unsigned get_gid() const { return gid; }
+
+
   // ref counting
  private:
   int auth_pins;
@@ -180,12 +194,29 @@ class CDirPlacement : public MDSCacheObject {
   void take_stripe_waiting(stripeid_t stripeid, list<Context*>& ls);
 
 
+  // locks
+ private:
+  static LockType authlock_type;
+  SimpleLock authlock; // protects mode, gid
+
+ public:
+  SimpleLock* get_lock(int type) {
+    assert(type == CEPH_LOCK_DAUTH);
+    return &authlock;
+  }
+  void encode_lock_state(int type, bufferlist& bl);
+  void decode_lock_state(int type, bufferlist& bl);
+
+
   // replication
   void encode_replica(int who, bufferlist& bl) {
     __u32 nonce = add_replica(who);
     ::encode(nonce, bl);
     ::encode(stripe_auth, bl);
     ::encode(version, bl);
+    ::encode(mode, bl);
+    ::encode(gid, bl);
+    authlock.encode_state_for_replica(bl);
   }
   void decode_replica(bufferlist::iterator& p, bool isnew) {
     __u32 nonce;
@@ -193,6 +224,9 @@ class CDirPlacement : public MDSCacheObject {
     replica_nonce = nonce;
     ::decode(stripe_auth, p);
     ::decode(version, p);
+    ::decode(mode, p);
+    ::decode(gid, p);
+    authlock.decode_state(p, isnew);
   }
 
 
