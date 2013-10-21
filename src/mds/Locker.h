@@ -63,7 +63,7 @@ private:
  public:
   Locker(MDS *m, MDCache *c) : mds(m), mdcache(c) {}  
 
-  SimpleLock *get_lock(int lock_type, MDSCacheObjectInfo &info);
+  SimpleLock *get_lock(int lock_type, const MDSCacheObjectInfo &info);
   
   void dispatch(Message *m);
   void handle_lock(MLock *m);

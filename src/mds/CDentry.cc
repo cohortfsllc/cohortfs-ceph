@@ -362,6 +362,7 @@ void CDentry::set_object_info(MDSCacheObjectInfo &info)
   info.dirfrag = dir->dirfrag();
   info.dname = name;
   info.snapid = last;
+  info.type = MDSCacheObjectInfo::DENTRY;
 }
 
 void CDentry::encode_lock_state(int type, bufferlist& bl)

@@ -674,21 +674,19 @@ void MDCache::open_foreign_mdsdir(inodeno_t ino, Context *fin)
 
 MDSCacheObject *MDCache::get_object(const MDSCacheObjectInfo &info)
 {
-  // inode?
-  if (info.ino) {
-    if (info.dirfrag.stripe.ino == info.ino)
-      return get_dirstripe(info.dirfrag.stripe);
-    return get_inode(info.ino, info.snapid);
-  }
+  if (info.type == MDSCacheObjectInfo::INODE)
+    return get_inode(info.dirfrag.stripe.ino, info.snapid);
+  if (info.type == MDSCacheObjectInfo::PLACEMENT)
+    return get_dir_placement(info.dirfrag.stripe.ino);
+  if (info.type == MDSCacheObjectInfo::STRIPE)
+    return get_dirstripe(info.dirfrag.stripe);
 
   // dir or dentry.
   CDirFrag *dir = get_dirfrag(info.dirfrag);
-  if (!dir) return 0;
-    
-  if (info.dname.length()) 
-    return dir->lookup(info.dname, info.snapid);
-  else
+  if (info.type == MDSCacheObjectInfo::FRAG || !dir)
     return dir;
+
+  return dir->lookup(info.dname, info.snapid);
 }
 
 
@@ -2098,15 +2096,15 @@ void MDCache::rejoin_send_rejoins()
 	  dout(15) << " " << *p->second << " authpin on " << **q << dendl;
 	  MDSCacheObjectInfo i;
 	  (*q)->set_object_info(i);
-	  if (i.ino)
-	    rejoin->add_inode_authpin(vinodeno_t(i.ino, i.snapid), p->second->reqid, p->second->attempt);
-	  else
+          if (i.type == MDSCacheObjectInfo::INODE)
+	    rejoin->add_inode_authpin(i.vino(), p->second->reqid, p->second->attempt);
+          else if (i.type == MDSCacheObjectInfo::DENTRY)
 	    rejoin->add_dentry_authpin(i.dirfrag, i.dname, i.snapid, p->second->reqid, p->second->attempt);
 
 	  if (p->second->has_more() && p->second->more()->is_remote_frozen_authpin &&
 	      p->second->more()->rename_inode == (*q))
-	    rejoin->add_inode_frozen_authpin(vinodeno_t(i.ino, i.snapid),
-					     p->second->reqid, p->second->attempt);
+	    rejoin->add_inode_frozen_authpin(i.vino(), p->second->reqid,
+                                             p->second->attempt);
 	}
       }
       // xlocks
@@ -2121,10 +2119,10 @@ void MDCache::rejoin_send_rejoins()
 	  dout(15) << " " << *p->second << " xlock on " << **q << " " << *(*q)->get_parent() << dendl;
 	  MDSCacheObjectInfo i;
 	  (*q)->get_parent()->set_object_info(i);
-	  if (i.ino)
-	    rejoin->add_inode_xlock(vinodeno_t(i.ino, i.snapid), (*q)->get_type(),
+          if (i.type == MDSCacheObjectInfo::INODE)
+	    rejoin->add_inode_xlock(i.vino(), (*q)->get_type(),
 				    p->second->reqid, p->second->attempt);
-	  else
+	  else if (i.type == MDSCacheObjectInfo::DENTRY)
 	    rejoin->add_dentry_xlock(i.dirfrag, i.dname, i.snapid,
 				     p->second->reqid, p->second->attempt);
 	}
@@ -2141,8 +2139,8 @@ void MDCache::rejoin_send_rejoins()
 		 << " " << q->first->get_parent() << dendl;
 	MDSCacheObjectInfo i;
 	q->first->get_parent()->set_object_info(i);
-	assert(i.ino);
-	rejoin->add_inode_wrlock(vinodeno_t(i.ino, i.snapid), q->first->get_type(),
+	assert(i.type == MDSCacheObjectInfo::INODE);
+	rejoin->add_inode_wrlock(i.vino(), q->first->get_type(),
 				 p->second->reqid, p->second->attempt);
       }
     }

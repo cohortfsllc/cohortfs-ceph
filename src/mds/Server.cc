@@ -4446,7 +4446,7 @@ void Server::handle_slave_link_prep(MDRequest *mdr)
 
   assert(g_conf->mds_kill_link_at != 4);
 
-  CInode *targeti = mdcache->get_inode(info.ino);
+  CInode *targeti = mdcache->get_inode(info.vino());
   assert(targeti);
   dout(10) << "targeti " << *targeti << dendl;
 

@@ -1231,12 +1231,15 @@ ostream& operator<<(ostream& out, MDSCacheObject &o);
 
 class MDSCacheObjectInfo {
 public:
-  inodeno_t ino;
   dirfrag_t dirfrag;
   string dname;
   snapid_t snapid;
+  enum object_type { INODE, PLACEMENT, STRIPE, FRAG, DENTRY };
+  __u8 type;
 
-  MDSCacheObjectInfo() : ino(0) {}
+  MDSCacheObjectInfo() {}
+
+  vinodeno_t vino() const { return vinodeno_t(dirfrag.stripe.ino, snapid); }
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
@@ -1245,10 +1248,8 @@ public:
 };
 
 inline bool operator==(const MDSCacheObjectInfo& l, const MDSCacheObjectInfo& r) {
-  if (l.ino || r.ino)
-    return l.ino == r.ino && l.snapid == r.snapid;
-  else
-    return l.dirfrag == r.dirfrag && l.dname == r.dname;
+  return l.type == r.type && l.dirfrag == r.dirfrag
+      && l.dname == r.dname && l.snapid == r.snapid;
 }
 
 WRITE_CLASS_ENCODER(MDSCacheObjectInfo)
@@ -1583,14 +1584,20 @@ inline ostream& operator<<(ostream& out, MDSCacheObject &o) {
 }
 
 inline ostream& operator<<(ostream& out, const MDSCacheObjectInfo &info) {
-  if (info.ino) {
-    if (info.ino == info.dirfrag.stripe.ino)
-      return out << info.dirfrag.stripe;
-    return out << info.ino << "." << info.snapid;
+  switch (info.type) {
+  case MDSCacheObjectInfo::INODE:
+    return out << "ino " << info.dirfrag.stripe.ino << "." << info.snapid;
+  case MDSCacheObjectInfo::PLACEMENT:
+    return out << "dir " << info.dirfrag.stripe.ino;
+  case MDSCacheObjectInfo::STRIPE:
+    return out << "stripe " << info.dirfrag.stripe;
+  case MDSCacheObjectInfo::FRAG:
+    return out << "frag " << info.dirfrag;
+  case MDSCacheObjectInfo::DENTRY:
+    return out << "dn " << info.dirfrag << '/' << info.dname
+        << " snap " << info.snapid;
+  default: assert(0);
   }
-  if (info.dname.length()) return out << info.dirfrag << "/" << info.dname
-				      << " snap " << info.snapid;
-  return out << info.dirfrag;
 }
 
 inline ostream& operator<<(ostream& out, mdsco_db_line_prefix o) {
