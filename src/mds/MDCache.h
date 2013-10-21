@@ -130,7 +130,7 @@ public:
 
 
   // -- discover --
-  enum discover_object { PLACEMENT, STRIPE, FRAG, DENTRY, INODE };
+  typedef MDSCacheObjectInfo::object_type discover_object;
   struct discover_info_t {
     tid_t tid;
     int mds;
