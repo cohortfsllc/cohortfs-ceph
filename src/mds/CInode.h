@@ -495,7 +495,7 @@ private:
 
   inodeno_t ino() const { return inode.ino; }
   uuid_d vol() const { return inode.volume; }
-  vinodeno_t vino() const { return vinodeno_t(inode.ino, last); }
+  vinodeno_t vino() const { return vinodeno_t(inode.volume, inode.ino, last); }
   int d_type() const { return IFTODT(inode.mode); }
 
   inode_t& get_inode() { return inode; }

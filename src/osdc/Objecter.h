@@ -857,15 +857,12 @@ public:
   };
 
 
-  // Pools and statistics 
+  // Pools and statistics
   struct ListContext {
-    int current_pg;
     collection_list_handle_t cookie;
-    epoch_t current_pg_epoch;
-    int starting_pg_num;
     bool at_end;
 
-    int64_t pool_id;
+    uuid_d volume;
     int pool_snap_seq;
     int max_entries;
     std::list<pair<object_t, string> > list;
@@ -874,8 +871,7 @@ public:
 
     bufferlist extra_info;
 
-    ListContext() : current_pg(0), current_pg_epoch(0), starting_pg_num(0),
-		    at_end(false), pool_id(0),
+    ListContext() : at_end(false), volume(),
 		    pool_snap_seq(0), max_entries(0) {}
   };
 

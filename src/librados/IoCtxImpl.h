@@ -50,7 +50,7 @@ struct librados::IoCtxImpl {
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
-	    uuid_d volid, snapid_t s);
+	    const uuid_d& volid, snapid_t s);
 
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count

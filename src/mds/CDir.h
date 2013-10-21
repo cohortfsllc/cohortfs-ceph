@@ -296,7 +296,8 @@ protected:
   uuid_d    volume()  const { return inode->vol(); }          // deprecate me?
   inodeno_t ino()     const { return inode->ino(); }          // deprecate me?
   frag_t    get_frag() const { return frag; }
-  dirfrag_t dirfrag() const { return dirfrag_t(inode->ino(), frag); }
+  dirfrag_t dirfrag() const { return dirfrag_t(inode->vol(),
+					       inode->ino(), frag); }
 
   CInode *get_inode()    { return inode; }
   CDir *get_parent_dir() { return inode->get_parent_dir(); }

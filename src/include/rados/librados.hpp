@@ -651,7 +651,7 @@ namespace librados
 
     void locator_set_key(const std::string& key);
 
-    uuid_d get_id();
+    const uuid_d& get_id();
 
     config_t cct();
 
@@ -701,7 +701,7 @@ namespace librados
 
     uint64_t get_instance_id();
 
-    int ioctx_create(const char *name, IoCtx &pioctx);
+    int ioctx_create(const uuid_d& volume, IoCtx &pioctx);
 
     // Features useful for test cases
     void test_blacklist_self(bool set);

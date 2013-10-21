@@ -591,26 +591,27 @@ public:
   bool have_inode(vinodeno_t vino) {
     return inode_map.count(vino) ? true:false;
   }
-  bool have_inode(inodeno_t ino, snapid_t snap=CEPH_NOSNAP) {
-    return have_inode(vinodeno_t(ino, snap));
+  bool have_inode(const uuid_d& volume, inodeno_t ino, snapid_t snap=CEPH_NOSNAP) {
+    return have_inode(vinodeno_t(volume, ino, snap));
   }
   CInode* get_inode(vinodeno_t vino) {
     if (have_inode(vino))
       return inode_map[vino];
     return NULL;
   }
-  CInode* get_inode(inodeno_t ino, snapid_t s=CEPH_NOSNAP) {
-    return get_inode(vinodeno_t(ino, s));
+  CInode* get_inode(const uuid_d& volume, inodeno_t ino,
+		    snapid_t s=CEPH_NOSNAP) {
+    return get_inode(vinodeno_t(volume, ino, s));
   }
 
   CDir* get_dirfrag(dirfrag_t df) {
-    CInode *in = get_inode(df.ino);
+    CInode *in = get_inode(df.volume, df.ino);
     if (!in)
       return NULL;
     return in->get_dirfrag(df.frag);
   }
   CDir* get_force_dirfrag(dirfrag_t df) {
-    CInode *diri = get_inode(df.ino);
+    CInode *diri = get_inode(df.volume, df.ino);
     if (!diri)
       return NULL;
     CDir *dir = force_dir_fragment(diri, df.frag);

@@ -397,7 +397,8 @@ void EMetaBlob::update_segment(LogSegment *ls)
 void EMetaBlob::fullbit::encode(bufferlist& bl) const {
   ENCODE_START(6, 5, bl);
   if (!_enc.length()) {
-    fullbit copy(dn, dnfirst, dnlast, dnv, inode, dirfragtree, xattrs, symlink,
+    fullbit copy(dn, dnfirst, dnlast, dnv, volume,
+		 inode, dirfragtree, xattrs, symlink,
 		 snapbl, state, &old_inodes);
     bl.append(copy._enc);
   } else {
@@ -505,11 +506,12 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
 void EMetaBlob::fullbit::generate_test_instances(list<EMetaBlob::fullbit*>& ls)
 {
   inode_t inode;
+  uuid_d volume;
   fragtree_t fragtree;
   map<string,bufferptr> empty_xattrs;
   bufferlist empty_snapbl;
   fullbit *sample = new fullbit("/testdn", 0, 0, 0,
-                                inode, fragtree, empty_xattrs, "", empty_snapbl,
+				volume, inode, fragtree, empty_xattrs, "", empty_snapbl,
                                 false, NULL);
   ls.push_back(sample);
 }
@@ -746,6 +748,7 @@ void EMetaBlob::encode(bufferlist& bl) const
   ::encode(lump_map, bl);
   ::encode(roots, bl);
   ::encode(table_tids, bl);
+  ::encode(opened_vol, bl);
   ::encode(opened_ino, bl);
   ::encode(allocated_ino, bl);
   ::encode(used_preallocated_ino, bl);
@@ -784,6 +787,7 @@ void EMetaBlob::decode(bufferlist::iterator &bl)
     }
   }
   ::decode(table_tids, bl);
+  ::decode(opened_vol, bl);
   ::decode(opened_ino, bl);
   ::decode(allocated_ino, bl);
   ::decode(used_preallocated_ino, bl);
@@ -805,6 +809,7 @@ void EMetaBlob::decode(bufferlist::iterator &bl)
     }
   }
   if (struct_v >= 3) {
+    ::decode(renamed_dirvol, bl);
     ::decode(renamed_dirino, bl);
     ::decode(renamed_dir_frags, bl);
   }
@@ -921,7 +926,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   assert(g_conf->mds_kill_journal_replay_at != 1);
 
   for (list<std::tr1::shared_ptr<fullbit> >::iterator p = roots.begin(); p != roots.end(); ++p) {
-    CInode *in = mds->mdcache->get_inode((*p)->inode.ino);
+    CInode *in = mds->mdcache->get_inode((*p)->volume, (*p)->inode.ino);
     bool isnew = in ? false:true;
     if (!in)
       in = new CInode(mds->mdcache, true);
@@ -936,7 +941,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   CInode *renamed_diri = 0;
   CDir *olddir = 0;
   if (renamed_dirino) {
-    renamed_diri = mds->mdcache->get_inode(renamed_dirino);
+    renamed_diri = mds->mdcache->get_inode(renamed_dirvol, renamed_dirino);
     if (renamed_diri)
       dout(10) << "EMetaBlob.replay renamed inode is " << *renamed_diri << dendl;
     else
@@ -968,7 +973,8 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     CDir *dir = mds->mdcache->get_force_dirfrag(*lp);
     if (!dir) {
       // hmm.  do i have the inode?
-      CInode *diri = mds->mdcache->get_inode((*lp).ino);
+      CInode *diri = mds->mdcache->get_inode(
+	vinodeno_t((*lp).volume, (*lp).ino));
       if (!diri) {
 	if (MDS_INO_IS_BASE(lp->ino)) {
 	  diri = mds->mdcache->create_system_inode(lp->ino, S_IFDIR|0755);
@@ -1041,7 +1047,8 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	assert(dn->last == p->dnlast);
       }
 
-      CInode *in = mds->mdcache->get_inode(p->inode.ino, p->dnlast);
+      CInode *in = mds->mdcache->get_inode(p->inode.volume,
+					   p->inode.ino, p->dnlast);
       if (!in) {
 	in = new CInode(mds->mdcache, true, p->dnfirst, p->dnlast);
 	p->update_inode(mds, in);
@@ -1167,7 +1174,8 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       olddir = unlinked[renamed_diri];
     } else {
       // we imported a diri we haven't seen before
-      renamed_diri = mds->mdcache->get_inode(renamed_dirino);
+      renamed_diri = mds->mdcache->get_inode(renamed_dirvol,
+					     renamed_dirino);
       assert(renamed_diri);  // it was in the metablob
     }
 
@@ -1248,7 +1256,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 
   // opened ino?
   if (opened_ino) {
-    CInode *in = mds->mdcache->get_inode(opened_ino);
+    CInode *in = mds->mdcache->get_inode(opened_vol, opened_ino);
     assert(in);
     dout(10) << "EMetaBlob.replay noting opened inode " << *in << dendl;
     logseg->open_files.push_back(&in->item_open_file);

@@ -65,6 +65,7 @@ public:
     string  dn;         // dentry
     snapid_t dnfirst, dnlast;
     version_t dnv;
+    uuid_d volume;
     inode_t inode;      // if it's not
     fragtree_t dirfragtree;
     map<string,bufferptr> xattrs;
@@ -80,7 +81,8 @@ public:
     const fullbit& operator=(const fullbit& o);
 
     fullbit(const string& d, snapid_t df, snapid_t dl, 
-	    version_t v, const inode_t& i, const fragtree_t &dft, 
+	    version_t v, const uuid_d& vol,
+	    const inode_t& i, const fragtree_t &dft,
 	    const map<string,bufferptr> &xa, const string& sym,
 	    const bufferlist &sbl, __u8 st,
 	    const old_inodes_t *oi = NULL) :
@@ -92,6 +94,7 @@ public:
       ::encode(df, _enc);
       ::encode(dl, _enc);
       ::encode(v, _enc);
+      ::encode(vol, _enc);
       ::encode(i, _enc);
       ::encode(xa, _enc);
       if (i.is_symlink())
@@ -316,8 +319,10 @@ private:
 
   list<pair<__u8,version_t> > table_tids;  // tableclient transactions
 
+  uuid_d opened_vol;
   inodeno_t opened_ino;
 public:
+  uuid_d renamed_dirvol;
   inodeno_t renamed_dirino;
   list<frag_t> renamed_dir_frags;
 private:
@@ -330,8 +335,8 @@ private:
   entity_name_t client_name;          //            session
 
   // inodes i've truncated
-  list<inodeno_t> truncate_start;        // start truncate 
-  map<inodeno_t,uint64_t> truncate_finish;  // finished truncate (started in segment blah)
+  list<inode_t> truncate_start;        // start truncate 
+  map<inode_t,uint64_t> truncate_finish;  // finished truncate (started in segment blah)
 
   vector<inodeno_t> destroyed_inodes;
 
@@ -454,14 +459,15 @@ private:
       sr->encode(snapbl);
 
     lump.nfull++;
-    lump.get_dfull().push_back(std::tr1::shared_ptr<fullbit>(new fullbit(dn->get_name(), 
-									 dn->first, dn->last,
-									 dn->get_projected_version(), 
-									 *pi, in->dirfragtree,
-									 *in->get_projected_xattrs(),
-									 in->symlink, snapbl,
-									 state,
-									 &in->old_inodes)));
+    lump.get_dfull().push_back(std::tr1::shared_ptr<fullbit>(
+				 new fullbit(dn->get_name(),
+					     dn->first, dn->last,
+					     dn->get_projected_version(),
+					     in->vol(), *pi, in->dirfragtree,
+					     *in->get_projected_xattrs(),
+					     in->symlink, snapbl,
+					     state,
+					     &in->old_inodes)));
   }
 
   // convenience: primary or remote?  figure it out.
@@ -515,10 +521,12 @@ private:
     }
 
     string empty;
-    roots.push_back(std::tr1::shared_ptr<fullbit>(new fullbit(empty, in->first, in->last, 0, *pi,
-							      *pdft, *px, in->symlink, snapbl,
-							      dirty ? fullbit::STATE_DIRTY : 0,
-							      &in->old_inodes)));
+    roots.push_back(std::tr1::shared_ptr<fullbit>(
+		      new fullbit(empty, in->first, in->last, 0,
+				  in->vol(), *pi, *pdft, *px,
+				  in->symlink, snapbl,
+				  dirty ? fullbit::STATE_DIRTY : 0,
+				  &in->old_inodes)));
   }
   
   dirlump& add_dir(CDir *dir, bool dirty, bool complete=false) {

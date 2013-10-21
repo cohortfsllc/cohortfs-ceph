@@ -632,11 +632,6 @@ int librados::IoCtx::set_auid_async(uint64_t auid_, PoolAsyncCompletion *c)
   return io_ctx_impl->pool_change_auid_async(auid_, c->pc);
 }
 
-int librados::IoCtx::get_auid(uint64_t *auid_)
-{
-  return rados_ioctx_pool_get_auid(io_ctx_impl, auid_);
-}
-
 int librados::IoCtx::create(const std::string& oid, bool exclusive)
 {
   object_t obj(oid);
@@ -1227,7 +1222,7 @@ void librados::IoCtx::set_assert_src_version(const std::string& oid, uint64_t ve
 
 const uuid_d &librados::IoCtx::get_id()
 {
-  return io_ctx_impl->get_id();
+  return io_ctx_impl->get_volume();
 }
 
 librados::config_t librados::IoCtx::cct()
@@ -1406,10 +1401,10 @@ int librados::Rados::pool_reverse_lookup(int64_t id, std::string *name)
   return client->pool_get_name(id, name);
 }
 
-int librados::Rados::ioctx_create(const char *name, IoCtx &io)
+int librados::Rados::ioctx_create(const uuid_d& volume, IoCtx &io)
 {
   rados_ioctx_t p;
-  int ret = rados_ioctx_create((rados_t)client, name, &p);
+  int ret = rados_ioctx_create((rados_t)client, volume, &p);
   if (ret)
     return ret;
   io.io_ctx_impl = (IoCtxImpl*)p;
@@ -1864,12 +1859,13 @@ extern "C" int rados_monitor_log(rados_t cluster, const char *level, rados_log_c
 }
 
 
-extern "C" int rados_ioctx_create(rados_t cluster, const char *name, rados_ioctx_t *io)
+extern "C" int rados_ioctx_create(rados_t cluster,
+				  const uuid_d& volume, rados_ioctx_t *io)
 {
   librados::RadosClient *client = (librados::RadosClient *)cluster;
   librados::IoCtxImpl *ctx;
 
-  int r = client->create_ioctx(name, &ctx);
+  int r = client->create_ioctx(volume, &ctx);
   if (r < 0)
     return r;
 
@@ -2028,31 +2024,18 @@ extern "C" int rados_ioctx_pool_set_auid(rados_ioctx_t io, uint64_t auid)
   return ctx->pool_change_auid(auid);
 }
 
-extern "C" int rados_ioctx_pool_get_auid(rados_ioctx_t io, uint64_t *auid)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->client->pool_get_auid(ctx->get_id(), (unsigned long long *)auid);
-}
-
 extern "C" rados_t rados_ioctx_get_cluster(rados_ioctx_t io)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   return (rados_t)ctx->client;
 }
 
-extern "C" int64_t rados_ioctx_get_id(rados_ioctx_t io)
+extern "C" void rados_ioctx_get_id(rados_ioctx_t io, uuid_t id)
 {
+  uuid_d u;
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->get_id();
-}
-
-extern "C" int rados_ioctx_get_pool_name(rados_ioctx_t io, char *s, unsigned maxlen)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  if (ctx->pool_name.length() >= maxlen)
-    return -ERANGE;
-  strcpy(s, ctx->pool_name.c_str());
-  return ctx->pool_name.length();
+  u = ctx->get_volume();
+  uuid_copy(id, u.uuid);
 }
 
 // snaps
@@ -2309,7 +2292,7 @@ extern "C" int rados_objects_list_open(rados_ioctx_t io, rados_list_ctx_t *listh
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   Objecter::ListContext *h = new Objecter::ListContext;
-  h->pool_id = ctx->poolid;
+  h->volume = ctx->volume;
   h->pool_snap_seq = ctx->snap_seq;
   *listh = (void *)new librados::ObjListCtx(ctx, h);
   return 0;

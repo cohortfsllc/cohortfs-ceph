@@ -488,14 +488,14 @@ void ObjectCacher::Object::discard(loff_t off, loff_t len)
 #define dout_prefix *_dout << "objectcacher "
 
 
-ObjectCacher::ObjectCacher(CephContext *cct_, string name, WritebackHandler& wb, Mutex& l,
+ObjectCacher::ObjectCacher(CephContext *cct_, WritebackHandler& wb, Mutex& l,
 			   flush_set_callback_t flush_callback,
 			   void *flush_callback_arg,
 			   uint64_t max_bytes, uint64_t max_objects,
 			   uint64_t max_dirty, uint64_t target_dirty,
 			   double max_dirty_age, bool block_writes_upfront)
   : perfcounter(NULL),
-    cct(cct_), writeback_handler(wb), name(name), lock(l),
+    cct(cct_), writeback_handler(wb), lock(l),
     max_dirty(max_dirty), target_dirty(target_dirty),
     max_size(max_bytes), max_objects(max_objects),
     block_writes_upfront(block_writes_upfront),
@@ -522,8 +522,8 @@ ObjectCacher::~ObjectCacher()
 
 void ObjectCacher::perf_start()
 {
-  string n = "objectcacher-" + name;
-  PerfCountersBuilder plb(cct, n, l_objectcacher_first, l_objectcacher_last);
+  PerfCountersBuilder plb(cct, "Cacher", l_objectcacher_first,
+			  l_objectcacher_last);
 
   plb.add_u64_counter(l_objectcacher_cache_ops_hit, "cache_ops_hit");
   plb.add_u64_counter(l_objectcacher_cache_ops_miss, "cache_ops_miss");

@@ -299,6 +299,7 @@ class ObjectCacher {
 
   struct ObjectSet {
     void *parent;
+    uuid_d volume;
 
     inodeno_t ino;
     uint64_t truncate_seq, truncate_size;
@@ -308,10 +309,9 @@ class ObjectCacher {
     int dirty_or_tx;
     bool return_enoent;
 
-    ObjectSet(void *p, int64_t _poolid, inodeno_t i)
-      : parent(p), ino(i), truncate_seq(0),
-	truncate_size(0), dirty_or_tx(0),
-	return_enoent(false) {}
+    ObjectSet(void *p, uuid_d _volume, inodeno_t i)
+      : parent(p), volume(_volume), ino(i), truncate_seq(0),
+	truncate_size(0), dirty_or_tx(0), return_enoent(false) {}
 
   };
 
@@ -321,9 +321,8 @@ class ObjectCacher {
  private:
   WritebackHandler& writeback_handler;
 
-  string name;
   Mutex& lock;
-  
+
   int64_t max_dirty, target_dirty, max_size, max_objects;
   utime_t max_dirty_age;
   bool block_writes_upfront;
@@ -516,7 +515,7 @@ class ObjectCacher {
 
 
 
-  ObjectCacher(CephContext *cct_, string name, WritebackHandler& wb, Mutex& l,
+  ObjectCacher(CephContext *cct_, WritebackHandler& wb, Mutex& l,
 	       flush_set_callback_t flush_callback,
 	       void *flush_callback_arg,
 	       uint64_t max_bytes, uint64_t max_objects,

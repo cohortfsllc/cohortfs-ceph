@@ -34,7 +34,6 @@
 
 // needed for static_cast
 #include "messages/PaxosServiceMessage.h"
-#include "messages/MPoolOpReply.h"
 #include "messages/MStatfsReply.h"
 #include "messages/MOSDOpReply.h"
 #include "messages/MOSDMap.h"
@@ -227,13 +226,9 @@ librados::RadosClient::~RadosClient()
   cct = NULL;
 }
 
-int librados::RadosClient::create_ioctx(const char *name, IoCtxImpl **io)
+int librados::RadosClient::create_ioctx(const uuid_d& volume, IoCtxImpl **io)
 {
-  int64_t poolid = lookup_pool(name);
-  if (poolid < 0)
-    return (int)poolid;
-
-  *io = new librados::IoCtxImpl(this, objecter, &lock, poolid, name,
+  *io = new librados::IoCtxImpl(this, objecter, &lock, volume,
 				CEPH_NOSNAP);
   return 0;
 }

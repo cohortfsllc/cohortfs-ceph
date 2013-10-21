@@ -462,7 +462,8 @@ uint64_t rados_get_instance_id(rados_t cluster);
  * @param ioctx where to store the io context
  * @returns 0 on success, negative error code on failure
  */
-int rados_ioctx_create(rados_t cluster, const char *pool_name, rados_ioctx_t *ioctx);
+int rados_ioctx_create(rados_t cluster, const uuid_d& volume,
+		       rados_ioctx_t *ioctx);
 
 /**
  * The opposite of rados_ioctx_create
@@ -499,141 +500,12 @@ rados_config_t rados_ioctx_cct(rados_ioctx_t io);
 rados_t rados_ioctx_get_cluster(rados_ioctx_t io);
 
 /**
- * Get pool usage statistics
- *
- * Fills in a rados_pool_stat_t after querying the cluster.
- *
- * @param io determines which pool to query
- * @param stats where to store the results
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_pool_stat(rados_ioctx_t io, struct rados_pool_stat_t *stats);
-
-/**
- * Get the id of a pool
- *
- * @param cluster which cluster the pool is in
- * @param pool_name which pool to look up
- * @returns id of the pool
- * @returns -ENOENT if the pool is not found
- */
-int64_t rados_pool_lookup(rados_t cluster, const char *pool_name);
-
-/**
- * Get the name of a pool
- *
- * @param cluster which cluster the pool is in
- * @param id the id of the pool
- * @param buf where to store the pool name
- * @param maxlen size of buffer where name will be stored
- * @returns length of string stored, or -ERANGE if buffer too small
- */
-int rados_pool_reverse_lookup(rados_t cluster, int64_t id, char *buf,
-			      size_t maxlen);
-
-/**
- * Create a pool with default settings
- *
- * The default owner is the admin user (auid 0).
- * The default crush rule is rule 0.
- *
- * @param cluster the cluster in which the pool will be created
- * @param pool_name the name of the new pool
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_create(rados_t cluster, const char *pool_name);
-
-/**
- * Create a pool owned by a specific auid
- *
- * The auid is the authenticated user id to give ownership of the pool.
- * TODO: document auid and the rest of the auth system
- *
- * @param cluster the cluster in which the pool will be created
- * @param pool_name the name of the new pool
- * @param auid the id of the owner of the new pool
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_create_with_auid(rados_t cluster, const char *pool_name, uint64_t auid);
-
-/**
- * Create a pool with a specific CRUSH rule
- *
- * @param cluster the cluster in which the pool will be created
- * @param pool_name the name of the new pool
- * @param crush_rule_num which rule to use for placement in the new pool1
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_create_with_crush_rule(rados_t cluster, const char *pool_name,
-				      __u8 crush_rule_num);
-
-/**
- * Create a pool with a specific CRUSH rule and auid
- *
- * This is a combination of rados_pool_create_with_crush_rule() and
- * rados_pool_create_with_auid().
- *
- * @param cluster the cluster in which the pool will be created
- * @param pool_name the name of the new pool
- * @param crush_rule_num which rule to use for placement in the new pool2
- * @param auid the id of the owner of the new pool
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_create_with_all(rados_t cluster, const char *pool_name, uint64_t auid,
-			       __u8 crush_rule_num);
-
-/**
- * Delete a pool and all data inside it
- *
- * The pool is removed from the cluster immediately,
- * but the actual data is deleted in the background.
- *
- * @param cluster the cluster the pool is in
- * @param pool_name which pool to delete
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_delete(rados_t cluster, const char *pool_name);
-
-/**
- * Attempt to change an io context's associated auid "owner."
- *
- * Requires that you have write permission on both the current and new
- * auid.
- *
- * @param io reference to the pool to change.
- * @param auid the auid you wish the io to have.
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_pool_set_auid(rados_ioctx_t io, uint64_t auid);
-
-/**
- * Get the auid of a pool
- *
- * @param io pool to query
- * @param auid where to store the auid
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_pool_get_auid(rados_ioctx_t io, uint64_t *auid);
-
-/**
  * Get the pool id of the io context
  *
  * @param io the io context to query
- * @returns the id of the pool the io context uses
+ * @param id The id found
  */
-int64_t rados_ioctx_get_id(rados_ioctx_t io);
-
-/**
- * Get the pool name of the io context
- *
- * @param io the io context to query
- * @param buf pointer to buffer where name will be stored
- * @param maxlen size of buffer where name will be stored
- * @returns length of string stored, or -ERANGE if buffer too small
- */
-int rados_ioctx_get_pool_name(rados_ioctx_t io, char *buf, unsigned maxlen);
-
-/** @} pools */
+void rados_ioctx_get_id(rados_ioctx_t io, uuid_t id);
 
 /**
  * @defgroup librados_h_obj_loc Object Locators

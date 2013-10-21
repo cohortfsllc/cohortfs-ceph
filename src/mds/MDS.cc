@@ -730,17 +730,19 @@ void MDS::handle_command(MMonCommand *m)
     else
       dout(15) << "session " << session << " not in sessionmap!" << dendl;
   } else if (m->cmd[0] == "issue_caps") {
-    long inum = strtol(m->cmd[1].c_str(), 0, 10);
-    CInode *in = mdcache->get_inode(inodeno_t(inum));
+    uuid_d vol = uuid_d::parse(m->cmd[1].c_str());
+    long inum = strtol(m->cmd[2].c_str(), 0, 10);
+    CInode *in = mdcache->get_inode(vol, inodeno_t(inum));
     if (in) {
       bool r = locker->issue_caps(in);
       dout(20) << "called issue_caps on inode "  << inum
 	       << " with result " << r << dendl;
     } else dout(15) << "inode " << inum << " not in mdcache!" << dendl;
   } else if (m->cmd[0] == "try_eval") {
-    long inum = strtol(m->cmd[1].c_str(), 0, 10);
-    int mask = strtol(m->cmd[2].c_str(), 0, 10);
-    CInode * ino = mdcache->get_inode(inodeno_t(inum));
+    uuid_d vol = uuid_d::parse(m->cmd[1].c_str());
+    long inum = strtol(m->cmd[2].c_str(), 0, 10);
+    int mask = strtol(m->cmd[3].c_str(), 0, 10);
+    CInode *ino = mdcache->get_inode(vol, inodeno_t(inum));
     if (ino) {
       locker->try_eval(ino, mask);
       dout(20) << "try_eval(" << inum << ", " << mask << ")" << dendl;

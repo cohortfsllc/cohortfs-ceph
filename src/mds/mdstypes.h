@@ -216,10 +216,12 @@ ostream& operator<<(ostream &out, const nest_info_t &n);
 
 
 struct vinodeno_t {
+  uuid_d volume;
   inodeno_t ino;
   snapid_t snapid;
   vinodeno_t() {}
-  vinodeno_t(inodeno_t i, snapid_t s) : ino(i), snapid(s) {}
+  vinodeno_t(const uuid_d& v, inodeno_t i, snapid_t s = CEPH_NOSNAP)
+    : volume(v), ino(i), snapid(s) {}
 
   void encode(bufferlist& bl) const {
     ::encode(ino, bl);
@@ -766,11 +768,13 @@ WRITE_CLASS_ENCODER(old_cap_reconnect_t)
 // dir frag
 
 struct dirfrag_t {
+  uuid_d    volume;
   inodeno_t ino;
   frag_t    frag;
 
-  dirfrag_t() : ino(0) { }
-  dirfrag_t(inodeno_t i, frag_t f) : ino(i), frag(f) { }
+  dirfrag_t() : volume(), ino(0) { }
+  dirfrag_t(const uuid_d& v, inodeno_t i, frag_t f)
+    : volume(v), ino(i), frag(f) { }
 
   void encode(bufferlist& bl) const {
     ::encode(ino, bl);

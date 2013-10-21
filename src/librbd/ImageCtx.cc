@@ -58,15 +58,6 @@ namespace librbd {
     memset(&header, 0, sizeof(header));
     memset(&layout, 0, sizeof(layout));
 
-    string pname = string("librbd-") + id + string("-") +
-      data_ctx.get_pool_name() + string("/") + name;
-    if (snap) {
-      snap_name = snap;
-      pname += "@";
-      pname += snap_name;
-    }
-    perf_start(pname);
-
     if (cct->_conf->rbd_cache) {
       Mutex::Locker l(cache_lock);
       ldout(cct, 20) << "enabling caching..." << dendl;
@@ -83,7 +74,7 @@ namespace librbd {
 		     << " max_dirty_age="
 		     << cct->_conf->rbd_cache_max_dirty_age << dendl;
 
-      object_cacher = new ObjectCacher(cct, pname, *writeback_handler, cache_lock,
+      object_cacher = new ObjectCacher(cct, *writeback_handler, cache_lock,
 				       NULL, NULL,
 				       cct->_conf->rbd_cache_size,
 				       10,  /* reset this in init */
