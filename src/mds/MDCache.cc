@@ -6474,7 +6474,7 @@ void MDCache::discover_ino(inodeno_t ino, Context *onfinish, int from)
   if (waiting_for_base_ino[from].count(ino) == 0) {
     discover_info_t& d = _create_discover(from);
     d.base.stripe.ino = ino;
-    d.want.first = d.want.second = INODE;
+    d.want.first = d.want.second = MDSCacheObjectInfo::INODE;
     _send_discover(d);
   }
   waiting_for_base_ino[from][ino].push_back(onfinish);
@@ -6492,7 +6492,7 @@ void MDCache::discover_dir_placement(CInode *base, Context *onfinish, int from)
   if (!base->is_waiter_for(CInode::WAIT_PLACEMENT) || !onfinish) {
     discover_info_t& d = _create_discover(from);
     d.base.stripe.ino = base->ino();
-    d.want.first = d.want.second = PLACEMENT;
+    d.want.first = d.want.second = MDSCacheObjectInfo::PLACEMENT;
     _send_discover(d);
   }
 
@@ -6513,7 +6513,7 @@ void MDCache::discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,
     discover_info_t& d = _create_discover(from);
     d.base.stripe.ino = base->ino();
     d.base.stripe.stripeid = stripeid;
-    d.want.first = d.want.second = STRIPE;
+    d.want.first = d.want.second = MDSCacheObjectInfo::STRIPE;
     _send_discover(d);
   }
 
@@ -6537,7 +6537,7 @@ void MDCache::discover_dir_frag(CDirStripe *base,
     discover_info_t& d = _create_discover(from);
     d.base.stripe = base->dirstripe();
     d.base.frag = approx_fg;
-    d.want.first = d.want.second = FRAG;
+    d.want.first = d.want.second = MDSCacheObjectInfo::FRAG;
     _send_discover(d);
   }
 
@@ -6620,8 +6620,8 @@ void MDCache::discover_path(CDirPlacement *base, snapid_t snap,
     d.base.stripe = ds;
     d.snap = snap;
     d.name = dname;
-    d.want.first = STRIPE;
-    d.want.second = DENTRY;
+    d.want.first = MDSCacheObjectInfo::STRIPE;
+    d.want.second = MDSCacheObjectInfo::DENTRY;
     d.xlock = xlock;
     _send_discover(d);
   }
@@ -6656,8 +6656,8 @@ void MDCache::discover_path(CDirStripe *base, snapid_t snap,
     d.base = df;
     d.snap = snap;
     d.name = dname;
-    d.want.first = FRAG;
-    d.want.second = DENTRY;
+    d.want.first = MDSCacheObjectInfo::FRAG;
+    d.want.second = MDSCacheObjectInfo::DENTRY;
     d.xlock = xlock;
     _send_discover(d);
   }
@@ -6691,7 +6691,7 @@ void MDCache::discover_path(CDirFrag *base, snapid_t snap,
     d.base = base->dirfrag();
     d.snap = snap;
     d.name = dname;
-    d.want.first = d.want.second = DENTRY;
+    d.want.first = d.want.second = MDSCacheObjectInfo::DENTRY;
     d.xlock = xlock;
     _send_discover(d);
   }
@@ -6746,7 +6746,7 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
   CInode *in = NULL;
 
   __u8 type = dis->want.first;
-  if (type == INODE) {
+  if (type == MDSCacheObjectInfo::INODE) {
     inodeno_t ino = dis->base.stripe.ino;
     in = get_inode(ino, dis->snapid);
     if (!in) {
@@ -6762,7 +6762,7 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
     dout(7) << "have " << *in << dendl;
 
     assert(in->is_auth());
-    reply->contains.first = INODE;
+    reply->contains.first = MDSCacheObjectInfo::INODE;
 
     // replicate parent objects if necessary
     if (!in->is_base()) {
@@ -6782,33 +6782,33 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
 
       if (stripe->is_auth() && !stripe->is_replica(from)) {
         dout(7) << "replicating parent " << *stripe << dendl;
-        reply->contains.first = STRIPE;
+        reply->contains.first = MDSCacheObjectInfo::STRIPE;
         replicate_stripe(stripe, from, reply->trace);
         replicate_dir(dir, from, reply->trace);
         replicate_dentry(dn, from, reply->trace);
       } else if (dir->is_auth() && !dir->is_replica(from)) {
         dout(7) << "replicating parent " << *dir << dendl;
-        reply->contains.first = FRAG;
+        reply->contains.first = MDSCacheObjectInfo::FRAG;
         replicate_dir(dir, from, reply->trace);
         replicate_dentry(dn, from, reply->trace);
       } else if (dn->is_auth() && !dn->is_replica(from)) {
         dout(7) << "replicating parent " << *dn << dendl;
-        reply->contains.first = DENTRY;
+        reply->contains.first = MDSCacheObjectInfo::DENTRY;
         replicate_dentry(dn, from, reply->trace);
       }
     }
 
     dout(7) << "replicating " << *in << dendl;
     replicate_inode(in, from, reply->trace);
-    reply->contains.second = INODE;
-    if (dis->want.second == INODE)
+    reply->contains.second = MDSCacheObjectInfo::INODE;
+    if (dis->want.second == MDSCacheObjectInfo::INODE)
       return true;
-    type = PLACEMENT;
+    type = MDSCacheObjectInfo::PLACEMENT;
   }
 
   CDirPlacement *placement = NULL;
 
-  if (type == PLACEMENT) {
+  if (type == MDSCacheObjectInfo::PLACEMENT) {
     if (!in) {
       inodeno_t ino = dis->base.stripe.ino;
       in = get_inode(ino, dis->snapid);
@@ -6822,7 +6822,7 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
         dout(7) << "fetching inode " << ino << " from container" << dendl;
         return fetch_inode_from_container(mds, ino, dis, reply);
       }
-      reply->contains.first = PLACEMENT;
+      reply->contains.first = MDSCacheObjectInfo::PLACEMENT;
     }
     if (!in->is_dir()) {
       dout(7) << "no placement for " << *in << ", not a directory" << dendl;
@@ -6834,20 +6834,20 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
     assert(placement->is_auth());
     dout(7) << "replicating " << *placement << dendl;
     replicate_placement(placement, from, reply->trace);
-    reply->contains.second = PLACEMENT;
-    if (dis->want.second == PLACEMENT)
+    reply->contains.second = MDSCacheObjectInfo::PLACEMENT;
+    if (dis->want.second == MDSCacheObjectInfo::PLACEMENT)
       return true;
-    type = STRIPE;
+    type = MDSCacheObjectInfo::STRIPE;
     if (!dis->name.empty())
       dis->base.stripe.stripeid = pick_stripe(placement, dis->name);
   }
 
   CDirStripe *stripe = NULL;
 
-  if (type == STRIPE) {
+  if (type == MDSCacheObjectInfo::STRIPE) {
     if (!placement) {
       placement = get_dir_placement(dis->base.stripe.ino);
-      reply->contains.first = STRIPE;
+      reply->contains.first = MDSCacheObjectInfo::STRIPE;
     }
     assert(placement);
     int auth = placement->get_stripe_auth(dis->base.stripe.stripeid);
@@ -6863,20 +6863,20 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
     assert(stripe->is_auth());
     dout(7) << "replicating " << *stripe << dendl;
     replicate_stripe(stripe, from, reply->trace);
-    reply->contains.second = STRIPE;
-    if (dis->want.second == STRIPE)
+    reply->contains.second = MDSCacheObjectInfo::STRIPE;
+    if (dis->want.second == MDSCacheObjectInfo::STRIPE)
       return true;
-    type = FRAG;
+    type = MDSCacheObjectInfo::FRAG;
     if (!dis->name.empty())
       dis->base.frag = stripe->pick_dirfrag(dis->name);
   }
 
   CDirFrag *dir = NULL;
 
-  if (type == FRAG) {
+  if (type == MDSCacheObjectInfo::FRAG) {
     if (!stripe) {
       stripe = get_dirstripe(dis->base.stripe);
-      reply->contains.first = FRAG;
+      reply->contains.first = MDSCacheObjectInfo::FRAG;
     }
     assert(stripe);
     assert(stripe->is_auth());
@@ -6885,18 +6885,18 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
     assert(dir->is_auth());
     dout(7) << "replicating " << *dir << dendl;
     replicate_dir(dir, from, reply->trace);
-    reply->contains.second = FRAG;
-    if (dis->want.second == FRAG)
+    reply->contains.second = MDSCacheObjectInfo::FRAG;
+    if (dis->want.second == MDSCacheObjectInfo::FRAG)
       return true;
-    type = DENTRY;
+    type = MDSCacheObjectInfo::DENTRY;
   }
 
-  assert(type == DENTRY);
+  assert(type == MDSCacheObjectInfo::DENTRY);
   assert(!dis->name.empty());
 
   if (!dir) {
     dir = get_dirfrag(dis->base);
-    reply->contains.first = DENTRY;
+    reply->contains.first = MDSCacheObjectInfo::DENTRY;
   }
   assert(dir);
   assert(dir->is_auth());
@@ -6921,8 +6921,8 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
   assert(dn->is_auth());
   dout(7) << "replicating " << *dn << dendl;
   replicate_dentry(dn, from, reply->trace);
-  reply->contains.second = DENTRY;
-  assert(dis->want.second == DENTRY);
+  reply->contains.second = MDSCacheObjectInfo::DENTRY;
+  assert(dis->want.second == MDSCacheObjectInfo::DENTRY);
   return true;
 }
 
@@ -7005,15 +7005,15 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 
   // starting point
   int next = m->contains.first;
-  if (m->want.first == INODE) {
+  if (m->want.first == MDSCacheObjectInfo::INODE) {
     if (!MDS_INO_IS_BASE(ino)) {
       placement = get_container()->get_inode()->get_placement();
 
       // does the reply include parent objects from the inode container?
-      if (next == STRIPE) {
+      if (next == MDSCacheObjectInfo::STRIPE) {
         stripe = add_replica_stripe(p, placement, from, finished);
         dout(7) << "discover_reply got " << *stripe << dendl;
-        next = FRAG;
+        next = MDSCacheObjectInfo::FRAG;
       } else {
         stripeid_t stripeid = get_container()->place(ino);
         stripe = placement->get_stripe(stripeid);
@@ -7023,31 +7023,31 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
       char dname[20];
       snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
 
-      if (next == FRAG) {
+      if (next == MDSCacheObjectInfo::FRAG) {
         dir = add_replica_dir(p, stripe, finished);
         dout(7) << "discover_reply got " << *dir << dendl;
-        next = DENTRY;
+        next = MDSCacheObjectInfo::DENTRY;
       } else {
         frag_t fg = stripe->pick_dirfrag(dname);
         dir = stripe->get_dirfrag(fg);
         assert(dir);
       }
 
-      if (next == DENTRY) {
+      if (next == MDSCacheObjectInfo::DENTRY) {
         dn = add_replica_dentry(p, dir, finished);
         dout(7) << "discover_reply got " << *dn << dendl;
-        next = INODE;
+        next = MDSCacheObjectInfo::INODE;
       } else if (!MDS_INO_IS_BASE(ino)) {
         dn = dir->lookup(dname, m->snapid);
         assert(dn);
       }
     }
 
-    assert(next == INODE);
+    assert(next == MDSCacheObjectInfo::INODE);
     in = add_replica_inode(p, dn, from, finished);
     dout(7) << "discover_reply got " << *in << dendl;
 
-    next = PLACEMENT;
+    next = MDSCacheObjectInfo::PLACEMENT;
 
     // take waiters?
     map<int, map<inodeno_t, list<Context*> > >::iterator i =
@@ -7067,7 +7067,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
   }
   assert(in);
 
-  if (next == PLACEMENT) {
+  if (next == MDSCacheObjectInfo::PLACEMENT) {
     if (m->is_flag_error_placement()) {
       if (!in->is_dir()) {
         in->take_waiting(CInode::WAIT_PLACEMENT, error);
@@ -7079,40 +7079,40 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
     } else if (!p.end()) {
       placement = add_replica_placement(p, in, from, finished);
       dout(7) << "discover_reply got " << *placement << dendl;
-      next = STRIPE;
+      next = MDSCacheObjectInfo::STRIPE;
     }
   } else if (!p.end()) {
     placement = in->get_placement();
     assert(placement);
   }
 
-  if (next == STRIPE) {
+  if (next == MDSCacheObjectInfo::STRIPE) {
     if (m->is_flag_error_stripe()) {
       placement->take_stripe_waiting(m->base.stripe.stripeid, error);
     } else if (!p.end()) {
       stripe = add_replica_stripe(p, placement, from, finished);
       dout(7) << "discover_reply got " << *stripe << dendl;
-      next = FRAG;
+      next = MDSCacheObjectInfo::FRAG;
     }
   } else if (!p.end()) {
     stripe = placement->get_stripe(m->base.stripe.stripeid);
     assert(stripe);
   }
 
-  if (next == FRAG) {
+  if (next == MDSCacheObjectInfo::FRAG) {
     if (m->is_flag_error_dir()) {
       stripe->take_waiting(CDirStripe::WAIT_DIR, error);
     } else if (!p.end()) {
       dir = add_replica_dir(p, stripe, finished);
       dout(7) << "discover_reply got " << *dir << dendl;
-      next = DENTRY;
+      next = MDSCacheObjectInfo::DENTRY;
     }
   } else if (!p.end()) {
     dir = stripe->get_dirfrag(m->base.frag);
     assert(dir);
   }
 
-  if (next == DENTRY) {
+  if (next == MDSCacheObjectInfo::DENTRY) {
     if (m->is_flag_error_dn()) {
       dir->take_dentry_waiting(m->error_dentry, m->snapid, m->snapid, error);
     } else if (!p.end()) {
