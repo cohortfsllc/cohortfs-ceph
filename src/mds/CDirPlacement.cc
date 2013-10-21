@@ -272,6 +272,8 @@ void CDirPlacement::auth_unpin(void *by)
 void CDirPlacement::set_object_info(MDSCacheObjectInfo &info)
 {
   info.dirfrag.stripe.ino = ino();
+  info.snapid = CEPH_NOSNAP;
+  info.type = MDSCacheObjectInfo::PLACEMENT;
 }
 
 void CDirPlacement::encode_lock_state(int type, bufferlist& bl)

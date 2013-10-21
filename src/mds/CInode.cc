@@ -654,9 +654,9 @@ void CInode::decode_store(bufferlist::iterator& bl)
 
 void CInode::set_object_info(MDSCacheObjectInfo &info)
 {
-  info.ino = ino();
-  info.dirfrag.stripe.stripeid = CEPH_CAP_OBJECT_INODE;
+  info.dirfrag.stripe.ino = ino();
   info.snapid = last;
+  info.type = MDSCacheObjectInfo::INODE;
 }
 
 void CInode::encode_lock_state(int type, bufferlist& bl)

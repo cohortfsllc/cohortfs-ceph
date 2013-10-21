@@ -3148,79 +3148,31 @@ void Locker::revoke_client_leases(SimpleLock *lock)
 
 // locks ----------------------------------------------------------------
 
-SimpleLock *Locker::get_lock(int lock_type, MDSCacheObjectInfo &info) 
+SimpleLock *Locker::get_lock(int lock_type, const MDSCacheObjectInfo &info) 
 {
-  switch (lock_type) {
-  case CEPH_LOCK_DN:
-    {
-      // be careful; info.dirfrag may have incorrect frag; recalculate based on dname.
-      // XXX: need get_inode() and pick_stripe() here?
-      CDirStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
-      if (!stripe) {
-	dout(7) << "get_lock doesn't have stripe " << info.dirfrag.stripe << dendl;
-        return 0;
-      }
-      frag_t fg = stripe->pick_dirfrag(info.dname);
-      CDirFrag *dir = stripe->get_dirfrag(fg);
-      if (!dir) {
-	dout(7) << "get_lock doesn't have dir " << fg << dendl;
-        return 0;
-      }
-      CDentry *dn = dir->lookup(info.dname, info.snapid);
-      if (!dn) {
-	dout(7) << "get_lock don't have dn " << info.dirfrag.stripe << " " << info.dname << dendl;
-	return 0;
-      }
-      return &dn->lock;
+  MDSCacheObject *object;
+  if (info.type == MDSCacheObjectInfo::DENTRY) {
+    // be careful; info.dirfrag may have incorrect frag; recalculate based on dname.
+    CDirStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
+    if (!stripe) {
+      dout(7) << "get_lock doesn't have stripe " << info.dirfrag.stripe << dendl;
+      return 0;
     }
-
-  case CEPH_LOCK_SDFT:
-  case CEPH_LOCK_SLINK:
-  case CEPH_LOCK_SNEST:
-    {
-      CDirStripe *stripe = mdcache->get_dirstripe(info.dirfrag.stripe);
-      if (!stripe) {
-        dout(7) << "get_lock doesn't have stripe " << info.dirfrag.stripe << dendl;
-        return 0;
-      }
-      switch (lock_type) {
-      case CEPH_LOCK_SDFT: return &stripe->dirfragtreelock;
-      case CEPH_LOCK_SLINK: return &stripe->linklock;
-      case CEPH_LOCK_SNEST: return &stripe->nestlock;
-      }
+    frag_t fg = stripe->pick_dirfrag(info.dname);
+    CDirFrag *dir = stripe->get_dirfrag(fg);
+    if (!dir) {
+      dout(7) << "get_lock doesn't have dir " << fg << dendl;
+      return 0;
     }
+    object = dir->lookup(info.dname, info.snapid);
+  } else
+    object = mdcache->get_object(info);
 
-  case CEPH_LOCK_IAUTH:
-  case CEPH_LOCK_ILINK:
-  case CEPH_LOCK_IFILE:
-  case CEPH_LOCK_INEST:
-  case CEPH_LOCK_IXATTR:
-  case CEPH_LOCK_IFLOCK:
-  case CEPH_LOCK_IPOLICY:
-    {
-      CInode *in = mdcache->get_inode(info.ino, info.snapid);
-      if (!in) {
-	dout(7) << "get_lock don't have ino " << info.ino << dendl;
-	return 0;
-      }
-      switch (lock_type) {
-      case CEPH_LOCK_IAUTH: return &in->authlock;
-      case CEPH_LOCK_ILINK: return &in->linklock;
-      case CEPH_LOCK_IFILE: return &in->filelock;
-      case CEPH_LOCK_INEST: return &in->nestlock;
-      case CEPH_LOCK_IXATTR: return &in->xattrlock;
-      case CEPH_LOCK_IFLOCK: return &in->flocklock;
-      case CEPH_LOCK_IPOLICY: return &in->policylock;
-      }
-    }
-
-  default:
-    dout(7) << "get_lock don't know lock_type " << lock_type << dendl;
-    assert(0);
-    break;
+  if (!object) {
+    dout(7) << "get_lock doesn't have " << info << dendl;
+    return 0;
   }
-
-  return 0;  
+  return object->get_lock(lock_type);
 }
 
 /* This function DOES put the passed message before returning */

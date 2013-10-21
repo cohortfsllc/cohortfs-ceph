@@ -890,45 +890,57 @@ void string_snap_t::generate_test_instances(list<string_snap_t*>& ls)
  */
 void MDSCacheObjectInfo::encode(bufferlist& bl) const
 {
-  ENCODE_START(2, 2, bl);
-  ::encode(ino, bl);
+  ENCODE_START(3, 3, bl);
   ::encode(dirfrag, bl);
   ::encode(dname, bl);
   ::encode(snapid, bl);
+  ::encode(type, bl);
   ENCODE_FINISH(bl);
 }
 
 void MDSCacheObjectInfo::decode(bufferlist::iterator& p)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, p);
-  ::decode(ino, p);
+  DECODE_START_LEGACY_COMPAT_LEN(3, 3, 3, p);
   ::decode(dirfrag, p);
   ::decode(dname, p);
   ::decode(snapid, p);
+  ::decode(type, p);
   DECODE_FINISH(p);
+}
+
+static string object_type_string(__u8 type)
+{
+  switch (type) {
+    case MDSCacheObjectInfo::INODE: return "inode";
+    case MDSCacheObjectInfo::PLACEMENT: return "placement";
+    case MDSCacheObjectInfo::STRIPE: return "stripe";
+    case MDSCacheObjectInfo::FRAG: return "frag";
+    case MDSCacheObjectInfo::DENTRY: return "dentry";
+    default: assert(!"bad object type");
+  }
 }
 
 void MDSCacheObjectInfo::dump(Formatter *f) const
 {
-  f->dump_unsigned("ino", ino);
   f->dump_stream("dirfrag") << dirfrag;
   f->dump_string("name", dname);
   f->dump_unsigned("snapid", snapid);
+  f->dump_string("type", object_type_string(type));
 }
 
 void MDSCacheObjectInfo::generate_test_instances(list<MDSCacheObjectInfo*>& ls)
 {
   ls.push_back(new MDSCacheObjectInfo);
   ls.push_back(new MDSCacheObjectInfo);
-  ls.back()->ino = 1;
   ls.back()->dirfrag = dirfrag_t(2, 1, 3);
   ls.back()->dname = "fooname";
   ls.back()->snapid = CEPH_NOSNAP;
+  ls.back()->type = MDSCacheObjectInfo::DENTRY;
   ls.push_back(new MDSCacheObjectInfo);
-  ls.back()->ino = 121;
   ls.back()->dirfrag = dirfrag_t(222, 3, 0);
   ls.back()->dname = "bar foo";
   ls.back()->snapid = 21322;
+  ls.back()->type = MDSCacheObjectInfo::DENTRY;
 }
 
 

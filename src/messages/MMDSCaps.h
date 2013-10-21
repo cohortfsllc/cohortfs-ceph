@@ -24,12 +24,6 @@ class MMDSCaps : public Message {
   const MDSCacheObjectInfo& get_info() const { return info; }
   int get_caps() const { return caps; }
 
-  bool is_inode() const {
-    return get_dirstripe().stripeid == CEPH_CAP_OBJECT_INODE;
-  }
-  inodeno_t get_ino() const { return info.ino; }
-  dirstripe_t get_dirstripe() const { return info.dirfrag.stripe; }
-
   MMDSCaps() : Message(MSG_MDS_MDSCAPS) {}
   MMDSCaps(MDSCacheObjectInfo &info, int caps)
       : Message(MSG_MDS_MDSCAPS), info(info), caps(caps) {}
@@ -39,11 +33,7 @@ class MMDSCaps : public Message {
  public:
   const char *get_type_name() const { return "mds_caps"; }
   void print(ostream& out) const {
-    if (is_inode())
-      out << "mds_inode_caps(" << get_ino() << " " << ccap_string(caps) << ")";
-    else
-      out << "mds_stripe_caps(" << get_dirstripe()
-          << " " << ccap_string(caps) << ")";
+    out << get_type_name() << '(' << info << ' ' << ccap_string(caps) << ')';
   }
 
   void encode_payload(uint64_t features) {

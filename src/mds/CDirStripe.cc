@@ -396,8 +396,9 @@ void CDirStripe::put_stickydirs()
 
 void CDirStripe::set_object_info(MDSCacheObjectInfo &info)
 {
-  info.ino = ds.ino;
   info.dirfrag.stripe = ds;
+  info.snapid = CEPH_NOSNAP;
+  info.type = MDSCacheObjectInfo::STRIPE;
 }
 
 void CDirStripe::encode_lock_state(int type, bufferlist& bl)
