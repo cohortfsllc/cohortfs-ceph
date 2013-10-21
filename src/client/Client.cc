@@ -5344,7 +5344,7 @@ int Client::getdir(const char *relpath, list<string>& contents)
 
 /****** file i/o **********/
 int Client::open(const char *relpath, int flags, mode_t mode, int stripe_unit,
-    int stripe_count, int object_size, const char *data_pool)
+		 int stripe_count, int object_size)
 {
   ldout(cct, 3) << "open enter(" << relpath << ", " << flags << "," << mode << ") = " << dendl;
   Mutex::Locker lock(client_lock);
@@ -5369,7 +5369,7 @@ int Client::open(const char *relpath, int flags, mode_t mode, int stripe_unit,
     if (r < 0)
       return r;
     r = _create(dir, dname.c_str(), flags, mode, &in, &fh, stripe_unit,
-                stripe_count, object_size, data_pool, &created);
+		stripe_count, object_size, &created);
   }
   if (r < 0)
     goto out;
@@ -5403,7 +5403,7 @@ int Client::open(const char *relpath, int flags, mode_t mode, int stripe_unit,
 int Client::open(const char *relpath, int flags, mode_t mode)
 {
   /* Use default file striping parameters */
-  return open(relpath, flags, mode, 0, 0, 0, NULL);
+  return open(relpath, flags, mode, 0, 0, 0);
 }
 
 int Client::lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name)
@@ -6996,8 +6996,9 @@ int Client::ll_mknod(vinodeno_t parent, const char *name, mode_t mode, dev_t rde
   return r;
 }
 
-int Client::_create(Inode *dir, const char *name, int flags, mode_t mode, Inode **inp, Fh **fhp,
-    int stripe_unit, int stripe_count, int object_size, const char *data_pool, bool *created, int uid, int gid)
+int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
+		    Inode **inp, Fh **fhp, int stripe_unit, int stripe_count,
+		    int object_size, bool *created, int uid, int gid)
 {
   ldout(cct, 3) << "_create(" << dir->ino << " " << name << ", 0" << oct << mode << dec << ")" << dendl;
 
@@ -7568,8 +7569,7 @@ int Client::ll_create(vinodeno_t parent, const char *name, mode_t mode, int flag
     return -EEXIST;
   if (r == -ENOENT && (flags & O_CREAT)) {
     r = _create(dir, name, flags, mode, &in, fhp,
-	        0, 0, 0,
-		NULL, &created, uid, gid);
+		0, 0, 0, &created, uid, gid);
     if (r < 0)
       goto out;
 

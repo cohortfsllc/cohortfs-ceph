@@ -651,7 +651,7 @@ namespace librados
 
     void locator_set_key(const std::string& key);
 
-    int64_t get_id();
+    uuid_d get_id();
 
     config_t cct();
 

@@ -1225,12 +1225,7 @@ void librados::IoCtx::set_assert_src_version(const std::string& oid, uint64_t ve
   io_ctx_impl->set_assert_src_version(obj, ver);
 }
 
-void librados::IoCtx::locator_set_key(const string& key)
-{
-  io_ctx_impl->oloc.key = key;
-}
-
-int64_t librados::IoCtx::get_id()
+const uuid_d &librados::IoCtx::get_id()
 {
   return io_ctx_impl->get_id();
 }
@@ -2037,15 +2032,6 @@ extern "C" int rados_ioctx_pool_get_auid(rados_ioctx_t io, uint64_t *auid)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   return ctx->client->pool_get_auid(ctx->get_id(), (unsigned long long *)auid);
-}
-
-extern "C" void rados_ioctx_locator_set_key(rados_ioctx_t io, const char *key)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  if (key)
-    ctx->oloc.key = key;
-  else
-    ctx->oloc.key = "";
 }
 
 extern "C" rados_t rados_ioctx_get_cluster(rados_ioctx_t io)
