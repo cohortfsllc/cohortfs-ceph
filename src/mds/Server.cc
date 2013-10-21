@@ -1827,16 +1827,15 @@ CInode* Server::prepare_new_inode(MDRequest *mdr, CDirFrag *dir, inodeno_t usein
   in->inode.truncate_seq = 1; /* starting with 1, 0 is kept for no-truncation logic */
 
   MClientRequest *req = mdr->client_request;
-#if 0
-  if (diri->inode.mode & S_ISGID) {
+  CDirPlacement *placement = dir->get_placement();
+  if (placement->is_sticky_gid()) {
     dout(10) << " dir is sticky" << dendl;
-    in->inode.gid = diri->inode.gid;
+    in->inode.gid = placement->get_gid();
     if (S_ISDIR(mode)) {
-      dout(10) << " new dir also sticky" << dendl;      
+      dout(10) << " new dir also sticky" << dendl;
       in->inode.mode |= S_ISGID;
     }
-  } else 
-#endif
+  } else
     in->inode.gid = req->get_caller_gid();
 
   in->inode.uid = req->get_caller_uid();
@@ -4048,6 +4047,10 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
   pi->accounted_rstat = pi->rstat;
 
+  CDirPlacement *newplacement = newi->get_placement();
+  newplacement->set_mode(pi->mode);
+  newplacement->set_gid(pi->gid);
+
   // prepare finisher
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "mkdir");
@@ -4059,7 +4062,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
                                     dn->inoparent(), true, 1);
 
   le->metablob.add_inode(newi, dn);
-  le->metablob.add_placement(newi->get_placement());
+  le->metablob.add_placement(newplacement);
   le->metablob.add_dentry(inodn, true);
   le->metablob.add_dentry(dn, true);
 
