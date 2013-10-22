@@ -1219,9 +1219,11 @@ public:
 
   PaxosService *get_paxos_service_by_name(const string& name);
 
+#ifdef MDS
   class MDSMonitor *mdsmon() {
     return (class MDSMonitor *)paxos_service[PAXOS_MDSMAP];
   }
+#endif
 
   class MonmapMonitor *monmon() {
     return (class MonmapMonitor *)paxos_service[PAXOS_MONMAP];
@@ -1245,7 +1247,9 @@ public:
 
   friend class Paxos;
   friend class OSDMonitor;
+#ifdef MDS
   friend class MDSMonitor;
+#endif
   friend class MonmapMonitor;
   friend class LogMonitor;
   friend class VolMonitor;

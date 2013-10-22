@@ -17,7 +17,9 @@
 
 #include "OSDMonitor.h"
 #include "Monitor.h"
+#ifdef MDS
 #include "MDSMonitor.h"
+#endif
 #include "osd/OSDMap.h"
 
 #include "MonitorDBStore.h"

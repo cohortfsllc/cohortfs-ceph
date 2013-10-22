@@ -10,9 +10,11 @@
 #include "common/strtol.h"
 
 #include "mon/MonMap.h"
+#if 0
 #include "mds/MDS.h"
 #include "mds/Dumper.h"
 #include "mds/Resetter.h"
+#endif
 
 #include "msg/Messenger.h"
 

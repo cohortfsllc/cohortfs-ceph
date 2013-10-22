@@ -64,7 +64,6 @@
 #include "include/str_list.h"
 
 #include "OSDMonitor.h"
-#include "MDSMonitor.h"
 #include "MonmapMonitor.h"
 #include "LogMonitor.h"
 #include "AuthMonitor.h"
@@ -167,7 +166,9 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
 
   paxos = new Paxos(this, "paxos");
 
+#ifdef MDS
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, paxos, "mdsmap");
+#endif
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, paxos, "monmap");
   paxos_service[PAXOS_OSDMAP]
     = OSDMonitorPlaceSystem::getSystem().newOSDMonitor(this, paxos, "osdmap");
@@ -2509,7 +2510,9 @@ void Monitor::get_status(stringstream &ss, Formatter *f)
     f->dump_stream("quorum") << get_quorum();
     f->dump_stream("quorum_names") << get_quorum_names();
     f->dump_stream("osdmap") << *osdmon()->osdmap;
+#ifdef MDS
     f->dump_stream("mdsmap") << mdsmon()->mdsmap;
+#endif
     f->close_section();
   } else {
     ss << "  cluster " << monmap->get_fsid() << "\n";
@@ -2517,7 +2520,9 @@ void Monitor::get_status(stringstream &ss, Formatter *f)
     ss << "   monmap " << *monmap << ", election epoch " << get_epoch()
       << ", quorum " << get_quorum() << " " << get_quorum_names() << "\n";
     ss << "   osdmap " << *osdmon()->osdmap << "\n";
+#ifdef MDS
     ss << "   mdsmap " << mdsmon()->mdsmap << "\n";
+#endif
   }
 }
 
@@ -2616,10 +2621,12 @@ void Monitor::handle_command(MMonCommand *m)
   access_r = (session->is_capable("mon", MON_CAP_R) || access_cmd);
   access_all = (session->caps.is_allow_all() || access_cmd);
 
+#ifdef MDS
   if (module == "mds") {
     mdsmon()->dispatch(m);
     return;
   }
+#endif
   if (module == "osd") {
     osdmon()->dispatch(m);
     return;
@@ -2780,7 +2787,9 @@ void Monitor::handle_command(MMonCommand *m)
 
     monmon()->dump_info(f.get());
     osdmon()->dump_info(f.get());
+#ifdef MDS
     mdsmon()->dump_info(f.get());
+#endif
 
     f->close_section();
     f->flush(ds);
@@ -3837,11 +3846,14 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
 			       m->get_connection()->has_feature(
 				 CEPH_FEATURE_INCSUBOSDMAP));
 
+#ifdef MDS
     if (p->first == "mdsmap") {
       if ((int)s->is_capable("mds", MON_CAP_R)) {
 	mdsmon()->check_sub(s->sub_map["mdsmap"]);
       }
-    } else if (p->first == "osdmap") {
+    /* } else if (p->first == "osdmap") { */
+#endif
+    if (p->first == "osdmap") {
       if ((int)s->is_capable("osd", MON_CAP_R)) {
 	osdmon()->check_sub(s->sub_map["osdmap"]);
       }
@@ -3878,10 +3890,13 @@ void Monitor::handle_get_version(MMonGetVersion *m)
 
   MMonGetVersionReply *reply = new MMonGetVersionReply();
   reply->handle = m->handle;
+#ifdef MDS
   if (m->what == "mdsmap") {
     reply->version = mdsmon()->mdsmap.get_epoch();
     reply->oldest_version = mdsmon()->get_first_committed();
-  } else if (m->what == "osdmap") {
+/*  } else if (m->what == "osdmap") { */
+#endif
+  if (m->what == "osdmap") {
     reply->version = osdmon()->osdmap->get_epoch();
     reply->oldest_version = osdmon()->get_first_committed();
   } else if (m->what == "monmap") {

@@ -67,8 +67,9 @@ using namespace std;
 #include "messages/MMonSubscribe.h"
 #include "messages/MMonSubscribeAck.h"
 #include "messages/MMonGlobalID.h"
+
+#ifdef MDS
 #include "messages/MClientSession.h"
-#include "messages/MClientReconnect.h"
 #include "messages/MClientRequest.h"
 #include "messages/MClientRequestForward.h"
 #include "messages/MClientReply.h"
@@ -76,9 +77,8 @@ using namespace std;
 #include "messages/MClientCapRelease.h"
 #include "messages/MClientLease.h"
 #include "messages/MClientSnap.h"
-
 #include "messages/MMDSSlaveRequest.h"
-
+#include "messages/MClientReconnect.h"
 #include "messages/MMDSMap.h"
 #include "messages/MMDSBeacon.h"
 #include "messages/MMDSLoadTargets.h"
@@ -89,7 +89,6 @@ using namespace std;
 #include "messages/MMDSFindInoReply.h"
 #include "messages/MMDSOpenIno.h"
 #include "messages/MMDSOpenInoReply.h"
-
 #include "messages/MDirUpdate.h"
 #include "messages/MDiscover.h"
 #include "messages/MDiscoverReply.h"
@@ -123,6 +122,8 @@ using namespace std;
 #include "messages/MInodeFileCaps.h"
 
 #include "messages/MLock.h"
+
+#endif
 
 #include "messages/MWatchNotify.h"
 #include "messages/MTimeCheck.h"
@@ -376,6 +377,7 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case CEPH_MSG_MON_SUBSCRIBE_ACK:
     m = new MMonSubscribeAck;
     break;
+#ifdef MDS
   case CEPH_MSG_CLIENT_SESSION:
     m = new MClientSession;
     break;
@@ -537,6 +539,7 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case MSG_MDS_LOCK:
     m = new MLock();
     break;
+#endif
 
   case MSG_TIMECHECK:
     m = new MTimeCheck();

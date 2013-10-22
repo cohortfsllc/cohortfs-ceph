@@ -469,8 +469,10 @@ int main(int argc, const char **argv)
                                                             CEPH_FEATURE_OSDENC));
   messenger->set_policy(entity_name_t::TYPE_CLIENT,
 			Messenger::Policy::stateless_server(supported, 0));
+#ifdef MDS
   messenger->set_policy(entity_name_t::TYPE_MDS,
 			Messenger::Policy::stateless_server(supported, 0));
+#endif
 
 
   // throttle client traffic
@@ -484,7 +486,9 @@ int main(int argc, const char **argv)
   Throttle *daemon_throttler = new Throttle(g_ceph_context, "mon_daemon_bytes",
 					    g_conf->mon_daemon_bytes);
   messenger->set_policy_throttlers(entity_name_t::TYPE_OSD, daemon_throttler, NULL);
+#ifdef MDS
   messenger->set_policy_throttlers(entity_name_t::TYPE_MDS, daemon_throttler, NULL);
+#endif
 
   cout << "starting " << g_conf->name << " rank " << rank
        << " at " << ipaddr

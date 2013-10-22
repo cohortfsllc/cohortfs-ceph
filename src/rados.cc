@@ -27,7 +27,6 @@ using namespace librados;
 #include "common/errno.h"
 #include "common/Formatter.h"
 #include "common/obj_bencher.h"
-#include "mds/inode_backtrace.h"
 #include "auth/Crypto.h"
 #include <iostream>
 #include <fstream>
