@@ -55,16 +55,6 @@ void frag_info_t::dump(Formatter *f) const
   f->dump_unsigned("num_subdirs", nsubdirs);
 }
 
-void frag_info_t::generate_test_instances(list<frag_info_t*>& ls)
-{
-  ls.push_back(new frag_info_t);
-  ls.push_back(new frag_info_t);
-  ls.back()->version = 1;
-  ls.back()->mtime = utime_t(2, 3);
-  ls.back()->nfiles = 4;
-  ls.back()->nsubdirs = 5;
-}
-
 ostream& operator<<(ostream &out, const frag_info_t &f)
 {
   if (f == frag_info_t())
@@ -120,19 +110,6 @@ void nest_info_t::dump(Formatter *f) const
   f->dump_stream("rctime") << rctime;
 }
 
-void nest_info_t::generate_test_instances(list<nest_info_t*>& ls)
-{
-  ls.push_back(new nest_info_t);
-  ls.push_back(new nest_info_t);
-  ls.back()->version = 1;
-  ls.back()->rbytes = 2;
-  ls.back()->rfiles = 3;
-  ls.back()->rsubdirs = 4;
-  ls.back()->ranchors = 5;
-  ls.back()->rsnaprealms = 6;
-  ls.back()->rctime = utime_t(7, 8);
-}
-
 ostream& operator<<(ostream &out, const nest_info_t &n)
 {
   if (n == nest_info_t())
@@ -182,15 +159,6 @@ void client_writeable_range_t::dump(Formatter *f) const
   f->dump_unsigned("last", range.last);
   f->close_section();
   f->dump_unsigned("follows", follows);
-}
-
-void client_writeable_range_t::generate_test_instances(list<client_writeable_range_t*>& ls)
-{
-  ls.push_back(new client_writeable_range_t);
-  ls.push_back(new client_writeable_range_t);
-  ls.back()->range.first = 123;
-  ls.back()->range.last = 456;
-  ls.back()->follows = 12;
 }
 
 ostream& operator<<(ostream& out, const client_writeable_range_t& r)
@@ -360,15 +328,6 @@ void inode_t::dump(Formatter *f) const
   f->dump_unsigned("backtrace_version", backtrace_version);
 }
 
-void inode_t::generate_test_instances(list<inode_t*>& ls)
-{
-  ls.push_back(new inode_t);
-  ls.push_back(new inode_t);
-  ls.back()->ino = 1;
-  // i am lazy.
-}
-
-
 /*
  * old_inode_t
  */
@@ -401,19 +360,6 @@ void old_inode_t::dump(Formatter *f) const
   }
   f->close_section();
 }
-
-void old_inode_t::generate_test_instances(list<old_inode_t*>& ls)
-{
-  ls.push_back(new old_inode_t);
-  ls.push_back(new old_inode_t);
-  ls.back()->first = 2;
-  list<inode_t*> ils;
-  inode_t::generate_test_instances(ils);
-  ls.back()->inode = *ils.back();
-  ls.back()->xattrs["user.foo"] = buffer::copy("asdf", 4);
-  ls.back()->xattrs["user.unprintable"] = buffer::copy("\000\001\002", 3);
-}
-
 
 /*
  * fnode_t
@@ -464,23 +410,6 @@ void fnode_t::dump(Formatter *f) const
   f->close_section();
 }
 
-void fnode_t::generate_test_instances(list<fnode_t*>& ls)
-{
-  ls.push_back(new fnode_t);
-  ls.push_back(new fnode_t);
-  ls.back()->version = 1;
-  ls.back()->snap_purged_thru = 2;
-  list<frag_info_t*> fls;
-  frag_info_t::generate_test_instances(fls);
-  ls.back()->fragstat = *fls.back();
-  ls.back()->accounted_fragstat = *fls.front();
-  list<nest_info_t*> nls;
-  nest_info_t::generate_test_instances(nls);
-  ls.back()->rstat = *nls.front();
-  ls.back()->accounted_rstat = *nls.back();
-}
-
-
 /*
  * old_rstat_t
  */
@@ -511,17 +440,6 @@ void old_rstat_t::dump(Formatter *f) const
   f->open_object_section("accounted_rstat");
   accounted_rstat.dump(f);
   f->close_section();
-}
-
-void old_rstat_t::generate_test_instances(list<old_rstat_t*>& ls)
-{
-  ls.push_back(new old_rstat_t());
-  ls.push_back(new old_rstat_t());
-  ls.back()->first = 12;
-  list<nest_info_t*> nls;
-  nest_info_t::generate_test_instances(nls);
-  ls.back()->rstat = *nls.back();
-  ls.back()->accounted_rstat = *nls.front();
 }
 
 /*
@@ -596,19 +514,6 @@ void session_info_t::dump(Formatter *f) const
   f->close_section();
 }
 
-void session_info_t::generate_test_instances(list<session_info_t*>& ls)
-{
-  ls.push_back(new session_info_t);
-  ls.push_back(new session_info_t);
-  ls.back()->inst = entity_inst_t(entity_name_t::MDS(12), entity_addr_t());
-  ls.back()->completed_requests.insert(make_pair(234, inodeno_t(111222)));
-  ls.back()->completed_requests.insert(make_pair(237, inodeno_t(222333)));
-  ls.back()->prealloc_inos.insert(333, 12);
-  ls.back()->prealloc_inos.insert(377, 112);
-  // we can't add used inos; they're cleared on decode
-}
-
-
 /*
  * string_snap_t
  */
@@ -633,18 +538,6 @@ void string_snap_t::dump(Formatter *f) const
   f->dump_string("name", name);
   f->dump_unsigned("snapid", snapid);
 }
-
-void string_snap_t::generate_test_instances(list<string_snap_t*>& ls)
-{
-  ls.push_back(new string_snap_t);
-  ls.push_back(new string_snap_t);
-  ls.back()->name = "foo";
-  ls.back()->snapid = 123;
-  ls.push_back(new string_snap_t);
-  ls.back()->name = "bar";
-  ls.back()->snapid = 456;
-}
-
 
 /*
  * MDSCacheObjectInfo
@@ -677,22 +570,6 @@ void MDSCacheObjectInfo::dump(Formatter *f) const
   f->dump_unsigned("snapid", snapid);
 }
 
-void MDSCacheObjectInfo::generate_test_instances(list<MDSCacheObjectInfo*>& ls)
-{
-  ls.push_back(new MDSCacheObjectInfo);
-  ls.push_back(new MDSCacheObjectInfo);
-  ls.back()->ino = 1;
-  ls.back()->dirfrag = dirfrag_t(2, 3);
-  ls.back()->dname = "fooname";
-  ls.back()->snapid = CEPH_NOSNAP;
-  ls.push_back(new MDSCacheObjectInfo);
-  ls.back()->ino = 121;
-  ls.back()->dirfrag = dirfrag_t(222, 0);
-  ls.back()->dname = "bar foo";
-  ls.back()->snapid = 21322;
-}
-
-
 /*
  * mds_table_pending_t
  */
@@ -720,16 +597,6 @@ void mds_table_pending_t::dump(Formatter *f) const
   f->dump_unsigned("mds", mds);
   f->dump_unsigned("tid", tid);
 }
-
-void mds_table_pending_t::generate_test_instances(list<mds_table_pending_t*>& ls)
-{
-  ls.push_back(new mds_table_pending_t);
-  ls.push_back(new mds_table_pending_t);
-  ls.back()->reqid = 234;
-  ls.back()->mds = 2;
-  ls.back()->tid = 35434;
-}
-
 
 /*
  * inode_load_vec_t
@@ -761,13 +628,6 @@ void inode_load_vec_t::dump(Formatter *f)
   f->close_section();
 }
 
-void inode_load_vec_t::generate_test_instances(list<inode_load_vec_t*>& ls)
-{
-  utime_t sample;
-  ls.push_back(new inode_load_vec_t(sample));
-}
-
-
 /*
  * dirfrag_load_vec_t
  */
@@ -780,12 +640,6 @@ void dirfrag_load_vec_t::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
-}
-
-void dirfrag_load_vec_t::generate_test_instances(list<dirfrag_load_vec_t*>& ls)
-{
-  utime_t sample;
-  ls.push_back(new dirfrag_load_vec_t(sample));
 }
 
 /*
@@ -827,12 +681,6 @@ void mds_load_t::dump(Formatter *f) const
   f->close_section();
 }
 
-void mds_load_t::generate_test_instances(list<mds_load_t*>& ls)
-{
-  utime_t sample;
-  ls.push_back(new mds_load_t(sample));
-}
-
 /*
  * cap_reconnect_t
  */
@@ -872,9 +720,3 @@ void cap_reconnect_t::dump(Formatter *f) const
   f->dump_string("has file locks", capinfo.flock_len ? "true" : "false");
 }
 
-void cap_reconnect_t::generate_test_instances(list<cap_reconnect_t*>& ls)
-{
-  ls.push_back(new cap_reconnect_t);
-  ls.back()->path = "/test/path";
-  ls.back()->capinfo.cap_id = 1;
-}

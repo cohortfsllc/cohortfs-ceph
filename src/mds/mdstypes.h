@@ -148,7 +148,6 @@ struct frag_info_t : public scatter_info_t {
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<frag_info_t*>& ls);
 };
 WRITE_CLASS_ENCODER(frag_info_t)
 
@@ -204,7 +203,6 @@ struct nest_info_t : public scatter_info_t {
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<nest_info_t*>& ls);
 };
 WRITE_CLASS_ENCODER(nest_info_t)
 
@@ -286,7 +284,6 @@ struct client_writeable_range_t {
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<client_writeable_range_t*>& ls);
 };
 
 inline void decode(client_writeable_range_t::byte_range_t& range, bufferlist::iterator& bl) {
@@ -443,7 +440,6 @@ struct inode_t {
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<inode_t*>& ls);
 };
 WRITE_CLASS_ENCODER(inode_t)
 
@@ -459,7 +455,6 @@ struct old_inode_t {
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<old_inode_t*>& ls);
 };
 WRITE_CLASS_ENCODER(old_inode_t)
 
@@ -476,7 +471,6 @@ struct fnode_t {
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<fnode_t*>& ls);
 };
 WRITE_CLASS_ENCODER(fnode_t)
 
@@ -488,7 +482,6 @@ struct old_rstat_t {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& p);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<old_rstat_t*>& ls);
 };
 WRITE_CLASS_ENCODER(old_rstat_t)
 
@@ -518,7 +511,6 @@ struct session_info_t {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& p);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<session_info_t*>& ls);
 };
 WRITE_CLASS_ENCODER(session_info_t)
 
@@ -604,7 +596,6 @@ struct string_snap_t {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& p);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<string_snap_t*>& ls);
 };
 WRITE_CLASS_ENCODER(string_snap_t)
 
@@ -632,7 +623,6 @@ struct mds_table_pending_t {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<mds_table_pending_t*>& ls);
 };
 WRITE_CLASS_ENCODER(mds_table_pending_t)
 
@@ -711,7 +701,6 @@ struct cap_reconnect_t {
   void decode_old(bufferlist::iterator& bl);
 
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<cap_reconnect_t*>& ls);
 };
 WRITE_CLASS_ENCODER(cap_reconnect_t)
 
@@ -847,7 +836,6 @@ public:
   // for dencoder
   void decode(bufferlist::iterator& p) { utime_t sample; decode(sample, p); }
   void dump(Formatter *f);
-  static void generate_test_instances(list<inode_load_vec_t*>& ls);
 };
 inline void encode(const inode_load_vec_t &c, bufferlist &bl) { c.encode(bl); }
 inline void decode(inode_load_vec_t & c, const utime_t &t, bufferlist::iterator &p) {
@@ -883,7 +871,6 @@ public:
     decode(sample, p);
   }
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<dirfrag_load_vec_t*>& ls);
 
   DecayCounter &get(int t) { 
     assert(t < NUM);
@@ -978,7 +965,6 @@ struct mds_load_t {
   //this one is for dencoder infrastructure
   void decode(bufferlist::iterator& bl) { utime_t sample; decode(sample, bl); }
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<mds_load_t*>& ls);
 };
 inline void encode(const mds_load_t &c, bufferlist &bl) { c.encode(bl); }
 inline void decode(mds_load_t &c, const utime_t &t, bufferlist::iterator &p) {
@@ -1091,7 +1077,6 @@ public:
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<MDSCacheObjectInfo*>& ls);
 };
 
 inline bool operator==(const MDSCacheObjectInfo& l, const MDSCacheObjectInfo& r) {

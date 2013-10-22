@@ -1420,9 +1420,6 @@ libcommon_files = \
 	cohort/CohortOSDMap.cc \
 	osd/osd_types.cc \
 	osd/PlaceSystem.cc \
-	mds/MDSMap.cc \
-	mds/inode_backtrace.cc \
-	mds/mdstypes.cc \
 	common/blkdev.cc \
 	common/common_init.cc \
 	common/pipe.c \
@@ -1455,6 +1452,9 @@ libcommon_files = \
 	common/ipaddr.cc \
 	common/pick_address.cc \
 	include/addr_parsing.c
+#	mds/MDSMap.cc
+#	mds/inode_backtrace.cc
+#	mds/mdstypes.cc
 
 if WITH_PROFILER
 libcommon_files += perfglue/cpu_profiler.cc
