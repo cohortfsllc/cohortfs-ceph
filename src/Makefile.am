@@ -101,10 +101,10 @@ ceph_osd_LDADD += -ldl
 endif
 
 # mds
-ceph_mds_SOURCES = ceph_mds.cc
-ceph_mds_LDADD = libmds.a libosdc.la $(LIBGLOBAL_LDA)
-bin_PROGRAMS += ceph-mds
-ceph_mds_CXXFLAGS = ${AM_CXXFLAGS}
+#ceph_mds_SOURCES = ceph_mds.cc
+#ceph_mds_LDADD = libmds.a libosdc.la $(LIBGLOBAL_LDA)
+#bin_PROGRAMS += ceph-mds
+#ceph_mds_CXXFLAGS = ${AM_CXXFLAGS}
 
 # admin tools
 
@@ -149,10 +149,10 @@ rgw_dencoder_src = rgw/rgw_dencoder.cc \
                    rgw/rgw_common.cc \
                    rgw/rgw_json_enc.cc
 
-ceph_dencoder_SOURCES = test/encoding/ceph_dencoder.cc ${rgw_dencoder_src} perfglue/disabled_heap_profiler.cc
-ceph_dencoder_CXXFLAGS = ${AM_CXXFLAGS}
-ceph_dencoder_LDADD = $(LIBGLOBAL_LDA) libcls_lock_client.a libcls_rgw_client.a libosd.a libmds.a libosdc.la $(LIBOS_LDA) libmon.a
-bin_PROGRAMS += ceph-dencoder
+#ceph_dencoder_SOURCES = test/encoding/ceph_dencoder.cc ${rgw_dencoder_src} perfglue/disabled_heap_profiler.cc
+#ceph_dencoder_CXXFLAGS = ${AM_CXXFLAGS}
+#ceph_dencoder_LDADD = $(LIBGLOBAL_LDA) libcls_lock_client.a libcls_rgw_client.a libosd.a libmds.a libosdc.la $(LIBOS_LDA) libmon.a
+#bin_PROGRAMS += ceph-dencoder
 
 mount_ceph_SOURCES = mount/mount.ceph.c common/armor.c common/safe_io.c common/secret.c include/addr_parsing.c
 mount_ceph_LDADD = -lkeyutils
@@ -202,9 +202,9 @@ tcmalloc_safety_flags = -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-rea
 ceph_osd_LDADD += -ltcmalloc
 ceph_osd_CXXFLAGS += ${tcmalloc_safety_flags}
 ceph_osd_SOURCES += perfglue/heap_profiler.cc
-ceph_mds_LDADD += -ltcmalloc
-ceph_mds_CXXFLAGS += ${tcmalloc_safety_flags}
-ceph_mds_SOURCES += perfglue/heap_profiler.cc
+#ceph_mds_LDADD += -ltcmalloc
+#ceph_mds_CXXFLAGS += ${tcmalloc_safety_flags}
+#ceph_mds_SOURCES += perfglue/heap_profiler.cc
 ceph_mon_LDADD += -ltcmalloc
 ceph_mon_CXXFLAGS += ${tcmalloc_safety_flags}
 ceph_mon_SOURCES += perfglue/heap_profiler.cc
@@ -214,7 +214,7 @@ ceph_fuse_CXXFLAGS += ${tcmalloc_safety_flags}
 endif #WITH_FUSE
 else
 ceph_osd_SOURCES += perfglue/disabled_heap_profiler.cc
-ceph_mds_SOURCES += perfglue/disabled_heap_profiler.cc
+#ceph_mds_SOURCES += perfglue/disabled_heap_profiler.cc
 ceph_mon_SOURCES += perfglue/disabled_heap_profiler.cc
 endif # WITH_TCMALLOC
 
@@ -1490,7 +1490,7 @@ libmon_a_SOURCES = \
 libmon_a_CXXFLAGS= ${AM_CXXFLAGS}
 noinst_LIBRARIES += libmon.a
 
-libmds_a_SOURCES = \
+#libmds_a_SOURCES = \
 	mds/Anchor.cc \
 	mds/Capability.cc \
 	mds/Dumper.cc \
@@ -1521,7 +1521,7 @@ libmds_a_SOURCES = \
 	mds/SessionMap.cc \
 	mds/MDLog.cc \
 	osdc/Journaler.cc
-noinst_LIBRARIES += libmds.a
+#noinst_LIBRARIES += libmds.a
 
 libos_a_SOURCES = \
 	os/FileJournal.cc \

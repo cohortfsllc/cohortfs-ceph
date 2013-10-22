@@ -76,6 +76,7 @@ class Inode {
   CephContext *cct;
 
   // -- the actual inode --
+  uuid_d volume;
   inodeno_t ino;
   snapid_t  snapid;
   uint32_t   rdev;    // if special file
@@ -225,7 +226,7 @@ class Inode {
   }
   ~Inode() { }
 
-  vinodeno_t vino() { return vinodeno_t(ino, snapid); }
+  vinodeno_t vino() { return vinodeno_t(volume, ino, snapid); }
 
   struct Compare {
     bool operator() (Inode* const & left, Inode* const & right) {
