@@ -51,7 +51,6 @@ public:
 			uint32_t replica) = 0;
   virtual uint32_t num_rules(void) = 0;
 
-  virtual bool valid(string& error);
   virtual int update(VolumeCRef v);
 };
 

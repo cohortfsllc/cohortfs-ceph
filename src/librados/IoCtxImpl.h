@@ -91,14 +91,9 @@ struct librados::IoCtxImpl {
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);
 
   // snaps
-  int snap_list(vector<uint64_t> *snaps);
-  int snap_lookup(const char *name, uint64_t *snapid);
-  int snap_get_name(uint64_t snapid, std::string *s);
-  int snap_get_stamp(uint64_t snapid, time_t *t);
   int snap_create(const char* snapname);
   int selfmanaged_snap_create(uint64_t *snapid);
   int snap_remove(const char* snapname);
-  int rollback(const object_t& oid, const char *snapName);
   int selfmanaged_snap_remove(uint64_t snapid);
   int selfmanaged_snap_rollback_object(const object_t& oid,
                                        ::SnapContext& snapc, uint64_t snapid);
@@ -176,9 +171,6 @@ struct librados::IoCtxImpl {
   int aio_exec(const object_t& oid, AioCompletionImpl *c, const char *cls,
 	       const char *method, bufferlist& inbl, bufferlist *outbl);
   int aio_stat(const object_t& oid, AioCompletionImpl *c, uint64_t *psize, time_t *pmtime);
-
-  int pool_change_auid(unsigned long long auid);
-  int pool_change_auid_async(unsigned long long auid, PoolAsyncCompletionImpl *c);
 
   void set_sync_op_version(eversion_t& ver);
   int watch(const object_t& oid, uint64_t ver, uint64_t *cookie, librados::WatchCtx *ctx);

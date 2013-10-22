@@ -568,3 +568,9 @@ void librados::RadosClient::handle_log(MLog *m)
 
   m->put();
 }
+
+int librados::RadosClient::volume_list(std::list<uuid_d>& volumes)
+{
+  return 0;
+  #warning TBD
+}

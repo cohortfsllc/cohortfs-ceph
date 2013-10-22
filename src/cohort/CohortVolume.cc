@@ -116,3 +116,8 @@ void CohortVolume::decode(bufferlist::iterator& bl)
   inherited::decode(bl);
   ::decode(place_text, bl);
 }
+
+int CohortVolume::update(VolumeCRef v)
+{
+  return 0;
+}

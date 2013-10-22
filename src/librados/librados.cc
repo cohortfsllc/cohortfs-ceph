@@ -622,16 +622,6 @@ void librados::IoCtx::dup(const IoCtx& rhs)
   io_ctx_impl->dup(*rhs.io_ctx_impl);
 }
 
-int librados::IoCtx::set_auid(uint64_t auid_)
-{
-  return io_ctx_impl->pool_change_auid(auid_);
-}
-
-int librados::IoCtx::set_auid_async(uint64_t auid_, PoolAsyncCompletion *c)
-{
-  return io_ctx_impl->pool_change_auid_async(auid_, c->pc);
-}
-
 int librados::IoCtx::create(const std::string& oid, bool exclusive)
 {
   object_t obj(oid);
@@ -926,44 +916,9 @@ int librados::IoCtx::snap_create(const char *snapname)
   return io_ctx_impl->snap_create(snapname);
 }
 
-int librados::IoCtx::snap_lookup(const char *name, snap_t *snapid)
-{
-  return io_ctx_impl->snap_lookup(name, snapid);
-}
-
-int librados::IoCtx::snap_get_stamp(snap_t snapid, time_t *t)
-{
-  return io_ctx_impl->snap_get_stamp(snapid, t);
-}
-
-int librados::IoCtx::snap_get_name(snap_t snapid, std::string *s)
-{
-  return io_ctx_impl->snap_get_name(snapid, s);
-}
-
 int librados::IoCtx::snap_remove(const char *snapname)
 {
   return io_ctx_impl->snap_remove(snapname);
-}
-
-int librados::IoCtx::snap_list(std::vector<snap_t> *snaps)
-{
-  return io_ctx_impl->snap_list(snaps);
-}
-
-int librados::IoCtx::rollback(const std::string& oid, const char *snapname)
-{
-  return io_ctx_impl->rollback(oid, snapname);
-}
-
-int librados::IoCtx::selfmanaged_snap_create(uint64_t *snapid)
-{
-  return io_ctx_impl->selfmanaged_snap_create(snapid);
-}
-
-int librados::IoCtx::selfmanaged_snap_remove(uint64_t snapid)
-{
-  return io_ctx_impl->selfmanaged_snap_remove(snapid);
 }
 
 int librados::IoCtx::selfmanaged_snap_rollback(const std::string& oid, uint64_t snapid)
@@ -1339,66 +1294,9 @@ int librados::Rados::conf_get(const char *option, std::string &val)
   return 0;
 }
 
-int librados::Rados::pool_create(const char *name)
-{
-  string str(name);
-  return client->pool_create(str);
-}
-
-int librados::Rados::pool_create(const char *name, uint64_t auid)
-{
-  string str(name);
-  return client->pool_create(str, auid);
-}
-
-int librados::Rados::pool_create(const char *name, uint64_t auid, __u8 crush_rule)
-{
-  string str(name);
-  return client->pool_create(str, auid, crush_rule);
-}
-
-int librados::Rados::pool_create_async(const char *name, PoolAsyncCompletion *c)
-{
-  string str(name);
-  return client->pool_create_async(str, c->pc);
-}
-
-int librados::Rados::pool_create_async(const char *name, uint64_t auid, PoolAsyncCompletion *c)
-{
-  string str(name);
-  return client->pool_create_async(str, c->pc, auid);
-}
-
-int librados::Rados::pool_create_async(const char *name, uint64_t auid, __u8 crush_rule,
-				       PoolAsyncCompletion *c)
-{
-  string str(name);
-  return client->pool_create_async(str, c->pc, auid, crush_rule);
-}
-
-int librados::Rados::pool_delete(const char *name)
-{
-  return client->pool_delete(name);
-}
-
-int librados::Rados::pool_delete_async(const char *name, PoolAsyncCompletion *c)
-{
-  return client->pool_delete_async(name, c->pc);
-}
-
 int librados::Rados::volume_list(std::list<uuid_d>& v)
 {
   return client->volume_list(v);
-}
-
-int64_t librados::Rados::pool_lookup(const char *name)
-{
-  return client->lookup_pool(name);
-}
-
-int librados::Rados::pool_reverse_lookup(int64_t id, std::string *name)
-{
-  return client->pool_get_name(id, name);
 }
 
 int librados::Rados::ioctx_create(const uuid_d& volume, IoCtx &io)
@@ -1414,12 +1312,6 @@ int librados::Rados::ioctx_create(const uuid_d& volume, IoCtx &io)
 void librados::Rados::test_blacklist_self(bool set)
 {
   client->blacklist_self(set);
-}
-
-int librados::Rados::get_pool_stats(std::list<string>& v, std::map<string, stats_map>& result)
-{
-  string category;
-  return get_pool_stats(v, category, result);
 }
 
 int librados::Rados::cluster_stat(cluster_stat_t& result)
@@ -1668,24 +1560,6 @@ extern "C" int rados_conf_get(rados_t cluster, const char *option, char *buf, si
   librados::RadosClient *client = (librados::RadosClient *)cluster;
   md_config_t *conf = client->cct->_conf;
   return conf->get_val(option, &tmp, len);
-}
-
-extern "C" int64_t rados_pool_lookup(rados_t cluster, const char *name)
-{
-  librados::RadosClient *radosp = (librados::RadosClient *)cluster;
-  return radosp->lookup_pool(name);
-}
-
-extern "C" int rados_pool_reverse_lookup(rados_t cluster, int64_t id,
-					 char *buf, size_t maxlen)
-{
-  librados::RadosClient *radosp = (librados::RadosClient *)cluster;
-  std::string name;
-  radosp->pool_get_name(id, &name);
-  if (name.length() >= maxlen)
-    return -ERANGE;
-  strcpy(buf, name.c_str());
-  return name.length();
 }
 
 extern "C" int rados_cluster_fsid(rados_t cluster, char *buf,
@@ -1973,49 +1847,6 @@ extern "C" uint64_t rados_get_last_version(rados_ioctx_t io)
   return ver.version;
 }
 
-extern "C" int rados_pool_create(rados_t cluster, const char *name)
-{
-  librados::RadosClient *radosp = (librados::RadosClient *)cluster;
-  string sname(name);
-  return radosp->pool_create(sname);
-}
-
-extern "C" int rados_pool_create_with_auid(rados_t cluster, const char *name,
-					   uint64_t auid)
-{
-  librados::RadosClient *radosp = (librados::RadosClient *)cluster;
-  string sname(name);
-  return radosp->pool_create(sname, auid);
-}
-
-extern "C" int rados_pool_create_with_crush_rule(rados_t cluster, const char *name,
-						 __u8 crush_rule_num)
-{
-  librados::RadosClient *radosp = (librados::RadosClient *)cluster;
-  string sname(name);
-  return radosp->pool_create(sname, 0, crush_rule_num);
-}
-
-extern "C" int rados_pool_create_with_all(rados_t cluster, const char *name,
-					  uint64_t auid, __u8 crush_rule_num)
-{
-  librados::RadosClient *radosp = (librados::RadosClient *)cluster;
-  string sname(name);
-  return radosp->pool_create(sname, auid, crush_rule_num);
-}
-
-extern "C" int rados_pool_delete(rados_t cluster, const char *pool_name)
-{
-  librados::RadosClient *client = (librados::RadosClient *)cluster;
-  return client->pool_delete(pool_name);
-}
-
-extern "C" int rados_ioctx_pool_set_auid(rados_ioctx_t io, uint64_t auid)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->pool_change_auid(auid);
-}
-
 extern "C" rados_t rados_ioctx_get_cluster(rados_ioctx_t io)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
@@ -2044,13 +1875,6 @@ extern "C" int rados_ioctx_snap_remove(rados_ioctx_t io, const char *snapname)
   return ctx->snap_remove(snapname);
 }
 
-extern "C" int rados_rollback(rados_ioctx_t io, const char *oid,
-			      const char *snapname)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->rollback(oid, snapname);
-}
-
 extern "C" int rados_ioctx_selfmanaged_snap_create(rados_ioctx_t io,
 					     uint64_t *snapid)
 {
@@ -2071,49 +1895,6 @@ extern "C" int rados_ioctx_selfmanaged_snap_rollback(rados_ioctx_t io,
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   return ctx->selfmanaged_snap_rollback_object(oid, ctx->snapc, snapid);
-}
-
-extern "C" int rados_ioctx_snap_list(rados_ioctx_t io, rados_snap_t *snaps,
-				    int maxlen)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  vector<uint64_t> snapvec;
-  int r = ctx->snap_list(&snapvec);
-  if (r < 0)
-    return r;
-  if ((int)snapvec.size() <= maxlen) {
-    for (unsigned i=0; i<snapvec.size(); i++)
-      snaps[i] = snapvec[i];
-    return snapvec.size();
-  }
-  return -ERANGE;
-}
-
-extern "C" int rados_ioctx_snap_lookup(rados_ioctx_t io, const char *name,
-				      rados_snap_t *id)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->snap_lookup(name, (uint64_t *)id);
-}
-
-extern "C" int rados_ioctx_snap_get_name(rados_ioctx_t io, rados_snap_t id,
-					char *name, int maxlen)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  std::string sname;
-  int r = ctx->snap_get_name(id, &sname);
-  if (r < 0)
-    return r;
-  if ((int)sname.length() >= maxlen)
-    return -ERANGE;
-  strncpy(name, sname.c_str(), maxlen);
-  return 0;
-}
-
-extern "C" int rados_ioctx_snap_get_stamp(rados_ioctx_t io, rados_snap_t id, time_t *t)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->snap_get_stamp(id, t);
 }
 
 extern "C" int rados_getxattr(rados_ioctx_t io, const char *o, const char *name,

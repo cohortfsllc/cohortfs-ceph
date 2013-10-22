@@ -470,26 +470,12 @@ namespace librados
     // Create a snapshot with a given name
     int snap_create(const char *snapname);
 
-    // Look up a snapshot by name.
-    // Returns 0 on success; error code otherwise
-    int snap_lookup(const char *snapname, snap_t *snap);
-
-    // Gets a timestamp for a snap
-    int snap_get_stamp(snap_t snapid, time_t *t);
-
-    // Gets the name of a snap
-    int snap_get_name(snap_t snapid, std::string *s);
-
     // Remove a snapshot from this pool
     int snap_remove(const char *snapname);
 
     int snap_list(std::vector<snap_t> *snaps);
 
     int rollback(const std::string& oid, const char *snapname);
-
-    int selfmanaged_snap_create(uint64_t *snapid);
-
-    int selfmanaged_snap_remove(uint64_t snapid);
 
     int selfmanaged_snap_rollback(const std::string& oid, uint64_t snapid);
 
@@ -709,11 +695,6 @@ namespace librados
 
     /* listing objects */
     int volume_list(std::list<uuid_d>& v);
-    int get_pool_stats(std::list<std::string>& v,
-		       std::map<std::string, stats_map>& stats);
-    int get_pool_stats(std::list<std::string>& v,
-                       std::string& category,
-		       std::map<std::string, stats_map>& stats);
     int cluster_stat(cluster_stat_t& result);
     int cluster_fsid(std::string *fsid);
 
