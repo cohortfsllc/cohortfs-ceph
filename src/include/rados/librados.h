@@ -14,6 +14,7 @@ extern "C" {
 #endif
 #include <string.h>
 #include "rados_types.h"
+#include <uuid/uuid.h>
 
 #ifndef CEPH_OSD_TMAP_SET
 /* These are also defined in rados.h and objclass.h. Keep them in sync! */
@@ -462,7 +463,7 @@ uint64_t rados_get_instance_id(rados_t cluster);
  * @param ioctx where to store the io context
  * @returns 0 on success, negative error code on failure
  */
-int rados_ioctx_create(rados_t cluster, const uuid_d& volume,
+int rados_ioctx_create(rados_t cluster, const uuid_t volume,
 		       rados_ioctx_t *ioctx);
 
 /**

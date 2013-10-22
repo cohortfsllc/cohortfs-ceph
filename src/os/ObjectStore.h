@@ -699,7 +699,6 @@ public:
     }
 
     void dump(ceph::Formatter *f);
-    static void generate_test_instances(list<Transaction*>& o);
   };
 
   struct C_DeleteTransaction : public Context {

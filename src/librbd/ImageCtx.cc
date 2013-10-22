@@ -150,7 +150,7 @@ namespace librbd {
     }
     return 0;
   }
-  
+
   void ImageCtx::init_layout()
   {
     if (stripe_unit == 0 || stripe_count == 0) {
@@ -162,7 +162,6 @@ namespace librbd {
     layout.fl_stripe_unit = stripe_unit;
     layout.fl_stripe_count = stripe_count;
     layout.fl_object_size = 1ull << order;
-    layout.fl_pg_pool = data_ctx.get_id();  // FIXME: pool id overflow?
 
     delete[] format_string;
     size_t len = object_prefix.length() + 16;
@@ -399,19 +398,19 @@ namespace librbd {
     return 0;
   }
 
-  int64_t ImageCtx::get_parent_pool_id(snap_t in_snap_id) const
+  const uuid_d& ImageCtx::get_parent_volume_id(snap_t in_snap_id) const
   {
     if (in_snap_id == CEPH_NOSNAP) {
-      return parent_md.spec.pool_id;
+      return parent_md.spec.volume_id;
     }
     string in_snap_name;
     int r = get_snap_name(in_snap_id, &in_snap_name);
     if (r < 0)
-      return -1;
+      return INVALID_VOLUME;
     map<string, SnapInfo>::const_iterator p = snaps_by_name.find(in_snap_name);
     if (p == snaps_by_name.end())
-      return -1;
-    return p->second.parent.spec.pool_id;
+      return INVALID_VOLUME;
+    return p->second.parent.spec.volume_id;
   }
 
   string ImageCtx::get_parent_image_id(snap_t in_snap_id) const
@@ -467,7 +466,6 @@ namespace librbd {
     ObjectCacher::OSDRead *rd = object_cacher->prepare_read(snap_id, bl, 0);
     snap_lock.put_read();
     ObjectExtent extent(o, 0 /* a lie */, off, len, 0);
-    extent.oloc.pool = data_ctx.get_id();
     extent.buffer_extents.push_back(make_pair(0, len));
     rd->extents.push_back(extent);
     cache_lock.Lock();
@@ -484,7 +482,6 @@ namespace librbd {
 							      utime_t(), 0);
     snap_lock.put_read();
     ObjectExtent extent(o, 0, off, len, 0);
-    extent.oloc.pool = data_ctx.get_id();
     extent.buffer_extents.push_back(make_pair(0, len));
     wr->extents.push_back(extent);
     {
@@ -602,7 +599,8 @@ namespace librbd {
     get_parent_overlap(in_snap_id, &overlap);
 
     size_t parent_len = 0;
-    if (get_parent_pool_id(in_snap_id) != -1 && offset <= overlap)
+    if (get_parent_volume_id(in_snap_id) != INVALID_VOLUME &&
+	offset <= overlap)
       parent_len = min(overlap, offset + length) - offset;
 
     ldout(cct, 20) << __func__ << " off = " << offset << " len = " << length

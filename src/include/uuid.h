@@ -24,11 +24,6 @@ struct uuid_d {
     memset(&uuid, 0, sizeof(uuid));
   }
 
-  uuid_d(uint64_t x) {
-    memset(&uuid, 0, sizeof(uint64_t));
-    memcpy(uuid + sizeof(uint64_t), &x, sizeof(uint64_t));
-  }
-
   uuid_d(uint64_t x, uint64_t y) {
     memcpy(uuid, &x, sizeof(uint64_t));
     memcpy(uuid + sizeof(uint64_t), &y, sizeof(uint64_t));
@@ -36,6 +31,10 @@ struct uuid_d {
 
   uuid_d(const uuid_d &u) {
     uuid_copy(uuid, u.uuid);
+  }
+
+  uuid_d(const uuid_t u) {
+    uuid_copy(uuid, u);
   }
 
   void clear() {

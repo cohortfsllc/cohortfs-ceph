@@ -402,6 +402,7 @@ namespace librbd {
 
   int list_children(ImageCtx *ictx, set<pair<string, string> >& names)
   {
+    /* This is kind of crap, see about fixing it. */
     CephContext *cct = ictx->cct;
     ldout(cct, 20) << "children list " << ictx->name << dendl;
 
@@ -416,15 +417,15 @@ namespace librbd {
     parent_spec parent_spec(ictx->md_ctx.get_id(), ictx->id, ictx->snap_id);
     names.clear();
 
-    // search all pools for children depending on this snapshot
+    // search all volumes for children depending on this snapshot
     Rados rados(ictx->md_ctx);
-    std::list<string> pools;
-    rados.pool_list(pools);
+    std::list<uuid_d> volumes;
+    rados.volume_list(volumes);
 
-    for (std::list<string>::const_iterator it = pools.begin();
-	 it != pools.end(); ++it) {
+    for (std::list<uuid_d>::const_iterator it = volumes.begin();
+	 it != volumes.end(); ++it) {
       IoCtx ioctx;
-      rados.ioctx_create(it->c_str(), ioctx);
+      rados.ioctx_create(*it, ioctx);
       set<string> image_ids;
       int r = cls_client::get_children(&ioctx, RBD_CHILDREN,
 				       parent_spec, image_ids);
@@ -479,7 +480,7 @@ namespace librbd {
   static int scan_for_parents(ImageCtx *ictx, parent_spec &pspec,
 			      snapid_t oursnap_id)
   {
-    if (pspec.pool_id != -1) {
+    if (pspec.volume_id != INVALID_VOLUME) {
       map<string, SnapInfo>::iterator it;
       for (it = ictx->snaps_by_name.begin();
 	   it != ictx->snaps_by_name.end(); ++it) {
@@ -635,18 +636,22 @@ namespace librbd {
     parent_spec pspec(ictx->md_ctx.get_id(), ictx->id, snap_id);
     // search all pools for children depending on this snapshot
     Rados rados(ictx->md_ctx);
-    std::list<std::string> pools;
-    rados.pool_list(pools);
+    std::list<uuid_d> volumes;
+    rados.volume_list(volumes);
     std::set<std::string> children;
-    for (std::list<std::string>::const_iterator it = pools.begin(); it != pools.end(); ++it) {
-      IoCtx pool_ioctx;
-      r = rados.ioctx_create(it->c_str(), pool_ioctx);
+    for (std::list<uuid_d>::const_iterator it = volumes.begin();
+	 it != volumes.end();
+	 ++it) {
+      IoCtx volume_ioctx;
+      r = rados.ioctx_create(*it, volume_ioctx);
       if (r < 0) {
-	lderr(ictx->cct) << "snap_unprotect: can't create ioctx for pool "
-			 << *it << dendl;
+	lderr(ictx->cct)
+	  << "snap_unprotect: can't create ioctx for pool "
+	  << *it << dendl;
 	goto reprotect_and_return_err;
       }
-      r = cls_client::get_children(&pool_ioctx, RBD_CHILDREN, pspec, children);
+      r = cls_client::get_children(&volume_ioctx, RBD_CHILDREN,
+				   pspec, children);
       // key should not exist for this parent if there is no entry
       if (((r < 0) && (r != -ENOENT))) {
 	lderr(ictx->cct) << "can't get children for pool " << *it << dendl;
@@ -654,12 +659,12 @@ namespace librbd {
       }
       // if we found a child, can't unprotect
       if (r == 0) {
-	lderr(ictx->cct) << "snap_unprotect: can't unprotect; at least " 
-	  << children.size() << " child(ren) in pool " << it->c_str() << dendl;
+	lderr(ictx->cct) << "snap_unprotect: can't unprotect; at least "
+	  << children.size() << " child(ren) in volume " << *it << dendl;
 	r = -EBUSY;
 	goto reprotect_and_return_err;
       }
-      pool_ioctx.close();	// last one out will self-destruct
+      volume_ioctx.close();	// last one out will self-destruct
     }
     // didn't find any child in any pool, go ahead with unprotect
     r = cls_client::set_protection_status(&ictx->md_ctx,
@@ -1225,24 +1230,18 @@ reprotect_and_return_err:
     string pool_name;
     Rados rados(ictx->md_ctx);
 
-    int64_t pool_id = ictx->get_parent_pool_id(ictx->snap_id);
+    uuid_d volume_id = ictx->get_parent_volume_id(ictx->snap_id);
     string parent_image_id = ictx->get_parent_image_id(ictx->snap_id);
     snap_t parent_snap_id = ictx->get_parent_snap_id(ictx->snap_id);
     assert(parent_snap_id != CEPH_NOSNAP);
 
-    if (pool_id < 0)
+    if (volume_id == INVALID_VOLUME)
       return -ENOENT;
-    int r = rados.pool_reverse_lookup(pool_id, &pool_name);
-    if (r < 0) {
-      lderr(ictx->cct) << "error looking up name for pool id " << pool_id
-		       << ": " << cpp_strerror(r) << dendl;
-      return r;
-    }
 
     IoCtx p_ioctx;
-    r = rados.ioctx_create(pool_name.c_str(), p_ioctx);
+    int r = rados.ioctx_create(volume_id, p_ioctx);
     if (r < 0) {
-      lderr(ictx->cct) << "error opening pool " << pool_name << ": "
+      lderr(ictx->cct) << "error opening volume " << volume_id << ": "
 		       << cpp_strerror(r) << dendl;
       return r;
     }
@@ -1274,7 +1273,7 @@ reprotect_and_return_err:
     return 0;
   }
 
-  int get_parent_info(ImageCtx *ictx, string *parent_pool_name,
+  int get_parent_info(ImageCtx *ictx, string *parent_volume,
 		      string *parent_name, string *parent_snap_name)
   {
     int r = ictx_check(ictx);
@@ -1296,18 +1295,8 @@ reprotect_and_return_err:
 	lderr(ictx->cct) << "Can't find snapshot id" << ictx->snap_id << dendl;
 	return r;
       }
-      if (parent_spec.pool_id == -1)
+      if (parent_spec.volume_id == INVALID_VOLUME)
 	return -ENOENT;
-    }
-    if (parent_pool_name) {
-      Rados rados(ictx->md_ctx);
-      r = rados.pool_reverse_lookup(parent_spec.pool_id,
-				    parent_pool_name);
-      if (r < 0) {
-	lderr(ictx->cct) << "error looking up pool name" << cpp_strerror(r)
-			 << dendl;
-	return r;
-      }
     }
 
     if (parent_snap_name) {
@@ -1608,7 +1597,7 @@ reprotect_and_return_err:
 	return r;
       if (!overlap ||
 	  ictx->parent->md_ctx.get_id() !=
-	  ictx->get_parent_pool_id(ictx->snap_id) ||
+	  ictx->get_parent_volume_id(ictx->snap_id) ||
 	  ictx->parent->id != ictx->get_parent_image_id(ictx->snap_id) ||
 	  ictx->parent->snap_id != ictx->get_parent_snap_id(ictx->snap_id)) {
 	ictx->clear_nonexistence_cache();
@@ -1617,7 +1606,8 @@ reprotect_and_return_err:
       }
     }
 
-    if (ictx->get_parent_pool_id(ictx->snap_id) > -1 && !ictx->parent) {
+    if (ictx->get_parent_volume_id(ictx->snap_id) != INVALID_VOLUME
+	&& !ictx->parent) {
       r = open_parent(ictx);
       if (r < 0) {
 	lderr(ictx->cct) << "error opening parent snapshot: "
@@ -2116,7 +2106,7 @@ reprotect_and_return_err:
       RWLock::RLocker l3(ictx->parent_lock);
 
       // can't flatten a non-clone
-      if (ictx->parent_md.spec.pool_id == -1) {
+      if (ictx->parent_md.spec.volume_id == INVALID_VOLUME) {
 	lderr(cct) << "image has no parent" << dendl;
 	return -EINVAL;
       }

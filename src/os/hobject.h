@@ -140,7 +140,6 @@ public:
   void decode(bufferlist::iterator& bl);
   void decode(json_spirit::Value& v);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<hobject_t*>& o);
   friend bool operator<(const hobject_t&, const hobject_t&);
   friend bool operator>(const hobject_t&, const hobject_t&);
   friend bool operator<=(const hobject_t&, const hobject_t&);

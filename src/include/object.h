@@ -131,7 +131,7 @@ struct file_object_t {
   uint64_t ino, bno;
   mutable char buf[51];
 
-  file_object_t(uuid_d v = 0, uint64_t i = 0, uint64_t b = 0) :
+  file_object_t(uuid_d v = INVALID_VOLUME, uint64_t i = 0, uint64_t b = 0) :
     vol(v), ino(i), bno(b) {
     buf[0] = 0;
   }

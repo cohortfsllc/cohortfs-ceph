@@ -168,11 +168,11 @@ void Ager::age_empty(float pc) {
 
 
 void Ager::age(int time,
-               float high_water,    // fill to this %
-               float low_water,     // then empty to this %
-               int count,         // this many times
-               float final_water,   // and end here ( <= low_water)
-               int fake_size_mb) { 
+	       float high_water,    // fill to this %
+	       float low_water,     // then empty to this %
+	       int count,         // this many times
+	       float final_water,   // and end here ( <= low_water)
+	       int fake_size_mb) {
 
   srand(0);
 
@@ -201,7 +201,7 @@ void Ager::age(int time,
   // init size distn (once)
   if (!did_distn) {
     did_distn = true;
-    age_cur_oid = file_object_t(888, 0);
+    age_cur_oid = file_object_t(INVALID_VOLUME, 0);
     file_size_distn.add(1, 19.0758125+0.65434375);
     file_size_distn.add(512, 35.6566);
     file_size_distn.add(1024, 27.7271875);

@@ -90,7 +90,7 @@ public:
   int pool_get_auid(uint64_t pool_id, unsigned long long *auid);
   int pool_get_name(uint64_t pool_id, std::string *auid);
 
-  int pool_list(std::list<string>& ls);
+  int volume_list(std::list<uuid_d>& ls);
   int get_fs_stats(ceph_statfs& result);
 
   int pool_create(string& name, unsigned long long auid=0, __u8 crush_rule=0);

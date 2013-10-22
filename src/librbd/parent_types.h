@@ -8,14 +8,14 @@
 
 namespace librbd {
   struct parent_spec {
-    int64_t pool_id;
+    uuid_d volume_id;
     string image_id;
     snapid_t snap_id;
-    parent_spec() : pool_id(-1), snap_id(CEPH_NOSNAP) {}
-    parent_spec(uint64_t pool_id, string image_id, snapid_t snap_id) :
-      pool_id(pool_id), image_id(image_id), snap_id(snap_id) {}
+    parent_spec() : volume_id(), snap_id(CEPH_NOSNAP) {}
+    parent_spec(uuid_d volume_id, string image_id, snapid_t snap_id) :
+      volume_id(volume_id), image_id(image_id), snap_id(snap_id) {}
     bool operator==(const parent_spec &other) {
-      return ((this->pool_id == other.pool_id) &&
+      return ((this->volume_id == other.volume_id) &&
 	      (this->image_id == other.image_id) &&
 	      (this->snap_id == other.snap_id));
     }

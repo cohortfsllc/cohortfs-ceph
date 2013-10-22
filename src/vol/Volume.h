@@ -49,7 +49,7 @@ private:
 
 protected:
   Volume(const vol_type t, const string n) :
-    type(t), uuid(0), name(n) { }
+    type(t), uuid(INVALID_VOLUME), name(n) { }
 
 
 public:

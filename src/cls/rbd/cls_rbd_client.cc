@@ -93,7 +93,7 @@ namespace librbd {
 	// get_snapcontext
 	::decode(*snapc, iter);
 	// get_parent
-	::decode(parent->spec.pool_id, iter);
+	::decode(parent->spec.volume_id, iter);
 	::decode(parent->spec.image_id, iter);
 	::decode(parent->spec.snap_id, iter);
 	::decode(parent->overlap, iter);
@@ -211,7 +211,7 @@ namespace librbd {
 
       try {
 	bufferlist::iterator iter = outbl.begin();
-	::decode(pspec->pool_id, iter);
+	::decode(pspec->volume_id, iter);
 	::decode(pspec->image_id, iter);
 	::decode(pspec->snap_id, iter);
 	::decode(*parent_overlap, iter);
@@ -226,7 +226,7 @@ namespace librbd {
 		   parent_spec pspec, uint64_t parent_overlap)
     {
       bufferlist inbl, outbl;
-      ::encode(pspec.pool_id, inbl);
+      ::encode(pspec.volume_id, inbl);
       ::encode(pspec.image_id, inbl);
       ::encode(pspec.snap_id, inbl);
       ::encode(parent_overlap, inbl);
@@ -244,7 +244,7 @@ namespace librbd {
 		  parent_spec pspec, const std::string &c_imageid)
     {
       bufferlist in, out;
-      ::encode(pspec.pool_id, in);
+      ::encode(pspec.volume_id, in);
       ::encode(pspec.image_id, in);
       ::encode(pspec.snap_id, in);
       ::encode(c_imageid, in);
@@ -256,7 +256,7 @@ namespace librbd {
 		     parent_spec pspec, const std::string &c_imageid)
     {
       bufferlist in, out;
-      ::encode(pspec.pool_id, in);
+      ::encode(pspec.volume_id, in);
       ::encode(pspec.image_id, in);
       ::encode(pspec.snap_id, in);
       ::encode(c_imageid, in);
@@ -268,7 +268,7 @@ namespace librbd {
 		     parent_spec pspec, set<string>& children)
     {
       bufferlist in, out;
-      ::encode(pspec.pool_id, in);
+      ::encode(pspec.volume_id, in);
       ::encode(pspec.image_id, in);
       ::encode(pspec.snap_id, in);
 
@@ -380,7 +380,7 @@ namespace librbd {
 	  ::decode((*features)[i], iter);
 	  ::decode(incompat_features, iter);
 	  // get_parent
-	  ::decode((*parents)[i].spec.pool_id, iter);
+	  ::decode((*parents)[i].spec.volume_id, iter);
 	  ::decode((*parents)[i].spec.image_id, iter);
 	  ::decode((*parents)[i].spec.snap_id, iter);
 	  ::decode((*parents)[i].overlap, iter);

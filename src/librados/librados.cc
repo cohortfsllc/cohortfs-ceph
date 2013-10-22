@@ -1386,9 +1386,9 @@ int librados::Rados::pool_delete_async(const char *name, PoolAsyncCompletion *c)
   return client->pool_delete_async(name, c->pc);
 }
 
-int librados::Rados::pool_list(std::list<std::string>& v)
+int librados::Rados::volume_list(std::list<uuid_d>& v)
 {
-  return client->pool_list(v);
+  return client->volume_list(v);
 }
 
 int64_t librados::Rados::pool_lookup(const char *name)
@@ -1404,7 +1404,7 @@ int librados::Rados::pool_reverse_lookup(int64_t id, std::string *name)
 int librados::Rados::ioctx_create(const uuid_d& volume, IoCtx &io)
 {
   rados_ioctx_t p;
-  int ret = rados_ioctx_create((rados_t)client, volume, &p);
+  int ret = rados_ioctx_create((rados_t)client, volume.uuid, &p);
   if (ret)
     return ret;
   io.io_ctx_impl = (IoCtxImpl*)p;
@@ -1700,35 +1700,27 @@ extern "C" int rados_cluster_fsid(rados_t cluster, char *buf,
   return fsid.length();
 }
 
-extern "C" int rados_pool_list(rados_t cluster, char *buf, size_t len)
+extern "C" int rados_volume_list(rados_t cluster, uuid_t *buf, size_t len)
 {
   librados::RadosClient *client = (librados::RadosClient *)cluster;
-  std::list<std::string> pools;
-  client->pool_list(pools);
+  std::list<uuid_d> volumes;
+  client->volume_list(volumes);
 
   if (!buf)
     return -EINVAL;
 
-  char *b = buf;
-  if (b)
-    memset(b, 0, len);
   int needed = 0;
-  std::list<std::string>::const_iterator i = pools.begin();
-  std::list<std::string>::const_iterator p_end = pools.end();
-  for (; i != p_end; ++i) {
-    if (len == 0)
-      break;
-    int rl = i->length() + 1;
-    strncat(b, i->c_str(), len - 2); // leave space for two NULLs
-    needed += rl;
-    len -= rl;
-    b += rl;
+  std::list<uuid_d>::const_iterator i = volumes.begin();
+  std::list<uuid_d>::const_iterator p_end = volumes.end();
+  for (int n = 0; i != p_end; ++i, ++n, ++needed) {
+    if (len > 0) {
+      uuid_copy(buf[n], i->uuid);
+      --len;
+    }
+    ++needed;
   }
-  for (; i != p_end; ++i) {
-    int rl = i->length() + 1;
-    needed += rl;
-  }
-  return needed + 1;
+
+  return needed;
 }
 
 static void do_out_buffer(bufferlist& outbl, char **outbuf, size_t *outbuflen)
@@ -1859,8 +1851,8 @@ extern "C" int rados_monitor_log(rados_t cluster, const char *level, rados_log_c
 }
 
 
-extern "C" int rados_ioctx_create(rados_t cluster,
-				  const uuid_d& volume, rados_ioctx_t *io)
+extern "C" int rados_ioctx_create(rados_t cluster, const uuid_t volume,
+				  rados_ioctx_t *io)
 {
   librados::RadosClient *client = (librados::RadosClient *)cluster;
   librados::IoCtxImpl *ctx;

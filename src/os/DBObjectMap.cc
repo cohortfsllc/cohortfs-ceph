@@ -180,8 +180,8 @@ string DBObjectMap::hobject_key_v0(coll_t c, const hobject_t &hoid)
   return out;
 }
 
-bool DBObjectMap::parse_hobject_key_v0(uint64_t vol, const string &in, coll_t *c,
-				       hobject_t *hoid)
+bool DBObjectMap::parse_hobject_key_v0(const uuid_d& vol, const string &in,
+				       coll_t *c, hobject_t *hoid)
 {
   string coll;
   string name;
@@ -926,7 +926,7 @@ int DBObjectMap::clone(const hobject_t &hoid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::upgrade(uint64_t vol)
+int DBObjectMap::upgrade(const uuid_d& vol)
 {
   while (1) {
     unsigned count = 0;

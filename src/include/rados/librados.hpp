@@ -10,6 +10,7 @@
 #include <vector>
 #include <utility>
 #include "buffer.h"
+#include "include/uuid.h"
 
 #include "librados.h"
 #include "rados_types.hpp"
@@ -707,7 +708,7 @@ namespace librados
     void test_blacklist_self(bool set);
 
     /* listing objects */
-    int pool_list(std::list<std::string>& v);
+    int volume_list(std::list<uuid_d>& v);
     int get_pool_stats(std::list<std::string>& v,
 		       std::map<std::string, stats_map>& stats);
     int get_pool_stats(std::list<std::string>& v,

@@ -312,14 +312,14 @@ ceph_test_libcephfs_build_CXXFLAGS = $(AM_CXXFLAGS)
 bin_DEBUGPROGRAMS += ceph_test_libcephfs_build
 endif
 
-if WITH_HADOOPCLIENT
-ceph_test_libhadoopcephfs_build_SOURCES = test/test_libcommon_build.cc \
+#if WITH_HADOOPCLIENT
+#ceph_test_libhadoopcephfs_build_SOURCES = test/test_libcommon_build.cc \
          $(libhadoopcephfs_la_SOURCES) \
 	 $(libosdc_la_SOURCES) $(libcommon_files)
-ceph_test_libhadoopcephfs_build_LDADD = libcephfs.la -lexpat $(PTHREAD_LIBS) -lm $(CRYPTO_LIBS) $(EXTRALIBS)
-ceph_test_libhadoopcephfs_build_CXXFLAGS = $(AM_CXXFLAGS)
-bin_DEBUGPROGRAMS += ceph_test_libhadoopcephfs_build
-endif
+#ceph_test_libhadoopcephfs_build_LDADD = libcephfs.la -lexpat $(PTHREAD_LIBS) -lm $(CRYPTO_LIBS) $(EXTRALIBS)
+#ceph_test_libhadoopcephfs_build_CXXFLAGS = $(AM_CXXFLAGS)
+#bin_DEBUGPROGRAMS += ceph_test_libhadoopcephfs_build
+#endif
 
 ##########
 BUILT_SOURCES =
@@ -571,16 +571,16 @@ libcls_rgw_client_a_SOURCES =  \
 noinst_LIBRARIES += libcls_rgw_client.a
 
 ## hadoop client
-if WITH_HADOOPCLIENT
-JAVA_BASE = /usr/lib/jvm/java-6-sun
-libhadoopcephfs_la_SOURCES = client/hadoop/CephFSInterface.cc
-libhadoopcephfs_la_LIBADD = libcephfs.la
-libhadoopcephfs_la_CFLAGS = ${AM_CFLAGS}
-libhadoopcephfs_la_CXXFLAGS = ${AM_CXXFLAGS}
-libhadoopcephfs_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex 'hadoopcephfs_.*'
-lib_LTLIBRARIES += libhadoopcephfs.la
+#if WITH_HADOOPCLIENT
+#JAVA_BASE = /usr/lib/jvm/java-6-sun
+#libhadoopcephfs_la_SOURCES = client/hadoop/CephFSInterface.cc
+#libhadoopcephfs_la_LIBADD = libcephfs.la
+#libhadoopcephfs_la_CFLAGS = ${AM_CFLAGS}
+#libhadoopcephfs_la_CXXFLAGS = ${AM_CXXFLAGS}
+#libhadoopcephfs_la_LDFLAGS = ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex 'hadoopcephfs_.*'
+#lib_LTLIBRARIES += libhadoopcephfs.la
 
-endif
+#endif
 
 ## CephFS Java Wrappers
 ##  - The JNI library is here
@@ -1475,7 +1475,6 @@ libmon_a_SOURCES = \
 	mon/PaxosService.cc \
 	mon/OSDMonitor.cc \
 	mon/CohortOSDMonitor.cc \
-	mon/MDSMonitor.cc \
 	mon/MonmapMonitor.cc \
 	mon/VolMonitor.cc \
 	mon/LogMonitor.cc \
@@ -1487,6 +1486,7 @@ libmon_a_SOURCES = \
 	mon/DataHealthService.cc \
 	mon/ConfigKeyService.cc \
 	common/util.cc
+#	mon/MDSMonitor.cc
 libmon_a_CXXFLAGS= ${AM_CXXFLAGS}
 noinst_LIBRARIES += libmon.a
 

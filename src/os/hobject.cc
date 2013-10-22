@@ -148,16 +148,6 @@ void hobject_t::dump(Formatter *f) const
   f->dump_int("max", (int)max);
 }
 
-void hobject_t::generate_test_instances(list<hobject_t*>& o)
-{
-  o.push_back(new hobject_t);
-  o.push_back(new hobject_t);
-  o.back()->max = true;
-  o.push_back(new hobject_t(object_t(19, "oname"), 1, 234));
-  o.push_back(new hobject_t(object_t(27, "oname2"), CEPH_NOSNAP, 67));
-  o.push_back(new hobject_t(object_t(32, "oname3"), CEPH_SNAPDIR, 910));
-}
-
 ostream& operator<<(ostream& out, const hobject_t& o)
 {
   if (o.is_max())
