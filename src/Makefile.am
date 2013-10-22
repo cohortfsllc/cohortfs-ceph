@@ -170,9 +170,9 @@ librados_config_LDADD = librados.la $(LIBGLOBAL_LDA)
 bin_PROGRAMS += librados-config
 
 # synthetic client
-ceph_syn_SOURCES = ceph_syn.cc client/SyntheticClient.cc
-ceph_syn_LDADD = libclient.la $(LIBGLOBAL_LDA)
-bin_PROGRAMS += ceph-syn
+#ceph_syn_SOURCES = ceph_syn.cc client/SyntheticClient.cc
+#ceph_syn_LDADD = libclient.la $(LIBGLOBAL_LDA)
+#bin_PROGRAMS += ceph-syn
 
 base: ceph-mon ceph-osd ceph-mds \
 	cephfs \
@@ -328,14 +328,14 @@ noinst_LTLIBRARIES =
 noinst_LIBRARIES =
 
 # libcephfs
-libcephfs_la_SOURCES = \
-	libcephfs.cc
-libcephfs_la_CFLAGS= ${CRYPTO_CFLAGS} ${AM_CFLAGS}
-libcephfs_la_CXXFLAGS= ${AM_CXXFLAGS}
-libcephfs_la_LIBADD = libclient.la
-libcephfs_la_LDFLAGS =  $(PTHREAD_LIBS) $(CRYPTO_LIBS) $(EXTRALIBS) \
+#libcephfs_la_SOURCES = \
+#	libcephfs.cc
+#libcephfs_la_CFLAGS= ${CRYPTO_CFLAGS} ${AM_CFLAGS}
+#libcephfs_la_CXXFLAGS= ${AM_CXXFLAGS}
+#libcephfs_la_LIBADD = libclient.la
+#libcephfs_la_LDFLAGS =  $(PTHREAD_LIBS) $(CRYPTO_LIBS) $(EXTRALIBS) \
             ${AM_LDFLAGS} -version-info 1:0:0 -export-symbols-regex '^ceph_.*'
-lib_LTLIBRARIES += libcephfs.la
+#lib_LTLIBRARIES += libcephfs.la
 
 ceph_test_timers_SOURCES = test/TestTimers.cc
 ceph_test_timers_LDADD = $(LIBGLOBAL_LDA)
@@ -1559,16 +1559,16 @@ libosdc_la_CXXFLAGS= ${AM_CXXFLAGS}
 libosdc_la_LIBADD = libcommon.la
 noinst_LTLIBRARIES += libosdc.la
 
-libclient_la_SOURCES = \
-	client/Client.cc \
-	client/Inode.cc \
-	client/Dentry.cc \
-	client/MetaRequest.cc \
-	client/ClientSnapRealm.cc \
-	client/MetaSession.cc \
-	client/Trace.cc
-libclient_la_LIBADD = libosdc.la $(LIBEDIT_LIBS)
-noinst_LTLIBRARIES += libclient.la
+#libclient_la_SOURCES = \
+#	client/Client.cc \
+#	client/Inode.cc \
+#	client/Dentry.cc \
+#	client/MetaRequest.cc \
+#	client/ClientSnapRealm.cc \
+#	client/MetaSession.cc \
+#	client/Trace.cc
+#libclient_la_LIBADD = libosdc.la $(LIBEDIT_LIBS)
+#noinst_LTLIBRARIES += libclient.la
 
 dist-hook:
 	$(srcdir)/check_version $(srcdir)/.git_version
