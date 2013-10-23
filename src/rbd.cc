@@ -1225,6 +1225,7 @@ static const char *imgname_from_path(const char *path)
   return imgname;
 }
 
+#if 0
 static void update_snap_name(char *imgname, char **snap)
 {
   char *s;
@@ -1267,6 +1268,7 @@ static void set_pool_image_name(const char *orig_pool, const char *orig_img,
 done_img:
   update_snap_name(*new_img, snap);
 }
+#endif
 
 static int do_import(librbd::RBD &rbd, librados::IoCtx& io_ctx,
 		     const char *imgname, int *order, const char *path,
@@ -1629,7 +1631,7 @@ static int do_watch(librados::IoCtx& pp, const char *imgname)
   return 0;
 }
 
-static int do_kernel_add(const char *poolname, const char *imgname,
+static int do_kernel_add(const uuid_d& volume, const char *imgname,
 			 const char *snapname)
 {
   MonMap monmap;
@@ -1682,7 +1684,7 @@ static int do_kernel_add(const char *poolname, const char *imgname,
     oss << ",key=" << key_name;
   }
 
-  oss << " " << poolname << " " << imgname;
+  oss << " " << volume << " " << imgname;
 
   if (snapname) {
     oss << " " << snapname;
@@ -2120,17 +2122,18 @@ int main(int argc, const char **argv)
   int opt_cmd = OPT_NO_CMD;
   global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
 
-  const char *poolname = NULL;
+  uuid_d volume;
   uint64_t size = 0;  // in bytes
   int order = 0;
   bool format_specified = false, output_format_specified = false;
   int format = 1;
   uint64_t features = RBD_FEATURE_LAYERING;
   const char *imgname = NULL, *snapname = NULL, *destname = NULL,
-    *dest_poolname = NULL, *dest_snapname = NULL, *path = NULL,
-    *devpath = NULL, *lock_cookie = NULL, *lock_client = NULL,
+    *dest_snapname = NULL, *path = NULL, *devpath = NULL,
+    *lock_cookie = NULL, *lock_client = NULL,
     *lock_tag = NULL, *output_format = "plain",
     *fromsnapname = NULL;
+  uuid_d dest_volume;
   bool lflag = false;
   int pretty_format = 0;
   long long stripe_unit = 0, stripe_count = 0;
@@ -2161,9 +2164,9 @@ int main(int argc, const char **argv)
       }
       format_specified = true;
     } else if (ceph_argparse_witharg(args, i, &val, "-p", "--pool", (char*)NULL)) {
-      poolname = strdup(val.c_str());
+      volume = uuid_d::parse(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--dest-pool", (char*)NULL)) {
-      dest_poolname = strdup(val.c_str());
+      dest_volume = uuid_d::parse(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--snap", (char*)NULL)) {
       snapname = strdup(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--from-snap", (char*)NULL)) {
@@ -2270,9 +2273,6 @@ if (!set_conf_param(v, p1, p2, p3)) { \
   for (i = args.erase(i); i != args.end(); ++i) {
     const char *v = *i;
     switch (opt_cmd) {
-      case OPT_LIST:
-	SET_CONF_PARAM(v, &poolname, NULL, NULL);
-	break;
       case OPT_INFO:
       case OPT_CREATE:
       case OPT_FLATTEN:
@@ -2402,8 +2402,6 @@ if (!set_conf_param(v, p1, p2, p3)) { \
 
   // do this unconditionally so we can parse pool/image@snapshot into
   // the relevant parts
-  set_pool_image_name(poolname, imgname, (char **)&poolname,
-		      (char **)&imgname, (char **)&snapname);
   if (snapname && opt_cmd != OPT_SNAP_CREATE && opt_cmd != OPT_SNAP_ROLLBACK &&
       opt_cmd != OPT_SNAP_REMOVE && opt_cmd != OPT_INFO &&
       opt_cmd != OPT_EXPORT && opt_cmd != OPT_EXPORT_DIFF && opt_cmd != OPT_DIFF && opt_cmd != OPT_COPY &&
@@ -2422,27 +2420,19 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     return EXIT_FAILURE;
   }
 
-  set_pool_image_name(dest_poolname, destname, (char **)&dest_poolname,
-		      (char **)&destname, (char **)&dest_snapname);
-
   if (opt_cmd == OPT_IMPORT) {
-    if (poolname && dest_poolname) {
-      cerr << "rbd: source and destination pool both specified" << std::endl;
+    if (volume != INVALID_VOLUME &&
+	dest_volume != INVALID_VOLUME) {
+      cerr << "rbd: source and destination volume both specified" << std::endl;
       return EXIT_FAILURE;
     }
     if (imgname && destname) {
       cerr << "rbd: source and destination image both specified" << std::endl;
       return EXIT_FAILURE;
     }
-    if (poolname)
-      dest_poolname = poolname;
+    if (volume != INVALID_VOLUME)
+      dest_volume = volume;
   }
-
-  if (!poolname)
-    poolname = "rbd";
-
-  if (!dest_poolname)
-    dest_poolname = "rbd";
 
   if (opt_cmd == OPT_EXPORT && !path)
     path = imgname;
@@ -2463,13 +2453,6 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     return EXIT_FAILURE;
   }
 
-  if ((opt_cmd == OPT_RENAME) && (strcmp(poolname, dest_poolname) != 0)) {
-    cerr << "rbd: mv/rename across pools not supported" << std::endl;
-    cerr << "source pool: " << poolname << " dest pool: " << dest_poolname
-      << std::endl;
-    return EXIT_FAILURE;
-  }
-
   bool talk_to_cluster = (opt_cmd != OPT_MAP &&
 			  opt_cmd != OPT_UNMAP &&
 			  opt_cmd != OPT_SHOWMAPPED);
@@ -2485,9 +2468,9 @@ if (!set_conf_param(v, p1, p2, p3)) { \
 
   int r;
   if (talk_to_cluster && opt_cmd != OPT_IMPORT) {
-    r = rados.ioctx_create(poolname, io_ctx);
+    r = rados.ioctx_create(volume, io_ctx);
     if (r < 0) {
-      cerr << "rbd: error opening pool " << poolname << ": "
+      cerr << "rbd: error opening volume " << volume << ": "
 	   << cpp_strerror(-r) << std::endl;
       return EXIT_FAILURE;
     }
@@ -2536,9 +2519,9 @@ if (!set_conf_param(v, p1, p2, p3)) { \
   }
 
   if (opt_cmd == OPT_COPY || opt_cmd == OPT_IMPORT || opt_cmd == OPT_CLONE) {
-    r = rados.ioctx_create(dest_poolname, dest_io_ctx);
+    r = rados.ioctx_create(dest_volume, dest_io_ctx);
     if (r < 0) {
-      cerr << "rbd: error opening pool " << dest_poolname << ": "
+      cerr << "rbd: error opening volume " << dest_volume << ": "
 	   << cpp_strerror(-r) << std::endl;
       return EXIT_FAILURE;
     }
@@ -2557,7 +2540,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     if (r < 0) {
       switch (r) {
       case -ENOENT:
-        cerr << "rbd: pool " << poolname << " doesn't contain rbd images"
+	cerr << "rbd: volume" << volume << " doesn't contain rbd images"
 	     << std::endl;
         break;
       default:
@@ -2839,7 +2822,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     break;
 
   case OPT_MAP:
-    r = do_kernel_add(poolname, imgname, snapname);
+    r = do_kernel_add(volume, imgname, snapname);
     if (r < 0) {
       cerr << "rbd: add failed: " << cpp_strerror(-r) << std::endl;
       return EXIT_FAILURE;

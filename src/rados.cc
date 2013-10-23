@@ -174,6 +174,7 @@ static void usage_exit()
   exit(1);
 }
 
+#if 0
 static int do_get(IoCtx& io_ctx, const char *objname, const char *outfile, unsigned op_size)
 {
   string oid(objname);
@@ -324,44 +325,6 @@ static int do_clone_data(IoCtx& io_ctx, const char *objname, IoCtx& target_ctx, 
   return target_ctx.operate(target_oid, &write_op);
 }
 
-static int do_copy_pool(Rados& rados, const char *src_pool, const char *target_pool)
-{
-  IoCtx src_ctx, target_ctx;
-  int ret = rados.ioctx_create(src_pool, src_ctx);
-  if (ret < 0) {
-    cerr << "cannot open source pool: " << src_pool << std::endl;
-    return ret;
-  }
-  ret = rados.ioctx_create(target_pool, target_ctx);
-  if (ret < 0) {
-    cerr << "cannot open target pool: " << target_pool << std::endl;
-    return ret;
-  }
-  librados::ObjectIterator i = src_ctx.objects_begin();
-  librados::ObjectIterator i_end = src_ctx.objects_end();
-  for (; i != i_end; ++i) {
-    string oid = i->first;
-    string locator = i->second;
-    if (i->second.size())
-      cout << src_pool << ":" << oid << "(@" << locator << ")" << " => "
-           << target_pool << ":" << oid << "(@" << locator << ")" << std::endl;
-    else
-      cout << src_pool << ":" << oid << " => "
-           << target_pool << ":" << oid << std::endl;
-
-
-    target_ctx.locator_set_key(locator);
-    ret = do_copy(src_ctx, oid.c_str(), target_ctx, oid.c_str());
-    if (ret < 0) {
-      char buf[64];
-      cerr << "error copying object: " << strerror_r(errno, buf, sizeof(buf)) << std::endl;
-      return ret;
-    }
-  }
-
-  return 0;
-}
-
 static int do_put(IoCtx& io_ctx, const char *objname, const char *infile, int op_size)
 {
   string oid(objname);
@@ -417,6 +380,7 @@ static int do_put(IoCtx& io_ctx, const char *objname, const char *infile, int op
   delete[] buf;
   return ret;
 }
+#endif
 
 class RadosWatchCtx : public librados::WatchCtx {
   string name;
@@ -551,7 +515,7 @@ public:
     num_objs = 200;
     max_op = 16;
   }
-  int bootstrap(const char *pool);
+  int bootstrap(const uuid_d& volume);
   int run();
   void cleanup();
 
@@ -583,19 +547,14 @@ static void _load_gen_cb(completion_t c, void *param)
   op->lg->io_cb(c, op);
 }
 
-int LoadGen::bootstrap(const char *pool)
+int LoadGen::bootstrap(const uuid_d& volume)
 {
   char buf[128];
   int i;
 
-  if (!pool) {
-    cerr << "ERROR: pool name was not specified" << std::endl;
-    return -EINVAL;
-  }
-
-  int ret = rados->ioctx_create(pool, io_ctx);
+  int ret = rados->ioctx_create(volume, io_ctx);
   if (ret < 0) {
-    cerr << "error opening pool " << pool << ": " << strerror_r(-ret, buf, sizeof(buf)) << std::endl;
+    cerr << "error opening volume " << volume << ": " << strerror_r(-ret, buf, sizeof(buf)) << std::endl;
     return ret;
   }
 
@@ -879,9 +838,10 @@ public:
   ~RadosBencher() { }
 };
 
+#if 0
 static int do_lock_cmd(std::vector<const char*> &nargs,
-                       const std::map < std::string, std::string > &opts,
-                       IoCtx *ioctx,
+		       const std::map < std::string, std::string > &opts,
+		       IoCtx *ioctx,
 		       Formatter *formatter)
 {
   char buf[128];
@@ -1034,17 +994,17 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
 
   return 0;
 }
+#endif
 
 /**********************************************
 
 **********************************************/
 static int rados_tool_common(const std::map < std::string, std::string > &opts,
-                             std::vector<const char*> &nargs)
+			     std::vector<const char*> &nargs)
 {
+#if 0
   int ret;
   bool create_pool = false;
-  const char *pool_name = NULL;
-  const char *target_pool_name = NULL;
   string oloc, target_oloc;
   int concurrent_ios = 16;
   int op_size = 1 << 22;
@@ -2233,6 +2193,9 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 out:
   delete formatter;
   return (ret < 0) ? 1 : 0;
+#endif
+
+  return 1;
 }
 
 int main(int argc, const char **argv)
@@ -2331,8 +2294,9 @@ int main(int argc, const char **argv)
     cerr << "rados: you must give an action. Try --help" << std::endl;
     return 1;
   }
+  /*
   if ((strcmp(args[0], "import") == 0) || (strcmp(args[0], "export") == 0))
     return rados_tool_sync(opts, args);
-  else
+  else */
     return rados_tool_common(opts, args);
 }

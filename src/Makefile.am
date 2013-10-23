@@ -183,18 +183,18 @@ base: ceph-mon ceph-osd ceph-mds \
 #	osdmaptool crushtool 
 
 # fuse targets?
-if WITH_FUSE
-ceph_fuse_SOURCES = ceph_fuse.cc client/fuse_ll.cc
-ceph_fuse_LDADD = -lfuse libclient.la $(LIBGLOBAL_LDA)
-ceph_fuse_CXXFLAGS = ${AM_CXXFLAGS}
-bin_PROGRAMS += ceph-fuse
+#if WITH_FUSE
+#ceph_fuse_SOURCES = ceph_fuse.cc client/fuse_ll.cc
+#ceph_fuse_LDADD = -lfuse libclient.la $(LIBGLOBAL_LDA)
+#ceph_fuse_CXXFLAGS = ${AM_CXXFLAGS}
+#bin_PROGRAMS += ceph-fuse
 
-rbd_fuse_SOURCES = rbd_fuse/rbd-fuse.c
-rbd_fuse_LDADD = -lfuse librados.la librbd.la $(LIBGLOBAL_LDA)
-rbd_fuse_CXXFLAGS = ${AM_CXXFLAGS}
-bin_PROGRAMS += rbd-fuse
+#rbd_fuse_SOURCES = rbd_fuse/rbd-fuse.c
+#rbd_fuse_LDADD = -lfuse librados.la librbd.la $(LIBGLOBAL_LDA)
+#rbd_fuse_CXXFLAGS = ${AM_CXXFLAGS}
+#bin_PROGRAMS += rbd-fuse
 
-endif
+#endif
 
 # tcmalloc?
 if WITH_TCMALLOC
@@ -208,10 +208,10 @@ ceph_osd_SOURCES += perfglue/heap_profiler.cc
 ceph_mon_LDADD += -ltcmalloc
 ceph_mon_CXXFLAGS += ${tcmalloc_safety_flags}
 ceph_mon_SOURCES += perfglue/heap_profiler.cc
-if WITH_FUSE
-ceph_fuse_LDADD += -ltcmalloc
-ceph_fuse_CXXFLAGS += ${tcmalloc_safety_flags}
-endif #WITH_FUSE
+#if WITH_FUSE
+#ceph_fuse_LDADD += -ltcmalloc
+#ceph_fuse_CXXFLAGS += ${tcmalloc_safety_flags}
+#endif #WITH_FUSE
 else
 ceph_osd_SOURCES += perfglue/disabled_heap_profiler.cc
 #ceph_mds_SOURCES += perfglue/disabled_heap_profiler.cc

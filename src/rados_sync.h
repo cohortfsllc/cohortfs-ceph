@@ -104,7 +104,7 @@ class IoCtxDistributor
 {
 public:
   static IoCtxDistributor* instance();
-  int init(librados::Rados &cluster, const char *pool_name, int num_ioctxes);
+  int init(librados::Rados &cluster, const uuid_d& volume, int num_ioctxes);
   void clear();
   librados::IoCtx& get_ioctx();
 private:

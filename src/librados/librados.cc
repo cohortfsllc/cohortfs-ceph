@@ -1875,20 +1875,6 @@ extern "C" int rados_ioctx_snap_remove(rados_ioctx_t io, const char *snapname)
   return ctx->snap_remove(snapname);
 }
 
-extern "C" int rados_ioctx_selfmanaged_snap_create(rados_ioctx_t io,
-					     uint64_t *snapid)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->selfmanaged_snap_create(snapid);
-}
-
-extern "C" int rados_ioctx_selfmanaged_snap_remove(rados_ioctx_t io,
-					     uint64_t snapid)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->selfmanaged_snap_remove(snapid);
-}
-
 extern "C" int rados_ioctx_selfmanaged_snap_rollback(rados_ioctx_t io,
 						     const char *oid,
 						     uint64_t snapid)

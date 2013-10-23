@@ -251,13 +251,13 @@ IoCtxDistributor* IoCtxDistributor::instance() {
   return ret;
 }
 
-int IoCtxDistributor::init(Rados &cluster, const char *pool_name,
+int IoCtxDistributor::init(Rados &cluster, const uuid_d& volume,
 			   int num_ioctxes) {
   m_io_ctxes.resize(num_ioctxes);
   for (std::vector<IoCtx>::iterator i = m_io_ctxes.begin();
 	 i != m_io_ctxes.end(); ++i) {
     IoCtx &io_ctx(*i);
-    int ret = cluster.ioctx_create(pool_name, io_ctx);
+    int ret = cluster.ioctx_create(volume, io_ctx);
     if (ret) {
       return ret;
     }
@@ -780,8 +780,9 @@ int BackedUpObject::read_xattrs_from_rados(IoCtx &io_ctx)
   return 0;
 }
 
+#if 0
 int rados_tool_sync(const std::map < std::string, std::string > &opts,
-                             std::vector<const char*> &args)
+		    std::vector<const char*> &args)
 {
   int ret;
   bool force = opts.count("force");
@@ -852,7 +853,7 @@ int rados_tool_sync(const std::map < std::string, std::string > &opts,
   }
   IoCtx io_ctx;
   std::string pool_name = (action == "import") ? dst : src;
-  ret = rados.ioctx_create(pool_name.c_str(), io_ctx);
+  ret = rados.ioctx_create(volume, io_ctx);
   if ((ret == -ENOENT) && (action == "import")) {
     if (create) {
       ret = rados.pool_create(pool_name.c_str());
@@ -899,3 +900,4 @@ int rados_tool_sync(const std::map < std::string, std::string > &opts,
     return ret;
   }
 }
+#endif
