@@ -538,7 +538,7 @@ namespace librbd {
     if (r < 0)
       return r;
 
-    r = ictx->data_ctx.selfmanaged_snap_remove(snap_id);
+//    r = ictx->data_ctx.selfmanaged_snap_remove(snap_id);
 
     if (r < 0)
       return r;
@@ -1519,7 +1519,7 @@ reprotect_and_return_err:
   {
     uint64_t snap_id;
 
-    int r = ictx->md_ctx.selfmanaged_snap_create(&snap_id);
+    int r = 0;//ictx->md_ctx.selfmanaged_snap_create(&snap_id);
     if (r < 0) {
       lderr(ictx->cct) << "failed to create snap id: " << cpp_strerror(-r)
 		       << dendl;
