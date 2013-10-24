@@ -221,6 +221,13 @@ struct MDRequest : public Mutation {
     bool is_remote_frozen_authpin;
     bool is_inode_exporter;
 
+    // for tracking rename traversal
+    struct {
+      inodeno_t source;
+      inodeno_t destination;
+      inodeno_t position;
+    } rename;
+
     map<client_t,entity_inst_t> imported_client_map;
     map<client_t,uint64_t> sseq_map;
     map<CInode*, map<client_t,CapExport> > cap_imports;

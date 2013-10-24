@@ -228,6 +228,10 @@ public:
   void _rename_apply(MDRequest *mdr, CDentry *srcdn, CDentry *destdn, CDentry *straydn); 
 
   // slaving
+  int rename_traverse(MDRequest *mdr, inodeno_t &ino, inodeno_t target);
+  void handle_slave_rename_traverse(MDRequest *mdr);
+  void handle_slave_rename_traverse_ack(MDRequest *mdr, MMDSSlaveRequest *m);
+
   void handle_slave_rename_prep(MDRequest *mdr);
   void handle_slave_rename_prep_ack(MDRequest *mdr, MMDSSlaveRequest *m);
   void _logged_slave_rename(MDRequest *mdr, CDentry *srcdn, CDentry *destdn);
