@@ -1386,6 +1386,10 @@ void Server::handle_slave_request_reply(MMDSSlaveRequest *m)
     handle_slave_rmdir_prep_ack(mdr, m);
     break;
 
+  case MMDSSlaveRequest::OP_RENAMETRAVERSEACK:
+    handle_slave_rename_traverse_ack(mdr, m);
+    break;
+
   case MMDSSlaveRequest::OP_RENAMEPREPACK:
     handle_slave_rename_prep_ack(mdr, m);
     break;
@@ -1502,6 +1506,10 @@ void Server::dispatch_slave_request(MDRequest *mdr)
 
   case MMDSSlaveRequest::OP_RMDIRPREP:
     handle_slave_rmdir_prep(mdr);
+    break;
+
+  case MMDSSlaveRequest::OP_RENAMETRAVERSE:
+    handle_slave_rename_traverse(mdr);
     break;
 
   case MMDSSlaveRequest::OP_RENAMEPREP:
@@ -5263,6 +5271,11 @@ public:
   }
 };
 
+enum { // rename_traverse() results
+  TRAVERSE_COMPLETE,
+  TRAVERSE_FORWARDED,
+  TRAVERSE_WAITING
+};
 
 /** handle_client_rename
  *
@@ -5362,7 +5375,30 @@ void Server::handle_client_rename(MDRequest *mdr)
     return;
   }
 
-  // TODO: dest a child of src? e.g. mv /usr /usr/foo
+  // dest a child of src? e.g. mv /usr /usr/foo
+  if (srci->is_dir()) {
+    if (mdr->more()->rename.source != srci->ino() ||
+        mdr->more()->rename.destination != destdir->ino()) {
+      mdr->more()->rename.source = srci->ino();
+      mdr->more()->rename.destination = destdir->ino();
+
+      // drop locks if we had already started
+      if (mdr->more()->rename.position)
+        mdcache->request_drop_locks(mdr);
+      mdr->more()->rename.position = mdr->more()->rename.destination;
+    }
+
+    // search for srci in the ancestors of desti
+    if (rename_traverse(mdr, mdr->more()->rename.position,
+                        mdr->more()->rename.source) != TRAVERSE_COMPLETE)
+      return;
+
+    if (mdr->more()->rename.position == mdr->more()->rename.source) {
+      reply_request(mdr, -EINVAL);
+      return;
+    }
+    assert(mdr->more()->rename.position == MDS_INO_ROOT);
+  }
 
   // -- locks --
   map<SimpleLock*, int> remote_wrlocks;
@@ -5521,6 +5557,143 @@ bool Server::_need_force_journal(CInode *diri)
 
 // ------------
 // SLAVE
+
+int Server::rename_traverse(MDRequest *mdr, inodeno_t &ino, inodeno_t target)
+{
+  dout(15) << "rename_traverse searching for " << target
+      << " from " << ino << dendl;
+
+  InodeContainer *container = mdcache->get_container();
+  CDirPlacement *placement = container->get_inode()->get_placement();
+
+  while (ino != MDS_INO_ROOT && ino != target) {
+    CInode *in = mdcache->get_inode(ino);
+    if (!in) {
+      // run placement to locate inode
+      stripeid_t stripeid = container->place(ino);
+      int who = placement->get_stripe_auth(stripeid);
+
+      if (who != mds->get_nodeid()) {
+        int op;
+        if (mdr->slave_to_mds == -1) {
+          // master, send slave request to next mds
+          op = MMDSSlaveRequest::OP_RENAMETRAVERSE;
+          dout(20) << "rename_traverse forwarding to mds." << who
+              << " for " << ino << dendl;
+        } else {
+          // slave, send ack to master with updated position
+          op = MMDSSlaveRequest::OP_RENAMETRAVERSEACK;
+          who = mdr->slave_to_mds;
+          dout(20) << "rename_traverse sending ack for " << ino
+              << " to mds." << who << dendl;
+          // TODO: forward directly to next mds?
+        }
+
+        MMDSSlaveRequest *req = new MMDSSlaveRequest(mdr->reqid, mdr->attempt, op);
+        req->traversal.position = ino;
+        req->traversal.target = target;
+        mds->send_message_mds(req, who);
+        return TRAVERSE_FORWARDED;
+      }
+
+      // fetch from inode container
+      CDirStripe *stripe = placement->get_or_open_stripe(stripeid);
+      if (!stripe->is_open()) {
+        dout(10) << "rename_traverse fetching " << *stripe
+            << " for " << ino << dendl;
+        stripe->fetch(new C_MDS_RetryRequest(mdcache, mdr));
+        return TRAVERSE_WAITING;
+      }
+
+      char dname[20];
+      snprintf(dname, sizeof(dname), "%llx", (unsigned long long)ino.val);
+      frag_t fg = stripe->pick_dirfrag(dname);
+      CDirFrag *dir = stripe->get_or_open_dirfrag(fg);
+      assert(!dir->is_complete());
+      dout(10) << "rename_traverse fetching " << *dir
+          << " for " << ino << dendl;
+      dir->fetch(new C_MDS_RetryRequest(mdcache, mdr));
+      return TRAVERSE_WAITING;
+    }
+
+    // get rdlock on inode linklock
+    if (mdr->locks.count(&in->linklock))
+      dout(20) << "rename_traverse already locked " << *in << dendl;
+    else if (!mds->locker->rdlock_start(&in->linklock, mdr)) {
+      dout(15) << "rename_traverse waiting on " << *in << dendl;
+      return TRAVERSE_WAITING;
+    }
+
+    dout(20) << "rename_traverse locked " << *in << dendl;
+
+    // follow inoparent
+    assert(in->inode.parents.size() == 1); // no directory hard links
+    const inoparent_t &parent = in->inode.parents.front();
+
+    ino = parent.stripe.ino;
+  }
+
+  return TRAVERSE_COMPLETE;
+}
+
+/* This function DOES put the mdr->slave_request before returning */
+void Server::handle_slave_rename_traverse(MDRequest *mdr)
+{
+  MMDSSlaveRequest *req = mdr->slave_request;
+  dout(15) << "handle_slave_rename_traverse " << *mdr
+	   << " searching for " << req->traversal.target
+           << " from " << req->traversal.position << dendl;
+
+  int result = rename_traverse(mdr, req->traversal.position,
+                               req->traversal.target);
+
+  if (result == TRAVERSE_COMPLETE) {
+    dout(20) << "handle_slave_rename_traverse sending ack for "
+        << req->traversal.position << " to mds." << mdr->slave_to_mds << dendl;
+    MMDSSlaveRequest *ack = new MMDSSlaveRequest(
+        mdr->reqid, mdr->attempt, MMDSSlaveRequest::OP_RENAMETRAVERSEACK);
+    ack->traversal = req->traversal;
+    mds->send_message_mds(ack, mdr->slave_to_mds);
+  }
+  if (result != TRAVERSE_WAITING) {
+    req->put();
+    mdr->slave_request = NULL;
+  }
+}
+
+/* This function DOES NOT put the passed message before returning */
+void Server::handle_slave_rename_traverse_ack(MDRequest *mdr,
+                                              MMDSSlaveRequest *ack)
+{
+  int from = ack->get_source().num();
+  dout(10) << "handle_slave_rename_traverse_ack " << *mdr
+	   << " from mds." << from << " " << *ack << dendl;
+
+  // register the mds as a slave if it made progress
+  if (mdr->more()->rename.position != ack->traversal.position)
+    mdr->more()->slaves.insert(from);
+
+  // old message, must have restarted traversal
+  if (mdr->more()->rename.source != ack->traversal.target)
+    return;
+
+  // attempt to continue the traversal
+  mdr->more()->rename.position = ack->traversal.position;
+  if (rename_traverse(mdr, mdr->more()->rename.position,
+                      mdr->more()->rename.source) != TRAVERSE_COMPLETE)
+    return;
+
+  // cannot move a dentry into its child
+  if (mdr->more()->rename.position == mdr->more()->rename.source) {
+    reply_request(mdr, -EINVAL);
+    return;
+  }
+
+  // traversal completed, continue with rename
+  assert(mdr->more()->rename.position == MDS_INO_ROOT);
+  dispatch_client_request(mdr);
+}
+
 
 class C_MDS_SlaveRenamePrep : public Context {
   Server *server;

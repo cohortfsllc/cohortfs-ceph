@@ -31,6 +31,9 @@ class MMDSSlaveRequest : public Message {
   static const int OP_UNLINKPREP =   5;
   static const int OP_LINKPREPACK = -4;
 
+  static const int OP_RENAMETRAVERSE =     6;
+  static const int OP_RENAMETRAVERSEACK = -6;
+
   static const int OP_RENAMEPREP =     7;
   static const int OP_RENAMEPREPACK = -7;
 
@@ -62,6 +65,8 @@ class MMDSSlaveRequest : public Message {
     case OP_LINKPREPACK: return "link_prep_ack";
     case OP_UNLINKPREP: return "unlink_prep";
 
+    case OP_RENAMETRAVERSE: return "rename_traverse";
+    case OP_RENAMETRAVERSEACK: return "rename_traverse_ack";
     case OP_RENAMEPREP: return "rename_prep";
     case OP_RENAMEPREPACK: return "rename_prep_ack";
 
@@ -98,6 +103,12 @@ class MMDSSlaveRequest : public Message {
 
  public:
   filepath path;
+
+  // for rename traversal
+  struct {
+    inodeno_t position;
+    inodeno_t target;
+  } traversal;
 
   // for rename prep
   struct {
@@ -143,6 +154,8 @@ public:
     ::encode(object_info, payload);
     ::encode(authpins, payload);
     ::encode(path, payload);
+    ::encode(traversal.position, payload);
+    ::encode(traversal.target, payload);
     ::encode(src.dn, payload);
     ::encode(src.ino, payload);
     ::encode(src.d_type, payload);
@@ -162,6 +175,8 @@ public:
     ::decode(object_info, p);
     ::decode(authpins, p);
     ::decode(path, p);
+    ::decode(traversal.position, p);
+    ::decode(traversal.target, p);
     ::decode(src.dn, p);
     ::decode(src.ino, p);
     ::decode(src.d_type, p);
