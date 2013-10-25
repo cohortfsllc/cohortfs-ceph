@@ -1568,3 +1568,41 @@ void CInode::decode_import(bufferlist::iterator& p,
   DECODE_FINISH(p);
 }
 
+void CInode::encode_replica(int rep, bufferlist& bl)
+{
+  assert(is_auth());
+
+  // relax locks?
+  if (!is_replicated())
+    replicate_relax_locks();
+
+  __u32 nonce = add_replica(rep);
+  ::encode(nonce, bl);
+
+  _encode_base(bl);
+  _encode_locks_state_for_replica(bl);
+  if (inode.is_dir())
+    get_placement()->encode_replica(rep, bl);
+}
+
+void CInode::decode_replica(bufferlist::iterator& p, bool is_new)
+{
+  __u32 nonce;
+  ::decode(nonce, p);
+  replica_nonce = nonce;
+
+  _decode_base(p);
+  _decode_locks_state(p, is_new);
+  if (inode.is_dir()) {
+    placement = get_placement();
+    is_new = !placement;
+    if (!placement) {
+      vector<int> empty_stripe_auth;
+      placement = new CDirPlacement(mdcache, ino(), authority().first,
+                                    empty_stripe_auth);
+      mdcache->add_dir_placement(placement);
+    }
+    placement->decode_replica(p, is_new);
+  }
+}
+

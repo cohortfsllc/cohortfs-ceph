@@ -406,27 +406,8 @@ public:
   void encode_store(bufferlist& bl);
   void decode_store(bufferlist::iterator& bl);
 
-  void encode_replica(int rep, bufferlist& bl) {
-    assert(is_auth());
-    
-    // relax locks?
-    if (!is_replicated())
-      replicate_relax_locks();
-    
-    __u32 nonce = add_replica(rep);
-    ::encode(nonce, bl);
-    
-    _encode_base(bl);
-    _encode_locks_state_for_replica(bl);
-  }
-  void decode_replica(bufferlist::iterator& p, bool is_new) {
-    __u32 nonce;
-    ::decode(nonce, p);
-    replica_nonce = nonce;
-    
-    _decode_base(p);
-    _decode_locks_state(p, is_new);
-  }
+  void encode_replica(int rep, bufferlist& bl);
+  void decode_replica(bufferlist::iterator& p, bool is_new);
 
 
   // -- waiting --
