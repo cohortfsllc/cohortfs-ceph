@@ -34,19 +34,32 @@ const string VolMap::EMPTY_STRING = "";
 
 void VolMap::encode(bufferlist& bl, uint64_t features) const {
   __u8 v = 1;
+  uint32_t count;
   ::encode(v, bl);
   ::encode(epoch, bl);
   ::encode(version, bl);
   ::encode(vol_by_uuid, bl);
+  count = vol_by_uuid.size();
+  ::encode(count, bl);
+  for (map<uuid_d,VolumeRef>::const_iterator v = vol_by_uuid.begin();
+       v != vol_by_uuid.end();
+       ++v) {
+    v->second->encode(bl);
+  }
 }
 
 void VolMap::decode(bufferlist::iterator& p) {
   __u8 v;
+  uint32_t count;
   ::decode(v, p);
   ::decode(epoch, p);
   ::decode(version, p);
-#warning Address this.
-//  ::decode(vol_by_uuid, p);
+  vol_by_uuid.clear();
+  ::decode(count, p);
+  for (uint32_t i = 0; i < count; ++i) {
+    VolumeRef v = Volume::create_decode(p);
+    vol_by_uuid[v->uuid] = v;
+  }
   vol_by_name.clear();
 
   // build name map from uuid map (only uuid map is encoded)
