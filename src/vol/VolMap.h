@@ -191,7 +191,6 @@ public:
 
 typedef std::tr1::shared_ptr<VolMap> VolMapRef;
 
-WRITE_CLASS_ENCODER(Volume);
 WRITE_CLASS_ENCODER_FEATURES(VolMap::Incremental);
 WRITE_CLASS_ENCODER(VolMap::Incremental::inc_add);
 WRITE_CLASS_ENCODER(VolMap::Incremental::inc_remove);

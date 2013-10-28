@@ -42,9 +42,6 @@ public:
 
   ~CohortVolume();
 
-  virtual void encode(bufferlist& bl) const;
-  virtual void decode(bufferlist::iterator& bl);
-
   /* Signature subject to change */
   virtual int64_t place(const object_t& o,
 			uint32_t rule,

@@ -105,18 +105,6 @@ CohortVolume::~CohortVolume(void)
   }
 }
 
-void CohortVolume::encode(bufferlist &bl) const
-{
-  inherited::encode(bl);
-  ::encode(place_text, bl);
-}
-
-void CohortVolume::decode(bufferlist::iterator& bl)
-{
-  inherited::decode(bl);
-  ::decode(place_text, bl);
-}
-
 int CohortVolume::update(VolumeCRef v)
 {
   return 0;

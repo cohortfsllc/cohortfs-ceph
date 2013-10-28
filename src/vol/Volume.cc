@@ -30,32 +30,31 @@
 using std::stringstream;
 
 const std::string Volume::typestrings[] = {
-  "VolFS", "VolBlock", "VolDeDupFS", "VolDeDupBlock","NotAVolType"};
+  "VolFS", "VolBlock", "VolDeDupFS", "VolDeDupBlock","NotAVolType"
+};
 
-void Volume::encode(bufferlist& bl) const
-{
-  __u8 v = 1;
-  ::encode(v, bl);
-  ::encode(type, bl);
-  ::encode(uuid, bl);
-  ::encode(name, bl);
-  ::encode(last_update, bl);
-}
+const Volume::factory Volume::factories[] = {
+  NULL, NULL, NULL, NULL, NULL
+};
 
-void Volume::decode(bufferlist::iterator& bl)
+
+void Volume::common_decode(bufferlist::iterator& bl,
+			   __u8 v, vol_type t)
 {
-  __u8 v;
-  ::decode(v, bl);
-  ::decode(type, bl);
+  type = t;
   ::decode(uuid, bl);
   ::decode(name, bl);
   ::decode(last_update, bl);
 }
 
-void Volume::decode(bufferlist& bl)
+void Volume::common_encode(bufferlist& bl) const
 {
-  bufferlist::iterator p = bl.begin();
-  decode(p);
+  int version = 0;
+  ::encode(version, bl);
+  ::encode(type, bl);
+  ::encode(uuid, bl);
+  ::encode(name, bl);
+  ::encode(last_update, bl);
 }
 
 bool Volume::valid_name(const string &name, string &error)
@@ -121,13 +120,19 @@ const string& Volume::type_string(vol_type type)
   }
 }
 
-void Volume::dump(Formatter *f) const
+VolumeRef Volume::create_decode(bufferlist::iterator& bl)
 {
-  char uuid_buf[uuid_d::uuid_d::char_rep_buf_size];
-  uuid.print(uuid_buf);
-  string uuid_str(uuid_buf);
-  f->dump_string("uuid", uuid_str);
-  f->dump_string("name", name);
-  f->dump_string("type", type_string(type));
-}
+  __u8 v;
+  vol_type t;
 
+  if (v != 0) {
+    throw buffer::malformed_input("Bad version.");
+  }
+
+  ::decode(v, bl);
+  ::decode(t, bl);
+  if (t < 0 || t >= NotAVolType || factories[t] == NULL)
+    throw buffer::malformed_input("Bad (or unimplemented) volume type.");
+
+  return factories[t](bl, v, t);
+}

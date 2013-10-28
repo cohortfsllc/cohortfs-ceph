@@ -247,23 +247,6 @@ bool VolMap::get_vol_uuid(const string& volspec, uuid_d& uuid_out) const
   }
 }
 
-void VolMap::dump(Formatter *f) const
-{
-  f->dump_int("epoch", epoch);
-
-  f->open_array_section("volumes");
-  for(map<uuid_d,VolumeRef>::const_iterator i = vol_by_uuid.begin();
-      i != vol_by_uuid.end();
-      ++i) {
-
-    f->open_object_section(string(i->first).c_str());
-    i->second->dump(f);
-    f->close_section();
-
-  }
-  f->close_section();
-}
-
 void VolMap::print(ostream& out) const
 {
     out << "epoch\t" << epoch << "\n";
@@ -317,8 +300,7 @@ void VolMap::Incremental::inc_add::decode(bufferlist::iterator& bl)
   __u8 v;
   ::decode(v, bl);
   ::decode(sequence, bl);
-#warning Address this or crash.
-  vol->decode(bl);
+  vol = Volume::create_decode(bl);
 }
 
 

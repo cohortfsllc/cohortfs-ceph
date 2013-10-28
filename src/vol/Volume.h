@@ -45,15 +45,55 @@ typedef shared_ptr<const Volume> VolumeCRef;
 class Volume {
 
 private:
+
   static const std::string typestrings[];
 
+  typedef VolumeRef(*factory)(bufferlist::iterator& bl, __u8 v, vol_type t);
+
+  /* Factory Protocol
+
+     Know then that a factory is called with a bufferlist from which
+     it is to decode itself.  It is also called with the version and
+     volume type. (The volume type should be obvious since it's what
+     the factory is dispatched on, but just in case someone decides
+     to use the same function for two streams that are almost
+     identical.)
+
+     The very first thing the factory must do is allocate (with new)
+     an empty (as in default constructor) volume of the required
+     type.
+
+     It must then call the common_decode method on its parent. (This
+     is virtual, so that volume classes that share functionality can
+     share a parent and have common structure decoded by it.  Any
+     common_decode in a child of Volume must call its parent's
+     common_decode before doing anything, as well.)
+
+     The factory method must then do its own specific implementation
+     and return a shared pointer to the volume.
+
+     Factories may inspect common variables AFTER they have been set,
+     but MUST NOT duplicate generic validity checks that are the
+     domain of the common decode method. */
+  static const factory factories[];
+
 protected:
+  /* This function is virtual so that it can be overriden. Any
+     common_encode not in the Volume class proper should call its
+     parent before doing anything else. This whole encode/decode
+     business is based off the Serialization section in the C++ FAQ
+     Lite. */
+  virtual void common_encode(bufferlist& bl) const;
+  virtual void common_decode(bufferlist::iterator& bl,
+			     __u8 v, vol_type t);
   Volume(const vol_type t, const string n) :
     type(t), uuid(INVALID_VOLUME), name(n) { }
 
 
 public:
 
+  /* It seems a bit icky to have a type field like this when we
+     already have type information encoded in the class. */
   vol_type type;
   uuid_d uuid;
   string name;
@@ -61,17 +101,16 @@ public:
 
   virtual ~Volume() { };
 
-  virtual void encode(bufferlist& bl) const;
-  virtual void decode(bufferlist::iterator& bl);
-  virtual void dump(Formatter *f) const;
-  void decode(bufferlist& bl);
-
   static bool valid_name(const string& name, string& error);
   virtual bool valid(string& error);
-
   virtual int update(VolumeCRef v);
-
   static const string& type_string(vol_type type);
+  static VolumeRef create_decode(bufferlist::iterator& bl);
+  /* This function should only be implemented by concrete
+     classes. Abstract parents should override common_encode. Any
+     concrete 'encode' should call its parent's common_encode as its
+     first action. */
+  virtual void encode(bufferlist& bl) const = 0;
 };
 
 #endif // VOL_VOLUME_H
