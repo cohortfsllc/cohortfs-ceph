@@ -646,6 +646,8 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
   inode_t *pi = get_projected_inode();
 
   ::encode(first, bl);
+  if (is_auth())
+    ::encode(pi->version, bl);
 
   switch (type) {
   case CEPH_LOCK_IAUTH:
@@ -720,6 +722,9 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
     }
     first = newfirst;
   }
+
+  if (!is_auth())
+    ::decode(inode.version, p);
 
   switch (type) {
   case CEPH_LOCK_IAUTH:
