@@ -1343,6 +1343,7 @@ void Server::handle_slave_request_reply(MMDSSlaveRequest *m)
       SimpleLock *lock = mds->locker->get_lock(m->get_lock_type(),
 					       m->get_object_info());
       mdr->more()->slaves.insert(from);
+      lock->get_parent()->decode_lock_state(m->get_lock_type(), m->lock_state);
       dout(10) << "got remote xlock on " << *lock << " on " << *lock->get_parent() << dendl;
       mdr->xlocks.insert(lock);
       mdr->locks.insert(lock);
@@ -1362,6 +1363,7 @@ void Server::handle_slave_request_reply(MMDSSlaveRequest *m)
       SimpleLock *lock = mds->locker->get_lock(m->get_lock_type(),
 					       m->get_object_info());
       mdr->more()->slaves.insert(from);
+      lock->get_parent()->decode_lock_state(m->get_lock_type(), m->lock_state);
       dout(10) << "got remote wrlock on " << *lock << " on " << *lock->get_parent() << dendl;
       mdr->remote_wrlocks[lock] = from;
       mdr->locks.insert(lock);
@@ -1456,6 +1458,7 @@ void Server::dispatch_slave_request(MDRequest *mdr)
 	MMDSSlaveRequest *r = new MMDSSlaveRequest(mdr->reqid, mdr->attempt, replycode);
 	r->set_lock_type(lock->get_type());
 	lock->get_parent()->set_object_info(r->get_object_info());
+        lock->get_parent()->encode_lock_state(lock->get_type(), r->lock_state);
 	mds->send_message(r, mdr->slave_request->get_connection());
       }
 
