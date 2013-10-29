@@ -643,53 +643,46 @@ void CInode::set_object_info(MDSCacheObjectInfo &info)
 
 void CInode::encode_lock_state(int type, bufferlist& bl)
 {
+  inode_t *pi = get_projected_inode();
+
   ::encode(first, bl);
 
   switch (type) {
   case CEPH_LOCK_IAUTH:
-    ::encode(inode.ctime, bl);
-    ::encode(inode.mode, bl);
-    ::encode(inode.uid, bl);
-    ::encode(inode.gid, bl);  
+    ::encode(pi->ctime, bl);
+    ::encode(pi->mode, bl);
+    ::encode(pi->uid, bl);
+    ::encode(pi->gid, bl);  
     break;
     
   case CEPH_LOCK_ILINK:
-    ::encode(inode.ctime, bl);
-    ::encode(inode.nlink, bl);
-    ::encode(inode.anchored, bl);
-    ::encode(inode.parents, bl);
+    ::encode(pi->ctime, bl);
+    ::encode(pi->nlink, bl);
+    ::encode(pi->anchored, bl);
+    ::encode(pi->parents, bl);
     break;
 
   case CEPH_LOCK_IFILE:
     if (is_auth()) {
-      ::encode(inode.mtime, bl);
-      ::encode(inode.atime, bl);
-      ::encode(inode.time_warp_seq, bl);
+      ::encode(pi->mtime, bl);
+      ::encode(pi->atime, bl);
+      ::encode(pi->time_warp_seq, bl);
       if (!is_dir()) {
-	::encode(inode.layout, bl);
-	::encode(inode.size, bl);
-	::encode(inode.client_ranges, bl);
+	::encode(pi->layout, bl);
+	::encode(pi->size, bl);
+	::encode(pi->client_ranges, bl);
       }
-      dout(15) << "encode_lock_state inode.dirstat is " << inode.dirstat << dendl;
-      ::encode(inode.dirstat, bl);
-    } else {
-      bool dirty = filelock.is_dirty();
-      ::encode(dirty, bl);
+      ::encode(pi->dirstat, bl);
     }
     break;
 
   case CEPH_LOCK_INEST:
-    if (is_auth()) {
-      dout(15) << "encode_lock_state inode.rstat is " << inode.rstat << dendl;
-      ::encode(inode.rstat, bl);
-    } else {
-      bool dirty = nestlock.is_dirty();
-      ::encode(dirty, bl);
-    }
+    if (is_auth())
+      ::encode(pi->rstat, bl);
     break;
     
   case CEPH_LOCK_IXATTR:
-    ::encode(xattrs, bl);
+    ::encode(*get_projected_xattrs(), bl);
     break;
 
   case CEPH_LOCK_IFLOCK:
@@ -698,9 +691,8 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
     break;
 
   case CEPH_LOCK_IPOLICY:
-    if (inode.is_dir()) {
-      ::encode(inode.layout, bl);
-    }
+    if (is_dir())
+      ::encode(pi->layout, bl);
     break;
   
   default:
