@@ -105,12 +105,6 @@ bool Volume::valid(string& error)
   return true;
 }
 
-int Volume::update(VolumeCRef v)
-{
-#warning To be done.
-  return 0;
-}
-
 const string& Volume::type_string(vol_type type)
 {
   if ((type < 0) || (type >= NotAVolType)) {

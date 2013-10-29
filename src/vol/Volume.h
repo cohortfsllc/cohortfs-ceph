@@ -103,7 +103,6 @@ public:
 
   static bool valid_name(const string& name, string& error);
   virtual bool valid(string& error);
-  virtual int update(VolumeCRef v);
   static const string& type_string(vol_type type);
   static VolumeRef create_decode(bufferlist::iterator& bl);
   /* This function should only be implemented by concrete

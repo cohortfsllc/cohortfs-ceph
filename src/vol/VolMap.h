@@ -116,7 +116,6 @@ public:
   int remove_volume(uuid_d uuid, const string& name_verifier = EMPTY_STRING);
   int rename_volume(VolumeRef v, const string& name);
   int rename_volume(uuid_d uuid, const string& name);
-  int update_volume(uuid_d uuid, VolumeRef volume);
 
   void apply_incremental(CephContext *cct, const VolMap::Incremental& inc);
 

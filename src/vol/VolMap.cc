@@ -154,42 +154,6 @@ int VolMap::rename_volume(uuid_d uuid,
   return rename_volume(v, name);
 }
 
-/*
- * Starting with the uuid as the invariant, find the entry in each map
- * that is associated with that uuid and update (if necessary) the
- * name.
- */
-int VolMap::update_volume(uuid_d uuid, VolumeRef nv)
-{
-  string error;
-  map<uuid_d,VolumeRef>::iterator i = vol_by_uuid.find(uuid);
-
-  if (i != end_u()) {
-    dout(0) << "attempt to update volume with non-existing uuid "
-	    << uuid << dendl;
-    return -ENOENT;
-  }
-
-  VolumeRef v = i->second;
-  int result = rename_volume(v, nv->name);
-
-  /* Come back and look at this later, it should be all or nothing. */
-  if (result != 0) {
-    return result;
-  }
-
-  nv->uuid = v->uuid;
-  nv->last_update = epoch + 1;
-
-  if (!nv->valid(error)) {
-    dout(0) << "Volume update invalid: " << error << dendl;
-    return -EINVAL;
-  }
-
-  return v->update(nv);
-}
-
-
 int VolMap::remove_volume(uuid_d uuid, const string& name_verifier)
 {
   map<uuid_d,VolumeRef>::iterator i = vol_by_uuid.find(uuid);
@@ -400,8 +364,9 @@ void VolMap::apply_incremental(CephContext *cct,
       remove_volume(rem_cursor->uuid);
       ++rem_cursor;
     } else if (upd_cursor != inc.updates.end() && upd_cursor->sequence == sequence) {
+      /*
       update_volume(upd_cursor->vol->uuid,
-		    upd_cursor->vol);
+                    upd_cursor->vol); */
       ++upd_cursor;
     } else {
       assert(0 == "couldn't find next update in sequence");
