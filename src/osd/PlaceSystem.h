@@ -30,6 +30,7 @@
 template<class T>
 class PlaceSystemBase {
 private:
+  typedef T* tempptr;
   static std::map<std::string,T*> nameMap;
   static std::map<__u16,T*> identifierMap;
   const std::string name;
@@ -41,7 +42,7 @@ protected:
     name(name),
     identifier(identifier)
   {
-    T* sub_this = dynamic_cast<T*>(this);
+    T* sub_this = static_cast<tempptr>(this);
     assert(sub_this);
     nameMap[name] = sub_this;
     identifierMap[identifier] = sub_this;
