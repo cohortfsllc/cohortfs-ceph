@@ -306,7 +306,7 @@ stripeid_t Inode::pick_stripe(const string &dname)
   return stripeid_t(dnhash % stripe_auth.size());
 }
 
-// open DirStripe for an inode.  if it's not open, allocated it (and pin dentry in memory).
+// open DirStripe for an inode.  if it's not open, allocate it (and pin dentry in memory).
 DirStripe* Inode::open_stripe(stripeid_t stripeid)
 {
   assert(stripeid < stripes.size());
