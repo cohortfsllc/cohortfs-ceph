@@ -5,9 +5,6 @@
 #include "cohort/CohortPlaceSystem.h"
 #include "VolMonitor.h"
 
-const CohortOSDMonitorPlaceSystem placeSystem(
-  CohortPlaceSystem::systemName, CohortPlaceSystem::systemIdentifier);
-
 void CohortOSDMonitor::dump_info_sub(Formatter *f)
 {
   CohortOSDMapRef p = static_pointer_cast<const CohortOSDMap>(osdmap);
@@ -33,7 +30,8 @@ void CohortOSDMonitor::tick_sub(bool& do_propose)
 void CohortOSDMonitor::create_pending()
 {
   pending_inc.reset(new CohortOSDMap::Incremental(osdmap->epoch + 1));
-  create_pending_super();
+#warning Foo.
+//  create_pending_super();
 }
 
 bool CohortOSDMonitor::preprocess_query_sub(PaxosServiceMessage *m)

@@ -1420,6 +1420,7 @@ libcommon_files = \
 	cohort/CohortOSDMap.cc \
 	osd/osd_types.cc \
 	osd/PlaceSystem.cc \
+	cohort/CohortPlaceSystem.cc \
 	common/blkdev.cc \
 	common/common_init.cc \
 	common/pipe.c \
