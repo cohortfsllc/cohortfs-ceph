@@ -177,8 +177,9 @@ void Inode::touch_cap(Cap *cap)
 
 void Inode::try_touch_cap(int mds)
 {
-  if (caps.count(mds))
-    touch_cap(caps[mds]);
+  map<int,Cap*>::iterator caps_iter = caps.find(mds);
+  if (caps_iter != caps.end())
+    touch_cap(caps_iter->second);
 }
 
 bool Inode::caps_issued_mask(unsigned mask)

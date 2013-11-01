@@ -870,7 +870,7 @@ uint64_t CephFuse::Handle::fino_snap(uint64_t fino)
 {
   Mutex::Locker l(stag_lock);
   uint64_t stag = FINO_STAG(fino);
-  assert(stag_snap_map.count(stag));
+  // assert(stag_snap_map.count(stag));
   return stag_snap_map[stag];
 }
 
@@ -900,12 +900,14 @@ uint64_t CephFuse::Handle::make_fake_ino(inodeno_t ino, snapid_t snapid)
 {
   Mutex::Locker l(stag_lock);
   uint64_t stag;
-  if (snap_stag_map.count(snapid) == 0) {
+
+  hash_map<uint64_t,int>::iterator snap_stag_iter = snap_stag_map.find(snapid);
+  if (snap_stag_iter == snap_stag_map.end()) {
     stag = ++last_stag;
     snap_stag_map[snapid] = stag;
     stag_snap_map[stag] = snapid;
   } else
-    stag = snap_stag_map[snapid];
+    stag = snap_stag_iter->second;
   inodeno_t fino = MAKE_FINO(ino, stag);
   //cout << "make_fake_ino " << ino << "." << snapid << " -> " << fino << std::endl;
   return fino;
