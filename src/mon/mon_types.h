@@ -17,24 +17,22 @@
 
 #include "include/utime.h"
 
-#define PAXOS_PGMAP      0  // before osd, for pg kick to behave
+#define PAXOS_VOLMAP     0 /* Before OSD */
 #define PAXOS_MDSMAP     1
 #define PAXOS_OSDMAP     2
 #define PAXOS_LOG        3
 #define PAXOS_MONMAP     4
 #define PAXOS_AUTH       5
-#define PAXOS_VOLMAP     6
-#define PAXOS_NUM        7
+#define PAXOS_NUM        6
 
 inline const char *get_paxos_name(int p) {
   switch (p) {
+  case PAXOS_VOLMAP: return "volmap";
   case PAXOS_MDSMAP: return "mdsmap";
   case PAXOS_MONMAP: return "monmap";
   case PAXOS_OSDMAP: return "osdmap";
-  case PAXOS_PGMAP: return "pgmap";
   case PAXOS_LOG: return "logm";
   case PAXOS_AUTH: return "auth";
-  case PAXOS_VOLMAP: return "volmap";
   default: assert(0); return 0;
   }
 }

@@ -190,14 +190,14 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
 
 PaxosService *Monitor::get_paxos_service_by_name(const string& name)
 {
+  if (name == "volmap")
+    return paxos_service[PAXOS_VOLMAP];
   if (name == "mdsmap")
     return paxos_service[PAXOS_MDSMAP];
   if (name == "monmap")
     return paxos_service[PAXOS_MONMAP];
   if (name == "osdmap")
     return paxos_service[PAXOS_OSDMAP];
-  if (name == "pgmap")
-    return paxos_service[PAXOS_PGMAP];
   if (name == "volmap")
     return paxos_service[PAXOS_VOLMAP];
   if (name == "logm")
@@ -3352,8 +3352,6 @@ bool Monitor::_ms_dispatch(Message *m)
     case CEPH_MSG_STATFS:
     case MSG_PGSTATS:
     case MSG_GETPOOLSTATS:
-      paxos_service[PAXOS_PGMAP]->dispatch((PaxosServiceMessage*)m);
-      break;
 
     case CEPH_MSG_POOLOP:
       paxos_service[PAXOS_OSDMAP]->dispatch((PaxosServiceMessage*)m);
