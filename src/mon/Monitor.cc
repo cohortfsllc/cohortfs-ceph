@@ -170,11 +170,13 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, paxos, "mdsmap");
 #endif
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, paxos, "monmap");
+  /* Since the OSDMap depends on the volume map, we have to start this
+     first. Though I'm thinking we might want to merge the two. - AE */
+  paxos_service[PAXOS_VOLMAP] = new VolMonitor(this, paxos, "volmap");
   paxos_service[PAXOS_OSDMAP]
     = OSDMonitorPlaceSystem::getSystem().newOSDMonitor(this, paxos, "osdmap");
   paxos_service[PAXOS_LOG] = new LogMonitor(this, paxos, "logm");
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, paxos, "auth");
-  paxos_service[PAXOS_VOLMAP] = new VolMonitor(this, paxos, "volmap");
 
   health_monitor = new HealthMonitor(this);
   config_key_service = new ConfigKeyService(this, paxos);
