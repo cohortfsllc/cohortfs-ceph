@@ -192,8 +192,10 @@ PaxosService *Monitor::get_paxos_service_by_name(const string& name)
 {
   if (name == "volmap")
     return paxos_service[PAXOS_VOLMAP];
+#ifdef MDS
   if (name == "mdsmap")
     return paxos_service[PAXOS_MDSMAP];
+#endif
   if (name == "monmap")
     return paxos_service[PAXOS_MONMAP];
   if (name == "osdmap")
@@ -3336,10 +3338,12 @@ bool Monitor::_ms_dispatch(Message *m)
       break;
 
       // MDSs
+#ifdef MDS
     case MSG_MDS_BEACON:
     case MSG_MDS_OFFLOAD_TARGETS:
       paxos_service[PAXOS_MDSMAP]->dispatch((PaxosServiceMessage*)m);
       break;
+#endif
 
       // auth
     case MSG_MON_GLOBAL_ID:
