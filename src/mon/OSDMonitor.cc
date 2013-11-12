@@ -104,15 +104,16 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
    * This ^^^^ sounds about right. Do it. We should then change the
    * 'get_stashed_version()' to 'get_full_version(version_t ver)', which should
    * then be read iif
-   *	(osdmap->epoch != osd_full_version)
-   *	&& (osdmap->epoch <= osdmap_full_version)
+   *	(osdmap.epoch != osd_full_version)
+   *	&& (osdmap.epoch <= osdmap_full_version)
    */
   version_t latest_full = get_version_latest_full();
   if ((latest_full > 0) && (latest_full > osdmap->epoch)) {
     bufferlist latest_bl;
     get_version_full(latest_full, latest_bl);
     assert(latest_bl.length() != 0);
-    dout(7) << __func__ << " loading latest full map e" << latest_full << dendl;
+    dout(7) << __func__ << " loading latest full map e" << latest_full
+	    << dendl;
     osdmap->decode(latest_bl);
   }
 
@@ -120,12 +121,14 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
   MonitorDBStore::Transaction t;
   while (version > osdmap->epoch) {
     bufferlist inc_bl;
-    int err = get_version(osdmap->epoch+1, inc_bl);
+    int err = get_version(osdmap->epoch + 1, inc_bl);
     assert(err == 0);
     assert(inc_bl.length());
 
-    dout(7) << "update_from_paxos  applying incremental " << osdmap->epoch+1 << dendl;
-    auto_ptr<OSDMap::Incremental> inc(osdmap->newIncremental());
+    dout(7) << "update_from_paxos  applying incremental "
+	    << osdmap->epoch + 1 << dendl;
+    OSDMap::Incremental* inc = osdmap->newIncremental();
+    inc->decode(inc_bl);
     err = osdmap->apply_incremental(*inc);
     assert(err == 0);
 
@@ -135,7 +138,7 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
     put_version_full(&t, osdmap->epoch, full_bl);
 
     // share
-    dout(1) << *osdmap << dendl;
+    dout(1) << osdmap << dendl;
 
     if (osdmap->epoch == 1) {
       erase_mkfs(&t);
