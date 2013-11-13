@@ -140,9 +140,9 @@ monmaptool_SOURCES = monmaptool.cc
 monmaptool_LDADD = $(LIBGLOBAL_LDA)
 #crushtool_SOURCES = crushtool.cc
 #crushtool_LDADD = $(LIBGLOBAL_LDA)
-#osdmaptool_SOURCES = osdmaptool.cc
-#osdmaptool_LDADD = $(LIBGLOBAL_LDA)
-bin_PROGRAMS += monmaptool #crushtool osdmaptool
+osdmaptool_SOURCES = osdmaptool.cc
+osdmaptool_LDADD = $(LIBGLOBAL_LDA)
+bin_PROGRAMS += monmaptool osdmaptool #crushtool
 
 rgw_dencoder_src = rgw/rgw_dencoder.cc \
                    rgw/rgw_acl.cc \
@@ -179,8 +179,8 @@ base: ceph-mon ceph-osd ceph-mds \
 	ceph-syn \
 	rados radosgw \
 	ceph-conf monmaptool ceph-authtool \
-	init-ceph mkcephfs mon_store_converter
-#	osdmaptool crushtool 
+	init-ceph mkcephfs mon_store_converter \
+	osdmaptool # crushtool 
 
 # fuse targets?
 #if WITH_FUSE
