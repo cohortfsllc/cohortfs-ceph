@@ -9,7 +9,7 @@
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software 
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include <sys/types.h>
@@ -24,17 +24,15 @@ using namespace std;
 #include "common/config.h"
 
 #include "common/errno.h"
-#include "pg/PGOSDMap.h"
 #include "mon/MonMap.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
+#include "osd/PlaceSystem.h"
+#include "osd/OSDMap.h"
 
 void usage()
 {
   cout << " usage: [--print] [--createsimple <numosd> [--clobber] ] <mapfilename>" << std::endl;
-  cout << "   --export-crush <file>   write osdmap's crush map to <file>" << std::endl;
-  cout << "   --import-crush <file>   replace osdmap's crush map with <file>" << std::endl;
-  cout << "   --test-map-pg <pgid>    map a pgid to osds" << std::endl;
   cout << "   --test-map-object <objectname> [--pool <poolid>] map an object to osds"
        << std::endl;
   exit(1);
@@ -131,7 +129,7 @@ int main(int argc, const char **argv)
 	exit(1);
       }
       cout << s << " got " << bl.length() << " bytes" << std::endl;
-      OSDMap *o = new OSDMap;
+      OSDMap *o = OSDMapPlaceSystem::getSystem().newOSDMap();
       o->decode(bl);
       maps.insert(o);
       if (prev)
@@ -141,7 +139,7 @@ int main(int argc, const char **argv)
     exit(0);
   }
   
-  OSDMap osdmap;
+  OSDMapRef osdmap;
   bufferlist bl;
 
   cout << me << ": osdmap file '" << fn << "'" << std::endl;
