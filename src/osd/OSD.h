@@ -167,13 +167,13 @@ public:
 
   int get_nodeid() const { return whoami; }
 
-  OSDMapRef osdmap;
+  OSDMapConstRef osdmap;
   VolMapRef volmap;
-  OSDMapRef get_osdmap() {
+  OSDMapConstRef get_osdmap() {
     Mutex::Locker l(publish_lock);
     return osdmap;
   }
-  void publish_map(OSDMapRef map) {
+  void publish_map(OSDMapConstRef map) {
     Mutex::Locker l(publish_lock);
     osdmap = map;
   }
@@ -192,8 +192,8 @@ public:
    * down, without worrying about reopening connections from threads
    * working from old maps.
    */
-  OSDMapRef next_osdmap;
-  void pre_publish_map(OSDMapRef map) {
+  OSDMapConstRef next_osdmap;
+  void pre_publish_map(OSDMapConstRef map) {
     Mutex::Locker l(pre_publish_lock);
     next_osdmap = map;
   }
@@ -251,12 +251,12 @@ public:
   SimpleLRU<epoch_t, bufferlist> map_bl_cache;
   SimpleLRU<epoch_t, bufferlist> map_bl_inc_cache;
 
-  OSDMapRef get_map(epoch_t e);
-  OSDMapRef add_map(OSDMap *o) {
+  OSDMapConstRef get_map(epoch_t e);
+  OSDMapConstRef add_map(OSDMap *o) {
     Mutex::Locker l(map_cache_lock);
     return _add_map(o);
   }
-  OSDMapRef _add_map(OSDMap *o);
+  OSDMapConstRef _add_map(OSDMap *o);
 
   void add_map_bl(epoch_t e, bufferlist& bl) {
     Mutex::Locker l(map_cache_lock);
@@ -609,9 +609,9 @@ private:
  protected:
 
   // -- osd map --
-  OSDMapRef osdmap;
+  OSDMapConstRef osdmap;
   VolMapRef volmap;
-  OSDMapRef get_osdmap() {
+  OSDMapConstRef get_osdmap() {
     return osdmap;
   }
   utime_t         had_map_since;
@@ -628,7 +628,7 @@ private:
   bool _share_map_incoming(entity_name_t name, Connection *con, epoch_t epoch,
 			   Session *session = 0);
   void _share_map_outgoing(int peer, Connection *con,
-			   OSDMapRef map = OSDMapRef());
+			   OSDMapConstRef map = OSDMapRef());
 
   void wait_for_new_map(OpRequestRef op);
   void handle_osd_map(class MOSDMap *m);
@@ -645,10 +645,10 @@ private:
   virtual void consume_map_sub() = 0;
 
   // osd map cache (past osd maps)
-  OSDMapRef get_map(epoch_t e) {
+  OSDMapConstRef get_map(epoch_t e) {
     return service->get_map(e);
   }
-  OSDMapRef add_map(OSDMap *o) {
+  OSDMapConstRef add_map(OSDMap *o) {
     return service->add_map(o);
   }
   void add_map_bl(epoch_t e, bufferlist& bl) {

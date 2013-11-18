@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -32,9 +32,9 @@ using namespace std;
 
 void usage()
 {
-  cout << " usage: [--print] [--createsimple <numosd> [--clobber] ] <mapfilename>" << std::endl;
-  cout << "   --test-map-object <objectname> [--pool <poolid>] map an object to osds"
-       << std::endl;
+  cout
+    << " usage: [--print] [--createsimple <numosd> [--clobber] ] <mapfilename>"
+    << std::endl;
   exit(1);
 }
 
@@ -59,11 +59,8 @@ int main(int argc, const char **argv)
   int num_osd = 0;
   bool clobber = false;
   bool modified = false;
-  std::string export_crush, import_crush, test_map_pg, test_map_object;
-  bool test_crush = false;
   int range_first = -1;
   int range_last = -1;
-  int pool = 0;
 
   std::string val;
   std::ostringstream err;
@@ -88,19 +85,8 @@ int main(int argc, const char **argv)
       create_from_conf = true;
     } else if (ceph_argparse_flag(args, i, "--clobber", (char*)NULL)) {
       clobber = true;
-    } else if (ceph_argparse_witharg(args, i, &val, "--export_crush", (char*)NULL)) {
-      export_crush = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--import_crush", (char*)NULL)) {
-      import_crush = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--test_map_pg", (char*)NULL)) {
-      test_map_pg = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--test_map_object", (char*)NULL)) {
-      test_map_object = val;
-    } else if (ceph_argparse_flag(args, i, "--test_crush", (char*)NULL)) {
-      test_crush = true;
     } else if (ceph_argparse_withint(args, i, &range_first, &err, "--range_first", (char*)NULL)) {
     } else if (ceph_argparse_withint(args, i, &range_last, &err, "--range_last", (char*)NULL)) {
-    } else if (ceph_argparse_withint(args, i, &pool, &err, "--pool", (char*)NULL)) {
     } else {
       ++i;
     }
@@ -138,12 +124,12 @@ int main(int argc, const char **argv)
     }
     exit(0);
   }
-  
+
   OSDMapRef osdmap;
   bufferlist bl;
 
   cout << me << ": osdmap file '" << fn << "'" << std::endl;
-  
+
   int r = 0;
   struct stat st;
   if (!createsimple && !create_from_conf && !clobber) {
@@ -151,7 +137,7 @@ int main(int argc, const char **argv)
     r = bl.read_file(fn.c_str(), &error);
     if (r == 0) {
       try {
-	osdmap.decode(bl);
+	osdmap->decode(bl);
       }
       catch (const buffer::error &e) {
 	cerr << me << ": error decoding osdmap '" << fn << "'" << std::endl;
@@ -175,145 +161,37 @@ int main(int argc, const char **argv)
     }
     uuid_d fsid;
     memset(&fsid, 0, sizeof(uuid_d));
-    osdmap.build_simple(g_ceph_context, 0, fsid, num_osd);
+    osdmap->build_simple(g_ceph_context, 0, fsid, num_osd);
     modified = true;
   }
   if (create_from_conf) {
     uuid_d fsid;
     memset(&fsid, 0, sizeof(uuid_d));
-    int r = osdmap.build_simple_from_conf(g_ceph_context, 0, fsid);
+    int r = osdmap->build_simple_from_conf(g_ceph_context, 0, fsid);
     if (r < 0)
       return -1;
     modified = true;
   }
 
-  if (!import_crush.empty()) {
-    bufferlist cbl;
-    std::string error;
-    r = cbl.read_file(import_crush.c_str(), &error);
-    if (r) {
-      cerr << me << ": error reading crush map from " << import_crush
-	   << ": " << error << std::endl;
-      exit(1);
-    }
-
-    // validate
-    CrushWrapper cw;
-    bufferlist::iterator p = cbl.begin();
-    cw.decode(p);
-
-    if (cw.get_max_devices() > osdmap.get_max_osd()) {
-      cerr << me << ": crushmap max_devices " << cw.get_max_devices()
-	   << " > osdmap max_osd " << osdmap.get_max_osd() << std::endl;
-      exit(1);
-    }
-    
-    // apply
-    OSDMap::Incremental inc;
-    inc.fsid = osdmap.get_fsid();
-    inc.epoch = osdmap.get_epoch()+1;
-    inc.crush = cbl;
-    osdmap.apply_incremental(inc);
-    cout << me << ": imported " << cbl.length() << " byte crush map from " << import_crush << std::endl;
-    modified = true;
-  }
-
-  if (!export_crush.empty()) {
-    bufferlist cbl;
-    osdmap.crush->encode(cbl);
-    r = cbl.write_file(export_crush.c_str());
-    if (r < 0) {
-      cerr << me << ": error writing crush map to " << import_crush << std::endl;
-      exit(1);
-    }
-    cout << me << ": exported crush map to " << export_crush << std::endl;
-  }  
-
-  if (!test_map_object.empty()) {
-    object_t oid(test_map_object);
-    if (!osdmap.have_pg_pool(pool)) {
-      cerr << "There is no pool " << pool << std::endl;
-      exit(1);
-    }
-    object_locator_t loc(pool);
-    pg_t raw_pgid = osdmap.object_locator_to_pg(oid, loc);
-    pg_t pgid = osdmap.raw_pg_to_pg(raw_pgid);
-    
-    vector<int> acting;
-    osdmap.pg_to_acting_osds(pgid, acting);
-    cout << " object '" << oid
-	 << "' -> " << pgid
-	 << " -> " << acting
-	 << std::endl;
-  }  
-  if (!test_map_pg.empty()) {
-    pg_t pgid;
-    if (!pgid.parse(test_map_pg.c_str())) {
-      cerr << me << ": failed to parse pg '" << test_map_pg
-	   << "', r = " << r << std::endl;
-      usage();
-    }
-    cout << " parsed '" << test_map_pg << "' -> " << pgid << std::endl;
-
-    vector<int> raw, up, acting;
-    osdmap.pg_to_osds(pgid, raw);
-    osdmap.pg_to_up_acting_osds(pgid, up, acting);
-    cout << pgid << " raw " << raw << " up " << up << " acting " << acting << std::endl;
-  }
-  if (test_crush) {
-    int pass = 0;
-    while (1) {
-      cout << "pass " << ++pass << std::endl;
-
-      hash_map<pg_t,vector<int> > m;
-      for (map<int64_t,pg_pool_t>::const_iterator p = osdmap.get_pools().begin();
-	   p != osdmap.get_pools().end();
-	   ++p) {
-	const pg_pool_t *pool = osdmap.get_pg_pool(p->first);
-	for (ps_t ps = 0; ps < pool->get_pg_num(); ps++) {
-	  pg_t pgid(ps, p->first, -1);
-	  for (int i=0; i<100; i++) {
-	    cout << pgid << " attempt " << i << std::endl;
-
-	    vector<int> r;
-	    osdmap.pg_to_acting_osds(pgid, r);
-	    //cout << pgid << " " << r << std::endl;
-	    if (m.count(pgid)) {
-	      if (m[pgid] != r) {
-		cout << pgid << " had " << m[pgid] << " now " << r << std::endl;
-		assert(0);
-	      }
-	    } else
-	      m[pgid] = r;
-	  }
-	}
-      }
-    }
-  }
-
-  if (!print && !print_json && !tree && !modified && 
-      export_crush.empty() && import_crush.empty() && 
-      test_map_pg.empty() && test_map_object.empty()) {
+  if (!print && !print_json && !tree && !modified) {
     cerr << me << ": no action specified?" << std::endl;
     usage();
   }
 
   if (modified)
-    osdmap.inc_epoch();
+    osdmap->inc_epoch();
 
-  if (print) 
-    osdmap.print(cout);
+  if (print)
+    osdmap->print(cout);
   if (print_json)
-    osdmap.dump_json(cout);
-  if (tree) 
-    osdmap.print_tree(&cout, NULL);
+    osdmap->dump_json(cout);
 
   if (modified) {
     bl.clear();
-    osdmap.encode(bl);
+    osdmap->encode(bl);
 
     // write it out
-    cout << me << ": writing epoch " << osdmap.get_epoch()
+    cout << me << ": writing epoch " << osdmap->get_epoch()
 	 << " to " << fn
 	 << std::endl;
     int r = bl.write_file(fn.c_str());

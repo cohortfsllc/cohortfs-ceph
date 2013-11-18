@@ -480,7 +480,6 @@ private:
 public:
   void print(ostream& out) const;
   void print_summary(ostream& out) const;
-  void print_tree(ostream *out, Formatter *f) const;
 
   string get_flag_string() const;
 
@@ -493,7 +492,8 @@ public:
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)
 WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
 
-typedef std::tr1::shared_ptr<const OSDMap> OSDMapRef;
+typedef std::tr1::shared_ptr<OSDMap> OSDMapRef;
+typedef std::tr1::shared_ptr<const OSDMap> OSDMapConstRef;
 
 inline ostream& operator<<(ostream& out, const OSDMap& m) {
   m.print_summary(out);
