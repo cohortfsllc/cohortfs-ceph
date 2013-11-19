@@ -72,6 +72,10 @@ void Stray::eval(CInode *in)
 {
   dout(10) << "eval " << *in << dendl;
 
+  if (in->state_test(CInode::STATE_PURGING)) {
+    dout(20) << " already purging" << dendl;
+    return;
+  }
   if (!in->is_auth()) {
     dout(20) << " not auth" << dendl;
     return;
