@@ -84,7 +84,6 @@ public:
 		     set<SimpleLock*> &wrlocks,
 		     set<SimpleLock*> &xlocks,
 		     map<SimpleLock*,int> *remote_wrlocks=NULL,
-		     map<SimpleLock*,int> *remote_xlocks=NULL,
 		     CInode *auth_pin_freeze=NULL);
 
   void cancel_locking(Mutation *mut, set<CapObject*> *pneed_issue);
@@ -129,9 +128,6 @@ public:
   bool xlock_start(SimpleLock *lock, Mutation *mut, C_GatherBuilder *gather);
   void _finish_xlock(SimpleLock *lock, client_t xlocker, bool *pneed_issue);
   void xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue);
-
-  void remote_xlock_start(SimpleLock *lock, int target, MDRequest *mut);
-  void remote_xlock_finish(SimpleLock *lock, int target, Mutation *mut);
 
   void xlock_export(SimpleLock *lock, Mutation *mut);
   void xlock_import(SimpleLock *lock, Mutation *mut);
