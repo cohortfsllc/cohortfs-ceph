@@ -57,7 +57,6 @@ struct Mutation {
   set< SimpleLock* > wrlocks;
   set< SimpleLock* > xlocks;
   map< SimpleLock*, int > remote_wrlocks;
-  map< SimpleLock*, int > remote_xlocks;
   set< SimpleLock*, SimpleLock::ptr_lt > locks;  // full ordering
 
   // lock we are currently trying to acquire.  if we give up for some reason,
@@ -103,7 +102,6 @@ struct Mutation {
     assert(rdlocks.empty());
     assert(wrlocks.empty());
     assert(remote_wrlocks.empty());
-    assert(remote_xlocks.empty());
   }
 
   bool is_master() { return slave_to_mds < 0; }
