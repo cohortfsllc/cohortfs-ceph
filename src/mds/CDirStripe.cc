@@ -707,6 +707,7 @@ int CDirStripe::_fetched(bufferlist& bl)
     state_set(STATE_OPEN);
     CDirFrag *dir = get_or_open_dirfrag(frag_t());
     dir->mark_new(ls);
+    dir->mark_complete();
     dout(10) << "stripe not found, marking new/open " << *this
         << " and " << *dir << dendl;
     return 0;

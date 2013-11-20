@@ -89,6 +89,11 @@ void Stray::eval(CInode *in)
         << " " << in->inode.parents << dendl;
     return;
   }
+  if (in->is_dir() && in->get_placement()->get_num_ref() > 0) {
+    dout(20) << " placement has " << in->get_placement()->get_num_ref()
+        << " refs " << *in->get_placement() << dendl;
+    return;
+  }
 
   CDentry *dn = in->get_projected_parent_dn();
   if (dn->is_replicated()) {
@@ -249,7 +254,9 @@ class C_AssertRemoved : public Context {
       dout(0) << "stripe " << ds << " removal got " << r << dendl;
     else
       dout(0) << "dir " << ds << ":" << fg << " removal got " << r << dendl;
-    assert(r == 0);
+    // removed assertion because we don't journal lazy stripe/frag creation,
+    // so we can't guarantee it will be open and flagged as new after replay
+    //assert(r == 0);
   }
 };
 
