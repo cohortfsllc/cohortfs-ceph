@@ -1020,8 +1020,7 @@ void CDirFrag::_fetched(bufferlist &bl, const string& want_dn)
   // empty?!?
   if (bl.length() == 0) {
     dout(0) << "_fetched missing object for " << *this << dendl;
-    clog.error() << "dir " << ino() << "." << dirfrag()
-	  << " object missing on disk; some files may be lost\n";
+    clog.error() << "dir " << dirfrag() << " object missing on disk; some files may be lost\n";
 
     log_mark_dirty();
 

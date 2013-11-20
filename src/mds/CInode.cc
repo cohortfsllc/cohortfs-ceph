@@ -199,6 +199,7 @@ ostream& operator<<(ostream& out, CInode& in)
 
 CInode::CInode(MDCache *c, int auth, snapid_t f, snapid_t l)
   : CapObject(c, f, l),
+    placement(NULL),
     inode_auth(auth, CDIR_AUTH_UNKNOWN),
     last_journaled(0),
     parent(0),
@@ -1595,6 +1596,7 @@ void CInode::decode_replica(bufferlist::iterator& p, bool is_new)
       vector<int> empty_stripe_auth;
       placement = new CDirPlacement(mdcache, ino(), authority().first,
                                     empty_stripe_auth);
+      placement->get(CDirPlacement::PIN_INODE);
       mdcache->add_dir_placement(placement);
     }
     placement->decode_replica(p, is_new);
