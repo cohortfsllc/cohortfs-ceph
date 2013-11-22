@@ -113,6 +113,11 @@ ostream& operator<<(ostream& out, const osd_xinfo_t& xi);
 
 class Monitor;
 
+class OSDMap;
+
+typedef std::tr1::shared_ptr<OSDMap> OSDMapRef;
+typedef std::tr1::shared_ptr<const OSDMap> OSDMapConstRef;
+
 
 /** OSDMap
  */
@@ -185,6 +190,9 @@ public:
   virtual void thrash(Monitor* mon, OSDMap::Incremental& pending_inc_orig) = 0;
 
 protected:
+  virtual void populate_simple(CephContext *cct) = 0;
+  virtual void populate_simple_from_conf(CephContext *cct) = 0;
+protected:
   uuid_d fsid;
   epoch_t epoch;        // what epoch of the osd cluster descriptor is this
   utime_t created, modified; // epoch start time
@@ -237,10 +245,10 @@ protected:
   virtual ~OSDMap() { }
 
   virtual Incremental* newIncremental() const = 0;
-  virtual void build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
-			    int num_osd) = 0;
-  virtual int build_simple_from_conf(CephContext *cct, epoch_t e,
-				     uuid_d &fsid) = 0;
+  static OSDMapRef build_simple(CephContext *cct, epoch_t e,
+				uuid_d &fsid, int num_osd);
+  static OSDMapRef build_simple_from_conf(CephContext *cct, epoch_t e,
+					  uuid_d &fsid);
   virtual int get_oid_osd(const Objecter* objecter,
 			  const object_t& oid,
 			  const ceph_file_layout* layout) = 0;
@@ -491,9 +499,6 @@ public:
 };
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)
 WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
-
-typedef std::tr1::shared_ptr<OSDMap> OSDMapRef;
-typedef std::tr1::shared_ptr<const OSDMap> OSDMapConstRef;
 
 inline ostream& operator<<(ostream& out, const OSDMap& m) {
   m.print_summary(out);

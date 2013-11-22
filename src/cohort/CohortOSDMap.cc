@@ -80,17 +80,6 @@ int CohortOSDMap::apply_incremental_subclass(
   return 0;
 }
 
-void CohortOSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
-				int num_osd)
-{
-}
-
-int CohortOSDMap::build_simple_from_conf(CephContext *cct, epoch_t e,
-					 uuid_d &fsid)
-{
-  return 0;
-}
-
 int CohortOSDMap::get_oid_osd(const Objecter* objecter,
 			      const object_t& oid,
 			      const ceph_file_layout* layout)

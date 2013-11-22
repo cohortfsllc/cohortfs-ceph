@@ -160,15 +160,13 @@ int main(int argc, const char **argv)
       exit(1);
     }
     uuid_d fsid;
-    memset(&fsid, 0, sizeof(uuid_d));
-    osdmap->build_simple(g_ceph_context, 0, fsid, num_osd);
+    osdmap = OSDMap::build_simple(g_ceph_context, 0, fsid, num_osd);
     modified = true;
   }
   if (create_from_conf) {
     uuid_d fsid;
-    memset(&fsid, 0, sizeof(uuid_d));
-    int r = osdmap->build_simple_from_conf(g_ceph_context, 0, fsid);
-    if (r < 0)
+    osdmap = OSDMap::build_simple_from_conf(g_ceph_context, 0, fsid);
+    if (!osdmap)
       return -1;
     modified = true;
   }
@@ -201,7 +199,6 @@ int main(int argc, const char **argv)
       return 1;
     }
   }
-  
 
   return 0;
 }

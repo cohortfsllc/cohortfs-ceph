@@ -18,6 +18,7 @@
 #include "common/config.h"
 #include "common/Formatter.h"
 #include "include/ceph_features.h"
+#include "osd/PlaceSystem.h"
 
 #include "common/code_environment.h"
 
@@ -988,4 +989,75 @@ void OSDMap::print_summary(ostream& out) const
     out << " full";
   else if (test_flag(CEPH_OSDMAP_NEARFULL))
     out << " nearfull";
+}
+
+OSDMapRef OSDMap::build_simple(CephContext *cct, epoch_t e,
+			       uuid_d &f, int num_osd)
+{
+  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap());
+
+  ldout(cct, 10) << "build_simple on " << num_osd
+		 << " osds" << dendl;
+
+  constructing->epoch = e;
+  constructing->set_fsid(f);
+  constructing->created = constructing->modified = ceph_clock_now(cct);
+
+  constructing->set_max_osd(num_osd);
+
+  for (int i = 0; i < num_osd; ++i) {
+    constructing->set_state(i, 0);
+    constructing->set_weight(i, CEPH_OSD_OUT);
+  }
+
+  constructing->populate_simple(cct);
+  return constructing;
+}
+
+OSDMapRef OSDMap::build_simple_from_conf(CephContext *cct, epoch_t e,
+					 uuid_d &f)
+{
+  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap());
+
+  ldout(cct, 10) << "build_simple_from_conf" << dendl;
+  constructing->epoch = e;
+  constructing->set_fsid(f);
+  constructing->created = constructing->modified = ceph_clock_now(cct);
+
+  const md_config_t *conf = cct->_conf;
+
+  // count osds
+  int maxosd = 0, numosd = 0;
+
+  vector<string> sections;
+  conf->get_all_sections(sections);
+  for (vector<string>::iterator i = sections.begin(); i != sections.end(); ++i) {
+    if (i->find("osd.") != 0)
+      continue;
+
+    const char *begin = i->c_str() + 4;
+    char *end = (char*)begin;
+    int o = strtol(begin, &end, 10);
+    if (*end != '\0')
+      continue;
+
+    if (o > cct->_conf->mon_max_osd) {
+      lderr(cct) << "[osd." << o << "] in config has id > mon_max_osd " << cct->_conf->mon_max_osd << dendl;
+      constructing.reset();
+      return constructing;
+    }
+    numosd++;
+    if (o > maxosd)
+      maxosd = o;
+  }
+
+  constructing->set_max_osd(maxosd + 1);
+
+  for (int i = 0; i <= maxosd; ++i) {
+    constructing->set_state(i, 0);
+    constructing->set_weight(i, CEPH_OSD_OUT);
+  }
+
+  constructing->populate_simple_from_conf(cct);
+  return constructing;
 }

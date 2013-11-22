@@ -11,6 +11,13 @@ class CohortOSDMap : public OSDMap {
 private:
   typedef OSDMap inherited;
 
+protected:
+
+  void populate_simple(CephContext *cct) { }
+
+  void populate_simple_from_conf(CephContext *cct) { }
+
+
 public:
   void thrash(Monitor* mon, OSDMap::Incremental& pending_inc_orig);
   virtual uint64_t get_features(uint64_t *mask) const;
