@@ -2,6 +2,7 @@
 #define CEPH_CLIENT_DENTRY_H
 
 #include "include/lru.h"
+#include "mds/mdstypes.h"
 
 class DirStripe;
 class Inode;
@@ -11,7 +12,7 @@ class Dentry : public LRUObject {
   string  name;                      // sort of lame
   //const char *name;
   DirStripe *stripe;
-  Inode   *inode;
+  vinodeno_t vino;
   int     ref;                       // 1 if there's a dir beneath me.
   uint64_t offset;
   int lease_mds;
@@ -40,8 +41,10 @@ class Dentry : public LRUObject {
   }
 
   void dump(Formatter *f) const;
-  
-  Dentry() : stripe(0), inode(0), ref(1), offset(0), lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) { }
+
+  bool is_null() const { return vino.ino == 0; }
+ 
+  Dentry() : stripe(0), vino(0, CEPH_NOSNAP), ref(1), offset(0), lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) { }
 private:
   ~Dentry() {
     assert(ref == 0);

@@ -297,19 +297,21 @@ void Client::dump_inode(Formatter *f, Inode *in, set<Inode*>& did, bool disconne
     DirStripe *stripe = *s;
     if (stripe) {
       ldout(cct, 1) << "  stripe " << *stripe << dendl;
-      for (dn_hashmap::iterator it = stripe->dentries.begin();
-           it != stripe->dentries.end();
-           ++it) {
+      for (dn_hashmap::iterator d = stripe->dentries.begin();
+           d != stripe->dentries.end();
+           ++d) {
+        Dentry *dn = d->second;
         ldout(cct, 1) << "   " << stripe->dirstripe()
-            << " dn " << it->first << " " << it->second
-            << " ref " << it->second->ref << dendl;
+            << " dn " << d->first << " " << dn
+            << " ref " << dn->ref << dendl;
         if (f) {
           f->open_object_section("dentry");
-          it->second->dump(f);
+          dn->dump(f);
           f->close_section();
-        }	
-        if (it->second->inode)
-          dump_inode(f, it->second->inode, did, false);
+        }
+        inode_hashmap::iterator i = inodes.find(dn->vino);
+        if (i != inodes.end())
+          dump_inode(f, i->second, did, false);
       }
     }
   }
@@ -646,22 +648,22 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
   ldout(cct, 12) << "insert_dentry_inode '" << dname << "' vino " << in->vino()
       << " in stripe " << stripe->dirstripe() << " dn " << dn << dendl;
  
-  if (dn && dn->inode) {
-    if (dn->inode->vino() == in->vino()) {
+  if (dn && !dn->is_null()) {
+    if (dn->vino == in->vino()) {
       touch_dn(dn);
       ldout(cct, 12) << " had dentry " << dname
-	       << " with correct vino " << dn->inode->vino()
+	       << " with correct vino " << dn->vino
 	       << dendl;
     } else {
       ldout(cct, 12) << " had dentry " << dname
-	       << " with WRONG vino " << dn->inode->vino()
+	       << " with WRONG vino " << dn->vino
 	       << dendl;
       unlink(dn, true);
       dn = NULL;
     }
   }
  
-  if (!dn || dn->inode == 0) {
+  if (!dn || dn->is_null()) {
     in->get();
     if (old_dentry)
       unlink(old_dentry, stripe == old_dentry->stripe); // keep dir open if its the same dir
@@ -683,7 +685,7 @@ void Client::update_dentry_lease(Dentry *dn, LeaseStat *dlease, utime_t from, Me
   utime_t dttl = from;
   dttl += (float)dlease->duration_ms / 1000.0;
   
-  assert(dn && dn->inode);
+  assert(dn && !dn->is_null());
 
   if (dlease->mask & CEPH_LOCK_DN) {
     if (dttl > dn->lease_ttl) {
@@ -774,7 +776,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
       if (pd != stripe->dentry_map.end() &&
 	  pd->first == dname) {
 	Dentry *olddn = pd->second;
-	if (pd->second->inode != in) {
+	if (olddn->vino != in->vino()) {
 	  // replace incorrect dentry
 	  ++pd;  // we are about to unlink this guy, move past it.
 	  unlink(olddn, true);
@@ -888,7 +890,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
                                         request->old_dentry() : NULL));
     } else {
       dn_hashmap::iterator d = stripe->dentries.find(dname);
-      if (d != stripe->dentries.end() && d->second->inode)
+      if (d != stripe->dentries.end() && !d->second->is_null())
         unlink(d->second, false);
     }
   } else if (reply->head.op == CEPH_MDS_OP_LOOKUPSNAP ||
@@ -914,7 +916,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
       DirStripe *stripe = diri->stripes[stripeid];
       if (stripe) {
         dn_hashmap::iterator d = stripe->dentries.find(dname);
-        if (d != stripe->dentries.end() && d->second->inode)
+        if (d != stripe->dentries.end() && !d->second->is_null())
           unlink(d->second, false);
       }
     }
@@ -965,8 +967,9 @@ int Client::choose_target_mds(MetaRequest *req)
       is_hash = true;
     }
   } else if (de) {
-    if (de->inode) {
-      in = de->inode;
+    inode_hashmap::iterator i = inodes.find(de->vino);
+    if (i != inodes.end()) {
+      in = i->second;
       ldout(cct, 20) << "choose_target_mds starting with req->dentry inode " << *in << dendl;
     } else {
       in = de->stripe->parent_inode;
@@ -1561,8 +1564,9 @@ MClientRequest* Client::build_client_request(MetaRequest *request)
     if (in)
       in->make_nosnap_relative_path(request->path);
     else if (de) {
-      if (de->inode)
-	de->inode->make_nosnap_relative_path(request->path);
+      inode_hashmap::iterator i = inodes.find(de->vino);
+      if (i != inodes.end())
+	i->second->make_nosnap_relative_path(request->path);
       else if (de->stripe) {
 	de->stripe->parent_inode->make_nosnap_relative_path(request->path);
 	request->path.push_dentry(de->name);
@@ -2112,8 +2116,7 @@ Dentry* Client::link(DirStripe *stripe, const string& name, Inode *in, Dentry *d
   }
 
   if (in) {    // link to inode
-    dn->inode = in;
-    in->get();
+    dn->vino = in->vino();
     // dn pin for each open stripe
     for (vector<DirStripe*>::iterator s = in->stripes.begin(); s != in->stripes.end(); ++s)
       if (*s)
@@ -2138,26 +2141,27 @@ Dentry* Client::link(DirStripe *stripe, const string& name, Inode *in, Dentry *d
 
 void Client::unlink(Dentry *dn, bool keepdir)
 {
-  Inode *in = dn->inode;
   ldout(cct, 15) << "unlink dir " << dn->stripe->parent_inode
       << " '" << dn->name << "' dn " << dn
-      << " inode " << *dn->inode << dendl;
+      << " vino " << dn->vino << dendl;
 
   // unlink from inode
-  if (in) {
+  inode_hashmap::iterator i = inodes.find(dn->vino);
+  if (i != inodes.end()) {
+    Inode *in = i->second;
     // dn pin for each open stripe
     for (vector<DirStripe*>::iterator s = in->stripes.begin(); s != in->stripes.end(); ++s)
       if (*s)
         dn->put();
-    dn->inode = 0;
 
     set<Dentry*>::iterator d = in->dn_set.find(dn);
     assert(d != in->dn_set.end());
     in->dn_set.erase(d);
     ldout(cct, 20) << "unlink  inode " << in << " parents now "
 		   << in->dn_set << dendl; 
-    put_inode(in);
   }
+
+  dn->vino.ino = 0;
 
   // unlink from dir
   dn->stripe->dentries.erase(dn->name);
@@ -3363,7 +3367,7 @@ private:
 public:
   C_Client_DentryInvalidate(Client *c, Dentry *dn) :
 			    client(c), dirino(dn->stripe->parent_inode->vino()),
-			    ino(dn->inode->vino()), name(dn->name) { }
+			    ino(dn->vino), name(dn->name) { }
   void finish(int r) {
     client->_async_dentry_invalidate(dirino, ino, name);
   }
@@ -3378,8 +3382,11 @@ void Client::_async_dentry_invalidate(vinodeno_t dirino, vinodeno_t ino, string&
 
 void Client::_schedule_invalidate_dentry_callback(Dentry *dn)
 {
-  if (dentry_invalidate_cb && dn->inode->ll_ref > 0)
-    async_dentry_invalidator.queue(new C_Client_DentryInvalidate(this, dn));
+  if (dentry_invalidate_cb) {
+    inode_hashmap::iterator i = inodes.find(dn->vino);
+    if (i != inodes.end() && i->second->ll_ref > 0)
+      async_dentry_invalidator.queue(new C_Client_DentryInvalidate(this, dn));
+  }
 }
 
 void Client::_invalidate_inode_parents(Inode *in)
@@ -3801,34 +3808,39 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
 		     << " seq " << dn->lease_seq
 		     << dendl;
 
-      // is dn lease valid?
-      utime_t now = ceph_clock_now(cct);
-      if (dn->lease_mds >= 0 &&
-	  dn->lease_ttl > now) {
-	map<int, MetaSession*>::iterator mds_iter =
-	      mds_sessions.find(dn->lease_mds);
-        if (mds_iter != mds_sessions.end()) {
-          MetaSession *s = mds_iter->second;
-          if (s->cap_ttl > now &&
-              s->cap_gen == dn->lease_gen) {
-            *target = dn->inode;
-            // touch this mds's dir cap too, even though we don't _explicitly_
-            // use it here, to make trim_caps() behave.
-            dir->try_touch_cap(dn->lease_mds);
-            touch_dn(dn);
-            goto done;
+      inode_hashmap::iterator i = inodes.find(dn->vino);
+      if (i != inodes.end()) {
+        Inode *in = i->second;
+
+        // is dn lease valid?
+        utime_t now = ceph_clock_now(cct);
+        if (dn->lease_mds >= 0 &&
+            dn->lease_ttl > now) {
+          map<int, MetaSession*>::iterator mds_iter =
+              mds_sessions.find(dn->lease_mds);
+          if (mds_iter != mds_sessions.end()) {
+            MetaSession *s = mds_iter->second;
+            if (s->cap_ttl > now &&
+                s->cap_gen == dn->lease_gen) {
+              *target = in;
+              // touch this mds's dir cap too, even though we don't _explicitly_
+              // use it here, to make trim_caps() behave.
+              dir->try_touch_cap(dn->lease_mds);
+              touch_dn(dn);
+              goto done;
+            }
+            ldout(cct, 20) << " bad lease, cap_ttl " << s->cap_ttl << ", cap_gen "
+		           << s->cap_gen
+		           << " vs lease_gen " << dn->lease_gen << dendl;
           }
-          ldout(cct, 20) << " bad lease, cap_ttl " << s->cap_ttl << ", cap_gen "
-		         << s->cap_gen
-		         << " vs lease_gen " << dn->lease_gen << dendl;
         }
-      }
-      // dir lease?
-      if (stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED) &&
-	  dn->cap_shared_gen == stripe->shared_gen) {
-	*target = dn->inode;
-	touch_dn(dn);
-	goto done;
+        // dir lease?
+        if (stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED) &&
+            dn->cap_shared_gen == stripe->shared_gen) {
+          *target = in;
+          touch_dn(dn);
+          goto done;
+        }
       }
     // can we conclude ENOENT locally?
     } else if (stripe->is_complete() &&
@@ -3860,7 +3872,7 @@ int Client::get_or_create(Inode *dir, const char* name,
     Dentry *dn = d->second;
     // is dn lease valid?
     utime_t now = ceph_clock_now(cct);
-    if (dn->inode &&
+    if (!dn->is_null() &&
 	dn->lease_mds >= 0 && 
 	dn->lease_ttl > now) {
       map<int, MetaSession*>::iterator mds_iter =
@@ -4808,15 +4820,18 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
   string prev_name;
   while (pd != stripe->dentry_map.end()) {
     Dentry *dn = pd->second;
-    if (dn->inode == NULL) {
+    if (dn->is_null()) {
       ldout(cct, 15) << " skipping null '" << pd->first << "'" << dendl;
       ++pd;
       continue;
     }
 
+    inode_hashmap::iterator i = inodes.find(dn->vino);
+    assert(i != inodes.end()); // stripe is complete
+
     struct stat st;
     struct dirent de;
-    int stmask = fill_stat(dn->inode, &st);
+    int stmask = fill_stat(i->second, &st);
     fill_dirent(&de, pd->first.c_str(), st.st_mode, st.st_ino, dirp->offset + 1);
 
     uint64_t next_off = dn->offset + 1;
@@ -4885,7 +4900,9 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
   if (dirp->offset == 1) {
     ldout(cct, 15) << " including .." << dendl;
     if (!diri->dn_set.empty()) {
-      Inode* in = diri->get_first_parent()->inode;
+      inode_hashmap::iterator i = inodes.find(diri->get_first_parent()->vino);
+      assert(i != inodes.end()); // XXX: how does this get pinned?
+      Inode* in = i->second;
       fill_dirent(&de, "..", S_IFDIR, in->ino, 2);
       fill_stat(in, &st);
     } else {
@@ -7150,13 +7167,16 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
     if (stripe) {
       dn_hashmap::iterator d = stripe->dentries.find(name);
       if (d != stripe->dentries.end()) {
-        Inode *in = d->second->inode;
-        // close stripes
-        for (vector<DirStripe*>::iterator s = in->stripes.begin();
-             s != in->stripes.end(); ++s) {
-          DirStripe *stripe = *s;
-          if (stripe && stripe->is_empty() && in->dn_set.size() == 1)
-            close_stripe(stripe); // FIXME: maybe i shoudl proactively hose the whole subtree from cache?
+        inode_hashmap::iterator i = inodes.find(d->second->vino);
+        if (i != inodes.end()) {
+          Inode *in = i->second;
+          // close stripes
+          for (vector<DirStripe*>::iterator s = in->stripes.begin();
+               s != in->stripes.end(); ++s) {
+            DirStripe *stripe = *s;
+            if (stripe && stripe->is_empty() && in->dn_set.size() == 1)
+              close_stripe(stripe); // FIXME: maybe i shoudl proactively hose the whole subtree from cache?
+          }
         }
         unlink(d->second, false);
       }
