@@ -134,13 +134,13 @@ class Inode : public CapObject {
 
   void get() { 
     _ref++; 
-    lsubdout(cct, mds, 15) << "inode.get on " << this << " " <<  ino << '.' << snapid
+    lsubdout(cct, mds, 15) << "inode.get on " << this << " " <<  vino()
 		   << " now " << _ref << dendl;
   }
   /// private method to put a reference; see Client::put_inode()
-  int _put(int n=1) {
-    _ref -= n; 
-    lsubdout(cct, mds, 15) << "inode.put on " << this << " " << ino << '.' << snapid
+  int _put() {
+    _ref--;
+    lsubdout(cct, mds, 15) << "inode.put on " << this << " " << vino()
 		   << " now " << _ref << dendl;
     assert(_ref >= 0);
     return _ref;

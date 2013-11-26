@@ -356,7 +356,7 @@ protected:
   // -- metadata cache stuff
 
   // decrease inode ref.  delete if dangling.
-  void put_inode(Inode *in, int n=1);
+  void put_inode(Inode *in);
   void close_stripe(DirStripe *stripe);
 
   friend class C_PutInode; // calls put_inode()
