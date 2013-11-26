@@ -303,7 +303,7 @@ void Client::dump_inode(Formatter *f, Inode *in, set<Inode*>& did, bool disconne
         Dentry *dn = d->second;
         ldout(cct, 1) << "   " << stripe->dirstripe()
             << " dn " << d->first << " " << dn
-            << " ref " << dn->ref << dendl;
+            << " ref " << dn->get_num_ref() << dendl;
         if (f) {
           f->open_object_section("dentry");
           dn->dump(f);
@@ -467,11 +467,9 @@ void Client::trim_cache()
     if (lru.lru_get_size() <= lru.lru_get_max())  break;
 
     // trim!
-    Dentry *dn = static_cast<Dentry*>(lru.lru_expire());
-    if (!dn)
+    LRUObject *o = lru.lru_expire();
+    if (!o)
       break;  // done
-    
-    trim_dentry(dn);
   }
 
   // hose root?
@@ -482,20 +480,6 @@ void Client::trim_cache()
     inodes.clear();
   }
 }
-
-void Client::trim_dentry(Dentry *dn)
-{
-  DirStripe *stripe = dn->stripe;
-  ldout(cct, 15) << "trim_dentry unlinking dn " << dn->name
-		 << " in stripe " << stripe->dirstripe() << dendl;
-  if (stripe->is_complete()) {
-    ldout(cct, 10) << " clearing I_COMPLETE on " << *stripe << dendl;
-    stripe->reset_complete();
-    stripe->release_count++;
-  }
-  unlink(dn, false);
-}
-
 
 Inode* Client::add_update_inode(InodeStat *st, utime_t from, MetaSession *session)
 {
@@ -650,7 +634,6 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
  
   if (dn && !dn->is_null()) {
     if (dn->vino == in->vino()) {
-      touch_dn(dn);
       ldout(cct, 12) << " had dentry " << dname
 	       << " with correct vino " << dn->vino
 	       << dendl;
@@ -784,7 +767,6 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	} else {
 	  // keep existing dn
 	  dn = olddn;
-	  touch_dn(dn);
 	  ++pd;  // move past the dentry we just touched.
 	}
       } else {
@@ -2095,14 +2077,14 @@ Dentry* Client::link(DirStripe *stripe, const string& name, Inode *in, Dentry *d
 {
   if (!dn) {
     // create a new Dentry
-    dn = new Dentry;
+    dn = new Dentry(cct);
     dn->name = name;
     
     // link to dir
     dn->stripe = stripe;
     stripe->dentries[dn->name] = dn;
     stripe->dentry_map[dn->name] = dn;
-    lru.lru_insert_mid(dn);    // mid or top?
+    dn->get();
 
     ldout(cct, 15) << "link stripe " << stripe->dirstripe() << " '" << name
         << "' to inode " << in << " dn " << dn << " (new dn)" << dendl;
@@ -2159,8 +2141,6 @@ void Client::unlink(Dentry *dn, bool keepdir)
     close_stripe(dn->stripe);
   dn->stripe = 0;
 
-  // delete den
-  lru.lru_remove(dn);
   dn->put();
 }
 
@@ -2703,21 +2683,6 @@ void Client::trim_caps(MetaSession *s, int max)
       ldout(cct, 20) << " removing unused, unneeded non-auth cap on " << *parent << dendl;
       remove_cap(cap);
       trimmed++;
-    } else {
-      assert(parent->is_inode());
-      Inode *in = static_cast<Inode*>(parent);
-      ldout(cct, 20) << " trying to trim dentries for " << *in << dendl;
-      bool all = true;
-      set<Dentry*>::iterator q = in->dn_set.begin();
-      while (q != in->dn_set.end()) {
-	Dentry *dn = *q++;
-	if (dn->lru_is_expireable())
-	  trim_dentry(dn);
-	else
-	  all = false;
-      }
-      if (all)
-	trimmed++;
     }
 
     ++p;
@@ -3815,7 +3780,6 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
               // touch this mds's dir cap too, even though we don't _explicitly_
               // use it here, to make trim_caps() behave.
               dir->try_touch_cap(dn->lease_mds);
-              touch_dn(dn);
               goto done;
             }
             ldout(cct, 20) << " bad lease, cap_ttl " << s->cap_ttl << ", cap_gen "
@@ -3827,7 +3791,6 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
         if (stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED) &&
             dn->cap_shared_gen == stripe->shared_gen) {
           *target = in;
-          touch_dn(dn);
           goto done;
         }
       }
@@ -4410,11 +4373,6 @@ int Client::fill_stat(Inode *in, struct stat *st, frag_info_t *dirstat, nest_inf
     *rstat = in->rstat;
 
   return in->caps_issued();
-}
-
-void Client::touch_dn(Dentry *dn)
-{
-  lru.lru_touch(dn);
 }
 
 int Client::chmod(const char *relpath, mode_t mode)
@@ -6771,11 +6729,7 @@ int Client::ll_readlink(vinodeno_t vino, const char **value, int uid, int gid)
   tout(cct) << vino.ino.val << std::endl;
 
   Inode *in = _ll_get_inode(vino);
-  set<Dentry*>::iterator dn = in->dn_set.begin();
-  while (dn != in->dn_set.end()) {
-    touch_dn(*dn);
-    ++dn;
-  }
+  // TODO: touch_inode(in)
 
   int r = 0;
   if (in->is_symlink()) {

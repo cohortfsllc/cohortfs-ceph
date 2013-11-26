@@ -1,19 +1,21 @@
 #ifndef CEPH_CLIENT_DENTRY_H
 #define CEPH_CLIENT_DENTRY_H
 
-#include "include/lru.h"
 #include "mds/mdstypes.h"
 
 class DirStripe;
 class Inode;
 
-class Dentry : public LRUObject {
+class Dentry {
+ private:
+  CephContext *cct;
+  int     ref;                       // 1 if there's a dir beneath me.
+
  public:
   string  name;                      // sort of lame
   //const char *name;
   DirStripe *stripe;
   vinodeno_t vino;
-  int     ref;                       // 1 if there's a dir beneath me.
   uint64_t offset;
   int lease_mds;
   utime_t lease_ttl;
@@ -21,30 +23,27 @@ class Dentry : public LRUObject {
   ceph_seq_t lease_seq;
   int cap_shared_gen;
   
-  /*
-   * ref==1 -> cached, unused
-   * ref >1 -> pinned in lru
-   */
   void get() { 
-    assert(ref > 0);
-    if (++ref == 2)
-      lru_pin(); 
-    //cout << "dentry.get on " << this << " " << name << " now " << ref << std::endl;
+    assert(ref >= 0);
+    ref++;
+    lsubdout(cct, mds, 15) << "dentry.get on " << this << " " << name << " now " << ref << dendl;
   }
   void put() { 
     assert(ref > 0);
-    if (--ref == 1)
-      lru_unpin();
-    //cout << "dentry.put on " << this << " " << name << " now " << ref << std::endl;
+    ref--;
+    lsubdout(cct, mds, 15) << "dentry.put on " << this << " " << name << " now " << ref << dendl;
     if (ref == 0)
       delete this;
   }
+  int get_num_ref() const { return ref; }
 
   void dump(Formatter *f) const;
 
   bool is_null() const { return vino.ino == 0; }
  
-  Dentry() : stripe(0), vino(0, CEPH_NOSNAP), ref(1), offset(0), lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) { }
+  Dentry(CephContext *cct)
+      : cct(cct), ref(0), stripe(0), vino(0, CEPH_NOSNAP), offset(0),
+        lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) {}
 private:
   ~Dentry() {
     assert(ref == 0);

@@ -378,11 +378,9 @@ protected:
   Inode *cwd;
   int path_walk(const filepath& fp, Inode **end, bool followsym=true);
   int fill_stat(Inode *in, struct stat *st, frag_info_t *dirstat=0, nest_info_t *rstat=0);
-  void touch_dn(Dentry *dn);
 
   // trim cache.
   void trim_cache();
-  void trim_dentry(Dentry *dn);
   void trim_caps(MetaSession *s, int max);
   
   void dump_inode(Formatter *f, Inode *in, set<Inode*>& did, bool disconnected);
