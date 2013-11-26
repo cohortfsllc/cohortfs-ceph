@@ -2124,6 +2124,7 @@ Dentry* Client::link(DirStripe *stripe, const string& name, Inode *in, Dentry *d
     }
 
     in->dn_set.insert(dn);
+    dn->get();
 
     ldout(cct, 20) << "link  inode " << in << " parents now " << in->dn_set << dendl; 
   }
@@ -2144,6 +2145,7 @@ void Client::unlink(Dentry *dn, bool keepdir)
     set<Dentry*>::iterator d = in->dn_set.find(dn);
     assert(d != in->dn_set.end());
     in->dn_set.erase(d);
+    dn->put();
     ldout(cct, 20) << "unlink  inode " << in << " parents now "
 		   << in->dn_set << dendl; 
   }
