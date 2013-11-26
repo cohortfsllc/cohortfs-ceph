@@ -2052,10 +2052,10 @@ void Client::handle_lease(MClientLease *m)
   m->put();
 }
 
-void Client::put_inode(Inode *in, int n)
+void Client::put_inode(Inode *in)
 {
   ldout(cct, 10) << "put_inode on " << *in << dendl;
-  int left = in->_put(n);
+  int left = in->_put();
   if (left == 0) {
     // release any caps
     remove_all_caps(in);
