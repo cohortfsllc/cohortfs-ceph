@@ -2085,10 +2085,6 @@ void Client::close_stripe(DirStripe *stripe)
 
   vector<DirStripe*>::iterator s = in->stripes.begin() + stripe->stripeid;
   assert(*s == stripe);
-
-  assert(in->dn_set.size() < 2);     // dirs can't be hard-linked
-  if (!in->dn_set.empty())
-    in->get_first_parent()->put();   // unpin dentry
  
   stripe->cap_item.remove_myself();
   stripe->snaprealm_item.remove_myself();
@@ -2124,10 +2120,6 @@ Dentry* Client::link(DirStripe *stripe, const string& name, Inode *in, Dentry *d
 
   if (in) {    // link to inode
     dn->vino = in->vino();
-    // dn pin for each open stripe
-    for (vector<DirStripe*>::iterator s = in->stripes.begin(); s != in->stripes.end(); ++s)
-      if (*s)
-        dn->get();
 
     // assert(in->dn_set.count(dn) == 0);
 
@@ -2156,11 +2148,6 @@ void Client::unlink(Dentry *dn, bool keepdir)
   inode_hashmap::iterator i = inodes.find(dn->vino);
   if (i != inodes.end()) {
     Inode *in = i->second;
-    // dn pin for each open stripe
-    for (vector<DirStripe*>::iterator s = in->stripes.begin(); s != in->stripes.end(); ++s)
-      if (*s)
-        dn->put();
-
     set<Dentry*>::iterator d = in->dn_set.find(dn);
     assert(d != in->dn_set.end());
     in->dn_set.erase(d);
