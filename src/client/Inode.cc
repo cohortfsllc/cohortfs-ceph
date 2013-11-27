@@ -313,7 +313,7 @@ DirStripe* Inode::open_stripe(stripeid_t stripeid)
   vector<DirStripe*>::iterator s = stripes.begin() + stripeid;
   if (!*s) {
     *s = new DirStripe(this, stripeid);
-    lsubdout(cct, mds, 15) << "open_stripe " << **s << " on " << *this << dendl;
+    lsubdout(cct, client, 15) << "open_stripe " << **s << " on " << *this << dendl;
     assert(dn_set.size() < 2); // dirs can't be hard-linked
     if (!dn_set.empty())
       (*dn_set.begin())->get();      // pin dentry
