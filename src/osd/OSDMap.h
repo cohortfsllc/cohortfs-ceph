@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -39,9 +39,6 @@
 #include <set>
 #include <map>
 #include <tr1/memory>
-
-#include "vol/VolMap.h"
-
 
 using namespace std;
 
@@ -81,7 +78,7 @@ struct osd_info_t {
   epoch_t up_thru;   // lower bound on actual osd death (if > up_from)
   epoch_t down_at;   // upper bound on actual osd death (if > up_from)
   epoch_t lost_at;   // last epoch we decided data was "lost"
-  
+
   osd_info_t() : last_clean_begin(0), last_clean_end(0),
 		 up_from(0), up_thru(0), down_at(0), lost_at(0) {}
 
@@ -122,9 +119,6 @@ typedef std::tr1::shared_ptr<const OSDMap> OSDMapConstRef;
 /** OSDMap
  */
 class OSDMap {
-
-  VolMapRef volmap;
-
 public:
   static void dedup(const OSDMap *o, OSDMap *n);
   class Incremental {
@@ -156,6 +150,8 @@ public:
 
     string cluster_snapshot;
 
+
+
     int get_net_marked_out(const OSDMap *previous) const;
     int get_net_marked_down(const OSDMap *previous) const;
     int identify_osd(uuid_d u) const;
@@ -184,24 +180,82 @@ public:
     }
     virtual ~Incremental() {}
 
-    virtual OSDMap* newOSDMap(VolMapRef v) const = 0;
-  }; // class OSDMap::Incremental
+    virtual OSDMap* newOSDMap(void) const = 0;
 
-  virtual void thrash(Monitor* mon, OSDMap::Incremental& pending_inc_orig) = 0;
+
+    struct vol_inc_add {
+      uint16_t sequence;
+      VolumeRef vol;
+
+      void encode(bufferlist& bl, uint64_t features = -1) const;
+      void decode(bufferlist::iterator& bl);
+      void decode(bufferlist& bl);
+    };
+    typedef inc_add inc_update;
+
+    struct inc_remove {
+      uint16_t sequence;
+      uuid_d uuid;
+
+      void encode(bufferlist& bl, uint64_t features = -1) const;
+      void decode(bufferlist::iterator& bl);
+      void decode(bufferlist& bl);
+    };
+
+    version_t vol_version;
+    uint16_t vol_next_sequence;
+    vector<inc_add> vol_additions;
+    vector<inc_remove> vol_removals;
+    vector<inc_update> vol_updates;
+
+  public:
+
+    void include_addition(VolumeRef vol) {
+      inc_add increment;
+      increment.sequence = next_sequence++;
+      increment.vol = vol;
+      additions.push_back(increment);
+    }
+
+    void include_removal(const uuid_d &uuid) {
+      inc_remove increment;
+      increment.sequence = next_sequence++;
+      increment.uuid = uuid;
+      removals.push_back(increment);
+    }
+
+    void include_update(VolumeRef vol) {
+      inc_update increment;
+      increment.sequence = next_sequence++;
+      increment.vol = vol;
+      updates.push_back(increment);
+    }
+
+    void encode(bufferlist& bl, uint64_t features) const;
+    void decode(bufferlist::iterator& bl);
+    void decode(bufferlist& bl);
+  }; // class OSDMap::Incremental
 
 protected:
   virtual void populate_simple(CephContext *cct) = 0;
   virtual void populate_simple_from_conf(CephContext *cct) = 0;
+
 protected:
   uuid_d fsid;
-  epoch_t epoch;        // what epoch of the osd cluster descriptor is this
+  epoch_t epoch; // what epoch of the osd cluster descriptor is this
   utime_t created, modified; // epoch start time
 
   uint32_t flags;
 
-  int num_osd;         // not saved
+  int num_osd; // not saved
   int32_t max_osd;
   vector<uint8_t> osd_state;
+
+  struct {
+    map<uuid_d,VolumeRef> vol_by_uuid;
+    map<string,VolumeRef> vol_by_name;
+  } volmap;
+
 
   struct addrs_s {
     vector<std::tr1::shared_ptr<entity_addr_t> > client_addr;
@@ -231,8 +285,7 @@ protected:
   friend class MDS;
 
  public:
-  OSDMap(VolMapRef v) :
-    volmap(v),
+  OSDMap(void) :
     epoch(0),
     flags(0),
     num_osd(0), max_osd(0),
@@ -496,6 +549,13 @@ public:
   virtual void dump(Formatter *f) const = 0;
   static void generate_test_instances(list<OSDMap*>& o);
   bool check_new_blacklist_entries() const { return new_blacklist_entries; }
+
+
+  int create_volume(VolumeRef volume, uuid_d& out);
+  int add_volume(VolumeRef volume);
+  int remove_volume(uuid_d uuid, const string& name_verifier = EMPTY_STRING);
+  int rename_volume(VolumeRef v, const string& name);
+  int rename_volume(uuid_d uuid, const string& name);
 };
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)
 WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
@@ -504,6 +564,5 @@ inline ostream& operator<<(ostream& out, const OSDMap& m) {
   m.print_summary(out);
   return out;
 }
-
 
 #endif // CEPH_OSDMAP_H

@@ -1417,7 +1417,6 @@ libcommon_files = \
 	msg/DispatchQueue.cc \
 	vol/Volume.cc \
 	cohort/CohortVolume.cc \
-	vol/VolMap.cc \
 	msg/Message.cc \
 	common/RefCountedObj.cc \
 	msg/Messenger.cc \
@@ -1940,7 +1939,6 @@ noinst_HEADERS = \
         messages/MOSDFailure.h\
         messages/MOSDMarkMeDown.h\
         messages/MOSDMap.h\
-        messages/MVolMap.h\
         messages/MOSDOp.h\
         messages/MOSDOpReply.h\
         messages/MBackfillReserve.h\
@@ -1959,7 +1957,6 @@ noinst_HEADERS = \
         messages/MStatfsReply.h\
 	messages/MTimeCheck.h\
         messages/MWatchNotify.h\
-        messages/MVolMap.h\
 	messages/PaxosServiceMessage.h\
 	mon/AuthMonitor.h\
         mon/DataHealthService.h\
@@ -1986,7 +1983,6 @@ noinst_HEADERS = \
         mon/VolMonitor.h\
         vol/Volume.h\
         cohort/CohortVolume.h\
-        vol/VolMap.h\
         mon/mon_types.h\
 	mount/canonicalize.c\
 	mount/mtab.c\
