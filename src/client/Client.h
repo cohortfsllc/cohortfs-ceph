@@ -389,6 +389,7 @@ protected:
 
   // trim cache.
   void trim_cache();
+  void trim_inode(Inode *in);
   void trim_caps(MetaSession *s, int max);
   
   void dump_inode(Formatter *f, Inode *in, set<Inode*>& did, bool disconnected);

@@ -26,12 +26,12 @@ class Dentry {
   void get() { 
     assert(ref >= 0);
     ref++;
-    lsubdout(cct, mds, 15) << "dentry.get on " << this << " " << name << " now " << ref << dendl;
+    lsubdout(cct, client, 15) << "dentry.get on " << this << " " << name << " now " << ref << dendl;
   }
   void put() {
     assert(ref > 0);
     ref--;
-    lsubdout(cct, mds, 15) << "dentry.put on " << this << " " << name << " now " << ref << dendl;
+    lsubdout(cct, client, 15) << "dentry.put on " << this << " " << name << " now " << ref << dendl;
     if (ref == 0)
       delete this;
   }

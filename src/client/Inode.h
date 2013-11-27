@@ -7,6 +7,7 @@
 #include "include/types.h"
 #include "include/xlist.h"
 #include "include/filepath.h"
+#include "include/lru.h"
 
 #include "mds/mdstypes.h" // hrm
 
@@ -51,7 +52,7 @@ struct CapSnap {
 };
 
 
-class Inode : public CapObject {
+class Inode : public CapObject, public LRUObject {
  private:
   InodeCache *cache;
  public:
@@ -133,20 +134,22 @@ class Inode : public CapObject {
   void make_nosnap_relative_path(filepath& p);
 
   void get() {
-    _ref++;
-    lsubdout(cct, mds, 15) << "inode.get on " << this << " " <<  vino()
+    assert(_ref >= 0);
+    if (++_ref == 2)
+      lru_pin();
+    lsubdout(cct, client, 15) << "inode.get on " << this << " " <<  vino()
                            << " now " << _ref << dendl;
   }
-  /// private method to put a reference; see Client::put_inode()
-  int _put() {
-    _ref--;
-    lsubdout(cct, mds, 15) << "inode.put on " << this << " " << vino()
+  void put() {
+    if (--_ref == 1)
+      lru_unpin();
+    lsubdout(cct, client, 15) << "inode.put on " << this << " " << vino()
                            << " now " << _ref << dendl;
-    assert(_ref >= 0);
-    return _ref;
+    if (_ref == 0)
+      delete this;
   }
 
-  int get_num_ref() {
+  int get_num_ref() const {
     return _ref;
   }
 

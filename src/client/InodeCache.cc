@@ -63,7 +63,7 @@ void InodeCache::_async_invalidate(Inode *in, int64_t off, int64_t len,
   lock.Lock();
   if (!keep_caps)
     client->put_cap_ref(in, CEPH_CAP_FILE_CACHE);
-  client->put_inode(in);
+  in->put();
   lock.Unlock();
 }
 
@@ -110,15 +110,10 @@ void InodeCache::release(Inode *in)
 
 
 class C_PutInode : public Context {
-  Client *client;
   Inode *in;
  public:
-  C_PutInode(Client *c, Inode *i) : client(c), in(i) {
-    in->get();
-  }
-  void finish(int) {
-    client->put_inode(in);
-  }
+  C_PutInode(Inode *in) : in(in) { in->get(); }
+  void finish(int) { in->put(); }
 };
 
 bool InodeCache::flush(Inode *in, Context *onfinish)
@@ -132,9 +127,9 @@ bool InodeCache::flush(Inode *in, Context *onfinish)
     return true;
   }
 
-  if (!onfinish) {
-    onfinish = new C_PutInode(client, in);
-  }
+  if (!onfinish)
+    onfinish = new C_PutInode(in);
+
   return objectcacher->flush_set(&in->oset, onfinish);
 }
 

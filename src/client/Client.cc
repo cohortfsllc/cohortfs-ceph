@@ -237,7 +237,7 @@ void Client::tear_down_cache()
        ++it) {
     Fh *fh = it->second;
     ldout(cct, 1) << "tear_down_cache forcing close of fh " << it->first << " ino " << fh->inode->ino << dendl;
-    put_inode(fh->inode);
+    fh->inode->put();
     delete fh;
   }
   fd_map.clear();
@@ -472,9 +472,11 @@ void Client::trim_cache()
     if (lru.lru_get_size() <= lru.lru_get_max())  break;
 
     // trim!
-    LRUObject *o = lru.lru_expire();
-    if (!o)
+    Inode *in = static_cast<Inode*>(lru.lru_expire());
+    if (!in)
       break;  // done
+
+    trim_inode(in);
   }
 
   // hose root?
@@ -497,9 +499,11 @@ Inode* Client::add_update_inode(InodeStat *st, utime_t from,
   if (!result.second) { // already exists
     in = result.first->second;
     ldout(cct, 12) << "add_update_inode had " << *in << " caps " << ccap_string(st->cap.caps) << dendl;
+    lru.lru_midtouch(in);
   } else {
     result.first->second = new Inode(cct, inodecache, st->vino, &st->layout);
     in = result.first->second;
+    in->get(); // first reference for inode_hashmap
     if (!root) {
       root = in;
       cwd = root;
@@ -511,6 +515,7 @@ Inode* Client::add_update_inode(InodeStat *st, utime_t from,
     in->snapid = st->vino.snapid;
     in->mode = st->mode & S_IFMT;
     was_new = true;
+    lru.lru_insert_mid(in);
   }
 
   in->rdev = st->rdev;
@@ -657,7 +662,7 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
     if (old_dentry)
       unlink(old_dentry, stripe == old_dentry->stripe); // keep dir open if its the same dir
     dn = link(stripe, dname, in, dn);
-    put_inode(in);
+    in->put();
     if (set_offset) {
       dn->offset = dir_result_t::make_fpos(stripe->stripeid,
                                            stripe->max_offset++);
@@ -1280,11 +1285,11 @@ void Client::put_request(MetaRequest *request)
 {
   if (request->get_num_ref() == 1) {
     if (request->inode())
-      put_inode(request->take_inode());
+      request->take_inode()->put();
     if (request->old_inode())
-      put_inode(request->take_old_inode());
+      request->take_old_inode()->put();
     if (request->other_inode())
-      put_inode(request->take_other_inode());
+      request->take_other_inode()->put();
   }
   request->_put();
 }
@@ -2034,26 +2039,40 @@ void Client::handle_lease(MClientLease *m)
   m->put();
 }
 
-void Client::put_inode(Inode *in)
+void Client::trim_inode(Inode *in)
 {
-  ldout(cct, 10) << "put_inode on " << *in << dendl;
-  int left = in->_put();
-  if (left == 0) {
-    // release any caps
-    remove_all_caps(in);
+  ldout(cct, 10) << "trim_inode " << *in << dendl;
 
-    ldout(cct, 10) << "put_inode deleting " << *in << dendl;
-    bool unclean = objectcacher->release_set(&in->oset);
-    assert(!unclean);
-    if (in->snapdir_parent)
-      put_inode(in->snapdir_parent);
-    inodes.erase(in->vino());
-    in->cap_item.remove_myself();
-    in->snaprealm_item.remove_myself();
-    if (in == root)
-      root = 0;
-    delete in;
+  // close any stripes
+  for (vector<DirStripe*>::iterator s = in->stripes.begin();
+       s != in->stripes.end(); ++s) {
+    DirStripe *stripe = *s;
+    if (!stripe)
+      continue;
+    // unlink any dentries
+    for (dn_map::iterator d = stripe->dentry_map.begin();
+         d != stripe->dentry_map.end(); ++d)
+      unlink(d->second, true);
+    close_stripe(stripe);
   }
+
+  // release any caps
+  remove_all_caps(in);
+
+  bool unclean = objectcacher->release_set(&in->oset);
+  assert(!unclean);
+  if (in->snapdir_parent)
+    in->snapdir_parent->put();
+  inodes.erase(in->vino());
+  in->cap_item.remove_myself();
+  in->snaprealm_item.remove_myself();
+  if (in == root)
+    root = 0;
+
+  lru.lru_remove(in);
+
+  // drop last ref
+  in->put();
 }
 
 void Client::close_stripe(DirStripe *stripe)
@@ -2072,7 +2091,7 @@ void Client::close_stripe(DirStripe *stripe)
   stripe->snaprealm_item.remove_myself();
   delete stripe;
   *s = 0;
-  put_inode(in);               // unpin inode
+  in->put(); // unpin inode
 }
 
   /**
@@ -2187,7 +2206,7 @@ void Client::put_cap_ref(Inode *in, unsigned cap)
 	check_caps(in, false);
 	signal_cond_list(in->waitfor_commit);
 	ldout(cct, 5) << "put_cap_ref dropped last FILE_BUFFER ref on " << *in << dendl;
-	put_inode(in);
+        in->put();
       }
     }
     if (cap & CEPH_CAP_FILE_CACHE) {
@@ -3280,7 +3299,7 @@ void Client::handle_cap_flush_ack(MetaSession *session, CapObject *o,
 	sync_cond.Signal();
       }
       if (!o->caps_dirty() && o->is_inode())
-	put_inode((Inode*)o);
+        static_cast<Inode*>(o)->put();
     }
   }
 
@@ -3307,7 +3326,7 @@ void Client::handle_cap_flushsnap_ack(MetaSession *session, Inode *in, MClientCa
       capsnap->flushing_item.remove_myself();
       delete capsnap;
       in->cap_snaps.erase(follows);
-      put_inode(in);
+      in->put();
     }
   } else {
     ldout(cct, 5) << "handle_cap_flushedsnap DUP(?) mds." << mds
@@ -3546,7 +3565,7 @@ void Client::unmount()
   tick_event = 0;
 
   if (cwd)
-    put_inode(cwd);
+    cwd->put();
   cwd = NULL;
 
   // clean up any unclosed files
@@ -3579,7 +3598,7 @@ void Client::unmount()
 	in->get();
 	inodecache->release(in);
 	inodecache->flush(in);
-	put_inode(in);
+        in->put();
       }
     }
   }
@@ -3963,7 +3982,7 @@ int Client::link(const char *relexisting, const char *relpath)
     goto out_unlock;
   r = _link(in, dir, name.c_str());
  out_unlock:
-  put_inode(in);
+  in->put();
  out:
   return r;
 }
@@ -4010,9 +4029,9 @@ int Client::rename(const char *relfrom, const char *relto)
     goto out_unlock;
   todir->get();
   r = _rename(fromdir, fromname.c_str(), todir, toname.c_str());
-  put_inode(todir);
+  todir->put();
  out_unlock:
-  put_inode(fromdir);
+  fromdir->put();
  out:
   return r;
 }
@@ -4597,7 +4616,7 @@ void Client::_closedir(dir_result_t *dirp)
   ldout(cct, 10) << "_closedir(" << dirp << ")" << dendl;
   if (dirp->inode) {
     ldout(cct, 10) << "_closedir detaching inode " << dirp->inode << dendl;
-    put_inode(dirp->inode);
+    dirp->inode->put();
     dirp->inode = 0;
   }
   _readdir_drop_dirp_buffer(dirp);
@@ -4688,7 +4707,7 @@ void Client::_readdir_drop_dirp_buffer(dir_result_t *dirp)
   typedef vector<pair<string,Inode*> > entry_vec;
   entry_vec &buf = dirp->buffer;
   for (entry_vec::iterator i = buf.begin(); i != buf.end(); ++i)
-    put_inode(i->second);
+    i->second->put();
   buf.clear();
 }
 
@@ -5304,7 +5323,7 @@ int Client::_release_fh(Fh *f)
     in->snap_cap_refs--;
   }
 
-  put_inode(in);
+  in->put();
   delete f;
 
   return 0;
@@ -5721,7 +5740,7 @@ void Client::sync_write_commit(Inode *in)
     mount_cond.Signal();
   }
 
-  put_inode(in);
+  in->put();
 }
 
 int Client::write(int fd, const char *buf, loff_t size, loff_t offset) 
@@ -5962,7 +5981,7 @@ int Client::_fsync(Fh *f, bool syncdataonly)
       cond.Wait(lock);
     lock.Unlock();
     client_lock.Lock();
-    put_inode(in);
+    in->put();
     ldout(cct, 15) << "got " << r << " from flush writeback" << dendl;
   } else {
     // FIXME: this can starve
@@ -6018,7 +6037,7 @@ int Client::chdir(const char *relpath)
     return r;
   if (cwd != in) {
     in->get();
-    put_inode(cwd);
+    cwd->put();
     cwd = in;
   }
   ldout(cct, 3) << "chdir(" << relpath << ")  cwd now " << cwd->ino << dendl;
@@ -6354,7 +6373,7 @@ int Client::_ll_put(Inode *in, int num)
   in->ll_put(num);
   ldout(cct, 20) << "_ll_put " << in << " " << in->ino << " " << num << " -> " << in->ll_ref << dendl;
   if (in->ll_ref == 0) {
-    put_inode(in);
+    in->put();
     return 0;
   } else {
     return in->ll_ref;
