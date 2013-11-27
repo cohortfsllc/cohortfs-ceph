@@ -4202,8 +4202,7 @@ int Client::_getattr(Inode *in, int mask, int uid, int gid, bool force)
   return res;
 }
 
-int Client::_setattr(Inode *in, struct stat *attr, int mask, int uid, int gid,
-		     Inode **inp)
+int Client::_setattr(Inode *in, struct stat *attr, int mask, int uid, int gid)
 {
   int issued = in->caps_issued();
 
@@ -4300,7 +4299,7 @@ int Client::_setattr(Inode *in, struct stat *attr, int mask, int uid, int gid,
 
   req->regetattr_mask = mask;
 
-  int res = make_request(req, uid, gid, inp);
+  int res = make_request(req, uid, gid);
   ldout(cct, 10) << "_setattr result=" << res << dendl;
   return res;
 }
@@ -6489,12 +6488,10 @@ int Client::ll_setattr(Inode *in, struct stat *attr, int mask, int uid,
   tout(cct) << attr->st_atime << std::endl;
   tout(cct) << mask << std::endl;
 
-  Inode *target = in;
-  int res = _setattr(in, attr, mask, uid, gid, &target);
-  if (res == 0) {
-    assert(in == target);
+  int res = _setattr(in, attr, mask, uid, gid);
+  if (res == 0)
     fill_stat(in, attr);
-  }
+
   ldout(cct, 3) << "ll_setattr " << vino << " = " << res << dendl;
   return res;
 }
