@@ -994,7 +994,8 @@ void OSDMap::print_summary(ostream& out) const
 OSDMapRef OSDMap::build_simple(CephContext *cct, epoch_t e,
 			       uuid_d &f, int num_osd)
 {
-  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap());
+  VolMapRef vol(new VolMap);
+  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap(vol));
 
   ldout(cct, 10) << "build_simple on " << num_osd
 		 << " osds" << dendl;
@@ -1017,7 +1018,8 @@ OSDMapRef OSDMap::build_simple(CephContext *cct, epoch_t e,
 OSDMapRef OSDMap::build_simple_from_conf(CephContext *cct, epoch_t e,
 					 uuid_d &f)
 {
-  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap());
+  VolMapRef vol(new VolMap);
+  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap(vol));
 
   ldout(cct, 10) << "build_simple_from_conf" << dendl;
   constructing->epoch = e;

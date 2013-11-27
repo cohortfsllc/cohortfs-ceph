@@ -32,6 +32,8 @@
 #include <errno.h>
 #include <deque>
 
+#include "cohort/CohortPlaceSystem.h"
+
 #define dout_subsys ceph_subsys_
 
 static void global_init_set_globals(CephContext *cct)
@@ -55,6 +57,30 @@ static const char* c_str_or_null(const std::string &str)
     return NULL;
   return str.c_str();
 }
+
+const CohortOSDMonitorPlaceSystem *theCohortMonPlaceSystem = NULL;
+const CohortOSDPlaceSystem *theCohortOSDPlaceSystem = NULL;
+const CohortOSDMapPlaceSystem *theCohortOSDMapPlaceSystem = NULL;
+
+void init_place_systems(void)
+{
+  if (!theCohortMonPlaceSystem) {
+    theCohortMonPlaceSystem = new CohortOSDMonitorPlaceSystem(
+      CohortPlaceSystem::systemName,
+      CohortPlaceSystem::systemIdentifier);
+  }
+  if (!theCohortOSDPlaceSystem) {
+    theCohortOSDPlaceSystem = new CohortOSDPlaceSystem(
+      CohortPlaceSystem::systemName,
+      CohortPlaceSystem::systemIdentifier);
+  }
+  if (!theCohortOSDMapPlaceSystem) {
+    theCohortOSDMapPlaceSystem = new CohortOSDMapPlaceSystem(
+      CohortPlaceSystem::systemName,
+      CohortPlaceSystem::systemIdentifier);
+  }
+}
+
 
 void global_init(std::vector < const char * > *alt_def_args, std::vector < const char* >& args,
 	       uint32_t module_type, code_environment_t code_env, int flags)
@@ -141,6 +167,7 @@ void global_init(std::vector < const char * > *alt_def_args, std::vector < const
 
   if (code_env == CODE_ENVIRONMENT_DAEMON && !(flags & CINIT_FLAG_NO_DAEMON_ACTIONS))
     output_ceph_version();
+  init_place_systems();
 }
 
 void global_print_banner(void)

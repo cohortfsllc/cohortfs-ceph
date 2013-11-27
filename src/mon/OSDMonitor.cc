@@ -64,9 +64,10 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, shared_ptr<OSDMap> os
 
 void OSDMonitor::create_initial()
 {
+  VolMapRef vol(new VolMap);
   dout(10) << "create_initial for " << mon->monmap->fsid << dendl;
 
-  auto_ptr<OSDMap> newmap(OSDMapPlaceSystem::getSystem().newOSDMap());
+  auto_ptr<OSDMap> newmap(OSDMapPlaceSystem::getSystem().newOSDMap(vol));
 
   bufferlist bl;
 

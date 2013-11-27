@@ -4107,6 +4107,7 @@ int Monitor::write_fsid(MonitorDBStore::Transaction &t)
 int Monitor::mkfs(bufferlist& osdmapbl)
 {
   MonitorDBStore::Transaction t;
+  VolMapRef vol(new VolMap());
 
   // verify cluster fsid
   int r = check_fsid();
@@ -4131,7 +4132,7 @@ int Monitor::mkfs(bufferlist& osdmapbl)
   if (osdmapbl.length()) {
     // make sure it's a valid osdmap
     try {
-      OSDMap* om = OSDMapPlaceSystem::getSystem().newOSDMap();;
+      OSDMap* om = OSDMapPlaceSystem::getSystem().newOSDMap(vol);
       om->decode(osdmapbl);
     }
     catch (buffer::error& e) {

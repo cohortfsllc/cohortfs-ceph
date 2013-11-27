@@ -35,7 +35,7 @@ public:
     OSDMapPlaceSystem(name, id)
   {}
 
-  virtual CohortOSDMap* newOSDMap(VolMapRef v) const {
+  virtual OSDMap* newOSDMap(VolMapRef v) const {
     return new CohortOSDMap(v);
   }
 
@@ -57,6 +57,7 @@ public:
 			    Messenger *hb_back_server, MonClient *mc,
 			    const std::string &dev,
 			    const std::string &jdev) const {
+
     return new CohortOSD(id, internal, external, hb_client, hb_front_server,
 			 hb_back_server, mc, dev, jdev);
   }

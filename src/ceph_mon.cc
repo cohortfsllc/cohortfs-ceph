@@ -40,22 +40,12 @@ using namespace std;
 
 #include "global/global_init.h"
 #include "global/signal_handler.h"
-#include "cohort/CohortPlaceSystem.h"
 
 #include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mon
 
 Monitor *mon = NULL;
-
-const CohortOSDMonitorPlaceSystem *theCohortPlaceSystem = NULL;
-
-void init_place_systems(void)
-{
-  theCohortPlaceSystem = new CohortOSDMonitorPlaceSystem(
-    CohortPlaceSystem::systemName,
-    CohortPlaceSystem::systemIdentifier);
-}
 
 void handle_mon_signal(int signum)
 {
@@ -127,8 +117,6 @@ int main(int argc, const char **argv)
   bool mkfs = false;
   bool compact = false;
   std::string osdmapfn, inject_monmap, extract_monmap;
-
-  init_place_systems();
 
   vector<const char*> args;
   argv_to_vec(argc, argv, args);

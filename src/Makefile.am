@@ -1332,9 +1332,18 @@ libcommon_la_LDFLAGS = -lrt
 noinst_LTLIBRARIES += libcommon.la
 
 libglobal_la_SOURCES = \
+	osd/osd_types.cc \
+	osd/PlaceSystem.cc \
+	cohort/CohortPlaceSystem.cc \
+	cohort/CohortOSD.cc \
+	cohort/CohortOSDMap.cc \
+	cohort/CohortOSDMap.cc \
+	mon/CohortOSDMonitor.cc \
 	global/global_context.cc \
 	global/global_init.cc \
 	global/pidfile.cc \
+	osd/OSD.cc \
+	cohort/CohortOSD.cc \
 	global/signal_handler.cc
 libglobal_la_CFLAGS= ${CRYPTO_CFLAGS} ${AM_CFLAGS}
 libglobal_la_CXXFLAGS= ${AM_CXXFLAGS}
