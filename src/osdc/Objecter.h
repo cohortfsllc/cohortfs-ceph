@@ -668,7 +668,6 @@ class Objecter {
   Messenger *messenger;
   MonClient *monc;
   std::tr1::shared_ptr<OSDMap> osdmap;
-  VolMapRef volmap;
   CephContext *cct;
 
   bool initialized;

@@ -85,7 +85,7 @@ bool CohortOSD::op_must_wait_for_map(OpRequestRef op)
   switch (op->request->get_type()) {
   case CEPH_MSG_OSD_OP:
     return !have_same_or_newer_map(
-      static_cast<MOSDOp*>(op->request)->get_osdmap_epoch());
+      static_cast<MOSDOp*>(op->request)->get_epoch());
 
   case MSG_OSD_SUBOP:
     return !have_same_or_newer_map(
@@ -93,7 +93,7 @@ bool CohortOSD::op_must_wait_for_map(OpRequestRef op)
 
   case MSG_OSD_SUBOPREPLY:
     return !have_same_or_newer_map(
-      static_cast<MOSDSubOpReply*>(op->request)->osdmap_epoch);
+      static_cast<MOSDSubOpReply*>(op->request)->epoch);
   }
   assert(0);
   return false;
@@ -110,8 +110,8 @@ void CohortOSD::handle_op_sub(OpRequestRef op)
 
   if (!vol) {
     /* No such volume */
-    if (m->get_volmap_epoch() > volmap->get_epoch()) {
-      /* Should wait for new volmap */
+    if (m->get_epoch() > osdmap->get_epoch()) {
+      /* Should wait for new map */
       return;
     }
     service->reply_op_error(op, -ENXIO);
@@ -133,8 +133,7 @@ bool CohortOSD::handle_sub_op_reply_sub(OpRequestRef op)
   assert(m->get_source().is_osd());
 
   // require same or newer map
-  if (!require_same_or_newer_map(op, m->get_osdmap_epoch(),
-				 m->get_volmap_epoch())) {
+  if (!require_same_or_newer_map(op, m->get_epoch())) {
     return false;
   }
 

@@ -18,25 +18,22 @@
 #include "include/utime.h"
 
 #ifdef MDS
-#define PAXOS_VOLMAP     0 /* Before OSD */
-#define PAXOS_MDSMAP     1
-#define PAXOS_OSDMAP     2
-#define PAXOS_LOG        3
-#define PAXOS_MONMAP     4
-#define PAXOS_AUTH       5
-#define PAXOS_NUM        6
-#else // !MDS
-#define PAXOS_VOLMAP     0 /* Before OSD */
+#define PAXOS_MDSMAP     0
 #define PAXOS_OSDMAP     1
 #define PAXOS_LOG        2
 #define PAXOS_MONMAP     3
 #define PAXOS_AUTH       4
 #define PAXOS_NUM        5
+#else // !MDS
+#define PAXOS_OSDMAP     0
+#define PAXOS_LOG        1
+#define PAXOS_MONMAP     2
+#define PAXOS_AUTH       3
+#define PAXOS_NUM        4
 #endif // !MDS
 
 inline const char *get_paxos_name(int p) {
   switch (p) {
-  case PAXOS_VOLMAP: return "volmap";
 #ifdef MDS
   case PAXOS_MDSMAP: return "mdsmap";
 #endif

@@ -55,8 +55,8 @@ public:
 
   CohortOSDService(CohortOSD *osd);
 
-  virtual OSDMap* newOSDMap(VolMapRef v) const {
-    return new CohortOSDMap(v);
+  virtual OSDMap* newOSDMap() const {
+    return new CohortOSDMap();
   }
   CohortOSDMapRef get_map(epoch_t e) {
     return static_pointer_cast<const CohortOSDMap>(get_map(e));
@@ -72,7 +72,7 @@ typedef shared_ptr<CohortOSDService> CohortOSDServiceRef;
 
 class CohortOSD : public OSD {
   OSDVolRef get_volume(const uuid_d volid) {
-    return dynamic_pointer_cast<OSDVol>(volmap->get(volid));
+    return OSDVolRef();
   }
 private:
 
@@ -229,8 +229,8 @@ public:
 
   friend class PGOSDService;
 
-  OSDMap* newOSDMap(VolMapRef v) const {
-    return new CohortOSDMap(v);
+  OSDMap* newOSDMap() const {
+    return new CohortOSDMap();
   }
 
   void check_replay_queue();

@@ -25,10 +25,6 @@ using namespace std;
 #include "PaxosService.h"
 #include "Session.h"
 
-#include "vol/VolMap.h"
-#include "messages/MVolMap.h"
-
-
 class MMonCommand;
 
 

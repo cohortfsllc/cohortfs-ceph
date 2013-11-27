@@ -53,7 +53,6 @@
 #include "messages/MOSDOpReply.h"
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDMap.h"
-#include "messages/MVolMap.h"
 #include "messages/MBackfillReserve.h"
 #include "messages/MRecoveryReserve.h"
 #include "messages/MOSDAlive.h"
@@ -1694,8 +1693,7 @@ void OSD::handle_osd_ping(MOSDPing *m)
   case MOSDPing::YOU_DIED:
     dout(10) << "handle_osd_ping " << m->get_source_inst() << " says i am down in " << m->map_epoch
 	     << dendl;
-    if (monc->sub_want("osdmap", m->map_epoch, CEPH_SUBSCRIBE_ONETIME) ||
-	monc->sub_want("volmap", volmap->get_epoch(), 0))
+    if (monc->sub_want("osdmap", m->map_epoch, CEPH_SUBSCRIBE_ONETIME))
       monc->renew_subs();
     break;
   }
@@ -1760,7 +1758,6 @@ void OSD::heartbeat()
       last_mon_heartbeat = now;
       dout(10) << "i have no heartbeat peers; checking mon for new map" << dendl;
       monc->sub_want("osdmap", osdmap->get_epoch() + 1, CEPH_SUBSCRIBE_ONETIME);
-      monc->sub_want("volmap", volmap->get_epoch() + 1, 0);
       monc->renew_subs();
     }
   }
@@ -2782,11 +2779,6 @@ void OSD::_dispatch(Message *m)
     handle_osd_map(static_cast<MOSDMap*>(m));
     break;
 
-    // Volume Map
-  case CEPH_MSG_VOL_MAP:
-    handle_vol_map(static_cast<MVolMap*>(m));
-    break;
-
     // osd
   case CEPH_MSG_SHUTDOWN:
     session = static_cast<Session *>(m->get_connection()->get_priv());
@@ -2940,7 +2932,6 @@ void OSD::wait_for_new_map(OpRequestRef op)
   // ask?
   if (waiting_for_osdmap.empty()) {
     monc->sub_want("osdmap", osdmap->get_epoch() + 1, CEPH_SUBSCRIBE_ONETIME);
-    monc->sub_want("volmap", volmap->get_epoch() + 1, 0);
     monc->renew_subs();
   }
 
@@ -3039,7 +3030,6 @@ void OSD::handle_osd_map(MOSDMap *m)
     if ((m->oldest_map < first && osdmap->get_epoch() == 0) ||
 	m->oldest_map <= osdmap->get_epoch()) {
       monc->sub_want("osdmap", osdmap->get_epoch()+1, CEPH_SUBSCRIBE_ONETIME);
-      monc->sub_want("volmap", volmap->get_epoch()+1, 0);
       monc->renew_subs();
       m->put();
       return;
@@ -3057,7 +3047,7 @@ void OSD::handle_osd_map(MOSDMap *m)
     p = m->maps.find(e);
     if (p != m->maps.end()) {
       dout(10) << "handle_osd_map  got full map for epoch " << e << dendl;
-      OSDMap *o = newOSDMap(volmap);
+      OSDMap *o = newOSDMap();
       bufferlist& bl = p->second;
 
       o->decode(bl);
@@ -3077,7 +3067,7 @@ void OSD::handle_osd_map(MOSDMap *m)
       t.write(coll_t::META_COLL, oid, 0, bl.length(), bl);
       pin_map_inc_bl(e, bl);
 
-      OSDMap *o = newOSDMap(volmap);
+      OSDMap *o = newOSDMap();
       if (e > 1) {
 	bufferlist obl;
 	OSDMapConstRef prev = get_map(e - 1);
@@ -3275,7 +3265,6 @@ void OSD::handle_osd_map(MOSDMap *m)
   if (m->newest_map && m->newest_map > last) {
     dout(10) << " msg say newest map is " << m->newest_map << ", requesting more" << dendl;
     monc->sub_want("osdmap", osdmap->get_epoch()+1, CEPH_SUBSCRIBE_ONETIME);
-    monc->sub_want("volmap", volmap->get_epoch()+1, 0);
     monc->renew_subs();
   }
   else if (is_booting()) {
@@ -3288,33 +3277,6 @@ void OSD::handle_osd_map(MOSDMap *m)
     shutdown();
 
   m->put();
-}
-
-void OSD::handle_vol_map(MVolMap *m)
-{
-  assert(osd_lock.is_locked());
-
-  Session *session = static_cast<Session *>(m->get_connection()->get_priv());
-  /* We probably won't have other OSDs be sending us map updates since
-     those only change in response to a monitor command/activity. */
-  if (session && !(session->entity_name.is_mon())) {
-    /* This person has no business telling us about the volume map. */
-    m->put();
-    session->put();
-    return;
-  }
-  if (session)
-    session->put();
-
-  epoch_t epoch = m->epoch;
-
-  if (epoch <= volmap->get_epoch()) {
-    m->put();
-    return;
-  }
-
-  volmap->decode(m->encoded);
-  return;
 }
 
 void OSD::check_osdmap_features()
@@ -3385,7 +3347,6 @@ void OSD::activate_map()
   if (osdmap->test_flag(CEPH_OSDMAP_FULL)) {
     dout(10) << " osdmap flagged full, doing onetime osdmap subscribe" << dendl;
     monc->sub_want("osdmap", osdmap->get_epoch() + 1, CEPH_SUBSCRIBE_ONETIME);
-    monc->sub_want("volmap", volmap->get_epoch() + 1, 0);
     monc->renew_subs();
   }
 
@@ -3546,7 +3507,7 @@ OSDMapConstRef OSDService::get_map(epoch_t epoch)
     return retval;
   }
 
-  OSDMap *map = newOSDMap(volmap);
+  OSDMap *map = newOSDMap();
   if (epoch > 0) {
     dout(20) << "get_map " << epoch << " - loading and decoding "
 	     << map << dendl;
@@ -3585,13 +3546,9 @@ bool OSD::require_osd_peer(OpRequestRef op)
  * the source is the pg primary.
  */
 bool OSD::require_same_or_newer_map(OpRequestRef op,
-				    epoch_t osdmap_epoch,
-				    epoch_t volmap_epoch)
+				    epoch_t osdmap_epoch)
 {
   Message *m = op->request;
-  dout(15) << "require_same_or_newer_maps (" << osdmap_epoch
-	   << ", " << volmap_epoch << ") (i am (" << volmap->get_epoch()
-	   << ", " << volmap->get_epoch() << ")) " << m << dendl;
 
   assert(osd_lock.is_locked());
 
@@ -3599,14 +3556,6 @@ bool OSD::require_same_or_newer_map(OpRequestRef op,
   if (osdmap_epoch > osdmap->get_epoch()) {
     dout(7) << "waiting for newer map epoch " << osdmap_epoch << " > my "
 	    << osdmap->get_epoch() << " with " << m << dendl;
-    wait_for_new_map(op);
-    return false;
-  }
-
-  // do they have a newer map?
-  if (volmap_epoch > volmap->get_epoch()) {
-    dout(7) << "waiting for newer map epoch " << volmap_epoch << " > my "
-	    << volmap->get_epoch() << " with " << m << dendl;
     wait_for_new_map(op);
     return false;
   }
@@ -3652,8 +3601,7 @@ void OSDService::reply_op_error(OpRequestRef op, int err, eversion_t v)
   int flags;
   flags = m->get_flags() & (CEPH_OSD_FLAG_ACK|CEPH_OSD_FLAG_ONDISK);
 
-  MOSDOpReply *reply = new MOSDOpReply(m, err, osdmap->get_epoch(),
-				       volmap->get_epoch(), flags);
+  MOSDOpReply *reply = new MOSDOpReply(m, err, osdmap->get_epoch(), flags);
   Messenger *msgr = client_messenger;
   reply->set_version(v);
   if (m->get_source().is_osd())
@@ -3674,8 +3622,7 @@ void OSD::handle_op(OpRequestRef op)
   m->clear_payload();
 
   // require same or newer map
-  if (!require_same_or_newer_map(op, m->get_osdmap_epoch(),
-				 m->get_volmap_epoch()))
+  if (!require_same_or_newer_map(op, m->get_epoch()))
     return;
 
   // object name too long?
@@ -3694,7 +3641,7 @@ void OSD::handle_op(OpRequestRef op)
   }
   // share our map with sender, if they're old
   _share_map_incoming(m->get_source(), m->get_connection().get(),
-		      m->get_osdmap_epoch(),
+		      m->get_epoch(),
 		      static_cast<Session *>(m->get_connection()->get_priv()));
 
   if (op->rmw_flags == 0) {

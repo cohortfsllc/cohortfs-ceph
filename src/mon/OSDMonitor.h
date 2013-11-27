@@ -256,7 +256,7 @@ protected:
 
   virtual ~OSDMonitor() { };
 
-  virtual OSDMap* newOSDMap(VolMapRef v) const = 0;
+  virtual OSDMap* newOSDMap(void) const = 0;
 
   void tick();  // check state, take actions
   virtual void tick_sub(bool& do_propose) = 0;

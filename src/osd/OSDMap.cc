@@ -256,7 +256,7 @@ void OSDMap::Incremental::dump(Formatter *f) const
 
   if (fullmap.length()) {
     f->open_object_section("full_map");
-    OSDMap* full = newOSDMap(VolMapRef());
+    OSDMap* full = newOSDMap();
     bufferlist fbl = fullmap;  // kludge around constness.
     bufferlist::iterator p = fbl.begin();
     full->decode(p);
@@ -994,8 +994,7 @@ void OSDMap::print_summary(ostream& out) const
 OSDMapRef OSDMap::build_simple(CephContext *cct, epoch_t e,
 			       uuid_d &f, int num_osd)
 {
-  VolMapRef vol(new VolMap);
-  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap(vol));
+  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap());
 
   ldout(cct, 10) << "build_simple on " << num_osd
 		 << " osds" << dendl;
@@ -1018,8 +1017,7 @@ OSDMapRef OSDMap::build_simple(CephContext *cct, epoch_t e,
 OSDMapRef OSDMap::build_simple_from_conf(CephContext *cct, epoch_t e,
 					 uuid_d &f)
 {
-  VolMapRef vol(new VolMap);
-  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap(vol));
+  OSDMapRef constructing(OSDMapPlaceSystem::getSystem().newOSDMap());
 
   ldout(cct, 10) << "build_simple_from_conf" << dendl;
   constructing->epoch = e;

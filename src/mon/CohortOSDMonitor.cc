@@ -3,7 +3,6 @@
 #include "messages/MRemoveSnaps.h"
 #include "CohortOSDMonitor.h"
 #include "cohort/CohortPlaceSystem.h"
-#include "VolMonitor.h"
 
 void CohortOSDMonitor::dump_info_sub(Formatter *f)
 {
@@ -14,7 +13,7 @@ CohortOSDMonitor::CohortOSDMonitor(Monitor *mn, Paxos *p,
 				   const string& service_name)
   : OSDMonitor(mn, p, service_name)
 {
-  osdmap.reset(newOSDMap(mon->volmon()->volmap));
+  osdmap.reset(newOSDMap());
   pending_inc.reset(new CohortOSDMap::Incremental());
 }
 

@@ -78,7 +78,6 @@
 #include "common/cmdparse.h"
 #include "include/assert.h"
 
-#include "VolMonitor.h"
 #include "osd/PlaceSystem.h"
 
 #define dout_subsys ceph_subsys_mon
@@ -170,9 +169,6 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, paxos, "mdsmap");
 #endif
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, paxos, "monmap");
-  /* Since the OSDMap depends on the volume map, we have to start this
-     first. Though I'm thinking we might want to merge the two. - AE */
-  paxos_service[PAXOS_VOLMAP] = new VolMonitor(this, paxos, "volmap");
   paxos_service[PAXOS_OSDMAP]
     = OSDMonitorPlaceSystem::getSystem().newOSDMonitor(this, paxos, "osdmap");
   paxos_service[PAXOS_LOG] = new LogMonitor(this, paxos, "logm");
@@ -190,8 +186,6 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
 
 PaxosService *Monitor::get_paxos_service_by_name(const string& name)
 {
-  if (name == "volmap")
-    return paxos_service[PAXOS_VOLMAP];
 #ifdef MDS
   if (name == "mdsmap")
     return paxos_service[PAXOS_MDSMAP];
@@ -200,8 +194,6 @@ PaxosService *Monitor::get_paxos_service_by_name(const string& name)
     return paxos_service[PAXOS_MONMAP];
   if (name == "osdmap")
     return paxos_service[PAXOS_OSDMAP];
-  if (name == "volmap")
-    return paxos_service[PAXOS_VOLMAP];
   if (name == "logm")
     return paxos_service[PAXOS_LOG];
   if (name == "auth")
@@ -2636,10 +2628,6 @@ void Monitor::handle_command(MMonCommand *m)
     return;
   }
 
-  if (module == "vol") {
-    volmon()->dispatch(m);
-    return;
-  }
   if (module == "mon") {
     monmon()->dispatch(m);
     return;
@@ -3865,9 +3853,6 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
       check_sub(s->sub_map["monmap"]);
     } else if (logmon()->sub_name_to_id(p->first) >= 0) {
       logmon()->check_sub(s->sub_map[p->first]);
-    } else if (p->first == "volmap") {
-      /* Todo: Allow subscribing to subsets of the volume map. */
-      volmon()->check_sub(s->sub_map["volmap"]);
     }
   }
 
@@ -4107,7 +4092,6 @@ int Monitor::write_fsid(MonitorDBStore::Transaction &t)
 int Monitor::mkfs(bufferlist& osdmapbl)
 {
   MonitorDBStore::Transaction t;
-  VolMapRef vol(new VolMap());
 
   // verify cluster fsid
   int r = check_fsid();
@@ -4132,7 +4116,7 @@ int Monitor::mkfs(bufferlist& osdmapbl)
   if (osdmapbl.length()) {
     // make sure it's a valid osdmap
     try {
-      OSDMap* om = OSDMapPlaceSystem::getSystem().newOSDMap(vol);
+      OSDMap* om = OSDMapPlaceSystem::getSystem().newOSDMap();
       om->decode(osdmapbl);
     }
     catch (buffer::error& e) {

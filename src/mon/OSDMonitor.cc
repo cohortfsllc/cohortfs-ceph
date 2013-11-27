@@ -49,7 +49,6 @@
 #include "include/util.h"
 #include "common/cmdparse.h"
 #include "include/str_list.h"
-#include "VolMonitor.h"
 
 using namespace std::tr1;
 
@@ -64,10 +63,9 @@ static ostream& _prefix(std::ostream *_dout, Monitor *mon, shared_ptr<OSDMap> os
 
 void OSDMonitor::create_initial()
 {
-  VolMapRef vol(new VolMap);
   dout(10) << "create_initial for " << mon->monmap->fsid << dendl;
 
-  auto_ptr<OSDMap> newmap(OSDMapPlaceSystem::getSystem().newOSDMap(vol));
+  auto_ptr<OSDMap> newmap(OSDMapPlaceSystem::getSystem().newOSDMap());
 
   bufferlist bl;
 
@@ -245,8 +243,6 @@ bool OSDMonitor::thrash()
     dout(5) << "thrash_map osd." << o << " out" << dendl;
     pending_inc->new_weight[o] = CEPH_OSD_OUT;
   }
-
-  osdmap->thrash(mon, *pending_inc);
 
   return true;
 }
@@ -1619,7 +1615,7 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
       }
       assert(err == 0);
       assert(b.length());
-      p = newOSDMap(mon->volmon()->volmap);
+      p = newOSDMap();
       p->decode(b);
     }
     if (prefix == "osd dump") {

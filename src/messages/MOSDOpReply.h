@@ -90,8 +90,7 @@ public:
 public:
   MOSDOpReply()
     : Message(CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION) { }
-  MOSDOpReply(MOSDOp *req, int r, epoch_t o, epoch_t v,
-	      int acktype)
+  MOSDOpReply(MOSDOp *req, int r, epoch_t o, int acktype)
     : Message(CEPH_MSG_OSD_OPREPLY, HEAD_VERSION, COMPAT_VERSION) {
     set_tid(req->get_tid());
     ops = req->ops;
@@ -100,7 +99,6 @@ public:
       (req->flags & ~(CEPH_OSD_FLAG_ONDISK|CEPH_OSD_FLAG_ONNVRAM|CEPH_OSD_FLAG_ACK)) | acktype;
     oid = req->oid;
     osdmap_epoch = o;
-    volmap_epoch = v;
     reassert_version = req->reassert_version;
     retry_attempt = req->get_retry_attempt();
 

@@ -39,6 +39,7 @@
 #include <set>
 #include <map>
 #include <tr1/memory>
+#include "vol/Volume.h"
 
 using namespace std;
 
@@ -191,9 +192,8 @@ public:
       void decode(bufferlist::iterator& bl);
       void decode(bufferlist& bl);
     };
-    typedef inc_add inc_update;
 
-    struct inc_remove {
+    struct vol_inc_remove {
       uint16_t sequence;
       uuid_d uuid;
 
@@ -204,36 +204,24 @@ public:
 
     version_t vol_version;
     uint16_t vol_next_sequence;
-    vector<inc_add> vol_additions;
-    vector<inc_remove> vol_removals;
-    vector<inc_update> vol_updates;
+    vector<vol_inc_add> vol_additions;
+    vector<vol_inc_remove> vol_removals;
 
   public:
 
     void include_addition(VolumeRef vol) {
-      inc_add increment;
-      increment.sequence = next_sequence++;
+      vol_inc_add increment;
+      increment.sequence = vol_next_sequence++;
       increment.vol = vol;
-      additions.push_back(increment);
+      vol_additions.push_back(increment);
     }
 
     void include_removal(const uuid_d &uuid) {
-      inc_remove increment;
-      increment.sequence = next_sequence++;
+      vol_inc_remove increment;
+      increment.sequence = vol_next_sequence++;
       increment.uuid = uuid;
-      removals.push_back(increment);
+      vol_removals.push_back(increment);
     }
-
-    void include_update(VolumeRef vol) {
-      inc_update increment;
-      increment.sequence = next_sequence++;
-      increment.vol = vol;
-      updates.push_back(increment);
-    }
-
-    void encode(bufferlist& bl, uint64_t features) const;
-    void decode(bufferlist::iterator& bl);
-    void decode(bufferlist& bl);
   }; // class OSDMap::Incremental
 
 protected:
@@ -553,7 +541,7 @@ public:
 
   int create_volume(VolumeRef volume, uuid_d& out);
   int add_volume(VolumeRef volume);
-  int remove_volume(uuid_d uuid, const string& name_verifier = EMPTY_STRING);
+  int remove_volume(uuid_d uuid);
   int rename_volume(VolumeRef v, const string& name);
   int rename_volume(uuid_d uuid, const string& name);
 };

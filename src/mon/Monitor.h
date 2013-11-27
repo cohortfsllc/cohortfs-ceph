@@ -1241,10 +1241,6 @@ public:
     return (class LogMonitor*) paxos_service[PAXOS_LOG];
   }
 
-  class VolMonitor *volmon() {
-    return (class VolMonitor *)paxos_service[PAXOS_VOLMAP];
-  }
-
   friend class Paxos;
   friend class OSDMonitor;
 #ifdef MDS

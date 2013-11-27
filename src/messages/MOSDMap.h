@@ -86,7 +86,6 @@ public:
     }
   }
   void encode_payload(uint64_t features) {
-    VolMapRef vol(new VolMap);
     ::encode(fsid, payload);
     if ((features & CEPH_FEATURE_PGID64) == 0 ||
 	(features & CEPH_FEATURE_PGPOOL3) == 0 ||
@@ -113,7 +112,7 @@ public:
 	p->second.clear();
 	if (inc->fullmap.length()) {
 	  // embedded full map?
-	  auto_ptr<OSDMap> m(placeSystem.newOSDMap(vol));
+	  auto_ptr<OSDMap> m(placeSystem.newOSDMap());
 	  m->decode(inc->fullmap);
 	  inc->fullmap.clear();
 	  m->encode(inc->fullmap, features);
@@ -123,7 +122,7 @@ public:
       for (map<epoch_t,bufferlist>::iterator p = maps.begin();
 	   p != maps.end();
 	   ++p) {
-	auto_ptr<OSDMap> m(placeSystem.newOSDMap(vol));
+	auto_ptr<OSDMap> m(placeSystem.newOSDMap());
 	m->decode(p->second);
 	p->second.clear();
 	m->encode(p->second, features);

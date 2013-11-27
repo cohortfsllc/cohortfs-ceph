@@ -37,8 +37,7 @@ class MOSDOp : public Message {
 
 private:
   uint32_t client_inc;
-  __u32 osdmap_epoch;
-  __u32 volmap_epoch;
+  __u32 epoch;
   __u32 flags;
   utime_t mtime;
   eversion_t reassert_version;
@@ -79,25 +78,21 @@ public:
 
   uuid_d get_volume() { return oid.volume; }
 
-  epoch_t get_osdmap_epoch() { return osdmap_epoch; }
-
-  epoch_t get_volmap_epoch() { return volmap_epoch; }
+  epoch_t get_epoch() { return epoch; }
 
   eversion_t get_version() { return reassert_version; }
-  
+
   utime_t get_mtime() { return mtime; }
 
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
   MOSDOp(int inc, long tid,
 	 object_t& _oid,
-	 epoch_t _osdmap_epoch,
-	 epoch_t _volmap_epoch,
+	 epoch_t _epoch,
 	 int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       client_inc(inc),
-      osdmap_epoch(_osdmap_epoch),
-      volmap_epoch(_volmap_epoch),
+      epoch(_epoch),
       flags(_flags), retry_attempt(-1),
       oid(_oid) {
     set_tid(tid);
@@ -211,8 +206,7 @@ struct ceph_osd_request_head {
       __u32 su = 0;
       ::encode(su, payload);
 
-      ::encode(osdmap_epoch, payload);
-      ::encode(volmap_epoch, payload);
+      ::encode(epoch, payload);
       ::encode(flags, payload);
       ::encode(mtime, payload);
       ::encode(reassert_version, payload);
@@ -234,8 +228,7 @@ struct ceph_osd_request_head {
       ::encode_nohead(snaps, payload);
     } else {
       ::encode(client_inc, payload);
-      ::encode(osdmap_epoch, payload);
-      ::encode(volmap_epoch, payload);
+      ::encode(epoch, payload);
       ::encode(flags, payload);
       ::encode(mtime, payload);
       ::encode(reassert_version, payload);
@@ -265,8 +258,7 @@ struct ceph_osd_request_head {
       __u32 su;
       ::decode(su, p);
 
-      ::decode(osdmap_epoch, p);
-      ::decode(volmap_epoch, p);
+      ::decode(epoch, p);
       ::decode(flags, p);
       ::decode(mtime, p);
       ::decode(reassert_version, p);
@@ -292,8 +284,7 @@ struct ceph_osd_request_head {
     } else {
       // new decode
       ::decode(client_inc, p);
-      ::decode(osdmap_epoch, p);
-      ::decode(volmap_epoch, p);
+      ::decode(epoch, p);
       ::decode(flags, p);
       ::decode(mtime, p);
       ::decode(reassert_version, p);
@@ -351,8 +342,7 @@ struct ceph_osd_request_head {
       out << " localize_reads";
     if (get_flags() & CEPH_OSD_FLAG_RWORDERED)
       out << " rwordered";
-    out << " o" << osdmap_epoch;
-    out << " v" << volmap_epoch;
+    out << " e" << epoch;
     out << ")";
   }
 };

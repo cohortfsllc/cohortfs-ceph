@@ -1485,7 +1485,6 @@ libmon_a_SOURCES = \
 	mon/OSDMonitor.cc \
 	mon/CohortOSDMonitor.cc \
 	mon/MonmapMonitor.cc \
-	mon/VolMonitor.cc \
 	mon/LogMonitor.cc \
 	mon/AuthMonitor.cc \
 	mon/Elector.cc \
@@ -1980,7 +1979,6 @@ noinst_HEADERS = \
         mon/PaxosService.h\
 	mon/QuorumService.h\
         mon/Session.h\
-        mon/VolMonitor.h\
         vol/Volume.h\
         cohort/CohortVolume.h\
         mon/mon_types.h\
