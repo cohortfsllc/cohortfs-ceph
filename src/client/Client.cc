@@ -1068,6 +1068,7 @@ void Client::dump_mds_requests(Formatter *f)
   }
 }
 
+// returns a reference to **ptarget on success
 int Client::verify_reply_trace(int r,
 			       MetaRequest *request, MClientReply *reply,
 			       Inode **ptarget, bool *pcreated,
@@ -1094,10 +1095,12 @@ int Client::verify_reply_trace(int r,
 
   if (request->target) {
     *ptarget = request->target;
+    request->target->get();
     ldout(cct, 20) << "make_request target is " << *request->target << dendl;
   } else {
     if (got_created_ino && (p = inodes.find(vinodeno_t(created_ino, CEPH_NOSNAP))) != inodes.end()) {
-      (*ptarget) = p->second;
+      *ptarget = p->second;
+      p->second->get();
       ldout(cct, 20) << "make_request created, target is " << **ptarget << dendl;
     } else {
       // we got a traceless reply, and need to look up what we just
@@ -1126,15 +1129,15 @@ int Client::verify_reply_trace(int r,
 	target = in;
       }
       if (r >= 0) {
-	if (ptarget)
-	  *ptarget = target;
-
 	// verify ino returned in reply and trace_dist are the same
 	if (got_created_ino &&
 	    created_ino.val != target->ino.val) {
 	  ldout(cct, 5) << "create got ino " << created_ino << " but then failed on lookup; EINTR?" << dendl;
-	  r = -EINTR;
+	  return -EINTR;
 	}
+
+        *ptarget = target;
+        target->get();
       }
     }
   }
