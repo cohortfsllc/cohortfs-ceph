@@ -2091,7 +2091,6 @@ void Client::close_stripe(DirStripe *stripe)
   stripe->snaprealm_item.remove_myself();
   delete stripe;
   *s = 0;
-  in->put(); // unpin inode
 }
 
   /**
@@ -7223,20 +7222,8 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
     DirStripe *stripe = dir->stripes[dir->pick_stripe(name)];
     if (stripe) {
       dn_hashmap::iterator d = stripe->dentries.find(name);
-      if (d != stripe->dentries.end()) {
-        inode_hashmap::iterator i = inodes.find(d->second->vino);
-        if (i != inodes.end()) {
-          Inode *in = i->second;
-          // close stripes
-          for (vector<DirStripe*>::iterator s = in->stripes.begin();
-               s != in->stripes.end(); ++s) {
-            DirStripe *stripe = *s;
-            if (stripe && stripe->is_empty() && in->dn_set.size() == 1)
-              close_stripe(stripe); // FIXME: maybe i shoudl proactively hose the whole subtree from cache?
-          }
-        }
+      if (d != stripe->dentries.end())
         unlink(d->second, false);
-      }
     }
   }
 
