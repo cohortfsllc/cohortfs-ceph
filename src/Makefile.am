@@ -1344,6 +1344,7 @@ libglobal_la_SOURCES = \
 	global/pidfile.cc \
 	osd/OSD.cc \
 	cohort/CohortOSD.cc \
+	cohort/OSDVol.cc \
 	global/signal_handler.cc
 libglobal_la_CFLAGS= ${CRYPTO_CFLAGS} ${AM_CFLAGS}
 libglobal_la_CXXFLAGS= ${AM_CXXFLAGS}

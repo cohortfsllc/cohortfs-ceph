@@ -6,27 +6,103 @@
 #include <tr1/memory>
 #include "common/Mutex.h"
 #include "include/uuid.h"
+#include "osd/OpRequest.h"
+#include "cohort/CohortOSDMap.h"
+#include "os/ObjectStore.h"
+#include "osd/Watch.h"
+
+using namespace std;
 
 class CohortOSDService;
-typedef shared_ptr<CohortOSDService> CohortOSDServiceRef;
+typedef std::tr1::shared_ptr<CohortOSDService> CohortOSDServiceRef;
 
 class OSDVol;
 class CohortOSD;
 
 typedef std::tr1::shared_ptr<OSDVol> OSDVolRef;
 
+struct ObjectContext {
+  int ref;
+  bool registered;
+  ObjectState obs;
+
+  SnapSetContext *ssc;  // may be null
+
+private:
+  Mutex lock;
+public:
+  Cond cond;
+  int unstable_writes, readers, writers_waiting, readers_waiting;
+
+  // set if writes for this object are blocked on another objects recovery
+  ObjectContext *blocked_by;      // object blocking our writes
+  set<ObjectContext*> blocking;   // objects whose writes we block
+
+  // any entity in obs.oi.watchers MUST be in either watchers or
+  // unconnected_watchers.
+  map<pair<uint64_t, entity_name_t>, WatchRef> watchers;
+
+  ObjectContext(const object_info_t &oi_, bool exists_, SnapSetContext *ssc_)
+    : ref(0), registered(false), obs(oi_, exists_), ssc(ssc_),
+      lock("ObjectContext::ObjectContext::lock"),
+      unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0),
+      blocked_by(0) {}
+
+  void get() { ++ref; }
+
+  // do simple synchronous mutual exclusion, for now.  now waitqueues or anything fancy.
+  void ondisk_write_lock() {
+    lock.Lock();
+    writers_waiting++;
+    while (readers_waiting || readers)
+      cond.Wait(lock);
+    writers_waiting--;
+    unstable_writes++;
+    lock.Unlock();
+  }
+  void ondisk_write_unlock() {
+    lock.Lock();
+    assert(unstable_writes > 0);
+    unstable_writes--;
+    if (!unstable_writes && readers_waiting)
+      cond.Signal();
+    lock.Unlock();
+  }
+  void ondisk_read_lock() {
+    lock.Lock();
+    readers_waiting++;
+    while (unstable_writes)
+      cond.Wait(lock);
+    readers_waiting--;
+    readers++;
+    lock.Unlock();
+  }
+  void ondisk_read_unlock() {
+    lock.Lock();
+    assert(readers > 0);
+    readers--;
+    if (!readers && writers_waiting)
+      cond.Signal();
+    lock.Unlock();
+  }
+};
+
 class OSDVol {
   friend class CohortOSD;
 
 protected:
-  uuid_d volume_id;
   Mutex vol_lock;
+  Mutex map_lock;
+
+  CohortOSDServiceRef osd;
 
   // Ops waiting for map, should be queued at back
-  Mutex map_lock;
   list<OpRequestRef> waiting_for_map;
   CohortOSDMapRef osdmap_ref;
   CohortOSDMapRef last_persisted_osdmap_ref;
+
+  uuid_d volume_id;
+
 
   void queue_op(OpRequestRef op);
   void take_op_map_waiters();
@@ -72,8 +148,11 @@ public:
   }
 public:
   OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
-	 uuid_d u, const hobject_t& loid, const hobject_t& ioid);
-  virtual ~OSDVol();
+	 uuid_d u, const hobject_t& loid, const hobject_t& ioid)
+    : vol_lock("OSDVol::vol_lock"), map_lock("OSDVol::map_lock"),
+      osd(o), osdmap_ref(curmap), volume_id(u),
+      log_oid(loid), biginfo_oid(ioid) { }
+  virtual ~OSDVol() { };
 
 private:
   // Prevent copying
@@ -119,8 +198,18 @@ public:
   void do_request(OpRequestRef op);
 
   void do_op(OpRequestRef op);
+  void do_sub_op(OpRequestRef op);
+  void do_sub_op_reply(OpRequestRef op);
+  int find_object_context(const hobject_t& oid,
+			  ObjectContext **pobc,
+			  bool can_create,
+			  snapid_t *psnapid);
+  ObjectContext *get_object_context(const hobject_t& soid, bool can_create);
+  void put_object_context(ObjectContext *obc);
+  SnapSetContext *get_snapset_context(const object_t& oid,
+				      bool can_create);
 };
 
-ostream& operator <<(ostream& out, const OSDVol& pg);
+ostream& operator <<(ostream& out, const OSDVol& vol);
 
 #endif /* !COHORT_OSDVOL_H */

@@ -51,10 +51,10 @@ public:
   bool match(uint32_t bits, uint32_t match) const {
     return match_hash(hash, bits, match);
   }
-  
+
   hobject_t() : snap(0), hash(0), max(false) {}
 
-  hobject_t(object_t oid, snapid_t snap, uint64_t hash) : 
+  hobject_t(object_t oid, snapid_t snap, uint64_t hash) :
     oid(oid), snap(snap), hash(hash), max(false)
     {}
 

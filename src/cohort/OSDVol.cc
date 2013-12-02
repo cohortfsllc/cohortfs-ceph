@@ -1,6 +1,8 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 
-#include "OSDVol.h"
+#include "cohort/CohortOSD.h"
+#include "cohort/OSDVol.h"
+#include "messages/MOSDOp.h"
 
 void OSDVol::do_request(OpRequestRef op)
 {
@@ -14,17 +16,9 @@ void OSDVol::do_request(OpRequestRef op)
   if (can_discard_request(op)) {
     return;
   }
-  if (!flushed) {
-    waiting_for_active.push_back(op);
-    return;
-  }
 
   switch (op->request->get_type()) {
   case CEPH_MSG_OSD_OP:
-    if (is_replay() || !is_active()) {
-      waiting_for_active.push_back(op);
-      return;
-    }
     do_op(op); // do it now
     break;
 
@@ -36,17 +30,110 @@ void OSDVol::do_request(OpRequestRef op)
     do_sub_op_reply(op);
     break;
 
-  case MSG_OSD_PG_SCAN:
-    do_scan(op);
-    break;
-
-  case MSG_OSD_PG_BACKFILL:
-    do_backfill(op);
-    break;
-
   default:
     /* Bogus */
     break;
+  }
+}
+
+int OSDVol::find_object_context(const hobject_t& oid,
+				ObjectContext **pobc,
+				bool can_create,
+				snapid_t *psnapid)
+{
+  hobject_t head(oid.oid, CEPH_NOSNAP, oid.hash);
+  hobject_t snapdir(oid.oid, CEPH_SNAPDIR, oid.hash);
+
+  // want the snapdir?
+  if (oid.snap == CEPH_SNAPDIR) {
+    // return head or snapdir, whichever exists.
+    ObjectContext *obc = get_object_context(head, can_create);
+    if (obc && !obc->obs.exists) {
+      // ignore it if the obc exists but the object doesn't
+      put_object_context(obc);
+      obc = NULL;
+    }
+    if (!obc) {
+      obc = get_object_context(snapdir, can_create);
+    }
+    if (!obc)
+      return -ENOENT;
+    *pobc = obc;
+
+    // always populate ssc for SNAPDIR...
+    if (!obc->ssc)
+      obc->ssc = get_snapset_context(oid.oid, true);
+    return 0;
+  }
+
+  // want the head?
+  if (oid.snap == CEPH_NOSNAP) {
+    ObjectContext *obc = get_object_context(head, oloc, can_create);
+    if (!obc)
+      return -ENOENT;
+    *pobc = obc;
+
+    if (can_create && !obc->ssc)
+      obc->ssc = get_snapset_context(oid.oid, oid.get_key(), oid.hash, true);
+
+    return 0;
+  }
+
+  // we want a snap
+  SnapSetContext *ssc = get_snapset_context(oid.oid, oid.get_key(), oid.hash, can_create);
+  if (!ssc)
+    return -ENOENT;
+
+  // head?
+  if (oid.snap > ssc->snapset.seq) {
+    if (ssc->snapset.head_exists) {
+      ObjectContext *obc = get_object_context(head, oloc, false);
+      if (!obc->ssc)
+	obc->ssc = ssc;
+      else {
+	assert(ssc == obc->ssc);
+	put_snapset_context(ssc);
+      }
+      *pobc = obc;
+      return 0;
+    }
+    put_snapset_context(ssc);
+    return -ENOENT;
+  }
+
+  // which clone would it be?
+  unsigned k = 0;
+  while (k < ssc->snapset.clones.size() &&
+	 ssc->snapset.clones[k] < oid.snap)
+    k++;
+  if (k == ssc->snapset.clones.size()) {
+    put_snapset_context(ssc);
+    return -ENOENT;
+  }
+  hobject_t soid(oid.oid, oid.get_key(), ssc->snapset.clones[k], oid.hash,
+		 info.pgid.pool());
+
+  put_snapset_context(ssc); // we're done with ssc
+  ssc = 0;
+
+  if (pg_log.get_missing().is_missing(soid)) {
+    if (psnapid)
+      *psnapid = soid.snap;
+    return -EAGAIN;
+  }
+
+  ObjectContext *obc = get_object_context(soid, oloc, false);
+  assert(obc);
+
+  // clone
+  snapid_t first = obc->obs.oi.snaps[obc->obs.oi.snaps.size()-1];
+  snapid_t last = obc->obs.oi.snaps[0];
+  if (first <= oid.snap) {
+    *pobc = obc;
+    return 0;
+  } else {
+    put_object_context(obc);
+    return -ENOENT;
   }
 }
 
@@ -66,7 +153,7 @@ void OSDVol::do_op(OpRequestRef op)
   bool can_create = op->may_write();
   snapid_t snapid;
   int r = find_object_context(hobject_t(m->get_oid(),
-					m->get_snapid());
+					m->get_snapid()),
 			      &obc, can_create, &snapid);
   if (r) {
     osd->reply_op_error(op, r);
@@ -1626,7 +1713,6 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
   for (list<notify_info_t>::iterator p = ctx->notifies.begin();
        p != ctx->notifies.end();
        ++p) {
-    dout(10) << "do_osd_op_effects, notify " << *p << dendl;
     NotifyRef notif(
       Notify::makeNotifyRef(
 	conn,
@@ -1641,7 +1727,6 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
 	   ctx->obc->watchers.begin();
 	 i != ctx->obc->watchers.end();
 	 ++i) {
-      dout(10) << "starting notify on watch " << i->first << dendl;
       i->second->start_notify(notif);
     }
     notif->init();
@@ -1650,7 +1735,6 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
   for (list<OpContext::NotifyAck>::iterator p = ctx->notify_acks.begin();
        p != ctx->notify_acks.end();
        ++p) {
-    dout(10) << "notify_ack " << make_pair(p->watch_cookie, p->notify_id) << dendl;
     for (map<pair<uint64_t, entity_name_t>, WatchRef>::iterator i =
 	   ctx->obc->watchers.begin();
 	 i != ctx->obc->watchers.end();
@@ -1658,8 +1742,163 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
       if (i->first.second != entity) continue;
       if (p->watch_cookie &&
 	  p->watch_cookie.get() != i->first.first) continue;
-      dout(10) << "acking notify on watch " << i->first << dendl;
       i->second->notify_ack(p->notify_id);
     }
   }
+}
+
+void OSDVol::queue_op(OpRequestRef op)
+{
+  Mutex::Locker l(map_lock);
+  if (!waiting_for_map.empty()) {
+    // preserve ordering
+    waiting_for_map.push_back(op);
+    return;
+  }
+  if (op_must_wait_for_map(get_osdmap_with_maplock(), op)) {
+    waiting_for_map.push_back(op);
+    return;
+  }
+  osd->op_wq.queue(make_pair(OSDVolRef(this), op));
+}
+
+void OSDVol::do_sub_op(OpRequestRef op)
+{
+  MOSDSubOp *m = static_cast<MOSDSubOp*>(op->request);
+  assert(have_same_or_newer_map(m->map_epoch));
+  assert(m->get_header().type == MSG_OSD_SUBOP);
+
+  OSDOp *first = NULL;
+
+  if (first) {
+    switch (first->op.op) {
+    case CEPH_OSD_OP_DELETE:
+      sub_op_remove(op);
+      return;
+    }
+  }
+
+  sub_op_modify(op);
+}
+
+void OSDVol::sub_op_remove(OpRequestRef op)
+{
+  MOSDSubOp *m = static_cast<MOSDSubOp*>(op->request);
+  assert(m->get_header().type == MSG_OSD_SUBOP);
+
+  op->mark_started();
+
+  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  remove_snap_mapped_object(*t, m->poid);
+  int r = osd->store->queue_transaction(osr.get(), t);
+  assert(r == 0);
+}
+
+void OSDVol::do_sub_op_reply(OpRequestRef op)
+{
+  MOSDSubOpReply *r = static_cast<MOSDSubOpReply *>(op->request);
+  assert(r->get_header().type == MSG_OSD_SUBOPREPLY);
+
+  sub_op_modify_reply(op);
+}
+
+ObjectContext *OSDVol::get_object_context(const hobject_t& soid,
+					  bool can_create)
+{
+  map<hobject_t, ObjectContext*>::iterator p = object_contexts.find(soid);
+  ObjectContext *obc;
+  if (p != object_contexts.end()) {
+    obc = p->second;
+  } else {
+    // check disk
+    bufferlist bv;
+    int r = osd->store->getattr(coll, soid, OI_ATTR, bv);
+    if (r < 0) {
+      if (!can_create)
+	return NULL;   // -ENOENT!
+
+      // new object.
+      object_info_t oi(soid, oloc);
+      SnapSetContext *ssc = get_snapset_context(soid.oid, soid.get_key(), soid.hash, true);
+      return create_object_context(oi, ssc);
+    }
+
+    object_info_t oi(bv);
+
+    // if the on-disk oloc is bad/undefined, set up the pool value
+    if (oi.oloc.get_pool() < 0) {
+      oi.oloc.pool = info.pgid.pool();
+    }
+
+    SnapSetContext *ssc = NULL;
+    if (can_create)
+      ssc = get_snapset_context(soid.oid, soid.get_key(), soid.hash, true);
+    obc = new ObjectContext(oi, true, ssc);
+    obc->obs.oi.decode(bv);
+    obc->obs.exists = true;
+
+    register_object_context(obc);
+
+    if (can_create && !obc->ssc)
+      obc->ssc = get_snapset_context(soid.oid, soid.get_key(), soid.hash, true);
+
+    populate_obc_watchers(obc);
+  }
+  obc->ref++;
+  return obc;
+}
+
+void OSDVol::put_object_context(ObjectContext *obc)
+{
+  if (mode.wake) {
+    requeue_ops(mode.waiting);
+    for (list<Cond*>::iterator p = mode.waiting_cond.begin(); p != mode.waiting_cond.end(); ++p)
+      (*p)->Signal();
+    mode.wake = false;
+  }
+
+  --obc->ref;
+  if (obc->ref == 0) {
+    if (obc->ssc)
+      put_snapset_context(obc->ssc);
+
+    if (obc->registered)
+      object_contexts.erase(obc->obs.oi.soid);
+    delete obc;
+
+    if (object_contexts.empty())
+      kick();
+  }
+}
+
+SnapSetContext *OSDVol::get_snapset_context(const object_t& oid,
+					    bool can_create)
+{
+  SnapSetContext *ssc;
+  map<object_t, SnapSetContext*>::iterator p = snapset_contexts.find(oid);
+  if (p != snapset_contexts.end()) {
+    ssc = p->second;
+  } else {
+    bufferlist bv;
+    hobject_t head(oid, CEPH_NOSNAP);
+    int r = osd->store->getattr(coll, head, SS_ATTR, bv);
+    if (r < 0) {
+      // try _snapset
+      hobject_t snapdir(oid, CEPH_SNAPDIR);
+      r = osd->store->getattr(coll, snapdir, SS_ATTR, bv);
+      if (r < 0 && !can_create)
+	return NULL;
+    }
+    ssc = new SnapSetContext(oid);
+    register_snapset_context(ssc);
+    if (r >= 0) {
+      bufferlist::iterator bvp = bv.begin();
+      ssc->snapset.decode(bvp);
+    }
+  }
+  assert(ssc);
+  dout(10) << "get_snapset_context " << ssc->oid << " "
+	   << ssc->ref << " -> " << (ssc->ref+1) << dendl;
+  ssc->ref++;
+  return ssc;
 }
