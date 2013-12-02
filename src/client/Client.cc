@@ -1161,7 +1161,7 @@ int Client::verify_reply_trace(int r,
  * @param request the MetaRequest to execute
  * @param uid uid to execute as
  * @param gid gid to execute as
- * @param ptarget [optional] address to store a pointer to the target inode we want to create or operate on
+ * @param ptarget [optional] address to store a pointer to the target inode we want to create or operate on.  returns a ref to the caller on success
  * @param pcreated [optional; required if ptarget] where to store a bool of whether our create atomically created a file
  * @param use_mds [optional] prefer a specific mds (-1 for default)
  * @param pdirbl [optional; disallowed if ptarget] where to pass extra reply payload to the caller
@@ -3741,6 +3741,7 @@ void Client::renew_caps(MetaSession *session)
 // ===============================================================
 // high level (POSIXy) interface
 
+// returns a reference to **target on success
 int Client::_do_lookup(Inode *dir, const string& name, Inode **target)
 {
   int op = dir->snapid == CEPH_SNAPDIR ? CEPH_MDS_OP_LOOKUPSNAP : CEPH_MDS_OP_LOOKUP;
@@ -6832,6 +6833,7 @@ int Client::ll_readlink(Inode *in, char *buf, size_t buflen, int uid, int gid)
   return r;
 }
 
+// returns a reference to **inp on success
 int Client::_mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev,
 		   int uid, int gid, Inode **inp)
 {
@@ -6896,6 +6898,7 @@ int Client::ll_mknod(Inode *parent, const char *name, mode_t mode,
   if (r == 0) {
     fill_stat(in, attr);
     _ll_get(in);
+    in->put(); // drop ref from _mknod
   }
   tout(cct) << attr->st_ino << std::endl;
   ldout(cct, 3) << "ll_mknod " << vparent << " " << name
@@ -6904,6 +6907,7 @@ int Client::ll_mknod(Inode *parent, const char *name, mode_t mode,
   return r;
 }
 
+// returns a reference to *inp on success
 int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
 		    Inode **inp, Fh **fhp, int stripe_unit, int stripe_count,
 		    int object_size, const char *data_pool, bool *created,
@@ -6984,6 +6988,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
 }
 
 
+// returns a reference to *inp on success
 int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid,
 		   Inode **inp)
 {
@@ -7047,6 +7052,7 @@ int Client::ll_mkdir(Inode *parent, const char *name, mode_t mode,
   if (r == 0) {
     fill_stat(in, attr);
     _ll_get(in);
+    in->put(); // drop ref from _mkdir
   }
   tout(cct) << attr->st_ino << std::endl;
   ldout(cct, 3) << "ll_mkdir " << vparent << " " << name
@@ -7055,8 +7061,9 @@ int Client::ll_mkdir(Inode *parent, const char *name, mode_t mode,
   return r;
 }
 
-int Client::_symlink(Inode *dir, const char *name, const char *target, int uid,
-		     int gid, Inode **inp)
+// returns a reference to *inp on success
+int Client::_symlink(Inode *dir, const char *name, const char *target,
+                     int uid, int gid, Inode **inp)
 {
   ldout(cct, 3) << "_symlink(" << dir->ino << " " << name << ", " << target
 	  << ", uid " << uid << ", gid " << gid << ")" << dendl;
@@ -7116,6 +7123,7 @@ int Client::ll_symlink(Inode *parent, const char *name, const char *value,
   if (r == 0) {
     fill_stat(in, attr);
     _ll_get(in);
+    in->put(); // drop ref from _symlink
   }
   tout(cct) << attr->st_ino << std::endl;
   ldout(cct, 3) << "ll_symlink " << vparent << " " << name
@@ -7151,7 +7159,8 @@ int Client::_unlink(Inode *dir, const char *name, int uid, int gid)
   res = _lookup(dir, name, &otherin);
   if (res < 0)
     goto fail;
-  req->set_other_inode(otherin);
+  req->set_other_inode(otherin); // give ref to MetaRequest
+  otherin->put(); // drop ref from _lookup
   req->other_inode_drop = CEPH_CAP_LINK_SHARED | CEPH_CAP_LINK_EXCL;
 
   req->set_inode(dir);
@@ -7219,6 +7228,7 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
   if (res < 0)
     goto fail;
   req->set_inode(in);
+  in->put(); // drop ref from _lookup
 
   res = make_request(req, uid, gid);
   if (res == 0) {
@@ -7294,7 +7304,8 @@ int Client::_rename(Inode *fromdir, const char *fromname, Inode *todir, const ch
   res = _lookup(fromdir, fromname, &oldin);
   if (res < 0)
     goto fail;
-  req->set_old_inode(oldin);
+  req->set_old_inode(oldin); // give ref to MetaRequest
+  oldin->put(); // drop ref from _lookup
   req->old_inode_drop = CEPH_CAP_LINK_SHARED;
 
   Inode *otherin;
@@ -7302,14 +7313,14 @@ int Client::_rename(Inode *fromdir, const char *fromname, Inode *todir, const ch
   if (res != 0 && res != -ENOENT) {
     goto fail;
   } else if (res == 0) {
-    req->set_other_inode(otherin);
+    req->set_other_inode(otherin); // give ref to MetaRequest
+    otherin->put(); // drop ref from _lookup
     req->other_inode_drop = CEPH_CAP_LINK_SHARED | CEPH_CAP_LINK_EXCL;
   }
 
   req->set_inode(todir);
 
-  Inode *target;
-  res = make_request(req, uid, gid, &target);
+  res = make_request(req, uid, gid);
 
   ldout(cct, 10) << "rename result is " << res << dendl;
 
@@ -7343,6 +7354,7 @@ int Client::ll_rename(Inode *parent, const char *name, Inode *newparent,
   return _rename(parent, name, newparent, newname, uid, gid);
 }
 
+// returns a reference to **inp on success
 int Client::_link(Inode *in, Inode *dir, const char *newname, int uid, int gid, Inode **inp)
 {
   ldout(cct, 3) << "_link(" << in->ino << " to " << dir->ino << " " << newname
@@ -7403,6 +7415,7 @@ int Client::ll_link(Inode *parent, Inode *newparent, const char *newname,
   if (r == 0) {
     fill_stat(parent, attr);
     _ll_get(parent);
+    parent->put(); // drop ref from _link
   }
   return r;
 }
