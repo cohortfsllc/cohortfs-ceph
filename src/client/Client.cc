@@ -1126,6 +1126,7 @@ int Client::verify_reply_trace(int r,
 	ldout(cct, 10) << "make_request got traceless reply, forcing getattr on #"
 		       << in->ino << dendl;
 	r = _getattr(in, request->regetattr_mask, uid, gid, true);
+        in->get();
 	target = in;
       }
       if (r >= 0) {
@@ -1133,11 +1134,11 @@ int Client::verify_reply_trace(int r,
 	if (got_created_ino &&
 	    created_ino.val != target->ino.val) {
 	  ldout(cct, 5) << "create got ino " << created_ino << " but then failed on lookup; EINTR?" << dendl;
+          target->put(); // drop ref from _do_lookup or _getattr block
 	  return -EINTR;
 	}
 
         *ptarget = target;
-        target->get();
       }
     }
   }
@@ -3759,6 +3760,7 @@ int Client::_do_lookup(Inode *dir, const string& name, Inode **target)
   return r;
 }
 
+// returns a reference to **target on success
 int Client::_lookup(Inode *dir, const string& dname, Inode **target)
 {
   int r = 0;
@@ -3772,12 +3774,17 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
   if (dname == "..") {
     if (dir->dn_set.empty())
       r = -ENOENT;
-    else
-      *target = dir->get_first_parent()->stripe->parent_inode; //dirs can't be hard-linked
+    else {
+      //dirs can't be hard-linked
+      Inode *in = dir->get_first_parent()->stripe->parent_inode;
+      in->get();
+      *target = in;
+    }
     goto done;
   }
 
   if (dname == ".") {
+    dir->get();
     *target = dir;
     goto done;
   }
@@ -3789,7 +3796,9 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
 
   if (dname == cct->_conf->client_snapdir &&
       dir->snapid == CEPH_NOSNAP) {
-    *target = open_snapdir(dir);
+    Inode *in = open_snapdir(dir);
+    in->get();
+    *target = in;
     goto done;
   }
 
@@ -3817,6 +3826,7 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
             MetaSession *s = mds_iter->second;
             if (s->cap_ttl > now &&
                 s->cap_gen == dn->lease_gen) {
+              in->get();
               *target = in;
               // touch this mds's dir cap too, even though we don't _explicitly_
               // use it here, to make trim_caps() behave.
@@ -3831,6 +3841,7 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
         // dir lease?
         if (stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED) &&
             dn->cap_shared_gen == stripe->shared_gen) {
+          in->get();
           *target = in;
           goto done;
         }
@@ -3889,6 +3900,7 @@ int Client::get_or_create(Inode *dir, const char* name,
   return 0;
 }
 
+// returns a reference to **final on success
 int Client::path_walk(const filepath& origpath, Inode **final, bool followsym)
 {
   filepath path = origpath;
@@ -3898,6 +3910,9 @@ int Client::path_walk(const filepath& origpath, Inode **final, bool followsym)
   else
     cur = cwd;
   assert(cur);
+
+  Inode::DerefSet refs; // clean up refs from _lookup
+  refs.insert(cur);
 
   ldout(cct, 10) << "path_walk " << path << dendl;
 
@@ -3912,9 +3927,10 @@ int Client::path_walk(const filepath& origpath, Inode **final, bool followsym)
     int r = _lookup(cur, dname, &next);
     if (r < 0)
       return r;
+    refs.insert(next);
     // only follow trailing symlink if followsym.  always follow
     // 'directory' symlinks.
-    if (next && next->is_symlink()) {
+    if (next->is_symlink()) {
       symlinks++;
       ldout(cct, 20) << " symlink count " << symlinks << ", value is '" << next->symlink << "'" << dendl;
       if (symlinks > MAXSYMLINKS) {
@@ -3954,8 +3970,10 @@ int Client::path_walk(const filepath& origpath, Inode **final, bool followsym)
   }
   if (!cur)
     return -ENOENT;
-  if (final)
+  if (final) {
+    cur->get(); // return an extra reference that won't be dropped with 'refs'
     *final = cur;
+  }
   return 0;
 }
 
@@ -4068,15 +4086,20 @@ int Client::mkdirs(const char *relpath, mode_t mode)
   tout(cct) << relpath << std::endl;
   tout(cct) << mode << std::endl;
 
+  Inode::DerefSet refs; // clean up refs from _lookup and _mkdir
+
   //get through existing parts of path
   filepath path(relpath);
   unsigned int i;
   int r=0;
+  cwd->get();
+  refs.insert(cwd);
   Inode *cur = cwd;
   Inode *next;
   for (i=0; i<path.depth(); ++i) {
     r=_lookup(cur, path[i].c_str(), &next);
     if (r < 0) break;
+    refs.insert(next);
     cur = next;
   }
   //check that we have work left to do
@@ -4086,16 +4109,11 @@ int Client::mkdirs(const char *relpath, mode_t mode)
   //make new directory at each level
   for (; i<path.depth(); ++i) {
     //make new dir
-    r = _mkdir(cur, path[i].c_str(), mode);
+    r = _mkdir(cur, path[i].c_str(), mode, -1, -1, &next);
     //check proper creation/existence
     if (r < 0) return r;
-    r = _lookup(cur, path[i], &next);
-    if(r < 0) {
-      ldout(cct, 0) << "mkdirs: successfully created new directory " << path[i]
-	      << " but can't _lookup it!" << dendl;
-      return r;
-    }
     //move to new dir and continue
+    refs.insert(next);
     cur = next;
     ldout(cct, 20) << "mkdirs: successfully created directory "
 	     << filepath(cur->ino).get_path() << dendl;
@@ -6326,6 +6344,7 @@ int Client::ll_lookup(Inode *parent, const char *name, struct stat *attr,
   assert(in);
   fill_stat(in, attr);
   _ll_get(in);
+  in->put(); // drop ref from _lookup
 
  out:
   ldout(cct, 3) << "ll_lookup " << parent << " " << name
@@ -7587,24 +7606,25 @@ int Client::ll_create(Inode *parent, const char *name, mode_t mode,
   tout(cct) << mode << std::endl;
   tout(cct) << flags << std::endl;
 
+  *fhp = NULL;
+
+  Inode::DerefSet refs; // clean up refs from _lookup and _create
   bool created = false;
   Inode *in = NULL;
   int r = _lookup(parent, name, &in);
-
-  if (r == 0 && (flags & O_CREAT) && (flags & O_EXCL))
-    return -EEXIST;
-
-   if (r == -ENOENT && (flags & O_CREAT)) {
-     r = _create(parent, name, flags, mode, &in, fhp /* may be NULL */,
+  if (r == 0) {
+    refs.insert(in);
+    if ((flags & O_CREAT) && (flags & O_EXCL)) {
+      r = -EEXIST;
+      goto out;
+    }
+  } else if (r == -ENOENT && (flags & O_CREAT)) {
+    r = _create(parent, name, flags, mode, &in, fhp,
 	        0, 0, 0, NULL, &created, uid, gid);
     if (r < 0)
       goto out;
-
-    if ((!in) && fhp)
-      in = (*fhp)->inode;
-  }
-
-  if (r < 0)
+    refs.insert(in);
+  } else
     goto out;
 
   assert(in);

@@ -133,7 +133,8 @@ class Inode : public CapObject, public LRUObject {
   void make_long_path(filepath& p);
   void make_nosnap_relative_path(filepath& p);
 
-  void get() {
+  // reference counting
+  void get() { 
     assert(_ref >= 0);
     if (++_ref == 2)
       lru_pin();
@@ -160,6 +161,27 @@ class Inode : public CapObject, public LRUObject {
     assert(ll_ref >= n);
     ll_ref -= n;
   }
+
+  // clean up an inode reference on destruction
+  class Deref {
+    Inode *in;
+   public:
+    Deref(Inode *in) : in(in) {}
+    ~Deref() { in->put(); }
+  };
+
+  // maintain a set of referenced inodes with a destructor to drop their refs
+  class DerefSet {
+    set<Inode*> inodes;
+   public:
+    ~DerefSet() { drop_refs(); }
+    void insert(Inode *in) { inodes.insert(in); }
+    void drop_refs() {
+      for (set<Inode*>::iterator i = inodes.begin(); i != inodes.end(); ++i)
+        (*i)->put();
+      inodes.clear();
+    }
+  };
 
   Inode(CephContext *cct, InodeCache *cache, vinodeno_t vino,
         ceph_file_layout *newlayout)
