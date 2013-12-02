@@ -3973,20 +3973,17 @@ int Client::link(const char *relexisting, const char *relpath)
   string name = path.last_dentry();
   path.pop_dentry();
 
+  Inode::DerefSet refs; // clean up refs from path_walk
   Inode *in, *dir;
-  int r;
-  r = path_walk(existing, &in);
+  int r = path_walk(existing, &in);
   if (r < 0)
-    goto out;
-  in->get();
+    return r;
+  refs.insert(in);
   r = path_walk(path, &dir);
   if (r < 0)
-    goto out_unlock;
-  r = _link(in, dir, name.c_str());
- out_unlock:
-  in->put();
- out:
-  return r;
+    return r;
+  refs.insert(dir);
+  return _link(in, dir, name.c_str());
 }
 
 int Client::unlink(const char *relpath)
@@ -4002,6 +3999,7 @@ int Client::unlink(const char *relpath)
   int r = path_walk(path, &dir);
   if (r < 0)
     return r;
+  Inode::Deref ref(dir); // clean up ref from path_walk
   return _unlink(dir, name.c_str());
 }
 
@@ -4019,23 +4017,19 @@ int Client::rename(const char *relfrom, const char *relto)
   string toname = to.last_dentry();
   to.pop_dentry();
 
+  Inode::DerefSet refs; // clean up refs from path_walk
   Inode *fromdir, *todir;
   int r;
 
   r = path_walk(from, &fromdir);
   if (r < 0)
-    goto out;
-  fromdir->get();
+    return r;
+  refs.insert(fromdir);
   r = path_walk(to, &todir);
   if (r < 0)
-    goto out_unlock;
-  todir->get();
-  r = _rename(fromdir, fromname.c_str(), todir, toname.c_str());
-  todir->put();
- out_unlock:
-  fromdir->put();
- out:
-  return r;
+    return r;
+  refs.insert(todir);
+  return _rename(fromdir, fromname.c_str(), todir, toname.c_str());
 }
 
 // dirs
@@ -4053,9 +4047,9 @@ int Client::mkdir(const char *relpath, mode_t mode)
   path.pop_dentry();
   Inode *dir;
   int r = path_walk(path, &dir);
-  if (r < 0) {
+  if (r < 0)
     return r;
-  }
+  Inode::Deref ref(dir); // clean up ref from path_walk
   return _mkdir(dir, name.c_str(), mode);
 }
 
@@ -4114,6 +4108,7 @@ int Client::rmdir(const char *relpath)
   int r = path_walk(path, &dir);
   if (r < 0)
     return r;
+  Inode::Deref ref(dir); // clean up ref from path_walk
   return _rmdir(dir, name.c_str());
 }
 
@@ -4127,11 +4122,12 @@ int Client::mknod(const char *relpath, mode_t mode, dev_t rdev)
   filepath path(relpath);
   string name = path.last_dentry();
   path.pop_dentry();
-  Inode *in;
-  int r = path_walk(path, &in);
+  Inode *dir;
+  int r = path_walk(path, &dir);
   if (r < 0)
     return r;
-  return _mknod(in, name.c_str(), mode, rdev);
+  Inode::Deref ref(dir); // clean up ref from path_walk
+  return _mknod(dir, name.c_str(), mode, rdev);
 }
 
 // symlinks
@@ -4150,6 +4146,7 @@ int Client::symlink(const char *target, const char *relpath)
   int r = path_walk(path, &dir);
   if (r < 0)
     return r;
+  Inode::Deref ref(dir); // clean up ref from path_walk
   return _symlink(dir, name.c_str(), target);
 }
 
@@ -4164,6 +4161,7 @@ int Client::readlink(const char *relpath, char *buf, loff_t size)
   int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   
   if (!in->is_symlink())
     return -EINVAL;
@@ -4340,6 +4338,7 @@ int Client::stat(const char *relpath, struct stat *stbuf,
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   r = _getattr(in, mask);
   if (r < 0) {
     ldout(cct, 3) << "stat exit on error!" << dendl;
@@ -4363,6 +4362,7 @@ int Client::lstat(const char *relpath, struct stat *stbuf,
   int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   r = _getattr(in, mask);
   if (r < 0) {
     ldout(cct, 3) << "lstat exit on error!" << dendl;
@@ -4426,6 +4426,7 @@ int Client::chmod(const char *relpath, mode_t mode)
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   struct stat attr;
   attr.st_mode = mode;
   return _setattr(in, &attr, CEPH_SETATTR_MODE);
@@ -4457,6 +4458,7 @@ int Client::lchmod(const char *relpath, mode_t mode)
   int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   struct stat attr;
   attr.st_mode = mode;
   return _setattr(in, &attr, CEPH_SETATTR_MODE);
@@ -4474,6 +4476,7 @@ int Client::chown(const char *relpath, int uid, int gid)
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   struct stat attr;
   attr.st_uid = uid;
   attr.st_gid = gid;
@@ -4515,6 +4518,7 @@ int Client::lchown(const char *relpath, int uid, int gid)
   int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   struct stat attr;
   attr.st_uid = uid;
   attr.st_gid = gid;
@@ -4536,6 +4540,7 @@ int Client::utime(const char *relpath, struct utimbuf *buf)
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   struct stat attr;
   attr.st_mtim.tv_sec = buf->modtime;
   attr.st_mtim.tv_nsec = 0;
@@ -4557,6 +4562,7 @@ int Client::lutime(const char *relpath, struct utimbuf *buf)
   int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   struct stat attr;
   attr.st_mtim.tv_sec = buf->modtime;
   attr.st_mtim.tv_nsec = 0;
@@ -4575,6 +4581,7 @@ int Client::opendir(const char *relpath, dir_result_t **dirpp)
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   r = _opendir(in, dirpp);
   tout(cct) << (unsigned long)*dirpp << std::endl;
   return r;
@@ -5182,24 +5189,32 @@ int Client::open(const char *relpath, int flags, mode_t mode, int stripe_unit,
 
   Fh *fh = NULL;
 
+  Inode::DerefSet refs; // clean up refs from path_walk and _create
   filepath path(relpath);
   Inode *in;
   bool created = false;
   int r = path_walk(path, &in);
-  if (r == 0 && (flags & O_CREAT) && (flags & O_EXCL))
-    return -EEXIST;
-  if (r == -ENOENT && (flags & O_CREAT)) {
+  if (r == 0) {
+    refs.insert(in);
+    if ((flags & O_CREAT) && (flags & O_EXCL)) {
+      r = -EEXIST;
+      goto out;
+    }
+  } else if (r == -ENOENT && (flags & O_CREAT)) {
     filepath dirpath = path;
     string dname = dirpath.last_dentry();
     dirpath.pop_dentry();
     Inode *dir;
     r = path_walk(dirpath, &dir);
     if (r < 0)
-      return r;
+      goto out;
+    refs.insert(dir);
     r = _create(dir, dname.c_str(), flags, mode, &in, &fh, stripe_unit,
                 stripe_count, object_size, data_pool, &created);
-  }
-  if (r < 0)
+    if (r < 0)
+      goto out;
+    refs.insert(in);
+  } else
     goto out;
 
   if (!created) {
@@ -6020,6 +6035,7 @@ int Client::chdir(const char *relpath)
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   if (cwd != in) {
     in->get();
     cwd->put();
@@ -6214,6 +6230,7 @@ int Client::mksnap(const char *relpath, const char *name)
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   Inode *snapdir = open_snapdir(in);
   return _mkdir(snapdir, name, 0);
 }
@@ -6225,6 +6242,7 @@ int Client::rmsnap(const char *relpath, const char *name)
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   Inode *snapdir = open_snapdir(in);
   return _rmdir(snapdir, name);
 }
@@ -6251,6 +6269,7 @@ int Client::get_caps_issued(const char *path) {
   int r = path_walk(p, &in, true);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
   return in->caps_issued();
 }
 
@@ -6459,81 +6478,89 @@ int Client::ll_setattr(vinodeno_t vino, struct stat *attr, int mask, int uid, in
 int Client::getxattr(const char *path, const char *name, void *value, size_t size)
 {
   Mutex::Locker lock(client_lock);
-  Inode *ceph_inode;
-  int r = Client::path_walk(path, &ceph_inode, true);
+  Inode *in;
+  int r = path_walk(path, &in, true);
   if (r < 0)
     return r;
-  return Client::_getxattr(ceph_inode, name, value, size, getuid(), getgid());
+  Inode::Deref ref(in); // clean up ref from path_walk
+  return _getxattr(in, name, value, size, getuid(), getgid());
 }
 
 int Client::lgetxattr(const char *path, const char *name, void *value, size_t size)
 {
   Mutex::Locker lock(client_lock);
-  Inode *ceph_inode;
-  int r = Client::path_walk(path, &ceph_inode, false);
+  Inode *in;
+  int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
-  return Client::_getxattr(ceph_inode, name, value, size, getuid(), getgid());
+  Inode::Deref ref(in); // clean up ref from path_walk
+  return _getxattr(in, name, value, size, getuid(), getgid());
 }
 
 int Client::listxattr(const char *path, char *list, size_t size)
 {
   Mutex::Locker lock(client_lock);
-  Inode *ceph_inode;
-  int r = Client::path_walk(path, &ceph_inode, true);
+  Inode *in;
+  int r = path_walk(path, &in, true);
   if (r < 0)
     return r;
-  return Client::_listxattr(ceph_inode, list, size, getuid(), getgid());
+  Inode::Deref ref(in); // clean up ref from path_walk
+  return _listxattr(in, list, size, getuid(), getgid());
 }
 
 int Client::llistxattr(const char *path, char *list, size_t size)
 {
   Mutex::Locker lock(client_lock);
-  Inode *ceph_inode;
-  int r = Client::path_walk(path, &ceph_inode, false);
+  Inode *in;
+  int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
-  return Client::_listxattr(ceph_inode, list, size, getuid(), getgid());
+  Inode::Deref ref(in); // clean up ref from path_walk
+  return _listxattr(in, list, size, getuid(), getgid());
 }
 
 int Client::removexattr(const char *path, const char *name)
 {
   Mutex::Locker lock(client_lock);
-  Inode *ceph_inode;
-  int r = Client::path_walk(path, &ceph_inode, true);
+  Inode *in;
+  int r = path_walk(path, &in, true);
   if (r < 0)
     return r;
-  return Client::_removexattr(ceph_inode, name, getuid(), getgid());
+  Inode::Deref ref(in); // clean up ref from path_walk
+  return _removexattr(in, name, getuid(), getgid());
 }
 
 int Client::lremovexattr(const char *path, const char *name)
 {
   Mutex::Locker lock(client_lock);
-  Inode *ceph_inode;
-  int r = Client::path_walk(path, &ceph_inode, false);
+  Inode *in;
+  int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
-  return Client::_removexattr(ceph_inode, name, getuid(), getgid());
+  Inode::Deref ref(in); // clean up ref from path_walk
+  return _removexattr(in, name, getuid(), getgid());
 }
 
 int Client::setxattr(const char *path, const char *name, const void *value, size_t size, int flags)
 {
   Mutex::Locker lock(client_lock);
-  Inode *ceph_inode;
-  int r = Client::path_walk(path, &ceph_inode, true);
+  Inode *in;
+  int r = path_walk(path, &in, true);
   if (r < 0)
     return r;
-  return Client::_setxattr(ceph_inode, name, value, size, flags, getuid(), getgid());
+  Inode::Deref ref(in); // clean up ref from path_walk
+  return _setxattr(in, name, value, size, flags, getuid(), getgid());
 }
 
 int Client::lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags)
 {
   Mutex::Locker lock(client_lock);
-  Inode *ceph_inode;
-  int r = Client::path_walk(path, &ceph_inode, false);
+  Inode *in;
+  int r = path_walk(path, &in, false);
   if (r < 0)
     return r;
-  return Client::_setxattr(ceph_inode, name, value, size, flags, getuid(), getgid());
+  Inode::Deref ref(in); // clean up ref from path_walk
+  return _setxattr(in, name, value, size, flags, getuid(), getgid());
 }
 
 int Client::_getxattr(Inode *in, const char *name, void *value, size_t size,
@@ -7653,6 +7680,7 @@ int Client::describe_layout(const char *relpath, ceph_file_layout *lp)
   int r = path_walk(path, &in);
   if (r < 0)
     return r;
+  Inode::Deref ref(in); // clean up ref from path_walk
 
   *lp = in->layout;
 
