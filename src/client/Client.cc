@@ -6450,12 +6450,12 @@ bool Client::ll_forget(Inode *in, int count)
     ldout(cct, 1) << "WARNING: ll_forget on " << ino << " " << count
 		  << ", which only has ll_ref=" << in->ll_ref << dendl;
     _ll_put(in, in->ll_ref);
-      last = true;
-    } else {
-    if (_ll_put(in, count) == 0)
-      last = true;
-  }
+    last = true;
+  } else if (_ll_put(in, count) == 0)
+    last = true;
 
+  if (last)
+    trim_cache();
   return last;
 }
 
