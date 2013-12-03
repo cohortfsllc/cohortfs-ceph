@@ -279,7 +279,7 @@ void Client::dump_inode(Formatter *f, Inode *in, set<Inode*>& did, bool disconne
 		<< "inode " << in->ino
 		<< " " << path
 		<< " ref " << in->get_num_ref()
-		<< *in << dendl;
+		<< " " << *in << dendl;
 
   if (f) {
     f->open_object_section("inode");
@@ -6379,8 +6379,6 @@ int Client::ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, in
 
 void Client::_ll_get(Inode *in)
 {
-  if (in->ll_ref == 0) 
-    in->get();
   in->ll_get();
   ldout(cct, 20) << "_ll_get " << in << " " << in->ino << " -> " << in->ll_ref << dendl;
 }
@@ -6389,12 +6387,7 @@ int Client::_ll_put(Inode *in, int num)
 {
   in->ll_put(num);
   ldout(cct, 20) << "_ll_put " << in << " " << in->ino << " " << num << " -> " << in->ll_ref << dendl;
-  if (in->ll_ref == 0) {
-    in->put();
-    return 0;
-  } else {
-    return in->ll_ref;
-  }
+  return in->ll_ref;
 }
 
 void Client::_ll_drop_pins()
@@ -6420,24 +6413,20 @@ bool Client::ll_forget(vinodeno_t vino, int num)
 
   if (vino.ino == 1) return true;  // ignore forget on root.
 
-  bool last = false;
   inode_hashmap::iterator i = inodes.find(vino);
   if (i == inodes.end()) {
     ldout(cct, 1) << "WARNING: ll_forget on " << vino << " " << num
 	    << ", which I don't have" << dendl;
-  } else {
-    Inode *in = i->second;
-    assert(in);
-    if (in->ll_ref < num) {
-      ldout(cct, 1) << "WARNING: ll_forget on " << vino << " " << num << ", which only has ll_ref=" << in->ll_ref << dendl;
-      _ll_put(in, in->ll_ref);
-      last = true;
-    } else if (_ll_put(in, num) == 0)
-      last = true;
+    return false;
   }
-  if (last)
-    trim_cache();
-  return last;
+
+  Inode *in = i->second;
+  if (in->ll_ref < num) {
+    ldout(cct, 1) << "WARNING: ll_forget on " << vino << " " << num << ", which only has ll_ref=" << in->ll_ref << dendl;
+    num = in->ll_ref;
+  }
+
+  return _ll_put(in, num) == 0;
 }
 
 // returns a reference on the returned inode
