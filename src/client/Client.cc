@@ -5320,14 +5320,26 @@ int Client::lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name)
 int Client::lookup_ino(inodeno_t ino)
 {
   Mutex::Locker lock(client_lock);
-  ldout(cct, 3) << "lookup_ino enter(" << ino << ") = " << dendl;
+  Inode *in;
+  int r = _lookup_ino(ino, &in);
+  if (r == 0)
+    in->put(); // drop ref from _lookup_ino
+  return r;
+}
+
+// returns a reference to **inp on success
+int Client::_lookup_ino(inodeno_t ino, Inode **inp)
+{
+  ldout(cct, 3) << "_lookup_ino enter(" << ino << ") = " << dendl;
 
   MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPINO);
   filepath path(ino);
   req->set_filepath(path);
 
-  int r = make_request(req, -1, -1, NULL, NULL, rand() % mdsmap->get_num_in_mds());
-  ldout(cct, 3) << "lookup_ino exit(" << ino << ") = " << r << dendl;
+  // TODO: get inode placement from mdsmap
+  int r = make_request(req, -1, -1, inp, NULL,
+                       rand() % mdsmap->get_num_in_mds());
+  ldout(cct, 3) << "_lookup_ino exit(" << ino << ") = " << r << dendl;
   return r;
 }
 
@@ -6363,22 +6375,17 @@ int Client::ll_lookup(Inode *parent, const char *name, struct stat *attr,
   tout(cct) << "ll_lookup" << std::endl;
   tout(cct) << name << std::endl;
 
-  string dname(name);
-  Inode *in;
-  int r = 0;
-
-  r = _lookup(parent, dname.c_str(), &in);
+  Inode *in = NULL;
+  int r = _lookup(parent, name, &in);
   if (r < 0) {
     attr->st_ino = 0;
-    goto out;
+  } else {
+    assert(in);
+    fill_stat(in, attr);
+    _ll_get(in);
+    in->put(); // drop ref from _lookup
   }
 
-  assert(in);
-  fill_stat(in, attr);
-  _ll_get(in);
-  in->put(); // drop ref from _lookup
-
- out:
   ldout(cct, 3) << "ll_lookup " << parent << " " << name
 	  << " -> " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
   tout(cct) << attr->st_ino << std::endl;
@@ -6488,9 +6495,12 @@ Inode *Client::ll_get_inode(vinodeno_t vino)
 {
   Mutex::Locker lock(client_lock);
   inode_hashmap::iterator i = inodes.find(vino);
-  if (i == inodes.end())
+  Inode *in = NULL;
+  if (i != inodes.end())
+    in = i->second;
+  else if (_lookup_ino(vino.ino, &in) != 0)
     return NULL;
-  Inode *in = i->second;
+
   _ll_get(in);
   return in;
 }
