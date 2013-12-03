@@ -642,6 +642,10 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
       ldout(cct, 12) << " had dentry " << dname
 	       << " with correct vino " << dn->vino
 	       << dendl;
+      // relink in case the inode had been trimmed
+      pair<set<Dentry*>::iterator, bool> result = in->dn_set.insert(dn);
+      if (result.second)
+        dn->get();
     } else {
       ldout(cct, 12) << " had dentry " << dname
 	       << " with WRONG vino " << dn->vino
@@ -2053,6 +2057,13 @@ void Client::trim_inode(Inode *in)
     close_stripe(stripe);
   }
 
+  // drop refs on dn_set
+  for (set<Dentry*>::iterator d = in->dn_set.begin(); d != in->dn_set.end(); ++d) {
+    Dentry *dn = *d;
+    dn->stripe->reset_complete();
+    dn->put();
+  }
+
   // release any caps
   remove_all_caps(in);
 
@@ -2147,9 +2158,10 @@ void Client::unlink(Dentry *dn, bool keepdir)
   if (i != inodes.end()) {
     Inode *in = i->second;
     set<Dentry*>::iterator d = in->dn_set.find(dn);
-    assert(d != in->dn_set.end());
-    in->dn_set.erase(d);
-    dn->put();
+    if (d != in->dn_set.end()) {
+      in->dn_set.erase(d);
+      dn->put();
+    }
     ldout(cct, 20) << "unlink  inode " << in << " parents now "
 		   << in->dn_set << dendl; 
   }
