@@ -5290,14 +5290,26 @@ int Client::lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name)
 int Client::lookup_ino(inodeno_t ino)
 {
   Mutex::Locker lock(client_lock);
-  ldout(cct, 3) << "lookup_ino enter(" << ino << ") = " << dendl;
+  Inode *in;
+  int r = _lookup_ino(ino, &in);
+  if (r == 0)
+    in->put(); // drop ref from _lookup_ino
+  return r;
+}
+
+// returns a reference to **inp on success
+int Client::_lookup_ino(inodeno_t ino, Inode **inp)
+{
+  ldout(cct, 3) << "_lookup_ino enter(" << ino << ") = " << dendl;
 
   MetaRequest *req = new MetaRequest(CEPH_MDS_OP_LOOKUPINO);
   filepath path(ino);
   req->set_filepath(path);
 
-  int r = make_request(req, -1, -1, NULL, NULL, rand() % mdsmap->get_num_in_mds());
-  ldout(cct, 3) << "lookup_ino exit(" << ino << ") = " << r << dendl;
+  // TODO: get inode placement from mdsmap
+  int r = make_request(req, -1, -1, inp, NULL,
+                       rand() % mdsmap->get_num_in_mds());
+  ldout(cct, 3) << "_lookup_ino exit(" << ino << ") = " << r << dendl;
   return r;
 }
 
@@ -6329,38 +6341,36 @@ int Client::ll_lookup(vinodeno_t parent, const char *name, struct stat *attr, in
   tout(cct) << parent.ino.val << std::endl;
   tout(cct) << name << std::endl;
 
-  string dname = name;
-  Inode *diri = 0;
-  Inode *in = 0;
-  int r = 0;
 
-  inode_hashmap::iterator i = inodes.find(parent);
-  if (i == inodes.end()) {
-    ldout(cct, 1) << "ll_lookup " << parent << " " << name << " -> ENOENT (parent DNE... WTF)" << dendl;
-    r = -ENOENT;
+  Inode *diri = _ll_get_inode(parent);
+  if (!diri) {
+    ldout(cct, 1) << "ll_lookup " << parent << " " << name
+        << " -> ENOENT (parent DNE... WTF)" << dendl;
     attr->st_ino = 0;
-    goto out;
+    tout(cct) << attr->st_ino << std::endl;
+    return -ENOENT;
   }
-  diri = i->second;
+  Inode::Deref ref(diri); // clean up ref from _ll_get_inode
+
   if (!diri->is_dir()) {
-    ldout(cct, 1) << "ll_lookup " << parent << " " << name << " -> ENOTDIR (parent not a dir... WTF)" << dendl;
-    r = -ENOTDIR;
+    ldout(cct, 1) << "ll_lookup " << parent << " " << name
+        << " -> ENOTDIR (parent not a dir... WTF)" << dendl;
     attr->st_ino = 0;
-    goto out;
+    tout(cct) << attr->st_ino << std::endl;
+    return -ENOTDIR;
   }
 
-  r = _lookup(diri, dname.c_str(), &in);
+  Inode *in = 0;
+  int r = _lookup(diri, name, &in);
   if (r < 0) {
     attr->st_ino = 0;
-    goto out;
+  } else {
+    assert(in);
+    fill_stat(in, attr);
+    _ll_get(in);
+    in->put(); // drop ref from _lookup
   }
 
-  assert(in);
-  fill_stat(in, attr);
-  _ll_get(in);
-  in->put(); // drop ref from _lookup
-
- out:
   ldout(cct, 3) << "ll_lookup " << parent << " " << name
 	  << " -> " << r << " (" << hex << attr->st_ino << dec << ")" << dendl;
   tout(cct) << attr->st_ino << std::endl;
@@ -6433,10 +6443,16 @@ bool Client::ll_forget(vinodeno_t vino, int num)
 // returns a reference on the returned inode
 Inode *Client::_ll_get_inode(vinodeno_t vino)
 {
+  Inode *in = NULL;
   inode_hashmap::iterator i = inodes.find(vino);
-  assert(i != inodes.end());
-  i->second->get();
-  return i->second;
+  if (i != inodes.end()) {
+    in = i->second;
+    in->get();
+  } else {
+    assert(vino.snapid == CEPH_NOSNAP); // cannot lookup-by-ino in snapshot
+    _lookup_ino(vino.ino, &in);
+  }
+  return in;
 }
 
 

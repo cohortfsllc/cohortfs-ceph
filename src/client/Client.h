@@ -630,6 +630,7 @@ public:
   int open(const char *path, int flags, mode_t mode, int stripe_unit, int stripe_count, int object_size, const char *data_pool);
   int lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name);
   int lookup_ino(inodeno_t ino);
+  int _lookup_ino(inodeno_t ino, Inode **inp);
   int close(int fd);
   loff_t lseek(int fd, loff_t offset, int whence);
   int read(int fd, char *buf, loff_t size, loff_t offset=-1);
