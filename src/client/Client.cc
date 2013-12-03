@@ -893,20 +893,21 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
 
     Inode *diri = _ll_get_inode(vino);
 
-    string dname = request->path.last_dentry();
-    stripeid_t stripeid = diri->pick_stripe(dname);
+    const string &snapname = request->path.last_dentry();
+    stripeid_t stripeid = diri->pick_stripe(snapname);
 
     LeaseStat dlease;
     dlease.duration_ms = 0;
 
     if (in) {
       DirStripe *stripe = diri->open_stripe(stripeid);
-      insert_dentry_inode(stripe, dname, &dlease, in, request->sent_stamp, session, true);
+      insert_dentry_inode(stripe, snapname, &dlease, in,
+                          request->sent_stamp, session, true);
     } else {
       assert(stripeid < diri->stripes.size());
       DirStripe *stripe = diri->stripes[stripeid];
       if (stripe) {
-        dn_hashmap::iterator d = stripe->dentries.find(dname);
+        dn_hashmap::iterator d = stripe->dentries.find(snapname);
         if (d != stripe->dentries.end() && !d->second->is_null())
           unlink(d->second, false);
       }
