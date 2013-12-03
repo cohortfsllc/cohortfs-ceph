@@ -892,24 +892,27 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
     vino.snapid = CEPH_SNAPDIR;
 
     Inode *diri = _ll_get_inode(vino);
+    if (diri) {
+      Inode::Deref ref(diri); // clean up ref from _ll_get_inode
 
-    const string &snapname = request->path.last_dentry();
-    stripeid_t stripeid = diri->pick_stripe(snapname);
+      const string &snapname = request->path.last_dentry();
+      stripeid_t stripeid = diri->pick_stripe(snapname);
 
-    LeaseStat dlease;
-    dlease.duration_ms = 0;
+      LeaseStat dlease;
+      dlease.duration_ms = 0;
 
-    if (in) {
-      DirStripe *stripe = diri->open_stripe(stripeid);
-      insert_dentry_inode(stripe, snapname, &dlease, in,
-                          request->sent_stamp, session, true);
-    } else {
-      assert(stripeid < diri->stripes.size());
-      DirStripe *stripe = diri->stripes[stripeid];
-      if (stripe) {
-        dn_hashmap::iterator d = stripe->dentries.find(snapname);
-        if (d != stripe->dentries.end() && !d->second->is_null())
-          unlink(d->second, false);
+      if (in) {
+        DirStripe *stripe = diri->open_stripe(stripeid);
+        insert_dentry_inode(stripe, snapname, &dlease, in,
+                            request->sent_stamp, session, true);
+      } else {
+        assert(stripeid < diri->stripes.size());
+        DirStripe *stripe = diri->stripes[stripeid];
+        if (stripe) {
+          dn_hashmap::iterator d = stripe->dentries.find(snapname);
+          if (d != stripe->dentries.end() && !d->second->is_null())
+            unlink(d->second, false);
+        }
       }
     }
   }
@@ -6427,10 +6430,12 @@ bool Client::ll_forget(vinodeno_t vino, int num)
   return last;
 }
 
+// returns a reference on the returned inode
 Inode *Client::_ll_get_inode(vinodeno_t vino)
 {
   inode_hashmap::iterator i = inodes.find(vino);
   assert(i != inodes.end());
+  i->second->get();
   return i->second;
 }
 
@@ -6450,6 +6455,11 @@ int Client::ll_getattr(vinodeno_t vino, struct stat *attr, int uid, int gid)
   }
 
   Inode *in = _ll_get_inode(vino);
+  if (!in) {
+    ldout(cct, 3) << "ll_getattr missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+
   int res;
   if (vino.snapid < CEPH_NOSNAP)
     res = 0;
@@ -6457,6 +6467,8 @@ int Client::ll_getattr(vinodeno_t vino, struct stat *attr, int uid, int gid)
     res = _getattr(in, CEPH_STAT_CAP_INODE_ALL, uid, gid);
   if (res == 0)
     fill_stat(in, attr);
+
+  in->put(); // drop ref from _ll_get_inode
   ldout(cct, 3) << "ll_getattr " << vino << " = " << res << dendl;
   return res;
 }
@@ -6476,10 +6488,16 @@ int Client::ll_setattr(vinodeno_t vino, struct stat *attr, int mask, int uid, in
   tout(cct) << mask << std::endl;
 
   Inode *in = _ll_get_inode(vino);
+  if (!in) {
+    ldout(cct, 3) << "ll_setattr missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+
   int res = _setattr(in, attr, mask, uid, gid);
   if (res == 0)
     fill_stat(in, attr);
 
+  in->put(); // drop ref from _ll_get_inode
   ldout(cct, 3) << "ll_setattr " << vino << " = " << res << dendl;
   return res;
 }
@@ -6658,6 +6676,12 @@ int Client::ll_getxattr(vinodeno_t vino, const char *name, void *value, size_t s
   tout(cct) << name << std::endl;
 
   Inode *in = _ll_get_inode(vino);
+  if (!in) {
+    ldout(cct, 3) << "ll_getxattr missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+
+  Inode::Deref ref(in); // clean up ref from _ll_get_inode
   return _getxattr(in, name, value, size, uid, gid);
 }
 
@@ -6710,6 +6734,12 @@ int Client::ll_listxattr(vinodeno_t vino, char *names, size_t size, int uid, int
   tout(cct) << size << std::endl;
 
   Inode *in = _ll_get_inode(vino);
+  if (!in) {
+    ldout(cct, 3) << "ll_listxattr missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+
+  Inode::Deref ref(in); // clean up ref from _ll_get_inode
   return _listxattr(in, names, size, uid, gid);
 }
 
@@ -6756,6 +6786,12 @@ int Client::ll_setxattr(vinodeno_t vino, const char *name, const void *value, si
   tout(cct) << name << std::endl;
 
   Inode *in = _ll_get_inode(vino);
+  if (!in) {
+    ldout(cct, 3) << "ll_setxattr missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+
+  Inode::Deref ref(in); // clean up ref from _ll_get_inode
   return _setxattr(in, name, value, size, flags, uid, gid);
 }
 
@@ -6796,6 +6832,12 @@ int Client::ll_removexattr(vinodeno_t vino, const char *name, int uid, int gid)
   tout(cct) << name << std::endl;
 
   Inode *in = _ll_get_inode(vino);
+  if (!in) {
+    ldout(cct, 3) << "ll_removexattr missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+
+  Inode::Deref ref(in); // clean up ref from _ll_get_inode
   return _removexattr(in, name, uid, gid);
 }
 
@@ -6808,6 +6850,10 @@ int Client::ll_readlink(vinodeno_t vino, const char **value, int uid, int gid)
   tout(cct) << vino.ino.val << std::endl;
 
   Inode *in = _ll_get_inode(vino);
+  if (!in) {
+    ldout(cct, 3) << "ll_readlink missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
   // TODO: touch_inode(in)
 
   int r = 0;
@@ -6817,6 +6863,7 @@ int Client::ll_readlink(vinodeno_t vino, const char **value, int uid, int gid)
     *value = "";
     r = -EINVAL;
   }
+  in->put(); // drop ref from _ll_get_inode
   ldout(cct, 3) << "ll_readlink " << vino << " = " << r << " (" << *value << ")" << dendl;
   return r;
 }
@@ -6875,8 +6922,14 @@ int Client::ll_mknod(vinodeno_t parent, const char *name, mode_t mode, dev_t rde
   tout(cct) << rdev << std::endl;
 
   Inode *diri = _ll_get_inode(parent);
+  if (!diri) {
+    ldout(cct, 3) << "ll_mknod missing dir " << parent << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+
   Inode *in = 0;
   int r = _mknod(diri, name, mode, rdev, uid, gid, &in);
+  diri->put(); // drop ref from _ll_get_inode
   if (r == 0) {
     fill_stat(in, attr);
     _ll_get(in);
@@ -7017,9 +7070,14 @@ int Client::ll_mkdir(vinodeno_t parent, const char *name, mode_t mode, struct st
   tout(cct) << mode << std::endl;
 
   Inode *diri = _ll_get_inode(parent);
+  if (!diri) {
+    ldout(cct, 3) << "ll_mkdir missing dir " << parent << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
 
   Inode *in = 0;
   int r = _mkdir(diri, name, mode, uid, gid, &in);
+  diri->put(); // drop ref from _ll_get_inode
   if (r == 0) {
     fill_stat(in, attr);
     _ll_get(in);
@@ -7084,8 +7142,14 @@ int Client::ll_symlink(vinodeno_t parent, const char *name, const char *value, s
   tout(cct) << value << std::endl;
 
   Inode *diri = _ll_get_inode(parent);
+  if (!diri) {
+    ldout(cct, 3) << "ll_symlink missing dir " << parent << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+
   Inode *in = 0;
   int r = _symlink(diri, name, value, uid, gid, &in);
+  diri->put(); // drop ref from _ll_get_inode
   if (r == 0) {
     fill_stat(in, attr);
     _ll_get(in);
@@ -7159,6 +7223,11 @@ int Client::ll_unlink(vinodeno_t vino, const char *name, int uid, int gid)
   tout(cct) << name << std::endl;
 
   Inode *diri = _ll_get_inode(vino);
+  if (!diri) {
+    ldout(cct, 3) << "ll_unlink missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+  Inode::Deref ref(diri); // clean up ref from _ll_get_inode
   return _unlink(diri, name, uid, gid);
 }
 
@@ -7190,17 +7259,12 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
   if (res < 0)
     goto fail;
   req->set_inode(in);
-  in->put(); // drop ref from _lookup
 
   res = make_request(req, uid, gid);
-  if (res == 0) {
-    DirStripe *stripe = dir->stripes[dir->pick_stripe(name)];
-    if (stripe) {
-      dn_hashmap::iterator d = stripe->dentries.find(name);
-      if (d != stripe->dentries.end())
-        unlink(d->second, false);
-    }
-  }
+  if (res == 0 && in->dn_set.size())
+    unlink(*in->dn_set.begin(), false);
+
+  in->put(); // drop ref from _lookup
 
   trim_cache();
   ldout(cct, 3) << "rmdir(" << path << ") = " << res << dendl;
@@ -7220,6 +7284,11 @@ int Client::ll_rmdir(vinodeno_t vino, const char *name, int uid, int gid)
   tout(cct) << name << std::endl;
 
   Inode *diri = _ll_get_inode(vino);
+  if (!diri) {
+    ldout(cct, 3) << "ll_rmdir missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+  Inode::Deref ref(diri); // clean up ref from _ll_get_inode
   return _rmdir(diri, name, uid, gid);
 }
 
@@ -7306,8 +7375,24 @@ int Client::ll_rename(vinodeno_t parent, const char *name, vinodeno_t newparent,
   tout(cct) << newparent.ino.val << std::endl;
   tout(cct) << newname << std::endl;
 
+  Inode::DerefSet refs; // clean up refs from _ll_get_inode
+
   Inode *fromdiri = _ll_get_inode(parent);
+  if (!fromdiri) {
+    ldout(cct, 3) << "ll_rename missing src dir " << parent
+        << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+  refs.insert(fromdiri);
+
   Inode *todiri = _ll_get_inode(newparent);
+  if (!todiri) {
+    ldout(cct, 3) << "ll_rename missing dest dir" << newparent
+        << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+  refs.insert(todiri);
+
   return _rename(fromdiri, name, todiri, newname, uid, gid);
 }
 
@@ -7362,12 +7447,25 @@ int Client::ll_link(vinodeno_t vino, vinodeno_t newparent, const char *newname, 
   tout(cct) << newparent << std::endl;
   tout(cct) << newname << std::endl;
 
-  Inode *old = _ll_get_inode(vino);
-  Inode *diri = _ll_get_inode(newparent);
+  Inode::DerefSet refs; // clean up refs from _ll_get_inode
 
-  int r = _link(old, diri, newname, uid, gid, &old);
+  Inode *old = _ll_get_inode(vino);
+  if (!old) {
+    ldout(cct, 3) << "ll_link missing inode " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+  refs.insert(old);
+
+  Inode *diri = _ll_get_inode(newparent);
+  if (!diri) {
+    ldout(cct, 3) << "ll_rename missing dir " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+  refs.insert(diri);
+
+  Inode *in = NULL;
+  int r = _link(old, diri, newname, uid, gid, &in);
   if (r == 0) {
-    Inode *in = _ll_get_inode(vino);
     fill_stat(in, attr);
     _ll_get(in);
     in->put(); // drop ref from _link
@@ -7395,7 +7493,10 @@ int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
   tout(cct) << vino.ino.val << std::endl;
  
   Inode *diri = _ll_get_inode(vino);
-  assert(diri);
+  if (!diri) {
+    ldout(cct, 3) << "ll_rename missing dir " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
 
   int r = 0;
   if (vino.snapid == CEPH_SNAPDIR) {
@@ -7403,6 +7504,7 @@ int Client::ll_opendir(vinodeno_t vino, void **dirpp, int uid, int gid)
   } else {
     r = _opendir(diri, (dir_result_t**)dirpp);
   }
+  diri->put(); // drop ref from _ll_get_inode
 
   tout(cct) << (unsigned long)*dirpp << std::endl;
 
@@ -7430,6 +7532,11 @@ int Client::ll_open(vinodeno_t vino, int flags, Fh **fhp, int uid, int gid)
   tout(cct) << flags << std::endl;
 
   Inode *in = _ll_get_inode(vino);
+  if (!in) {
+    ldout(cct, 3) << "ll_open missing " << vino << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+  Inode::Deref ref(in); // clean up ref from _ll_get_inode
 
   int r;
   if (uid < 0) {
@@ -7461,10 +7568,17 @@ int Client::ll_create(vinodeno_t parent, const char *name, mode_t mode, int flag
 
   *fhp = NULL;
 
-  Inode::DerefSet refs; // clean up refs from _lookup and _create
+  Inode::DerefSet refs; // clean up refs from _ll_get_inode, _lookup, _create
+
+  Inode *dir = _ll_get_inode(parent);
+  if (!dir) {
+    ldout(cct, 3) << "ll_create missing dir " << parent << " = -ESTALE" << dendl;
+    return -ESTALE;
+  }
+  refs.insert(dir);
+
   bool created = false;
   Inode *in = NULL;
-  Inode *dir = _ll_get_inode(parent);
   int r = _lookup(dir, name, &in);
   if (r == 0) {
     refs.insert(in);
