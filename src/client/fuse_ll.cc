@@ -319,8 +319,9 @@ static void fuse_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
     fuse_reply_err(req, -r);
   }
 
-  // XXX NB, we dont iput(i2) because FUSE will do so in a matching
-  // fuse_ll_forget()
+  // iput(i2) despite the expectation of a matching fuse_ll_forget();
+  // if we hold this reference, all parent objects must stay pinned
+  cfuse->iput(i2);
   cfuse->iput(i1); // iput required
 }
 
