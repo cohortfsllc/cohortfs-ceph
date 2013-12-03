@@ -116,7 +116,7 @@ CDirFrag::CDirFrag(CDirStripe *stripe, frag_t frag, MDCache *mdcache, bool auth)
     mseq(0),
     item_dirty(this),
     item_new(this),
-    version(0),
+    version(1),
     num_head_items(0),
     num_head_null(0),
     num_snap_items(0),
