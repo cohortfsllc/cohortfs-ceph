@@ -5427,10 +5427,12 @@ void Server::handle_client_rename(MDRequest *mdr)
   if (oldin) {
     xlocks.insert(&oldin->linklock);
 
-    // rdlock oldin stripes to prevent creates while verifying emptiness
-    CDirPlacement *placement = oldin->get_placement();
-    for (size_t i = 0; i < placement->get_stripe_count(); ++i)
-      rdlocks.insert(&placement->get_stripe(i)->linklock);
+    if (oldin->is_dir()) {
+      // rdlock oldin stripes to prevent creates while verifying emptiness
+      CDirPlacement *placement = oldin->get_placement();
+      for (size_t i = 0; i < placement->get_stripe_count(); ++i)
+        rdlocks.insert(&placement->get_stripe(i)->linklock);
+    }
   }
 
   CInode *auth_pin_freeze = !srcdn->is_auth() && srcdnl->is_primary() ? srci : NULL;
