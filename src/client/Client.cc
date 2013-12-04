@@ -3824,6 +3824,7 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
             if (s->cap_ttl > now &&
                 s->cap_gen == dn->lease_gen) {
               in->get();
+              lru.lru_midtouch(in);
               *target = in;
               // touch this mds's dir cap too, even though we don't _explicitly_
               // use it here, to make trim_caps() behave.
@@ -3839,6 +3840,7 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
         if (stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED) &&
             dn->cap_shared_gen == stripe->shared_gen) {
           in->get();
+          lru.lru_midtouch(in);
           *target = in;
           goto done;
         }
@@ -6437,6 +6439,7 @@ Inode *Client::_ll_get_inode(vinodeno_t vino)
   if (i != inodes.end()) {
     in = i->second;
     in->get();
+    lru.lru_midtouch(in);
   } else {
     assert(vino.snapid == CEPH_NOSNAP); // cannot lookup-by-ino in snapshot
     _lookup_ino(vino.ino, &in);
@@ -6859,7 +6862,6 @@ int Client::ll_readlink(vinodeno_t vino, const char **value, int uid, int gid)
     ldout(cct, 3) << "ll_readlink missing " << vino << " = -ESTALE" << dendl;
     return -ESTALE;
   }
-  // TODO: touch_inode(in)
 
   int r = 0;
   if (in->is_symlink()) {
