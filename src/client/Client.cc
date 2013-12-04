@@ -3840,6 +3840,7 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
             if (s->cap_ttl > now &&
                 s->cap_gen == dn->lease_gen) {
               in->get();
+              lru.lru_midtouch(in);
               *target = in;
               // touch this mds's dir cap too, even though we don't _explicitly_
               // use it here, to make trim_caps() behave.
@@ -3855,6 +3856,7 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
         if (stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED) &&
             dn->cap_shared_gen == stripe->shared_gen) {
           in->get();
+          lru.lru_midtouch(in);
           *target = in;
           goto done;
         }
@@ -6424,6 +6426,7 @@ int Client::ll_walk(const char* name, Inode **i, struct stat *attr)
 void Client::_ll_get(Inode *in)
 {
   in->ll_get();
+  lru.lru_midtouch(in);
   ldout(cct, 20) << "_ll_get " << in << " " << in->ino << " -> " << in->ll_ref << dendl;
 }
 
