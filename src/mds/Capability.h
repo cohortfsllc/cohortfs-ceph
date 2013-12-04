@@ -253,6 +253,8 @@ public:
     g_num_capa++;
   }
   ~Capability() {
+    // finish cap callbacks waiting on confirmation
+    finish_confirm_waiters(last_sent);
     g_num_cap--;
     g_num_caps++;
   }
