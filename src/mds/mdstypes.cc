@@ -402,6 +402,27 @@ ostream& operator<<(ostream& out, const inoparent_t &p)
 
 
 /*
+ * stripe_cap_update_t
+ */
+void stripe_cap_update_t::encode(bufferlist &bl) const
+{
+  ::encode(name, bl);
+  ::encode(ino, bl);
+}
+
+void stripe_cap_update_t::decode(bufferlist::iterator &p)
+{
+  ::decode(name, p);
+  ::decode(ino, p);
+}
+
+ostream& operator<<(ostream& out, const stripe_cap_update_t &s)
+{
+  return out << s.name << "->" << s.ino;
+}
+
+
+/*
  * inode_t
  */
 

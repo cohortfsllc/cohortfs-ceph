@@ -417,6 +417,20 @@ ostream& operator<<(ostream &out, const stripe_stat_update_t &s);
 
 
 /*
+ * stripe cap update
+ */
+struct stripe_cap_update_t {
+  string name;
+  inodeno_t ino;
+
+  void encode(bufferlist &bl) const;
+  void decode(bufferlist::iterator &bl);
+};
+
+ostream& operator<<(ostream &out, const stripe_cap_update_t &s);
+
+
+/*
  * inode parents
  */
 struct inoparent_t {
