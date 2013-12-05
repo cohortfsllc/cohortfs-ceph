@@ -782,6 +782,10 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	} else {
 	  // keep existing dn
 	  dn = olddn;
+          // relink in case the inode had been trimmed
+          pair<set<Dentry*>::iterator, bool> result = in->dn_set.insert(dn);
+          if (result.second)
+            dn->get();
 	  ++pd;  // move past the dentry we just touched.
 	}
       } else {
