@@ -32,6 +32,9 @@ class MClientCaps : public Message {
   bufferlist xattrbl;
   bufferlist flockbl;
 
+  // dentries updated with stripe caps
+  bufferlist dentries; // vector<stripe_cap_update_t>
+
   int get_caps() const { return head.caps; }
   int get_wanted() const { return head.wanted; }
   int get_dirty() const { return head.dirty; }
@@ -159,8 +162,10 @@ public:
       assert(middle.length() == inode.xattr_len);
       if (inode.xattr_len)
         xattrbl = middle;
-    } else
+    } else {
       ::decode(stripe, p);
+      ::decode(dentries, p);
+    }
     ::decode_nohead(head.snap_trace_len, snapbl, p);
 
     // conditionally decode flock metadata
@@ -173,8 +178,10 @@ public:
     if (is_inode()) {
       inode.xattr_len = xattrbl.length();
       ::encode(inode, payload);
-    } else
+    } else {
       ::encode(stripe, payload);
+      ::encode(dentries, payload);
+    }
     ::encode_nohead(snapbl, payload);
 
     middle = xattrbl;
