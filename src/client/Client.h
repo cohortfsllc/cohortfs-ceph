@@ -506,7 +506,8 @@ private:
   void _readdir_drop_dirp_buffer(dir_result_t *dirp);
   void _readdir_next_stripe(dir_result_t *dirp);
   int _readdir_get_stripe(dir_result_t *dirp);
-  int _readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p);
+  int _readdir_cache_cb(dir_result_t *dirp, DirStripe *stirpe,
+                        add_dirent_cb_t cb, void *p);
   void _closedir(dir_result_t *dirp);
 
   // other helpers

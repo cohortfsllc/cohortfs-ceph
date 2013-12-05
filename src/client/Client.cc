@@ -4826,22 +4826,13 @@ int Client::_readdir_get_stripe(dir_result_t *dirp)
   return res;
 }
 
-int Client::_readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
+int Client::_readdir_cache_cb(dir_result_t *dirp, DirStripe *stripe,
+                              add_dirent_cb_t cb, void *p)
 {
   assert(client_lock.is_locked());
   ldout(cct, 10) << "_readdir_cache_cb " << dirp
-      << " on " << dirp->inode->ino << ':' << dirp->get_stripe()
-      << " at_cache_name " << dirp->at_cache_name
+      << " on " << *stripe << " at_cache_name " << dirp->at_cache_name
       << " offset " << hex << dirp->offset << dec << dendl;
-
-  stripeid_t stripeid = dirp->get_stripe();
-  DirStripe *stripe = dirp->inode->stripes[stripeid];
-
-  if (!stripe) {
-    ldout(cct, 10) << " stripe " << stripeid << " is empty" << dendl;
-    dirp->next_stripe();
-    return 0;
-  }
 
   dn_map::iterator pd;
   if (dirp->at_cache_name.length()) {
@@ -4855,7 +4846,6 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
   if (pd == stripe->dentry_map.end())
     dirp->next_stripe();
 
-  string prev_name;
   while (pd != stripe->dentry_map.end()) {
     Dentry *dn = pd->second;
     if (dn->is_null()) {
@@ -4885,11 +4875,10 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
 	     << dendl;
     if (r < 0) {
       dirp->next_offset = dn->offset;
-      dirp->at_cache_name = prev_name;
       return r;
     }
 
-    prev_name = dn->name;
+    dirp->at_cache_name = dn->name;
     dirp->offset = next_off;
     if (r > 0)
       return r;
@@ -4964,42 +4953,38 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
       return r;
   }
 
-  // can we read from our cache?
   while (!dirp->at_end()) {
+    // can we read from our cache?
     stripeid = dirp->get_stripe();
     DirStripe *stripe = dirp->inode->stripes[stripeid];
-    if (!stripe)
-      break;
+    if (stripe)
+      ldout(cct, 10) << *stripe << " offset " << hex << dirp->offset
+          << " pos " << dirp->get_pos() << dec
+          << " at_cache_name " << dirp->at_cache_name
+          << " snapid " << stripe->snapid
+          << " issued " << ccap_string(stripe->caps_issued()) << dendl;
 
-    ldout(cct, 10) << *stripe << " offset " << hex << dirp->offset
-        << " pos " << dirp->get_pos() << dec
-        << " at_cache_name " << dirp->at_cache_name
-        << " snapid " << stripe->snapid
-        << " issued " << ccap_string(stripe->caps_issued()) << dendl;
+    if (stripe && (dirp->offset == 2 || dirp->get_pos() == 0 ||
+                   !dirp->at_cache_name.empty()) &&
+        stripe->snapid != CEPH_SNAPDIR && stripe->is_complete() &&
+        stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED)) {
+      int err = _readdir_cache_cb(dirp, stripe, cb, p);
+      if (err && err != -EAGAIN)
+        return err;
+      continue;
+    }
 
-    if ((dirp->offset != 2 && dirp->get_pos() != 0 &&
-         dirp->at_cache_name.empty()) ||
-        stripe->snapid == CEPH_SNAPDIR || !stripe->is_complete() ||
-        !stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED))
-      break;
+    if (dirp->at_cache_name.length()) {
+      dirp->last_name = dirp->at_cache_name;
+      dirp->at_cache_name.clear();
+    }
 
-    int err = _readdir_cache_cb(dirp, cb, p);
-    if (err == -EAGAIN)
-      break;
-    if (err)
-      return err;
-  }
-  if (dirp->at_cache_name.length()) {
-    dirp->last_name = dirp->at_cache_name;
-    dirp->at_cache_name.clear();
-  }
-
-  while (!dirp->at_end()) {
     if (dirp->buffer_stripe != dirp->get_stripe()) {
       int r = _readdir_get_stripe(dirp);
       if (r)
 	return r;
       stripeid = dirp->buffer_stripe;
+      stripe = diri->stripes[stripeid];
       off = dirp->get_pos();
     }
 
@@ -5034,7 +5019,6 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
       continue;  // more!
     }
 
-    DirStripe *stripe = diri->stripes[stripeid];
     if (stripe && stripe->release_count == dirp->release_count &&
 	stripe->shared_gen == dirp->start_shared_gen) {
       ldout(cct, 10) << " marking I_COMPLETE on " << *stripe << dendl;
