@@ -263,7 +263,16 @@ class CDirStripe : public CapObject {
   void encode_lock_state(int type, bufferlist& bl);
   void decode_lock_state(int type, bufferlist& bl);
 
+  // track added/removed dentries, so we can include a delta with cap updates
+ private:
+  vector<stripe_cap_update_t> dentry_updates;
+ public:
+  void add_dentry_update(const string &dname, inodeno_t ino) {
+    dentry_updates.push_back(stripe_cap_update_t(dname, ino));
+  }
+
   // -- caps --
+ public:
   virtual int get_caps_liked();
   virtual int get_caps_allowed_ever();
   int encode_stripestat(bufferlist &bl, Session *session, SnapRealm *dir_realm,

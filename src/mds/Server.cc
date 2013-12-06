@@ -2663,6 +2663,9 @@ void Server::handle_client_openc(MDRequest *mdr)
     pi->client_ranges[client].follows = follows;
   }
 
+  // include the change in stripe cap updates
+  dn->get_stripe()->add_dentry_update(dn->get_name(), in->ino());
+
   if (follows >= dn->first)
     dn->first = follows+1;
   in->first = dn->first;
@@ -3954,6 +3957,9 @@ void Server::handle_client_mknod(MDRequest *mdr)
   pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
   pi->accounted_rstat = pi->rstat;
 
+  // include the change in stripe cap updates
+  dn->get_stripe()->add_dentry_update(dn->get_name(), pi->ino);
+
   // if the client created a _regular_ file via MKNOD, it's highly likely they'll
   // want to write to it (e.g., if they are reexporting NFS)
   if (S_ISREG(pi->mode)) {
@@ -4063,6 +4069,9 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   pi->dirstat.mtime = pi->rstat.rctime = mdr->now;
   pi->accounted_rstat = pi->rstat;
 
+  // include the change in stripe cap updates
+  dn->get_stripe()->add_dentry_update(dn->get_name(), pi->ino);
+
   CDirPlacement *newplacement = newi->get_placement();
   newplacement->set_mode(pi->mode);
   newplacement->set_gid(pi->gid);
@@ -4155,6 +4164,9 @@ void Server::handle_client_symlink(MDRequest *mdr)
 
   pi->update_backtrace();
   pi->parents.push_back(dn->inoparent());
+
+  // include the change in stripe cap updates
+  dn->get_stripe()->add_dentry_update(dn->get_name(), pi->ino);
 
   if (follows >= dn->first)
     dn->first = follows + 1;
@@ -4261,6 +4273,9 @@ void Server::_link_local(MDRequest *mdr, CDentry *dn, CInode *targeti)
   pi->nlink++;
   pi->ctime = mdr->now;
   targeti->project_added_parent(dn->inoparent());
+
+  // include the change in stripe cap updates
+  dn->get_stripe()->add_dentry_update(dn->get_name(), pi->ino);
 
   snapid_t follows = mdcache->get_snaprealm()->get_newest_seq();
   if (follows >= dn->first)
@@ -4379,12 +4394,16 @@ void Server::_link_remote(MDRequest *mdr, bool inc, CDentry *dn, CInode *targeti
                                       dn->inoparent(), true, 1);
     dn->push_projected_linkage(targeti->ino(), targeti->d_type());
     le->metablob.add_dentry(dn, true); // new remote
+
+    dn->get_stripe()->add_dentry_update(dn->get_name(), targeti->ino());
   } else {
     targeti->inode.nlink--;
     mdcache->parentstats.sub(&targeti->inode, dn->inoparent(),
                              mdr, &le->metablob);
     mdcache->journal_cow_dentry(mdr, &le->metablob, dn);
     le->metablob.add_dentry(dn, true);
+
+    dn->get_stripe()->add_dentry_update(dn->get_name(), 0);
   }
 
   journal_and_reply(mdr, targeti, dn, le, new C_MDS_link_remote_finish(mds, mdr, inc, dn, targeti));
@@ -4919,6 +4938,9 @@ void Server::_unlink_local(MDRequest *mdr, CDentry *dn)
 
   mdcache->parentstats.sub(pi, dn->inoparent(), mdr, &le->metablob);
   in->project_removed_parent(dn->inoparent());
+
+  // include the change in stripe cap updates
+  dn->get_stripe()->add_dentry_update(dn->get_name(), 0);
 
   // remote link.  update remote inode.
   assert(dnl->is_remote());
@@ -5477,12 +5499,18 @@ void Server::handle_client_rename(MDRequest *mdr)
   else
     dout(10) << "destdn from null to " << srci->ino() << dendl;
 
+  // include the change in stripe cap updates
+  destdn->get_stripe()->add_dentry_update(destdn->get_name(), srci->ino());
+
   // srcdn
   srcdn->push_projected_linkage();
   if (srcdn->is_auth()) {
     // change linkage from srci to null
     le->metablob.add_dentry(srcdn, true);
     dout(10) << "srcdn from " << srci->ino() << " to null" << dendl;
+
+    // include the change in stripe cap updates
+    srcdn->get_stripe()->add_dentry_update(srcdn->get_name(), 0);
   }
 
   // srcin
@@ -5760,6 +5788,9 @@ void Server::handle_slave_rename_prep(MDRequest *mdr)
     // change linkage from srcino to null
     srcdn->push_projected_linkage();
     le->commit.add_dentry(srcdn, srcdn->is_auth());
+
+    // include the change in stripe cap updates
+    srcdn->get_stripe()->add_dentry_update(srcdn->get_name(), 0);
   }
 
   // destdn
@@ -5780,6 +5811,9 @@ void Server::handle_slave_rename_prep(MDRequest *mdr)
     // change linkage from destino to srcino
     destdn->push_projected_linkage(req->src.ino, req->src.d_type);
     le->commit.add_dentry(destdn, destdn->is_auth());
+
+    // include the change in stripe cap updates
+    destdn->get_stripe()->add_dentry_update(destdn->get_name(), req->src.ino);
   }
 
   // srcino
@@ -5963,8 +5997,11 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr,
 
     // restore and journal linkage
     srcdn->push_projected_linkage(rollback.src.ino, rollback.src.d_type);
-    if (srcdn->is_auth())
+    if (srcdn->is_auth()) {
       le->commit.add_dentry(srcdn, true);
+      srcdn->get_stripe()->add_dentry_update(srcdn->get_name(),
+                                             rollback.src.ino);
+    }
   } else
     dout(10) << "   srcdn not found" << dendl;
 
@@ -5974,8 +6011,11 @@ void Server::do_rename_rollback(bufferlist &rbl, int master, MDRequest *mdr,
 
     // restore and journal linkage
     destdn->push_projected_linkage(rollback.dest.ino, rollback.dest.d_type);
-    if (destdn->is_auth())
+    if (destdn->is_auth()) {
       le->commit.add_dentry(destdn, true);
+      destdn->get_stripe()->add_dentry_update(destdn->get_name(),
+                                              rollback.dest.ino);
+    }
   } else
     dout(10) << "  destdn not found" << dendl;
 
