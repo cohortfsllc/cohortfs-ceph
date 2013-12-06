@@ -68,26 +68,26 @@ int OSDVol::find_object_context(const hobject_t& oid,
 
   // want the head?
   if (oid.snap == CEPH_NOSNAP) {
-    ObjectContext *obc = get_object_context(head, oloc, can_create);
+    ObjectContext *obc = get_object_context(head, can_create);
     if (!obc)
       return -ENOENT;
     *pobc = obc;
 
     if (can_create && !obc->ssc)
-      obc->ssc = get_snapset_context(oid.oid, oid.get_key(), oid.hash, true);
+      obc->ssc = get_snapset_context(oid.oid, true);
 
     return 0;
   }
 
   // we want a snap
-  SnapSetContext *ssc = get_snapset_context(oid.oid, oid.get_key(), oid.hash, can_create);
+  SnapSetContext *ssc = get_snapset_context(oid.oid, can_create);
   if (!ssc)
     return -ENOENT;
 
   // head?
   if (oid.snap > ssc->snapset.seq) {
     if (ssc->snapset.head_exists) {
-      ObjectContext *obc = get_object_context(head, oloc, false);
+      ObjectContext *obc = get_object_context(head, false);
       if (!obc->ssc)
 	obc->ssc = ssc;
       else {
@@ -110,24 +110,16 @@ int OSDVol::find_object_context(const hobject_t& oid,
     put_snapset_context(ssc);
     return -ENOENT;
   }
-  hobject_t soid(oid.oid, oid.get_key(), ssc->snapset.clones[k], oid.hash,
-		 info.pgid.pool());
+  hobject_t soid(oid.oid, ssc->snapset.clones[k]);
 
   put_snapset_context(ssc); // we're done with ssc
   ssc = 0;
 
-  if (pg_log.get_missing().is_missing(soid)) {
-    if (psnapid)
-      *psnapid = soid.snap;
-    return -EAGAIN;
-  }
-
-  ObjectContext *obc = get_object_context(soid, oloc, false);
+  ObjectContext *obc = get_object_context(soid, false);
   assert(obc);
 
   // clone
   snapid_t first = obc->obs.oi.snaps[obc->obs.oi.snaps.size()-1];
-  snapid_t last = obc->obs.oi.snaps[0];
   if (first <= oid.snap) {
     *pobc = obc;
     return 0;
@@ -161,39 +153,13 @@ void OSDVol::do_op(OpRequestRef op)
   }
 
   if ((op->may_read()) && (obc->obs.oi.lost)) {
-    // This object is lost. Reading from it returns an error.
-	     << " is lost" << dendl;
     osd->reply_op_error(op, -ENFILE);
     return;
   }
 
   bool ok;
-  if ((op->may_read() && op->may_write()) ||
-      (m->get_flags() & CEPH_OSD_FLAG_RWORDERED)) {
-    ok = mode.try_rmw(client);
-  } else if (op->may_write()) {
-    ok = mode.try_write(client);
-  } else if (op->may_read()) {
-    ok = mode.try_read(client);
-  } else {
-    osd->reply_op_error(op, -ENFILE);
-    return;
-  }
-
-  if (!ok) {
-    mode.waiting.push_back(op);
-    return;
-  }
-
   if (!op->may_write() && !obc->obs.exists) {
     osd->reply_op_error(op, -ENOENT);
-    put_object_context(obc);
-    return;
-  }
-
-  // are writes blocked by another object?
-  if (obc->blocked_by) {
-    wait_for_degraded_object(obc->blocked_by->obs.oi.soid, op);
     put_object_context(obc);
     return;
   }
@@ -213,15 +179,12 @@ void OSDVol::do_op(OpRequestRef op)
     if (!ceph_osd_op_type_multi(osd_op.op.op))
       continue;
     if (osd_op.soid.oid.name.length()) {
-      object_locator_t src_oloc;
-      get_src_oloc(m->get_oid(), m->get_object_locator(), src_oloc);
-      hobject_t src_oid(osd_op.soid, src_oloc.key, m->get_pg().ps(),
-			info.pgid.pool());
+      hobject_t src_oid(osd_op.soid);
       if (!src_obc.count(src_oid)) {
 	ObjectContext *sobc;
 	snapid_t ssnapid;
 
-	int r = find_object_context(src_oid, src_oloc, &sobc, false, &ssnapid);
+	int r = find_object_context(src_oid, &sobc, false, &ssnapid);
 	if (r) {
 	  osd->reply_op_error(op, r);
 	}  else {
@@ -1901,4 +1864,24 @@ SnapSetContext *OSDVol::get_snapset_context(const object_t& oid,
 	   << ssc->ref << " -> " << (ssc->ref+1) << dendl;
   ssc->ref++;
   return ssc;
+}
+
+void OSDVol::put_snapset_context(SnapSetContext *ssc)
+{
+  --ssc->ref;
+  if (ssc->ref == 0) {
+    if (ssc->registered)
+      snapset_contexts.erase(ssc->oid);
+    delete ssc;
+  }
+}
+
+void OSDVol::put_object_contexts(map<hobject_t,ObjectContext*>& obcv)
+{
+  if (obcv.empty())
+    return;
+  dout(10) << "put_object_contexts " << obcv << dendl;
+  for (map<hobject_t,ObjectContext*>::iterator p = obcv.begin(); p != obcv.end(); ++p)
+    put_object_context(p->second);
+  obcv.clear();
 }
