@@ -360,12 +360,6 @@ protected:
 
   // -- metadata cache stuff
 
-  // decrease inode ref.  delete if dangling.
-  void put_inode(Inode *in);
-  void close_stripe(DirStripe *stripe);
-
-  friend class C_PutInode; // calls put_inode()
-  friend class InodeCache;
   friend class C_Client_DentryInvalidate;  // calls dentry_invalidate_cb
   friend class C_Block_Sync; // Calls block map and protected helpers
 

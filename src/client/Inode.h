@@ -230,6 +230,7 @@ class Inode : public CapObject, public LRUObject {
   bool have_valid_size();
   stripeid_t pick_stripe(const string &dname);
   DirStripe *open_stripe(stripeid_t stripeid);
+  void close_stripe(DirStripe *stripe);
 
   virtual void print(ostream &out);
   void dump(Formatter *f) const;

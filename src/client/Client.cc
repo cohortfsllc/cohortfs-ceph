@@ -819,7 +819,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
     }
 
     if (stripe->is_empty())
-      close_stripe(stripe);
+      stripe->parent_inode->close_stripe(stripe);
   }
 }
 
@@ -2067,7 +2067,7 @@ void Client::trim_inode(Inode *in)
     for (dn_map::iterator d = stripe->dentry_map.begin();
          d != stripe->dentry_map.end(); ++d)
       unlink(d->second, true);
-    close_stripe(stripe);
+    in->close_stripe(stripe);
   }
 
   // drop refs on dn_set
@@ -2094,24 +2094,6 @@ void Client::trim_inode(Inode *in)
 
   // drop last ref
   in->put();
-}
-
-void Client::close_stripe(DirStripe *stripe)
-{
-  Inode *in = stripe->parent_inode;
-  ldout(cct, 15) << "close_stripe " << *stripe << " on " << *in << dendl;
-  assert(stripe->is_empty());
-
-  // release any caps
-  stripe->remove_all_caps();
-
-  vector<DirStripe*>::iterator s = in->stripes.begin() + stripe->stripeid;
-  assert(*s == stripe);
- 
-  stripe->cap_item.remove_myself();
-  stripe->snaprealm_item.remove_myself();
-  delete stripe;
-  *s = 0;
 }
 
   /**
@@ -2185,7 +2167,7 @@ void Client::unlink(Dentry *dn, bool keepdir)
   dn->stripe->dentries.erase(dn->name);
   dn->stripe->dentry_map.erase(dn->name);
   if (dn->stripe->is_empty() && !keepdir)
-    close_stripe(dn->stripe);
+    dn->stripe->parent_inode->close_stripe(dn->stripe);
   dn->stripe = 0;
 
   dn->put();

@@ -318,6 +318,24 @@ DirStripe* Inode::open_stripe(stripeid_t stripeid)
   return *s;
 }
 
+void Inode::close_stripe(DirStripe *stripe)
+{
+  ldout(cct, 15) << "close_stripe " << *stripe << " on " << *this << dendl;
+  assert(this == stripe->parent_inode);
+  assert(stripe->is_empty());
+
+  // release any caps
+  stripe->remove_all_caps();
+
+  vector<DirStripe*>::iterator s = stripes.begin() + stripe->stripeid;
+  assert(*s == stripe);
+
+  stripe->cap_item.remove_myself();
+  stripe->snaprealm_item.remove_myself();
+  delete stripe;
+  *s = 0;
+}
+
 bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, uint32_t rflags)
 {
   unsigned fmode = 0;
