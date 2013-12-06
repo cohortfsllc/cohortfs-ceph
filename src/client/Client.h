@@ -52,6 +52,7 @@ using namespace __gnu_cxx;
 
 #include "osdc/ObjectCacher.h"
 #include "InodeCache.h"
+#include "SnapRealmMap.h"
 
 class MDSMap;
 class OSDMap;
@@ -309,14 +310,11 @@ protected:
   // all inodes with caps sit on either cap_list or delayed_caps.
   xlist<CapObject*> delayed_caps, cap_list;
   int num_flushing_caps;
-  hash_map<inodeno_t,SnapRealm*> snap_realms;
+  SnapRealmMap snap_realms;
 
   /* async block write barrier support */
   map<uint64_t, BarrierContext* > barriers;
 
-  SnapRealm *get_snap_realm(inodeno_t r);
-  SnapRealm *get_snap_realm_maybe(inodeno_t r);
-  void put_snap_realm(SnapRealm *realm);
   bool adjust_realm_parent(SnapRealm *realm, inodeno_t parent);
   inodeno_t update_snap_trace(bufferlist& bl, bool must_flush=true);
   inodeno_t _update_snap_trace(vector<SnapRealmInfo>& trace);

@@ -8,12 +8,18 @@
 #include "common/snap_types.h"
 #include "include/xlist.h"
 
+#include "SnapRealmMap.h"
+
 class CapObject;
 class Inode;
 
 struct SnapRealm {
+ private:
+  SnapRealmMap *container;
+  int nref; // remove from container on nref->0
+
+ public:
   inodeno_t ino;
-  int nref;
   snapid_t created;
   snapid_t seq;
   
@@ -32,9 +38,20 @@ private:
 public:
   xlist<CapObject*> inodes_with_caps;
 
-  SnapRealm(inodeno_t i) : 
-    ino(i), nref(0), created(0), seq(0),
+  SnapRealm(SnapRealmMap *container, inodeno_t i) :
+    container(container), nref(0), ino(i), created(0), seq(0),
     pparent(NULL) { }
+
+  int get_num_refs() const { return nref; }
+  void get() {
+    ++nref;
+  }
+  void put() {
+    if (--nref == 0) {
+      container->remove(ino);
+      delete this;
+    }
+  }
 
   void build_snap_context();
   void invalidate_cache() {

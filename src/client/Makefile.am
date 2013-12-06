@@ -8,6 +8,7 @@ libclient_la_SOURCES = \
 	client/DirStripe.cc \
 	client/MetaRequest.cc \
 	client/ClientSnapRealm.cc \
+	client/SnapRealmMap.cc \
 	client/MetaSession.cc \
 	client/Trace.cc
 libclient_la_LIBADD = $(LIBOSDC) $(LIBEDIT_LIBS)
@@ -24,6 +25,7 @@ noinst_HEADERS += \
 	client/MetaRequest.h \
 	client/MetaSession.h \
 	client/ClientSnapRealm.h \
+	client/SnapRealmMap.h \
 	client/SyntheticClient.h \
 	client/Trace.h \
 	client/barrier.h \

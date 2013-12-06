@@ -163,6 +163,7 @@ Client::Client(Messenger *m, MonClient *mc)
     local_osd(-1), local_osd_epoch(0),
     unsafe_sync_write(0),
     num_flushing_caps(0),
+    snap_realms(m->cct),
     client_lock("Client::client_lock")
 {
   monclient->set_messenger(m);
@@ -1920,7 +1921,7 @@ void Client::send_reconnect(MetaSession *session)
       if (!in->is_any_caps()) {
 	ldout(cct, 10) << "  removing last cap, closing snaprealm" << dendl;
 	in->snaprealm_item.remove_myself();
-	put_snap_realm(in->snaprealm);
+        in->snaprealm->put();
 	in->snaprealm = 0;
       }
     }
@@ -2596,7 +2597,7 @@ void Client::add_update_cap(CapObject *o, MetaSession *mds_session,
     mds_session->num_caps++;
     if (!had_any_caps) {
       assert(o->snaprealm == 0);
-      o->snaprealm = get_snap_realm(realm);
+      o->snaprealm = snap_realms.get(realm);
       o->snaprealm->inodes_with_caps.push_back(&o->snaprealm_item);
       ldout(cct, 15) << "add_update_cap first one, opened snaprealm "
 		     << o->snaprealm << dendl;
@@ -2688,7 +2689,7 @@ void Client::remove_cap(Cap *cap)
     ldout(cct, 15) << "remove_cap last one, closing snaprealm "
 		   << parent->snaprealm << dendl;
     parent->snaprealm_item.remove_myself();
-    put_snap_realm(parent->snaprealm);
+    parent->snaprealm->put();
     parent->snaprealm = 0;
   }
 }
@@ -2910,42 +2911,6 @@ void Client::invalidate_snaprealm_and_children(SnapRealm *realm)
   }
 }
 
-SnapRealm *Client::get_snap_realm(inodeno_t r)
-{
-  SnapRealm *realm = snap_realms[r];
-  if (!realm)
-    snap_realms[r] = realm = new SnapRealm(r);
-  ldout(cct, 20) << "get_snap_realm " << r << " " << realm << " " << realm->nref << " -> " << (realm->nref + 1) << dendl;
-  realm->nref++;
-  return realm;
-}
-
-SnapRealm *Client::get_snap_realm_maybe(inodeno_t r)
-{
-  hash_map<inodeno_t,SnapRealm*>::iterator snap_iter =
-	  snap_realms.find(r);
-  if (snap_iter == snap_realms.end()) {
-    ldout(cct, 20) << "get_snap_realm_maybe " << r << " fail" << dendl;
-    return NULL;
-  }
-  SnapRealm *realm = snap_iter->second;
-  ldout(cct, 20) << "get_snap_realm_maybe " << r << " " << realm << " "
-		 << realm->nref << " -> " << (realm->nref + 1) << dendl;
-  realm->nref++;
-  return realm;
-}
-
-void Client::put_snap_realm(SnapRealm *realm)
-{
-  ldout(cct, 20) << "put_snap_realm " << realm->ino << " " << realm
-		 << " " << realm->nref << " -> " << (realm->nref - 1)
-		 << dendl;
-  if (--realm->nref == 0) {
-    snap_realms.erase(realm->ino);
-    delete realm;
-  }
-}
-
 bool Client::adjust_realm_parent(SnapRealm *realm, inodeno_t parent)
 {
   if (realm->parent != parent) {
@@ -2954,9 +2919,9 @@ bool Client::adjust_realm_parent(SnapRealm *realm, inodeno_t parent)
     realm->parent = parent;
     if (realm->pparent) {
       realm->pparent->pchildren.erase(realm);
-      put_snap_realm(realm->pparent);
+      realm->pparent->put();
     }
-    realm->pparent = get_snap_realm(parent);
+    realm->pparent = snap_realms.get(parent);
     realm->pparent->pchildren.insert(realm);
     return true;
   }
@@ -2975,7 +2940,7 @@ inodeno_t Client::update_snap_trace(bufferlist& bl, bool flush)
     ::decode(info, p);
     if (first_realm == 0)
       first_realm = info.ino();
-    SnapRealm *realm = get_snap_realm(info.ino());
+    SnapRealm *realm = snap_realms.get(info.ino());
 
     if (info.seq() > realm->seq) {
       ldout(cct, 10) << "update_snap_trace " << *realm << " seq " << info.seq() << " > " << realm->seq
@@ -3029,7 +2994,7 @@ inodeno_t Client::update_snap_trace(bufferlist& bl, bool flush)
 	       << " <= " << realm->seq << " and same parent, SKIPPING" << dendl;
     }
         
-    put_snap_realm(realm);
+    realm->put();
   }
 
   return first_realm;
@@ -3058,7 +3023,7 @@ void Client::handle_snap(MClientSnap *m)
     assert(info.ino() == m->head.split);
     
     // flush, then move, ino's.
-    realm = get_snap_realm(info.ino());
+    realm = snap_realms.get(info.ino());
     ldout(cct, 10) << " splitting off " << *realm << dendl;
     for (vector<inodeno_t>::iterator p = m->split_inos.begin();
 	 p != m->split_inos.end();
@@ -3081,7 +3046,7 @@ void Client::handle_snap(MClientSnap *m)
 	queue_cap_snap(in, in->snaprealm->get_snap_context().seq);
 
 	in->snaprealm_item.remove_myself();
-	put_snap_realm(in->snaprealm);
+	in->snaprealm->put();
 	to_move.push_back(in);
       }
     }
@@ -3091,11 +3056,11 @@ void Client::handle_snap(MClientSnap *m)
 	 p != m->split_realms.end();
 	 ++p) {
       ldout(cct, 10) << "adjusting snaprealm " << *p << " parent" << dendl;
-      SnapRealm *child = get_snap_realm_maybe(*p);
+      SnapRealm *child = snap_realms.find(*p);
       if (!child)
 	continue;
       adjust_realm_parent(child, realm->ino);
-      put_snap_realm(child);
+      child->put();
     }
   }
 
@@ -3106,9 +3071,9 @@ void Client::handle_snap(MClientSnap *m)
       Inode *in = *p;
       in->snaprealm = realm;
       realm->inodes_with_caps.push_back(&in->snaprealm_item);
-      realm->nref++;
+      realm->get();
     }
-    put_snap_realm(realm);
+    realm->put();
   }
 
   m->put();
