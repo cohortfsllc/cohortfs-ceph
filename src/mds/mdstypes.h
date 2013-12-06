@@ -423,6 +423,9 @@ struct stripe_cap_update_t {
   string name;
   inodeno_t ino;
 
+  stripe_cap_update_t(const string &name, inodeno_t ino)
+      : name(name), ino(ino) {}
+
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator &bl);
 };
