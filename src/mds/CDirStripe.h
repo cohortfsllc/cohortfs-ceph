@@ -270,6 +270,7 @@ class CDirStripe : public CapObject {
   void add_dentry_update(const string &dname, inodeno_t ino) {
     dentry_updates.push_back(stripe_cap_update_t(dname, ino));
   }
+  virtual void take_update_waiters(list<Context*> &waiters);
 
   // -- caps --
  public:

@@ -541,6 +541,15 @@ void CDirStripe::encode_cap_message(MClientCaps *m, Capability *cap)
   m->stripe.rfiles = f->rstat.rfiles;
   m->stripe.rsubdirs = f->rstat.rsubdirs;
   f->rstat.rctime.encode_timeval(&m->stripe.rctime);
+
+  ::encode(dentry_updates, m->dentries);
+}
+
+void CDirStripe::take_update_waiters(list<Context*> &waiters)
+{
+  // clean up dentry updates after issue_caps()
+  CapObject::take_update_waiters(waiters);
+  dentry_updates.clear();
 }
 
 // pins
