@@ -435,8 +435,6 @@ protected:
   void add_update_cap(CapObject *o, MetaSession *session, uint64_t cap_id,
 		      unsigned issued, unsigned seq, unsigned mseq,
                       inodeno_t realm, int flags);
-  void remove_cap(Cap *cap);
-  void remove_all_caps(CapObject *o);
   void remove_session_caps(MetaSession *session);
   void mark_caps_dirty(Inode *in, unsigned caps);
   int mark_caps_flushing(CapObject *o);

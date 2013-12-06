@@ -91,6 +91,9 @@ class CapObject {
   void get_cap_ref(unsigned cap);
   bool put_cap_ref(unsigned cap);
 
+  void remove_cap(Cap *cap);
+  void remove_all_caps();
+
 
   // virtual interface
   virtual unsigned caps_wanted() const;

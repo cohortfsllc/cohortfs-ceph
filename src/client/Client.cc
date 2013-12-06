@@ -2078,7 +2078,7 @@ void Client::trim_inode(Inode *in)
   }
 
   // release any caps
-  remove_all_caps(in);
+  in->remove_all_caps();
 
   bool unclean = objectcacher->release_set(&in->oset);
   assert(!unclean);
@@ -2103,7 +2103,7 @@ void Client::close_stripe(DirStripe *stripe)
   assert(stripe->is_empty());
 
   // release any caps
-  remove_all_caps(stripe);
+  stripe->remove_all_caps();
 
   vector<DirStripe*>::iterator s = in->stripes.begin() + stripe->stripeid;
   assert(*s == stripe);
@@ -2648,63 +2648,11 @@ void Client::add_update_cap(CapObject *o, MetaSession *mds_session,
     signal_cond_list(o->waitfor_caps);
 }
 
-void Client::remove_cap(Cap *cap)
-{
-  CapObject *parent = cap->parent;
-  MetaSession *session = cap->session;
-  int mds = session->mds_num;
-
-  ldout(cct, 10) << "remove_cap mds." << mds << " on " << *parent << dendl;
- 
-  if (!session->release)
-    session->release = new MClientCapRelease;
-  ceph_mds_cap_item i;
-  i.ino = parent->ino;
-  i.stripeid = parent->stripeid;
-  i.cap_id = cap->cap_id;
-  i.seq = cap->issue_seq;
-  i.migrate_seq = cap->mseq;
-  session->release->caps.push_back(i);
-
-  if (parent->auth_cap == cap) {
-    if (parent->flushing_cap_item.is_on_list()) {
-      ldout(cct, 10) << " removing myself from flushing_cap list" << dendl;
-      parent->flushing_cap_item.remove_myself();
-    }
-    parent->auth_cap = NULL;
-  }
-
-  cap_map::iterator c = parent->caps.find(mds);
-  assert(c != parent->caps.end());
-  parent->caps.erase(c);
-
-  if (cap == session->s_cap_iterator) {
-    cap->parent = NULL;
-  } else {
-    cap->cap_item.remove_myself();
-    delete cap;
-  }
-
-  if (!parent->is_any_caps()) {
-    ldout(cct, 15) << "remove_cap last one, closing snaprealm "
-		   << parent->snaprealm << dendl;
-    parent->snaprealm_item.remove_myself();
-    parent->snaprealm->put();
-    parent->snaprealm = 0;
-  }
-}
-
-void Client::remove_all_caps(CapObject *o)
-{
-  while (o->caps.size())
-    remove_cap(o->caps.begin()->second);
-}
-
 void Client::remove_session_caps(MetaSession *mds) 
 {
   while (mds->caps.size()) {
     Cap *cap = *mds->caps.begin();
-    remove_cap(cap);
+    cap->parent->remove_cap(cap);
   }
 }
 
@@ -2728,7 +2676,7 @@ void Client::trim_caps(MetaSession *s, int max)
 	continue;
       }
       ldout(cct, 20) << " removing unused, unneeded non-auth cap on " << *parent << dendl;
-      remove_cap(cap);
+      parent->remove_cap(cap);
       trimmed++;
     }
 
@@ -3223,7 +3171,7 @@ void Client::handle_cap_export(MetaSession *session, CapObject *o, MClientCaps *
 	      << " EXPORT from mds." << mds
 	      << ", just removing old cap" << dendl;
 
-    remove_cap(cap);
+    o->remove_cap(cap);
   }
   // else we already released it
 

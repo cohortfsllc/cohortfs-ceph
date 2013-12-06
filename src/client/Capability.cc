@@ -206,6 +206,57 @@ bool CapObject::check_cap(const Cap *cap, unsigned retain, bool unmounting) cons
   return true;
 }
 
+void CapObject::remove_cap(Cap *cap)
+{
+  MetaSession *session = cap->session;
+  int mds = session->mds_num;
+
+  ldout(cct, 10) << "remove_cap mds." << mds << " on " << *this << dendl;
+
+  if (!session->release)
+    session->release = new MClientCapRelease;
+  ceph_mds_cap_item i;
+  i.ino = ino;
+  i.stripeid = stripeid;
+  i.cap_id = cap->cap_id;
+  i.seq = cap->issue_seq;
+  i.migrate_seq = cap->mseq;
+  session->release->caps.push_back(i);
+
+  if (auth_cap == cap) {
+    if (flushing_cap_item.is_on_list()) {
+      ldout(cct, 10) << " removing myself from flushing_cap list" << dendl;
+      flushing_cap_item.remove_myself();
+    }
+    auth_cap = NULL;
+  }
+
+  cap_map::iterator c = caps.find(mds);
+  assert(c != caps.end());
+  caps.erase(c);
+
+  if (cap == session->s_cap_iterator) {
+    cap->parent = NULL;
+  } else {
+    cap->cap_item.remove_myself();
+    delete cap;
+  }
+
+  if (!is_any_caps()) {
+    ldout(cct, 15) << "remove_cap last one, closing snaprealm "
+        << snaprealm << dendl;
+    snaprealm_item.remove_myself();
+    snaprealm->put();
+    snaprealm = 0;
+  }
+}
+
+void CapObject::remove_all_caps()
+{
+  while (caps.size())
+    remove_cap(caps.begin()->second);
+}
+
 void CapObject::dump(Formatter *f) const
 {
   f->open_array_section("caps");
