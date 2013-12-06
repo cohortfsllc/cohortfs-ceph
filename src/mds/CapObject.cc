@@ -200,6 +200,18 @@ void CapObject::choose_lock_states()
     choose_lock_state(*i, issued);
 }
 
+void CapObject::request_cap_update(int mask, Context *c)
+{
+  cap_update_mask |= mask;
+  cap_updates.push_back(c);
+}
+
+void CapObject::take_update_waiters(list<Context*> &waiters)
+{
+  swap(cap_updates, waiters);
+  cap_update_mask = 0;
+}
+
 void CapObject::update_cap_lru()
 {
   int target = g_conf->mds_cap_update_lru_target;

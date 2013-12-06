@@ -53,6 +53,7 @@ class CapObject : public MDSCacheObject {
 
   virtual void encode_cap_message(MClientCaps *m, Capability *cap) = 0;
  
+ private:
   // cap callbacks; force issue_caps() to send a CEPH_CAP_OP_SYNC_UPDATE
   // message to all clients matching cap_update_mask, and finish once all
   // updates are acked with CEPH_CAP_OP_UPDATE
@@ -62,6 +63,14 @@ class CapObject : public MDSCacheObject {
   xlist<Capability*> shared_cap_lru; // lru of caps with CEPH_CAP_ANY_SHARED
   xlist<Capability*> cap_blacklist; // caps blacklisted because of lru
 
+ public:
+  void request_cap_update(int mask, Context *c);
+  bool wants_update(int mask = -1) const { return mask & cap_update_mask; }
+  virtual void take_update_waiters(list<Context*> &waiters);
+
+  void update_lru_insert(xlist<Capability*>::item *item) {
+    shared_cap_lru.push_back(item);
+  }
   void update_cap_lru();
   bool is_cap_blacklisted(Capability *cap) const;
 

@@ -1226,10 +1226,9 @@ void Locker::wrlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
   }
 
   // send a cap update to any clients caching this lock
-  CapObject *o = (CapObject*)lock->get_parent();
+  CapObject *o = static_cast<CapObject*>(lock->get_parent());
   const int mask = (CEPH_CAP_GSHARED << lock->get_cap_shift());
-  o->cap_update_mask |= mask;
-  o->cap_updates.push_back(new C_Locker_WrlockCallback(mds, this, lock));
+  o->request_cap_update(mask, new C_Locker_WrlockCallback(mds, this, lock));
   dout(7) << "wrlock_finish callbacks requested for " << *o
       << " on " << *lock << " for caps " << ccap_string(mask) << dendl;
 
@@ -1415,8 +1414,7 @@ void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
   // send a cap update to any clients caching this lock
   CapObject *o = static_cast<CapObject*>(lock->get_parent());
   const int mask = (CEPH_CAP_GSHARED << lock->get_cap_shift());
-  o->cap_update_mask |= mask;
-  o->cap_updates.push_back(new C_Locker_XlockCallback(mds, this, lock));
+  o->request_cap_update(mask, new C_Locker_XlockCallback(mds, this, lock));
   dout(7) << "xlock_finish callbacks requested for " << *o
       << " on " << *lock << " for caps " << ccap_string(mask) << dendl;
 
@@ -1700,7 +1698,7 @@ void Locker::issue_caps(CapObject *o, Capability *only_cap)
   // client caps
   map<client_t, Capability*>::iterator it, end;
   if (only_cap) {
-    assert(!o->cap_update_mask); // don't skip callbacks
+    assert(!o->wants_update()); // don't skip callbacks
     end = it = o->client_caps.find(only_cap->get_client());
     ++end;
   } else {
@@ -1752,7 +1750,7 @@ void Locker::issue_caps(CapObject *o, Capability *only_cap)
       seq = cap->issue((wanted|likes) & allowed & pending); // no new caps
     else if ((wanted & allowed) & ~pending) // missing wanted+allowed caps
       seq = cap->issue((wanted|likes) & allowed);
-    else if (pending & o->cap_update_mask) // needs sync update
+    else if (o->wants_update(pending)) // needs sync update
       seq = cap->issue_norevoke(0); // bump seq
     else // no caps changed
       continue;
@@ -1763,7 +1761,7 @@ void Locker::issue_caps(CapObject *o, Capability *only_cap)
     int op = CEPH_CAP_OP_GRANT;
 
     // wait for confirmation on matching caps, both current and revoked
-    if ((before|after) & o->cap_update_mask) {
+    if (o->wants_update(before|after)) {
       // use SYNC_UPDATE if we're expecting a callback
       op = CEPH_CAP_OP_SYNC_UPDATE;
       dout(10) << "cap update requested for " << *o << ':' << seq << dendl;
@@ -1773,7 +1771,7 @@ void Locker::issue_caps(CapObject *o, Capability *only_cap)
 
     // update cap lru
     if ((~before & after) & CEPH_CAP_ANY_SHARED) // new shared caps?
-      o->shared_cap_lru.push_back(&cap->item_parent_lru);
+      o->update_lru_insert(&cap->item_parent_lru);
     else if ((after & CEPH_CAP_ANY_SHARED) == 0 && // no more shared caps?
              !o->is_cap_blacklisted(cap))
       cap->item_parent_lru.remove_myself();
@@ -1792,8 +1790,7 @@ void Locker::issue_caps(CapObject *o, Capability *only_cap)
   }
 
   C_Contexts *fin = new C_Contexts(g_ceph_context);
-  fin->take(o->cap_updates);
-  o->cap_update_mask = 0;
+  o->take_update_waiters(fin->contexts);
 
   // finish cap callbacks once all updates are acked
   if (gather.has_subs()) {
