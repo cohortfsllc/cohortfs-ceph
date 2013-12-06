@@ -429,6 +429,7 @@ struct stripe_cap_update_t {
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator &bl);
 };
+WRITE_CLASS_ENCODER(stripe_cap_update_t)
 
 ostream& operator<<(ostream &out, const stripe_cap_update_t &s);
 
