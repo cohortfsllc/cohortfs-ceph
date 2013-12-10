@@ -366,8 +366,6 @@ protected:
   //int get_cache_size() { return lru.lru_get_size(); }
   //void set_cache_size(int m) { lru.lru_set_max(m); }
 
-  void unlink(Dentry *dn, bool keepdir);
-
   // path traversal for high-level interface
   Inode *cwd;
   int path_walk(const filepath& fp, Inode **end, bool followsym=true);

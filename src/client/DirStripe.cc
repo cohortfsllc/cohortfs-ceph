@@ -90,6 +90,47 @@ Dentry* DirStripe::link(const string &name, Inode *in, Dentry *dn)
   return dn;
 }
 
+void DirStripe::unlink(Dentry *dn, bool keepempty)
+{
+  ldout(cct, 15) << "unlink dir " << parent_inode << " '" << dn->name
+      << "' dn " << dn << " vino " << dn->vino << dendl;
+
+  // unlink from inode
+  inode_hashmap::const_iterator i = parent_inode->inodes.find(dn->vino);
+  if (i != parent_inode->inodes.end()) {
+    Inode *in = i->second;
+    set<Dentry*>::const_iterator d = in->dn_set.find(dn);
+    if (d != in->dn_set.end()) {
+      in->dn_set.erase(d);
+      dn->put();
+    }
+    ldout(cct, 20) << "unlink  inode " << in << " parents now "
+        << in->dn_set << dendl;
+  }
+
+  dn->vino.ino = 0;
+
+  // unlink from dir
+  dentries.erase(dn->name);
+  dentry_map.erase(dn->name);
+  dn->stripe = 0;
+  dn->put();
+
+  if (is_empty() && !keepempty)
+    parent_inode->close_stripe(this);
+}
+
+void DirStripe::unlink_all(bool keepempty)
+{
+  // unlink any dentries
+  dn_map::iterator d = dentry_map.begin();
+  while (d != dentry_map.end())
+    unlink((d++)->second, true);
+
+  if (!keepempty)
+    parent_inode->close_stripe(this);
+}
+
 Dentry* DirStripe::lookup(const string &name) const
 {
   dn_hashmap::const_iterator d = dentries.find(name);

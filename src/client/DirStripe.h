@@ -46,6 +46,9 @@ class DirStripe : public CapObject {
   Dentry* link(const string &name, vinodeno_t vino, Dentry *dn = NULL);
   Dentry* link(const string &name, Inode *in, Dentry *dn = NULL);
 
+  void unlink(Dentry *dn, bool keepempty);
+  void unlink_all(bool keepempty);
+
   Dentry* lookup(const string &name) const;
 
   // CapObject

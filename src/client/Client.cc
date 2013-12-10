@@ -502,7 +502,8 @@ Inode* Client::add_update_inode(InodeStat *st, utime_t from,
     ldout(cct, 12) << "add_update_inode had " << *in << " caps " << ccap_string(st->cap.caps) << dendl;
     lru.lru_midtouch(in);
   } else {
-    result.first->second = new Inode(cct, inodecache, st->vino, &st->layout);
+    result.first->second = new Inode(cct, inodecache, inodes,
+                                     st->vino, &st->layout);
     in = result.first->second;
     in->get(); // first reference for inode_hashmap
     if (!root) {
@@ -622,8 +623,7 @@ DirStripe* Client::add_update_stripe(Inode *diri, const StripeStat &st,
     stripe->set_complete();
     ldout(cct, 10) << " stripe " << *stripe
         << " is open on empty dir, tearing down" << dendl;
-    while (!stripe->dentry_map.empty())
-      unlink(stripe->dentry_map.begin()->second, true);
+    stripe->unlink_all(true);
   }
 
   return stripe;
@@ -656,14 +656,14 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
       ldout(cct, 12) << " had dentry " << dname
 	       << " with WRONG vino " << dn->vino
 	       << dendl;
-      unlink(dn, true);
+      dn->stripe->unlink(dn, true);
       dn = NULL;
     }
   }
  
   if (!dn || dn->is_null()) {
-    if (old_dentry)
-      unlink(old_dentry, stripe == old_dentry->stripe); // keep dir open if its the same dir
+    if (old_dentry)                       // keep dir open if its the same dir
+      old_dentry->stripe->unlink(old_dentry, stripe == old_dentry->stripe);
     dn = stripe->link(dname, in, dn);
     if (set_offset) {
       dn->offset = dir_result_t::make_fpos(stripe->stripeid,
@@ -756,7 +756,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	  ldout(cct, 15) << "insert_trace  unlink '" << pd->first << "'" << dendl;
 	  Dentry *dn = pd->second;
 	  ++pd;
-	  unlink(dn, true);
+	  stripe->unlink(dn, true);
 	} else {
 	  ++pd;
 	}
@@ -775,7 +775,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	if (olddn->vino != in->vino()) {
 	  // replace incorrect dentry
 	  ++pd;  // we are about to unlink this guy, move past it.
-	  unlink(olddn, true);
+	  stripe->unlink(olddn, true);
 	  dn = stripe->link(dname, in);
 	} else {
 	  // keep existing dn
@@ -809,7 +809,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	  ldout(cct, 15) << "insert_trace  unlink '" << pd->first << "'" << dendl;
 	  Dentry *dn = pd->second;
 	  ++pd;
-	  unlink(dn, true);
+	  stripe->unlink(dn, true);
 	} else
 	  ++pd;
       }
@@ -890,7 +890,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
     } else {
       Dentry *dn = stripe->lookup(dname);
       if (dn && !dn->is_null())
-        unlink(dn, false);
+        stripe->unlink(dn, false);
     }
   } else if (reply->head.op == CEPH_MDS_OP_LOOKUPSNAP ||
 	     reply->head.op == CEPH_MDS_OP_MKSNAP) {	  
@@ -918,7 +918,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
       if (stripe) {
         Dentry *dn = stripe->lookup(snapname);
         if (dn && !dn->is_null())
-          unlink(dn, false);
+          stripe->unlink(dn, false);
       }
     }
   }
@@ -1119,9 +1119,9 @@ int Client::verify_reply_trace(int r,
 	// rename is special: we handle old_dentry unlink explicitly in insert_dentry_inode(), so
 	// we need to compensate and do the same here.
 	Dentry *od = request->old_dentry();
-	if (od) {
-	  unlink(od, false);
-	}
+	if (od)
+	  od->stripe->unlink(od, false);
+
 	ldout(cct, 10) << "make_request got traceless reply, looking up #"
 		       << d->stripe->parent_inode->ino << "/" << d->name
 		       << " got_ino " << got_created_ino
@@ -2060,16 +2060,14 @@ void Client::trim_inode(Inode *in)
     if (!stripe)
       continue;
     // unlink any dentries
-    for (dn_map::iterator d = stripe->dentry_map.begin();
-         d != stripe->dentry_map.end(); ++d)
-      unlink(d->second, true);
-    in->close_stripe(stripe);
+    stripe->unlink_all(false);
   }
 
   // drop refs on dn_set
   for (set<Dentry*>::iterator d = in->dn_set.begin(); d != in->dn_set.end(); ++d) {
     Dentry *dn = *d;
-    dn->stripe->reset_complete();
+    if (dn->stripe) // parent inode+stripe may have been trimmed
+      dn->stripe->reset_complete();
     dn->put();
   }
 
@@ -2090,37 +2088,6 @@ void Client::trim_inode(Inode *in)
 
   // drop last ref
   in->put();
-}
-
-void Client::unlink(Dentry *dn, bool keepdir)
-{
-  ldout(cct, 15) << "unlink dir " << dn->stripe->parent_inode
-      << " '" << dn->name << "' dn " << dn
-      << " vino " << dn->vino << dendl;
-
-  // unlink from inode
-  inode_hashmap::iterator i = inodes.find(dn->vino);
-  if (i != inodes.end()) {
-    Inode *in = i->second;
-    set<Dentry*>::iterator d = in->dn_set.find(dn);
-    if (d != in->dn_set.end()) {
-      in->dn_set.erase(d);
-      dn->put();
-    }
-    ldout(cct, 20) << "unlink  inode " << in << " parents now "
-		   << in->dn_set << dendl; 
-  }
-
-  dn->vino.ino = 0;
-
-  // unlink from dir
-  dn->stripe->dentries.erase(dn->name);
-  dn->stripe->dentry_map.erase(dn->name);
-  if (dn->stripe->is_empty() && !keepdir)
-    dn->stripe->parent_inode->close_stripe(dn->stripe);
-  dn->stripe = 0;
-
-  dn->put();
 }
 
 
@@ -3242,7 +3209,7 @@ void Client::_invalidate_inode_parents(Inode *in)
     // FIXME: we play lots of unlink/link tricks when handling MDS replies,
     //        so in->dn_set doesn't always reflect the state of kernel's dcache.
     _schedule_invalidate_dentry_callback(dn);
-    unlink(dn, false);
+    dn->stripe->unlink(dn, false);
   }
 }
 
@@ -6175,7 +6142,8 @@ Inode *Client::open_snapdir(Inode *diri)
   pair<inode_hashmap::iterator, bool> result =
       inodes.insert(make_pair(vino, (Inode*)NULL));
   if (result.second) {
-    result.first->second = new Inode(cct, inodecache, vino, &diri->layout);
+    result.first->second = new Inode(cct, inodecache, inodes,
+                                     vino, &diri->layout);
 
     in = result.first->second;
     in->ino = diri->ino;
@@ -7060,7 +7028,7 @@ int Client::_unlink(Inode *dir, const char *name, int uid, int gid)
     if (stripe) {
       Dentry *dn = stripe->lookup(name);
       if (dn)
-        unlink(dn, false);
+        stripe->unlink(dn, false);
     }
   }
   ldout(cct, 10) << "unlink result is " << res << dendl;
@@ -7119,8 +7087,10 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
   req->set_inode(in);
 
   res = make_request(req, uid, gid);
-  if (res == 0 && in->dn_set.size())
-    unlink(*in->dn_set.begin(), false);
+  if (res == 0 && in->dn_set.size()) {
+    Dentry *dn = *in->dn_set.begin();
+    dn->stripe->unlink(dn, false);
+  }
 
   in->put(); // drop ref from _lookup
 
