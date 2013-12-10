@@ -34,6 +34,13 @@ DirStripe::DirStripe(Inode *in, stripeid_t stripeid)
 {
 }
 
+Dentry* DirStripe::lookup(const string &name) const
+{
+  dn_hashmap::const_iterator d = dentries.find(name);
+  return d != dentries.end() ? d->second : NULL;
+}
+
+
 unsigned DirStripe::caps_wanted() const
 {
   return CapObject::caps_wanted() | CEPH_CAP_LINK_SHARED;

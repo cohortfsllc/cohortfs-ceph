@@ -31,11 +31,13 @@ class DirStripe : public CapObject {
 
   dirstripe_t dirstripe() const { return dirstripe_t(ino, stripeid); }
 
-  bool is_empty() const {  return dentries.empty(); }
-
   bool is_complete() const { return flags & I_COMPLETE; }
   void set_complete() { flags |= I_COMPLETE; }
   void reset_complete() { flags &= ~I_COMPLETE; }
+
+  bool is_empty() const {  return dentries.empty(); }
+
+  Dentry* lookup(const string &name) const;
 
   // CapObject
   virtual unsigned caps_wanted() const;

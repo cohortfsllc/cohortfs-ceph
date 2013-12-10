@@ -638,8 +638,7 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
                                     MetaSession *session, bool set_offset,
 				    Dentry *old_dentry)
 {
-  dn_hashmap::iterator d = stripe->dentries.find(dname);
-  Dentry *dn = d == stripe->dentries.end() ? NULL : d->second;
+  Dentry *dn = stripe->lookup(dname);
  
   ldout(cct, 12) << "insert_dentry_inode '" << dname << "' vino " << in->vino()
       << " in stripe " << stripe->dirstripe() << " dn " << dn << dendl;
@@ -891,9 +890,9 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
                           ((request->head.op == CEPH_MDS_OP_RENAME) ?
                                         request->old_dentry() : NULL));
     } else {
-      dn_hashmap::iterator d = stripe->dentries.find(dname);
-      if (d != stripe->dentries.end() && !d->second->is_null())
-        unlink(d->second, false);
+      Dentry *dn = stripe->lookup(dname);
+      if (dn && !dn->is_null())
+        unlink(dn, false);
     }
   } else if (reply->head.op == CEPH_MDS_OP_LOOKUPSNAP ||
 	     reply->head.op == CEPH_MDS_OP_MKSNAP) {	  
@@ -919,9 +918,9 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
       assert(stripeid < diri->stripes.size());
       DirStripe *stripe = diri->stripes[stripeid];
       if (stripe) {
-        dn_hashmap::iterator d = stripe->dentries.find(snapname);
-        if (d != stripe->dentries.end() && !d->second->is_null())
-          unlink(d->second, false);
+        Dentry *dn = stripe->lookup(snapname);
+        if (dn && !dn->is_null())
+          unlink(dn, false);
       }
     }
   }
@@ -2032,14 +2031,13 @@ void Client::handle_lease(MClientLease *m)
           << " for " << m->dname << dendl;
       goto revoke;
     }
-    dn_hashmap::iterator d = stripe->dentries.find(m->dname);
-    if (d == stripe->dentries.end()) {
+    Dentry *dn = stripe->lookup(m->dname);
+    if (!dn) {
       ldout(cct, 10) << " don't have dentry "
           << m->get_ino() << "/" << m->dname << dendl;
       goto revoke;
     }
 
-    Dentry *dn = d->second;
     ldout(cct, 10) << " revoked DN lease on " << dn << dendl;
     dn->lease_mds = -1;
   }
@@ -3716,9 +3714,8 @@ int Client::_lookup(Inode *dir, const string& dname, Inode **target)
 
   stripe = dir->stripes[dir->pick_stripe(dname)];
   if (stripe) {
-    dn_hashmap::iterator d = stripe->dentries.find(dname);
-    if (d != stripe->dentries.end()) {
-      Dentry *dn = d->second;
+    Dentry *dn = stripe->lookup(dname);
+    if (dn) {
       ldout(cct, 20) << "_lookup have dn " << dname << " mds." << dn->lease_mds
 		     << " ttl " << dn->lease_ttl
 		     << " seq " << dn->lease_seq
@@ -3785,9 +3782,8 @@ int Client::get_or_create(Inode *dir, const char* name,
   // lookup
   ldout(cct, 20) << "get_or_create " << *dir << " name " << name << dendl;
   DirStripe *stripe = dir->open_stripe(dir->pick_stripe(name));
-  dn_hashmap::iterator d = stripe->dentries.find(name);
-  if (d != stripe->dentries.end()) {
-    Dentry *dn = d->second;
+  Dentry *dn = stripe->lookup(name);
+  if (dn) {
     // is dn lease valid?
     utime_t now = ceph_clock_now(cct);
     if (!dn->is_null() &&
@@ -7113,9 +7109,9 @@ int Client::_unlink(Inode *dir, const char *name, int uid, int gid)
   if (res == 0) {
     DirStripe *stripe = dir->stripes[dir->pick_stripe(name)];
     if (stripe) {
-      dn_hashmap::iterator d = stripe->dentries.find(name);
-      if (d != stripe->dentries.end())
-        unlink(d->second, false);
+      Dentry *dn = stripe->lookup(name);
+      if (dn)
+        unlink(dn, false);
     }
   }
   ldout(cct, 10) << "unlink result is " << res << dendl;
