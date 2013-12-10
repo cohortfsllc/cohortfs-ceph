@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 #ifndef CEPH_WATCH_H
 #define CEPH_WATCH_H
@@ -28,9 +28,7 @@ enum WatcherState {
 };
 
 class OSDService;
-class ReplicatedPG;
-void intrusive_ptr_add_ref(ReplicatedPG *pg);
-void intrusive_ptr_release(ReplicatedPG *pg);
+class OSDVol;
 class ObjectContext;
 class MWatchNotify;
 
@@ -116,7 +114,7 @@ public:
     uint64_t cookie,
     uint64_t notify_id,
     uint64_t version,
-    OSDService *osd);
+    OSDServiceRef osd);
 
   /// Call after creation to initialize
   void init();
@@ -150,7 +148,7 @@ class Watch {
   CancelableContext *cb;
 
   OSDService *osd;
-  boost::intrusive_ptr<ReplicatedPG> pg;
+  boost::shared_ptr<OSDVol> vol;
   ObjectContext *obc;
 
   std::map<uint64_t, NotifyRef> in_progress_notifies;
@@ -164,7 +162,7 @@ class Watch {
   bool discarded;
 
   Watch(
-    ReplicatedPG *pg, OSDService *osd,
+    OSDVol *vol, OSDService *osd,
     ObjectContext *obc, uint32_t timeout,
     uint64_t cookie, entity_name_t entity,
     entity_addr_t addr);
@@ -181,19 +179,19 @@ class Watch {
   /// Cleans up state on discard or remove (including Connection state, obc)
   void discard_state();
 public:
-  /// NOTE: must be called with pg lock held
+  /// NOTE: must be called with vol lock held
   ~Watch();
 
   string gen_dbg_prefix();
   static WatchRef makeWatchRef(
-    ReplicatedPG *pg, OSDService *osd,
+    OSDVol *vol, OSDServiceRef osd,
     ObjectContext *obc, uint32_t timeout, uint64_t cookie, entity_name_t entity, entity_addr_t addr);
   void set_self(WatchRef _self) {
     self = _self;
   }
 
   /// Does not grant a ref count!
-  boost::intrusive_ptr<ReplicatedPG> get_pg() { return pg; }
+  boost::shared_ptr<OSDVol> get_vol() { return vol; }
 
   /// Grants a ref count!
   ObjectContext *get_obc();

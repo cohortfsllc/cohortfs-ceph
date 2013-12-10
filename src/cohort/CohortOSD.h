@@ -65,12 +65,23 @@ public:
   const CohortOSDMapRef cohortosdmap() {
     return dynamic_pointer_cast<const CohortOSDMap>(get_osdmap());
   }
+  // -- Watch --
+  Mutex watch_lock;
+  SafeTimer watch_timer;
+  uint64_t next_notif_id;
+  uint64_t get_next_id(epoch_t cur_epoch) {
+    Mutex::Locker l(watch_lock);
+    return (((uint64_t)cur_epoch) << 32) | ((uint64_t)(next_notif_id++));
+  }
+  ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> &op_wq;
 };
 
 typedef shared_ptr<CohortOSDService> CohortOSDServiceRef;
 
 
 class CohortOSD : public OSD {
+  friend CohortOSDService;
+
   OSDVolRef get_volume(const uuid_d volid) {
     return OSDVolRef();
   }
@@ -226,8 +237,6 @@ protected:
   virtual bool asok_command_sub(string command, string args, ostream& ss);
 
 public:
-
-  friend class PGOSDService;
 
   OSDMap* newOSDMap() const {
     return new CohortOSDMap();

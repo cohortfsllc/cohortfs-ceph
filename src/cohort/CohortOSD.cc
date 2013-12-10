@@ -27,8 +27,10 @@ CohortOSD* CohortOSDService::cohortosd() const
   return static_cast<CohortOSD*>(osd);
 }
 
-CohortOSDService::CohortOSDService(CohortOSD *osd) :
-  OSDService(osd)
+CohortOSDService::CohortOSDService(CohortOSD *_osd) :
+  OSDService(_osd), watch_lock("CohortOSDService::watch_lock"),
+  watch_timer(_osd->client_messenger->cct, watch_lock),
+  op_wq(_osd->op_wq)
 {
 }
 
@@ -89,7 +91,7 @@ bool CohortOSD::op_must_wait_for_map(OpRequestRef op)
 
   case MSG_OSD_SUBOP:
     return !have_same_or_newer_map(
-      static_cast<MOSDSubOp*>(op->request)->osdmap_epoch);
+      static_cast<MOSDSubOp*>(op->request)->map_epoch);
 
   case MSG_OSD_SUBOPREPLY:
     return !have_same_or_newer_map(

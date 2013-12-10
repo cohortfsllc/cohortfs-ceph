@@ -890,6 +890,7 @@ public:
   int init_op_flags(OpRequestRef op);
   OSDServiceRef service;
   friend class OSDService;
+  friend class CohortOSDService;
 };
 
 //compatibility of the executable
