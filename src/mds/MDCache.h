@@ -131,7 +131,7 @@ public:
   uint64_t              last_cap_id;
   
 
-
+private:
   // -- discover --
   typedef MDSCacheObjectInfo::object_type discover_object;
   struct discover_info_t {
@@ -159,8 +159,13 @@ public:
   }
 
   // waiters
-  map<int, map<inodeno_t, list<Context*> > > waiting_for_base_ino;
+  typedef map<inodeno_t, list<Context*> > ino_waiter_map;
+  typedef map<int, ino_waiter_map> mds_ino_waiter_map;
+  mds_ino_waiter_map waiting_for_ino;
 
+  void take_ino_waiting(int who, inodeno_t ino, list<Context*> &ls);
+
+public:
   void discover_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
   void discover_dir_placement(inodeno_t ino, Context *onfinish, int from);
   void discover_dir_stripe(CDirPlacement *base, stripeid_t stripeid,

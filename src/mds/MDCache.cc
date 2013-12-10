@@ -5805,13 +5805,35 @@ void MDCache::_send_discover(discover_info_t& d)
 void MDCache::discover_ino(inodeno_t ino, Context *onfinish, int from) 
 {
   dout(7) << "discover_ino " << ino << " from mds." << from << dendl;
-  if (waiting_for_base_ino[from].count(ino) == 0) {
+
+  pair<mds_ino_waiter_map::iterator, bool> i = waiting_for_ino.insert(
+      make_pair(from, ino_waiter_map()));
+
+  pair<ino_waiter_map::iterator, bool> j = i.first->second.insert(
+      make_pair(ino, list<Context*>()));
+  if (j.second) {
     discover_info_t& d = _create_discover(from);
     d.base.stripe.ino = ino;
     d.want.first = d.want.second = MDSCacheObjectInfo::INODE;
     _send_discover(d);
   }
-  waiting_for_base_ino[from][ino].push_back(onfinish);
+  j.first->second.push_back(onfinish);
+}
+
+void MDCache::take_ino_waiting(int who, inodeno_t ino, list<Context*> &ls)
+{
+  mds_ino_waiter_map::iterator i = waiting_for_ino.find(who);
+  if (i == waiting_for_ino.end())
+    return;
+
+  ino_waiter_map::iterator j = i->second.find(ino);
+  if (j == i->second.end())
+    return;
+
+  ls.splice(ls.end(), j->second);
+  i->second.erase(j);
+  if (i->second.empty())
+    waiting_for_ino.erase(i);
 }
 
 
@@ -6395,19 +6417,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 
     next = MDSCacheObjectInfo::PLACEMENT;
 
-    // take waiters?
-    map<int, map<inodeno_t, list<Context*> > >::iterator i =
-        waiting_for_base_ino.find(from);
-    if (i != waiting_for_base_ino.end()) {
-      map<inodeno_t, list<Context*> >::iterator j = i->second.find(ino);
-      if (j != i->second.end()) {
-        dout(7) << "taking " << j->second.size() << " waiters" << dendl;
-        finished.splice(finished.end(), j->second);
-        i->second.erase(j);
-        if (i->second.empty())
-          waiting_for_base_ino.erase(i);
-      }
-    }
+    take_ino_waiting(from, ino, finished);
   } else {
     in = get_inode(ino, m->snapid);
   }
