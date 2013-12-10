@@ -37,6 +37,15 @@ class DirStripe : public CapObject {
 
   bool is_empty() const {  return dentries.empty(); }
 
+ private:
+  // create a null dentry
+  Dentry* link(const string &name);
+
+ public:
+  // link a dentry by vinodeno or inode
+  Dentry* link(const string &name, vinodeno_t vino, Dentry *dn = NULL);
+  Dentry* link(const string &name, Inode *in, Dentry *dn = NULL);
+
   Dentry* lookup(const string &name) const;
 
   // CapObject

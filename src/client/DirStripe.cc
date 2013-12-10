@@ -3,6 +3,7 @@
 
 #include "DirStripe.h"
 #include "Inode.h"
+#include "Dentry.h"
 #include "messages/MClientCaps.h"
 
 #define dout_subsys ceph_subsys_client
@@ -32,6 +33,61 @@ DirStripe::DirStripe(Inode *in, stripeid_t stripeid)
   : CapObject(in->cct, in->vino(), stripeid), parent_inode(in), version(0),
     release_count(0), max_offset(2), shared_gen(0), flags(0)
 {
+}
+
+Dentry* DirStripe::link(const string &name)
+{
+  // find/insert an entry in the hashmap
+  pair<dn_hashmap::iterator, bool> result = dentries.insert(
+      dn_hashmap::value_type(name, NULL));
+  if (result.second) {
+    Dentry *dn = new Dentry(cct);
+    result.first->second = dn;
+    dn->name = name;
+    dn->stripe = this;
+    dentry_map[name] = dn;
+    dn->get();
+  }
+  return result.first->second;
+}
+
+Dentry* DirStripe::link(const string &name, vinodeno_t vino, Dentry *dn)
+{
+  if (!dn) {
+    // create a new Dentry
+    dn = link(name);
+
+    ldout(cct, 15) << "link stripe " << dirstripe() << " '" << name
+        << "' to vino " << vino << " dn " << dn << " (new dn)" << dendl;
+  } else {
+    ldout(cct, 15) << "link stripe " << dirstripe() << " '" << name
+        << "' to vino " << vino << " dn " << dn << " (old dn)" << dendl;
+  }
+
+  dn->vino = vino;
+  return dn;
+}
+
+Dentry* DirStripe::link(const string &name, Inode *in, Dentry *dn)
+{
+  // only one parent for directories!
+  if (in->is_dir() && !in->dn_set.empty()) {
+    Dentry *olddn = in->get_first_parent();
+    ldout(cct, 20) << "link parent=" << dn << " old parent=" << olddn << dendl;
+    if (olddn != dn) {
+      assert(olddn->stripe != this || olddn->name != name);
+      olddn->stripe->unlink(olddn, false);
+    }
+  }
+
+  // link to inode
+  dn = link(name, in->vino(), dn);
+
+  if (in->dn_set.insert(dn).second) // get ref if it wasn't already in dn_set
+    dn->get();
+
+  ldout(cct, 20) << "link inode " << in << " parents now " << in->dn_set << dendl;
+  return dn;
 }
 
 Dentry* DirStripe::lookup(const string &name) const

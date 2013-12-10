@@ -662,11 +662,9 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
   }
  
   if (!dn || dn->is_null()) {
-    in->get();
     if (old_dentry)
       unlink(old_dentry, stripe == old_dentry->stripe); // keep dir open if its the same dir
-    dn = link(stripe, dname, in, dn);
-    in->put();
+    dn = stripe->link(dname, in, dn);
     if (set_offset) {
       dn->offset = dir_result_t::make_fpos(stripe->stripeid,
                                            stripe->max_offset++);
@@ -778,7 +776,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	  // replace incorrect dentry
 	  ++pd;  // we are about to unlink this guy, move past it.
 	  unlink(olddn, true);
-	  dn = link(stripe, dname, in, NULL);
+	  dn = stripe->link(dname, in);
 	} else {
 	  // keep existing dn
 	  dn = olddn;
@@ -790,7 +788,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	}
       } else {
 	// new dn
-	dn = link(stripe, dname, in, NULL);
+	dn = stripe->link(dname, in);
       }
       update_dentry_lease(dn, &dlease, request->sent_stamp, session);
       dn->offset = dir_result_t::make_fpos(request->readdir_stripe,
@@ -2092,52 +2090,6 @@ void Client::trim_inode(Inode *in)
 
   // drop last ref
   in->put();
-}
-
-  /**
-   * Don't call this with in==NULL, use get_or_create for that
-   * leave dn set to default NULL unless you're trying to add
-   * a new inode to a pre-created Dentry
-   */
-Dentry* Client::link(DirStripe *stripe, const string& name, Inode *in, Dentry *dn)
-{
-  if (!dn) {
-    // create a new Dentry
-    dn = new Dentry(cct);
-    dn->name = name;
-    
-    // link to dir
-    dn->stripe = stripe;
-    stripe->dentries[dn->name] = dn;
-    stripe->dentry_map[dn->name] = dn;
-    dn->get();
-
-    ldout(cct, 15) << "link stripe " << stripe->dirstripe() << " '" << name
-        << "' to inode " << in << " dn " << dn << " (new dn)" << dendl;
-  } else {
-    ldout(cct, 15) << "link stripe " << stripe->dirstripe() << " '" << name
-        << "' to inode " << in << " dn " << dn << " (old dn)" << dendl;
-  }
-
-  if (in) {    // link to inode
-    dn->vino = in->vino();
-
-    // assert(in->dn_set.count(dn) == 0);
-
-    // only one parent for directories!
-    if (in->is_dir() && !in->dn_set.empty()) {
-      Dentry *olddn = in->get_first_parent();
-      assert(olddn->stripe != stripe || olddn->name != name);
-      unlink(olddn, false);
-    }
-
-    in->dn_set.insert(dn);
-    dn->get();
-
-    ldout(cct, 20) << "link  inode " << in << " parents now " << in->dn_set << dendl; 
-  }
-  
-  return dn;
 }
 
 void Client::unlink(Dentry *dn, bool keepdir)
@@ -3784,26 +3736,23 @@ int Client::get_or_create(Inode *dir, const char* name,
   DirStripe *stripe = dir->open_stripe(dir->pick_stripe(name));
   Dentry *dn = stripe->lookup(name);
   if (dn) {
-    // is dn lease valid?
-    utime_t now = ceph_clock_now(cct);
-    if (!dn->is_null() &&
-	dn->lease_mds >= 0 && 
-	dn->lease_ttl > now) {
-      map<int, MetaSession*>::iterator mds_iter =
-	      mds_sessions.find(dn->lease_mds);
-      if (mds_iter != mds_sessions.end()) {
-        MetaSession *s = mds_iter->second;
-	if (s->cap_ttl > now &&
-	    s->cap_gen == dn->lease_gen) {
-	  if (expect_null)
-	    return -EEXIST;
-	}
+    if (expect_null) {
+      // is dn lease valid?
+      utime_t now = ceph_clock_now(cct);
+      if (!dn->is_null() && dn->lease_mds >= 0 && dn->lease_ttl > now) {
+        map<int, MetaSession*>::iterator mds_iter =
+            mds_sessions.find(dn->lease_mds);
+        if (mds_iter != mds_sessions.end()) {
+          MetaSession *s = mds_iter->second;
+          if (s->cap_ttl > now && s->cap_gen == dn->lease_gen)
+            return -EEXIST;
+        }
       }
     }
     *pdn = dn;
   } else {
     // otherwise link up a new one
-    *pdn = link(stripe, name, NULL, NULL);
+    *pdn = stripe->link(name, vinodeno_t(0, CEPH_NOSNAP));
   }
 
   // success

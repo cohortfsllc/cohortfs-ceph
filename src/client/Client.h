@@ -366,12 +366,6 @@ protected:
   //int get_cache_size() { return lru.lru_get_size(); }
   //void set_cache_size(int m) { lru.lru_set_max(m); }
 
-  /**
-   * Don't call this with in==NULL, use get_or_create for that
-   * leave dn set to default NULL unless you're trying to add
-   * a new inode to a pre-created Dentry
-   */
-  Dentry* link(DirStripe *stripe, const string& name, Inode *in, Dentry *dn);
   void unlink(Dentry *dn, bool keepdir);
 
   // path traversal for high-level interface
