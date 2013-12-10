@@ -127,10 +127,10 @@ public:
     flags &= FLAG_ERR_DN;
     error_dentry = dn;
   }
-  void set_flag_error_ino() { flags &= FLAG_ERR_INO; }
-  void set_flag_error_placement() { flags &= FLAG_ERR_PLACEMENT; }
-  void set_flag_error_stripe() { flags &= FLAG_ERR_STRIPE; }
-  void set_flag_error_dir() { flags &= FLAG_ERR_DIR; }
+  void set_flag_error_ino() { flags |= FLAG_ERR_INO; }
+  void set_flag_error_placement() { flags |= FLAG_ERR_PLACEMENT; }
+  void set_flag_error_stripe() { flags |= FLAG_ERR_STRIPE; }
+  void set_flag_error_dir() { flags |= FLAG_ERR_DIR; }
 
   void set_auth_hint(int a) {
     auth_hint = a;

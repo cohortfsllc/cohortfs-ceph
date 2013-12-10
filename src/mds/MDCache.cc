@@ -6349,7 +6349,9 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
 
   // starting point
   int next = m->contains.first;
-  if (m->want.first == MDSCacheObjectInfo::INODE) {
+  if (m->is_flag_error_ino()) {
+    take_ino_waiting(from, ino, error);
+  } else if (m->want.first == MDSCacheObjectInfo::INODE) {
     if (!MDS_INO_IS_BASE(ino)) {
       placement = get_container()->get_inode()->get_placement();
 
