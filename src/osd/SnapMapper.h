@@ -139,42 +139,18 @@ private:
     const hobject_t &oid,
     MapCacher::Transaction<std::string, bufferlist> *t);
 
-  // True if hoid belongs in this mapping based on mask_bits and match
-  bool check(const hobject_t &hoid) const {
-    return hoid.match(mask_bits, match);
-  }
-
   int _remove_oid(
     const hobject_t &oid,    ///< [in] oid to remove
     MapCacher::Transaction<std::string, bufferlist> *t ///< [out] transaction
     );
 
 public:
-  uint32_t mask_bits;
-  const uint32_t match;
   string last_key_checked;
-  const int64_t pool;
-  SnapMapper(
-    MapCacher::StoreDriver<std::string, bufferlist> *driver,
-    uint32_t match,  ///< [in] pgid
-    uint32_t bits,   ///< [in] current split bits
-    int64_t pool     ///< [in] pool
-    )
-    : backend(driver), mask_bits(bits), match(match), pool(pool) {
-    update_bits(mask_bits);
+  SnapMapper(MapCacher::StoreDriver<std::string, bufferlist> *driver)
+    : backend(driver) {
   }
 
   set<string> prefixes;
-  /// Update bits in case of pg split
-  void update_bits(
-    uint32_t new_bits  ///< [in] new split bits
-    ) {
-    assert(new_bits >= mask_bits);
-    mask_bits = new_bits;
-    prefixes = hobject_t::get_prefixes(
-      mask_bits,
-      match);
-  }
 
   /// Update snaps for oid, empty new_snaps removes the mapping
   int update_snaps(
@@ -193,8 +169,8 @@ public:
 
   /// Returns first object with snap as a snap
   int get_next_object_to_trim(
-    snapid_t snap,              ///< [in] snap to check
-    hobject_t *hoid             ///< [out] next hoid to trim
+    snapid_t snap, ///< [in] snap to check
+    hobject_t *hoid ///< [out] next hoid to trim
     );  ///< @return error, -ENOENT if no more objects
 
   /// Remove mapping for oid

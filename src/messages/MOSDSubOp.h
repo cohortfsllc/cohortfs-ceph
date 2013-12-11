@@ -33,7 +33,7 @@ public:
 
   // metadata from original request
   osd_reqid_t reqid;
-  
+
   // subop
   hobject_t poid;
 
@@ -58,7 +58,7 @@ public:
   eversion_t version;
 
   // piggybacked osd/og state
-  eversion_t pg_trim_to;   // primary->replica: trim to here
+  eversion_t trim_to;   // primary->replica: trim to here
   osd_peer_stat_t peer_stat;
 
   map<string,bufferptr> attrset;

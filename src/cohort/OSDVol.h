@@ -13,9 +13,12 @@
 #include "osd/Watch.h"
 #include "VolLog.h"
 #include "messages/MOSDOpReply.h"
+#include "osd/SnapMapper.h"
 
 using namespace std;
 
+class C_OSD_OpApplied;
+class C_OSD_OpCommit;
 class CohortOSDService;
 typedef std::tr1::shared_ptr<CohortOSDService> CohortOSDServiceRef;
 
@@ -94,6 +97,7 @@ class OSDVol {
   friend class CohortOSD;
 
   object_stat_collection_t unstable_stats;
+  bool dirty_info, dirty_big_info;
   struct OpContext {
     OpRequestRef op;
     osd_reqid_t reqid;
@@ -139,7 +143,7 @@ class OSDVol {
     ObjectContext *clone_obc;    // if we created a clone
     ObjectContext *snapset_obc;  // if we created/deleted a snapdir
 
-    int data_off;        // FIXME: we may want to kill this msgr hint off at some point!
+    int data_off; // FIXME: we may want to kill this msgr hint off at some point!
 
     MOSDOpReply *reply;
 
@@ -170,9 +174,28 @@ class OSDVol {
     }
   };
 
+  struct RepModify {
+    OSDVolRef vol;
+    OpRequestRef op;
+    OpContext *ctx;
+    bool applied, committed;
+    eversion_t last_complete;
+    epoch_t epoch_started;
+
+    uint64_t bytes_written;
+
+    ObjectStore::Transaction opt, localt;
+    list<ObjectStore::Transaction*> tls;
+
+    RepModify() : vol(), ctx(NULL), applied(false), committed(false),
+		  epoch_started(0), bytes_written(0) {}
+  };
+
   /*
    * State on the PG primary associated with the replicated mutation
    */
+  friend C_OSD_OpApplied;
+  friend C_OSD_OpCommit;
   class RepGather {
   public:
     xlist<RepGather*>::item queue_item;
@@ -227,6 +250,17 @@ class OSDVol {
 	delete this;
 	//generic_dout(0) << "deleting " << this << dendl;
       }
+    }
+  };
+
+  struct C_OSD_OndiskWriteUnlock : public Context {
+    ObjectContext *obc, *obc2;
+    C_OSD_OndiskWriteUnlock(ObjectContext *o, ObjectContext *o2=0) :
+      obc(o), obc2(o2) {}
+    void finish(int r) {
+      obc->ondisk_write_unlock();
+      if (obc2)
+	obc2->ondisk_write_unlock();
     }
   };
 
@@ -290,11 +324,8 @@ public:
   }
 public:
   OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
-	 uuid_d u, const hobject_t& loid, const hobject_t& ioid)
-    : volume_id(u), vol_lock("OSDVol::vol_lock"),
-      map_lock("OSDVol::map_lock"), osd(o),
-      osdmap_ref(curmap), vol_log(), log_oid(loid), biginfo_oid(ioid),
-      info(u) { }
+	 uuid_d u, const hobject_t& loid, const hobject_t& ioid);
+
   virtual ~OSDVol() { };
 
 private:
@@ -313,8 +344,27 @@ private:
   // projected object info
   map<hobject_t, ObjectContext*> object_contexts;
   map<object_t, SnapSetContext*> snapset_contexts;
+  OSDriver osdriver;
+  SnapMapper snap_mapper;
+  interval_set<snapid_t> snap_trimq;
+  map<eversion_t,list<OpRequestRef> > waiting_for_ack, waiting_for_ondisk;
 
 public:
+  struct C_OSD_RepModifyApply : public Context {
+    RepModify *rm;
+    C_OSD_RepModifyApply(RepModify *r) : rm(r) { }
+    void finish(int r) {
+      rm->vol->sub_op_modify_applied(rm);
+    }
+  };
+  struct C_OSD_RepModifyCommit : public Context {
+    RepModify *rm;
+    C_OSD_RepModifyCommit(RepModify *r) : rm(r) { }
+    void finish(int r) {
+      rm->vol->sub_op_modify_commit(rm);
+    }
+  };
+
   static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
 			 coll_t coll, hobject_t &infos_oid,
 			 __u8 info_struct_v, bool dirty_big_info);
@@ -408,6 +458,31 @@ public:
       register_snapset_context(obc->ssc);
   }
   void populate_obc_watchers(ObjectContext *obc);
+  void add_log_entry(vol_log_entry_t& e, bufferlist& log_bl);
+  void write_if_dirty(ObjectStore::Transaction& t);
+  void filter_snapc(SnapContext& snapc);
+  void _make_clone(ObjectStore::Transaction& t,
+		   const hobject_t& head, const hobject_t& coid,
+		   object_info_t *poi);
+  void add_interval_usage(interval_set<uint64_t>& s,
+			  object_stat_sum_t& delta_stats);
+  int do_tmapup_slow(OpContext *ctx, bufferlist::iterator& bp,
+		     OSDOp& osd_op, bufferlist& bl);
+  void update_snap_map(vector<vol_log_entry_t> &log_entries,
+		       ObjectStore::Transaction &t);
+  void sub_op_modify_applied(RepModify *rm);
+  void sub_op_modify_commit(RepModify *rm);
+  void check_blacklisted_obc_watchers(ObjectContext *obc);
+  void log_subop_stats(OpRequestRef op, int tag_inb, int tag_lat);
+  void handle_watch_timeout(WatchRef watch);
+  RepGather *new_repop(OpContext *ctx, ObjectContext *obc,
+		       tid_t rep_tid);
+  void eval_repop(RepGather *repop);
+  void apply_repop(RepGather *repop);
+  void queue_snap_trim(void);
+  void remove_repop(RepGather *repop);
+  void op_applied(RepGather *repop);
+  void op_commit(RepGather *repop);
 };
 
 ostream& operator <<(ostream& out, const OSDVol& vol);

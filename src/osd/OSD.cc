@@ -1295,7 +1295,7 @@ void OSD::recursive_remove_collection(ObjectStore *store,
     store,
     coll_t(),
     make_snapmapper_oid());
-  SnapMapper mapper(&driver, 0, 0, 0);
+  SnapMapper mapper(&driver);
 
   vector<hobject_t> objects;
   store->collection_list(tmp, objects);
