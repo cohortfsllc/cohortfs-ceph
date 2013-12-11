@@ -805,7 +805,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
       }
     }
 
-    if (stripe->is_empty())
+    if (stripe->is_empty() && !stripe->is_any_caps())
       stripe->parent_inode->close_stripe(stripe);
   }
 }

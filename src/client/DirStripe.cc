@@ -92,7 +92,7 @@ Dentry* DirStripe::link(const string &name, Inode *in, Dentry *dn)
 
 void DirStripe::unlink(Dentry *dn, bool keepempty)
 {
-  ldout(cct, 15) << "unlink dir " << parent_inode << " '" << dn->name
+  ldout(cct, 15) << "unlink " << dirstripe() << " '" << dn->name
       << "' dn " << dn << " vino " << dn->vino << dendl;
 
   // unlink from inode
