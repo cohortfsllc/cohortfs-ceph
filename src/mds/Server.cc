@@ -5811,9 +5811,6 @@ void Server::handle_slave_rename_prep(MDRequest *mdr)
     // change linkage from destino to srcino
     destdn->push_projected_linkage(req->src.ino, req->src.d_type);
     le->commit.add_dentry(destdn, destdn->is_auth());
-
-    // include the change in stripe cap updates
-    destdn->get_stripe()->add_dentry_update(destdn->get_name(), req->src.ino);
   }
 
   // srcino
