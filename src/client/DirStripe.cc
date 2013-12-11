@@ -165,6 +165,21 @@ void DirStripe::read_client_caps(const Cap *cap, MClientCaps *m)
   rstat.rfiles = m->stripe.rfiles;
   rstat.rsubdirs = m->stripe.rsubdirs;
   rstat.rctime.decode_timeval(&m->stripe.rctime);
+
+  bufferlist::iterator p = m->dentries.begin();
+  vector<stripe_cap_update_t> dns;
+  ::decode(dns, p);
+
+  for (vector<stripe_cap_update_t>::iterator d = dns.begin(); d != dns.end(); ++d) {
+    ldout(cct, 10) << "read_client_caps dentry update " << *d << dendl;
+    if (d->ino)
+      link(d->name, vinodeno_t(d->ino, CEPH_NOSNAP));
+    else {
+      Dentry *dn = lookup(d->name);
+      if (dn)
+        unlink(dn, true);
+    }
+  }
 }
 
 void DirStripe::write_client_caps(const Cap *cap, MClientCaps *m, unsigned mask)

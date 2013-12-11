@@ -598,7 +598,6 @@ DirStripe* Client::add_update_stripe(Inode *diri, const StripeStat &st,
   if (!st.cap.caps)
     return stripe;
 
-  bool updated_fragstat = false;
   if (st.version == 0 || (stripe->version & ~1) < st.version) {
     unsigned implemented = 0;
     unsigned issued = stripe->caps_issued(&implemented) | stripe->caps_dirty();
@@ -609,22 +608,11 @@ DirStripe* Client::add_update_stripe(Inode *diri, const StripeStat &st,
     if ((issued & CEPH_CAP_LINK_EXCL) == 0) {
       stripe->fragstat = st.fragstat;
       stripe->rstat = st.rstat;
-      updated_fragstat = true;
     }
   }
 
   add_update_cap(stripe, session, st.cap.cap_id, st.cap.caps, st.cap.seq,
                  st.cap.mseq, inodeno_t(st.cap.realm), st.cap.flags);
-
-  // setting I_COMPLETE needs to happen after adding the cap
-  if ((st.cap.caps & CEPH_CAP_LINK_SHARED) &&
-      updated_fragstat && stripe->fragstat.size() == 0) {
-    ldout(cct, 10) << " marking I_COMPLETE on empty dir " << *stripe << dendl;
-    stripe->set_complete();
-    ldout(cct, 10) << " stripe " << *stripe
-        << " is open on empty dir, tearing down" << dendl;
-    stripe->unlink_all(true);
-  }
 
   return stripe;
 }
@@ -662,14 +650,16 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
   }
  
   if (!dn || dn->is_null()) {
-    if (old_dentry)                       // keep dir open if its the same dir
-      old_dentry->stripe->unlink(old_dentry, stripe == old_dentry->stripe);
     dn = stripe->link(dname, in, dn);
     if (set_offset) {
       dn->offset = dir_result_t::make_fpos(stripe->stripeid,
                                            stripe->max_offset++);
       ldout(cct, 15) << " setting dn offset to " << dn->offset << dendl;
     }
+  }
+  if (old_dentry) { // keep dir open if its the same dir
+    assert(dn != old_dentry);
+    old_dentry->stripe->unlink(old_dentry, stripe == old_dentry->stripe);
   }
 
   update_dentry_lease(dn, dlease, from, session);
