@@ -1,13 +1,11 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
-#include "PG.h"
-
 #include "include/types.h"
 #include "messages/MWatchNotify.h"
 
 #include <map>
 
 #include "OSD.h"
-#include "ReplicatedPG.h"
+#include "cohort/CohortOSD.h"
 #include "Watch.h"
 
 #include "common/config.h"
@@ -26,43 +24,28 @@ static ostream& _prefix(
   return *_dout << notify->gen_dbg_prefix();
 }
 
-Notify::Notify(
-  ConnectionRef client,
-  unsigned num_watchers,
-  bufferlist &payload,
-  uint32_t timeout,
-  uint64_t cookie,
-  uint64_t notify_id,
-  uint64_t version,
-  OSDService *osd)
-  : client(client),
-    in_progress_watchers(num_watchers),
-    complete(false),
-    discarded(false),
-    payload(payload),
-    timeout(timeout),
-    cookie(cookie),
-    notify_id(notify_id),
-    version(version),
-    osd(osd),
-    cb(NULL),
-    lock("Notify::lock") {}
+Notify::Notify(ConnectionRef client, unsigned num_watchers,
+	       bufferlist &payload, uint32_t timeout,
+	       uint64_t cookie, uint64_t notify_id,
+	       uint64_t version, CohortOSDServiceRef osd) :
+  client(client), in_progress_watchers(num_watchers),
+  complete(false), discarded(false), payload(payload),
+  timeout(timeout), cookie(cookie), notify_id(notify_id),
+  version(version), osd(osd), cb(NULL), lock("Notify::lock") {}
 
-NotifyRef Notify::makeNotifyRef(
-  ConnectionRef client,
-  unsigned num_watchers,
-  bufferlist &payload,
-  uint32_t timeout,
-  uint64_t cookie,
-  uint64_t notify_id,
-  uint64_t version,
-  OSDService *osd) {
-  NotifyRef ret(
-    new Notify(
-      client, num_watchers,
-      payload, timeout,
-      cookie, notify_id,
-      version, osd));
+NotifyRef Notify::makeNotifyRef(ConnectionRef client,
+				unsigned num_watchers,
+				bufferlist &payload,
+				uint32_t timeout,
+				uint64_t cookie,
+				uint64_t notify_id,
+				uint64_t version,
+				CohortOSDServiceRef osd)
+{
+  NotifyRef ret(new Notify(client, num_watchers,
+			   payload, timeout,
+			   cookie, notify_id,
+			   version, osd));
   ret->set_self(ret);
   return ret;
 }
@@ -107,12 +90,12 @@ void Notify::do_timeout()
   for (set<WatchRef>::iterator i = _watchers.begin();
        i != _watchers.end();
        ++i) {
-    boost::intrusive_ptr<ReplicatedPG> pg((*i)->get_pg());
-    pg->lock();
+    OSDVolRef vol((*i)->get_vol());
+    vol->lock();
     if (!(*i)->is_discarded()) {
       (*i)->cancel_notify(self.lock());
     }
-    pg->unlock();
+    vol->unlock();
   }
 }
 
@@ -213,15 +196,15 @@ public:
   void finish(int) { assert(0); /* not used */ }
   void complete(int) {
     dout(10) << "HandleWatchTimeout" << dendl;
-    boost::intrusive_ptr<ReplicatedPG> pg(watch->pg);
-    OSDService *osd(watch->osd);
+    OSDVolRef vol(watch->vol);
+    CohortOSDServiceRef osd(watch->osd);
     osd->watch_lock.Unlock();
-    pg->lock();
+    vol->lock();
     watch->cb = NULL;
     if (!watch->is_discarded() && !canceled)
-      watch->pg->handle_watch_timeout(watch);
+      watch->vol->handle_watch_timeout(watch);
     delete this; // ~Watch requires pg lock!
-    pg->unlock();
+    vol->unlock();
     osd->watch_lock.Lock();
   }
 };
@@ -236,10 +219,9 @@ public:
   }
   void finish(int) {
     dout(10) << "HandleWatchTimeoutDelayed" << dendl;
-    assert(watch->pg->is_locked());
     watch->cb = NULL;
     if (!watch->is_discarded() && !canceled)
-      watch->pg->handle_watch_timeout(watch);
+      watch->vol->handle_watch_timeout(watch);
   }
 };
 
@@ -247,32 +229,12 @@ public:
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
 
-string Watch::gen_dbg_prefix() {
-  stringstream ss;
-  ss << pg->gen_prefix() << " -- Watch(" 
-     << make_pair(cookie, entity)
-     << ", obc->ref=" << (obc ? obc->ref : -1) << ") ";
-  return ss.str();
-}
-
-Watch::Watch(
-  ReplicatedPG *pg,
-  OSDService *osd,
-  ObjectContext *obc,
-  uint32_t timeout,
-  uint64_t cookie,
-  entity_name_t entity,
-  entity_addr_t addr)
-  : cb(NULL),
-    osd(osd),
-    pg(pg),
-    obc(obc),
-    timeout(timeout),
-    cookie(cookie),
-    addr(addr),
-    entity(entity),
-    discarded(false) {
-  obc->get();
+Watch::Watch(OSDVolRef vol, CohortOSDServiceRef osd, ObjectContext *obc,
+	     uint32_t timeout, uint64_t cookie, entity_name_t entity,
+	     entity_addr_t addr) : cb(NULL), osd(osd), vol(vol), obc(obc),
+				   timeout(timeout), cookie(cookie),
+				   addr(addr), entity(entity),
+				   discarded(false) {obc->get();
   dout(10) << "Watch()" << dendl;
 }
 
@@ -327,7 +289,8 @@ void Watch::connect(ConnectionRef con)
 {
   dout(10) << "connecting" << dendl;
   conn = con;
-  OSD::Session* sessionref(static_cast<OSD::Session*>(con->get_priv()));
+  CohortOSD::Session *sessionref(static_cast<CohortOSD::Session*>(
+				   con->get_priv()));
   sessionref->wstate.addWatch(self.lock());
   sessionref->put();
   for (map<uint64_t, NotifyRef>::iterator i = in_progress_notifies.begin();
@@ -358,19 +321,19 @@ void Watch::discard()
 
 void Watch::discard_state()
 {
-  assert(pg->is_locked());
   assert(!discarded);
   assert(obc);
   in_progress_notifies.clear();
   unregister_cb();
   discarded = true;
   if (conn) {
-    OSD::Session* sessionref(static_cast<OSD::Session*>(conn->get_priv()));
+    CohortOSD::Session* sessionref(static_cast<CohortOSD::Session*>(
+				     conn->get_priv()));
     sessionref->wstate.removeWatch(self.lock());
     sessionref->put();
     conn = ConnectionRef();
   }
-  pg->put_object_context(obc);
+  vol->put_object_context(obc);
   obc = NULL;
 }
 
@@ -426,11 +389,12 @@ void Watch::notify_ack(uint64_t notify_id)
   }
 }
 
-WatchRef Watch::makeWatchRef(
-  ReplicatedPG *pg, OSDService *osd,
-  ObjectContext *obc, uint32_t timeout, uint64_t cookie, entity_name_t entity, entity_addr_t addr)
+WatchRef Watch::makeWatchRef(OSDVolRef vol, CohortOSDServiceRef osd,
+			     ObjectContext *obc, uint32_t timeout,
+			     uint64_t cookie, entity_name_t entity,
+			     entity_addr_t addr)
 {
-  WatchRef ret(new Watch(pg, osd, obc, timeout, cookie, entity, addr));
+  WatchRef ret(new Watch(vol, osd, obc, timeout, cookie, entity, addr));
   ret->set_self(ret);
   return ret;
 }
@@ -457,11 +421,19 @@ void WatchConState::reset()
   for (set<WatchRef>::iterator i = _watches.begin();
        i != _watches.end();
        ++i) {
-    boost::intrusive_ptr<ReplicatedPG> pg((*i)->get_pg());
-    pg->lock();
+    OSDVolRef vol((*i)->get_vol());
+    vol->lock();
     if (!(*i)->is_discarded()) {
       (*i)->disconnect();
     }
-    pg->unlock();
+    vol->unlock();
   }
+}
+
+string Watch::gen_dbg_prefix() {
+  stringstream ss;
+  ss << vol->gen_prefix() << " -- Watch("
+     << make_pair(cookie, entity)
+     << ", obc->ref=" << (obc ? obc->ref : -1) << ") ";
+  return ss.str();
 }

@@ -387,5 +387,5 @@ protected:
 			   pg_missing_t &missing, ostringstream &oss,
 			   set<string> *log_keys_debug);
 };
-  
+
 #endif // CEPH_PG_LOG_H

@@ -307,8 +307,6 @@ struct vol_info_t {
 
   eversion_t log_tail;     // oldest log entry.
 
-  hobject_t last_backfill;   // objects >= this and < last_complete may be 
-
   interval_set<snapid_t> purged_snaps;
 
   vol_stat_t stats;
@@ -316,17 +314,15 @@ struct vol_info_t {
   vol_history_t history;
 
   vol_info_t()
-    : last_epoch_started(0), last_backfill(hobject_t::get_max())
+    : last_epoch_started(0)
   { }
   vol_info_t(const uuid_d& volid)
     : volid(volid),
-      last_epoch_started(0), last_backfill(hobject_t::get_max())
+      last_epoch_started(0)
   { }
 
   bool is_empty() const { return last_update.version == 0; }
   bool dne() const { return history.epoch_created == 0; }
-
-  bool is_incomplete() const { return last_backfill != hobject_t::get_max(); }
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& p);
@@ -346,8 +342,6 @@ inline ostream& operator<<(ostream& out, const vol_info_t& voli)
     if (voli.last_complete != voli.last_update)
       out << " lc " << voli.last_complete;
     out << " (" << voli.log_tail << "," << voli.last_update << "]";
-    if (voli.is_incomplete())
-      out << " lb " << voli.last_backfill;
   }
   out << " local-les=" << voli.last_epoch_started;
   out << " n=" << voli.stats.stats.sum.num_objects;
@@ -537,9 +531,6 @@ public:
     touched_log(false), dirty_from(eversion_t::max()),
     dirty_divergent_priors(false) {}
 
-
-  void reset_backfill();
-
   void clear();
 
   //////////////////// get or set log ////////////////////
@@ -625,20 +616,21 @@ public:
   bool read_log(ObjectStore *store, hobject_t log_oid,
 		const vol_info_t &info, ostringstream &oss) {
     return read_log(store, log_oid, info, divergent_priors,
-		    log, &log_keys_debug);
+		    log, oss, &log_keys_debug);
   }
 
   /// return true if the log should be rewritten
   static bool read_log(ObjectStore *store, hobject_t log_oid,
 		       const vol_info_t &info,
 		       map<eversion_t, hobject_t> &divergent_priors,
-		       IndexedLog &log, set<string> *log_keys_debug = 0);
+		       IndexedLog &log, ostringstream &oss,
+		       set<string> *log_keys_debug = 0);
 
 protected:
   static void read_log_old(ObjectStore *store, coll_t coll, hobject_t log_oid,
-			   const vol_info_t &info, map<eversion_t, hobject_t> &divergent_priors,
-			   IndexedLog &log,
-			   ostringstream &oss,
+			   const vol_info_t &info, map<eversion_t,
+			   hobject_t> &divergent_priors,
+			   IndexedLog &log, ostringstream &oss,
 			   set<string> *log_keys_debug);
 };
 

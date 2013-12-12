@@ -12,9 +12,9 @@
 
 OSDVol::OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
 	       uuid_d u, const hobject_t& loid, const hobject_t& ioid) :
-  volume_id(u), vol_lock("OSDVol::vol_lock"), map_lock("OSDVol::map_lock"),
-  osd(o), osdmap_ref(curmap), vol_log(), log_oid(loid), biginfo_oid(ioid),
-  info(u),
+  snap_trim_item(this), volume_id(u), vol_lock("OSDVol::vol_lock"),
+  map_lock("OSDVol::map_lock"), osd(o), osdmap_ref(curmap), vol_log(),
+  log_oid(loid), biginfo_oid(ioid), info(u),
   osdriver(osd->store, coll_t(), OSD::make_snapmapper_oid()),
   snap_mapper(&osdriver)
 {
@@ -1615,7 +1615,7 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
       watch = ctx->obc->watchers[watcher];
     } else {
       watch = Watch::makeWatchRef(
-	this, osd, ctx->obc, i->timeout_seconds,
+	OSDVolRef(this), osd, ctx->obc, i->timeout_seconds,
 	i->cookie, entity, conn->get_peer_addr());
       ctx->obc->watchers.insert(
 	make_pair(
@@ -2634,7 +2634,7 @@ void OSDVol::populate_obc_watchers(ObjectContext *obc)
     dout(10) << "  unconnected watcher " << p->first << " will expire " << expire << dendl;
     WatchRef watch(
       Watch::makeWatchRef(
-	this, osd, obc, p->second.timeout_seconds, p->first.first,
+	OSDVolRef(this), osd, obc, p->second.timeout_seconds, p->first.first,
 	p->first.second, p->second.addr));
     watch->disconnect();
     obc->watchers.insert(
@@ -3115,13 +3115,11 @@ void OSDVol::apply_repop(RepGather *repop)
 							repop->ctx->clone_obc);
   int r = osd->store->queue_transactions(
     osr.get(),repop->tls, onapplied, oncommit, onapplied_sync, repop->ctx->op);
-  if (r) {
-    derr << "apply_repop  queue_transactions returned " << r << " on " << *repop << dendl;
-    assert(0);
-  }
+
+  assert(r = 0);
 }
 
-void OSDVal::queue_snap_trim()
+void OSDVol::queue_snap_trim()
 {
   if (osd->queue_for_snap_trim(this))
     dout(10) << "queue_snap_trim -- queuing" << dendl;
@@ -3137,7 +3135,6 @@ void OSDVol::remove_repop(RepGather *repop)
 void OSDVol::op_applied(RepGather *repop)
 {
   lock();
-  dout(10) << "op_applied " << *repop << dendl;
   if (repop->ctx->op)
     repop->ctx->op->mark_event("op_applied");
 
@@ -3183,12 +3180,8 @@ void OSDVol::op_commit(RepGather *repop)
   if (repop->ctx->op)
     repop->ctx->op->mark_event("op_commit");
 
-  if (repop->aborted) {
-    dout(10) << "op_commit " << *repop << " -- aborted" << dendl;
-  } else if (repop->waitfor_disk.count(osd->get_nodeid()) == 0) {
-    dout(10) << "op_commit " << *repop << " -- already marked ondisk" << dendl;
-  } else {
-    dout(10) << "op_commit " << *repop << dendl;
+  if (!repop->aborted &&
+      (repop->waitfor_disk.count(osd->get_nodeid()) != 0)) {
     int whoami = osd->get_nodeid();
 
     repop->waitfor_disk.erase(whoami);
@@ -3206,4 +3199,202 @@ void OSDVol::op_commit(RepGather *repop)
 
   repop->put();
   unlock();
+}
+
+void OSDVol::snap_trimmer(void)
+{
+  hobject_t pos;
+
+  lock();
+  if (deleting) {
+    unlock();
+    return;
+  }
+
+  entity_inst_t nobody;
+  dout(10) << "snap_trimmer posting" << dendl;
+
+  snapid_t snap_to_trim = snap_trimq.range_start();
+
+  // Get next
+  int r = snap_mapper.get_next_object_to_trim(snap_to_trim, &pos);
+
+  if (r == -ENOENT) {
+    // Done!
+    unlock();
+    return;
+  }
+
+  RepGather *repop = trim_object(pos);
+  assert(repop);
+
+
+  repop->queue_snap_trimmer = true;
+
+  append_log(repop->ctx->log, eversion_t(), repop->ctx->local_t);
+  eval_repop(repop);
+
+  unlock();
+  return;
+}
+
+OSDVol::RepGather *OSDVol::trim_object(const hobject_t &coid)
+{
+  // load clone info
+  bufferlist bl;
+  ObjectContext *obc = 0;
+  find_object_context(coid, &obc, false, NULL);
+
+  object_info_t &coi = obc->obs.oi;
+  set<snapid_t> old_snaps(coi.snaps.begin(), coi.snaps.end());
+
+  // get snap set context
+  if (!obc->ssc)
+    obc->ssc = get_snapset_context(coid.oid, false);
+
+  SnapSet& snapset = obc->ssc->snapset;
+
+  vector<OSDOp> ops;
+  tid_t rep_tid = osd->get_tid();
+  osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, rep_tid);
+  OpContext *ctx = new OpContext(
+    OpRequestRef(),
+    reqid,
+    ops,
+    &obc->obs,
+    obc->ssc,
+    this);
+  ctx->mtime = ceph_clock_now(g_ceph_context);
+
+  ctx->at_version.epoch = get_osdmap()->get_epoch();
+  ctx->at_version.version = vol_log.get_head().version + 1;
+
+  RepGather *repop = new_repop(ctx, obc, rep_tid);
+
+  ObjectStore::Transaction *t = &ctx->op_t;
+  OSDriver::OSTransaction os_t(osdriver.get_transaction(t));
+
+  set<snapid_t> new_snaps;
+
+  snap_mapper.update_snaps(coid, new_snaps,
+			   &old_snaps, // debug
+			   &os_t);
+
+  if (new_snaps.empty()) {
+    // remove clone
+    dout(10) << coid << " snaps " << old_snaps << " -> "
+	     << new_snaps << " ... deleting" << dendl;
+    t->remove(coll_t(), coid);
+
+    // ...from snapset
+    snapid_t last = coid.snap;
+    vector<snapid_t>::iterator p;
+    for (p = snapset.clones.begin(); p != snapset.clones.end(); ++p)
+      if (*p == last)
+	break;
+    assert(p != snapset.clones.end());
+    object_stat_sum_t delta;
+    if (p != snapset.clones.begin()) {
+      // not the oldest... merge overlap into next older clone
+      vector<snapid_t>::iterator n = p - 1;
+      interval_set<uint64_t> keep;
+      keep.union_of(
+	snapset.clone_overlap[*n],
+	snapset.clone_overlap[*p]);
+      add_interval_usage(keep, delta);  // not deallocated
+      snapset.clone_overlap[*n].intersection_of(
+	snapset.clone_overlap[*p]);
+    } else {
+      add_interval_usage(
+	snapset.clone_overlap[last],
+	delta);  // not deallocated
+    }
+    delta.num_objects--;
+    delta.num_object_clones--;
+    delta.num_bytes -= snapset.clone_size[last];
+    info.stats.stats.add(delta, obc->obs.oi.category);
+
+    snapset.clones.erase(p);
+    snapset.clone_overlap.erase(last);
+    snapset.clone_size.erase(last);
+
+    ctx->log.push_back(
+      vol_log_entry_t(
+	vol_log_entry_t::DELETE,
+	coid,
+	ctx->at_version,
+	ctx->obs->oi.version,
+	osd_reqid_t(),
+	ctx->mtime)
+      );
+    ctx->at_version.version++;
+  } else {
+    // save adjusted snaps for this object
+    coi.snaps = vector<snapid_t>(new_snaps.rbegin(), new_snaps.rend());
+
+    coi.prior_version = coi.version;
+    coi.version = ctx->at_version;
+    bl.clear();
+    ::encode(coi, bl);
+    t->setattr(coll_t(), coid, OI_ATTR, bl);
+
+    ctx->log.push_back(
+      vol_log_entry_t(vol_log_entry_t::MODIFY,
+		      coid, coi.version,
+		      coi.prior_version,
+		      osd_reqid_t(),
+		      ctx->mtime));
+    ::encode(coi.snaps, ctx->log.back().snaps);
+    ctx->at_version.version++;
+  }
+
+  // save head snapset
+  dout(10) << coid << " new snapset " << snapset << dendl;
+
+  hobject_t snapoid(coid.oid, snapset.head_exists ? CEPH_NOSNAP:CEPH_SNAPDIR);
+  ctx->snapset_obc = get_object_context(snapoid, false);
+  assert(ctx->snapset_obc->registered);
+
+  if (snapset.clones.empty() && !snapset.head_exists) {
+    dout(10) << coid << " removing " << snapoid << dendl;
+    ctx->log.push_back(
+      vol_log_entry_t(vol_log_entry_t::DELETE, snapoid,
+		      ctx->at_version, ctx->snapset_obc->obs.oi.version,
+		      osd_reqid_t(), ctx->mtime));
+    ctx->snapset_obc->obs.exists = false;
+
+    t->remove(coll_t(), snapoid);
+  } else {
+    dout(10) << coid << " updating snapset on " << snapoid << dendl;
+    ctx->log.push_back(
+      vol_log_entry_t(vol_log_entry_t::MODIFY,
+		      snapoid, ctx->at_version,
+		      ctx->snapset_obc->obs.oi.version,
+		      osd_reqid_t(), ctx->mtime));
+
+    ctx->snapset_obc->obs.oi.prior_version =
+      ctx->snapset_obc->obs.oi.version;
+    ctx->snapset_obc->obs.oi.version = ctx->at_version;
+
+    bl.clear();
+    ::encode(snapset, bl);
+    t->setattr(coll_t(), snapoid, SS_ATTR, bl);
+
+    bl.clear();
+    ::encode(ctx->snapset_obc->obs.oi, bl);
+    t->setattr(coll_t(), snapoid, OI_ATTR, bl);
+  }
+
+  return repop;
+}
+
+std::string OSDVol::gen_prefix() const
+{
+  stringstream out;
+  CohortOSDMapRef mapref = osdmap_ref;
+  out << "osd." << osd->whoami
+      << " vol_epoch: " << (mapref ? mapref->get_epoch():0)
+      << " vol[" << info.volid << "(unlocked)] ";
+
+  return out.str();
 }

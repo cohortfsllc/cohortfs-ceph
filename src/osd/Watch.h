@@ -27,7 +27,7 @@ enum WatcherState {
   WATCHER_NOTIFIED,
 };
 
-class OSDService;
+class CohortOSDService;
 class OSDVol;
 class ObjectContext;
 class MWatchNotify;
@@ -37,6 +37,8 @@ typedef std::tr1::shared_ptr<Watch> WatchRef;
 typedef std::tr1::weak_ptr<Watch> WWatchRef;
 
 class Notify;
+typedef std::tr1::shared_ptr<CohortOSDService> CohortOSDServiceRef;
+typedef std::tr1::shared_ptr<OSDVol> OSDVolRef;
 typedef std::tr1::shared_ptr<Notify> NotifyRef;
 typedef std::tr1::weak_ptr<Notify> WNotifyRef;
 
@@ -64,7 +66,7 @@ class Notify {
   uint64_t notify_id;
   uint64_t version;
 
-  OSDService *osd;
+  CohortOSDServiceRef osd;
   CancelableContext *cb;
   Mutex lock;
 
@@ -80,15 +82,14 @@ class Notify {
   /// Called on Notify timeout
   void do_timeout();
 
-  Notify(
-    ConnectionRef client,
-    unsigned num_watchers,
-    bufferlist &payload,
-    uint32_t timeout,
-    uint64_t cookie,
-    uint64_t notify_id,
-    uint64_t version,
-    OSDService *osd);
+  Notify(ConnectionRef client,
+	 unsigned num_watchers,
+	 bufferlist &payload,
+	 uint32_t timeout,
+	 uint64_t cookie,
+	 uint64_t notify_id,
+	 uint64_t version,
+	 CohortOSDServiceRef osd);
 
   /// registers a timeout callback with the watch_timer
   void register_cb();
@@ -114,7 +115,7 @@ public:
     uint64_t cookie,
     uint64_t notify_id,
     uint64_t version,
-    OSDServiceRef osd);
+    CohortOSDServiceRef osd);
 
   /// Call after creation to initialize
   void init();
@@ -147,8 +148,8 @@ class Watch {
   ConnectionRef conn;
   CancelableContext *cb;
 
-  OSDService *osd;
-  boost::shared_ptr<OSDVol> vol;
+  CohortOSDServiceRef osd;
+  OSDVolRef vol;
   ObjectContext *obc;
 
   std::map<uint64_t, NotifyRef> in_progress_notifies;
@@ -161,11 +162,10 @@ class Watch {
   entity_name_t entity;
   bool discarded;
 
-  Watch(
-    OSDVol *vol, OSDService *osd,
-    ObjectContext *obc, uint32_t timeout,
-    uint64_t cookie, entity_name_t entity,
-    entity_addr_t addr);
+  Watch(OSDVolRef vol, CohortOSDServiceRef osd,
+	ObjectContext *obc, uint32_t timeout,
+	uint64_t cookie, entity_name_t entity,
+	entity_addr_t addr);
 
   /// Registers the timeout callback with watch_timer
   void register_cb();
@@ -184,14 +184,13 @@ public:
 
   string gen_dbg_prefix();
   static WatchRef makeWatchRef(
-    OSDVol *vol, OSDServiceRef osd,
+    OSDVolRef vol, CohortOSDServiceRef osd,
     ObjectContext *obc, uint32_t timeout, uint64_t cookie, entity_name_t entity, entity_addr_t addr);
   void set_self(WatchRef _self) {
     self = _self;
   }
 
-  /// Does not grant a ref count!
-  boost::shared_ptr<OSDVol> get_vol() { return vol; }
+  OSDVolRef get_vol() { return vol; }
 
   /// Grants a ref count!
   ObjectContext *get_obc();

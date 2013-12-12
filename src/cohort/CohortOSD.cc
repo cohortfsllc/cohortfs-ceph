@@ -30,7 +30,8 @@ CohortOSD* CohortOSDService::cohortosd() const
 CohortOSDService::CohortOSDService(CohortOSD *_osd) :
   OSDService(_osd), watch_lock("CohortOSDService::watch_lock"),
   watch_timer(_osd->client_messenger->cct, watch_lock),
-  op_wq(_osd->op_wq)
+  op_wq(_osd->op_wq),
+  snap_trim_wq(_osd->snap_trim_wq)
 {
 }
 
@@ -47,7 +48,9 @@ CohortOSD::CohortOSD(int id, Messenger *internal, Messenger *external,
 		     const std::string &jdev) :
   OSD(id, internal, external, hb_client, hb_front_server, hb_back_server,
       mc, dev, jdev),
-  op_wq(this, g_conf->osd_op_thread_timeout, &op_tp)
+  op_wq(this, g_conf->osd_op_thread_timeout, &op_tp),
+  snap_trim_wq(this, g_conf->osd_snap_trim_thread_timeout,
+	       &disk_tp)
 
 {
 }

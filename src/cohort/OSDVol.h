@@ -98,6 +98,8 @@ class OSDVol {
 
   object_stat_collection_t unstable_stats;
   bool dirty_info, dirty_big_info;
+  bool deleting;
+  xlist<OSDVol*>::item snap_trim_item;
   struct OpContext {
     OpRequestRef op;
     osd_reqid_t reqid;
@@ -379,7 +381,7 @@ public:
   bool can_discard_op(OpRequestRef op);
   bool can_discard_request(OpRequestRef op);
 
-  static bool op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op);
+  static bool op_must_wait_for_map(CohortOSDMapRef curmap, OpRequestRef op);
 
   static bool split_request(OpRequestRef op, unsigned match, unsigned bits);
 
@@ -483,6 +485,9 @@ public:
   void remove_repop(RepGather *repop);
   void op_applied(RepGather *repop);
   void op_commit(RepGather *repop);
+  void snap_trimmer(void);
+  RepGather *trim_object(const hobject_t &coid);
+  std::string gen_prefix() const;
 };
 
 ostream& operator <<(ostream& out, const OSDVol& vol);

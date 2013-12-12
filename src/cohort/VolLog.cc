@@ -15,7 +15,8 @@
  */
 
 #include "VolLog.h"
-#include "SnapMapper.h"
+#include "osd/SnapMapper.h"
+#include "vol/Volume.h"
 
 #define dout_subsys ceph_subsys_osd
 
@@ -96,8 +97,6 @@ void vol_log_entry_t::decode(bufferlist::iterator &bl)
 
   ::decode(reqid, bl);
   ::decode(mtime, bl);
-  if (struct_v < 5)
-    invalid_pool = true;
 
   if (op == LOST_REVERT) {
     if (struct_v >= 6) {
@@ -182,8 +181,6 @@ void vol_log_t::decode(bufferlist::iterator &bl, int64_t pool)
     for (list<vol_log_entry_t>::iterator i = log.begin();
 	 i != log.end();
 	 ++i) {
-      if (i->soid.pool == -1)
-	i->soid.pool = pool;
     }
   }
 }
@@ -266,47 +263,6 @@ ostream& vol_log_t::print(ostream& out) const
 
 //////////////////// VolLog::IndexedLog ////////////////////
 
-void VolLog::IndexedLog::split_into(
-  vol_t child_pgid,
-  unsigned split_bits,
-  VolLog::IndexedLog *olog)
-{
-  list<vol_log_entry_t> oldlog;
-  oldlog.swap(log);
-
-  eversion_t old_tail;
-  olog->head = head;
-  olog->tail = tail;
-  unsigned mask = ~((~0)<<split_bits);
-  for (list<vol_log_entry_t>::iterator i = oldlog.begin();
-       i != oldlog.end();
-       ) {
-    if ((i->soid.hash & mask) == child_pgid.m_seed) {
-      olog->log.push_back(*i);
-      if (log.empty())
-	tail = i->version;
-    } else {
-      log.push_back(*i);
-      if (olog->empty())
-	olog->tail = i->version;
-    }
-    oldlog.erase(i++);
-  }
-
-  if (log.empty())
-    tail = head;
-  else
-    head = log.rbegin()->version;
-
-  if (olog->empty())
-    olog->tail = olog->head;
-  else
-    olog->head = olog->log.rbegin()->version;
-
-  olog->index();
-  index();
-}
-
 void VolLog::IndexedLog::trim(eversion_t s)
 {
   if (complete_to != log.end() &&
@@ -343,31 +299,21 @@ ostream& VolLog::IndexedLog::print(ostream& out) const
 
 //////////////////// VolLog ////////////////////
 
-void VolLog::reset_backfill()
-{
-  missing.clear();
-  divergent_priors.clear();
-  dirty_divergent_priors = true;
-}
-
 void VolLog::clear() {
   divergent_priors.clear();
-  missing.clear();
   log.zero();
   log_keys_debug.clear();
   undirty();
 }
 
-void VolLog::clear_info_log(
-  vol_t pgid,
-  const hobject_t &infos_oid,
-  const hobject_t &log_oid,
-  ObjectStore::Transaction *t) {
-
+void VolLog::clear_info_log(uuid_d vol, const hobject_t &infos_oid,
+			    const hobject_t &log_oid,
+			    ObjectStore::Transaction *t)
+{
   set<string> keys_to_remove;
-  keys_to_remove.insert(PG::get_epoch_key(pgid));
-  keys_to_remove.insert(PG::get_biginfo_key(pgid));
-  keys_to_remove.insert(PG::get_info_key(pgid));
+  keys_to_remove.insert(Volume::get_epoch_key(vol));
+  keys_to_remove.insert(Volume::get_biginfo_key(vol));
+  keys_to_remove.insert(Volume::get_info_key(vol));
 
   t->remove(coll_t::META_COLL, log_oid);
   t->omap_rmkeys(coll_t::META_COLL, infos_oid, keys_to_remove);
@@ -396,159 +342,31 @@ void VolLog::trim(eversion_t trim_to, vol_info_t &info)
   }
 }
 
-void VolLog::proc_replica_log(ObjectStore::Transaction& t,
-			  vol_info_t &oinfo, const vol_log_t &olog, vol_missing_t& omissing, int from) const
-{
-  dout(10) << "proc_replica_log for osd." << from << ": "
-	   << oinfo << " " << olog << " " << omissing << dendl;
-
-  /*
-    basically what we're doing here is rewinding the remote log,
-    dropping divergent entries, until we find something that matches
-    our master log.  we then reset last_update to reflect the new
-    point up to which missing is accurate.
-
-    later, in activate(), missing will get wound forward again and
-    we will send the peer enough log to arrive at the same state.
-  */
-
-  for (map<hobject_t, vol_missing_t::item>::iterator i = omissing.missing.begin();
-       i != omissing.missing.end();
-       ++i) {
-    dout(20) << " before missing " << i->first << " need " << i->second.need
-	     << " have " << i->second.have << dendl;
-  }
-
-  list<vol_log_entry_t>::const_reverse_iterator pp = olog.log.rbegin();
-  eversion_t lu(oinfo.last_update);
-  while (true) {
-    if (pp == olog.log.rend()) {
-      if (pp != olog.log.rbegin())   // no last_update adjustment if we discard nothing!
-	lu = olog.tail;
-      break;
-    }
-    const vol_log_entry_t& oe = *pp;
-
-    // don't continue past the tail of our log.
-    if (oe.version <= log.tail)
-      break;
-
-    if (!log.objects.count(oe.soid)) {
-      dout(10) << " had " << oe << " new dne : divergent, ignoring" << dendl;
-      ++pp;
-      continue;
-    }
-      
-    const vol_log_entry_t& ne = *(log.objects.find(oe.soid)->second);
-    if (ne.version == oe.version) {
-      dout(10) << " had " << oe << " new " << ne << " : match, stopping" << dendl;
-      lu = pp->version;
-      break;
-    }
-
-    if (oe.soid > oinfo.last_backfill) {
-      // past backfill line, don't care
-      dout(10) << " had " << oe << " beyond last_backfill : skipping" << dendl;
-      ++pp;
-      continue;
-    }
-
-    if (ne.version > oe.version) {
-      dout(10) << " had " << oe << " new " << ne << " : new will supercede" << dendl;
-    } else {
-      if (oe.is_delete()) {
-	if (ne.is_delete()) {
-	  // old and new are delete
-	  dout(10) << " had " << oe << " new " << ne << " : both deletes" << dendl;
-	} else {
-	  // old delete, new update.
-	  dout(10) << " had " << oe << " new " << ne << " : missing" << dendl;
-	  omissing.add(ne.soid, ne.version, eversion_t());
-	}
-      } else {
-	if (ne.is_delete()) {
-	  // old update, new delete
-	  dout(10) << " had " << oe << " new " << ne << " : new will supercede" << dendl;
-	  omissing.rm(oe.soid, oe.version);
-	} else {
-	  // old update, new update
-	  dout(10) << " had " << oe << " new " << ne << " : new will supercede" << dendl;
-	  omissing.revise_need(ne.soid, ne.version);
-	}
-      }
-    }
-
-    ++pp;
-  }    
-
-  if (lu < oinfo.last_update) {
-    dout(10) << " peer osd." << from << " last_update now " << lu << dendl;
-    oinfo.last_update = lu;
-  }
-
-  if (omissing.have_missing()) {
-    eversion_t first_missing =
-      omissing.missing[omissing.rmissing.begin()->second].need;
-    oinfo.last_complete = eversion_t();
-    list<vol_log_entry_t>::const_iterator i = olog.log.begin();
-    for (;
-	 i != olog.log.end();
-	 ++i) {
-      if (i->version < first_missing)
-	oinfo.last_complete = i->version;
-      else
-	break;
-    }
-  } else {
-    oinfo.last_complete = oinfo.last_update;
-  }
-}
-
 /*
- * merge an old (possibly divergent) log entry into the new log.  this 
- * happens _after_ new log items have been assimilated.  thus, we assume
- * the index already references newer entries (if present), and missing
- * has been updated accordingly.
+ * merge an old (possibly divergent) log entry into the new log.  this
+ * happens _after_ new log items have been assimilated.  thus, we
+ * assume the index already references newer entries (if present), and
+ * missing has been updated accordingly.
  *
  * return true if entry is not divergent.
  */
-bool VolLog::merge_old_entry(ObjectStore::Transaction& t, const vol_log_entry_t& oe, const vol_info_t& info, list<hobject_t>& remove_snap)
+bool VolLog::merge_old_entry(ObjectStore::Transaction& t,
+			     const vol_log_entry_t& oe,
+			     const vol_info_t& info,
+			     list<hobject_t>& remove_snap)
 {
-  if (oe.soid > info.last_backfill) {
-    dout(20) << "merge_old_entry  had " << oe << " : beyond last_backfill" << dendl;
-    return false;
-  }
   if (log.objects.count(oe.soid)) {
     vol_log_entry_t &ne = *log.objects[oe.soid];  // new(er?) entry
-    
+
     if (ne.version > oe.version) {
-      dout(20) << "merge_old_entry  had " << oe << " new " << ne << " : older, missing" << dendl;
-      assert(ne.is_delete() || missing.is_missing(ne.soid));
+      dout(20) << "merge_old_entry  had " << oe << " new " << ne
+	       << " : older, missing" << dendl;
+      assert(ne.is_delete());
       return false;
     }
     if (ne.version == oe.version) {
       dout(20) << "merge_old_entry  had " << oe << " new " << ne << " : same" << dendl;
       return true;
-    }
-    if (oe.is_delete()) {
-      if (ne.is_delete()) {
-	// old and new are delete
-	dout(20) << "merge_old_entry  had " << oe << " new " << ne << " : both deletes" << dendl;
-      } else {
-	// old delete, new update.
-	dout(20) << "merge_old_entry  had " << oe << " new " << ne << " : missing" << dendl;
-	missing.revise_need(ne.soid, ne.version);
-      }
-    } else {
-      if (ne.is_delete()) {
-	// old update, new delete
-	dout(20) << "merge_old_entry  had " << oe << " new " << ne << " : new delete supercedes" << dendl;
-	missing.rm(oe.soid, oe.version);
-      } else {
-	// old update, new update
-	dout(20) << "merge_old_entry  had " << oe << " new " << ne << " : new item supercedes" << dendl;
-	missing.revise_need(ne.soid, ne.version);
-      }
     }
   } else if (oe.op == vol_log_entry_t::CLONE) {
     assert(oe.soid.snap != CEPH_NOSNAP);
@@ -556,8 +374,6 @@ bool VolLog::merge_old_entry(ObjectStore::Transaction& t, const vol_log_entry_t&
 	     << ", clone with no non-divergent log entries, "
 	     << "deleting" << dendl;
     remove_snap.push_back(oe.soid);
-    if (missing.is_missing(oe.soid))
-      missing.rm(oe.soid, missing.missing[oe.soid].need);
   } else if (oe.prior_version > info.log_tail) {
     /**
      * oe.prior_version is a previously divergent log entry
@@ -577,9 +393,6 @@ bool VolLog::merge_old_entry(ObjectStore::Transaction& t, const vol_log_entry_t&
 	     << oe.prior_version << dendl;
     if (oe.prior_version > eversion_t()) {
       add_divergent_prior(oe.prior_version, oe.soid);
-      missing.revise_need(oe.soid, oe.prior_version);
-    } else if (missing.is_missing(oe.soid)) {
-      missing.rm(oe.soid, missing.missing[oe.soid].need);
     }
   }
   return false;
@@ -648,12 +461,6 @@ void VolLog::merge_log(ObjectStore::Transaction& t,
   // The logs must overlap.
   assert(log.head >= olog.tail && olog.head >= log.tail);
 
-  for (map<hobject_t, vol_missing_t::item>::iterator i = missing.missing.begin();
-       i != missing.missing.end();
-       ++i) {
-    dout(20) << "vol_missing_t sobject: " << i->first << dendl;
-  }
-
   bool changed = false;
 
   // extend on tail?
@@ -686,8 +493,6 @@ void VolLog::merge_log(ObjectStore::Transaction& t,
 
   if (oinfo.stats.reported < info.stats.reported)   // make sure reported always increases
     oinfo.stats.reported = info.stats.reported;
-  if (info.last_backfill.is_max())
-    info.stats = oinfo.stats;
 
   // do we have divergent entries to throw out?
   if (olog.head < log.head) {
@@ -722,13 +527,8 @@ void VolLog::merge_log(ObjectStore::Transaction& t,
       vol_log_entry_t &ne = *p;
       dout(20) << "merge_log " << ne << dendl;
       log.index(ne);
-      if (ne.soid <= info.last_backfill) {
-	missing.add_next_event(ne);
-	if (ne.is_delete())
-	  remove_snap.push_back(ne.soid);
-      }
     }
-      
+
     // move aside divergent items
     list<vol_log_entry_t> divergent;
     while (!log.empty()) {
@@ -765,8 +565,6 @@ void VolLog::merge_log(ObjectStore::Transaction& t,
 
     changed = true;
   }
-  
-  dout(10) << "merge_log result " << log << " " << missing << " changed=" << changed << dendl;
 
   if (changed) {
     dirty_info = true;
@@ -864,12 +662,11 @@ void VolLog::_write_log(
   t.omap_setkeys(coll_t::META_COLL, log_oid, keys);
 }
 
-bool VolLog::read_log(ObjectStore *store, coll_t coll, hobject_t log_oid,
-  const vol_info_t &info, map<eversion_t, hobject_t> &divergent_priors,
-  IndexedLog &log,
-  vol_missing_t &missing,
-  ostringstream &oss,
-  set<string> *log_keys_debug)
+bool VolLog::read_log(ObjectStore *store, hobject_t log_oid,
+		      const vol_info_t &info,
+		      map<eversion_t, hobject_t> &divergent_priors,
+		      IndexedLog &log,ostringstream &oss,
+		      set<string> *log_keys_debug)
 {
   dout(10) << "read_log" << dendl;
   bool rewrite_log = false;
@@ -879,7 +676,8 @@ bool VolLog::read_log(ObjectStore *store, coll_t coll, hobject_t log_oid,
   int r = store->stat(coll_t::META_COLL, log_oid, &st);
   assert(r == 0);
   if (st.st_size > 0) {
-    read_log_old(store, coll, log_oid, info, divergent_priors, log, missing, oss, log_keys_debug);
+    read_log_old(store, coll_t(), log_oid, info, divergent_priors, log,
+		 oss, log_keys_debug);
     rewrite_log = true;
   } else {
     log.tail = info.log_tail;
@@ -921,20 +719,17 @@ bool VolLog::read_log(ObjectStore *store, coll_t coll, hobject_t log_oid,
       if (i->version <= info.last_complete) break;
       if (did.count(i->soid)) continue;
       did.insert(i->soid);
-      
+
       if (i->is_delete()) continue;
-      
+
       bufferlist bv;
-      int r = store->getattr(coll, i->soid, OI_ATTR, bv);
+      int r = store->getattr(coll_t(), i->soid, OI_ATTR, bv);
       if (r >= 0) {
 	object_info_t oi(bv);
 	if (oi.version < i->version) {
-	  dout(15) << "read_log  missing " << *i << " (have " << oi.version << ")" << dendl;
-	  missing.add(i->soid, i->version, oi.version);
+	  dout(15) << "read_log " << *i << " (have "
+		   << oi.version << ")" << dendl;
 	}
-      } else {
-	dout(15) << "read_log  missing " << *i << dendl;
-	missing.add(i->soid, i->version, eversion_t());
       }
     }
     for (map<eversion_t, hobject_t>::reverse_iterator i =
@@ -945,7 +740,7 @@ bool VolLog::read_log(ObjectStore *store, coll_t coll, hobject_t log_oid,
       if (did.count(i->second)) continue;
       did.insert(i->second);
       bufferlist bv;
-      int r = store->getattr(coll, i->second, OI_ATTR, bv);
+      int r = store->getattr(coll_t(), i->second, OI_ATTR, bv);
       if (r >= 0) {
 	object_info_t oi(bv);
 	/**
@@ -960,9 +755,6 @@ bool VolLog::read_log(ObjectStore *store, coll_t coll, hobject_t log_oid,
 	 * would show up in the log above.
 	 */
 	assert(oi.version == i->first);
-      } else {
-	dout(15) << "read_log  missing " << *i << dendl;
-	missing.add(i->second, i->first, eversion_t());
       }
     }
   }
@@ -971,10 +763,10 @@ bool VolLog::read_log(ObjectStore *store, coll_t coll, hobject_t log_oid,
 }
 
 void VolLog::read_log_old(ObjectStore *store, coll_t coll, hobject_t log_oid,
-			 const vol_info_t &info, map<eversion_t, hobject_t> &divergent_priors,
-			 IndexedLog &log,
-			 vol_missing_t &missing, ostringstream &oss,
-			 set<string> *log_keys_debug)
+			  const vol_info_t &info,
+			  map<eversion_t, hobject_t> &divergent_priors,
+			  IndexedLog &log, ostringstream &oss,
+			  set<string> *log_keys_debug)
 {
   // load bounds, based on old OndiskLog encoding.
   uint64_t ondisklog_tail = 0;
@@ -1050,21 +842,24 @@ void VolLog::read_log_old(ObjectStore *store, coll_t coll, hobject_t log_oid,
 
       // [repair] in order?
       if (e.version < last) {
-	dout(0) << "read_log " << pos << " out of order entry " << e << " follows " << last << dendl;
-	oss << info.pgid << " log has out of order entry "
-	      << e << " following " << last << "\n";
+	dout(0) << "read_log " << pos << " out of order entry " << e
+		<< " follows " << last << dendl;
+	oss << info.volid << " log has out of order entry "
+	    << e << " following " << last << "\n";
 	reorder = true;
       }
 
       if (e.version <= log.tail) {
-	dout(20) << "read_log  ignoring entry at " << pos << " below log.tail" << dendl;
+	dout(20) << "read_log  ignoring entry at " << pos << " below log.tail"
+		 << dendl;
 	continue;
       }
       if (last.version == e.version.version) {
-	dout(0) << "read_log  got dup " << e.version << " (last was " << last << ", dropping that one)" << dendl;
+	dout(0) << "read_log  got dup " << e.version << " (last was "
+		<< last << ", dropping that one)" << dendl;
 	log.log.pop_back();
-	oss << info.pgid << " read_log got dup "
-	      << e.version << " after " << last << "\n";
+	oss << info.volid << " read_log got dup "
+	    << e.version << " after " << last << "\n";
       }
 
       if (e.invalid_hash) {
@@ -1091,10 +886,6 @@ void VolLog::read_log_old(ObjectStore *store, coll_t coll, hobject_t log_oid,
 	}
       }
 
-      if (e.invalid_pool) {
-	e.soid.pool = info.pgid.pool();
-      }
-
       e.offset = pos;
       uint64_t endpos = ondisklog_tail + p.get_off();
       log.log.push_back(e);
@@ -1104,12 +895,12 @@ void VolLog::read_log_old(ObjectStore *store, coll_t coll, hobject_t log_oid,
 
       // [repair] at end of log?
       if (!p.end() && e.version == info.last_update) {
-	oss << info.pgid << " log has extra data at "
-	   << endpos << "~" << (ondisklog_head-endpos) << " after "
-	   << info.last_update << "\n";
+	oss << info.volid << " log has extra data at "
+	    << endpos << "~" << (ondisklog_head-endpos) << " after "
+	    << info.last_update << "\n";
 
 	dout(0) << "read_log " << endpos << " *** extra gunk at end of log, "
-	        << "adjusting ondisklog_head" << dendl;
+		<< "adjusting ondisklog_head" << dendl;
 	ondisklog_head = endpos;
 	break;
       }

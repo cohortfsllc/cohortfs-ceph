@@ -952,5 +952,5 @@ namespace __gnu_cxx {
       return h;
     }
   };
-}
+};
 #endif

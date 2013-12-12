@@ -74,6 +74,12 @@ public:
     return (((uint64_t)cur_epoch) << 32) | ((uint64_t)(next_notif_id++));
   }
   ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> &op_wq;
+  ThreadPool::WorkQueue<OSDVol> &snap_trim_wq;
+
+  bool queue_for_snap_trim(OSDVol *vol) {
+    return snap_trim_wq.queue(vol);
+  }
+
 };
 
 typedef shared_ptr<CohortOSDService> CohortOSDServiceRef;
@@ -158,13 +164,52 @@ private:
   void enqueue_op(OSDVolRef vol, OpRequestRef op);
   void dequeue_op(OSDVolRef vol, OpRequestRef op);
 
+  xlist<OSDVol*> snap_trim_queue;
+
+
+  struct SnapTrimWQ : public ThreadPool::WorkQueue<OSDVol> {
+    CohortOSD *osd;
+    SnapTrimWQ(CohortOSD *o, time_t ti, ThreadPool *tp)
+      : ThreadPool::WorkQueue<OSDVol>("OSD::SnapTrimWQ", ti, 0, tp), osd(o) {}
+
+    bool _empty() {
+      return osd->snap_trim_queue.empty();
+    }
+    bool _enqueue(OSDVol *vol) {
+      if (vol->snap_trim_item.is_on_list())
+	return false;
+      osd->snap_trim_queue.push_back(&vol->snap_trim_item);
+      return true;
+    }
+    void _dequeue(OSDVol *vol) {
+      vol->snap_trim_item.remove_myself();
+    }
+    OSDVol *_dequeue() {
+      if (osd->snap_trim_queue.empty())
+	return NULL;
+      OSDVol *vol = osd->snap_trim_queue.front();
+      osd->snap_trim_queue.pop_front();
+      return vol;
+    }
+
+    void _process(OSDVol *vol) {
+      vol->snap_trimmer();
+    }
+    void _clear() {
+      osd->snap_trim_queue.clear();
+    }
+  } snap_trim_wq;
+
 public:
 
   virtual void handle_conf_change(const struct md_config_t *conf,
 				  const std::set <std::string> &changed);
 
-  struct CohortSession : public Session {
-    CohortSession() : Session() {}
+  struct Session : public OSD::Session {
+    std::map<void *, uuid_d> watches;
+    WatchConState wstate;
+
+    Session() : OSD::Session() {}
   };
 
 

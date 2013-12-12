@@ -27,6 +27,8 @@
 
 #define dout_subsys ceph_subsys_mon
 
+WRITE_RAW_ENCODER(vol_type);
+
 using std::stringstream;
 
 const std::string Volume::typestrings[] = {

@@ -21,9 +21,10 @@
 #include <vector>
 #include <tr1/memory>
 #include "include/types.h"
-#include "include/encoding.h"
 #include "common/Formatter.h"
 #include "include/uuid.h"
+#include "include/stringify.h"
+#include "include/encoding.h"
 
 using namespace std;
 using namespace std::tr1;
@@ -35,8 +36,6 @@ enum vol_type {
   CohortVolDeDupBlock,
   NotAVolType
 };
-
-WRITE_RAW_ENCODER(vol_type);
 
 class Volume;
 typedef shared_ptr<Volume> VolumeRef;
@@ -110,6 +109,15 @@ public:
      concrete 'encode' should call its parent's common_encode as its
      first action. */
   virtual void encode(bufferlist& bl) const = 0;
+  static string get_epoch_key(uuid_d vol) {
+    return stringify(vol) + "_epoch";
+  }
+  static string get_info_key(uuid_d vol) {
+    return stringify(vol) + "_info";
+  }
+  static string get_biginfo_key(uuid_d vol) {
+    return stringify(vol) + "_biginfo";
+  }
 };
 
 #endif // VOL_VOLUME_H
