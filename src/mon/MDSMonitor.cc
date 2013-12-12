@@ -72,6 +72,10 @@ void MDSMonitor::create_new_fs(MDSMap &m, int metadata_pool, int data_pool)
   m.session_autoclose = g_conf->mds_session_autoclose;
   m.max_file_size = g_conf->mds_max_file_size;
 
+  m.inode_placement.count = g_conf->mds_inode_stripes;
+  m.inode_placement.shift = 40; // leave 24 bits for stripe index
+  m.inode_placement.offset = 1;
+
   print_map(m);
 }
 
