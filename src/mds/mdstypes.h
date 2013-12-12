@@ -436,6 +436,55 @@ ostream& operator<<(ostream &out, const stripe_cap_update_t &s);
 
 
 /*
+ * mds_inode_placement_t
+ */
+struct mds_inode_placement_t {
+  uint16_t count; // number of inode container stripes
+  uint8_t shift;  // number of bits right shifted before taking modulus.
+                  //  this allows blocks of consecutive inode numbers to
+                  //  be allocated to the same stripe
+  uint8_t offset; // offset between stripe index and inode number prefix,
+                  //  i.e. stripe 0 contains inode numbers 1xxxxxx if offset=1
+
+  mds_inode_placement_t() : count(0), shift(0), offset(0) {}
+
+  // inode placement algorithm
+  stripeid_t place(inodeno_t ino) const {
+    return ((ino >> shift) - offset) % count;
+  }
+
+  void encode(bufferlist &bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(count, bl);
+    ::encode(shift, bl);
+    ::encode(offset, bl);
+    ENCODE_FINISH(bl);
+  }
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START_LEGACY_COMPAT_LEN(1, 1, 1, bl);
+    ::decode(count, bl);
+    ::decode(shift, bl);
+    ::decode(offset, bl);
+    DECODE_FINISH(bl);
+  }
+  void dump(Formatter *f) const {
+    f->dump_unsigned("count", count);
+    f->dump_unsigned("shift", shift);
+    f->dump_unsigned("offset", offset);
+  }
+  static void generate_test_instances(list<mds_inode_placement_t*>& ls) {
+    ls.push_back(new mds_inode_placement_t);
+  }
+};
+WRITE_CLASS_ENCODER(mds_inode_placement_t)
+
+static inline ostream& operator<<(ostream &out, const mds_inode_placement_t &p) {
+  return out << "stripe = ((ino >> " << p.shift << ") - "
+      << p.offset << ") % " << p.count;
+}
+
+
+/*
  * inode parents
  */
 struct inoparent_t {
