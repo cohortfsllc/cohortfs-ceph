@@ -5125,9 +5125,10 @@ int Client::_lookup_ino(inodeno_t ino, Inode **inp)
   filepath path(ino);
   req->set_filepath(path);
 
-  // TODO: get inode placement from mdsmap
-  int r = make_request(req, -1, -1, inp, NULL,
-                       rand() % mdsmap->get_num_in_mds());
+  // locate inode via placement from mdsmap
+  int who = mdsmap->inode_placement.place(ino);
+
+  int r = make_request(req, -1, -1, inp, NULL, who);
   ldout(cct, 3) << "_lookup_ino exit(" << ino << ") = " << r << dendl;
   return r;
 }
