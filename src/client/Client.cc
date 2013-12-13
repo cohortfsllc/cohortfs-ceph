@@ -1007,11 +1007,13 @@ int Client::choose_target_mds(MetaRequest *req)
     cap = in->auth_cap;
   if (!cap && !in->caps.empty())
     cap = in->caps.begin()->second;
-  if (!cap)
-    goto random_mds;
-  mds = cap->session->mds_num;
-  ldout(cct, 10) << "choose_target_mds from caps on inode " << *in << dendl;
-
+  if (cap) {
+    mds = cap->session->mds_num;
+    ldout(cct, 10) << "choose_target_mds from caps on inode " << *in << dendl;
+  } else {
+    // use mdsmap to place inode
+    mds = mdsmap->inode_placement.place(in->ino);
+  }
   goto out;
 
 random_mds:
