@@ -2368,7 +2368,7 @@ void MDCache::handle_cache_rejoin_weak(MMDSCacheRejoin *weak)
       if (p->first.stripeid == CEPH_CAP_OBJECT_INODE) {
         CInode *in = get_inode(p->first.ino);
         if (!in) {
-          stripeid_t stripeid = get_container()->place(p->first.ino);
+          stripeid_t stripeid = mds->mdsmap->inode_placement.place(p->first.ino);
           CInode *container = get_container()->get_inode();
           auth_mds = container->get_placement()->get_stripe_auth(stripeid);
         } else
@@ -3350,7 +3350,7 @@ bool MDCache::fetch_imported_cap_objects()
       // fetch from inode container
       InodeContainer *container = mds->mdcache->get_container();
       CDirPlacement *placement = container->get_inode()->get_placement();
-      stripeid_t stripeid = container->place(p->first.ino);
+      stripeid_t stripeid = mds->mdsmap->inode_placement.place(p->first.ino);
       int who = placement->get_stripe_auth(stripeid);
       if (who != mds->get_nodeid()) {
         dout(10) << "fetch_imported_cap_objects not auth for " << p->first.ino << dendl;
@@ -5550,7 +5550,7 @@ void MDCache::open_remote_ino(inodeno_t ino, Context *onfinish)
 
   // discover the inode from the inode container
   CDirPlacement *placement = get_container()->get_inode()->get_placement();
-  stripeid_t stripeid = get_container()->place(ino);
+  stripeid_t stripeid = mds->mdsmap->inode_placement.place(ino);
   int who = placement->get_stripe_auth(stripeid);
   discover_ino(ino, onfinish, who);
 }
@@ -5940,7 +5940,7 @@ static stripeid_t pick_stripe(CDirPlacement *placement, const string &dname)
     inodeno_t ino;
     istringstream stream(dname);
     stream >> hex >> ino.val;
-    return placement->mdcache->get_container()->place(ino);
+    return placement->mdcache->mds->mdsmap->inode_placement.place(ino);
   }
 
   return placement->pick_stripe(dname);
@@ -6068,7 +6068,7 @@ static bool fetch_inode_from_container(MDS *mds, inodeno_t ino,
 {
   InodeContainer *container = mds->mdcache->get_container();
   CDirPlacement *placement = container->get_inode()->get_placement();
-  stripeid_t stripeid = container->place(ino);
+  stripeid_t stripeid = mds->mdsmap->inode_placement.place(ino);
   int who = placement->get_stripe_auth(stripeid);
   if (who != mds->get_nodeid()) {
     reply->set_flag_error_ino();
@@ -6199,13 +6199,12 @@ bool MDCache::process_discover(MDiscover *dis, MDiscoverReply *reply)
 
   if (type == MDSCacheObjectInfo::STRIPE) {
     if (!placement) {
-      placement = get_dir_placement(dis->base.stripe.ino);
+      inodeno_t ino = dis->base.stripe.ino;
+      placement = get_dir_placement(ino);
       if (!placement) {
-        dout(10) << "discover stripe failed to find placement for ino "
-            << dis->base.stripe.ino << dendl;
-        discover_dir_placement(dis->base.stripe.ino,
-                               new C_MDS_RetryMessage(mds, dis),
-                               get_container()->place(dis->base.stripe.ino));
+        dout(10) << "discover stripe failed to find placement for ino " << ino << dendl;
+        stripeid_t stripe = mds->mdsmap->inode_placement.place(ino);
+        discover_dir_placement(ino, new C_MDS_RetryMessage(mds, dis), stripe);
         return false;
       }
       reply->contains.first = MDSCacheObjectInfo::STRIPE;
@@ -6383,7 +6382,7 @@ void MDCache::handle_discover_reply(MDiscoverReply *m)
         dout(7) << "discover_reply got " << *stripe << dendl;
         next = MDSCacheObjectInfo::FRAG;
       } else {
-        stripeid_t stripeid = get_container()->place(ino);
+        stripeid_t stripeid = mds->mdsmap->inode_placement.place(ino);
         stripe = placement->get_stripe(stripeid);
         assert(stripe);
       }

@@ -620,7 +620,7 @@ void Server::handle_client_reconnect(MClientReconnect *m)
         auth_mds = in->authority().first;
       } else {
         // run inode placement to determine authority
-        stripeid_t stripeid = mdcache->get_container()->place(p->first.ino);
+        stripeid_t stripeid = mds->mdsmap->inode_placement.place(p->first.ino);
         CInode *container = mdcache->get_container()->get_inode();
         auth_mds = container->get_placement()->get_stripe_auth(stripeid);
       }
@@ -2317,7 +2317,7 @@ void Server::handle_client_lookup_ino(MDRequest *mdr)
 
   InodeContainer *container = mdcache->get_container();
   CDirPlacement *placement = container->get_inode()->get_placement();
-  stripeid_t stripeid = container->place(ino);
+  stripeid_t stripeid = mds->mdsmap->inode_placement.place(ino);
   int who = placement->get_stripe_auth(stripeid);
   if (who != mds->get_nodeid()) {
     dout(10) << "lookup_ino " << ino << " forwarding to mds." << who << dendl;
@@ -5603,7 +5603,7 @@ int Server::rename_traverse(MDRequest *mdr, inodeno_t &ino, inodeno_t target)
     CInode *in = mdcache->get_inode(ino);
     if (!in) {
       // run placement to locate inode
-      stripeid_t stripeid = container->place(ino);
+      stripeid_t stripeid = mds->mdsmap->inode_placement.place(ino);
       int who = placement->get_stripe_auth(stripeid);
 
       if (who != mds->get_nodeid()) {

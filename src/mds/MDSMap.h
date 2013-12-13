@@ -180,9 +180,9 @@ protected:
   bool ever_allowed_snaps; //< the cluster has ever allowed snap creation
   bool explicitly_allowed_snaps; //< the user has explicitly enabled snap creation
 
+public:
   mds_inode_placement_t inode_placement; // placement algorithm
 
-public:
   CompatSet compat;
 
   friend class MDSMonitor;

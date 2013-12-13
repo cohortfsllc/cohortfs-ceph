@@ -48,9 +48,6 @@ class InodeContainer {
   // create a null dentry and add its lock to xlocks
   CDentry* xlock_dentry(MDRequest *mdr, inodeno_t ino,
                         set<SimpleLock*> &xlocks);
-
-  // run the placement algorithm for the given inode number
-  stripeid_t place(inodeno_t ino) const;
 };
 
 #endif

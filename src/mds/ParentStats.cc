@@ -564,7 +564,7 @@ void ParentStats::update_accounted(inodeno_t ino, Projected &projected,
   assert(container->get_inode());
   CDirPlacement *placement = container->get_inode()->get_placement();
   int who = in ? in->authority().first :
-      placement->get_stripe_auth(container->place(ino));
+      placement->get_stripe_auth(mds->mdsmap->inode_placement.place(ino));
   if (who == mds->get_nodeid()) {
     if (!in) // must be accounted already if it isn't pinned
       return;
