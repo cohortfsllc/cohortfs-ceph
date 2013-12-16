@@ -7287,17 +7287,12 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
   if (res < 0)
     goto fail;
   req->set_inode(in);
-  in->put(); // drop ref from _lookup
 
   res = make_request(req, uid, gid);
-  if (res == 0) {
-    DirStripe *stripe = dir->stripes[dir->pick_stripe(name)];
-    if (stripe) {
-      dn_hashmap::iterator d = stripe->dentries.find(name);
-      if (d != stripe->dentries.end())
-        unlink(d->second, false);
-    }
-  }
+  if (res == 0 && in->dn_set.size())
+    unlink(*in->dn_set.begin(), false);
+
+  in->put(); // drop ref from _lookup
 
   trim_cache();
   ldout(cct, 3) << "rmdir(" << path << ") = " << res << dendl;
