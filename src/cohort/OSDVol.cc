@@ -3398,3 +3398,121 @@ std::string OSDVol::gen_prefix() const
 
   return out.str();
 }
+
+void OSDVol::do_pending_flush()
+{
+  osr->flush();
+}
+
+bool OSDVol::op_has_sufficient_caps(OpRequestRef op)
+{
+  // only check MOSDOp
+  if (op->request->get_type() != CEPH_MSG_OSD_OP)
+    return true;
+
+  MOSDOp *req = static_cast<MOSDOp*>(op->request);
+
+  OSD::Session *session = (OSD::Session *)req->get_connection()->get_priv();
+  if (!session) {
+    dout(0) << "op_has_sufficient_caps: no session for op " << *req << dendl;
+    return false;
+  }
+  OSDCap& caps = session->caps;
+  session->put();
+
+  bool cap = caps.is_capable(req->get_oid(),
+			     op->need_read_cap(),
+			     op->need_write_cap(),
+			     op->need_class_read_cap(),
+			     op->need_class_write_cap());
+
+  dout(20) << "op_has_sufficient_caps "
+	   << " need_read_cap=" << op->need_read_cap()
+	   << " need_write_cap=" << op->need_write_cap()
+	   << " need_class_read_cap=" << op->need_class_read_cap()
+	   << " need_class_write_cap=" << op->need_class_write_cap()
+	   << " -> " << (cap ? "yes" : "NO")
+	   << dendl;
+  return cap;
+}
+
+bool OSDVol::can_discard_request(OpRequestRef op)
+{
+  switch (op->request->get_type()) {
+  case CEPH_MSG_OSD_OP:
+    return can_discard_op(op);
+  }
+
+  return false;
+}
+
+bool OSDVol::can_discard_op(OpRequestRef op)
+{
+  MOSDOp *m = static_cast<MOSDOp*>(op->request);
+  if (OSD::op_is_discardable(m)) {
+    dout(20) << " discard " << *m << dendl;
+    return true;
+  }
+
+  return false;
+}
+
+bool OSDVol::op_must_wait_for_map(CohortOSDMapRef curmap, OpRequestRef op)
+{
+  switch (op->request->get_type()) {
+  case CEPH_MSG_OSD_OP:
+    return !have_same_or_newer_map(
+      curmap,
+      static_cast<MOSDOp*>(op->request)->get_map_epoch());
+
+  case MSG_OSD_SUBOP:
+    return !have_same_or_newer_map(
+      curmap,
+      static_cast<MOSDSubOp*>(op->request)->map_epoch);
+
+  case MSG_OSD_SUBOPREPLY:
+    return !have_same_or_newer_map(
+      curmap,
+      static_cast<MOSDSubOpReply*>(op->request)->map_epoch);
+  }
+  assert(0);
+  return false;
+}
+
+void OSDVol::write_info(ObjectStore::Transaction& t)
+{
+  info.stats.stats.add(unstable_stats);
+  unstable_stats.clear();
+
+  _write_info(t, get_osdmap()->get_epoch(), info,
+	      osd->infos_oid, dirty_big_info);
+
+  last_persisted_osdmap_ref = osdmap_ref;
+
+  dirty_info = false;
+  dirty_big_info = false;
+}
+
+int OSDVol::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
+			vol_info_t &info,
+			hobject_t &infos_oid,
+			bool dirty_big_info)
+{
+  // info.  store purged_snaps separately.
+  interval_set<snapid_t> purged_snaps;
+  map<string,bufferlist> v;
+  ::encode(epoch, v[Volume::get_epoch_key(info.volid)]);
+  purged_snaps.swap(info.purged_snaps);
+  ::encode(info, v[Volume::get_info_key(info.volid)]);
+  purged_snaps.swap(info.purged_snaps);
+
+  if (dirty_big_info) {
+    // potentially big stuff
+    bufferlist& bigbl = v[Volume::get_biginfo_key(info.volid)];
+    ::encode(info.purged_snaps, bigbl);
+  }
+
+  t.omap_setkeys(coll_t::META_COLL, infos_oid, v);
+
+  return 0;
+}

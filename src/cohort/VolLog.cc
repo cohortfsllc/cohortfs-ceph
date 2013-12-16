@@ -917,3 +917,53 @@ void VolLog::read_log_old(ObjectStore *store, coll_t coll, hobject_t log_oid,
     }
   }
 }
+
+void vol_info_t::encode(bufferlist &bl) const
+{
+  ENCODE_START(27, 26, bl);
+  ::encode(volid, bl);
+  ::encode(last_update, bl);
+  ::encode(last_complete, bl);
+  ::encode(log_tail, bl);
+  ::encode(stats, bl);
+  history.encode(bl);
+  ::encode(purged_snaps, bl);
+  ::encode(last_epoch_started, bl);
+  ENCODE_FINISH(bl);
+}
+
+void vol_history_t::encode(bufferlist &bl) const
+{
+  ENCODE_START(6, 4, bl);
+  ::encode(epoch_created, bl);
+  ::encode(last_epoch_started, bl);
+  ::encode(last_epoch_clean, bl);
+  ::encode(same_interval_since, bl);
+  ::encode(same_up_since, bl);
+  ::encode(same_primary_since, bl);
+  ENCODE_FINISH(bl);
+}
+
+void vol_stat_t::encode(bufferlist &bl) const
+{
+  ENCODE_START(13, 8, bl);
+  ::encode(version, bl);
+  ::encode(reported, bl);
+  ::encode(state, bl);
+  ::encode(log_start, bl);
+  ::encode(ondisk_log_start, bl);
+  ::encode(created, bl);
+  ::encode(last_epoch_clean, bl);
+  ::encode(stats, bl);
+  ::encode(log_size, bl);
+  ::encode(ondisk_log_size, bl);
+  ::encode(last_fresh, bl);
+  ::encode(last_change, bl);
+  ::encode(last_active, bl);
+  ::encode(last_clean, bl);
+  ::encode(last_unstale, bl);
+  ::encode(mapping_epoch, bl);
+  ::encode(stats_invalid, bl);
+  ::encode(last_became_active, bl);
+  ENCODE_FINISH(bl);
+}

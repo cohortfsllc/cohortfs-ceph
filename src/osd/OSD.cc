@@ -3622,7 +3622,7 @@ void OSD::handle_op(OpRequestRef op)
   m->clear_payload();
 
   // require same or newer map
-  if (!require_same_or_newer_map(op, m->get_epoch()))
+  if (!require_same_or_newer_map(op, m->get_map_epoch()))
     return;
 
   // object name too long?
@@ -3641,7 +3641,7 @@ void OSD::handle_op(OpRequestRef op)
   }
   // share our map with sender, if they're old
   _share_map_incoming(m->get_source(), m->get_connection().get(),
-		      m->get_epoch(),
+		      m->get_map_epoch(),
 		      static_cast<Session *>(m->get_connection()->get_priv()));
 
   if (op->rmw_flags == 0) {

@@ -84,7 +84,7 @@ int CohortOSDMap::get_oid_osd(const Objecter* objecter,
 			      const object_t& oid,
 			      const ceph_file_layout* layout)
 {
-  return 0;
+
 }
 
 int CohortOSDMap::get_file_stripe_address(vector<ObjectExtent>& extents,

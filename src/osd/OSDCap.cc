@@ -104,11 +104,12 @@ void OSDCap::set_allow_all()
   grants.push_back(OSDCapGrant(OSDCapMatch(), OSDCapSpec(OSD_CAP_ANY)));
 }
 
-bool OSDCap::is_capable(const string& pool_name, int64_t pool_auid,
-			const string& object, bool op_may_read,
+bool OSDCap::is_capable(const object_t& object, bool op_may_read,
 			bool op_may_write, bool op_may_class_read,
 			bool op_may_class_write) const
 {
+#if 0
+  /* Rewrite for volume permissions */
   osd_rwxa_t allow = 0;
   for (vector<OSDCapGrant>::const_iterator p = grants.begin();
        p != grants.end(); ++p) {
@@ -123,6 +124,8 @@ bool OSDCap::is_capable(const string& pool_name, int64_t pool_auid,
     }
   }
   return false;
+#endif /* 0 */
+  return true;
 }
 
 

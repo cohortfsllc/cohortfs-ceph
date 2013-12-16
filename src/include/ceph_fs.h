@@ -43,14 +43,8 @@ struct ceph_file_layout {
 	__le32 fl_stripe_count;    /* over this many objects */
 	__le32 fl_object_size;     /* until objects are this big, then move to
 				      new objects */
-	__le32 fl_cas_hash;        /* UNUSED.  0 = none; 1 = sha256 */
-
-	/* pg -> disk layout */
-	__le32 fl_object_stripe_unit;  /* UNUSED.  for per-object parity, if any */
-
-	/* object -> pg layout */
-	__le32 fl_unused;       /* unused; used to be preferred primary for pg (-1 for none) */
-	__le32 fl_pg_pool;      /* namespace, crush ruleset, rep level */
+	__le32 fl_rule_index;      /* Which placement rule for the
+				      volume to use for this file. */
 } __attribute__ ((packed));
 
 #define CEPH_MIN_STRIPE_UNIT 65536

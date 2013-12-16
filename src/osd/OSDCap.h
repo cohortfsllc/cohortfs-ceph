@@ -137,12 +137,11 @@ struct OSDCap {
    *                          write class method
    * @return true if the operation is allowed, false otherwise
    */
-  bool is_capable(const string& pool_name, int64_t pool_auid,
-		  const string& object, bool op_may_read, bool op_may_write,
+  bool is_capable(const object_t& object, bool op_may_read, bool op_may_write,
 		  bool op_may_class_read, bool op_may_class_write) const;
 };
 
-static inline ostream& operator<<(ostream& out, const OSDCap& cap) 
+static inline ostream& operator<<(ostream& out, const OSDCap& cap)
 {
   return out << "osdcap" << cap.grants;
 }

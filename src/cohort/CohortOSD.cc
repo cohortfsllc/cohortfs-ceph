@@ -90,7 +90,7 @@ bool CohortOSD::op_must_wait_for_map(OpRequestRef op)
   switch (op->request->get_type()) {
   case CEPH_MSG_OSD_OP:
     return !have_same_or_newer_map(
-      static_cast<MOSDOp*>(op->request)->get_epoch());
+      static_cast<MOSDOp*>(op->request)->get_map_epoch());
 
   case MSG_OSD_SUBOP:
     return !have_same_or_newer_map(
@@ -98,7 +98,7 @@ bool CohortOSD::op_must_wait_for_map(OpRequestRef op)
 
   case MSG_OSD_SUBOPREPLY:
     return !have_same_or_newer_map(
-      static_cast<MOSDSubOpReply*>(op->request)->epoch);
+      static_cast<MOSDSubOpReply*>(op->request)->map_epoch);
   }
   assert(0);
   return false;
@@ -115,7 +115,7 @@ void CohortOSD::handle_op_sub(OpRequestRef op)
 
   if (!vol) {
     /* No such volume */
-    if (m->get_epoch() > osdmap->get_epoch()) {
+    if (m->get_map_epoch() > osdmap->get_epoch()) {
       /* Should wait for new map */
       return;
     }
@@ -138,7 +138,7 @@ bool CohortOSD::handle_sub_op_reply_sub(OpRequestRef op)
   assert(m->get_source().is_osd());
 
   // require same or newer map
-  if (!require_same_or_newer_map(op, m->get_epoch())) {
+  if (!require_same_or_newer_map(op, m->get_map_epoch())) {
     return false;
   }
 
@@ -290,4 +290,47 @@ void CohortOSD::dequeue_op(OSDVolRef vol, OpRequestRef op)
   op->mark_reached_vol();
 
   vol->do_request(op);
+}
+
+bool CohortOSD::handle_sub_op_sub(OpRequestRef op)
+{
+  MOSDSubOp *m = static_cast<MOSDSubOp*>(op->request);
+  assert(m->get_header().type == MSG_OSD_SUBOP);
+
+  if (m->map_epoch < up_epoch) {
+    return false;
+  }
+
+  if (!require_osd_peer(op))
+    return false;
+
+  // must be a rep op.
+  assert(m->get_source().is_osd());
+
+  // make sure we have the pg
+  const uuid_d volid = m->get_vol();
+
+  // require same or newer map
+  if (!require_same_or_newer_map(op, m->map_epoch))
+    return false;
+
+  // share our map with sender, if they're old
+  _share_map_incoming(
+    m->get_source(), m->get_connection().get(), m->map_epoch,
+    static_cast<OSD::Session*>(m->get_connection()->get_priv()));
+
+  OSDVolRef osdvol = _lookup_vol(volid);
+
+  enqueue_op(osdvol, op);
+
+  return true;
+}
+
+OSDVolRef CohortOSD::_lookup_vol(uuid_d volid)
+{
+  assert(osd_lock.is_locked());
+  if (!vol_map.count(volid))
+    return OSDVolRef();
+  OSDVolRef osdvol = vol_map[volid];
+  return osdvol;
 }

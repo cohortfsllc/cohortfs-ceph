@@ -1346,11 +1346,32 @@ libglobal_la_SOURCES = \
 	cohort/CohortOSD.cc \
 	cohort/OSDVol.cc \
 	cohort/VolLog.cc \
+	osd/ClassHandler.cc \
 	osd/Watch.cc \
+	osd/SnapMapper.cc \
+	osd/OSDCap.cc \
+	cohort/VolLog.cc \
+	os/FileStore.cc \
+	osd/Ager.cc \
+	os/FileJournal.cc \
+	osd/OpRequest.cc \
+	objclass/class_api.cc \
+	os/ObjectStore.cc \
+	os/IndexManager.cc \
+	os/WBThrottle.cc \
+	os/chain_xattr.cc \
+	os/DBObjectMap.cc \
+	os/JournalingObjectStore.cc \
+	os/FileJournal.cc \
+	os/LFNIndex.cc \
+	os/HashIndex.cc \
+	os/FlatIndex.cc \
+	mon/PaxosService.cc \
+	mon/OSDMonitor.cc \
 	global/signal_handler.cc
 libglobal_la_CFLAGS= ${CRYPTO_CFLAGS} ${AM_CFLAGS}
 libglobal_la_CXXFLAGS= ${AM_CXXFLAGS}
-libglobal_la_LIBADD= libcommon.la
+libglobal_la_LIBADD = libcommon.la -laio
 noinst_LTLIBRARIES += libglobal.la
 
 #crush_files = \

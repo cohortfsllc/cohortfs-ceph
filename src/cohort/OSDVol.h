@@ -368,8 +368,10 @@ public:
   };
 
   static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
-			 coll_t coll, hobject_t &infos_oid,
-			 __u8 info_struct_v, bool dirty_big_info);
+			 vol_info_t &info,
+			 hobject_t &infos_oid,
+			 bool dirty_big_info);
+
   static int read_info(ObjectStore *store, const coll_t coll,
 		       bufferlist &bl, hobject_t &biginfo_oid,
 		       hobject_t &infos_oid);
@@ -385,7 +387,7 @@ public:
 
   static bool split_request(OpRequestRef op, unsigned match, unsigned bits);
 
-  static bool have_same_or_newer_map(OSDMapRef osdmap, epoch_t e) {
+  static bool have_same_or_newer_map(CohortOSDMapRef osdmap, epoch_t e) {
     return e <= osdmap->get_epoch();
   }
   bool have_same_or_newer_map(epoch_t e) {

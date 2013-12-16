@@ -37,7 +37,7 @@ class MOSDOp : public Message {
 
 private:
   uint32_t client_inc;
-  __u32 epoch;
+  __u32 map_epoch;
   __u32 flags;
   utime_t mtime;
   eversion_t reassert_version;
@@ -78,7 +78,7 @@ public:
 
   uuid_d get_volume() { return oid.volume; }
 
-  epoch_t get_epoch() { return epoch; }
+  epoch_t get_map_epoch() { return map_epoch; }
 
   eversion_t get_version() { return reassert_version; }
 
@@ -92,7 +92,7 @@ public:
 	 int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       client_inc(inc),
-      epoch(_epoch),
+      map_epoch(_epoch),
       flags(_flags), retry_attempt(-1),
       oid(_oid) {
     set_tid(tid);
@@ -181,8 +181,7 @@ public:
 struct ceph_osd_request_head {
 	__le32 client_inc;                 /* client incarnation */
 	struct ceph_object_layout layout;  /* pgid */
-	__le32 osdmap_epoch;               /* client's osdmap epoch */
-	__le32 volmap_epoch;               /* client's volmap epoch */
+	__le32 map_epoch;               /* client's epoch */
 
 	__le32 flags;
 
@@ -206,7 +205,7 @@ struct ceph_osd_request_head {
       __u32 su = 0;
       ::encode(su, payload);
 
-      ::encode(epoch, payload);
+      ::encode(map_epoch, payload);
       ::encode(flags, payload);
       ::encode(mtime, payload);
       ::encode(reassert_version, payload);
@@ -228,7 +227,7 @@ struct ceph_osd_request_head {
       ::encode_nohead(snaps, payload);
     } else {
       ::encode(client_inc, payload);
-      ::encode(epoch, payload);
+      ::encode(map_epoch, payload);
       ::encode(flags, payload);
       ::encode(mtime, payload);
       ::encode(reassert_version, payload);
@@ -258,7 +257,7 @@ struct ceph_osd_request_head {
       __u32 su;
       ::decode(su, p);
 
-      ::decode(epoch, p);
+      ::decode(map_epoch, p);
       ::decode(flags, p);
       ::decode(mtime, p);
       ::decode(reassert_version, p);
@@ -284,7 +283,7 @@ struct ceph_osd_request_head {
     } else {
       // new decode
       ::decode(client_inc, p);
-      ::decode(epoch, p);
+      ::decode(map_epoch, p);
       ::decode(flags, p);
       ::decode(mtime, p);
       ::decode(reassert_version, p);
@@ -342,7 +341,7 @@ struct ceph_osd_request_head {
       out << " localize_reads";
     if (get_flags() & CEPH_OSD_FLAG_RWORDERED)
       out << " rwordered";
-    out << " e" << epoch;
+    out << " e" << map_epoch;
     out << ")";
   }
 };

@@ -14,9 +14,6 @@ using std::set;
 using std::map;
 using std::fstream;
 
-#include <ext/hash_map>
-using namespace __gnu_cxx;
-
 #include "include/filepath.h"
 #include "include/interval_set.h"
 #include "include/lru.h"
@@ -100,6 +97,7 @@ private:
     return static_pointer_cast<const CohortOSDMap>(osdmap);
   }
 
+  map<uuid_d, OSDVolRef> vol_map;
   list<OpRequestRef> waiting_for_map;
 
   struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
@@ -289,6 +287,7 @@ public:
 
   void check_replay_queue();
   void sched_scrub();
+  OSDVolRef _lookup_vol(uuid_d volid);
 };
 
 

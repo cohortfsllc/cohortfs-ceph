@@ -53,7 +53,7 @@ public:
 
   // transaction to exec
   bufferlist logbl;
-  
+
   // subop metadata
   eversion_t version;
 
@@ -82,6 +82,10 @@ public:
 
   // indicates that we must fix hobject_t encoding
   bool hobject_incorrect_pool;
+
+  const uuid_d& get_vol(void) const {
+    return poid.oid.volume;
+  }
 
   int get_cost() const {
     if (ops.size() == 1 && ops[0].op.op == CEPH_OSD_OP_PULL)
