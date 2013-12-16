@@ -118,6 +118,10 @@ public:
   static string get_biginfo_key(uuid_d vol) {
     return stringify(vol) + "_biginfo";
   }
+
+  virtual vector<int> place(const object_t& object,
+			    const OSDMap& map,
+			    const ceph_file_layout& layout);
 };
 
 #endif // VOL_VOLUME_H

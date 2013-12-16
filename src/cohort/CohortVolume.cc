@@ -13,23 +13,31 @@
 #include <dlfcn.h>
 #include "CohortVolume.h"
 
-void CohortVolume::compile(void)
+/* Epoch should be the current epoch of the OSDMap. */
+
+void CohortVolume::compile(epoch_t epoch)
 {
   Mutex::Locker l(compile_lock);
-  char scmfilename[uuid_d::char_rep_buf_size + 5];
+  char cfilename[uuid_d::char_rep_buf_size + 5];
   char objfilename[uuid_d::char_rep_buf_size + 5];
   char sofilename[uuid_d::char_rep_buf_size + 5];
 
   pid_t child;
 
-  const char *bargv[] = {
-    [0] = "bigloo", [1] = "-O3", [2] = "-fcfa-arithmetic",
-    [3] = "-q", [4] = "-copt", [5] = "-fPIC",
-    [6] = scmfilename, [7] = "-c", [8] = "-dload-init-sym",
-    [9] = "module_init", [10] = NULL
-  };
+  uuid.print(cfilename);
+  strcpy(objfilename, cfilename);
+  strcpy(sofilename, cfilename);
+  strcat(cfilename, ".c");
+  strcat(objfilename, ".o");
+  strcat(sofilename, ".so");
 
   const char *cargv[] = {
+    [0] = "gcc", [1] = "-O3", [2] = "-fPIC",
+    [3] = "-c", [4] = cfilename, [5] = "-o",
+    [6] = objfilename, [7] = NULL
+  };
+
+  const char *largv[] = {
     [0] = "gcc", [1] = "-shared", [2] = "-o",
     [3] = "module.so", [4] = "module.o", [5] = "-lm",
     [6] = "-lc", [7] = NULL
@@ -51,28 +59,9 @@ void CohortVolume::compile(void)
     place_shared = NULL;
   }
 
-  uuid.print(scmfilename);
-  strcpy(objfilename, scmfilename);
-  strcpy(sofilename, scmfilename);
-  strcat(scmfilename, ".scm");
-  strcat(objfilename, ".o");
-  strcat(sofilename, ".so");
-  place_text.write_file(scmfilename);
+  place_text.write_file(cfilename);
 
   child = fork();
-  if (!child) {
-    execvp("bigloo", (char **)bargv);
-  } else {
-  bretry:
-    int status = 0;
-    waitpid(child, &status, 0);
-    if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
-      goto bretry;
-    }
-  }
-
-  unlink(scmfilename);
-
   if (!child) {
     execvp("gcc", (char **)cargv);
   } else {
@@ -81,6 +70,19 @@ void CohortVolume::compile(void)
     waitpid(child, &status, 0);
     if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
       goto cretry;
+    }
+  }
+
+  unlink(scmfilename);
+
+  if (!child) {
+    execvp("gcc", (char **)largv);
+  } else {
+  lretry:
+    int status = 0;
+    waitpid(child, &status, 0);
+    if (!(WIFEXITED(status) || WIFSIGNALED(status))) {
+      goto lretry;
     }
   }
 
@@ -108,4 +110,60 @@ CohortVolume::~CohortVolume(void)
 int CohortVolume::update(VolumeCRef v)
 {
   return 0;
+}
+
+uint32_t num_rules(void)
+{
+  return entry_points.length();
+}
+
+struct placemenet_context
+{
+  OSDMap *map;
+  vector<int> *osds;
+};
+
+
+/* Return 'true' if the OSD is marked as 'in' */
+
+static bool test_osd(void *data, int osd)
+{
+  placement_context *context = (placement_context *)data;
+  return context->map->is_in(osd);
+}
+
+/* This function adds an OSD to the list returned to the client ONLY
+   if the OSD is marked in. */
+
+static bool return_osd(void *data, int osd)
+{
+  placement_context *context = (placement_context *)data;
+  if (context->map->is_in(osd))
+    context->osds.push_back(osd);
+  else
+    return false;
+}
+
+int place(const object_t& object,
+	  const OSDMap& map,
+	  const ceph_file_layout& layout,
+	  vector<int>& osds)
+{
+  placement_context context = {
+    .map = &map,
+    .osds = &osds
+  };
+
+  if ((compiled_epoch < last_update) || !place_shared) {
+    compile();
+  }
+
+  if (layout.fl_rule_index >= entry_points.length) {
+    return -1;
+  }
+
+  return entry_points[layout.fl_rule_index](&context, object.vol->uuid,
+					    object.name.c_str(), &layout,
+					    test_osd, return_osd);
+
 }

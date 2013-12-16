@@ -1542,6 +1542,7 @@ libosd_a_SOURCES = \
 	osd/Ager.cc \
 	osd/OSD.cc \
 	cohort/CohortOSD.cc \
+	cohort/OSDVol.cc \
 	osd/OSDCap.cc \
 	osd/ClassHandler.cc \
 	osd/OpRequest.cc \

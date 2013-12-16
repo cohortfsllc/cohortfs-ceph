@@ -13,6 +13,10 @@
 #include "vol/Volume.h"
 #include "cohort/erasure.h"
 
+typedef int(*place_func)(void*, const uuid_t, const char*,
+			 const ceph_file_layout, bool(*)(void*, int),
+			 bool(*)(void*, int));
+
 /* Superclass of all Cohort volume types, supporting dynamically
    generated placement. */
 
@@ -26,7 +30,7 @@ protected:
   void *place_shared;
   epoch_t compiled_epoch;
   vector<string> symbols;
-  vector<void *> entry_points;
+  vector<place_func> entry_points;
   erasure_params erasure;
 
   CohortVolume(const vol_type t, const string n,
@@ -42,11 +46,12 @@ public:
 
   ~CohortVolume();
 
-  /* Signature subject to change */
-  virtual int64_t place(const object_t& o,
-			uint32_t rule,
-			uint32_t replica) = 0;
-  virtual uint32_t num_rules(void) = 0;
+  virtual uint32_t num_rules(void);
+
+  virtual int place(const object_t& object,
+		    const OSDMap& map,
+		    const ceph_file_layout& layout,
+		    vector<int>& osds);
 
   virtual int update(VolumeCRef v);
 };
