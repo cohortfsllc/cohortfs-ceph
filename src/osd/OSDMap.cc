@@ -741,14 +741,12 @@ void OSDMap::encodeOSDMap(bufferlist& bl, uint64_t features) const
   ::encode(osd_addrs->hb_front_addr, bl);
 
   uint32_t count;
-  ::encode(v, bl);
-  ::encode(epoch, bl);
-  ::encode(version, bl);
-  ::encode(vol_by_uuid, bl);
-  count = vol_by_uuid.size();
+  ::encode(volmap.vol_by_uuid, bl);
+  count = volmap.vol_by_uuid.size();
   ::encode(count, bl);
-  for (map<uuid_d,VolumeRef>::const_iterator v = vol_by_uuid.begin();
-       v != vol_by_uuid.end();
+  for (map<uuid_d,VolumeRef>::const_iterator v
+	 = volmap.vol_by_uuid.begin();
+       v != volmap.vol_by_uuid.end();
        ++v) {
     v->second->encode(bl);
   }
@@ -811,22 +809,20 @@ void OSDMap::decodeOSDMap(bufferlist::iterator& p, __u16 v)
   calc_num_osds();
 
   uint32_t count;
-  ::decode(v, p);
-  ::decode(epoch, p);
-  ::decode(version, p);
-  vol_by_uuid.clear();
+  volmap.vol_by_uuid.clear();
   ::decode(count, p);
   for (uint32_t i = 0; i < count; ++i) {
     VolumeRef v = Volume::create_decode(p);
-    vol_by_uuid[v->uuid] = v;
+    volmap.vol_by_uuid[v->uuid] = v;
   }
-  vol_by_name.clear();
+  volmap.vol_by_name.clear();
 
   // build name map from uuid map (only uuid map is encoded)
-  for(map<uuid_d,VolumeRef>::const_iterator i = vol_by_uuid.begin();
-      i != vol_by_uuid.end();
+  for(map<uuid_d,VolumeRef>::const_iterator i
+	= volmap.vol_by_uuid.begin();
+      i != volmap.vol_by_uuid.end();
       ++i) {
-    vol_by_name[i->second->name] = i->second;
+    volmap.vol_by_name[i->second->name] = i->second;
   }
 }
 
@@ -896,20 +892,12 @@ void OSDMap::dump(Formatter *f) const
   }
   f->close_section();
 
-  out << "e" << epoch << ": ";
-
   f->open_array_section("volumes");
-  bool first = true;
-  for(map<uuid_d,VolumeRef>::const_iterator i = vol_by_uuid.begin();
-      i != vol_by_uuid.end();
+  for(map<uuid_d,VolumeRef>::const_iterator i = volmap.vol_by_uuid.begin();
+      i != volmap.vol_by_uuid.end();
       ++i) {
-    if (!first) {
-      out << ", ";
-    } else {
-      first = false;
-    }
-    out << "'" << i->second->name << "' "
-	<< "(" << i->first << ") ";
+    f->dump_stream("uuid") << i->first;
+    f->dump_string("name", i->second->name);
   }
   f->close_section();
 }
@@ -1000,8 +988,8 @@ void OSDMap::print(ostream& out) const
        ++p)
     out << "blacklist " << p->first << " expires " << p->second << "\n";
 
-    for(map<uuid_d,VolumeRef>::const_iterator i = vol_by_uuid.begin();
-	i != vol_by_uuid.end();
+    for(map<uuid_d,VolumeRef>::const_iterator i = volmap.vol_by_uuid.begin();
+	i != volmap.vol_by_uuid.end();
 	++i) {
       out << i->first << ":\t"
 	  << "'" << i->second->name << "\n";
@@ -1151,28 +1139,28 @@ int OSDMap::add_volume(VolumeRef vol) {
     return -EINVAL;
   }
 
-  if (vol_by_uuid.count(vol->uuid) > 0) {
+  if (volmap.vol_by_uuid.count(vol->uuid) > 0) {
     dout(0) << "attempt to add volume with existing uuid "
 	    << vol->uuid << dendl;
     return -EEXIST;
   }
 
-  if (vol_by_name.count(vol->name) > 0) {
+  if (volmap.vol_by_name.count(vol->name) > 0) {
     dout(0) << "attempt to add volume with existing name \""
 	    << vol->name << "\"" << dendl;
     return -EEXIST;
   }
 
-  vol_by_uuid[vol->uuid] = vol;
-  vol_by_name[vol->name] = vol;
+  volmap.vol_by_uuid[vol->uuid] = vol;
+  volmap.vol_by_name[vol->name] = vol;
   return 0;
 }
 
-int OSDMap::remove_volume(uuid_d uuid, const string& name_verifier)
+int OSDMap::remove_volume(uuid_d uuid)
 {
-  map<uuid_d,VolumeRef>::iterator i = vol_by_uuid.find(uuid);
+  map<uuid_d,VolumeRef>::iterator i = volmap.vol_by_uuid.find(uuid);
 
-  if (i != end_u()) {
+  if (i != volmap.vol_by_uuid.end()) {
     dout(0) << "attempt to remove volume with non-existing uuid "
 	    << uuid << dendl;
     return -ENOENT;
@@ -1180,59 +1168,8 @@ int OSDMap::remove_volume(uuid_d uuid, const string& name_verifier)
 
   VolumeRef v = i->second;
 
-  if (!name_verifier.empty() && name_verifier != v->name) {
-    dout(0) << "attempt to remove volume " << uuid
-	    << " with non-matching volume name verifier (\"" << name_verifier
-	    << "\" instead of \"" << v->name << "\"" << dendl;
-    return -EINVAL;
-  }
-
-  vol_by_name.erase(v->name);
-  vol_by_uuid.erase(uuid);
+  volmap.vol_by_name.erase(v->name);
+  volmap.vol_by_uuid.erase(uuid);
 
   return 0;
 }
-
-vector<VolumeCRef> OSDMap::search_vol(const string& searchKey,
-				      size_t max) const
-{
-  size_t count = 0;
-  vector<VolumeCRef> result;
-
-  try {
-    uuid_d uuid = uuid_d::parse(searchKey);
-
-  // TODO : if searchKey could be a *partial* uuid, search for all
-  // volumes w/ uuids that begin with that partial.
-
-    const map<uuid_d,VolumeRef>::const_iterator i = find(uuid);
-    if (i != end_u()) {
-      result.push_back(i->second);
-      ++count;
-    }
-  } catch (const std::invalid_argument &ia) {
-  }
-
-  if (count < max) {
-    map<string,VolumeRef>::const_iterator i = vol_by_name.find(searchKey);
-    if (i != end_n()) {
-      result.push_back(i->second);
-      ++count;
-    }
-  }
-
-  return result;
-}
-
-bool OSDMap::get_vol_uuid(const string& volspec, uuid_d& uuid_out) const
-{
-  // vector<VolMap::vol_info_t> vols_found = search_vol_info(volspec, 2);
-  vector<VolumeCRef> vols_found = search_vol(volspec, 2);
-  if (vols_found.size() == 1) {
-    uuid_out = vols_found[0]->uuid;
-    return true;
-  } else {
-    return false;
-  }
-}
-

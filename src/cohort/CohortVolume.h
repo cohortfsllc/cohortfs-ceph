@@ -9,12 +9,12 @@
 #ifndef COHORT_COHORTVOLUME_H
 #define COHORT_COHORTVOLUME_H
 
-#include "common/Mutex.h"
 #include "vol/Volume.h"
 #include "cohort/erasure.h"
+#include "common/RWLock.h"
 
 typedef int(*place_func)(void*, const uuid_t, const char*,
-			 const ceph_file_layout, bool(*)(void*, int),
+			 const ceph_file_layout*, bool(*)(void*, int),
 			 bool(*)(void*, int));
 
 /* Superclass of all Cohort volume types, supporting dynamically
@@ -23,8 +23,8 @@ typedef int(*place_func)(void*, const uuid_t, const char*,
 class CohortVolume : public Volume {
   typedef Volume inherited;
 protected:
-  Mutex compile_lock;
-  void compile(void);
+  RWLock compile_lock;
+  void compile(epoch_t epoch);
 
   bufferlist place_text;
   void *place_shared;

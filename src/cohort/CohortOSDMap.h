@@ -81,11 +81,15 @@ public:
   void build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
 		    int num_osd);
   int build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid);
+
   int get_oid_osd(const Objecter* objecter,
 		  const object_t& oid,
-		  const ceph_file_layout* layout);
-  int get_file_stripe_address(vector<ObjectExtent>& extents,
-			      vector<entity_addr_t>& address);
+		  const ceph_file_layout& layout,
+		  vector<int> &osds);
+
+  int get_file_stripe_address(const vector<ObjectExtent>& extents,
+			      const vector<entity_addr_t>& address,
+			      vector<int> &osds);
 };
 WRITE_CLASS_ENCODER_FEATURES(CohortOSDMap)
 WRITE_CLASS_ENCODER_FEATURES(CohortOSDMap::Incremental)

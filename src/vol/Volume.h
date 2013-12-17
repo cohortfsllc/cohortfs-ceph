@@ -26,6 +26,8 @@
 #include "include/stringify.h"
 #include "include/encoding.h"
 
+class OSDMap;
+
 using namespace std;
 using namespace std::tr1;
 
@@ -119,9 +121,10 @@ public:
     return stringify(vol) + "_biginfo";
   }
 
-  virtual vector<int> place(const object_t& object,
-			    const OSDMap& map,
-			    const ceph_file_layout& layout);
+  virtual int place(const object_t& object,
+		    const OSDMap& map,
+		    const ceph_file_layout& layout,
+		    vector<int>& osds) = 0;
 };
 
 #endif // VOL_VOLUME_H

@@ -292,11 +292,11 @@ protected:
 					  uuid_d &fsid);
   virtual int get_oid_osd(const Objecter* objecter,
 			  const object_t& oid,
-			  const ceph_file_layout* layout,
+			  const ceph_file_layout& layout,
 			  vector<int> &osds) = 0;
 
   virtual int get_file_stripe_address(const vector<ObjectExtent>& extents,
-				      const vector<entity_addr_t>& address
+				      const vector<entity_addr_t>& address,
 				      vector<int> &osds) = 0;
 
   // map info
@@ -544,6 +544,16 @@ public:
   int create_volume(VolumeRef volume, uuid_d& out);
   int add_volume(VolumeRef volume);
   int remove_volume(uuid_d uuid);
+
+  bool find_by_uuid(const uuid_d& uuid, VolumeRef& vol) {
+    map<uuid_d,VolumeRef>::iterator v = volmap.vol_by_uuid.find(uuid);
+    if (v == volmap.vol_by_uuid.end()) {
+      return false;
+    } else {
+      vol = v->second;
+      return true;
+    }
+  }
 };
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)
 WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)

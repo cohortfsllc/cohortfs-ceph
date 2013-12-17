@@ -82,13 +82,21 @@ int CohortOSDMap::apply_incremental_subclass(
 
 int CohortOSDMap::get_oid_osd(const Objecter* objecter,
 			      const object_t& oid,
-			      const ceph_file_layout* layout)
+			      const ceph_file_layout& layout,
+			      vector<int> &osds)
 {
+  VolumeRef vol;
 
+  if (!find_by_uuid(oid.volume, vol))
+    return -1;
+
+  return vol->place(oid, *this, layout, osds);
 }
 
-int CohortOSDMap::get_file_stripe_address(vector<ObjectExtent>& extents,
-					  vector<entity_addr_t>& address)
+int CohortOSDMap::get_file_stripe_address(const vector<ObjectExtent>& extents,
+					  const vector<entity_addr_t>& address,
+					  vector<int> &osds)
 {
+#warning TBD
   return 0;
 }

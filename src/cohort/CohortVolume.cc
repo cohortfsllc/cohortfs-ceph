@@ -12,12 +12,12 @@
 #include <sys/wait.h>
 #include <dlfcn.h>
 #include "CohortVolume.h"
+#include "osd/OSDMap.h"
 
 /* Epoch should be the current epoch of the OSDMap. */
 
 void CohortVolume::compile(epoch_t epoch)
 {
-  Mutex::Locker l(compile_lock);
   char cfilename[uuid_d::char_rep_buf_size + 5];
   char objfilename[uuid_d::char_rep_buf_size + 5];
   char sofilename[uuid_d::char_rep_buf_size + 5];
@@ -73,7 +73,7 @@ void CohortVolume::compile(epoch_t epoch)
     }
   }
 
-  unlink(scmfilename);
+  unlink(cfilename);
 
   if (!child) {
     execvp("gcc", (char **)largv);
@@ -95,8 +95,10 @@ void CohortVolume::compile(epoch_t epoch)
       i < symbols.size();
       ++i) {
     entry_points[i]
-      = dlsym(place_shared, symbols[i].c_str());
+      = (place_func) dlsym(place_shared, symbols[i].c_str());
   }
+
+  compiled_epoch = epoch;
 }
 
 CohortVolume::~CohortVolume(void)
@@ -112,14 +114,14 @@ int CohortVolume::update(VolumeCRef v)
   return 0;
 }
 
-uint32_t num_rules(void)
+uint32_t CohortVolume::num_rules(void)
 {
-  return entry_points.length();
+  return entry_points.size();
 }
 
-struct placemenet_context
+struct placement_context
 {
-  OSDMap *map;
+  const OSDMap *map;
   vector<int> *osds;
 };
 
@@ -138,32 +140,39 @@ static bool test_osd(void *data, int osd)
 static bool return_osd(void *data, int osd)
 {
   placement_context *context = (placement_context *)data;
-  if (context->map->is_in(osd))
-    context->osds.push_back(osd);
-  else
-    return false;
+  if (context->map->is_in(osd)) {
+    context->osds->push_back(osd);
+    return true;
+  }
+
+  return false;
 }
 
-int place(const object_t& object,
-	  const OSDMap& map,
-	  const ceph_file_layout& layout,
-	  vector<int>& osds)
+int CohortVolume::place(const object_t& object,
+			const OSDMap& map,
+			const ceph_file_layout& layout,
+			vector<int>& osds)
 {
   placement_context context = {
     .map = &map,
     .osds = &osds
   };
 
+  compile_lock.get_read();
   if ((compiled_epoch < last_update) || !place_shared) {
-    compile();
+    compile_lock.unlock();
+    compile_lock.get_write();
+    compile(map.get_epoch());
   }
 
-  if (layout.fl_rule_index >= entry_points.length) {
+  if (layout.fl_rule_index >= entry_points.size()) {
     return -1;
   }
 
-  return entry_points[layout.fl_rule_index](&context, object.vol->uuid,
-					    object.name.c_str(), &layout,
-					    test_osd, return_osd);
+  int rc = entry_points[layout.fl_rule_index](&context, object.volume.uuid,
+					      object.name.c_str(), &layout,
+					      test_osd, return_osd);
+  compile_lock.unlock();
 
+  return rc;
 }
