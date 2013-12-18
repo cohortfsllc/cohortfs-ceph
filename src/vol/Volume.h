@@ -32,10 +32,7 @@ using namespace std;
 using namespace std::tr1;
 
 enum vol_type {
-  CohortVolFS,
-  CohortVolBlock,
-  CohortVolDeDupFS,
-  CohortVolDeDupBlock,
+  CohortVol,
   NotAVolType
 };
 
@@ -43,10 +40,9 @@ class Volume;
 typedef shared_ptr<Volume> VolumeRef;
 typedef shared_ptr<const Volume> VolumeCRef;
 
-class Volume {
-
+class Volume
+{
 private:
-
   static const std::string typestrings[];
 
   typedef VolumeRef(*factory)(bufferlist::iterator& bl, __u8 v, vol_type t);
@@ -87,6 +83,10 @@ protected:
   virtual void common_encode(bufferlist& bl) const;
   virtual void common_decode(bufferlist::iterator& bl,
 			     __u8 v, vol_type t);
+
+  Volume(const vol_type t) :
+    type(t), uuid(INVALID_VOLUME), name() { }
+
   Volume(const vol_type t, const string n) :
     type(t), uuid(INVALID_VOLUME), name(n) { }
 

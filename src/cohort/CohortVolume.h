@@ -20,8 +20,10 @@ typedef int(*place_func)(void*, const uuid_t, const char*,
 /* Superclass of all Cohort volume types, supporting dynamically
    generated placement. */
 
-class CohortVolume : public Volume {
+class CohortVolume : public Volume
+{
   typedef Volume inherited;
+
 protected:
   RWLock compile_lock;
   void compile(epoch_t epoch);
@@ -33,16 +35,13 @@ protected:
   vector<place_func> entry_points;
   erasure_params erasure;
 
-  CohortVolume(const vol_type t, const string n,
-	       const bufferlist &p,
-	       const vector<string> &s) :
-    Volume(t, n),
-    compile_lock("CohortVolume::compile_lock"),
-    place_text(p), place_shared(NULL),
-    compiled_epoch(0),
-    symbols(s), entry_points(symbols.size()) { }
+  CohortVolume(vol_type t)
+    : Volume(t), compile_lock("CohortVolume::compile_lock"),
+      place_text(), place_shared(NULL),
+      compiled_epoch(0),
+      symbols(), entry_points() { }
 
-public:
+  public:
 
   ~CohortVolume();
 
@@ -54,6 +53,16 @@ public:
 		    vector<int>& osds);
 
   virtual int update(VolumeCRef v);
+
+  virtual void common_decode(bufferlist::iterator& bl,
+			     __u8 v, vol_type t);
+  virtual void common_encode(bufferlist& bl) const;
+  virtual void encode(bufferlist& bl) const {
+    common_encode(bl);
+  }
+
+  friend VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v,
+				    vol_type t);
 };
 
 #endif // COHORT_COHORTVOLUME_H

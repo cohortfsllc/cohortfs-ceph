@@ -32,11 +32,13 @@ WRITE_RAW_ENCODER(vol_type);
 using std::stringstream;
 
 const std::string Volume::typestrings[] = {
-  "VolFS", "VolBlock", "VolDeDupFS", "VolDeDupBlock","NotAVolType"
+  "CohortVol", "NotAVolType"
 };
 
+VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v, vol_type t);
+
 const Volume::factory Volume::factories[] = {
-  NULL, NULL, NULL, NULL, NULL
+  CohortVolFactory, NULL
 };
 
 

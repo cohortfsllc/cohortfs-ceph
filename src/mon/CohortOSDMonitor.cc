@@ -30,8 +30,7 @@ void CohortOSDMonitor::tick_sub(bool& do_propose)
 void CohortOSDMonitor::create_pending()
 {
   pending_inc.reset(new CohortOSDMap::Incremental(osdmap->epoch + 1));
-#warning Foo.
-//  create_pending_super();
+  create_pending_super();
 }
 
 bool CohortOSDMonitor::preprocess_query_sub(PaxosServiceMessage *m)

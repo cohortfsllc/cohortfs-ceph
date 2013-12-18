@@ -1401,7 +1401,7 @@ reprotect_and_return_err:
 		   << cpp_strerror(-r) << dendl;
 	return r;
       }
-    } 
+    }
 
     ldout(cct, 2) << "done." << dendl;
     return 0;

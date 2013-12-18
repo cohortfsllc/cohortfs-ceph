@@ -11,8 +11,15 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <dlfcn.h>
-#include "CohortVolume.h"
 #include "osd/OSDMap.h"
+#include "CohortVolume.h"
+
+VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v, vol_type t)
+{
+  CohortVolume *vol = new CohortVolume(t);
+  vol->common_decode(bl, v, t);
+  return VolumeRef(vol);
+}
 
 /* Epoch should be the current epoch of the OSDMap. */
 
@@ -175,4 +182,35 @@ int CohortVolume::place(const object_t& object,
   compile_lock.unlock();
 
   return rc;
+}
+
+void CohortVolume::common_decode(bufferlist::iterator& bl,
+				 __u8 v, vol_type t)
+{
+  inherited::common_decode(bl, v, t);
+
+  ::decode(place_text, bl);
+  uint32_t count;
+  ::decode(count, bl);
+  symbols.reserve(count);
+  for(uint32_t i = 0; i < count; ++i) {
+    string symbol;
+    ::decode(symbol, bl);
+    symbols[i] = symbol;
+  }
+  entry_points.reserve(count);
+}
+
+void CohortVolume::common_encode(bufferlist& bl) const
+{
+  inherited::common_encode(bl);
+
+  ::encode(place_text, bl);
+  ::encode(symbols, bl);
+
+  uint32_t count = symbols.size();
+  ::encode(count, bl);
+  for(uint32_t i = 0; i < count; ++i) {
+    ::encode(symbols[i], bl);
+  }
 }
