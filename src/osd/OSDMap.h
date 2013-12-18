@@ -240,9 +240,9 @@ protected:
   vector<uint8_t> osd_state;
 
   struct {
-    map<uuid_d,VolumeRef> vol_by_uuid;
-    map<string,VolumeRef> vol_by_name;
-  } volmap;
+    map<uuid_d,VolumeRef> by_uuid;
+    map<string,VolumeRef> by_name;
+  } vols;
 
 
   struct addrs_s {
@@ -546,13 +546,17 @@ public:
   int remove_volume(uuid_d uuid);
 
   bool find_by_uuid(const uuid_d& uuid, VolumeRef& vol) {
-    map<uuid_d,VolumeRef>::iterator v = volmap.vol_by_uuid.find(uuid);
-    if (v == volmap.vol_by_uuid.end()) {
+    map<uuid_d,VolumeRef>::iterator v = vols.by_uuid.find(uuid);
+    if (v == vols.by_uuid.end()) {
       return false;
     } else {
       vol = v->second;
       return true;
     }
+  }
+
+  bool volmap_empty(void) {
+    return vols.by_uuid.empty();
   }
 };
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)

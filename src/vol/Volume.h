@@ -127,4 +127,9 @@ public:
 		    vector<int>& osds) = 0;
 };
 
+inline ostream& operator<<(ostream& out, const Volume& vol) {
+  return out << Volume::type_string(vol.type) << " : "
+	     << vol.uuid << " : " << vol.name;
+}
+
 #endif // VOL_VOLUME_H

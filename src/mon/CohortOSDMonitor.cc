@@ -3,6 +3,7 @@
 #include "messages/MRemoveSnaps.h"
 #include "CohortOSDMonitor.h"
 #include "cohort/CohortPlaceSystem.h"
+#include "vol/Volume.h"
 
 void CohortOSDMonitor::dump_info_sub(Formatter *f)
 {
@@ -69,51 +70,27 @@ bool CohortOSDMonitor::preprocess_command_sub(MMonCommand *m, int& r,
 {
   const shared_ptr<CohortOSDMap> l_osdmap
     = static_pointer_cast<CohortOSDMap>(osdmap);
-  int r = -1;
-  stringstream ss;
   bufferlist rdata;
+
+  r = -1;
 
   if (m->cmd.size() > 1) {
     if (m->cmd[1] == "list" && m->cmd.size() == 2) {
-      if (volmap->empty()) {
+      if (l_osdmap->volmap_empty()) {
 	ss << "volmap is empty" << std::endl;
       } else {
-	ss << "volmap has " << volmap->size() << " entries" << std::endl;
+	ss << "volmap has " << l_osdmap->vols.by_name.size()
+	   << " entries" << std::endl;
 	stringstream ds;
 	for (map<string,VolumeRef>::const_iterator i
-	       = volmap->begin_n();
-	     i != volmap->end_n();
+	       = l_osdmap->vols.by_name.begin();
+	     i != l_osdmap->vols.by_name.end();
 	     ++i) {
 	  ds << *i->second << std::endl;
 	}
 	rdata.append(ds);
       }
       r = 0;
-    } else if (m->cmd[1] == "lookup" && m->cmd.size() == 3) {
-      const string& searchKey = m->cmd[2];
-      const size_t maxResults = 100;
-      const vector<VolumeCRef> results
-	= volmap->search_vol(searchKey, maxResults);
-      if (results.empty()) {
-	ss << "no volmap entries match \"" << searchKey << "\"";
-	r = -ENOENT;
-      } else {
-	if (results.size() == 1) {
-	  ss << "matching volmap entry";
-	} else if (results.size() == maxResults) {
-	  ss << "maximum matching volmap entries; could be more";
-	} else {
-	  ss << "matching volmap entries";
-	}
-	stringstream ds;
-	for (vector<VolumeCRef>::const_iterator i = results.begin();
-	     i != results.end();
-	     ++i) {
-	  ds << *i << std::endl;
-	}
-	rdata.append(ds);
-	r = 0;
-      }
     }
   }
 
@@ -129,7 +106,7 @@ bool CohortOSDMonitor::preprocess_command_sub(MMonCommand *m, int& r,
 }
 
 bool CohortOSDMonitor::prepare_command_sub(MMonCommand *m,
-					   int& err,
+					   int& r,
 					   stringstream& ss,
 					   string& rs)
 {
@@ -137,9 +114,8 @@ bool CohortOSDMonitor::prepare_command_sub(MMonCommand *m,
     = static_pointer_cast<CohortOSDMap>(osdmap);
   const shared_ptr<CohortOSDMap::Incremental> l_pending_inc
     = static_pointer_cast<CohortOSDMap::Incremental>(pending_inc);
-  int r = -1;
-  stringstream ss;
   bufferlist rdata;
+  r = -1;
 
   if (m->cmd.size() > 1) {
     if (m->cmd[1] == "create" && m->cmd.size() == 4) {
@@ -162,55 +138,18 @@ bool CohortOSDMonitor::prepare_command_sub(MMonCommand *m,
 	  ss << "volume could not be created due to error code " << -r;
 	}
       }
-    } else if (m->cmd[1] == "remove" && m->cmd.size() == 4) {
+    } else if (m->cmd[1] == "remove" && m->cmd.size() == 3) {
       const string& uuid_str = m->cmd[2];
-      const string& name = m->cmd[3];
       string error_message;
-
-      if (Volume::valid_name(name, error_message)) {
-	uuid_d uuid;
-	try {
-	  uuid = uuid_d::parse(uuid_str);
-	  r = pending_volmap->remove_volume(uuid, name);
-	  if (r == 0) {
-	    ss << "removed volume " << uuid << " \"" << name << "\"";
-	    pending_inc.include_removal(uuid);
-	  } else if (r == -ENOENT) {
-	    ss << "no volume with provided uuid " << uuid << " exists";
-	  } else if (r == -EINVAL) {
-	    ss << "volume name \"" << name << "\" does not match volume with uuid " << uuid;
-	  } else {
-	    ss << "volume could not be removed due to error code " << -r;
-	  }
-	} catch (const std::invalid_argument& ia) {
-	  ss << "provided volume uuid " << uuid << " is not a valid uuid";
-	  r = -EINVAL;
-	}
-      } else {
-	ss << error_message;
-	r = -EINVAL;
-      }
-    } else if (m->cmd[1] == "rename" && m->cmd.size() == 4) {
-      const string& volspec = m->cmd[2];
-      const string& new_name = m->cmd[3];
       uuid_d uuid;
-      const bool is_unique = pending_volmap->get_vol_uuid(volspec, uuid);
-      if (is_unique) {
-	r = pending_volmap->rename_volume(uuid, new_name);
-	if (r == 0) {
-#warning And this
-//	  pending_inc.include_update(vinfo_out);
-	  ss << "volume " << uuid << " renamed to " << new_name;
-	} else if (r == -EINVAL) {
-	  ss << "volume name is invalid";
-	} else if (r == -EEXIST) {
-	  ss << "volume with name \"" << new_name << "\" already exists";
-	} else {
-	  ss << "volume could not be renamed due to error code " << -r;
-	}
-      } else {
-	ss << "provided volume specifier \"" << volspec << "\" does not specify a unique volume";
-	r = -ENOENT;
+
+      try {
+	uuid = uuid_d::parse(uuid_str);
+	pending_inc->include_removal(uuid);
+	/* Error handling */
+      } catch (const std::invalid_argument& ia) {
+	ss << "provided volume uuid " << uuid << " is not a valid uuid";
+	r = -EINVAL;
       }
     }
   }
@@ -219,7 +158,6 @@ bool CohortOSDMonitor::prepare_command_sub(MMonCommand *m,
     r = -EINVAL;
     ss << "unrecognized command";
   }
-  string rs;
   getline(ss, rs);
 
   if (r != -1) {
