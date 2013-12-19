@@ -3,12 +3,16 @@ set(mds_srcs
 	AnchorClient.cc
 	AnchorServer.cc 
 	Capability.cc 
+	CapObject.cc
 	CDentry.cc 
-	CDir.cc 
+	CDirFrag.cc 
+	CDirStripe.cc 
+	CDirPlacement.cc 
 	CInode.cc 
 	Dumper.cc 
 	flock.cc
 	InoTable.cc 
+	InodeContainer.cc
 	journal.cc 
 	Locker.cc 
 	locks.c 
@@ -20,14 +24,15 @@ set(mds_srcs
 	MDSTable.cc
 	MDSTableClient.cc 
 	MDSTableServer.cc 
-	Migrator.cc
 	Mutation.cc 
+	ParentStats.cc
 	Resetter.cc 
 	Server.cc 
 	SessionMap.cc 
 	SnapRealm.cc 
 	SnapServer.cc 
 	snap.cc 
+	Stray.cc
 	${CMAKE_SOURCE_DIR}/src/osdc/Journaler.cc
 )
 
