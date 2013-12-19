@@ -2,12 +2,17 @@
 set(LIBEDIT_LIBS edit)
 
 set(libclient_srcs
+	barrier.cc
+	Capability.cc
 	Client.cc 
 	ClientSnapRealm.cc 
 	Dentry.cc 
+	DirStripe.cc
 	Inode.cc 
+	InodeCache.cc
 	MetaRequest.cc 
 	MetaSession.cc 
+	SnapRealmMap.cc
 	Trace.cc
 )
 
