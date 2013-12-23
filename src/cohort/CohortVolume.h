@@ -13,10 +13,6 @@
 #include "cohort/erasure.h"
 #include "common/RWLock.h"
 
-typedef int(*place_func)(void*, const uuid_t, const char*,
-			 const ceph_file_layout*, bool(*)(void*, int),
-			 bool(*)(void*, int));
-
 /* Superclass of all Cohort volume types, supporting dynamically
    generated placement. */
 
@@ -32,7 +28,7 @@ protected:
   void *place_shared;
   epoch_t compiled_epoch;
   vector<string> symbols;
-  vector<place_func> entry_points;
+  vector<void*> entry_points;
   erasure_params erasure;
 
   CohortVolume(vol_type t)
@@ -63,6 +59,14 @@ protected:
 
   friend VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v,
 				    vol_type t);
+
+  static VolumeRef create(const string& name, const epoch_t last_update,
+			  const string& place_text, const string& symbols,
+			  const string& erasure_type,
+			  const string& data_blocks, const string& code_blocks,
+			  const string& word_size, const string& packet_size,
+			  const string& size, string& error_message);
+
 };
 
 #endif // COHORT_COHORTVOLUME_H

@@ -4,6 +4,7 @@
 #include "CohortOSDMonitor.h"
 #include "cohort/CohortPlaceSystem.h"
 #include "vol/Volume.h"
+#include "cohort/CohortVolume.h"
 
 void CohortOSDMonitor::dump_info_sub(Formatter *f)
 {
@@ -117,24 +118,37 @@ bool CohortOSDMonitor::prepare_command_sub(MMonCommand *m,
   r = -1;
 
   if (m->cmd.size() > 1) {
-    if (m->cmd[1] == "create" && m->cmd.size() == 4) {
+    if (m->cmd[1] == "create" && m->cmd.size() == 12) {
       const string& name = m->cmd[2];
-      uuid_d uuid;
-      string error_message;
+      epoch_t last_update = l_osdmap->epoch;
+      const string& place_text = m->cmd[4];
+      const string& symbols = m->cmd[5];
+      const string& erasure_type = m->cmd[6];
+      const string& data_blocks = m->cmd[7];
+      const string& code_blocks = m->cmd[8];
+      const string& word_size = m->cmd[9];
+      const string& packet_size = m->cmd[10];
+      const string& size = m->cmd[11];
+      string& error_message = m->cmd[3];
+
+      VolumeRef vol;
+
+      /* Only one volume type for now, when we implement more I'll
+	 come back and complexify this. */
 
       if (!Volume::valid_name(name, error_message)) {
 	ss << error_message;
 	r = -EINVAL;
       } else {
-#warning Adapt for typed creation.
-//	r = pending_volmap->create_volume(name, uuid);
-	if (r == 0) {
-	  ss << "volume " << uuid << " created with name \"" << name << "\"";
-//	  pending_inc.include_addition(uuid, name);
-	} else if (r == -EEXIST) {
-	  ss << "volume with name \"" << name << "\" already exists";
+	vol = CohortVolume::create(name, last_update, place_text,
+				   symbols, erasure_type, data_blocks,
+				   code_blocks, word_size, packet_size,
+				   size, error_message);
+	if (vol) {
+	  ss << "volume: " << vol << " created.";
+	  pending_inc->include_addition(vol);
 	} else {
-	  ss << "volume could not be created due to error code " << -r;
+	  ss << error_message;
 	}
       }
     } else if (m->cmd[1] == "remove" && m->cmd.size() == 3) {
@@ -160,8 +174,6 @@ bool CohortOSDMonitor::prepare_command_sub(MMonCommand *m,
   getline(ss, rs);
 
   if (r != -1) {
-    // success.. delay reply
-    // paxos->wait_for_commit(new Monitor::C_Command(mon, m, r, rs, paxos->get_version()));
     mon->reply_command(m, r, rs, rdata, paxos->get_version());
     return true;
   } else {

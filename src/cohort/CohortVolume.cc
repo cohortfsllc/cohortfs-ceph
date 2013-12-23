@@ -14,6 +14,10 @@
 #include "osd/OSDMap.h"
 #include "CohortVolume.h"
 
+typedef int(*place_func)(void*, const uuid_t, const char*,
+			 const ceph_file_layout*, bool(*)(void*, int),
+			 bool(*)(void*, int));
+
 VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v, vol_type t)
 {
   CohortVolume *vol = new CohortVolume(t);
@@ -101,8 +105,7 @@ void CohortVolume::compile(epoch_t epoch)
   for(vector<string>::size_type i = 0;
       i < symbols.size();
       ++i) {
-    entry_points[i]
-      = (place_func) dlsym(place_shared, symbols[i].c_str());
+    entry_points[i] = dlsym(place_shared, symbols[i].c_str());
   }
 
   compiled_epoch = epoch;
@@ -155,6 +158,7 @@ static bool return_osd(void *data, int osd)
   return false;
 }
 
+
 int CohortVolume::place(const object_t& object,
 			const OSDMap& map,
 			const ceph_file_layout& layout,
@@ -176,9 +180,10 @@ int CohortVolume::place(const object_t& object,
     return -1;
   }
 
-  int rc = entry_points[layout.fl_rule_index](&context, object.volume.uuid,
-					      object.name.c_str(), &layout,
-					      test_osd, return_osd);
+  place_func entry_point = (place_func) entry_points[layout.fl_rule_index];
+
+  int rc = entry_point(&context, object.volume.uuid, object.name.c_str(),
+		       &layout, test_osd, return_osd);
   compile_lock.unlock();
 
   return rc;
