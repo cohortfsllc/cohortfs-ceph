@@ -27,13 +27,13 @@ if (HAVE_XIO)
     ${Xio_LIBRARY} ibverbs rdmacm pthread rt)
 endif (HAVE_XIO)
 
-set(bindir /usr/local/bin)
-set(sbindir /usr/local/sbin)
-set(libdir /usr/local/lib)
-set(sysconfdir /usr/local/etc)
-set(pkgdatadir /usr/share)
+set(bindir ${CMAKE_INSTALL_PREFIX}/bin)
+set(sbindir ${CMAKE_INSTALL_PREFIX}/sbin)
+set(libdir ${CMAKE_INSTALL_PREFIX}/lib)
+set(sysconfdir ${CMAKE_INSTALL_PREFIX}/etc)
+set(pkgdatadir ${CMAKE_INSTALL_PREFIX}/share)
 #double check with someone that pkgdatadir is correct
-set(prefix /usr/local)
+set(prefix ${CMAKE_INSTALL_PREFIX})
 set(GCOV_PREFIX_STRIP 4)
 
 configure_file(
@@ -264,7 +264,7 @@ install(TARGETS
   ceph_mon_store_converter
   DESTINATION bin)
 
-install(FILES
+install(PROGRAMS
   ${CMAKE_BINARY_DIR}/init-ceph
   ${CMAKE_BINARY_DIR}/mkcephfs
   ${CMAKE_SOURCE_DIR}/doc/start/ceph.conf
