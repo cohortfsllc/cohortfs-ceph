@@ -28,8 +28,6 @@ DEPENDS ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_versio
 
 if (HAVE_XIO)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -I${Xio_INCLUDE_DIR}")
-
 set(xio_messenger_cc
   ../msg/XioConnection.cc
   ../msg/XioMsg.cc
