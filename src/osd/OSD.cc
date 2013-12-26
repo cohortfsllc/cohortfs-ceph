@@ -157,6 +157,8 @@ OSDService::OSDService(OSD *osd) :
   infos_oid(OSD::make_infos_oid()),
   cluster_messenger(osd->cluster_messenger),
   client_messenger(osd->client_messenger),
+  xio_cluster_messenger(osd->xio_cluster_messenger),
+  xio_client_messenger(osd->xio_client_messenger),
   logger(osd->logger),
   monc(osd->monc),
   op_wq(osd->op_wq),
@@ -870,7 +872,9 @@ int OSD::peek_journal_fsid(string path, uuid_d& fsid)
 
 // cons/des
 
-OSD::OSD(int id, Messenger *internal_messenger, Messenger *external_messenger,
+OSD::OSD(int id,
+	 Messenger *internal_messenger, Messenger *external_messenger,
+	 Messenger *xio_internal_messenger, Messenger *xio_external_messenger,
 	 Messenger *hb_clientm,
 	 Messenger *hb_front_serverm,
 	 Messenger *hb_back_serverm,
@@ -889,6 +893,8 @@ OSD::OSD(int id, Messenger *internal_messenger, Messenger *external_messenger,
 								      cct->_conf->auth_service_required)),
   cluster_messenger(internal_messenger),
   client_messenger(external_messenger),
+  xio_cluster_messenger(xio_internal_messenger),
+  xio_client_messenger(xio_external_messenger),
   monc(mc),
   logger(NULL),
   store(NULL),

@@ -31,6 +31,7 @@
 #include "messages/MWatchNotify.h"
 #include "messages/MLog.h"
 #include "msg/SimpleMessenger.h"
+#include "msg/XioMessenger.h"
 
 // needed for static_cast
 #include "messages/PaxosServiceMessage.h"

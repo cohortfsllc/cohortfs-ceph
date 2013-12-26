@@ -31,8 +31,8 @@ using namespace std;
 
 #include "mon/MonMap.h"
 
-
 #include "msg/Messenger.h"
+#include "msg/XioMessenger.h"
 
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
@@ -319,9 +319,23 @@ int main(int argc, const char **argv)
   Messenger *client_messenger = Messenger::create(g_ceph_context,
 						  entity_name_t::OSD(whoami), "client",
 						  getpid());
+
+  Messenger *xio_client_messenger = new XioMessenger(g_ceph_context,
+						     entity_name_t::OSD(whoami),
+						     "xio client",
+						     0 /* nonce */, /* XXXX */
+						     1 /* portals */);
+
   Messenger *cluster_messenger = Messenger::create(g_ceph_context,
 						   entity_name_t::OSD(whoami), "cluster",
 						   getpid());
+
+  Messenger *xio_cluster_messenger = new XioMessenger(g_ceph_context,
+						      entity_name_t::OSD(whoami),
+						      "xio cluster",
+						      0 /* nonce */, /* XXXX */
+						      1 /* portals */);
+
   Messenger *messenger_hbclient = Messenger::create(g_ceph_context,
 						    entity_name_t::OSD(whoami), "hbclient",
 						    getpid());
@@ -430,7 +444,7 @@ int main(int argc, const char **argv)
     return -1;
   global_init_chdir(g_ceph_context);
 
-  osd = new OSD(whoami, cluster_messenger, client_messenger,
+  osd = new OSD(whoami, cluster_messenger, client_messenger, xio_cluster_messenger, xio_client_messenger,
 		messenger_hbclient, messenger_hb_front_server, messenger_hb_back_server,
 		&mc,
 		g_conf->osd_data, g_conf->osd_journal);

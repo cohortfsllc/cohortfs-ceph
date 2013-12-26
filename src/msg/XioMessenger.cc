@@ -171,7 +171,7 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
 
       unsigned xopt;
 
-#if 0
+#if 1
       xopt = XIO_LOG_LEVEL_TRACE;
       xio_set_opt(NULL, XIO_OPTLEVEL_ACCELIO, XIO_OPTNAME_LOG_LEVEL,
 		  &xopt, sizeof(unsigned));
@@ -200,7 +200,6 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
 
   /* update class instance count */
   nInstances.inc();
-  
 } /* ctor */
 
 int XioMessenger::new_session(struct xio_session *session,

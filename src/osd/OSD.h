@@ -240,6 +240,8 @@ public:
 private:
   Messenger *&cluster_messenger;
   Messenger *&client_messenger;
+  Messenger *&xio_cluster_messenger;
+  Messenger *&xio_client_messenger;
 public:
   PerfCounters *&logger;
   MonClient   *&monc;
@@ -300,6 +302,9 @@ public:
   ConnectionRef get_con_osd_cluster(int peer, epoch_t from_epoch);
   pair<ConnectionRef,ConnectionRef> get_con_osd_hb(int peer, epoch_t from_epoch);  // (back, front)
   void send_message_osd_cluster(int peer, Message *m, epoch_t from_epoch);
+
+  /* XXX why do these pick the messenger statically, rather than taking
+   * con->get_messenger()? */
   void send_message_osd_cluster(Message *m, Connection *con) {
     cluster_messenger->send_message(m, con);
   }
@@ -570,6 +575,10 @@ protected:
 
   Messenger   *cluster_messenger;
   Messenger   *client_messenger;
+
+  Messenger   *xio_cluster_messenger;
+  Messenger   *xio_client_messenger;
+
   MonClient   *monc;
   PerfCounters      *logger;
   ObjectStore *store;
@@ -1616,6 +1625,7 @@ protected:
   /* internal and external can point to the same messenger, they will still
    * be cleaned up properly*/
   OSD(int id, Messenger *internal, Messenger *external,
+      Messenger *xio_internal, Messenger *xio_external,
       Messenger *hb_client, Messenger *hb_front_server, Messenger *hb_back_server,
       MonClient *mc, const std::string &dev, const std::string &jdev);
   ~OSD();
