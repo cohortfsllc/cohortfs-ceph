@@ -105,6 +105,13 @@ struct CephContext;
 # define CEPH_SETATTR_CTIME 64
 #endif
 
+/* mds info for device callbacks */
+struct ceph_mds_info_t {
+  int deviceid;
+  uint32_t addr_count;
+  sockaddr_storage addrs[1];
+};
+
 /**
  * @defgroup libcephfs_h_init Setup and Teardown
  * These are the first and last functions that should be called
@@ -1325,6 +1332,15 @@ int ceph_ll_write_block(struct ceph_mount_info *cmount,
 int ceph_ll_commit_blocks(struct ceph_mount_info *cmount,
 			  struct Inode *in, uint64_t offset, uint64_t range);
 
+/* mds info callbacks sent on mdsmap updates */
+typedef void (*mds_add_cb)(const struct ceph_mds_info_t *device, void *user);
+typedef void (*mds_remove_cb)(int deviceid, void *user);
+
+/* registration for mds info callbacks */
+uint32_t ceph_get_mdsmap_registration(struct ceph_mount_info *cmount,
+				      mds_add_cb add, mds_remove_cb remove,
+				      void *user);
+void ceph_put_mdsmap_registration(struct ceph_mount_info *cmount, uint32_t reg);
 
 #ifdef __cplusplus
 }
