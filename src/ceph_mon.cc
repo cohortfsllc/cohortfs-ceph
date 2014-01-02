@@ -40,12 +40,28 @@ using namespace std;
 
 #include "global/global_init.h"
 #include "global/signal_handler.h"
+#include "cohort/CohortPlaceSystem.h"
 
 #include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mon
 
 Monitor *mon = NULL;
+
+const CohortOSDMonitorPlaceSystem *theCohortOSDMon = NULL;
+const CohortOSDMapPlaceSystem *theCohortOSDMap = NULL;
+
+static void init_place_systems(void)
+{
+  theCohortOSDMon = new CohortOSDMonitorPlaceSystem(
+    CohortPlaceSystem::systemName,
+    CohortPlaceSystem::systemIdentifier);
+
+  theCohortOSDMap = new CohortOSDMapPlaceSystem(
+    CohortPlaceSystem::systemName,
+    CohortPlaceSystem::systemIdentifier);
+}
+
 
 void handle_mon_signal(int signum)
 {
@@ -123,6 +139,8 @@ int main(int argc, const char **argv)
   env_to_vec(args);
 
   global_init(NULL, args, CEPH_ENTITY_TYPE_MON, CODE_ENVIRONMENT_DAEMON, 0);
+
+  init_place_systems();
 
   uuid_d fsid;
   std::string val;

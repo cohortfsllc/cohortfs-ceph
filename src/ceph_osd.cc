@@ -53,13 +53,27 @@ using namespace std;
 
 OSD *osd = NULL;
 
+const CohortOSDMapPlaceSystem *theCohortOSDMap = NULL;
+const CohortOSDPlaceSystem *theCohortOSD = NULL;
+
+static void init_place_systems(void)
+{
+  theCohortOSDMap = new CohortOSDMapPlaceSystem(
+    CohortPlaceSystem::systemName,
+    CohortPlaceSystem::systemIdentifier);
+
+  theCohortOSD = new CohortOSDPlaceSystem(
+    CohortPlaceSystem::systemName,
+    CohortPlaceSystem::systemIdentifier);
+}
+
 void handle_osd_signal(int signum)
 {
   if (osd)
     osd->handle_signal(signum);
 }
 
-void usage() 
+void usage()
 {
   derr << "usage: ceph-osd -i osdid [--osd-data=path] [--osd-journal=path] "
        << "[--mkfs] [--mkjournal] [--convert-filestore]" << dendl;
