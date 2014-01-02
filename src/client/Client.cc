@@ -78,6 +78,7 @@ using namespace std;
 #include "DirStripe.h"
 #include "ClientSnapRealm.h"
 #include "Fh.h"
+#include "MDSRegMap.h"
 #include "MetaSession.h"
 #include "MetaRequest.h"
 #include "ObjecterWriteback.h"
@@ -204,6 +205,8 @@ Client::Client(Messenger *m, MonClient *mc)
 				  true);
   inodecache = new InodeCache(this, client_lock, objectcacher);
   filer = new Filer(objecter);
+
+  mdsmap_registrations = new MDSRegMap(cct);
 }
 
 
@@ -213,6 +216,7 @@ Client::~Client()
 
   tear_down_cache();
 
+  delete mdsmap_registrations;
   delete inodecache;
   delete objectcacher;
   delete writeback_handler;
@@ -440,6 +444,7 @@ void Client::shutdown()
 
   inodecache->shutdown();
   objectcacher->stop();  // outside of client_lock! this does a join.
+  mdsmap_registrations->shutdown();
 
   client_lock.Lock();
   assert(initialized);

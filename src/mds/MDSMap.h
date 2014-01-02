@@ -243,7 +243,7 @@ public:
     return data_pools.count(poolid);
   }
 
-  const map<uint64_t,mds_info_t>& get_mds_info() { return mds_info; }
+  const map<uint64_t,mds_info_t>& get_mds_info() const { return mds_info; }
   const mds_info_t& get_mds_info_gid(uint64_t gid) {
     assert(mds_info.count(gid));
     return mds_info[gid];

@@ -78,6 +78,7 @@ class Objecter;
 class ObjectCacher;
 class WritebackHandler;
 class InodeCache;
+class MDSRegMap;
 
 class PerfCounters;
 
@@ -215,6 +216,7 @@ class Client : public Dispatcher {
   SafeTimer timer;
 
   InodeCache *inodecache;
+  MDSRegMap *mdsmap_registrations; // libcephfs mdsmap callback registrations
 
   client_dentry_callback_t dentry_invalidate_cb;
   void *dentry_invalidate_cb_handle;
