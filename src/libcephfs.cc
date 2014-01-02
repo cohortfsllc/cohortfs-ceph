@@ -20,6 +20,7 @@
 #include "auth/Crypto.h"
 #include "client/Client.h"
 #include "client/MDSRegMap.h"
+#include "mds/MDSMap.h"
 #include "include/cephfs/libcephfs.h"
 #include "common/Mutex.h"
 #include "common/ceph_argparse.h"
@@ -1472,6 +1473,11 @@ extern "C" uint64_t ceph_ll_get_internal_offset(class ceph_mount_info *cmount,
 						uint64_t blockno)
 {
   return (cmount->get_client()->ll_get_internal_offset(in, blockno));
+}
+
+extern "C" int ceph_max_num_mds(struct ceph_mount_info *cmount)
+{
+    return cmount->get_client()->mdsmap->get_max_mds();
 }
 
 extern "C" uint32_t ceph_get_mdsmap_registration(class ceph_mount_info *cmount,

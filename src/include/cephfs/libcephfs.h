@@ -109,7 +109,7 @@ struct CephContext;
 struct ceph_mds_info_t {
   int deviceid;
   uint32_t addr_count;
-  sockaddr_storage addrs[1];
+  struct sockaddr_storage addrs[1];
 };
 
 /**
@@ -1331,6 +1331,8 @@ int ceph_ll_write_block(struct ceph_mount_info *cmount,
 			uint64_t snapseq, uint32_t sync);
 int ceph_ll_commit_blocks(struct ceph_mount_info *cmount,
 			  struct Inode *in, uint64_t offset, uint64_t range);
+
+int ceph_max_num_mds(struct ceph_mount_info *cmount);
 
 /* mds info callbacks sent on mdsmap updates */
 typedef void (*mds_add_cb)(const struct ceph_mds_info_t *device, void *user);

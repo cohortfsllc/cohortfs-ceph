@@ -248,9 +248,12 @@ public:
     assert(mds_info.count(gid));
     return mds_info[gid];
   }
-  const mds_info_t& get_mds_info(int m) {
-    assert(up.count(m) && mds_info.count(up[m]));
-    return mds_info[up[m]];
+  const mds_info_t& get_mds_info(int m) const {
+    map<int32_t,uint64_t>::const_iterator u = up.find(m);
+    assert(u != up.end()); // up[m]
+    map<uint64_t,mds_info_t>::const_iterator i = mds_info.find(u->second);
+    assert(i != mds_info.end()); // mds_info[up[m]]
+    return i->second;
   }
   uint64_t find_mds_gid_by_name(const string& s) {
     for (map<uint64_t,mds_info_t>::const_iterator p = mds_info.begin();
