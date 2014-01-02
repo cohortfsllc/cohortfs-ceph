@@ -1859,6 +1859,9 @@ void Client::handle_mds_map(MMDSMap* m)
     }
   }
 
+  // send mdsmap callbacks if necessary
+  mdsmap_registrations->update(mdsmap);
+
   // kick any waiting threads
   signal_cond_list(waiting_for_mdsmap);
 
