@@ -10,6 +10,7 @@ set(libclient_srcs
 	DirStripe.cc
 	Inode.cc 
 	InodeCache.cc
+	MDSRegMap.cc
 	MetaRequest.cc 
 	MetaSession.cc 
 	SnapRealmMap.cc
