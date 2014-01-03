@@ -16,26 +16,19 @@ static bool decode_type(const string& erasure_type,
 			erasure_encoder& type,
 			string& error_message)
 {
-  switch (erasure_type) {
-  case "reed_solomon_vandermonde":
+  if (erasure_type == "reed_solomon_vandermonde") {
     type = reed_solomon_vandermonde;
-    break;
-  case "reed_solomon_vandermonde_raid_6":
+  } else if (erasure_type == "reed_solomon_vandermonde_raid_6") {
     type = reed_solomon_vandermonde_raid_6;
-    break;
-  case "reed_solomon_cauchy":
+  } else if (erasure_type == "reed_solomon_cauchy") {
     type = reed_solomon_cauchy;
-    break;
-  case "liberation":
+  } else if (erasure_type == "liberation") {
     type = liberation;
-    break;
-  case "blaum_roth":
+  } else if (erasure_type == "blaum_roth") {
     type = blaum_roth;
-    break;
-  case "liber8tion":
+  } else if (erasure_type == "liber8tion") {
     type = liber8tion;
-    break;
-  default:
+  } else {
     error_message = erasure_type + " is not a valid erasure type.";
     return false;
   }
@@ -53,7 +46,7 @@ bool erasure_params::fill_out(const string& erasure_type,
 			      string& error_message)
 {
   if (!decode_type(erasure_type, params.type, error_message))
-    return;
+    return false;
 
   string cur;
 
@@ -86,7 +79,7 @@ bool erasure_params::fill_out(const string& erasure_type,
   }
 
   if (params.type == liber8tion &&
-      params.word_size != 8) {
+      params.w != 8) {
     error_message = "Liber8tion requires a word_size of 8.";
     return false;
   }

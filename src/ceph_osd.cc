@@ -46,6 +46,7 @@ using namespace std;
 #include "common/pick_address.h"
 
 #include "perfglue/heap_profiler.h"
+#include "cohort/CohortPlaceSystem.h"
 
 #include "include/assert.h"
 
@@ -89,6 +90,8 @@ int main(int argc, const char **argv)
 
   global_init(NULL, args, CEPH_ENTITY_TYPE_OSD, CODE_ENVIRONMENT_DAEMON, 0);
   ceph_heap_profiler_init();
+
+  init_place_systems();
 
   // osd specific args
   bool mkfs = false;

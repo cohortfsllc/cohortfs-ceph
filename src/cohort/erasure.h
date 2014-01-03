@@ -9,6 +9,10 @@
 #ifndef COHORT_ERASURE_H
 #define COHORT_ERASURE_H
 
+#include <string>
+
+using std::string;
+
 /* Currently the set of encodings supported by Jerasure, but I reserve
    the right to add more in the future. */
 
