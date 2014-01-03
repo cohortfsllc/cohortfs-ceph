@@ -1408,6 +1408,7 @@ libcommon_files = \
 	msg/DispatchQueue.cc \
 	vol/Volume.cc \
 	cohort/CohortVolume.cc \
+	cohort/erasure.cc \
 	msg/Message.cc \
 	common/RefCountedObj.cc \
 	msg/Messenger.cc \

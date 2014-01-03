@@ -294,7 +294,7 @@ int OSDMonitor::reweight_by_utilization(int oload, std::string& out_str)
 }
 
 
-void OSDMonitor::create_pending()
+void OSDMonitor::create_pending_super()
 {
   pending_inc->fsid = mon->monmap->fsid;
 

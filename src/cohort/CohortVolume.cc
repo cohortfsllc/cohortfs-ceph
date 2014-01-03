@@ -11,12 +11,16 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <dlfcn.h>
+#include <boost/lexical_cast.hpp>
 #include "osd/OSDMap.h"
 #include "CohortVolume.h"
 
-typedef int(*place_func)(void*, const uuid_t, const char*,
-			 const ceph_file_layout*, bool(*)(void*, int),
-			 bool(*)(void*, int));
+using boost::lexical_cast;
+using boost::bad_lexical_cast;
+
+typedef int (*place_func)(void*, const uuid_t, const char*,
+			  const ceph_file_layout*, bool(*)(void*, int),
+			  bool(*)(void*, int));
 
 VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v, vol_type t)
 {
@@ -218,4 +222,49 @@ void CohortVolume::common_encode(bufferlist& bl) const
   for(uint32_t i = 0; i < count; ++i) {
     ::encode(symbols[i], bl);
   }
+}
+
+VolumeRef CohortVolume::create(const string& name,
+			       const epoch_t last_update,
+			       const string& place_text,
+			       const string& symbols,
+			       const string& erasure_type,
+			       const string& data_blocks,
+			       const string& code_blocks,
+			       const string& word_size,
+			       const string& packet_size,
+			       const string& size,
+			       string& error_message)
+{
+  CohortVolume *v = new CohortVolume(CohortVol);
+  char *c_symbols = NULL;
+  char *next = NULL, *save = NULL;
+
+  if (!valid_name(name, error_message))
+    goto error;
+
+  v->name = name;
+  v->last_update = last_update;
+  v->place_text.append(place_text);
+
+  /* Yucky yucky yucky, come back and clean up later */
+  c_symbols = strdup(symbols.c_str());
+
+  while ((next = strtok_r(c_symbols, " ", &save))) {
+    v->symbols.push_back(next);
+  }
+
+  if (!erasure_params::fill_out(erasure_type, data_blocks,
+				code_blocks, word_size,
+				packet_size, size,
+				v->erasure,
+				error_message))
+    goto error;
+
+  return VolumeRef(v);
+
+error:
+
+  delete v;
+  return VolumeRef();
 }

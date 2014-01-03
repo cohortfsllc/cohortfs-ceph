@@ -12,7 +12,7 @@
 /* Currently the set of encodings supported by Jerasure, but I reserve
    the right to add more in the future. */
 
-enum erasure_encoders {
+enum erasure_encoder {
   reed_solomon_vandermonde, /* Classic Reed-Solomon with a
 			       Vandermonde matrix, using arithmetic in
 			       GF(2^w). */
@@ -23,7 +23,7 @@ enum erasure_encoders {
   reed_solomon_cauchy, /* Xorrible Reed-Solomon, using Cauchy
 			  matrices. */
   liberation, /* Word-size must be prime, m must be 2. */
-  blaum_rothm, /* Word-size must be one less than a prime, m bust be 2. */
+  blaum_roth, /* Word-size must be one less than a prime, m bust be 2. */
   liber8tion, /* Word-size must be 8, m must be 2. */
 };
 
@@ -31,12 +31,22 @@ enum erasure_encoders {
    Jerasure uses. */
 
 struct erasure_params {
-  erasure_encoders type; /* Type of encoding to use */
+  erasure_encoder type; /* Type of encoding to use */
   int k; /* Count of data stripes in a block/object */
   int m; /* Count of coding stripes in a block/object */
   int w; /* Word size */
   int packetsize; /* Size of packets (subdivisions of a stripe) */
   int size; /* Size of each stripe, in bytes. */
+
+  static bool fill_out(const string& erasure_type,
+		       const string& data_blocks,
+		       const string& code_blocks,
+		       const string& word_size,
+		       const string& packet_size,
+		       const string& size,
+		       erasure_params& params,
+		       string& error_message);
+
 };
 
 #endif /* !COHORT_ERASURE_H */
