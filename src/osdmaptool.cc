@@ -29,6 +29,7 @@ using namespace std;
 #include "global/global_init.h"
 #include "osd/PlaceSystem.h"
 #include "osd/OSDMap.h"
+#include "cohort/CohortPlaceSystem.h"
 
 const CohortOSDMapPlaceSystem *theCohortOSDMap = NULL;
 
