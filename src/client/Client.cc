@@ -7442,7 +7442,8 @@ int Client::ll_create(Inode *parent, const char *name, mode_t mode,
   tout(cct) << mode << std::endl;
   tout(cct) << flags << std::endl;
 
-  *fhp = NULL;
+  if (fhp)
+    *fhp = NULL;
 
   Inode::DerefSet refs; // clean up refs from _lookup and _create
   bool created = false;
