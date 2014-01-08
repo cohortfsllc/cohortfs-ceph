@@ -395,7 +395,7 @@ int OSD::mkfs(const std::string &dev,
 	bl.push_back(bp);
 	dout(0) << "testing disk bandwidth..." << dendl;
 	utime_t start = ceph_clock_now(g_ceph_context);
-	object_t oid(0, "disk_bw_test");
+	object_t oid(uuid_d(), "disk_bw_test");
 	for (int i=0; i<1000; i++) {
 	  ObjectStore::Transaction *t = new ObjectStore::Transaction;
 	  t->write(coll_t::META_COLL, hobject_t(sobject_t(oid, 0)), i*bl.length(), bl.length(), bl);
@@ -2387,7 +2387,7 @@ void OSD::do_command(Connection *con, tid_t tid, vector<string>& cmd, bufferlist
     for (int64_t pos = 0; pos < count; pos += bsize) {
       char nm[30];
       snprintf(nm, sizeof(nm), "disk_bw_test_%lld", (long long)pos);
-      object_t oid(0, nm);
+      object_t oid(uuid_d(), nm);
       hobject_t soid(sobject_t(oid, 0));
       ObjectStore::Transaction *t = new ObjectStore::Transaction;
       t->write(coll_t::META_COLL, soid, 0, bsize, bl);

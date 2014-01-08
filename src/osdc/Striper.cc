@@ -76,7 +76,7 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
     // find oid, extent
     char buf[strlen(object_format) + 32];
     snprintf(buf, sizeof(buf), object_format, (long long unsigned)objectno);
-    object_t oid(0, buf);
+    object_t oid(uuid_d(), buf);
 
     // map range into object
     uint64_t block_start = (stripeno % stripes_per_object) * su;

@@ -390,26 +390,26 @@ public:
   ClassHandler  *class_handler;
   int get_nodeid() { return whoami; }
 
-  static hobject_t get_osdmap_pobject_name(epoch_t epoch) { 
+  static hobject_t get_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(0, foo), 0));
+    return hobject_t(sobject_t(object_t(uuid_d(), foo), 0));
   }
-  static hobject_t get_inc_osdmap_pobject_name(epoch_t epoch) { 
+  static hobject_t get_inc_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "inc_osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(0, foo), 0));
+    return hobject_t(sobject_t(object_t(uuid_d(), foo), 0));
   }
 
   static hobject_t make_snapmapper_oid() {
     return hobject_t(
       sobject_t(
-	object_t(0, "snapmapper"),
+	object_t(uuid_d(), "snapmapper"),
 	0));
   }
 
   static hobject_t make_infos_oid() {
-    hobject_t oid(sobject_t(object_t(0, "infos"), CEPH_NOSNAP));
+    hobject_t oid(sobject_t(object_t(uuid_d(), "infos"), CEPH_NOSNAP));
     return oid;
   }
 

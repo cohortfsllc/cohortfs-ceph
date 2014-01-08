@@ -971,7 +971,7 @@ bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
   sscanf(hash_str.c_str(), "%X", &hash);
 
 
-  (*out) = hobject_t(object_t(0, name), snap, hash);
+  (*out) = hobject_t(object_t(uuid_d(), name), snap, hash);
   return true;
 }
 
@@ -1051,7 +1051,7 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, hobject_t *out) {
     snap = strtoull(snap_str.c_str(), NULL, 16);
   sscanf(hash_str.c_str(), "%X", &hash);
 
-  (*out) = hobject_t(object_t(0, name), snap, hash);
+  (*out) = hobject_t(object_t(uuid_d(), name), snap, hash);
   out->nspace = ns;
   return true;
 }

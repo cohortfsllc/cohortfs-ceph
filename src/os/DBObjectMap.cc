@@ -1017,7 +1017,7 @@ int DBObjectMap::init(bool do_upgrade)
 		<< dendl;
 	return -ENOTSUP;
       } else {
-	r = upgrade(0);
+	r = upgrade(uuid_d());
 	if (r < 0)
 	  return r;
       }

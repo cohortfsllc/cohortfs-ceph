@@ -1731,7 +1731,7 @@ extern "C" int rados_ioctx_create(rados_t cluster, const uuid_t volume,
   librados::RadosClient *client = (librados::RadosClient *)cluster;
   librados::IoCtxImpl *ctx;
 
-  int r = client->create_ioctx(volume, &ctx);
+  int r = client->create_ioctx(uuid_d::swallow(volume), &ctx);
   if (r < 0)
     return r;
 

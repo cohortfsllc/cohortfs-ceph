@@ -41,7 +41,7 @@
 #define CEPH_OSD_FEATURE_INCOMPAT_LEVELDBLOG CompatSet::Feature(9, "leveldblog")
 #define CEPH_OSD_FEATURE_INCOMPAT_SNAPMAPPER CompatSet::Feature(10, "snapmapper")
 
-#define OSD_SUPERBLOCK_POBJECT hobject_t(sobject_t(object_t(0, "osd_superblock"), 0))
+#define OSD_SUPERBLOCK_POBJECT hobject_t(sobject_t(object_t(uuid_d(), "osd_superblock"), 0))
 
 
 // placement seed (a hash value)

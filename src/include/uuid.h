@@ -21,7 +21,7 @@ struct uuid_d {
   uuid_t uuid;
 
   uuid_d() {
-    memset(&uuid, 0, sizeof(uuid));
+    uuid_clear(uuid);
   }
 
   uuid_d(uint64_t x, uint64_t y) {
@@ -33,12 +33,8 @@ struct uuid_d {
     uuid_copy(uuid, u.uuid);
   }
 
-  uuid_d(const uuid_t u) {
-    uuid_copy(uuid, u);
-  }
-
   void clear() {
-    memset(&uuid, 0, sizeof(uuid));
+    uuid_clear(uuid);
   }
 
   bool is_zero() const {
@@ -69,6 +65,13 @@ struct uuid_d {
   static uuid_d parse(const std::string& s) {
     uuid_d u = parse(s.c_str());
     return u;
+  }
+
+  // version of above functions using strings
+  static uuid_d swallow(const uuid_t u) {
+    uuid_d v;
+    uuid_copy(v.uuid, u);
+    return v;
   }
   void print(std::string& s) const {
     char buff[char_rep_buf_size];

@@ -101,7 +101,7 @@ bool Volume::valid(string& error)
     return false;
   }
 
-  if (uuid == 0) {
+  if (uuid.is_zero()) {
     error = "UUID may not be 0.";
     return false;
   }
