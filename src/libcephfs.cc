@@ -1483,6 +1483,7 @@ extern "C" int ceph_max_num_mds(struct ceph_mount_info *cmount)
 extern "C" uint32_t ceph_get_mdsmap_registration(class ceph_mount_info *cmount,
 						 mds_add_cb add,
 						 mds_remove_cb remove,
+						 mds_placement_cb placement,
 						 void *user)
 {
   MDSRegMap *registrations = cmount->get_client()->mdsmap_registrations;

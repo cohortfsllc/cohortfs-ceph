@@ -112,6 +112,15 @@ struct ceph_mds_info_t {
   struct sockaddr_storage addrs[1];
 };
 
+struct ceph_ino_placement_t {
+  uint16_t count; /* number of inode container stripes */
+  uint8_t shift;  /* number of bits right shifted before taking modulus.
+		     this allows blocks of consecutive inode numbers to
+		     be allocated to the same stripe */
+  uint8_t offset; /* offset between stripe index and inode number prefix,
+		     i.e. stripe 0 contains inode numbers 1xxxxxx if offset=1 */
+};
+
 /**
  * @defgroup libcephfs_h_init Setup and Teardown
  * These are the first and last functions that should be called
@@ -1332,16 +1341,19 @@ int ceph_ll_write_block(struct ceph_mount_info *cmount,
 int ceph_ll_commit_blocks(struct ceph_mount_info *cmount,
 			  struct Inode *in, uint64_t offset, uint64_t range);
 
+/* metadata striping interface */
 int ceph_max_num_mds(struct ceph_mount_info *cmount);
 
 /* mds info callbacks sent on mdsmap updates */
 typedef void (*mds_add_cb)(const struct ceph_mds_info_t *device, void *user);
 typedef void (*mds_remove_cb)(int deviceid, void *user);
+typedef void (*mds_placement_cb)(const ceph_ino_placement_t *placement,
+    void *user);
 
 /* registration for mds info callbacks */
 uint32_t ceph_get_mdsmap_registration(struct ceph_mount_info *cmount,
 				      mds_add_cb add, mds_remove_cb remove,
-				      void *user);
+				      mds_placement_cb, void *user);
 void ceph_put_mdsmap_registration(struct ceph_mount_info *cmount, uint32_t reg);
 
 #ifdef __cplusplus
