@@ -265,7 +265,7 @@ protected:
     return dynamic_pointer_cast<const CohortOSDMap>(get_map(e));
   }
 
-  const CohortOSDMapRef pgosdmap() {
+  const CohortOSDMapRef cohortosdmap() {
     return dynamic_pointer_cast<const CohortOSDMap>(get_osdmap());
   }
 

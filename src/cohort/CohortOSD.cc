@@ -329,8 +329,14 @@ bool CohortOSD::handle_sub_op_sub(OpRequestRef op)
 OSDVolRef CohortOSD::_lookup_vol(uuid_d volid)
 {
   assert(osd_lock.is_locked());
-  if (!vol_map.count(volid))
-    return OSDVolRef();
-  OSDVolRef osdvol = vol_map[volid];
-  return osdvol;
+  map<uuid_d, OSDVolRef>::iterator i = vol_map.find(volid);
+  if (i != vol_map.end()) {
+    return i->second;
+  } else {
+    OSDVolRef osdvol(new OSDVol(
+		       cohortosdservice(), cohortosdmap(), volid,
+		       hobject_t(object_t(volid, "log"), CEPH_NOSNAP),
+		       hobject_t(object_t(volid, "info"), CEPH_NOSNAP)));
+    return osdvol;
+  }
 }
