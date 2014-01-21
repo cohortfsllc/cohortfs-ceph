@@ -478,6 +478,14 @@ struct mds_inode_placement_t {
 };
 WRITE_CLASS_ENCODER(mds_inode_placement_t)
 
+inline bool operator==(const mds_inode_placement_t &l,
+		       const mds_inode_placement_t &r) {
+  return l.count == r.count && l.shift == r.shift && l.offset == r.offset;
+}
+inline bool operator!=(const mds_inode_placement_t &l,
+		       const mds_inode_placement_t &r) {
+  return l.count != r.count || l.shift != r.shift || l.offset != r.offset;
+}
 static inline ostream& operator<<(ostream &out, const mds_inode_placement_t &p) {
   return out << "stripe = ((ino >> " << p.shift << ") - "
       << p.offset << ") % " << p.count;

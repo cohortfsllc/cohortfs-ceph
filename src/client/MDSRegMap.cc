@@ -13,7 +13,8 @@
 MDSRegMap::MDSRegMap(CephContext *cct)
   : cct(cct),
     mtx("MDSRegMap"),
-    next_regid(0)
+    next_regid(0),
+    placement_seq(0)
 {
 }
 
@@ -23,7 +24,8 @@ MDSRegMap::~MDSRegMap()
 }
 
 // callback registration
-uint32_t MDSRegMap::add_registration(void *add, void *remove, void *user)
+uint32_t MDSRegMap::add_registration(void *add, void *remove,
+				     void *place, void *user)
 {
   Mutex::Locker lock(mtx);
 
@@ -32,7 +34,9 @@ uint32_t MDSRegMap::add_registration(void *add, void *remove, void *user)
   registration &reg = regs[regid];
   reg.add = add;
   reg.remove = remove;
+  reg.place = place;
   reg.user = user;
+  reg.placement_seq = 0;
   reg.async = new Finisher(cct);
   reg.async->start();
 
@@ -123,12 +127,29 @@ class C_DM_AddMDS : public Context {
 class C_DM_RemoveMDS : public Context {
  private:
   mds_remove_cb callback;
-  int deviceid;
+  int index;
   void *user;
  public:
-  C_DM_RemoveMDS(mds_remove_cb callback, int deviceid, void *user)
-    : callback(callback), deviceid(deviceid), user(user) {}
-  void finish(int r) { callback(deviceid, user); }
+  C_DM_RemoveMDS(mds_remove_cb callback, int index, void *user)
+    : callback(callback), index(index), user(user) {}
+  void finish(int r) { callback(index, user); }
+};
+
+class C_DM_Placement : public Context {
+ private:
+  mds_placement_cb callback;
+  ceph_ino_placement_t placement;
+  void *user;
+ public:
+  C_DM_Placement(mds_placement_cb callback, const mds_inode_placement_t &p,
+      void *user) : callback(callback), user(user)
+  {
+    // convert mds_inode_placement_t to ceph_ino_placement_t
+    placement.count = p.count;
+    placement.shift = p.shift;
+    placement.offset = p.offset;
+  }
+  void finish(int r) { callback(&placement, user); }
 };
 
 // assumes caller has locked mtx
@@ -158,6 +179,15 @@ void MDSRegMap::update(registration &reg)
 
   // resize after loop in case there were known devices past count
   reg.known.resize(count);
+
+  // if placement has changed, send a callback 
+  if (ceph_seq_cmp(reg.placement_seq, placement_seq) < 0) {
+    ldout(cct, 10) << "sending callback for placement seq="
+      << placement_seq << dendl;
+    mds_placement_cb callback = reinterpret_cast<mds_placement_cb>(reg.place);
+    reg.async->queue(new C_DM_Placement(callback, placement, reg.user));
+    reg.placement_seq = placement_seq;
+  }
 }
 
 void MDSRegMap::shutdown()

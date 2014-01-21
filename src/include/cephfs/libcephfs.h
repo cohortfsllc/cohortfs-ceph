@@ -1347,8 +1347,8 @@ int ceph_max_num_mds(struct ceph_mount_info *cmount);
 /* mds info callbacks sent on mdsmap updates */
 typedef void (*mds_add_cb)(const struct ceph_mds_info_t *device, void *user);
 typedef void (*mds_remove_cb)(int deviceid, void *user);
-typedef void (*mds_placement_cb)(const ceph_ino_placement_t *placement,
-    void *user);
+typedef void (*mds_placement_cb)(const struct ceph_ino_placement_t *placement,
+				 void *user);
 
 /* registration for mds info callbacks */
 uint32_t ceph_get_mdsmap_registration(struct ceph_mount_info *cmount,
