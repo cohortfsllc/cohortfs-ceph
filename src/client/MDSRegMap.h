@@ -10,6 +10,8 @@
 #include "common/Finisher.h"
 #include "common/Mutex.h"
 
+#include "mds/mdstypes.h"
+
 
 class MDSMap;
 // use shared ptrs so we can remove mds info while callbacks are outstanding
@@ -27,13 +29,19 @@ class MDSRegMap {
   struct registration {
     void *add;
     void *remove;
+    void *place;
     void *user;
     Finisher *async; // send callbacks in a separate thread
     vector<bool> known; // up mds' for which the client got callbacks
+    ceph_seq_t placement_seq; // last placement_seq sent to client
   };
   typedef std::map<uint32_t, registration> reg_map;
   reg_map regs;
   uint32_t next_regid;
+
+  // cached inode placement information
+  mds_inode_placement_t placement;
+  ceph_seq_t placement_seq;
 
   // cache of device info
   vector<mds_info_ptr> devices;
@@ -49,7 +57,7 @@ class MDSRegMap {
   ~MDSRegMap();
 
   // add/remove callback registrations
-  uint32_t add_registration(void *add, void *remove, void *user);
+  uint32_t add_registration(void *add, void *remove, void *place, void *user);
   void remove_registration(uint32_t regid);
 
   // called with MDSMap each time the epoch changes

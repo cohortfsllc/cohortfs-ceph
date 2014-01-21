@@ -1489,6 +1489,7 @@ extern "C" uint32_t ceph_get_mdsmap_registration(class ceph_mount_info *cmount,
   MDSRegMap *registrations = cmount->get_client()->mdsmap_registrations;
   return registrations->add_registration(reinterpret_cast<void*>(add),
 					 reinterpret_cast<void*>(remove),
+					 reinterpret_cast<void*>(placement),
 					 user);
 }
 
