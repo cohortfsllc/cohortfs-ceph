@@ -78,13 +78,19 @@ void MDSRegMap::update(const MDSMap *mdsmap)
 {
   Mutex::Locker lock(mtx);
 
-  int count = mdsmap->get_max_mds();
-  devices.resize(count);
+  // update inode placement
+  if (placement_seq == 0 || placement != mdsmap->inode_placement) {
+    placement = mdsmap->inode_placement;
+    placement_seq++;
 
-  ldout(cct, 10) << "update count=" << count << dendl;
+    devices.resize(placement.count);
+
+    ldout(cct, 10) << "update placement seq=" << placement_seq
+      << " count=" << placement.count << dendl;
+  }
 
   // update cached devices
-  for (int i = 0; i < count; i++) {
+  for (int i = 0; i < placement.count; i++) {
     if (mdsmap->get_state(i) != MDSMap::STATE_ACTIVE) {
       // free the device if there was one
       if (devices[i])
@@ -93,7 +99,7 @@ void MDSRegMap::update(const MDSMap *mdsmap)
     } else if (!devices[i]) {
       const MDSMap::mds_info_t &info = mdsmap->get_mds_info(i);
       mds_info_ptr mds(new ceph_mds_info_t);
-      mds->deviceid = i;
+      mds->index = i;
       mds->addr_count = 1;
       memcpy(&mds->addrs, &info.addr.addr, sizeof(mds->addrs));
       // hack: set port to nfs:2049
@@ -155,30 +161,20 @@ class C_DM_Placement : public Context {
 // assumes caller has locked mtx
 void MDSRegMap::update(registration &reg)
 {
-  size_t count = devices.size();
-  if (reg.known.size() < count)
-    reg.known.resize(count);
-
+  // send removal callbacks first
   for (size_t i = 0; i < reg.known.size(); i++) {
-    if (i < count && devices[i]) {
-      if (!reg.known[i]) {
-	ldout(cct, 10) << "sending callback for added mds." << i << dendl;
-	mds_add_cb callback = reinterpret_cast<mds_add_cb>(reg.add);
-	reg.async->queue(new C_DM_AddMDS(callback, devices[i], reg.user));
-	reg.known[i] = true;
-      }
-    } else {
-      if (reg.known[i]) {
-	ldout(cct, 10) << "sending callback for removed mds." << i << dendl;
-	mds_remove_cb callback = reinterpret_cast<mds_remove_cb>(reg.remove);
-	reg.async->queue(new C_DM_RemoveMDS(callback, i, reg.user));
-	reg.known[i] = false;
-      }
-    }
+    if (i < devices.size() && devices[i]) // device still up
+      continue;
+    if (!reg.known[i])
+      continue;
+
+    ldout(cct, 10) << "sending callback for removed mds." << i << dendl;
+    mds_remove_cb callback = reinterpret_cast<mds_remove_cb>(reg.remove);
+    reg.async->queue(new C_DM_RemoveMDS(callback, i, reg.user));
+    reg.known[i] = false;
   }
 
-  // resize after loop in case there were known devices past count
-  reg.known.resize(count);
+  reg.known.resize(devices.size());
 
   // if placement has changed, send a callback 
   if (ceph_seq_cmp(reg.placement_seq, placement_seq) < 0) {
@@ -187,6 +183,19 @@ void MDSRegMap::update(registration &reg)
     mds_placement_cb callback = reinterpret_cast<mds_placement_cb>(reg.place);
     reg.async->queue(new C_DM_Placement(callback, placement, reg.user));
     reg.placement_seq = placement_seq;
+  }
+
+  // send add callbacks
+  for (size_t i = 0; i < devices.size(); i++) {
+    if (!devices[i])
+      continue;
+    if (reg.known[i])
+      continue;
+
+    ldout(cct, 10) << "sending callback for added mds." << i << dendl;
+    mds_add_cb callback = reinterpret_cast<mds_add_cb>(reg.add);
+    reg.async->queue(new C_DM_AddMDS(callback, devices[i], reg.user));
+    reg.known[i] = true;
   }
 }
 
