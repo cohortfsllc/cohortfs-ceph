@@ -1,15 +1,39 @@
 set (crush_files 
-	../crush/builder.c 
-	../crush/mapper.c 
-	../crush/crush.c 
-	../crush/hash.c 
-	../crush/CrushWrapper.cc 
-	../crush/CrushCompiler.cc 
-	../crush/CrushTester.cc
+	crush/builder.c 
+	crush/mapper.c 
+	crush/crush.c 
+	crush/hash.c 
+	crush/CrushWrapper.cc 
+	crush/CrushCompiler.cc 
+	crush/CrushTester.cc
+)
+set (cohort_osd_files 
+	../cohort/CohortOSD.cc
+	../cohort/CohortOSD.h
+	../cohort/OSDVol.cc
+	../cohort/OSDVol.h
+	../cohort/VolLog.cc
+	../cohort/VolLog.h
+)
+set (cohort_librgw_files 
+	cohort/CohortOSDMap.cc
+	cohort/CohortOSDMap.h
+)
+set (cohort_common_files 
+	../cohort/CohortPlaceSystem.cc
+	../cohort/CohortPlaceSystem.h
+	../cohort/CohortVolume.cc
+	../cohort/CohortVolume.h
+	../cohort/erasure.cc
+	../cohort/erasure.h
+	../vol/Volume.cc
+	../vol/Volume.h
 )
 
 add_custom_target(check_version ALL ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_SOURCE_DIR}/src/.git_version 
 COMMENT "ceph_ver.h is up to date")
+
+include_directories("${CMAKE_BINARY_DIR}/src")
 
 add_custom_command(
 PRE_BUILD
@@ -20,14 +44,14 @@ DEPENDS ${CMAKE_SOURCE_DIR}/src/check_version
 
 add_custom_command(
 PRE_BUILD
-OUTPUT ${CMAKE_SOURCE_DIR}/src/ceph_ver.h
-COMMAND ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_version ${CMAKE_SOURCE_DIR}/src/ceph_ver.h
+OUTPUT ${CMAKE_BINARY_DIR}/src/ceph_ver.h
+COMMAND ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_version ${CMAKE_BINARY_DIR}/src/ceph_ver.h
 DEPENDS ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_version
 )
 
 # this list ommits the ceph_ver.c file
 set (libcommon_files
-	${CMAKE_SOURCE_DIR}/src/ceph_ver.h
+	${CMAKE_BINARY_DIR}/src/ceph_ver.h
 	../ceph_ver.c 
 	../auth/AuthAuthorizeHandler.cc 
 	../auth/AuthClientHandler.cc 
@@ -126,7 +150,8 @@ set (libcommon_files
 	../common/ipaddr.cc 
 	../common/pick_address.cc
 	../include/addr_parsing.c 
-	${crush_files}
+#	${crush_files}
+	${cohort_common_files}
 )
 
 
@@ -147,7 +172,7 @@ include_directories("..")
 
 add_library (common ${libcommon_files})
 
-set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_SOURCE_DIR}/src/ceph_ver.h)
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/ceph_ver.h)
 
 add_dependencies(common check_version)
 
