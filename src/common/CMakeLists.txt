@@ -182,9 +182,6 @@ endif(${WITH_PROFILER})
 
 target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES}) 
 
-message( STATUS "libcommon is here" )
-
-
 
 
 

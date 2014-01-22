@@ -29,5 +29,3 @@ include_directories("..")
 add_library(osd ${osd_srcs})
 
 target_link_libraries(osd dl leveldb)
-
-message( STATUS "osd is here" )

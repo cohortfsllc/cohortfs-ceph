@@ -20,5 +20,3 @@ include_directories("..")
 add_library(client ${libclient_srcs})
 
 target_link_libraries(client osdc ${LIBEDIT_LIBS})
-
-message(STATUS "client is here")

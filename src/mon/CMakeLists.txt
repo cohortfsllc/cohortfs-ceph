@@ -1,5 +1,3 @@
-message( STATUS "libmon is here" )
-
 set (no_fun_mon_files
 	../mon/Monitor.cc 
 	../mon/PGMonitor.cc 
@@ -33,6 +31,3 @@ set(lib_mon_srcs
 include_directories("..")
 
 add_library(mon ${lib_mon_srcs})
-
-
-
