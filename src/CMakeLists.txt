@@ -65,8 +65,12 @@ add_subdirectory(mon)
 add_subdirectory(os)
 add_subdirectory(global)
 add_subdirectory(osd)
-add_subdirectory(mds)
-add_subdirectory(client)
+if(${WITH_MDS})
+  add_subdirectory(mds)
+endif(${WITH_MDS})
+if(${WITH_CLIENT})
+  add_subdirectory(client)
+endif(${WITH_CLIENT})
 
 if(${WITH_TCMALLOC})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
@@ -87,7 +91,7 @@ set(ceph_mon_srcs
 
 add_executable(ceph-mon ${ceph_mon_srcs})
 
-target_link_libraries(ceph-mon mon boost_thread common os global ${TCMALLOC_LIBS})
+target_link_libraries(ceph-mon mon boost_thread common os global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
 # osd
 set(ceph_osd_srcs
@@ -101,6 +105,7 @@ add_executable(ceph-osd ${ceph_osd_srcs})
 
 target_link_libraries(ceph-osd osd os global ${TCMALLOC_LIBS})
 
+if(${WITH_MDS})
 #mds
 set(ceph_mds_srcs
 	ceph_mds.cc
@@ -109,6 +114,7 @@ set(ceph_mds_srcs
 add_executable(ceph-mds ${ceph_mds_srcs})
 
 target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global ${TCMALLOC_LIBS} boost_thread)
+endif(${WITH_MDS})
 
 # admin tools
 
@@ -127,8 +133,10 @@ set(ceph_syn_srcs
 	client/SyntheticClient.cc
 )
 
-add_executable(ceph-syn ${ceph_syn_srcs})
-target_link_libraries(ceph-syn client global)
+if(${WITH_CLIENT})
+  add_executable(ceph-syn ${ceph_syn_srcs})
+  target_link_libraries(ceph-syn client global)
+endif(${WITH_CLIENT})
 
 #rados
 set(rados_srcs
@@ -139,7 +147,7 @@ set(rados_srcs
 	common/obj_bencher.cc
 )
 add_executable(rados ${rados_srcs})
-target_link_libraries(rados cls_lock librados global)
+target_link_libraries(rados cls_lock librados global ${CMAKE_DL_LIBS})
 
 #radosgw worry about option logic at a different time
 if(${WITH_RADOSGW})
@@ -169,7 +177,7 @@ set(librados_config_srcs
 )
 
 add_executable(librados-config ${librados_config_srcs})
-target_link_libraries(librados-config librados global)
+target_link_libraries(librados-config librados global ${CMAKE_DL_LIBS})
 
 
 #ceph-conf
@@ -193,8 +201,10 @@ set(crushtool_srcs
 	crushtool.cc
 )
 
-add_executable(crushtool ${crushtool_srcs})
-target_link_libraries(crushtool global)
+if (${WITH_CLIENT})
+  add_executable(crushtool ${crushtool_srcs})
+  target_link_libraries(crushtool global)
+endif (${WITH_CLIENT})
 
 #osdmaptool
 set(osdomaptool_srcs 
@@ -202,7 +212,7 @@ osdmaptool.cc
 )
 
 add_executable(osdmaptool  ${osdomaptool_srcs})
-target_link_libraries(osdmaptool global)
+target_link_libraries(osdmaptool global ${CMAKE_DL_LIBS})
 
 #ceph-authtool
 set(ceph_authtool_srcs
@@ -233,21 +243,29 @@ mon/MonitorStore.cc
 add_executable(ceph_mon_store_converter ${ceph_mon_store_converter_srcs})
 target_link_libraries(ceph_mon_store_converter os global)
 
+set (ceph_mds_bin)
+if (${WITH_MDS})
+       list(APPEND ceph_mds_bin ceph-mds)
+endif (${WITH_MDS})
+set (ceph_client_bin)
+if (${WITH_CLIENT})
+       list(APPEND ceph_client_bin ceph-syn crushtool)
+endif (${WITH_CLIENT})
+
 
 # add the install targets
 install(TARGETS
   ceph-mon
   ceph-osd
-  ceph-mds
+  ${ceph_mds_bin}
   cephfs
   ${ceph_fuse_bin}
-  ceph-syn
+  ${ceph_client_bin}
   rados
   librados-config
   ceph-conf
   monmaptool
   osdmaptool
-  crushtool
   ceph-authtool
   ceph_mon_store_converter
   DESTINATION bin)
