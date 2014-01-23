@@ -1,7 +1,10 @@
 set (no_fun_mon_files
-	../mon/Monitor.cc 
 	../mon/PGMonitor.cc 
 	../mon/PGMap.cc 
+)
+set (cohort_mon_files
+	../mon/Monitor.cc 
+	../mon/CohortOSDMonitor.cc
 )
 
 set(lib_mon_srcs
@@ -25,6 +28,7 @@ set(lib_mon_srcs
 	../mon/ConfigKeyService.cc 
 	../common/util.cc
 # ${no_fun_mon_files}
+${cohort_mon_files}
 )
 
 
