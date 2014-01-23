@@ -10,7 +10,7 @@
 #cmakedefine DARWIN 
 
 /* Define if you want C_Gather debugging */
-#cmakedefine DEBUG_GATHER 
+#cmakedefine DEBUG_GATHER 1
 
 /* Define if enabling coverage. */
 #cmakedefine ENABLE_COVERAGE
@@ -20,9 +20,6 @@
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #cmakedefine HAVE_ARPA_INET_H 1
-
-/* have boost::random::discrete_distribution */
-#cmakedefine HAVE_BOOST_RANDOM_DISCRETE_DISTRIBUTION
 
 /* Define to 1 if you have the <dirent.h> header file, and it defines `DIR'.
    */
@@ -45,20 +42,6 @@
 
 /* Defined if you don't have atomic_ops */
 #cmakedefine HAVE_LIBAIO
-
-/* Define to 1 if you have the `boost_system' library (-lboost_system). */
-#cmakedefine HAVE_LIBBOOST_SYSTEM 1
-
-/* Define to 1 if you have the `boost_system-mt' library (-lboost_system-mt).
-   */
-#cmakedefine HAVE_LIBBOOST_SYSTEM_MT 1
-
-/* Define to 1 if you have the `boost_thread' library (-lboost_thread). */
-#cmakedefine HAVE_LIBBOOST_THREAD 1
-
-/* Define to 1 if you have the `boost_thread-mt' library (-lboost_thread-mt).
-   */
-#cmakedefine HAVE_LIBBOOST_THREAD_MT 1
 
 /* Define if you have fuse */
 #cmakedefine HAVE_LIBFUSE
@@ -90,9 +73,6 @@
 /* Define if you have perftools profiler enabled */
 #cmakedefine HAVE_PROFILER
 
-/* Define if you have POSIX threads libraries and header files. */
-#cmakedefine HAVE_PTHREAD
-
 /* Define to 1 if you have the <stdint.h> header file. */
 #cmakedefine HAVE_STDINT_H 1
 
@@ -105,18 +85,11 @@
 /* Define to 1 if you have the <string.h> header file. */
 #cmakedefine HAVE_STRING_H 1
 
-/* Define to 1 if you have the `syncfs' function. */
-#cmakedefine HAVE_SYNCFS 1
-
 /* sync_file_range(2) is supported */
 #cmakedefine HAVE_SYNC_FILE_RANGE
 
 /* Define to 1 if you have the <syslog.h> header file. */
 #cmakedefine HAVE_SYSLOG_H 1
-
-/* Define to 1 if you have the <sys/dir.h> header file, and it defines `DIR'.
-   */
-#cmakedefine HAVE_SYS_DIR_H 1
 
 /* Define to 1 if you have the <sys/file.h> header file. */
 #cmakedefine HAVE_SYS_FILE_H 1
@@ -155,48 +128,8 @@
 /* Define to 1 if you have the <sys/vfs.h> header file. */
 #cmakedefine HAVE_SYS_VFS_H 1
 
-/* Define to 1 if you have <sys/wait.h> that is POSIX.1 compatible. */
-#cmakedefine HAVE_SYS_WAIT_H
-
-/* Define to 1 if you have the <sys/xattr.h> header file. */
-#cmakedefine HAVE_SYS_XATTR_H
-
-/* Define to 1 if you have the <unistd.h> header file. */
-#cmakedefine HAVE_UNISTD_H
-
-/* Define to 1 if you have the <utime.h> header file. */
-#cmakedefine HAVE_UTIME_H
-
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
-#cmakedefine LT_OBJDIR
-
 /* Defined if you do not have atomic_ops */
 #cmakedefine NO_ATOMIC_OPS
-
-/* Define to 1 if your C compiler doesn't accept -c and -o together. */
-#cmakedefine NO_MINUS_C_MINUS_O
-
-/* Name of package */
-#cmakedefine PACKAGE
-
-/* Define to the address where bug reports for this package should be sent. */
-#cmakedefine PACKAGE_BUGREPORT
-
-/* Define to the full name of this package. */
-#cmakedefine PACKAGE_NAME
-
-/* Define to the full name and version of this package. */
-#cmakedefine PACKAGE_STRING
-
-/* Define to the one symbol short name of this package. */
-#cmakedefine PACKAGE_TARNAME
-
-/* Define to the home page for this package. */
-#cmakedefine PACKAGE_URL
-
-/* Define to the version of this package. */
-#cmakedefine PACKAGE_VERSION
 
 /* Defined if you want pg ref debugging */
 #cmakedefine PG_DEBUG_REFS
@@ -205,17 +138,11 @@
    your system. */
 #cmakedefine PTHREAD_CREATE_JOINABLE
 
-/* Define to 1 if you have the ANSI C header files. */
-#cmakedefine STDC_HEADERS
-
 /* Define if using CryptoPP. */
 #cmakedefine USE_CRYPTOPP
 
 /* Define if using NSS. */
 #cmakedefine USE_NSS
-
-/* Version number of package */
-#cmakedefine VERSION
 
 /* define if radosgw enabled */
 #cmakedefine WITH_RADOSGW
