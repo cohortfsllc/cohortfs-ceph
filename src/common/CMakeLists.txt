@@ -1,13 +1,13 @@
-set (crush_files 
-	crush/builder.c 
-	crush/mapper.c 
-	crush/crush.c 
-	crush/hash.c 
-	crush/CrushWrapper.cc 
-	crush/CrushCompiler.cc 
+set (crush_files
+	crush/builder.c
+	crush/mapper.c
+	crush/crush.c
+	crush/hash.c
+	crush/CrushWrapper.cc
+	crush/CrushCompiler.cc
 	crush/CrushTester.cc
 )
-set (cohort_osd_files 
+set (cohort_osd_files
 	../cohort/CohortOSD.cc
 	../cohort/CohortOSD.h
 	../cohort/OSDVol.cc
@@ -15,11 +15,12 @@ set (cohort_osd_files
 	../cohort/VolLog.cc
 	../cohort/VolLog.h
 )
-set (cohort_librgw_files 
+set (cohort_librgw_files
 	cohort/CohortOSDMap.cc
 	cohort/CohortOSDMap.h
 )
-set (cohort_common_files 
+set (cohort_common_files
+	../cohort/CohortOSDMap.cc
 	../cohort/CohortPlaceSystem.cc
 	../cohort/CohortPlaceSystem.h
 	../cohort/CohortVolume.cc
@@ -28,9 +29,20 @@ set (cohort_common_files
 	../cohort/erasure.h
 	../vol/Volume.cc
 	../vol/Volume.h
+	../osd/PlaceSystem.cc
 )
 
-add_custom_target(check_version ALL ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_SOURCE_DIR}/src/.git_version 
+set (mds_files)
+if (${WITH_MDS})
+	list(APPEND mds_files
+		../mds/MDSMap.cc
+		../mds/inode_backtrace.cc
+		../mds/mdstypes.cc
+	)
+endif (${WITH_MDS})
+
+
+add_custom_target(check_version ALL ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_SOURCE_DIR}/src/.git_version
 COMMENT "ceph_ver.h is up to date")
 
 include_directories("${CMAKE_BINARY_DIR}/src")
@@ -52,104 +64,102 @@ DEPENDS ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_versio
 # this list ommits the ceph_ver.c file
 set (libcommon_files
 	${CMAKE_BINARY_DIR}/src/ceph_ver.h
-	../ceph_ver.c 
-	../auth/AuthAuthorizeHandler.cc 
-	../auth/AuthClientHandler.cc 
-	../auth/AuthSessionHandler.cc 
-	../auth/AuthMethodList.cc 
-	../auth/cephx/CephxAuthorizeHandler.cc 
-	../auth/cephx/CephxClientHandler.cc 
-	../auth/cephx/CephxProtocol.cc 
-	../auth/cephx/CephxSessionHandler.cc 
-	../auth/none/AuthNoneAuthorizeHandler.cc 
-	../auth/unknown/AuthUnknownAuthorizeHandler.cc 
-	../auth/Crypto.cc 
-	../auth/KeyRing.cc 
-	../auth/RotatingKeyRing.cc 
-	../common/DecayCounter.cc 
-	../common/LogClient.cc 
-	../common/LogEntry.cc 
-	../common/PrebufferedStreambuf.cc 
-	../common/BackTrace.cc 
-	../common/perf_counters.cc 
-	../common/Mutex.cc 
-	../common/OutputDataSocket.cc 
-	../common/admin_socket.cc 
-	../common/admin_socket_client.cc 
-	../common/cmdparse.cc 
-	../common/escape.c 
-	../common/Clock.cc 
-	../common/Throttle.cc 
-	../common/Timer.cc 
-	../common/Finisher.cc 
+	../ceph_ver.c
+	../auth/AuthAuthorizeHandler.cc
+	../auth/AuthClientHandler.cc
+	../auth/AuthSessionHandler.cc
+	../auth/AuthMethodList.cc
+	../auth/cephx/CephxAuthorizeHandler.cc
+	../auth/cephx/CephxClientHandler.cc
+	../auth/cephx/CephxProtocol.cc
+	../auth/cephx/CephxSessionHandler.cc
+	../auth/none/AuthNoneAuthorizeHandler.cc
+	../auth/unknown/AuthUnknownAuthorizeHandler.cc
+	../auth/Crypto.cc
+	../auth/KeyRing.cc
+	../auth/RotatingKeyRing.cc
+	../common/DecayCounter.cc
+	../common/LogClient.cc
+	../common/LogEntry.cc
+	../common/PrebufferedStreambuf.cc
+	../common/BackTrace.cc
+	../common/perf_counters.cc
+	../common/Mutex.cc
+	../common/OutputDataSocket.cc
+	../common/admin_socket.cc
+	../common/admin_socket_client.cc
+	../common/cmdparse.cc
+	../common/escape.c
+	../common/Clock.cc
+	../common/Throttle.cc
+	../common/Timer.cc
+	../common/Finisher.cc
 	../common/environment.cc
 	../common/sctp_crc32.c
-	../common/assert.cc 
-        ../common/run_cmd.cc 
-	../common/WorkQueue.cc 
-	../common/ConfUtils.cc 
-	../common/MemoryModel.cc 
-	../common/armor.c 
-	../common/fd.cc 
-	../common/xattr.c 
-	../common/safe_io.c 
-	../common/snap_types.cc 
-	../common/str_list.cc 
-	../common/errno.cc 
-	../json_spirit/json_spirit_reader.cpp 
-	../json_spirit/json_spirit_writer.cpp 
-	../json_spirit/json_spirit_value.cpp 
-	../log/Log.cc 
-	../log/SubsystemMap.cc 
-	../mon/MonCap.cc 
-	../mon/MonClient.cc 
+	../common/assert.cc
+        ../common/run_cmd.cc
+	../common/WorkQueue.cc
+	../common/ConfUtils.cc
+	../common/MemoryModel.cc
+	../common/armor.c
+	../common/fd.cc
+	../common/xattr.c
+	../common/safe_io.c
+	../common/snap_types.cc
+	../common/str_list.cc
+	../common/errno.cc
+	../json_spirit/json_spirit_reader.cpp
+	../json_spirit/json_spirit_writer.cpp
+	../json_spirit/json_spirit_value.cpp
+	../log/Log.cc
+	../log/SubsystemMap.cc
+	../mon/MonCap.cc
+	../mon/MonClient.cc
 	../mon/MonMap.cc
-	../msg/Accepter.cc 
-	../msg/DispatchQueue.cc 
-	../msg/Message.cc 
-	../common/RefCountedObj.cc 
-	../msg/Messenger.cc 
-	../msg/Pipe.cc 
-	../msg/SimpleMessenger.cc 
-	../msg/msg_types.cc 
-	../os/hobject.cc 
-	../osd/OSDMap.cc 
-	../osd/osd_types.cc 
-	../mds/MDSMap.cc 
-	../mds/inode_backtrace.cc 
-	../mds/mdstypes.cc 
-	../common/blkdev.cc 
-	../common/common_init.cc 
-	../common/pipe.c 
-	../common/ceph_argparse.cc 
-	../common/ceph_context.cc 
-	../common/buffer.cc 
-	../common/code_environment.cc 
-	../common/dout.cc 
-	../common/signal.cc 
-	../common/simple_spin.cc 
-	../common/Thread.cc 
-	../common/Formatter.cc 
-	../common/HeartbeatMap.cc 
-	../include/ceph_fs.cc 
-	../include/ceph_hash.cc 
-	../include/ceph_strings.cc 
+	../msg/Accepter.cc
+	../msg/DispatchQueue.cc
+	../msg/Message.cc
+	../common/RefCountedObj.cc
+	../msg/Messenger.cc
+	../msg/Pipe.cc
+	../msg/SimpleMessenger.cc
+	../msg/msg_types.cc
+	../os/hobject.cc
+	../osd/OSDMap.cc
+	../osd/osd_types.cc
+#	${mds_files}
+	../common/blkdev.cc
+	../common/common_init.cc
+	../common/pipe.c
+	../common/ceph_argparse.cc
+	../common/ceph_context.cc
+	../common/buffer.cc
+	../common/code_environment.cc
+	../common/dout.cc
+	../common/signal.cc
+	../common/simple_spin.cc
+	../common/Thread.cc
+	../common/Formatter.cc
+	../common/HeartbeatMap.cc
+	../include/ceph_fs.cc
+	../include/ceph_hash.cc
+	../include/ceph_strings.cc
 	../include/ceph_frag.cc
-	../common/config.cc 
-	../common/utf8.c 
-	../common/mime.c 
-	../common/strtol.cc 
-	../common/page.cc 
-	../common/lockdep.cc 
-	../common/version.cc 
-	../common/hex.cc 
-	../common/entity_name.cc 
-	../common/ceph_crypto.cc 
-	../common/ceph_crypto_cms.cc 
-	../common/ceph_json.cc 
-	../common/ipaddr.cc 
+	../common/config.cc
+	../common/utf8.c
+	../common/mime.c
+	../common/strtol.cc
+	../common/page.cc
+	../common/lockdep.cc
+	../common/version.cc
+	../common/hex.cc
+	../common/entity_name.cc
+	../common/ceph_crypto.cc
+	../common/ceph_crypto_cms.cc
+	../common/ceph_json.cc
+	../common/ipaddr.cc
 	../common/pick_address.cc
-	../include/addr_parsing.c 
+	../include/addr_parsing.c
 #	${crush_files}
 	${cohort_common_files}
 )
@@ -163,7 +173,7 @@ if (${WITH_PROFILER})
 else ()
   set (libcommon_files
 	../perfglue/disabled_stubs.cc
-	${libcommon_files}) 
+	${libcommon_files})
 endif (${WITH_PROFILER})
 
 add_definitions("-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE")
@@ -180,7 +190,7 @@ if (${WITH_PROFILER})
   target_link_libraries(common profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES}) 
+target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES})
 
 
 
