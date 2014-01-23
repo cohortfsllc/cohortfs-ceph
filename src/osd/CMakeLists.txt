@@ -10,6 +10,7 @@ set (cohort_osd_files
 	../cohort/OSDVol.h
 	../cohort/VolLog.cc
 	../cohort/VolLog.h
+	../mon/Monitor.cc
 )
 
 set(osd_srcs
