@@ -71,6 +71,9 @@ endif(${WITH_MDS})
 if(${WITH_CLIENT})
   add_subdirectory(client)
 endif(${WITH_CLIENT})
+if(${WITH_KVS})
+  add_subdirectory(key_value_store)
+endif(${WITH_KVS})
 
 if(${WITH_TCMALLOC})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
@@ -83,7 +86,7 @@ endif(${WITH_TCMALLOC})
 include_directories(".")
 
 #monitor
-set(ceph_mon_srcs 
+set(ceph_mon_srcs
 	ceph_mon.cc
 	common/TextTable.cc
 	${TCMALLOC_srcs}
@@ -95,8 +98,8 @@ target_link_libraries(ceph-mon mon boost_thread common os global ${CMAKE_DL_LIBS
 
 # osd
 set(ceph_osd_srcs
-	ceph_osd.cc 
-	objclass/class_debug.cc 
+	ceph_osd.cc
+	objclass/class_debug.cc
 	objclass/class_api.cc
 	${TCMALLOC_srcs}
 )
@@ -119,7 +122,7 @@ endif(${WITH_MDS})
 # admin tools
 
 #cephfs
-set(cephfs_srcs 
+set(cephfs_srcs
 	cephfs.cc
 )
 
@@ -129,7 +132,7 @@ target_link_libraries(cephfs common)
 
 # synthetic client
 set(ceph_syn_srcs
-	ceph_syn.cc 
+	ceph_syn.cc
 	client/SyntheticClient.cc
 )
 
@@ -140,10 +143,10 @@ endif(${WITH_CLIENT})
 
 #rados
 set(rados_srcs
-	rados.cc 
-	rados_import.cc 
-	rados_export.cc 
-	rados_sync.cc 
+	rados.cc
+	rados_import.cc
+	rados_export.cc
+	rados_sync.cc
 	common/obj_bencher.cc
 )
 add_executable(rados ${rados_srcs})
@@ -152,16 +155,16 @@ target_link_libraries(rados cls_lock librados global ${CMAKE_DL_LIBS})
 #radosgw worry about option logic at a different time
 if(${WITH_RADOSGW})
 set(radosgw_srcs
-	rgw/rgw_resolve.cc 
-        rgw/rgw_rest.cc 
-        rgw/rgw_rest_swift.cc 
-        rgw/rgw_rest_s3.cc 
-        rgw/rgw_rest_usage.cc 
-        rgw/rgw_rest_user.cc 
-        rgw/rgw_rest_bucket.cc 
-        rgw/rgw_http_client.cc 
-        rgw/rgw_swift.cc 
-	rgw/rgw_swift_auth.cc 
+	rgw/rgw_resolve.cc
+        rgw/rgw_rest.cc
+        rgw/rgw_rest_swift.cc
+        rgw/rgw_rest_s3.cc
+        rgw/rgw_rest_usage.cc
+        rgw/rgw_rest_user.cc
+        rgw/rgw_rest_bucket.cc
+        rgw/rgw_http_client.cc
+        rgw/rgw_swift.cc
+	rgw/rgw_swift_auth.cc
 	rgw/rgw_main.cc
 )
 
@@ -173,7 +176,7 @@ endif(${WITH_RADOSGW})
 
 #librados_config_srcs
 set(librados_config_srcs
-	librados-config.cc 
+	librados-config.cc
 )
 
 add_executable(librados-config ${librados_config_srcs})
@@ -207,7 +210,7 @@ if (${WITH_CLIENT})
 endif (${WITH_CLIENT})
 
 #osdmaptool
-set(osdomaptool_srcs 
+set(osdomaptool_srcs
 osdmaptool.cc
 )
 
