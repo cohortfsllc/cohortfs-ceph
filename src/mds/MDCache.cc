@@ -5118,7 +5118,7 @@ int MDCache::path_traverse(MDRequest *mdr, Message *req, Context *fin,     // wh
       return 1;
     }
 
-    __u32 dnhash = placement->hash_dentry_name(path[depth]);
+    __u64 dnhash = placement->hash_dentry_name(path[depth]);
     stripeid_t stripeid = placement->pick_stripe(dnhash);
     CDirStripe *curstripe = placement->get_stripe(stripeid);
     if (!curstripe) {
@@ -5392,7 +5392,7 @@ bool MDCache::path_is_mine(filepath& path)
 
     assert(cur->is_dir());
     CDirPlacement *placement = cur->get_placement();
-    __u32 dnhash = placement->hash_dentry_name(path[i]);
+    __u64 dnhash = placement->hash_dentry_name(path[i]);
     stripeid_t stripeid = placement->pick_stripe(dnhash);
     CDirStripe *stripe = placement->get_stripe(stripeid);
     if (!stripe)
@@ -5432,7 +5432,7 @@ CInode *MDCache::cache_traverse(const filepath& fp)
 
     assert(in->is_dir());
     CDirPlacement *placement = in->get_placement();
-    __u32 dnhash = placement->hash_dentry_name(dname);
+    __u64 dnhash = placement->hash_dentry_name(dname);
     stripeid_t stripeid = placement->pick_stripe(dnhash);
     CDirStripe *stripe = placement->get_stripe(stripeid);
     if (!stripe)

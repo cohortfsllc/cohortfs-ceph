@@ -165,7 +165,7 @@ CDentry* CDirFrag::add_null_dentry(const string& dname,
   assert(lookup_exact_snap(dname, last) == 0);
    
   // create dentry
-  __u32 dnhash = get_placement()->hash_dentry_name(dname);
+  __u64 dnhash = get_placement()->hash_dentry_name(dname);
   CDentry* dn = new CDentry(dname, dnhash, first, last);
   if (is_auth()) 
     dn->state_set(CDentry::STATE_AUTH);
@@ -207,7 +207,7 @@ CDentry* CDirFrag::add_primary_dentry(const string& dname, CInode *in,
   assert(lookup_exact_snap(dname, last) == 0);
   
   // create dentry
-  __u32 dnhash = get_placement()->hash_dentry_name(dname);
+  __u64 dnhash = get_placement()->hash_dentry_name(dname);
   CDentry* dn = new CDentry(dname, dnhash, first, last);
   if (is_auth()) 
     dn->state_set(CDentry::STATE_AUTH);
@@ -253,7 +253,7 @@ CDentry* CDirFrag::add_remote_dentry(const string& dname, inodeno_t ino, unsigne
   assert(lookup_exact_snap(dname, last) == 0);
 
   // create dentry
-  __u32 dnhash = get_placement()->hash_dentry_name(dname);
+  __u64 dnhash = get_placement()->hash_dentry_name(dname);
   CDentry* dn = new CDentry(dname, dnhash, ino, d_type, first, last);
   if (is_auth()) 
     dn->state_set(CDentry::STATE_AUTH);

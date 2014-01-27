@@ -1703,7 +1703,7 @@ CDirFrag *Server::validate_dentry_dir(MDRequest *mdr, CInode *diri, const string
   }
 
   // XXX: avoid taking the hash when stripe count is 1 and fragtree is empty
-  __u32 dnhash = placement->hash_dentry_name(dname);
+  __u64 dnhash = placement->hash_dentry_name(dname);
   int stripeid = placement->pick_stripe(dnhash);
   CDirStripe *stripe = try_open_auth_stripe(placement, stripeid, mdr);
   if (!stripe)

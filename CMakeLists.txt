@@ -128,6 +128,8 @@ endif(CRYPTOPP_FOUND)
 #option for RGW
 option(WITH_RADOSGW "Rados Gateway is enabled" ON)
 
+find_package(CityHash REQUIRED)
+
 # Now create a useable config.h
 configure_file(
   ${PROJECT_SOURCE_DIR}/src/include/config-h.in.cmake

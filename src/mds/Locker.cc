@@ -2420,7 +2420,7 @@ void Locker::process_request_cap_release(MDRequest *mdr, client_t client, const 
 
   if (dname.length()) {
     CDirPlacement *placement = in->get_placement();
-    __u32 dnhash = placement->hash_dentry_name(dname);
+    __u64 dnhash = placement->hash_dentry_name(dname);
     stripeid_t stripeid = placement->pick_stripe(dnhash);
     CDirStripe *stripe = placement->get_stripe(stripeid);
     if (stripe) {
@@ -2940,7 +2940,7 @@ void Locker::handle_client_lease(MClientLease *m)
   }
 
   CDirPlacement *placement = in->get_placement();
-  __u32 dnhash = placement->hash_dentry_name(m->dname);
+  __u64 dnhash = placement->hash_dentry_name(m->dname);
   stripeid_t stripeid = placement->pick_stripe(dnhash);
   CDirStripe *stripe = placement->get_stripe(stripeid);
   if (!stripe) {

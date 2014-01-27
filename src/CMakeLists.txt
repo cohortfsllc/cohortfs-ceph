@@ -97,13 +97,15 @@ add_executable(ceph-osd ${ceph_osd_srcs})
 target_link_libraries(ceph-osd osd os global ${TCMALLOC_LIBS})
 
 #mds
+include_directories(${CITYHASH_INCLUDE_DIR})
+
 set(ceph_mds_srcs
 	ceph_mds.cc
 	${TCMALLOC_srcs}
 )
 add_executable(ceph-mds ${ceph_mds_srcs})
 
-target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global ${TCMALLOC_LIBS} boost_thread)
+target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global ${TCMALLOC_LIBS} boost_thread ${CITYHASH_LIBRARIES})
 
 # admin tools
 

@@ -14,6 +14,7 @@
 
 
 #include "include/types.h"
+#include "city.h"
 
 #include "CDirPlacement.h"
 #include "CDirStripe.h"
@@ -106,24 +107,21 @@ CDirPlacement::CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
   layout.dl_dir_hash = g_conf->mds_default_dir_hash;
 }
 
-__u32 CDirPlacement::hash_dentry_name(const string &dn)
-{ 
-  int which = layout.dl_dir_hash; 
-  if (!which) 
-    which = CEPH_STR_HASH_LINUX;
-  return ceph_str_hash(which, dn.data(), dn.length());
+__u64 CDirPlacement::hash_dentry_name(const string &dn)
+{
+  return CityHash64WithSeed(dn.data(), dn.length(), 0);
 }
 
-stripeid_t CDirPlacement::pick_stripe(__u32 dnhash)
+stripeid_t CDirPlacement::pick_stripe(__u64 dnhash)
 {
   return stripeid_t(dnhash % stripe_auth.size());
-} 
+}
 
 stripeid_t CDirPlacement::pick_stripe(const string &dname)
 {
   if (stripe_auth.size() == 1)
     return 0;
-  __u32 dnhash = hash_dentry_name(dname);
+  __u64 dnhash = hash_dentry_name(dname);
   return stripeid_t(dnhash % stripe_auth.size());
 }
 

@@ -221,7 +221,7 @@ frag_t CDirStripe::pick_dirfrag(const string& dn)
   if (dirfragtree.empty())
     return frag_t();          // avoid the string hash if we can.
 
-  __u32 h = get_placement()->hash_dentry_name(dn);
+  __u64 h = get_placement()->hash_dentry_name(dn);
   return dirfragtree[h];
 }
 
