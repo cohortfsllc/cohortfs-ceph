@@ -662,8 +662,9 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
       ldout(cct, 15) << " setting dn offset to " << dn->offset << dendl;
     }
   }
-  if (old_dentry) { // keep dir open if its the same dir
+  if (old_dentry && old_dentry->stripe) {
     assert(dn != old_dentry);
+    // keep dir open if its the same dir
     old_dentry->stripe->unlink(old_dentry, stripe == old_dentry->stripe);
   }
 
@@ -932,7 +933,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
 int Client::choose_target_mds(MetaRequest *req) 
 {
   int mds = -1;
-  __u32 hash = 0;
+  __u64 hash = 0;
   bool is_hash = false;
 
   Inode *in = NULL;
@@ -954,12 +955,9 @@ int Client::choose_target_mds(MetaRequest *req)
   if (in) {
     ldout(cct, 20) << "choose_target_mds starting with req->inode " << *in << dendl;
     if (req->path.depth()) {
-      hash = ceph_str_hash(in->dir_layout.dl_dir_hash,
-			   req->path[0].data(),
-			   req->path[0].length());
-      ldout(cct, 20) << "choose_target_mds inode dir hash is " << (int)in->dir_layout.dl_dir_hash
-	       << " on " << req->path[0]
-	       << " => " << hash << dendl;
+      hash = in->hash_dentry_name(req->path[0]);
+      ldout(cct, 20) << "choose_target_mds inode dir hash on "
+	       << req->path[0] << " => " << hash << dendl;
       is_hash = true;
     }
   } else if (de) {
@@ -969,12 +967,9 @@ int Client::choose_target_mds(MetaRequest *req)
       ldout(cct, 20) << "choose_target_mds starting with req->dentry inode " << *in << dendl;
     } else {
       in = de->stripe->parent_inode;
-      hash = ceph_str_hash(in->dir_layout.dl_dir_hash,
-			   de->name.data(),
-			   de->name.length());
-      ldout(cct, 20) << "choose_target_mds dentry dir hash is " << (int)in->dir_layout.dl_dir_hash
-	       << " on " << de->name
-	       << " => " << hash << dendl;
+      hash = in->hash_dentry_name(de->name);
+      ldout(cct, 20) << "choose_target_mds dentry dir hash on "
+	       << req->path[0] << " => " << hash << dendl;
       is_hash = true;
     }
   }

@@ -8,6 +8,7 @@
 #include "DirStripe.h"
 #include "ClientSnapRealm.h"
 #include "messages/MClientCaps.h"
+#include "city.h"
 
 #define dout_subsys ceph_subsys_client
 
@@ -299,11 +300,19 @@ bool Inode::have_valid_size()
   return false;
 }
 
-stripeid_t Inode::pick_stripe(const string &dname)
+__u64 Inode::hash_dentry_name(const string &dname) const
 {
-  __u32 dnhash = ceph_str_hash(dir_layout.dl_dir_hash,
-                               dname.data(), dname.length());
+  return CityHash64WithSeed(dname.data(), dname.length(), 0);
+}
+
+stripeid_t Inode::pick_stripe(__u64 dnhash) const
+{
   return stripeid_t(dnhash % stripe_auth.size());
+}
+
+stripeid_t Inode::pick_stripe(const string &dname) const
+{
+  return pick_stripe(hash_dentry_name(dname));
 }
 
 // open DirStripe for an inode.  if it's not open, allocate it (and pin dentry in memory).

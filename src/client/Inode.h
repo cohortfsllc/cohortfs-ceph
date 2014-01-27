@@ -231,7 +231,9 @@ class Inode : public CapObject, public LRUObject {
                         unsigned issued);
 
   bool have_valid_size();
-  stripeid_t pick_stripe(const string &dname);
+  __u64 hash_dentry_name(const string &dname) const;
+  stripeid_t pick_stripe(__u64 dnhash) const;
+  stripeid_t pick_stripe(const string &dname) const;
   DirStripe *open_stripe(stripeid_t stripeid);
   void close_stripe(DirStripe *stripe);
 

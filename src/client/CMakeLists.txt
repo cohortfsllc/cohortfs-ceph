@@ -19,7 +19,7 @@ set(libclient_srcs
 
 add_library(client ${libclient_srcs})
 
-target_link_libraries(client osdc ${LIBEDIT_LIBS})
+target_link_libraries(client osdc ${LIBEDIT_LIBS} ${CITYHASH_LIBRARIES})
 
 # libcephfs
 if (WITH_LIBCEPHFS)
