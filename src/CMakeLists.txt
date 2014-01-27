@@ -21,7 +21,6 @@ set(sbindir ${CMAKE_INSTALL_PREFIX}/sbin)
 set(libdir ${CMAKE_INSTALL_PREFIX}/lib)
 set(sysconfdir ${CMAKE_INSTALL_PREFIX}/etc)
 set(pkgdatadir ${CMAKE_INSTALL_PREFIX}/share)
-#double check with someone that pkgdatadir is correct
 set(prefix ${CMAKE_INSTALL_PREFIX})
 set(GCOV_PREFIX_STRIP 4)
 
@@ -56,9 +55,7 @@ COMMAND chmod 755 ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph ${C
 DEPENDS ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph
 COMMENT "Shell Scripts have permission")
 
-add_subdirectory(common)
 add_subdirectory(osdc)
-add_subdirectory(cls/lock)
 add_subdirectory(librados)
 add_subdirectory(rgw)
 add_subdirectory(mon)
@@ -71,9 +68,6 @@ endif(${WITH_MDS})
 if(${WITH_CLIENT})
   add_subdirectory(client)
 endif(${WITH_CLIENT})
-if(${WITH_KVS})
-  add_subdirectory(key_value_store)
-endif(${WITH_KVS})
 
 if(${WITH_TCMALLOC})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
@@ -84,6 +78,204 @@ else()
 endif(${WITH_TCMALLOC})
 
 include_directories(".")
+
+set (crush_files
+	crush/builder.c
+	crush/mapper.c
+	crush/crush.c
+	crush/hash.c
+	crush/CrushWrapper.cc
+	crush/CrushCompiler.cc
+	crush/CrushTester.cc
+)
+#set (cohort_osd_files
+#	cohort/CohortOSD.cc
+#	cohort/CohortOSD.h
+#	cohort/OSDVol.cc
+#	cohort/OSDVol.h
+#	cohort/VolLog.cc
+#	cohort/VolLog.h
+#)
+#set (cohort_librgw_files
+#	cohort/CohortOSDMap.cc
+#	cohort/CohortOSDMap.h
+#)
+set (cohort_common_files
+	cohort/CohortOSDMap.cc
+	cohort/CohortPlaceSystem.cc
+	cohort/CohortPlaceSystem.h
+	cohort/CohortVolume.cc
+	cohort/CohortVolume.h
+	cohort/erasure.cc
+	cohort/erasure.h
+	vol/Volume.cc
+	vol/Volume.h
+	osd/PlaceSystem.cc
+)
+
+set (mds_files)
+if (${WITH_MDS})
+	list(APPEND mds_files
+		../mds/MDSMap.cc
+		../mds/inode_backtrace.cc
+		../mds/mdstypes.cc
+	)
+endif (${WITH_MDS})
+
+
+add_custom_target(check_version ALL ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_SOURCE_DIR}/src/.git_version
+COMMENT "ceph_ver.h is up to date")
+
+include_directories("${CMAKE_BINARY_DIR}/src")
+
+add_custom_command(
+PRE_BUILD
+OUTPUT ${CMAKE_SOURCE_DIR}/src/.git_version
+COMMAND ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_SOURCE_DIR}/src/.git_version
+DEPENDS ${CMAKE_SOURCE_DIR}/src/check_version
+)
+
+add_custom_command(
+PRE_BUILD
+OUTPUT ${CMAKE_BINARY_DIR}/src/ceph_ver.h
+COMMAND ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_version ${CMAKE_BINARY_DIR}/src/ceph_ver.h
+DEPENDS ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_version
+)
+
+# this list ommits the ceph_ver.c file
+set (libcommon_files
+	${CMAKE_BINARY_DIR}/src/ceph_ver.h
+	ceph_ver.c
+	auth/AuthAuthorizeHandler.cc
+	auth/AuthClientHandler.cc
+	auth/AuthSessionHandler.cc
+	auth/AuthMethodList.cc
+	auth/cephx/CephxAuthorizeHandler.cc
+	auth/cephx/CephxClientHandler.cc
+	auth/cephx/CephxProtocol.cc
+	auth/cephx/CephxSessionHandler.cc
+	auth/none/AuthNoneAuthorizeHandler.cc
+	auth/unknown/AuthUnknownAuthorizeHandler.cc
+	auth/Crypto.cc
+	auth/KeyRing.cc
+	auth/RotatingKeyRing.cc
+	common/DecayCounter.cc
+	common/LogClient.cc
+	common/LogEntry.cc
+	common/PrebufferedStreambuf.cc
+	common/BackTrace.cc
+	common/perf_counters.cc
+	common/Mutex.cc
+	common/OutputDataSocket.cc
+	common/admin_socket.cc
+	common/admin_socket_client.cc
+	common/cmdparse.cc
+	common/escape.c
+	common/Clock.cc
+	common/Throttle.cc
+	common/Timer.cc
+	common/Finisher.cc
+	common/environment.cc
+	common/sctp_crc32.c
+	common/assert.cc
+        common/run_cmd.cc
+	common/WorkQueue.cc
+	common/ConfUtils.cc
+	common/MemoryModel.cc
+	common/armor.c
+	common/fd.cc
+	common/xattr.c
+	common/safe_io.c
+	common/snap_types.cc
+	common/str_list.cc
+	common/errno.cc
+	json_spirit/json_spirit_reader.cpp
+	json_spirit/json_spirit_writer.cpp
+	json_spirit/json_spirit_value.cpp
+	log/Log.cc
+	log/SubsystemMap.cc
+	mon/MonCap.cc
+	mon/MonClient.cc
+	mon/MonMap.cc
+	msg/Accepter.cc
+	msg/DispatchQueue.cc
+	msg/Message.cc
+	common/RefCountedObj.cc
+	msg/Messenger.cc
+	msg/Pipe.cc
+	msg/SimpleMessenger.cc
+	msg/msg_types.cc
+	os/hobject.cc
+	osd/OSDMap.cc
+	osd/osd_types.cc
+#	${mds_files}
+	common/blkdev.cc
+	common/common_init.cc
+	common/pipe.c
+	common/ceph_argparse.cc
+	common/ceph_context.cc
+	common/buffer.cc
+	common/code_environment.cc
+	common/dout.cc
+	common/signal.cc
+	common/simple_spin.cc
+	common/Thread.cc
+	common/Formatter.cc
+	common/HeartbeatMap.cc
+	include/ceph_fs.cc
+	include/ceph_hash.cc
+	include/ceph_strings.cc
+	include/ceph_frag.cc
+	common/config.cc
+	common/utf8.c
+	common/mime.c
+	common/strtol.cc
+	common/page.cc
+	common/lockdep.cc
+	common/version.cc
+	common/hex.cc
+	common/entity_name.cc
+	common/ceph_crypto.cc
+	common/ceph_crypto_cms.cc
+	common/ceph_json.cc
+	common/ipaddr.cc
+	common/pick_address.cc
+	include/addr_parsing.c
+#	${crush_files}
+	${cohort_common_files}
+)
+
+
+if (${WITH_PROFILER})
+  list(APPEND libcommon_files perfglue/cpu_profiler.cc)
+else ()
+  list(APPEND libcommon_files perfglue/disabled_stubs.cc)
+endif (${WITH_PROFILER})
+
+
+add_library (common ${libcommon_files})
+
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/ceph_ver.h)
+
+add_dependencies(common check_version)
+
+if (${WITH_PROFILER})
+  target_link_libraries(common profiler)
+endif(${WITH_PROFILER})
+
+target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES})
+
+# cls/lock
+set(cls_lock_files
+	cls/lock/cls_lock_client.cc  
+	cls/lock/cls_lock_types.cc 
+	cls/lock/cls_lock_ops.cc
+)
+add_library(x_cls_lock OBJECT ${cls_lock_files})
+add_library(cls_lock_shared SHARED $<TARGET_OBJECTS:x_cls_lock>)
+add_library(cls_lock_static STATIC $<TARGET_OBJECTS:x_cls_lock>)
+set_target_properties(cls_lock_shared PROPERTIES OUTPUT_NAME cls_lock VERSION "1.0.0" SOVERSION "1")
+set_target_properties(cls_lock_static PROPERTIES OUTPUT_NAME cls_lock)
 
 #monitor
 set(ceph_mon_srcs
@@ -150,7 +342,31 @@ set(rados_srcs
 	common/obj_bencher.cc
 )
 add_executable(rados ${rados_srcs})
-target_link_libraries(rados cls_lock librados global ${CMAKE_DL_LIBS})
+target_link_libraries(rados cls_lock_shared librados global ${CMAKE_DL_LIBS})
+
+if(${WITH_RBD})
+#rbd
+set(rbd_srcs
+        librbd/librbd.cc
+        librbd/AioCompletion.cc
+        librbd/AioRequest.cc
+        cls/rbd/cls_rbd_client.cc
+        librbd/ImageCtx.cc
+        librbd/internal.cc
+        librbd/LibrbdWriteback.cc
+        librbd/WatchCtx.cc
+        osdc/ObjectCacher.cc
+        osdc/Striper.cc
+        librados/snap_set_diff.cc
+        common/util.cc
+)
+add_library(rbd OBJECT ${rbd_srcs})
+add_library(rbd_shared SHARED $<TARGET_OBJECTS:rbd> $<TARGET_OBJECTS:x_cls_lock>)
+add_library(rbd_static STATIC $<TARGET_OBJECTS:rbd> $<TARGET_OBJECTS:x_cls_lock>)
+target_link_libraries(rbd_shared ${CMAKE_DL_LIBS})
+set_target_properties(rbd_shared PROPERTIES OUTPUT_NAME rbd VERSION "1.0.0" SOVERSION "1")
+set_target_properties(rbd_static PROPERTIES OUTPUT_NAME rbd)
+endif(${WITH_RBD})
 
 #radosgw worry about option logic at a different time
 if(${WITH_RADOSGW})
@@ -245,6 +461,16 @@ mon/MonitorStore.cc
 
 add_executable(ceph_mon_store_converter ${ceph_mon_store_converter_srcs})
 target_link_libraries(ceph_mon_store_converter os global)
+
+#kvs
+if(${WITH_KVS})
+set(kvs_srcs
+	key_value_store/cls_kvs.cc
+)
+
+add_library(cls_kvs ${kvs_srcs})
+
+endif(${WITH_KVS})
 
 set (ceph_mds_bin)
 if (${WITH_MDS})
