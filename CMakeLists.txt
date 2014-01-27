@@ -90,6 +90,12 @@ option(WITH_MDS "MDS is here" ON)
 # needs mds and? XXX
 option(WITH_CLIENT "Client is here" ON)
 
+# key-value store
+option(WITH_KVS "Key value store is here" ON)
+
+# remote block storage
+option(WITH_RBD "Remote block storage is here" ON)
+
 option(WITH_LEVELDB "LevelDB is here" ON)
 if(${WITH_LEVELDB})
 find_package(leveldb)
