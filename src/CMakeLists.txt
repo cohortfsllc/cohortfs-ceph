@@ -6,14 +6,15 @@ set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wno-invalid-offsetof -Wnon-virtual-dtor -
 
 add_definitions("${AM_COMMON_FLAGS}")
 
-set(EXTRALIBS uuid rt profiler)
+set(EXTRALIBS uuid rt)
+if(${WITH_PROFILER})
+  list(APPEND EXTRALIBS profiler)
+endif(${WITH_PROFILER})
 
 set(CRYPTO_LIBS cryptopp)
 
 if(${HAVE_ATOMIC_OPS})
-  set(EXTRALIBS
-	atomic_ops
-	${EXTRALIBS})
+  list(APPEND EXTRALIBS atomic_ops)
 endif(${HAVE_ATOMIC_OPS})
 
 set(bindir ${CMAKE_INSTALL_PREFIX}/bin)
@@ -55,12 +56,8 @@ COMMAND chmod 755 ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph ${C
 DEPENDS ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph
 COMMENT "Shell Scripts have permission")
 
-add_subdirectory(osdc)
-add_subdirectory(librados)
 add_subdirectory(rgw)
-add_subdirectory(mon)
 add_subdirectory(os)
-add_subdirectory(global)
 add_subdirectory(osd)
 if(${WITH_MDS})
   add_subdirectory(mds)
@@ -79,6 +76,71 @@ endif(${WITH_TCMALLOC})
 
 include_directories(".")
 
+##########################################
+
+# osdc
+set(osdc_files
+	osdc/Objecter.cc 
+	osdc/ObjectCacher.cc 
+	osdc/Filer.cc 
+	osdc/Striper.cc
+)
+
+add_library(osdc ${CEPH_SHARED} ${osdc_files})
+
+# mon
+set (no_fun_mon_files
+	mon/PGMonitor.cc 
+	mon/PGMap.cc 
+)
+set (cohort_mon_files
+	mon/Monitor.cc 
+	mon/CohortOSDMonitor.cc
+)
+
+set(lib_mon_srcs
+	auth/cephx/CephxKeyServer.cc 
+	auth/cephx/CephxServiceHandler.cc 
+#X	auth/cephx/CephxSessionHandler.cc 
+	auth/AuthServiceHandler.cc 
+#X	auth/AuthSessionHandler.cc 
+	mon/Paxos.cc 
+	mon/PaxosService.cc 
+	mon/OSDMonitor.cc 
+#X	mon/MDSMonitor.cc 
+	mon/MonmapMonitor.cc 
+	mon/LogMonitor.cc 
+	mon/AuthMonitor.cc 
+	mon/Elector.cc 
+	mon/MonitorStore.cc 
+#X	os/LevelDBStore.cc 
+	mon/HealthMonitor.cc 
+	mon/DataHealthService.cc 
+	mon/ConfigKeyService.cc 
+#X	common/util.cc
+# ${no_fun_mon_files}
+	${cohort_mon_files}
+)
+
+add_library(mon ${CEPH_SHARED} ${lib_mon_srcs})
+
+# global
+set(libglobal_srcs
+	global/global_init.cc 
+	global/pidfile.cc 
+	global/signal_handler.cc
+)
+set(global_common_files
+	global/global_context.cc 
+)
+add_library(global_common_objs OBJECT ${global_common_files})
+add_library(global ${CEPH_SHARED} ${libglobal_srcs} $<TARGET_OBJECTS:global_common_objs>)
+target_link_libraries(global common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
+if(${ENABLE_SHARED})
+  set_target_properties(global PROPERTIES OUTPUT_NAME ceph-global VERSION "1.0.0" SOVERSION "1")
+endif(${ENABLE_SHARED})
+
+# common
 set (crush_files
 	crush/builder.c
 	crush/mapper.c
@@ -252,8 +314,11 @@ else ()
   list(APPEND libcommon_files perfglue/disabled_stubs.cc)
 endif (${WITH_PROFILER})
 
+if(${ENABLE_SHARED})
+  list(APPEND libcommon_files $<TARGET_OBJECTS:global_common_objs>)
+endif(${ENABLE_SHARED})
 
-add_library (common ${libcommon_files})
+add_library (common ${CEPH_SHARED} ${libcommon_files})
 
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/ceph_ver.h)
 
@@ -271,11 +336,11 @@ set(cls_lock_files
 	cls/lock/cls_lock_types.cc 
 	cls/lock/cls_lock_ops.cc
 )
-add_library(x_cls_lock OBJECT ${cls_lock_files})
-add_library(cls_lock_shared SHARED $<TARGET_OBJECTS:x_cls_lock>)
-add_library(cls_lock_static STATIC $<TARGET_OBJECTS:x_cls_lock>)
-set_target_properties(cls_lock_shared PROPERTIES OUTPUT_NAME cls_lock VERSION "1.0.0" SOVERSION "1")
-set_target_properties(cls_lock_static PROPERTIES OUTPUT_NAME cls_lock)
+add_library(cls_lock_objs OBJECT ${cls_lock_files})
+add_library(cls_lock ${CEPH_SHARED} $<TARGET_OBJECTS:cls_lock_objs>)
+if(${ENABLE_SHARED})
+  set_target_properties(cls_lock PROPERTIES OUTPUT_NAME cls_lock VERSION "1.0.0" SOVERSION "1")
+endif(${ENABLE_SHARED})
 
 #monitor
 set(ceph_mon_srcs
@@ -320,7 +385,7 @@ set(cephfs_srcs
 
 add_executable(cephfs ${cephfs_srcs})
 
-target_link_libraries(cephfs common)
+target_link_libraries(cephfs common ${EXTRALIBS})
 
 # synthetic client
 set(ceph_syn_srcs
@@ -333,6 +398,19 @@ if(${WITH_CLIENT})
   target_link_libraries(ceph-syn client global)
 endif(${WITH_CLIENT})
 
+set(librados_srcs
+	librados/librados.cc 
+	librados/RadosClient.cc
+	librados/IoCtxImpl.cc 
+)
+
+add_library(librados ${CEPH_SHARED} ${librados_srcs} $<TARGET_OBJECTS:cls_lock_objs>)
+add_dependencies(librados osdc)
+target_link_libraries(librados osdc common ${CRYPTO_LIBS} ${EXTRALIBS})
+if(${ENABLE_SHARED})
+  set_target_properties(librados PROPERTIES VERSION 2.0.0 SOVERSION 2)
+endif(${ENABLE_SHARED})
+
 #rados
 set(rados_srcs
 	rados.cc
@@ -342,7 +420,7 @@ set(rados_srcs
 	common/obj_bencher.cc
 )
 add_executable(rados ${rados_srcs})
-target_link_libraries(rados cls_lock_shared librados global ${CMAKE_DL_LIBS})
+target_link_libraries(rados librados global ${CMAKE_DL_LIBS})
 
 if(${WITH_RBD})
 #rbd
@@ -360,12 +438,11 @@ set(rbd_srcs
         librados/snap_set_diff.cc
         common/util.cc
 )
-add_library(rbd OBJECT ${rbd_srcs})
-add_library(rbd_shared SHARED $<TARGET_OBJECTS:rbd> $<TARGET_OBJECTS:x_cls_lock>)
-add_library(rbd_static STATIC $<TARGET_OBJECTS:rbd> $<TARGET_OBJECTS:x_cls_lock>)
-target_link_libraries(rbd_shared ${CMAKE_DL_LIBS})
-set_target_properties(rbd_shared PROPERTIES OUTPUT_NAME rbd VERSION "1.0.0" SOVERSION "1")
-set_target_properties(rbd_static PROPERTIES OUTPUT_NAME rbd)
+add_library(rbd ${CEPH_SHARED} ${rbd_srcs} $<TARGET_OBJECTS:cls_lock_objs>)
+target_link_libraries(rbd ${CMAKE_DL_LIBS})
+if(${ENABLE_SHARED})
+  set_target_properties(rbd PROPERTIES VERSION "1.0.0" SOVERSION "1")
+endif(${ENABLE_SHARED})
 endif(${WITH_RBD})
 
 #radosgw worry about option logic at a different time
@@ -468,7 +545,7 @@ set(kvs_srcs
 	key_value_store/cls_kvs.cc
 )
 
-add_library(cls_kvs ${kvs_srcs})
+add_library(cls_kvs ${CEPH_SHARED} ${kvs_srcs})
 
 endif(${WITH_KVS})
 

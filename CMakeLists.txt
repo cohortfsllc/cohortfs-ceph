@@ -71,6 +71,13 @@ CHECK_INCLUDE_FILES("keyutils.h" HAVE_KEYUTILS_H)
 
 set(DEBUG_GATHER ON)
 
+option(ENABLE_SHARED "build shared libraries" ON)
+if(${ENABLE_SHARED})
+ set(CEPH_SHARED SHARED)
+else(${ENABLE_SHARED})
+ set(CEPH_SHARED STATIC)
+endif(${ENABLE_SHARED})
+
 option(WITH_AIO "AIO is here ON" ON)
 if(${WITH_AIO})
 find_package(aio)
@@ -151,7 +158,11 @@ configure_file(
 
 add_definitions(-D__linux__)
 
-set(Boost_USE_STATIC_LIBS   ON)
+if(${ENABLE_SHARED})
+  set(Boost_USE_STATIC_LIBS   OFF)
+else(${ENABLE_SHARED})
+  set(Boost_USE_STATIC_LIBS   ON)
+endif(${ENABLE_SHARED})
 set(Boost_USE_MULTITHREADED ON)
 find_package(Boost COMPONENTS thread system REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
