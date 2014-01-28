@@ -242,7 +242,7 @@ class Inode : public CapObject, public LRUObject {
 
 
   // callback registrations
-  void add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
+  bool add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
 			    void *placement, void *recall, void *user);
   void remove_dir_registration(uint32_t regid);
 

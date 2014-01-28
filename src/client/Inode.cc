@@ -389,13 +389,16 @@ void Inode::set_stripe_auth(const vector<int> &stripes)
     registrations->update(stripe_auth);
 }
 
-void Inode::add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
+bool Inode::add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
 				 void *placement, void *recall, void *user)
 {
-  if (!registrations) // allocate on first use
+  if (!registrations) {
+    // allocate on first use
     registrations = new DirRegMap(cct, mdsregs, vino());
+    registrations->update(stripe_auth);
+  }
 
-  registrations->add_registration(regid, placement, recall, user);
+  return registrations->add_registration(regid, placement, recall, user);
 }
 
 void Inode::remove_dir_registration(uint32_t regid)

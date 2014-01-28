@@ -47,7 +47,7 @@ class DirRegMap {
   ~DirRegMap();
 
   // add/remove callback registrations
-  void add_registration(uint32_t regid, void *place, void *recall, void *user);
+  bool add_registration(uint32_t regid, void *place, void *recall, void *user);
   void remove_registration(uint32_t regid);
 
   // recall a registration; called by MDSRegMap

@@ -1352,8 +1352,22 @@ typedef void (*mds_placement_cb)(const struct ceph_ino_placement_t *placement,
 /* registration for mds info callbacks */
 uint32_t ceph_get_mdsmap_registration(struct ceph_mount_info *cmount,
 				      mds_add_cb add, mds_remove_cb remove,
-				      mds_placement_cb, void *user);
+				      mds_placement_cb placement, void *user);
 void ceph_put_mdsmap_registration(struct ceph_mount_info *cmount, uint32_t reg);
+
+/* dir placement callbacks */
+typedef void (*dir_placement_cb)(vinodeno_t vino, uint64_t hash_seed,
+                                 uint32_t stripe_count, const int *stripes,
+			         void *user);
+typedef void (*dir_recall_cb)(vinodeno_t vino, void *user);
+
+/* registration for dir placement callbacks */
+bool ceph_get_dir_registration(struct ceph_mount_info *cmount,
+			       vinodeno_t vino, uint32_t reg,
+			       dir_placement_cb placement,
+			       dir_recall_cb recall, void *user);
+void ceph_put_dir_registration(struct ceph_mount_info *cmount,
+			       vinodeno_t vino, uint32_t reg);
 
 #ifdef __cplusplus
 }

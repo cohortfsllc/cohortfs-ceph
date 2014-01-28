@@ -7,7 +7,7 @@
 #define dout_subsys ceph_subsys_client
 
 #undef dout_prefix
-#define dout_prefix *_dout << "client.dirreg(" << vino << ')'
+#define dout_prefix *_dout << "client.dirreg(" << vino << ") "
 
 DirRegMap::DirRegMap(CephContext *cct, MDSRegMap *mdsregs, vinodeno_t vino)
   : cct(cct),
@@ -23,20 +23,25 @@ DirRegMap::~DirRegMap()
   assert(regs.empty());
 }
 
-void DirRegMap::add_registration(uint32_t regid, void *place,
+bool DirRegMap::add_registration(uint32_t regid, void *place,
 				 void *recall, void *user)
 {
+  Finisher *finisher = mdsregs->add_dir_registration(regid, this);
+  if (!finisher)
+    return false;
+
   Mutex::Locker lock(mtx);
 
   registration &reg = regs[regid];
   reg.place = place;
   reg.recall = recall;
   reg.user = user;
-  reg.async = mdsregs->add_dir_registration(regid, this);
+  reg.async = finisher;
 
   ldout(cct, 10) << "added registration " << regid << dendl;
 
   update(reg);
+  return true;
 }
 
 void DirRegMap::remove_registration(uint32_t regid)
@@ -113,6 +118,8 @@ void DirRegMap::cleanup(registration &reg)
 
 void DirRegMap::update(const vector<int> &stripes, uint64_t seed)
 {
+  ldout(cct, 10) << "update " << stripes << " " << seed << dendl;
+
   if (stripe_auth == stripes && hash_seed == seed)
     return;
 

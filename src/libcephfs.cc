@@ -19,6 +19,7 @@
 
 #include "auth/Crypto.h"
 #include "client/Client.h"
+#include "client/Inode.h"
 #include "client/MDSRegMap.h"
 #include "mds/MDSMap.h"
 #include "include/cephfs/libcephfs.h"
@@ -1492,5 +1493,34 @@ extern "C" void ceph_put_mdsmap_registration(struct ceph_mount_info *cmount,
 					     uint32_t reg)
 {
   cmount->get_client()->mdsmap_registrations->remove_registration(reg);
+}
+
+
+extern "C" bool ceph_get_dir_registration(class ceph_mount_info *cmount,
+					  vinodeno_t vino, uint32_t reg,
+					  dir_placement_cb placement,
+					  dir_recall_cb recall,
+					  void *user)
+{
+  Inode *inode = cmount->get_client()->ll_get_inode(vino);
+  if (inode == NULL)
+    return false;
+
+  MDSRegMap *registrations = cmount->get_client()->mdsmap_registrations;
+  bool r = inode->add_dir_registration(registrations, reg,
+				       reinterpret_cast<void*>(placement),
+				       reinterpret_cast<void*>(recall), user);
+  cmount->get_client()->ll_put(inode); // drop ref from ll_get_inode()
+  return r;
+}
+
+extern "C" void ceph_put_dir_registration(struct ceph_mount_info *cmount,
+					  vinodeno_t vino, uint32_t reg)
+{
+  Inode *inode = cmount->get_client()->ll_get_inode(vino);
+  if (inode) {
+    inode->remove_dir_registration(reg);
+    cmount->get_client()->ll_put(inode); // drop ref from ll_get_inode()
+  }
 }
 
