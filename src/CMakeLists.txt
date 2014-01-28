@@ -57,8 +57,6 @@ DEPENDS ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph
 COMMENT "Shell Scripts have permission")
 
 add_subdirectory(rgw)
-add_subdirectory(os)
-add_subdirectory(osd)
 if(${WITH_MDS})
   add_subdirectory(mds)
 endif(${WITH_MDS})
@@ -78,17 +76,69 @@ include_directories(".")
 
 ##########################################
 
-# osdc
+#osdc
 set(osdc_files
 	osdc/Objecter.cc 
 	osdc/ObjectCacher.cc 
 	osdc/Filer.cc 
 	osdc/Striper.cc
 )
-
 add_library(osdc ${CEPH_SHARED} ${osdc_files})
 
-# mon
+#os
+set(libos_srcs
+	os/FileJournal.cc 
+	os/FileStore.cc 
+	os/chain_xattr.cc 
+	os/ObjectStore.cc 
+	os/JournalingObjectStore.cc 
+	os/LFNIndex.cc 
+	os/HashIndex.cc 
+	os/IndexManager.cc 
+	os/FlatIndex.cc 
+	os/DBObjectMap.cc 
+	os/LevelDBStore.cc 
+	os/WBThrottle.cc
+)
+
+add_library(os ${CEPH_SHARED} ${libos_srcs})
+if(${HAVE_LIBAIO})
+  target_link_libraries(os aio)
+endif(${HAVE_LIBAIO})
+target_link_libraries(os leveldb snappy)
+
+# #X below indicates source which builds, but won't link without mds
+#osd
+set (no_fun_osd_files
+	osd/PG.cc 
+	osd/PGLog.cc 
+	osd/ReplicatedPG.cc 
+)
+set (cohort_osd_files 
+	cohort/CohortOSD.cc
+	cohort/CohortOSD.h
+	cohort/OSDVol.cc
+	cohort/OSDVol.h
+	cohort/VolLog.cc
+	cohort/VolLog.h
+#X	mon/Monitor.cc
+)
+set(osd_srcs
+	osd/Ager.cc 
+	osd/OSD.cc 
+	osd/OSDCap.cc 
+	osd/Watch.cc 
+	osd/ClassHandler.cc 
+	osd/OpRequest.cc 
+	osd/SnapMapper.cc
+# ${no_fun_osd_files}
+${cohort_osd_files}
+)
+
+add_library(osd ${CEPH_SHARED} ${osd_srcs})
+target_link_libraries(osd dl leveldb)
+
+#mon
 set (no_fun_mon_files
 	mon/PGMonitor.cc 
 	mon/PGMap.cc 
@@ -98,6 +148,7 @@ set (cohort_mon_files
 	mon/CohortOSDMonitor.cc
 )
 
+# #X below indicates source which builds, but won't link without mds
 set(lib_mon_srcs
 	auth/cephx/CephxKeyServer.cc 
 	auth/cephx/CephxServiceHandler.cc 
@@ -124,7 +175,7 @@ set(lib_mon_srcs
 
 add_library(mon ${CEPH_SHARED} ${lib_mon_srcs})
 
-# global
+#global
 set(libglobal_srcs
 	global/global_init.cc 
 	global/pidfile.cc 
@@ -140,7 +191,7 @@ if(${ENABLE_SHARED})
   set_target_properties(global PROPERTIES OUTPUT_NAME ceph-global VERSION "1.0.0" SOVERSION "1")
 endif(${ENABLE_SHARED})
 
-# common
+#common
 set (crush_files
 	crush/builder.c
 	crush/mapper.c
@@ -330,7 +381,7 @@ endif(${WITH_PROFILER})
 
 target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES})
 
-# cls/lock
+#cls/lock
 set(cls_lock_files
 	cls/lock/cls_lock_client.cc  
 	cls/lock/cls_lock_types.cc 
@@ -353,7 +404,7 @@ add_executable(ceph-mon ${ceph_mon_srcs})
 
 target_link_libraries(ceph-mon mon boost_thread common os global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
-# osd
+#ceph-osd
 set(ceph_osd_srcs
 	ceph_osd.cc
 	objclass/class_debug.cc
