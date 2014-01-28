@@ -140,7 +140,7 @@ dir_result_t::dir_result_t(Inode *in)
 int64_t dir_result_t::next_stripe_offset() const
 {
   stripeid_t stripe = get_stripe() + 1;
-  if (stripe >= inode->stripe_auth.size())
+  if (stripe >= inode->get_stripe_count())
     return END;
   return make_fpos(stripe, 0);
 }
@@ -579,8 +579,8 @@ Inode* Client::add_update_inode(InodeStat *st, utime_t from,
   }
 
   // copy stripe auth array
-  in->stripe_auth = st->stripe_auth;
-  in->stripes.resize(in->stripe_auth.size());
+  in->set_stripe_auth(st->stripe_auth);
+  in->stripes.resize(in->get_stripe_count());
 
   if (in->snapid == CEPH_NOSNAP)
     add_update_cap(in, session, st->cap.cap_id, st->cap.caps, st->cap.seq, st->cap.mseq, inodeno_t(st->cap.realm), st->cap.flags);
@@ -998,7 +998,7 @@ int Client::choose_target_mds(MetaRequest *req)
            << " hash=" << hash << dendl;
 
   if (is_hash && S_ISDIR(in->mode)) {
-    mds = in->stripe_auth[hash % in->stripe_auth.size()];
+    mds = in->get_stripe_auth(hash % in->get_stripe_count());
     ldout(cct, 10) << "choose_target_mds from stripe hash" << dendl;
     goto out;
   }
@@ -4593,7 +4593,7 @@ int Client::_readdir_get_stripe(dir_result_t *dirp)
   
   
   bufferlist dirbl;
-  int use_mds = diri->stripe_auth[stripe];
+  int use_mds = diri->get_stripe_auth(stripe);
   int res = make_request(req, -1, -1, NULL, NULL, use_mds, &dirbl);
 
   if (res == 0) {
@@ -4612,7 +4612,7 @@ int Client::_readdir_get_stripe(dir_result_t *dirp)
 
     if (req->readdir_end) {
       dirp->last_name.clear();
-      if (stripe == diri->stripe_auth.size() - 1) // rightmost?
+      if (stripe == diri->get_stripe_count() - 1) // rightmost?
 	dirp->next_offset = 2;
       else
 	dirp->next_offset = 0;

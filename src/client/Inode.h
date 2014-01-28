@@ -57,6 +57,7 @@ struct CapSnap {
 class Inode : public CapObject, public LRUObject {
  private:
   InodeCache *cache;
+  vector<int> stripe_auth;
  public:
   const inode_hashmap &inodes; // inode map; needed for DirStripe::unlink()
   uint32_t   rdev;    // if special file
@@ -123,7 +124,6 @@ class Inode : public CapObject, public LRUObject {
   string    symlink;  // symlink content, if it's a symlink
   map<string,bufferptr> xattrs;
 
-  vector<int> stripe_auth;
   vector<DirStripe*> stripes; // if i'm a dir.
 
   list<Cond*>       waitfor_commit;
@@ -236,6 +236,10 @@ class Inode : public CapObject, public LRUObject {
   stripeid_t pick_stripe(const string &dname) const;
   DirStripe *open_stripe(stripeid_t stripeid);
   void close_stripe(DirStripe *stripe);
+
+  void set_stripe_auth(const vector<int> &stripes);
+  size_t get_stripe_count() const { return stripe_auth.size(); }
+  int get_stripe_auth(stripeid_t stripe) const { return stripe_auth[stripe]; }
 
   virtual void print(ostream &out);
   void dump(Formatter *f) const;

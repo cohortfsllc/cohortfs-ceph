@@ -375,6 +375,10 @@ bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, ui
   return (mode & fmode) == fmode;
 }
 
+void Inode::set_stripe_auth(const vector<int> &stripes)
+{
+  stripe_auth = stripes;
+}
 
 void Inode::dump(Formatter *f) const
 {
