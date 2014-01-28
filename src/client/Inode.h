@@ -18,6 +18,8 @@
 struct MetaSession;
 class Dentry;
 class DirStripe;
+class DirRegMap;
+class MDSRegMap;
 struct SnapRealm;
 class Inode;
 class InodeCache;
@@ -107,6 +109,7 @@ class Inode : public CapObject, public LRUObject {
   // about the dir (if this is one!)
   set<int>  dir_contacts;
   bool      dir_hashed, dir_replicated;
+  DirRegMap *registrations; // directory placement callback registrations
 
   Inode *snapdir_parent;  // only if we are a snapdir inode
   map<snapid_t,CapSnap*> cap_snaps;   // pending flush to mds
@@ -192,7 +195,7 @@ class Inode : public CapObject, public LRUObject {
       rdev(0), mode(0), uid(0), gid(0), nlink(0),
       size(0), truncate_seq(1), truncate_size(-1),
       time_warp_seq(0), max_size(0), version(0), xattr_version(0),
-      dir_hashed(false), dir_replicated(false),
+      dir_hashed(false), dir_replicated(false), registrations(NULL),
       snapdir_parent(0), oset((void *)this, newlayout->fl_pg_pool, ino),
       reported_size(0), wanted_max_size(0), requested_max_size(0),
       _ref(0), ll_ref(0)
@@ -200,7 +203,7 @@ class Inode : public CapObject, public LRUObject {
     memset(&dir_layout, 0, sizeof(dir_layout));
     memset(&layout, 0, sizeof(layout));
   }
-  ~Inode() { }
+  ~Inode();
 
   vinodeno_t vino() { return vinodeno_t(ino, snapid); }
 
@@ -237,9 +240,16 @@ class Inode : public CapObject, public LRUObject {
   DirStripe *open_stripe(stripeid_t stripeid);
   void close_stripe(DirStripe *stripe);
 
+
+  // callback registrations
+  void add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
+			    void *placement, void *recall, void *user);
+  void remove_dir_registration(uint32_t regid);
+
   void set_stripe_auth(const vector<int> &stripes);
   size_t get_stripe_count() const { return stripe_auth.size(); }
   int get_stripe_auth(stripeid_t stripe) const { return stripe_auth[stripe]; }
+
 
   virtual void print(ostream &out);
   void dump(Formatter *f) const;

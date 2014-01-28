@@ -5,6 +5,7 @@
 #include "Inode.h"
 #include "InodeCache.h"
 #include "Dentry.h"
+#include "DirRegMap.h"
 #include "DirStripe.h"
 #include "ClientSnapRealm.h"
 #include "messages/MClientCaps.h"
@@ -45,6 +46,12 @@ ostream& operator<<(ostream &out, Inode &in)
 {
   in.print(out);
   return out;
+}
+
+Inode::~Inode()
+{
+  if (registrations)
+    delete registrations;
 }
 
 void Inode::make_long_path(filepath& p)
@@ -378,7 +385,25 @@ bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, ui
 void Inode::set_stripe_auth(const vector<int> &stripes)
 {
   stripe_auth = stripes;
+  if (registrations)
+    registrations->update(stripe_auth);
 }
+
+void Inode::add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
+				 void *placement, void *recall, void *user)
+{
+  if (!registrations) // allocate on first use
+    registrations = new DirRegMap(cct, mdsregs, vino());
+
+  registrations->add_registration(regid, placement, recall, user);
+}
+
+void Inode::remove_dir_registration(uint32_t regid)
+{
+  assert(registrations);
+  registrations->remove_registration(regid);
+}
+
 
 void Inode::dump(Formatter *f) const
 {

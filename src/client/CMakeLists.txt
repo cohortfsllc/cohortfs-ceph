@@ -7,6 +7,7 @@ set(libclient_srcs
 	Client.cc 
 	ClientSnapRealm.cc 
 	Dentry.cc 
+	DirRegMap.cc
 	DirStripe.cc
 	Inode.cc 
 	InodeCache.cc

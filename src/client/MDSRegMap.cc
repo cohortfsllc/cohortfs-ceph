@@ -1,5 +1,8 @@
 // vim: ts=8 sw=2 smarttab
 #include "MDSRegMap.h"
+#include "DirRegMap.h"
+
+#include "common/Finisher.h"
 
 #include "../mds/MDSMap.h"
 #include "include/cephfs/libcephfs.h"
@@ -54,16 +57,45 @@ void MDSRegMap::remove_registration(uint32_t regid)
 
   ldout(cct, 10) << "removing registration " << regid << dendl;
 
-  reg_map::iterator i = regs.find(regid);
-  assert(i != regs.end());
+  reg_map::iterator r = regs.find(regid);
+  assert(r != regs.end());
 
-  cleanup(i->second);
+  cleanup(regid, r->second);
 
-  regs.erase(i);
+  regs.erase(r);
 }
 
-void MDSRegMap::cleanup(registration &reg)
+Finisher* MDSRegMap::add_dir_registration(uint32_t regid, DirRegMap *dirregs)
 {
+  ldout(cct, 10) << "adding directory registration for " << regid << dendl;
+
+  reg_map::iterator r = regs.find(regid);
+  assert(r != regs.end());
+
+  registration &reg = r->second;
+  reg.dirs.insert(dirregs);
+  return reg.async;
+}
+
+void MDSRegMap::remove_dir_registration(uint32_t regid, DirRegMap *dirregs)
+{
+  ldout(cct, 10) << "removing directory registration for " << regid << dendl;
+
+  reg_map::iterator r = regs.find(regid);
+  assert(r != regs.end());
+
+  registration &reg = r->second;
+  set<DirRegMap*>::iterator d = reg.dirs.find(dirregs);
+  assert(d != reg.dirs.end());
+  reg.dirs.erase(d);
+}
+
+void MDSRegMap::cleanup(uint32_t regid, registration &reg)
+{
+  // send recalls for directory registrations
+  for (dir_reg_set::iterator d = reg.dirs.begin(); d != reg.dirs.end(); ++d)
+    (*d)->recall_registration(regid);
+
   ldout(cct, 10) << "waiting for registration to finish callbacks" << dendl;
 
   // wait for any outstanding callbacks
@@ -72,7 +104,6 @@ void MDSRegMap::cleanup(registration &reg)
 
   ldout(cct, 10) << "callbacks finished" << dendl;
 }
-
 
 void MDSRegMap::update(const MDSMap *mdsmap)
 {
@@ -119,35 +150,35 @@ void MDSRegMap::update(const MDSMap *mdsmap)
 
 
 // Context objects for Finisher
-class C_DM_AddMDS : public Context {
+class C_MRM_AddMDS : public Context {
  private:
   mds_add_cb callback;
   mds_info_ptr dev;
   void *user;
  public:
-  C_DM_AddMDS(mds_add_cb callback, mds_info_ptr dev, void *user)
+  C_MRM_AddMDS(mds_add_cb callback, mds_info_ptr dev, void *user)
     : callback(callback), dev(dev), user(user) {}
   void finish(int r) { callback(dev.get(), user); }
 };
 
-class C_DM_RemoveMDS : public Context {
+class C_MRM_RemoveMDS : public Context {
  private:
   mds_remove_cb callback;
   int index;
   void *user;
  public:
-  C_DM_RemoveMDS(mds_remove_cb callback, int index, void *user)
+  C_MRM_RemoveMDS(mds_remove_cb callback, int index, void *user)
     : callback(callback), index(index), user(user) {}
   void finish(int r) { callback(index, user); }
 };
 
-class C_DM_Placement : public Context {
+class C_MRM_Placement : public Context {
  private:
   mds_placement_cb callback;
   ceph_ino_placement_t placement;
   void *user;
  public:
-  C_DM_Placement(mds_placement_cb callback, const mds_inode_placement_t &p,
+  C_MRM_Placement(mds_placement_cb callback, const mds_inode_placement_t &p,
       void *user) : callback(callback), user(user)
   {
     // convert mds_inode_placement_t to ceph_ino_placement_t
@@ -170,7 +201,7 @@ void MDSRegMap::update(registration &reg)
 
     ldout(cct, 10) << "sending callback for removed mds." << i << dendl;
     mds_remove_cb callback = reinterpret_cast<mds_remove_cb>(reg.remove);
-    reg.async->queue(new C_DM_RemoveMDS(callback, i, reg.user));
+    reg.async->queue(new C_MRM_RemoveMDS(callback, i, reg.user));
     reg.known[i] = false;
   }
 
@@ -181,7 +212,7 @@ void MDSRegMap::update(registration &reg)
     ldout(cct, 10) << "sending callback for placement seq="
       << placement_seq << dendl;
     mds_placement_cb callback = reinterpret_cast<mds_placement_cb>(reg.place);
-    reg.async->queue(new C_DM_Placement(callback, placement, reg.user));
+    reg.async->queue(new C_MRM_Placement(callback, placement, reg.user));
     reg.placement_seq = placement_seq;
   }
 
@@ -194,7 +225,7 @@ void MDSRegMap::update(registration &reg)
 
     ldout(cct, 10) << "sending callback for added mds." << i << dendl;
     mds_add_cb callback = reinterpret_cast<mds_add_cb>(reg.add);
-    reg.async->queue(new C_DM_AddMDS(callback, devices[i], reg.user));
+    reg.async->queue(new C_MRM_AddMDS(callback, devices[i], reg.user));
     reg.known[i] = true;
   }
 }
@@ -204,10 +235,10 @@ void MDSRegMap::shutdown()
   Mutex::Locker lock(mtx);
 
   // clean up and remove registrations
-  reg_map::iterator i = regs.begin();
-  while (i != regs.end()) {
-    cleanup(i->second);
-    regs.erase(i++);
+  reg_map::iterator r = regs.begin();
+  while (r != regs.end()) {
+    cleanup(r->first, r->second);
+    regs.erase(r++);
   }
 }
 
