@@ -76,6 +76,10 @@ include_directories(".")
 
 ##########################################
 
+# tcmalloc heap profiler
+set(heap_profiler_files ${TCMALLOC_srcs})
+add_library(heap_profiler_objs OBJECT ${heap_profiler_files})
+
 #osdc
 set(osdc_files
 	osdc/Objecter.cc 
@@ -385,10 +389,9 @@ endif(${ENABLE_SHARED})
 set(ceph_mon_srcs
 	ceph_mon.cc
 	common/TextTable.cc
-	${TCMALLOC_srcs}
 )
 
-add_executable(ceph-mon ${ceph_mon_srcs})
+add_executable(ceph-mon ${ceph_mon_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 
 target_link_libraries(ceph-mon mon boost_thread common os global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
@@ -397,10 +400,9 @@ set(ceph_osd_srcs
 	ceph_osd.cc
 	objclass/class_debug.cc
 	objclass/class_api.cc
-	${TCMALLOC_srcs}
 )
 
-add_executable(ceph-osd ${ceph_osd_srcs})
+add_executable(ceph-osd ${ceph_osd_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 
 target_link_libraries(ceph-osd osd os global ${TCMALLOC_LIBS})
 
@@ -408,9 +410,8 @@ if(${WITH_MDS})
 #mds
 set(ceph_mds_srcs
 	ceph_mds.cc
-	${TCMALLOC_srcs}
 )
-add_executable(ceph-mds ${ceph_mds_srcs})
+add_executable(ceph-mds ${ceph_mds_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 
 target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global ${TCMALLOC_LIBS} boost_thread)
 endif(${WITH_MDS})
