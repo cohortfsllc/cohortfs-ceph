@@ -6,7 +6,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wno-invalid-offsetof -Wnon-virtual-dtor -
 
 add_definitions("${AM_COMMON_FLAGS}")
 
-set(EXTRALIBS uuid rt)
+set(EXTRALIBS uuid rt dl)
 if(${WITH_PROFILER})
   list(APPEND EXTRALIBS profiler)
 endif(${WITH_PROFILER})
