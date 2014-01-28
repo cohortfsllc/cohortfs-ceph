@@ -107,13 +107,13 @@ if(${HAVE_LIBAIO})
 endif(${HAVE_LIBAIO})
 target_link_libraries(os leveldb snappy)
 
-# #X below indicates source which builds, but won't link without mds
 #osd
 set (no_fun_osd_files
 	osd/PG.cc 
 	osd/PGLog.cc 
 	osd/ReplicatedPG.cc 
 )
+# #X below indicates source which builds, but won't link without mds
 set (cohort_osd_files 
 	cohort/CohortOSD.cc
 	cohort/CohortOSD.h
@@ -152,9 +152,7 @@ set (cohort_mon_files
 set(lib_mon_srcs
 	auth/cephx/CephxKeyServer.cc 
 	auth/cephx/CephxServiceHandler.cc 
-#X	auth/cephx/CephxSessionHandler.cc 
 	auth/AuthServiceHandler.cc 
-#X	auth/AuthSessionHandler.cc 
 	mon/Paxos.cc 
 	mon/PaxosService.cc 
 	mon/OSDMonitor.cc 
@@ -173,7 +171,7 @@ set(lib_mon_srcs
 	${cohort_mon_files}
 )
 
-add_library(mon ${CEPH_SHARED} ${lib_mon_srcs})
+add_library(mon ${CEPH_SHARED} ${lib_mon_srcs} $<TARGET_OBJECTS:mon_common_objs>)
 
 #global
 set(libglobal_srcs
@@ -201,18 +199,6 @@ set (crush_files
 	crush/CrushCompiler.cc
 	crush/CrushTester.cc
 )
-#set (cohort_osd_files
-#	cohort/CohortOSD.cc
-#	cohort/CohortOSD.h
-#	cohort/OSDVol.cc
-#	cohort/OSDVol.h
-#	cohort/VolLog.cc
-#	cohort/VolLog.h
-#)
-#set (cohort_librgw_files
-#	cohort/CohortOSDMap.cc
-#	cohort/CohortOSDMap.h
-#)
 set (cohort_common_files
 	cohort/CohortOSDMap.cc
 	cohort/CohortPlaceSystem.cc
@@ -229,9 +215,9 @@ set (cohort_common_files
 set (mds_files)
 if (${WITH_MDS})
 	list(APPEND mds_files
-		../mds/MDSMap.cc
-		../mds/inode_backtrace.cc
-		../mds/mdstypes.cc
+		mds/MDSMap.cc
+		mds/inode_backtrace.cc
+		mds/mdstypes.cc
 	)
 endif (${WITH_MDS})
 
@@ -261,12 +247,10 @@ set (libcommon_files
 	ceph_ver.c
 	auth/AuthAuthorizeHandler.cc
 	auth/AuthClientHandler.cc
-	auth/AuthSessionHandler.cc
 	auth/AuthMethodList.cc
 	auth/cephx/CephxAuthorizeHandler.cc
 	auth/cephx/CephxClientHandler.cc
 	auth/cephx/CephxProtocol.cc
-	auth/cephx/CephxSessionHandler.cc
 	auth/none/AuthNoneAuthorizeHandler.cc
 	auth/unknown/AuthUnknownAuthorizeHandler.cc
 	auth/Crypto.cc
@@ -357,7 +341,11 @@ set (libcommon_files
 #	${crush_files}
 	${cohort_common_files}
 )
-
+set(mon_common_files
+	auth/AuthSessionHandler.cc
+	auth/cephx/CephxSessionHandler.cc
+)
+add_library(mon_common_objs OBJECT ${mon_common_files})
 
 if (${WITH_PROFILER})
   list(APPEND libcommon_files perfglue/cpu_profiler.cc)
@@ -369,7 +357,7 @@ if(${ENABLE_SHARED})
   list(APPEND libcommon_files $<TARGET_OBJECTS:global_common_objs>)
 endif(${ENABLE_SHARED})
 
-add_library (common ${CEPH_SHARED} ${libcommon_files})
+add_library (common ${CEPH_SHARED} ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>)
 
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/ceph_ver.h)
 
