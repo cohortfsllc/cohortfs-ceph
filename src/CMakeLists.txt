@@ -631,6 +631,9 @@ set(kvs_srcs
 )
 
 add_library(cls_kvs ${CEPH_SHARED} ${kvs_srcs})
+if(${ENABLE_SHARED})
+  set_target_properties(cls_kvs PROPERTIES OUTPUT_NAME cls_kvs VERSION "1.0.0" SOVERSION "1")
+endif(${ENABLE_SHARED})
 
 endif(${WITH_KVS})
 
