@@ -101,11 +101,12 @@ set(libos_srcs
 	os/IndexManager.cc 
 	os/FlatIndex.cc 
 	os/DBObjectMap.cc 
-	os/LevelDBStore.cc 
 	os/WBThrottle.cc
 )
+set(os_mon_files os/LevelDBStore.cc)
 
-add_library(os ${CEPH_SHARED} ${libos_srcs})
+add_library(os_mon_objs OBJECT ${os_mon_files})
+add_library(os ${CEPH_SHARED} ${libos_srcs} $<TARGET_OBJECTS:os_mon_objs>)
 if(${HAVE_LIBAIO})
   target_link_libraries(os aio)
 endif(${HAVE_LIBAIO})
@@ -148,7 +149,7 @@ set (no_fun_mon_files
 	mon/PGMap.cc 
 )
 set (cohort_mon_files
-	mon/Monitor.cc 
+	mon/Monitor.cc
 	mon/CohortOSDMonitor.cc
 )
 
@@ -166,7 +167,7 @@ set(lib_mon_srcs
 	mon/AuthMonitor.cc 
 	mon/Elector.cc 
 	mon/MonitorStore.cc 
-#X	os/LevelDBStore.cc 
+#X	os/LevelDBStore.cc
 	mon/HealthMonitor.cc 
 	mon/DataHealthService.cc 
 	mon/ConfigKeyService.cc 
@@ -175,7 +176,11 @@ set(lib_mon_srcs
 	${cohort_mon_files}
 )
 
-add_library(mon ${CEPH_SHARED} ${lib_mon_srcs} $<TARGET_OBJECTS:mon_common_objs>)
+add_library(mon ${CEPH_SHARED} ${lib_mon_srcs}
+#	$<TARGET_OBJECTS:mon_common_objs>
+	$<TARGET_OBJECTS:os_mon_objs>
+#	$<TARGET_OBJECTS:osd_mon_objs>
+	)
 
 #global
 set(libglobal_srcs
