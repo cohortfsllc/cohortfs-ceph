@@ -170,7 +170,6 @@ set(lib_mon_srcs
 	mon/LogMonitor.cc 
 	mon/AuthMonitor.cc 
 	mon/Elector.cc 
-	mon/MonitorStore.cc 
 	mon/HealthMonitor.cc 
 	mon/DataHealthService.cc 
 	mon/ConfigKeyService.cc 
@@ -178,13 +177,16 @@ set(lib_mon_srcs
 	${cohort_mon_files}
 )
 set(common_util_src common/util.cc)
+set(monitorstore_src mon/MonitorStore.cc)
 
 add_library(common_util_obj OBJECT ${common_util_src})
+add_library(monitorstore_obj OBJECT ${monitorstore_src})
 add_library(mon ${CEPH_SHARED} ${lib_mon_srcs}
 #	$<TARGET_OBJECTS:mon_common_objs>
 	$<TARGET_OBJECTS:os_mon_objs>
 	$<TARGET_OBJECTS:osd_mon_objs>
 	$<TARGET_OBJECTS:common_util_obj>
+	$<TARGET_OBJECTS:monitorstore_obj>
 	)
 
 #global
@@ -596,10 +598,10 @@ endif(WITH_FUSE)
 #ceph_mon_store_converter
 set(ceph_mon_store_converter_srcs
 mon_store_converter.cc
-mon/MonitorStore.cc
 )
 
-add_executable(ceph_mon_store_converter ${ceph_mon_store_converter_srcs})
+add_executable(ceph_mon_store_converter ${ceph_mon_store_converter_srcs}
+	$<TARGET_OBJECTS:monitorstore_obj>)
 target_link_libraries(ceph_mon_store_converter os global)
 
 #kvs
