@@ -395,6 +395,16 @@ if(${ENABLE_SHARED})
   set_target_properties(cls_rbd PROPERTIES OUTPUT_NAME cls_rbd VERSION "1.0.0" SOVERSION "1")
 endif(${ENABLE_SHARED})
 
+#cls/refcount
+set(cls_refcount_files
+	cls/refcount/cls_refcount.cc
+)
+add_library(cls_refcount_objs OBJECT ${cls_refcount_files})
+add_library(cls_refcount ${CEPH_SHARED} $<TARGET_OBJECTS:cls_refcount_objs>)
+if(${ENABLE_SHARED})
+  set_target_properties(cls_refcount PROPERTIES OUTPUT_NAME cls_refcount VERSION "1.0.0" SOVERSION "1")
+endif(${ENABLE_SHARED})
+
 #cls/lock
 set(cls_lock_files
 	cls/lock/cls_lock_client.cc  
