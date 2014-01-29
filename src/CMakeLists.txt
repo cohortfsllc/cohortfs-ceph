@@ -385,6 +385,16 @@ endif(${WITH_PROFILER})
 
 target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES})
 
+#cls/rbd
+set(cls_rbd_files
+	cls/rbd/cls_rbd.cc
+)
+add_library(cls_rbd_objs OBJECT ${cls_rbd_files})
+add_library(cls_rbd ${CEPH_SHARED} $<TARGET_OBJECTS:cls_rbd_objs>)
+if(${ENABLE_SHARED})
+  set_target_properties(cls_rbd PROPERTIES OUTPUT_NAME cls_rbd VERSION "1.0.0" SOVERSION "1")
+endif(${ENABLE_SHARED})
+
 #cls/lock
 set(cls_lock_files
 	cls/lock/cls_lock_client.cc  
