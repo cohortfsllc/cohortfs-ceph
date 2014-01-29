@@ -83,11 +83,13 @@ add_library(heap_profiler_objs OBJECT ${heap_profiler_files})
 #osdc
 set(osdc_files
 	osdc/Objecter.cc 
-	osdc/ObjectCacher.cc 
 	osdc/Filer.cc 
-	osdc/Striper.cc
 )
-add_library(osdc ${CEPH_SHARED} ${osdc_files})
+set(osdc_rbd_files osdc/ObjectCacher.cc osdc/Striper.cc)
+
+add_library(osdc_rbd_objs OBJECT ${osdc_rbd_files})
+
+add_library(osdc ${CEPH_SHARED} ${osdc_files}  $<TARGET_OBJECTS:osdc_rbd_objs>)
 
 #os
 set(libos_srcs
@@ -480,12 +482,11 @@ set(librbd_srcs
         librbd/internal.cc
         librbd/LibrbdWriteback.cc
         librbd/WatchCtx.cc
-        osdc/ObjectCacher.cc
-        osdc/Striper.cc
         librados/snap_set_diff.cc
         common/util.cc
 )
-add_library(librbd ${CEPH_SHARED} ${librbd_srcs} $<TARGET_OBJECTS:cls_lock_objs>)
+add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
+	$<TARGET_OBJECTS:cls_lock_objs> $<TARGET_OBJECTS:osdc_rbd_objs>)
 target_link_libraries(librbd ${CMAKE_DL_LIBS})
 if(${ENABLE_SHARED})
 	set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd)
