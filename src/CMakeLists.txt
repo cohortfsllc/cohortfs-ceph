@@ -126,7 +126,6 @@ set (cohort_osd_files
 	cohort/OSDVol.h
 	cohort/VolLog.cc
 	cohort/VolLog.h
-#X	mon/Monitor.cc
 )
 set(osd_srcs
 	osd/Ager.cc 
@@ -139,8 +138,12 @@ set(osd_srcs
 # ${no_fun_osd_files}
 ${cohort_osd_files}
 )
+set(osd_mon_files mon/Monitor.cc)
 
-add_library(osd ${CEPH_SHARED} ${osd_srcs})
+add_library(osd_mon_objs OBJECT ${osd_mon_files})
+add_library(osd ${CEPH_SHARED} ${osd_srcs}
+# $<TARGET_OBJECTS:osd_mon_objs>
+)
 target_link_libraries(osd dl leveldb)
 
 #mon
@@ -149,7 +152,6 @@ set (no_fun_mon_files
 	mon/PGMap.cc 
 )
 set (cohort_mon_files
-	mon/Monitor.cc
 	mon/CohortOSDMonitor.cc
 )
 
@@ -167,7 +169,6 @@ set(lib_mon_srcs
 	mon/AuthMonitor.cc 
 	mon/Elector.cc 
 	mon/MonitorStore.cc 
-#X	os/LevelDBStore.cc
 	mon/HealthMonitor.cc 
 	mon/DataHealthService.cc 
 	mon/ConfigKeyService.cc 
@@ -179,7 +180,7 @@ set(lib_mon_srcs
 add_library(mon ${CEPH_SHARED} ${lib_mon_srcs}
 #	$<TARGET_OBJECTS:mon_common_objs>
 	$<TARGET_OBJECTS:os_mon_objs>
-#	$<TARGET_OBJECTS:osd_mon_objs>
+	$<TARGET_OBJECTS:osd_mon_objs>
 	)
 
 #global
