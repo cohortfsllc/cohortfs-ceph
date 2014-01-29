@@ -174,15 +174,17 @@ set(lib_mon_srcs
 	mon/HealthMonitor.cc 
 	mon/DataHealthService.cc 
 	mon/ConfigKeyService.cc 
-#X	common/util.cc
 # ${no_fun_mon_files}
 	${cohort_mon_files}
 )
+set(common_util_src common/util.cc)
 
+add_library(common_util_obj OBJECT ${common_util_src})
 add_library(mon ${CEPH_SHARED} ${lib_mon_srcs}
 #	$<TARGET_OBJECTS:mon_common_objs>
 	$<TARGET_OBJECTS:os_mon_objs>
 	$<TARGET_OBJECTS:osd_mon_objs>
+	$<TARGET_OBJECTS:common_util_obj>
 	)
 
 #global
@@ -483,10 +485,11 @@ set(librbd_srcs
         librbd/LibrbdWriteback.cc
         librbd/WatchCtx.cc
         librados/snap_set_diff.cc
-        common/util.cc
 )
 add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
-	$<TARGET_OBJECTS:cls_lock_objs> $<TARGET_OBJECTS:osdc_rbd_objs>)
+	$<TARGET_OBJECTS:cls_lock_objs> $<TARGET_OBJECTS:osdc_rbd_objs>
+	$<TARGET_OBJECTS:common_util_obj>
+	)
 target_link_libraries(librbd ${CMAKE_DL_LIBS})
 if(${ENABLE_SHARED})
 	set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd)
@@ -498,9 +501,8 @@ set(rbd_srcs
 	common/fiemap.cc
 	common/secret.c
 	common/TextTable.cc
-	common/util.cc
 )
-add_executable(rbd ${rbd_srcs})
+add_executable(rbd ${rbd_srcs} $<TARGET_OBJECTS:common_util_obj>)
 set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
 target_link_libraries(rbd global librbd librados keyutils ${CMAKE_DL_LIBS})
 list(APPEND rbd_bin rbd)
