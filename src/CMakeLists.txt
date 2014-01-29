@@ -462,9 +462,10 @@ set(rados_srcs
 add_executable(rados ${rados_srcs})
 target_link_libraries(rados librados global ${CMAKE_DL_LIBS})
 
+set (rbd_bin)
 if(${WITH_RBD})
-#rbd
-set(rbd_srcs
+#librbd
+set(librbd_srcs
         librbd/librbd.cc
         librbd/AioCompletion.cc
         librbd/AioRequest.cc
@@ -478,11 +479,24 @@ set(rbd_srcs
         librados/snap_set_diff.cc
         common/util.cc
 )
-add_library(rbd ${CEPH_SHARED} ${rbd_srcs} $<TARGET_OBJECTS:cls_lock_objs>)
-target_link_libraries(rbd ${CMAKE_DL_LIBS})
+add_library(librbd ${CEPH_SHARED} ${librbd_srcs} $<TARGET_OBJECTS:cls_lock_objs>)
+target_link_libraries(librbd ${CMAKE_DL_LIBS})
 if(${ENABLE_SHARED})
-  set_target_properties(rbd PROPERTIES VERSION "1.0.0" SOVERSION "1")
+	set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd)
 endif(${ENABLE_SHARED})
+
+#rbd
+set(rbd_srcs
+        rbd.cc
+	common/fiemap.cc
+	common/secret.c
+	common/TextTable.cc
+	common/util.cc
+)
+add_executable(rbd ${rbd_srcs})
+set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
+target_link_libraries(rbd global librbd librados keyutils ${CMAKE_DL_LIBS})
+list(APPEND rbd_bin rbd)
 endif(${WITH_RBD})
 
 #radosgw worry about option logic at a different time
@@ -608,6 +622,7 @@ install(TARGETS
   ${ceph_fuse_bin}
   ${ceph_client_bin}
   rados
+  ${rbd_bin}
   librados-config
   ceph-conf
   monmaptool
