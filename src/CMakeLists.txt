@@ -182,7 +182,7 @@ set(monitorstore_src mon/MonitorStore.cc)
 add_library(common_util_obj OBJECT ${common_util_src})
 add_library(monitorstore_obj OBJECT ${monitorstore_src})
 add_library(mon ${CEPH_SHARED} ${lib_mon_srcs}
-#	$<TARGET_OBJECTS:mon_common_objs>
+	$<TARGET_OBJECTS:mon_common_objs>
 	$<TARGET_OBJECTS:os_mon_objs>
 	$<TARGET_OBJECTS:osd_mon_objs>
 	$<TARGET_OBJECTS:common_util_obj>
