@@ -19,7 +19,12 @@ void dump(const ceph_file_layout& l, Formatter *f)
 
 void dump(const ceph_dir_layout& l, Formatter *f)
 {
-  f->dump_unsigned("dir_hash", l.dl_dir_hash);
+  f->dump_unsigned("hash_seed", l.dl_hash_seed);
+  f->dump_unsigned("stripe_count", l.dl_stripe_count);
+  f->open_array_section("stripes");
+  for (int i = 0; i < l.dl_stripe_count; i++)
+    f->dump_int("auth", l.dl_stripe_auth[i]);
+  f->close_section();
 }
 
 

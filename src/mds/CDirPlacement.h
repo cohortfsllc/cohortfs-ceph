@@ -107,9 +107,10 @@ class CDirPlacement : public MDSCacheObject {
   // stripe authority
  private:
   vector<int> stripe_auth; // auth mds for each stripe
+  ceph_dir_layout layout;
 
  public:
-  size_t get_stripe_count() const { return stripe_auth.size(); }
+  size_t get_stripe_count() const { return layout.dl_stripe_count; }
 
   const vector<int>& get_stripe_auth() const { return stripe_auth; }
   int get_stripe_auth(stripeid_t stripeid) const {
@@ -121,19 +122,21 @@ class CDirPlacement : public MDSCacheObject {
     // don't erase any open stripes
     assert(stripes.lower_bound(auth.size()) == stripes.end());
     stripe_auth = auth;
+    // update dir layout
+    layout.dl_stripe_count = stripe_auth.size();
+    layout.dl_stripe_auth = stripe_auth.data();
   }
   void set_stripe_auth(stripeid_t stripeid, int auth) {
     assert(stripeid < stripe_auth.size());
     stripe_auth[stripeid] = auth;
   }
 
-  // stripe placement
- private:
-  ceph_dir_layout layout;
-
- public:
   const ceph_dir_layout& get_layout() const { return layout; }
-  void set_layout(const ceph_dir_layout &lo) { layout = lo; }
+  void set_layout(const ceph_dir_layout &lo)
+  {
+    layout = lo;
+    stripe_auth.assign(lo.dl_stripe_auth, lo.dl_stripe_auth + lo.dl_stripe_count);
+  }
 
   __u64 hash_dentry_name(const string &dn);
   stripeid_t pick_stripe(__u64 hash);

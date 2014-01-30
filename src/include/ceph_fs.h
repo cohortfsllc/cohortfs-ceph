@@ -58,10 +58,11 @@ struct ceph_file_layout {
 int ceph_file_layout_is_valid(const struct ceph_file_layout *layout);
 
 struct ceph_dir_layout {
+	__u64  dl_hash_seed;
+	int   *dl_stripe_auth; /* auth mds for each stripe */
+	__u16  dl_stripe_count;
 	__u8   dl_dir_hash;   /* see ceph_hash.h for ids */
 	__u8   dl_unused1;
-	__u16  dl_unused2;
-	__u32  dl_unused3;
 } __attribute__ ((packed));
 
 /* crypto algorithms */

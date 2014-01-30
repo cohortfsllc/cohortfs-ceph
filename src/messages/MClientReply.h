@@ -133,12 +133,12 @@ struct InodeStat {
     rstat.rfiles = e.rfiles;
     rstat.rsubdirs = e.rsubdirs;
 
-    int n = e.stripes;
-    if (n) {
+    if ((mode & S_IFMT) == S_IFDIR) {
       ::decode(dir_layout, p);
-      stripe_auth.resize(n);
-      for (int i = 0; i < n; i++)
+      stripe_auth.resize(dir_layout.dl_stripe_count);
+      for (int i = 0; i < dir_layout.dl_stripe_count; i++)
         ::decode(stripe_auth[i], p);
+      dir_layout.dl_stripe_auth = stripe_auth.data();
     } else
       memset(&dir_layout, 0, sizeof(dir_layout));
 

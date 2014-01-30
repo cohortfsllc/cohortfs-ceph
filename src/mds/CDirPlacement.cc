@@ -109,20 +109,20 @@ CDirPlacement::CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
 
 __u64 CDirPlacement::hash_dentry_name(const string &dn)
 {
-  return CityHash64WithSeed(dn.data(), dn.length(), 0);
+  return CityHash64WithSeed(dn.data(), dn.length(), layout.dl_hash_seed);
 }
 
 stripeid_t CDirPlacement::pick_stripe(__u64 dnhash)
 {
-  return stripeid_t(dnhash % stripe_auth.size());
+  return stripeid_t(dnhash % layout.dl_stripe_count);
 }
 
 stripeid_t CDirPlacement::pick_stripe(const string &dname)
 {
-  if (stripe_auth.size() == 1)
+  if (layout.dl_stripe_count == 1)
     return 0;
   __u64 dnhash = hash_dentry_name(dname);
-  return stripeid_t(dnhash % stripe_auth.size());
+  return stripeid_t(dnhash % layout.dl_stripe_count);
 }
 
 // stripes

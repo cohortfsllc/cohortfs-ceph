@@ -1374,7 +1374,6 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   }
 
   // encode
-  e.stripes = is_dir() ? placement->get_stripe_count() : 0;
   ::encode(e, bl);
 
   if (is_dir()) {
