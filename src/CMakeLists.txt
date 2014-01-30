@@ -89,8 +89,7 @@ set(osdc_rbd_files osdc/ObjectCacher.cc osdc/Striper.cc)
 
 add_library(osdc_rbd_objs OBJECT ${osdc_rbd_files})
 
-add_library(osdc ${CEPH_SHARED} ${osdc_files}  $<TARGET_OBJECTS:osdc_rbd_objs>)
-install(TARGETS osdc DESTINATION lib)
+add_library(osdc STATIC ${osdc_files} $<TARGET_OBJECTS:osdc_rbd_objs>)
 
 #os
 set(libos_srcs
@@ -109,12 +108,10 @@ set(libos_srcs
 set(os_mon_files os/LevelDBStore.cc)
 
 add_library(os_mon_objs OBJECT ${os_mon_files})
-add_library(os ${CEPH_SHARED} ${libos_srcs} $<TARGET_OBJECTS:os_mon_objs>)
+add_library(os STATIC ${libos_srcs} $<TARGET_OBJECTS:os_mon_objs>)
 if(${HAVE_LIBAIO})
   target_link_libraries(os aio)
 endif(${HAVE_LIBAIO})
-set_target_properties(os PROPERTIES OUTPUT_NAME ceph-os VERSION "1.0.0" SOVERSION "1")
-install(TARGETS os DESTINATION lib)
 target_link_libraries(os leveldb snappy)
 
 #osd
@@ -146,11 +143,10 @@ ${cohort_osd_files}
 set(osd_mon_files mon/Monitor.cc)
 
 add_library(osd_mon_objs OBJECT ${osd_mon_files})
-add_library(osd ${CEPH_SHARED} ${osd_srcs}
+add_library(osd STATIC ${osd_srcs}
 # $<TARGET_OBJECTS:osd_mon_objs>
 )
 target_link_libraries(osd dl leveldb)
-install(TARGETS osd DESTINATION lib)
 
 #mon
 set (no_fun_mon_files
@@ -185,14 +181,13 @@ set(monitorstore_src mon/MonitorStore.cc)
 
 add_library(common_util_obj OBJECT ${common_util_src})
 add_library(monitorstore_obj OBJECT ${monitorstore_src})
-add_library(mon ${CEPH_SHARED} ${lib_mon_srcs}
+add_library(mon STATIC ${lib_mon_srcs}
 	$<TARGET_OBJECTS:mon_common_objs>
 	$<TARGET_OBJECTS:os_mon_objs>
 	$<TARGET_OBJECTS:osd_mon_objs>
 	$<TARGET_OBJECTS:common_util_obj>
 	$<TARGET_OBJECTS:monitorstore_obj>
 	)
-install(TARGETS mon DESTINATION lib)
 
 #global
 set(libglobal_srcs
@@ -204,11 +199,10 @@ set(global_common_files
 	global/global_context.cc 
 )
 add_library(global_common_objs OBJECT ${global_common_files})
-add_library(global ${CEPH_SHARED} ${libglobal_srcs} $<TARGET_OBJECTS:global_common_objs>)
+add_library(global STATIC ${libglobal_srcs} $<TARGET_OBJECTS:global_common_objs>)
 target_link_libraries(global common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(global PROPERTIES OUTPUT_NAME ceph-global VERSION "1.0.0" SOVERSION "1")
-  install(TARGETS global DESTINATION lib)
 endif(${ENABLE_SHARED})
 
 #common
@@ -379,7 +373,7 @@ if(${ENABLE_SHARED})
   list(APPEND libcommon_files $<TARGET_OBJECTS:global_common_objs>)
 endif(${ENABLE_SHARED})
 
-add_library (common ${CEPH_SHARED} ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>)
+add_library (common STATIC ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>)
 
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/ceph_ver.h)
 
@@ -390,10 +384,6 @@ if (${WITH_PROFILER})
 endif(${WITH_PROFILER})
 
 target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES})
-if(${ENABLE_SHARED})
-  set_target_properties(common PROPERTIES OUTPUT_NAME ceph-common VERSION "1.0.0" SOVERSION "1")
-  install(TARGETS common DESTINATION lib)
-endif(${ENABLE_SHARED})
 
 #cls/rbd
 set(cls_rbd_files
@@ -491,7 +481,6 @@ add_dependencies(librados osdc)
 target_link_libraries(librados osdc common ${CRYPTO_LIBS} ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2)
-  install(TARGETS librados DESTINATION lib)
 endif(${ENABLE_SHARED})
 install(FILES
 	include/rados/librados.h
@@ -536,7 +525,6 @@ add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
 target_link_libraries(librbd ${CMAKE_DL_LIBS})
 if(${ENABLE_SHARED})
 	set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd)
-	install(TARGETS librbd DESTINATION lib)
 endif(${ENABLE_SHARED})
 
 #rbd
@@ -577,7 +565,6 @@ set(radosgw_srcs
 add_executable(radosgw ${radosgw_srcs})
 
 target_link_libraries(radosgw librgw_a librados libcls_rgw_client libcls_lock_client libcls_refcount_client curl expat global fcgi resolv)
-install(TARGETS radosgw DESTINATION bin)
 endif(${WITH_RADOSGW})
 
 #librados_config_srcs
@@ -692,6 +679,14 @@ install(TARGETS
   ceph-authtool
   ceph_mon_store_converter
   DESTINATION bin)
+install(TARGETS librados librbd DESTINATION lib)
+install(TARGETS cls_kvs cls_lock cls_rbd DESTINATION lib/rados-classes)
+if(${WITH_KVS})
+  install(TARGETS cls_kvs DESTINATION lib)
+endif(${WITH_KVS})
+if(${WITH_RADOSGW})
+  install(TARGETS radosgw DESTINATION bin)
+endif(${WITH_RADOSGW})
 
 install(PROGRAMS
   ${CMAKE_BINARY_DIR}/init-ceph
