@@ -90,6 +90,7 @@ set(osdc_rbd_files osdc/ObjectCacher.cc osdc/Striper.cc)
 add_library(osdc_rbd_objs OBJECT ${osdc_rbd_files})
 
 add_library(osdc ${CEPH_SHARED} ${osdc_files}  $<TARGET_OBJECTS:osdc_rbd_objs>)
+install(TARGETS osdc DESTINATION lib)
 
 #os
 set(libos_srcs
@@ -112,6 +113,8 @@ add_library(os ${CEPH_SHARED} ${libos_srcs} $<TARGET_OBJECTS:os_mon_objs>)
 if(${HAVE_LIBAIO})
   target_link_libraries(os aio)
 endif(${HAVE_LIBAIO})
+set_target_properties(os PROPERTIES OUTPUT_NAME ceph-os VERSION "1.0.0" SOVERSION "1")
+install(TARGETS os DESTINATION lib)
 target_link_libraries(os leveldb snappy)
 
 #osd
@@ -147,6 +150,7 @@ add_library(osd ${CEPH_SHARED} ${osd_srcs}
 # $<TARGET_OBJECTS:osd_mon_objs>
 )
 target_link_libraries(osd dl leveldb)
+install(TARGETS osd DESTINATION lib)
 
 #mon
 set (no_fun_mon_files
@@ -188,6 +192,7 @@ add_library(mon ${CEPH_SHARED} ${lib_mon_srcs}
 	$<TARGET_OBJECTS:common_util_obj>
 	$<TARGET_OBJECTS:monitorstore_obj>
 	)
+install(TARGETS mon DESTINATION lib)
 
 #global
 set(libglobal_srcs
@@ -203,6 +208,7 @@ add_library(global ${CEPH_SHARED} ${libglobal_srcs} $<TARGET_OBJECTS:global_comm
 target_link_libraries(global common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(global PROPERTIES OUTPUT_NAME ceph-global VERSION "1.0.0" SOVERSION "1")
+  install(TARGETS global DESTINATION lib)
 endif(${ENABLE_SHARED})
 
 #common
@@ -384,6 +390,10 @@ if (${WITH_PROFILER})
 endif(${WITH_PROFILER})
 
 target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES})
+if(${ENABLE_SHARED})
+  set_target_properties(common PROPERTIES OUTPUT_NAME ceph-common VERSION "1.0.0" SOVERSION "1")
+  install(TARGETS common DESTINATION lib)
+endif(${ENABLE_SHARED})
 
 #cls/rbd
 set(cls_rbd_files
@@ -481,7 +491,18 @@ add_dependencies(librados osdc)
 target_link_libraries(librados osdc common ${CRYPTO_LIBS} ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2)
+  install(TARGETS librados DESTINATION lib)
 endif(${ENABLE_SHARED})
+install(FILES
+	include/rados/librados.h
+	include/rados/rados_types.h
+	include/rados/rados_types.hpp
+	include/rados/librados.hpp
+	include/buffer.h
+	include/page.h
+	include/crc32c.h
+	DESTINATION include/rados
+)
 
 #rados
 set(rados_srcs
@@ -515,6 +536,7 @@ add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
 target_link_libraries(librbd ${CMAKE_DL_LIBS})
 if(${ENABLE_SHARED})
 	set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd)
+	install(TARGETS librbd DESTINATION lib)
 endif(${ENABLE_SHARED})
 
 #rbd
@@ -528,6 +550,12 @@ add_executable(rbd ${rbd_srcs} $<TARGET_OBJECTS:common_util_obj>)
 set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
 target_link_libraries(rbd global librbd librados keyutils ${CMAKE_DL_LIBS})
 list(APPEND rbd_bin rbd)
+install(FILES
+	include/rbd/features.h
+	include/rbd/librbd.h
+	include/rbd/librbd.hpp
+	DESTINATION include/rbd
+)
 endif(${WITH_RBD})
 
 #radosgw worry about option logic at a different time
