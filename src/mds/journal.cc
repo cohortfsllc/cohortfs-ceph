@@ -807,7 +807,7 @@ void EMetaBlob::Placement::apply(MDS *mds, CDirPlacement *placement,
 
   placement->set_mode(mode);
   placement->set_gid(gid);
-  placement->set_stripe_auth(stripe_auth);
+  layout.dl_stripe_auth = stripe_auth.data();
   placement->set_layout(layout);
   dout(10) << "EMetaBlob updated placement " << *placement << dendl;
 

@@ -219,6 +219,8 @@ class CDirPlacement : public MDSCacheObject {
     __u32 nonce = add_replica(who);
     ::encode(nonce, bl);
     ::encode(stripe_auth, bl);
+    assert(layout.dl_stripe_count == stripe_auth.size());
+    ::encode(layout, bl);
     ::encode(version, bl);
     ::encode(mode, bl);
     ::encode(gid, bl);
@@ -229,6 +231,9 @@ class CDirPlacement : public MDSCacheObject {
     ::decode(nonce, p);
     replica_nonce = nonce;
     ::decode(stripe_auth, p);
+    ::decode(layout, p);
+    assert(layout.dl_stripe_count == stripe_auth.size());
+    layout.dl_stripe_auth = stripe_auth.data();
     ::decode(version, p);
     ::decode(mode, p);
     ::decode(gid, p);

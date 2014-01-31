@@ -1,4 +1,5 @@
 // vim: ts=8 sw=2 smarttab
+#include <algorithm>
 #include "DirRegMap.h"
 #include "MDSRegMap.h"
 #include "common/Finisher.h"
@@ -13,9 +14,9 @@ DirRegMap::DirRegMap(CephContext *cct, MDSRegMap *mdsregs, vinodeno_t vino)
   : cct(cct),
     mdsregs(mdsregs),
     mtx("DirRegMap"),
-    vino(vino),
-    hash_seed(0)
+    vino(vino)
 {
+  memset(&layout, 0, sizeof(layout));
 }
 
 DirRegMap::~DirRegMap()
@@ -81,10 +82,10 @@ class C_DRM_Placement : public Context {
   vector<int> stripes;
   void *user;
  public:
-  C_DRM_Placement(dir_placement_cb callback, vinodeno_t vino,
-                  uint64_t seed, const vector<int> &stripes, void *user)
+  C_DRM_Placement(dir_placement_cb callback, vinodeno_t vino, uint64_t seed,
+                  const int *stripes_begin, const int *stripes_end, void *user)
     : callback(callback), vino(vino), seed(seed),
-      stripes(stripes), user(user) {}
+      stripes(stripes_begin, stripes_end), user(user) {}
   void finish(int r) {
     callback(vino, seed, stripes.size(), stripes.data(), user);
   }
@@ -94,8 +95,10 @@ void DirRegMap::update(registration &reg)
 {
   ldout(cct, 10) << "sending placement for dir " << vino << dendl;
   dir_placement_cb callback = reinterpret_cast<dir_placement_cb>(reg.place);
-  reg.async->queue(new C_DRM_Placement(callback, vino, hash_seed,
-				       stripe_auth, reg.user));
+  const int *stripe_begin = layout.dl_stripe_auth;
+  const int *stripe_end = layout.dl_stripe_auth + layout.dl_stripe_count;
+  reg.async->queue(new C_DRM_Placement(callback, vino, layout.dl_hash_seed,
+				       stripe_begin, stripe_end, reg.user));
 }
 
 class C_DRM_Recall : public Context {
@@ -116,15 +119,23 @@ void DirRegMap::cleanup(registration &reg)
   reg.async->queue(new C_DRM_Recall(callback, vino, reg.user));
 }
 
-void DirRegMap::update(const vector<int> &stripes, uint64_t seed)
+static bool operator==(const ceph_dir_layout &lhs, const ceph_dir_layout &rhs)
 {
-  ldout(cct, 10) << "update " << stripes << " " << seed << dendl;
+  return lhs.dl_hash_seed == rhs.dl_hash_seed
+    && lhs.dl_dir_hash == rhs.dl_dir_hash
+    && lhs.dl_stripe_count == rhs.dl_stripe_count
+    && equal(lhs.dl_stripe_auth, lhs.dl_stripe_auth + lhs.dl_stripe_count,
+	     rhs.dl_stripe_auth);
+}
 
-  if (stripe_auth == stripes && hash_seed == seed)
+void DirRegMap::update(const ceph_dir_layout &dl)
+{
+  ldout(cct, 10) << "update " << dl.dl_stripe_count << dendl;
+
+  if (layout == dl)
     return;
 
-  stripe_auth = stripes;
-  hash_seed = seed;
+  layout = dl;
 
   // schedule callbacks
   for (reg_map::iterator r = regs.begin(); r != regs.end(); ++r)

@@ -33,8 +33,7 @@ class DirRegMap {
   reg_map regs;
 
   // cached dentry placement information
-  vector<int> stripe_auth;
-  uint64_t hash_seed;
+  ceph_dir_layout layout;
 
   // wait for the finisher to complete
   void cleanup(registration &reg);
@@ -53,7 +52,7 @@ class DirRegMap {
   // recall a registration; called by MDSRegMap
   void recall_registration(uint32_t regid);
 
-  void update(const vector<int> &stripes, uint64_t seed = 0);
+  void update(const ceph_dir_layout &dl);
 
   void close();
 };

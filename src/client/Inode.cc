@@ -382,11 +382,25 @@ bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, ui
   return (mode & fmode) == fmode;
 }
 
-void Inode::set_stripe_auth(const vector<int> &stripes)
+void Inode::set_dir_layout(const ceph_dir_layout &dl)
 {
-  stripe_auth = stripes;
+  dir_layout = dl;
+  stripe_auth.assign(dl.dl_stripe_auth, dl.dl_stripe_auth + dl.dl_stripe_count);
+  dir_layout.dl_stripe_auth = stripe_auth.data();
+  stripes.resize(dl.dl_stripe_count);
   if (registrations)
-    registrations->update(stripe_auth);
+    registrations->update(dir_layout);
+}
+
+void Inode::take_dir_layout(const ceph_dir_layout &dl, vector<int> &sa)
+{
+  dir_layout = dl;
+  stripe_auth.swap(sa);
+  assert(dir_layout.dl_stripe_count == stripe_auth.size());
+  assert(dir_layout.dl_stripe_auth == stripe_auth.data());
+  stripes.resize(dl.dl_stripe_count);
+  if (registrations)
+    registrations->update(dir_layout);
 }
 
 bool Inode::add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
@@ -395,7 +409,7 @@ bool Inode::add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
   if (!registrations) {
     // allocate on first use
     registrations = new DirRegMap(cct, mdsregs, vino());
-    registrations->update(stripe_auth);
+    registrations->update(dir_layout);
   }
 
   return registrations->add_registration(regid, placement, recall, user);

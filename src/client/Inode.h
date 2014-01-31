@@ -100,8 +100,8 @@ class Inode : public CapObject, public LRUObject {
   bool is_file()    const { return (mode & S_IFMT) == S_IFREG; }
 
   bool has_dir_layout() const {
-    for (unsigned c = 0; c < sizeof(layout); c++)
-      if (*((const char *)&layout + c))
+    for (unsigned c = 0; c < sizeof(dir_layout); c++)
+      if (*((const char *)&dir_layout + c))
 	return true;
     return false;
   }
@@ -246,8 +246,10 @@ class Inode : public CapObject, public LRUObject {
 			    void *placement, void *recall, void *user);
   void remove_dir_registration(uint32_t regid);
 
-  void set_stripe_auth(const vector<int> &stripes);
+  void set_dir_layout(const ceph_dir_layout &dl);
+  void take_dir_layout(const ceph_dir_layout &dl, vector<int> &stripes);
   size_t get_stripe_count() const { return stripe_auth.size(); }
+  const vector<int>& get_stripe_auth() const { return stripe_auth; }
   int get_stripe_auth(stripeid_t stripe) const { return stripe_auth[stripe]; }
 
 

@@ -565,8 +565,9 @@ Inode* Client::add_update_inode(InodeStat *st, utime_t from,
     in->rstat = st->rstat;
 
     if (in->is_dir()) {
-      in->dir_layout = st->dir_layout;
-      ldout(cct, 20) << " dir hash is " << (int)in->dir_layout.dl_dir_hash << dendl;
+      // claim stripe auth array
+      in->take_dir_layout(st->dir_layout, st->stripe_auth);
+      ldout(cct, 20) << " dir layout " << in->get_stripe_auth() << dendl;
     }
 
     in->layout = st->layout;
@@ -577,10 +578,6 @@ Inode* Client::add_update_inode(InodeStat *st, utime_t from,
                          st->time_warp_seq, st->ctime, st->mtime, st->atime,
                          issued);
   }
-
-  // copy stripe auth array
-  in->set_stripe_auth(st->stripe_auth);
-  in->stripes.resize(in->get_stripe_count());
 
   if (in->snapid == CEPH_NOSNAP)
     add_update_cap(in, session, st->cap.cap_id, st->cap.caps, st->cap.seq, st->cap.mseq, inodeno_t(st->cap.realm), st->cap.flags);

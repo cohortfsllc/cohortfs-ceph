@@ -105,6 +105,8 @@ CDirPlacement::CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
 
   memset(&layout, 0, sizeof(layout));
   layout.dl_dir_hash = g_conf->mds_default_dir_hash;
+  layout.dl_stripe_count = stripe_auth.size();
+  layout.dl_stripe_auth = this->stripe_auth.data();
 }
 
 __u64 CDirPlacement::hash_dentry_name(const string &dn)
