@@ -295,10 +295,8 @@ set (libcommon_files
 	common/WorkQueue.cc
 	common/ConfUtils.cc
 	common/MemoryModel.cc
-	common/armor.c
 	common/fd.cc
 	common/xattr.c
-	common/safe_io.c
 	common/snap_types.cc
 	common/str_list.cc
 	common/errno.cc
@@ -353,7 +351,6 @@ set (libcommon_files
 	common/ceph_json.cc
 	common/ipaddr.cc
 	common/pick_address.cc
-	include/addr_parsing.c
 #	${crush_files}
 	${cohort_common_files}
 )
@@ -362,6 +359,12 @@ set(mon_common_files
 	auth/cephx/CephxSessionHandler.cc
 )
 add_library(mon_common_objs OBJECT ${mon_common_files})
+set(common_mountcephfs_files
+	common/armor.c
+	common/safe_io.c
+	include/addr_parsing.c
+)
+add_library(common_mountcephfs_objs OBJECT ${common_mountcephfs_files})
 
 if (${WITH_PROFILER})
   list(APPEND libcommon_files perfglue/cpu_profiler.cc)
@@ -373,7 +376,10 @@ if(${ENABLE_SHARED})
   list(APPEND libcommon_files $<TARGET_OBJECTS:global_common_objs>)
 endif(${ENABLE_SHARED})
 
-add_library (common STATIC ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>)
+add_library (common STATIC ${libcommon_files}
+	$<TARGET_OBJECTS:mon_common_objs>
+	$<TARGET_OBJECTS:common_mountcephfs_objs>
+)
 
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/ceph_ver.h)
 
@@ -531,10 +537,14 @@ endif(${ENABLE_SHARED})
 set(rbd_srcs
         rbd.cc
 	common/fiemap.cc
-	common/secret.c
 	common/TextTable.cc
 )
-add_executable(rbd ${rbd_srcs} $<TARGET_OBJECTS:common_util_obj>)
+set(rbd_mountcephfs_files common/secret.c)
+add_library(rbd_mountcephfs_objs OBJECT ${rbd_mountcephfs_files})
+add_executable(rbd ${rbd_srcs}
+	$<TARGET_OBJECTS:common_util_obj>
+	$<TARGET_OBJECTS:rbd_mountcephfs_objs>
+)
 set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
 target_link_libraries(rbd global librbd librados keyutils ${CMAKE_DL_LIBS})
 list(APPEND rbd_bin rbd)
@@ -652,6 +662,14 @@ endif(${ENABLE_SHARED})
 
 endif(${WITH_KVS})
 
+#mount.ceph
+set(mount_ceph_srcs mount/mount.ceph.c)
+add_executable(mount.ceph ${mount_ceph_srcs}
+	$<TARGET_OBJECTS:common_mountcephfs_objs>
+	$<TARGET_OBJECTS:rbd_mountcephfs_objs>
+)
+target_link_libraries(mount.ceph keyutils)
+
 set (ceph_mds_bin)
 if (${WITH_MDS})
        list(APPEND ceph_mds_bin ceph-mds)
@@ -690,8 +708,13 @@ endif(${WITH_RADOSGW})
 
 install(PROGRAMS
   ${CMAKE_BINARY_DIR}/init-ceph
-  ${CMAKE_BINARY_DIR}/mkcephfs
   ${CMAKE_SOURCE_DIR}/doc/start/ceph.conf
   ${CMAKE_SOURCE_DIR}/src/vstart.sh
   ${CMAKE_SOURCE_DIR}/src/ceph_common.sh
   DESTINATION bin)
+install(PROGRAMS
+  ${CMAKE_BINARY_DIR}/mkcephfs
+  DESTINATION sbin)
+install(TARGETS
+  mount.ceph
+  DESTINATION sbin)
