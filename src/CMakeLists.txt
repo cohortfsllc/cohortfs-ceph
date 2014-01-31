@@ -720,12 +720,18 @@ install(PROGRAMS
   ${CMAKE_SOURCE_DIR}/src/ceph-clsinfo
   ${CMAKE_BINARY_DIR}/ceph-debugpack
   ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer
+  ${CMAKE_BINARY_DIR}/ceph-coverage
+  ${CMAKE_SOURCE_DIR}/src/ceph-run
   DESTINATION bin)
 install(PROGRAMS
   ${CMAKE_SOURCE_DIR}/src/ceph_common.sh
   DESTINATION lib/ceph)
 install(PROGRAMS
   ${CMAKE_BINARY_DIR}/mkcephfs
+  ${CMAKE_SOURCE_DIR}/src/ceph-disk-prepare
+  ${CMAKE_SOURCE_DIR}/src/ceph-disk-udev
+  ${CMAKE_SOURCE_DIR}/src/ceph-disk-activate
+  ${CMAKE_SOURCE_DIR}/src/ceph-disk
   DESTINATION sbin)
 install(TARGETS
   mount.ceph
