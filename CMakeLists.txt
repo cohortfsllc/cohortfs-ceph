@@ -71,6 +71,8 @@ CHECK_INCLUDE_FILES("keyutils.h" HAVE_KEYUTILS_H)
 
 set(DEBUG_GATHER ON)
 
+set(CEPH_MAN_DIR "share/man" CACHE STRING "Install location for man pages (relative to prefix).")
+
 option(ENABLE_SHARED "build shared libraries" ON)
 if(${ENABLE_SHARED})
  set(CEPH_SHARED SHARED)
@@ -182,3 +184,4 @@ set(OperatingSystem "Mac OS X")
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
 add_subdirectory(src)
+add_subdirectory(man)

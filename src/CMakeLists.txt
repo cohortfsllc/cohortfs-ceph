@@ -662,6 +662,13 @@ endif(${ENABLE_SHARED})
 
 endif(${WITH_KVS})
 
+#admin tools
+# XXX needs mon/PGMap.cc which is no fun
+#set(ceph_srcs tools/ceph.cc tools/common.cc)
+#add_executable(ceph ${mount_ceph_srcs}
+#	$<TARGET_OBJECTS:common_cephtool_objs>
+#)
+
 #mount.ceph
 set(mount_ceph_srcs mount/mount.ceph.c)
 add_executable(mount.ceph ${mount_ceph_srcs}
@@ -698,9 +705,9 @@ install(TARGETS
   ceph_mon_store_converter
   DESTINATION bin)
 install(TARGETS librados librbd DESTINATION lib)
-install(TARGETS cls_kvs cls_lock cls_rbd DESTINATION lib/rados-classes)
+install(TARGETS cls_refcount cls_lock cls_rbd DESTINATION lib/rados-classes)
 if(${WITH_KVS})
-  install(TARGETS cls_kvs DESTINATION lib)
+  install(TARGETS cls_kvs DESTINATION lib/rados-classes)
 endif(${WITH_KVS})
 if(${WITH_RADOSGW})
   install(TARGETS radosgw DESTINATION bin)
@@ -710,8 +717,13 @@ install(PROGRAMS
   ${CMAKE_BINARY_DIR}/init-ceph
   ${CMAKE_SOURCE_DIR}/doc/start/ceph.conf
   ${CMAKE_SOURCE_DIR}/src/vstart.sh
-  ${CMAKE_SOURCE_DIR}/src/ceph_common.sh
+  ${CMAKE_SOURCE_DIR}/src/ceph-clsinfo
+  ${CMAKE_BINARY_DIR}/ceph-debugpack
+  ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer
   DESTINATION bin)
+install(PROGRAMS
+  ${CMAKE_SOURCE_DIR}/src/ceph_common.sh
+  DESTINATION lib/ceph)
 install(PROGRAMS
   ${CMAKE_BINARY_DIR}/mkcephfs
   DESTINATION sbin)
