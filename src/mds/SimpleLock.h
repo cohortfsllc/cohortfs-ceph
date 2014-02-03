@@ -35,6 +35,7 @@ inline const char *get_lock_type_name(int t) {
   case CEPH_LOCK_SLINK: return "slink";
   case CEPH_LOCK_SNEST: return "snest";
   case CEPH_LOCK_DAUTH: return "dauth";
+  case CEPH_LOCK_DLAYOUT: return "dlayout";
   default: assert(0); return 0;
   }
 }
@@ -42,7 +43,8 @@ inline bool is_scatter_lock(int t) {
   return t == CEPH_LOCK_IFILE
       || t == CEPH_LOCK_INEST
       || t == CEPH_LOCK_SLINK
-      || t == CEPH_LOCK_SNEST;
+      || t == CEPH_LOCK_SNEST
+      || t == CEPH_LOCK_DLAYOUT;
 }
 inline bool is_inode_lock(int t) {
   switch (t) {
@@ -91,6 +93,7 @@ struct LockType {
     case CEPH_LOCK_INEST:
     case CEPH_LOCK_SLINK:
     case CEPH_LOCK_SNEST:
+    case CEPH_LOCK_DLAYOUT:
       sm = &sm_scatterlock;
       break;
     case CEPH_LOCK_IFILE:
@@ -280,6 +283,7 @@ public:
     case CEPH_LOCK_SLINK:    return 8 +10*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_SNEST:    return 8 +11*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_DAUTH:    return 8 +12*SimpleLock::WAIT_BITS;
+    case CEPH_LOCK_DLAYOUT:  return 8 +13*SimpleLock::WAIT_BITS;
     default:
       assert(0);
     }
@@ -292,6 +296,7 @@ public:
     case CEPH_LOCK_ILINK: return CEPH_CAP_SLINK;
     case CEPH_LOCK_IFILE: return CEPH_CAP_SFILE;
     case CEPH_LOCK_IXATTR: return CEPH_CAP_SXATTR;
+    case CEPH_LOCK_DLAYOUT: return CEPH_CAP_SDIRLAYOUT;
     default: return 0;
     }
   }

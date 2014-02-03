@@ -202,12 +202,17 @@ class CDirPlacement : public MDSCacheObject {
   // locks
  private:
   static LockType authlock_type;
+  static LockType layoutlock_type;
  public:
   SimpleLock authlock; // protects mode, gid
+  SimpleLock layoutlock; // protects layout, stripe_auth
 
   SimpleLock* get_lock(int type) {
-    assert(type == CEPH_LOCK_DAUTH);
-    return &authlock;
+    switch (type) {
+    case CEPH_LOCK_DAUTH: return &authlock;
+    case CEPH_LOCK_DLAYOUT: return &layoutlock;
+    }
+    return 0;
   }
   void set_object_info(MDSCacheObjectInfo &info);
   void encode_lock_state(int type, bufferlist& bl);

@@ -274,6 +274,7 @@ extern const char *ceph_mds_state_name(int s);
 #define CEPH_LOCK_SLINK       (1<<11)
 #define CEPH_LOCK_SNEST       (1<<12)
 #define CEPH_LOCK_DAUTH       (1<<13)
+#define CEPH_LOCK_DLAYOUT     (1<<14)
 
 /* client_session ops */
 enum {
@@ -562,8 +563,9 @@ int ceph_flags_to_mode(int flags);
 #define CEPH_CAP_SXATTR     6
 #define CEPH_CAP_SFILE      8
 #define CEPH_CAP_SFLOCK    20
+#define CEPH_CAP_SDIRLAYOUT 22
 
-#define CEPH_CAP_BITS      22
+#define CEPH_CAP_BITS      24
 
 /* composed values */
 #define CEPH_CAP_AUTH_SHARED  (CEPH_CAP_GSHARED  << CEPH_CAP_SAUTH)
@@ -583,6 +585,8 @@ int ceph_flags_to_mode(int flags);
 #define CEPH_CAP_FILE_LAZYIO   (CEPH_CAP_GLAZYIO   << CEPH_CAP_SFILE)
 #define CEPH_CAP_FLOCK_SHARED  (CEPH_CAP_GSHARED   << CEPH_CAP_SFLOCK)
 #define CEPH_CAP_FLOCK_EXCL    (CEPH_CAP_GEXCL     << CEPH_CAP_SFLOCK)
+#define CEPH_CAP_DIRLAYOUT_SHARED (CEPH_CAP_GSHARED << CEPH_CAP_SDIRLAYOUT)
+#define CEPH_CAP_DIRLAYOUT_EXCL   (CEPH_CAP_GEXCL   << CEPH_CAP_SDIRLAYOUT)
 
 
 /* cap masks (for getattr) */

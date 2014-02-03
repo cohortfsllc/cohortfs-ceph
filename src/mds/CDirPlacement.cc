@@ -37,6 +37,7 @@
 boost::pool<> CDirPlacement::pool(sizeof(CDirPlacement));
 
 LockType CDirPlacement::authlock_type(CEPH_LOCK_DAUTH);
+LockType CDirPlacement::layoutlock_type(CEPH_LOCK_DLAYOUT);
 
 
 void CDirPlacement::print(ostream& out) 
@@ -61,6 +62,8 @@ void CDirPlacement::print(ostream& out)
 
   if (!authlock.is_sync_and_unlocked())
     out << ' ' << authlock;
+  if (!layoutlock.is_sync_and_unlocked())
+    out << ' ' << layoutlock;
 
   out << " state=" << get_state();
   if (state_test(CDirPlacement::STATE_FROZEN)) out << "|frozen";
@@ -98,7 +101,8 @@ CDirPlacement::CDirPlacement(MDCache *mdcache, inodeno_t ino, int inode_auth,
     mode(0),
     gid(0),
     auth_pins(0),
-    authlock(this, &authlock_type)
+    authlock(this, &authlock_type),
+    layoutlock(this, &layoutlock_type)
 {
   if (inode_auth == mdcache->mds->get_nodeid())
     state_set(STATE_AUTH);
@@ -258,20 +262,37 @@ void CDirPlacement::set_object_info(MDSCacheObjectInfo &info)
 
 void CDirPlacement::encode_lock_state(int type, bufferlist& bl)
 {
-  assert(type == CEPH_LOCK_DAUTH);
-  if (is_auth()) {
+  if (!is_auth())
+    return;
+
+  switch (type) {
+  case CEPH_LOCK_DAUTH:
     ::encode(mode, bl);
     ::encode(gid, bl);
+    break;
+  case CEPH_LOCK_DLAYOUT:
+    ::encode(layout, bl);
+    ::encode(stripe_auth, bl);
+    break;
   }
 }
 
 void CDirPlacement::decode_lock_state(int type, bufferlist& bl)
 {
-  assert(type == CEPH_LOCK_DAUTH);
-  if (!is_auth()) {
-    bufferlist::iterator p = bl.begin();
+  if (is_auth())
+    return;
+
+  bufferlist::iterator p = bl.begin();
+  switch (type) {
+  case CEPH_LOCK_DAUTH:
     ::decode(mode, p);
     ::decode(gid, p);
+    break;
+  case CEPH_LOCK_DLAYOUT:
+    ::decode(layout, p);
+    ::decode(stripe_auth, p);
+    layout.dl_stripe_auth = stripe_auth.data();
+    break;
   }
 }
 
