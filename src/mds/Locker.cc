@@ -540,7 +540,7 @@ void Locker::eval_gather(SimpleLock *lock, bool first, bool *pneed_issue, list<C
 
   int next = lock->get_next_state();
 
-  bool caps = lock->get_cap_shift();
+  bool caps = lock->is_cap_object();
   CapObject *o = caps ? static_cast<CapObject*>(lock->get_parent()) : NULL;
 
   bool need_issue = false;
@@ -1220,7 +1220,7 @@ void Locker::wrlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
   }
 
   if (!lock->get_parent()->is_auth() ||
-      !lock->get_cap_shift()) {
+      !lock->is_cap_object()) {
     _wrlock_finished(lock, pneed_issue);
     return;
   }
@@ -1369,7 +1369,7 @@ bool Locker::xlock_start(SimpleLock *lock, Mutation *mut,
 void Locker::_finish_xlock(SimpleLock *lock, client_t xlocker, bool *pneed_issue)
 {
   assert(!lock->is_stable());
-  if (lock->get_cap_shift() &&
+  if (lock->is_cap_object() &&
       (static_cast<CapObject*>(lock->get_parent()))->get_loner() >= 0)
     lock->set_state(LOCK_EXCL);
   else
@@ -1377,7 +1377,7 @@ void Locker::_finish_xlock(SimpleLock *lock, client_t xlocker, bool *pneed_issue
   if (lock->get_type() == CEPH_LOCK_DN && lock->get_parent()->is_replicated() &&
       !lock->is_waiter_for(SimpleLock::WAIT_WR))
     simple_sync(lock, pneed_issue);
-  if (lock->get_cap_shift())
+  if (lock->is_cap_object())
     *pneed_issue = true;
   lock->get_parent()->auth_unpin(lock);
 }
@@ -1406,7 +1406,7 @@ void Locker::xlock_finish(SimpleLock *lock, Mutation *mut, bool *pneed_issue)
   mut->xlocks.erase(lock);
   mut->locks.erase(lock);
  
-  if (!lock->get_cap_shift()) {
+  if (!lock->is_cap_object()) {
     _xlock_finished(lock, pneed_issue);
     return;
   }
@@ -3281,7 +3281,7 @@ void Locker::simple_eval(SimpleLock *lock, bool *need_issue)
 
   CapObject *o = 0;
   int wanted = 0;
-  if (lock->get_cap_shift()) {
+  if (lock->is_cap_object()) {
     o = static_cast<CapObject*>(lock->get_parent());
     o->get_caps_wanted(&wanted, NULL, lock->get_cap_shift());
   }
@@ -3314,7 +3314,7 @@ bool Locker::simple_sync(SimpleLock *lock, bool *need_issue)
   assert(lock->get_parent()->is_auth());
   assert(lock->is_stable());
 
-  CapObject *o = lock->get_cap_shift() ?
+  CapObject *o = lock->is_cap_object() ?
       static_cast<CapObject*>(lock->get_parent()) : NULL;
 
   int old_state = lock->get_state();
@@ -3386,7 +3386,7 @@ void Locker::simple_excl(SimpleLock *lock, bool *need_issue)
   assert(lock->get_parent()->is_auth());
   assert(lock->is_stable());
 
-  CapObject *o = lock->get_cap_shift() ?
+  CapObject *o = lock->is_cap_object() ?
       static_cast<CapObject*>(lock->get_parent()) : NULL;
 
   switch (lock->get_state()) {
@@ -3441,7 +3441,7 @@ void Locker::simple_lock(SimpleLock *lock, bool *need_issue)
   assert(lock->is_stable());
   assert(lock->get_state() != LOCK_LOCK);
   
-  CapObject *o = lock->get_cap_shift() ?
+  CapObject *o = lock->is_cap_object() ?
       static_cast<CapObject*>(lock->get_parent()) : NULL;
 
   int old_state = lock->get_state();
@@ -3520,7 +3520,7 @@ void Locker::simple_xlock(SimpleLock *lock)
   //assert(lock->is_stable());
   assert(lock->get_state() != LOCK_XLOCK);
   
-  CapObject *o = lock->get_cap_shift() ?
+  CapObject *o = lock->is_cap_object() ?
       static_cast<CapObject*>(lock->get_parent()) : NULL;
 
   if (lock->is_stable())
@@ -3710,7 +3710,7 @@ void Locker::scatter_mix(ScatterLock *lock, bool *need_issue)
 {
   dout(7) << "scatter_mix " << *lock << " on " << *lock->get_parent() << dendl;
 
-  CapObject *o = lock->get_cap_shift() ?
+  CapObject *o = lock->is_cap_object() ?
       static_cast<CapObject*>(lock->get_parent()) : NULL;
   assert(lock->get_parent()->is_auth());
   assert(lock->is_stable());
@@ -3953,8 +3953,8 @@ void Locker::handle_file_lock(ScatterLock *lock, MLock *m)
 	  << " from mds." << from << " " 
 	  << *parent << dendl;
 
-  bool caps = lock->get_cap_shift();
-  
+  bool caps = lock->is_cap_object();
+ 
   switch (m->get_action()) {
     // -- replica --
   case LOCK_AC_SYNC:
