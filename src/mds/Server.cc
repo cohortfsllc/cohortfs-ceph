@@ -2619,6 +2619,7 @@ void Server::handle_client_openc(MDRequest *mdr)
 
   CDirPlacement *placement = dn->get_dir()->get_placement();
   rdlocks.insert(&placement->authlock);
+  rdlocks.insert(&placement->layoutlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -2730,6 +2731,7 @@ void Server::handle_client_readdir(MDRequest *mdr)
                                     diri->authority().first);
     return;
   }
+  rdlocks.insert(&placement->layoutlock);
 
   // which stripe?
   stripeid_t stripeid = req->head.args.readdir.stripe;
@@ -3915,6 +3917,7 @@ void Server::handle_client_mknod(MDRequest *mdr)
 
   CDirPlacement *placement = dn->get_dir()->get_placement();
   rdlocks.insert(&placement->authlock);
+  rdlocks.insert(&placement->layoutlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4031,6 +4034,7 @@ void Server::handle_client_mkdir(MDRequest *mdr)
 
   CDirPlacement *placement = dn->get_dir()->get_placement();
   rdlocks.insert(&placement->authlock);
+  rdlocks.insert(&placement->layoutlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4138,6 +4142,7 @@ void Server::handle_client_symlink(MDRequest *mdr)
 
   CDirPlacement *placement = dn->get_dir()->get_placement();
   rdlocks.insert(&placement->authlock);
+  rdlocks.insert(&placement->layoutlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
@@ -4835,6 +4840,7 @@ void Server::handle_client_unlink(MDRequest *mdr)
   xlocks.insert(&dn->lock);
   wrlocks.insert(&dn->get_stripe()->linklock);
   wrlocks.insert(&dn->get_stripe()->nestlock);
+  rdlocks.insert(&dn->get_stripe()->get_placement()->layoutlock);
   xlocks.insert(&in->linklock);
 
   // rdlock stripes to prevent creates while verifying emptiness
@@ -5441,6 +5447,8 @@ void Server::handle_client_rename(MDRequest *mdr)
     wrlocks.insert(&srcdn->get_stripe()->linklock);
     wrlocks.insert(&srcdn->get_stripe()->nestlock);
   }
+  rdlocks.insert(&srcdn->get_stripe()->get_placement()->layoutlock);
+  rdlocks.insert(&destdn->get_stripe()->get_placement()->layoutlock);
 
   // we need to update srci's ctime.  xlock its least contended lock to do that...
   xlocks.insert(&srci->linklock);
