@@ -237,11 +237,19 @@ CInode::~CInode()
 
 void CInode::set_placement(CDirPlacement *p)
 {
-  if (placement) // drop old pin
+  if (placement) {
+    // drop old pin
     placement->put(CDirPlacement::PIN_INODE);
+    assert(cap_locks.back() == &placement->layoutlock);
+    cap_locks.pop_back();
+  }
   placement = p;
-  if (placement) // get new pin
+  if (placement) {
+    // get new pin
     placement->get(CDirPlacement::PIN_INODE);
+    // grant inode caps based on the placement lock
+    cap_locks.push_back(&placement->layoutlock);
+  }
 }
 
 void CInode::set_stripe_auth(const vector<int> &stripe_auth)
