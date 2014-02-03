@@ -732,6 +732,7 @@ install(PROGRAMS
   ${CMAKE_SOURCE_DIR}/src/ceph-disk-udev
   ${CMAKE_SOURCE_DIR}/src/ceph-disk-activate
   ${CMAKE_SOURCE_DIR}/src/ceph-disk
+  ${CMAKE_SOURCE_DIR}/src/ceph-create-keys
   DESTINATION sbin)
 install(TARGETS
   mount.ceph
