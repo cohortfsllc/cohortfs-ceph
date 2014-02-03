@@ -384,6 +384,9 @@ public:
   }
 
   // stripe placement
+ private:
+  void set_placement(CDirPlacement *p);
+ public:
   void set_stripe_auth(const vector<int> &stripe_auth);
   CDirPlacement* get_placement();
 

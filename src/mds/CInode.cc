@@ -235,6 +235,15 @@ CInode::~CInode()
   g_num_inos++;
 }
 
+void CInode::set_placement(CDirPlacement *p)
+{
+  if (placement) // drop old pin
+    placement->put(CDirPlacement::PIN_INODE);
+  placement = p;
+  if (placement) // get new pin
+    placement->get(CDirPlacement::PIN_INODE);
+}
+
 void CInode::set_stripe_auth(const vector<int> &stripe_auth)
 {
   assert(is_dir());
@@ -242,20 +251,21 @@ void CInode::set_stripe_auth(const vector<int> &stripe_auth)
     placement->set_stripe_auth(stripe_auth);
     dout(10) << "set_stripe_auth existing " << *placement << dendl;
   } else {
-    placement = new CDirPlacement(mdcache, ino(), authority().first,
-                                  stripe_auth);
-    mdcache->add_dir_placement(placement);
-    dout(10) << "set_stripe_auth created " << *placement << dendl;
+    CDirPlacement *p = new CDirPlacement(mdcache, ino(), authority().first,
+					 stripe_auth);
+    set_placement(p);
+    mdcache->add_dir_placement(p);
+    dout(10) << "set_stripe_auth created " << *p << dendl;
   }
 }
 
 CDirPlacement* CInode::get_placement()
 {
   if (!placement) {
-    placement = mdcache->get_dir_placement(ino());
-    if (placement) {
-      placement->get(CDirPlacement::PIN_INODE);
-      dout(10) << "get_placement found cached " << *placement << dendl;
+    CDirPlacement *p = mdcache->get_dir_placement(ino());
+    if (p) {
+      dout(10) << "get_placement found cached " << *p << dendl;
+      set_placement(p);
     }
   }
   return placement;
@@ -1595,10 +1605,10 @@ void CInode::decode_replica(bufferlist::iterator& p, bool is_new)
     is_new = !placement;
     if (!placement) {
       vector<int> empty_stripe_auth;
-      placement = new CDirPlacement(mdcache, ino(), authority().first,
-                                    empty_stripe_auth);
-      placement->get(CDirPlacement::PIN_INODE);
-      mdcache->add_dir_placement(placement);
+      CDirPlacement *p = new CDirPlacement(mdcache, ino(), authority().first,
+                                           empty_stripe_auth);
+      mdcache->add_dir_placement(p);
+      set_placement(p);
     }
     placement->decode_replica(p, is_new);
   }

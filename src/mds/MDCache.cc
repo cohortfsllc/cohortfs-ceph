@@ -4325,8 +4325,11 @@ void MDCache::trim_inode(CDentry *dn, CInode *in,
   assert(in->get_num_ref() == 0);
 
   // PLACEMENT
-  if (in->is_dir())
-    trim_placement(in->get_placement(), expiremap);
+  if (in->is_dir()) {
+    CDirPlacement *p = in->get_placement();
+    in->set_placement(NULL);
+    trim_placement(p, expiremap);
+  }
 
   // INODE
   if (in->is_auth()) {
