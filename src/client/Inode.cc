@@ -115,6 +115,8 @@ unsigned Inode::caps_wanted() const
       want |= ceph_caps_for_mode(p->first);
   if (want & CEPH_CAP_FILE_BUFFER)
     want |= CEPH_CAP_FILE_EXCL;
+  if (is_dir())
+    want |= CEPH_CAP_DIRLAYOUT_SHARED;
   return want;
 }
 

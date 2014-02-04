@@ -306,11 +306,6 @@ public:
     default: return (1 << CEPH_CAP_SIMPLE_BITS) - 1;
     }
   }
-  bool is_cap_object() const {
-    int shift = get_cap_shift();
-    // DLAYOUT parent is CDirPlacement, which can't be cast to CapObject
-    return shift && shift != CEPH_CAP_SDIRLAYOUT;
-  }
 
   class ptr_lt {
    public:

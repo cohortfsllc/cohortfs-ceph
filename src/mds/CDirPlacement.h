@@ -21,7 +21,7 @@
 #include "mdstypes.h"
 #include "common/config.h"
 
-#include "SimpleLock.h"
+#include "ScatterLock.h"
 
 #include <list>
 #include <map>
@@ -205,7 +205,7 @@ class CDirPlacement : public MDSCacheObject {
   static LockType layoutlock_type;
  public:
   SimpleLock authlock; // protects mode, gid
-  SimpleLock layoutlock; // protects layout, stripe_auth
+  ScatterLock layoutlock; // protects layout, stripe_auth
 
   SimpleLock* get_lock(int type) {
     switch (type) {

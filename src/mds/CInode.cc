@@ -1113,8 +1113,9 @@ int CInode::get_caps_liked()
   if (inode.nlink == 0)
     liked |= CEPH_CAP_LINK_SHARED;
 
-  if (is_dir())
-    liked |= CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED;  // but not, say, FILE_RD|WR|WRBUFFER
+  if (is_dir()) // not FILE_RD|WR|WRBUFFER
+    liked |= CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED |
+      CEPH_CAP_DIRLAYOUT_EXCL | CEPH_CAP_DIRLAYOUT_SHARED;
   else
     liked |= CEPH_CAP_ANY & ~CEPH_CAP_FILE_LAZYIO;
   return liked;
@@ -1124,7 +1125,8 @@ int CInode::get_caps_allowed_ever()
 {
   int allowed;
   if (is_dir())
-    allowed = CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED;
+    allowed = CEPH_CAP_PIN | CEPH_CAP_ANY_EXCL | CEPH_CAP_ANY_SHARED |
+      CEPH_CAP_DIRLAYOUT_EXCL | CEPH_CAP_DIRLAYOUT_SHARED;
   else
     allowed = CEPH_CAP_ANY;
   return allowed & CapObject::get_caps_allowed_ever();
