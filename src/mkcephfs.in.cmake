@@ -57,7 +57,7 @@ if [ `dirname $0` = "." ] && [ $PWD != "/etc/init.d" ]; then
     ETCDIR=.
 else
     BINDIR=@bindir@
-    LIBDIR=@libdir@
+    LIBDIR=@libdir@/ceph
     ETCDIR=@sysconfdir@/ceph
 fi
 
@@ -68,7 +68,7 @@ usage_exit() {
     exit
 }
 
-. $BINDIR/ceph_common.sh
+. $LIBDIR/ceph_common.sh
 
 
 allhosts=0
