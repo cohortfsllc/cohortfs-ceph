@@ -54,7 +54,7 @@ void CohortVolume::compile(epoch_t epoch)
 
   const char *largv[] = {
     [0] = "gcc", [1] = "-shared", [2] = "-o",
-    [3] = "module.so", [4] = "module.o", [5] = "-lm",
+    [3] = sofilename, [4] = objfilename, [5] = "-lm",
     [6] = "-lc", [7] = NULL
   };
 

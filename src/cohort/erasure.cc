@@ -16,7 +16,9 @@ static bool decode_type(const string& erasure_type,
 			erasure_encoder& type,
 			string& error_message)
 {
-  if (erasure_type == "reed_solomon_vandermonde") {
+  if (erasure_type == "no_erasure") {
+    type = no_erasure;
+  } if (erasure_type == "reed_solomon_vandermonde") {
     type = reed_solomon_vandermonde;
   } else if (erasure_type == "reed_solomon_vandermonde_raid_6") {
     type = reed_solomon_vandermonde_raid_6;
@@ -36,6 +38,7 @@ static bool decode_type(const string& erasure_type,
   return true;
 }
 
+
 bool erasure_params::fill_out(const string& erasure_type,
 			      const string& data_blocks,
 			      const string& code_blocks,
@@ -47,6 +50,9 @@ bool erasure_params::fill_out(const string& erasure_type,
 {
   if (!decode_type(erasure_type, params.type, error_message))
     return false;
+
+  if (params.type == no_erasure)
+    return true;
 
   string cur;
 

@@ -118,18 +118,18 @@ bool CohortOSDMonitor::prepare_command_sub(MMonCommand *m,
   r = -1;
 
   if (m->cmd.size() > 1) {
-    if (m->cmd[1] == "create" && m->cmd.size() == 12) {
+    if (m->cmd[1] == "create" && m->cmd.size() == 11) {
       const string& name = m->cmd[2];
       epoch_t last_update = l_osdmap->epoch;
-      const string& place_text = m->cmd[4];
-      const string& symbols = m->cmd[5];
-      const string& erasure_type = m->cmd[6];
-      const string& data_blocks = m->cmd[7];
-      const string& code_blocks = m->cmd[8];
-      const string& word_size = m->cmd[9];
-      const string& packet_size = m->cmd[10];
-      const string& size = m->cmd[11];
-      string& error_message = m->cmd[3];
+      const string& place_text = m->cmd[3];
+      const string& symbols = m->cmd[4];
+      const string& erasure_type = m->cmd[5];
+      const string& data_blocks = m->cmd[6];
+      const string& code_blocks = m->cmd[7];
+      const string& word_size = m->cmd[8];
+      const string& packet_size = m->cmd[9];
+      const string& size = m->cmd[10];
+      string error_message;
 
       VolumeRef vol;
 

@@ -17,6 +17,7 @@ using std::string;
    the right to add more in the future. */
 
 enum erasure_encoder {
+  no_erasure, /* No erasure encoding */
   reed_solomon_vandermonde, /* Classic Reed-Solomon with a
 			       Vandermonde matrix, using arithmetic in
 			       GF(2^w). */
