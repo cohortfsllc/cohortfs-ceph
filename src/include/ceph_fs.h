@@ -627,7 +627,7 @@ int ceph_flags_to_mode(int flags);
 			   CEPH_CAP_PIN)
 
 #define CEPH_CAP_LOCKS (CEPH_LOCK_IFILE | CEPH_LOCK_IAUTH | CEPH_LOCK_ILINK | \
-			CEPH_LOCK_IXATTR)
+			CEPH_LOCK_IXATTR | CEPH_LOCK_DLAYOUT)
 
 int ceph_caps_for_mode(int mode);
 
