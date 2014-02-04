@@ -7643,6 +7643,63 @@ void MDCache::rollback_uncommitted_fragments()
 }
 
 
+// ==============================================================
+// directory restriping
+
+class RestripeMutation : public Mutation {
+ public:
+  CDirPlacement *dir;
+  vector<int> stripes;
+  RestripeMutation(CDirPlacement *dir, const vector<int> &stripes)
+    : dir(dir), stripes(stripes)
+  {
+    pin(dir);
+  }
+};
+
+class C_MDC_RestripeLock : public Context {
+ private:
+  MDCache *mdcache;
+  RestripeMutation *mut;
+ public:
+  C_MDC_RestripeLock(MDCache *mdcache, RestripeMutation *mut)
+    : mdcache(mdcache), mut(mut) {}
+  void finish(int r) {
+    mdcache->_restripe_lock(mut);
+  }
+};
+
+void MDCache::restripe_dir(CDirPlacement *dir, const vector<int> &stripes)
+{
+  dout(10) << "restripe_dir " << *dir << " -> " << stripes << dendl;
+
+  _restripe_lock(new RestripeMutation(dir, stripes));
+}
+
+void MDCache::_restripe_lock(RestripeMutation *mut)
+{
+  dout(10) << "restripe_lock " << *mut->dir << " -> " << mut->stripes << dendl;
+
+  C_GatherBuilder gather(g_ceph_context);
+  if (mds->locker->wrlock_start(&mut->dir->layoutlock, mut, &gather)) {
+    _restripe_locked(mut);
+    return;
+  }
+
+  gather.set_finisher(new C_MDC_RestripeLock(this, mut));
+  gather.activate();
+}
+
+void MDCache::_restripe_locked(RestripeMutation *mut)
+{
+  dout(10) << "restripe_locked " << *mut->dir << " -> " << mut->stripes << dendl;
+
+  mds->locker->wrlock_finish(&mut->dir->layoutlock, mut, NULL);
+  mut->apply();
+  mut->cleanup();
+  delete mut;
+}
+
 
 // ==============================================================
 // debug crap

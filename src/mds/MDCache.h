@@ -75,6 +75,7 @@ class ESubtreeMap;
 struct Mutation;
 struct MDRequest;
 struct MDSlaveUpdate;
+class RestripeMutation;
 
 
 class MDCache {
@@ -817,6 +818,16 @@ public:
   void split_dir(CDirFrag *dir, int byn);
   void merge_dir(CDirStripe *stripe, frag_t fg);
   void rollback_uncommitted_fragments();
+
+  // -- directory restriping --
+ private:
+  void _restripe_lock(RestripeMutation *mut);
+  void _restripe_locked(RestripeMutation *mut);
+
+  friend class C_MDC_RestripeLock;
+
+ public:
+  void restripe_dir(CDirPlacement *dir, const vector<int> &stripe_auth);
 
   // -- updates --
   //int send_inode_updates(CInode *in);

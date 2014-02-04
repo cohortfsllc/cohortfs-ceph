@@ -780,8 +780,22 @@ void MDS::handle_command(MMonCommand *m)
         } else dout(0) << "stripe " << dirstripe_t(in->ino(), stripeid) << " not found" << dendl;
       } else dout(0) << "path " << fp << " not found" << dendl;
     } else dout(0) << "bad syntax" << dendl;
-  } 
-  else if (m->cmd[0] == "cpu_profiler") {
+  } else if (m->cmd[0] == "restripe_dir") {
+    if (m->cmd.size() >= 3) {
+      filepath fp(m->cmd[1].c_str());
+      CInode *in = mdcache->cache_traverse(fp);
+      if (in) {
+	if (in->is_dir()) {
+	  if (in->is_auth()) {
+	    vector<int> stripes;
+	    for (size_t i = 2; i < m->cmd.size(); i++)
+	      stripes.push_back(atoi(m->cmd[i].c_str()));
+	    mdcache->restripe_dir(in->get_placement(), stripes);
+	  } else dout(0) << "not auth for " << *in << dendl;
+	} else dout(0) << "not a directory: " << *in << dendl;
+      } else dout(0) << "path " << fp << " not found" << dendl;
+    } else dout(0) << "bad syntax" << dendl;
+  } else if (m->cmd[0] == "cpu_profiler") {
     ostringstream ss;
     cpu_profiler_handle_command(m->cmd, ss);
     clog.info() << ss.str();
