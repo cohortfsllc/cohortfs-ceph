@@ -238,23 +238,23 @@ if (${WITH_MDS})
 endif (${WITH_MDS})
 
 
-add_custom_target(check_version ALL ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_SOURCE_DIR}/src/.git_version
+add_custom_target(check_version ALL ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_BINARY_DIR}/src/.git_version
 COMMENT "ceph_ver.h is up to date")
 
 include_directories("${CMAKE_BINARY_DIR}/src")
 
 add_custom_command(
 PRE_BUILD
-OUTPUT ${CMAKE_SOURCE_DIR}/src/.git_version
-COMMAND ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_SOURCE_DIR}/src/.git_version
+OUTPUT ${CMAKE_BINARY_DIR}/src/.git_version
+COMMAND ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_BINARY_DIR}/src/.git_version
 DEPENDS ${CMAKE_SOURCE_DIR}/src/check_version
 )
 
 add_custom_command(
 PRE_BUILD
 OUTPUT ${CMAKE_BINARY_DIR}/src/ceph_ver.h
-COMMAND ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_version ${CMAKE_BINARY_DIR}/src/ceph_ver.h
-DEPENDS ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_SOURCE_DIR}/src/.git_version
+COMMAND ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_BINARY_DIR}/src/.git_version ${CMAKE_BINARY_DIR}/src/ceph_ver.h
+DEPENDS ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_BINARY_DIR}/src/.git_version
 )
 
 # this list ommits the ceph_ver.c file
