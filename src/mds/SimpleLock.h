@@ -90,11 +90,13 @@ struct LockType {
     case CEPH_LOCK_DAUTH:
       sm = &sm_simplelock;
       break;
+    case CEPH_LOCK_DLAYOUT:
+      sm = &sm_scatterlock;
+      break;
     case CEPH_LOCK_INEST:
     case CEPH_LOCK_SLINK:
     case CEPH_LOCK_SNEST:
-    case CEPH_LOCK_DLAYOUT:
-      sm = &sm_scatterlock;
+      sm = &sm_scatterupdatelock;
       break;
     case CEPH_LOCK_IFILE:
       sm = &sm_filelock;
