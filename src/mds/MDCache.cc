@@ -5449,7 +5449,11 @@ CInode *MDCache::cache_traverse(const filepath& fp)
     CDentry *dn = curdir->lookup(dname, CEPH_NOSNAP);
     if (!dn)
       return NULL;
-    in = dn->get_linkage()->get_inode();
+    CDentry::linkage_t *dnl = dn->get_linkage();
+    if (dnl->is_remote())
+      in = get_inode(dnl->get_remote_ino());
+    else
+      in = dnl->get_inode();
     if (!in)
       return NULL;
   }
