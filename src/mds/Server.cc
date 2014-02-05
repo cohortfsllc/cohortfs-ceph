@@ -4010,6 +4010,41 @@ void Server::handle_client_mknod(MDRequest *mdr)
 }
 
 
+static void choose_dir_striping(MDS *mds, uint32_t count, uint32_t mod,
+				vector<int> &stripe_auth)
+{
+  // use default values for optional arguments
+  if (count == 0) count = 1;
+  if (mod == 0 || mod > count) mod = count;
+
+  // get set of active mds nodes
+  set<int> nodes;
+  mds->mdsmap->get_active_mds_set(nodes);
+
+  set<int>::iterator it = nodes.find(mds->get_nodeid());
+  assert(it != nodes.end()); // must be up to handle a request
+
+  if (mod > nodes.size())
+    mod = nodes.size();
+
+  stripe_auth.reserve(count);
+
+  // choose 'mod' nodes, starting with current mds
+  for (uint32_t i = 0; i < mod; i++) {
+    if (it == nodes.end()) // copy any remaining nodes from the front
+      it = nodes.begin();
+    stripe_auth.push_back(*it++);
+  }
+
+  // repeat the stripes up to the requested count
+  count -= mod;
+  while (count) {
+    uint32_t n = min(count, mod);
+    copy(stripe_auth.begin(), stripe_auth.begin() + n,
+	back_inserter(stripe_auth));
+    count -= n;
+  }
+}
 
 // MKDIR
 /* This function takes responsibility for the passed mdr*/
@@ -4048,12 +4083,14 @@ void Server::handle_client_mkdir(MDRequest *mdr)
   mode |= S_IFDIR;
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), ino, mode);
 
-  // stripe over all active nodes
-  set<int> nodes;
-  mds->mdsmap->get_active_mds_set(nodes);
-
-  vector<int> stripe_auth(nodes.begin(), nodes.end());
+  // initialize the striping pattern
+  vector<int> stripe_auth;
+  choose_dir_striping(mds, req->head.args.mkdir.stripe_count,
+      req->head.args.mkdir.stripe_mod, stripe_auth);
   newi->set_stripe_auth(stripe_auth);
+  dout(12) << " requested stripe count=" << req->head.args.mkdir.stripe_count
+    << " mod=" << req->head.args.mkdir.stripe_mod
+    << " -> " << stripe_auth << dendl;
 
   dout(12) << " follows " << follows << dendl;
   if (follows >= dn->first)

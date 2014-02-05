@@ -382,6 +382,8 @@ union ceph_mds_request_args {
 	} __attribute__ ((packed)) mknod;
 	struct {
 		__le32 mode;
+		__le32 stripe_count;         /* optional stripe count hint */
+		__le32 stripe_mod;           /* optional stripe modulus hint */
 	} __attribute__ ((packed)) mkdir;
 	struct {
 		__le32 flags;
