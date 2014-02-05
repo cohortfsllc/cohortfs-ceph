@@ -49,11 +49,15 @@ class DirRegMap {
   bool add_registration(uint32_t regid, void *place, void *recall, void *user);
   void remove_registration(uint32_t regid);
 
+  bool empty() const { return regs.empty(); }
+
   // recall a registration; called by MDSRegMap
   void recall_registration(uint32_t regid);
 
+  // update registered clients of a new layout
   void update(const ceph_dir_layout &dl);
 
+  // recall all registrations
   void close();
 };
 

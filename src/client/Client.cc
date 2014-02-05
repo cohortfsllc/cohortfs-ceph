@@ -994,7 +994,8 @@ int Client::choose_target_mds(MetaRequest *req)
   ldout(cct, 20) << "choose_target_mds " << *in << " is_hash=" << is_hash
            << " hash=" << hash << dendl;
 
-  if (is_hash && S_ISDIR(in->mode)) {
+  if (is_hash && S_ISDIR(in->mode) &&
+      in->caps_issued_mask(CEPH_CAP_DIRLAYOUT_SHARED)) {
     mds = in->get_stripe_auth(hash % in->get_stripe_count());
     ldout(cct, 10) << "choose_target_mds from stripe hash" << dendl;
     goto out;
@@ -4587,10 +4588,12 @@ int Client::_readdir_get_stripe(dir_result_t *dirp)
   }
   req->readdir_offset = dirp->next_offset;
   req->readdir_stripe = stripe;
-  
-  
+
+  int use_mds = -1;
+  if (diri->caps_issued_mask(CEPH_CAP_DIRLAYOUT_SHARED))
+    use_mds = diri->get_stripe_auth(stripe);
+
   bufferlist dirbl;
-  int use_mds = diri->get_stripe_auth(stripe);
   int res = make_request(req, -1, -1, NULL, NULL, use_mds, &dirbl);
 
   if (res == 0) {

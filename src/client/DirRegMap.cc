@@ -55,7 +55,6 @@ void DirRegMap::remove_registration(uint32_t regid)
   assert(i != regs.end());
 
   mdsregs->remove_dir_registration(regid, this);
-  cleanup(i->second);
 
   regs.erase(i);
 }
@@ -144,6 +143,8 @@ void DirRegMap::update(const ceph_dir_layout &dl)
 
 void DirRegMap::close()
 {
+  ldout(cct, 10) << "close " << regs.size() << dendl;
+
   // schedule recalls
   for (reg_map::iterator r = regs.begin(); r != regs.end(); ++r) {
     cleanup(r->second);

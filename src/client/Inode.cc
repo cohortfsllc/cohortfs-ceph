@@ -50,8 +50,10 @@ ostream& operator<<(ostream &out, Inode &in)
 
 Inode::~Inode()
 {
-  if (registrations)
+  if (registrations) {
+    registrations->close();
     delete registrations;
+  }
 }
 
 void Inode::make_long_path(filepath& p)
@@ -169,6 +171,14 @@ bool Inode::on_caps_revoked(unsigned revoked)
 
   if (caps_used() & revoked & CEPH_CAP_FILE_BUFFER)
     return cache->flush(this); // waiting for flush?
+
+  if (caps_used() & revoked & CEPH_CAP_DIRLAYOUT_SHARED) {
+    assert(registrations);
+    registrations->close();
+    delete registrations;
+    registrations = NULL;
+    put_cap_ref(CEPH_CAP_DIRLAYOUT_SHARED);
+  }
 
   return true;
 }
@@ -408,10 +418,15 @@ void Inode::take_dir_layout(const ceph_dir_layout &dl, vector<int> &sa)
 bool Inode::add_dir_registration(MDSRegMap *mdsregs, uint32_t regid,
 				 void *placement, void *recall, void *user)
 {
+  // need dirlayout cap to provide registrations
+  if (!caps_issued_mask(CEPH_CAP_DIRLAYOUT_SHARED))
+    return false;
+
   if (!registrations) {
     // allocate on first use
     registrations = new DirRegMap(cct, mdsregs, vino());
     registrations->update(dir_layout);
+    get_cap_ref(CEPH_CAP_DIRLAYOUT_SHARED);
   }
 
   return registrations->add_registration(regid, placement, recall, user);
@@ -421,6 +436,12 @@ void Inode::remove_dir_registration(uint32_t regid)
 {
   assert(registrations);
   registrations->remove_registration(regid);
+
+  if (registrations->empty()) {
+    delete registrations;
+    registrations = NULL;
+    put_cap_ref(CEPH_CAP_DIRLAYOUT_SHARED);
+  }
 }
 
 

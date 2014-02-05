@@ -954,6 +954,7 @@ void Locker::eval(SimpleLock *lock, bool *need_issue)
   case CEPH_LOCK_INEST:
   case CEPH_LOCK_SLINK:
   case CEPH_LOCK_SNEST:
+  case CEPH_LOCK_DLAYOUT:
     return scatter_eval(static_cast<ScatterLock*>(lock), need_issue);
   default:
     return simple_eval(lock, need_issue);
