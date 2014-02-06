@@ -1312,10 +1312,11 @@ extern "C" int ceph_ll_create(class ceph_mount_info *cmount,
 extern "C" int ceph_ll_mkdir(class ceph_mount_info *cmount,
 			     Inode *parent, const char *name,
 			     mode_t mode, struct stat *attr, Inode **out,
-			     int uid, int gid)
+			     int uid, int gid, uint32_t stripe_count,
+			     uint32_t stripe_mod)
 {
   return (cmount->get_client()->ll_mkdir(parent, name, mode, attr, out, uid,
-					 gid));
+					 gid, stripe_count, stripe_mod));
 }
 
 extern "C" int ceph_ll_link(class ceph_mount_info *cmount,

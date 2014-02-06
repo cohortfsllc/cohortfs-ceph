@@ -1289,7 +1289,8 @@ int ceph_ll_create(struct ceph_mount_info *cmount, struct Inode *parent,
 		   int uid, int gid);
 int ceph_ll_mkdir(struct ceph_mount_info *cmount, struct Inode *parent,
 		  const char *name, mode_t mode, struct stat *attr,
-		  Inode **out, int uid, int gid);
+		  Inode **out, int uid, int gid, uint32_t stripe_count,
+		  uint32_t stripe_mod);
 int ceph_ll_link(struct ceph_mount_info *cmount, struct Inode *in,
 		 struct Inode *newparrent, const char *name,
 		 struct stat *attr, int uid, int gid);

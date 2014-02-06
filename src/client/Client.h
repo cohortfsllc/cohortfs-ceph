@@ -513,7 +513,8 @@ private:
   int _link(Inode *in, Inode *dir, const char *name, int uid=-1, int gid=-1, Inode **inp = 0);
   int _unlink(Inode *dir, const char *name, int uid=-1, int gid=-1);
   int _rename(Inode *olddir, const char *oname, Inode *ndir, const char *nname, int uid=-1, int gid=-1);
-  int _mkdir(Inode *dir, const char *name, mode_t mode, int uid=-1, int gid=-1, Inode **inp = 0);
+  int _mkdir(Inode *dir, const char *name, mode_t mode, int uid=-1, int gid=-1,
+             uint32_t stripe_count=0, uint32_t stripe_mod=0, Inode **inp = 0);
   int _rmdir(Inode *dir, const char *name, int uid=-1, int gid=-1);
   int _symlink(Inode *dir, const char *name, const char *target, int uid=-1, int gid=-1, Inode **inp = 0);
   int _mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev, int uid=-1, int gid=-1, Inode **inp = 0);
@@ -711,7 +712,8 @@ public:
   int ll_mknod(Inode *in, const char *name, mode_t mode, dev_t rdev,
 	       struct stat *attr, Inode **out, int uid = -1, int gid = -1);
   int ll_mkdir(Inode *in, const char *name, mode_t mode, struct stat *attr,
-	       Inode **out, int uid = -1, int gid = -1);
+	       Inode **out, int uid = -1, int gid = -1,
+	       uint32_t stripe_count = 0, uint32_t stripe_mod = 0);
   int ll_symlink(Inode *in, const char *name, const char *value,
 		 struct stat *attr, Inode **out, int uid = -1, int gid = -1);
   int ll_unlink(Inode *in, const char *name, int uid = -1, int gid = -1);

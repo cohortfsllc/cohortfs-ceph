@@ -3922,7 +3922,7 @@ int Client::mkdirs(const char *relpath, mode_t mode)
   //make new directory at each level
   for (; i<path.depth(); ++i) {
     //make new dir
-    r = _mkdir(cur, path[i].c_str(), mode, -1, -1, &next);
+    r = _mkdir(cur, path[i].c_str(), mode, -1, -1, 0, 0, &next);
     //check proper creation/existence
     if (r < 0) return r;
     //move to new dir and continue
@@ -6843,7 +6843,7 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
 
 // returns a reference to *inp on success
 int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid,
-		   Inode **inp)
+		   uint32_t stripe_count, uint32_t stripe_mod, Inode **inp)
 {
   ldout(cct, 3) << "_mkdir(" << dir->ino << " " << name << ", 0" << oct
 		<< mode << dec << ", uid " << uid << ", gid " << gid << ")"
@@ -6864,6 +6864,8 @@ int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid,
   req->set_filepath(path);
   req->set_inode(dir);
   req->head.args.mkdir.mode = mode;
+  req->head.args.mkdir.stripe_count = stripe_count;
+  req->head.args.mkdir.stripe_mod = stripe_mod;
   req->dentry_drop = CEPH_CAP_FILE_SHARED;
   req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
@@ -6888,7 +6890,8 @@ int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid,
 }
 
 int Client::ll_mkdir(Inode *parent, const char *name, mode_t mode,
-		     struct stat *attr, Inode **out, int uid, int gid)
+		     struct stat *attr, Inode **out, int uid, int gid,
+		     uint32_t stripe_count, uint32_t stripe_mod)
 {
   Mutex::Locker lock(client_lock);
 
@@ -6901,7 +6904,7 @@ int Client::ll_mkdir(Inode *parent, const char *name, mode_t mode,
   tout(cct) << mode << std::endl;
 
   Inode *in = NULL;
-  int r = _mkdir(parent, name, mode, uid, gid, &in);
+  int r = _mkdir(parent, name, mode, uid, gid, stripe_count, stripe_mod, &in);
   if (r == 0) {
     fill_stat(in, attr);
     _ll_get(in);
