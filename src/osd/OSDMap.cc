@@ -187,6 +187,9 @@ int OSDMap::Incremental::identify_osd(uuid_d u) const
 
 void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
 {
+  // base
+  __u16 v = 6;
+  ::encode(v, bl);
   ::encode(fsid, bl);
   ::encode(epoch, bl);
   ::encode(modified, bl);
