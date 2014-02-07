@@ -53,6 +53,7 @@ CohortOSD::CohortOSD(int id, Messenger *internal, Messenger *external,
 	       &disk_tp)
 
 {
+  service = shared_ptr<CohortOSDService>(new CohortOSDService(this));
 }
 
 int CohortOSD::init()
