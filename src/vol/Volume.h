@@ -57,14 +57,13 @@ private:
      identical.)
 
      The very first thing the factory must do is allocate (with new)
-     an empty (as in default constructor) volume of the required
-     type.
+     an volume of the required type with the type constructor.
 
-     It must then call the common_decode method on its parent. (This
+     It must then call the decode_payload() on the new volume.  (This
      is virtual, so that volume classes that share functionality can
      share a parent and have common structure decoded by it.  Any
-     common_decode in a child of Volume must call its parent's
-     common_decode before doing anything, as well.)
+     decode_payload in a child of Volume must call its parent's
+     decode_payload before doing anything, as well.)
 
      The factory method must then do its own specific implementation
      and return a shared pointer to the volume.
@@ -75,14 +74,7 @@ private:
   static const factory factories[];
 
 protected:
-  /* This function is virtual so that it can be overriden. Any
-     common_encode not in the Volume class proper should call its
-     parent before doing anything else. This whole encode/decode
-     business is based off the Serialization section in the C++ FAQ
-     Lite. */
-  virtual void common_encode(bufferlist& bl) const;
-  virtual void common_decode(bufferlist::iterator& bl,
-			     __u8 v, vol_type t);
+  virtual void decode_payload(bufferlist::iterator& bl, __u8 v);
 
   Volume(const vol_type t) :
     type(t), uuid(INVALID_VOLUME), name() { }
@@ -105,12 +97,14 @@ public:
   static bool valid_name(const string& name, string& error);
   virtual bool valid(string& error);
   static const string& type_string(vol_type type);
-  static VolumeRef create_decode(bufferlist::iterator& bl);
-  /* This function should only be implemented by concrete
-     classes. Abstract parents should override common_encode. Any
-     concrete 'encode' should call its parent's common_encode as its
-     first action. */
-  virtual void encode(bufferlist& bl) const = 0;
+  static VolumeRef decode_volume(bufferlist::iterator& bl);
+  /* Each child class should call its parent's encode class as it's first
+     action. */
+  virtual void encode(bufferlist& bl) const;
+  /* Dummy decode for WRITE_CLASS_ENCODER */
+  void decode(bufferlist& bl) { assert(false); };
+  void decode(bufferlist::iterator& bl) { assert(false); };
+
   static string get_epoch_key(uuid_d vol) {
     return stringify(vol) + "_epoch";
   }
@@ -126,6 +120,8 @@ public:
 		    const unsigned int rule_index,
 		    vector<int>& osds) = 0;
 };
+
+WRITE_CLASS_ENCODER(Volume)
 
 inline ostream& operator<<(ostream& out, const Volume& vol) {
   return out << Volume::type_string(vol.type) << " : "

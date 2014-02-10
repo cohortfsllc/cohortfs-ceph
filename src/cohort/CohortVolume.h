@@ -1,4 +1,5 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Copyright (C) 2013, CohortFS, LLC <info@cohortfs.com>
  * All rights reserved.
@@ -50,12 +51,8 @@ protected:
 
   virtual int update(VolumeCRef v);
 
-  virtual void common_decode(bufferlist::iterator& bl,
-			     __u8 v, vol_type t);
-  virtual void common_encode(bufferlist& bl) const;
-  virtual void encode(bufferlist& bl) const {
-    common_encode(bl);
-  }
+  virtual void decode_payload(bufferlist::iterator& bl, __u8 v);
+  virtual void encode(bufferlist& bl) const;
 
   friend VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v,
 				    vol_type t);

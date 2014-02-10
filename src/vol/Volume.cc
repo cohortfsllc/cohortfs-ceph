@@ -42,16 +42,14 @@ const Volume::factory Volume::factories[] = {
 };
 
 
-void Volume::common_decode(bufferlist::iterator& bl,
-			   __u8 v, vol_type t)
+void Volume::decode_payload(bufferlist::iterator& bl, __u8 v)
 {
-  type = t;
   ::decode(uuid, bl);
   ::decode(name, bl);
   ::decode(last_update, bl);
 }
 
-void Volume::common_encode(bufferlist& bl) const
+void Volume::encode(bufferlist& bl) const
 {
   int version = 0;
   ::encode(version, bl);
@@ -118,7 +116,7 @@ const string& Volume::type_string(vol_type type)
   }
 }
 
-VolumeRef Volume::create_decode(bufferlist::iterator& bl)
+VolumeRef Volume::decode_volume(bufferlist::iterator& bl)
 {
   __u8 v;
   vol_type t;

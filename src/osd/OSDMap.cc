@@ -202,7 +202,7 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
   ::encode(new_weight, bl);
 
   // extended
-  __u16 ev = 10;
+  __u16 ev = 11;
   ::encode(ev, bl);
   ::encode(new_hb_back_up, bl);
   ::encode(new_up_thru, bl);
@@ -215,6 +215,8 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
   ::encode(new_uuid, bl);
   ::encode(new_xinfo, bl);
   ::encode(new_hb_front_up, bl);
+  ::encode(vol_additions, bl);
+  ::encode(vol_removals, bl);
 }
 
 // pre-condition -- the version has already been read and it is at
@@ -259,6 +261,10 @@ void OSDMap::Incremental::decode(bufferlist::iterator &p)
     ::decode(new_xinfo, p);
   if (ev >= 10)
     ::decode(new_hb_front_up, p);
+  if (ev >= 11) {
+    ::decode(vol_additions, p);
+    ::decode(vol_removals, p);
+  }
 }
 
 void OSDMap::Incremental::dump(Formatter *f) const
@@ -383,6 +389,29 @@ void OSDMap::Incremental::dump(Formatter *f) const
   f->close_section();
 } // dump
 
+void OSDMap::Incremental::vol_inc_add::encode(bufferlist& bl, uint64_t features) const
+{
+  ::encode(sequence, bl);
+  ::encode(vol, bl);
+}
+
+void OSDMap::Incremental::vol_inc_add::decode(bufferlist::iterator &p)
+{
+  ::decode(sequence, p);
+  vol = Volume::decode_volume(p);
+}
+
+void OSDMap::Incremental::vol_inc_remove::encode(bufferlist& bl, uint64_t features) const
+{
+  ::encode(sequence, bl);
+  ::encode(uuid, bl);
+}
+
+void OSDMap::Incremental::vol_inc_remove::decode(bufferlist::iterator &p)
+{
+  ::decode(sequence, p);
+  ::decode(uuid, p);
+}
 
 
 // ----------------------------------
@@ -815,7 +844,7 @@ void OSDMap::decodeOSDMap(bufferlist::iterator& p, __u16 v)
   vols.by_uuid.clear();
   ::decode(count, p);
   for (uint32_t i = 0; i < count; ++i) {
-    VolumeRef v = Volume::create_decode(p);
+    VolumeRef v = Volume::decode_volume(p);
     vols.by_uuid[v->uuid] = v;
   }
   vols.by_name.clear();

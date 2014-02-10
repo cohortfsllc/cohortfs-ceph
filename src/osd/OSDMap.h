@@ -560,6 +560,8 @@ public:
 };
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)
 WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
+WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_add)
+WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_remove)
 
 inline ostream& operator<<(ostream& out, const OSDMap& m) {
   m.print_summary(out);

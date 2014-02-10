@@ -1,4 +1,5 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Copyright (C) 2013, CohortFS, LLC <info@cohortfs.com>
  * All rights reserved.
@@ -25,7 +26,7 @@ typedef int (*place_func)(void*, const uuid_t, const char*,
 VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v, vol_type t)
 {
   CohortVolume *vol = new CohortVolume(t);
-  vol->common_decode(bl, v, t);
+  vol->decode_payload(bl, v);
   return VolumeRef(vol);
 }
 
@@ -193,10 +194,9 @@ int CohortVolume::place(const object_t& object,
   return rc;
 }
 
-void CohortVolume::common_decode(bufferlist::iterator& bl,
-				 __u8 v, vol_type t)
+void CohortVolume::decode_payload(bufferlist::iterator& bl, __u8 v)
 {
-  inherited::common_decode(bl, v, t);
+  inherited::decode_payload(bl, v);
 
   ::decode(place_text, bl);
   uint32_t count;
@@ -210,9 +210,9 @@ void CohortVolume::common_decode(bufferlist::iterator& bl,
   entry_points.reserve(count);
 }
 
-void CohortVolume::common_encode(bufferlist& bl) const
+void CohortVolume::encode(bufferlist& bl) const
 {
-  inherited::common_encode(bl);
+  inherited::encode(bl);
 
   ::encode(place_text, bl);
   ::encode(symbols, bl);
