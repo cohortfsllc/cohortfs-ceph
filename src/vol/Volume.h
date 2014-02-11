@@ -123,7 +123,7 @@ public:
 
   virtual int place(const object_t& object,
 		    const OSDMap& map,
-		    const ceph_file_layout& layout,
+		    const unsigned int rule_index,
 		    vector<int>& osds) = 0;
 };
 

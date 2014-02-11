@@ -290,9 +290,8 @@ protected:
 				uuid_d &fsid, int num_osd);
   static OSDMapRef build_simple_from_conf(CephContext *cct, epoch_t e,
 					  uuid_d &fsid);
-  virtual int get_oid_osd(const Objecter* objecter,
-			  const object_t& oid,
-			  const ceph_file_layout& layout,
+  virtual int get_oid_osd(const object_t& oid,
+			  const int rule_index,
 			  vector<int> &osds) = 0;
 
   virtual int get_file_stripe_address(const vector<ObjectExtent>& extents,

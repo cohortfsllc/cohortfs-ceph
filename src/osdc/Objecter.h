@@ -41,8 +41,6 @@ class OSDMap;
 class MonClient;
 class Message;
 
-class MPoolOpReply;
-
 class MGetPoolStatsReply;
 class MStatfsReply;
 class MCommandReply;
@@ -685,7 +683,6 @@ class Objecter {
   void maybe_request_map();
 
   version_t last_seen_osdmap_version;
-  version_t last_seen_pgmap_version;
 
   Mutex &client_lock;
   SafeTimer &timer;
@@ -755,7 +752,6 @@ public:
 
     utime_t stamp;
 
-    bool precalc_pgid;
     epoch_t map_dne_bound;
 
     bool budgeted;
@@ -771,7 +767,7 @@ public:
       outbl(NULL),
       flags(f), priority(0), onack(ac), oncommit(co),
       tid(0), attempts(0),
-      paused(false), objver(ov), reply_epoch(NULL), precalc_pgid(false),
+      paused(false), objver(ov), reply_epoch(NULL),
       map_dne_bound(0),
       budgeted(false),
       should_resend(true) {
@@ -1065,9 +1061,7 @@ public:
   enum recalc_op_target_result {
     RECALC_OP_TARGET_NO_ACTION = 0,
     RECALC_OP_TARGET_NEED_RESEND,
-    RECALC_OP_TARGET_POOL_DNE,
-    RECALC_OP_TARGET_OSD_DNE,
-    RECALC_OP_TARGET_OSD_DOWN
+    RECALC_OP_TARGET_FAIL
   };
   int recalc_op_target(Op *op);
   bool recalc_linger_op_target(LingerOp *op);
@@ -1133,7 +1127,6 @@ public:
     global_op_flags(0),
     keep_balanced_budget(false), honor_osdmap_full(true),
     last_seen_osdmap_version(0),
-    last_seen_pgmap_version(0),
     client_lock(l), timer(t),
     logger(NULL), tick_event(NULL),
     m_request_state_hook(NULL),
@@ -1588,8 +1581,6 @@ private:
     o->snapc = snapc;
     return op_submit(o);
   }
-
-  void list_objects(ListContext *p, Context *onfinish);
 
   // ---------------------------
   // df stats

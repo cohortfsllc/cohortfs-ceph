@@ -82,9 +82,8 @@ public:
 		    int num_osd);
   int build_simple_from_conf(CephContext *cct, epoch_t e, uuid_d &fsid);
 
-  int get_oid_osd(const Objecter* objecter,
-		  const object_t& oid,
-		  const ceph_file_layout& layout,
+  int get_oid_osd(const object_t& oid,
+		  const int rule_index,
 		  vector<int> &osds);
 
   int get_file_stripe_address(const vector<ObjectExtent>& extents,

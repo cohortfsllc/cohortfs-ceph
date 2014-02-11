@@ -225,7 +225,7 @@ int librados::IoCtxImpl::list(Objecter::ListContext *context, int max_entries)
   context->max_entries = max_entries;
 
   lock->Lock();
-  objecter->list_objects(context, new C_SafeCond(&mylock, &cond, &done, &r));
+  abort(); /* Reimplement for volumes */
   lock->Unlock();
 
   mylock.Lock();

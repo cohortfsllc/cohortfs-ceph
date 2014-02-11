@@ -19,7 +19,7 @@ using boost::lexical_cast;
 using boost::bad_lexical_cast;
 
 typedef int (*place_func)(void*, const uuid_t, const char*,
-			  const ceph_file_layout*, bool(*)(void*, int),
+			  bool(*)(void*, int),
 			  bool(*)(void*, int));
 
 VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v, vol_type t)
@@ -165,7 +165,7 @@ static bool return_osd(void *data, int osd)
 
 int CohortVolume::place(const object_t& object,
 			const OSDMap& map,
-			const ceph_file_layout& layout,
+			const unsigned int rule_index,
 			vector<int>& osds)
 {
   placement_context context = {
@@ -180,14 +180,14 @@ int CohortVolume::place(const object_t& object,
     compile(map.get_epoch());
   }
 
-  if (layout.fl_rule_index >= entry_points.size()) {
+  if (rule_index >= entry_points.size()) {
     return -1;
   }
 
-  place_func entry_point = (place_func) entry_points[layout.fl_rule_index];
+  place_func entry_point = (place_func) entry_points[rule_index];
 
   int rc = entry_point(&context, object.volume.uuid, object.name.c_str(),
-		       &layout, test_osd, return_osd);
+		       test_osd, return_osd);
   compile_lock.unlock();
 
   return rc;

@@ -278,10 +278,7 @@ void Objecter::send_linger(LingerOp *info)
   o->should_resend = false;
 
   if (info->session) {
-    int r = recalc_op_target(o);
-    if (r == RECALC_OP_TARGET_POOL_DNE) {
-      _send_linger_map_check(info);
-    }
+    recalc_op_target(o);
   }
 
   if (info->register_tid) {
@@ -448,8 +445,7 @@ void Objecter::scan_requests(bool skipped_map,
       need_resend_linger.push_back(op);
       linger_cancel_map_check(op);
       break;
-    case RECALC_OP_TARGET_POOL_DNE:
-      check_linger_pool_dne(op);
+    case RECALC_OP_TARGET_FAIL:
       break;
     }
   }
@@ -471,8 +467,7 @@ void Objecter::scan_requests(bool skipped_map,
       need_resend[op->tid] = op;
       op_cancel_map_check(op);
       break;
-    case RECALC_OP_TARGET_POOL_DNE:
-      check_op_pool_dne(op);
+    case RECALC_OP_TARGET_FAIL:
       break;
     }
   }
@@ -494,12 +489,10 @@ void Objecter::scan_requests(bool skipped_map,
       need_resend_command[c->tid] = c;
       command_cancel_map_check(c);
       break;
-    case RECALC_OP_TARGET_POOL_DNE:
-    case RECALC_OP_TARGET_OSD_DNE:
-    case RECALC_OP_TARGET_OSD_DOWN:
+    case RECALC_OP_TARGET_FAIL:
       check_command_map_dne(c);
       break;
-    }     
+    }
   }
 }
 
@@ -1138,7 +1131,7 @@ tid_t Objecter::_op_submit(Op *op)
   // pick target
   num_homeless_ops++;  // initially; recalc_op_target() will decrement if it finds a target
   int r = recalc_op_target(op);
-  bool check_for_latest_map = (r == RECALC_OP_TARGET_POOL_DNE);
+  bool check_for_latest_map = (r == RECALC_OP_TARGET_FAIL);
 
   // add to gather set(s)
   if (op->onack) {
@@ -1249,56 +1242,24 @@ bool Objecter::is_pg_changed(vector<int>& o, vector<int>& n, bool any_change)
 
 int Objecter::recalc_op_target(Op *op)
 {
-#if 0
   vector<int> acting;
-  pg_t pgid = op->pgid;
-  if (op->precalc_pgid) {
-    ldout(cct, 10) << "recalc_op_target have " << pgid << " pool " << pgosdmap->have_pg_pool(pgid.pool()) << dendl;
-    if (!pgosdmap->have_pg_pool(pgid.pool()))
-      return RECALC_OP_TARGET_POOL_DNE;
-  } else {
-    int ret = pgosdmap->object_locator_to_pg(op->oid, op->oloc, pgid);
-    if (ret == -ENOENT)
-      return RECALC_OP_TARGET_POOL_DNE;
-  }
-  pgosdmap->pg_to_acting_osds(pgid, acting);
+  int ret = osdmap->get_oid_osd(op->oid,
+				0, /* Rule index, eventually derived
+				      from something. */
+				acting);
 
-  if (op->pgid != pgid || is_pg_changed(op->acting, acting, op->used_replica)) {
-    op->pgid = pgid;
+  if (ret < 0 || acting.empty())
+    return RECALC_OP_TARGET_FAIL;
+
+  if (op->acting != acting) {
     op->acting = acting;
-    ldout(cct, 10) << "recalc_op_target tid " << op->tid
-	     << " pgid " << pgid << " acting " << acting << dendl;
 
     OSDSession *s = NULL;
     op->used_replica = false;
-    if (!acting.empty()) {
-      int osd;
-      bool read = (op->flags & CEPH_OSD_FLAG_READ) && (op->flags & CEPH_OSD_FLAG_WRITE) == 0;
-      if (read && (op->flags & CEPH_OSD_FLAG_BALANCE_READS)) {
-	int p = rand() % acting.size();
-	if (p)
-	  op->used_replica = true;
-	osd = acting[p];
-	ldout(cct, 10) << " chose random osd." << osd << " of " << acting << dendl;
-      } else if (read && (op->flags & CEPH_OSD_FLAG_LOCALIZE_READS)) {
-	// look for a local replica
-	int i;
-	/* loop through the OSD replicas and see if any are local to read from.
-	 * We don't need to check the primary since we default to it. (Be
-         * careful to preserve that default, which is why we iterate in reverse
-         * order.) */
-	for (i = acting.size()-1; i > 0; --i) {
-	  if (osdmap->get_addr(acting[i]).is_same_host(messenger->get_myaddr())) {
-	    op->used_replica = true;
-	    ldout(cct, 10) << " chose local osd." << acting[i] << " of " << acting << dendl;
-	    break;
-	  }
-	}
-	osd = acting[i];
-      } else
-	osd = acting[0];
-      s = get_session(osd);
-    }
+
+    int osd;
+    osd = acting[0];
+    s = get_session(osd);
 
     if (op->session != s) {
       if (!op->session)
@@ -1312,32 +1273,22 @@ int Objecter::recalc_op_target(Op *op)
     }
     return RECALC_OP_TARGET_NEED_RESEND;
   }
-#endif /* 0 */
-  abort();
   return RECALC_OP_TARGET_NO_ACTION;
 }
 
 bool Objecter::recalc_linger_op_target(LingerOp *linger_op)
 {
-#if 0
-  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
-
   vector<int> acting;
-  pg_t pgid;
-  int ret =
-    pgosdmap->object_locator_to_pg(linger_op->oid, linger_op->oloc, pgid);
-  if (ret == -ENOENT) {
-    return RECALC_OP_TARGET_POOL_DNE;
-  }
-  pgosdmap->pg_to_acting_osds(pgid, acting);
+  int ret = osdmap->get_oid_osd(linger_op->oid,
+				0, /* Rule index, eventually derived
+				      from something. */
+				acting);
 
-  if (pgid != linger_op->pgid || is_pg_changed(linger_op->acting, acting, true)) {
-    linger_op->pgid = pgid;
-    linger_op->acting = acting;
-    ldout(cct, 10) << "recalc_linger_op_target tid " << linger_op->linger_id
-	     << " pgid " << pgid << " acting " << acting << dendl;
-    
-    OSDSession *s = acting.size() ? get_session(acting[0]) : NULL;
+  if (ret < 0 || acting.empty())
+    return RECALC_OP_TARGET_FAIL;
+
+  if (linger_op->acting != acting) {
+    OSDSession *s = get_session(acting[0]);
     if (linger_op->session != s) {
       linger_op->session_item.remove_myself();
       linger_op->session = s;
@@ -1346,8 +1297,6 @@ bool Objecter::recalc_linger_op_target(LingerOp *linger_op)
     }
     return RECALC_OP_TARGET_NEED_RESEND;
   }
-#endif /* 0 */
-  abort();
   return RECALC_OP_TARGET_NO_ACTION;
 }
 
@@ -1610,142 +1559,6 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
 }
 
 
-void Objecter::list_objects(ListContext *list_context, Context *onfinish) {
-#if 0
-  PGOSDMap* pgosdmap = dynamic_cast<PGOSDMap*>(osdmap);
-
-  ldout(cct, 10) << "list_objects" << dendl;
-  ldout(cct, 20) << "pool_id " << list_context->pool_id
-	   << "\npool_snap_seq " << list_context->pool_snap_seq
-	   << "\nmax_entries " << list_context->max_entries
-	   << "\nlist_context " << list_context
-	   << "\nonfinish " << onfinish
-	   << "\nlist_context->current_pg" << list_context->current_pg
-	   << "\nlist_context->cookie" << list_context->cookie << dendl;
-
-  if (list_context->at_end) {
-    onfinish->finish(0);
-    delete onfinish;
-    return;
-  }
-
-  const pg_pool_t *pool = pgosdmap->get_pg_pool(list_context->pool_id);
-  int pg_num = pool->get_pg_num();
-
-  if (list_context->starting_pg_num == 0) {     // there can't be zero pgs!
-    list_context->starting_pg_num = pg_num;
-    ldout(cct, 20) << pg_num << " placement groups" << dendl;
-  }
-  if (list_context->starting_pg_num != pg_num) {
-    // start reading from the beginning; the pgs have changed
-    ldout(cct, 10) << "The placement groups have changed, restarting with " << pg_num << dendl;
-    list_context->current_pg = 0;
-    list_context->cookie = collection_list_handle_t();
-    list_context->current_pg_epoch = 0;
-    list_context->starting_pg_num = pg_num;
-  }
-  if (list_context->current_pg == pg_num){ //this context got all the way through
-    onfinish->finish(0);
-    delete onfinish;
-    return;
-  }
-
-  ObjectOperation op;
-  op.pg_ls(list_context->max_entries, list_context->filter, list_context->cookie,
-	   list_context->current_pg_epoch);
-
-  bufferlist *bl = new bufferlist();
-  C_List *onack = new C_List(list_context, onfinish, bl, this);
-
-  object_t oid;
-  object_locator_t oloc(list_context->pool_id);
-
-  // 
-  Op *o = new Op(oid, oloc, op.ops, CEPH_OSD_FLAG_READ, onack, NULL, NULL);
-  o->priority = op.priority;
-  o->snapid = list_context->pool_snap_seq;
-  o->outbl = bl;
-  o->reply_epoch = &onack->epoch;
-
-  o->pgid = pg_t(list_context->current_pg, list_context->pool_id, -1);
-  o->precalc_pgid = true;
-
-  op_submit(o);
-#endif /* 0 */
-  abort();
-}
-
-
-void Objecter::_list_reply(ListContext *list_context, int r, bufferlist *bl,
-			   Context *final_finish, epoch_t reply_epoch)
-{
-#if 0
-  ldout(cct, 10) << "_list_reply" << dendl;
-
-  bufferlist::iterator iter = bl->begin();
-  pg_ls_response_t response;
-  bufferlist extra_info;
-  ::decode(response, iter);
-  if (!iter.end()) {
-    ::decode(extra_info, iter);
-  }
-  list_context->cookie = response.handle;
-  if (!list_context->current_pg_epoch) {
-    // first pgls result, set epoch marker
-    ldout(cct, 20) << "first pgls piece, reply_epoch is " << reply_epoch << dendl;
-    list_context->current_pg_epoch = reply_epoch;
-  }
-
-  int response_size = response.entries.size();
-  ldout(cct, 20) << "response.entries.size " << response_size
-	   << ", response.entries " << response.entries << dendl;
-  list_context->extra_info.append(extra_info);
-  if (response_size) {
-    ldout(cct, 20) << "got a response with objects, proceeding" << dendl;
-    list_context->list.merge(response.entries);
-    if (response_size >= list_context->max_entries) {
-      final_finish->finish(0);
-      delete bl;
-      delete final_finish;
-      return;
-    }
-
-    // ask for fewer objects next time around
-    list_context->max_entries -= response_size;
-
-    // if the osd returns 1 (newer code), or no entries, it means we
-    // hit the end of the pg.
-    if (r == 0 && response_size > 0) {
-      // not yet done with this pg
-      delete bl;
-      list_objects(list_context, final_finish);
-      return;
-    }
-  }
-
-  // if we make this this far, there are no objects left in the current pg, but we want more!
-  ++list_context->current_pg;
-  list_context->current_pg_epoch = 0;
-  ldout(cct, 20) << "emptied current pg, moving on to next one:" << list_context->current_pg << dendl;
-  if (list_context->current_pg < list_context->starting_pg_num){ // we have more pgs to go through
-    list_context->cookie = collection_list_handle_t();
-    delete bl;
-    list_objects(list_context, final_finish);
-    return;
-  }
-  
-  // if we make it this far, there are no more pgs
-  ldout(cct, 20) << "out of pgs, returning to" << final_finish << dendl;
-  list_context->at_end = true;
-  delete bl;
-  final_finish->finish(0);
-  delete final_finish;
-  return;
-#endif /* 0 */
-  abort();
-}
-
-
 //snapshots
 
 void Objecter::get_fs_stats(ceph_statfs& result, Context *onfinish)
@@ -1766,7 +1579,8 @@ void Objecter::get_fs_stats(ceph_statfs& result, Context *onfinish)
 void Objecter::fs_stats_submit(StatfsOp *op)
 {
   ldout(cct, 10) << "fs_stats_submit" << op->tid << dendl;
-  monc->send_mon_message(new MStatfs(monc->get_fsid(), op->tid, last_seen_pgmap_version));
+  monc->send_mon_message(new MStatfs(monc->get_fsid(), op->tid,
+				     last_seen_osdmap_version));
   op->last_submit = ceph_clock_now(cct);
 
   logger->inc(l_osdc_statfs_send);
@@ -1783,8 +1597,6 @@ void Objecter::handle_fs_stats_reply(MStatfsReply *m)
     StatfsOp *op = statfs_ops[tid];
     ldout(cct, 10) << "have request " << tid << " at " << op << dendl;
     *(op->stats) = m->h.st;
-    if (m->h.version > last_seen_pgmap_version)
-      last_seen_pgmap_version = m->h.version;
     op->onfinish->finish(0);
     delete op->onfinish;
     statfs_ops.erase(tid);
@@ -2083,31 +1895,22 @@ int Objecter::_submit_command(CommandOp *c, tid_t *ptid)
 
 int Objecter::recalc_command_target(CommandOp *c)
 {
-#if 0
   OSDSession *s = NULL;
   c->map_check_error = 0;
   if (c->target_osd >= 0) {
     if (!osdmap->exists(c->target_osd)) {
       c->map_check_error = -ENOENT;
       c->map_check_error_str = "osd dne";
-      return RECALC_OP_TARGET_OSD_DNE;
+      return RECALC_OP_TARGET_FAIL;
     }
     if (osdmap->is_down(c->target_osd)) {
       c->map_check_error = -ENXIO;
       c->map_check_error_str = "osd down";
-      return RECALC_OP_TARGET_OSD_DOWN;
+      return RECALC_OP_TARGET_FAIL;
     }
     s = get_session(c->target_osd);
   } else {
-    if (!osdmap->have_pg_pool(c->target_pg.pool())) {
-      c->map_check_error = -ENOENT;
-      c->map_check_error_str = "pool dne";
-      return RECALC_OP_TARGET_POOL_DNE;
-    }
-    vector<int> acting;
-    osdmap->pg_to_acting_osds(c->target_pg, acting);
-    if (!acting.empty())
-      s = get_session(acting[0]);
+    return RECALC_OP_TARGET_FAIL;
   }
   if (c->session != s) {
     ldout(cct, 10) << "recalc_command_target " << c->tid << " now " << c->session << dendl;
@@ -2122,8 +1925,6 @@ int Objecter::recalc_command_target(CommandOp *c)
     return RECALC_OP_TARGET_NEED_RESEND;
   }
   ldout(cct, 20) << "recalc_command_target " << c->tid << " no change, " << c->session << dendl;
-#endif /* 0 */
-  abort();
   return RECALC_OP_TARGET_NO_ACTION;
 }
 
