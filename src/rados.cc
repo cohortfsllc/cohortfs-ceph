@@ -41,6 +41,16 @@ using namespace librados;
 #include <locale>
 
 #include "cls/lock/cls_lock_client.h"
+#include "cohort/CohortPlaceSystem.h"
+
+const CohortOSDMapPlaceSystem *theCohortOSDMap = NULL;
+
+static void init_place_systems(void)
+{
+  theCohortOSDMap = new CohortOSDMapPlaceSystem(
+    CohortPlaceSystem::systemName,
+    CohortPlaceSystem::systemIdentifier);
+}
 
 int rados_tool_sync(const std::map < std::string, std::string > &opts,
 		    std::vector<const char*> &args);
@@ -1351,6 +1361,8 @@ int main(int argc, const char **argv)
 
   global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
   common_init_finish(g_ceph_context);
+
+  init_place_systems();
 
   std::map < std::string, std::string > opts;
   std::vector<const char*>::iterator i;
