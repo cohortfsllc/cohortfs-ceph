@@ -1377,55 +1377,20 @@ int main(int argc, const char **argv)
       opts["force"] = "true";
     } else if (ceph_argparse_flag(args, i, "-d", "--delete-after", (char*)NULL)) {
       opts["delete-after"] = "true";
-    } else if (ceph_argparse_flag(args, i, "-C", "--create", "--create-pool",
-				  (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, i, "-C", "--create", (char*)NULL)) {
       opts["create"] = "true";
     } else if (ceph_argparse_flag(args, i, "--pretty-format", (char*)NULL)) {
       opts["pretty-format"] = "true";
     } else if (ceph_argparse_flag(args, i, "--show-time", (char*)NULL)) {
       opts["show-time"] = "true";
-    } else if (ceph_argparse_witharg(args, i, &val, "-p", "--pool", (char*)NULL)) {
-      opts["pool"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--target-pool", (char*)NULL)) {
-      opts["target_pool"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--object-locator" , (char *)NULL)) {
-      opts["object_locator"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--target-locator" , (char *)NULL)) {
-      opts["target_locator"] = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "-p", "--vol", (char*)NULL)) {
+      opts["vol"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--category", (char*)NULL)) {
       opts["category"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "-t", "--concurrent-ios", (char*)NULL)) {
-      opts["concurrent-ios"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--block-size", (char*)NULL)) {
-      opts["block-size"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "-b", (char*)NULL)) {
-      opts["block-size"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "-s", "--snap", (char*)NULL)) {
       opts["snap"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "-S", "--snapid", (char*)NULL)) {
       opts["snapid"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--min-object-size", (char*)NULL)) {
-      opts["min-object-size"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--max-object-size", (char*)NULL)) {
-      opts["max-object-size"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--min-op-len", (char*)NULL)) {
-      opts["min-op-len"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--max-op-len", (char*)NULL)) {
-      opts["max-op-len"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--max-ops", (char*)NULL)) {
-      opts["max-ops"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--max-backlog", (char*)NULL)) {
-      opts["max-backlog"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--target-throughput", (char*)NULL)) {
-      opts["target-throughput"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--read-percent", (char*)NULL)) {
-      opts["read-percent"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--num-objects", (char*)NULL)) {
-      opts["num-objects"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--run-length", (char*)NULL)) {
-      opts["run-length"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "--workers", (char*)NULL)) {
-      opts["workers"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--format", (char*)NULL)) {
       opts["format"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--lock-tag", (char*)NULL)) {
