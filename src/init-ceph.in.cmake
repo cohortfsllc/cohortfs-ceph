@@ -433,7 +433,7 @@ done
 # activate latent osds?
 if [ "$command" = "start" ]; then
     if [ "$*" = "" ] || echo $* | grep -q ^osd\$ ; then
-	ceph-disk activate-all
+    "$SBINDIR/ceph-disk" activate-all
     fi
 fi
 
