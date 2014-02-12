@@ -43,6 +43,7 @@
 #include "IoCtxImpl.h"
 #include "PoolAsyncCompletionImpl.h"
 #include "RadosClient.h"
+#include "osd/PlaceSystem.h"
 
 #include "include/assert.h"
 
@@ -67,6 +68,7 @@ librados::RadosClient::RadosClient(CephContext *cct_)
   : Dispatcher(cct_),
     cct(cct_->get()),
     conf(cct_->_conf),
+    osdmap(OSDMapPlaceSystem::getSystem().newOSDMap()),
     state(DISCONNECTED),
     monclient(cct_),
     messenger(NULL),
