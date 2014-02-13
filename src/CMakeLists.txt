@@ -1,3 +1,5 @@
+include(GetGitRevisionDescription)
+
 add_definitions("-DCEPH_LIBDIR=${LIBRARY_OUTPUT_PATH}")
 
 set(AM_COMMON_FLAGS "-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE -rdynamic -Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -fPIC")
@@ -24,6 +26,30 @@ set(sysconfdir ${CMAKE_INSTALL_PREFIX}/etc)
 set(pkgdatadir ${CMAKE_INSTALL_PREFIX}/share)
 set(prefix ${CMAKE_INSTALL_PREFIX})
 set(GCOV_PREFIX_STRIP 4)
+get_git_head_revision(GIT_REFSPEC CEPH_GIT_VER)
+git_describe(CEPH_GIT_NICE_VER --always)
+
+# Python stuff
+find_package(PythonInterp 2 QUIET)
+if(NOT PYTHONINTERP_FOUND)
+  message(FATAL_ERROR "Python 2 interpreter not found.")
+endif(NOT PYTHONINTERP_FOUND)
+
+# if CMAKE_INSTALL_PREFIX is an empty string, must replace
+# it with "/" to make PYTHON_INSTALL_TEMPLATE an absolute path to be
+# consistent with all other installation paths.
+if(CMAKE_INSTALL_PREFIX)
+  set(PYTHON_INSTALL_TEMPLATE "${CMAKE_INSTALL_PREFIX}")
+else(CMAKE_INSTALL_PREFIX)
+  set(PYTHON_INSTALL_TEMPLATE "/")
+endif(CMAKE_INSTALL_PREFIX)
+
+execute_process(
+  COMMAND
+  ${PYTHON_EXECUTABLE} -c "from distutils import sysconfig; print sysconfig.get_python_lib(1,0,prefix='${PYTHON_INSTALL_TEMPLATE}')"
+  OUTPUT_VARIABLE PYTHON_INSTDIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
 
 configure_file(
 ${CMAKE_SOURCE_DIR}/src/init-ceph.in.cmake
@@ -51,9 +77,21 @@ ${CMAKE_BINARY_DIR}/ceph-debugpack
 @ONLY
 )
 
+configure_file(
+${CMAKE_SOURCE_DIR}/src/ceph.in.cmake
+${CMAKE_BINARY_DIR}/ceph
+@ONLY
+)
+
+configure_file(
+${CMAKE_SOURCE_DIR}/src/ceph_ver.h.in.cmake
+${CMAKE_BINARY_DIR}/src/include/ceph_ver.h
+@ONLY
+)
+
 add_custom_target(shell_scripts ALL
-COMMAND chmod 755 ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph ${CMAKE_BINARY_DIR}/ceph-debugpack ${CMAKE_BINARY_DIR}/ceph-coverage
-DEPENDS ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph
+COMMAND chmod 755 ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph ${CMAKE_BINARY_DIR}/ceph-debugpack ${CMAKE_BINARY_DIR}/ceph-coverage ${CMAKE_BINARY_DIR}/ceph
+DEPENDS ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph ${CMAKE_BINARY_DIR}/ceph-debugpack ${CMAKE_BINARY_DIR}/ceph-coverage ${CMAKE_BINARY_DIR}/ceph
 COMMENT "Shell Scripts have permission")
 
 add_subdirectory(rgw)
@@ -238,28 +276,9 @@ if (${WITH_MDS})
 endif (${WITH_MDS})
 
 
-add_custom_target(check_version ALL ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_BINARY_DIR}/src/.git_version
-COMMENT "ceph_ver.h is up to date")
-
-include_directories("${CMAKE_BINARY_DIR}/src")
-
-add_custom_command(
-PRE_BUILD
-OUTPUT ${CMAKE_BINARY_DIR}/src/.git_version
-COMMAND ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_BINARY_DIR}/src/.git_version
-DEPENDS ${CMAKE_SOURCE_DIR}/src/check_version
-)
-
-add_custom_command(
-PRE_BUILD
-OUTPUT ${CMAKE_BINARY_DIR}/src/ceph_ver.h
-COMMAND ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_BINARY_DIR}/src/.git_version ${CMAKE_BINARY_DIR}/src/ceph_ver.h
-DEPENDS ${CMAKE_SOURCE_DIR}/src/make_version ${CMAKE_BINARY_DIR}/src/.git_version
-)
-
 # this list ommits the ceph_ver.c file
 set (libcommon_files
-	${CMAKE_BINARY_DIR}/src/ceph_ver.h
+	${CMAKE_BINARY_DIR}/src/include/ceph_ver.h
 	ceph_ver.c
 	auth/AuthAuthorizeHandler.cc
 	auth/AuthClientHandler.cc
@@ -381,9 +400,7 @@ add_library (common STATIC ${libcommon_files}
 	$<TARGET_OBJECTS:common_mountcephfs_objs>
 )
 
-set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/ceph_ver.h)
-
-add_dependencies(common check_version)
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c ${CMAKE_SOURCE_DIR}/src/common/version.cc ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/include/ceph_ver.h)
 
 if (${WITH_PROFILER})
   target_link_libraries(common profiler)
@@ -719,6 +736,7 @@ install(PROGRAMS
   ${CMAKE_SOURCE_DIR}/src/vstart.sh
   ${CMAKE_SOURCE_DIR}/src/ceph-clsinfo
   ${CMAKE_BINARY_DIR}/ceph-debugpack
+  ${CMAKE_BINARY_DIR}/ceph
   ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer
   ${CMAKE_BINARY_DIR}/ceph-coverage
   ${CMAKE_SOURCE_DIR}/src/ceph-run
@@ -737,3 +755,6 @@ install(PROGRAMS
 install(TARGETS
   mount.ceph
   DESTINATION sbin)
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/pybind/
+  DESTINATION ${PYTHON_INSTDIR})

@@ -1,3 +1,4 @@
+#!@PYTHON_EXECUTABLE@
 #
 # Processed in Makefile to add python #! line and version variable
 #
@@ -154,13 +155,13 @@ def do_help(parser, args, help_all = False):
     """
     Print basic parser help
     If the cluster is available:
-        get and print monitor help; 
-        if help_all, print help for daemon commands as well 
+        get and print monitor help;
+        if help_all, print help for daemon commands as well
     """
 
     def help_for_target(target, partial=None):
         ret, outbuf, outs = json_command(cluster_handle, target=target,
-                                         prefix='get_command_descriptions', 
+                                         prefix='get_command_descriptions',
                                          timeout=10)
         if ret:
             print >> sys.stderr, \
@@ -420,7 +421,7 @@ def find_cmd_target(childargs):
 def complete(sigdict, args, target):
     """
     Command completion.  Match as much of [args] as possible,
-    and print every possible match separated by newlines. 
+    and print every possible match separated by newlines.
     Return exitcode.
     """
     # XXX this looks a lot like the front of validate_command().  Refactor?
@@ -485,7 +486,7 @@ def main():
     parser, parsed_args, childargs = parse_cmdargs()
 
     if parsed_args.version:
-        print 'ceph version {0} ({1})'.format(CEPH_GIT_NICE_VER, CEPH_GIT_VER)
+        print 'ceph version {0} ({1})'.format('@CEPH_GIT_NICE_VER@', '@CEPH_GIT_VER@')
         return 0
 
     global verbose
