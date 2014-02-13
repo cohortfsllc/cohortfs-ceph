@@ -170,6 +170,16 @@ public:
     }
     return val;
   }
+
+  VPtr add(K key, VPtr val) {
+    list<VPtr> to_release;
+    {
+      Mutex::Locker l(lock);
+      weak_refs.insert(make_pair(key, val));
+      lru_add(key, val, &to_release);
+    }
+    return val;
+  }
 };
 
 #endif

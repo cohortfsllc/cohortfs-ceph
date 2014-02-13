@@ -40,13 +40,14 @@ public:
   CephContext *cct;
   md_config_t *conf;
 private:
+  OSDMapRef osdmap;
+
   enum {
     DISCONNECTED,
     CONNECTING,
     CONNECTED,
   } state;
 
-  std::tr1::shared_ptr<OSDMap> osdmap;
 
   MonClient monclient;
   SimpleMessenger *messenger;

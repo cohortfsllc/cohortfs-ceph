@@ -128,7 +128,7 @@ int librados::RadosClient::connect()
   ldout(cct, 1) << "starting objecter" << dendl;
 
   err = -ENOMEM;
-  objecter = new Objecter(cct, messenger, &monclient, osdmap.get(), lock, timer);
+  objecter = new Objecter(cct, messenger, &monclient, osdmap, lock, timer);
   if (!objecter)
     goto out;
   objecter->set_balanced_budget();

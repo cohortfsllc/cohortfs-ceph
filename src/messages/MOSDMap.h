@@ -60,7 +60,7 @@ class MOSDMap : public Message {
 
 
   MOSDMap() : Message(CEPH_MSG_OSD_MAP, HEAD_VERSION) { }
-  MOSDMap(const uuid_d &f, OSDMap *oc=0)
+  MOSDMap(const uuid_d &f, OSDMapRef oc = OSDMapRef())
     : Message(CEPH_MSG_OSD_MAP, HEAD_VERSION),
       fsid(f),
       oldest_map(0), newest_map(0) {
@@ -112,7 +112,7 @@ public:
 	p->second.clear();
 	if (inc->fullmap.length()) {
 	  // embedded full map?
-	  auto_ptr<OSDMap> m(placeSystem.newOSDMap());
+	  OSDMapRef m(placeSystem.newOSDMap());
 	  m->decode(inc->fullmap);
 	  inc->fullmap.clear();
 	  m->encode(inc->fullmap, features);
@@ -122,7 +122,7 @@ public:
       for (map<epoch_t,bufferlist>::iterator p = maps.begin();
 	   p != maps.end();
 	   ++p) {
-	auto_ptr<OSDMap> m(placeSystem.newOSDMap());
+	OSDMapRef m(placeSystem.newOSDMap());
 	m->decode(p->second);
 	p->second.clear();
 	m->encode(p->second, features);

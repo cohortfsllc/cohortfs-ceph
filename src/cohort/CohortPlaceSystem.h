@@ -35,8 +35,8 @@ public:
     OSDMapPlaceSystem(name, id)
   {}
 
-  virtual OSDMap* newOSDMap() const {
-    return new CohortOSDMap();
+  virtual OSDMapRef newOSDMap() const {
+    return OSDMapRef(new CohortOSDMap());
   }
 
   virtual CohortOSDMap::Incremental* newOSDMapIncremental() const {

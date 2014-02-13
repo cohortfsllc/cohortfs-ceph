@@ -52,8 +52,8 @@ public:
 
   CohortOSDService(CohortOSD *osd);
 
-  virtual OSDMap* newOSDMap() const {
-    return new CohortOSDMap();
+  virtual OSDMapRef newOSDMap() const {
+    return OSDMapRef(new CohortOSDMap());
   }
   CohortOSDMapRef get_map(epoch_t e) {
     return static_pointer_cast<const CohortOSDMap>(get_map(e));
@@ -217,9 +217,8 @@ public:
 	    const std::string &dev,
 	    const std::string &jdev);
 
-  virtual CohortOSDService* newOSDService(OSD* osd) const {
-    CohortOSD* cohortosd = dynamic_cast<CohortOSD*>(osd);
-    return new CohortOSDService(cohortosd);
+  virtual OSDServiceRef newOSDService(OSD* osd) const {
+    return OSDServiceRef(new CohortOSDService(static_cast<CohortOSD*>(osd)));
   }
 
   virtual int init();
@@ -281,8 +280,8 @@ protected:
 
 public:
 
-  OSDMap* newOSDMap() const {
-    return new CohortOSDMap();
+  OSDMapRef newOSDMap() const {
+    return OSDMapRef(new CohortOSDMap());
   }
 
   void check_replay_queue();

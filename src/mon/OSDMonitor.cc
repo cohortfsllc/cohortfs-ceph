@@ -631,7 +631,7 @@ bool OSDMonitor::can_mark_down(int i)
     return false;
   }
   int up = osdmap->get_num_up_osds()
-    - pending_inc->get_net_marked_down(&(*osdmap.get()));
+    - pending_inc->get_net_marked_down(osdmap);
   float up_ratio = (float)up / (float)osdmap->get_num_osds();
   if (up_ratio < g_conf->mon_osd_min_up_ratio) {
     dout(5) << "can_mark_down current up_ratio " << up_ratio << " < min "
@@ -662,7 +662,7 @@ bool OSDMonitor::can_mark_out(int i)
     return false;
   }
   int in = osdmap->get_num_in_osds()
-    - pending_inc->get_net_marked_out(&(*osdmap.get()));
+    - pending_inc->get_net_marked_out(osdmap);
   float in_ratio = (float)in / (float)osdmap->get_num_osds();
   if (in_ratio < g_conf->mon_osd_min_in_ratio) {
     if (i >= 0)
@@ -1188,7 +1188,7 @@ void OSDMonitor::send_latest(PaxosServiceMessage *m, epoch_t start)
 
 MOSDMap *OSDMonitor::build_latest_full()
 {
-  MOSDMap *r = new MOSDMap(mon->monmap->fsid, osdmap.get());
+  MOSDMap *r = new MOSDMap(mon->monmap->fsid, osdmap);
   r->oldest_map = get_first_committed();
   r->newest_map = osdmap->get_epoch();
   return r;
@@ -1605,7 +1605,7 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
     cmd_getval(g_ceph_context, cmdmap, "epoch", epochnum, (int64_t)0);
     epoch = epochnum;
 
-    OSDMap *p = osdmap.get();
+    OSDMapRef p = osdmap;
     if (epoch) {
       bufferlist b;
       int err = get_version("full", epoch, b);
@@ -1665,8 +1665,8 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
       p->encode(rdata);
       ss << "got osdmap epoch " << p->get_epoch();
     }
-    if (p != osdmap.get())
-      delete p;
+    if (p != osdmap)
+      p.reset();
   } else if (prefix == "osd getmaxosd") {
     ds << "max_osd = " << osdmap->get_max_osd() << " in epoch " << osdmap->get_epoch();
     rdata.append(ds);

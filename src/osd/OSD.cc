@@ -95,7 +95,7 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, whoami, get_osdmap())
 
-static ostream& _prefix(std::ostream* _dout, int whoami, OSDMapConstRef osdmap) {
+static ostream& _prefix(std::ostream* _dout, int whoami, OSDMapRef osdmap) {
   return *_dout << "osd." << whoami << " "
 		<< (osdmap ? osdmap->get_epoch():0)
 		<< " ";
@@ -767,7 +767,7 @@ bool OSD::asok_command(string command, string args, ostream& ss)
     op_tracker.dump_historic_ops(ss);
   } else if (command == "dump_blacklist") {
     list<pair<entity_addr_t,utime_t> > bl;
-    OSDMapConstRef curmap = service->get_osdmap();
+    OSDMapRef curmap = service->get_osdmap();
 
     JSONFormatter f(true);
     f.open_array_section("blacklist");
@@ -1576,7 +1576,7 @@ void OSD::handle_osd_ping(MOSDPing *m)
     return;
   }
 
-  OSDMapConstRef curmap = service->get_osdmap();
+  OSDMapRef curmap = service->get_osdmap();
 
   switch (m->op) {
 
@@ -2546,7 +2546,7 @@ bool OSD::_share_map_incoming(entity_name_t name, Connection *con, epoch_t epoch
 }
 
 
-void OSD::_share_map_outgoing(int peer, Connection *con, OSDMapConstRef map)
+void OSD::_share_map_outgoing(int peer, Connection *con, OSDMapRef map)
 {
   if (!map)
     map = service->get_osdmap();
@@ -2969,13 +2969,13 @@ void OSD::note_up_osd(int peer)
 }
 
 struct C_OnMapApply : public Context {
-  OSDService *service;
+  OSDServiceRef service;
   boost::scoped_ptr<ObjectStore::Transaction> t;
-  list<OSDMapConstRef> pinned_maps;
+  list<OSDMapRef> pinned_maps;
   epoch_t e;
-  C_OnMapApply(OSDService *service,
+  C_OnMapApply(OSDServiceRef service,
 	       ObjectStore::Transaction *t,
-	       const list<OSDMapConstRef> &pinned_maps,
+	       const list<OSDMapRef> &pinned_maps,
 	       epoch_t e)
     : service(service), t(t), pinned_maps(pinned_maps), e(e) {}
   void finish(int r) {
@@ -2986,7 +2986,7 @@ struct C_OnMapApply : public Context {
 void OSD::handle_osd_map(MOSDMap *m)
 {
   assert(osd_lock.is_locked());
-  list<OSDMapConstRef> pinned_maps;
+  list<OSDMapRef> pinned_maps;
   if (m->fsid != monc->get_fsid()) {
     dout(0) << "handle_osd_map fsid " << m->fsid << " != " << monc->get_fsid() << dendl;
     m->put();
@@ -3047,7 +3047,7 @@ void OSD::handle_osd_map(MOSDMap *m)
     p = m->maps.find(e);
     if (p != m->maps.end()) {
       dout(10) << "handle_osd_map  got full map for epoch " << e << dendl;
-      OSDMap *o = newOSDMap();
+      OSDMapRef o = newOSDMap();
       bufferlist& bl = p->second;
 
       o->decode(bl);
@@ -3067,10 +3067,10 @@ void OSD::handle_osd_map(MOSDMap *m)
       t.write(coll_t::META_COLL, oid, 0, bl.length(), bl);
       pin_map_inc_bl(e, bl);
 
-      OSDMap *o = newOSDMap();
+      OSDMapRef o = newOSDMap();
       if (e > 1) {
 	bufferlist obl;
-	OSDMapConstRef prev = get_map(e - 1);
+	OSDMapRef prev = get_map(e - 1);
 	prev->encode(obl);
 	o->decode(obl);
       }
@@ -3128,7 +3128,7 @@ void OSD::handle_osd_map(MOSDMap *m)
   for (epoch_t cur = start; cur <= superblock.newest_map; cur++) {
     dout(10) << " advance to epoch " << cur << " (<= newest " << superblock.newest_map << ")" << dendl;
 
-    OSDMapConstRef newmap = get_map(cur);
+    OSDMapRef newmap = get_map(cur);
     assert(newmap);  // we just cached it above!
 
     // start blacklisting messages sent to peers that go down.
@@ -3244,7 +3244,7 @@ void OSD::handle_osd_map(MOSDMap *m)
   store->queue_transaction(
     0,
     _t,
-    new C_OnMapApply(service.get(), _t, pinned_maps, osdmap->get_epoch()),
+    new C_OnMapApply(service, _t, pinned_maps, osdmap->get_epoch()),
     0, fin);
   service->publish_superblock(superblock);
 
@@ -3483,31 +3483,31 @@ void OSDService::clear_map_bl_cache_pins(epoch_t e)
   map_bl_cache.clear_pinned(e);
 }
 
-OSDMapConstRef OSDService::_add_map(OSDMap *o)
+OSDMapRef OSDService::_add_map(OSDMapRef o)
 {
   epoch_t e = o->get_epoch();
 
   if (g_conf->osd_map_dedup) {
     // Dedup against an existing map at a nearby epoch
-    OSDMapConstRef for_dedup = map_cache.lower_bound(e);
+    OSDMapRef for_dedup = map_cache.lower_bound(e);
     if (for_dedup) {
-      OSDMap::dedup(for_dedup.get(), o);
+      OSDMap::dedup(for_dedup, o);
     }
   }
-  OSDMapConstRef l = map_cache.add(e, o);
+  OSDMapRef l = map_cache.add(e, o);
   return l;
 }
 
-OSDMapConstRef OSDService::get_map(epoch_t epoch)
+OSDMapRef OSDService::get_map(epoch_t epoch)
 {
   Mutex::Locker l(map_cache_lock);
-  OSDMapConstRef retval = map_cache.lookup(epoch);
+  OSDMapRef retval = map_cache.lookup(epoch);
   if (retval) {
     dout(30) << "get_map " << epoch << " -cached" << dendl;
     return retval;
   }
 
-  OSDMap *map = newOSDMap();
+  OSDMapRef map = newOSDMap();
   if (epoch > 0) {
     dout(20) << "get_map " << epoch << " - loading and decoding "
 	     << map << dendl;

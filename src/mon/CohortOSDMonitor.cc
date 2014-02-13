@@ -16,7 +16,7 @@ CohortOSDMonitor::CohortOSDMonitor(Monitor *mn, Paxos *p,
 				   const string& service_name)
   : OSDMonitor(mn, p, service_name)
 {
-  osdmap.reset(newOSDMap());
+  osdmap = newOSDMap();
   pending_inc.reset(new CohortOSDMap::Incremental());
 }
 

@@ -167,12 +167,12 @@ public:
 
   int get_nodeid() const { return whoami; }
 
-  OSDMapConstRef osdmap;
-  OSDMapConstRef get_osdmap() {
+  OSDMapRef osdmap;
+  OSDMapRef get_osdmap() {
     Mutex::Locker l(publish_lock);
     return osdmap;
   }
-  void publish_map(OSDMapConstRef map) {
+  void publish_map(OSDMapRef map) {
     Mutex::Locker l(publish_lock);
     osdmap = map;
   }
@@ -191,8 +191,8 @@ public:
    * down, without worrying about reopening connections from threads
    * working from old maps.
    */
-  OSDMapConstRef next_osdmap;
-  void pre_publish_map(OSDMapConstRef map) {
+  OSDMapRef next_osdmap;
+  void pre_publish_map(OSDMapRef map) {
     Mutex::Locker l(pre_publish_lock);
     next_osdmap = map;
   }
@@ -246,16 +246,16 @@ public:
 
   // osd map cache (past osd maps)
   Mutex map_cache_lock;
-  SharedLRU<epoch_t, const OSDMap> map_cache;
+  SharedLRU<epoch_t, OSDMap> map_cache;
   SimpleLRU<epoch_t, bufferlist> map_bl_cache;
   SimpleLRU<epoch_t, bufferlist> map_bl_inc_cache;
 
-  OSDMapConstRef get_map(epoch_t e);
-  OSDMapConstRef add_map(OSDMap *o) {
+  OSDMapRef get_map(epoch_t e);
+  OSDMapRef add_map(OSDMapRef o) {
     Mutex::Locker l(map_cache_lock);
     return _add_map(o);
   }
-  OSDMapConstRef _add_map(OSDMap *o);
+  OSDMapRef _add_map(OSDMapRef o);
 
   void add_map_bl(epoch_t e, bufferlist& bl) {
     Mutex::Locker l(map_cache_lock);
@@ -320,7 +320,7 @@ public:
   OSDService(OSD *osd);
   // this virtual function soley exists to make the class polymorphic
   virtual ~OSDService() { };
-  virtual OSDMap* newOSDMap(void) const = 0;
+  virtual OSDMapRef newOSDMap(void) const = 0;
 
   virtual bool test_ops_sub(ObjectStore *store,
 			    std::string command,
@@ -608,8 +608,8 @@ private:
  protected:
 
   // -- osd map --
-  OSDMapConstRef osdmap;
-  OSDMapConstRef get_osdmap() {
+  OSDMapRef osdmap;
+  OSDMapRef get_osdmap() {
     return osdmap;
   }
   utime_t         had_map_since;
@@ -626,7 +626,7 @@ private:
   bool _share_map_incoming(entity_name_t name, Connection *con, epoch_t epoch,
 			   Session *session = 0);
   void _share_map_outgoing(int peer, Connection *con,
-			   OSDMapConstRef map = OSDMapRef());
+			   OSDMapRef map = OSDMapRef());
 
   void wait_for_new_map(OpRequestRef op);
   void handle_osd_map(class MOSDMap *m);
@@ -642,10 +642,10 @@ private:
   virtual void consume_map_sub() = 0;
 
   // osd map cache (past osd maps)
-  OSDMapConstRef get_map(epoch_t e) {
+  OSDMapRef get_map(epoch_t e) {
     return service->get_map(e);
   }
-  OSDMapConstRef add_map(OSDMap *o) {
+  OSDMapRef add_map(OSDMapRef o) {
     return service->add_map(o);
   }
   void add_map_bl(epoch_t e, bufferlist& bl) {
@@ -808,8 +808,8 @@ protected:
       MonClient *mc, const std::string &dev, const std::string &jdev);
   virtual ~OSD();
 
-  virtual OSDService* newOSDService(OSD* osd) const = 0;
-  virtual OSDMap* newOSDMap() const = 0;
+  virtual OSDServiceRef newOSDService(OSD* osd) const = 0;
+  virtual OSDMapRef newOSDMap() const = 0;
 
   utime_t last_stats_sent;
   bool osd_stat_updated;

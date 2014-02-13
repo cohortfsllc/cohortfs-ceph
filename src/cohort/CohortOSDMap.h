@@ -50,8 +50,8 @@ public:
       decode(p);
     }
 
-    OSDMap* newOSDMap() const {
-      return new CohortOSDMap();
+    OSDMapRef newOSDMap() const {
+      return OSDMapRef(new CohortOSDMap());
     }
   };
 

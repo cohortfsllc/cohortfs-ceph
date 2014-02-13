@@ -114,14 +114,12 @@ class Monitor;
 class OSDMap;
 
 typedef std::tr1::shared_ptr<OSDMap> OSDMapRef;
-typedef std::tr1::shared_ptr<const OSDMap> OSDMapConstRef;
-
 
 /** OSDMap
  */
 class OSDMap {
 public:
-  static void dedup(const OSDMap *o, OSDMap *n);
+  static void dedup(const OSDMapRef o, OSDMapRef n);
   class Incremental {
   public:
     uuid_d fsid;
@@ -153,8 +151,8 @@ public:
 
 
 
-    int get_net_marked_out(const OSDMap *previous) const;
-    int get_net_marked_down(const OSDMap *previous) const;
+    int get_net_marked_out(const OSDMapRef previous) const;
+    int get_net_marked_down(const OSDMapRef previous) const;
     int identify_osd(uuid_d u) const;
 
     void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
@@ -181,7 +179,7 @@ public:
     }
     virtual ~Incremental() {}
 
-    virtual OSDMap* newOSDMap(void) const = 0;
+    virtual OSDMapRef newOSDMap(void) const = 0;
 
 
     struct vol_inc_add {
@@ -536,7 +534,6 @@ public:
   static string get_flag_string(unsigned flags);
   virtual void dump_json(ostream& out) const;
   virtual void dump(Formatter *f) const = 0;
-  static void generate_test_instances(list<OSDMap*>& o);
   bool check_new_blacklist_entries() const { return new_blacklist_entries; }
 
 

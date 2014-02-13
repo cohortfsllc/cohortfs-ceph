@@ -145,7 +145,7 @@ ostream& operator<<(ostream& out, const osd_xinfo_t& xi)
 // ----------------------------------
 // OSDMap::Incremental
 
-int OSDMap::Incremental::get_net_marked_out(const OSDMap *previous) const
+int OSDMap::Incremental::get_net_marked_out(OSDMapRef previous) const
 {
   int n = 0;
   for (map<int32_t,uint32_t>::const_iterator p = new_weight.begin();
@@ -159,7 +159,7 @@ int OSDMap::Incremental::get_net_marked_out(const OSDMap *previous) const
   return n;
 }
 
-int OSDMap::Incremental::get_net_marked_down(const OSDMap *previous) const
+int OSDMap::Incremental::get_net_marked_down(OSDMapRef previous) const
 {
   int n = 0;
   for (map<int32_t,uint8_t>::const_iterator p = new_state.begin();
@@ -276,13 +276,12 @@ void OSDMap::Incremental::dump(Formatter *f) const
 
   if (fullmap.length()) {
     f->open_object_section("full_map");
-    OSDMap* full = newOSDMap();
+    OSDMapRef full = newOSDMap();
     bufferlist fbl = fullmap;  // kludge around constness.
     bufferlist::iterator p = fbl.begin();
     full->decode(p);
     full->dump(f);
     f->close_section();
-    delete full;
   }
 
   f->dump_int("new_max_osd", new_max_osd);
@@ -558,7 +557,7 @@ bool OSDMap::find_osd_on_ip(const entity_addr_t& ip) const
 }
 
 
-void OSDMap::dedup(const OSDMap *o, OSDMap *n)
+void OSDMap::dedup(const OSDMapRef o, OSDMapRef n)
 {
   if (o->epoch == n->epoch)
     return;

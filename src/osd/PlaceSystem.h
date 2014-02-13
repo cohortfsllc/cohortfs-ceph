@@ -99,7 +99,7 @@ public:
   }
 
   // creates a new Map; caller must deallocate
-  virtual OSDMap* newOSDMap() const = 0;
+  virtual OSDMapRef newOSDMap() const = 0;
 
   // creates a new MapIncremental; caller must deallocate
   virtual OSDMap::Incremental* newOSDMapIncremental() const = 0;

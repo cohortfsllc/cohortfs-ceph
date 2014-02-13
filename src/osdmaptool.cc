@@ -114,9 +114,9 @@ int main(int argc, const char **argv)
   fn = args[0];
 
   if (range_first >= 0 && range_last >= 0) {
-    set<OSDMap*> maps;
-    OSDMap *prev = NULL;
-    for (int i=range_first; i <= range_last; i++) {
+    set<OSDMapRef> maps;
+    OSDMapRef prev;
+    for (int i = range_first; i <= range_last; i++) {
       ostringstream f;
       f << fn << "/" << i;
       bufferlist bl;
@@ -127,7 +127,7 @@ int main(int argc, const char **argv)
 	exit(1);
       }
       cout << s << " got " << bl.length() << " bytes" << std::endl;
-      OSDMap *o = OSDMapPlaceSystem::getSystem().newOSDMap();
+      OSDMapRef o = OSDMapPlaceSystem::getSystem().newOSDMap();
       o->decode(bl);
       maps.insert(o);
       if (prev)
