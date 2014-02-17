@@ -769,6 +769,10 @@ public:
   int ll_releasedirstripe(dir_result_t *dirp);
   int readdirstripeplus_r(dir_result_t *dirp, struct dirent *de,
                           struct stat *st, int *stmask);
+
+  void rewinddirstripe(dir_result_t *dirp);
+  loff_t telldirstripe(dir_result_t *dirp);
+  void seekdirstripe(dir_result_t *dirp, loff_t offset);
 };
 
 #endif

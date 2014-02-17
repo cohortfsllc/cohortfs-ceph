@@ -4506,8 +4506,45 @@ void Client::seekdir(dir_result_t *dirp, loff_t offset)
     dirp->next_offset = 0;  // not 2 on non-leftmost frags!
 }
 
+void Client::rewinddirstripe(dir_result_t *dirp)
+{
+  Mutex::Locker lock(client_lock);
 
+  stripeid_t stripeid = dirp->get_stripe();
+  ldout(cct, 3) << "rewinddirstripe(" << dirp << ")" << dendl;
+  _readdir_drop_dirp_buffer(dirp);
+  dirp->reset();
+  dirp->set_stripe(stripeid);
+}
 
+loff_t Client::telldirstripe(dir_result_t *dirp)
+{
+  ldout(cct, 3) << "telldirstripe(" << dirp << ") = " << dirp->offset << dendl;
+  // return the position within the current stripe
+  return dirp->get_pos();
+}
+
+void Client::seekdirstripe(dir_result_t *dirp, loff_t offset)
+{
+  Mutex::Locker lock(client_lock);
+
+  ldout(cct, 3) << "seekdirstripe(" << dirp << ", "
+      << hex << offset << dec << ")" << dendl;
+
+  stripeid_t stripeid = dirp->get_stripe();
+
+  if (offset == 0 || dir_result_t::fpos_off(offset) < dirp->get_pos()) {
+    _readdir_drop_dirp_buffer(dirp);
+    dirp->reset();
+  }
+
+  if (offset > dirp->offset)
+    dirp->release_count--;   // bump if we do a forward seek
+
+  dirp->offset = dir_result_t::make_fpos(stripeid, offset);
+  if (stripeid > 0 && dirp->next_offset == 2)
+    dirp->next_offset = 0;  // not 2 on non-leftmost frags!
+}
 
 
 //struct dirent {
