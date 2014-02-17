@@ -85,8 +85,9 @@ typedef shared_ptr<CohortOSDService> CohortOSDServiceRef;
 class CohortOSD : public OSD {
   friend CohortOSDService;
 
-  OSDVolRef get_volume(const uuid_d volid) {
-    return OSDVolRef();
+  OSDVolRef get_volume(const uuid_d& volid) {
+    Mutex::Locker l(osd_lock);
+    return _lookup_vol(volid);
   }
 private:
 
@@ -278,7 +279,7 @@ public:
 
   void check_replay_queue();
   void sched_scrub();
-  OSDVolRef _lookup_vol(uuid_d volid);
+  OSDVolRef _lookup_vol(const uuid_d& volid);
 };
 
 

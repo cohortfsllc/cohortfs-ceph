@@ -327,7 +327,7 @@ bool CohortOSD::handle_sub_op_sub(OpRequestRef op)
   return true;
 }
 
-OSDVolRef CohortOSD::_lookup_vol(uuid_d volid)
+OSDVolRef CohortOSD::_lookup_vol(const uuid_d& volid)
 {
   assert(osd_lock.is_locked());
   map<uuid_d, OSDVolRef>::iterator i = vol_map.find(volid);
