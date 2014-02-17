@@ -654,8 +654,7 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
   if (!dn || dn->is_null()) {
     dn = stripe->link(dname, in, dn);
     if (set_offset) {
-      dn->offset = dir_result_t::make_fpos(stripe->stripeid,
-                                           stripe->max_offset++);
+      dn->offset = stripe->max_offset++;
       ldout(cct, 15) << " setting dn offset to " << dn->offset << dendl;
     }
   }
@@ -784,8 +783,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	dn = stripe->link(dname, in);
       }
       update_dentry_lease(dn, &dlease, request->sent_stamp, session);
-      dn->offset = dir_result_t::make_fpos(request->readdir_stripe,
-                                           i + request->readdir_offset);
+      dn->offset = i + request->readdir_offset;
 
       // add to cached result list
       in->get();
@@ -4696,7 +4694,8 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, DirStripe *stripe,
     int stmask = fill_stat(i->second, &st);
     fill_dirent(&de, pd->first.c_str(), st.st_mode, st.st_ino, dirp->offset + 1);
 
-    uint64_t next_off = dn->offset + 1;
+    uint64_t next_off = dir_result_t::make_fpos(dirp->get_stripe(),
+						dn->offset + 1);
     ++pd;
     if (pd == stripe->dentry_map.end())
       next_off = dirp->next_stripe_offset();
@@ -4708,7 +4707,8 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, DirStripe *stripe,
 	     << " = " << r
 	     << dendl;
     if (r < 0) {
-      dirp->next_offset = dn->offset;
+      dirp->next_offset = dir_result_t::make_fpos(dirp->get_stripe(),
+						  dn->offset);
       return r;
     }
 
