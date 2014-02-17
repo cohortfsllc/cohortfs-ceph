@@ -560,6 +560,8 @@ public:
   int opendir(const char *name, dir_result_t **dirpp);
   int closedir(dir_result_t *dirp);
 
+  int _readdir_stripe_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p);
+
   /**
    * Fill a directory listing from dirp, invoking cb for each entry
    * with the given pointer, the dirent, the struct stat, the stmask,

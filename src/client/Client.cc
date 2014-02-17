@@ -4696,18 +4696,91 @@ int Client::_readdir_cache_cb(dir_result_t *dirp, DirStripe *stripe,
   return 0;
 }
 
+int Client::_readdir_stripe_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
+{
+  uint32_t off = dirp->get_pos();
+  stripeid_t stripeid = dirp->get_stripe();
+  DirStripe *stripe = dirp->inode->stripes[stripeid];
+  if (stripe)
+    ldout(cct, 10) << *stripe << " offset " << hex << dirp->offset
+      << " pos " << off << dec << " at_cache_name " << dirp->at_cache_name
+      << " snapid " << stripe->snapid
+      << " issued " << ccap_string(stripe->caps_issued()) << dendl;
+
+  struct dirent de;
+  struct stat st;
+
+  // can we read from our cache?
+  if (stripe && (dirp->offset == 2 || off == 0 ||
+	!dirp->at_cache_name.empty()) &&
+      stripe->snapid != CEPH_SNAPDIR && stripe->is_complete() &&
+      stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED)) {
+    return _readdir_cache_cb(dirp, stripe, cb, p);
+  }
+
+  if (dirp->at_cache_name.length()) {
+    // resuming from cache
+    dirp->last_name = dirp->at_cache_name;
+    dirp->at_cache_name.clear();
+  }
+
+  do {
+    if (dirp->buffer_stripe != stripeid) {
+      // fetch the next buffer of entries
+      int r = _readdir_get_stripe(dirp);
+      if (r)
+	return r;
+    }
+
+    ldout(cct, 10) << "off " << off << " this_offset " << hex << dirp->this_offset << dec
+      << " size " << dirp->buffer.size() << " stripe " << stripeid << dendl;
+    dirp->offset = dir_result_t::make_fpos(stripeid, off);
+    while (off >= dirp->this_offset &&
+	off - dirp->this_offset < dirp->buffer.size()) {
+      pair<string,Inode*>& ent = dirp->buffer[off - dirp->this_offset];
+
+      int stmask = fill_stat(ent.second, &st);
+      fill_dirent(&de, ent.first.c_str(), st.st_mode, st.st_ino, dirp->offset + 1);
+
+      client_lock.Unlock();
+      int r = cb(p, &de, &st, stmask, dirp->offset + 1);  // _next_ offset
+      client_lock.Lock();
+      ldout(cct, 15) << " de " << de.d_name << " off " << hex << dirp->offset << dec
+	<< " = " << r
+	<< dendl;
+      if (r < 0)
+	return r;
+
+      off++;
+      dirp->offset++;
+      if (r > 0)
+	return r;
+    }
+
+    _readdir_drop_dirp_buffer(dirp);
+  } while (dirp->last_name.length());
+
+  stripe = dirp->inode->stripes[stripeid];
+  if (stripe && stripe->release_count == dirp->release_count &&
+      stripe->shared_gen == dirp->start_shared_gen) {
+    ldout(cct, 10) << " marking I_COMPLETE on " << *stripe << dendl;
+    stripe->set_complete();
+    stripe->max_offset = dirp->offset;
+  }
+  return 0;
+}
+
 int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
 {
   Mutex::Locker lock(client_lock);
 
-  stripeid_t stripeid = dirp->get_stripe();
-  uint32_t off = dirp->get_pos();
-
   Inode *diri = dirp->inode;
 
-  ldout(cct, 10) << "readdir_r_cb " << diri << " stripe " << stripeid
-      << " pos " << hex << off << dec << " at_end=" << dirp->at_end() << dendl;
+  ldout(cct, 10) << "readdir_r_cb " << diri << " stripe " << dirp->get_stripe()
+      << " pos " << hex << dirp->get_pos() << dec
+      << " at_end=" << dirp->at_end() << dendl;
 
+  int r;
   struct dirent de;
   struct stat st;
   memset(&de, 0, sizeof(de));
@@ -4721,12 +4794,12 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
     fill_stat(diri, &st);
 
     client_lock.Unlock();
-    int r = cb(p, &de, &st, -1, 1);
+    r = cb(p, &de, &st, -1, 1);
     client_lock.Lock();
     if (r < 0)
       return r;
 
-    dirp->offset = off = 1;
+    dirp->offset = 1;
     if (r > 0)
       return r;
   }
@@ -4745,93 +4818,23 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
     }
 
     client_lock.Unlock();
-    int r = cb(p, &de, &st, -1, 2);
+    r = cb(p, &de, &st, -1, 2);
     client_lock.Lock();
     if (r < 0)
       return r;
 
-    dirp->offset = off = 2;
+    dirp->offset = 2;
     if (r > 0)
       return r;
   }
 
   while (!dirp->at_end()) {
-    // can we read from our cache?
-    stripeid = dirp->get_stripe();
-    DirStripe *stripe = dirp->inode->stripes[stripeid];
-    if (stripe)
-      ldout(cct, 10) << *stripe << " offset " << hex << dirp->offset
-          << " pos " << dirp->get_pos() << dec
-          << " at_cache_name " << dirp->at_cache_name
-          << " snapid " << stripe->snapid
-          << " issued " << ccap_string(stripe->caps_issued()) << dendl;
-
-    if (stripe && (dirp->offset == 2 || dirp->get_pos() == 0 ||
-                   !dirp->at_cache_name.empty()) &&
-        stripe->snapid != CEPH_SNAPDIR && stripe->is_complete() &&
-        stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED)) {
-      int err = _readdir_cache_cb(dirp, stripe, cb, p);
-      if (err && err != -EAGAIN)
-        return err;
-      continue;
-    }
-
-    if (dirp->at_cache_name.length()) {
-      dirp->last_name = dirp->at_cache_name;
-      dirp->at_cache_name.clear();
-    }
-
-    if (dirp->buffer_stripe != dirp->get_stripe()) {
-      int r = _readdir_get_stripe(dirp);
-      if (r)
-	return r;
-      stripeid = dirp->buffer_stripe;
-      stripe = diri->stripes[stripeid];
-      off = dirp->get_pos();
-    }
-
-    ldout(cct, 10) << "off " << off << " this_offset " << hex << dirp->this_offset << dec
-        << " size " << dirp->buffer.size() << " stripe " << stripeid << dendl;
-    dirp->offset = dir_result_t::make_fpos(stripeid, off);
-    while (off >= dirp->this_offset &&
-	   off - dirp->this_offset < dirp->buffer.size()) {
-      pair<string,Inode*>& ent = dirp->buffer[off - dirp->this_offset];
-
-      int stmask = fill_stat(ent.second, &st);
-      fill_dirent(&de, ent.first.c_str(), st.st_mode, st.st_ino, dirp->offset + 1);
-
-      client_lock.Unlock();
-      int r = cb(p, &de, &st, stmask, dirp->offset + 1);  // _next_ offset
-      client_lock.Lock();
-      ldout(cct, 15) << " de " << de.d_name << " off " << hex << dirp->offset << dec
-	       << " = " << r
-	       << dendl;
-      if (r < 0)
-	return r;
-
-      off++;
-      dirp->offset++;
-      if (r > 0)
-	return r;
-    }
-
-    if (dirp->last_name.length()) {
-      ldout(cct, 10) << " fetching next chunk" << dendl;
-      _readdir_drop_dirp_buffer(dirp);
-      continue;  // more!
-    }
-
-    if (stripe && stripe->release_count == dirp->release_count &&
-	stripe->shared_gen == dirp->start_shared_gen) {
-      ldout(cct, 10) << " marking I_COMPLETE on " << *stripe << dendl;
-      stripe->set_complete();
-      stripe->max_offset = dirp->offset;
-    }
+    r = _readdir_stripe_cb(dirp, cb, p);
+    if (r < 0)
+      return r;
 
     // next stripe!
     _readdir_next_stripe(dirp);
-    off = 0;
-    stripeid = dirp->get_stripe();
   }
   return 0;
 }
