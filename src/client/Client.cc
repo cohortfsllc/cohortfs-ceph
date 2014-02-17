@@ -4916,6 +4916,27 @@ int Client::readdirplus_r(dir_result_t *d, struct dirent *de, struct stat *st, i
   return 0;
 }
 
+int Client::readdirstripeplus_r(dir_result_t *d, struct dirent *de,
+				struct stat *st, int *stmask)
+{
+  single_readdir sr;
+  sr.de = de;
+  sr.st = st;
+  sr.stmask = stmask;
+  sr.full = false;
+
+  // get lock for _readdir_stripe_cb, which otherwise happens in readdir_r_cb()
+  Mutex::Locker lock(client_lock);
+
+  // read entries from the current stripe
+  int r = _readdir_stripe_cb(d, _readdir_single_dirent_cb, (void *)&sr);
+  if (r < -1)
+    return r;
+  if (sr.full)
+    return 1;
+  return 0;
+}
+
 
 /* getdents */
 struct getdents_result {

@@ -764,6 +764,9 @@ public:
   void ll_register_dentry_invalidate_cb(client_dentry_callback_t cb, void *handle);
 
   void ll_register_getgroups_cb(client_getgroups_callback_t cb, void *handle);
+
+  int readdirstripeplus_r(dir_result_t *dirp, struct dirent *de,
+                          struct stat *st, int *stmask);
 };
 
 #endif
