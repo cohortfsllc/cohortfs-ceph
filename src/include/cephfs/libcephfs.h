@@ -1396,6 +1396,14 @@ int ceph_ll_opendirstripe(struct ceph_mount_info *cmount,
 int ceph_ll_releasedirstripe(struct ceph_mount_info *cmount,
 			     struct ceph_dirstripe_result *stripe);
 
+/* directory stripe seeking */
+void ceph_rewinddirstripe(struct ceph_mount_info *cmount,
+			  struct ceph_dirstripe_result *dirp);
+loff_t ceph_telldirstripe(struct ceph_mount_info *cmount,
+			  struct ceph_dirstripe_result *dirp);
+void ceph_seekdirstripe(struct ceph_mount_info *cmount,
+			struct ceph_dirstripe_result *dirp, loff_t offset);
+
 #ifdef __cplusplus
 }
 #endif

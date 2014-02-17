@@ -461,6 +461,31 @@ extern "C" int ceph_ll_releasedirstripe(class ceph_mount_info *cmount,
   return cmount->get_client()->ll_releasedirstripe((dir_result_t*)dir);
 }
 
+extern "C" void ceph_rewinddirstripe(class ceph_mount_info *cmount,
+				     struct ceph_dirstripe_result *dirp)
+{
+  if (!cmount->is_mounted())
+    return;
+  cmount->get_client()->rewinddirstripe((dir_result_t*)dirp);
+}
+
+extern "C" loff_t ceph_telldirstripe(class ceph_mount_info *cmount,
+				     struct ceph_dirstripe_result *dirp)
+{
+  if (!cmount->is_mounted())
+    return -ENOTCONN;
+  return cmount->get_client()->telldirstripe((dir_result_t*)dirp);
+}
+
+extern "C" void ceph_seekdirstripe(class ceph_mount_info *cmount,
+				   struct ceph_dirstripe_result *dirp,
+				   loff_t offset)
+{
+  if (!cmount->is_mounted())
+    return;
+  cmount->get_client()->seekdirstripe((dir_result_t*)dirp, offset);
+}
+
 extern "C" int ceph_link (class ceph_mount_info *cmount, const char *existing,
 			  const char *newname)
 {
