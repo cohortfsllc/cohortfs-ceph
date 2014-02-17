@@ -87,6 +87,15 @@ struct librados::IoCtxImpl {
     return volume;
   }
 
+  object_t volumize(const object_t& obj) {
+    if (obj.volume == INVALID_VOLUME) {
+      object_t vobj = obj;
+      vobj.volume = volume;
+      return vobj;
+    } else {
+      return obj;
+    }
+  }
 
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);
 
@@ -94,7 +103,7 @@ struct librados::IoCtxImpl {
   int snap_create(const char* snapname);
   int snap_remove(const char* snapname);
   int selfmanaged_snap_rollback_object(const object_t& oid,
-                                       ::SnapContext& snapc, uint64_t snapid);
+				       ::SnapContext& snapc, uint64_t snapid);
 
   // io
   int list(Objecter::ListContext *context, int max_entries);
@@ -104,7 +113,7 @@ struct librados::IoCtxImpl {
   int append(const object_t& oid, bufferlist& bl, size_t len);
   int write_full(const object_t& oid, bufferlist& bl);
   int clone_range(const object_t& dst_oid, uint64_t dst_offset,
-                  const object_t& src_oid, uint64_t src_offset, uint64_t len);
+		  const object_t& src_oid, uint64_t src_offset, uint64_t len);
   int read(const object_t& oid, bufferlist& bl, size_t len, uint64_t off);
   int mapext(const object_t& oid, uint64_t off, size_t len,
 	     std::map<uint64_t,uint64_t>& m);
