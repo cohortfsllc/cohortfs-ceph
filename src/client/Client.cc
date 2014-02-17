@@ -7411,6 +7411,40 @@ int Client::ll_releasedir(dir_result_t *dirp)
   return 0;
 }
 
+int Client::ll_opendirstripe(Inode *in, stripeid_t stripeid,
+			     dir_result_t **dirpp)
+{
+  Mutex::Locker lock(client_lock);
+  ldout(cct, 3) << "ll_opendirstripe " << dirpp << dendl;
+  tout(cct) << "ll_opendirstripe" << std::endl;
+  tout(cct) << (unsigned long)dirpp << std::endl;
+
+  if (!in->is_dir())
+    return -ENOTDIR;
+  if (stripeid >= in->stripes.size())
+    return -EINVAL;
+  *dirpp = new dir_result_t(in);
+  (*dirpp)->set_stripe(stripeid);
+  DirStripe *stripe = in->stripes[stripeid];
+  if (stripe) {
+    (*dirpp)->release_count = stripe->release_count;
+    (*dirpp)->start_shared_gen = stripe->shared_gen;
+  }
+  ldout(cct, 3) << "_opendirstripe(" << in->ino << ", " << stripeid << ") = "
+    << 0 << " (" << *dirpp << ")" << dendl;
+  return 0;
+}
+
+int Client::ll_releasedirstripe(dir_result_t *dirp)
+{
+  Mutex::Locker lock(client_lock);
+  ldout(cct, 3) << "ll_releasedirstripe " << dirp << dendl;
+  tout(cct) << "ll_releasedirstripe" << std::endl;
+  tout(cct) << (unsigned long)dirp << std::endl;
+  _closedir(dirp);
+  return 0;
+}
+
 int Client::ll_open(Inode *in, int flags, Fh **fhp, int uid, int gid)
 {
   assert(!(flags & O_CREAT));

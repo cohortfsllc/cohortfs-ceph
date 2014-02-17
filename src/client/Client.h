@@ -765,6 +765,8 @@ public:
 
   void ll_register_getgroups_cb(client_getgroups_callback_t cb, void *handle);
 
+  int ll_opendirstripe(Inode *in, stripeid_t stripe, dir_result_t **dirpp);
+  int ll_releasedirstripe(dir_result_t *dirp);
   int readdirstripeplus_r(dir_result_t *dirp, struct dirent *de,
                           struct stat *st, int *stmask);
 };
