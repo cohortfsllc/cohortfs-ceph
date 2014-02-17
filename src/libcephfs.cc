@@ -399,6 +399,17 @@ extern "C" int ceph_readdirplus_r(class ceph_mount_info *cmount, struct ceph_dir
   return cmount->get_client()->readdirplus_r((dir_result_t*)dirp, de, st, stmask);
 }
 
+extern "C" int ceph_readdirstripeplus_r(class ceph_mount_info *cmount,
+					struct ceph_dirstripe_result *dirp,
+					struct dirent *de, struct stat *st,
+					int *stmask)
+{
+  if (!cmount->is_mounted())
+    return -ENOTCONN;
+  return cmount->get_client()->readdirstripeplus_r((dir_result_t*)dirp,
+						   de, st, stmask);
+}
+
 extern "C" int ceph_getdents(class ceph_mount_info *cmount, struct ceph_dir_result *dirp,
 			     char *buf, int buflen)
 {
@@ -434,6 +445,20 @@ extern "C" void ceph_seekdir(class ceph_mount_info *cmount, struct ceph_dir_resu
   if (!cmount->is_mounted())
     return;
   cmount->get_client()->seekdir((dir_result_t*)dirp, offset);
+}
+
+extern "C" int ceph_ll_opendirstripe(class ceph_mount_info *cmount,
+				     Inode *in, uint32_t stripeid,
+				     struct ceph_dirstripe_result **dirpp)
+{
+  return (cmount->get_client()->ll_opendirstripe(in, stripeid,
+						 (dir_result_t**)dirpp));
+}
+
+extern "C" int ceph_ll_releasedirstripe(class ceph_mount_info *cmount,
+				        ceph_dirstripe_result *dir)
+{
+  return cmount->get_client()->ll_releasedirstripe((dir_result_t*)dir);
 }
 
 extern "C" int ceph_link (class ceph_mount_info *cmount, const char *existing,

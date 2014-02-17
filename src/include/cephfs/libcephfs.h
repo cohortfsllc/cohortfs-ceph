@@ -92,6 +92,7 @@ struct vinodeno_t;
 typedef struct vinodeno_t vinodeno;
 struct ceph_mount_info;
 struct ceph_dir_result;
+struct ceph_dirstripe_result;
 struct CephContext;
 
 /* setattr mask bits */
@@ -398,6 +399,24 @@ int ceph_readdir_r(struct ceph_mount_info *cmount, struct ceph_dir_result *dirp,
  */
 int ceph_readdirplus_r(struct ceph_mount_info *cmount, struct ceph_dir_result *dirp, struct dirent *de,
 		       struct stat *st, int *stmask);
+
+/**
+ * A single-stripe version of ceph_readdirplus_r().
+ *
+ * @param cmount the ceph mount handle to use for performing the readdir_plus_r.
+ * @param dirp the directory stream pointer from an opendirstripe holding the
+ *        state of the next entry to return.
+ * @param de the directory entry pointer filled in with the next directory
+ *        entry of the dirp state.
+ * @param st the stats of the file/directory of the entry returned
+ * @param stmask a mask that gets filled in with the stats fields that are
+ *        being set in the st parameter.
+ * @returns 1 if the next entry was filled in, 0 if the end of the directory
+ *          stream was reached, and a negative error code on failure.
+ */
+int ceph_readdirstripeplus_r(struct ceph_mount_info *cmount,
+			     struct ceph_dirstripe_result *dirp,
+			     struct dirent *de, struct stat *st, int *stmask);
 
 /**
  * Gets multiple directory entries.
@@ -1369,6 +1388,13 @@ bool ceph_get_dir_registration(struct ceph_mount_info *cmount,
 			       dir_recall_cb recall, void *user);
 void ceph_put_dir_registration(struct ceph_mount_info *cmount,
 			       vinodeno_t vino, uint32_t reg);
+
+/* open/close a directory stripe for traversal */
+int ceph_ll_opendirstripe(struct ceph_mount_info *cmount,
+			  Inode *in, uint32_t stripeid,
+			  struct ceph_dirstripe_result **stripe);
+int ceph_ll_releasedirstripe(struct ceph_mount_info *cmount,
+			     struct ceph_dirstripe_result *stripe);
 
 #ifdef __cplusplus
 }
