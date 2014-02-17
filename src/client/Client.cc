@@ -4560,26 +4560,23 @@ void Client::_readdir_drop_dirp_buffer(dir_result_t *dirp)
 int Client::_readdir_get_stripe(dir_result_t *dirp)
 {
   assert(dirp);
-  assert(dirp->inode);
-
-  // get the current stripe.
+  Inode *diri = dirp->inode;
+  assert(diri);
   stripeid_t stripe = dirp->get_stripe();
-  
+
   ldout(cct, 10) << "_readdir_get_stripe " << dirp
-      << " on " << dirp->inode->ino << " stripe " << stripe
+      << " on " << diri->ino << " stripe " << stripe
       << " next_offset " << dirp->next_offset
       << " last_name " << dirp->last_name << dendl;
 
   int op = CEPH_MDS_OP_READDIR;
-  if (dirp->inode && dirp->inode->snapid == CEPH_SNAPDIR)
+  if (diri->snapid == CEPH_SNAPDIR)
     op = CEPH_MDS_OP_LSSNAP;
-
-  Inode *diri = dirp->inode;
 
   MetaRequest *req = new MetaRequest(op);
   filepath path;
   diri->make_nosnap_relative_path(path);
-  req->set_filepath(path); 
+  req->set_filepath(path);
   req->set_inode(diri);
   req->head.args.readdir.stripe = stripe;
   if (dirp->last_name.length()) {
@@ -4598,15 +4595,13 @@ int Client::_readdir_get_stripe(dir_result_t *dirp)
 
   if (res == 0) {
     // stuff dir contents to cache, dir_result_t
-    assert(diri);
-
     _readdir_drop_dirp_buffer(dirp);
 
     dirp->buffer.swap(req->readdir_result);
     dirp->buffer_stripe = stripe;
 
     dirp->this_offset = dirp->next_offset;
-    ldout(cct, 10) << "_readdir_get_stripe " << dirp << " got stripe " << dirp->buffer_stripe
+    ldout(cct, 10) << "_readdir_get_stripe " << dirp << " got stripe " << stripe
 	     << " this_offset " << dirp->this_offset
 	     << " size " << dirp->buffer.size() << dendl;
 
