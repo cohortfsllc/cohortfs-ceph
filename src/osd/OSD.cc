@@ -1933,17 +1933,13 @@ void OSD::ms_handle_connect(Connection *con)
 
 bool OSD::ms_handle_reset(Connection *con)
 {
-  assert(osd_lock.is_locked());
-  dout(10) << "reset_heartbeat_peers" << dendl;
-  Mutex::Locker l(heartbeat_lock);
-  while (!heartbeat_peers.empty()) {
-    HeartbeatInfo& hi = heartbeat_peers.begin()->second;
-    hbclient_messenger->mark_down(hi.con_back);
-    if (hi.con_front) {
-      hbclient_messenger->mark_down(hi.con_front);
-    }
-    heartbeat_peers.erase(heartbeat_peers.begin());
-  }
+  dout(1) << "OSD::ms_handle_reset()" << dendl;
+  OSD::Session *session = (OSD::Session *)con->get_priv();
+  if (!session)
+    return false;
+  session->wstate.reset();
+  session->con.reset(NULL);  // break con <-> session ref cycle
+  session->put();
   return true;
 };
 

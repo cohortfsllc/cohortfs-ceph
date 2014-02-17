@@ -54,6 +54,7 @@ using namespace __gnu_cxx;
 #include "common/sharedptr_registry.hpp"
 #include "common/PrioritizedQueue.h"
 #include "include/assert.h"
+#include "Watch.h"
 
 #define CEPH_OSD_PROTOCOL    10 /* cluster internal */
 
@@ -463,6 +464,7 @@ public:
     int64_t auid;
     epoch_t last_sent_epoch;
     ConnectionRef con;
+    WatchConState wstate;
 
     Session() : auid(-1), last_sent_epoch(0), con(0) {}
   };

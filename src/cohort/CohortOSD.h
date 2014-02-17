@@ -203,14 +203,6 @@ public:
   virtual void handle_conf_change(const struct md_config_t *conf,
 				  const std::set <std::string> &changed);
 
-  struct Session : public OSD::Session {
-    std::map<void *, uuid_d> watches;
-    WatchConState wstate;
-
-    Session() : OSD::Session() {}
-  };
-
-
   CohortOSD(int id, Messenger *internal, Messenger *external,
 	    Messenger *hb_client, Messenger *hb_front_server,
 	    Messenger *hb_back_server, MonClient *mc,
