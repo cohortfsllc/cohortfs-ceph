@@ -111,8 +111,7 @@ void CohortOSD::handle_op_sub(OpRequestRef op)
 
   uuid_d volid = m->get_volume();
 
-  // get and lock *pg.
-  OSDVolRef vol = get_volume(volid);
+  OSDVolRef vol = _lookup_vol(volid);
 
   if (!vol) {
     /* No such volume */
