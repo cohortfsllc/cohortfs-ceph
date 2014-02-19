@@ -228,6 +228,9 @@ void OSDVol::do_op(OpRequestRef op)
     return;
   }
 
+  /* Since we're only doing client side replication this pass, we
+     don't have to do the snapdir/clone check. */
+
   op->mark_started();
 
   OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops,
@@ -250,10 +253,18 @@ void OSDVol::do_op(OpRequestRef op)
     }
 
     op->mark_started();
+    // version
+    ctx->at_version = vol_log.get_head();
+
+    ctx->at_version.epoch = get_osdmap()->get_epoch();
+    ctx->at_version.version++;
+    assert(ctx->at_version > info.last_update);
+    assert(ctx->at_version > vol_log.get_head());
 
     ctx->mtime = m->get_mtime();
-
   }
+
+
 
   if (op->may_read()) {
     obc->ondisk_read_lock();
