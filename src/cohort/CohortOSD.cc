@@ -337,6 +337,7 @@ OSDVolRef CohortOSD::_lookup_vol(const uuid_d& volid)
 		       cohortosdservice(), cohortosdmap(), volid,
 		       hobject_t(object_t(volid, "log"), CEPH_NOSNAP),
 		       hobject_t(object_t(volid, "info"), CEPH_NOSNAP)));
+    vol_map[volid] = osdvol;
     return osdvol;
   }
 }
