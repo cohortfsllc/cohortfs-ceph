@@ -14,8 +14,9 @@ OSDVol::OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
 	       uuid_d u, const hobject_t& loid, const hobject_t& ioid) :
   snap_trim_item(this), volume_id(u), vol_lock("OSDVol::vol_lock"),
   map_lock("OSDVol::map_lock"), osd(o), osdmap_ref(curmap), vol_log(),
-  log_oid(loid), biginfo_oid(ioid), info(u),
-  osdriver(osd->store, coll_t(), OSD::make_snapmapper_oid()),
+  log_oid(loid), biginfo_oid(ioid),
+  osr(osd->osr_registry.lookup_or_create(u, (stringify(u)))),
+  info(u), osdriver(osd->store, coll_t(), OSD::make_snapmapper_oid()),
   snap_mapper(&osdriver)
 {
 }

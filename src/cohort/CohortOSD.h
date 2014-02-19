@@ -70,6 +70,7 @@ public:
     Mutex::Locker l(watch_lock);
     return (((uint64_t)cur_epoch) << 32) | ((uint64_t)(next_notif_id++));
   }
+  SharedPtrRegistry<uuid_d, ObjectStore::Sequencer> osr_registry;
   ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> &op_wq;
   ThreadPool::WorkQueue<OSDVol> &snap_trim_wq;
 
