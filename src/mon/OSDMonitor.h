@@ -246,8 +246,9 @@ protected:
   virtual bool prepare_remove_snaps(class MRemoveSnaps *m) = 0;
   virtual bool preprocess_command_sub(MMonCommand *m, int& r,
 				      stringstream& ss) = 0;
-  virtual bool prepare_command_sub(MMonCommand *m, int& err,
-				   stringstream& ss, string& rs) = 0;
+  virtual bool prepare_command_sub(string& prefix,
+				   map<string, cmd_vartype>& map,
+				   int& err, stringstream& ss) = 0;
 
  public:
   OSDMonitor(Monitor *mn, Paxos *p, string service_name)

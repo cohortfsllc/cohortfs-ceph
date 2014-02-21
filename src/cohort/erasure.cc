@@ -18,7 +18,7 @@ static bool decode_type(const string& erasure_type,
 {
   if (erasure_type == "no_erasure") {
     type = no_erasure;
-  } if (erasure_type == "reed_solomon_vandermonde") {
+  } else if (erasure_type == "reed_solomon_vandermonde") {
     type = reed_solomon_vandermonde;
   } else if (erasure_type == "reed_solomon_vandermonde_raid_6") {
     type = reed_solomon_vandermonde_raid_6;
@@ -40,11 +40,11 @@ static bool decode_type(const string& erasure_type,
 
 
 bool erasure_params::fill_out(const string& erasure_type,
-			      const string& data_blocks,
-			      const string& code_blocks,
-			      const string& word_size,
-			      const string& packet_size,
-			      const string& size,
+			      const int64_t data_blocks,
+			      const int64_t code_blocks,
+			      const int64_t word_size,
+			      const int64_t packet_size,
+			      const int64_t size,
 			      erasure_params& params,
 			      string& error_message)
 {
@@ -58,19 +58,19 @@ bool erasure_params::fill_out(const string& erasure_type,
 
   try {
     cur = "data_blocks";
-    params.k = lexical_cast<int>(data_blocks);
+    params.k = static_cast<int>(data_blocks);
 
     cur = "code_blocks";
-    params.m = lexical_cast<int>(code_blocks);
+    params.m = static_cast<int>(code_blocks);
 
     cur = "word_size";
-    params.w = lexical_cast<int>(word_size);
+    params.w = static_cast<int>(word_size);
 
     cur = "packet_size";
-    params.packetsize = lexical_cast<int>(packet_size);
+    params.packetsize = static_cast<int>(packet_size);
 
     cur = "size";
-    params.size = lexical_cast<int>(size);
+    params.size = static_cast<int>(size);
   } catch (bad_lexical_cast&) {
     error_message = cur + " is not a valid integer.";
     return false;

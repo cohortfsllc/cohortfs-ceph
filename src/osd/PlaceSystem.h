@@ -59,7 +59,7 @@ public:
   __u16 getSystemIdentifier() const { return identifier; }
 
   static const T& getSystem() {
-    const string& name = g_conf->osd_placement_system;
+    const string& name = "cohort";
     return getSystem(name);
   }
 

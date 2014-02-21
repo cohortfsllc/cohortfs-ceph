@@ -60,9 +60,9 @@ protected:
   static VolumeRef create(const string& name, const epoch_t last_update,
 			  const string& place_text, const string& symbols,
 			  const string& erasure_type,
-			  const string& data_blocks, const string& code_blocks,
-			  const string& word_size, const string& packet_size,
-			  const string& size, string& error_message);
+			  int64_t data_blocks, int64_t code_blocks,
+			  int64_t word_size, int64_t packet_size,
+			  int64_t size, string& error_message);
 
 };
 

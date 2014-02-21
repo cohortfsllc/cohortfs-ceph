@@ -982,6 +982,7 @@ struct qi {
 
 void OSDMap::print(ostream& out) const
 {
+#if 0
   out << "epoch " << get_epoch() << "\n"
       << "fsid " << get_fsid() << "\n"
       << "created " << get_created() << "\n"
@@ -1025,6 +1026,9 @@ void OSDMap::print(ostream& out) const
       out << i->first << ":\t"
 	  << "'" << i->second->name << "\n";
     }
+#else
+    dump_json(out);
+#endif
 
 }
 

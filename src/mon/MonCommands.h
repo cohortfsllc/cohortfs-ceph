@@ -405,6 +405,20 @@ COMMAND("osd blacklist " \
 	"name=addr,type=CephEntityAddr " \
 	"name=expire,type=CephFloat,range=0.0,req=false", \
 	"add (optionally until <expire> seconds from now) or remove <addr> from blacklist")
+COMMAND("osd volume create " \
+	"name=volumeName,type=CephString " \
+	"name=placeCode,type=CephString " \
+	"name=placeSymbols,type=CephString " \
+	"name=erasureType,type=CephString " \
+	"name=erasureDataBlocks,type=CephInt,range=0,req=false " \
+	"name=erasureCodeBlocks,type=CephInt,range=0,req=false " \
+	"name=erasureWordSize,type=CephInt,range=0,req=false " \
+	"name=erasurePktSize,type=CephInt,range=0,req=false " \
+	"name=erasureSize,type=CephInt,range=0,req=false", \
+	"create volume")
+COMMAND("osd volume remove " \
+	"name=uuid,type=CephUUID", \
+	"remove volume")
 COMMAND("osd pool mksnap " \
 	"name=pool,type=CephPoolname " \
 	"name=snap,type=CephString", \

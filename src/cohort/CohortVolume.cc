@@ -12,12 +12,10 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <dlfcn.h>
-#include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 #include "osd/OSDMap.h"
 #include "CohortVolume.h"
-
-using boost::lexical_cast;
-using boost::bad_lexical_cast;
 
 typedef int (*place_func)(void*, const uuid_t, const char*,
 			  bool(*)(void*, int),
@@ -227,18 +225,16 @@ void CohortVolume::encode(bufferlist& bl) const
 VolumeRef CohortVolume::create(const string& name,
 			       const epoch_t last_update,
 			       const string& place_text,
-			       const string& symbols,
+			       const string& sym_str,
 			       const string& erasure_type,
-			       const string& data_blocks,
-			       const string& code_blocks,
-			       const string& word_size,
-			       const string& packet_size,
-			       const string& size,
+			       int64_t data_blocks,
+			       int64_t code_blocks,
+			       int64_t word_size,
+			       int64_t packet_size,
+			       int64_t size,
 			       string& error_message)
 {
   CohortVolume *v = new CohortVolume(CohortVol);
-  char *c_symbols = NULL;
-  char *next = NULL, *save = NULL;
 
   if (!valid_name(name, error_message))
     goto error;
@@ -247,12 +243,7 @@ VolumeRef CohortVolume::create(const string& name,
   v->last_update = last_update;
   v->place_text.append(place_text);
 
-  /* Yucky yucky yucky, come back and clean up later */
-  c_symbols = strdup(symbols.c_str());
-
-  while ((next = strtok_r(c_symbols, " ", &save))) {
-    v->symbols.push_back(next);
-  }
+  boost::algorithm::split(v->symbols, sym_str, boost::algorithm::is_any_of(" \t"));
 
   if (!erasure_params::fill_out(erasure_type, data_blocks,
 				code_blocks, word_size,

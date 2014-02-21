@@ -27,7 +27,8 @@
 #include "librados/IoCtxImpl.h"
 #include "librados/PoolAsyncCompletionImpl.h"
 #include "librados/RadosClient.h"
-#include <cls/lock/cls_lock_client.h>
+#include "cls/lock/cls_lock_client.h"
+#include "cohort/CohortPlaceSystem.h"
 
 #include <string>
 #include <map>
@@ -48,6 +49,15 @@ using std::runtime_error;
 #define dout_prefix *_dout << "librados: "
 
 #define RADOS_LIST_MAX_ENTRIES 1024
+
+const CohortOSDMapPlaceSystem *theCohortOSDMap = NULL;
+
+static void init_place_systems(void)
+{
+  theCohortOSDMap = new CohortOSDMapPlaceSystem(
+    CohortPlaceSystem::systemName,
+    CohortPlaceSystem::systemIdentifier);
+}
 
 /*
  * Structure of this file
@@ -1369,6 +1379,7 @@ int rados_create_common(rados_t *pcluster,
 			const char * const clustername,
 			CephInitParameters *iparams)
 {
+  init_place_systems();
   // missing things compared to global_init:
   // g_ceph_context, g_conf, g_lockdep, signal handlers
   CephContext *cct = common_preinit(*iparams, CODE_ENVIRONMENT_LIBRARY, 0);

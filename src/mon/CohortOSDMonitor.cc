@@ -106,80 +106,80 @@ bool CohortOSDMonitor::preprocess_command_sub(MMonCommand *m, int& r,
   }
 }
 
-bool CohortOSDMonitor::prepare_command_sub(MMonCommand *m,
-					   int& r,
-					   stringstream& ss,
-					   string& rs)
+bool CohortOSDMonitor::prepare_command_sub(string& prefix,
+					   map<string, cmd_vartype>& map,
+					   int& err,
+					   stringstream& ss)
 {
   const shared_ptr<CohortOSDMap> l_osdmap
     = static_pointer_cast<CohortOSDMap>(osdmap);
-  const shared_ptr<CohortOSDMap::Incremental> l_pending_inc
-    = static_pointer_cast<CohortOSDMap::Incremental>(pending_inc);
   bufferlist rdata;
-  r = -1;
 
-  if (m->cmd.size() > 1) {
-    if (m->cmd[1] == "create" && m->cmd.size() == 11) {
-      const string& name = m->cmd[2];
-      epoch_t last_update = l_osdmap->epoch;
-      const string& place_text = m->cmd[3];
-      const string& symbols = m->cmd[4];
-      const string& erasure_type = m->cmd[5];
-      const string& data_blocks = m->cmd[6];
-      const string& code_blocks = m->cmd[7];
-      const string& word_size = m->cmd[8];
-      const string& packet_size = m->cmd[9];
-      const string& size = m->cmd[10];
-      string error_message;
+  if (prefix == "osd volume create") {
+    string name;
+    string place_text;
+    string symbols;
+    string erasure_type;
+    int64_t data_blocks;
+    int64_t code_blocks;
+    int64_t word_size;
+    int64_t packet_size;
+    int64_t size;
+    epoch_t last_update = l_osdmap->epoch;
+    string error_message;
 
-      VolumeRef vol;
+    VolumeRef vol;
 
-      /* Only one volume type for now, when we implement more I'll
-	 come back and complexify this. */
+    cmd_getval(g_ceph_context, map, "volumeName", name);
+    cmd_getval(g_ceph_context, map, "placeCode", place_text);
+    cmd_getval(g_ceph_context, map, "placeSymbols", symbols);
+    cmd_getval(g_ceph_context, map, "erasureType", erasure_type);
+    cmd_getval(g_ceph_context, map, "erasureDataBlocks", data_blocks, int64_t(0));
+    cmd_getval(g_ceph_context, map, "erasureCodeBlocks", code_blocks, int64_t(0));
+    cmd_getval(g_ceph_context, map, "erasureWordSize", word_size, int64_t(0));
+    cmd_getval(g_ceph_context, map, "erasurePktSize", packet_size, int64_t(0));
+    cmd_getval(g_ceph_context, map, "erasureSize", size, int64_t(0));
 
-      if (!Volume::valid_name(name, error_message)) {
-	ss << error_message;
-	r = -EINVAL;
-      } else {
-	vol = CohortVolume::create(name, last_update, place_text,
-				   symbols, erasure_type, data_blocks,
-				   code_blocks, word_size, packet_size,
-				   size, error_message);
-	if (vol) {
-	  ss << "volume: " << vol << " created.";
-	  pending_inc->include_addition(vol);
-	} else {
-	  ss << error_message;
-	}
-      }
-    } else if (m->cmd[1] == "remove" && m->cmd.size() == 3) {
-      const string& uuid_str = m->cmd[2];
-      string error_message;
-      uuid_d uuid;
+    /* Only one volume type for now, when we implement more I'll
+       come back and complexify this. */
 
-      try {
-	uuid = uuid_d::parse(uuid_str);
-	pending_inc->include_removal(uuid);
-	/* Error handling */
-      } catch (const std::invalid_argument& ia) {
-	ss << "provided volume uuid " << uuid << " is not a valid uuid";
-	r = -EINVAL;
-      }
+    if (!Volume::valid_name(name, error_message)) {
+      ss << error_message;
+      err = -EINVAL;
+      return true;
     }
-  }
+    vol = CohortVolume::create(name, last_update, place_text,
+	symbols, erasure_type, data_blocks,
+	code_blocks, word_size, packet_size,
+	size, error_message);
+    if (vol) {
+      ss << "volume: " << vol << " created.";
+      pending_inc->include_addition(vol);
+    } else {
+      ss << error_message;
+      err = -EINVAL;
+      return true;
+    }
+  } else if (prefix == "osd volume remove") {
+    string uuid_str;
+    string error_message;
+    uuid_d uuid;
 
-  if (r == -1) {
-    r = -EINVAL;
-    ss << "unrecognized command";
-  }
-  getline(ss, rs);
-
-  if (r != -1) {
-    mon->reply_command(m, r, rs, rdata, paxos->get_version());
-    return true;
+    cmd_getval(g_ceph_context, map, "uuid", uuid_str);
+    try {
+      uuid = uuid_d::parse(uuid_str);
+      pending_inc->include_removal(uuid);
+      /* Error handling */
+    } catch (const std::invalid_argument& ia) {
+      ss << "provided volume uuid " << uuid << " is not a valid uuid";
+      err = -EINVAL;
+      return true;
+    }
   } else {
     return false;
   }
+
+  return true;
 }
 
 void CohortOSDMonitor::update_trim()

@@ -44,11 +44,11 @@ struct erasure_params {
   int size; /* Size of each stripe, in bytes. */
 
   static bool fill_out(const string& erasure_type,
-		       const string& data_blocks,
-		       const string& code_blocks,
-		       const string& word_size,
-		       const string& packet_size,
-		       const string& size,
+		       int64_t data_blocks,
+		       int64_t code_blocks,
+		       int64_t word_size,
+		       int64_t packet_size,
+		       int64_t size,
 		       erasure_params& params,
 		       string& error_message);
 

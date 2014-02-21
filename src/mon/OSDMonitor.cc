@@ -2108,9 +2108,10 @@ done:
     ss << "will thrash map for " << thrash_map << " epochs";
     ret = thrash();
     err = 0;
-  } else if (prepare_command_sub(m, err, ss, rs)) {
-    return true;
+  } else if (prepare_command_sub(prefix, cmdmap, err, ss)) {
+    goto reply;
   } else {
+    ss << "unrecognized command";
     err = -EINVAL;
   }
 

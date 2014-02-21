@@ -1,4 +1,5 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #ifndef CEPH_PGOSDMONITOR_H
 #define CEPH_PGOSDMONITOR_H
@@ -58,8 +59,9 @@ public:
   virtual bool prepare_remove_snaps(MRemoveSnaps *m);
   virtual bool preprocess_command_sub(MMonCommand *m, int& r,
 				      stringstream& ss);
-  virtual bool prepare_command_sub(MMonCommand *m, int& err,
-				   stringstream& ss, string& rs);
+  virtual bool prepare_command_sub(string& prefix,
+				   map<string, cmd_vartype>& map,
+				   int& err, stringstream& ss);
 
   void update_trim();
 
