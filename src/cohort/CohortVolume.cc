@@ -197,15 +197,9 @@ void CohortVolume::decode_payload(bufferlist::iterator& bl, __u8 v)
   inherited::decode_payload(bl, v);
 
   ::decode(place_text, bl);
-  uint32_t count;
-  ::decode(count, bl);
-  symbols.reserve(count);
-  for(uint32_t i = 0; i < count; ++i) {
-    string symbol;
-    ::decode(symbol, bl);
-    symbols[i] = symbol;
-  }
-  entry_points.reserve(count);
+  ::decode(symbols, bl);
+  entry_points.reserve(symbols.size());
+  // TODO decode erasure coding
 }
 
 void CohortVolume::encode(bufferlist& bl) const
@@ -214,12 +208,7 @@ void CohortVolume::encode(bufferlist& bl) const
 
   ::encode(place_text, bl);
   ::encode(symbols, bl);
-
-  uint32_t count = symbols.size();
-  ::encode(count, bl);
-  for(uint32_t i = 0; i < count; ++i) {
-    ::encode(symbols[i], bl);
-  }
+  // TODO encode erasure coding
 }
 
 VolumeRef CohortVolume::create(const string& name,

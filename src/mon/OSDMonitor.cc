@@ -2109,6 +2109,8 @@ done:
     ret = thrash();
     err = 0;
   } else if (prepare_command_sub(prefix, cmdmap, err, ss)) {
+    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, get_version()));
+    propose_pending();
     goto reply;
   } else {
     ss << "unrecognized command";

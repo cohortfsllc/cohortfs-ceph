@@ -118,14 +118,14 @@ const string& Volume::type_string(vol_type type)
 
 VolumeRef Volume::decode_volume(bufferlist::iterator& bl)
 {
-  __u8 v;
+  int v;
   vol_type t;
 
+  ::decode(v, bl);
   if (v != 0) {
     throw buffer::malformed_input("Bad version.");
   }
 
-  ::decode(v, bl);
   ::decode(t, bl);
   if (t < 0 || t >= NotAVolType || factories[t] == NULL)
     throw buffer::malformed_input("Bad (or unimplemented) volume type.");

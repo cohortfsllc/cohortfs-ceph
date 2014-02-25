@@ -28,7 +28,7 @@ protected:
   bufferlist place_text;
   void *place_shared;
   epoch_t compiled_epoch;
-  vector<string> symbols;
+  vector<std::string> symbols;
   vector<void*> entry_points;
   erasure_params erasure;
 

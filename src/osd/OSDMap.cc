@@ -391,7 +391,7 @@ void OSDMap::Incremental::dump(Formatter *f) const
 void OSDMap::Incremental::vol_inc_add::encode(bufferlist& bl, uint64_t features) const
 {
   ::encode(sequence, bl);
-  ::encode(vol, bl);
+  ::encode(*vol, bl);
 }
 
 void OSDMap::Incremental::vol_inc_add::decode(bufferlist::iterator &p)
@@ -772,7 +772,6 @@ void OSDMap::encodeOSDMap(bufferlist& bl, uint64_t features) const
   ::encode(osd_addrs->hb_front_addr, bl);
 
   uint32_t count;
-  ::encode(vols.by_uuid, bl);
   count = vols.by_uuid.size();
   ::encode(count, bl);
   for (map<uuid_d,VolumeRef>::const_iterator v

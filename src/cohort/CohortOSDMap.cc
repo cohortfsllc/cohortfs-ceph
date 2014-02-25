@@ -1,4 +1,5 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include "CohortOSDMap.h"
 
@@ -77,6 +78,19 @@ int CohortOSDMap::apply_incremental_subclass(
   const CohortOSDMap::Incremental& inc =
     dynamic_cast<const CohortOSDMap::Incremental&>(incOrig);
 
+  for (vector<OSDMap::Incremental::vol_inc_add>::const_iterator p =
+      inc.vol_additions.begin();
+      p != inc.vol_additions.end();
+      ++p) {
+    add_volume(p->vol);
+  }
+
+  for (vector<OSDMap::Incremental::vol_inc_remove>::const_iterator p =
+      inc.vol_removals.begin();
+      p != inc.vol_removals.end();
+      ++p) {
+    remove_volume(p->uuid);
+  }
   return 0;
 }
 
