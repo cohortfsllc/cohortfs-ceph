@@ -3202,7 +3202,10 @@ void OSDVol::apply_repop(RepGather *repop)
   int r = osd->store->queue_transactions(
     osr.get(),repop->tls, onapplied, oncommit, onapplied_sync, repop->ctx->op);
 
-  assert(r = 0);
+  if (r) {
+    derr << "apply_repop  queue_transactions returned " << r << dendl;
+    abort();
+  }
 }
 
 void OSDVol::queue_snap_trim()
