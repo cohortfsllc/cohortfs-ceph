@@ -9,6 +9,23 @@
 #include "common/errno.h"
 
 #define dout_subsys ceph_subsys_osd
+#define DOUT_PREFIX_ARGS this, osd->whoami, get_osdmap()
+#undef dout_prefix
+#define dout_prefix _prefix(_dout, this, osd->whoami, get_osdmap())
+static ostream& _prefix(std::ostream *_dout, OSDVol* vol, int whoami,
+			CohortOSDMapRef osdmap) {
+  return *_dout << vol->gen_prefix();
+}
+
+std::string OSDVol::gen_prefix() const
+{
+  stringstream out;
+  CohortOSDMapRef mapref = osdmap_ref;
+  out << "osd." << osd->whoami
+      << " vol_epoch: " << (mapref ? mapref->get_epoch():0)
+      << " " << volume_id << " ";
+  return out.str();
+}
 
 OSDVol::OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
 	       uuid_d u, const hobject_t& loid, const hobject_t& ioid) :
@@ -233,6 +250,7 @@ void OSDVol::do_op(OpRequestRef op)
 
   op->mark_started();
 
+  const hobject_t& soid = obc->obs.oi.soid;
   OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops,
 				 &obc->obs, obc->ssc,
 				 this);
@@ -252,7 +270,33 @@ void OSDVol::do_op(OpRequestRef op)
       return;
     }
 
+    eversion_t oldv = vol_log.get_log().get_request_version(ctx->reqid);
+    if (oldv != eversion_t()) {
+      delete ctx;
+      put_object_context(obc);
+      put_object_contexts(src_obc);
+      if (already_complete(oldv)) {
+	osd->reply_op_error(op, 0, oldv);
+      } else {
+	if (m->wants_ack()) {
+	  if (already_ack(oldv)) {
+	    MOSDOpReply *reply
+	      = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0);
+	    reply->add_flags(CEPH_OSD_FLAG_ACK);
+	    osd->send_message_osd_client(reply, m->get_connection());
+	  } else {
+	    waiting_for_ack[oldv].push_back(op);
+	  }
+	}
+	// always queue ondisk waiters, so that we can requeue if needed
+	waiting_for_ondisk[oldv].push_back(op);
+	op->mark_delayed("waiting for ondisk");
+      }
+      return;
+    }
+
     op->mark_started();
+
     // version
     ctx->at_version = vol_log.get_head();
 
@@ -262,23 +306,37 @@ void OSDVol::do_op(OpRequestRef op)
     assert(ctx->at_version > vol_log.get_head());
 
     ctx->mtime = m->get_mtime();
+
+    dout(10) << "do_op " << soid << " " << ctx->ops
+	     << " ov " << obc->obs.oi.version << " av " << ctx->at_version
+	     << " snapc " << ctx->snapc
+	     << " snapset " << obc->ssc->snapset
+	     << dendl;
+  } else {
+    dout(10) << "do_op " << soid << " " << ctx->ops
+	     << " ov " << obc->obs.oi.version
+	     << dendl;
   }
-
-
 
   if (op->may_read()) {
+    dout(10) << " taking ondisk_read_lock" << dendl;
     obc->ondisk_read_lock();
   }
-  for (map<hobject_t,ObjectContext*>::iterator p = src_obc.begin(); p != src_obc.end(); ++p) {
+  for (map<hobject_t,ObjectContext*>::iterator p = src_obc.begin();
+       p != src_obc.end(); ++p) {
+    dout(10) << " taking ondisk_read_lock for src " << p->first << dendl;
     p->second->ondisk_read_lock();
   }
 
   int result = prepare_transaction(ctx);
 
   if (op->may_read()) {
+    dout(10) << " dropping ondisk_read_lock" << dendl;
     obc->ondisk_read_unlock();
   }
-  for (map<hobject_t,ObjectContext*>::iterator p = src_obc.begin(); p != src_obc.end(); ++p) {
+  for (map<hobject_t,ObjectContext*>::iterator p = src_obc.begin();
+       p != src_obc.end(); ++p) {
+    dout(10) << " dropping ondisk_read_lock for src " << p->first << dendl;
     p->second->ondisk_read_unlock();
   }
 
@@ -298,7 +356,7 @@ void OSDVol::do_op(OpRequestRef op)
   // and it has already been applied, we will return 0 with no
   // payload.  Non-deterministic behavior is no good.  However, it is
   // possible to construct an operation that does a read, does a guard
-  // check (e.g., CMPXATTR), and then a write.	Then we either succeed
+  // check (e.g., CMPXATTR), and then a write.  Then we either succeed
   // with the write, or return a CMPXATTR and the read value.
   if (ctx->op_t.empty() && !ctx->modify) {
     // read.
@@ -333,10 +391,26 @@ void OSDVol::do_op(OpRequestRef op)
     return;
   }
 
+  assert(op->may_write());
+
   // trim log?
   calc_trim_to();
 
   append_log(ctx->log, trim_to, ctx->local_t);
+
+  // continuing on to write path, make sure object context is registered
+  assert(obc->registered);
+
+  // issue replica writes
+  tid_t rep_tid = osd->get_tid();
+  // new repop claims our obc, src_obc refs
+  RepGather *repop = new_repop(ctx, obc, rep_tid);
+  // note: repop now owns ctx AND ctx->op
+
+  repop->src_obc.swap(src_obc); // and src_obc.
+
+  eval_repop(repop);
+  repop->put();
 }
 
 
@@ -3398,17 +3472,6 @@ OSDVol::RepGather *OSDVol::trim_object(const hobject_t &coid)
   }
 
   return repop;
-}
-
-std::string OSDVol::gen_prefix() const
-{
-  stringstream out;
-  CohortOSDMapRef mapref = osdmap_ref;
-  out << "osd." << osd->whoami
-      << " vol_epoch: " << (mapref ? mapref->get_epoch():0)
-      << " vol[" << info.volid << "(unlocked)] ";
-
-  return out.str();
 }
 
 void OSDVol::do_pending_flush()

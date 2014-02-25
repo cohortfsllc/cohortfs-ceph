@@ -274,6 +274,11 @@ protected:
 
   CohortOSDServiceRef osd;
 
+  // replica ops
+  // [primary|tail]
+  xlist<RepGather*> repop_queue;
+  map<tid_t, RepGather*> repop_map;
+
   // Ops waiting for map, should be queued at back
   list<OpRequestRef> waiting_for_map;
   CohortOSDMapRef osdmap_ref;
@@ -490,6 +495,28 @@ public:
   void snap_trimmer(void);
   RepGather *trim_object(const hobject_t &coid);
   std::string gen_prefix() const;
+  bool already_complete(eversion_t v) {
+    for (xlist<RepGather*>::iterator i = repop_queue.begin();
+	 !i.end();
+	 ++i) {
+      if ((*i)->v > v)
+	break;
+      if (!(*i)->waitfor_disk.empty())
+	return false;
+    }
+    return true;
+  }
+  bool already_ack(eversion_t v) {
+    for (xlist<RepGather*>::iterator i = repop_queue.begin();
+	 !i.end();
+	 ++i) {
+      if ((*i)->v > v)
+	break;
+      if (!(*i)->waitfor_ack.empty())
+	return false;
+    }
+    return true;
+  }
 };
 
 ostream& operator <<(ostream& out, const OSDVol& vol);
