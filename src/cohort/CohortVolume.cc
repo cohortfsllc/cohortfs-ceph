@@ -228,6 +228,7 @@ VolumeRef CohortVolume::create(const string& name,
   if (!valid_name(name, error_message))
     goto error;
 
+  v->uuid = uuid_d::generate_random();
   v->name = name;
   v->last_update = last_update;
   v->place_text.append(place_text);

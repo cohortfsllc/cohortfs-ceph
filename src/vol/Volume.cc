@@ -104,6 +104,11 @@ bool Volume::valid(string& error)
     return false;
   }
 
+  if (uuid == INVALID_VOLUME) {
+    error = "UUID is invalid";
+    return false;
+  }
+
   return true;
 }
 
