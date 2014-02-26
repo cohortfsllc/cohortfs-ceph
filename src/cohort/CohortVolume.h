@@ -26,17 +26,20 @@ protected:
   void compile(epoch_t epoch);
 
   bufferlist place_text;
-  void *place_shared;
-  epoch_t compiled_epoch;
   vector<std::string> symbols;
-  vector<void*> entry_points;
   erasure_params erasure;
+
+  /* These are internal and are not serialized */
+  vector<void*> entry_points;
+  epoch_t compiled_epoch;
+  void *place_shared;
 
   CohortVolume(vol_type t)
     : Volume(t), compile_lock("CohortVolume::compile_lock"),
-      place_text(), place_shared(NULL),
+      place_text(), symbols(),
+      entry_points(),
       compiled_epoch(0),
-      symbols(), entry_points() { }
+      place_shared(NULL) { }
 
   public:
 
@@ -51,6 +54,7 @@ protected:
 
   virtual int update(VolumeCRef v);
 
+  virtual void dump(Formatter *f) const;
   virtual void decode_payload(bufferlist::iterator& bl, __u8 v);
   virtual void encode(bufferlist& bl) const;
 

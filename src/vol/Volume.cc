@@ -42,6 +42,14 @@ const Volume::factory Volume::factories[] = {
 };
 
 
+void Volume::dump(Formatter *f) const
+{
+  f->dump_int("type", type);
+  f->dump_stream("uuid") << uuid;
+  f->dump_stream("name") << name;
+  f->dump_stream("last_update") << last_update;
+}
+
 void Volume::decode_payload(bufferlist::iterator& bl, __u8 v)
 {
   ::decode(uuid, bl);

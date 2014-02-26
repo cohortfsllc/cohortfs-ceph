@@ -926,8 +926,9 @@ void OSDMap::dump(Formatter *f) const
   for(map<uuid_d,VolumeRef>::const_iterator i = vols.by_uuid.begin();
       i != vols.by_uuid.end();
       ++i) {
-    f->dump_stream("uuid") << i->first;
-    f->dump_string("name", i->second->name);
+    f->open_object_section("volume_info");
+    i->second->dump(f);
+    f->close_section();
   }
   f->close_section();
 }

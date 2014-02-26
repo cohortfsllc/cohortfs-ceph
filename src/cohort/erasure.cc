@@ -1,4 +1,5 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Copyright (C) 2013, CohortFS, LLC <info@cohortfs.com>
  * All rights reserved.
@@ -7,35 +8,36 @@
  */
 
 #include <boost/lexical_cast.hpp>
+#include "boost/assign.hpp"
 #include "erasure.h"
 
 using boost::lexical_cast;
 using boost::bad_lexical_cast;
+using namespace boost::assign;
+
+static map <erasure_encoder, string> type_map = map_list_of
+  ( no_erasure, "no_erasure" )
+  ( reed_solomon_vandermonde, "reed_solomon_vandermonde" )
+  ( reed_solomon_vandermonde_raid_6, "reed_solomon_vandermonde_raid_6" )
+  ( reed_solomon_cauchy, "reed_solomon_cauchy" )
+  ( liberation, "liberation" )
+  ( blaum_roth, "blaum_roth" )
+  ( liber8tion, "liber8tion" );
 
 static bool decode_type(const string& erasure_type,
 			erasure_encoder& type,
 			string& error_message)
 {
-  if (erasure_type == "no_erasure") {
-    type = no_erasure;
-  } else if (erasure_type == "reed_solomon_vandermonde") {
-    type = reed_solomon_vandermonde;
-  } else if (erasure_type == "reed_solomon_vandermonde_raid_6") {
-    type = reed_solomon_vandermonde_raid_6;
-  } else if (erasure_type == "reed_solomon_cauchy") {
-    type = reed_solomon_cauchy;
-  } else if (erasure_type == "liberation") {
-    type = liberation;
-  } else if (erasure_type == "blaum_roth") {
-    type = blaum_roth;
-  } else if (erasure_type == "liber8tion") {
-    type = liber8tion;
-  } else {
-    error_message = erasure_type + " is not a valid erasure type.";
-    return false;
+  for (map<erasure_encoder, string>::const_iterator p = type_map.begin();
+       p != type_map.end();
+       ++p) {
+    if (erasure_type == p->second) {
+      type = p->first;
+      return true;
+    }
   }
-
-  return true;
+  error_message = erasure_type + " is not a valid erasure type.";
+  return false;
 }
 
 
@@ -91,4 +93,42 @@ bool erasure_params::fill_out(const string& erasure_type,
   }
 
   return true;
+}
+
+void erasure_params::encode(bufferlist& bl) const
+{
+  __u8 v = 1;
+  ::encode(v, bl);
+  uint64_t utype = (uint64_t)type;
+  ::encode(utype, bl);
+  ::encode(k, bl);
+  ::encode(m, bl);
+  ::encode(w, bl);
+  ::encode(packetsize, bl);
+  ::encode(size, bl);
+}
+
+void erasure_params::decode(bufferlist::iterator& bl)
+{
+  __u8 v;
+  ::decode(v, bl);
+  uint64_t utype;
+  ::decode(utype, bl);
+  type = (erasure_encoder)utype;
+  ::decode(k, bl);
+  ::decode(m, bl);
+  ::decode(w, bl);
+  ::decode(packetsize, bl);
+  ::decode(size, bl);
+}
+
+ostream& operator<<(ostream& out, const erasure_params& erasure)
+{
+  out << "type " << type_map[erasure.type]
+      << " data_blocks " << erasure.k
+      << " code_blocks " << erasure.m
+      << " word_size " << erasure.w
+      << " packet_size " << erasure.packetsize
+      << " size " << erasure.size;
+  return out;
 }

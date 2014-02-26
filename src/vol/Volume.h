@@ -98,7 +98,10 @@ public:
   virtual bool valid(string& error);
   static const string& type_string(vol_type type);
   static VolumeRef decode_volume(bufferlist::iterator& bl);
-  /* Each child class should call its parent's encode class as it's first
+  /* Each child class should call its parent's dump method as it's first
+     action. */
+  virtual void dump(Formatter *f) const;
+  /* Each child class should call its parent's encode method as it's first
      action. */
   virtual void encode(bufferlist& bl) const;
   /* Dummy decode for WRITE_CLASS_ENCODER */

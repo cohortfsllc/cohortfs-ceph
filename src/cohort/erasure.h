@@ -10,12 +10,15 @@
 #define COHORT_ERASURE_H
 
 #include <string>
+#include "include/encoding.h"
 
 using std::string;
+using namespace std;
 
 /* Currently the set of encodings supported by Jerasure, but I reserve
    the right to add more in the future. */
 
+/* If you change this, change type_map[] in erasure.cc */
 enum erasure_encoder {
   no_erasure, /* No erasure encoding */
   reed_solomon_vandermonde, /* Classic Reed-Solomon with a
@@ -52,6 +55,11 @@ struct erasure_params {
 		       erasure_params& params,
 		       string& error_message);
 
+  void encode(bufferlist& bl) const;
+  void decode(bufferlist::iterator& bl);
 };
+
+WRITE_CLASS_ENCODER(erasure_params)
+ostream& operator<<(ostream& out, const erasure_params& erasure);
 
 #endif /* !COHORT_ERASURE_H */

@@ -192,6 +192,14 @@ int CohortVolume::place(const object_t& object,
   return rc;
 }
 
+void CohortVolume::dump(Formatter *f) const
+{
+  inherited::dump(f);
+  f->dump_stream("place_text") << place_text;
+  f->dump_stream("symbols") << symbols;
+  f->dump_stream("erasure") << erasure;
+}
+
 void CohortVolume::decode_payload(bufferlist::iterator& bl, __u8 v)
 {
   inherited::decode_payload(bl, v);
@@ -199,7 +207,7 @@ void CohortVolume::decode_payload(bufferlist::iterator& bl, __u8 v)
   ::decode(place_text, bl);
   ::decode(symbols, bl);
   entry_points.reserve(symbols.size());
-  // TODO decode erasure coding
+  ::decode(erasure, bl);
 }
 
 void CohortVolume::encode(bufferlist& bl) const
@@ -208,7 +216,7 @@ void CohortVolume::encode(bufferlist& bl) const
 
   ::encode(place_text, bl);
   ::encode(symbols, bl);
-  // TODO encode erasure coding
+  ::encode(erasure, bl);
 }
 
 VolumeRef CohortVolume::create(const string& name,
