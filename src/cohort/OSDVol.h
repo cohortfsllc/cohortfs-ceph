@@ -100,6 +100,7 @@ class OSDVol {
   bool dirty_info, dirty_big_info;
   bool deleting;
   xlist<OSDVol*>::item snap_trim_item;
+public:
   struct OpContext {
     OpRequestRef op;
     osd_reqid_t reqid;
@@ -511,5 +512,21 @@ public:
 };
 
 ostream& operator <<(ostream& out, const OSDVol& vol);
+
+inline ostream& operator<<(ostream& out, OSDVol::RepGather& repop)
+{
+  out << "repgather(" << &repop
+      << (repop.applying ? " applying" : "")
+      << (repop.applied ? " applied" : "")
+      << " " << repop.v
+      << " rep_tid=" << repop.rep_tid
+      << " wfack=" << repop.waitfor_ack
+    //<< " wfnvram=" << repop.waitfor_nvram
+      << " wfdisk=" << repop.waitfor_disk;
+  if (repop.ctx->op)
+    out << " op=" << *(repop.ctx->op->request);
+  out << ")";
+  return out;
+}
 
 #endif /* !COHORT_OSDVOL_H */

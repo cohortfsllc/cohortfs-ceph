@@ -3057,10 +3057,23 @@ void OSDVol::eval_repop(RepGather *repop)
   if (repop->ctx->op)
     m = static_cast<MOSDOp *>(repop->ctx->op->request);
 
+  if (m)
+    dout(10) << "eval_repop " << *repop
+	     << " wants=" << (m->wants_ack() ? "a":"") << (m->wants_ondisk() ? "d":"")
+	     << (repop->done ? " DONE" : "")
+	     << dendl;
+  else
+    dout(10) << "eval_repop " << *repop << " (no op)"
+	     << (repop->done ? " DONE" : "")
+	     << dendl;
+
   if (repop->done)
     return;
 
-  apply_repop(repop);
+  // apply?
+  if (!repop->applied && !repop->applying &&
+      repop->waitfor_ack.size() == 1)
+    apply_repop(repop);
 
   if (m) {
 
@@ -3098,6 +3111,7 @@ void OSDVol::eval_repop(RepGather *repop)
 	else
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0);
 	reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
+	dout(10) << " sending commit on " << *repop << " " << reply << dendl;
 	assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
 	osd->send_message_osd_client(reply, m->get_connection());
 	repop->sent_disk = true;
@@ -3130,6 +3144,7 @@ void OSDVol::eval_repop(RepGather *repop)
 	else
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0);
 	reply->add_flags(CEPH_OSD_FLAG_ACK);
+	dout(10) << " sending ack on " << *repop << " " << reply << dendl;
 	assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
 	osd->send_message_osd_client(reply, m->get_connection());
 	repop->sent_ack = true;
@@ -3154,16 +3169,25 @@ void OSDVol::eval_repop(RepGather *repop)
       queue_snap_trim();
     }
 
+    dout(10) << " removing " << *repop << dendl;
+    assert(!repop_queue.empty());
+    dout(20) << "   q front is " << *repop_queue.front() << dendl;
+    if (repop_queue.front() != repop) {
+      dout(0) << " removing " << *repop << dendl;
+      dout(0) << "   q front is " << *repop_queue.front() << dendl;
+      assert(repop_queue.front() == repop);
+    }
+    repop_queue.pop_front();
     remove_repop(repop);
   }
 }
 
 class C_OSD_OpApplied : public Context {
 public:
-  OSDVolRef vol;
+  OSDVol *vol;
   OSDVol::RepGather *repop;
 
-  C_OSD_OpApplied(OSDVolRef v,
+  C_OSD_OpApplied(OSDVol *v,
 		  OSDVol::RepGather *rg) :
     vol(v), repop(rg) {
     repop->get();
@@ -3175,10 +3199,10 @@ public:
 
 class C_OSD_OpCommit : public Context {
 public:
-  OSDVolRef vol;
+  OSDVol *vol;
   OSDVol::RepGather *repop;
 
-  C_OSD_OpCommit(OSDVolRef v, OSDVol::RepGather *rg) :
+  C_OSD_OpCommit(OSDVol *v, OSDVol::RepGather *rg) :
     vol(v), repop(rg) {
     repop->get();
   }
@@ -3189,6 +3213,7 @@ public:
 
 void OSDVol::apply_repop(RepGather *repop)
 {
+  dout(10) << "apply_repop  applying update on " << *repop << dendl;
   assert(!repop->applying);
   assert(!repop->applied);
 
@@ -3201,16 +3226,17 @@ void OSDVol::apply_repop(RepGather *repop)
   if (repop->ctx->clone_obc)
     repop->ctx->clone_obc->ondisk_write_lock();
 
-  Context *oncommit = new C_OSD_OpCommit(OSDVolRef(this), repop);
-  Context *onapplied = new C_OSD_OpApplied(OSDVolRef(this), repop);
+  Context *oncommit = new C_OSD_OpCommit(this, repop);
+  Context *onapplied = new C_OSD_OpApplied(this, repop);
   Context *onapplied_sync = new C_OSD_OndiskWriteUnlock(repop->obc,
 							repop->ctx->clone_obc);
-  int r = osd->store->queue_transactions(
-    osr.get(),repop->tls, onapplied, oncommit, onapplied_sync, repop->ctx->op);
-
+  int r = osd->store->queue_transactions(osr.get(), repop->tls, onapplied,
+					 oncommit, onapplied_sync,
+					 repop->ctx->op);
   if (r) {
-    derr << "apply_repop  queue_transactions returned " << r << dendl;
-    abort();
+    derr << "apply_repop  queue_transactions returned " << r << " on "
+	 << *repop << dendl;
+    assert(0);
   }
 }
 
@@ -3275,8 +3301,12 @@ void OSDVol::op_commit(RepGather *repop)
   if (repop->ctx->op)
     repop->ctx->op->mark_event("op_commit");
 
-  if (!repop->aborted &&
-      (repop->waitfor_disk.count(osd->get_nodeid()) != 0)) {
+  if (repop->aborted) {
+    dout(10) << "op_commit " << *repop << " -- aborted" << dendl;
+  } else if (repop->waitfor_disk.count(osd->get_nodeid()) == 0) {
+    dout(10) << "op_commit " << *repop << " -- already marked ondisk" << dendl;
+  } else {
+    dout(10) << "op_commit " << *repop << dendl;
     int whoami = osd->get_nodeid();
 
     repop->waitfor_disk.erase(whoami);
