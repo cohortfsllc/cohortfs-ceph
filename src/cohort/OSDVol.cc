@@ -3044,9 +3044,21 @@ void OSDVol::handle_watch_timeout(WatchRef watch)
 OSDVol::RepGather *OSDVol::new_repop(OpContext *ctx, ObjectContext *obc,
 				     tid_t rep_tid)
 {
+  if (ctx->op)
+    dout(10) << "new_repop rep_tid " << rep_tid << " on "
+	     << *ctx->op->request << dendl;
+  else
+    dout(10) << "new_repop rep_tid " << rep_tid << " (no op)" << dendl;
+
   RepGather *repop = new RepGather(ctx, obc, rep_tid, info.last_complete);
 
   repop->start = ceph_clock_now(g_ceph_context);
+
+  repop_queue.push_back(&repop->queue_item);
+  repop_map[repop->rep_tid] = repop;
+  repop->get();
+
+  osd->logger->set(l_osd_op_wip, repop_map.size());
 
   return repop;
 }
