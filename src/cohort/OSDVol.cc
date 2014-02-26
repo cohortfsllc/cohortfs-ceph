@@ -409,6 +409,12 @@ void OSDVol::do_op(OpRequestRef op)
 
   repop->src_obc.swap(src_obc); // and src_obc.
 
+  repop->v = ctx->at_version;
+
+  // add myself to gather set
+  repop->waitfor_ack.insert(osd->whoami);
+  repop->waitfor_disk.insert(osd->whoami);
+
   eval_repop(repop);
   repop->put();
 }
@@ -3279,10 +3285,10 @@ void OSDVol::op_commit(RepGather *repop)
     // behaves the same in that the COMMIT implies and ACK and there
     // is no separate reply sent.
     repop->waitfor_ack.erase(whoami);
-    
+
     last_update_ondisk = repop->v;
 
-    last_complete_ondisk = repop->pg_local_last_complete;
+    last_complete_ondisk = repop->vol_local_last_complete;
     eval_repop(repop);
   }
 

@@ -202,42 +202,33 @@ class OSDVol {
   public:
     xlist<RepGather*>::item queue_item;
     int nref;
-
     eversion_t v;
 
     OpContext *ctx;
     ObjectContext *obc;
     map<hobject_t,ObjectContext*> src_obc;
-
     tid_t rep_tid;
-
     bool applying, applied, aborted, done;
-
     set<int>  waitfor_ack;
-    //set<int>  waitfor_nvram;
     set<int>  waitfor_disk;
     bool sent_ack;
-    //bool sent_nvram;
     bool sent_disk;
-    
     utime_t   start;
-    
-    eversion_t          pg_local_last_complete;
-
+    eversion_t vol_local_last_complete;
     list<ObjectStore::Transaction*> tls;
     bool queue_snap_trimmer;
-    
-    RepGather(OpContext *c, ObjectContext *pi, tid_t rt, 
+
+    RepGather(OpContext *c, ObjectContext *pi, tid_t rt,
 	      eversion_t lc) :
       queue_item(this),
       nref(1),
       ctx(c), obc(pi),
-      rep_tid(rt), 
+      rep_tid(rt),
       applying(false), applied(false), aborted(false), done(false),
       sent_ack(false),
       //sent_nvram(false),
       sent_disk(false),
-      pg_local_last_complete(lc),
+      vol_local_last_complete(lc),
       queue_snap_trimmer(false) { }
 
     void get() {
