@@ -550,6 +550,15 @@ public:
       return true;
     }
   }
+  bool find_by_name(const string& name, VolumeRef& vol) {
+    map<string,VolumeRef>::iterator v = vols.by_name.find(name);
+    if (v == vols.by_name.end()) {
+      return false;
+    } else {
+      vol = v->second;
+      return true;
+    }
+  }
 
   bool volmap_empty(void) {
     return vols.by_uuid.empty();

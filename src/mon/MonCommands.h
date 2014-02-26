@@ -417,7 +417,7 @@ COMMAND("osd volume create " \
 	"name=erasureSize,type=CephInt,range=0,req=false", \
 	"create volume")
 COMMAND("osd volume remove " \
-	"name=uuid,type=CephUUID", \
+	"name=volumeName,type=CephString", \
 	"remove volume")
 COMMAND("osd pool mksnap " \
 	"name=pool,type=CephPoolname " \

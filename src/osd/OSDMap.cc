@@ -1195,7 +1195,7 @@ int OSDMap::remove_volume(uuid_d uuid)
 {
   map<uuid_d,VolumeRef>::iterator i = vols.by_uuid.find(uuid);
 
-  if (i != vols.by_uuid.end()) {
+  if (i == vols.by_uuid.end()) {
     dout(0) << "attempt to remove volume with non-existing uuid "
 	    << uuid << dendl;
     return -ENOENT;

@@ -161,20 +161,17 @@ bool CohortOSDMonitor::prepare_command_sub(string& prefix,
       return true;
     }
   } else if (prefix == "osd volume remove") {
-    string uuid_str;
+    string name;
     string error_message;
-    uuid_d uuid;
+    VolumeRef vol;
 
-    cmd_getval(g_ceph_context, map, "uuid", uuid_str);
-    try {
-      uuid = uuid_d::parse(uuid_str);
-      pending_inc->include_removal(uuid);
-      /* Error handling */
-    } catch (const std::invalid_argument& ia) {
-      ss << "provided volume uuid " << uuid << " is not a valid uuid";
+    cmd_getval(g_ceph_context, map, "volumeName", name);
+    if (!osdmap->find_by_name(name, vol)) {
+      ss << "volume named " << name << " not found";
       err = -EINVAL;
       return true;
     }
+    pending_inc->include_removal(vol->uuid);
   } else {
     return false;
   }
