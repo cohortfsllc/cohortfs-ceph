@@ -190,6 +190,7 @@ private:
 	parent(0),
 	apply_lock("FileStore::OpSequencer::apply_lock", false, false) {}
     ~OpSequencer() {
+      Mutex::Locker l(qlock);
       assert(q.empty());
     }
 
