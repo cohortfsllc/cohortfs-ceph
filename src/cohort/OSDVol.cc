@@ -29,6 +29,7 @@ std::string OSDVol::gen_prefix() const
 
 OSDVol::OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
 	       uuid_d u, const hobject_t& loid, const hobject_t& ioid) :
+  dirty_info(false), dirty_big_info(false),
   snap_trim_item(this), volume_id(u), vol_lock("OSDVol::vol_lock"),
   map_lock("OSDVol::map_lock"), osd(o), osdmap_ref(curmap), vol_log(),
   log_oid(loid), biginfo_oid(ioid),
