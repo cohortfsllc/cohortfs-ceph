@@ -183,7 +183,7 @@ public:
   };
 
   struct RepModify {
-    OSDVolRef vol;
+    OSDVol* vol;
     OpRequestRef op;
     OpContext *ctx;
     bool applied, committed;

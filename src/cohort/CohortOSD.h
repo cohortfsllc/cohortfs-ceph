@@ -86,9 +86,9 @@ typedef shared_ptr<CohortOSDService> CohortOSDServiceRef;
 class CohortOSD : public OSD {
   friend CohortOSDService;
 
-  OSDVolRef get_volume(const uuid_d& volid) {
+  OSDVol* get_volume(const uuid_d& volid) {
     Mutex::Locker l(osd_lock);
-    return _lookup_vol(volid);
+    return _lookup_lock_vol(volid);
   }
 private:
 
@@ -99,13 +99,13 @@ private:
     return static_pointer_cast<const CohortOSDMap>(osdmap);
   }
 
-  map<uuid_d, OSDVolRef> vol_map;
+  map<uuid_d, OSDVol*> vol_map;
   list<OpRequestRef> waiting_for_map;
 
   struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
 					       OSDVolRef> {
     Mutex qlock;
-    map<OSDVolRef, list<OpRequestRef> > vol_for_processing;
+    map<OSDVol*, list<OpRequestRef> > vol_for_processing;
     CohortOSD *osd;
     PrioritizedQueue<pair<OSDVolRef, OpRequestRef>, entity_inst_t > pqueue;
     OpWQ(CohortOSD *o, time_t ti, ThreadPool *tp)
@@ -127,13 +127,13 @@ private:
     OSDVolRef _dequeue();
 
     struct Pred {
-      OSDVolRef vol;
-      Pred(OSDVolRef vol) : vol(vol) {}
+      OSDVol* vol;
+      Pred(OSDVol* vol) : vol(vol) {}
       bool operator()(const pair<OSDVolRef, OpRequestRef> &op) {
 	return op.first == vol;
       }
     };
-    void dequeue(OSDVolRef vol, list<OpRequestRef> *dequeued = 0) {
+    void dequeue(OSDVol* vol, list<OpRequestRef> *dequeued = 0) {
       lock();
       if (!dequeued) {
 	pqueue.remove_by_filter(Pred(vol));
@@ -161,7 +161,7 @@ private:
     void _process(OSDVolRef vol);
   } op_wq;
 
-  void enqueue_op(OSDVolRef vol, OpRequestRef op);
+  void enqueue_op(OSDVol* vol, OpRequestRef op);
   void dequeue_op(OSDVolRef vol, OpRequestRef op);
 
   xlist<OSDVol*> snap_trim_queue;
@@ -280,7 +280,8 @@ public:
 
   void check_replay_queue();
   void sched_scrub();
-  OSDVolRef _lookup_vol(const uuid_d& volid);
+  OSDVol* _lookup_vol(const uuid_d& volid);
+  OSDVol* _lookup_lock_vol(const uuid_d& volid);
 };
 
 

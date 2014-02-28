@@ -161,7 +161,7 @@ class Watch {
   entity_name_t entity;
   bool discarded;
 
-  Watch(OSDVolRef vol, CohortOSDServiceRef osd,
+  Watch(OSDVol* vol, CohortOSDServiceRef osd,
 	ObjectContext *obc, uint32_t timeout,
 	uint64_t cookie, entity_name_t entity,
 	entity_addr_t addr);
@@ -183,7 +183,7 @@ public:
 
   string gen_dbg_prefix();
   static WatchRef makeWatchRef(
-    OSDVolRef vol, CohortOSDServiceRef osd,
+    OSDVol* vol, CohortOSDServiceRef osd,
     ObjectContext *obc, uint32_t timeout, uint64_t cookie, entity_name_t entity, entity_addr_t addr);
   void set_self(WatchRef _self) {
     self = _self;

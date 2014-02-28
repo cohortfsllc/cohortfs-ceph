@@ -229,7 +229,7 @@ public:
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
 
-Watch::Watch(OSDVolRef vol, CohortOSDServiceRef osd, ObjectContext *obc,
+Watch::Watch(OSDVol* vol, CohortOSDServiceRef osd, ObjectContext *obc,
 	     uint32_t timeout, uint64_t cookie, entity_name_t entity,
 	     entity_addr_t addr) : cb(NULL), osd(osd), vol(vol), obc(obc),
 				   timeout(timeout), cookie(cookie),
@@ -389,7 +389,7 @@ void Watch::notify_ack(uint64_t notify_id)
   }
 }
 
-WatchRef Watch::makeWatchRef(OSDVolRef vol, CohortOSDServiceRef osd,
+WatchRef Watch::makeWatchRef(OSDVol* vol, CohortOSDServiceRef osd,
 			     ObjectContext *obc, uint32_t timeout,
 			     uint64_t cookie, entity_name_t entity,
 			     entity_addr_t addr)

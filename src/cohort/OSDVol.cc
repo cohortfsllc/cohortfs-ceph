@@ -1709,7 +1709,7 @@ void OSDVol::do_osd_op_effects(OpContext *ctx)
       watch = ctx->obc->watchers[watcher];
     } else {
       watch = Watch::makeWatchRef(
-	OSDVolRef(this), osd, ctx->obc, i->timeout_seconds,
+	this, osd, ctx->obc, i->timeout_seconds,
 	i->cookie, entity, conn->get_peer_addr());
       ctx->obc->watchers.insert(
 	make_pair(
@@ -2587,7 +2587,8 @@ void OSDVol::sub_op_modify(OpRequestRef op)
   op->mark_started();
 
   RepModify *rm = new RepModify;
-  rm->vol.reset(this);
+  rm->vol = this;
+  get();
   rm->op = op;
   rm->ctx = 0;
   rm->last_complete = info.last_complete;
@@ -2605,12 +2606,6 @@ void OSDVol::sub_op_modify(OpRequestRef op)
 	rm->opt.set_tolerate_collection_add_enoent();
       p = m->logbl.begin();
       ::decode(log, p);
-      if (m->hobject_incorrect_pool) {
-	for (vector<vol_log_entry_t>::iterator i = log.begin();
-	     i != log.end();
-	     ++i) {
-	}
-      }
       rm->opt.set_replica();
 
       if (!rm->opt.empty()) {
@@ -2624,36 +2619,6 @@ void OSDVol::sub_op_modify(OpRequestRef op)
 
       rm->tls.push_back(&rm->localt);
       rm->tls.push_back(&rm->opt);
-
-    } else {
-      // do op
-      assert(0);
-
-      // TODO: this is severely broken because we don't know whether
-      // this object is really lost or not. We just always assume that
-      // it's not right now.  Also, we're taking the address of a
-      // variable on the stack.
-      object_info_t oi(soid);
-      oi.lost = false; // I guess?
-      oi.version = m->old_version;
-      oi.size = m->old_size;
-      ObjectState obs(oi, m->old_exists);
-      SnapSetContext ssc(m->poid.oid);
-
-      rm->ctx = new OpContext(op, m->reqid, m->ops, &obs, &ssc, this);
-
-      rm->ctx->mtime = m->mtime;
-      rm->ctx->at_version = m->version;
-      rm->ctx->snapc = m->snapc;
-
-      ssc.snapset = m->snapset;
-      rm->ctx->obc->ssc = &ssc;
-
-      prepare_transaction(rm->ctx);
-      append_log(rm->ctx->log, m->trim_to, rm->ctx->local_t);
-
-      rm->tls.push_back(&rm->ctx->op_t);
-      rm->tls.push_back(&rm->ctx->local_t);
     }
 
     rm->bytes_written = rm->opt.get_encoded_bytes();
@@ -2676,7 +2641,7 @@ void OSDVol::sub_op_modify(OpRequestRef op)
 					 oncommit, 0, op);
   if (r) {
     dout(0) << "error applying transaction: r = " << r << dendl;
-    assert(0);
+    abort();
   }
   // op is cleaned up by oncommit/onapply when both are executed
 }
@@ -2728,7 +2693,7 @@ void OSDVol::populate_obc_watchers(ObjectContext *obc)
     dout(10) << "  unconnected watcher " << p->first << " will expire " << expire << dendl;
     WatchRef watch(
       Watch::makeWatchRef(
-	OSDVolRef(this), osd, obc, p->second.timeout_seconds, p->first.first,
+	this, osd, obc, p->second.timeout_seconds, p->first.first,
 	p->first.second, p->second.addr));
     watch->disconnect();
     obc->watchers.insert(

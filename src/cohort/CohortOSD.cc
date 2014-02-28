@@ -111,7 +111,7 @@ void CohortOSD::handle_op_sub(OpRequestRef op)
 
   uuid_d volid = m->get_volume();
 
-  OSDVolRef vol = _lookup_vol(volid);
+  OSDVol* vol = _lookup_vol(volid);
 
   if (!vol) {
     /* No such volume */
@@ -228,10 +228,10 @@ void CohortOSD::OpWQ::_enqueue_front(pair<OSDVolRef, OpRequestRef> item)
 {
   {
     Mutex::Locker l(qlock);
-    if (vol_for_processing.count(item.first)) {
-      vol_for_processing[(item.first)].push_front(item.second);
-      item.second = vol_for_processing[item.first].back();
-      vol_for_processing[item.first].pop_back();
+    if (vol_for_processing.count(&*(item.first))) {
+      vol_for_processing[&*(item.first)].push_front(item.second);
+      item.second = vol_for_processing[&*(item.first)].back();
+      vol_for_processing[&*(item.first)].pop_back();
     }
   }
   unsigned priority = item.second->request->get_priority();
@@ -254,7 +254,7 @@ OSDVolRef CohortOSD::OpWQ::_dequeue()
     Mutex::Locker l(qlock);
     pair<OSDVolRef, OpRequestRef> ret = pqueue.dequeue();
     vol = ret.first;
-    vol_for_processing[vol].push_back(ret.second);
+    vol_for_processing[&*vol].push_back(ret.second);
   }
   osd->logger->set(l_osd_opq, pqueue.length());
   return vol;
@@ -266,21 +266,21 @@ void CohortOSD::OpWQ::_process(OSDVolRef vol)
   OpRequestRef op;
   {
     Mutex::Locker l(qlock);
-    if (!vol_for_processing.count(vol)) {
+    if (!vol_for_processing.count(&*vol)) {
       vol->unlock();
       return;
     }
-    assert(vol_for_processing[vol].size());
-    op = vol_for_processing[vol].front();
-    vol_for_processing[vol].pop_front();
-    if (!(vol_for_processing[vol].size()))
-      vol_for_processing.erase(vol);
+    assert(vol_for_processing[&*vol].size());
+    op = vol_for_processing[&*vol].front();
+    vol_for_processing[&*vol].pop_front();
+    if (!(vol_for_processing[&*vol].size()))
+      vol_for_processing.erase(&*vol);
   }
   osd->dequeue_op(vol, op);
   vol->unlock();
 }
 
-void CohortOSD::enqueue_op(OSDVolRef vol, OpRequestRef op)
+void CohortOSD::enqueue_op(OSDVol* vol, OpRequestRef op)
 {
   vol->queue_op(op);
 }
@@ -307,7 +307,7 @@ bool CohortOSD::handle_sub_op_sub(OpRequestRef op)
   // must be a rep op.
   assert(m->get_source().is_osd());
 
-  // make sure we have the pg
+  // make sure we have the vol
   const uuid_d volid = m->get_vol();
 
   // require same or newer map
@@ -319,25 +319,33 @@ bool CohortOSD::handle_sub_op_sub(OpRequestRef op)
     m->get_source(), m->get_connection().get(), m->map_epoch,
     static_cast<OSD::Session*>(m->get_connection()->get_priv()));
 
-  OSDVolRef osdvol = _lookup_vol(volid);
+  OSDVol* osdvol = _lookup_vol(volid);
 
   enqueue_op(osdvol, op);
 
   return true;
 }
 
-OSDVolRef CohortOSD::_lookup_vol(const uuid_d& volid)
+OSDVol* CohortOSD::_lookup_vol(const uuid_d& volid)
 {
   assert(osd_lock.is_locked());
-  map<uuid_d, OSDVolRef>::iterator i = vol_map.find(volid);
+  map<uuid_d, OSDVol*>::iterator i = vol_map.find(volid);
   if (i != vol_map.end()) {
     return i->second;
   } else {
-    OSDVolRef osdvol(new OSDVol(
-		       cohortosdservice(), cohortosdmap(), volid,
-		       hobject_t(object_t(volid, "log"), CEPH_NOSNAP),
-		       hobject_t(object_t(volid, "info"), CEPH_NOSNAP)));
-    vol_map[volid] = osdvol;
-    return osdvol;
+    OSDVol* vol = new OSDVol(cohortosdservice(), cohortosdmap(), volid,
+			     hobject_t(object_t(volid, "log"), CEPH_NOSNAP),
+			     hobject_t(object_t(volid, "info"), CEPH_NOSNAP));
+    vol_map[volid] = vol;
+    vol->get();
+    return vol;
   }
+}
+
+OSDVol* CohortOSD::_lookup_lock_vol(const uuid_d& volid)
+{
+  OSDVol* vol = _lookup_vol(volid);
+  if (vol)
+    vol->lock();
+  return vol;
 }
