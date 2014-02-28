@@ -10,7 +10,6 @@
 #include "osd/OpRequest.h"
 #include "cohort/CohortOSDMap.h"
 #include "os/ObjectStore.h"
-#include "osd/Watch.h"
 #include "VolLog.h"
 #include "messages/MOSDOpReply.h"
 #include "osd/SnapMapper.h"
@@ -23,9 +22,15 @@ class CohortOSDService;
 typedef std::tr1::shared_ptr<CohortOSDService> CohortOSDServiceRef;
 
 class OSDVol;
+typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
+
 class CohortOSD;
 
-typedef std::tr1::shared_ptr<OSDVol> OSDVolRef;
+void intrusive_ptr_add_ref(OSDVol *vol);
+void intrusive_ptr_release(OSDVol *vol);
+
+class Watch;
+typedef std::tr1::shared_ptr<Watch> WatchRef;
 
 struct ObjectContext {
   int ref;
@@ -261,7 +266,9 @@ public:
 protected:
   uuid_d volume_id;
 
-  Mutex vol_lock;
+ Mutex _lock;
+  Cond _cond;
+  atomic_t ref;
   Mutex map_lock;
 
   CohortOSDServiceRef osd;
@@ -315,11 +322,11 @@ public:
   void all_activated_and_committed();
 
   void lock() {
-    vol_lock.Lock();
+    _lock.Lock();
   }
 
   void unlock() {
-    vol_lock.Unlock();
+    _lock.Unlock();
   }
 public:
   OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
@@ -509,6 +516,8 @@ public:
     }
     return true;
   }
+  void get(void);
+  void put(void);
 };
 
 ostream& operator <<(ostream& out, const OSDVol& vol);

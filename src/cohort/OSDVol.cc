@@ -7,6 +7,7 @@
 #include "messages/MOSDSubOpReply.h"
 #include "osd/SnapMapper.h"
 #include "common/errno.h"
+#include "osd/Watch.h"
 
 #define dout_subsys ceph_subsys_osd
 #define DOUT_PREFIX_ARGS this, osd->whoami, get_osdmap()
@@ -30,7 +31,7 @@ std::string OSDVol::gen_prefix() const
 OSDVol::OSDVol(CohortOSDServiceRef o, CohortOSDMapRef curmap,
 	       uuid_d u, const hobject_t& loid, const hobject_t& ioid) :
   dirty_info(false), dirty_big_info(false),
-  snap_trim_item(this), volume_id(u), vol_lock("OSDVol::vol_lock"),
+  snap_trim_item(this), volume_id(u), _lock("OSDVol::vol_lock"),
   map_lock("OSDVol::map_lock"), osd(o), osdmap_ref(curmap), vol_log(),
   log_oid(loid), biginfo_oid(ioid),
   osr(osd->osr_registry.lookup_or_create(u, (stringify(u)))),
@@ -3642,4 +3643,18 @@ int OSDVol::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
   t.omap_setkeys(coll_t::META_COLL, infos_oid, v);
 
   return 0;
+}
+
+void intrusive_ptr_add_ref(OSDVol *vol) { vol->get(); }
+void intrusive_ptr_release(OSDVol *vol) { vol->put(); }
+
+void OSDVol::get(void)
+{
+  ref.inc();
+}
+
+void OSDVol::put(void)
+{
+  if (ref.dec() == 0)
+    delete this;
 }

@@ -21,6 +21,7 @@
 #include "msg/Messenger.h"
 #include "include/Context.h"
 #include "common/Mutex.h"
+#include "cohort/OSDVol.h"
 
 enum WatcherState {
   WATCHER_PENDING,
@@ -28,7 +29,6 @@ enum WatcherState {
 };
 
 class CohortOSDService;
-class OSDVol;
 class ObjectContext;
 class MWatchNotify;
 
@@ -38,7 +38,6 @@ typedef std::tr1::weak_ptr<Watch> WWatchRef;
 
 class Notify;
 typedef std::tr1::shared_ptr<CohortOSDService> CohortOSDServiceRef;
-typedef std::tr1::shared_ptr<OSDVol> OSDVolRef;
 typedef std::tr1::shared_ptr<Notify> NotifyRef;
 typedef std::tr1::weak_ptr<Notify> WNotifyRef;
 
