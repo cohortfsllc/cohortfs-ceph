@@ -178,11 +178,13 @@ private:
     bool _enqueue(OSDVol *vol) {
       if (vol->snap_trim_item.is_on_list())
 	return false;
+      vol->get();
       osd->snap_trim_queue.push_back(&vol->snap_trim_item);
       return true;
     }
     void _dequeue(OSDVol *vol) {
-      vol->snap_trim_item.remove_myself();
+      if (vol->snap_trim_item.remove_myself())
+	vol->put();
     }
     OSDVol *_dequeue() {
       if (osd->snap_trim_queue.empty())
@@ -194,6 +196,7 @@ private:
 
     void _process(OSDVol *vol) {
       vol->snap_trimmer();
+      vol->put();
     }
     void _clear() {
       osd->snap_trim_queue.clear();

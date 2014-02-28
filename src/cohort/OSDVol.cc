@@ -2901,6 +2901,7 @@ void OSDVol::sub_op_modify_applied(RepModify *rm)
   if (done) {
     delete rm->ctx;
     delete rm;
+    put();
   }
 }
 
