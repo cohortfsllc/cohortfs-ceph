@@ -28,7 +28,8 @@ CohortOSD* CohortOSDService::cohortosd() const
 }
 
 CohortOSDService::CohortOSDService(CohortOSD *_osd) :
-  OSDService(_osd), watch_lock("CohortOSDService::watch_lock"),
+  OSDService(_osd), lru(g_conf->osd_volume_lru),
+  watch_lock("CohortOSDService::watch_lock"),
   watch_timer(_osd->client_messenger->cct, watch_lock),
   op_wq(_osd->op_wq),
   snap_trim_wq(_osd->snap_trim_wq)
@@ -111,7 +112,7 @@ void CohortOSD::handle_op_sub(OpRequestRef op)
 
   uuid_d volid = m->get_volume();
 
-  OSDVol* vol = _lookup_vol(volid);
+  OSDVolRef vol = _lookup_vol(volid);
 
   if (!vol) {
     /* No such volume */
@@ -280,7 +281,7 @@ void CohortOSD::OpWQ::_process(OSDVolRef vol)
   vol->unlock();
 }
 
-void CohortOSD::enqueue_op(OSDVol* vol, OpRequestRef op)
+void CohortOSD::enqueue_op(OSDVolRef vol, OpRequestRef op)
 {
   vol->queue_op(op);
 }
@@ -319,32 +320,62 @@ bool CohortOSD::handle_sub_op_sub(OpRequestRef op)
     m->get_source(), m->get_connection().get(), m->map_epoch,
     static_cast<OSD::Session*>(m->get_connection()->get_priv()));
 
-  OSDVol* osdvol = _lookup_vol(volid);
+  OSDVolRef osdvol = _lookup_vol(volid);
 
   enqueue_op(osdvol, op);
 
   return true;
 }
 
-OSDVol* CohortOSD::_lookup_vol(const uuid_d& volid)
+OSDVolRef CohortOSD::_lookup_vol(const uuid_d& volid)
 {
   assert(osd_lock.is_locked());
   map<uuid_d, OSDVol*>::iterator i = vol_map.find(volid);
   if (i != vol_map.end()) {
-    return i->second;
-  } else {
-    OSDVol* vol = new OSDVol(cohortosdservice(), cohortosdmap(), volid,
-			     hobject_t(object_t(volid, "log"), CEPH_NOSNAP),
-			     hobject_t(object_t(volid, "info"), CEPH_NOSNAP));
-    vol_map[volid] = vol;
-    vol->get();
+    OSDVolRef vol = i->second;
+    cohortosdservice()->lru.lru_touch(&*vol);
     return vol;
+  } else {
+    return _create_vol(volid);
   }
 }
 
-OSDVol* CohortOSD::_lookup_lock_vol(const uuid_d& volid)
+OSDVolRef CohortOSD::_create_vol(const uuid_d& volid)
 {
-  OSDVol* vol = _lookup_vol(volid);
+  assert(osd_lock.is_locked());
+  OSDVol* vol = new OSDVol(cohortosdservice(), cohortosdmap(), volid,
+			   hobject_t(object_t(volid, "log"), CEPH_NOSNAP),
+			   hobject_t(object_t(volid, "info"), CEPH_NOSNAP));
+  cohortosdservice()->lru.lru_insert_top(vol);
+  vol_map[volid] = vol;
+
+  trim_vols();
+  return OSDVolRef(vol);
+}
+
+void CohortOSD::trim_vols(void)
+{
+  unsigned last = 0;
+  assert(osd_lock.is_locked());
+  while (cohortosdservice()->lru.lru_get_size() != last) {
+    last = cohortosdservice()->lru.lru_get_size();
+
+    if (cohortosdservice()->lru.lru_get_size() <=
+	cohortosdservice()->lru.lru_get_max())
+      break;
+
+    OSDVol* vol = static_cast<OSDVol*>(cohortosdservice()->lru.lru_expire());
+    if (!vol)
+      break;
+
+    vol_map.erase(vol->volume_id);
+    delete(vol);
+  }
+}
+
+OSDVolRef CohortOSD::_lookup_lock_vol(const uuid_d& volid)
+{
+  OSDVolRef vol = _lookup_vol(volid);
   if (vol)
     vol->lock();
   return vol;

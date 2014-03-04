@@ -13,6 +13,7 @@
 #include "VolLog.h"
 #include "messages/MOSDOpReply.h"
 #include "osd/SnapMapper.h"
+#include "include/lru.h"
 
 using namespace std;
 
@@ -98,7 +99,7 @@ public:
   }
 };
 
-class OSDVol {
+class OSDVol : public LRUObject {
   friend class CohortOSD;
 
   object_stat_collection_t unstable_stats;

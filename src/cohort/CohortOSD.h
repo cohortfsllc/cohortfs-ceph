@@ -29,16 +29,17 @@ using std::fstream;
 #include "common/AsyncReserver.h"
 #include "cohort/CohortOSDMap.h"
 #include "OSDVol.h"
+#include "include/lru.h"
 
 class CohortOSD;
 class CohortOSDService;
 
 class CohortOSDService : public OSDService {
 private:
-
   typedef OSDService inherited;
-
 public:
+
+  LRU lru;
 
   virtual bool test_ops_sub(ObjectStore *store,
 			    std::string command,
@@ -86,7 +87,7 @@ typedef shared_ptr<CohortOSDService> CohortOSDServiceRef;
 class CohortOSD : public OSD {
   friend CohortOSDService;
 
-  OSDVol* get_volume(const uuid_d& volid) {
+  OSDVolRef get_volume(const uuid_d& volid) {
     Mutex::Locker l(osd_lock);
     return _lookup_lock_vol(volid);
   }
@@ -161,7 +162,7 @@ private:
     void _process(OSDVolRef vol);
   } op_wq;
 
-  void enqueue_op(OSDVol* vol, OpRequestRef op);
+  void enqueue_op(OSDVolRef vol, OpRequestRef op);
   void dequeue_op(OSDVolRef vol, OpRequestRef op);
 
   xlist<OSDVol*> snap_trim_queue;
@@ -283,8 +284,10 @@ public:
 
   void check_replay_queue();
   void sched_scrub();
-  OSDVol* _lookup_vol(const uuid_d& volid);
-  OSDVol* _lookup_lock_vol(const uuid_d& volid);
+  void trim_vols(void);
+  OSDVolRef _create_vol(const uuid_d& volid);
+  OSDVolRef _lookup_vol(const uuid_d& volid);
+  OSDVolRef _lookup_lock_vol(const uuid_d& volid);
 };
 
 

@@ -668,3 +668,5 @@ OPTION(mutex_perf_counter, OPT_BOOL, false) // enable/disable mutex perf counter
 // This will be set to true when it is safe to start threads.
 // Once it is true, it will never change.
 OPTION(internal_safe_to_start_threads, OPT_BOOL, false)
+
+OPTION(osd_volume_lru, OPT_INT, 100)

@@ -3616,11 +3616,12 @@ void intrusive_ptr_release(OSDVol *vol) { vol->put(); }
 
 void OSDVol::get(void)
 {
-  ref.inc();
+  if (ref.inc() == 1)
+    lru_pin();
 }
 
 void OSDVol::put(void)
 {
   if (ref.dec() == 0)
-    delete this;
+    lru_unpin();
 }
