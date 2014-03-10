@@ -1141,6 +1141,30 @@ int Client::verify_reply_trace(int r,
   return r;
 }
 
+void Client::init_request(MetaRequest *request, int uid, int gid, int use_mds)
+{
+  // assign a unique tid
+  tid_t tid = ++last_tid;
+  request->set_tid(tid);
+  // make note
+  mds_requests[tid] = request->get();
+  if (uid < 0) {
+    uid = geteuid();
+    gid = getegid();
+  }
+  request->set_caller_uid(uid);
+  request->set_caller_gid(gid);
+
+  if (!mds_requests.empty())
+    request->set_oldest_client_tid(mds_requests.begin()->first);
+  else
+    request->set_oldest_client_tid(tid); // this one is the oldest.
+
+  // hack target mds?
+  if (use_mds >= 0)
+    request->resend_mds = use_mds;
+}
+
 
 /**
  * make a request
@@ -1162,40 +1186,13 @@ int Client::verify_reply_trace(int r,
  * @param use_mds [optional] prefer a specific mds (-1 for default)
  * @param pdirbl [optional; disallowed if ptarget] where to pass extra reply payload to the caller
  */
-int Client::make_request(MetaRequest *request, 
-			 int uid, int gid, 
-			 Inode **ptarget, bool *pcreated,
-			 int use_mds,
+int Client::make_request(MetaRequest *request, int uid, int gid,
+			 Inode **ptarget, bool *pcreated, int use_mds,
 			 bufferlist *pdirbl)
 {
-  int r = 0;
-
-  // assign a unique tid
-  tid_t tid = ++last_tid;
-  request->set_tid(tid);
-  // make note
-  mds_requests[tid] = request->get();
-  if (uid < 0) {
-    uid = geteuid();
-    gid = getegid();
-  }
-  request->set_caller_uid(uid);
-  request->set_caller_gid(gid);
-
-  if (!mds_requests.empty()) 
-    request->set_oldest_client_tid(mds_requests.begin()->first);
-  else
-    request->set_oldest_client_tid(tid); // this one is the oldest.
-
-  // hack target mds?
-  if (use_mds >= 0)
-    request->resend_mds = use_mds;
+  init_request(request, uid, gid, use_mds);
 
   while (1) {
-    // set up wait cond
-    Cond caller_cond;
-    request->caller_cond = &caller_cond;
-
     // choose mds
     int mds = choose_target_mds(request);
     if (mds < 0 || !mdsmap->is_active_or_stopping(mds)) {
@@ -1207,17 +1204,6 @@ int Client::make_request(MetaRequest *request,
     // open a session?
     MetaSession *session = NULL;
     if (!have_open_session(mds)) {
-      if (!mdsmap->is_active_or_stopping(mds)) {
-	ldout(cct, 10) << "no address for mds." << mds << ", waiting for new mdsmap" << dendl;
-	wait_on_list(waiting_for_mdsmap);
-
-	if (!mdsmap->is_active_or_stopping(mds)) {
-	  ldout(cct, 10) << "hmm, still have no address for mds." << mds << ", trying a random mds" << dendl;
-	  request->resend_mds = mdsmap->get_random_up_mds();
-	  continue;
-	}
-      }
-      
       session = _get_or_open_mds_session(mds);
 
       // wait
@@ -1233,6 +1219,10 @@ int Client::make_request(MetaRequest *request,
       session = mds_sessions[mds];
     }
 
+    // set up wait cond
+    Cond caller_cond;
+    request->caller_cond = &caller_cond;
+
     // send request.
     send_request(request, session);
 
@@ -1246,23 +1236,31 @@ int Client::make_request(MetaRequest *request,
     request->caller_cond = NULL;
 
     // did we get a reply?
-    if (request->reply) 
+    if (request->reply)
       break;
   }
 
+  return complete_request(request, ptarget, pcreated, pdirbl);
+}
+
+int Client::complete_request(MetaRequest *request, Inode **ptarget,
+			     bool *pcreated, bufferlist *pdirbl)
+{
   // got it!
   MClientReply *reply = request->reply;
   request->reply = NULL;
-  r = reply->get_result();
+  int r = reply->get_result();
 
   // kick dispatcher (we've got it!)
   assert(request->dispatch_cond);
   request->dispatch_cond->Signal();
-  ldout(cct, 20) << "sendrecv kickback on tid " << tid << " " << request->dispatch_cond << dendl;
+  ldout(cct, 20) << "sendrecv kickback on tid " << request->tid
+    << " " << request->dispatch_cond << dendl;
   request->dispatch_cond = 0;
-  
+
   if (r >= 0 && ptarget)
-    r = verify_reply_trace(r, request, reply, ptarget, pcreated, uid, gid);
+    r = verify_reply_trace(r, request, reply, ptarget, pcreated,
+			   request->head.caller_uid, request->head.caller_gid);
 
   if (pdirbl)
     pdirbl->claim(reply->get_extra_bl());

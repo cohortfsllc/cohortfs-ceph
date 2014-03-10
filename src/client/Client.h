@@ -262,10 +262,12 @@ public:
   void dump_mds_requests(Formatter *f);
   void dump_mds_sessions(Formatter *f);
 
+  void init_request(MetaRequest *req, int uid, int gid, int use_mds=-1);
   int make_request(MetaRequest *req, int uid, int gid,
-		   //MClientRequest *req, int uid, int gid,
 		   Inode **ptarget = 0, bool *pcreated = 0,
 		   int use_mds=-1, bufferlist *pdirbl=0);
+  int complete_request(MetaRequest *req, Inode **ptarget=0,
+		       bool *pcreated=0, bufferlist *pdirbl=0);
   void put_request(MetaRequest *request);
 
   int verify_reply_trace(int r, MetaRequest *request, MClientReply *reply,
