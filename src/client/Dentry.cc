@@ -16,7 +16,6 @@ void Dentry::dump(Formatter *f) const
   f->dump_stream("stripe") << stripe->dirstripe();
   f->dump_stream("vino") << vino;
   f->dump_int("ref", ref);
-  f->dump_unsigned("offset", offset);
   if (lease_mds >= 0) {
     f->dump_int("lease_mds", lease_mds);
     f->dump_stream("lease_ttl") << lease_ttl;

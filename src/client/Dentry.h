@@ -13,10 +13,8 @@ class Dentry {
 
  public:
   string  name;                      // sort of lame
-  //const char *name;
   DirStripe *stripe;
   vinodeno_t vino;
-  uint64_t offset;
   int lease_mds;
   utime_t lease_ttl;
   uint64_t lease_gen;
@@ -42,7 +40,7 @@ class Dentry {
   bool is_null() const { return vino.ino == 0; }
  
   Dentry(CephContext *cct)
-      : cct(cct), ref(0), stripe(0), vino(0, CEPH_NOSNAP), offset(0),
+      : cct(cct), ref(0), stripe(0), vino(0, CEPH_NOSNAP),
         lease_mds(-1), lease_gen(0), lease_seq(0), cap_shared_gen(0) {}
 private:
   ~Dentry() {

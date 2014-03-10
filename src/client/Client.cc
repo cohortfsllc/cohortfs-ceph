@@ -82,6 +82,7 @@ using namespace std;
 #include "MetaSession.h"
 #include "MetaRequest.h"
 #include "ObjecterWriteback.h"
+#include "ReaddirWorker.h"
 
 #include "include/assert.h"
 
@@ -131,18 +132,110 @@ bool Client::CommandHook::call(std::string command, cmdmap_t& cmdmap,
 
 // -------------
 
-dir_result_t::dir_result_t(Inode *in)
-  : inode(in), offset(0), this_offset(2), next_offset(2),
-    release_count(0), start_shared_gen(0),
-    buffer_stripe(-1) { 
+DirEntryBuffer::~DirEntryBuffer()
+{
+  for (entry_vec::iterator i = entries.begin(); i != entries.end(); ++i)
+    i->second->put();
+}
+
+void DirEntryBuffer::insert(const string &name, Inode *inode)
+{
+  inode->get();
+  entries.push_back(entry_pair(name, inode));
+}
+
+void DirEntryBuffer::append(DirEntryBuffer &other)
+{
+  // claim the entries and their references from other
+  entries.insert(entries.end(), other.entries.begin(), other.entries.end());
+  other.entries.clear();
+}
+
+DirChunk::DirChunk()
+  : stripeid(0),
+    offset(0),
+    count(0),
+    flags(0)
+{
+}
+
+void DirChunk::drop_buffer()
+{
+  buffer.reset();
+  set_reading(false);
+}
+
+DirStripeReader::DirStripeReader()
+  : stripeid(0),
+    offset(0),
+    shared_gen(0),
+    release_count(0),
+    readahead(0),
+    eof(false)
+{
+}
+
+void DirStripeReader::reset()
+{
+  offset = 0;
+  last_name.clear();
+  eof = false;
+}
+
+DirReader::DirReader(Inode *in, int uid, int gid)
+  : inode(in),
+    offset(0),
+    eof_chunk(0),
+    uid(uid),
+    gid(gid),
+    err(0),
+    refs(1)
+{
   inode->get();
 }
-int64_t dir_result_t::next_stripe_offset() const
+
+DirReader::~DirReader()
 {
-  stripeid_t stripe = get_stripe() + 1;
-  if (stripe >= inode->get_stripe_count())
-    return END;
-  return make_fpos(stripe, 0);
+  inode->put();
+}
+
+void DirReader::chunk_finished(stripeid_t stripeid, uint32_t offset,
+			       std::tr1::shared_ptr<DirEntryBuffer> &entries)
+{
+  // add chunk
+  chunks.push_back(DirChunk());
+
+  DirChunk &chunk = chunks.back();
+  chunk.stripeid = stripeid;
+  chunk.offset = offset;
+  chunk.count = entries->size();
+  swap(chunk.buffer, entries);
+  chunk.set_end(stripes[stripeid].eof);
+
+  cond.Signal();
+}
+
+void DirReader::chunk_error(stripeid_t stripeid, int r)
+{
+  if (err == 0)
+    err = r;
+  cond.Signal();
+}
+
+int DirReader::wait_for_chunk(uint32_t chunk, Mutex &mutex)
+{
+  while (err == 0 && (chunk >= chunks.size() || chunks[chunk].is_pending()))
+    cond.Wait(mutex);
+  return err;
+}
+
+bool DirReader::all_stripes_at_eof() const
+{
+  for (vector<DirStripeReader>::const_iterator i = stripes.begin();
+      i != stripes.end(); ++i)
+    if (!i->eof)
+      return false;
+  return true;
 }
 
 // cons/des
@@ -165,6 +258,7 @@ Client::Client(Messenger *m, MonClient *mc)
     unsafe_sync_write(0),
     num_flushing_caps(0),
     snap_realms(m->cct),
+    async_dir_reader(NULL),
     client_lock("Client::client_lock")
 {
   monclient->set_messenger(m);
@@ -207,6 +301,7 @@ Client::Client(Messenger *m, MonClient *mc)
   filer = new Filer(objecter);
 
   mdsmap_registrations = new MDSRegMap(cct);
+  async_dir_reader = new ReaddirWorker(this);
 }
 
 
@@ -449,6 +544,7 @@ void Client::shutdown()
   client_lock.Lock();
   assert(initialized);
   initialized = false;
+  async_dir_reader->stop();
   timer.shutdown();
   objecter->shutdown_locked();
   client_lock.Unlock();
@@ -625,8 +721,7 @@ DirStripe* Client::add_update_stripe(Inode *diri, const StripeStat &st,
  */
 Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
                                     LeaseStat *dlease, Inode *in, utime_t from,
-                                    MetaSession *session, bool set_offset,
-				    Dentry *old_dentry)
+                                    MetaSession *session, Dentry *old_dentry)
 {
   Dentry *dn = stripe->lookup(dname);
  
@@ -650,14 +745,10 @@ Dentry *Client::insert_dentry_inode(DirStripe *stripe, const string& dname,
       dn = NULL;
     }
   }
- 
-  if (!dn || dn->is_null()) {
+
+  if (!dn || dn->is_null())
     dn = stripe->link(dname, in, dn);
-    if (set_offset) {
-      dn->offset = stripe->max_offset++;
-      ldout(cct, 15) << " setting dn offset to " << dn->offset << dendl;
-    }
-  }
+
   if (old_dentry && old_dentry->stripe) {
     assert(dn != old_dentry);
     // keep dir open if its the same dir
@@ -698,7 +789,7 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
   ConnectionRef con = request->reply->get_connection();
   uint64_t features = con->get_features();
 
-  assert(request->readdir_result.empty());
+  request->readdir_result.reset(new DirEntryBuffer());
 
   // the extra buffer list is only set for readdir and lssnap replies
   bufferlist::iterator p = reply->get_extra_bl().begin();
@@ -783,13 +874,11 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session, 
 	dn = stripe->link(dname, in);
       }
       update_dentry_lease(dn, &dlease, request->sent_stamp, session);
-      dn->offset = i + request->readdir_offset;
 
       // add to cached result list
-      in->get();
-      request->readdir_result.push_back(pair<string,Inode*>(dname, in));
+      request->readdir_result->insert(dname, in);
 
-      ldout(cct, 15) << "insert_trace  " << hex << dn->offset << dec << ": '" << dname << "' -> " << in->ino << dendl;
+      ldout(cct, 15) << "insert_trace '" << dname << "' -> " << in->ino << dendl;
     }
     request->readdir_last_name = dname;
 
@@ -875,7 +964,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
     Inode *diri = i->second;
     DirStripe *stripe = add_update_stripe(diri, sst, session);
     if (in) {
-      insert_dentry_inode(stripe, dname, &dlease, in, request->sent_stamp, session, true,
+      insert_dentry_inode(stripe, dname, &dlease, in, request->sent_stamp, session,
                           ((request->head.op == CEPH_MDS_OP_RENAME) ?
                                         request->old_dentry() : NULL));
     } else {
@@ -902,7 +991,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
     if (in) {
       DirStripe *stripe = diri->open_stripe(stripeid);
       insert_dentry_inode(stripe, snapname, &dlease, in,
-                          request->sent_stamp, session, true);
+                          request->sent_stamp, session);
     } else {
       assert(stripeid < diri->stripes.size());
       DirStripe *stripe = diri->stripes[stripeid];
@@ -4411,7 +4500,7 @@ int Client::lutime(const char *relpath, struct utimbuf *buf)
   return _setattr(in, &attr, CEPH_SETATTR_MTIME|CEPH_SETATTR_ATIME);
 }
 
-int Client::opendir(const char *relpath, dir_result_t **dirpp) 
+int Client::opendir(const char *relpath, DirReader **dirpp) 
 {
   Mutex::Locker lock(client_lock);
   tout(cct) << "opendir" << std::endl;
@@ -4427,22 +4516,35 @@ int Client::opendir(const char *relpath, dir_result_t **dirpp)
   return r;
 }
 
-int Client::_opendir(Inode *in, dir_result_t **dirpp, int uid, int gid) 
+int Client::_opendir(Inode *in, DirReader **dirpp, int uid, int gid) 
 {
   if (!in->is_dir())
     return -ENOTDIR;
-  *dirpp = new dir_result_t(in);
-  (*dirpp)->set_stripe(0);
-  if (in->stripes[0]) {
-    (*dirpp)->release_count = in->stripes[0]->release_count;
-    (*dirpp)->start_shared_gen = in->stripes[0]->shared_gen;
+
+  DirReader *dirp = new DirReader(in, uid, gid);
+
+  stripeid_t stripe_count = in->get_stripe_count();
+  dirp->stripes.reserve(stripe_count);
+
+  for (stripeid_t i = 0; i < stripe_count; i++) {
+    DirStripeReader s;
+    s.stripeid = i;
+
+    DirStripe *stripe = in->stripes[i];
+    if (stripe) {
+      s.release_count = stripe->release_count;
+      s.shared_gen = stripe->shared_gen;
+    }
+    dirp->stripes.push_back(s);
   }
+
+  *dirpp = dirp;
   ldout(cct, 3) << "_opendir(" << in->ino << ") = " << 0 << " (" << *dirpp << ")" << dendl;
   return 0;
 }
 
 
-int Client::closedir(dir_result_t *dir) 
+int Client::closedir(DirReader *dir) 
 {
   Mutex::Locker lock(client_lock);
   tout(cct) << "closedir" << std::endl;
@@ -4453,93 +4555,115 @@ int Client::closedir(dir_result_t *dir)
   return 0;
 }
 
-void Client::_closedir(dir_result_t *dirp)
+void Client::_closedir(DirReader *dirp)
 {
   ldout(cct, 10) << "_closedir(" << dirp << ")" << dendl;
-  if (dirp->inode) {
-    ldout(cct, 10) << "_closedir detaching inode " << dirp->inode << dendl;
-    dirp->inode->put();
-    dirp->inode = 0;
-  }
-  _readdir_drop_dirp_buffer(dirp);
-  delete dirp;
+  dirp->put();
 }
 
-void Client::rewinddir(dir_result_t *dirp)
+void Client::rewinddir(DirReader *dirp)
 {
   Mutex::Locker lock(client_lock);
 
-  ldout(cct, 3) << "rewinddir(" << dirp << ")" << dendl;
-  _readdir_drop_dirp_buffer(dirp);
-  dirp->reset();
+  ldout(cct, 3) << "rewinddir(" << dirp << ')' << dendl;
+
+  _seekdir(dirp, 0);
 }
- 
-loff_t Client::telldir(dir_result_t *dirp)
+
+loff_t Client::telldir(DirReader *dirp)
 {
+  Mutex::Locker lock(client_lock);
+
   ldout(cct, 3) << "telldir(" << dirp << ") = " << dirp->offset << dendl;
   return dirp->offset;
 }
 
-void Client::seekdir(dir_result_t *dirp, loff_t offset)
+void Client::_seekdir(DirReader *dirp, loff_t offset)
+{
+  // no change
+  if (dirp->offset == offset)
+    return;
+
+  // if we're reading from cache, finish the current chunk
+  uint32_t prev_index = dirp->chunk_index();
+  if (prev_index < dirp->chunks.size()) {
+    DirChunk &prev = dirp->chunks[prev_index];
+    DirStripeReader &stripe = dirp->stripes[prev.stripeid];
+    assert(stripe.offset >= prev.offset);
+    if (prev.count == 0)
+      prev.count = stripe.offset - prev.offset;
+  }
+
+  dirp->offset = offset;
+  uint32_t index = dirp->chunk_index();
+
+  // past eof
+  if (dirp->eof_chunk && index >= dirp->eof_chunk)
+    return;
+
+  // reset stripe offsets and drop buffered entries
+  for (vector<DirStripeReader>::iterator s = dirp->stripes.begin();
+      s != dirp->stripes.end(); ++s) {
+    s->reset();
+    for (set<uint32_t>::iterator c = s->buffered.begin();
+	c != s->buffered.end(); ++c) {
+      DirChunk &chunk = dirp->chunks[*c];
+      assert(chunk.buffer);
+      if (!chunk.is_reading()) {
+	assert(s->readahead > 0);
+	s->readahead--;
+      }
+      chunk.drop_buffer();
+    }
+    s->buffered.clear();
+  }
+
+  // find the last chunk from each stripe to determine our stripe offsets
+  int i;
+  if (index == dirp->chunks.size()) {
+    assert(dirp->chunk_offset() == 0);
+    i = (int)index - 1;
+  } else {
+    assert(index < dirp->chunks.size());
+    i = (int)index;
+  }
+
+  size_t stripes_remaining = dirp->stripes.size();
+  for (; i >= 0; i--) {
+    DirChunk &c = dirp->chunks[i];
+    DirStripeReader &s = dirp->stripes[c.stripeid];
+    if (s.offset) // already found this stripe
+      continue;
+    s.offset = c.offset + c.count;
+    s.eof = c.is_end();
+    if (--stripes_remaining == 0) // found offsets for all stripes
+      break;
+  }
+
+  if (dirp->chunks.empty()) {
+    assert(offset <= 2);
+    return;
+  }
+
+  // set current stripe offset
+  DirChunk &chunk = dirp->chunks[index];
+  DirStripeReader &stripe = dirp->stripes[chunk.stripeid];
+
+  unsigned dot_offset = index == 0 ? 2 : 0;
+  uint32_t chunk_offset = dot_offset > DirReader::fpos_off(offset) ?
+    0 : DirReader::fpos_off(offset) - dot_offset;
+
+  stripe.offset = chunk.offset + chunk_offset;
+}
+
+void Client::seekdir(DirReader *dirp, loff_t offset)
 {
   Mutex::Locker lock(client_lock);
 
   ldout(cct, 3) << "seekdir(" << dirp << ", "
       << hex << offset << dec << ")" << dendl;
 
-  if (offset == 0 ||
-      dir_result_t::fpos_stripe(offset) != dirp->get_stripe() ||
-      dir_result_t::fpos_off(offset) < dirp->get_pos()) {
-    _readdir_drop_dirp_buffer(dirp);
-    dirp->reset();
-  }
-
-  if (offset > dirp->offset)
-    dirp->release_count--;   // bump if we do a forward seek
-
-  dirp->offset = offset;
-  if (dirp->get_stripe() > 0 && dirp->next_offset == 2)
-    dirp->next_offset = 0;  // not 2 on non-leftmost frags!
-}
-
-void Client::rewinddirstripe(dir_result_t *dirp)
-{
-  Mutex::Locker lock(client_lock);
-
-  stripeid_t stripeid = dirp->get_stripe();
-  ldout(cct, 3) << "rewinddirstripe(" << dirp << ")" << dendl;
-  _readdir_drop_dirp_buffer(dirp);
-  dirp->reset();
-  dirp->set_stripe(stripeid);
-}
-
-loff_t Client::telldirstripe(dir_result_t *dirp)
-{
-  ldout(cct, 3) << "telldirstripe(" << dirp << ") = " << dirp->offset << dendl;
-  // return the position within the current stripe
-  return dirp->get_pos();
-}
-
-void Client::seekdirstripe(dir_result_t *dirp, loff_t offset)
-{
-  Mutex::Locker lock(client_lock);
-
-  ldout(cct, 3) << "seekdirstripe(" << dirp << ", "
-      << hex << offset << dec << ")" << dendl;
-
-  stripeid_t stripeid = dirp->get_stripe();
-
-  if (offset == 0 || dir_result_t::fpos_off(offset) < dirp->get_pos()) {
-    _readdir_drop_dirp_buffer(dirp);
-    dirp->reset();
-  }
-
-  if (offset > dirp->offset)
-    dirp->release_count--;   // bump if we do a forward seek
-
-  dirp->offset = dir_result_t::make_fpos(stripeid, offset);
-  if (stripeid > 0 && dirp->next_offset == 2)
-    dirp->next_offset = 0;  // not 2 on non-leftmost frags!
+  _seekdir(dirp, offset);
 }
 
 
@@ -4566,248 +4690,189 @@ void Client::fill_dirent(struct dirent *de, const char *name, int type, uint64_t
 #endif
 }
 
-void Client::_readdir_next_stripe(dir_result_t *dirp)
+dn_map::iterator _skip_null_dentries(dn_map::iterator i, dn_map::iterator end)
 {
-  stripeid_t stripe = dirp->get_stripe();
-
-  // advance
-  dirp->next_stripe();
-  if (dirp->at_end()) {
-    ldout(cct, 10) << "_readdir_next_stripe advance from " << stripe << " to END" << dendl;
-  } else {
-    ldout(cct, 10) << "_readdir_next_stripe advance from " << stripe << " to " << dirp->get_stripe() << dendl;
-  }
+  while (i != end && i->second->is_null())
+    ++i;
+  return i;
 }
 
-void Client::_readdir_drop_dirp_buffer(dir_result_t *dirp)
-{
-  ldout(cct, 10) << "_readdir_drop_dirp_buffer " << dirp << dendl;
-
-  typedef vector<pair<string,Inode*> > entry_vec;
-  entry_vec &buf = dirp->buffer;
-  for (entry_vec::iterator i = buf.begin(); i != buf.end(); ++i)
-    i->second->put();
-  buf.clear();
-}
-
-int Client::_readdir_get_stripe(dir_result_t *dirp)
-{
-  assert(dirp);
-  Inode *diri = dirp->inode;
-  assert(diri);
-  stripeid_t stripe = dirp->get_stripe();
-
-  ldout(cct, 10) << "_readdir_get_stripe " << dirp
-      << " on " << diri->ino << " stripe " << stripe
-      << " next_offset " << dirp->next_offset
-      << " last_name " << dirp->last_name << dendl;
-
-  int op = CEPH_MDS_OP_READDIR;
-  if (diri->snapid == CEPH_SNAPDIR)
-    op = CEPH_MDS_OP_LSSNAP;
-
-  MetaRequest *req = new MetaRequest(op);
-  filepath path;
-  diri->make_nosnap_relative_path(path);
-  req->set_filepath(path);
-  req->set_inode(diri);
-  req->head.args.readdir.stripe = stripe;
-  if (dirp->last_name.length()) {
-    req->path2.set_path(dirp->last_name.c_str());
-    req->readdir_start = dirp->last_name;
-  }
-  req->readdir_offset = dirp->next_offset;
-  req->readdir_stripe = stripe;
-
-  int use_mds = -1;
-  if (diri->caps_issued_mask(CEPH_CAP_DIRLAYOUT_SHARED))
-    use_mds = diri->get_stripe_auth(stripe);
-
-  bufferlist dirbl;
-  int res = make_request(req, -1, -1, NULL, NULL, use_mds, &dirbl);
-
-  if (res == 0) {
-    // stuff dir contents to cache, dir_result_t
-    _readdir_drop_dirp_buffer(dirp);
-
-    dirp->buffer.swap(req->readdir_result);
-    dirp->buffer_stripe = stripe;
-
-    dirp->this_offset = dirp->next_offset;
-    ldout(cct, 10) << "_readdir_get_stripe " << dirp << " got stripe " << stripe
-	     << " this_offset " << dirp->this_offset
-	     << " size " << dirp->buffer.size() << dendl;
-
-    if (req->readdir_end) {
-      dirp->last_name.clear();
-      if (stripe == diri->get_stripe_count() - 1) // rightmost?
-	dirp->next_offset = 2;
-      else
-	dirp->next_offset = 0;
-    } else {
-      dirp->last_name = req->readdir_last_name;
-      dirp->next_offset += req->readdir_num;
-    }
-  } else {
-    ldout(cct, 10) << "_readdir_get_stripe got error " << res << ", setting end flag" << dendl;
-    dirp->set_end();
-  }
-
-  return res;
-}
-
-int Client::_readdir_cache_cb(dir_result_t *dirp, DirStripe *stripe,
-                              add_dirent_cb_t cb, void *p)
+int Client::_readdir_cache_cb(DirReader *dirp, DirStripeReader *s,
+			      DirChunk *chunk, DirStripe *stripe,
+			      add_dirent_cb_t cb, void *p)
 {
   assert(client_lock.is_locked());
-  ldout(cct, 10) << "_readdir_cache_cb " << dirp
-      << " on " << *stripe << " at_cache_name " << dirp->at_cache_name
-      << " offset " << hex << dirp->offset << dec << dendl;
+  const uint32_t index = dirp->chunk_index();
+
+  ldout(cct, 10) << "_readdir_cache_cb " << s
+      << " on " << *stripe << " last_name " << s->last_name
+      << " offset " << hex << s->offset << ", from " << chunk->offset
+      << " to " << chunk->offset + chunk->count << dec
+      << " of chunk " << index << dendl;
 
   dn_map::iterator pd;
-  if (dirp->at_cache_name.length()) {
-    pd = stripe->dentry_map.find(dirp->at_cache_name);
+  if (!s->last_name.empty()) {
+    pd = stripe->dentry_map.find(s->last_name);
     if (pd == stripe->dentry_map.end())
-      return -EAGAIN;  // weird, i give up
+      return -ESTALE;
     ++pd;
   } else {
+    assert(s->offset == 0);
     pd = stripe->dentry_map.begin();
   }
-  if (pd == stripe->dentry_map.end())
-    dirp->next_stripe();
+
+  pd = _skip_null_dentries(pd, stripe->dentry_map.end());
+
+  if (pd == stripe->dentry_map.end()) // advance to next chunk
+    dirp->offset = DirReader::make_fpos(index + 1, 0);
 
   while (pd != stripe->dentry_map.end()) {
     Dentry *dn = pd->second;
-    if (dn->is_null()) {
-      ldout(cct, 15) << " skipping null '" << pd->first << "'" << dendl;
-      ++pd;
-      continue;
-    }
+    pd = _skip_null_dentries(++pd, stripe->dentry_map.end());
 
     inode_hashmap::iterator i = inodes.find(dn->vino);
     assert(i != inodes.end()); // stripe is complete
 
+    // end of stripe or chunk?
+    uint64_t next_off = dirp->offset + 1;
+    if (pd == stripe->dentry_map.end()) {
+      // end of stripe
+      next_off = DirReader::make_fpos(index + 1, 0);
+    } else if (chunk->count) {
+      // end of existing chunk?
+      if (s->offset+1 == chunk->offset + chunk->count)
+	next_off = DirReader::make_fpos(index + 1, 0);
+    } else {
+      // when reading from cache, break up the chunks so we can still
+      // get some parallelism if stripe are invalidated
+      if (s->offset+1 - chunk->offset >= cct->_conf->mds_readdir_chunk_size)
+	next_off = DirReader::make_fpos(index + 1, 0);
+    }
+
     struct stat st;
     struct dirent de;
     int stmask = fill_stat(i->second, &st);
-    fill_dirent(&de, pd->first.c_str(), st.st_mode, st.st_ino, dirp->offset + 1);
-
-    uint64_t next_off = dir_result_t::make_fpos(dirp->get_stripe(),
-						dn->offset + 1);
-    ++pd;
-    if (pd == stripe->dentry_map.end())
-      next_off = dirp->next_stripe_offset();
+    fill_dirent(&de, dn->name.c_str(), st.st_mode, st.st_ino, next_off);
 
     client_lock.Unlock();
     int r = cb(p, &de, &st, stmask, next_off);  // _next_ offset
     client_lock.Lock();
-    ldout(cct, 15) << " de " << de.d_name << " off " << hex << dn->offset << dec
-	     << " = " << r
-	     << dendl;
-    if (r < 0) {
-      dirp->next_offset = dir_result_t::make_fpos(dirp->get_stripe(),
-						  dn->offset);
+    ldout(cct, 15) << " de " << dn->name << " off " << hex << dirp->offset << dec
+	     << " = " << r << dendl;
+    if (r < 0)
       return r;
+
+    dirp->offset = next_off;
+    s->last_name = dn->name;
+    s->offset++;
+    if (r > 0)
+      return r;
+
+    if (next_off == DirReader::make_fpos(index + 1, 0)) {
+      if (!chunk->count)
+	chunk->count = s->offset - chunk->offset;
+      else
+	s->eof = chunk->is_end();
+      return 0;
+    }
+  }
+
+  s->last_name.clear();
+  chunk->set_end(s->eof = true);
+
+  // set chunk count
+  if (!chunk->count)
+    chunk->count = s->offset - chunk->offset;
+
+  ldout(cct, 10) << "_readdir_cache_cb at end of "
+      << stripe->dirstripe() << dendl;
+  return 0;
+}
+
+int Client::_readdir_chunk_cb(DirReader *dirp, DirStripeReader *s,
+			      DirChunk *chunk, add_dirent_cb_t cb, void *p)
+{
+  struct dirent de;
+  struct stat st;
+  const uint32_t index = dirp->chunk_index();
+  unsigned off = dirp->chunk_offset();
+  entry_vec &buffer = chunk->buffer->entries;
+  int r;
+
+  // account for . and .. in first chunk
+  if (index == 0)
+    off -= 2;
+
+  ldout(cct, 10) << "chunk " << index << " stripe " << s->stripeid
+    << " off " << hex << chunk->offset << dec
+    << " at " << off << " of " << buffer.size()
+    << " reading=" << chunk->is_reading() << dendl;
+
+  while (off < buffer.size()) {
+    uint64_t next_off = dirp->offset + 1;
+    if (off == buffer.size() - 1)
+      next_off = DirReader::make_fpos(index + 1, 0);
+
+    entry_pair &ent = buffer[off];
+    int stmask = fill_stat(ent.second, &st);
+    fill_dirent(&de, ent.first.c_str(), st.st_mode, st.st_ino, next_off);
+
+    client_lock.Unlock();
+    r = cb(p, &de, &st, stmask, next_off);
+    client_lock.Lock();
+    ldout(cct, 15) << " de " << de.d_name << " off " << hex << dirp->offset << dec
+      << " = " << r << dendl;
+    if (r < 0)
+      return r;
+
+    if (!chunk->is_reading()) {
+      // continue readahead
+      assert(s->readahead > 0);
+      s->readahead--;
+      chunk->set_reading(true);
+      async_dir_reader->stripe_readahead(dirp, s, index);
     }
 
-    dirp->at_cache_name = dn->name;
+    off++;
     dirp->offset = next_off;
     if (r > 0)
       return r;
   }
-  dirp->at_cache_name.clear();
 
-  if (dirp->at_end())
-    ldout(cct, 10) << "_readdir_cache_cb at end of "
-        << stripe->dirstripe() << dendl;
-  else
-    ldout(cct, 10) << "_readdir_cache_cb at " << stripe->dirstripe()
-        << " advancing to " << dirp->get_stripe() << dendl;
+  ldout(cct, 10) << "dropping buffer for chunk " << index
+    << " eof=" << chunk->is_end() << dendl;
+  chunk->drop_buffer();
+  s->buffered.erase(index);
+  if (chunk->is_end())
+    s->eof = true;
   return 0;
 }
 
-int Client::_readdir_stripe_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
+// pick the first stripe that is fully cached
+static bool _readdir_pick_cached_stripe(DirReader *dirp, stripeid_t *stripeid)
 {
-  uint32_t off = dirp->get_pos();
-  stripeid_t stripeid = dirp->get_stripe();
-  DirStripe *stripe = dirp->inode->stripes[stripeid];
-  if (stripe)
-    ldout(cct, 10) << *stripe << " offset " << hex << dirp->offset
-      << " pos " << off << dec << " at_cache_name " << dirp->at_cache_name
-      << " snapid " << stripe->snapid
-      << " issued " << ccap_string(stripe->caps_issued()) << dendl;
-
-  struct dirent de;
-  struct stat st;
-
-  // can we read from our cache?
-  if (stripe && (dirp->offset == 2 || off == 0 ||
-	!dirp->at_cache_name.empty()) &&
-      stripe->snapid != CEPH_SNAPDIR && stripe->is_complete() &&
-      stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED)) {
-    return _readdir_cache_cb(dirp, stripe, cb, p);
-  }
-
-  if (dirp->at_cache_name.length()) {
-    // resuming from cache
-    dirp->last_name = dirp->at_cache_name;
-    dirp->at_cache_name.clear();
-  }
-
-  do {
-    if (dirp->buffer_stripe != stripeid) {
-      // fetch the next buffer of entries
-      int r = _readdir_get_stripe(dirp);
-      if (r)
-	return r;
+  for (vector<DirStripeReader>::iterator i = dirp->stripes.begin();
+      i != dirp->stripes.end(); ++i) {
+    DirStripe *stripe = dirp->inode->stripes[i->stripeid];
+    if (stripe && !i->eof && stripe->is_complete() &&
+	(i->offset == 0 || !i->last_name.empty()) &&
+	stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED)) {
+      *stripeid = i->stripeid;
+      return true;
     }
-
-    ldout(cct, 10) << "off " << off << " this_offset " << hex << dirp->this_offset << dec
-      << " size " << dirp->buffer.size() << " stripe " << stripeid << dendl;
-    dirp->offset = dir_result_t::make_fpos(stripeid, off);
-    while (off >= dirp->this_offset &&
-	off - dirp->this_offset < dirp->buffer.size()) {
-      pair<string,Inode*>& ent = dirp->buffer[off - dirp->this_offset];
-
-      int stmask = fill_stat(ent.second, &st);
-      fill_dirent(&de, ent.first.c_str(), st.st_mode, st.st_ino, dirp->offset + 1);
-
-      client_lock.Unlock();
-      int r = cb(p, &de, &st, stmask, dirp->offset + 1);  // _next_ offset
-      client_lock.Lock();
-      ldout(cct, 15) << " de " << de.d_name << " off " << hex << dirp->offset << dec
-	<< " = " << r
-	<< dendl;
-      if (r < 0)
-	return r;
-
-      off++;
-      dirp->offset++;
-      if (r > 0)
-	return r;
-    }
-
-    _readdir_drop_dirp_buffer(dirp);
-  } while (dirp->last_name.length());
-
-  stripe = dirp->inode->stripes[stripeid];
-  if (stripe && stripe->release_count == dirp->release_count &&
-      stripe->shared_gen == dirp->start_shared_gen) {
-    ldout(cct, 10) << " marking I_COMPLETE on " << *stripe << dendl;
-    stripe->set_complete();
-    stripe->max_offset = dirp->offset;
   }
-  return 0;
+  return false;
 }
 
-int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
+int Client::readdir_r_cb(DirReader *dirp, add_dirent_cb_t cb, void *p)
 {
   Mutex::Locker lock(client_lock);
 
   Inode *diri = dirp->inode;
 
-  ldout(cct, 10) << "readdir_r_cb " << diri << " stripe " << dirp->get_stripe()
-      << " pos " << hex << dirp->get_pos() << dec
+  ldout(cct, 10) << "readdir_r_cb " << diri
+      << " chunk " << dirp->chunk_index()
+      << " pos " << hex << dirp->offset << dec
       << " at_end=" << dirp->at_end() << dendl;
 
   int r;
@@ -4859,19 +4924,100 @@ int Client::readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p)
   }
 
   while (!dirp->at_end()) {
-    r = _readdir_stripe_cb(dirp, cb, p);
-    if (r < 0)
-      return r;
+    uint32_t index = dirp->chunk_index();
+    if (index == dirp->chunks.size()) {
+      // at eof?
+      if (dirp->all_stripes_at_eof()) {
+	ldout(cct, 15) << "all stripes at eof" << dendl;
+	dirp->eof_chunk = dirp->chunk_index();
+	dirp->set_end();
+	break;
+      }
 
-    // next stripe!
-    _readdir_next_stripe(dirp);
+      // any cached stripes?
+      stripeid_t stripeid;
+      if (_readdir_pick_cached_stripe(dirp, &stripeid)) {
+	DirStripeReader &s = dirp->stripes[stripeid];
+	// create a new chunk
+	ldout(cct, 15) << "starting chunk " << index
+	  << " for cached stripe " << stripeid
+	  << " at offset " << s.offset
+	  << " last name " << s.last_name << dendl;
+	dirp->chunks.push_back(DirChunk());
+	DirChunk &chunk = dirp->chunks.back();
+        chunk.stripeid = stripeid;
+        chunk.offset = s.offset;
+        chunk.last_name = s.last_name;
+	continue;
+      }
+
+      // drive stripe readahead
+      for (vector<DirStripeReader>::iterator i = dirp->stripes.begin();
+	  i != dirp->stripes.end(); ++i) {
+	if (!i->eof && !i->readahead)
+	  async_dir_reader->read_stripe(dirp, &*i);
+      }
+
+      // wait for next chunk
+      ldout(cct, 15) << "waiting for chunk " << index << dendl;
+      r = dirp->wait_for_chunk(index, client_lock);
+      ldout(cct, 15) << "finished waiting for chunk " << index
+	<< ", r = " << r << dendl;
+      if (r)
+	return r;
+    }
+
+    DirChunk &chunk = dirp->chunks[index];
+    DirStripeReader &s = dirp->stripes[chunk.stripeid];
+
+    if (chunk.is_pending()) {
+      // wait for chunk to finish
+      ldout(cct, 15) << "waiting for pending chunk " << index << dendl;
+      r = dirp->wait_for_chunk(index, client_lock);
+      ldout(cct, 15) << "finished waiting for chunk " << index
+	<< ", r = " << r << dendl;
+      if (r)
+	return r;
+    }
+
+    if (chunk.buffer) {
+      // read buffered entries
+      r = _readdir_chunk_cb(dirp, &s, &chunk, cb, p);
+    } else {
+      DirStripe *stripe = dirp->inode->stripes[chunk.stripeid];
+      // cache still valid?
+      if (!stripe || !stripe->is_complete() ||
+	  !stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED) ||
+	  (s.offset && s.last_name.empty())) {
+	if (chunk.count) {
+	  // didn't finish an existing chunk. need to refetch the whole chunk
+	  assert(s.offset >= chunk.offset);
+	  assert(s.offset - chunk.offset <= chunk.count);
+	  s.offset = chunk.offset;
+	  s.last_name = chunk.last_name;
+	  s.eof = false;
+	  async_dir_reader->read_chunk(dirp, index);
+	} else {
+	  // finish the current chunk and advance to the next
+	  chunk.count = s.offset - chunk.offset;
+	  dirp->offset = DirReader::make_fpos(index + 1, 0);
+	  // fetch more of the stripe from the mds
+	  async_dir_reader->stripe_readahead(dirp, &s, index);
+	}
+	continue;
+      }
+      // read entries from last_name
+      r = _readdir_cache_cb(dirp, &s, &chunk, stripe, cb, p);
+    }
+    if (r)
+      return r;
   }
   return 0;
 }
 
 
-int Client::readdir_r(dir_result_t *d, struct dirent *de)
-{  
+int Client::readdir_r(DirReader *d, struct dirent *de)
+{
   return readdirplus_r(d, de, 0, 0);
 }
 
@@ -4908,7 +5054,7 @@ static int _readdir_single_dirent_cb(void *p, struct dirent *de, struct stat *st
   return 1;
 }
 
-struct dirent *Client::readdir(dir_result_t *d)
+struct dirent *Client::readdir(DirReader *d)
 {
   int ret;
   static int stmask;
@@ -4933,7 +5079,7 @@ struct dirent *Client::readdir(dir_result_t *d)
   return (dirent *) NULL;
 }
 
-int Client::readdirplus_r(dir_result_t *d, struct dirent *de, struct stat *st, int *stmask)
+int Client::readdirplus_r(DirReader *d, struct dirent *de, struct stat *st, int *stmask)
 {  
   single_readdir sr;
   sr.de = de;
@@ -4944,27 +5090,6 @@ int Client::readdirplus_r(dir_result_t *d, struct dirent *de, struct stat *st, i
   // our callback fills the dirent and sets sr.full=true on first
   // call, and returns -1 the second time around.
   int r = readdir_r_cb(d, _readdir_single_dirent_cb, (void *)&sr);
-  if (r < -1)
-    return r;
-  if (sr.full)
-    return 1;
-  return 0;
-}
-
-int Client::readdirstripeplus_r(dir_result_t *d, struct dirent *de,
-				struct stat *st, int *stmask)
-{
-  single_readdir sr;
-  sr.de = de;
-  sr.st = st;
-  sr.stmask = stmask;
-  sr.full = false;
-
-  // get lock for _readdir_stripe_cb, which otherwise happens in readdir_r_cb()
-  Mutex::Locker lock(client_lock);
-
-  // read entries from the current stripe
-  int r = _readdir_stripe_cb(d, _readdir_single_dirent_cb, (void *)&sr);
   if (r < -1)
     return r;
   if (sr.full)
@@ -5003,7 +5128,7 @@ static int _readdir_getdent_cb(void *p, struct dirent *de, struct stat *st, int 
   return 0;
 }
 
-int Client::_getdents(dir_result_t *dir, char *buf, int buflen, bool fullent)
+int Client::_getdents(DirReader *dir, char *buf, int buflen, bool fullent)
 {
   getdents_result gr;
   gr.buf = buf;
@@ -5051,7 +5176,7 @@ int Client::getdir(const char *relpath, list<string>& contents)
     tout(cct) << relpath << std::endl;
   }
 
-  dir_result_t *d;
+  DirReader *d;
   int r = opendir(relpath, &d);
   if (r < 0)
     return r;
@@ -7412,7 +7537,7 @@ uint64_t Client::ll_get_internal_offset(Inode *in, uint64_t blockno)
   return (blockno % stripes_per_object) * su;
 }
 
-int Client::ll_opendir(Inode *in, dir_result_t** dirpp, int uid, int gid)
+int Client::ll_opendir(Inode *in, DirReader** dirpp, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
 
@@ -7422,12 +7547,7 @@ int Client::ll_opendir(Inode *in, dir_result_t** dirpp, int uid, int gid)
   tout(cct) << "ll_opendir" << std::endl;
   tout(cct) << vino.ino.val << std::endl;
 
-  int r = 0;
-  if (vino.snapid == CEPH_SNAPDIR) {
-    *dirpp = new dir_result_t(in);
-  } else {
-    r = _opendir(in, dirpp);
-  }
+  int r = _opendir(in, dirpp, uid, gid);
 
   tout(cct) << (unsigned long)*dirpp << std::endl;
 
@@ -7436,7 +7556,7 @@ int Client::ll_opendir(Inode *in, dir_result_t** dirpp, int uid, int gid)
   return r;
 }
 
-int Client::ll_releasedir(dir_result_t *dirp)
+int Client::ll_releasedir(DirReader *dirp)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "ll_releasedir " << dirp << dendl;
@@ -7447,7 +7567,7 @@ int Client::ll_releasedir(dir_result_t *dirp)
 }
 
 int Client::ll_opendirstripe(Inode *in, stripeid_t stripeid,
-			     dir_result_t **dirpp)
+			     DirReader **dirpp, int uid, int gid)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "ll_opendirstripe " << dirpp << dendl;
@@ -7458,25 +7578,34 @@ int Client::ll_opendirstripe(Inode *in, stripeid_t stripeid,
     return -ENOTDIR;
   if (stripeid >= in->stripes.size())
     return -EINVAL;
-  *dirpp = new dir_result_t(in);
-  (*dirpp)->set_stripe(stripeid);
+
+  // initialize a DirReader with a single stripe
+  DirStripeReader s;
+  s.stripeid = stripeid;
+
   DirStripe *stripe = in->stripes[stripeid];
   if (stripe) {
-    (*dirpp)->release_count = stripe->release_count;
-    (*dirpp)->start_shared_gen = stripe->shared_gen;
+    s.release_count = stripe->release_count;
+    s.shared_gen = stripe->shared_gen;
   }
+
+  DirReader *dirp = new DirReader(in, uid, gid);
+  dirp->stripes.push_back(s);
+
   ldout(cct, 3) << "_opendirstripe(" << in->ino << ", " << stripeid << ") = "
-    << 0 << " (" << *dirpp << ")" << dendl;
+    << 0 << " (" << dirp << ")" << dendl;
+
+  *dirpp = dirp;
   return 0;
 }
 
-int Client::ll_releasedirstripe(dir_result_t *dirp)
+int Client::ll_releasedirstripe(DirReader *dirp)
 {
   Mutex::Locker lock(client_lock);
   ldout(cct, 3) << "ll_releasedirstripe " << dirp << dendl;
   tout(cct) << "ll_releasedirstripe" << std::endl;
   tout(cct) << (unsigned long)dirp << std::endl;
-  _closedir(dirp);
+  dirp->put();
   return 0;
 }
 

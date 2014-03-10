@@ -31,7 +31,7 @@ ostream& operator<<(ostream &out, DirStripe &stripe)
 
 DirStripe::DirStripe(Inode *in, stripeid_t stripeid)
   : CapObject(in->cct, in->vino(), stripeid), parent_inode(in), version(0),
-    release_count(0), max_offset(2), shared_gen(0), flags(0)
+    release_count(0), shared_gen(0), flags(0)
 {
 }
 
@@ -116,7 +116,7 @@ void DirStripe::unlink(Dentry *dn, bool keepempty)
   dn->stripe = 0;
   dn->put();
 
-  if (is_empty() && !keepempty)
+  if (is_empty() && !is_any_caps() && !keepempty)
     parent_inode->close_stripe(this);
 }
 

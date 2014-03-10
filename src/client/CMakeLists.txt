@@ -14,6 +14,7 @@ set(libclient_srcs
 	MDSRegMap.cc
 	MetaRequest.cc 
 	MetaSession.cc 
+	ReaddirWorker.cc 
 	SnapRealmMap.cc
 	Trace.cc
 )

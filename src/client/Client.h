@@ -79,6 +79,7 @@ class ObjectCacher;
 class WritebackHandler;
 class InodeCache;
 class MDSRegMap;
+class ReaddirWorker;
 
 class PerfCounters;
 
@@ -106,15 +107,6 @@ enum {
  
 */
 
-/* getdir result */
-struct DirEntry {
-  string d_name;
-  struct stat st;
-  int stmask;
-  DirEntry(const string &s) : d_name(s), stmask(0) {}
-  DirEntry(const string &n, struct stat& s, int stm) : d_name(n), st(s), stmask(stm) {}
-};
-
 class Inode;
 class DirStripe;
 class Dentry;
@@ -138,60 +130,120 @@ typedef int (*client_getgroups_callback_t)(void *handle, uid_t uid, gid_t **sgid
 // ========================================================
 // client interface
 
-struct dir_result_t {
+typedef pair<string, Inode*> entry_pair;
+typedef vector<entry_pair> entry_vec;
+
+struct DirEntryBuffer {
+  entry_vec entries;
+
+  ~DirEntryBuffer();
+
+  void insert(const string &name, Inode *inode);
+  void append(DirEntryBuffer &other);
+  size_t size() const { return entries.size(); }
+};
+
+// tracking for a single readdir response
+struct DirChunk {
+  static const uint32_t PENDING = 0x1; // mds request pending
+  static const uint32_t READING = 0x2; // started reading from buffer
+  static const uint32_t END = 0x4; // last chunk in this stripe
+
+  stripeid_t stripeid;
+  uint32_t offset; // starting offset within the stripe
+  uint32_t count; // number of entries in the chunk
+  string last_name; // name of last entry before cache or on mds
+  std::tr1::shared_ptr<DirEntryBuffer> buffer;
+  uint32_t flags;
+
+  DirChunk();
+
+  void drop_buffer();
+
+  bool is_pending() const { return flags & PENDING; }
+  void set_pending(bool b) {
+    if (b) flags |= PENDING;
+    else flags &= ~PENDING;
+  }
+
+  bool is_reading() const { return flags & READING; }
+  void set_reading(bool b) {
+    if (b) flags |= READING;
+    else flags &= ~READING;
+  }
+
+  bool is_end() const { return flags & END; }
+  void set_end(bool b) {
+    if (b) flags |= END;
+    else flags &= ~END;
+  }
+};
+
+struct DirStripeReader {
+  stripeid_t stripeid;
+  uint64_t offset; // offset for next chunk of this stripe
+  int shared_gen; // stripe shared_gen at start of readdir
+  uint64_t release_count;
+  string last_name;
+  int readahead; // readahead chunk count
+  std::set<uint32_t> buffered; // set of buffered chunk indices
+  bool eof; // reached end of listing
+
+  DirStripeReader();
+
+  void reset();
+};
+
+struct DirReader {
   static const int SHIFT = 28;
   static const int64_t MASK = (1 << SHIFT) - 1;
   static const loff_t END = 1ULL << (SHIFT + 32);
 
-  static uint64_t make_fpos(stripeid_t stripe, unsigned off) {
-    return ((uint64_t)stripe << SHIFT) | (uint64_t)off;
+  static uint64_t make_fpos(uint32_t chunk, unsigned off) {
+    return ((uint64_t)chunk << SHIFT) | (uint64_t)off;
   }
-  static stripeid_t fpos_stripe(uint64_t p) {
+  static uint32_t fpos_chunk(uint64_t p) {
     return (p & ~END) >> SHIFT;
   }
   static unsigned fpos_off(uint64_t p) {
     return p & MASK;
   }
 
-
   Inode *inode;
+  uint64_t offset; // high bits: chunk index, low bits: an offset
+  uint32_t eof_chunk; // 1 past the last valid chunk index
+  int uid, gid;
+  int err;
 
-  int64_t offset;        // high bits: stripe, low bits: an offset
+  // track order of chunks served to the client to support seeking
+  vector<DirChunk> chunks;
+  // track position within each stripe
+  vector<DirStripeReader> stripes;
 
-  uint64_t this_offset;  // offset of last chunk, adjusted for . and ..
-  uint64_t next_offset;  // offset of next chunk (last_name's + 1)
-  string last_name;      // last entry in previous chunk
+  Cond cond; // signaled on chunk_finished/chunk_error
 
-  uint64_t release_count;
-  int start_shared_gen;  // dir shared_gen at start of readdir
+  DirReader(Inode *in, int uid, int gid);
 
-  stripeid_t buffer_stripe;
-  vector<pair<string,Inode*> > buffer;
+  uint32_t chunk_index() const { return fpos_chunk(offset); }
+  unsigned chunk_offset() const { return fpos_off(offset); }
 
-  string at_cache_name;  // last entry we successfully returned
+  void chunk_finished(stripeid_t stripeid, uint32_t offset,
+		      std::tr1::shared_ptr<DirEntryBuffer> &entries);
+  void chunk_error(stripeid_t stripeid, int r);
 
-  dir_result_t(Inode *in);
+  int wait_for_chunk(uint32_t index, Mutex &mutex);
 
-  stripeid_t get_stripe() const { return (offset >> SHIFT); }
-  unsigned get_pos() const { return offset & MASK; }
+  bool all_stripes_at_eof() const;
 
-  int64_t next_stripe_offset() const;
-  void next_stripe() { offset = next_stripe_offset(); }
-  void set_stripe(stripeid_t stripe) {
-    offset = (uint64_t)stripe << SHIFT;
-    assert(sizeof(offset) == 8);
-  }
   void set_end() { offset |= END; }
-  bool at_end() { return (offset & END); }
+  bool at_end() const { return offset & END; }
 
-  void reset() {
-    last_name.clear();
-    at_cache_name.clear();
-    next_offset = 2;
-    this_offset = 0;
-    offset = 0;
-    buffer_stripe = -1;
-  }
+ private:
+  ~DirReader();
+  int refs;
+ public:
+  void get() { refs++; }
+  void put() { if (--refs == 0) delete this; }
 };
 
 class Client : public Dispatcher {
@@ -326,6 +378,8 @@ protected:
 
   Inode *open_snapdir(Inode *diri);
 
+  friend class ReaddirWorker;
+  ReaddirWorker *async_dir_reader;
 
   // file handles, etc.
   interval_set<int> free_fd_set;  // unused fds
@@ -473,9 +527,9 @@ protected:
   Inode *add_update_inode(InodeStat *st, utime_t ttl, MetaSession *session);
   DirStripe* add_update_stripe(Inode *diri, const StripeStat &st,
                                MetaSession *session);
-  Dentry *insert_dentry_inode(DirStripe *stripe, const string& dname, LeaseStat *dlease, 
-			      Inode *in, utime_t from, MetaSession *session, bool set_offset,
-			      Dentry *old_dentry = NULL);
+  Dentry *insert_dentry_inode(DirStripe *stripe, const string& dname,
+			      LeaseStat *dlease, Inode *in, utime_t from,
+			      MetaSession *session, Dentry *old_dentry = NULL);
   void update_dentry_lease(Dentry *dn, LeaseStat *dlease, utime_t from, MetaSession *session);
 
 
@@ -488,13 +542,13 @@ private:
   // some readdir helpers
   typedef int (*add_dirent_cb_t)(void *p, struct dirent *de, struct stat *st, int stmask, off_t off);
 
-  int _opendir(Inode *in, dir_result_t **dirpp, int uid=-1, int gid=-1);
-  void _readdir_drop_dirp_buffer(dir_result_t *dirp);
-  void _readdir_next_stripe(dir_result_t *dirp);
-  int _readdir_get_stripe(dir_result_t *dirp);
-  int _readdir_cache_cb(dir_result_t *dirp, DirStripe *stirpe,
-                        add_dirent_cb_t cb, void *p);
-  void _closedir(dir_result_t *dirp);
+  int _opendir(Inode *in, DirReader **dirpp, int uid=-1, int gid=-1);
+  int _readdir_cache_cb(DirReader *dirp, DirStripeReader *s, DirChunk *chunk,
+			DirStripe *stripe, add_dirent_cb_t cb, void *p);
+  int _readdir_chunk_cb(DirReader *dirp, DirStripeReader *s, DirChunk *chunk,
+			add_dirent_cb_t cb, void *p);
+  void _seekdir(DirReader *dirp, loff_t offset);
+  void _closedir(DirReader *dirp);
 
   // other helpers
   void _ll_get(Inode *in);
@@ -559,10 +613,8 @@ public:
   void getcwd(std::string& cwd);
 
   // namespace ops
-  int opendir(const char *name, dir_result_t **dirpp);
-  int closedir(dir_result_t *dirp);
-
-  int _readdir_stripe_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p);
+  int opendir(const char *name, DirReader **dirpp);
+  int closedir(DirReader *dirp);
 
   /**
    * Fill a directory listing from dirp, invoking cb for each entry
@@ -572,11 +624,11 @@ public:
    * Returns 0 if it reached the end of the directory.
    * If @a cb returns a negative error code, stop and return that.
    */
-  int readdir_r_cb(dir_result_t *dirp, add_dirent_cb_t cb, void *p);
+  int readdir_r_cb(DirReader *dirp, add_dirent_cb_t cb, void *p);
 
-  struct dirent * readdir(dir_result_t *d);
-  int readdir_r(dir_result_t *dirp, struct dirent *de);
-  int readdirplus_r(dir_result_t *dirp, struct dirent *de, struct stat *st, int *stmask);
+  struct dirent * readdir(DirReader *d);
+  int readdir_r(DirReader *dirp, struct dirent *de);
+  int readdirplus_r(DirReader *dirp, struct dirent *de, struct stat *st, int *stmask);
 
   int getdir(const char *relpath, list<string>& names);  // get the whole dir at once.
 
@@ -585,17 +637,17 @@ public:
    * If it returns -ERANGE you just need to increase the size of the
    * buffer and try again.
    */
-  int _getdents(dir_result_t *dirp, char *buf, int buflen, bool ful);  // get a bunch of dentries at once
-  int getdents(dir_result_t *dirp, char *buf, int buflen) {
+  int _getdents(DirReader *dirp, char *buf, int buflen, bool ful);  // get a bunch of dentries at once
+  int getdents(DirReader *dirp, char *buf, int buflen) {
     return _getdents(dirp, buf, buflen, true);
   }
-  int getdnames(dir_result_t *dirp, char *buf, int buflen) {
+  int getdnames(DirReader *dirp, char *buf, int buflen) {
     return _getdents(dirp, buf, buflen, false);
   }
 
-  void rewinddir(dir_result_t *dirp);
-  loff_t telldir(dir_result_t *dirp);
-  void seekdir(dir_result_t *dirp, loff_t offset);
+  void rewinddir(DirReader *dirp);
+  loff_t telldir(DirReader *dirp);
+  void seekdir(DirReader *dirp, loff_t offset);
 
   int link(const char *existing, const char *newname);
   int unlink(const char *path);
@@ -710,8 +762,8 @@ public:
 		  int flags, int uid=-1, int gid=-1);
   int ll_removexattr(Inode *in, const char *name, int uid=-1, int gid=-1);
   int ll_listxattr(Inode *in, char *list, size_t size, int uid=-1, int gid=-1);
-  int ll_opendir(Inode *in, dir_result_t **dirpp, int uid = -1, int gid = -1);
-  int ll_releasedir(dir_result_t* dirp);
+  int ll_opendir(Inode *in, DirReader **dirpp, int uid = -1, int gid = -1);
+  int ll_releasedir(DirReader* dirp);
   int ll_readlink(Inode *in, char *buf, size_t bufsize, int uid = -1, int gid = -1);
   int ll_mknod(Inode *in, const char *name, mode_t mode, dev_t rdev,
 	       struct stat *attr, Inode **out, int uid = -1, int gid = -1);
@@ -767,14 +819,9 @@ public:
 
   void ll_register_getgroups_cb(client_getgroups_callback_t cb, void *handle);
 
-  int ll_opendirstripe(Inode *in, stripeid_t stripe, dir_result_t **dirpp);
-  int ll_releasedirstripe(dir_result_t *dirp);
-  int readdirstripeplus_r(dir_result_t *dirp, struct dirent *de,
-                          struct stat *st, int *stmask);
-
-  void rewinddirstripe(dir_result_t *dirp);
-  loff_t telldirstripe(dir_result_t *dirp);
-  void seekdirstripe(dir_result_t *dirp, loff_t offset);
+  int ll_opendirstripe(Inode *in, stripeid_t stripe, DirReader **dirpp,
+		       int uid = -1, int gid = -1);
+  int ll_releasedirstripe(DirReader *dirp);
 };
 
 #endif

@@ -244,7 +244,7 @@ static void fuse_ll_opendir(fuse_req_t req, fuse_ino_t ino,
   Inode *in = cfuse->iget(ino);
   void *dirp;
 
-  int r = cfuse->client->ll_opendir(in, (dir_result_t **) &dirp, ctx->uid,
+  int r = cfuse->client->ll_opendir(in, (DirReader **) &dirp, ctx->uid,
 				    ctx->gid);
   if (r >= 0) {
     fi->fh = (long)dirp;
@@ -568,7 +568,7 @@ static void fuse_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 {
   CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
 
-  dir_result_t *dirp = (dir_result_t*)fi->fh;
+  DirReader *dirp = (DirReader*)fi->fh;
   cfuse->client->seekdir(dirp, off);
 
   struct readdir_context rc;
@@ -590,7 +590,7 @@ static void fuse_ll_releasedir(fuse_req_t req, fuse_ino_t ino,
 			       struct fuse_file_info *fi)
 {
   CephFuse::Handle *cfuse = (CephFuse::Handle *)fuse_req_userdata(req);
-  dir_result_t *dirp = (dir_result_t*)fi->fh;
+  DirReader *dirp = (DirReader*)fi->fh;
   cfuse->client->ll_releasedir(dirp);
   fuse_reply_err(req, 0);
 }

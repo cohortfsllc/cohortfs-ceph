@@ -18,6 +18,7 @@
 class MClientReply;
 class Inode;
 class Dentry;
+struct DirEntryBuffer;
 
 struct MetaRequest {
 private:
@@ -57,7 +58,7 @@ public:
   string readdir_start;  // starting _after_ this name
   uint64_t readdir_offset;
 
-  vector<pair<string,Inode*> > readdir_result;
+  std::tr1::shared_ptr<DirEntryBuffer> readdir_result;
   bool readdir_end;
   int readdir_num;
   string readdir_last_name;

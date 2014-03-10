@@ -1014,10 +1014,10 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   utime_t start = ceph_clock_now(client->cct);
 
   hash_map<int64_t, int64_t> open_files;
-  hash_map<int64_t, dir_result_t*> open_dirs;
+  hash_map<int64_t, DirReader*> open_dirs;
 
   hash_map<int64_t, Fh*> ll_files;
-  hash_map<int64_t, dir_result_t*> ll_dirs;
+  hash_map<int64_t, DirReader*> ll_dirs;
   hash_map<uint64_t, int64_t> ll_inos;
 
   Inode *i1, *i2;
@@ -1148,7 +1148,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     } else if (strcmp(op, "opendir") == 0) {
       const char *a = t.get_string(buf, p);
       int64_t b = t.get_int();
-      dir_result_t *dirp;
+      DirReader *dirp;
       client->opendir(a, &dirp);
       if (dirp) open_dirs[b] = dirp;
     } else if (strcmp(op, "closedir") == 0) {
@@ -1357,7 +1357,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     } else if (strcmp(op, "ll_opendir") == 0) {
       int64_t i = t.get_int();
       int64_t r = t.get_int();
-      dir_result_t *dirp;
+      DirReader *dirp;
       if (ll_inos.count(i)) {
 	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
 	if (client->ll_opendir(i1, &dirp) == 0)
@@ -1533,7 +1533,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     dout(1) << "leftover close " << fi->second << dendl;
     if (fi->second > 0) client->close(fi->second);
   }
-  for (hash_map<int64_t, dir_result_t*>::iterator fi = open_dirs.begin();
+  for (hash_map<int64_t, DirReader*>::iterator fi = open_dirs.begin();
        fi != open_dirs.end();
        ++fi) {
     dout(1) << "leftover closedir " << fi->second << dendl;
@@ -1545,7 +1545,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     dout(1) << "leftover ll_release " << fi->second << dendl;
     if (fi->second) client->ll_release(fi->second);
   }
-  for (hash_map<int64_t,dir_result_t*>::iterator fi = ll_dirs.begin();
+  for (hash_map<int64_t,DirReader*>::iterator fi = ll_dirs.begin();
        fi != ll_dirs.end();
        ++fi) {
     dout(1) << "leftover ll_releasedir " << fi->second << dendl;

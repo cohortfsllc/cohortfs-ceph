@@ -20,7 +20,6 @@ class DirStripe : public CapObject {
   dn_hashmap dentries;
   dn_map dentry_map;
   uint64_t release_count;
-  uint64_t max_offset;
 
   frag_info_t fragstat;
   nest_info_t rstat;

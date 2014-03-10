@@ -362,6 +362,8 @@ OPTION(mds_standby_for_rank, OPT_INT, -1)
 OPTION(mds_standby_replay, OPT_BOOL, false)
 OPTION(mds_cap_update_lru_target, OPT_INT, 0) // trim caps when doing updates
 OPTION(mds_inode_stripes, OPT_INT, 1)
+OPTION(mds_readdir_readahead, OPT_INT, 1)
+OPTION(mds_readdir_chunk_size, OPT_INT, 1024)
 
 // If true, compact leveldb store on mount
 OPTION(osd_compact_leveldb_on_mount, OPT_BOOL, false)
