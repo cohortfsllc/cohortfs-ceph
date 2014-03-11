@@ -230,8 +230,11 @@ librados::RadosClient::~RadosClient()
 
 int librados::RadosClient::create_ioctx(const uuid_d& volume, IoCtxImpl **io)
 {
+  lock.Lock();
+  wait_for_osdmap();
   *io = new librados::IoCtxImpl(this, objecter, &lock, volume,
 				CEPH_NOSNAP);
+  lock.Unlock();
   return 0;
 }
 
