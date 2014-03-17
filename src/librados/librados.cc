@@ -25,7 +25,6 @@
 
 #include "librados/AioCompletionImpl.h"
 #include "librados/IoCtxImpl.h"
-#include "librados/PoolAsyncCompletionImpl.h"
 #include "librados/RadosClient.h"
 #include "cls/lock/cls_lock_client.h"
 #include "cohort/CohortPlaceSystem.h"
@@ -465,39 +464,6 @@ void librados::ObjectIterator::get_next()
 }
 
 const librados::ObjectIterator librados::ObjectIterator::__EndObjectIterator(NULL);
-
-///////////////////////////// PoolAsyncCompletion //////////////////////////////
-int librados::PoolAsyncCompletion::PoolAsyncCompletion::set_callback(void *cb_arg,
-								     rados_callback_t cb)
-{
-  PoolAsyncCompletionImpl *c = (PoolAsyncCompletionImpl *)pc;
-  return c->set_callback(cb_arg, cb);
-}
-
-int librados::PoolAsyncCompletion::PoolAsyncCompletion::wait()
-{
-  PoolAsyncCompletionImpl *c = (PoolAsyncCompletionImpl *)pc;
-  return c->wait();
-}
-
-bool librados::PoolAsyncCompletion::PoolAsyncCompletion::is_complete()
-{
-  PoolAsyncCompletionImpl *c = (PoolAsyncCompletionImpl *)pc;
-  return c->is_complete();
-}
-
-int librados::PoolAsyncCompletion::PoolAsyncCompletion::get_return_value()
-{
-  PoolAsyncCompletionImpl *c = (PoolAsyncCompletionImpl *)pc;
-  return c->get_return_value();
-}
-
-void librados::PoolAsyncCompletion::PoolAsyncCompletion::release()
-{
-  PoolAsyncCompletionImpl *c = (PoolAsyncCompletionImpl *)pc;
-  c->release();
-  delete this;
-}
 
 ///////////////////////////// AioCompletion //////////////////////////////
 int librados::AioCompletion::AioCompletion::set_complete_callback(void *cb_arg, rados_callback_t cb)
@@ -1338,12 +1304,6 @@ int librados::Rados::cluster_stat(cluster_stat_t& result)
 int librados::Rados::cluster_fsid(string *fsid)
 {
   return client->get_fsid(fsid);
-}
-
-librados::PoolAsyncCompletion *librados::Rados::pool_async_create_completion()
-{
-  PoolAsyncCompletionImpl *c = new PoolAsyncCompletionImpl;
-  return new PoolAsyncCompletion(c);
 }
 
 librados::AioCompletion *librados::Rados::aio_create_completion()

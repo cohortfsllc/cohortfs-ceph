@@ -41,7 +41,6 @@
 
 #include "AioCompletionImpl.h"
 #include "IoCtxImpl.h"
-#include "PoolAsyncCompletionImpl.h"
 #include "RadosClient.h"
 #include "osd/PlaceSystem.h"
 

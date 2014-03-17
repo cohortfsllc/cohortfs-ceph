@@ -17,7 +17,6 @@
 #include "IoCtxImpl.h"
 
 #include "librados/AioCompletionImpl.h"
-#include "librados/PoolAsyncCompletionImpl.h"
 #include "librados/RadosClient.h"
 #include "include/assert.h"
 
