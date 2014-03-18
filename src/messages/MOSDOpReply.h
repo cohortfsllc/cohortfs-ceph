@@ -123,12 +123,12 @@ public:
       head.volmap_epoch = volmap_epoch;
       head.result = result;
       head.num_ops = ops.size();
-      head.object_len = oid.name.length();
+      head.object_len = oid.idsize;
       ::encode(head, payload);
       for (unsigned i = 0; i < head.num_ops; i++) {
 	::encode(ops[i].op, payload);
       }
-      ::encode_nohead(oid.name, payload);
+      payload.append(oid.id, oid.idsize);
     } else {
       ::encode(oid, payload);
       ::encode(flags, payload);
@@ -157,7 +157,15 @@ public:
       for (unsigned i = 0; i < head.num_ops; i++) {
 	::decode(ops[i].op, p);
       }
-      ::decode_nohead(head.object_len, oid.name, p);
+      if (oid.id) {
+	delete[] oid.id;
+      }
+      if (head.object_len) {
+	oid.id = new char[head.object_len];
+	p.copy(head.object_len, (char *) oid.id);
+      } else {
+	oid.id = NULL;
+      }
       result = head.result;
       flags = head.flags;
       reassert_version = head.reassert_version;
@@ -195,8 +203,8 @@ public:
   const char *get_type_name() const { return "osd_op_reply"; }
   
   void print(ostream& out) const {
-    out << "osd_op_reply(" << get_tid()
-	<< " " << oid << " " << ops;
+    out << "osd_op_reply(" << get_tid();
+//	<< " " << oid << " " << ops;
     if (is_ondisk())
       out << " ondisk";
     else if (is_onnvram())

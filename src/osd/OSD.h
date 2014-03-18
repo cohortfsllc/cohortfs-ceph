@@ -392,26 +392,27 @@ public:
   int get_nodeid() { return whoami; }
 
   static hobject_t get_osdmap_pobject_name(epoch_t epoch) {
-    char foo[20];
-    snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(uuid_d(), foo), 0));
+    const size_t l = 6 + sizeof(epoch_t);
+    char foo[l] = "osdmap";
+    memcpy(foo + 6, &epoch, sizeof(epoch_t));
+    return hobject_t(sobject_t(object_t(OSD_PSEUDO_VOLUME, l, foo), 0));
   }
   static hobject_t get_inc_osdmap_pobject_name(epoch_t epoch) {
-    char foo[20];
-    snprintf(foo, sizeof(foo), "inc_osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(uuid_d(), foo), 0));
+    const size_t l = 10 + sizeof(epoch_t);
+    char foo[l] = "inc_osdmap";
+    memcpy(foo + 10, &epoch, sizeof(epoch_t));
+    return hobject_t(sobject_t(object_t(OSD_PSEUDO_VOLUME, l, foo), 0));
   }
 
   static hobject_t make_snapmapper_oid() {
+    char foo[] = "snapmapper";
     return hobject_t(
-      sobject_t(
-	object_t(uuid_d(), "snapmapper"),
-	0));
+      sobject_t(object_t(OSD_PSEUDO_VOLUME, sizeof(foo) - 1, foo), 0));
   }
 
   static hobject_t make_infos_oid() {
-    hobject_t oid(sobject_t(object_t(uuid_d(), "infos"), CEPH_NOSNAP));
-    return oid;
+    return hobject_t(
+      sobject_t(object_t(OSD_PSEUDO_VOLUME, 5, "infos"), CEPH_NOSNAP));
   }
 
   static void recursive_remove_collection(ObjectStore *store, coll_t tmp);

@@ -188,7 +188,7 @@ struct ceph_osd_request_head {
 	struct ceph_timespec mtime;        /* for mutations only */
 	struct ceph_eversion reassert_version; /* if we are replaying op */
 
-	__le32 object_len;     /* length of object name */
+	size_t object_len;     /* length of object name */
 
 	__le64 snapid;         /* snapid to read */
 	__le64 snap_seq;       /* writer's snap context */
@@ -210,20 +210,21 @@ struct ceph_osd_request_head {
       ::encode(mtime, payload);
       ::encode(reassert_version, payload);
 
-      __u32 oid_len = oid.name.length();
-      ::encode(oid_len, payload);
+      ::encode(oid.idsize, payload);
       ::encode(snapid, payload);
       ::encode(snap_seq, payload);
       __u32 num_snaps = snaps.size();
       ::encode(num_snaps, payload);
-      
+
       //::encode(ops, payload);
       __u16 num_ops = ops.size();
       ::encode(num_ops, payload);
       for (unsigned i = 0; i < ops.size(); i++)
 	::encode(ops[i].op, payload);
 
-      ::encode_nohead(oid.name, payload);
+      if (oid.id)
+	payload.append(oid.id, oid.idsize);
+
       ::encode_nohead(snaps, payload);
     } else {
       ::encode(client_inc, payload);
@@ -262,13 +263,15 @@ struct ceph_osd_request_head {
       ::decode(mtime, p);
       ::decode(reassert_version, p);
 
-      __u32 oid_len;
-      ::decode(oid_len, p);
+      if (oid.id) {
+	delete[] oid.id;
+      }
+      ::decode(oid.idsize, p);
       ::decode(snapid, p);
       ::decode(snap_seq, p);
       __u32 num_snaps;
       ::decode(num_snaps, p);
-      
+
       //::decode(ops, p);
       __u16 num_ops;
       ::decode(num_ops, p);
@@ -276,7 +279,10 @@ struct ceph_osd_request_head {
       for (unsigned i = 0; i < num_ops; i++)
 	::decode(ops[i].op, p);
 
-      decode_nohead(oid_len, oid.name, p);
+      if (oid.idsize) {
+	oid.id = new char[oid.idsize];
+	p.copy(oid.idsize, (char *)oid.id);
+      }
       decode_nohead(num_snaps, snaps, p);
 
       retry_attempt = -1;
@@ -314,9 +320,9 @@ struct ceph_osd_request_head {
   const char *get_type_name() const { return "osd_op"; }
   void print(ostream& out) const {
     out << "osd_op(" << get_reqid();
+#if 0
     out << " " << oid;
 
-#if 0
     out << " ";
     if (may_read())
       out << "r";

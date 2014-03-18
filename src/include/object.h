@@ -34,47 +34,69 @@ using namespace __gnu_cxx;
 #define MAX_CEPH_OBJECT_NAME_LEN 4096
 
 static const uuid_d OSD_PSEUDO_VOLUME = uuid_d();
-static const uuid_d INVALID_VOLUME = uuid_d(~0, ~0);
+static const uuid_d INVALID_VOLUME = uuid_d(-1, -1);
 
 struct object_t {
   uuid_d volume;
-  string name;
+  size_t idsize;
+  const char *id;
 
-  /* Not ideal, but it saves us from having to throw out and rewrite
-     every interface.  We can create objects with an invalid volume
-     for things like ObjectOperation and then have the IoCtx put the
-     volume it has stored in */
-  object_t() : volume(INVALID_VOLUME) {}
-  object_t(const char *s) : volume(INVALID_VOLUME), name(s) {}
-  object_t(const string& s) : volume(INVALID_VOLUME), name(s) {}
-  object_t(uuid_d v, const char *s) : volume(v), name(s) {}
-  object_t(uuid_d v, const string& s) : volume(v), name(s) {}
+  object_t() : volume(INVALID_VOLUME), idsize(0), id(NULL) {
+  }
+
+  object_t(const uuid_d& v, const size_t len, const char *s)
+    : volume(v), idsize(len) {
+    if (idsize == 0) {
+      id = NULL;
+    } else {
+      id = new char[idsize];
+      memcpy((void *) id, s, idsize);
+    }
+  }
+  ~object_t(void) {
+    if (id) {
+      delete[] id;
+    }
+  }
 
   void swap(object_t& o) {
-    name.swap(o.name);
+    std::swap(o.id, id);
+    std::swap(o.idsize, idsize);
     std::swap(o.volume, volume);
   }
   void clear() {
     volume.clear();
-    name.clear();
+    idsize = 0;
+    if (id) {
+      delete id;
+      id = NULL;
+    }
   }
 
   void encode(bufferlist &bl) const {
     ::encode(volume, bl);
-    ::encode(name, bl);
+    ::encode(idsize, bl);
+    bl.append(id, idsize);
   }
   void decode(bufferlist::iterator &bl) {
     ::decode(volume, bl);
-    ::decode(name, bl);
+    ::decode(idsize, bl);
+    if (id) {
+      delete id;
+    }
+    id = new char[idsize];
+    bl.copy(idsize, (char *)id);
   }
 };
 WRITE_CLASS_ENCODER(object_t)
 
 inline bool operator==(const object_t& l, const object_t& r) {
-  return ((l.volume == r.volume) && (l.name == r.name));
+  return ((l.volume == r.volume) &&
+	  (memcmp(l.id, r.id, min(l.idsize, r.idsize)) == 0));
 }
 inline bool operator!=(const object_t& l, const object_t& r) {
-  return ((l.volume != r.volume) || (l.name != r.name));
+    return ((l.volume != r.volume) ||
+	    (memcmp(l.id, r.id, min(l.idsize, r.idsize)) != 0));
 }
 inline bool operator>(const object_t& l, const object_t& r) {
   if (l.volume > r.volume) {
@@ -82,7 +104,7 @@ inline bool operator>(const object_t& l, const object_t& r) {
   } else if (l.volume < r.volume) {
     return false;
   } else {
-    return l.name > r.name;
+    return memcmp(l.id, r.id, min(l.idsize, r.idsize) > 0);
   }
 }
 inline bool operator<(const object_t& l, const object_t& r) {
@@ -91,7 +113,7 @@ inline bool operator<(const object_t& l, const object_t& r) {
   } else if (l.volume > r.volume) {
     return false;
   } else {
-    return l.name < r.name;
+    return memcmp(l.id, r.id, min(l.idsize, r.idsize)) < 0;
   }
 }
 inline bool operator>=(const object_t& l, const object_t& r) {
@@ -100,53 +122,30 @@ inline bool operator>=(const object_t& l, const object_t& r) {
   } else if (l.volume < r.volume) {
     return false;
   } else {
-    return l.name >= r.name;
+    return memcmp(l.id, r.id, min(l.idsize, r.idsize)) >= 0;
   }
 }
+
 inline bool operator<=(const object_t& l, const object_t& r) {
   if (l.volume < r.volume) {
     return true;
   } else if (l.volume > r.volume) {
     return false;
   } else {
-    return l.name <= r.name;
+    return memcmp(l.id, r.id, min(l.idsize, r.idsize)) <= 0;
   }
 }
-inline ostream& operator<<(ostream& out, const object_t& o) {
-  return out << o.volume << ":" << o.name;
-}
+//inline ostream& operator<<(ostream& out, const object_t& o) {
+// return out << o.volume << ":" << o.name;
+//}
 
 namespace __gnu_cxx {
   template<> struct hash<object_t> {
     size_t operator()(const object_t& r) const {
-      //static hash<string> H;
-      //return H(r.name);
-      return ceph_str_hash_linux(r.name.c_str(), r.name.length());
+      return ceph_str_hash_rjenkins(r.id, r.idsize);
     }
   };
 }
-
-struct file_object_t {
-  uuid_d vol;
-  uint64_t ino, bno;
-  mutable char buf[51];
-
-  file_object_t(uuid_d v = INVALID_VOLUME, uint64_t i = 0, uint64_t b = 0) :
-    vol(v), ino(i), bno(b) {
-    buf[0] = 0;
-  }
-
-  const char *c_str() const {
-    if (!buf[0])
-      sprintf(buf, "%"PRIx64".%08"PRIx64, ino, bno);
-    return buf;
-  }
-
-  operator object_t() {
-    return object_t(vol, c_str());
-  }
-};
-
 
 // ---------------------------
 // snaps
@@ -156,7 +155,7 @@ struct snapid_t {
   snapid_t(uint64_t v=0) : val(v) {}
   snapid_t operator+=(snapid_t o) { val += o.val; return *this; }
   snapid_t operator++() { ++val; return *this; }
-  operator uint64_t() const { return val; }  
+  operator uint64_t() const { return val; }
 };
 
 inline void encode(snapid_t i, bufferlist &bl) { encode(i.val, bl); }
@@ -215,9 +214,9 @@ inline bool operator>=(const sobject_t &l, const sobject_t &r) {
 inline bool operator<=(const sobject_t &l, const sobject_t &r) {
   return l.oid < r.oid || (l.oid == r.oid && l.snap <= r.snap);
 }
-inline ostream& operator<<(ostream& out, const sobject_t &o) {
-  return out << o.oid << "/" << o.snap;
-}
+//inline ostream& operator<<(ostream& out, const sobject_t &o) {
+//  return out << o.oid << "/" << o.snap;
+//}
 namespace __gnu_cxx {
   template<> struct hash<sobject_t> {
     size_t operator()(const sobject_t &r) const {
