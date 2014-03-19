@@ -87,9 +87,7 @@ string hobject_t::to_str() const
   out += string(snap_with_hash);
 
   out.push_back('.');
-  append_escaped(oid.name, &out);
-  out.push_back('.');
-  append_escaped(get_key(), &out);
+  append_escaped(oid.to_str(), &out);
   out.push_back('.');
   append_escaped(nspace, &out);
 
@@ -123,6 +121,7 @@ void hobject_t::decode(bufferlist::iterator& bl)
   DECODE_FINISH(bl);
 }
 
+#if 0
 void hobject_t::decode(json_spirit::Value& v)
 {
   using namespace json_spirit;
@@ -139,10 +138,11 @@ void hobject_t::decode(json_spirit::Value& v)
       max = p.value_.get_int();
   }
 }
+#endif
 
 void hobject_t::dump(Formatter *f) const
 {
-  f->dump_string("oid", oid.name);
+  f->dump_string("oid", oid.to_str());
   f->dump_int("snapid", snap);
   f->dump_int("hash", hash);
   f->dump_int("max", (int)max);
@@ -153,8 +153,6 @@ ostream& operator<<(ostream& out, const hobject_t& o)
   if (o.is_max())
     return out << "MAX";
   out << std::hex << o.hash << std::dec;
-  if (o.get_key().length())
-    out << "." << o.get_key();
   out << "/" << o.oid << "/" << o.snap;
   out << "/" << o.nspace;
   return out;

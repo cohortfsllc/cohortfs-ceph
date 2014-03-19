@@ -29,6 +29,7 @@ using namespace __gnu_cxx;
 #include "encoding.h"
 #include "ceph_hash.h"
 #include "cmp.h"
+#include "common/armor.h"
 
 /// Maximum supported object name length for Ceph, in bytes.
 #define MAX_CEPH_OBJECT_NAME_LEN 4096
@@ -87,6 +88,16 @@ struct object_t {
     id = new char[idsize];
     bl.copy(idsize, (char *)id);
   }
+
+  string to_str() const {
+    size_t n = idsize * 4 / 3 + 3;
+    char b[n];
+    string s(volume);
+    s.append(":");
+    size_t l = ceph_armor(b, b+n, id, id + idsize);
+    s.append(b, l);
+    return s;
+  }
 };
 WRITE_CLASS_ENCODER(object_t)
 
@@ -135,9 +146,9 @@ inline bool operator<=(const object_t& l, const object_t& r) {
     return memcmp(l.id, r.id, min(l.idsize, r.idsize)) <= 0;
   }
 }
-//inline ostream& operator<<(ostream& out, const object_t& o) {
-// return out << o.volume << ":" << o.name;
-//}
+inline ostream& operator<<(ostream& out, const object_t& o) {
+  return out << o.to_str();
+}
 
 namespace __gnu_cxx {
   template<> struct hash<object_t> {
@@ -214,9 +225,9 @@ inline bool operator>=(const sobject_t &l, const sobject_t &r) {
 inline bool operator<=(const sobject_t &l, const sobject_t &r) {
   return l.oid < r.oid || (l.oid == r.oid && l.snap <= r.snap);
 }
-//inline ostream& operator<<(ostream& out, const sobject_t &o) {
-//  return out << o.oid << "/" << o.snap;
-//}
+inline ostream& operator<<(ostream& out, const sobject_t &o) {
+  return out << o.oid << "/" << o.snap;
+}
 namespace __gnu_cxx {
   template<> struct hash<sobject_t> {
     size_t operator()(const sobject_t &r) const {

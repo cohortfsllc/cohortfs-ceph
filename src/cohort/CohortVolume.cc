@@ -17,7 +17,7 @@
 #include "osd/OSDMap.h"
 #include "CohortVolume.h"
 
-typedef int (*place_func)(void*, const uuid_t, const char*,
+typedef int (*place_func)(void*, const uuid_t, size_t, const char*,
 			  bool(*)(void*, int),
 			  bool(*)(void*, int));
 
@@ -185,7 +185,8 @@ int CohortVolume::place(const object_t& object,
 
   place_func entry_point = (place_func) entry_points[rule_index];
 
-  int rc = entry_point(&context, object.volume.uuid, object.name.c_str(),
+  int rc = entry_point(&context, object.volume.uuid,
+		       object.idsize, object.id,
 		       test_osd, return_osd);
   compile_lock.unlock();
 

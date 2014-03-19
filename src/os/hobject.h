@@ -39,9 +39,6 @@ public:
   string nspace;
 
 public:
-  const string &get_key() const {
-    return oid.name;
-  }
 
   string to_str() const;
 
@@ -126,10 +123,6 @@ public:
     hash = _reverse_nibbles(v);
   }
 
-  const string& get_effective_key() const {
-    return oid.name;
-  }
-
   void swap(hobject_t &o) {
     hobject_t temp(o);
     o = (*this);
@@ -161,13 +154,12 @@ namespace __gnu_cxx {
 
 ostream& operator<<(ostream& out, const hobject_t& o);
 
-WRITE_EQ_OPERATORS_6(hobject_t, oid, get_key(), snap, hash, max, nspace)
+WRITE_EQ_OPERATORS_5(hobject_t, oid, snap, hash, max, nspace)
 // sort hobject_t's by <max, get_filestore_key(hash), key, oid, snapid>
-WRITE_CMP_OPERATORS_6(hobject_t,
+WRITE_CMP_OPERATORS_5(hobject_t,
 		      max,
 		      get_filestore_key(),
 		      nspace,
-		      get_effective_key(),
 		      oid,
 		      snap)
 
