@@ -139,7 +139,6 @@ set(libos_srcs
 	os/LFNIndex.cc 
 	os/HashIndex.cc 
 	os/IndexManager.cc 
-	os/FlatIndex.cc 
 	os/DBObjectMap.cc 
 	os/WBThrottle.cc
 )

@@ -402,9 +402,6 @@ int LFNIndex::list_objects(const vector<string> &to_list, int max_objs,
 	if (!lfn_must_hash(long_name)) {
 	  assert(long_name == short_name);
 	}
-	if (index_version == HASH_INDEX_TAG)
-	  get_hobject_from_oinfo(to_list_path.c_str(), short_name.c_str(), &obj);
-	  
 	out->insert(pair<string, hobject_t>(short_name, obj));
 	++listed;
       } else {
@@ -528,136 +525,30 @@ int LFNIndex::remove_attr_path(const vector<string> &path,
   maybe_inject_failure();
   return chain_removexattr(full_path.c_str(), mangled_attr_name.c_str());
 }
-  
-string LFNIndex::lfn_generate_object_name_keyless(const hobject_t &hoid) {
-  char s[FILENAME_MAX_LEN];
-  char *end = s + sizeof(s);
-  char *t = s;
 
-  const char *i = hoid.oid.name.c_str();
-  // Escape subdir prefix
-  if (hoid.oid.name.substr(0, 4) == "DIR_") {
-    *t++ = '\\';
-    *t++ = 'd';
-    i += 4;
-  }
-  while (*i && t < end) {
-    if (*i == '\\') {
-      *t++ = '\\';
-      *t++ = '\\';      
-    } else if (*i == '.' && i == hoid.oid.name.c_str()) {  // only escape leading .
-      *t++ = '\\';
-      *t++ = '.';
-    } else if (*i == '/') {
-      *t++ = '\\';
-      *t++ = 's';
-    } else
-      *t++ = *i;
-    i++;
-  }
+string LFNIndex::lfn_generate_object_name(const hobject_t &hoid) 
+{
+  /* XXX get rid of this assertion, I'm only using it to help
+     debug/make sure I don't run into magic numbers.. */
+  assert(index_version == HOBJECT_WITH_VOLUME);
+
+  stringstream ss(hoid.oid.to_str());
+
+  /* Since the base64 encoded object name doesn't contain anything we
+     need to escape, we don't have to escape anything. */
 
   if (hoid.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, "_head");
+    ss << "_head";
   else if (hoid.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, "_snapdir");
+    ss << ("_snapdir");
   else
-    t += snprintf(t, end - t, "_%llx", (long long unsigned)hoid.snap);
-  snprintf(t, end - t, "_%.*X", (int)(sizeof(hoid.hash)*2), hoid.hash);
+    ss << "_" << hex << setfill('0') << setw(sizeof(hoid.snap) * 2)
+       << hoid.snap;
 
-  return string(s);
-}
+  ss << "_" << hex << setfill('0') << setw(sizeof(hoid.hash) * 2)
+     << hoid.snap;
 
-static void append_escaped(string::const_iterator begin,
-			   string::const_iterator end, 
-			   string *out) {
-  for (string::const_iterator i = begin; i != end; ++i) {
-    if (*i == '\\') {
-      out->append("\\\\");
-    } else if (*i == '/') {
-      out->append("\\s");
-    } else if (*i == '_') {
-      out->append("\\u");
-    } else if (*i == '\0') {
-      out->append("\\n");
-    } else {
-      out->append(i, i+1);
-    }
-  }
-}
-
-string LFNIndex::lfn_generate_object_name(const hobject_t &hoid) {
-  if (index_version == HASH_INDEX_TAG)
-    return lfn_generate_object_name_keyless(hoid);
-  if (index_version == HASH_INDEX_TAG_2)
-    return lfn_generate_object_name_poolless(hoid);
-
-  string full_name;
-  string::const_iterator i = hoid.oid.name.begin();
-  if (hoid.oid.name.substr(0, 4) == "DIR_") {
-    full_name.append("\\d");
-    i += 4;
-  } else if (hoid.oid.name[0] == '.') {
-    full_name.append("\\.");
-    ++i;
-  }
-  append_escaped(i, hoid.oid.name.end(), &full_name);
-  full_name.append("_");
-  append_escaped(hoid.get_key().begin(), hoid.get_key().end(), &full_name);
-  full_name.append("_");
-
-  char buf[PATH_MAX];
-  char *t = buf;
-  char *end = t + sizeof(buf);
-  if (hoid.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, "head");
-  else if (hoid.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, "snapdir");
-  else
-    t += snprintf(t, end - t, "%llx", (long long unsigned)hoid.snap);
-  snprintf(t, end - t, "_%.*X", (int)(sizeof(hoid.hash)*2), hoid.hash);
-  full_name += string(buf);
-  full_name.append("_");
-
-  append_escaped(hoid.nspace.begin(), hoid.nspace.end(), &full_name);
-  full_name.append("_");
-
-  t = buf;
-  end = t + sizeof(buf);
-  full_name += string(buf);
-
-  return full_name;
-}
-
-string LFNIndex::lfn_generate_object_name_poolless(const hobject_t &hoid) {
-  if (index_version == HASH_INDEX_TAG)
-    return lfn_generate_object_name_keyless(hoid);
-
-  string full_name;
-  string::const_iterator i = hoid.oid.name.begin();
-  if (hoid.oid.name.substr(0, 4) == "DIR_") {
-    full_name.append("\\d");
-    i += 4;
-  } else if (hoid.oid.name[0] == '.') {
-    full_name.append("\\.");
-    ++i;
-  }
-  append_escaped(i, hoid.oid.name.end(), &full_name);
-  full_name.append("_");
-  append_escaped(hoid.get_key().begin(), hoid.get_key().end(), &full_name);
-  full_name.append("_");
-
-  char snap_with_hash[PATH_MAX];
-  char *t = snap_with_hash;
-  char *end = t + sizeof(snap_with_hash);
-  if (hoid.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, "head");
-  else if (hoid.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, "snapdir");
-  else
-    t += snprintf(t, end - t, "%llx", (long long unsigned)hoid.snap);
-  snprintf(t, end - t, "_%.*X", (int)(sizeof(hoid.hash)*2), hoid.hash);
-  full_name += string(snap_with_hash);
-  return full_name;
+  return ss.str();
 }
 
 int LFNIndex::lfn_get_name(const vector<string> &path, 
@@ -835,158 +726,18 @@ bool LFNIndex::lfn_is_subdir(const string &name, string *demangled) {
   return 0;
 }
 
-static int parse_object(const char *s, hobject_t& o)
-{
-  const char *hash = s + strlen(s) - 1;
-  while (*hash != '_' &&
-	 hash > s)
-    hash--;
-  const char *bar = hash - 1;
-  while (*bar != '_' &&
-	 bar > s)
-    bar--;
-  if (*bar == '_') {
-    char buf[bar-s + 1];
-    char *t = buf;
-    const char *i = s;
-    while (i < bar) {
-      if (*i == '\\') {
-	i++;
-	switch (*i) {
-	case '\\': *t++ = '\\'; break;
-	case '.': *t++ = '.'; break;
-	case 's': *t++ = '/'; break;
-	case 'd': {
-	  *t++ = 'D';
-	  *t++ = 'I';
-	  *t++ = 'R';
-	  *t++ = '_';
-	  break;
-	}
-	default: assert(0);
-	}
-      } else {
-	*t++ = *i;
-      }
-      i++;
-    }
-    *t = 0;
-    o.oid.name = string(buf, t-buf);
-    if (strncmp(bar+1, "head", 4) == 0)
-      o.snap = CEPH_NOSNAP;
-    else if (strncmp(bar+1, "snapdir", 7) == 0)
-      o.snap = CEPH_SNAPDIR;
-    else 
-      o.snap = strtoull(bar+1, NULL, 16);
-    sscanf(hash, "_%X", &o.hash);
-
-    return 1;
-  }
-  return 0;
-}
-
-bool LFNIndex::lfn_parse_object_name_keyless(const string &long_name, hobject_t *out) {
-  bool r = parse_object(long_name.c_str(), *out);
-
-  if (!r) return r;
-  string temp = lfn_generate_object_name(*out);
-  return r;
-}
-
-static bool append_unescaped(string::const_iterator begin,
-			     string::const_iterator end, 
-			     string *out) {
-  for (string::const_iterator i = begin; i != end; ++i) {
-    if (*i == '\\') {
-      ++i;
-      if (*i == '\\')
-	out->append("\\");
-      else if (*i == 's')
-	out->append("/");
-      else if (*i == 'n')
-	(*out) += '\0';
-      else if (*i == 'u')
-	out->append("_");
-      else
-	return false;
-    } else {
-      out->append(i, i+1);
-    }
-  }
-  return true;
-}
-
-bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
-					      hobject_t *out) {
-  string name;
-  uint32_t hash;
-  snapid_t snap;
-
-  string::const_iterator current = long_name.begin();
-  if (*current == '\\') {
-    ++current;
-    if (current == long_name.end()) {
-      return false;
-    } else if (*current == 'd') {
-      name.append("DIR_");
-      ++current;
-    } else if (*current == '.') {
-      name.append(".");
-      ++current;
-    } else {
-      --current;
-    }
-  }
-
-  string::const_iterator end = current;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  if (!append_unescaped(current, end, &name))
-    return false;
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  string snap_str(current, end);
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end != long_name.end())
-    return false;
-  string hash_str(current, end);
-
-  if (snap_str == "head")
-    snap = CEPH_NOSNAP;
-  else if (snap_str == "snapdir")
-    snap = CEPH_SNAPDIR;
-  else
-    snap = strtoull(snap_str.c_str(), NULL, 16);
-  sscanf(hash_str.c_str(), "%X", &hash);
-
-
-  (*out) = hobject_t(object_t(uuid_d(), name), snap, hash);
-  return true;
-}
-
 
 bool LFNIndex::lfn_parse_object_name(const string &long_name, hobject_t *out) {
-  string name;
-  string key;
-  string ns;
+  uuid_d vol;
   uint32_t hash;
   snapid_t snap;
 
-  if (index_version == HASH_INDEX_TAG)
-    return lfn_parse_object_name_keyless(long_name, out);
-  if (index_version == HASH_INDEX_TAG_2)
-    return lfn_parse_object_name_poolless(long_name, out);
+  /* XXX get rid of this assertion, I'm only using it to help
+     debug/make sure I don't run into magic numbers.. */
+  assert(index_version == HOBJECT_WITH_VOLUME);
+
+  string::const_iterator current = long_name.begin();
+
 
   string::const_iterator current = long_name.begin();
   if (*current == '\\') {

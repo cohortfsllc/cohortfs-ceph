@@ -35,8 +35,6 @@ struct hobject_t {
   uint32_t hash;
 private:
   bool max;
-public:
-  string nspace;
 
 public:
 
@@ -154,7 +152,7 @@ namespace __gnu_cxx {
 
 ostream& operator<<(ostream& out, const hobject_t& o);
 
-WRITE_EQ_OPERATORS_5(hobject_t, oid, snap, hash, max, nspace)
+WRITE_EQ_OPERATORS_4(hobject_t, oid, snap, hash, max)
 // sort hobject_t's by <max, get_filestore_key(hash), key, oid, snapid>
 WRITE_CMP_OPERATORS_5(hobject_t,
 		      max,

@@ -93,7 +93,7 @@ struct object_t {
     size_t n = idsize * 4 / 3 + 3;
     char b[n];
     string s(volume);
-    s.append(":");
+    s.append("_");
     size_t l = ceph_armor(b, b+n, id, id + idsize);
     s.append(b, l);
     return s;

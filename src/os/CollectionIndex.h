@@ -78,10 +78,11 @@ protected:
     return IndexedPath(new Path(path, collection));
   }
 
-  static const uint32_t FLAT_INDEX_TAG = 0;
-  static const uint32_t HASH_INDEX_TAG = 1;
-  static const uint32_t HASH_INDEX_TAG_2 = 2;
-  static const uint32_t HOBJECT_WITH_POOL = 3;
+//  static const uint32_t FLAT_INDEX_TAG = 0;
+//  static const uint32_t HASH_INDEX_TAG = 1;
+//  static const uint32_t HASH_INDEX_TAG_2 = 2;
+//  static const uint32_t HOBJECT_WITH_POOL = 3;
+  static const uint32_t HOBJECT_WITH_VOLUME = 4;
   /**
    * For tracking Filestore collection versions.
    *

@@ -9,12 +9,16 @@
  * base64 encode/decode.
  */
 
-const char *pem_key = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+/* Use , rather than / so we don't have to escape */
+
+const char *pem_key = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,";
 
 static int encode_bits(int c)
 {
 	return pem_key[c];
 }
+
+/* Use , rather than / so we don't have to escape */
 
 static int decode_bits(char c)
 {
@@ -24,13 +28,13 @@ static int decode_bits(char c)
 		return c - 'a' + 26;
 	if (c >= '0' && c <= '9')
 		return c - '0' + 52;
-	if (c == '+' || c == '-')
+	if (c == '+')
 		return 62;
-	if (c == '/' || c == '_')
+	if (c == ',')
 		return 63;
 	if (c == '=')
 		return 0; /* just non-negative, please */
-	return -EINVAL;	
+	return -EINVAL;
 }
 
 static int set_str_val(char **pdst, const char *end, char c)
