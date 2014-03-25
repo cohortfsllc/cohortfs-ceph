@@ -36,24 +36,6 @@ const string DBObjectMap::HOBJECT_TO_SEQ = "_HOBJTOSEQ_";
 const string DBObjectMap::LEAF_PREFIX = "_LEAF_";
 const string DBObjectMap::REVERSE_LEAF_PREFIX = "_REVLEAF_";
 
-static void append_escaped(const string &in, string *out)
-{
-  for (string::const_iterator i = in.begin(); i != in.end(); ++i) {
-    if (*i == '%') {
-      out->push_back('%');
-      out->push_back('p');
-    } else if (*i == '.') {
-      out->push_back('%');
-      out->push_back('e');
-    } else if (*i == '_') {
-      out->push_back('%');
-      out->push_back('u');
-    } else {
-      out->push_back(*i);
-    }
-  }
-}
-
 static bool append_unescaped(string::const_iterator begin,
 			     string::const_iterator end, 
 			     string *out) {
@@ -132,60 +114,54 @@ bool DBObjectMap::check(std::ostream &out)
 
 string DBObjectMap::hobject_key(const hobject_t &hoid)
 {
-  string out;
-  append_escaped(hoid.oid.name, &out);
-  out.push_back('.');
-  append_escaped(hoid.get_key(), &out);
-  out.push_back('.');
-  append_escaped(hoid.nspace, &out);
-  out.push_back('.');
+  stringstream ss(hoid.oid.to_str());
 
-  char snap_with_hash[1000];
-  char *t = snap_with_hash;
-  char *end = t + sizeof(snap_with_hash);
+  /* Since the base64 encoded object name doesn't contain anything we
+     need to escape, we don't have to escape anything. */
+
   if (hoid.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, "head");
+    ss << ".head";
   else if (hoid.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, "snapdir");
+    ss << (".snapdir");
   else
-    t += snprintf(t, end - t, "%llx", (long long unsigned)hoid.snap);
+    ss << "." << hex << setfill('0') << setw(sizeof(hoid.snap) * 2)
+       << hoid.snap;
 
-  t += snprintf(t, end - t, ".none");
-  snprintf(t, end - t, ".%.*X", (int)(sizeof(hoid.hash)*2), hoid.hash);
-  out += string(snap_with_hash);
-  return out;
+  ss << "." << hex << setfill('0') << setw(sizeof(hoid.hash) * 2)
+     << hoid.hash;
+
+  return ss.str();
 }
 
 string DBObjectMap::hobject_key_v0(coll_t c, const hobject_t &hoid)
 {
-  string out;
-  append_escaped(c.to_str(), &out);
-  out.push_back('.');
-  append_escaped(hoid.oid.name, &out);
-  out.push_back('.');
-  append_escaped(hoid.get_key(), &out);
-  out.push_back('.');
+  stringstream ss(c.to_str());
+  ss << '.' << hoid.oid.to_str();
 
-  char snap_with_hash[1000];
-  char *t = snap_with_hash;
-  char *end = t + sizeof(snap_with_hash);
+  /* Since the base64 encoded object name doesn't contain anything we
+     need to escape, we don't have to escape anything. */
+
   if (hoid.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, ".head");
+    ss << ".head";
   else if (hoid.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, ".snapdir");
+    ss << (".snapdir");
   else
-    t += snprintf(t, end - t, ".%llx", (long long unsigned)hoid.snap);
-  snprintf(t, end - t, ".%.*X", (int)(sizeof(hoid.hash)*2), hoid.hash);
-  out += string(snap_with_hash);
-  return out;
+    ss << "." << hex << setfill('0') << setw(sizeof(hoid.snap) * 2)
+       << hoid.snap;
+
+  ss << "." << hex << setfill('0') << setw(sizeof(hoid.hash) * 2)
+     << hoid.hash;
+
+  return ss.str();
+
 }
 
 bool DBObjectMap::parse_hobject_key_v0(const uuid_d& vol, const string &in,
 				       coll_t *c, hobject_t *hoid)
 {
   string coll;
-  string name;
-  string key;
+  size_t idsize;
+  char *id;
   snapid_t snap;
   uint32_t hash;
 

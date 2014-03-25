@@ -88,8 +88,6 @@ string hobject_t::to_str() const
 
   out.push_back('.');
   append_escaped(oid.to_str(), &out);
-  out.push_back('.');
-  append_escaped(nspace, &out);
 
   return out;
 }
@@ -101,7 +99,6 @@ void hobject_t::encode(bufferlist& bl) const
   ::encode(snap, bl);
   ::encode(hash, bl);
   ::encode(max, bl);
-  ::encode(nspace, bl);
   ENCODE_FINISH(bl);
 }
 
@@ -115,9 +112,6 @@ void hobject_t::decode(bufferlist::iterator& bl)
     ::decode(max, bl);
   else
     max = false;
-  if (struct_v >= 4) {
-    ::decode(nspace, bl);
-  }
   DECODE_FINISH(bl);
 }
 
@@ -154,6 +148,5 @@ ostream& operator<<(ostream& out, const hobject_t& o)
     return out << "MAX";
   out << std::hex << o.hash << std::dec;
   out << "/" << o.oid << "/" << o.snap;
-  out << "/" << o.nspace;
   return out;
 }

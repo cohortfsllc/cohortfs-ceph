@@ -702,7 +702,7 @@ int HashIndex::list_by_hash(const vector<string> &path,
     if (j == objects.end() || j->first != *i) {
       if (min_count > 0 && out->size() > (unsigned)min_count) {
 	if (next)
-	  *next = hobject_t(object_t(uuid_d(), ""), CEPH_NOSNAP, hash_prefix_to_hash(*i));
+	  *next = hobject_t(object_t(uuid_d(), 0, NULL), CEPH_NOSNAP, hash_prefix_to_hash(*i));
 	return 0;
       }
       *(next_path.rbegin()) = *(i->rbegin());

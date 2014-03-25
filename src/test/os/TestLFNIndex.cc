@@ -131,12 +131,6 @@ TEST_F(TestHASH_INDEX_TAG_2, generate_and_parse_name) {
 			  "\\dA_KEY_head_ABABABAB");
 }
 
-class TestHOBJECT_WITH_POOL : public TestWrapLFNIndex, public ::testing::Test {
-public:
-  TestHOBJECT_WITH_POOL() : TestWrapLFNIndex(coll_t("ABC"), "PATH", CollectionIndex::HOBJECT_WITH_POOL) {
-  }
-};
-
 TEST_F(TestHOBJECT_WITH_POOL, generate_and_parse_name) {
   const vector<string> path;
   std::string mangled_name;

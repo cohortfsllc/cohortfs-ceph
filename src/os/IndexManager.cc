@@ -28,7 +28,6 @@
 #include "include/buffer.h"
 
 #include "IndexManager.h"
-#include "FlatIndex.h"
 #include "HashIndex.h"
 #include "CollectionIndex.h"
 
@@ -75,7 +74,7 @@ int IndexManager::init_index(coll_t c, const char *path, uint32_t version) {
     return r;
   HashIndex index(c, path, g_conf->filestore_merge_threshold,
 		  g_conf->filestore_split_multiple,
-		  CollectionIndex::HASH_INDEX_TAG_2,
+		  CollectionIndex::HOBJECT_WITH_VOLUME,
 		  g_conf->filestore_index_retry_probability);
   return index.init();
 }
@@ -90,14 +89,7 @@ int IndexManager::build_index(coll_t c, const char *path, Index *index) {
       return r;
 
     switch (version) {
-    case CollectionIndex::FLAT_INDEX_TAG: {
-      *index = Index(new FlatIndex(c, path),
-		     RemoveOnDelete(c, this));
-      return 0;
-    }
-    case CollectionIndex::HASH_INDEX_TAG: // fall through
-    case CollectionIndex::HASH_INDEX_TAG_2: // fall through
-    case CollectionIndex::HOBJECT_WITH_POOL: {
+    case CollectionIndex::HOBJECT_WITH_VOLUME: {
       // Must be a HashIndex
       *index = Index(new HashIndex(c, path, g_conf->filestore_merge_threshold,
 				   g_conf->filestore_split_multiple, version), 
@@ -111,7 +103,7 @@ int IndexManager::build_index(coll_t c, const char *path, Index *index) {
     // No need to check
     *index = Index(new HashIndex(c, path, g_conf->filestore_merge_threshold,
 				 g_conf->filestore_split_multiple,
-				 CollectionIndex::HOBJECT_WITH_POOL,
+				 CollectionIndex::HOBJECT_WITH_VOLUME,
 				 g_conf->filestore_index_retry_probability),
 		   RemoveOnDelete(c, this));
     return 0;

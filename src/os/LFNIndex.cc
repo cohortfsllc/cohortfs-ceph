@@ -346,23 +346,6 @@ int LFNIndex::move_object(
 }
 
 
-static int get_hobject_from_oinfo(const char *dir, const char *file, 
-				  hobject_t *o) {
-  char path[PATH_MAX];
-  bufferptr bp(PATH_MAX);
-  snprintf(path, sizeof(path), "%s/%s", dir, file);
-  // Hack, user.ceph._ is the attribute used to store the object info
-  int r = chain_getxattr(path, "user.ceph._", bp.c_str(), bp.length());
-  if (r < 0)
-    return r;
-  bufferlist bl;
-  bl.push_back(bp);
-  object_info_t oi(bl);
-  *o = oi.soid;
-  return 0;
-}
-
-
 int LFNIndex::list_objects(const vector<string> &to_list, int max_objs,
 			   long *handle, map<string, hobject_t> *out) {
   string to_list_path = get_full_path_subdir(to_list);
@@ -546,7 +529,7 @@ string LFNIndex::lfn_generate_object_name(const hobject_t &hoid)
        << hoid.snap;
 
   ss << "_" << hex << setfill('0') << setw(sizeof(hoid.hash) * 2)
-     << hoid.snap;
+     << hoid.hash;
 
   return ss.str();
 }
@@ -729,81 +712,111 @@ bool LFNIndex::lfn_is_subdir(const string &name, string *demangled) {
 
 bool LFNIndex::lfn_parse_object_name(const string &long_name, hobject_t *out) {
   uuid_d vol;
-  uint32_t hash;
   snapid_t snap;
+  uint32_t hash;
+  /* uuid_parse requires an actual NULL-terminated string, even though
+     all UUIDs are the same length. Fooey. */
+  char volbuf[uuid_d::char_rep_buf_size];
+  size_t len = long_name.size();
+  const char *data = long_name.c_str();
+  const char *cursor = data;
+  const char *end = data + len;
+
 
   /* XXX get rid of this assertion, I'm only using it to help
      debug/make sure I don't run into magic numbers.. */
   assert(index_version == HOBJECT_WITH_VOLUME);
 
-  string::const_iterator current = long_name.begin();
+  /* UUID */
 
+  if (len < uuid_d::char_rep_buf_size)
+    return false;
 
-  string::const_iterator current = long_name.begin();
-  if (*current == '\\') {
-    ++current;
-    if (current == long_name.end()) {
+  memcpy(volbuf, data, uuid_d::char_rep_buf_size - 1);
+  volbuf[uuid_d::char_rep_buf_size - 1] = 0;
+  cursor += (uuid_d::char_rep_buf_size - 1);
+  if (uuid_parse(volbuf, vol.uuid) != 0)
+    return false;
+  if (*cursor != '_')
+    return false;
+
+  ++cursor;
+
+  /* ID */
+
+  const char *bound
+    = (const char*) memchr(cursor, '_', end - cursor);
+  if (!bound)
+    return false;
+
+  const char *id = cursor;
+  size_t idsize = bound - cursor - 1;
+
+  /* Snap */
+  char *endptr;
+
+  cursor = bound + 1;
+  bound = (const char*) memchr(cursor, '_', end - cursor);
+  if (!bound)
+    return false;
+
+  switch (bound - cursor - 1) {
+  case 4:
+    if (memcmp(cursor, "head", 4) == 0)
+      snap = CEPH_NOSNAP;
+    else
       return false;
-    } else if (*current == 'd') {
-      name.append("DIR_");
-      ++current;
-    } else if (*current == '.') {
-      name.append(".");
-      ++current;
-    } else {
-      --current;
-    }
+    break;
+
+  case 7:
+    if (memcmp(cursor, "snapdir", 7) == 0)
+      snap = CEPH_SNAPDIR;
+    else
+      return false;
+    break;
+
+  case (sizeof(snap) * 2):
+  {
+    snap.val = strtoull(cursor, &endptr, 16);
+    if (endptr != bound)
+      return false;
+
+    break;
+  }
+  default:
+    return false;
+    break;
   }
 
-  string::const_iterator end = current;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  if (!append_unescaped(current, end, &name))
+  /* Hash */
+
+  cursor = bound + 1;
+
+  if (end - cursor != sizeof(hash) * 2)
     return false;
 
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  if (!append_unescaped(current, end, &key))
+  hash = strtoul(cursor, &endptr, 16);
+  if (endptr != bound)
     return false;
 
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  string snap_str(current, end);
+  *out = hobject_t(object_t(vol, 0, NULL), snap, hash);
 
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  string hash_str(current, end);
+  size_t decoded = (idsize - 3) * 3 / 4;
+  if (decoded == 0)
+    return true;
 
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  if (!append_unescaped(current, end, &ns))
-    return false;
+  out->oid.idsize = decoded;
+  out->oid.id = new char[decoded];
+  int r = ceph_unarmor((char *) out->oid.id, out->oid.id + decoded,
+		       id, id + idsize);
 
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end != long_name.end())
+  if (r < 0) {
+    delete[] out->oid.id;
+    out->oid.id = NULL;
+    out->oid.idsize = 0;
     return false;
-  string pstring(current, end);
+  }
 
-  if (snap_str == "head")
-    snap = CEPH_NOSNAP;
-  else if (snap_str == "snapdir")
-    snap = CEPH_SNAPDIR;
-  else
-    snap = strtoull(snap_str.c_str(), NULL, 16);
-  sscanf(hash_str.c_str(), "%X", &hash);
-
-  (*out) = hobject_t(object_t(uuid_d(), name), snap, hash);
-  out->nspace = ns;
   return true;
 }
 
