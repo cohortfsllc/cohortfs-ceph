@@ -271,7 +271,7 @@ public:
   /// String munging (public for testing)
   static string hobject_key(const hobject_t &hoid);
   static string hobject_key_v0(coll_t c, const hobject_t &hoid);
-  static bool parse_hobject_key_v0(const uuid_d& vol, const string &in,
+  static bool parse_hobject_key_v0(const string &in,
 				   coll_t *c, hobject_t *hoid);
 private:
   /// Implicit lock on Header->seq

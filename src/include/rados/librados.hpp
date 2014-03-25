@@ -15,6 +15,8 @@
 #include "librados.h"
 #include "rados_types.hpp"
 
+struct object_t;
+
 namespace librados
 {
   using ceph::bufferlist;
@@ -577,7 +579,7 @@ namespace librados
      * @returns 0 on success, -EROFS if the io context specifies a snap_seq
      * other than SNAP_HEAD
      */
-    int aio_remove(const std::string& oid, AioCompletion *c);
+    int aio_remove(const object_t &oid, AioCompletion *c);
 
     int aio_flush();
 
@@ -597,9 +599,9 @@ namespace librados
 	         bufferlist& inbl, bufferlist *outbl);
 
     // compound object operations
-    int operate(const std::string& oid, ObjectWriteOperation *op);
-    int operate(const std::string& oid, ObjectReadOperation *op, bufferlist *pbl);
-    int aio_operate(const std::string& oid, AioCompletion *c, ObjectWriteOperation *op);
+    int operate(const object_t& oid, ObjectWriteOperation *op);
+    int operate(const object_t& oid, ObjectReadOperation *op, bufferlist *pbl);
+    int aio_operate(const object_t& oid, AioCompletion *c, ObjectWriteOperation *op);
     /**
      * Schedule an async write operation with explicit snapshot parameters
      *
@@ -614,12 +616,12 @@ namespace librados
      * @param snaps currently existing selfmanaged snapshot ids for this object
      * @returns 0 on success, negative error code on failure
      */
-    int aio_operate(const std::string& oid, AioCompletion *c,
+    int aio_operate(const object_t& oid, AioCompletion *c,
 		    ObjectWriteOperation *op, snap_t seq,
 		    std::vector<snap_t>& snaps);
-    int aio_operate(const std::string& oid, AioCompletion *c,
+    int aio_operate(const object_t& oid, AioCompletion *c,
 		    ObjectReadOperation *op, bufferlist *pbl);
-    int aio_operate(const std::string& oid, AioCompletion *c,
+    int aio_operate(const object_t& oid, AioCompletion *c,
 		    ObjectReadOperation *op, snap_t snapid, int flags,
 		    bufferlist *pbl);
 
@@ -629,7 +631,7 @@ namespace librados
     int unwatch(const std::string& o, uint64_t handle);
     int notify(const std::string& o, uint64_t ver, bufferlist& bl);
     int list_watchers(const std::string& o, std::list<obj_watch_t> *out_watchers);
-    int list_snaps(const std::string& o, snap_set_t *out_snaps);
+    int list_snaps(const object_t& o, snap_set_t *out_snaps);
     void set_notify_timeout(uint32_t timeout);
 
     // assert version for next sync operations

@@ -36,27 +36,6 @@ const string DBObjectMap::HOBJECT_TO_SEQ = "_HOBJTOSEQ_";
 const string DBObjectMap::LEAF_PREFIX = "_LEAF_";
 const string DBObjectMap::REVERSE_LEAF_PREFIX = "_REVLEAF_";
 
-static bool append_unescaped(string::const_iterator begin,
-			     string::const_iterator end, 
-			     string *out) {
-  for (string::const_iterator i = begin; i != end; ++i) {
-    if (*i == '%') {
-      ++i;
-      if (*i == 'p')
-	out->push_back('%');
-      else if (*i == 'e')
-	out->push_back('.');
-      else if (*i == 'u')
-	out->push_back('_');
-      else
-	return false;
-    } else {
-      out->push_back(*i);
-    }
-  }
-  return true;
-}
-
 bool DBObjectMap::check(std::ostream &out)
 {
   bool retval = true;
@@ -156,64 +135,121 @@ string DBObjectMap::hobject_key_v0(coll_t c, const hobject_t &hoid)
 
 }
 
-bool DBObjectMap::parse_hobject_key_v0(const uuid_d& vol, const string &in,
+bool DBObjectMap::parse_hobject_key_v0(const string &in,
 				       coll_t *c, hobject_t *hoid)
 {
-  string coll;
-  size_t idsize;
-  char *id;
+  uuid_d vol;
   snapid_t snap;
   uint32_t hash;
+  /* uuid_parse requires an actual NULL-terminated string, even though
+     all UUIDs are the same length. Fooey. */
+  size_t len = in.size();
+  const char *data = in.c_str();
+  const char *cursor = data;
+  const char *end = data + len;
+  string tmp;
 
-  string::const_iterator current = in.begin();
-  string::const_iterator end;
-  for (end = current; end != in.end() && *end != '.'; ++end) ;
-  if (end == in.end())
-    return false;
-  if (!append_unescaped(current, end, &coll))
-    return false;
+  /* coll_t */
 
-  current = ++end;
-  for (; end != in.end() && *end != '.'; ++end) ;
-  if (end == in.end())
-    return false;
-  if (!append_unescaped(current, end, &name))
+  const char* bound = (const char*) memchr(cursor, '.', len);
+  if (!bound)
     return false;
 
-  current = ++end;
-  for (; end != in.end() && *end != '.'; ++end) ;
-  if (end == in.end())
-    return false;
-  if (!append_unescaped(current, end, &key))
+  tmp = string(cursor, bound - cursor - 1);
+  *c = coll_t(tmp);
+
+  cursor = bound + 1;
+
+  /* UUID */
+
+  if (end - cursor < uuid_d::char_rep_buf_size)
     return false;
 
-  current = ++end;
-  // Bug in old encoding, double .
-  if (*current != '.')
+  tmp = string(cursor, uuid_d::char_rep_buf_size - 1);
+  cursor += (uuid_d::char_rep_buf_size - 1);
+  if (uuid_parse(tmp.c_str(), vol.uuid) != 0)
     return false;
 
-  current = ++end;
-  for (; end != in.end() && *end != '.'; ++end) ;
-  if (end == in.end())
+  if (*cursor != '_')
     return false;
-  string snap_str(current, end);
-  
-  current = ++end;
-  for (; end != in.end() && *end != '.'; ++end) ;
-  if (end != in.end())
+
+  ++cursor;
+
+  /* ID */
+
+  bound = (const char*) memchr(cursor, '.', end - cursor);
+
+  if (!bound)
     return false;
-  string hash_str(current, end);
 
-  if (snap_str == "head")
-    snap = CEPH_NOSNAP;
-  else if (snap_str == "snapdir")
-    snap = CEPH_SNAPDIR;
-  else
-    snap = strtoull(snap_str.c_str(), NULL, 16);
-  sscanf(hash_str.c_str(), "%X", &hash);
+  const char *id = cursor;
+  size_t idsize = bound - cursor - 1;
 
-  *c = coll_t(coll);
-  (*hoid) = hobject_t(object_t(vol, name), snap, hash);
+  /* Snap */
+  char *endptr;
+
+  cursor = bound + 1;
+  bound = (const char*) memchr(cursor, '.', end - cursor);
+  if (!bound)
+    return false;
+
+  switch (bound - cursor - 1) {
+  case 4:
+    if (memcmp(cursor, "head", 4) == 0)
+      snap = CEPH_NOSNAP;
+    else
+      return false;
+    break;
+
+  case 7:
+    if (memcmp(cursor, "snapdir", 7) == 0)
+      snap = CEPH_SNAPDIR;
+    else
+      return false;
+    break;
+
+  case (sizeof(snap) * 2):
+  {
+    snap.val = strtoull(cursor, &endptr, 16);
+    if (endptr != bound)
+      return false;
+
+    break;
+  }
+  default:
+    return false;
+    break;
+  }
+
+  /* Hash */
+
+  cursor = bound + 1;
+
+  if (end - cursor != sizeof(hash) * 2)
+    return false;
+
+  hash = strtoul(cursor, &endptr, 16);
+  if (endptr != bound)
+    return false;
+
+  *hoid = hobject_t(object_t(vol, 0, NULL), snap, hash);
+
+  size_t decoded = (idsize - 3) * 3 / 4;
+  if (decoded == 0)
+    return true;
+
+  hoid->oid.idsize = decoded;
+  hoid->oid.id = new char[decoded];
+  int r = ceph_unarmor((char *) hoid->oid.id, hoid->oid.id + decoded,
+		       id, id + idsize);
+
+  if (r < 0) {
+    delete[] hoid->oid.id;
+    hoid->oid.id = NULL;
+    hoid->oid.idsize = 0;
+    return false;
+  }
+
   return true;
 }
 
@@ -943,7 +979,7 @@ int DBObjectMap::upgrade(const uuid_d& vol)
 
       coll_t coll;
       hobject_t hoid;
-      assert(parse_hobject_key_v0(vol, iter->key(), &coll, &hoid));
+      assert(parse_hobject_key_v0(iter->key(), &coll, &hoid));
       new_map_headers[hobject_key(hoid)] = got.begin()->second;
     }
 

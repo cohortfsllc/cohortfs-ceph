@@ -815,41 +815,37 @@ int librados::IoCtx::omap_rm_keys(const std::string& oid,
   return operate(oid, &op);
 }
 
-int librados::IoCtx::operate(const std::string& oid, librados::ObjectWriteOperation *o)
+int librados::IoCtx::operate(const object_t& oid, librados::ObjectWriteOperation *o)
 {
-  object_t obj(oid);
-  return io_ctx_impl->operate(obj, (::ObjectOperation*)o->impl, o->pmtime);
+  return io_ctx_impl->operate(oid, (::ObjectOperation*)o->impl, o->pmtime);
 }
 
-int librados::IoCtx::operate(const std::string& oid, librados::ObjectReadOperation *o, bufferlist *pbl)
+int librados::IoCtx::operate(const object_t& oid, librados::ObjectReadOperation *o, bufferlist *pbl)
 {
-  object_t obj(oid);
-  return io_ctx_impl->operate_read(obj, (::ObjectOperation*)o->impl, pbl);
+  return io_ctx_impl->operate_read(oid, (::ObjectOperation*)o->impl, pbl);
 }
 
-int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
+int librados::IoCtx::aio_operate(const object_t& oid, AioCompletion *c,
 				 librados::ObjectWriteOperation *o)
 {
-  object_t obj(oid);
-  return io_ctx_impl->aio_operate(obj, (::ObjectOperation*)o->impl, c->pc,
+  return io_ctx_impl->aio_operate(oid, (::ObjectOperation*)o->impl, c->pc,
 				  io_ctx_impl->snapc);
 }
 
-int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
+int librados::IoCtx::aio_operate(const object_t& oid, AioCompletion *c,
 				 librados::ObjectWriteOperation *o,
 				 snap_t snap_seq, std::vector<snap_t>& snaps)
 {
-  object_t obj(oid);
   vector<snapid_t> snv;
   snv.resize(snaps.size());
   for (size_t i = 0; i < snaps.size(); ++i)
     snv[i] = snaps[i];
   SnapContext snapc(snap_seq, snv);
-  return io_ctx_impl->aio_operate(obj, (::ObjectOperation*)o->impl, c->pc,
+  return io_ctx_impl->aio_operate(oid, (::ObjectOperation*)o->impl, c->pc,
 				  snapc);
 }
 
-int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
+int librados::IoCtx::aio_operate(const object_t& oid, AioCompletion *c,
 				 librados::ObjectReadOperation *o,
 				 bufferlist *pbl)
 {
@@ -858,18 +854,17 @@ int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
 				       0, pbl);
 }
 
-int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
-				 librados::ObjectReadOperation *o, 
+int librados::IoCtx::aio_operate(const object_t& oid, AioCompletion *c,
+				 librados::ObjectReadOperation *o,
 				 snap_t snapid, int flags, bufferlist *pbl)
 {
-  object_t obj(oid);
   int op_flags = 0;
   if (flags & OPERATION_BALANCE_READS)
     op_flags |= CEPH_OSD_FLAG_BALANCE_READS;
   if (flags & OPERATION_LOCALIZE_READS)
     op_flags |= CEPH_OSD_FLAG_LOCALIZE_READS;
 
-  return io_ctx_impl->aio_operate_read(obj, (::ObjectOperation*)o->impl, c->pc,
+  return io_ctx_impl->aio_operate_read(oid, (::ObjectOperation*)o->impl, c->pc,
 				       op_flags, pbl);
 }
 
@@ -1060,7 +1055,7 @@ int librados::IoCtx::aio_write_full(const std::string& oid, librados::AioComplet
   return io_ctx_impl->aio_write_full(obj, c->pc, bl);
 }
 
-int librados::IoCtx::aio_remove(const std::string& oid, librados::AioCompletion *c)
+int librados::IoCtx::aio_remove(const object_t &oid, librados::AioCompletion *c)
 {
   return io_ctx_impl->aio_remove(oid, c->pc);
 }
@@ -1119,8 +1114,8 @@ int librados::IoCtx::list_watchers(const std::string& oid,
   return r;
 }
 
-int librados::IoCtx::list_snaps(const std::string& oid,
-                                   snap_set_t *out_snaps)
+int librados::IoCtx::list_snaps(const object_t& oid,
+				snap_set_t *out_snaps)
 {
   ObjectReadOperation op;
   int r;
@@ -2052,7 +2047,7 @@ extern "C" int rados_objects_list_next(rados_list_ctx_t listctx, const char **en
       return -ENOENT;
   }
 
-  *entry = h->list.front().first.name.c_str();
+  *entry = h->list.front().first.to_str().c_str();
 
   if (key) {
     if (h->list.front().second.size())

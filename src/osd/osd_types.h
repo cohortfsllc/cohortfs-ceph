@@ -387,6 +387,15 @@ class ObjectExtent {
     oid(o), objectno(ono), offset(off), length(l), truncate_size(ts) { }
 };
 
+inline ostream& operator<<(ostream& out, const ObjectExtent& oe)
+{
+  return out << "ObjectExtent(oid." << oe.oid << " "
+	     << "objectno." << oe.objectno << " "
+	     << "offset." << oe.offset << " "
+	     << "length." << oe.length << " "
+	     << "truncate_size." << oe.truncate_size << ")";
+}
+
 // ---------------------------------------
 
 class OSDSuperblock {

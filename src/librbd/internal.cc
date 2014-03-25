@@ -128,9 +128,9 @@ namespace librbd {
     info.parent_name[0] = '\0';
   }
 
-  uint64_t oid_to_object_no(const string& oid, const string& object_prefix)
+  uint64_t oid_to_object_no(const object_t& oid, const string& object_prefix)
   {
-    istringstream iss(oid);
+    istringstream iss(oid.to_str());
     // skip object prefix and separator
     iss.ignore(object_prefix.length() + 1);
     uint64_t num;
@@ -193,11 +193,11 @@ namespace librbd {
 	librados::AioCompletion *rados_completion =
 	  librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
 	if (p->offset == 0) {
-	  ictx->data_ctx.aio_remove(p->oid.name, rados_completion);
+	  ictx->data_ctx.aio_remove(p->oid, rados_completion);
 	} else {
 	  librados::ObjectWriteOperation op;
 	  op.truncate(p->offset);
-	  ictx->data_ctx.aio_operate(p->oid.name, rados_completion, &op);
+	  ictx->data_ctx.aio_operate(p->oid, rados_completion, &op);
 	}
 	rados_completion->release();
       }
@@ -2481,7 +2481,7 @@ reprotect_and_return_err:
 	ldout(ictx->cct, 20) << "diff_iterate object " << p->first << dendl;
 
 	librados::snap_set_t snap_set;
-	int r = head_ctx.list_snaps(p->first.name, &snap_set);
+	int r = head_ctx.list_snaps(p->first, &snap_set);
 	if (r == -ENOENT) {
 	  if (from_snap_id == 0 && !parent_diff.empty()) {
 	    // report parent diff instead
@@ -2898,7 +2898,7 @@ reprotect_and_return_err:
 			      objectx);
 	uint64_t object_overlap = ictx->prune_parent_extents(objectx, overlap);
 
-	AioWrite *req = new AioWrite(ictx, p->oid.name, p->objectno, p->offset,
+	AioWrite *req = new AioWrite(ictx, p->oid, p->objectno, p->offset,
 				     objectx, object_overlap,
 				     bl, snapc, snap_id, req_comp);
 	c->add_request();
@@ -2972,13 +2972,13 @@ reprotect_and_return_err:
       }
 
       if (p->offset == 0 && p->length == ictx->layout.fl_object_size) {
-	req = new AioRemove(ictx, p->oid.name, p->objectno, objectx, object_overlap,
+	req = new AioRemove(ictx, p->oid, p->objectno, objectx, object_overlap,
 			    snapc, snap_id, req_comp);
       } else if (p->offset + p->length == ictx->layout.fl_object_size) {
-	req = new AioTruncate(ictx, p->oid.name, p->objectno, p->offset, objectx, object_overlap,
+	req = new AioTruncate(ictx, p->oid, p->objectno, p->offset, objectx, object_overlap,
 			      snapc, snap_id, req_comp);
       } else {
-	req = new AioZero(ictx, p->oid.name, p->objectno, p->offset, p->length,
+	req = new AioZero(ictx, p->oid, p->objectno, p->offset, p->length,
 			  objectx, object_overlap,
 			  snapc, snap_id, req_comp);
       }
@@ -3064,7 +3064,7 @@ reprotect_and_return_err:
 			     << " from " << q->buffer_extents << dendl;
 
 	C_AioRead *req_comp = new C_AioRead(ictx->cct, c);
-	AioRead *req = new AioRead(ictx, q->oid.name, 
+	AioRead *req = new AioRead(ictx, q->oid,
 				   q->objectno, q->offset, q->length,
 				   q->buffer_extents,
 				   snap_id, true, req_comp);

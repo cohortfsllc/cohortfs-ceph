@@ -53,7 +53,7 @@ struct uuid_d {
     if (i == 0) {
       return u;
     } else {
-      throw std::invalid_argument(s);
+      return uuid_d(-1, -1);
     }
   }
 

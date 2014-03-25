@@ -40,9 +40,9 @@ namespace librbd {
     struct write_result_d {
       bool done;
       int ret;
-      std::string oid;
+      object_t oid;
       Context *oncommit;
-      write_result_d(const std::string& oid, Context *oncommit) :
+      write_result_d(const object_t& oid, Context *oncommit) :
 	done(false), ret(0), oid(oid), oncommit(oncommit) {}
     private:
       write_result_d(const write_result_d& rhs);
@@ -50,12 +50,12 @@ namespace librbd {
     };
 
   private:
-    void complete_writes(const std::string& oid);
+    void complete_writes(const object_t& oid);
 
     tid_t m_tid;
     Mutex& m_lock;
     librbd::ImageCtx *m_ictx;
-    hash_map<std::string, std::queue<write_result_d*> > m_writes;
+    map<object_t, std::queue<write_result_d*> > m_writes;
     friend class C_OrderedWrite;
   };
 }

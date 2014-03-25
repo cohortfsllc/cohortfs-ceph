@@ -167,7 +167,6 @@ set (cohort_osd_files
 	cohort/VolLog.h
 )
 set(osd_srcs
-	osd/Ager.cc 
 	osd/OSD.cc 
 	osd/OSDCap.cc 
 	osd/Watch.cc 

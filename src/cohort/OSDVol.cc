@@ -221,7 +221,7 @@ void OSDVol::do_op(OpRequestRef op)
 
     if (!ceph_osd_op_type_multi(osd_op.op.op))
       continue;
-    if (osd_op.soid.oid.name.length()) {
+    if (osd_op.soid.oid.idsize) {
       hobject_t src_oid(osd_op.soid);
       if (!src_obc.count(src_oid)) {
 	ObjectContext *sobc;

@@ -161,7 +161,7 @@ namespace librbd {
   void image_info(const ImageCtx *ictx, image_info_t& info, size_t info_size);
   std::string get_block_oid(const std::string &object_prefix, uint64_t num,
 			    bool old_format);
-  uint64_t oid_to_object_no(const string& oid, const string& object_prefix);
+  uint64_t oid_to_object_no(const object_t& oid, const string& object_prefix);
   int clip_io(ImageCtx *ictx, uint64_t off, uint64_t *len);
   int init_rbd_info(struct rbd_info *info);
   void init_rbd_header(struct rbd_obj_header_ondisk& ondisk,

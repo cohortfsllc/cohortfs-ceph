@@ -38,6 +38,24 @@ static const uuid_d OSD_PSEUDO_VOLUME = uuid_d();
 static const uuid_d INVALID_VOLUME = uuid_d(-1, -1);
 
 struct object_t {
+private:
+
+  void store(size_t len, const char* data) {
+    if (id) {
+      delete[] id;
+      id = 0;
+    }
+
+    idsize = len;
+    if (idsize == 0) {
+      id = NULL;
+    } else {
+      id = new char[idsize];
+      memcpy((void *) id, data, idsize);
+    }
+  }
+
+public:
   uuid_d volume;
   size_t idsize;
   const char *id;
@@ -45,14 +63,32 @@ struct object_t {
   object_t() : volume(INVALID_VOLUME), idsize(0), id(NULL) {
   }
 
+  object_t(const object_t& o)
+    : volume(o.volume), idsize(0), id(NULL) {
+    store(o.idsize, o.id);
+  }
+
   object_t(const uuid_d& v, const size_t len, const char *s)
-    : volume(v), idsize(len) {
-    if (idsize == 0) {
-      id = NULL;
-    } else {
-      id = new char[idsize];
-      memcpy((void *) id, s, idsize);
-    }
+    : volume(v), idsize(0), id(NULL) {
+    store(len, s);
+  }
+  object_t(const uuid_d& v, const string s)
+    : volume(v), idsize(0), id(NULL) {
+    store(s.size(), s.data());
+  }
+  object_t(const uuid_d& v, const char *s)
+    : volume(v), idsize(0), id(NULL) {
+    store(strlen(s), s);
+  }
+  /* These constructors suck and exist for now, but will be removed
+     when we have more time to update the librados interface/structure. */
+  object_t(const char *s)
+    : volume(INVALID_VOLUME), idsize(0), id(NULL) {
+    store(strlen(s), s);
+  }
+  object_t(const string s)
+    : volume(INVALID_VOLUME), idsize(0), id(NULL) {
+    store(s.size(), s.data());
   }
   ~object_t(void) {
     if (id) {
@@ -60,11 +96,6 @@ struct object_t {
     }
   }
 
-  void swap(object_t& o) {
-    std::swap(o.id, id);
-    std::swap(o.idsize, idsize);
-    std::swap(o.volume, volume);
-  }
   void clear() {
     volume.clear();
     idsize = 0;
@@ -97,6 +128,12 @@ struct object_t {
     size_t l = ceph_armor(b, b+n, id, id + idsize);
     s.append(b, l);
     return s;
+  }
+
+  object_t& operator=(const object_t &o) {
+    volume = o.volume;
+    store(o.idsize, o.id);
+    return *this;
   }
 };
 WRITE_CLASS_ENCODER(object_t)
@@ -188,13 +225,6 @@ struct sobject_t {
 
   sobject_t() : snap(0) {}
   sobject_t(object_t o, snapid_t s) : oid(o), snap(s) {}
-
-  void swap(sobject_t& o) {
-    oid.swap(o.oid);
-    snapid_t t = snap;
-    snap = o.snap;
-    o.snap = t;
-  }
 
   void encode(bufferlist& bl) const {
     ::encode(oid, bl);

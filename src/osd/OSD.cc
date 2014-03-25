@@ -36,8 +36,6 @@
 #include "os/FileStore.h"
 #include "os/FileJournal.h"
 
-#include "Ager.h"
-
 #include "msg/Messenger.h"
 #include "msg/Message.h"
 
@@ -347,6 +345,7 @@ int OSD::mkfs(const std::string &dev,
     }
 
     // age?
+#if 0 // NO.
     if (g_conf->osd_age_time != 0) {
       if (g_conf->osd_age_time >= 0) {
 	dout(0) << "aging..." << dendl;
@@ -358,6 +357,7 @@ int OSD::mkfs(const std::string &dev,
 		 g_conf->osd_age - .05);
       }
     }
+#endif /* 0 */
 
     OSDSuperblock sb;
     bufferlist sbbl;
@@ -3622,8 +3622,8 @@ void OSD::handle_op(OpRequestRef op)
     return;
 
   // object name too long?
-  if (m->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
-    dout(4) << "handle_op '" << m->get_oid().name << "' is longer than "
+  if (m->get_oid().idsize > MAX_CEPH_OBJECT_NAME_LEN) {
+    dout(4) << "handle_op '" << m->get_oid().to_str() << "' is longer than "
 	    << MAX_CEPH_OBJECT_NAME_LEN << " bytes!" << dendl;
     service->reply_op_error(op, -ENAMETOOLONG);
     return;
@@ -3746,7 +3746,7 @@ int OSD::init_op_flags(OpRequestRef op)
       op->set_read();
 
     // set READ flag if there are src_oids
-    if (iter->soid.oid.name.length())
+    if (iter->soid.oid.idsize)
       op->set_read();
 
     switch (iter->op.op) {

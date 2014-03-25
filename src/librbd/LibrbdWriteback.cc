@@ -102,7 +102,7 @@ namespace librbd {
     librados::ObjectReadOperation op;
     op.read(off, len, pbl, NULL);
     int flags = m_ictx->get_read_flags(snapid);
-    int r = m_ictx->data_ctx.aio_operate(oid.name, rados_completion, &op,
+    int r = m_ictx->data_ctx.aio_operate(oid, rados_completion, &op,
 					 snapid, flags, NULL);
     rados_completion->release();
     assert(r >= 0);
@@ -118,7 +118,7 @@ namespace librbd {
     m_ictx->parent_lock.put_read();
     m_ictx->snap_lock.put_read();
 
-    uint64_t object_no = oid_to_object_no(oid.name, m_ictx->object_prefix);
+    uint64_t object_no = oid_to_object_no(oid, m_ictx->object_prefix);
 
     // reverse map this object extent onto the parent
     vector<pair<uint64_t,uint64_t> > objectx;
@@ -146,7 +146,7 @@ namespace librbd {
     m_ictx->parent_lock.put_read();
     m_ictx->snap_lock.put_read();
 
-    uint64_t object_no = oid_to_object_no(oid.name, m_ictx->object_prefix);
+    uint64_t object_no = oid_to_object_no(oid, m_ictx->object_prefix);
     
     // reverse map this object extent onto the parent
     vector<pair<uint64_t,uint64_t> > objectx;
@@ -154,11 +154,11 @@ namespace librbd {
 			  object_no, 0, m_ictx->layout.fl_object_size,
 			  objectx);
     uint64_t object_overlap = m_ictx->prune_parent_extents(objectx, overlap);
-    write_result_d *result = new write_result_d(oid.name, oncommit);
-    m_writes[oid.name].push(result);
+    write_result_d *result = new write_result_d(oid, oncommit);
+    m_writes[oid].push(result);
     ldout(m_ictx->cct, 20) << "write will wait for result " << result << dendl;
     C_OrderedWrite *req_comp = new C_OrderedWrite(m_ictx->cct, result, this);
-    AioWrite *req = new AioWrite(m_ictx, oid.name,
+    AioWrite *req = new AioWrite(m_ictx, oid,
 				 object_no, off, objectx, object_overlap,
 				 bl, snapc, snap_id,
 				 req_comp);
@@ -166,7 +166,7 @@ namespace librbd {
     return ++m_tid;
   }
 
-  void LibrbdWriteback::complete_writes(const std::string& oid)
+  void LibrbdWriteback::complete_writes(const object_t& oid)
   {
     assert(m_lock.is_locked());
     std::queue<write_result_d*>& results = m_writes[oid];
