@@ -515,7 +515,7 @@ string LFNIndex::lfn_generate_object_name(const hobject_t &hoid)
      debug/make sure I don't run into magic numbers.. */
   assert(index_version == HOBJECT_WITH_VOLUME);
 
-  stringstream ss(hoid.oid.to_str());
+  stringstream ss(hoid.oid.to_str(), ios_base::out | ios_base::ate);
 
   /* Since the base64 encoded object name doesn't contain anything we
      need to escape, we don't have to escape anything. */

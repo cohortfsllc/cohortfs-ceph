@@ -93,7 +93,7 @@ bool DBObjectMap::check(std::ostream &out)
 
 string DBObjectMap::hobject_key(const hobject_t &hoid)
 {
-  stringstream ss(hoid.oid.to_str());
+  stringstream ss(hoid.oid.to_str(), ios_base::out | ios_base::ate);
 
   /* Since the base64 encoded object name doesn't contain anything we
      need to escape, we don't have to escape anything. */
@@ -114,7 +114,7 @@ string DBObjectMap::hobject_key(const hobject_t &hoid)
 
 string DBObjectMap::hobject_key_v0(coll_t c, const hobject_t &hoid)
 {
-  stringstream ss(c.to_str());
+  stringstream ss(c.to_str(), ios_base::out | ios_base::ate);
   ss << '.' << hoid.oid.to_str();
 
   /* Since the base64 encoded object name doesn't contain anything we
