@@ -1017,7 +1017,7 @@ void FileJournal::do_write(bufferlist& bl)
     if (write_bl(pos, first)) {
       derr << "FileJournal::do_write: write_bl(pos=" << pos
 	   << ") failed" << dendl;
-      ceph_abort();
+      abort();
     }
     assert(pos == get_top());
     if (hbp.length()) {
@@ -1028,7 +1028,7 @@ void FileJournal::do_write(bufferlist& bl)
     if (write_bl(pos, second)) {
       derr << "FileJournal::do_write: write_bl(pos=" << pos
 	   << ") failed" << dendl;
-      ceph_abort();
+      abort();
     }
   } else {
     // header too?
@@ -1038,14 +1038,14 @@ void FileJournal::do_write(bufferlist& bl)
 	derr << "FileJournal::do_write: pwrite(fd=" << fd
 	     << ", hbp.length=" << hbp.length() << ") failed :"
 	     << cpp_strerror(err) << dendl;
-	ceph_abort();
+	abort();
       }
     }
 
     if (write_bl(pos, bl)) {
       derr << "FileJournal::do_write: write_bl(pos=" << pos
 	   << ") failed" << dendl;
-      ceph_abort();
+      abort();
     }
   }
 
@@ -1238,7 +1238,7 @@ void FileJournal::do_aio_write(bufferlist& bl)
     if (write_aio_bl(pos, first, 0)) {
       derr << "FileJournal::do_aio_write: write_aio_bl(pos=" << pos
 	   << ") failed" << dendl;
-      ceph_abort();
+      abort();
     }
     assert(pos == header.max_size);
     if (hbp.length()) {
@@ -1250,7 +1250,7 @@ void FileJournal::do_aio_write(bufferlist& bl)
     if (write_aio_bl(pos, second, writing_seq)) {
       derr << "FileJournal::do_aio_write: write_aio_bl(pos=" << pos
 	   << ") failed" << dendl;
-      ceph_abort();
+      abort();
     }
   } else {
     // header too?
@@ -1260,14 +1260,14 @@ void FileJournal::do_aio_write(bufferlist& bl)
       loff_t pos = 0;
       if (write_aio_bl(pos, hbl, 0)) {
 	derr << "FileJournal::do_aio_write: write_aio_bl(header) failed" << dendl;
-	ceph_abort();
+	abort();
       }
     }
 
     if (write_aio_bl(pos, bl, writing_seq)) {
       derr << "FileJournal::do_aio_write: write_aio_bl(pos=" << pos
 	   << ") failed" << dendl;
-      ceph_abort();
+      abort();
     }
   }
 
@@ -1640,7 +1640,7 @@ void FileJournal::wrap_read_bl(
     if (r) {
       derr << "FileJournal::wrap_read_bl: safe_read_exact " << pos << "~" << len << " returned "
 	   << r << dendl;
-      ceph_abort();
+      abort();
     }
     bl->push_back(bp);
     pos += len;

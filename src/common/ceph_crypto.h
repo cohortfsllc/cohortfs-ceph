@@ -15,9 +15,7 @@
 # include <cryptopp/sha.h>
 # include <cryptopp/hmac.h>
 
-// reinclude our assert to clobber the system one
-# include "include/assert.h"
-
+class CephContext;
 namespace ceph {
   namespace crypto {
     void assert_init();

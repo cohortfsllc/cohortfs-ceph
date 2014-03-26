@@ -174,7 +174,7 @@ void MonitorStore::put_int(version_t val, const char *a, const char *b)
       int err = -errno;
       derr << __func__ << " failed to create dir " << fn << ": "
 	   << cpp_strerror(err) << dendl;
-      ceph_abort();
+      abort();
     }
     dout(15) << "set_int " << a << "/" << b << " = " << val << dendl;
     snprintf(fn, sizeof(fn), "%s/%s/%s", dir.c_str(), a, b);
@@ -193,30 +193,30 @@ void MonitorStore::put_int(version_t val, const char *a, const char *b)
     int err = errno;
     derr << "MonitorStore::put_int: failed to open '" << tfn << "': "
 	 << cpp_strerror(err) << dendl;
-    ceph_abort();
+    abort();
   }
   int r = safe_write(fd, vs, strlen(vs));
   if (r) {
     derr << "MonitorStore::put_int: failed to write to '" << tfn << "': "
 	 << cpp_strerror(r) << dendl;
-    ceph_abort();
+    abort();
   }
   r = ::fsync(fd);
   if (r) {
     derr << "Monitor::put_int: failed to fsync fd for '" << tfn << "': "
 	 << cpp_strerror(r) << dendl;
-    ceph_abort();
+    abort();
   }
   if (TEMP_FAILURE_RETRY(::close(fd))) {
     derr << "MonitorStore::put_int: failed to close fd for '" << tfn << "': "
 	 << cpp_strerror(r) << dendl;
-    ceph_abort();
+    abort();
   }
   if (::rename(tfn, fn)) {
     int err = errno;
     derr << "MonitorStore::put_int: failed to rename '" << tfn << "' to "
 	 << "'" << fn << "': " << cpp_strerror(err) << dendl;
-    ceph_abort();
+    abort();
   }
 }
 

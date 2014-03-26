@@ -3292,7 +3292,7 @@ public:
     bt->print(*_dout);
     *_dout << dendl;
     delete bt;
-    ceph_abort();
+    abort();
   }
 private:
   int m_commit_timeo;

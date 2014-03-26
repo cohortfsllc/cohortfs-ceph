@@ -1,3 +1,18 @@
+#if defined(__linux__)
+#include <features.h>
+#elif defined(__FreeBSD__)
+#include <sys/cdefs.h>
+#define	__GNUC_PREREQ(minor, major)	__GNUC_PREREQ__(minor, major)
+#endif
+#include <assert.h>
+namespace ceph {
+};
+using namespace ceph;
+
+#ifdef __CEPH__
+# include "acconfig.h"
+#endif
+#if 0
 #ifndef CEPH_ASSERT_H
 #define CEPH_ASSERT_H
 
@@ -121,3 +136,4 @@ using namespace ceph;
    ? __CEPH_ASSERT_VOID_CAST (0)					\
    : __ceph_assert_fail (__STRING(expr), __FILE__, __LINE__, __CEPH_ASSERT_FUNCTION))
 
+#endif

@@ -18,8 +18,8 @@
 #include <iostream>
 #include <stdint.h>
 
-#include "include/buffer.h"
 #include "include/atomic.h"
+#include "include/buffer.h"
 
 class AdminSocket;
 class CephContextServiceThread;

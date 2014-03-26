@@ -307,7 +307,6 @@ set (libcommon_files
 	common/Finisher.cc
 	common/environment.cc
 	common/sctp_crc32.c
-	common/assert.cc
         common/run_cmd.cc
 	common/WorkQueue.cc
 	common/ConfUtils.cc

@@ -133,7 +133,6 @@ void global_init(std::vector < const char * > *alt_def_args, std::vector < const
     dout(1) << "lockdep is enabled" << dendl;
     lockdep_register_ceph_context(cct);
   }
-  register_assert_context(cct);
 
   // call all observers now.  this has the side-effect of configuring
   // and opening the log file immediately.

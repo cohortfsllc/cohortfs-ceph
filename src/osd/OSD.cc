@@ -867,7 +867,6 @@ int OSD::init_super()
   cls_initialize(class_handler);
 
   // load up "current" osdmap
-  assert_warn(!osdmap);
   if (osdmap) {
     derr << "OSD::init: unable to read current osdmap" << dendl;
     return -EINVAL;
@@ -878,7 +877,6 @@ int OSD::init_super()
   bind_epoch = osdmap->get_epoch();
 
   dout(2) << "superblock: i am osd." << superblock.whoami << dendl;
-  assert_warn(whoami == superblock.whoami);
   if (whoami != superblock.whoami) {
     derr << "OSD::init: logic error: superblock says osd"
 	 << superblock.whoami << " but i am osd." << whoami << dendl;

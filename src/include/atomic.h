@@ -27,9 +27,6 @@
 // libatomic_ops implementation
 #include <atomic_ops.h>
 
-// reinclude our assert to clobber the system one
-#include "include/assert.h"
-
 namespace ceph {
   class atomic_t {
     AO_t val;
@@ -68,7 +65,6 @@ namespace ceph {
  * crappy slow implementation that uses a pthreads spinlock.
  */
 #include <pthread.h>
-#include "include/assert.h"
 
 namespace ceph {
   class atomic_t {
