@@ -42,6 +42,7 @@ using namespace __gnu_cxx;
 #include "SequencerPosition.h"
 #include "FDCache.h"
 #include "WBThrottle.h"
+#include "CollectionIndex.h"
 
 #include "include/uuid.h"
 
@@ -55,7 +56,8 @@ class FileStore : public JournalingObjectStore,
                   public md_config_obs_t
 {
 public:
-  static const uint32_t on_disk_version = 3;
+  static const uint32_t on_disk_version =
+      CollectionIndex::HOBJECT_WITH_VOLUME;
 private:
   string internal_name;         ///< internal name, used to name the perfcounter instance
   string basedir, journalpath;
