@@ -6,6 +6,9 @@
 /* fallocate(2) is supported */
 #cmakedefine CEPH_HAVE_FALLOCATE 
 
+/* posix_fallocate is supported */
+#cmakedefine HAVE_POSIX_FALLOCATE 
+
 /* Define if darwin/osx */
 #cmakedefine DARWIN 
 
@@ -160,6 +163,9 @@
 
 /* Define to 1 if you have the <sys/xattr.h> header file. */
 #cmakedefine HAVE_SYS_XATTR_H
+
+/* Define to 1 if you have the <linux/types.h> header file. */
+#cmakedefine HAVE_LINUX_TYPES_H 1
 
 /* Define to 1 if you have the <unistd.h> header file. */
 #cmakedefine HAVE_UNISTD_H

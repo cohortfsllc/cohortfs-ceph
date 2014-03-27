@@ -20,6 +20,7 @@ set(mds_srcs
 	MDSTable.cc
 	MDSTableClient.cc 
 	MDSTableServer.cc 
+	MDSUtility.cc
 	Migrator.cc
 	Mutation.cc 
 	Resetter.cc 

@@ -88,6 +88,10 @@ set (libcommon_files
 	snap_types.cc 
 	str_list.cc 
 	errno.cc 
+	bloom_filter.cc
+	histogram.cc
+	str_map.cc
+	linux_version.c
 	../json_spirit/json_spirit_reader.cpp 
 	../json_spirit/json_spirit_writer.cpp 
 	../json_spirit/json_spirit_value.cpp 
@@ -107,6 +111,8 @@ set (libcommon_files
 	hobject.cc 
 	../osd/OSDMap.cc 
 	../osd/osd_types.cc 
+	../osd/ECMsgTypes.cc 
+	../osd/HitSet.cc 
 	../mds/MDSMap.cc 
 	../mds/inode_backtrace.cc 
 	../mds/mdstypes.cc 
@@ -173,7 +179,7 @@ if (${WITH_PROFILER})
   target_link_libraries(common profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES}) 
+target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} erasure_code) 
 
 
 
