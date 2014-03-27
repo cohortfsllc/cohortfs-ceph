@@ -342,6 +342,7 @@ DirStripe* Inode::open_stripe(stripeid_t stripeid)
   if (!*s) {
     *s = new DirStripe(this, stripeid);
     lsubdout(cct, client, 15) << "open_stripe " << **s << " on " << *this << dendl;
+    get_cap_ref(CEPH_CAP_FILE_SHARED);
   }
   return *s;
 }
@@ -362,6 +363,7 @@ void Inode::close_stripe(DirStripe *stripe)
   stripe->snaprealm_item.remove_myself();
   delete stripe;
   *s = 0;
+  put_cap_ref(CEPH_CAP_FILE_SHARED);
 }
 
 bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, uint32_t rflags)
