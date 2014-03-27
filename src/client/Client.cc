@@ -6889,8 +6889,6 @@ int Client::_mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev,
   req->set_inode(dir);
   req->head.args.mknod.mode = mode;
   req->head.args.mknod.rdev = rdev;
-  req->dentry_drop = CEPH_CAP_FILE_SHARED;
-  req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
   Dentry *de;
   int res = get_or_create(dir, name, &de);
@@ -6981,8 +6979,6 @@ int Client::_create(Inode *dir, const char *name, int flags, mode_t mode,
   req->head.args.open.stripe_count = stripe_count;
   req->head.args.open.object_size = object_size;
   req->head.args.open.pool = pool_id;
-  req->dentry_drop = CEPH_CAP_FILE_SHARED;
-  req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
   bufferlist extra_bl;
   inodeno_t created_ino;
@@ -7045,8 +7041,6 @@ int Client::_mkdir(Inode *dir, const char *name, mode_t mode, int uid, int gid,
   req->head.args.mkdir.mode = mode;
   req->head.args.mkdir.stripe_count = stripe_count;
   req->head.args.mkdir.stripe_mod = stripe_mod;
-  req->dentry_drop = CEPH_CAP_FILE_SHARED;
-  req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
   Dentry *de;
   int res = get_or_create(dir, name, &de);
@@ -7118,8 +7112,6 @@ int Client::_symlink(Inode *dir, const char *name, const char *target,
   req->set_filepath(path);
   req->set_inode(dir);
   req->set_string2(target); 
-  req->dentry_drop = CEPH_CAP_FILE_SHARED;
-  req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
   Dentry *de;
   int res = get_or_create(dir, name, &de);
@@ -7187,8 +7179,6 @@ int Client::_unlink(Inode *dir, const char *name, int uid, int gid)
   if (res < 0)
     goto fail;
   req->set_dentry(de);
-  req->dentry_drop = CEPH_CAP_FILE_SHARED;
-  req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
   Inode *otherin;
   res = _lookup(dir, name, &otherin);
@@ -7248,10 +7238,6 @@ int Client::_rmdir(Inode *dir, const char *name, int uid, int gid)
   dir->make_nosnap_relative_path(path);
   path.push_dentry(name);
   req->set_filepath(path);
-
-  req->dentry_drop = CEPH_CAP_FILE_SHARED;
-  req->dentry_unless = CEPH_CAP_FILE_EXCL;
-  req->inode_drop = CEPH_CAP_LINK_SHARED | CEPH_CAP_LINK_EXCL;
 
   Dentry *de;
   int res = get_or_create(dir, name, &de);
@@ -7321,16 +7307,12 @@ int Client::_rename(Inode *fromdir, const char *fromname, Inode *todir, const ch
   if (res < 0)
     goto fail;
   req->set_old_dentry(oldde);
-  req->old_dentry_drop = CEPH_CAP_FILE_SHARED;
-  req->old_dentry_unless = CEPH_CAP_FILE_EXCL;
 
   Dentry *de;
   res = get_or_create(todir, toname, &de);
   if (res < 0)
     goto fail;
   req->set_dentry(de);
-  req->dentry_drop = CEPH_CAP_FILE_SHARED;
-  req->dentry_unless = CEPH_CAP_FILE_EXCL;
 
   Inode *oldin;
   res = _lookup(fromdir, fromname, &oldin);
