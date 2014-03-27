@@ -972,6 +972,8 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
       if (dn && !dn->is_null())
         stripe->unlink(dn, false);
     }
+    if (stripe->caps_issued_mask(CEPH_CAP_LINK_SHARED))
+      stripe->check_complete(sst.fragstat);
   } else if (reply->head.op == CEPH_MDS_OP_LOOKUPSNAP ||
 	     reply->head.op == CEPH_MDS_OP_MKSNAP) {	  
     ldout(cct, 10) << " faking snap lookup weirdness" << dendl;

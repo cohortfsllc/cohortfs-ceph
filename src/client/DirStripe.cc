@@ -145,6 +145,20 @@ Dentry* DirStripe::lookup(const string &name) const
   return d != dentries.end() ? d->second : NULL;
 }
 
+void DirStripe::check_complete(const frag_info_t &fragstat)
+{
+  if (num_nonnull == fragstat.nfiles + fragstat.nsubdirs) {
+    if (!is_complete()) {
+      ldout(cct, 10) << "setting I_COMPLETE at "
+	<< num_nonnull << " entries" << dendl;
+      set_complete();
+    }
+  } else if (is_complete()) {
+    ldout(cct, 10) << "clearing I_COMPLETE, have " << num_nonnull << " of "
+      << fragstat.nfiles + fragstat.nsubdirs << " entries" << dendl;
+    reset_complete();
+  }
+}
 
 unsigned DirStripe::caps_wanted() const
 {
@@ -188,6 +202,8 @@ void DirStripe::read_client_caps(const Cap *cap, MClientCaps *m)
         unlink(dn, true);
     }
   }
+
+  check_complete(fragstat);
 }
 
 void DirStripe::write_client_caps(const Cap *cap, MClientCaps *m, unsigned mask)

@@ -31,6 +31,8 @@ class DirStripe : public CapObject {
 
   dirstripe_t dirstripe() const { return dirstripe_t(ino, stripeid); }
 
+  void check_complete(const frag_info_t &fragstat);
+
   bool is_complete() const { return flags & I_COMPLETE; }
   void set_complete() { flags |= I_COMPLETE; }
   void reset_complete() { flags &= ~I_COMPLETE; }
