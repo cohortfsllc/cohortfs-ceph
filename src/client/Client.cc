@@ -3338,9 +3338,7 @@ void Client::handle_cap_grant(MetaSession *session, CapObject *o,
 
   if (m->get_op() == CEPH_CAP_OP_SYNC_UPDATE) {
     // reply with an ack
-    unsigned wanted = o->caps_wanted();
-    unsigned retain = wanted | CEPH_CAP_PIN;
-    send_cap(cap, o->caps_used(), wanted, retain, 0);
+    send_cap(cap, o->caps_used(), o->caps_wanted(), new_caps, 0);
   }
 
   // wake up waiters
