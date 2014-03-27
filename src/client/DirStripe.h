@@ -23,6 +23,7 @@ class DirStripe : public CapObject {
 
   frag_info_t fragstat;
   nest_info_t rstat;
+  uint32_t num_nonnull;
   int shared_gen;
   unsigned flags;
 

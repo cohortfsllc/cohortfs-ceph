@@ -31,7 +31,7 @@ ostream& operator<<(ostream &out, DirStripe &stripe)
 
 DirStripe::DirStripe(Inode *in, stripeid_t stripeid)
   : CapObject(in->cct, in->vino(), stripeid), parent_inode(in), version(0),
-    release_count(0), shared_gen(0), flags(0)
+    release_count(0), num_nonnull(0), shared_gen(0), flags(0)
 {
 }
 
@@ -63,6 +63,11 @@ Dentry* DirStripe::link(const string &name, vinodeno_t vino, Dentry *dn)
     ldout(cct, 15) << "link stripe " << dirstripe() << " '" << name
         << "' to vino " << vino << " dn " << dn << " (old dn)" << dendl;
   }
+
+  if (dn->vino.ino == 0 && vino.ino != 0)
+    num_nonnull++;
+  else if (dn->vino.ino != 0 && vino.ino == 0)
+    num_nonnull--;
 
   dn->vino = vino;
   return dn;
@@ -107,6 +112,9 @@ void DirStripe::unlink(Dentry *dn, bool keepempty)
     ldout(cct, 20) << "unlink  inode " << in << " parents now "
         << in->dn_set << dendl;
   }
+
+  if (dn->vino.ino != 0)
+    num_nonnull--;
 
   dn->vino.ino = 0;
 
