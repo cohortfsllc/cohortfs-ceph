@@ -54,6 +54,7 @@
 #include <sys/types.h>
 #endif
 
+#if 0
 #ifndef HAVE___U8
 typedef uint8_t __u8;
 #endif
@@ -84,6 +85,7 @@ typedef uint64_t __u64;
 
 #ifndef HAVE___S64
 typedef int64_t __s64;
+#endif
 #endif
 
 #define __bitwise__
