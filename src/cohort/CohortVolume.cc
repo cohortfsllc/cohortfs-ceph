@@ -18,6 +18,7 @@
 #include "CohortVolume.h"
 
 typedef int (*place_func)(void*, const uuid_t, size_t, const char*,
+			  struct erasure_params *,
 			  bool(*)(void*, int),
 			  bool(*)(void*, int));
 
@@ -187,7 +188,7 @@ int CohortVolume::place(const object_t& object,
 
   int rc = entry_point(&context, object.volume.uuid,
 		       object.idsize, object.id,
-		       test_osd, return_osd);
+		       &erasure, test_osd, return_osd);
   compile_lock.unlock();
 
   return rc;
