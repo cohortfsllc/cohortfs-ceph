@@ -1517,6 +1517,7 @@ reprotect_and_return_err:
 
   int add_snap(ImageCtx *ictx, const char *snap_name)
   {
+#if 0
     uint64_t snap_id;
 
     int r = 0;//ictx->md_ctx.selfmanaged_snap_create(&snap_id);
@@ -1540,6 +1541,7 @@ reprotect_and_return_err:
       return r;
     }
 
+#endif
     return 0;
   }
 

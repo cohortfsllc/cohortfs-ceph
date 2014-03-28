@@ -110,6 +110,8 @@ int CohortOSDMap::get_file_stripe_address(const vector<ObjectExtent>& extents,
 					  const vector<entity_addr_t>& address,
 					  vector<int> &osds)
 {
+  /* Don't know if this is actually necessary to us or if we'll end up
+     discarding it. Not relevant until a golden spike with the MDS, though. */
 #warning TBD
   return 0;
 }
