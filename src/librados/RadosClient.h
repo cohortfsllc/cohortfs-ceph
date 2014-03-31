@@ -85,6 +85,7 @@ public:
   uint64_t get_instance_id();
 
   int create_ioctx(const uuid_d& volume, IoCtxImpl **io);
+  int create_ioctx(const string& volume, IoCtxImpl **io);
 
   int get_fsid(std::string *s);
 

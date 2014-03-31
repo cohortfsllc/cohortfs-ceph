@@ -31,7 +31,7 @@ class RadosClient;
 struct librados::IoCtxImpl {
   atomic_t ref_cnt;
   RadosClient *client;
-  uuid_d volume;
+  VolumeRef volume;
   snapid_t snap_seq;
   ::SnapContext snapc;
   uint64_t assert_ver;
@@ -50,7 +50,7 @@ struct librados::IoCtxImpl {
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
-	    const uuid_d& volid, snapid_t s);
+	    VolumeRef vol, snapid_t s);
 
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count
@@ -84,13 +84,13 @@ struct librados::IoCtxImpl {
   void flush_aio_writes();
 
   const uuid_d& get_volume() {
-    return volume;
+    return volume->uuid;
   }
 
   object_t volumize(const object_t& obj) {
     if (obj.volume == INVALID_VOLUME) {
       object_t vobj = obj;
-      vobj.volume = volume;
+      vobj.volume = volume->uuid;
       return vobj;
     } else {
       return obj;

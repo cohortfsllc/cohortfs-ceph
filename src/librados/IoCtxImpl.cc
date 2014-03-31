@@ -32,9 +32,9 @@ librados::IoCtxImpl::IoCtxImpl() :
 }
 
 librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
-			       Mutex *client_lock, const uuid_d& v,
+			       Mutex *client_lock, VolumeRef vol,
 			       snapid_t s)
-  : ref_cnt(0), client(c), volume(v), snap_seq(s),
+  : ref_cnt(0), client(c), volume(vol), snap_seq(s),
     assert_ver(0), notify_timeout(c->cct->_conf->client_notify_timeout),
     aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
     aio_write_seq(0), lock(client_lock), objecter(objecter)
@@ -253,7 +253,7 @@ int librados::IoCtxImpl::create(const object_t& oid, bool exclusive)
   lock->Lock();
   objecter->create(volumize(oid), snapc, ut, 0,
 		   (exclusive ? CEPH_OSD_OP_FLAG_EXCL : 0),
-		  onack, NULL, &ver);
+		   onack, NULL, &ver);
   lock->Unlock();
 
   mylock.Lock();

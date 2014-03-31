@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_OBJECTER_H
@@ -94,7 +94,9 @@ struct ObjectOperation {
     osd_op.op.extent.length = len;
     osd_op.indata.claim_append(bl);
   }
-  void add_clone_range(int op, uint64_t off, uint64_t len, const object_t& srcoid, uint64_t srcoff, snapid_t srcsnapid) {
+  void add_clone_range(int op, uint64_t off, uint64_t len,
+		       const object_t& srcoid, uint64_t srcoff,
+		       snapid_t srcsnapid) {
     OSDOp& osd_op = add_op(op);
     osd_op.op.op = op;
     osd_op.op.clonerange.offset = off;
@@ -111,7 +113,8 @@ struct ObjectOperation {
       osd_op.indata.append(name);
     osd_op.indata.append(data);
   }
-  void add_xattr_cmp(int op, const char *name, uint8_t cmp_op, uint8_t cmp_mode, const bufferlist& data) {
+  void add_xattr_cmp(int op, const char *name, uint8_t cmp_op,
+		     uint8_t cmp_mode, const bufferlist& data) {
     OSDOp& osd_op = add_op(op);
     osd_op.op.op = op;
     osd_op.op.xattr.name_len = (name ? strlen(name) : 0);
@@ -122,7 +125,8 @@ struct ObjectOperation {
       osd_op.indata.append(name);
     osd_op.indata.append(data);
   }
-  void add_call(int op, const char *cname, const char *method, bufferlist &indata) {
+  void add_call(int op, const char *cname, const char *method,
+		bufferlist &indata) {
     OSDOp& osd_op = add_op(op);
     osd_op.op.op = op;
     osd_op.op.cls.class_len = strlen(cname);
@@ -132,7 +136,8 @@ struct ObjectOperation {
     osd_op.indata.append(method, osd_op.op.cls.method_len);
     osd_op.indata.append(indata);
   }
-  void add_watch(int op, uint64_t cookie, uint64_t ver, uint8_t flag, bufferlist& inbl) {
+  void add_watch(int op, uint64_t cookie, uint64_t ver, uint8_t flag,
+		 bufferlist& inbl) {
     OSDOp& osd_op = add_op(op);
     osd_op.op.op = op;
     osd_op.op.watch.cookie = cookie;
@@ -140,14 +145,16 @@ struct ObjectOperation {
     osd_op.op.watch.flag = flag;
     osd_op.indata.append(inbl);
   }
-  void add_pgls(int op, uint64_t count, collection_list_handle_t cookie, epoch_t start_epoch) {
+  void add_pgls(int op, uint64_t count, collection_list_handle_t cookie,
+		epoch_t start_epoch) {
     OSDOp& osd_op = add_op(op);
     osd_op.op.op = op;
     osd_op.op.pgls.count = count;
     osd_op.op.pgls.start_epoch = start_epoch;
     ::encode(cookie, osd_op.indata);
   }
-  void add_pgls_filter(int op, uint64_t count, bufferlist& filter, collection_list_handle_t cookie, epoch_t start_epoch) {
+  void add_pgls_filter(int op, uint64_t count, bufferlist& filter,
+		       collection_list_handle_t cookie, epoch_t start_epoch) {
     OSDOp& osd_op = add_op(op);
     osd_op.op.op = op;
     osd_op.op.pgls.count = count;
@@ -292,8 +299,10 @@ struct ObjectOperation {
     add_data(CEPH_OSD_OP_SPARSE_READ, off, len, bl);
   }
 
-  void clone_range(const object_t& src_oid, uint64_t src_offset, uint64_t len, uint64_t dst_offset) {
-    add_clone_range(CEPH_OSD_OP_CLONERANGE, dst_offset, len, src_oid, src_offset, CEPH_NOSNAP);
+  void clone_range(const object_t& src_oid, uint64_t src_offset,
+		   uint64_t len, uint64_t dst_offset) {
+    add_clone_range(CEPH_OSD_OP_CLONERANGE, dst_offset, len, src_oid,
+		    src_offset, CEPH_NOSNAP);
   }
 
   // object attrs
@@ -688,7 +697,7 @@ class Objecter {
   SafeTimer &timer;
 
   PerfCounters *logger;
-  
+
   class C_Tick : public Context {
     Objecter *ob;
   public:
@@ -887,7 +896,7 @@ public:
       }
     }
   };
-  
+
   struct StatfsOp {
     tid_t tid;
     struct ceph_statfs *stats;
@@ -999,7 +1008,7 @@ public:
       objecter->_linger_ack(info, r);
     }
   };
-  
+
   struct C_Linger_Commit : public Context {
     Objecter *objecter;
     LingerOp *info;
@@ -1510,10 +1519,10 @@ private:
     return op_submit(o);
   }
   tid_t create(const object_t& oid,
-	     const SnapContext& snapc, utime_t mtime,
-             int global_flags, int create_flags,
-             Context *onack, Context *oncommit,
-             eversion_t *objver = NULL, ObjectOperation *extra_ops = NULL) {
+	       const SnapContext& snapc, utime_t mtime,
+	       int global_flags, int create_flags,
+	       Context *onack, Context *oncommit,
+	       eversion_t *objver = NULL, ObjectOperation *extra_ops = NULL) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_CREATE;

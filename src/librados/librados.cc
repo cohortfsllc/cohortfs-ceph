@@ -2017,7 +2017,7 @@ extern "C" int rados_objects_list_open(rados_ioctx_t io, rados_list_ctx_t *listh
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   Objecter::ListContext *h = new Objecter::ListContext;
-  h->volume = ctx->volume;
+  h->volume = ctx->volume->uuid;
   h->pool_snap_seq = ctx->snap_seq;
   *listh = (void *)new librados::ObjListCtx(ctx, h);
   return 0;
