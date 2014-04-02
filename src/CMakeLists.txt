@@ -542,7 +542,7 @@ add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
 	$<TARGET_OBJECTS:cls_lock_objs> $<TARGET_OBJECTS:osdc_rbd_objs>
 	$<TARGET_OBJECTS:common_util_obj>
 	)
-target_link_libraries(librbd ${CMAKE_DL_LIBS})
+target_link_libraries(librbd common ${CMAKE_DL_LIBS})
 if(${ENABLE_SHARED})
 	set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd)
 endif(${ENABLE_SHARED})
