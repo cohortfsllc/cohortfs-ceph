@@ -93,42 +93,6 @@
 * See cmdparse.cc/h for more details.
 */
 
-/*
- * pg commands PgMonitor.cc
- */
-
-COMMAND("pg stat", "show placement group status.")
-COMMAND("pg getmap", "get binary pg map to -o/stdout")
-COMMAND("pg send_pg_creates", "trigger pg creates to be issued")
-COMMAND("pg dump " \
-	"name=dumpcontents,type=CephChoices,strings=all|summary|sum|pools|osds|pgs,n=N,req=false", \
-	"show human-readable versions of pg map")
-COMMAND("pg dump_json " \
-	"name=dumpcontents,type=CephChoices,strings=all|summary|sum|pools|osds|pgs,n=N,req=false", \
-	"show human-readable version of pg map in json only")
-COMMAND("pg dump_pools_json", "show pg pools info in json only")
-COMMAND("pg dump_stuck " \
-	"name=stuckops,type=CephChoices,strings=inactive|unclean|stale,n=N,req=false " \
-	"name=threshold,type=CephInt,req=false",
-	"show information about stuck pgs [--threshold=seconds to consider stuck]")
-COMMAND("pg map name=pgid,type=CephPgid", "show mapping of pg to osds")
-COMMAND("pg scrub name=pgid,type=CephPgid", "start scrub on <pgid>")
-COMMAND("pg deep-scrub name=pgid,type=CephPgid", "start deep-scrub on <pgid>")
-COMMAND("pg repair name=pgid,type=CephPgid", "start repair on <pgid>")
-COMMAND("pg debug " \
-	"name=debugop,type=CephChoices,strings=unfound_objects_exist|degraded_pgs_exist", \
-	"show debug info about pgs")
-COMMAND("pg force_create_pg name=pgid,type=CephPgid", \
-	"force creation of pg <pgid>")
-COMMAND("pg set_full_ratio name=ratio,type=CephFloat,range=0.0|1.0", \
-	"set ratio at which pgs are considered full")
-COMMAND("pg set_nearfull_ratio name=ratio,type=CephFloat,range=0.0|1.0", \
-	"set ratio at which pgs are considered nearly full")
-
-/*
- * auth commands AuthMonitor.cc
- */
-
 COMMAND("auth export name=entity,type=CephString,req=false", \
        	"write keyring for requested entity, or master keyring if none given")
 COMMAND("auth get name=entity,type=CephString", \
@@ -303,68 +267,7 @@ COMMAND("osd deep-scrub " \
 COMMAND("osd repair " \
 	"name=who,type=CephString", \
 	"initiate repair on osd <who>")
-COMMAND("osd lspools " \
-	"name=auid,type=CephInt,req=false", \
-	"list pools")
 COMMAND("osd blacklist ls", "show blacklisted clients")
-COMMAND("osd crush rule list", "list crush rules")
-COMMAND("osd crush rule ls", "list crush rules")
-COMMAND("osd crush rule dump", "dump crush rules")
-COMMAND("osd crush dump", "dump crush map")
-COMMAND("osd setcrushmap", "set crush map from input file")
-COMMAND("osd crush set", "set crush map from input file")
-COMMAND("osd crush add-bucket " \
-	"name=name,type=CephString " \
-	"name=type,type=CephString", \
-	"add no-parent (probably root) crush bucket <name> of type <type>")
-COMMAND("osd crush set " \
-	"name=id,type=CephOsdName " \
-	"name=weight,type=CephFloat,range=0.0 " \
-	"name=args,type=CephString,n=N", \
-	"set crushmap entry for <name> to <weight> with location <args>")
-COMMAND("osd crush add " \
-	"name=id,type=CephOsdName " \
-	"name=weight,type=CephFloat,range=0.0 " \
-	"name=args,type=CephString,n=N", \
-	"add crushmap entry for <name> with <weight> and location <args>")
-COMMAND("osd crush create-or-move " \
-	"name=id,type=CephOsdName " \
-	"name=weight,type=CephFloat,range=0.0 " \
-	"name=args,type=CephString,n=N", \
-	"create entry or move existing entry for <name> <weight> at/to location <args>")
-COMMAND("osd crush move " \
-	"name=id,type=CephOsdName " \
-	"name=args,type=CephString,n=N", \
-	"move existing entry for <name> to location <args>")
-COMMAND("osd crush link " \
-	"name=name,type=CephString " \
-	"name=args,type=CephString,n=N", \
-	"link existing entry for <name> under location <args>")
-COMMAND("osd crush rm " \
-	"name=name,type=CephString", \
-	"remove <name> from crush map")
-COMMAND("osd crush remove " \
-	"name=name,type=CephString", \
-	"remove <name> from crush map")
-COMMAND("osd crush unlink " \
-	"name=name,type=CephString " \
-	"name=ancestor,type=CephString,req=false", \
-	"unlink <name> from crush map (everywhere, or just at <ancestor>")
-COMMAND("osd crush reweight " \
-	"name=name,type=CephString " \
-	"name=weight,type=CephFloat,range=0.0", \
-	"change <name>'s weight to <weight> in crush map")
-COMMAND("osd crush tunables " \
-	"name=profile,type=CephChoices,strings=legacy|argonaut|bobtail|optimal|default", \
-	"set crush tunables values to <profile>")
-COMMAND("osd crush rule create-simple " \
-	"name=name,type=CephString " \
-	"name=root,type=CephString " \
-	"name=type,type=CephString", \
-	"create crush rule <name> in <root> of type <type>")
-COMMAND("osd crush rule rm " \
-	"name=name,type=CephString", \
-	"remove crush rule <name>")
 COMMAND("osd setmaxosd " \
 	"name=newmax,type=CephInt,range=0", \
 	"set new maximum osd value")
@@ -419,46 +322,6 @@ COMMAND("osd volume create " \
 COMMAND("osd volume remove " \
 	"name=volumeName,type=CephString", \
 	"remove volume")
-COMMAND("osd pool mksnap " \
-	"name=pool,type=CephPoolname " \
-	"name=snap,type=CephString", \
-	"make snapshot <snap> in <pool>")
-COMMAND("osd pool rmsnap " \
-	"name=pool,type=CephPoolname " \
-	"name=snap,type=CephString", \
-	"remove snapshot <snap> from <pool>")
-COMMAND("osd pool create " \
-	"name=pool,type=CephPoolname " \
-	"name=pg_num,type=CephInt,range=0 " \
-	"name=pgp_num,type=CephInt,range=0,req=false", \
-	"create pool")
-COMMAND("osd pool delete " \
-	"name=pool,type=CephPoolname " \
-	"name=pool2,type=CephPoolname " \
-	"name=sure,type=CephChoices,strings=--yes-i-really-really-mean-it", \
-	"delete pool (say pool twice, add --yes-i-really-really-mean-it)")
-COMMAND("osd pool rename " \
-	"name=srcpool,type=CephPoolname " \
-	"name=destpool,type=CephPoolname", \
-	"rename <srcpool> to <destpool>")
-COMMAND("osd pool get " \
-	"name=pool,type=CephPoolname " \
-	"name=var,type=CephChoices,strings=size|min_size|crash_replay_interval|pg_num|pgp_num|crush_ruleset", \
-	"get pool parameter <var>")
-COMMAND("osd pool set " \
-	"name=pool,type=CephPoolname " \
-	"name=var,type=CephChoices,strings=size|min_size|crash_replay_interval|pg_num|pgp_num|crush_ruleset " \
-	"name=val,type=CephInt " \
-	"name=sure,type=CephChoices,strings=--allow-experimental-feature,req=false", \
-	"set pool parameter <var> to <val>")
-// 'val' is a CephString because it can include a unit.  Perhaps
-// there should be a Python type for validation/conversion of strings
-// with units.
-COMMAND("osd pool set-quota " \
-	"name=pool,type=CephPoolname " \
-	"name=field,type=CephChoices,strings=max_objects|max_bytes " \
-	"name=val,type=CephString",
-	"set object or byte limit on pool")
 COMMAND("osd reweight-by-utilization " \
 	"name=oload,type=CephInt,range=100,req=false", \
 	"reweight OSDs by utilization [overload-percentage-for-consideration, default 120]")
