@@ -1718,7 +1718,7 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
       rdata.append(s);
     }
     ss << "listed " << osdmap->blacklist.size() << " entries";
-  } else if (!preprocess_command_sub(m, r, ss)) {
+  } else if (!preprocess_command_sub(prefix, r, ss, rdata)) {
     return false;
   }
 

@@ -57,8 +57,9 @@ public:
   virtual bool prepare_update_sub(PaxosServiceMessage *m);
   virtual bool preprocess_remove_snaps_sub(class MRemoveSnaps *m);
   virtual bool prepare_remove_snaps(MRemoveSnaps *m);
-  virtual bool preprocess_command_sub(MMonCommand *m, int& r,
-				      stringstream& ss);
+  virtual bool preprocess_command_sub(const string& prefix,
+				      int& r, stringstream& ss,
+				      bufferlist &rdata);
   virtual bool prepare_command_sub(string& prefix,
 				   map<string, cmd_vartype>& map,
 				   int& err, stringstream& ss);

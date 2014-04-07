@@ -322,6 +322,7 @@ COMMAND("osd volume create " \
 COMMAND("osd volume remove " \
 	"name=volumeName,type=CephString", \
 	"remove volume")
+COMMAND("osd volume list", "list volumes")
 COMMAND("osd reweight-by-utilization " \
 	"name=oload,type=CephInt,range=100,req=false", \
 	"reweight OSDs by utilization [overload-percentage-for-consideration, default 120]")

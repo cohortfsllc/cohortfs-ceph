@@ -66,44 +66,36 @@ bool CohortOSDMonitor::prepare_remove_snaps(MRemoveSnaps *m)
   return true;
 }
 
-bool CohortOSDMonitor::preprocess_command_sub(MMonCommand *m, int& r,
-					      stringstream& ss)
+bool CohortOSDMonitor::preprocess_command_sub(const string &prefix, int& r,
+					      stringstream& ss,
+					      bufferlist &rdata)
 {
   const shared_ptr<CohortOSDMap> l_osdmap
     = static_pointer_cast<CohortOSDMap>(osdmap);
-  bufferlist rdata;
 
   r = -1;
 
-  if (m->cmd.size() > 1) {
-    if (m->cmd[1] == "list" && m->cmd.size() == 2) {
-      if (l_osdmap->volmap_empty()) {
-	ss << "volmap is empty" << std::endl;
-      } else {
-	ss << "volmap has " << l_osdmap->vols.by_name.size()
-	   << " entries" << std::endl;
-	stringstream ds;
-	for (map<string,VolumeRef>::const_iterator i
-	       = l_osdmap->vols.by_name.begin();
-	     i != l_osdmap->vols.by_name.end();
-	     ++i) {
-	  ds << *i->second << std::endl;
-	}
-	rdata.append(ds);
+  if (prefix == "osd volume list") {
+    if (l_osdmap->volmap_empty()) {
+      ss << "volmap is empty" << std::endl;
+    } else {
+      ss << "volmap has " << l_osdmap->vols.by_name.size()
+	 << " entries" << std::endl;
+      stringstream ds;
+      for (map<string,VolumeRef>::const_iterator i
+	     = l_osdmap->vols.by_name.begin();
+	   i != l_osdmap->vols.by_name.end();
+	   ++i) {
+	ds << *i->second << std::endl;
       }
-      r = 0;
+      rdata.append(ds);
     }
-  }
-
-  string rs;
-  getline(ss, rs);
-
-  if (r != -1) {
-    mon->reply_command(m, r, rs, rdata, paxos->get_version());
-    return true;
+    r = 0;
   } else {
     return false;
   }
+
+  return true;
 }
 
 bool CohortOSDMonitor::prepare_command_sub(string& prefix,
