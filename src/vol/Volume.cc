@@ -91,14 +91,13 @@ bool Volume::valid_name(const string &name, string &error)
     }
   }
 
-  try {
-    uuid_d::parse(name);
+  uuid_d uuid = uuid_d::parse(name);
+  if (uuid != INVALID_VOLUME) {
     error = "volume name cannot match the form of UUIDs";
     return false;
-  } catch (const std::invalid_argument &ia) {
-    return true;
   }
 
+  return true;
 }
 
 bool Volume::valid(string& error)
