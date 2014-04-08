@@ -313,11 +313,11 @@ COMMAND("osd volume create " \
 	"name=placeCode,type=CephString " \
 	"name=placeSymbols,type=CephString " \
 	"name=erasureType,type=CephString " \
-	"name=erasureDataBlocks,type=CephInt,range=0,req=false " \
+	"name=erasureSize,type=CephInt,range=4096,req=false " \
+	"name=erasureDataBlocks,type=CephInt,range=1,req=false " \
 	"name=erasureCodeBlocks,type=CephInt,range=0,req=false " \
 	"name=erasureWordSize,type=CephInt,range=0,req=false " \
-	"name=erasurePktSize,type=CephInt,range=0,req=false " \
-	"name=erasureSize,type=CephInt,range=0,req=false", \
+	"name=erasurePktSize,type=CephInt,range=0,req=false ", \
 	"create volume")
 COMMAND("osd volume remove " \
 	"name=volumeName,type=CephString", \

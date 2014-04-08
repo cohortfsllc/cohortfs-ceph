@@ -33,18 +33,23 @@ VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v, vol_type t)
 
 void CohortVolume::compile(epoch_t epoch)
 {
-  char cfilename[uuid_d::char_rep_buf_size + 5];
-  char objfilename[uuid_d::char_rep_buf_size + 5];
-  char sofilename[uuid_d::char_rep_buf_size + 5];
+  char uuidstring[uuid_d::char_rep_buf_size];
+  char cfilename[uuid_d::char_rep_buf_size + 10];
+  char objfilename[uuid_d::char_rep_buf_size + 10];
+  char sofilename[uuid_d::char_rep_buf_size + 10];
 
   pid_t child;
 
-  uuid.print(cfilename);
+  uuid.print(uuidstring);
+  strcpy(cfilename, "/tmp/");
+  strcat(cfilename, uuidstring);
   strcpy(objfilename, cfilename);
   strcpy(sofilename, cfilename);
   strcat(cfilename, ".c");
   strcat(objfilename, ".o");
   strcat(sofilename, ".so");
+
+  unlink(sofilename);
 
   const char *cargv[] = {
     [0] = "gcc", [1] = "-O3", [2] = "-fPIC",
@@ -90,6 +95,7 @@ void CohortVolume::compile(epoch_t epoch)
 
   unlink(cfilename);
 
+  child = fork();
   if (!child) {
     execvp("gcc", (char **)largv);
   } else {
@@ -104,12 +110,10 @@ void CohortVolume::compile(epoch_t epoch)
   unlink(objfilename);
   place_shared = dlopen(sofilename, RTLD_LAZY | RTLD_GLOBAL);
 
-  unlink(sofilename);
-
   for(vector<string>::size_type i = 0;
       i < symbols.size();
       ++i) {
-    entry_points[i] = dlsym(place_shared, symbols[i].c_str());
+    entry_points.push_back(dlsym(place_shared, symbols[i].c_str()));
   }
 
   compiled_epoch = epoch;

@@ -2108,7 +2108,7 @@ done:
     ss << "will thrash map for " << thrash_map << " epochs";
     ret = thrash();
     err = 0;
-  } else if (prepare_command_sub(prefix, cmdmap, err, ss)) {
+  } else if (prepare_command_sub(prefix, cmdmap, err, ss, rdata)) {
     wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs, get_version()));
     propose_pending();
     goto reply;

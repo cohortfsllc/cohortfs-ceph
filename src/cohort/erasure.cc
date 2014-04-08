@@ -7,12 +7,9 @@
  * DO NOT DISTRIBUTE THIS FILE.  EVER.
  */
 
-#include <boost/lexical_cast.hpp>
 #include "boost/assign.hpp"
 #include "erasure.h"
 
-using boost::lexical_cast;
-using boost::bad_lexical_cast;
 using namespace boost::assign;
 
 static map <erasure_encoder, string> type_map = map_list_of
@@ -53,28 +50,19 @@ bool erasure_params::fill_out(const string& erasure_type,
   if (!decode_type(erasure_type, params.type, error_message))
     return false;
 
-  if (params.type == no_erasure)
-    return true;
+  params.k = static_cast<int>(data_blocks);
+  params.m = static_cast<int>(code_blocks);
+  params.w = static_cast<int>(word_size);
+  params.packetsize = static_cast<int>(packet_size);
+  params.size = static_cast<int>(size);
 
-  string cur;
+  if (params.size == 0) {
+    error_message = "No zero length data blocks, please.";
+    return false;
+  }
 
-  try {
-    cur = "data_blocks";
-    params.k = static_cast<int>(data_blocks);
-
-    cur = "code_blocks";
-    params.m = static_cast<int>(code_blocks);
-
-    cur = "word_size";
-    params.w = static_cast<int>(word_size);
-
-    cur = "packet_size";
-    params.packetsize = static_cast<int>(packet_size);
-
-    cur = "size";
-    params.size = static_cast<int>(size);
-  } catch (bad_lexical_cast&) {
-    error_message = cur + " is not a valid integer.";
+  if (params.k == 0) {
+    error_message = "I cannot store data on no OSDs.";
     return false;
   }
 

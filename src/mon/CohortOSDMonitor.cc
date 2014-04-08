@@ -101,11 +101,11 @@ bool CohortOSDMonitor::preprocess_command_sub(const string &prefix, int& r,
 bool CohortOSDMonitor::prepare_command_sub(string& prefix,
 					   map<string, cmd_vartype>& map,
 					   int& err,
-					   stringstream& ss)
+					   stringstream& ss,
+					   bufferlist &rdata)
 {
   const shared_ptr<CohortOSDMap> l_osdmap
     = static_pointer_cast<CohortOSDMap>(osdmap);
-  bufferlist rdata;
 
   if (prefix == "osd volume create") {
     string name;
@@ -126,11 +126,11 @@ bool CohortOSDMonitor::prepare_command_sub(string& prefix,
     cmd_getval(g_ceph_context, map, "placeCode", place_text);
     cmd_getval(g_ceph_context, map, "placeSymbols", symbols);
     cmd_getval(g_ceph_context, map, "erasureType", erasure_type);
-    cmd_getval(g_ceph_context, map, "erasureDataBlocks", data_blocks, int64_t(0));
+    cmd_getval(g_ceph_context, map, "erasureSize", size, int64_t(4096));
+    cmd_getval(g_ceph_context, map, "erasureDataBlocks", data_blocks, int64_t(1));
     cmd_getval(g_ceph_context, map, "erasureCodeBlocks", code_blocks, int64_t(0));
     cmd_getval(g_ceph_context, map, "erasureWordSize", word_size, int64_t(0));
     cmd_getval(g_ceph_context, map, "erasurePktSize", packet_size, int64_t(0));
-    cmd_getval(g_ceph_context, map, "erasureSize", size, int64_t(0));
 
     /* Only one volume type for now, when we implement more I'll
        come back and complexify this. */

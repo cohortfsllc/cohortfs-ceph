@@ -249,7 +249,8 @@ protected:
 				      bufferlist &rdata) = 0;
   virtual bool prepare_command_sub(string& prefix,
 				   map<string, cmd_vartype>& map,
-				   int& err, stringstream& ss) = 0;
+				   int& err, stringstream& ss,
+				   bufferlist &rdata) = 0;
 
  public:
   OSDMonitor(Monitor *mn, Paxos *p, string service_name)

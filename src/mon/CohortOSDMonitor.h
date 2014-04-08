@@ -62,7 +62,8 @@ public:
 				      bufferlist &rdata);
   virtual bool prepare_command_sub(string& prefix,
 				   map<string, cmd_vartype>& map,
-				   int& err, stringstream& ss);
+				   int& err, stringstream& ss,
+				   bufferlist &rdata);
 
   void update_trim();
 
