@@ -111,7 +111,9 @@ void usage(ostream& out)
 "       --lock-type                  Lock type (shared, exclusive)\n"
 "\n"
 "GLOBAL OPTIONS:\n"
-"   --vol=volume\n"
+"   --uvol=uuid\n"
+"        operate on objects in the given volume\n"
+"   --vol=name\n"
 "        operate on objects in the given volume\n"
 "   -b op_size\n"
 "        set the size of write ops for put or benchmarking\n"
@@ -528,7 +530,8 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   int op_size = 1 << 22;
   std::map<std::string, std::string>::const_iterator i;
   std::string category;
-  uuid_d vol;
+  uuid_d uvol;;
+  std::string vol;
 
   Formatter *formatter = NULL;
   bool pretty_format = false;
@@ -536,9 +539,13 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   Rados rados;
   IoCtx io_ctx;
 
+  i = opts.find("uvol");
+  if (i != opts.end()) {
+    uvol = uuid_d::parse(i->second);
+  }
   i = opts.find("vol");
   if (i != opts.end()) {
-    vol = uuid_d::parse(i->second);
+    vol = i->second;
   }
   i = opts.find("category");
   if (i != opts.end()) {
@@ -583,37 +590,24 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   char buf[80];
 
   // open io context.
-  if (!vol.is_zero()) {
+  if (!uvol.is_zero()) {
+    ret = rados.ioctx_create(uvol, io_ctx);
+    if (ret < 0) {
+      cerr << "error opening volume " << vol << ": "
+	   << strerror_r(-ret, buf, sizeof(buf)) << std::endl;
+      goto out;
+    }
+  } else if (vol.length() != 0) {
     ret = rados.ioctx_create(vol, io_ctx);
     if (ret < 0) {
       cerr << "error opening volume " << vol << ": "
 	   << strerror_r(-ret, buf, sizeof(buf)) << std::endl;
       goto out;
     }
-  }
-
-#if 0
-  // snapname?
-  if (snapname) {
-    ret = io_ctx.snap_lookup(snapname, &snapid);
-    if (ret < 0) {
-      cerr << "error looking up snap '" << snapname << "': " << strerror_r(-ret, buf, sizeof(buf)) << std::endl;
+  } else {
+      cerr << "No volume specified." << std::endl;
       goto out;
-    }
   }
-
-  if (snapid != CEPH_NOSNAP) {
-    string name;
-    ret = io_ctx.snap_get_name(snapid, &name);
-    if (ret < 0) {
-      cerr << "snapid " << snapid << " doesn't exist in pool "
-	   << io_ctx.get_pool_name() << std::endl;
-      goto out;
-    }
-    io_ctx.snap_set_read(snapid);
-    cout << "selected snap " << snapid << " '" << snapname << "'" << std::endl;
-  }
-#endif /* 0 */
 
   assert(!nargs.empty());
 
@@ -760,7 +754,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 #endif /* 0 */
 
   if (strcmp(nargs[0], "mapext") == 0) {
-    if (vol.is_zero() || nargs.size() < 2)
+    if (nargs.size() < 2)
       usage_exit();
     string oid(nargs[1]);
     std::map<uint64_t,uint64_t> m;
@@ -775,7 +769,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
   }
   else if (strcmp(nargs[0], "stat") == 0) {
-    if (vol.is_zero() || nargs.size() < 2)
+    if (nargs.size() < 2)
       usage_exit();
     string oid(nargs[1]);
     uint64_t size;
@@ -791,7 +785,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
   }
   else if (strcmp(nargs[0], "get") == 0) {
-    if (vol.is_zero() || nargs.size() < 3)
+    if (nargs.size() < 3)
       usage_exit();
     ret = do_get(io_ctx, nargs[1], nargs[2], op_size);
     if (ret < 0) {
@@ -801,7 +795,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
   }
   else if (strcmp(nargs[0], "put") == 0) {
-    if (vol.is_zero() || nargs.size() < 3)
+    if (nargs.size() < 3)
       usage_exit();
     ret = do_put(io_ctx, nargs[1], nargs[2], op_size);
     if (ret < 0) {
@@ -811,7 +805,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
   }
   else if (strcmp(nargs[0], "truncate") == 0) {
-    if (vol.is_zero() || nargs.size() < 3)
+    if (uvol.is_zero() || nargs.size() < 3)
       usage_exit();
 
     string oid(nargs[1]);
@@ -830,7 +824,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
   }
   else if (strcmp(nargs[0], "setxattr") == 0) {
-    if (vol.is_zero() || nargs.size() < 4)
+    if (uvol.is_zero() || nargs.size() < 4)
       usage_exit();
 
     string oid(nargs[1]);
@@ -851,7 +845,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       ret = 0;
   }
   else if (strcmp(nargs[0], "getxattr") == 0) {
-    if (vol.is_zero() || nargs.size() < 3)
+    if (nargs.size() < 3)
       usage_exit();
 
     string oid(nargs[1]);
@@ -870,7 +864,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     string s(bl.c_str(), bl.length());
     cout << s << std::endl;
   } else if (strcmp(nargs[0], "rmxattr") == 0) {
-    if (vol.is_zero() || nargs.size() < 3)
+    if (nargs.size() < 3)
       usage_exit();
 
     string oid(nargs[1]);
@@ -884,7 +878,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       goto out;
     }
   } else if (strcmp(nargs[0], "listxattr") == 0) {
-    if (vol.is_zero() || nargs.size() < 2)
+    if (nargs.size() < 2)
       usage_exit();
 
     string oid(nargs[1]);
@@ -902,7 +896,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       cout << iter->first << std::endl;
     }
   } else if (strcmp(nargs[0], "getomapheader") == 0) {
-    if (vol.is_zero() || nargs.size() < 2)
+    if (nargs.size() < 2)
       usage_exit();
 
     string oid(nargs[1]);
@@ -920,7 +914,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       ret = 0;
     }
   } else if (strcmp(nargs[0], "setomapheader") == 0) {
-    if (vol.is_zero() || nargs.size() < 3)
+    if (nargs.size() < 3)
       usage_exit();
 
     string oid(nargs[1]);
@@ -938,7 +932,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       ret = 0;
     }
   } else if (strcmp(nargs[0], "setomapval") == 0) {
-    if (vol.is_zero() || nargs.size() < 4)
+    if (nargs.size() < 4)
       usage_exit();
 
     string oid(nargs[1]);
@@ -959,7 +953,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       ret = 0;
     }
   } else if (strcmp(nargs[0], "getomapval") == 0) {
-    if (vol.is_zero() || nargs.size() < 3)
+    if (nargs.size() < 3)
       usage_exit();
 
     string oid(nargs[1]);
@@ -988,7 +982,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       goto out;
     }
   } else if (strcmp(nargs[0], "rmomapkey") == 0) {
-    if (vol.is_zero() || nargs.size() < 3)
+    if (nargs.size() < 3)
       usage_exit();
 
     string oid(nargs[1]);
@@ -1005,7 +999,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       ret = 0;
     }
   } else if (strcmp(nargs[0], "listomapvals") == 0) {
-    if (vol.is_zero() || nargs.size() < 2)
+    if (nargs.size() < 2)
       usage_exit();
 
     string oid(nargs[1]);
@@ -1040,7 +1034,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     ret = 0;
   }
   else if (strcmp(nargs[0], "rm") == 0) {
-    if (vol.is_zero() || nargs.size() < 2)
+    if (nargs.size() < 2)
       usage_exit();
     vector<const char *>::iterator iter = nargs.begin();
     ++iter;
@@ -1055,7 +1049,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
   }
   else if (strcmp(nargs[0], "create") == 0) {
-    if (vol.is_zero() || nargs.size() < 2)
+    if (nargs.size() < 2)
       usage_exit();
     string oid(nargs[1]);
     if (nargs.size() > 2) {
@@ -1191,7 +1185,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   }
 #endif /* 0 */
   else if (strcmp(nargs[0], "listomapkeys") == 0) {
-    if (vol.is_zero() || nargs.size() < 2)
+    if (nargs.size() < 2)
       usage_exit();
 
     librados::ObjectReadOperation read;
@@ -1383,7 +1377,9 @@ int main(int argc, const char **argv)
       opts["pretty-format"] = "true";
     } else if (ceph_argparse_flag(args, i, "--show-time", (char*)NULL)) {
       opts["show-time"] = "true";
-    } else if (ceph_argparse_witharg(args, i, &val, "-p", "--vol", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--uvol", (char*)NULL)) {
+      opts["uvol"] = val;
+    } else if (ceph_argparse_witharg(args, i, &val, "--vol", (char*)NULL)) {
       opts["vol"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--category", (char*)NULL)) {
       opts["category"] = val;

@@ -691,6 +691,7 @@ namespace librados
     uint64_t get_instance_id();
 
     int ioctx_create(const uuid_d& volume, IoCtx &pioctx);
+    int ioctx_create(const string& volume, IoCtx &pioctx);
 
     // Features useful for test cases
     void test_blacklist_self(bool set);

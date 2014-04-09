@@ -466,6 +466,9 @@ uint64_t rados_get_instance_id(rados_t cluster);
 int rados_ioctx_create(rados_t cluster, const uuid_t volume,
 		       rados_ioctx_t *ioctx);
 
+int rados_ioctx_create_vn(rados_t cluster, const char *volume,
+			  rados_ioctx_t *ioctx);
+
 /**
  * The opposite of rados_ioctx_create
  *

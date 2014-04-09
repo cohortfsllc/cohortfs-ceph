@@ -1280,6 +1280,16 @@ int librados::Rados::ioctx_create(const uuid_d& volume, IoCtx &io)
   return 0;
 }
 
+int librados::Rados::ioctx_create(const string& volume, IoCtx &io)
+{
+  rados_ioctx_t p;
+  int ret = rados_ioctx_create_vn((rados_t)client, volume.c_str(), &p);
+  if (ret)
+    return ret;
+  io.io_ctx_impl = (IoCtxImpl*)p;
+  return 0;
+}
+
 void librados::Rados::test_blacklist_self(bool set)
 {
   client->blacklist_self(set);
@@ -1698,6 +1708,22 @@ extern "C" int rados_ioctx_create(rados_t cluster, const uuid_t volume,
   librados::IoCtxImpl *ctx;
 
   int r = client->create_ioctx(uuid_d::swallow(volume), &ctx);
+  if (r < 0)
+    return r;
+
+  *io = ctx;
+  ctx->get();
+  return 0;
+}
+
+extern "C" int rados_ioctx_create_vn(rados_t cluster,
+				     const char *volume,
+				     rados_ioctx_t *io)
+{
+  librados::RadosClient *client = (librados::RadosClient *)cluster;
+  librados::IoCtxImpl *ctx;
+
+  int r = client->create_ioctx(string(volume), &ctx);
   if (r < 0)
     return r;
 
