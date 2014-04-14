@@ -155,6 +155,7 @@ set(libcommon_files
   common/RefCountedObj.cc
   msg/Messenger.cc
   msg/Pipe.cc
+  msg/PipeConnection.cc
   msg/SimpleMessenger.cc
   msg/msg_types.cc
   common/hobject.cc
