@@ -230,7 +230,10 @@ static int fio_ceph_filestore_init(struct thread_data *td)
 	ceph_filestore_data->osd_path = strdup("/mnt/fio_ceph_filestore.XXXXXXX");
 	ceph_filestore_data->journal_path = strdup("/var/lib/ceph/osd/journal-ram/fio_ceph_filestore.XXXXXXX");
 
-	mkdtemp(ceph_filestore_data->osd_path);
+	if (!mkdtemp(ceph_filestore_data->osd_path)) {
+		cout << "mkdtemp failed: " << strerror(errno) << std::endl;
+		return 1;
+	}
 	//mktemp(ceph_filestore_data->journal_path); // NOSPC issue
 
   	ObjectStore *fs = new FileStore(ceph_filestore_data->osd_path, ceph_filestore_data->journal_path);
