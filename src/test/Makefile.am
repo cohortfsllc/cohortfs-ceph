@@ -46,6 +46,14 @@ ceph_test_keys_SOURCES = test/testkeys.cc
 ceph_test_keys_LDADD = $(LIBMON) $(CEPH_GLOBAL) 
 bin_DEBUGPROGRAMS += ceph_test_keys
 
+if WITH_FIO_DIR
+libfio_ceph_filestore_la_SOURCES = test/fio_ceph_filestore.cc
+libfio_ceph_filestore_la_LIBADD = $(LIBOS) $(LIBGLOBAL) $(CRYPTO_LIBS) $(EXTRALIBS)
+libfio_ceph_filestore_la_LDFLAGS = -rdynamic -shared -fPIC
+libfio_ceph_filestore_la_CXXFLAGS = ${AM_CXXFLAGS} -DCONFIG_CPU_COUNT
+#libfio_ceph_filestore_la_CXXFLAGS = ${AM_CXXFLAGS} -DCONFIG_CPU_COUNT -I$(FIO_INC_DIR)
+lib_LTLIBRARIES += libfio_ceph_filestore.la
+endif
 
 ## Dencoder test
 
