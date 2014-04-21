@@ -1716,20 +1716,32 @@ target_link_libraries(test_get_blkdev_size
   )
 
 
-add_executable(simple_server simple_server.cc simple_dispatcher.cc)
+add_executable(simple_server
+  messenger/simple_server.cc
+  messenger/simple_dispatcher.cc
+  )
 target_link_libraries(simple_server os global common boost_regex
   ${TCMALLOC_LIBS})
 
-add_executable(simple_client simple_client.cc simple_dispatcher.cc)
+add_executable(simple_client
+  messenger/simple_client.cc
+  messenger/simple_dispatcher.cc
+  )
 target_link_libraries(simple_client os global common boost_regex
   ${TCMALLOC_LIBS})
 
 if (HAVE_XIO)
-  add_executable(xio_server xio_server.cc xio_dispatcher.cc)
+  add_executable(xio_server
+    messenger/xio_server.cc
+    messenger/xio_dispatcher.cc
+    )
   target_link_libraries(xio_server os global common boost_regex
     ${TCMALLOC_LIBS} ${EXTRALIBS})
 
-  add_executable(xio_client xio_client.cc xio_dispatcher.cc)
+  add_executable(xio_client
+    messenger/xio_client.cc
+    messenger/xio_dispatcher.cc
+    )
   target_link_libraries(xio_client os global common boost_regex
     ${TCMALLOC_LIBS} ${EXTRALIBS})
 endif(HAVE_XIO)

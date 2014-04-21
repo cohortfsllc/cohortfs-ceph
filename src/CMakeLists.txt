@@ -205,6 +205,7 @@ set(libcommon_files
   common/ceph_json.cc
   common/ipaddr.cc
   common/pick_address.cc
+  common/address_helper.cc
   common/linux_version.c
   vol/Volume.cc
   cohort/erasure.cc
