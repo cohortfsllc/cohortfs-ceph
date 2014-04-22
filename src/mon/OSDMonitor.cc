@@ -1081,7 +1081,7 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
 
 void OSDMonitor::_booted(MOSDBoot *m, bool logit)
 {
-  dout(7) << "_booted " << m->get_orig_source_inst() 
+  dout(7) << "_booted " << m->get_orig_source_inst()
 	  << " w " << m->sb.weight << " from " << m->sb.current_epoch << dendl;
 
   if (logit) {
@@ -1275,6 +1275,40 @@ void OSDMonitor::send_incremental(PaxosServiceMessage *req, epoch_t first)
     osd_epoch[osd] = last;
 }
 
+void OSDMonitor::send_incremental(epoch_t first, ConnectionRef &con,
+				  bool onetime)
+{
+  dout(5) << "send_incremental [" << first << ".." << osdmap.get_epoch() << "]"
+	  << " to " << con << dendl;
+
+  if (first < get_first_committed()) {
+    first = get_first_committed();
+    bufferlist bl;
+    int err = get_version_full(first, bl);
+    assert(err == 0);
+    assert(bl.length());
+
+    dout(20) << "send_incremental starting with base full "
+	     << first << " " << bl.length() << " bytes" << dendl;
+
+    MOSDMap *m = new MOSDMap(osdmap.get_fsid());
+    m->oldest_map = first;
+    m->newest_map = osdmap.get_epoch();
+    m->maps[first] = bl;
+    con->get_messenger()->send_message(m, con);
+    first++;
+  }
+
+  while (first <= osdmap.get_epoch()) {
+    epoch_t last = MIN(first + g_conf->osd_map_message_max, osdmap.get_epoch());
+    MOSDMap *m = build_incremental(first, last);
+    con->get_messenger()->send_message(m, con);
+    first = last + 1;
+    if (onetime)
+      break;
+  }
+}
+
 void OSDMonitor::send_incremental(epoch_t first, entity_inst_t& dest, bool onetime)
 {
   dout(5) << "send_incremental [" << first << ".." << osdmap.get_epoch() << "]"
@@ -1308,16 +1342,12 @@ void OSDMonitor::send_incremental(epoch_t first, entity_inst_t& dest, bool oneti
   }
 }
 
-
-
-
 epoch_t OSDMonitor::blacklist(const entity_addr_t& a, utime_t until)
 {
   dout(10) << "blacklist " << a << " until " << until << dendl;
   pending_inc.new_blacklist[a] = until;
   return pending_inc.epoch;
 }
-
 
 void OSDMonitor::check_subs()
 {
@@ -1337,12 +1367,13 @@ void OSDMonitor::check_sub(Subscription *sub)
 {
   dout(10) << __func__ << " " << sub << " next " << sub->next
 	   << (sub->onetime ? " (onetime)":" (ongoing)") << dendl;
+
   if (sub->next <= osdmap.get_epoch()) {
+    Messenger *msgr = sub->session->con->get_messenger();
     if (sub->next >= 1)
-      send_incremental(sub->next, sub->session->inst, sub->incremental_onetime);
+      send_incremental(sub->next, sub->session->con, sub->incremental_onetime);
     else
-      mon->messenger->send_message(build_latest_full(),
-				   sub->session->inst);
+      msgr->send_message(build_latest_full(), sub->session->con);
     if (sub->onetime)
       mon->session_map.remove_sub(sub);
     else
@@ -1351,7 +1382,6 @@ void OSDMonitor::check_sub(Subscription *sub)
 }
 
 // TICK
-
 
 void OSDMonitor::tick()
 {

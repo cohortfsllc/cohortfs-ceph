@@ -197,6 +197,7 @@ private:
   void send_full(PaxosServiceMessage *m);
   void send_incremental(PaxosServiceMessage *m, epoch_t first);
   void send_incremental(epoch_t first, entity_inst_t& dest, bool onetime);
+  void send_incremental(epoch_t first, ConnectionRef &con, bool onetime);
 
   bool check_source(PaxosServiceMessage *m, uuid_d fsid);
 
@@ -252,7 +253,6 @@ private:
 	osdmon->dispatch(m);
       else
 	assert(0 == "bad C_ReplyMap return value");
-    }
   };
 
  public:

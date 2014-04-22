@@ -26,8 +26,6 @@
 #include "auth/AuthClientHandler.h"
 #include "auth/RotatingKeyRing.h"
 
-#include "messages/MMonSubscribe.h"
-
 #include "common/SimpleRNG.h"
 #include "osd/osd_types.h"
 
