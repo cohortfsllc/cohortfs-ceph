@@ -253,6 +253,7 @@ private:
 	osdmon->dispatch(m);
       else
 	assert(0 == "bad C_ReplyMap return value");
+    }
   };
 
  public:

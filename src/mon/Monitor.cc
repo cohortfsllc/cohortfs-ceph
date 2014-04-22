@@ -1393,12 +1393,10 @@ void Monitor::handle_probe_probe(MMonProbe *m)
   if (missing) {
     dout(1) << " peer " << m->get_source_addr() << " missing features "
 	    << missing << dendl;
-    if (con->has_feature(CEPH_FEATURE_OSD_PRIMARY_AFFINITY)) {
-      MMonProbe *r = new MMonProbe(monmap->fsid, MMonProbe::OP_MISSING_FEATURES,
-				   name, has_ever_joined);
-      m->required_features = required_features;
-      con->get_messenger()->send_message(r, con);
-    }
+    MMonProbe *r = new MMonProbe(monmap->fsid, MMonProbe::OP_MISSING_FEATURES,
+	name, has_ever_joined);
+    m->required_features = required_features;
+    con->get_messenger()->send_message(r, con);
     m->put();
     return;
   }
