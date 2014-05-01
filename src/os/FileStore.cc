@@ -2414,6 +2414,11 @@ int FileStore::read(
   }
 
   if (len == 0) {
+    lfn_close(fd);
+    return 0;
+  }
+
+  if (len == read_entire) {
     struct stat st;
     memset(&st, 0, sizeof(struct stat));
     int r = ::fstat(**fd, &st);

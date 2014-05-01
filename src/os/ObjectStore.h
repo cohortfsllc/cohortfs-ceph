@@ -1122,7 +1122,8 @@ public:
    * @param allow_eio if false, assert on -EIO operation failure
    * @returns number of bytes read on success, or negative error code on failure.
    */
-   virtual int read(
+  static const size_t read_entire;
+  virtual int read(
     const coll_t &cid,
     const hobject_t& oid,
     uint64_t offset,
