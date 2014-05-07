@@ -41,8 +41,6 @@
 #include "objclass/objclass.h"
 #include "include/rbd_types.h"
 
-#include "cls/rbd/cls_rbd.h"
-
 
 /*
  * Object keys:
@@ -65,23 +63,10 @@ cls_method_handle_t h_create;
 cls_method_handle_t h_get_features;
 cls_method_handle_t h_get_size;
 cls_method_handle_t h_set_size;
-cls_method_handle_t h_get_parent;
-cls_method_handle_t h_set_parent;
-cls_method_handle_t h_get_protection_status;
-cls_method_handle_t h_set_protection_status;
 cls_method_handle_t h_get_stripe_unit_count;
 cls_method_handle_t h_set_stripe_unit_count;
-cls_method_handle_t h_remove_parent;
-cls_method_handle_t h_add_child;
-cls_method_handle_t h_remove_child;
-cls_method_handle_t h_get_children;
-cls_method_handle_t h_get_snapcontext;
 cls_method_handle_t h_get_object_prefix;
-cls_method_handle_t h_get_snapshot_name;
-cls_method_handle_t h_snapshot_add;
-cls_method_handle_t h_snapshot_remove;
 cls_method_handle_t h_get_all_features;
-cls_method_handle_t h_copyup;
 cls_method_handle_t h_get_id;
 cls_method_handle_t h_set_id;
 cls_method_handle_t h_dir_get_id;
@@ -90,66 +75,10 @@ cls_method_handle_t h_dir_list;
 cls_method_handle_t h_dir_add_image;
 cls_method_handle_t h_dir_remove_image;
 cls_method_handle_t h_dir_rename_image;
-cls_method_handle_t h_old_snapshots_list;
-cls_method_handle_t h_old_snapshot_add;
-cls_method_handle_t h_old_snapshot_remove;
 
 #define RBD_MAX_KEYS_READ 64
-#define RBD_SNAP_KEY_PREFIX "snapshot_"
 #define RBD_DIR_ID_KEY_PREFIX "id_"
 #define RBD_DIR_NAME_KEY_PREFIX "name_"
-
-static int snap_read_header(cls_method_context_t hctx, bufferlist& bl)
-{
-  unsigned snap_count = 0;
-  uint64_t snap_names_len = 0;
-  struct rbd_obj_header_ondisk *header;
-
-  CLS_LOG(20, "snapshots_list");
-
-  while (1) {
-    int len = sizeof(*header) +
-      snap_count * sizeof(struct rbd_obj_snap_ondisk) +
-      snap_names_len;
-
-    int rc = cls_cxx_read(hctx, 0, len, &bl);
-    if (rc < 0)
-      return rc;
-
-    if (bl.length() < sizeof(*header))
-      return -EINVAL;
-
-    header = (struct rbd_obj_header_ondisk *)bl.c_str();
-    assert(header);
-
-    if ((snap_count != header->snap_count) ||
-        (snap_names_len != header->snap_names_len)) {
-      snap_count = header->snap_count;
-      snap_names_len = header->snap_names_len;
-      bl.clear();
-      continue;
-    }
-    break;
-  }
-
-  return 0;
-}
-
-static void key_from_snap_id(snapid_t snap_id, string *out)
-{
-  ostringstream oss;
-  oss << RBD_SNAP_KEY_PREFIX
-      << std::setw(16) << std::setfill('0') << std::hex << snap_id;
-  *out = oss.str();
-}
-
-static snapid_t snap_id_from_key(const string &key)
-{
-  istringstream iss(key);
-  uint64_t id;
-  iss.ignore(strlen(RBD_SNAP_KEY_PREFIX)) >> std::hex >> id;
-  return id;
-}
 
 template<typename T>
 static int read_key(cls_method_context_t hctx, const string &key, T *out)
@@ -218,9 +147,9 @@ int create(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
     return -EINVAL;
   }
 
-  CLS_LOG(20, "create object_prefix=%s size=%llu order=%u features=%llu",
-	  object_prefix.c_str(), (unsigned long long)size, order,
-	  (unsigned long long)features);
+  CLS_LOG(20,
+	  "create object_prefix=%s size=%"PRIu64" order=%u features=%"PRIu64,
+	  object_prefix.c_str(), size, order, features);
 
   if (features & ~RBD_FEATURES_ALL) {
     return -ENOSYS;
@@ -261,52 +190,24 @@ int create(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   if (r < 0)
     return r;
 
-  bufferlist snap_seqbl;
-  uint64_t snap_seq = 0;
-  ::encode(snap_seq, snap_seqbl);
-  r = cls_cxx_map_set_val(hctx, "snap_seq", &snap_seqbl);
-  if (r < 0)
-    return r;
-
   return 0;
 }
 
 /**
  * Input:
- * @param snap_id which snapshot to query, or CEPH_NOSNAP (uint64_t)
  *
  * Output:
- * @param features list of enabled features for the given snapshot (uint64_t)
+ * @param features list of enabled features for the given image
  * @returns 0 on success, negative error code on failure
  */
 int get_features(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  uint64_t features, snap_id;
+  uint64_t features;
 
-  bufferlist::iterator iter = in->begin();
-  try {
-    ::decode(snap_id, iter);
-  } catch (const buffer::error &err) {
-    return -EINVAL;
-  }
-
-  CLS_LOG(20, "get_features snap_id=%llu", (unsigned long long)snap_id);
-
-  if (snap_id == CEPH_NOSNAP) {
-    int r = read_key(hctx, "features", &features);
-    if (r < 0) {
-      CLS_ERR("failed to read features off disk: %s", cpp_strerror(r).c_str());
-      return r;
-    }
-  } else {
-    cls_rbd_snap snap;
-    string snapshot_key;
-    key_from_snap_id(snap_id, &snapshot_key);
-    int r = read_key(hctx, snapshot_key, &snap);
-    if (r < 0)
-      return r;
-
-    features = snap.features;
+  int r = read_key(hctx, "features", &features);
+  if (r < 0) {
+    CLS_ERR("failed to read features off disk: %s", cpp_strerror(r).c_str());
+    return r;
   }
 
   uint64_t incompatible = features & RBD_FEATURES_INCOMPATIBLE;
@@ -332,8 +233,8 @@ int require_feature(cls_method_context_t hctx, uint64_t need)
   if (r < 0)
     return r;
   if ((features & need) != need) {
-    CLS_LOG(10, "require_feature missing feature %llx, have %llx",
-            (unsigned long long)need, (unsigned long long)features);
+    CLS_LOG(10, "require_feature missing feature %"PRIx64", have %"PRIx64,
+	    need, features);
     return -ENOEXEC;
   }
   return 0;
@@ -341,48 +242,29 @@ int require_feature(cls_method_context_t hctx, uint64_t need)
 
 /**
  * Input:
- * @param snap_id which snapshot to query, or CEPH_NOSNAP (uint64_t)
  *
  * Output:
  * @param order bits to shift to get the size of data objects (uint8_t)
- * @param size size of the image in bytes for the given snapshot (uint64_t)
+ * @param size size of the image in bytes
  * @returns 0 on success, negative error code on failure
  */
 int get_size(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
 {
-  uint64_t snap_id, size;
+  uint64_t size;
   uint8_t order;
-
-  bufferlist::iterator iter = in->begin();
-  try {
-    ::decode(snap_id, iter);
-  } catch (const buffer::error &err) {
-    return -EINVAL;
-  }
-
-  CLS_LOG(20, "get_size snap_id=%llu", (unsigned long long)snap_id);
 
   int r = read_key(hctx, "order", &order);
   if (r < 0) {
-    CLS_ERR("failed to read the order off of disk: %s", cpp_strerror(r).c_str());
+    CLS_ERR("failed to read the order off of disk: %s",
+	    cpp_strerror(r).c_str());
     return r;
   }
 
-  if (snap_id == CEPH_NOSNAP) {
-    r = read_key(hctx, "size", &size);
-    if (r < 0) {
-      CLS_ERR("failed to read the image's size off of disk: %s", cpp_strerror(r).c_str());
-      return r;
-    }
-  } else {
-    cls_rbd_snap snap;
-    string snapshot_key;
-    key_from_snap_id(snap_id, &snapshot_key);
-    int r = read_key(hctx, snapshot_key, &snap);
-    if (r < 0)
-      return r;
-
-    size = snap.image_size;
+  r = read_key(hctx, "size", &size);
+  if (r < 0) {
+    CLS_ERR("failed to read the image's size off of disk: %s",
+	    cpp_strerror(r).c_str());
+    return r;
   }
 
   ::encode(order, *out);
@@ -414,40 +296,19 @@ int set_size(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   uint64_t orig_size;
   int r = read_key(hctx, "size", &orig_size);
   if (r < 0) {
-    CLS_ERR("Could not read image's size off disk: %s", cpp_strerror(r).c_str());
+    CLS_ERR("Could not read image's size off disk: %s",
+	    cpp_strerror(r).c_str());
     return r;
   }
 
-  CLS_LOG(20, "set_size size=%llu orig_size=%llu", (unsigned long long)size,
-          (unsigned long long)orig_size);
+  CLS_LOG(20, "set_size size=%"PRIu64" orig_size=%"PRIu64, size, orig_size);
 
   bufferlist sizebl;
   ::encode(size, sizebl);
   r = cls_cxx_map_set_val(hctx, "size", &sizebl);
   if (r < 0) {
-    CLS_ERR("error writing snapshot metadata: %d", r);
+    CLS_ERR("error writing metadata: %d", r);
     return r;
-  }
-
-  // if we are shrinking, and have a parent, shrink our overlap with
-  // the parent, too.
-  if (size < orig_size) {
-    cls_rbd_parent parent;
-    r = read_key(hctx, "parent", &parent);
-    if (r == -ENOENT)
-      r = 0;
-    if (r < 0)
-      return r;
-    if (parent.exists() && parent.overlap > size) {
-      bufferlist parentbl;
-      parent.overlap = size;
-      ::encode(parent, parentbl);
-      r = cls_cxx_map_set_val(hctx, "parent", &parentbl);
-      if (r < 0) {
-	CLS_ERR("error writing parent: %d", r);
-	return r;
-      }
-    }
   }
 
   return 0;
@@ -463,130 +324,6 @@ int check_exists(cls_method_context_t hctx)
   uint64_t size;
   time_t mtime;
   return cls_cxx_stat(hctx, &size, &mtime);
-}
-
-/**
- * get the current protection status of the specified snapshot
- *
- * Input:
- * @param snap_id (uint64_t) which snapshot to get the status of
- *
- * Output:
- * @param status (uint8_t) one of:
- * RBD_PROTECTION_STATUS_{PROTECTED, UNPROTECTED, UNPROTECTING}
- *
- * @returns 0 on success, negative error code on failure
- * @returns -EINVAL if snapid is CEPH_NOSNAP
- */
-int get_protection_status(cls_method_context_t hctx, bufferlist *in,
-			  bufferlist *out)
-{
-  snapid_t snap_id;
-
-  bufferlist::iterator iter = in->begin();
-  try {
-    ::decode(snap_id, iter);
-  } catch (const buffer::error &err) {
-    CLS_LOG(20, "get_protection_status: invalid decode");
-    return -EINVAL;
-  }
-
-  int r = check_exists(hctx);
-  if (r < 0)
-    return r;
-
-  CLS_LOG(20, "get_protection_status snap_id=%llu",
-         (unsigned long long)snap_id.val);
-
-  if (snap_id == CEPH_NOSNAP)
-    return -EINVAL;
-
-  cls_rbd_snap snap;
-  string snapshot_key;
-  key_from_snap_id(snap_id.val, &snapshot_key);
-  r = read_key(hctx, snapshot_key, &snap);
-  if (r < 0) {
-    CLS_ERR("could not read key for snapshot id %"PRIu64, snap_id.val);
-    return r;
-  }
-
-  if (snap.protection_status >= RBD_PROTECTION_STATUS_LAST) {
-    CLS_ERR("invalid protection status for snap id %llu: %u",
-	    (unsigned long long)snap_id.val, snap.protection_status);
-    return -EIO;
-  }
-
-  ::encode(snap.protection_status, *out);
-  return 0;
-}
-
-/**
- * set the proctection status of a snapshot
- *
- * Input:
- * @param snapid (uint64_t) which snapshot to set the status of
- * @param status (uint8_t) one of:
- * RBD_PROTECTION_STATUS_{PROTECTED, UNPROTECTED, UNPROTECTING}
- *
- * @returns 0 on success, negative error code on failure
- * @returns -EINVAL if snapid is CEPH_NOSNAP
- */
-int set_protection_status(cls_method_context_t hctx, bufferlist *in,
-			  bufferlist *out)
-{
-  snapid_t snap_id;
-  uint8_t status;
-
-  bufferlist::iterator iter = in->begin();
-  try {
-    ::decode(snap_id, iter);
-    ::decode(status, iter);
-  } catch (const buffer::error &err) {
-    CLS_LOG(20, "set_protection_status: invalid decode");
-    return -EINVAL;
-  }
-
-  int r = check_exists(hctx);
-  if (r < 0)
-    return r;
-
-  r = require_feature(hctx, RBD_FEATURE_LAYERING);
-  if (r < 0) {
-    CLS_LOG(20, "image does not support layering");
-    return r;
-  }
-
-  CLS_LOG(20, "set_protection_status snapid=%llu status=%u",
-	  (unsigned long long)snap_id.val, status);
-
-  if (snap_id == CEPH_NOSNAP)
-    return -EINVAL;
-
-  if (status >= RBD_PROTECTION_STATUS_LAST) {
-    CLS_LOG(10, "invalid protection status for snap id %llu: %u",
-	    (unsigned long long)snap_id.val, status);
-    return -EINVAL;
-  }
-
-  cls_rbd_snap snap;
-  string snapshot_key;
-  key_from_snap_id(snap_id.val, &snapshot_key);
-  r = read_key(hctx, snapshot_key, &snap);
-  if (r < 0) {
-    CLS_ERR("could not read key for snapshot id %"PRIu64, snap_id.val);
-    return r;
-  }
-
-  snap.protection_status = status;
-  bufferlist snapshot_bl;
-  ::encode(snap, snapshot_bl);
-  r = cls_cxx_map_set_val(hctx, snapshot_key, &snapshot_bl);
-  if (r < 0) {
-    CLS_ERR("error writing snapshot metadata: %d", r);
-    return r;
-  }
-
-  return 0;
 }
 
 /**
@@ -679,12 +416,13 @@ int set_stripe_unit_count(cls_method_context_t hctx, bufferlist *in, bufferlist 
   uint8_t order;
   r = read_key(hctx, "order", &order);
   if (r < 0) {
-    CLS_ERR("failed to read the order off of disk: %s", cpp_strerror(r).c_str());
+    CLS_ERR("failed to read the order off of disk: %s",
+	    cpp_strerror(r).c_str());
     return r;
   }
   if ((1ull << order) % stripe_unit || stripe_unit > (1ull << order)) {
-    CLS_ERR("stripe unit %llu is not a factor of the object size %llu",
-            (unsigned long long)stripe_unit, 1ull << order);
+    CLS_ERR("stripe unit %"PRIu64" is not a factor of the object size %llu",
+	    stripe_unit, 1ull << order);
     return -EINVAL;
   }
 
@@ -708,438 +446,6 @@ int set_stripe_unit_count(cls_method_context_t hctx, bufferlist *in, bufferlist 
 
 
 /**
- * get the current parent, if any
- *
- * Input:
- * @param snap_id which snapshot to query, or CEPH_NOSNAP (uint64_t)
- *
- * Output:
- * @param pool parent pool id (-1 if parent does not exist)
- * @param image parent image id
- * @param snapid parent snapid
- * @param size portion of parent mapped under the child
- *
- * @returns 0 on success or parent does not exist, negative error code on failure
- */
-int get_parent(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  uint64_t snap_id;
-
-  bufferlist::iterator iter = in->begin();
-  try {
-    ::decode(snap_id, iter);
-  } catch (const buffer::error &err) {
-    return -EINVAL;
-  }
-
-  int r = check_exists(hctx);
-  if (r < 0)
-    return r;
-
-  CLS_LOG(20, "get_parent snap_id=%llu", (unsigned long long)snap_id);
-
-  cls_rbd_parent parent;
-  r = require_feature(hctx, RBD_FEATURE_LAYERING);
-  if (r == 0) {
-    if (snap_id == CEPH_NOSNAP) {
-      r = read_key(hctx, "parent", &parent);
-      if (r < 0 && r != -ENOENT)
-	return r;
-    } else {
-      cls_rbd_snap snap;
-      string snapshot_key;
-      key_from_snap_id(snap_id, &snapshot_key);
-      r = read_key(hctx, snapshot_key, &snap);
-      if (r < 0 && r != -ENOENT)
-	return r;
-      parent = snap.parent;
-    }
-  }
-
-  ::encode(parent.pool, *out);
-  ::encode(parent.id, *out);
-  ::encode(parent.snapid, *out);
-  ::encode(parent.overlap, *out);
-  return 0;
-}
-
-/**
- * set the image parent
- *
- * Input:
- * @param pool parent pool
- * @param id parent image id
- * @param snapid parent snapid
- * @param size parent size
- *
- * @returns 0 on success, or negative error code
- */
-int set_parent(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  int64_t pool;
-  string id;
-  snapid_t snapid;
-  uint64_t size;
-
-  bufferlist::iterator iter = in->begin();
-  try {
-    ::decode(pool, iter);
-    ::decode(id, iter);
-    ::decode(snapid, iter);
-    ::decode(size, iter);
-  } catch (const buffer::error &err) {
-    CLS_LOG(20, "cls_rbd::set_parent: invalid decode");
-    return -EINVAL;
-  }
-
-  int r = check_exists(hctx);
-  if (r < 0) {
-    CLS_LOG(20, "cls_rbd::set_parent: child already exists");
-    return r;
-  }
-
-  r = require_feature(hctx, RBD_FEATURE_LAYERING);
-  if (r < 0) {
-    CLS_LOG(20, "cls_rbd::set_parent: child does not support layering");
-    return r;
-  }
-
-  CLS_LOG(20, "set_parent pool=%llu id=%s snapid=%llu size=%llu",
-	  (unsigned long long)pool, id.c_str(), (unsigned long long)snapid.val,
-	  (unsigned long long)size);
-
-  if (pool < 0 || id.length() == 0 || snapid == CEPH_NOSNAP || size == 0) {
-    return -EINVAL;
-  }
-
-  // make sure there isn't already a parent
-  cls_rbd_parent parent;
-  r = read_key(hctx, "parent", &parent);
-  if (r == 0) {
-    CLS_LOG(20, "set_parent existing parent pool=%llu id=%s snapid=%llu"
-            "overlap=%llu", (unsigned long long)parent.pool, parent.id.c_str(),
-	    (unsigned long long)parent.snapid.val,
-	    (unsigned long long)parent.overlap);
-    return -EEXIST;
-  }
-
-  // our overlap is the min of our size and the parent's size.
-  uint64_t our_size;
-  r = read_key(hctx, "size", &our_size);
-  if (r < 0)
-    return r;
-
-  bufferlist parentbl;
-  parent.pool = pool;
-  parent.id = id;
-  parent.snapid = snapid;
-  parent.overlap = MIN(our_size, size);
-  ::encode(parent, parentbl);
-  r = cls_cxx_map_set_val(hctx, "parent", &parentbl);
-  if (r < 0) {
-    CLS_ERR("error writing parent: %d", r);
-    return r;
-  }
-
-  return 0;
-}
-
-
-/**
- * remove the parent pointer
- *
- * This can only happen on the head, not on a snapshot.  No arguments.
- *
- * @returns 0 on success, negative error code on failure.
- */
-int remove_parent(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  int r = check_exists(hctx);
-  if (r < 0)
-    return r;
-
-  r = require_feature(hctx, RBD_FEATURE_LAYERING);
-  if (r < 0)
-    return r;
-
-  cls_rbd_parent parent;
-  r = read_key(hctx, "parent", &parent);
-  if (r < 0)
-    return r;
-
-  r = cls_cxx_map_remove_key(hctx, "parent");
-  if (r < 0) {
-    CLS_ERR("error removing parent: %d", r);
-    return r;
-  }
-
-  return 0;
-}
-
-/**
- * methods for dealing with rbd_children object
- */
-
-static int decode_parent_common(bufferlist::iterator& it, uint64_t *pool_id,
-				string *image_id, snapid_t *snap_id)
-{
-  try {
-    ::decode(*pool_id, it);
-    ::decode(*image_id, it);
-    ::decode(*snap_id, it);
-  } catch (const buffer::error &err) {
-    CLS_ERR("error decoding parent spec");
-    return -EINVAL;
-  }
-  return 0;
-}
-
-static int decode_parent(bufferlist *in, uint64_t *pool_id,
-			 string *image_id, snapid_t *snap_id)
-{
-  bufferlist::iterator it = in->begin();
-  return decode_parent_common(it, pool_id, image_id, snap_id);
-}
-
-static int decode_parent_and_child(bufferlist *in, uint64_t *pool_id,
-			           string *image_id, snapid_t *snap_id,
-				   string *c_image_id)
-{
-  bufferlist::iterator it = in->begin();
-  int r = decode_parent_common(it, pool_id, image_id, snap_id);
-  if (r < 0)
-    return r;
-  try {
-    ::decode(*c_image_id, it);
-  } catch (const buffer::error &err) {
-    CLS_ERR("error decoding child image id");
-    return -EINVAL;
-  }
-  return 0;
-}
-
-static string parent_key(uint64_t pool_id, string image_id, snapid_t snap_id)
-{
-  bufferlist key_bl;
-  ::encode(pool_id, key_bl);
-  ::encode(image_id, key_bl);
-  ::encode(snap_id, key_bl);
-  return string(key_bl.c_str(), key_bl.length());
-}
-
-/**
- * add child to rbd_children directory object
- *
- * rbd_children is a map of (p_pool_id, p_image_id, p_snap_id) to
- * [c_image_id, [c_image_id ... ]]
- *
- * Input:
- * @param p_pool_id parent pool id
- * @param p_image_id parent image oid
- * @param p_snap_id parent snapshot id
- * @param c_image_id new child image oid to add
- *
- * @returns 0 on success, negative error on failure
- */
-
-int add_child(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  int r;
-
-  uint64_t p_pool_id;
-  snapid_t p_snap_id;
-  string p_image_id, c_image_id;
-  // Use set for ease of erase() for remove_child()
-  std::set<string> children;
-
-  r = decode_parent_and_child(in, &p_pool_id, &p_image_id, &p_snap_id,
-			      &c_image_id);
-  if (r < 0)
-    return r;
-
-  CLS_LOG(20, "add_child %s to (%"PRIu64", %s, %"PRIu64")", c_image_id.c_str(),
-	  p_pool_id, p_image_id.c_str(), p_snap_id.val);
-
-  string key = parent_key(p_pool_id, p_image_id, p_snap_id);
-
-  // get current child list for parent, if any
-  r = read_key(hctx, key, &children);
-  if ((r < 0) && (r != -ENOENT)) {
-    CLS_LOG(20, "add_child: omap read failed: %d", r);
-    return r;
-  }
-
-  if (children.find(c_image_id) != children.end()) {
-    CLS_LOG(20, "add_child: child already exists: %s", c_image_id.c_str());
-    return -EEXIST;
-  }
-  // add new child
-  children.insert(c_image_id);
-
-  // write back
-  bufferlist childbl;
-  ::encode(children, childbl);
-  r = cls_cxx_map_set_val(hctx, key, &childbl);
-  if (r < 0)
-    CLS_LOG(20, "add_child: omap write failed: %d", r);
-  return r;
-}
-
-/**
- * remove child from rbd_children directory object
- *
- * Input:
- * @param p_pool_id parent pool id
- * @param p_image_id parent image oid
- * @param p_snap_id parent snapshot id
- * @param c_image_id new child image oid to add
- *
- * @returns 0 on success, negative error on failure
- */
-
-int remove_child(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  int r;
-
-  uint64_t p_pool_id;
-  snapid_t p_snap_id;
-  string p_image_id, c_image_id;
-  std::set<string> children;
-
-  r = decode_parent_and_child(in, &p_pool_id, &p_image_id, &p_snap_id,
-			      &c_image_id);
-  if (r < 0)
-    return r;
-
-  CLS_LOG(20, "remove_child %s from (%"PRIu64", %s, %"PRIu64")",
-	       c_image_id.c_str(), p_pool_id, p_image_id.c_str(),
-	       p_snap_id.val);
-
-  string key = parent_key(p_pool_id, p_image_id, p_snap_id);
-
-  // get current child list for parent.  Unlike add_child(), an empty list
-  // is an error (how can we remove something that doesn't exist?)
-  r = read_key(hctx, key, &children);
-  if (r < 0) {
-    CLS_LOG(20, "remove_child: read omap failed: %d", r);
-    return r;
-  }
-
-  if (children.find(c_image_id) == children.end()) {
-    CLS_LOG(20, "remove_child: child not found: %s", c_image_id.c_str());
-    return -ENOENT;
-  }
-  // find and remove child
-  children.erase(c_image_id);
-
-  // now empty?  remove key altogether
-  if (children.empty()) {
-    r = cls_cxx_map_remove_key(hctx, key);
-    if (r < 0)
-      CLS_LOG(20, "remove_child: remove key failed: %d", r);
-  } else {
-    // write back shortened children list
-    bufferlist childbl;
-    ::encode(children, childbl);
-    r = cls_cxx_map_set_val(hctx, key, &childbl);
-    if (r < 0)
-      CLS_LOG(20, "remove_child: write omap failed: %d ", r);
-  }
-  return r;
-}
-
-/**
- * Input:
- * @param p_pool_id parent pool id
- * @param p_image_id parent image oid
- * @param p_snap_id parent snapshot id
- * @param c_image_id new child image oid to add
- *
- * Output:
- * @param children set<string> of children
- *
- * @returns 0 on success, negative error on failure
- */
-int get_children(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  int r;
-  uint64_t p_pool_id;
-  snapid_t p_snap_id;
-  string p_image_id;
-  std::set<string> children;
-
-  r = decode_parent(in, &p_pool_id, &p_image_id, &p_snap_id);
-  if (r < 0)
-    return r;
-
-  CLS_LOG(20, "get_children of (%"PRIu64", %s, %"PRIu64")",
-	  p_pool_id, p_image_id.c_str(), p_snap_id.val);
-
-  string key = parent_key(p_pool_id, p_image_id, p_snap_id);
-
-  r = read_key(hctx, key, &children);
-  if (r < 0) {
-    if (r != -ENOENT)
-      CLS_LOG(20, "get_children: read omap failed: %d", r);
-    return r;
-  }
-  ::encode(children, *out);
-  return 0;
-}
-
-
-/**
- * Get the information needed to create a rados snap context for doing
- * I/O to the data objects. This must include all snapshots.
- *
- * Output:
- * @param snap_seq the highest snapshot id ever associated with the image (uint64_t)
- * @param snap_ids existing snapshot ids in descending order (vector<uint64_t>)
- * @returns 0 on success, negative error code on failure
- */
-int get_snapcontext(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  CLS_LOG(20, "get_snapcontext");
-
-  int r;
-  int max_read = RBD_MAX_KEYS_READ;
-  vector<snapid_t> snap_ids;
-  string last_read = RBD_SNAP_KEY_PREFIX;
-
-  do {
-    set<string> keys;
-    r = cls_cxx_map_get_keys(hctx, last_read, max_read, &keys);
-    if (r < 0)
-      return r;
-
-    for (set<string>::const_iterator it = keys.begin();
-	 it != keys.end(); ++it) {
-      if ((*it).find(RBD_SNAP_KEY_PREFIX) != 0)
-	break;
-      snapid_t snap_id = snap_id_from_key(*it);
-      snap_ids.push_back(snap_id);
-    }
-    if (!keys.empty())
-      last_read = *(keys.rbegin());
-  } while (r == max_read);
-
-  uint64_t snap_seq;
-  r = read_key(hctx, "snap_seq", &snap_seq);
-  if (r < 0) {
-    CLS_ERR("could not read the image's snap_seq off disk: %s", cpp_strerror(r).c_str());
-    return r;
-  }
-
-  // snap_ids must be descending in a snap context
-  std::reverse(snap_ids.begin(), snap_ids.end());
-
-  ::encode(snap_seq, *out);
-  ::encode(snap_ids, *out);
-
-  return 0;
-}
-
-/**
  * Output:
  * @param object_prefix prefix for data object names (string)
  * @returns 0 on success, negative error code on failure
@@ -1152,198 +458,11 @@ int get_object_prefix(cls_method_context_t hctx, bufferlist *in, bufferlist *out
   int r = read_key(hctx, "object_prefix", &object_prefix);
   if (r < 0) {
     CLS_ERR("failed to read the image's object prefix off of disk: %s",
-            cpp_strerror(r).c_str());
+	    cpp_strerror(r).c_str());
     return r;
   }
 
   ::encode(object_prefix, *out);
-
-  return 0;
-}
-
-int get_snapshot_name(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  uint64_t snap_id;
-
-  bufferlist::iterator iter = in->begin();
-  try {
-    ::decode(snap_id, iter);
-  } catch (const buffer::error &err) {
-    return -EINVAL;
-  }
-
-  CLS_LOG(20, "get_snapshot_name snap_id=%llu", (unsigned long long)snap_id);
-
-  if (snap_id == CEPH_NOSNAP)
-    return -EINVAL;
-
-  cls_rbd_snap snap;
-  string snapshot_key;
-  key_from_snap_id(snap_id, &snapshot_key);
-  int r = read_key(hctx, snapshot_key, &snap);
-  if (r < 0)
-    return r;
-
-  ::encode(snap.name, *out);
-
-  return 0;
-}
-
-/**
- * Adds a snapshot to an rbd header. Ensures the id and name are unique.
- *
- * Input:
- * @param snap_name name of the snapshot (string)
- * @param snap_id id of the snapshot (uint64_t)
- *
- * Output:
- * @returns 0 on success, negative error code on failure.
- * @returns -ESTALE if the input snap_id is less than the image's snap_seq
- * @returns -EEXIST if the id or name are already used by another snapshot
- */
-int snapshot_add(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  bufferlist snap_namebl, snap_idbl;
-  cls_rbd_snap snap_meta;
-
-  try {
-    bufferlist::iterator iter = in->begin();
-    ::decode(snap_meta.name, iter);
-    ::decode(snap_meta.id, iter);
-  } catch (const buffer::error &err) {
-    return -EINVAL;
-  }
-
-  CLS_LOG(20, "snapshot_add name=%s id=%llu", snap_meta.name.c_str(),
-	 (unsigned long long)snap_meta.id.val);
-
-  if (snap_meta.id > CEPH_MAXSNAP)
-    return -EINVAL;
-
-  uint64_t cur_snap_seq;
-  int r = read_key(hctx, "snap_seq", &cur_snap_seq);
-  if (r < 0) {
-    CLS_ERR("Could not read image's snap_seq off disk: %s", cpp_strerror(r).c_str());
-    return r;
-  }
-
-  // client lost a race with another snapshot creation.
-  // snap_seq must be monotonically increasing.
-  if (snap_meta.id < cur_snap_seq)
-    return -ESTALE;
-
-  r = read_key(hctx, "size", &snap_meta.image_size);
-  if (r < 0) {
-    CLS_ERR("Could not read image's size off disk: %s", cpp_strerror(r).c_str());
-    return r;
-  }
-  r = read_key(hctx, "features", &snap_meta.features);
-  if (r < 0) {
-    CLS_ERR("Could not read image's features off disk: %s", cpp_strerror(r).c_str());
-    return r;
-  }
-
-  int max_read = RBD_MAX_KEYS_READ;
-  string last_read = RBD_SNAP_KEY_PREFIX;
-  do {
-    map<string, bufferlist> vals;
-    r = cls_cxx_map_get_vals(hctx, last_read, RBD_SNAP_KEY_PREFIX,
-			     max_read, &vals);
-    if (r < 0)
-      return r;
-
-    for (map<string, bufferlist>::iterator it = vals.begin();
-	 it != vals.end(); ++it) {
-      cls_rbd_snap old_meta;
-      bufferlist::iterator iter = it->second.begin();
-      try {
-	::decode(old_meta, iter);
-      } catch (const buffer::error &err) {
-	snapid_t snap_id = snap_id_from_key(it->first);
-	CLS_ERR("error decoding snapshot metadata for snap_id: %llu",
-	        (unsigned long long)snap_id.val);
-	return -EIO;
-      }
-      if (snap_meta.name == old_meta.name || snap_meta.id == old_meta.id) {
-	CLS_LOG(20, "snap_name %s or snap_id %llu matches existing snap %s %llu",
-		snap_meta.name.c_str(), (unsigned long long)snap_meta.id.val,
-		old_meta.name.c_str(), (unsigned long long)old_meta.id.val);
-	return -EEXIST;
-      }
-    }
-
-    if (!vals.empty())
-      last_read = vals.rbegin()->first;
-  } while (r == RBD_MAX_KEYS_READ);
-
-  // snapshot inherits parent, if any
-  cls_rbd_parent parent;
-  r = read_key(hctx, "parent", &parent);
-  if (r < 0 && r != -ENOENT)
-    return r;
-  if (r == 0) {
-    snap_meta.parent = parent;
-  }
-
-  bufferlist snap_metabl, snap_seqbl;
-  ::encode(snap_meta, snap_metabl);
-  ::encode(snap_meta.id, snap_seqbl);
-
-  string snapshot_key;
-  key_from_snap_id(snap_meta.id, &snapshot_key);
-  map<string, bufferlist> vals;
-  vals["snap_seq"] = snap_seqbl;
-  vals[snapshot_key] = snap_metabl;
-  r = cls_cxx_map_set_vals(hctx, &vals);
-  if (r < 0) {
-    CLS_ERR("error writing snapshot metadata: %d", r);
-    return r;
-  }
-
-  return 0;
-}
-
-/**
- * Removes a snapshot from an rbd header.
- *
- * Input:
- * @param snap_id the id of the snapshot to remove (uint64_t)
- *
- * Output:
- * @returns 0 on success, negative error code on failure
- */
-int snapshot_remove(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  snapid_t snap_id;
-
-  try {
-    bufferlist::iterator iter = in->begin();
-    ::decode(snap_id, iter);
-  } catch (const buffer::error &err) {
-    return -EINVAL;
-  }
-
-  CLS_LOG(20, "snapshot_remove id=%llu", (unsigned long long)snap_id.val);
-
-  // check if the key exists. we can't rely on remove_key doing this for
-  // us, since OMAPRMKEYS returns success if the key is not there.
-  // bug or feature? sounds like a bug, since tmap did not have this
-  // behavior, but cls_rgw may rely on it...
-  cls_rbd_snap snap;
-  string snapshot_key;
-  key_from_snap_id(snap_id, &snapshot_key);
-  int r = read_key(hctx, snapshot_key, &snap);
-  if (r == -ENOENT)
-    return -ENOENT;
-
-  if (snap.protection_status != RBD_PROTECTION_STATUS_UNPROTECTED)
-    return -EBUSY;
-
-  r = cls_cxx_map_remove_key(hctx, snapshot_key);
-  if (r < 0) {
-    CLS_ERR("error writing snapshot metadata: %d", r);
-    return r;
-  }
 
   return 0;
 }
@@ -1357,34 +476,6 @@ int get_all_features(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   ::encode(all_features, *out);
   return 0;
 }
-
-/**
- * "Copy up" data from the parent of a clone to the clone's object(s).
- * Used for implementing copy-on-write for a clone image.  Client
- * will pass down a chunk of data that fits completely within one
- * clone block (one object), and is aligned (starts at beginning of block),
- * but may be shorter (for non-full parent blocks).  The class method
- * can't know the object size to validate the requested length,
- * so it just writes the data as given if the child object doesn't
- * already exist, and returns success if it does.
- *
- * Input:
- * @param in bufferlist of data to write
- *
- * Output:
- * @returns 0 on success, or if block already exists in child
- *  negative error code on other error
- */
-
-int copyup(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  // check for existence; if child object exists, just return success
-  if (cls_cxx_stat(hctx, NULL, NULL) == 0)
-    return 0;
-  CLS_LOG(20, "copyup: writing length %d\n", in->length());
-  return cls_cxx_write(hctx, 0, in->length(), in);
-}
-
 
 /************************ rbd_id object methods **************************/
 
@@ -1776,7 +867,8 @@ int dir_add_image(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
  * @returns -ESTALE if the name and id do not map to each other
  * @returns 0 on success, negative error code on failure
  */
-int dir_remove_image(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
+int dir_remove_image(cls_method_context_t hctx, bufferlist *in,
+		     bufferlist *out)
 {
   string name, id;
   try {
@@ -1788,201 +880,6 @@ int dir_remove_image(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   }
 
   return dir_remove_image_helper(hctx, name, id);
-}
-
-/****************************** Old format *******************************/
-
-int old_snapshots_list(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  bufferlist bl;
-  struct rbd_obj_header_ondisk *header;
-  int rc = snap_read_header(hctx, bl);
-  if (rc < 0)
-    return rc;
-
-  header = (struct rbd_obj_header_ondisk *)bl.c_str();
-  bufferptr p(header->snap_names_len);
-  char *buf = (char *)header;
-  char *name = buf + sizeof(*header) + header->snap_count * sizeof(struct rbd_obj_snap_ondisk);
-  char *end = name + header->snap_names_len;
-  memcpy(p.c_str(),
-         buf + sizeof(*header) + header->snap_count * sizeof(struct rbd_obj_snap_ondisk),
-         header->snap_names_len);
-
-  ::encode(header->snap_seq, *out);
-  ::encode(header->snap_count, *out);
-
-  for (unsigned i = 0; i < header->snap_count; i++) {
-    string s = name;
-    ::encode(header->snaps[i].id, *out);
-    ::encode(header->snaps[i].image_size, *out);
-    ::encode(s, *out);
-
-    name += strlen(name) + 1;
-    if (name > end)
-      return -EIO;
-  }
-
-  return 0;
-}
-
-int old_snapshot_add(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  bufferlist bl;
-  struct rbd_obj_header_ondisk *header;
-  bufferlist newbl;
-  bufferptr header_bp(sizeof(*header));
-  struct rbd_obj_snap_ondisk *new_snaps;
-
-  int rc = snap_read_header(hctx, bl);
-  if (rc < 0)
-    return rc;
-
-  header = (struct rbd_obj_header_ondisk *)bl.c_str();
-
-  int snaps_id_ofs = sizeof(*header);
-  int names_ofs = snaps_id_ofs + sizeof(*new_snaps) * header->snap_count;
-  const char *snap_name;
-  const char *snap_names = ((char *)header) + names_ofs;
-  const char *end = snap_names + header->snap_names_len;
-  bufferlist::iterator iter = in->begin();
-  string s;
-  uint64_t snap_id;
-
-  try {
-    ::decode(s, iter);
-    ::decode(snap_id, iter);
-  } catch (const buffer::error &err) {
-    return -EINVAL;
-  }
-  snap_name = s.c_str();
-
-  if (header->snap_seq > snap_id)
-    return -ESTALE;
-
-  const char *cur_snap_name;
-  for (cur_snap_name = snap_names; cur_snap_name < end; cur_snap_name += strlen(cur_snap_name) + 1) {
-    if (strncmp(cur_snap_name, snap_name, end - cur_snap_name) == 0)
-      return -EEXIST;
-  }
-  if (cur_snap_name > end)
-    return -EIO;
-
-  int snap_name_len = strlen(snap_name);
-
-  bufferptr new_names_bp(header->snap_names_len + snap_name_len + 1);
-  bufferptr new_snaps_bp(sizeof(*new_snaps) * (header->snap_count + 1));
-
-  /* copy snap names and append to new snap name */
-  char *new_snap_names = new_names_bp.c_str();
-  strcpy(new_snap_names, snap_name);
-  memcpy(new_snap_names + snap_name_len + 1, snap_names, header->snap_names_len);
-
-  /* append new snap id */
-  new_snaps = (struct rbd_obj_snap_ondisk *)new_snaps_bp.c_str();
-  memcpy(new_snaps + 1, header->snaps, sizeof(*new_snaps) * header->snap_count);
-
-  header->snap_count = header->snap_count + 1;
-  header->snap_names_len = header->snap_names_len + snap_name_len + 1;
-  header->snap_seq = snap_id;
-
-  new_snaps[0].id = snap_id;
-  new_snaps[0].image_size = header->image_size;
-
-  memcpy(header_bp.c_str(), header, sizeof(*header));
-
-  newbl.push_back(header_bp);
-  newbl.push_back(new_snaps_bp);
-  newbl.push_back(new_names_bp);
-
-  rc = cls_cxx_write_full(hctx, &newbl);
-  if (rc < 0)
-    return rc;
-
-  return 0;
-}
-
-int old_snapshot_remove(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
-{
-  bufferlist bl;
-  struct rbd_obj_header_ondisk *header;
-  bufferlist newbl;
-  bufferptr header_bp(sizeof(*header));
-
-  int rc = snap_read_header(hctx, bl);
-  if (rc < 0)
-    return rc;
-
-  header = (struct rbd_obj_header_ondisk *)bl.c_str();
-
-  int snaps_id_ofs = sizeof(*header);
-  int names_ofs = snaps_id_ofs + sizeof(struct rbd_obj_snap_ondisk) * header->snap_count;
-  const char *snap_name;
-  const char *snap_names = ((char *)header) + names_ofs;
-  const char *orig_names = snap_names;
-  const char *end = snap_names + header->snap_names_len;
-  bufferlist::iterator iter = in->begin();
-  string s;
-  unsigned i;
-  bool found = false;
-  struct rbd_obj_snap_ondisk snap;
-
-  try {
-    ::decode(s, iter);
-  } catch (const buffer::error &err) {
-    return -EINVAL;
-  }
-  snap_name = s.c_str();
-
-  for (i = 0; snap_names < end; i++) {
-    if (strcmp(snap_names, snap_name) == 0) {
-      snap = header->snaps[i];
-      found = true;
-      break;
-    }
-    snap_names += strlen(snap_names) + 1;
-  }
-  if (!found) {
-    CLS_ERR("couldn't find snap %s\n", snap_name);
-    return -ENOENT;
-  }
-
-  header->snap_names_len  = header->snap_names_len - (s.length() + 1);
-  header->snap_count = header->snap_count - 1;
-
-  bufferptr new_names_bp(header->snap_names_len);
-  bufferptr new_snaps_bp(sizeof(header->snaps[0]) * header->snap_count);
-
-  memcpy(header_bp.c_str(), header, sizeof(*header));
-  newbl.push_back(header_bp);
-
-  if (header->snap_count) {
-    int snaps_len = 0;
-    int names_len = 0;
-    CLS_LOG(20, "i=%d\n", i);
-    if (i > 0) {
-      snaps_len = sizeof(header->snaps[0]) * i;
-      names_len =  snap_names - orig_names;
-      memcpy(new_snaps_bp.c_str(), header->snaps, snaps_len);
-      memcpy(new_names_bp.c_str(), orig_names, names_len);
-    }
-    snap_names += s.length() + 1;
-
-    if (i < header->snap_count) {
-      memcpy(new_snaps_bp.c_str() + snaps_len,
-             header->snaps + i + 1,
-             sizeof(header->snaps[0]) * (header->snap_count - i));
-      memcpy(new_names_bp.c_str() + names_len, snap_names , end - snap_names);
-    }
-    newbl.push_back(new_snaps_bp);
-    newbl.push_back(new_names_bp);
-  }
-
-  rc = cls_cxx_write_full(hctx, &newbl);
-  if (rc < 0)
-    return rc;
-
-  return 0;
 }
 
 
@@ -2003,42 +900,12 @@ void __cls_init()
   cls_register_cxx_method(h_class, "set_size",
 			  CLS_METHOD_RD | CLS_METHOD_WR,
 			  set_size, &h_set_size);
-  cls_register_cxx_method(h_class, "get_snapcontext",
-			  CLS_METHOD_RD,
-			  get_snapcontext, &h_get_snapcontext);
   cls_register_cxx_method(h_class, "get_object_prefix",
 			  CLS_METHOD_RD,
 			  get_object_prefix, &h_get_object_prefix);
-  cls_register_cxx_method(h_class, "get_snapshot_name",
-			  CLS_METHOD_RD,
-			  get_snapshot_name, &h_get_snapshot_name);
-  cls_register_cxx_method(h_class, "snapshot_add",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  snapshot_add, &h_snapshot_add);
-  cls_register_cxx_method(h_class, "snapshot_remove",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  snapshot_remove, &h_snapshot_remove);
   cls_register_cxx_method(h_class, "get_all_features",
 			  CLS_METHOD_RD,
 			  get_all_features, &h_get_all_features);
-  cls_register_cxx_method(h_class, "copyup",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  copyup, &h_copyup);
-  cls_register_cxx_method(h_class, "get_parent",
-			  CLS_METHOD_RD,
-			  get_parent, &h_get_parent);
-  cls_register_cxx_method(h_class, "set_parent",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  set_parent, &h_set_parent);
-  cls_register_cxx_method(h_class, "remove_parent",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  remove_parent, &h_remove_parent);
-  cls_register_cxx_method(h_class, "set_protection_status",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  set_protection_status, &h_set_protection_status);
-  cls_register_cxx_method(h_class, "get_protection_status",
-			  CLS_METHOD_RD,
-			  get_protection_status, &h_get_protection_status);
   cls_register_cxx_method(h_class, "get_stripe_unit_count",
 			  CLS_METHOD_RD,
 			  get_stripe_unit_count, &h_get_stripe_unit_count);
@@ -2046,16 +913,6 @@ void __cls_init()
 			  CLS_METHOD_RD | CLS_METHOD_WR,
 			  set_stripe_unit_count, &h_set_stripe_unit_count);
 
-  /* methods for the rbd_children object */
-  cls_register_cxx_method(h_class, "add_child",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  add_child, &h_add_child);
-  cls_register_cxx_method(h_class, "remove_child",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  remove_child, &h_remove_child);
-  cls_register_cxx_method(h_class, "get_children",
-			  CLS_METHOD_RD,
-			  get_children, &h_get_children);
 
   /* methods for the rbd_id.$image_name objects */
   cls_register_cxx_method(h_class, "get_id",
@@ -2084,17 +941,6 @@ void __cls_init()
   cls_register_cxx_method(h_class, "dir_rename_image",
 			  CLS_METHOD_RD | CLS_METHOD_WR,
 			  dir_rename_image, &h_dir_rename_image);
-
-  /* methods for the old format */
-  cls_register_cxx_method(h_class, "snap_list",
-			  CLS_METHOD_RD,
-			  old_snapshots_list, &h_old_snapshots_list);
-  cls_register_cxx_method(h_class, "snap_add",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  old_snapshot_add, &h_old_snapshot_add);
-  cls_register_cxx_method(h_class, "snap_remove",
-			  CLS_METHOD_RD | CLS_METHOD_WR,
-			  old_snapshot_remove, &h_old_snapshot_remove);
 
   return;
 }

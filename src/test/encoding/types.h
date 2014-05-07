@@ -294,11 +294,6 @@ TYPE(rgw_obj)
 #include "rgw/rgw_log.h"
 TYPE(rgw_log_entry)
 TYPE(rgw_intent_log_entry)
-
-#include "cls/rbd/cls_rbd.h"
-TYPE(cls_rbd_parent)
-TYPE(cls_rbd_snap)
-
 #endif
 
 #include "cls/lock/cls_lock_types.h"

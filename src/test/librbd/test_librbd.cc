@@ -115,9 +115,10 @@ TEST(LibRBD, CreateAndStat)
   uint64_t size = 2 << 20;
   
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
   ASSERT_EQ(0, rbd_stat(image, &info, sizeof(info)));
-  printf("image has size %llu and order %d\n", (unsigned long long) info.size, info.order);
+  printf("image has size %"PRIu64" and order %d\n",
+	 info.size, info.order);
   ASSERT_EQ(info.size, size);
   ASSERT_EQ(info.order, order);
   ASSERT_EQ(0, rbd_close(image));
@@ -144,7 +145,7 @@ TEST(LibRBD, CreateAndStatPP)
     uint64_t size = 2 << 20;
     
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
+    ASSERT_EQ(0, rbd.open(ioctx, image, name));
     ASSERT_EQ(0, image.stat(info, sizeof(info)));
     ASSERT_EQ(info.size, size);
     ASSERT_EQ(info.order, order);
@@ -169,7 +170,7 @@ TEST(LibRBD, ResizeAndStat)
   uint64_t size = 2 << 20;
   
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   ASSERT_EQ(0, rbd_resize(image, size * 4));
   ASSERT_EQ(0, rbd_stat(image, &info, sizeof(info)));
@@ -203,7 +204,7 @@ TEST(LibRBD, ResizeAndStatPP)
     uint64_t size = 2 << 20;
     
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
+    ASSERT_EQ(0, rbd.open(ioctx, image, name));
     
     ASSERT_EQ(0, image.resize(size * 4));
     ASSERT_EQ(0, image.stat(info, sizeof(info)));
@@ -376,7 +377,7 @@ TEST(LibRBD, TestCopy)
   uint64_t size = 2 << 20;
   
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
   ASSERT_EQ(1, test_ls(ioctx, 1, name));
   ASSERT_EQ(0, rbd_copy(image, ioctx, name2));
   ASSERT_EQ(2, test_ls(ioctx, 2, name, name2));
@@ -420,7 +421,7 @@ TEST(LibRBD, TestCopyPP)
     PrintProgress pp;
 
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
+    ASSERT_EQ(0, rbd.open(ioctx, image, name));
     ASSERT_EQ(1, test_ls_pp(rbd, ioctx, 1, name));
     ASSERT_EQ(0, image.copy(ioctx, name2));
     ASSERT_EQ(2, test_ls_pp(rbd, ioctx, 2, name, name2));
@@ -432,166 +433,7 @@ TEST(LibRBD, TestCopyPP)
   ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
 }
 
-int test_ls_snaps(rbd_image_t image, int num_expected, ...)
-{
-  int num_snaps, i, j, max_size = 10;
-  va_list ap;
-  rbd_snap_info_t snaps[max_size];
-  num_snaps = rbd_snap_list(image, snaps, &max_size);
-  printf("num snaps is: %d\nexpected: %d\n", num_snaps, num_expected);
-
-  for (i = 0; i < num_snaps; i++) {
-    printf("snap: %s\n", snaps[i].name);
-  }
-
-  va_start(ap, num_expected);
-  for (i = num_expected; i > 0; i--) {
-    char *expected = va_arg(ap, char *);
-    uint64_t expected_size = va_arg(ap, uint64_t);
-    int found = 0;
-    for (j = 0; j < num_snaps; j++) {
-      if (snaps[j].name == NULL)
-	continue;
-      if (strcmp(snaps[j].name, expected) == 0) {
-	printf("found %s with size %llu\n", snaps[j].name, (unsigned long long) snaps[j].size);
-	assert(snaps[j].size == expected_size);
-	free((void *) snaps[j].name);
-	snaps[j].name = NULL;
-	found = 1;
-	break;
-      }
-    }
-    assert(found);
-  }
-  va_end(ap);
-
-  for (i = 0; i < num_snaps; i++) {
-    assert(snaps[i].name == NULL);
-  }
-
-  return num_snaps;
-}
-
-TEST(LibRBD, TestCreateLsDeleteSnap)
-{
-  rados_t cluster;
-  rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
-
-  rbd_image_t image;
-  int order = 0;
-  const char *name = "testimg";
-  uint64_t size = 2 << 20;
-  uint64_t size2 = 4 << 20;
-  
-  ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
-
-  ASSERT_EQ(0, rbd_snap_create(image, "snap1"));
-  ASSERT_EQ(1, test_ls_snaps(image, 1, "snap1", size));
-  ASSERT_EQ(0, rbd_resize(image, size2));
-  ASSERT_EQ(0, rbd_snap_create(image, "snap2"));
-  ASSERT_EQ(2, test_ls_snaps(image, 2, "snap1", size, "snap2", size2));
-  ASSERT_EQ(0, rbd_snap_remove(image, "snap1"));
-  ASSERT_EQ(1, test_ls_snaps(image, 1, "snap2", size2));
-  ASSERT_EQ(0, rbd_snap_remove(image, "snap2"));
-  ASSERT_EQ(0, test_ls_snaps(image, 0));
-  
-  ASSERT_EQ(0, rbd_close(image));
-
-  rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
-}
-
-int test_ls_snaps(librbd::Image& image, size_t num_expected, ...)
-{
-  int r;
-  size_t i, j;
-  va_list ap;
-  vector<librbd::snap_info_t> snaps;
-  r = image.snap_list(snaps);
-  assert(r >= 0);
-  cout << "num snaps is: " << snaps.size() << endl
-	    << "expected: " << num_expected << endl;
-
-  for (i = 0; i < snaps.size(); i++) {
-    cout << "snap: " << snaps[i].name << endl;
-  }
-
-  va_start(ap, num_expected);
-  for (i = num_expected; i > 0; i--) {
-    char *expected = va_arg(ap, char *);
-    uint64_t expected_size = va_arg(ap, uint64_t);
-    int found = 0;
-    for (j = 0; j < snaps.size(); j++) {
-      if (snaps[j].name == "")
-	continue;
-      if (strcmp(snaps[j].name.c_str(), expected) == 0) {
-	cout << "found " << snaps[j].name << " with size " << snaps[j].size << endl;
-	assert(snaps[j].size == expected_size);
-	snaps[j].name = "";
-	found = 1;
-	break;
-      }
-    }
-    assert(found);
-  }
-  va_end(ap);
-
-  for (i = 0; i < snaps.size(); i++) {
-    assert(snaps[i].name == "");
-  }
-
-  return snaps.size();
-}
-
-TEST(LibRBD, TestCreateLsDeleteSnapPP)
-{
-  librados::Rados rados;
-  librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
-
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
-
-  {
-    librbd::RBD rbd;
-    librbd::Image image;
-    int order = 0;
-    const char *name = "testimg";
-    uint64_t size = 2 << 20;
-    uint64_t size2 = 4 << 20;
-    
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
-
-    ASSERT_FALSE(image.snap_exists("snap1"));
-    ASSERT_EQ(0, image.snap_create("snap1"));
-    ASSERT_TRUE(image.snap_exists("snap1"));
-    ASSERT_EQ(1, test_ls_snaps(image, 1, "snap1", size));
-    ASSERT_EQ(0, image.resize(size2));
-    ASSERT_FALSE(image.snap_exists("snap2"));
-    ASSERT_EQ(0, image.snap_create("snap2"));
-    ASSERT_TRUE(image.snap_exists("snap2"));
-    ASSERT_EQ(2, test_ls_snaps(image, 2, "snap1", size, "snap2", size2));
-    ASSERT_EQ(0, image.snap_remove("snap1"));
-    ASSERT_FALSE(image.snap_exists("snap1"));
-    ASSERT_EQ(1, test_ls_snaps(image, 1, "snap2", size2));
-    ASSERT_EQ(0, image.snap_remove("snap2"));
-    ASSERT_FALSE(image.snap_exists("snap2"));
-    ASSERT_EQ(0, test_ls_snaps(image, 0));
-  }
-
-  ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
-}
-
-
-
 #define TEST_IO_SIZE 512
-#define TEST_IO_TO_SNAP_SIZE 80
 
 void simple_write_cb(rbd_completion_t cb, void *arg)
 {
@@ -699,7 +541,7 @@ TEST(LibRBD, TestIO)
   uint64_t size = 2 << 20;
   
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   char test_data[TEST_IO_SIZE + 1];
   char zero_data[TEST_IO_SIZE + 1];
@@ -768,7 +610,7 @@ TEST(LibRBD, TestEmptyDiscard)
   uint64_t size = 20 << 20;
   
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   aio_discard_test_data(image, 0, 1*1024*1024);
   aio_discard_test_data(image, 0, 4*1024*1024);
@@ -880,7 +722,7 @@ TEST(LibRBD, TestIOPP)
     uint64_t size = 2 << 20;
     
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
+    ASSERT_EQ(0, rbd.open(ioctx, image, name));
 
     char test_data[TEST_IO_SIZE + 1];
     char zero_data[TEST_IO_SIZE + 1];
@@ -921,419 +763,6 @@ TEST(LibRBD, TestIOPP)
 }
 
 
-TEST(LibRBD, TestIOToSnapshot)
-{
-  rados_t cluster;
-  rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
-
-  rbd_image_t image;
-  int order = 0;
-  const char *name = "testimg";
-  uint64_t isize = 2 << 20;
-  
-  ASSERT_EQ(0, create_image(ioctx, name, isize, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
-
-  int i, r;
-  rbd_image_t image_at_snap;
-  char orig_data[TEST_IO_TO_SNAP_SIZE + 1];
-  char test_data[TEST_IO_TO_SNAP_SIZE + 1];
-
-  for (i = 0; i < TEST_IO_TO_SNAP_SIZE; ++i)
-    test_data[i] = (char) (i + 48);
-  test_data[TEST_IO_TO_SNAP_SIZE] = '\0';
-  orig_data[TEST_IO_TO_SNAP_SIZE] = '\0';
-
-  r = rbd_read(image, 0, TEST_IO_TO_SNAP_SIZE, orig_data);
-  ASSERT_EQ(r, TEST_IO_TO_SNAP_SIZE);
-
-  ASSERT_EQ(0, test_ls_snaps(image, 0));
-  ASSERT_EQ(0, rbd_snap_create(image, "orig"));
-  ASSERT_EQ(1, test_ls_snaps(image, 1, "orig", isize));
-  read_test_data(image, orig_data, 0, TEST_IO_TO_SNAP_SIZE);
-
-  printf("write test data!\n");
-  write_test_data(image, test_data, 0, TEST_IO_TO_SNAP_SIZE);
-  ASSERT_EQ(0, rbd_snap_create(image, "written"));
-  ASSERT_EQ(2, test_ls_snaps(image, 2, "orig", isize, "written", isize));
-
-  read_test_data(image, test_data, 0, TEST_IO_TO_SNAP_SIZE);
-
-  rbd_snap_set(image, "orig");
-  read_test_data(image, orig_data, 0, TEST_IO_TO_SNAP_SIZE);
-
-  rbd_snap_set(image, "written");
-  read_test_data(image, test_data, 0, TEST_IO_TO_SNAP_SIZE);
-
-  rbd_snap_set(image, "orig");
-
-  r = rbd_write(image, 0, TEST_IO_TO_SNAP_SIZE, test_data);
-  printf("write to snapshot returned %d\n", r);
-  ASSERT_LT(r, 0);
-  cout << cpp_strerror(-r) << std::endl;
-
-  read_test_data(image, orig_data, 0, TEST_IO_TO_SNAP_SIZE);
-  rbd_snap_set(image, "written");
-  read_test_data(image, test_data, 0, TEST_IO_TO_SNAP_SIZE);
-
-  r = rbd_snap_rollback(image, "orig");
-  ASSERT_EQ(r, -EROFS);
-
-  r = rbd_snap_set(image, NULL);
-  ASSERT_EQ(r, 0);
-  r = rbd_snap_rollback(image, "orig");
-  ASSERT_EQ(r, 0);
-
-  write_test_data(image, test_data, 0, TEST_IO_TO_SNAP_SIZE);
-
-  rbd_flush(image);
-
-  printf("opening testimg@orig\n");
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image_at_snap, "orig"));
-  read_test_data(image_at_snap, orig_data, 0, TEST_IO_TO_SNAP_SIZE);
-  r = rbd_write(image_at_snap, 0, TEST_IO_TO_SNAP_SIZE, test_data);
-  printf("write to snapshot returned %d\n", r);
-  ASSERT_LT(r, 0);
-  cout << cpp_strerror(-r) << std::endl;
-  ASSERT_EQ(0, rbd_close(image_at_snap));
-
-  ASSERT_EQ(2, test_ls_snaps(image, 2, "orig", isize, "written", isize));
-  ASSERT_EQ(0, rbd_snap_remove(image, "written"));
-  ASSERT_EQ(1, test_ls_snaps(image, 1, "orig", isize));
-  ASSERT_EQ(0, rbd_snap_remove(image, "orig"));
-  ASSERT_EQ(0, test_ls_snaps(image, 0));
-
-  ASSERT_EQ(0, rbd_close(image));
-
-  rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
-}
-
-TEST(LibRBD, TestClone)
-{
-  rados_t cluster;
-  rados_ioctx_t ioctx;
-  rbd_image_info_t pinfo, cinfo;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
-
-  int features = RBD_FEATURE_LAYERING;
-  rbd_image_t parent, child;
-  int order = 0;
-
-  // make a parent to clone from
-  ASSERT_EQ(0, create_image_full(ioctx, "parent", 4<<20, &order, false, features));
-  ASSERT_EQ(0, rbd_open(ioctx, "parent", &parent, NULL));
-  printf("made parent image \"parent\"\n");
-
-  char *data = (char *)"testdata";
-  ASSERT_EQ((ssize_t)strlen(data), rbd_write(parent, 0, strlen(data), data));
-
-  // can't clone a non-snapshot, expect failure
-  EXPECT_NE(0, rbd_clone(ioctx, "parent", NULL, ioctx, "child", features, &order));
-
-  // verify that there is no parent info on "parent"
-  char ppool[1], pname[1], psnapname[1];
-  ASSERT_EQ(-ENOENT, rbd_get_parent_info(parent, ppool, sizeof(ppool),
-	    pname, sizeof(pname), psnapname, sizeof(psnapname)));
-  printf("parent has no parent info\n");
-
-  // create a snapshot, reopen as the parent we're interested in
-  ASSERT_EQ(0, rbd_snap_create(parent, "parent_snap"));
-  printf("made snapshot \"parent@parent_snap\"\n");
-  ASSERT_EQ(0, rbd_close(parent));
-  ASSERT_EQ(0, rbd_open(ioctx, "parent", &parent, "parent_snap"));
-
-  ASSERT_EQ(-EINVAL, rbd_clone(ioctx, "parent", "parent_snap", ioctx, "child",
-	    features, &order));
-
-  // unprotected image should fail unprotect
-  ASSERT_EQ(-EINVAL, rbd_snap_unprotect(parent, "parent_snap"));
-  printf("can't unprotect an unprotected snap\n");
-
-  ASSERT_EQ(0, rbd_snap_protect(parent, "parent_snap"));
-  // protecting again should fail
-  ASSERT_EQ(-EBUSY, rbd_snap_protect(parent, "parent_snap"));
-  printf("can't protect a protected snap\n");
-
-  // This clone and open should work
-  ASSERT_EQ(0, rbd_clone(ioctx, "parent", "parent_snap", ioctx, "child",
-	    features, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, "child", &child, NULL));
-  printf("made and opened clone \"child\"\n");
-
-  // check read
-  read_test_data(child, data, 0, strlen(data));
-
-  // check write
-  ASSERT_EQ((ssize_t)strlen(data), rbd_write(child, 20, strlen(data), data));
-  read_test_data(child, data, 20, strlen(data));
-  read_test_data(child, data, 0, strlen(data));
-
-  // check attributes
-  ASSERT_EQ(0, rbd_stat(parent, &pinfo, sizeof(pinfo)));
-  ASSERT_EQ(0, rbd_stat(child, &cinfo, sizeof(cinfo)));
-  EXPECT_EQ(cinfo.size, pinfo.size);
-  uint64_t overlap;
-  rbd_get_overlap(child, &overlap);
-  EXPECT_EQ(overlap, pinfo.size);
-  EXPECT_EQ(cinfo.obj_size, pinfo.obj_size);
-  EXPECT_EQ(cinfo.order, pinfo.order);
-  printf("sizes and overlaps are good between parent and child\n");
-
-  // sizing down child results in changing overlap and size, not parent size
-  ASSERT_EQ(0, rbd_resize(child, 2UL<<20));
-  ASSERT_EQ(0, rbd_stat(child, &cinfo, sizeof(cinfo)));
-  rbd_get_overlap(child, &overlap);
-  ASSERT_EQ(overlap, 2UL<<20);
-  ASSERT_EQ(cinfo.size, 2UL<<20);
-  ASSERT_EQ(0, rbd_resize(child, 4UL<<20));
-  ASSERT_EQ(0, rbd_stat(child, &cinfo, sizeof(cinfo)));
-  rbd_get_overlap(child, &overlap);
-  ASSERT_EQ(overlap, 2UL<<20);
-  ASSERT_EQ(cinfo.size, 4UL<<20);
-  printf("sized down clone, changed overlap\n");
-
-  // sizing back up doesn't change that
-  ASSERT_EQ(0, rbd_resize(child, 5UL<<20));
-  ASSERT_EQ(0, rbd_stat(child, &cinfo, sizeof(cinfo)));
-  rbd_get_overlap(child, &overlap);
-  ASSERT_EQ(overlap, 2UL<<20);
-  ASSERT_EQ(cinfo.size, 5UL<<20);
-  ASSERT_EQ(0, rbd_stat(parent, &pinfo, sizeof(pinfo)));
-  printf("parent info: size %lld obj_size %lld parent_pool %lld\n",
-	 (unsigned long long)pinfo.size, (unsigned long long)pinfo.obj_size,
-	 (unsigned long long)pinfo.parent_pool);
-  ASSERT_EQ(pinfo.size, 4UL<<20);
-  printf("sized up clone, changed size but not overlap or parent's size\n");
-  
-  ASSERT_EQ(0, rbd_close(child));
-
-  ASSERT_EQ(-EBUSY, rbd_snap_remove(parent, "parent_snap"));
-  printf("can't remove parent while child still exists\n");
-  ASSERT_EQ(0, rbd_remove(ioctx, "child"));
-  ASSERT_EQ(-EBUSY, rbd_snap_remove(parent, "parent_snap"));
-  printf("can't remove parent while still protected\n");
-  ASSERT_EQ(0, rbd_snap_unprotect(parent, "parent_snap"));
-  ASSERT_EQ(0, rbd_snap_remove(parent, "parent_snap"));
-  printf("removed parent snap after unprotecting\n");
-
-  ASSERT_EQ(0, rbd_close(parent));
-  rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
-}
-
-TEST(LibRBD, TestClone2)
-{
-  rados_t cluster;
-  rados_ioctx_t ioctx;
-  string pool_name = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name, &cluster));
-  rados_ioctx_create(cluster, pool_name.c_str(), &ioctx);
-
-  int features = RBD_FEATURE_LAYERING;
-  rbd_image_t parent, child;
-  int order = 0;
-
-  // make a parent to clone from
-  ASSERT_EQ(0, create_image_full(ioctx, "parent", 4<<20, &order, false, features));
-  ASSERT_EQ(0, rbd_open(ioctx, "parent", &parent, NULL));
-  printf("made parent image \"parent\"\n");
-
-  char *data = (char *)"testdata";
-  char *childata = (char *)"childata";
-  ASSERT_EQ((ssize_t)strlen(data), rbd_write(parent, 0, strlen(data), data));
-  ASSERT_EQ((ssize_t)strlen(data), rbd_write(parent, 12, strlen(data), data));
-
-  // can't clone a non-snapshot, expect failure
-  EXPECT_NE(0, rbd_clone(ioctx, "parent", NULL, ioctx, "child", features, &order));
-
-  // verify that there is no parent info on "parent"
-  char ppool[1], pname[1], psnapname[1];
-  ASSERT_EQ(-ENOENT, rbd_get_parent_info(parent, ppool, sizeof(ppool),
-	    pname, sizeof(pname), psnapname, sizeof(psnapname)));
-  printf("parent has no parent info\n");
-
-  // create a snapshot, reopen as the parent we're interested in
-  ASSERT_EQ(0, rbd_snap_create(parent, "parent_snap"));
-  printf("made snapshot \"parent@parent_snap\"\n");
-  ASSERT_EQ(0, rbd_close(parent));
-  ASSERT_EQ(0, rbd_open(ioctx, "parent", &parent, "parent_snap"));
-
-  ASSERT_EQ(-EINVAL, rbd_clone(ioctx, "parent", "parent_snap", ioctx, "child",
-	    features, &order));
-
-  // unprotected image should fail unprotect
-  ASSERT_EQ(-EINVAL, rbd_snap_unprotect(parent, "parent_snap"));
-  printf("can't unprotect an unprotected snap\n");
-
-  ASSERT_EQ(0, rbd_snap_protect(parent, "parent_snap"));
-  // protecting again should fail
-  ASSERT_EQ(-EBUSY, rbd_snap_protect(parent, "parent_snap"));
-  printf("can't protect a protected snap\n");
-
-  // This clone and open should work
-  ASSERT_EQ(0, rbd_clone(ioctx, "parent", "parent_snap", ioctx, "child",
-	    features, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, "child", &child, NULL));
-  printf("made and opened clone \"child\"\n");
-
-  // write something in
-  ASSERT_EQ((ssize_t)strlen(childata), rbd_write(child, 20, strlen(childata), childata));
-
-  char test[strlen(data) * 2];
-  ASSERT_EQ((ssize_t)strlen(data), rbd_read(child, 20, strlen(data), test));
-  ASSERT_EQ(0, memcmp(test, childata, strlen(childata)));
-
-  // overlap
-  ASSERT_EQ((ssize_t)sizeof(test), rbd_read(child, 20 - strlen(data), sizeof(test), test));
-  ASSERT_EQ(0, memcmp(test, data, strlen(data)));
-  ASSERT_EQ(0, memcmp(test + strlen(data), childata, strlen(childata)));
-
-  // all parent
-  ASSERT_EQ((ssize_t)sizeof(test), rbd_read(child, 0, sizeof(test), test));
-  ASSERT_EQ(0, memcmp(test, data, strlen(data)));
-
-  ASSERT_EQ(0, rbd_close(child));
-  ASSERT_EQ(0, rbd_close(parent));
-  rados_ioctx_destroy(ioctx);
-  ASSERT_EQ(0, destroy_one_pool(pool_name, &cluster));
-}
-
-static void test_list_children(rbd_image_t image, ssize_t num_expected, ...)
-{
-  va_list ap;
-  va_start(ap, num_expected);
-  size_t pools_len = 100;
-  size_t children_len = 100;
-  char *pools = NULL;
-  char *children = NULL;
-  ssize_t num_children;
-
-  do {
-    free(pools);
-    free(children);
-    pools = (char *) malloc(pools_len);
-    children = (char *) malloc(children_len);
-    num_children = rbd_list_children(image, pools, &pools_len,
-				     children, &children_len);
-  } while (num_children == -ERANGE);
-
-  ASSERT_EQ(num_expected, num_children);
-  for (ssize_t i = num_expected; i > 0; --i) {
-    char *expected_pool = va_arg(ap, char *);
-    char *expected_image = va_arg(ap, char *);
-    char *pool = pools;
-    char *image = children;
-    bool found = 0;
-    printf("\ntrying to find %s/%s\n", expected_pool, expected_image);
-    for (ssize_t j = 0; j < num_children; ++j) {
-      printf("checking %s/%s\n", pool, image);
-      if (strcmp(expected_pool, pool) == 0 &&
-	  strcmp(expected_image, image) == 0) {
-	printf("found child %s/%s\n\n", pool, image);
-	found = 1;
-	break;
-      }
-      pool += strlen(pool) + 1;
-      image += strlen(image) + 1;
-      if (j == num_children - 1) {
-	ASSERT_EQ(pool - pools - 1, (ssize_t) pools_len);
-	ASSERT_EQ(image - children - 1, (ssize_t) children_len);
-      }
-    }
-    ASSERT_TRUE(found);
-  }
-  va_end(ap);
-
-  if (pools)
-    free(pools);
-  if (children)
-    free(children);
-}
-
-TEST(LibRBD, ListChildren)
-{
-  rados_t cluster;
-  rados_ioctx_t ioctx1, ioctx2;
-  string pool_name1 = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name1, &cluster));
-  string pool_name2 = get_temp_pool_name();
-  ASSERT_EQ("", create_one_pool(pool_name2, &cluster));
-  rados_ioctx_create(cluster, pool_name1.c_str(), &ioctx1);
-  rados_ioctx_create(cluster, pool_name2.c_str(), &ioctx2);
-
-  int features = RBD_FEATURE_LAYERING;
-  rbd_image_t parent;
-  int order = 0;
-
-  // make a parent to clone from
-  ASSERT_EQ(0, create_image_full(ioctx1, "parent", 4<<20, &order,
-				 false, features));
-  ASSERT_EQ(0, rbd_open(ioctx1, "parent", &parent, NULL));
-  // create a snapshot, reopen as the parent we're interested in
-  ASSERT_EQ(0, rbd_snap_create(parent, "parent_snap"));
-  ASSERT_EQ(0, rbd_snap_set(parent, "parent_snap"));
-  ASSERT_EQ(0, rbd_snap_protect(parent, "parent_snap"));
-
-  ASSERT_EQ(0, rbd_close(parent));
-  ASSERT_EQ(0, rbd_open(ioctx1, "parent", &parent, "parent_snap"));
-
-  ASSERT_EQ(0, rbd_clone(ioctx1, "parent", "parent_snap", ioctx2, "child1",
-	    features, &order));
-  test_list_children(parent, 1, pool_name2.c_str(), "child1");
-
-  ASSERT_EQ(0, rbd_clone(ioctx1, "parent", "parent_snap", ioctx1, "child2",
-	    features, &order));
-  test_list_children(parent, 2, pool_name2.c_str(), "child1",
-		     pool_name1.c_str(), "child2");
-
-  ASSERT_EQ(0, rbd_clone(ioctx1, "parent", "parent_snap", ioctx2, "child3",
-	    features, &order));
-  test_list_children(parent, 3, pool_name2.c_str(), "child1",
-		     pool_name1.c_str(), "child2",
-		     pool_name2.c_str(), "child3");
-
-  ASSERT_EQ(0, rbd_clone(ioctx1, "parent", "parent_snap", ioctx2, "child4",
-	    features, &order));
-  test_list_children(parent, 4, pool_name2.c_str(), "child1",
-		     pool_name1.c_str(), "child2",
-		     pool_name2.c_str(), "child3",
-		     pool_name2.c_str(), "child4");
-
-  ASSERT_EQ(0, rbd_remove(ioctx2, "child1"));
-  test_list_children(parent, 3,
-		     pool_name1.c_str(), "child2",
-		     pool_name2.c_str(), "child3",
-		     pool_name2.c_str(), "child4");
-
-  ASSERT_EQ(0, rbd_remove(ioctx2, "child3"));
-  test_list_children(parent, 2,
-		     pool_name1.c_str(), "child2",
-		     pool_name2.c_str(), "child4");
-
-  ASSERT_EQ(0, rbd_remove(ioctx2, "child4"));
-  test_list_children(parent, 1,
-		     pool_name1.c_str(), "child2");
-
-  ASSERT_EQ(0, rbd_remove(ioctx1, "child2"));
-  test_list_children(parent, 0);
-
-  ASSERT_EQ(0, rbd_snap_unprotect(parent, "parent_snap"));
-  ASSERT_EQ(0, rbd_snap_remove(parent, "parent_snap"));
-  ASSERT_EQ(0, rbd_close(parent));
-  ASSERT_EQ(0, rbd_remove(ioctx1, "parent"));
-  rados_ioctx_destroy(ioctx1);
-  rados_ioctx_destroy(ioctx2);
-  // destroy_one_pool also closes the cluster; do this one step at a time
-  ASSERT_EQ(0, rados_pool_delete(cluster, pool_name1.c_str()));
-  ASSERT_EQ(0, destroy_one_pool(pool_name2, &cluster));
-}
-
 TEST(LibRBD, LockingPP)
 {
   librados::Rados rados;
@@ -1353,7 +782,7 @@ TEST(LibRBD, LockingPP)
     std::string cookie2 = "bar";
 
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
+    ASSERT_EQ(0, rbd.open(ioctx, image, name));
 
     // no lockers initially
     std::list<librbd::locker_t> lockers;
@@ -1420,7 +849,7 @@ TEST(LibRBD, FlushAio)
   size_t num_aios = 256;
 
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   char test_data[TEST_IO_SIZE + 1];
   size_t i;
@@ -1472,7 +901,7 @@ TEST(LibRBD, FlushAioPP)
     size_t num_aios = 256;
 
     ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
+    ASSERT_EQ(0, rbd.open(ioctx, image, name));
 
     char test_data[TEST_IO_SIZE + 1];
     size_t i;
@@ -1558,225 +987,6 @@ void scribble(librbd::Image& image, int n, int max, interval_set<uint64_t> *exis
   }
 }
 
-TEST(LibRBD, DiffIterate)
-{
-  librados::Rados rados;
-  librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
-
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
-
-  int seed = getpid();
-  cout << "seed " << seed << std::endl;
-  srand(seed);
-
-  {
-    librbd::RBD rbd;
-    librbd::Image image;
-    int order = 0;
-    const char *name = "testimg";
-    uint64_t size = 20 << 20;
-
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
-
-    interval_set<uint64_t> exists;
-    interval_set<uint64_t> one, two;
-    scribble(image, 10, 102400, &exists, &one);
-    cout << " wrote " << one << std::endl;
-    ASSERT_EQ(0, image.snap_create("one"));
-    scribble(image, 10, 102400, &exists, &two);
-    cout << " wrote " << two << std::endl;
-
-    interval_set<uint64_t> diff;
-    ASSERT_EQ(0, image.diff_iterate("one", 0, size, iterate_cb, (void *)&diff));
-    cout << " diff was " << diff << std::endl;
-    if (!two.subset_of(diff)) {
-      interval_set<uint64_t> i;
-      i.intersection_of(two, diff);
-      interval_set<uint64_t> l = two;
-      l.subtract(i);
-      cout << " ... two - (two*diff) = " << l << std::endl;     
-    }
-    ASSERT_TRUE(two.subset_of(diff));
-  }
-  ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
-}
-
-struct diff_extent {
-  diff_extent(uint64_t offset, uint64_t length, bool exists) :
-    offset(offset), length(length), exists(exists) {}
-  uint64_t offset;
-  uint64_t length;
-  bool exists;
-  bool operator==(const diff_extent& o) const {
-    return offset == o.offset && length == o.length && exists == o.exists;
-  }
-};
-
-ostream& operator<<(ostream & o, const diff_extent& e) {
-  return o << '(' << e.offset << '~' << e.length << ' ' << (e.exists ? "true" : "false") << ')';
-}
-
-int vector_iterate_cb(uint64_t off, size_t len, int exists, void *arg)
-{
-  cout << "iterate_cb " << off << "~" << len << std::endl;
-  vector<diff_extent> *diff = static_cast<vector<diff_extent> *>(arg);
-  diff->push_back(diff_extent(off, len, exists));
-  return 0;
-}
-
-TEST(LibRBD, DiffIterateDiscard)
-{
-  librados::Rados rados;
-  librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
-
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
-
-  int seed = getpid();
-  cout << "seed " << seed << std::endl;
-  srand(seed);
-
-  {
-    librbd::RBD rbd;
-    librbd::Image image;
-    int order = 0;
-    const char *name = "testimg";
-    uint64_t size = 20 << 20;
-
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
-
-    vector<diff_extent> extents;
-    ceph::bufferlist bl;
-
-    ASSERT_EQ(0, image.diff_iterate(NULL, 0, size,
-				    vector_iterate_cb, (void *) &extents));
-    ASSERT_EQ(0u, extents.size());
-
-    char data[256];
-    memset(data, 1, sizeof(data));
-    bl.append(data, 256);
-    ASSERT_EQ(256, image.write(0, 256, bl));
-    ASSERT_EQ(0, image.diff_iterate(NULL, 0, size,
-				    vector_iterate_cb, (void *) &extents));
-    ASSERT_EQ(1u, extents.size());
-    ASSERT_EQ(diff_extent(0, 256, true), extents[0]);
-
-    int obj_ofs = 256;
-    ASSERT_EQ(obj_ofs, image.discard(0, obj_ofs));
-
-    extents.clear();
-    ASSERT_EQ(0, image.diff_iterate(NULL, 0, size,
-				    vector_iterate_cb, (void *) &extents));
-    ASSERT_EQ(0u, extents.size());
-
-    ASSERT_EQ(0, image.snap_create("snap1"));
-    ASSERT_EQ(256, image.write(0, 256, bl));
-    ASSERT_EQ(0, image.diff_iterate(NULL, 0, size,
-				    vector_iterate_cb, (void *) &extents));
-    ASSERT_EQ(1u, extents.size());
-    ASSERT_EQ(diff_extent(0, 256, true), extents[0]);
-    ASSERT_EQ(0, image.snap_create("snap2"));
-
-    ASSERT_EQ(obj_ofs, image.discard(0, obj_ofs));
-
-    extents.clear();
-    ASSERT_EQ(0, image.snap_set("snap2"));
-    ASSERT_EQ(0, image.diff_iterate("snap1", 0, size,
-				    vector_iterate_cb, (void *) &extents));
-    ASSERT_EQ(1u, extents.size());
-    ASSERT_EQ(diff_extent(0, 256, true), extents[0]);
-
-    ASSERT_EQ(0, image.snap_set(NULL));
-    ASSERT_EQ(1 << order, image.discard(0, 1 << order));
-    ASSERT_EQ(0, image.snap_create("snap3"));
-    ASSERT_EQ(0, image.snap_set("snap3"));
-
-    extents.clear();
-    ASSERT_EQ(0, image.diff_iterate("snap1", 0, size,
-				    vector_iterate_cb, (void *) &extents));
-    ASSERT_EQ(1u, extents.size());
-    ASSERT_EQ(diff_extent(0, 256, false), extents[0]);
-  }
-  ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
-}
-
-TEST(LibRBD, DiffIterateStress)
-{
-  librados::Rados rados;
-  librados::IoCtx ioctx;
-  string pool_name = get_temp_pool_name();
-
-  ASSERT_EQ("", create_one_pool_pp(pool_name, rados));
-  ASSERT_EQ(0, rados.ioctx_create(pool_name.c_str(), ioctx));
-
-  int seed = getpid();
-  cout << "seed " << seed << std::endl;
-  srand(seed);
-
-  {
-    librbd::RBD rbd;
-    librbd::Image image;
-    int order = 0;
-    const char *name = "testimg";
-    uint64_t size = 400 << 20;
-
-    ASSERT_EQ(0, create_image_pp(rbd, ioctx, name, size, &order));
-    ASSERT_EQ(0, rbd.open(ioctx, image, name, NULL));
-
-    interval_set<uint64_t> curexists;
-    vector<interval_set<uint64_t> > wrote;
-    vector<interval_set<uint64_t> > exists;
-    vector<string> snap;
-    int n = 20;
-    for (int i=0; i<n; i++) {
-      interval_set<uint64_t> w;
-      scribble(image, 10, 8192000, &curexists, &w);
-      cout << " i=" << i << " exists " << curexists << " wrote " << w << std::endl;
-      string s = "snap" + stringify(i);
-      ASSERT_EQ(0, image.snap_create(s.c_str()));
-      wrote.push_back(w);
-      exists.push_back(curexists);
-      snap.push_back(s);
-    }
-
-    for (int i=0; i<n-1; i++) {
-      for (int j=i+1; j<n; j++) {
-	interval_set<uint64_t> diff, actual, uex;
-	for (int k=i+1; k<=j; k++)
-	  diff.union_of(wrote[k]);
-	cout << "from " << i << " to " << j << " diff " << diff << std::endl;
-
-	// limit to extents that exists both at the beginning and at the end
-	uex.union_of(exists[i], exists[j]);
-	diff.intersection_of(uex);
-	cout << "  limited diff " << diff << std::endl;
-
-	image.snap_set(snap[j].c_str());
-	ASSERT_EQ(0, image.diff_iterate(snap[i].c_str(), 0, size, iterate_cb, (void *)&actual));
-	cout << " actual was " << actual << std::endl;
-	if (!diff.subset_of(actual)) {
-	  interval_set<uint64_t> i;
-	  i.intersection_of(diff, actual);
-	  interval_set<uint64_t> l = diff;
-	  l.subtract(i);
-	  cout << " ... diff - (actual*diff) = " << l << std::endl;     
-	}
-	ASSERT_TRUE(diff.subset_of(actual));
-      }
-    }
-
-  }
-  ioctx.close();
-  ASSERT_EQ(0, destroy_one_pool_pp(pool_name, rados));
-}
-
 TEST(LibRBD, ZeroLengthWrite)
 {
   rados_t cluster;
@@ -1791,7 +1001,7 @@ TEST(LibRBD, ZeroLengthWrite)
   uint64_t size = 2 << 20;
 
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   char read_data[1];
   ASSERT_EQ(0, rbd_write(image, 0, 0, NULL));
@@ -1819,7 +1029,7 @@ TEST(LibRBD, ZeroLengthDiscard)
   uint64_t size = 2 << 20;
 
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   const char *data = "blah";
   char read_data[strlen(data)];
@@ -1848,7 +1058,7 @@ TEST(LibRBD, ZeroLengthRead)
   uint64_t size = 2 << 20;
 
   ASSERT_EQ(0, create_image(ioctx, name, size, &order));
-  ASSERT_EQ(0, rbd_open(ioctx, name, &image, NULL));
+  ASSERT_EQ(0, rbd_open(ioctx, name, &image));
 
   char read_data[1];
   ASSERT_EQ(0, rbd_read(image, 0, 0, read_data));

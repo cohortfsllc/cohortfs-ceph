@@ -18,7 +18,6 @@
 #include "common/Cond.h"
 #include "common/dout.h"
 #include "common/errno.h"
-#include "common/snap_types.h"
 #include "common/perf_counters.h"
 #include "include/Context.h"
 #include "include/rbd/librbd.hpp"
@@ -42,7 +41,6 @@ using std::string;
 using std::vector;
 
 using ceph::bufferlist;
-using librados::snap_t;
 using librados::IoCtx;
 
 namespace librbd {
@@ -84,13 +82,7 @@ namespace librbd {
 
   int RBD::open(IoCtx& io_ctx, Image& image, const char *name)
   {
-    return open(io_ctx, image, name, NULL);
-  }
-
-  int RBD::open(IoCtx& io_ctx, Image& image, const char *name,
-		const char *snap_name)
-  {
-    ImageCtx *ictx = new ImageCtx(name, "", snap_name, io_ctx, false);
+    ImageCtx *ictx = new ImageCtx(name, "", io_ctx, false);
 
     int r = librbd::open_image(ictx);
     if (r < 0)
@@ -100,10 +92,9 @@ namespace librbd {
     return 0;
   }
 
-  int RBD::open_read_only(IoCtx& io_ctx, Image& image, const char *name,
-			  const char *snap_name)
+  int RBD::open_read_only(IoCtx& io_ctx, Image& image, const char *name)
   {
-    ImageCtx *ictx = new ImageCtx(name, "", snap_name, io_ctx, true);
+    ImageCtx *ictx = new ImageCtx(name, "", io_ctx, true);
 
     int r = librbd::open_image(ictx);
     if (r < 0)
@@ -130,22 +121,6 @@ namespace librbd {
   {
     return librbd::create(io_ctx, name, size, false, features, order,
 			  stripe_unit, stripe_count);
-  }
-
-  int RBD::clone(IoCtx& p_ioctx, const char *p_name, const char *p_snap_name,
-		 IoCtx& c_ioctx, const char *c_name, uint64_t features,
-		 int *c_order)
-  {
-    return librbd::clone(p_ioctx, p_name, p_snap_name, c_ioctx, c_name,
-			 features, c_order, 0, 0);
-  }
-
-  int RBD::clone2(IoCtx& p_ioctx, const char *p_name, const char *p_snap_name,
-		  IoCtx& c_ioctx, const char *c_name, uint64_t features,
-		  int *c_order, uint64_t stripe_unit, int stripe_count)
-  {
-    return librbd::clone(p_ioctx, p_name, p_snap_name, c_ioctx, c_name,
-			 features, c_order, stripe_unit, stripe_count);
   }
 
   int RBD::remove(IoCtx& io_ctx, const char *name)
@@ -272,20 +247,6 @@ namespace librbd {
     return ictx->get_stripe_count();
   }
 
-  int Image::overlap(uint64_t *overlap)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::get_overlap(ictx, overlap);
-  }
-
-  int Image::parent_info(string *parent_pool_name, string *parent_name,
-			 string *parent_snap_name)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::get_parent_info(ictx, parent_pool_name, parent_name,
-				   parent_snap_name);
-  }
-
   int Image::copy(IoCtx& dest_io_ctx, const char *destname)
   {
     ImageCtx *ictx = (ImageCtx *)ctx;
@@ -313,25 +274,6 @@ namespace librbd {
     ImageCtx *srcctx = (ImageCtx *)ctx;
     ImageCtx *destctx = (ImageCtx *)dest.ctx;
     return librbd::copy(srcctx, destctx, pctx);
-  }
-
-  int Image::flatten()
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    librbd::NoOpProgressContext prog_ctx;
-    return librbd::flatten(ictx, prog_ctx);
-  }
-
-  int Image::flatten_with_progress(librbd::ProgressContext& prog_ctx)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::flatten(ictx, prog_ctx);
-  }
-
-  int Image::list_children(set<pair<string, string> > *children)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::list_children(ictx, *children);
   }
 
   int Image::list_lockers(std::list<librbd::locker_t> *lockers,
@@ -365,68 +307,6 @@ namespace librbd {
     return librbd::break_lock(ictx, client, cookie);
   }
 
-  int Image::snap_create(const char *snap_name)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_create(ictx, snap_name);
-  }
-
-  int Image::snap_remove(const char *snap_name)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_remove(ictx, snap_name);
-  }
-
-  int Image::snap_rollback(const char *snap_name)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    librbd::NoOpProgressContext prog_ctx;
-    return librbd::snap_rollback(ictx, snap_name, prog_ctx);
-  }
-
-  int Image::snap_rollback_with_progress(const char *snap_name,
-					 ProgressContext& prog_ctx)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_rollback(ictx, snap_name, prog_ctx);
-  }
-
-  int Image::snap_protect(const char *snap_name)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_protect(ictx, snap_name);
-  }
-
-  int Image::snap_unprotect(const char *snap_name)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_unprotect(ictx, snap_name);
-  }
-
-  int Image::snap_is_protected(const char *snap_name, bool *is_protected)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_is_protected(ictx, snap_name, is_protected);
-  }
-
-  int Image::snap_list(vector<librbd::snap_info_t>& snaps)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_list(ictx, snaps);
-  }
-
-  bool Image::snap_exists(const char *snap_name)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_exists(ictx, snap_name);
-  }
-
-  int Image::snap_set(const char *snap_name)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::snap_set(ictx, snap_name);
-  }
-
   ssize_t Image::read(uint64_t ofs, size_t len, bufferlist& bl)
   {
     ImageCtx *ictx = (ImageCtx *)ctx;
@@ -452,15 +332,6 @@ namespace librbd {
     if (r > 0)
       r = 0;
     return (int)r;
-  }
-
-  int Image::diff_iterate(const char *fromsnapname,
-			  uint64_t ofs, uint64_t len,
-			  int (*cb)(uint64_t, size_t, int, void *),
-			  void *arg)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::diff_iterate(ictx, fromsnapname, ofs, len, cb, arg);
   }
 
   ssize_t Image::write(uint64_t ofs, size_t len, bufferlist& bl)
@@ -583,29 +454,6 @@ extern "C" int rbd_create3(rados_ioctx_t p, const char *name,
 			stripe_unit, stripe_count);
 }
 
-extern "C" int rbd_clone(rados_ioctx_t p_ioctx, const char *p_name,
-			 const char *p_snap_name, rados_ioctx_t c_ioctx,
-			 const char *c_name, uint64_t features, int *c_order)
-{
-  librados::IoCtx p_ioc, c_ioc;
-  librados::IoCtx::from_rados_ioctx_t(p_ioctx, p_ioc);
-  librados::IoCtx::from_rados_ioctx_t(c_ioctx, c_ioc);
-  return librbd::clone(p_ioc, p_name, p_snap_name, c_ioc, c_name,
-		       features, c_order, 0, 0);
-}
-
-extern "C" int rbd_clone2(rados_ioctx_t p_ioctx, const char *p_name,
-			  const char *p_snap_name, rados_ioctx_t c_ioctx,
-			  const char *c_name, uint64_t features, int *c_order,
-			  uint64_t stripe_unit, int stripe_count)
-{
-  librados::IoCtx p_ioc, c_ioc;
-  librados::IoCtx::from_rados_ioctx_t(p_ioctx, p_ioc);
-  librados::IoCtx::from_rados_ioctx_t(c_ioctx, c_ioc);
-  return librbd::clone(p_ioc, p_name, p_snap_name, c_ioc, c_name,
-		       features, c_order, stripe_unit, stripe_count);
-}
-
 extern "C" int rbd_remove(rados_ioctx_t p, const char *name)
 {
   librados::IoCtx io_ctx;
@@ -663,21 +511,6 @@ extern "C" int rbd_copy_with_progress2(rbd_image_t srcp, rbd_image_t destp,
   return ret;
 }
 
-extern "C" int rbd_flatten(rbd_image_t image)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  librbd::NoOpProgressContext prog_ctx;
-  return librbd::flatten(ictx, prog_ctx);
-}
-
-extern "C" int rbd_flatten_with_progress(rbd_image_t image,
-					 librbd_progress_fn_t cb, void *cbdata)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  librbd::CProgressContext prog_ctx(cb, cbdata);
-  return librbd::flatten(ictx, prog_ctx);
-}
-
 extern "C" int rbd_rename(rados_ioctx_t src_p, const char *srcname,
 			  const char *destname)
 {
@@ -686,12 +519,11 @@ extern "C" int rbd_rename(rados_ioctx_t src_p, const char *srcname,
   return librbd::rename(src_io_ctx, srcname, destname);
 }
 
-extern "C" int rbd_open(rados_ioctx_t p, const char *name, rbd_image_t *image,
-			const char *snap_name)
+extern "C" int rbd_open(rados_ioctx_t p, const char *name, rbd_image_t *image)
 {
   librados::IoCtx io_ctx;
   librados::IoCtx::from_rados_ioctx_t(p, io_ctx);
-  librbd::ImageCtx *ictx = new librbd::ImageCtx(name, "", snap_name, io_ctx,
+  librbd::ImageCtx *ictx = new librbd::ImageCtx(name, "", io_ctx,
 						false);
   int r = librbd::open_image(ictx);
   if (r >= 0)
@@ -700,12 +532,11 @@ extern "C" int rbd_open(rados_ioctx_t p, const char *name, rbd_image_t *image,
 }
 
 extern "C" int rbd_open_read_only(rados_ioctx_t p, const char *name,
-				  rbd_image_t *image, const char *snap_name)
+				  rbd_image_t *image)
 {
   librados::IoCtx io_ctx;
   librados::IoCtx::from_rados_ioctx_t(p, io_ctx);
-  librbd::ImageCtx *ictx = new librbd::ImageCtx(name, "", snap_name, io_ctx,
-						true);
+  librbd::ImageCtx *ictx = new librbd::ImageCtx(name, "", io_ctx, true);
   int r = librbd::open_image(ictx);
   if (r >= 0)
     *image = (rbd_image_t)ictx;
@@ -771,182 +602,6 @@ extern "C" int rbd_get_stripe_count(rbd_image_t image, uint64_t *stripe_count)
   librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
   *stripe_count = ictx->get_stripe_count();
   return 0;
-}
-
-extern "C" int rbd_get_overlap(rbd_image_t image, uint64_t *overlap)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::get_overlap(ictx, overlap);
-}
-
-extern "C" int rbd_get_parent_info(rbd_image_t image,
-  char *parent_pool_name, size_t ppool_namelen, char *parent_name,
-  size_t pnamelen, char *parent_snap_name, size_t psnap_namelen)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  string p_pool_name, p_name, p_snap_name;
-
-  int r = librbd::get_parent_info(ictx, &p_pool_name, &p_name, &p_snap_name);
-  if (r < 0)
-    return r;
-
-  // compare against input bufferlen, leaving room for \0
-  if (p_pool_name.length() + 1 > ppool_namelen ||
-      p_name.length() + 1 > pnamelen ||
-      p_snap_name.length() + 1 > psnap_namelen) {
-    return -ERANGE;
-  }
-
-  strcpy(parent_pool_name, p_pool_name.c_str());
-  strcpy(parent_name, p_name.c_str());
-  strcpy(parent_snap_name, p_snap_name.c_str());
-  return 0;
-}
-
-/* snapshots */
-extern "C" int rbd_snap_create(rbd_image_t image, const char *snap_name)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::snap_create(ictx, snap_name);
-}
-
-extern "C" int rbd_snap_remove(rbd_image_t image, const char *snap_name)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::snap_remove(ictx, snap_name);
-}
-
-extern "C" int rbd_snap_rollback(rbd_image_t image, const char *snap_name)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  librbd::NoOpProgressContext prog_ctx;
-  return librbd::snap_rollback(ictx, snap_name, prog_ctx);
-}
-
-extern "C" int rbd_snap_rollback_with_progress(rbd_image_t image,
-					       const char *snap_name,
-					       librbd_progress_fn_t cb,
-					       void *cbdata)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  librbd::CProgressContext prog_ctx(cb, cbdata);
-  return librbd::snap_rollback(ictx, snap_name, prog_ctx);
-}
-
-extern "C" int rbd_snap_list(rbd_image_t image, rbd_snap_info_t *snaps,
-			     int *max_snaps)
-{
-  vector<librbd::snap_info_t> cpp_snaps;
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  int r = librbd::snap_list(ictx, cpp_snaps);
-  if (r == -ENOENT)
-    return 0;
-  if (r < 0)
-    return r;
-  if (!max_snaps)
-    return -EINVAL;
-  if (*max_snaps < (int)cpp_snaps.size() + 1) {
-    *max_snaps = (int)cpp_snaps.size() + 1;
-    return -ERANGE;
-  }
-
-  int i;
-
-  for (i = 0; i < (int)cpp_snaps.size(); i++) {
-    snaps[i].id = cpp_snaps[i].id;
-    snaps[i].size = cpp_snaps[i].size;
-    snaps[i].name = strdup(cpp_snaps[i].name.c_str());
-    if (!snaps[i].name) {
-      for (int j = 0; j < i; j++)
-	free((void *)snaps[j].name);
-      return -ENOMEM;
-    }
-  }
-  snaps[i].id = 0;
-  snaps[i].size = 0;
-  snaps[i].name = NULL;
-
-  return (int)cpp_snaps.size();
-}
-
-extern "C" void rbd_snap_list_end(rbd_snap_info_t *snaps)
-{
-  while (snaps->name) {
-    free((void *)snaps->name);
-    snaps++;
-  }
-}
-
-extern "C" int rbd_snap_protect(rbd_image_t image, const char *snap_name)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::snap_protect(ictx, snap_name);
-}
-
-extern "C" int rbd_snap_unprotect(rbd_image_t image, const char *snap_name)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::snap_unprotect(ictx, snap_name);
-}
-
-extern "C" int rbd_snap_is_protected(rbd_image_t image, const char *snap_name,
-				     int *is_protected)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  bool protected_snap;
-  int r = librbd::snap_is_protected(ictx, snap_name, &protected_snap);
-  if (r < 0)
-    return r;
-  *is_protected = protected_snap ? 1 : 0;
-  return 0;
-}
-
-extern "C" int rbd_snap_set(rbd_image_t image, const char *snap_name)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::snap_set(ictx, snap_name);
-}
-
-extern "C" ssize_t rbd_list_children(rbd_image_t image, char *pools,
-				     size_t *pools_len, char *images,
-				     size_t *images_len)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  set<pair<string, string> > image_set;
-
-  int r = librbd::list_children(ictx, image_set);
-  if (r < 0)
-    return r;
-
-  size_t pools_total = 0;
-  size_t images_total = 0;
-  for (set<pair<string, string> >::const_iterator it = image_set.begin();
-       it != image_set.end(); ++it) {
-    pools_total += it->first.length() + 1;
-    images_total += it->second.length() + 1;
-  }
-
-  bool too_short = false;
-  if (pools_total > *pools_len)
-    too_short = true;
-  if (images_total > *images_len)
-    too_short = true;
-  *pools_len = pools_total;
-  *images_len = images_total;
-  if (too_short)
-    return -ERANGE;
-
-  char *pools_p = pools;
-  char *images_p = images;
-  for (set<pair<string, string> >::const_iterator it = image_set.begin();
-       it != image_set.end(); ++it) {
-    strcpy(pools_p, it->first.c_str());
-    pools_p += it->first.length() + 1;
-    strcpy(images_p, it->second.c_str());
-    images_p += it->second.length() + 1;
-  }
-
-  return image_set.size();
 }
 
 extern "C" ssize_t rbd_list_lockers(rbd_image_t image, int *exclusive,
@@ -1056,16 +711,6 @@ extern "C" int rbd_read_iterate2(rbd_image_t image, uint64_t ofs, uint64_t len,
   if (r > 0)
     r = 0;
   return (int)r;
-}
-
-extern "C" int rbd_diff_iterate(rbd_image_t image,
-				const char *fromsnapname,
-				uint64_t ofs, uint64_t len,
-				int (*cb)(uint64_t, size_t, int, void *),
-				void *arg)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::diff_iterate(ictx, fromsnapname, ofs, len, cb, arg);
 }
 
 extern "C" ssize_t rbd_write(rbd_image_t image, uint64_t ofs, size_t len,

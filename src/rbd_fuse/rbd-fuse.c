@@ -173,7 +173,7 @@ open_rbd_image(const char *image_name)
 		}
 		if (i == MAX_RBD_IMAGES)
 			return -1;
-		int ret = rbd_open(ioctx, rbd->image_name, &(rbd->image), NULL);
+		int ret = rbd_open(ioctx, rbd->image_name, &(rbd->image));
 		if (ret < 0) {
 			simple_err("open_rbd_image: can't open: ", ret);
 			return ret;

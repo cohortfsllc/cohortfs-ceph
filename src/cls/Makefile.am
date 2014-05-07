@@ -111,7 +111,6 @@ noinst_HEADERS += \
 	cls/lock/cls_lock_types.h \
 	cls/lock/cls_lock_ops.h \
 	cls/lock/cls_lock_client.h \
-	cls/rbd/cls_rbd.h \
 	cls/rbd/cls_rbd_client.h \
 	cls/refcount/cls_refcount_ops.h \
 	cls/refcount/cls_refcount_client.h \

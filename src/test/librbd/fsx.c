@@ -1,11 +1,11 @@
-// -*- mode:C; tab-width:8; c-basic-offset:8; indent-tabs-mode:t -*- 
+// -*- mode:C; tab-width:8; c-basic-offset:8; indent-tabs-mode:t -*-
 /*
  *	Copyright (C) 1991, NeXT Computer, Inc.  All Rights Reserverd.
  *
  *	File:	fsx.c
  *	Author:	Avadis Tevanian, Jr.
  *
- *	File system exerciser. 
+ *	File system exerciser.
  *
  *	Rewritten 8/98 by Conrad Minshall.
  *
@@ -81,79 +81,74 @@ int			logcount = 0;	/* total ops */
  */
 
 /* common operations */
-#define	OP_READ		0
-#define OP_WRITE	1
-#define OP_MAPREAD	2
-#define OP_MAPWRITE	3
-#define OP_MAX_LITE	4
+#define	OP_READ	0
+#define OP_WRITE 1
+#define OP_MAPREAD 2
+#define OP_MAPWRITE 3
+#define OP_MAX_LITE 4
 
 /* !lite operations */
-#define OP_TRUNCATE	4
-#define OP_FALLOCATE	5
-#define OP_PUNCH_HOLE	6
+#define OP_TRUNCATE 4
+#define OP_FALLOCATE 5
+#define OP_PUNCH_HOLE 6
 /* rbd-specific operations */
-#define OP_CLONE        7
-#define OP_FLATTEN	8
-#define OP_MAX_FULL	9
+#define OP_MAX_FULL 9
 
 /* operation modifiers */
-#define OP_CLOSEOPEN	100
-#define OP_SKIPPED	101
+#define OP_CLOSEOPEN 100
+#define OP_SKIPPED 101
 
 #undef PAGE_SIZE
-#define PAGE_SIZE       getpagesize()
+#define PAGE_SIZE getpagesize()
 #undef PAGE_MASK
-#define PAGE_MASK       (PAGE_SIZE - 1)
+#define PAGE_MASK (PAGE_SIZE - 1)
 
-char	*original_buf;			/* a pointer to the original data */
-char	*good_buf;			/* a pointer to the correct data */
-char	*temp_buf;			/* a pointer to the current data */
-char	*pool;				/* name of the pool our test image is in */
-char	*iname;				/* name of our test image */
-rados_t cluster;                        /* handle for our test cluster */
-rados_ioctx_t	ioctx;			/* handle for our test pool */
-rbd_image_t	image;			/* handle for our test image */
+char *original_buf; /* a pointer to the original data */
+char *good_buf; /* a pointer to the correct data */
+char *temp_buf; /* a pointer to the current data */
+char *pool; /* name of the pool our test image is in */
+char *iname; /* name of our test image */
+rados_t cluster; /* handle for our test cluster */
+rados_ioctx_t ioctx; /* handle for our test pool */
+rbd_image_t image; /* handle for our test image */
 
-char	dirpath[1024];
+char dirpath[1024];
 
-off_t		file_size = 0;
-off_t		biggest = 0;
-char		state[256];
-unsigned long	testcalls = 0;		/* calls to function "test" */
+off_t file_size = 0;
+off_t biggest = 0;
+char state[256];
+unsigned long testcalls = 0; /* calls to function "test" */
 
-unsigned long	simulatedopcount = 0;	/* -b flag */
-int	closeprob = 0;			/* -c flag */
-int	debug = 0;			/* -d flag */
-unsigned long	debugstart = 0;		/* -D flag */
-int	flush = 0;			/* -f flag */
-int	do_fsync = 0;			/* -y flag */
-unsigned long	maxfilelen = 256 * 1024;	/* -l flag */
-int	sizechecks = 1;			/* -n flag disables them */
-int	maxoplen = 64 * 1024;		/* -o flag */
-int	quiet = 0;			/* -q flag */
-unsigned long progressinterval = 0;	/* -p flag */
-int	readbdy = 1;			/* -r flag */
-int	style = 0;			/* -s flag */
-int	prealloc = 0;			/* -x flag */
-int	truncbdy = 1;			/* -t flag */
-int	writebdy = 1;			/* -w flag */
-long	monitorstart = -1;		/* -m flag */
-long	monitorend = -1;		/* -m flag */
-int	lite = 0;			/* -L flag */
-long	numops = -1;			/* -N flag */
-int	randomoplen = 1;		/* -O flag disables it */
-int	seed = 1;			/* -S flag */
-int     mapped_writes = 0;              /* -W flag disables */
-int     fallocate_calls = 0;            /* -F flag disables */
-int     punch_hole_calls = 1;           /* -H flag disables */
-int	clone_calls = 1;                /* -C flag disables */
-int     randomize_striping = 1;
-int 	mapped_reads = 0;		/* -R flag disables it */
-int	fsxgoodfd = 0;
-int	o_direct;			/* -Z */
-int	aio = 0;
-
-int num_clones = 0;
+unsigned long simulatedopcount = 0; /* -b flag */
+int closeprob = 0; /* -c flag */
+int debug = 0; /* -d flag */
+unsigned long debugstart = 0; /* -D flag */
+int flush = 0; /* -f flag */
+int do_fsync = 0; /* -y flag */
+unsigned long maxfilelen = 256 * 1024; /* -l flag */
+int sizechecks = 1; /* -n flag disables them */
+int maxoplen = 64 * 1024; /* -o flag */
+int quiet = 0; /* -q flag */
+unsigned long progressinterval = 0; /* -p flag */
+int readbdy = 1; /* -r flag */
+int style = 0; /* -s flag */
+int prealloc = 0; /* -x flag */
+int truncbdy = 1; /* -t flag */
+int writebdy = 1; /* -w flag */
+long monitorstart = -1; /* -m flag */
+long monitorend = -1; /* -m flag */
+int lite = 0; /* -L flag */
+long numops = -1; /* -N flag */
+int randomoplen = 1; /* -O flag disables it */
+int seed = 1; /* -S flag */
+int mapped_writes = 0; /* -W flag disables */
+int fallocate_calls = 0; /* -F flag disables */
+int punch_hole_calls = 1; /* -H flag disables */
+int randomize_striping = 1;
+int mapped_reads = 0; /* -R flag disables it */
+int fsxgoodfd = 0;
+int o_direct; /* -Z */
+int aio = 0;
 
 int page_size;
 int page_mask;
@@ -332,12 +327,6 @@ logdump(void)
 						     lp->args[0] + lp->args[1])
 				prt("\t******PPPP");
 			break;
-		case OP_CLONE:
-			prt("CLONE");
-			break;
-		case OP_FLATTEN:
-			prt("FLATTEN");
-			break;
 		case OP_SKIPPED:
 			prt("SKIPPED (no operation)");
 			break;
@@ -394,7 +383,7 @@ void
 report_failure(int status)
 {
 	logdump();
-	
+
 	if (fsxgoodfd) {
 		if (good_buf) {
 			save_buffer(good_buf, file_size, fsxgoodfd);
@@ -519,11 +508,7 @@ create_image()
 		simple_err("Error creating ioctx", r);
 		goto failed_shutdown;
 	}
-	if (clone_calls) {
-		r = rbd_create2(ioctx, iname, 0, RBD_FEATURE_LAYERING, &order);
-	} else {
-		r = rbd_create(ioctx, iname, 0, &order);
-	}
+	r = rbd_create(ioctx, iname, 0, &order);
 	if (r < 0) {
 		simple_err("Error creating image", r);
 		goto failed_open;
@@ -779,142 +764,7 @@ do_punch_hole(unsigned offset, unsigned length)
 	memset(good_buf + max_offset, '\0', max_len);
 }
 
-void clone_filename(char *buf, size_t len, int clones)
-{
-	snprintf(buf, len, "%s/fsx-%s-parent%d",
-		 dirpath, iname, clones);
-}
-
-void clone_imagename(char *buf, size_t len, int clones)
-{
-	if (clones > 0)
-		snprintf(buf, len, "%s-clone%d", iname, clones);
-	else
-		strncpy(buf, iname, len);
-}
-
-void check_clone(int clonenum);
-
-void
-do_clone()
-{
-	char filename[1024];
-	char imagename[1024];
-	char lastimagename[1024];
-	int ret, fd;
-	int order = 0, stripe_unit = 0, stripe_count = 0;
-
-	if (randomize_striping) {
-		order = 18 + rand() % 8;
-		stripe_unit = 1ull << (order - 1 - (rand() % 8));
-		stripe_count = 2 + rand() % 14;
-	}
-
-	log4(OP_CLONE, 0, 0, 0);
-	++num_clones;
-	prt("%lu clone\t%d order %d su %d sc %d\n", testcalls, num_clones, order, stripe_unit, stripe_count);
-
-	clone_filename(filename, sizeof(filename), num_clones);
-	if ((fd = open(filename, O_WRONLY|O_CREAT|O_TRUNC, 0666)) < 0) {
-		simple_err("do_clone: open", -errno);
-		exit(162);
-	}
-	save_buffer(good_buf, file_size, fd);
-	if ((ret = close(fd)) < 0) {
-		simple_err("do_clone: close", -errno);
-		exit(163);
-	}
-
-	clone_imagename(imagename, sizeof(imagename), num_clones);
-	clone_imagename(lastimagename, sizeof(lastimagename),
-			num_clones - 1);
-
-	if ((ret = rbd_snap_create(image, "snap")) < 0) {
-		simple_err("do_clone: rbd create snap", ret);
-		exit(164);
-	}
-
-	if ((ret = rbd_snap_protect(image, "snap")) < 0) {
-		simple_err("do_clone: rbd protect snap", ret);
-		exit(164);
-	}
-
-	ret = rbd_clone2(ioctx, lastimagename, "snap", ioctx, imagename,
-			 RBD_FEATURES_ALL, &order, stripe_unit, stripe_count);
-	if (ret < 0) {
-		simple_err("do_clone: rbd clone", ret);
-		exit(165);
-	}
-
-	if ((ret = rbd_close(image)) < 0) {
-		simple_err("do_clone: rbd close", ret);
-		exit(174);
-	}
-
-	if ((ret = rbd_open(ioctx, imagename, &image, NULL)) < 0) {
-		simple_err("do_clone: rbd open", ret);
-		exit(166);
-	}
-
-	if (num_clones > 1)
-		check_clone(num_clones - 2);
-}
-
-void
-check_clone(int clonenum)
-{
-	char filename[128];
-	char imagename[128];
-	int ret, fd;
-	rbd_image_t cur_image;
-	struct stat file_info;
-	char *good_buf, *temp_buf;
-
-	clone_imagename(imagename, sizeof(imagename), clonenum);
-	if ((ret = rbd_open(ioctx, imagename, &cur_image, NULL)) < 0) {
-		simple_err("check_clone: rbd open", ret);
-		exit(167);
-	}
-
-	clone_filename(filename, sizeof(filename), clonenum + 1);
-	if ((fd = open(filename, O_RDONLY)) < 0) {
-		simple_err("check_clone: open", -errno);
-		exit(168);
-	}
-
-	prt("checking clone #%d, image %s against file %s\n",
-	    clonenum, imagename, filename);
-	if ((ret = fstat(fd, &file_info)) < 0) {
-		simple_err("check_clone: fstat", -errno);
-		exit(169);
-	}
-
-	good_buf = malloc(file_info.st_size);
-	temp_buf = malloc(file_info.st_size);
-
-	if ((ret = pread(fd, good_buf, file_info.st_size, 0)) < 0) {
-		simple_err("check_clone: pread", -errno);
-		exit(170);
-	}
-	if ((ret = rbd_read(cur_image, 0, file_info.st_size, temp_buf)) < 0) {
-		simple_err("check_clone: rbd_read", ret);
-		exit(171);
-	}
-	close(fd);
-	if ((ret = rbd_close(cur_image)) < 0) {
-		simple_err("check_clone: rbd close", ret);
-		exit(174);
-	}
-	check_buffers(good_buf, temp_buf, 0, file_info.st_size);
-
-	unlink(filename);
-
-	free(good_buf);
-	free(temp_buf);
-}
-
-void
-writefileimage()
+void writefileimage()
 {
 	ssize_t ret;
 
@@ -935,26 +785,6 @@ writefileimage()
 }
 
 void
-do_flatten()
-{
-	int ret;
-
-	if (num_clones == 0 ||
-	    (rbd_get_parent_info(image, NULL, 0, NULL, 0, NULL, 0)
-	    == -ENOENT)) {
-		log4(OP_SKIPPED, OP_FLATTEN, 0, 0);
-		return;
-	}
-	log4(OP_FLATTEN, 0, 0, 0);
-	prt("%lu flatten\n", testcalls);
-
-	if ((ret = rbd_flatten(image)) < 0) {
-		simple_err("do_flatten: rbd flatten", ret);
-		exit(177);
-	}
-}
-
-void
 docloseopen(void)
 {
 	int ret;
@@ -968,7 +798,7 @@ docloseopen(void)
 		prterrcode("docloseopen: close", ret);
 		report_failure(180);
 	}
-	ret = rbd_open(ioctx, iname, &image, NULL);
+	ret = rbd_open(ioctx, iname, &image);
 	if (ret < 0) {
 		prterrcode("docloseopen: open", ret);
 		report_failure(181);
@@ -1038,12 +868,6 @@ test(void)
 			goto out;
 		}
 		break;
-	case OP_CLONE:
-		if (!clone_calls || random() % 100 > 5 || file_size == 0) {
-			log4(OP_SKIPPED, OP_CLONE, 0, 0);
-			goto out;
-		}
-		break;
 	}
 
 	switch (op) {
@@ -1076,14 +900,6 @@ test(void)
 	case OP_PUNCH_HOLE:
 		TRIM_OFF_LEN(offset, size, file_size);
 		do_punch_hole(offset, size);
-		break;
-
-	case OP_CLONE:
-		do_clone();
-		break;
-
-	case OP_FLATTEN:
-		do_flatten();
 		break;
 
 	default:
@@ -1141,7 +957,6 @@ usage(void)
 "	-F: Do not use fallocate (preallocation) calls\n"
 #endif
 "        -H: Do not use punch hole calls\n"
-"        -C: Do not use clone calls\n"
 "	-L: fsxLite - no file creations & no file size changes\n\
 	-N numops: total # operations to do (default infinity)\n\
 	-O: use oplen (see -o flag) for every op (default random)\n\
@@ -1415,10 +1230,7 @@ main(int argc, char **argv)
 			do_fsync = 1;
 			break;
 		case 'A':
-		        aio = 1;
-			break;
-		case 'C':
-			clone_calls = 0;
+			aio = 1;
 			break;
 		case 'D':
 			debugstart = getnum(optarg, &endp);
@@ -1500,7 +1312,7 @@ main(int argc, char **argv)
 		prterrcode(iname, ret);
 		exit(90);
 	}
-	ret = rbd_open(ioctx, iname, &image, NULL);
+	ret = rbd_open(ioctx, iname, &image);
 	if (ret < 0) {
 		simple_err("Error opening image", ret);
 		exit(91);
@@ -1562,49 +1374,6 @@ main(int argc, char **argv)
 	if ((ret = rbd_close(image)) < 0) {
 		prterrcode("rbd_close", ret);
 		report_failure(99);
-	}
-
-	if (num_clones > 0)
-		check_clone(num_clones - 1);
-
-	while (num_clones >= 0) {
-		static int first = 1;
-		char clonename[128];
-		char errmsg[128];
-		clone_imagename(clonename, 128, num_clones);
-		if ((ret = rbd_open(ioctx, clonename, &image, NULL)) < 0) {
-			sprintf(errmsg, "rbd_open %s", clonename);
-			prterrcode(errmsg, ret);
-			report_failure(101);
-		}
-		if (!first) {
-			if ((ret = rbd_snap_unprotect(image, "snap")) < 0) {
-				sprintf(errmsg, "rbd_snap_unprotect %s@snap",
-					clonename);
-				prterrcode(errmsg, ret);
-			report_failure(102);
-			}
-			if ((ret = rbd_snap_remove(image, "snap")) < 0) {
-				sprintf(errmsg, "rbd_snap_remove %s@snap",
-					clonename);
-				prterrcode(errmsg, ret);
-				report_failure(103);
-			}
-		}
-		if ((ret = rbd_close(image)) < 0) {
-			sprintf(errmsg, "rbd_close %s", clonename);
-			prterrcode(errmsg, ret);
-			report_failure(104);
-		}
-
-		if ((ret = rbd_remove(ioctx, clonename)) < 0) {
-			sprintf(errmsg, "rbd_remove %s", clonename);
-			prterrcode(errmsg, ret);
-			report_failure(105);
-		}
-
-		first = 0;
-		num_clones--;
 	}
 
 	rados_ioctx_destroy(ioctx);

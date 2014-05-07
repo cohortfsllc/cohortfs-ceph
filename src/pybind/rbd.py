@@ -61,9 +61,6 @@ class ReadOnlyImage(Error):
 class ImageBusy(Error):
     pass
 
-class ImageHasSnapshots(Error):
-    pass
-
 class FunctionNotSupported(Error):
     pass
 
@@ -95,7 +92,6 @@ def make_ex(ret, msg):
         errno.EINVAL    : InvalidArgument,
         errno.EROFS     : ReadOnlyImage,
         errno.EBUSY     : ImageBusy,
-        errno.ENOTEMPTY : ImageHasSnapshots,
         errno.ENOSYS    : FunctionNotSupported,
         errno.EDOM      : ArgumentOutOfRange,
         errno.ESHUTDOWN : ConnectionShutdown,
@@ -112,14 +108,7 @@ class rbd_image_info_t(Structure):
                 ("obj_size", c_uint64),
                 ("num_objs", c_uint64),
                 ("order", c_int),
-                ("block_name_prefix", c_char * 24),
-                ("parent_pool", c_int64),
-                ("parent_name", c_char * 96)]
-
-class rbd_snap_info_t(Structure):
-    _fields_ = [("id", c_uint64),
-                ("size", c_uint64),
-                ("name", c_char_p)]
+                ("block_name_prefix", c_char * 24)]
 
 def load_librbd():
     """
@@ -218,46 +207,6 @@ class RBD(object):
         if ret < 0:
             raise make_ex(ret, 'error creating image')
 
-    def clone(self, p_ioctx, p_name, p_snapname, c_ioctx, c_name,
-              features=0, order=None):
-        """
-        Clone a parent rbd snapshot into a COW sparse child.
-
-        :param p_ioctx: the parent context that represents the parent snap
-        :type ioctx: :class:`rados.Ioctx`
-        :param p_name: the parent image name
-        :type name: str
-        :param p_snapname: the parent image snapshot name
-        :type name: str
-        :param c_ioctx: the child context that represents the new clone
-        :type ioctx: :class:`rados.Ioctx`
-        :param c_name: the clone (child) name
-        :type name: str
-        :param features: bitmask of features to enable; if set, must include layering
-        :type features: int
-        :param order: the image is split into (2**order) byte objects
-        :type order: int
-        :raises: :class:`TypeError`
-        :raises: :class:`InvalidArgument`
-        :raises: :class:`ImageExists`
-        :raises: :class:`FunctionNotSupported`
-        :raises: :class:`ArgumentOutOfRange`
-        """
-        if order is None:
-            order = 0
-        if not isinstance(p_snapname, str) or not isinstance(p_name, str):
-            raise TypeError('parent name and snapname must be strings')
-        if not isinstance(c_name, str):
-            raise TypeError('child name must be a string')
-
-        ret = self.librbd.rbd_clone(p_ioctx.io, c_char_p(p_name),
-                                    c_char_p(p_snapname),
-                                    c_ioctx.io, c_char_p(c_name),
-                                          c_uint64(features),
-                                          byref(c_int(order)))
-        if ret < 0:
-            raise make_ex(ret, 'error creating clone')
-
     def list(self, ioctx):
         """
         List image names.
@@ -277,21 +226,17 @@ class RBD(object):
         return filter(lambda name: name != '', c_names.raw.split('\0'))
 
     def remove(self, ioctx, name):
-        """
-        Delete an RBD image. This may take a long time, since it does
-        not return until every object that comprises the image has
-        been deleted. Note that all snapshots must be deleted before
-        the image can be removed. If there are snapshots left,
-        :class:`ImageHasSnapshots` is raised. If the image is still
-        open, or the watch from a crashed client has not expired,
-        :class:`ImageBusy` is raised.
+        """Delete an RBD image. This may take a long time, since it does not
+        return until every object that comprises the image has been
+        deleted. If the image is still open, or the watch from a
+        crashed client has not expired, :class:`ImageBusy` is raised.
 
         :param ioctx: determines which RADOS pool the image is in
         :type ioctx: :class:`rados.Ioctx`
         :param name: the name of the image to remove
         :type name: str
-        :raises: :class:`ImageNotFound`, :class:`ImageBusy`,
-                 :class:`ImageHasSnapshots`
+        :raises: :class:`ImageNotFound`, :class:`ImageBusy`
+
         """
         if not isinstance(name, str):
             raise TypeError('name must be a string')
@@ -320,21 +265,15 @@ class RBD(object):
 class Image(object):
     """
     This class represents an RBD image. It is used to perform I/O on
-    the image and interact with snapshots.
+    the image.
 
     **Note**: Any method of this class may raise :class:`ImageNotFound`
     if the image has been deleted.
     """
 
-    def __init__(self, ioctx, name, snapshot=None, read_only=False):
-        """
-        Open the image at the given snapshot.
-        If a snapshot is specified, the image will be read-only, unless
-        :func:`Image.set_snap` is called later.
-
-        If read-only mode is used, metadata for the :class:`Image`
-        object (such as which snapshots exist) may become obsolete. See
-        the C api for more details.
+    def __init__(self, ioctx, name, read_only=False):
+        """If read-only mode is used, metadata for the :class:`Image` object
+        may become obsolete. See the C api for more details.
 
         To clean up from opening the image, :func:`Image.close` should
         be called.  For ease of use, this is done automatically when
@@ -344,10 +283,9 @@ class Image(object):
         :type ioctx: :class:`rados.Ioctx`
         :param name: the name of the image
         :type name: str
-        :param snapshot: which snapshot to read from
-        :type snaphshot: str
         :param read_only: whether to open the image in read-only mode
         :type read_only: bool
+
         """
         self.closed = True
         self.librbd = load_librbd()
@@ -355,20 +293,17 @@ class Image(object):
         self.name = name
         if not isinstance(name, str):
             raise TypeError('name must be a string')
-        if snapshot is not None and not isinstance(snapshot, str):
-            raise TypeError('snapshot must be a string or None')
         if read_only:
             if not hasattr(self.librbd, 'rbd_open_read_only'):
                 raise FunctionNotSupported('installed version of librbd does '
                                            'not support open in read-only mode')
             ret = self.librbd.rbd_open_read_only(ioctx.io, c_char_p(name),
-                                                 byref(self.image),
-                                                 c_char_p(snapshot))
+                                                 byref(self.image))
         else:
             ret = self.librbd.rbd_open(ioctx.io, c_char_p(name),
-                                       byref(self.image), c_char_p(snapshot))
+                                       byref(self.image))
         if ret != 0:
-            raise make_ex(ret, 'error opening image %s at snapshot %s' % (name, snapshot))
+            raise make_ex(ret, 'error opening image %s' % (name))
         self.closed = False
 
     def __enter__(self):
@@ -411,8 +346,7 @@ class Image(object):
 
     def stat(self):
         """
-        Get information about the image. Currently parent pool and
-        parent name are always -1 and ''.
+        Get information about the image.
 
         :returns: dict - contains the following keys:
 
@@ -428,10 +362,6 @@ class Image(object):
             * ``block_name_prefix`` (str) - the prefix of the RADOS objects used
               to store the image
 
-            * ``parent_pool`` (int) - deprecated
-
-            * ``parent_name``  (str) - deprecated
-
             See also :meth:`format` and :meth:`features`.
 
         """
@@ -444,26 +374,8 @@ class Image(object):
             'obj_size'          : info.obj_size,
             'num_objs'          : info.num_objs,
             'order'             : info.order,
-            'block_name_prefix' : info.block_name_prefix,
-            'parent_pool'       : info.parent_pool,
-            'parent_name'       : info.parent_name
+            'block_name_prefix' : info.block_name_prefix
             }
-
-    def parent_info(self):
-        ret = -errno.ERANGE
-        size = 8
-        while ret == -errno.ERANGE and size <= 4096:
-            pool = create_string_buffer(size)
-            name = create_string_buffer(size)
-            snapname = create_string_buffer(size)
-            ret = self.librbd.rbd_get_parent_info(self.image, pool, len(pool), 
-                name, len(name), snapname, len(snapname))
-            if ret == -errno.ERANGE:
-                size *= 2
-
-        if (ret != 0):
-            raise make_ex(ret, 'error getting parent info for image %s' % (self.name,))
-        return (pool.value, name.value, snapname.value)
 
     def old_format(self):
         old = c_uint8()
@@ -474,8 +386,7 @@ class Image(object):
 
     def size(self):
         """
-        Get the size of the image. If open to a snapshot, returns the
-        size of that snapshot.
+        Get the size of the image.
 
         :returns: the size of the image in bytes
         """
@@ -492,13 +403,6 @@ class Image(object):
             raise make_ex(ret, 'error getting features for image' % (self.name))
         return features.value
 
-    def overlap(self):
-        overlap = c_uint64()
-        ret = self.librbd.rbd_get_overlap(self.image, byref(overlap))
-        if (ret != 0):
-            raise make_ex(ret, 'error getting overlap for image' % (self.name))
-        return overlap.value
-
     def copy(self, dest_ioctx, dest_name):
         """
         Copy the image to another location.
@@ -514,121 +418,6 @@ class Image(object):
         ret = self.librbd.rbd_copy(self.image, dest_ioctx.io, c_char_p(dest_name))
         if ret < 0:
             raise make_ex(ret, 'error copying image %s to %s' % (self.name, dest_name))
-
-    def list_snaps(self):
-        """
-        Iterate over the snapshots of an image.
-
-        :returns: :class:`SnapIterator`
-        """
-        return SnapIterator(self)
-
-    def create_snap(self, name):
-        """
-        Create a snapshot of the image.
-
-        :param name: the name of the snapshot
-        :type name: str
-        :raises: :class:`ImageExists`
-        """
-        if not isinstance(name, str):
-            raise TypeError('name must be a string')
-        ret = self.librbd.rbd_snap_create(self.image, c_char_p(name))
-        if ret != 0:
-            raise make_ex(ret, 'error creating snapshot %s from %s' % (name, self.name))
-
-    def remove_snap(self, name):
-        """
-        Delete a snapshot of the image.
-
-        :param name: the name of the snapshot
-        :type name: str
-        :raises: :class:`IOError`, :class:`ImageBusy`
-        """
-        if not isinstance(name, str):
-            raise TypeError('name must be a string')
-        ret = self.librbd.rbd_snap_remove(self.image, c_char_p(name))
-        if ret != 0:
-            raise make_ex(ret, 'error removing snapshot %s from %s' % (name, self.name))
-
-    def rollback_to_snap(self, name):
-        """
-        Revert the image to its contents at a snapshot. This is a
-        potentially expensive operation, since it rolls back each
-        object individually.
-
-        :param name: the snapshot to rollback to
-        :type name: str
-        :raises: :class:`IOError`
-        """
-        if not isinstance(name, str):
-            raise TypeError('name must be a string')
-        ret = self.librbd.rbd_snap_rollback(self.image, c_char_p(name))
-        if ret != 0:
-            raise make_ex(ret, 'error rolling back image %s to snapshot %s' % (self.name, name))
-
-    def protect_snap(self, name):
-        """
-        Mark a snapshot as protected. This means it can't be deleted
-        until it is unprotected.
-
-        :param name: the snapshot to protect
-        :type name: str
-        :raises: :class:`IOError`, :class:`ImageNotFound`
-        """
-        if not isinstance(name, str):
-            raise TypeError('name must be a string')
-        ret = self.librbd.rbd_snap_protect(self.image, c_char_p(name))
-        if ret != 0:
-            raise make_ex(ret, 'error protecting snapshot %s@%s' % (self.name, name))
-
-    def unprotect_snap(self, name):
-        """
-        Mark a snapshot unprotected. This allows it to be deleted if
-        it was protected.
-
-        :param name: the snapshot to unprotect
-        :type name: str
-        :raises: :class:`IOError`, :class:`ImageNotFound`
-        """
-        if not isinstance(name, str):
-            raise TypeError('name must be a string')
-        ret = self.librbd.rbd_snap_unprotect(self.image, c_char_p(name))
-        if ret != 0:
-            raise make_ex(ret, 'error unprotecting snapshot %s@%s' % (self.name, name))
-
-    def is_protected_snap(self, name):
-        """
-        Find out whether a snapshot is protected from deletion.
-
-        :param name: the snapshot to check
-        :type name: str
-        :returns: bool - whether the snapshot is protected
-        :raises: :class:`IOError`, :class:`ImageNotFound`
-        """
-        if not isinstance(name, str):
-            raise TypeError('name must be a string')
-        is_protected = c_int()
-        ret = self.librbd.rbd_snap_is_protected(self.image, c_char_p(name),
-                                                byref(is_protected))
-        if ret != 0:
-            raise make_ex(ret, 'error checking if snapshot %s@%s is protected' % (self.name, name))
-        return is_protected.value == 1
-
-    def set_snap(self, name):
-        """
-        Set the snapshot to read from. Writes will raise ReadOnlyImage
-        while a snapshot is set. Pass None to unset the snapshot
-        (reads come from the current image) , and allow writing again.
-
-        :param name: the snapshot to read from, or None to unset the snapshot
-        :type name: str or None
-        """
-        if name is not None and not isinstance(name, str):
-            raise TypeError('name must be a string')
-        ret = self.librbd.rbd_snap_set(self.image, c_char_p(name))
-        if ret != 0:
-            raise make_ex(ret, 'error setting image %s to snapshot %s' % (self.name, name))
 
     def read(self, offset, length):
         """
@@ -648,58 +437,6 @@ class Image(object):
         if ret < 0:
             raise make_ex(ret, 'error reading %s %ld~%ld' % (self.image, offset, length))
         return ctypes.string_at(ret_buf, ret)
-
-    def diff_iterate(self, offset, length, from_snapshot, iterate_cb):
-        """
-        Iterate over the changed extents of an image.
-
-        This will call iterate_cb with three arguments:
-
-        (offset, length, exists)
-
-        where the changed extent starts at offset bytes, continues for
-        length bytes, and is full of data (if exists is True) or zeroes
-        (if exists is False).
-
-        If from_snapshot is None, it is interpreted as the beginning
-        of time and this generates all allocated extents.
-
-        The end version is whatever is currently selected (via set_snap)
-        for the image.
-
-        Raises :class:`InvalidArgument` if from_snapshot is after
-        the currently set snapshot.
-
-        Raises :class:`ImageNotFound` if from_snapshot is not the name
-        of a snapshot of the image.
-
-        :param offset: start offset in bytes
-        :type offset: int
-        :param length: size of region to report on, in bytes
-        :type length: int
-        :param from_snapshot: starting snapshot name, or None
-        :type from_snapshot: str or None
-        :param iterate_cb: function to call for each extent
-        :type iterate_cb: function acception arguments for offset,
-                           length, and exists
-        :raises: :class:`InvalidArgument`, :class:`IOError`,
-                 :class:`ImageNotFound`
-        """
-        if from_snapshot is not None and not isinstance(from_snapshot, str):
-            raise TypeError('client must be a string')
-
-        RBD_DIFF_CB = CFUNCTYPE(c_int, c_uint64, c_size_t, c_int, c_void_p)
-        cb_holder = DiffIterateCB(iterate_cb)
-        cb = RBD_DIFF_CB(cb_holder.callback)
-        ret = self.librbd.rbd_diff_iterate(self.image,
-                                           c_char_p(from_snapshot),
-                                           c_uint64(offset),
-                                           c_uint64(length),
-                                           cb,
-                                           c_void_p(None))
-        if ret < 0:
-            msg = 'error generating diff from snapshot %s' % from_snapshot
-            raise make_ex(ret, msg)
 
     def write(self, data, offset):
         """
@@ -769,40 +506,6 @@ written." % (self.name, ret, length))
         if ret != 0:
             raise make_ex(ret, 'error getting stripe count for image' % (self.name))
         return stripe_count.value
-
-    def flatten(self):
-        """
-        Flatten clone image (copy all blocks from parent to child)
-        """
-        ret = self.librbd.rbd_flatten(self.image)
-        if (ret < 0):
-            raise make_ex(ret, "error flattening %s" % self.name)
-
-    def list_children(self):
-        """
-        List children of the currently set snapshot (set via set_snap()).
-
-        :returns: list - a list of (pool name, image name) tuples
-        """
-        pools_size = c_size_t(512)
-        images_size = c_size_t(512)
-        while True:
-            c_pools = create_string_buffer(pools_size.value)
-            c_images = create_string_buffer(images_size.value)
-            ret = self.librbd.rbd_list_children(self.image,
-                                                byref(c_pools),
-                                                byref(pools_size),
-                                                byref(c_images),
-                                                byref(images_size))
-            if ret >= 0:
-                break
-            elif ret != -errno.ERANGE:
-                raise make_ex(ret, 'error listing images')
-        if ret == 0:
-            return []
-        pools = c_pools.raw[:pools_size.value - 1].split('\0')
-        images = c_images.raw[:images_size.value - 1].split('\0')
-        return zip(pools, images)
 
     def list_lockers(self):
         """
@@ -914,41 +617,3 @@ class DiffIterateCB(object):
     def callback(self, offset, length, exists, unused):
         self.cb(offset, length, exists == 1)
         return 0
-
-class SnapIterator(object):
-    """
-    Iterator over snapshot info for an image.
-
-    Yields a dictionary containing information about a snapshot.
-
-    Keys are:
-
-    * ``id`` (int) - numeric identifier of the snapshot
-
-    * ``size`` (int) - size of the image at the time of snapshot (in bytes)
-
-    * ``name`` (str) - name of the snapshot
-    """
-    def __init__(self, image):
-        self.librbd = image.librbd
-        num_snaps = c_int(10)
-        while True:
-            self.snaps = (rbd_snap_info_t * num_snaps.value)()
-            ret = self.librbd.rbd_snap_list(image.image, byref(self.snaps),
-                                            byref(num_snaps))
-            if ret >= 0:
-                self.num_snaps = ret
-                break
-            elif ret != -errno.ERANGE:
-                raise make_ex(ret, 'error listing snapshots for image %s' % (image.name,))
-
-    def __iter__(self):
-        for i in xrange(self.num_snaps):
-            yield {
-                'id'   : self.snaps[i].id,
-                'size' : self.snaps[i].size,
-                'name' : self.snaps[i].name,
-                }
-
-    def __del__(self):
-        self.librbd.rbd_snap_list_end(self.snaps)

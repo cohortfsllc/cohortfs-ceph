@@ -45,21 +45,6 @@
 #define RBD_DIRECTORY           "rbd_directory"
 #define RBD_INFO                "rbd_info"
 
-/*
- * rbd_children object in each pool contains omap entries
- * that map parent (poolid, imageid, snapid) to a list of children
- * (imageids; snapids aren't required because we get all the snapshot
- * info from a read of the child's header object anyway).
- *
- * The clone operation writes a new item to this child list, and rm or
- * flatten removes an item, and may remove the whole entry if no children
- * exist after the rm/flatten.
- *
- * When attempting to remove a parent, all pools are searched for
- * rbd_children objects with entries referring to that parent; if any
- * exist (and those children exist), the parent removal is prevented.
- */
-#define RBD_CHILDREN		"rbd_children"
 #define RBD_LOCK_NAME		"rbd_lock"
 
 #define RBD_DEFAULT_OBJ_ORDER	22   /* 4MB */
@@ -78,10 +63,6 @@ struct rbd_info {
 	__le64 max_id;
 } __attribute__ ((packed));
 
-struct rbd_obj_snap_ondisk {
-	__le64 id;
-	__le64 image_size;
-} __attribute__((packed));
 
 struct rbd_obj_header_ondisk {
 	char text[40];
@@ -90,16 +71,8 @@ struct rbd_obj_header_ondisk {
 	char version[8];
 	struct {
 		__u8 order;
-		__u8 crypt_type;
-		__u8 comp_type;
-		__u8 unused;
 	} __attribute__((packed)) options;
 	__le64 image_size;
-	__le64 snap_seq;
-	__le32 snap_count;
-	__le32 reserved;
-	__le64 snap_names_len;
-	struct rbd_obj_snap_ondisk snaps[0];
 } __attribute__((packed));
 
 

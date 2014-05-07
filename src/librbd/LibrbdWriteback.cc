@@ -89,8 +89,7 @@ namespace librbd {
   {
   }
 
-  void LibrbdWriteback::read(const object_t& oid,
-			     const object_locator_t& oloc,
+  void LibrbdWriteback::read(const object_t& oid, const object_locator_t& oloc,
 			     uint64_t off, uint64_t len, snapid_t snapid,
 			     bufferlist *pbl, uint64_t trunc_size,
 			     __u32 trunc_seq, Context *onfinish)
@@ -101,68 +100,41 @@ namespace librbd {
       librados::Rados::aio_create_completion(req, context_cb, NULL);
     librados::ObjectReadOperation op;
     op.read(off, len, pbl, NULL);
-    int flags = m_ictx->get_read_flags(snapid);
+    int flags = m_ictx->get_read_flags();
     int r = m_ictx->data_ctx.aio_operate(oid.name, rados_completion, &op,
 					 flags, NULL);
     rados_completion->release();
     assert(r >= 0);
   }
 
-  bool LibrbdWriteback::may_copy_on_write(const object_t& oid, uint64_t read_off, uint64_t read_len, snapid_t snapid)
+  bool LibrbdWriteback::may_copy_on_write(const object_t& oid,
+					  uint64_t read_off, uint64_t read_len,
+					  snapid_t snapid)
   {
-    m_ictx->snap_lock.get_read();
-    librados::snap_t snap_id = m_ictx->snap_id;
-    m_ictx->parent_lock.get_read();
-    uint64_t overlap = 0;
-    m_ictx->get_parent_overlap(snap_id, &overlap);
-    m_ictx->parent_lock.put_read();
-    m_ictx->snap_lock.put_read();
-
-    uint64_t object_no = oid_to_object_no(oid.name, m_ictx->object_prefix);
-
-    // reverse map this object extent onto the parent
-    vector<pair<uint64_t,uint64_t> > objectx;
-    Striper::extent_to_file(m_ictx->cct, &m_ictx->layout,
-			  object_no, 0, m_ictx->layout.fl_object_size,
-			  objectx);
-    uint64_t object_overlap = m_ictx->prune_parent_extents(objectx, overlap);
-    bool may = object_overlap > 0;
-    ldout(m_ictx->cct, 10) << "may_copy_on_write " << oid << " " << read_off << "~" << read_len << " = " << may << dendl;
-    return may;
+    return false;
   }
 
   ceph_tid_t LibrbdWriteback::write(const object_t& oid,
-			       const object_locator_t& oloc,
-			       uint64_t off, uint64_t len,
-			       const SnapContext& snapc,
-			       const bufferlist &bl, utime_t mtime,
-			       uint64_t trunc_size, __u32 trunc_seq,
-			       Context *oncommit)
+				    const object_locator_t& oloc,
+				    uint64_t off, uint64_t len,
+				    const SnapContext& snapc,
+				    const bufferlist &bl, utime_t mtime,
+				    uint64_t trunc_size, __u32 trunc_seq,
+				    Context *oncommit)
   {
-    m_ictx->snap_lock.get_read();
-    librados::snap_t snap_id = m_ictx->snap_id;
-    m_ictx->parent_lock.get_read();
-    uint64_t overlap = 0;
-    m_ictx->get_parent_overlap(snap_id, &overlap);
-    m_ictx->parent_lock.put_read();
-    m_ictx->snap_lock.put_read();
-
     uint64_t object_no = oid_to_object_no(oid.name, m_ictx->object_prefix);
-    
-    // reverse map this object extent onto the parent
+
     vector<pair<uint64_t,uint64_t> > objectx;
     Striper::extent_to_file(m_ictx->cct, &m_ictx->layout,
 			  object_no, 0, m_ictx->layout.fl_object_size,
 			  objectx);
-    uint64_t object_overlap = m_ictx->prune_parent_extents(objectx, overlap);
     write_result_d *result = new write_result_d(oid.name, oncommit);
     m_writes[oid.name].push(result);
     ldout(m_ictx->cct, 20) << "write will wait for result " << result << dendl;
     C_OrderedWrite *req_comp = new C_OrderedWrite(m_ictx->cct, result, this);
     AioWrite *req = new AioWrite(m_ictx, oid.name,
-				 object_no, off, objectx, object_overlap,
-				 bl, snapc, snap_id,
-				 req_comp);
+				 object_no, off, objectx,
+				 bl, req_comp);
     req->send();
     return ++m_tid;
   }

@@ -23,16 +23,13 @@ using std::string;
 using std::vector;
 
 using ceph::bufferlist;
-using librados::snap_t;
 using librados::IoCtx;
 
 namespace librbd {
   ImageCtx::ImageCtx(const string &image_name, const string &image_id,
-		     const char *snap, IoCtx& p, bool ro)
+		     IoCtx& p, bool ro)
     : cct((CephContext*)p.cct()),
       perfcounter(NULL),
-      snap_id(CEPH_NOSNAP),
-      snap_exists(true),
       read_only(ro),
       flush_encountered(false),
       exclusive_locked(false),
@@ -42,14 +39,12 @@ namespace librbd {
       last_refresh(0),
       md_lock("librbd::ImageCtx::md_lock"),
       cache_lock("librbd::ImageCtx::cache_lock"),
-      snap_lock("librbd::ImageCtx::snap_lock"),
-      parent_lock("librbd::ImageCtx::parent_lock"),
       refresh_lock("librbd::ImageCtx::refresh_lock"),
       extra_read_flags(0),
       old_format(true),
       order(0), size(0), features(0),
       format_string(NULL),
-      id(image_id), parent(NULL),
+      id(image_id),
       stripe_unit(0), stripe_count(0),
       object_cacher(NULL), writeback_handler(NULL), object_set(NULL)
   {
@@ -61,11 +56,6 @@ namespace librbd {
 
     string pname = string("librbd-") + id + string("-") +
       data_ctx.get_pool_name() + string("/") + name;
-    if (snap) {
-      snap_name = snap;
-      pname += "@";
-      pname += snap_name;
-    }
     perf_start(pname);
 
     if (cct->_conf->rbd_cache) {
@@ -223,9 +213,6 @@ namespace librbd {
     plb.add_time_avg(l_librbd_aio_discard_latency, "aio_discard_latency");
     plb.add_u64_counter(l_librbd_aio_flush, "aio_flush");
     plb.add_time_avg(l_librbd_aio_flush_latency, "aio_flush_latency");
-    plb.add_u64_counter(l_librbd_snap_create, "snap_create");
-    plb.add_u64_counter(l_librbd_snap_remove, "snap_remove");
-    plb.add_u64_counter(l_librbd_snap_rollback, "snap_rollback");
     plb.add_u64_counter(l_librbd_notify, "notify");
     plb.add_u64_counter(l_librbd_resize, "resize");
 
@@ -243,71 +230,8 @@ namespace librbd {
     extra_read_flags |= flag;
   }
 
-  int ImageCtx::get_read_flags(snap_t snap_id) {
-    int flags = librados::OPERATION_NOFLAG | extra_read_flags;
-    if (snap_id == LIBRADOS_SNAP_HEAD)
-      return flags;
-
-    if (cct->_conf->rbd_balance_snap_reads)
-      flags |= librados::OPERATION_BALANCE_READS;
-    else if (cct->_conf->rbd_localize_snap_reads)
-      flags |= librados::OPERATION_LOCALIZE_READS;
-    return flags;
-  }
-
-  int ImageCtx::snap_set(string in_snap_name)
-  {
-    map<string, SnapInfo>::iterator it = snaps_by_name.find(in_snap_name);
-    if (it != snaps_by_name.end()) {
-      snap_name = in_snap_name;
-      snap_id = it->second.id;
-      snap_exists = true;
-      data_ctx.snap_set_read(snap_id);
-      return 0;
-    }
-    return -ENOENT;
-  }
-
-  void ImageCtx::snap_unset()
-  {
-    snap_id = CEPH_NOSNAP;
-    snap_name = "";
-    snap_exists = true;
-    data_ctx.snap_set_read(snap_id);
-  }
-
-  snap_t ImageCtx::get_snap_id(string in_snap_name) const
-  {
-    map<string, SnapInfo>::const_iterator it = snaps_by_name.find(in_snap_name);
-    if (it != snaps_by_name.end())
-      return it->second.id;
-    return CEPH_NOSNAP;
-  }
-
-  int ImageCtx::get_snap_name(snapid_t in_snap_id, string *out_snap_name) const
-  {
-    map<string, SnapInfo>::const_iterator it;
-
-    for (it = snaps_by_name.begin(); it != snaps_by_name.end(); ++it) {
-      if (it->second.id == in_snap_id) {
-	*out_snap_name = it->first;
-	return 0;
-      }
-    }
-    return -ENOENT;
-  }
-
-  int ImageCtx::get_parent_spec(snapid_t in_snap_id, parent_spec *out_pspec)
-  {
-    map<string, SnapInfo>::iterator it;
-
-    for (it = snaps_by_name.begin(); it != snaps_by_name.end(); ++it) {
-      if (it->second.id == in_snap_id) {
-	*out_pspec = it->second.parent.spec;
-	return 0;
-      }
-    }
-    return -ENOENT;
+  int ImageCtx::get_read_flags() {
+    return librados::OPERATION_NOFLAG | extra_read_flags;
   }
 
   uint64_t ImageCtx::get_current_size() const
@@ -348,138 +272,20 @@ namespace librbd {
     return num_periods * stripe_count;
   }
 
-  int ImageCtx::is_snap_protected(string in_snap_name, bool *is_protected) const
+  uint64_t ImageCtx::get_image_size() const
   {
-    map<string, SnapInfo>::const_iterator it = snaps_by_name.find(in_snap_name);
-    if (it != snaps_by_name.end()) {
-      *is_protected =
-	(it->second.protection_status == RBD_PROTECTION_STATUS_PROTECTED);
-      return 0;
-    }
-    return -ENOENT;
+    return size;
   }
 
-  int ImageCtx::is_snap_unprotected(string in_snap_name,
-				    bool *is_unprotected) const
+  int ImageCtx::get_features(uint64_t *out_features) const
   {
-    map<string, SnapInfo>::const_iterator it = snaps_by_name.find(in_snap_name);
-    if (it != snaps_by_name.end()) {
-      *is_unprotected =
-	(it->second.protection_status == RBD_PROTECTION_STATUS_UNPROTECTED);
-      return 0;
-    }
-    return -ENOENT;
-  }
-
-  void ImageCtx::add_snap(string in_snap_name, snap_t id, uint64_t in_size,
-			  uint64_t features,
-			  parent_info parent,
-			  uint8_t protection_status)
-  {
-    snaps.push_back(id);
-    SnapInfo info(id, in_size, features, parent, protection_status);
-    snaps_by_name.insert(pair<string, SnapInfo>(in_snap_name, info));
-  }
-
-  uint64_t ImageCtx::get_image_size(snap_t in_snap_id) const
-  {
-    if (in_snap_id == CEPH_NOSNAP) {
-      return size;
-    }
-    string in_snap_name;
-    int r = get_snap_name(in_snap_id, &in_snap_name);
-    if (r < 0)
-      return 0;
-    map<string, SnapInfo>::const_iterator p = snaps_by_name.find(in_snap_name);
-    if (p == snaps_by_name.end())
-      return 0;
-    return p->second.size;
-  }
-
-  int ImageCtx::get_features(snap_t in_snap_id, uint64_t *out_features) const
-  {
-    if (in_snap_id == CEPH_NOSNAP) {
-      *out_features = features;
-      return 0;
-    }
-    string in_snap_name;
-    int r = get_snap_name(in_snap_id, &in_snap_name);
-    if (r < 0)
-      return r;
-    map<string, SnapInfo>::const_iterator p = snaps_by_name.find(in_snap_name);
-    if (p == snaps_by_name.end())
-      return -ENOENT;
-    *out_features = p->second.features;
-    return 0;
-  }
-
-  int64_t ImageCtx::get_parent_pool_id(snap_t in_snap_id) const
-  {
-    if (in_snap_id == CEPH_NOSNAP) {
-      return parent_md.spec.pool_id;
-    }
-    string in_snap_name;
-    int r = get_snap_name(in_snap_id, &in_snap_name);
-    if (r < 0)
-      return -1;
-    map<string, SnapInfo>::const_iterator p = snaps_by_name.find(in_snap_name);
-    if (p == snaps_by_name.end())
-      return -1;
-    return p->second.parent.spec.pool_id;
-  }
-
-  string ImageCtx::get_parent_image_id(snap_t in_snap_id) const
-  {
-    if (in_snap_id == CEPH_NOSNAP) {
-      return parent_md.spec.image_id;
-    }
-    string in_snap_name;
-    int r = get_snap_name(in_snap_id, &in_snap_name);
-    if (r < 0)
-      return "";
-    map<string, SnapInfo>::const_iterator p = snaps_by_name.find(in_snap_name);
-    if (p == snaps_by_name.end())
-      return "";
-    return p->second.parent.spec.image_id;
-  }
-
-  uint64_t ImageCtx::get_parent_snap_id(snap_t in_snap_id) const
-  {
-    if (in_snap_id == CEPH_NOSNAP) {
-      return parent_md.spec.snap_id;
-    }
-    string in_snap_name;
-    int r = get_snap_name(in_snap_id, &in_snap_name);
-    if (r < 0)
-      return CEPH_NOSNAP;
-    map<string, SnapInfo>::const_iterator p = snaps_by_name.find(in_snap_name);
-    if (p == snaps_by_name.end())
-      return CEPH_NOSNAP;
-    return p->second.parent.spec.snap_id;
-  }
-
-  int ImageCtx::get_parent_overlap(snap_t in_snap_id, uint64_t *overlap) const
-  {
-    if (in_snap_id == CEPH_NOSNAP) {
-      *overlap = parent_md.overlap;
-      return 0;
-    }
-    string in_snap_name;
-    int r = get_snap_name(in_snap_id, &in_snap_name);
-    if (r < 0)
-      return r;
-    map<string, SnapInfo>::const_iterator p = snaps_by_name.find(in_snap_name);
-    if (p == snaps_by_name.end())
-      return -ENOENT;
-    *overlap = p->second.parent.overlap;
+    *out_features = features;
     return 0;
   }
 
   void ImageCtx::aio_read_from_cache(object_t o, bufferlist *bl, size_t len,
 				     uint64_t off, Context *onfinish) {
-    snap_lock.get_read();
-    ObjectCacher::OSDRead *rd = object_cacher->prepare_read(snap_id, bl, 0);
-    snap_lock.put_read();
+    ObjectCacher::OSDRead *rd = object_cacher->prepare_read(CEPH_NOSNAP, bl, 0);
     ObjectExtent extent(o, 0 /* a lie */, off, len, 0);
     extent.oloc.pool = data_ctx.get_id();
     extent.buffer_extents.push_back(make_pair(0, len));
@@ -493,10 +299,8 @@ namespace librbd {
 
   void ImageCtx::write_to_cache(object_t o, bufferlist& bl, size_t len,
 				uint64_t off, Context *onfinish) {
-    snap_lock.get_read();
-    ObjectCacher::OSDWrite *wr = object_cacher->prepare_write(snapc, bl,
-							      utime_t(), 0);
-    snap_lock.put_read();
+    ObjectCacher::OSDWrite *wr
+      = object_cacher->prepare_write(::SnapContext(), bl, utime_t(), 0);
     ObjectExtent extent(o, 0, off, len, 0);
     extent.oloc.pool = data_ctx.get_id();
     // XXX: nspace is always default, io_ctx_impl field private
@@ -610,42 +414,4 @@ namespace librbd {
     delete wctx;
     wctx = NULL;
   }
-
-  size_t ImageCtx::parent_io_len(uint64_t offset, size_t length,
-				 snap_t in_snap_id)
-  {
-    uint64_t overlap = 0;
-    get_parent_overlap(in_snap_id, &overlap);
-
-    size_t parent_len = 0;
-    if (get_parent_pool_id(in_snap_id) != -1 && offset <= overlap)
-      parent_len = min(overlap, offset + length) - offset;
-
-    ldout(cct, 20) << __func__ << " off = " << offset << " len = " << length
-		   << " overlap = " << overlap << " parent_io_len = "
-		   << parent_len << dendl;
-    return parent_len;
-  }
-
-  uint64_t ImageCtx::prune_parent_extents(vector<pair<uint64_t,uint64_t> >& objectx,
-					  uint64_t overlap)
-  {
-    // drop extents completely beyond the overlap
-    while (!objectx.empty() && objectx.back().first >= overlap)
-      objectx.pop_back();
-
-    // trim final overlapping extent
-    if (!objectx.empty() && objectx.back().first + objectx.back().second > overlap)
-      objectx.back().second = overlap - objectx.back().first;
-
-    uint64_t len = 0;
-    for (vector<pair<uint64_t,uint64_t> >::iterator p = objectx.begin();
-	 p != objectx.end();
-	 ++p)
-      len += p->second;
-    ldout(cct, 10) << "prune_parent_extents image overlap " << overlap
-		   << ", object overlap " << len
-		   << " from image extents " << objectx << dendl;
-    return len;
- }
 }
