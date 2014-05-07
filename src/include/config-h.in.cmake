@@ -229,4 +229,7 @@
 /* define if radosgw enabled */
 #cmakedefine WITH_RADOSGW
 
+/* Define if Xio is enabled */
+#cmakedefine HAVE_XIO
+
 #endif /* CONFIG_H */

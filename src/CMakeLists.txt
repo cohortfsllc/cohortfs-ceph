@@ -14,12 +14,15 @@ if(${WITH_PROFILER})
   list(APPEND EXTRALIBS profiler)
 endif(${WITH_PROFILER})
 
+if (HAVE_XIO)
+  include_directories(${Xio_INCLUDE_DIR})
+  list(APPEND EXTRALIBS ${Xio_LIBRARY} ibverbs rdmacm pthread)
+endif(HAVE_XIO)
+
 set(CRYPTO_LIBS cryptopp)
 
 if(${HAVE_ATOMIC_OPS})
-  set(EXTRALIBS
-    atomic_ops
-    ${EXTRALIBS})
+  list(APPEND EXTRALIBS atomic_ops)
 endif(${HAVE_ATOMIC_OPS})
 
 set(bindir ${CMAKE_INSTALL_PREFIX}/bin)

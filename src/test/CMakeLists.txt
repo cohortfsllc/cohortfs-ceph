@@ -1714,3 +1714,22 @@ target_link_libraries(test_get_blkdev_size
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
+
+
+add_executable(simple_server simple_server.cc simple_dispatcher.cc)
+target_link_libraries(simple_server os global common boost_regex
+  ${TCMALLOC_LIBS})
+
+add_executable(simple_client simple_client.cc simple_dispatcher.cc)
+target_link_libraries(simple_client os global common boost_regex
+  ${TCMALLOC_LIBS})
+
+if (HAVE_XIO)
+  add_executable(xio_server xio_server.cc xio_dispatcher.cc)
+  target_link_libraries(xio_server os global common boost_regex
+    ${TCMALLOC_LIBS} ${EXTRALIBS})
+
+  add_executable(xio_client xio_client.cc xio_dispatcher.cc)
+  target_link_libraries(xio_client os global common boost_regex
+    ${TCMALLOC_LIBS} ${EXTRALIBS})
+endif(HAVE_XIO)
