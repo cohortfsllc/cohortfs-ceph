@@ -91,8 +91,8 @@ void Dumper::dump(const char *dump_file)
   bufferlist bl;
 
   lock.Lock();
-  filer.read(ino, &journaler->get_layout(), CEPH_NOSNAP,
-             start, len, &bl, 0, new C_SafeCond(&localLock, &cond, &done));
+  filer.read(ino, &journaler->get_layout(),
+	     start, len, &bl, 0, new C_SafeCond(&localLock, &cond, &done));
   lock.Unlock();
   localLock.Lock();
   while (!done)
@@ -106,10 +106,9 @@ void Dumper::dump(const char *dump_file)
     // include an informative header
     char buf[200];
     memset(buf, 0, sizeof(buf));
-    sprintf(buf, "Ceph mds%d journal dump\n start offset %llu (0x%llx)\n       length %llu (0x%llx)\n%c",
-	    rank, 
-	    (unsigned long long)start, (unsigned long long)start,
-	    (unsigned long long)bl.length(), (unsigned long long)bl.length(),
+    sprintf(buf, "Ceph mds%d journal dump\n start offset %"PRIu64
+	    " (0x%"PRIx64")\n       length %"PRIu32" (0x%"PRIx32")\n%c",
+	    rank, start, start, bl.length(), bl.length(),
 	    4);
     int r = safe_write(fd, buf, sizeof(buf));
     if (r)
@@ -173,21 +172,20 @@ void Dumper::undump(const char *dump_file)
 
   object_t oid = file_object_t(ino, 0);
   object_locator_t oloc(mdsmap->get_metadata_pool());
-  SnapContext snapc;
 
   bool done = false;
   Cond cond;
-  
+
   cout << "writing header " << oid << std::endl;
-  objecter->write_full(oid, oloc, snapc, hbl, ceph_clock_now(g_ceph_context), 0, 
-		       NULL, 
-		       new C_SafeCond(&lock, &cond, &done));
+  objecter->write_full(oid, oloc, ::SnapContext(), hbl,
+		       ceph_clock_now(g_ceph_context),
+		       0, NULL, new C_SafeCond(&lock, &cond, &done));
 
   lock.Lock();
   while (!done)
     cond.Wait(lock);
   lock.Unlock();
-  
+
   // read
   Filer filer(objecter);
   uint64_t pos = start;
@@ -198,13 +196,15 @@ void Dumper::undump(const char *dump_file)
     uint64_t l = MIN(left, 1024*1024);
     j.read_fd(fd, l);
     cout << " writing " << pos << "~" << l << std::endl;
-    filer.write(ino, &h.layout, snapc, pos, l, j, ceph_clock_now(g_ceph_context), 0, NULL, new C_SafeCond(&lock, &cond, &done));
+    filer.write(ino, &h.layout, pos, l, j,
+		ceph_clock_now(g_ceph_context), 0, NULL,
+		new C_SafeCond(&lock, &cond, &done));
 
     lock.Lock();
     while (!done)
       cond.Wait(lock);
     lock.Unlock();
-    
+
     pos += l;
     left -= l;
   }

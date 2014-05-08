@@ -285,7 +285,7 @@ namespace librbd {
 
   void ImageCtx::aio_read_from_cache(object_t o, bufferlist *bl, size_t len,
 				     uint64_t off, Context *onfinish) {
-    ObjectCacher::OSDRead *rd = object_cacher->prepare_read(CEPH_NOSNAP, bl, 0);
+    ObjectCacher::OSDRead *rd = object_cacher->prepare_read(bl, 0);
     ObjectExtent extent(o, 0 /* a lie */, off, len, 0);
     extent.oloc.pool = data_ctx.get_id();
     extent.buffer_extents.push_back(make_pair(0, len));
@@ -300,7 +300,7 @@ namespace librbd {
   void ImageCtx::write_to_cache(object_t o, bufferlist& bl, size_t len,
 				uint64_t off, Context *onfinish) {
     ObjectCacher::OSDWrite *wr
-      = object_cacher->prepare_write(::SnapContext(), bl, utime_t(), 0);
+      = object_cacher->prepare_write(bl, utime_t(), 0);
     ObjectExtent extent(o, 0, off, len, 0);
     extent.oloc.pool = data_ctx.get_id();
     // XXX: nspace is always default, io_ctx_impl field private

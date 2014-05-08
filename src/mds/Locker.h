@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MDS_LOCKER_H
@@ -30,7 +30,6 @@ class CDir;
 class CInode;
 class CDentry;
 class EMetaBlob;
-struct SnapRealm;
 
 class Message;
 
@@ -78,9 +77,6 @@ protected:
   void _drop_rdlocks(MutationImpl *mut, set<CInode*> *pneed_issue);
   void _drop_non_rdlocks(MutationImpl *mut, set<CInode*> *pneed_issue);
 public:
-  void include_snap_rdlocks(set<SimpleLock*>& rdlocks, CInode *in);
-  void include_snap_rdlocks_wlayout(set<SimpleLock*>& rdlocks, CInode *in,
-                                    ceph_file_layout **layout);
 
   bool acquire_locks(MDRequestRef& mdr,
 		     set<SimpleLock*> &rdlocks,
@@ -220,9 +216,7 @@ public:
   void adjust_cap_wanted(Capability *cap, int wanted, int issue_seq);
   void handle_client_caps(class MClientCaps *m);
   void _update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *pi);
-  void _do_snap_update(CInode *in, snapid_t snap, int dirty, snapid_t follows, client_t client, MClientCaps *m, MClientCaps *ack);
-  void _do_null_snapflush(CInode *head_in, client_t client, snapid_t follows);
-  bool _do_cap_update(CInode *in, Capability *cap, int dirty, snapid_t follows, MClientCaps *m,
+  bool _do_cap_update(CInode *in, Capability *cap, int dirty, MClientCaps *m,
 		      MClientCaps *ack=0);
   void handle_client_cap_release(class MClientCapRelease *m);
   void _do_cap_release(client_t client, inodeno_t ino, uint64_t cap_id, ceph_seq_t mseq, ceph_seq_t seq);
@@ -258,7 +252,8 @@ public:
   // -- file i/o --
  public:
   version_t issue_file_data_version(CInode *in);
-  Capability* issue_new_caps(CInode *in, int mode, Session *session, SnapRealm *conrealm, bool is_replay);
+  Capability* issue_new_caps(CInode *in, int mode, Session *session,
+			     bool is_replay);
   bool issue_caps(CInode *in, Capability *only_cap=0);
   void issue_caps_set(set<CInode*>& inset);
   void issue_truncate(CInode *in);

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -60,7 +60,7 @@ class CDentry : public MDSCacheObject, public LRUObject {
 private:
   static boost::pool<> pool;
 public:
-  static void *operator new(size_t num_bytes) { 
+  static void *operator new(size_t num_bytes) {
     void *n = pool.malloc();
     if (!n)
       throw std::bad_alloc();
@@ -72,17 +72,17 @@ public:
 
 public:
   // -- state --
-  static const int STATE_NEW =          (1<<0);
-  static const int STATE_FRAGMENTING =  (1<<1);
-  static const int STATE_PURGING =      (1<<2);
+  static const int STATE_NEW = (1<<0);
+  static const int STATE_FRAGMENTING = (1<<1);
+  static const int STATE_PURGING = (1<<2);
   static const int STATE_BADREMOTEINO = (1<<3);
   // stray dentry needs notification of releasing reference
-  static const int STATE_STRAY =	STATE_NOTIFYREF;
+  static const int STATE_STRAY = STATE_NOTIFYREF;
 
   // -- pins --
-  static const int PIN_INODEPIN =     1;  // linked inode is pinned
+  static const int PIN_INODEPIN = 1; // linked inode is pinned
   static const int PIN_FRAGMENTING = -2;  // containing dir is refragmenting
-  static const int PIN_PURGING =      3;
+  static const int PIN_PURGING = 3;
   const char *pin_name(int p) {
     switch (p) {
     case PIN_INODEPIN: return "inodepin";
@@ -91,9 +91,6 @@ public:
     default: return generic_pin_name(p);
     }
   };
-
-  // -- wait --
-  //static const int WAIT_LOCK_OFFSET = 8;
 
   void add_waiter(uint64_t tag, Context *c);
 
@@ -106,18 +103,13 @@ public:
 public:
   string name;
   __u32 hash;
-  snapid_t first, last;
-
-  dentry_key_t key() { 
-    return dentry_key_t(last, name.c_str()); 
-  }
 
 public:
   struct linkage_t {
     CInode *inode;
     inodeno_t remote_ino;
     unsigned char remote_d_type;
-    
+
     linkage_t() : inode(0), remote_ino(0), remote_d_type(0) {}
 
     // dentry type is primary || remote || null
@@ -130,19 +122,19 @@ public:
     inodeno_t get_remote_ino() { return remote_ino; }
     unsigned char get_remote_d_type() { return remote_d_type; }
 
-    void set_remote(inodeno_t ino, unsigned char d_type) { 
+    void set_remote(inodeno_t ino, unsigned char d_type) {
       remote_ino = ino;
       remote_d_type = d_type;
       inode = 0;
     }
     void link_remote(CInode *in);
   };
-  
+
 protected:
   CDir *dir;     // containing dirfrag
   linkage_t linkage;
   list<linkage_t> projected;
-  
+
   version_t version;  // dir version when last touched.
   version_t projected_version;  // what it will be when i unlock/commit.
 
@@ -174,10 +166,8 @@ public:
 
  public:
   // cons
-  CDentry(const string& n, __u32 h,
-	  snapid_t f, snapid_t l) :
+  CDentry(const string& n, __u32 h) :
     name(n), hash(h),
-    first(f), last(l),
     dir(0),
     version(0), projected_version(0),
     item_dirty(this),
@@ -187,10 +177,8 @@ public:
     g_num_dn++;
     g_num_dna++;
   }
-  CDentry(const string& n, __u32 h, inodeno_t ino, unsigned char dt,
-	  snapid_t f, snapid_t l) :
+  CDentry(const string& n, __u32 h, inodeno_t ino, unsigned char dt) :
     name(n), hash(h),
-    first(f), last(l),
     dir(0),
     version(0), projected_version(0),
     item_dirty(this),
@@ -310,7 +298,6 @@ public:
 
     __u32 nonce = add_replica(mds);
     ::encode(nonce, bl);
-    ::encode(first, bl);
     ::encode(linkage.remote_ino, bl);
     ::encode(linkage.remote_d_type, bl);
     __s32 ls = lock.get_replica_state();
@@ -322,7 +309,6 @@ public:
   // note: this assumes the dentry already exists.  
   // i.e., the name is already extracted... so we just need the other state.
   void encode_export(bufferlist& bl) {
-    ::encode(first, bl);
     ::encode(state, bl);
     ::encode(version, bl);
     ::encode(projected_version, bl);
@@ -343,7 +329,6 @@ public:
     put(PIN_TEMPEXPORTING);
   }
   void decode_import(bufferlist::iterator& blp, LogSegment *ls) {
-    ::decode(first, blp);
     __u32 nstate;
     ::decode(nstate, blp);
     ::decode(version, blp);

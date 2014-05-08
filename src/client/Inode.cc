@@ -5,7 +5,6 @@
 #include "Inode.h"
 #include "Dentry.h"
 #include "Dir.h"
-#include "ClientSnapRealm.h"
 
 ostream& operator<<(ostream &out, Inode &in)
 {
@@ -19,9 +18,11 @@ ostream& operator<<(ostream &out, Inode &in)
       << " caps=" << ccap_string(in.caps_issued());
   if (!in.caps.empty()) {
     out << "(";
-    for (map<int,Cap*>::iterator p = in.caps.begin(); p != in.caps.end(); ++p) {
+    for (map<int,Cap*>::iterator p = in.caps.begin();
+	 p != in.caps.end();
+	 ++p) {
       if (p != in.caps.begin())
-        out << ',';
+	out << ',';
       out << p->first << '=' << ccap_string(p->second->issued);
     }
     out << ")";
@@ -54,34 +55,17 @@ void Inode::make_long_path(filepath& p)
     assert((*dn_set.begin())->dir && (*dn_set.begin())->dir->parent_inode);
     (*dn_set.begin())->dir->parent_inode->make_long_path(p);
     p.push_dentry((*dn_set.begin())->name);
-  } else if (snapdir_parent) {
-    snapdir_parent->make_nosnap_relative_path(p);
-    string empty;
-    p.push_dentry(empty);
-  } else
-    p = filepath(ino);
-}
-
-/*
- * make a filepath suitable for an mds request:
- *  - if we are non-snapped/live, the ino is sufficient, e.g. #1234
- *  - if we are snapped, make filepath relative to first non-snapped parent.
- */
-void Inode::make_nosnap_relative_path(filepath& p)
-{
-  if (snapid == CEPH_NOSNAP) {
-    p = filepath(ino);
-  } else if (snapdir_parent) {
-    snapdir_parent->make_nosnap_relative_path(p);
-    string empty;
-    p.push_dentry(empty);
-  } else if (!dn_set.empty()) {
-    assert((*dn_set.begin())->dir && (*dn_set.begin())->dir->parent_inode);
-    (*dn_set.begin())->dir->parent_inode->make_nosnap_relative_path(p);
-    p.push_dentry((*dn_set.begin())->name);
   } else {
     p = filepath(ino);
   }
+}
+
+/*
+ * make a filepath suitable for an mds request
+ */
+void Inode::make_relative_path(filepath& p)
+{
+    p = filepath(ino);
 }
 
 void Inode::get_open_ref(int mode)
@@ -91,7 +75,6 @@ void Inode::get_open_ref(int mode)
 
 bool Inode::put_open_ref(int mode)
 {
-  //cout << "open_by_mode[" << mode << "] " << open_by_mode[mode] << " -> " << (open_by_mode[mode]-1) << std::endl;
   if (--open_by_mode[mode] == 0)
     return true;
   return false;
@@ -104,7 +87,6 @@ void Inode::get_cap_ref(int cap)
     if (cap & 1) {
       int c = 1 << n;
       cap_refs[c]++;
-      //cout << "inode " << *this << " get " << cap_string(c) << " " << (cap_refs[c]-1) << " -> " << cap_refs[c] << std::endl;
     }
     cap >>= 1;
     n++;
@@ -122,12 +104,12 @@ int Inode::put_cap_ref(int cap)
     if (cap & 1) {
       int c = 1 << n;
       if (cap_refs[c] <= 0) {
-	lderr(cct) << "put_cap_ref " << ccap_string(c) << " went negative on " << *this << dendl;
+	lderr(cct) << "put_cap_ref " << ccap_string(c)
+		   << " went negative on " << *this << dendl;
 	assert(cap_refs[c] > 0);
       }
       if (--cap_refs[c] == 0)
-        last |= c;
-      //cout << "inode " << *this << " put " << cap_string(c) << " " << (cap_refs[c]+1) << " -> " << cap_refs[c] << std::endl;
+	last |= c;
     }
     cap >>= 1;
     n++;
@@ -155,7 +137,7 @@ bool Inode::cap_is_valid(Cap* cap)
 
 int Inode::caps_issued(int *implemented)
 {
-  int c = snap_caps;
+  int c = 0;
   int i = 0;
   for (map<int,Cap*>::iterator it = caps.begin();
        it != caps.end();
@@ -183,7 +165,7 @@ void Inode::try_touch_cap(int mds)
 
 bool Inode::caps_issued_mask(unsigned mask)
 {
-  int c = snap_caps;
+  int c = 0;
   if ((c & mask) == mask)
     return true;
   // prefer auth cap
@@ -259,7 +241,8 @@ bool Inode::have_valid_size()
   return false;
 }
 
-// open Dir for an inode.  if it's not open, allocated it (and pin dentry in memory).
+// open Dir for an inode.  if it's not open, allocated it (and pin
+// dentry in memory).
 Dir *Inode::open_dir()
 {
   if (!dir) {
@@ -268,12 +251,13 @@ Dir *Inode::open_dir()
     assert(dn_set.size() < 2); // dirs can't be hard-linked
     if (!dn_set.empty())
       (*dn_set.begin())->get();      // pin dentry
-    get();                  // pin inode
+    get(); // pin inode
   }
   return dir;
 }
 
-bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, uint32_t rflags)
+bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count,
+		       uint32_t rflags)
 {
   unsigned fmode = 0;
 
@@ -294,7 +278,7 @@ bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, ui
     int i = 0;
     for (; i < sgids_count; ++i) {
       if (sgids[i] == gid) {
-        fmode = fmode << 3;
+	fmode = fmode << 3;
 	break;
       }
     }
@@ -307,7 +291,6 @@ bool Inode::check_mode(uid_t ruid, gid_t rgid, gid_t *sgids, int sgids_count, ui
 void Inode::dump(Formatter *f) const
 {
   f->dump_stream("ino") << ino;
-  f->dump_stream("snapid") << snapid;
   if (rdev)
     f->dump_unsigned("rdev", rdev);
   f->dump_stream("ctime") << ctime;
@@ -331,16 +314,6 @@ void Inode::dump(Formatter *f) const
     f->open_object_section("dir_layout");
     ::dump(dir_layout, f);
     f->close_section();
-
-    /* FIXME when wip-mds-encoding is merged ***
-    f->open_object_section("dir_stat");
-    dirstat.dump(f);
-    f->close_section();
-
-    f->open_object_section("rstat");
-    rstat.dump(f);
-    f->close_section();
-    */
   }
 
   f->dump_unsigned("version", version);
@@ -350,7 +323,9 @@ void Inode::dump(Formatter *f) const
   if (is_dir()) {
     if (!dir_contacts.empty()) {
       f->open_object_section("dir_contants");
-      for (set<int>::iterator p = dir_contacts.begin(); p != dir_contacts.end(); ++p)
+      for (set<int>::iterator p = dir_contacts.begin();
+	   p != dir_contacts.end();
+	   ++p)
 	f->dump_int("mds", *p);
       f->close_section();
     }
@@ -386,32 +361,16 @@ void Inode::dump(Formatter *f) const
   }
   f->dump_int("shared_gen", shared_gen);
   f->dump_int("cache_gen", cache_gen);
-  if (snap_caps) {
-    f->dump_int("snap_caps", snap_caps);
-    f->dump_int("snap_cap_refs", snap_cap_refs);
-  }
 
   f->dump_stream("hold_caps_until") << hold_caps_until;
   f->dump_unsigned("last_flush_tid", last_flush_tid);
 
-  if (snaprealm) {
-    f->open_object_section("snaprealm");
-    snaprealm->dump(f);
-    f->close_section();
-  }
-  if (!cap_snaps.empty()) {
-    for (map<snapid_t,CapSnap*>::const_iterator p = cap_snaps.begin(); p != cap_snaps.end(); ++p) {
-      f->open_object_section("cap_snap");
-      f->dump_stream("follows") << p->first;
-      p->second->dump(f);
-      f->close_section();
-    }
-  }
-
   // open
   if (!open_by_mode.empty()) {
     f->open_array_section("open_by_mode");
-    for (map<int,int>::const_iterator p = open_by_mode.begin(); p != open_by_mode.end(); ++p) {
+    for (map<int,int>::const_iterator p = open_by_mode.begin();
+	 p != open_by_mode.end();
+	 ++p) {
       f->open_object_section("ref");
       f->dump_unsigned("mode", p->first);
       f->dump_unsigned("refs", p->second);
@@ -421,7 +380,9 @@ void Inode::dump(Formatter *f) const
   }
   if (!cap_refs.empty()) {
     f->open_array_section("cap_refs");
-    for (map<int,int>::const_iterator p = cap_refs.begin(); p != cap_refs.end(); ++p) {
+    for (map<int,int>::const_iterator p = cap_refs.begin();
+	 p != cap_refs.end();
+	 ++p) {
       f->open_object_section("cap_ref");
       f->dump_stream("cap") << ccap_string(p->first);
       f->dump_int("refs", p->second);
@@ -441,7 +402,9 @@ void Inode::dump(Formatter *f) const
 
   if (!dn_set.empty()) {
     f->open_array_section("parents");
-    for (set<Dentry*>::const_iterator p = dn_set.begin(); p != dn_set.end(); ++p) {
+    for (set<Dentry*>::const_iterator p = dn_set.begin();
+	 p != dn_set.end();
+	 ++p) {
       f->open_object_section("dentry");
       f->dump_stream("dir_ino") << (*p)->dir->parent_inode->ino;
       f->dump_string("name", (*p)->name);
@@ -464,29 +427,4 @@ void Cap::dump(Formatter *f) const
   f->dump_unsigned("issue_seq", issue_seq);
   f->dump_unsigned("mseq", mseq);
   f->dump_unsigned("gen", gen);
-}
-
-void CapSnap::dump(Formatter *f) const
-{
-  f->dump_stream("ino") << in->ino;
-  f->dump_stream("issued") << ccap_string(issued);
-  f->dump_stream("dirty") << ccap_string(dirty);
-  f->dump_unsigned("size", size);
-  f->dump_stream("ctime") << ctime;
-  f->dump_stream("mtime") << mtime;
-  f->dump_stream("atime") << atime;
-  f->dump_int("time_warp_seq", time_warp_seq);
-  f->dump_stream("mode") << '0' << std::oct << mode << std::dec;
-  f->dump_unsigned("uid", uid);
-  f->dump_unsigned("gid", gid);
-  if (!xattrs.empty()) {
-    f->open_object_section("xattr_lens");
-    for (map<string,bufferptr>::const_iterator p = xattrs.begin(); p != xattrs.end(); ++p)
-      f->dump_int(p->first.c_str(), p->second.length());
-    f->close_section();
-  }
-  f->dump_unsigned("xattr_version", xattr_version);
-  f->dump_int("writing", (int)writing);
-  f->dump_int("dirty_data", (int)dirty_data);
-  f->dump_unsigned("flush_tid", flush_tid);
 }

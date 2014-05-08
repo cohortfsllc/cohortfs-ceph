@@ -22,7 +22,6 @@ class LogEvent;
 class EMetaBlob;
 class EUpdate;
 class MMDSSlaveRequest;
-struct SnapInfo;
 
 struct MutationImpl;
 struct MDRequestImpl;
@@ -108,7 +107,6 @@ public:
   void reply_request(MDRequestRef& mdr, int r = 0, CInode *tracei = 0, CDentry *tracedn = 0);
   void reply_request(MDRequestRef& mdr, MClientReply *reply, CInode *tracei = 0, CDentry *tracedn = 0);
   void set_trace_dist(Session *session, MClientReply *reply, CInode *in, CDentry *dn,
-		      snapid_t snapid,
 		      int num_dentries_wanted,
 		      MDRequestRef& mdr);
 
@@ -223,12 +221,6 @@ public:
   void handle_client_rename(MDRequestRef& mdr);
   void _rename_finish(MDRequestRef& mdr,
 		      CDentry *srcdn, CDentry *destdn, CDentry *straydn);
-
-  void handle_client_lssnap(MDRequestRef& mdr);
-  void handle_client_mksnap(MDRequestRef& mdr);
-  void _mksnap_finish(MDRequestRef& mdr, CInode *diri, SnapInfo &info);
-  void handle_client_rmsnap(MDRequestRef& mdr);
-  void _rmsnap_finish(MDRequestRef& mdr, CInode *diri, snapid_t snapid);
 
   // helpers
   bool _rename_prepare_witness(MDRequestRef& mdr, int who, set<int> &witnesse,

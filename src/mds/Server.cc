@@ -28,7 +28,6 @@
 #include "MDBalancer.h"
 #include "AnchorClient.h"
 #include "InoTable.h"
-#include "SnapClient.h"
 #include "Mutation.h"
 
 #include "msg/Messenger.h"
@@ -38,7 +37,6 @@
 #include "messages/MClientReply.h"
 #include "messages/MClientReconnect.h"
 #include "messages/MClientCaps.h"
-#include "messages/MClientSnap.h"
 
 #include "messages/MMDSSlaveRequest.h"
 
@@ -622,29 +620,6 @@ void Server::handle_client_reconnect(MClientReconnect *m)
     mds->clog.debug() << "reconnect by " << session->info.inst
 	<< " after " << delay << "\n";
   }
-  
-  // snaprealms
-  for (vector<ceph_mds_snaprealm_reconnect>::iterator p = m->realms.begin();
-       p != m->realms.end();
-       ++p) {
-    CInode *in = mdcache->get_inode(inodeno_t(p->ino));
-    if (in && in->state_test(CInode::STATE_PURGING))
-      continue;
-    if (in) {
-      assert(in->snaprealm);
-      if (in->snaprealm->have_past_parents_open()) {
-	dout(15) << "open snaprealm (w/ past parents) on " << *in << dendl;
-	mdcache->finish_snaprealm_reconnect(from, in->snaprealm, snapid_t(p->seq));
-      } else {
-	dout(15) << "open snaprealm (w/o past parents) on " << *in << dendl;
-	mdcache->add_reconnected_snaprealm(from, inodeno_t(p->ino), snapid_t(p->seq));
-      }
-    } else {
-      dout(15) << "open snaprealm (w/o inode) on " << inodeno_t(p->ino)
-	       << " seq " << p->seq << dendl;
-      mdcache->add_reconnected_snaprealm(from, inodeno_t(p->ino), snapid_t(p->seq));
-    }
-  }
 
   // caps
   for (map<inodeno_t, cap_reconnect_t>::iterator p = m->caps.begin();
@@ -658,11 +633,7 @@ void Server::handle_client_reconnect(MClientReconnect *m)
     if (in && in->state_test(CInode::STATE_PURGING))
       continue;
     if (in && in->is_auth()) {
-      // we recovered it, and it's ours.  take note.
-      dout(15) << "open cap realm " << inodeno_t(p->second.capinfo.snaprealm)
-	       << " on " << *in << dendl;
       in->reconnect_cap(from, p->second.capinfo, session);
-      mds->mdcache->add_reconnected_cap(in, from, inodeno_t(p->second.capinfo.snaprealm));
       recover_filelocks(in, p->second.flockbl, m->get_orig_source().num());
       continue;
     }
@@ -868,7 +839,7 @@ void Server::early_reply(MDRequestRef& mdr, CInode *tracei, CDentry *tracedn)
     if (tracedn)
       mdr->cap_releases.erase(tracedn->get_dir()->get_inode()->vino());
 
-    set_trace_dist(mdr->session, reply, tracei, tracedn, mdr->snapid,
+    set_trace_dist(mdr->session, reply, tracei, tracedn,
 		   mdr->client_request->get_dentry_wanted(),
 		   mdr);
   }
@@ -906,7 +877,6 @@ void Server::reply_request(MDRequestRef& mdr, MClientReply *reply, CInode *trace
   apply_allocated_inos(mdr);
 
   // get tracei/tracedn from mdr?
-  snapid_t snapid = mdr->snapid;
   if (!tracei)
     tracei = mdr->tracei;
   if (!tracedn)
@@ -951,7 +921,7 @@ void Server::reply_request(MDRequestRef& mdr, MClientReply *reply, CInode *trace
       } else {
 	// include metadata in reply
 	set_trace_dist(session, reply, tracei, tracedn,
-	               snapid, dentry_wanted,
+		       dentry_wanted,
 		       mdr);
       }
     }
@@ -1005,7 +975,6 @@ void Server::encode_null_lease(bufferlist& bl)
  */
 void Server::set_trace_dist(Session *session, MClientReply *reply,
 			    CInode *in, CDentry *dn,
-			    snapid_t snapid,
 			    int dentry_wanted,
 			    MDRequestRef& mdr)
 {
@@ -1023,26 +992,13 @@ void Server::set_trace_dist(Session *session, MClientReply *reply,
   client_t client = session->get_client();
   utime_t now = ceph_clock_now(g_ceph_context);
 
-  dout(20) << "set_trace_dist snapid " << snapid << dendl;
-
-  //assert((bool)dn == (bool)dentry_wanted);  // not true for snapshot lookups
-
-  // realm
-  SnapRealm *realm = 0;
-  if (in)
-    realm = in->find_snaprealm();
-  else
-    realm = dn->get_dir()->get_inode()->find_snaprealm();
-  reply->snapbl = realm->get_snap_trace();
-  dout(10) << "set_trace_dist snaprealm " << *realm << " len=" << reply->snapbl.length() << dendl;
-
   // dir + dentry?
   if (dn) {
     reply->head.is_dentry = 1;
     CDir *dir = dn->get_dir();
     CInode *diri = dir->get_inode();
 
-    diri->encode_inodestat(bl, session, NULL, snapid);
+    diri->encode_inodestat(bl, session);
     dout(20) << "set_trace_dist added diri " << *diri << dendl;
 
 #ifdef MDS_VERIFY_FRAGSTAT
@@ -1053,17 +1009,14 @@ void Server::set_trace_dist(Session *session, MClientReply *reply,
     dout(20) << "set_trace_dist added dir  " << *dir << dendl;
 
     ::encode(dn->get_name(), bl);
-    if (snapid == CEPH_NOSNAP)
-      mds->locker->issue_client_lease(dn, client, bl, now, session);
-    else
-      encode_null_lease(bl);
-    dout(20) << "set_trace_dist added dn   " << snapid << " " << *dn << dendl;
+    mds->locker->issue_client_lease(dn, client, bl, now, session);
+    dout(20) << "set_trace_dist added dn   " << *dn << dendl;
   } else
     reply->head.is_dentry = 0;
 
   // inode
   if (in) {
-    in->encode_inodestat(bl, session, NULL, snapid, 0, mdr->getattr_caps);
+    in->encode_inodestat(bl, session, 0, mdr->getattr_caps);
     dout(20) << "set_trace_dist added in   " << *in << dendl;
     reply->head.is_target = 1;
   } else
@@ -1200,8 +1153,6 @@ void Server::dispatch_client_request(MDRequestRef& mdr)
     handle_client_getattr(mdr, true);
     break;
 
-  case CEPH_MDS_OP_LOOKUPSNAP:
-    // lookupsnap does not reference a CDentry; treat it as a getattr
   case CEPH_MDS_OP_GETATTR:
     handle_client_getattr(mdr, false);
     break;
@@ -1267,18 +1218,6 @@ void Server::dispatch_client_request(MDRequestRef& mdr)
     break;
   case CEPH_MDS_OP_SYMLINK:
     handle_client_symlink(mdr);
-    break;
-
-
-    // snaps
-  case CEPH_MDS_OP_LSSNAP:
-    handle_client_lssnap(mdr);
-    break;
-  case CEPH_MDS_OP_MKSNAP:
-    handle_client_mksnap(mdr);
-    break;
-  case CEPH_MDS_OP_RMSNAP:
-    handle_client_rmsnap(mdr);
     break;
 
 
@@ -2071,8 +2010,7 @@ public:
 CInode* Server::rdlock_path_pin_ref(MDRequestRef& mdr, int n,
 				    set<SimpleLock*> &rdlocks,
 				    bool want_auth,
-				    bool no_want_auth, /* for readdir, who doesn't want auth _even_if_ it's
-							  a snapped dir */
+				    bool no_want_auth,
 				    ceph_file_layout **layout,
 				    bool no_lookup)    // true if we cannot return a null dentry lease
 {
@@ -2103,10 +2041,6 @@ CInode* Server::rdlock_path_pin_ref(MDRequestRef& mdr, int n,
   CInode *ref = mdr->in[n];
   dout(10) << "ref is " << *ref << dendl;
 
-  // fw to inode auth?
-  if (mdr->snapid != CEPH_NOSNAP && !no_want_auth)
-    want_auth = true;
-
   if (want_auth) {
     if (ref->is_ambiguous_auth()) {
       dout(10) << "waiting for single auth on " << *ref << dendl;
@@ -2127,16 +2061,6 @@ CInode* Server::rdlock_path_pin_ref(MDRequestRef& mdr, int n,
 	(ref->is_freezing() && !mdr->is_auth_pinned(ref))) {
       dout(7) << "waiting for !frozen/authpinnable on " << *ref << dendl;
       ref->add_waiter(CInode::WAIT_UNFREEZE, new C_MDS_RetryRequest(mdcache, mdr));
-      /* If we have any auth pins, this will deadlock.
-       * But the only way to get here if we've already got auth pins
-       * is because we're on an inode with snapshots that got updated
-       * between dispatches of this request. So we're going to drop
-       * our locks and our auth pins and reacquire them later.
-       *
-       * This is safe since we're only in this function when working on
-       * a single MDS request; otherwise we'd be in
-       * rdlock_path_xlock_dentry.
-       */
       mds->locker->drop_locks(mdr.get(), NULL);
       mdr->drop_local_auth_pins();
       return 0;
@@ -2147,10 +2071,6 @@ CInode* Server::rdlock_path_pin_ref(MDRequestRef& mdr, int n,
 
   for (int i=0; i<(int)mdr->dn[n].size(); i++) 
     rdlocks.insert(&mdr->dn[n][i]->lock);
-  if (layout)
-    mds->locker->include_snap_rdlocks_wlayout(rdlocks, ref, layout);
-  else
-    mds->locker->include_snap_rdlocks(rdlocks, ref);
 
   // set and pin ref
   mdr->pin(ref);
@@ -2248,10 +2168,6 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequestRef& mdr, int n,
     rdlocks.insert(&dn->lock);  // existing dn, rdlock
   wrlocks.insert(&dn->get_dir()->inode->filelock); // also, wrlock on dir mtime
   wrlocks.insert(&dn->get_dir()->inode->nestlock); // also, wrlock on dir mtime
-  if (layout)
-    mds->locker->include_snap_rdlocks_wlayout(rdlocks, dn->get_dir()->inode, layout);
-  else
-    mds->locker->include_snap_rdlocks(rdlocks, dn->get_dir()->inode);
 
   return dn;
 }
@@ -2334,8 +2250,7 @@ void Server::handle_client_getattr(MDRequestRef& mdr, bool is_lookup)
   client_t client = mdr->get_client();
   int issued = 0;
   Capability *cap = ref->get_client_cap(client);
-  if (cap && (mdr->snapid == CEPH_NOSNAP ||
-	      mdr->snapid <= cap->client_follows))
+  if (cap)
     issued = cap->issued();
 
   int mask = req->head.args.getattr.mask;
@@ -2347,8 +2262,6 @@ void Server::handle_client_getattr(MDRequestRef& mdr, bool is_lookup)
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
-  // note which caps are requested, so we return at least a snapshot
-  // value for them.  (currently this matters for xattrs and inline data)
   mdr->getattr_caps = mask;
 
   mds->balancer->hit_inode(ceph_clock_now(g_ceph_context), ref, META_POP_IRD,
@@ -2474,11 +2387,6 @@ void Server::handle_client_open(MDRequestRef& mdr)
       return;
   }
 
-  if (mdr->snapid != CEPH_NOSNAP && mdr->client_request->may_write()) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
-
   // can only open a dir with mode FILE_MODE_PIN, at least for now.
   if (cur->inode.is_dir())
     cmode = CEPH_FILE_MODE_PIN;
@@ -2506,14 +2414,6 @@ void Server::handle_client_open(MDRequestRef& mdr)
     reply_request(mdr, -EPERM);
     return;
   }
-  
-  // snapped data is read only
-  if (mdr->snapid != CEPH_NOSNAP &&
-      (cmode & CEPH_FILE_MODE_WR)) {
-    dout(7) << "snap " << mdr->snapid << " is read-only " << *cur << dendl;
-    reply_request(mdr, -EPERM);
-    return;
-  }
 
   // O_TRUNC
   if ((flags & O_TRUNC) &&
@@ -2538,34 +2438,17 @@ void Server::handle_client_open(MDRequestRef& mdr)
     return;
   }
 
-  // sync filelock if snapped.
-  //  this makes us wait for writers to flushsnaps, ensuring we get accurate metadata,
-  //  and that data itself is flushed so that we can read the snapped data off disk.
-  if (mdr->snapid != CEPH_NOSNAP && !cur->is_dir()) {
-    rdlocks.insert(&cur->filelock);
-    if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-      return;
-  }
-
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
   if (cur->is_file() || cur->is_dir()) {
-    if (mdr->snapid == CEPH_NOSNAP) {
-      // register new cap
-      Capability *cap = mds->locker->issue_new_caps(cur, cmode, mdr->session, 0, req->is_replay());
-      if (cap)
-	dout(12) << "open issued caps " << ccap_string(cap->pending())
-		 << " for " << req->get_source()
-		 << " on " << *cur << dendl;
-    } else {
-      int caps = ceph_caps_for_mode(cmode);
-      dout(12) << "open issued IMMUTABLE SNAP caps " << ccap_string(caps)
+    // register new cap
+    Capability *cap = mds->locker->issue_new_caps(cur, cmode, mdr->session,
+						  req->is_replay());
+    if (cap)
+      dout(12) << "open issued caps " << ccap_string(cap->pending())
 	       << " for " << req->get_source()
-	       << " snapid " << mdr->snapid
 	       << " on " << *cur << dendl;
-      mdr->snap_caps = caps;
-    }
   }
 
   // increase max_size?
@@ -2573,8 +2456,7 @@ void Server::handle_client_open(MDRequestRef& mdr)
     mds->locker->check_inode_max_size(cur);
 
   // make sure this inode gets into the journal
-  if (cur->is_auth() && cur->last == CEPH_NOSNAP &&
-      !cur->item_open_file.is_on_list()) {
+  if (cur->is_auth() && !cur->item_open_file.is_on_list()) {
     LogSegment *ls = mds->mdlog->get_current_segment();
     EOpen *le = new EOpen(mds->mdlog);
     mdlog->start_entry(le);
@@ -2606,10 +2488,9 @@ class C_MDS_openc_finish : public Context {
   MDRequestRef mdr;
   CDentry *dn;
   CInode *newi;
-  snapid_t follows;
 public:
-  C_MDS_openc_finish(MDS *m, MDRequestRef& r, CDentry *d, CInode *ni, snapid_t f) :
-    mds(m), mdr(r), dn(d), newi(ni), follows(f) {}
+  C_MDS_openc_finish(MDS *m, MDRequestRef& r, CDentry *d, CInode *ni) :
+    mds(m), mdr(r), dn(d), newi(ni) {}
   void finish(int r) {
     assert(r == 0);
 
@@ -2677,12 +2558,8 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
   ceph_file_layout *dir_layout = NULL;
   CDentry *dn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks,
-                                         !excl, false, false, &dir_layout);
+					 !excl, false, false, &dir_layout);
   if (!dn) return;
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   // set layout
   ceph_file_layout layout;
   if (dir_layout)
@@ -2739,9 +2616,6 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   // create inode.
   mdr->now = ceph_clock_now(g_ceph_context);
 
-  SnapRealm *realm = diri->find_snaprealm();   // use directory's realm; inode isn't attached yet.
-  snapid_t follows = realm->get_newest_seq();
-
   CInode *in = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
 				 req->head.args.open.mode | S_IFREG, &layout);
   assert(in);
@@ -2756,14 +2630,9 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   if (cmode & CEPH_FILE_MODE_WR) {
     in->inode.client_ranges[client].range.first = 0;
     in->inode.client_ranges[client].range.last = in->inode.get_layout_size_increment();
-    in->inode.client_ranges[client].follows = follows;
   }
   in->inode.rstat.rfiles = 1;
 
-  if (follows >= dn->first)
-    dn->first = follows+1;
-  in->first = dn->first;
-  
   // prepare finisher
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "openc");
@@ -2774,7 +2643,7 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   le->metablob.add_primary_dentry(dn, in, true, true, true);
 
   // do the open
-  mds->locker->issue_new_caps(in, cmode, mdr->session, realm, req->is_replay());
+  mds->locker->issue_new_caps(in, cmode, mdr->session, req->is_replay());
   in->authlock.set_state(LOCK_EXCL);
   in->xattrlock.set_state(LOCK_EXCL);
 
@@ -2783,7 +2652,7 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   LogSegment *ls = mds->mdlog->get_current_segment();
   ls->open_files.push_back(&in->item_open_file);
 
-  C_MDS_openc_finish *fin = new C_MDS_openc_finish(mds, mdr, dn, in, follows);
+  C_MDS_openc_finish *fin = new C_MDS_openc_finish(mds, mdr, dn, in);
 
   if (mdr->client_request->get_connection()->has_feature(CEPH_FEATURE_REPLY_CREATE_INODE)) {
     dout(10) << "adding ino to reply to indicate inode was created" << dendl;
@@ -2858,20 +2727,6 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
 
   mdr->now = ceph_clock_now(g_ceph_context);
 
-  snapid_t snapid = mdr->snapid;
-  dout(10) << "snapid " << snapid << dendl;
-
-  // purge stale snap data?
-  const set<snapid_t> *snaps = 0;
-  SnapRealm *realm = diri->find_snaprealm();
-  if (realm->get_last_destroyed() > dir->fnode.snap_purged_thru) {
-    snaps = &realm->get_snaps();
-    dout(10) << " last_destroyed " << realm->get_last_destroyed() << " > " << dir->fnode.snap_purged_thru
-	     << ", doing snap purge with " << *snaps << dendl;
-    dir->fnode.snap_purged_thru = realm->get_last_destroyed();
-    assert(snapid == CEPH_NOSNAP || snaps->count(snapid));  // just checkin'! 
-  }
-
   unsigned max = req->head.args.readdir.max_entries;
   if (!max)
     max = dir->get_num_any();  // whatever, something big.
@@ -2887,7 +2742,6 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
   //  this isn't perfect, but we should capture the main variable/unbounded size items!
   int front_bytes = dirbl.length() + sizeof(__u32) + sizeof(__u8)*2;
   int bytes_left = max_bytes - front_bytes;
-  bytes_left -= realm->get_snap_trace().length();
 
   // build dir contents
   bufferlist dnbl;
@@ -2907,13 +2761,6 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
 
     if (dnl->is_null())
       continue;
-    if (snaps && dn->last != CEPH_NOSNAP)
-      if (dir->try_trim_snap_dentry(dn, *snaps))
-	continue;
-    if (dn->last < snapid || dn->first > snapid) {
-      dout(20) << "skipping non-overlapping snap " << *dn << dendl;
-      continue;
-    }
 
     if (!offset_str.empty() && dn->get_name().compare(offset_str) <= 0)
       continue;
@@ -2968,7 +2815,7 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
 
     // inode
     dout(12) << "including inode " << *in << dendl;
-    int r = in->encode_inodestat(dnbl, mdr->session, realm, snapid, bytes_left - (int)dnbl.length());
+    int r = in->encode_inodestat(dnbl, mdr->session, bytes_left - (int)dnbl.length());
     if (r < 0) {
       // chop off dn->name, lease
       dout(10) << " ran out of room, stopping at " << start_len << " < " << bytes_left << dendl;
@@ -2991,9 +2838,6 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
   ::encode(end, dirbl);
   ::encode(complete, dirbl);
   dirbl.claim_append(dnbl);
-  
-  if (snaps)
-    dir->log_mark_dirty();
 
   // yay, reply
   dout(10) << "reply to " << *req << " readdir num=" << numfiles
@@ -3205,10 +3049,6 @@ void Server::handle_client_setattr(MDRequestRef& mdr)
   CInode *cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
   if (!cur) return;
 
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   if (cur->ino() < MDS_INO_SYSTEM_BASE && !cur->is_base()) {
     reply_request(mdr, -EPERM);
     return;
@@ -3312,8 +3152,7 @@ void Server::do_open_truncate(MDRequestRef& mdr, int cmode)
 
   dout(10) << "do_open_truncate " << *in << dendl;
 
-  SnapRealm *realm = in->find_snaprealm();
-  mds->locker->issue_new_caps(in, cmode, mdr->session, realm, mdr->client_request->is_replay());
+  mds->locker->issue_new_caps(in, cmode, mdr->session, mdr->client_request->is_replay());
 
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "open_truncate");
@@ -3334,7 +3173,6 @@ void Server::do_open_truncate(MDRequestRef& mdr, int cmode)
   if (cmode & CEPH_FILE_MODE_WR) {
     pi->client_ranges[client].range.first = 0;
     pi->client_ranges[client].range.last = pi->get_layout_size_increment();
-    pi->client_ranges[client].follows = in->find_snaprealm()->get_newest_seq();
     changed_ranges = true;
   }
   
@@ -3369,10 +3207,6 @@ void Server::handle_client_setlayout(MDRequestRef& mdr)
   CInode *cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true);
   if (!cur) return;
 
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   if (!cur->is_file()) {
     reply_request(mdr, -EINVAL);
     return;
@@ -3448,11 +3282,6 @@ void Server::handle_client_setdirlayout(MDRequestRef& mdr)
   ceph_file_layout *dir_layout = NULL;
   CInode *cur = rdlock_path_pin_ref(mdr, 0, rdlocks, true, false, &dir_layout);
   if (!cur) return;
-
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
 
   if (!cur->is_dir()) {
     reply_request(mdr, -ENOTDIR);
@@ -3794,11 +3623,6 @@ void Server::handle_client_setxattr(MDRequestRef& mdr)
   if (!cur)
     return;
 
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
-
   int flags = req->head.args.setxattr.flags;
 
   // magic ceph.* namespace?
@@ -3864,11 +3688,6 @@ void Server::handle_client_removexattr(MDRequestRef& mdr)
   if (!cur)
     return;
 
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
-
   if (name.find("ceph.") == 0) {
     handle_remove_vxattr(mdr, cur, rdlocks, wrlocks, xlocks);
     return;
@@ -3920,16 +3739,15 @@ class C_MDS_mknod_finish : public Context {
   MDRequestRef mdr;
   CDentry *dn;
   CInode *newi;
-  snapid_t follows;
 public:
-  C_MDS_mknod_finish(MDS *m, MDRequestRef& r, CDentry *d, CInode *ni, snapid_t f) :
-    mds(m), mdr(r), dn(d), newi(ni), follows(f) {}
+  C_MDS_mknod_finish(MDS *m, MDRequestRef& r, CDentry *d, CInode *ni) :
+    mds(m), mdr(r), dn(d), newi(ni) {}
   void finish(int r) {
     assert(r == 0);
 
     // link the inode
     dn->pop_projected_linkage();
-    
+
     // be a bit hacky with the inode version, here.. we decrement it
     // just to keep mark_dirty() happen. (we didn't bother projecting
     // a new version of hte inode since it's just been created)
@@ -3973,10 +3791,6 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
   CDentry *dn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks, false, false, false,
 					 &dir_layout);
   if (!dn) return;
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -3993,8 +3807,6 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
   else
     layout = mds->mdcache->default_file_layout;
 
-  SnapRealm *realm = dn->get_dir()->inode->find_snaprealm();
-  snapid_t follows = realm->get_newest_seq();
   mdr->now = ceph_clock_now(g_ceph_context);
 
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino),
@@ -4016,11 +3828,10 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
     dout(15) << " setting a client_range too, since this is a regular file" << dendl;
     newi->inode.client_ranges[client].range.first = 0;
     newi->inode.client_ranges[client].range.last = newi->inode.get_layout_size_increment();
-    newi->inode.client_ranges[client].follows = follows;
 
     // issue a cap on the file
     int cmode = CEPH_FILE_MODE_RDWR;
-    Capability *cap = mds->locker->issue_new_caps(newi, cmode, mdr->session, realm, req->is_replay());
+    Capability *cap = mds->locker->issue_new_caps(newi, cmode, mdr->session, req->is_replay());
     if (cap) {
       cap->set_wanted(0);
 
@@ -4034,10 +3845,6 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
     }
   }
 
-  if (follows >= dn->first)
-    dn->first = follows + 1;
-  newi->first = dn->first;
-    
   dout(10) << "mknod mode " << newi->inode.mode << " rdev " << newi->inode.rdev << dendl;
 
   // prepare finisher
@@ -4051,7 +3858,8 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
 				    PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
   le->metablob.add_primary_dentry(dn, newi, true, true, true);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn,
+							      newi));
 }
 
 
@@ -4064,18 +3872,12 @@ void Server::handle_client_mkdir(MDRequestRef& mdr)
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
   CDentry *dn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks, false, false, false);
   if (!dn) return;
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
   // new inode
-  SnapRealm *realm = dn->get_dir()->inode->find_snaprealm();
-  snapid_t follows = realm->get_newest_seq();
   mdr->now = ceph_clock_now(g_ceph_context);
 
   unsigned mode = req->head.args.mkdir.mode;
@@ -4090,11 +3892,6 @@ void Server::handle_client_mkdir(MDRequestRef& mdr)
   newi->inode.version = dn->pre_dirty();
   newi->inode.rstat.rsubdirs = 1;
   newi->inode.update_backtrace();
-
-  dout(12) << " follows " << follows << dendl;
-  if (follows >= dn->first)
-    dn->first = follows + 1;
-  newi->first = dn->first;
 
   // ...and that new dir is empty.
   CDir *newdir = newi->get_or_open_dirfrag(mds->mdcache, frag_t());
@@ -4113,7 +3910,7 @@ void Server::handle_client_mkdir(MDRequestRef& mdr)
   
   // issue a cap on the directory
   int cmode = CEPH_FILE_MODE_RDWR;
-  Capability *cap = mds->locker->issue_new_caps(newi, cmode, mdr->session, realm, req->is_replay());
+  Capability *cap = mds->locker->issue_new_caps(newi, cmode, mdr->session, req->is_replay());
   if (cap) {
     cap->set_wanted(0);
 
@@ -4130,7 +3927,8 @@ void Server::handle_client_mkdir(MDRequestRef& mdr)
   LogSegment *ls = mds->mdlog->get_current_segment();
   ls->open_files.push_back(&newi->item_open_file);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn,
+							      newi));
 }
 
 
@@ -4142,17 +3940,12 @@ void Server::handle_client_symlink(MDRequestRef& mdr)
   set<SimpleLock*> rdlocks, wrlocks, xlocks;
   CDentry *dn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks, false, false, false);
   if (!dn) return;
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
 
   mdr->now = ceph_clock_now(g_ceph_context);
-  snapid_t follows = dn->get_dir()->inode->find_snaprealm()->get_newest_seq();
 
   unsigned mode = S_IFLNK | 0777;
   CInode *newi = prepare_new_inode(mdr, dn->get_dir(), inodeno_t(req->head.ino), mode);
@@ -4168,10 +3961,6 @@ void Server::handle_client_symlink(MDRequestRef& mdr)
   newi->inode.version = dn->pre_dirty();
   newi->inode.update_backtrace();
 
-  if (follows >= dn->first)
-    dn->first = follows + 1;
-  newi->first = dn->first;
-
   // prepare finisher
   mdr->ls = mdlog->get_current_segment();
   EUpdate *le = new EUpdate(mdlog, "symlink");
@@ -4181,7 +3970,8 @@ void Server::handle_client_symlink(MDRequestRef& mdr)
   mdcache->predirty_journal_parents(mdr, &le->metablob, newi, dn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
   le->metablob.add_primary_dentry(dn, newi, true, true);
 
-  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn, newi, follows));
+  journal_and_reply(mdr, newi, dn, le, new C_MDS_mknod_finish(mds, mdr, dn,
+							      newi));
 }
 
 
@@ -4204,10 +3994,6 @@ void Server::handle_client_link(MDRequestRef& mdr)
   if (!dn) return;
   CInode *targeti = rdlock_path_pin_ref(mdr, 1, rdlocks, false);
   if (!targeti) return;
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
 
   CDir *dir = dn->get_dir();
   dout(7) << "handle_client_link link " << dn->get_name() << " in " << *dir << dendl;
@@ -4295,10 +4081,6 @@ void Server::_link_local(MDRequestRef& mdr, CDentry *dn, CInode *targeti)
   pi->nlink++;
   pi->ctime = mdr->now;
   pi->version = tipv;
-
-  snapid_t follows = dn->get_dir()->inode->find_snaprealm()->get_newest_seq();
-  if (follows >= dn->first)
-    dn->first = follows;
 
   // log + wait
   EUpdate *le = new EUpdate(mdlog, "link_local");
@@ -4415,7 +4197,6 @@ void Server::_link_remote(MDRequestRef& mdr, bool inc, CDentry *dn, CInode *targ
   } else {
     dn->pre_dirty();
     mdcache->predirty_journal_parents(mdr, &le->metablob, targeti, dn->get_dir(), PREDIRTY_DIR, -1);
-    mdcache->journal_cow_dentry(mdr.get(), &le->metablob, dn);
     le->metablob.add_null_dentry(dn, true);
   }
 
@@ -4800,10 +4581,6 @@ void Server::handle_client_unlink(MDRequestRef& mdr)
     reply_request(mdr, r);
     return;
   }
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
 
   CDentry *dn = trace[trace.size()-1];
   assert(dn);
@@ -4870,19 +4647,6 @@ void Server::handle_client_unlink(MDRequestRef& mdr)
   }
   if (in->is_dir())
     rdlocks.insert(&in->filelock);   // to verify it's empty
-  mds->locker->include_snap_rdlocks(rdlocks, dnl->get_inode());
-
-  // if we unlink a snapped multiversion inode and are creating a
-  // remote link to it, it must be anchored.  this mirrors the logic
-  // in MDCache::journal_cow_dentry().
-  bool need_snap_dentry = 
-    dnl->is_primary() &&
-    in->is_multiversion() &&
-    in->find_snaprealm()->get_newest_seq() + 1 > dn->first;
-  if (need_snap_dentry) {
-    dout(10) << " i need to be anchored because i am multiversion and will get a remote cow dentry" << dendl;
-    mds->mdcache->anchor_create_prep_locks(mdr, in, rdlocks, xlocks);
-  }
 
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
     return;
@@ -4896,14 +4660,6 @@ void Server::handle_client_unlink(MDRequestRef& mdr)
   // yay!
   if (mdr->now == utime_t())
     mdr->now = ceph_clock_now(g_ceph_context);
-
-  // NOTE: this is non-optimal.  we create an anchor at the old
-  // location, and then change it.  we can do better, but it's more
-  // complicated.  this is fine for now.
-  if (need_snap_dentry && !in->is_anchored()) {
-    mdcache->anchor_create(mdr, in, new C_MDS_RetryRequest(mdcache, mdr));
-    return;
-  }
 
   // get stray dn ready?
   if (dnl->is_primary()) {
@@ -4976,9 +4732,6 @@ void Server::_unlink_local(MDRequestRef& mdr, CDentry *dn, CDentry *straydn)
   CDentry::linkage_t *dnl = dn->get_projected_linkage();
   CInode *in = dnl->get_inode();
 
-  SnapRealm *realm = in->find_snaprealm();
-  snapid_t follows = realm->get_newest_seq();
-
   // ok, let's do it.
   mdr->ls = mdlog->get_current_segment();
 
@@ -4996,7 +4749,6 @@ void Server::_unlink_local(MDRequestRef& mdr, CDentry *dn, CDentry *straydn)
   if (straydn) {
     assert(dnl->is_primary());
     straydn->push_projected_linkage(in);
-    straydn->first = follows + 1;
   }
 
   // the unlinked dentry
@@ -5016,10 +4768,6 @@ void Server::_unlink_local(MDRequestRef& mdr, CDentry *dn, CDentry *straydn)
     mdcache->predirty_journal_parents(mdr, &le->metablob, in, dn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, -1);
     mdcache->predirty_journal_parents(mdr, &le->metablob, in, straydn->get_dir(), PREDIRTY_PRIMARY|PREDIRTY_DIR, 1);
 
-    // project snaprealm, too
-    if (in->snaprealm || follows + 1 > dn->first)
-      in->project_past_snaprealm_parent(straydn->get_dir()->inode->find_snaprealm());
-
     pi->update_backtrace();
     le->metablob.add_primary_dentry(straydn, in, true, true);
   } else {
@@ -5029,7 +4777,6 @@ void Server::_unlink_local(MDRequestRef& mdr, CDentry *dn, CDentry *straydn)
     mdcache->journal_dirty_inode(mdr.get(), &le->metablob, in);
   }
 
-  mdcache->journal_cow_dentry(mdr.get(), &le->metablob, dn);
   le->metablob.add_null_dentry(dn, true);
 
   if (in->is_dir()) {
@@ -5066,23 +4813,17 @@ void Server::_unlink_local_finish(MDRequestRef& mdr,
   // relink as stray?  (i.e. was primary link?)
   CDentry::linkage_t *straydnl = 0;
 
-  bool snap_is_new = false;
   if (straydn) {
     dout(20) << " straydn is " << *straydn << dendl;
     straydnl = straydn->pop_projected_linkage();
-    
-    snap_is_new = straydnl->get_inode()->snaprealm ? true : false;
     mdcache->touch_dentry_bottom(straydn);
   }
 
   dn->mark_dirty(dnpv, mdr->ls);
   mdr->apply();
 
-  if (snap_is_new) //only new if straydnl exists
-    mdcache->do_realm_invalidate_and_update_notify(straydnl->get_inode(), CEPH_SNAP_OP_SPLIT, true);
-  
   mds->mdcache->send_dentry_unlink(dn, straydn, mdr);
-  
+
   // update subtree map?
   if (straydn && straydnl->get_inode()->is_dir()) 
     mdcache->adjust_subtree_after_rename(straydnl->get_inode(), dn->get_dir(), true);
@@ -5370,9 +5111,6 @@ bool Server::_dir_is_nonempty_unlocked(MDRequestRef& mdr, CInode *in)
   dout(10) << "dir_is_nonempty_unlocked " << *in << dendl;
   assert(in->is_auth());
 
-  if (in->snaprealm && in->snaprealm->srnode.snaps.size())
-    return true; // in a snapshot!
-
   list<CDir*> ls;
   in->get_dirfrags(ls);
   for (list<CDir*>::iterator p = ls.begin(); p != ls.end(); ++p) {
@@ -5476,10 +5214,6 @@ void Server::handle_client_rename(MDRequestRef& mdr)
   CDentry *destdn = rdlock_path_xlock_dentry(mdr, 0, rdlocks, wrlocks, xlocks, true, false, true);
   if (!destdn) return;
   dout(10) << " destdn " << *destdn << dendl;
-  if (mdr->snapid != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   CDentry::linkage_t *destdnl = destdn->get_projected_linkage();
   CDir *destdir = destdn->get_dir();
   assert(destdir->is_auth());
@@ -5502,10 +5236,6 @@ void Server::handle_client_rename(MDRequestRef& mdr)
   assert(!srctrace.empty());
   CDentry *srcdn = srctrace[srctrace.size()-1];
   dout(10) << " srcdn " << *srcdn << dendl;
-  if (srcdn->last != CEPH_NOSNAP) {
-    reply_request(mdr, -EROFS);
-    return;
-  }
   CDentry::linkage_t *srcdnl = srcdn->get_projected_linkage();
   CInode *srci = srcdnl->get_inode();
   dout(10) << " srci " << *srci << dendl;
@@ -5669,7 +5399,6 @@ void Server::handle_client_rename(MDRequestRef& mdr)
     wrlocks.insert(&srcdn->get_dir()->inode->filelock);
     wrlocks.insert(&srcdn->get_dir()->inode->nestlock);
   }
-  mds->locker->include_snap_rdlocks(rdlocks, srcdn->get_dir()->inode);
 
   // straydn?
   if (straydn) {
@@ -5710,14 +5439,6 @@ void Server::handle_client_rename(MDRequestRef& mdr)
     if (oldin->is_dir())
       rdlocks.insert(&oldin->filelock);
   }
-  if (srcdnl->is_primary() && srci->is_dir())  
-    // FIXME: this should happen whenever we are renamning between
-    // realms, regardless of the file type
-    // FIXME: If/when this changes, make sure to update the
-    // "allowance" in handle_slave_rename_prep
-    xlocks.insert(&srci->snaplock);  // FIXME: an auth bcast could be sufficient?
-  else
-    rdlocks.insert(&srci->snaplock);
 
   // take any locks needed for anchor creation/verification
   mds->mdcache->anchor_create_prep_locks(mdr, srci, rdlocks, xlocks);
@@ -5732,19 +5453,6 @@ void Server::handle_client_rename(MDRequestRef& mdr)
       _dir_is_nonempty(mdr, oldin)) {
     reply_request(mdr, -ENOTEMPTY);
     return;
-  }
-
-  // moving between snaprealms?
-  if (srcdnl->is_primary() && srci->is_multiversion() && !srci->snaprealm) {
-    SnapRealm *srcrealm = srci->find_snaprealm();
-    SnapRealm *destrealm = destdn->get_dir()->inode->find_snaprealm();
-    if (srcrealm != destrealm &&
-	(srcrealm->get_newest_seq() + 1 > srcdn->first ||
-	 destrealm->get_newest_seq() + 1 > srcdn->first)) {
-      dout(10) << " renaming between snaprealms, creating snaprealm for " << *srci << dendl;
-      mds->mdcache->snaprealm_create(mdr, srci);
-      return;
-    }
   }
 
   assert(g_conf->mds_kill_rename_at != 1);
@@ -6099,7 +5807,7 @@ void Server::_rename_prepare(MDRequestRef& mdr,
       assert(straydn);  // moving to straydn.
       // link--, and move.
       if (destdn->is_auth()) {
-	tpi = oldin->project_inode(); //project_snaprealm
+	tpi = oldin->project_inode();
 	tpi->version = straydn->pre_dirty(tpi->version);
 	tpi->update_backtrace();
       }
@@ -6150,11 +5858,11 @@ void Server::_rename_prepare(MDRequestRef& mdr,
 	    if (!dir->is_auth())
 	      metablob->renamed_dir_frags.push_back(dir->get_frag());
 	  }
-	  dout(10) << " noting renamed dir open frags " << metablob->renamed_dir_frags << dendl;
+	  dout(10) << " noting renamed dir open frags "
+		   << metablob->renamed_dir_frags << dendl;
 	}
       }
-      pi = srci->project_inode(); // project snaprealm if srcdnl->is_primary
-                                                 // & srcdnl->snaprealm
+      pi = srci->project_inode();
       pi->version = mdr->more()->pvmap[destdn] = destdn->pre_dirty(oldpv);
       pi->update_backtrace();
     }
@@ -6210,31 +5918,18 @@ void Server::_rename_prepare(MDRequestRef& mdr,
   if (destdn->is_auth())
     mdcache->predirty_journal_parents(mdr, metablob, srci, destdn->get_dir(), flags, 1);
 
-  SnapRealm *src_realm = srci->find_snaprealm();
-  SnapRealm *dest_realm = destdn->get_dir()->inode->find_snaprealm();
-  snapid_t next_dest_snap = dest_realm->get_newest_seq() + 1;
-
   // add it all to the metablob
   // target inode
   if (!linkmerge) {
     if (destdnl->is_primary()) {
       if (destdn->is_auth()) {
-	// project snaprealm, too
-	if (oldin->snaprealm || src_realm->get_newest_seq() + 1 > srcdn->first)
-	  oldin->project_past_snaprealm_parent(straydn->get_dir()->inode->find_snaprealm());
-	straydn->first = MAX(oldin->first, next_dest_snap);
-	metablob->add_primary_dentry(straydn, oldin, true, true);
-      } else if (force_journal_stray) {
 	dout(10) << " forced journaling straydn " << *straydn << dendl;
 	metablob->add_dir_context(straydn->get_dir());
 	metablob->add_primary_dentry(straydn, oldin, true);
-      }
     } else if (destdnl->is_remote()) {
       if (oldin->is_auth()) {
 	// auth for targeti
 	metablob->add_dir_context(oldin->get_projected_parent_dir());
-	mdcache->journal_cow_dentry(mdr.get(), metablob, oldin->get_projected_parent_dn(),
-				    CEPH_NOSNAP, 0, destdnl);
 	metablob->add_primary_dentry(oldin->get_projected_parent_dn(), oldin, true);
       }
     }
@@ -6243,38 +5938,17 @@ void Server::_rename_prepare(MDRequestRef& mdr,
   // dest
   if (srcdnl->is_remote()) {
     if (!linkmerge) {
-      if (destdn->is_auth() && !destdnl->is_null())
-	mdcache->journal_cow_dentry(mdr.get(), metablob, destdn, CEPH_NOSNAP, 0, destdnl);
-      else
-	destdn->first = MAX(destdn->first, next_dest_snap);
-
       if (destdn->is_auth())
-        metablob->add_remote_dentry(destdn, true, srcdnl->get_remote_ino(), srcdnl->get_remote_d_type());
+	metablob->add_remote_dentry(destdn, true, srcdnl->get_remote_ino(), srcdnl->get_remote_d_type());
       if (srci->get_projected_parent_dn()->is_auth()) { // it's remote
 	metablob->add_dir_context(srci->get_projected_parent_dir());
-        mdcache->journal_cow_dentry(mdr.get(), metablob, srci->get_projected_parent_dn(), CEPH_NOSNAP, 0, srcdnl);
 	metablob->add_primary_dentry(srci->get_projected_parent_dn(), srci, true);
       }
     } else {
-      if (destdn->is_auth() && !destdnl->is_null())
-	mdcache->journal_cow_dentry(mdr.get(), metablob, destdn, CEPH_NOSNAP, 0, destdnl);
-      else
-	destdn->first = MAX(destdn->first, next_dest_snap);
-
       if (destdn->is_auth())
-        metablob->add_primary_dentry(destdn, destdnl->get_inode(), true, true);
+	metablob->add_primary_dentry(destdn, destdnl->get_inode(), true, true);
     }
   } else if (srcdnl->is_primary()) {
-    // project snap parent update?
-    if (destdn->is_auth() &&
-        (srci->snaprealm || src_realm->get_newest_seq() + 1 > srcdn->first))
-      srci->project_past_snaprealm_parent(dest_realm);
-    
-    if (destdn->is_auth() && !destdnl->is_null())
-      mdcache->journal_cow_dentry(mdr.get(), metablob, destdn, CEPH_NOSNAP, 0, destdnl);
-    else
-      destdn->first = MAX(destdn->first, next_dest_snap);
-
     if (destdn->is_auth())
       metablob->add_primary_dentry(destdn, srci, true, true);
     else if (force_journal_dest) {
@@ -6297,7 +5971,6 @@ void Server::_rename_prepare(MDRequestRef& mdr,
   // src
   if (srcdn->is_auth()) {
     dout(10) << " journaling srcdn " << *srcdn << dendl;
-    mdcache->journal_cow_dentry(mdr.get(), metablob, srcdn, CEPH_NOSNAP, 0, srcdnl);
     // also journal the inode in case we need do slave rename rollback. It is Ok to add
     // both primary and NULL dentries. Because during journal replay, null dentry is
     // processed after primary dentry.
@@ -6306,10 +5979,6 @@ void Server::_rename_prepare(MDRequestRef& mdr,
     metablob->add_null_dentry(srcdn, true);
   } else
     dout(10) << " NOT journaling srcdn " << *srcdn << dendl;
-
-  // make renamed inode first track the dn
-  if (srcdnl->is_primary() && destdn->is_auth())
-    srci->first = destdn->first;  
 
   // anchor updates?
   if (mdr->more()->src_reanchor_atid)
@@ -6322,10 +5991,11 @@ void Server::_rename_prepare(MDRequestRef& mdr,
   if (srci->is_dir())
     mdcache->project_subtree_rename(srci, srcdn->get_dir(), destdn->get_dir());
 
+  }
 }
 
-
-void Server::_rename_apply(MDRequestRef& mdr, CDentry *srcdn, CDentry *destdn, CDentry *straydn)
+void Server::_rename_apply(MDRequestRef& mdr, CDentry *srcdn, CDentry *destdn,
+			   CDentry *straydn)
 {
   dout(10) << "_rename_apply " << *mdr << " " << *srcdn << " " << *destdn << dendl;
   dout(10) << " pvs " << mdr->more()->pvmap << dendl;
@@ -6334,7 +6004,7 @@ void Server::_rename_apply(MDRequestRef& mdr, CDentry *srcdn, CDentry *destdn, C
   CDentry::linkage_t *destdnl = destdn->get_linkage();
 
   CInode *oldin = destdnl->get_inode();
-  
+
   bool imported_inode = false;
 
   // primary+remote link merge?
@@ -6353,14 +6023,7 @@ void Server::_rename_apply(MDRequestRef& mdr, CDentry *srcdn, CDentry *destdn, C
 
       // nlink-- targeti
       if (destdn->is_auth()) {
-	bool hadrealm = (oldin->snaprealm ? true : false);
 	oldin->pop_and_dirty_projected_inode(mdr->ls);
-	if (oldin->snaprealm && !hadrealm)
-	  mdcache->do_realm_invalidate_and_update_notify(oldin, CEPH_SNAP_OP_SPLIT);
-      } else {
-	// FIXME this snaprealm is not filled out correctly
-	//oldin->open_snaprealm();  might be sufficient..	
-      }
     } else if (destdnl->is_remote()) {
       destdn->get_dir()->unlink_inode(destdn);
       if (oldin->is_auth())
@@ -6436,8 +6099,6 @@ void Server::_rename_apply(MDRequestRef& mdr, CDentry *srcdn, CDentry *destdn, C
     if (destdn->is_auth()) {
       in->pop_and_dirty_projected_inode(mdr->ls);
 
-    } else {
-      // FIXME: fix up snaprealm!
     }
   }
 
@@ -6459,10 +6120,8 @@ void Server::_rename_apply(MDRequestRef& mdr, CDentry *srcdn, CDentry *destdn, C
   // removing a new dn?
   if (srcdn->is_auth())
     srcdn->get_dir()->try_remove_unlinked_dn(srcdn);
+  }
 }
-
-
-
 
 
 // ------------
@@ -6565,7 +6224,7 @@ void Server::handle_slave_rename_prep(MDRequestRef& mdr)
       //  - avoid concurrent updates to the inode
       //     (this could also be accomplished with the versionlock)
       int allowance = 2; // 1 for the mdr auth_pin, 1 for the link lock
-      allowance += srcdnl->get_inode()->is_dir(); // for the snap lock
+      allowance += srcdnl->get_inode()->is_dir();
       dout(10) << " freezing srci " << *srcdnl->get_inode() << " with allowance " << allowance << dendl;
       bool frozen_inode = srcdnl->get_inode()->freeze_inode(allowance);
 
@@ -6881,7 +6540,6 @@ void _rollback_repair_dir(MutationRef& mut, CDir *dir, rename_rollback::drec &r,
     pf->rstat.rfiles += linkunlink * rstat.rfiles;
     pf->rstat.rsubdirs += linkunlink * rstat.rsubdirs;
     pf->rstat.ranchors += linkunlink * rstat.ranchors;
-    pf->rstat.rsnaprealms += linkunlink * rstat.rsnaprealms;
   }
   if (pf->fragstat.mtime == ctime) {
     pf->fragstat.mtime = r.dirfrag_old_mtime;
@@ -7269,339 +6927,3 @@ void Server::_slave_rename_sessions_flushed(MDRequestRef& mdr)
 	<< mdr->more()->waiting_on_slave << dendl;
   }
 }
-
-// snaps
-/* This function takes responsibility for the passed mdr*/
-void Server::handle_client_lssnap(MDRequestRef& mdr)
-{
-  MClientRequest *req = mdr->client_request;
-
-  // traverse to path
-  CInode *diri = mdcache->get_inode(req->get_filepath().get_ino());
-  if (!diri || diri->state_test(CInode::STATE_PURGING)) {
-     reply_request(mdr, -ESTALE);
-     return;
-  }
-  if (!diri->is_auth()) {
-    mdcache->request_forward(mdr, diri->authority().first);
-    return;
-  }
-  if (!diri->is_dir()) {
-    reply_request(mdr, -ENOTDIR);
-    return;
-  }
-  dout(10) << "lssnap on " << *diri << dendl;
-
-  // lock snap
-  set<SimpleLock*> rdlocks, wrlocks, xlocks;
-  mds->locker->include_snap_rdlocks(rdlocks, diri);
-  if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-    return;
-
-  SnapRealm *realm = diri->find_snaprealm();
-  map<snapid_t,SnapInfo*> infomap;
-  realm->get_snap_info(infomap, diri->get_oldest_snap());
-
-  __u32 num = 0;
-  bufferlist dnbl;
-  for (map<snapid_t,SnapInfo*>::iterator p = infomap.begin();
-       p != infomap.end();
-       ++p) {
-    dout(10) << p->first << " -> " << *p->second << dendl;
-
-    // actual
-    if (p->second->ino == diri->ino())
-      ::encode(p->second->name, dnbl);
-    else
-      ::encode(p->second->get_long_name(), dnbl);
-    encode_infinite_lease(dnbl);
-    diri->encode_inodestat(dnbl, mdr->session, realm, p->first);
-    num++;
-  }
-
-  bufferlist dirbl;
-  encode_empty_dirstat(dirbl);
-  ::encode(num, dirbl);
-  __u8 t = 1;
-  ::encode(t, dirbl);  // end
-  ::encode(t, dirbl);  // complete
-  dirbl.claim_append(dnbl);
-  
-  MClientReply *reply = new MClientReply(req);
-  reply->set_extra_bl(dirbl);
-  reply_request(mdr, reply, diri);
-}
-
-
-// MKSNAP
-
-struct C_MDS_mksnap_finish : public Context {
-  MDS *mds;
-  MDRequestRef mdr;
-  CInode *diri;
-  SnapInfo info;
-  C_MDS_mksnap_finish(MDS *m, MDRequestRef& r, CInode *di, SnapInfo &i) :
-    mds(m), mdr(r), diri(di), info(i) {}
-  void finish(int r) {
-    mds->server->_mksnap_finish(mdr, diri, info);
-  }
-};
-
-/* This function takes responsibility for the passed mdr*/
-void Server::handle_client_mksnap(MDRequestRef& mdr)
-{
-  if (!mds->mdsmap->allows_snaps()) {
-    // you can't make snapshots until you set an option right now
-    reply_request(mdr, -EPERM);
-    return;
-  }
-
-  MClientRequest *req = mdr->client_request;
-  CInode *diri = mdcache->get_inode(req->get_filepath().get_ino());
-  if (!diri || diri->state_test(CInode::STATE_PURGING)) {
-    reply_request(mdr, -ESTALE);
-    return;
-  }
-
-  if (!diri->is_auth()) {    // fw to auth?
-    mdcache->request_forward(mdr, diri->authority().first);
-    return;
-  }
-
-  // dir only
-  if (!diri->is_dir()) {
-    reply_request(mdr, -ENOTDIR);
-    return;
-  }
-  if (diri->is_system() && !diri->is_root()) {
-    // no snaps in system dirs (root is ok)
-    reply_request(mdr, -EPERM);
-    return;
-  }
-
-  const string &snapname = req->get_filepath().last_dentry();
-  dout(10) << "mksnap " << snapname << " on " << *diri << dendl;
-
-  // lock snap
-  set<SimpleLock*> rdlocks, wrlocks, xlocks;
-
-  mds->locker->include_snap_rdlocks(rdlocks, diri);
-  rdlocks.erase(&diri->snaplock);
-  xlocks.insert(&diri->snaplock);
-
-  // we need to anchor... get these locks up front!
-  mds->mdcache->anchor_create_prep_locks(mdr, diri, rdlocks, xlocks);
-
-  if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-    return;
-
-  // make sure name is unique
-  if (diri->snaprealm &&
-      diri->snaprealm->exists(snapname)) {
-    reply_request(mdr, -EEXIST);
-    return;
-  }
-  if (snapname.length() == 0 ||
-      snapname[0] == '_') {
-    reply_request(mdr, -EINVAL);
-    return;
-  }
-
-  if (mdr->now == utime_t())
-    mdr->now = ceph_clock_now(g_ceph_context);
-
-  // anchor
-  if (!diri->is_anchored()) {
-    mdcache->anchor_create(mdr, diri, new C_MDS_RetryRequest(mdcache, mdr));
-    return;
-  }
-
-  // allocate a snapid
-  if (!mdr->more()->stid) {
-    // prepare an stid
-    mds->snapclient->prepare_create(diri->ino(), snapname, mdr->now, 
-				    &mdr->more()->stid, &mdr->more()->snapidbl,
-				    new C_MDS_RetryRequest(mds->mdcache, mdr));
-    return;
-  }
-
-  version_t stid = mdr->more()->stid;
-  snapid_t snapid;
-  bufferlist::iterator p = mdr->more()->snapidbl.begin();
-  ::decode(snapid, p);
-  dout(10) << " stid " << stid << " snapid " << snapid << dendl;
-
-  // journal
-  SnapInfo info;
-  info.ino = diri->ino();
-  info.snapid = snapid;
-  info.name = snapname;
-  info.stamp = mdr->now;
-
-  inode_t *pi = diri->project_inode();
-  pi->ctime = info.stamp;
-  pi->version = diri->pre_dirty();
-
-  // project the snaprealm
-  sr_t *newsnap = diri->project_snaprealm(snapid);
-  newsnap->snaps[snapid] = info;
-  newsnap->seq = snapid;
-  newsnap->last_created = snapid;
-
-  // journal the inode changes
-  mdr->ls = mdlog->get_current_segment();
-  EUpdate *le = new EUpdate(mdlog, "mksnap");
-  mdlog->start_entry(le);
-
-  le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
-  le->metablob.add_table_transaction(TABLE_SNAP, stid);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, diri, 0, PREDIRTY_PRIMARY, false);
-  mdcache->journal_dirty_inode(mdr.get(), &le->metablob, diri);
-
-  // journal the snaprealm changes
-  mdlog->submit_entry(le, new C_MDS_mksnap_finish(mds, mdr, diri, info));
-  mdlog->flush();
-}
-
-void Server::_mksnap_finish(MDRequestRef& mdr, CInode *diri, SnapInfo &info)
-{
-  dout(10) << "_mksnap_finish " << *mdr << " " << info << dendl;
-
-  int op = (diri->snaprealm? CEPH_SNAP_OP_CREATE : CEPH_SNAP_OP_SPLIT);
-
-  diri->pop_and_dirty_projected_inode(mdr->ls);
-  mdr->apply();
-
-  mds->snapclient->commit(mdr->more()->stid, mdr->ls);
-
-  // create snap
-  dout(10) << "snaprealm now " << *diri->snaprealm << dendl;
-
-  mdcache->do_realm_invalidate_and_update_notify(diri, op);
-
-  // yay
-  mdr->in[0] = diri;
-  mdr->snapid = info.snapid;
-  MClientReply *reply = new MClientReply(mdr->client_request, 0);
-  reply->snapbl = diri->snaprealm->get_snap_trace();
-  reply_request(mdr, reply, diri);
-}
-
-
-// RMSNAP
-
-struct C_MDS_rmsnap_finish : public Context {
-  MDS *mds;
-  MDRequestRef mdr;
-  CInode *diri;
-  snapid_t snapid;
-  C_MDS_rmsnap_finish(MDS *m, MDRequestRef& r, CInode *di, snapid_t sn) :
-    mds(m), mdr(r), diri(di), snapid(sn) {}
-  void finish(int r) {
-    mds->server->_rmsnap_finish(mdr, diri, snapid);
-  }
-};
-
-/* This function takes responsibility for the passed mdr*/
-void Server::handle_client_rmsnap(MDRequestRef& mdr)
-{
-  MClientRequest *req = mdr->client_request;
-
-  CInode *diri = mdcache->get_inode(req->get_filepath().get_ino());
-  if (!diri || diri->state_test(CInode::STATE_PURGING)) {
-    reply_request(mdr, -ESTALE);
-    return;
-  }
-  if (!diri->is_auth()) {    // fw to auth?
-    mdcache->request_forward(mdr, diri->authority().first);
-    return;
-  }
-  if (!diri->is_dir()) {
-    reply_request(mdr, -ENOTDIR);
-    return;
-  }
-
-  const string &snapname = req->get_filepath().last_dentry();
-  dout(10) << "rmsnap " << snapname << " on " << *diri << dendl;
-
-  // does snap exist?
-  if (snapname.length() == 0 || snapname[0] == '_') {
-    reply_request(mdr, -EINVAL);   // can't prune a parent snap, currently.
-    return;
-  }
-  if (!diri->snaprealm || !diri->snaprealm->exists(snapname)) {
-    reply_request(mdr, -ENOENT);
-    return;
-  }
-  snapid_t snapid = diri->snaprealm->resolve_snapname(snapname, diri->ino());
-  dout(10) << " snapname " << snapname << " is " << snapid << dendl;
-
-  set<SimpleLock*> rdlocks, wrlocks, xlocks;
-  mds->locker->include_snap_rdlocks(rdlocks, diri);
-  rdlocks.erase(&diri->snaplock);
-  xlocks.insert(&diri->snaplock);
-
-  if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
-    return;
-
-  // prepare
-  if (!mdr->more()->stid) {
-    mds->snapclient->prepare_destroy(diri->ino(), snapid,
-				     &mdr->more()->stid, &mdr->more()->snapidbl,
-				     new C_MDS_RetryRequest(mds->mdcache, mdr));
-    return;
-  }
-  version_t stid = mdr->more()->stid;
-  bufferlist::iterator p = mdr->more()->snapidbl.begin();
-  snapid_t seq;
-  ::decode(seq, p);  
-  dout(10) << " stid is " << stid << ", seq is " << seq << dendl;
-
-  // journal
-  inode_t *pi = diri->project_inode();
-  pi->ctime = ceph_clock_now(g_ceph_context);
-  pi->version = diri->pre_dirty();
-  
-  mdr->ls = mdlog->get_current_segment();
-  EUpdate *le = new EUpdate(mdlog, "rmsnap");
-  mdlog->start_entry(le);
-  
-  // project the snaprealm
-  sr_t *newnode = diri->project_snaprealm();
-  newnode->snaps.erase(snapid);
-  newnode->seq = seq;
-  newnode->last_destroyed = seq;
-
-  le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
-  le->metablob.add_table_transaction(TABLE_SNAP, stid);
-  mdcache->predirty_journal_parents(mdr, &le->metablob, diri, 0, PREDIRTY_PRIMARY, false);
-  mdcache->journal_dirty_inode(mdr.get(), &le->metablob, diri);
-
-  mdlog->submit_entry(le, new C_MDS_rmsnap_finish(mds, mdr, diri, snapid));
-  mdlog->flush();
-}
-
-void Server::_rmsnap_finish(MDRequestRef& mdr, CInode *diri, snapid_t snapid)
-{
-  dout(10) << "_rmsnap_finish " << *mdr << " " << snapid << dendl;
-  snapid_t stid = mdr->more()->stid;
-  bufferlist::iterator p = mdr->more()->snapidbl.begin();
-  snapid_t seq;
-  ::decode(seq, p);  
-
-  diri->pop_and_dirty_projected_inode(mdr->ls);
-  mdr->apply();
-
-  mds->snapclient->commit(stid, mdr->ls);
-
-  dout(10) << "snaprealm now " << *diri->snaprealm << dendl;
-
-  mdcache->do_realm_invalidate_and_update_notify(diri, CEPH_SNAP_OP_DESTROY);
-
-  // yay
-  mdr->in[0] = diri;
-  MClientReply *reply = new MClientReply(mdr->client_request, 0);
-  reply_request(mdr, reply);
-}
-
-

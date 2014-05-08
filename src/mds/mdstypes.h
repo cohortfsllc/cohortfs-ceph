@@ -173,10 +173,9 @@ struct nest_info_t : public scatter_info_t {
   int64_t rsize() const { return rfiles + rsubdirs; }
 
   int64_t ranchors;  // for dirstat, includes inode's anchored flag.
-  int64_t rsnaprealms;
 
   nest_info_t() : rbytes(0), rfiles(0), rsubdirs(0),
-		  ranchors(0), rsnaprealms(0) {}
+		  ranchors(0) {}
 
   void zero() {
     *this = nest_info_t();
@@ -192,7 +191,6 @@ struct nest_info_t : public scatter_info_t {
     rfiles += fac*other.rfiles;
     rsubdirs += fac*other.rsubdirs;
     ranchors += fac*other.ranchors;
-    rsnaprealms += fac*other.rsnaprealms;
   }
 
   // *this += cur - acc;
@@ -203,7 +201,6 @@ struct nest_info_t : public scatter_info_t {
     rfiles += cur.rfiles - acc.rfiles;
     rsubdirs += cur.rsubdirs - acc.rsubdirs;
     ranchors += cur.ranchors - acc.ranchors;
-    rsnaprealms += cur.rsnaprealms - acc.rsnaprealms;
   }
 
   void encode(bufferlist &bl) const;
@@ -222,39 +219,33 @@ ostream& operator<<(ostream &out, const nest_info_t &n);
 
 struct vinodeno_t {
   inodeno_t ino;
-  snapid_t snapid;
   vinodeno_t() {}
-  vinodeno_t(inodeno_t i, snapid_t s) : ino(i), snapid(s) {}
+  explicit vinodeno_t(inodeno_t i) : ino(i) {}
 
   void encode(bufferlist& bl) const {
     ::encode(ino, bl);
-    ::encode(snapid, bl);
   }
   void decode(bufferlist::iterator& p) {
     ::decode(ino, p);
-    ::decode(snapid, p);
   }
 };
 WRITE_CLASS_ENCODER(vinodeno_t)
 
 inline bool operator==(const vinodeno_t &l, const vinodeno_t &r) {
-  return l.ino == r.ino && l.snapid == r.snapid;
+  return l.ino == r.ino;
 }
 inline bool operator!=(const vinodeno_t &l, const vinodeno_t &r) {
   return !(l == r);
 }
 inline bool operator<(const vinodeno_t &l, const vinodeno_t &r) {
-  return 
-    l.ino < r.ino ||
-    (l.ino == r.ino && l.snapid < r.snapid);
+  return l.ino < r.ino;
 }
 
 CEPH_HASH_NAMESPACE_START
   template<> struct hash<vinodeno_t> {
-    size_t operator()(const vinodeno_t &vino) const { 
+    size_t operator()(const vinodeno_t &vino) const {
       hash<inodeno_t> H;
-      hash<uint64_t> I;
-      return H(vino.ino) ^ I(vino.snapid);
+      return H(vino.ino);
     }
   };
 CEPH_HASH_NAMESPACE_END
@@ -264,10 +255,6 @@ CEPH_HASH_NAMESPACE_END
 
 inline ostream& operator<<(ostream &out, const vinodeno_t &vino) {
   out << vino.ino;
-  if (vino.snapid == CEPH_NOSNAP)
-    out << ".head";
-  else if (vino.snapid)
-    out << '.' << vino.snapid;
   return out;
 }
 
@@ -282,9 +269,8 @@ struct client_writeable_range_t {
   };
 
   byte_range_t range;
-  snapid_t follows;     // aka "data+metadata flushed thru"
 
-  client_writeable_range_t() : follows(0) {}
+  client_writeable_range_t() {}
 
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator& bl);
@@ -303,8 +289,7 @@ ostream& operator<<(ostream& out, const client_writeable_range_t& r);
 
 inline bool operator==(const client_writeable_range_t& l,
 		       const client_writeable_range_t& r) {
-  return l.range.first == r.range.first && l.range.last == r.range.last &&
-    l.follows == r.follows;
+  return l.range.first == r.range.first && l.range.last == r.range.last;
 }
 
 
@@ -314,7 +299,7 @@ inline bool operator==(const client_writeable_range_t& l,
 struct inode_t {
   // base (immutable)
   inodeno_t ino;
-  uint32_t   rdev;    // if special file
+  uint32_t  rdev;    // if special file
 
   // affected by any inode change...
   utime_t    ctime;   // inode change time
@@ -427,16 +412,6 @@ struct inode_t {
     }
   }
 
-  void trim_client_ranges(snapid_t last) {
-    map<client_t, client_writeable_range_t>::iterator p = client_ranges.begin();
-    while (p != client_ranges.end()) {
-      if (p->second.follows >= last)
-	client_ranges.erase(p++);
-      else
-	++p;
-    }
-  }
-
   bool is_backtrace_updated() {
     return backtrace_version == version;
   }
@@ -456,29 +431,11 @@ struct inode_t {
 };
 WRITE_CLASS_ENCODER(inode_t)
 
-
 /*
- * old_inode_t
- */
-struct old_inode_t {
-  snapid_t first;
-  inode_t inode;
-  map<string,bufferptr> xattrs;
-
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator& bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<old_inode_t*>& ls);
-};
-WRITE_CLASS_ENCODER(old_inode_t)
-
-
-/*
- * like an inode, but for a dir frag 
+ * like an inode, but for a dir frag
  */
 struct fnode_t {
   version_t version;
-  snapid_t snap_purged_thru;   // the max_last_destroy snapid we've been purged thru
   frag_info_t fragstat, accounted_fragstat;
   nest_info_t rstat, accounted_rstat;
 
@@ -489,22 +446,6 @@ struct fnode_t {
   fnode_t() : version(0) {};
 };
 WRITE_CLASS_ENCODER(fnode_t)
-
-
-struct old_rstat_t {
-  snapid_t first;
-  nest_info_t rstat, accounted_rstat;
-
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& p);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<old_rstat_t*>& ls);
-};
-WRITE_CLASS_ENCODER(old_rstat_t)
-
-inline ostream& operator<<(ostream& out, const old_rstat_t& o) {
-  return out << "old_rstat(first " << o.first << " " << o.rstat << " " << o.accounted_rstat << ")";
-}
 
 
 /*
@@ -532,98 +473,6 @@ struct session_info_t {
 };
 WRITE_CLASS_ENCODER(session_info_t)
 
-
-// =======
-// dentries
-
-struct dentry_key_t {
-  snapid_t snapid;
-  const char *name;
-  dentry_key_t() : snapid(0), name(0) {}
-  dentry_key_t(snapid_t s, const char *n) : snapid(s), name(n) {}
-
-  // encode into something that can be decoded as a string.
-  // name_ (head) or name_%x (!head)
-  void encode(bufferlist& bl) const {
-    string key;
-    encode(key);
-    ::encode(key, bl);
-  }
-  void encode(string& key) const {
-    char b[20];
-    if (snapid != CEPH_NOSNAP) {
-      uint64_t val(snapid);
-      snprintf(b, sizeof(b), "%" PRIx64, val);
-    } else {
-      snprintf(b, sizeof(b), "%s", "head");
-    }
-    ostringstream oss;
-    oss << name << "_" << b;
-    key = oss.str();
-  }
-  static void decode_helper(bufferlist::iterator& bl, string& nm, snapid_t& sn) {
-    string key;
-    ::decode(key, bl);
-    decode_helper(key, nm, sn);
-  }
-  static void decode_helper(const string& key, string& nm, snapid_t& sn) {
-    size_t i = key.find_last_of('_');
-    assert(i != string::npos);
-    if (key.compare(i+1, string::npos, "head") == 0) {
-      // name_head
-      sn = CEPH_NOSNAP;
-    } else {
-      // name_%x
-      long long unsigned x = 0;
-      sscanf(key.c_str() + i + 1, "%llx", &x);
-      sn = x;
-    }  
-    nm = string(key.c_str(), i);
-  }
-};
-
-inline ostream& operator<<(ostream& out, const dentry_key_t &k)
-{
-  return out << "(" << k.name << "," << k.snapid << ")";
-}
-
-inline bool operator<(const dentry_key_t& k1, const dentry_key_t& k2)
-{
-  /*
-   * order by name, then snap
-   */
-  int c = strcmp(k1.name, k2.name);
-  return 
-    c < 0 || (c == 0 && k1.snapid < k2.snapid);
-}
-
-
-/*
- * string_snap_t is a simple (string, snapid_t) pair
- */
-struct string_snap_t {
-  string name;
-  snapid_t snapid;
-  string_snap_t() {}
-  string_snap_t(const string& n, snapid_t s) : name(n), snapid(s) {}
-  string_snap_t(const char *n, snapid_t s) : name(n), snapid(s) {}
-
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& p);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<string_snap_t*>& ls);
-};
-WRITE_CLASS_ENCODER(string_snap_t)
-
-inline bool operator<(const string_snap_t& l, const string_snap_t& r) {
-  int c = strcmp(l.name.c_str(), r.name.c_str());
-  return c < 0 || (c == 0 && l.snapid < r.snapid);
-}
-
-inline ostream& operator<<(ostream& out, const string_snap_t &k)
-{
-  return out << "(" << k.name << "," << k.snapid << ")";
-}
 
 /*
  * mds_table_pending_t
@@ -703,12 +552,12 @@ struct cap_reconnect_t {
   cap_reconnect_t() {
     memset(&capinfo, 0, sizeof(capinfo));
   }
-  cap_reconnect_t(uint64_t cap_id, inodeno_t pino, const string& p, int w, int i, inodeno_t sr) : 
+  cap_reconnect_t(uint64_t cap_id, inodeno_t pino, const string& p, int w,
+		  int i) :
     path(p) {
     capinfo.cap_id = cap_id;
     capinfo.wanted = w;
     capinfo.issued = i;
-    capinfo.snaprealm = sr;
     capinfo.pathbase = pino;
     capinfo.flock_len = 0;
   }
@@ -730,8 +579,7 @@ struct old_ceph_mds_cap_reconnect {
 	__le32 issued;
   __le64 old_size;
   struct ceph_timespec old_mtime, old_atime;
-	__le64 snaprealm;
-	__le64 pathbase;        /* base ino for our path to this ino */
+	__le64 pathbase; /* base ino for our path to this ino */
 } __attribute__ ((packed));
 WRITE_RAW_ENCODER(old_ceph_mds_cap_reconnect)
 
@@ -744,7 +592,6 @@ struct old_cap_reconnect_t {
     capinfo.cap_id = n.capinfo.cap_id;
     capinfo.wanted = n.capinfo.wanted;
     capinfo.issued = n.capinfo.issued;
-    capinfo.snaprealm = n.capinfo.snaprealm;
     capinfo.pathbase = n.capinfo.pathbase;
     return *this;
   }
@@ -754,7 +601,6 @@ struct old_cap_reconnect_t {
     n.capinfo.cap_id = capinfo.cap_id;
     n.capinfo.wanted = capinfo.wanted;
     n.capinfo.issued = capinfo.issued;
-    n.capinfo.snaprealm = capinfo.snaprealm;
     n.capinfo.pathbase = capinfo.pathbase;
     return n;
   }
@@ -1089,7 +935,6 @@ public:
   inodeno_t ino;
   dirfrag_t dirfrag;
   string dname;
-  snapid_t snapid;
 
   MDSCacheObjectInfo() : ino(0) {}
 
@@ -1099,9 +944,10 @@ public:
   static void generate_test_instances(list<MDSCacheObjectInfo*>& ls);
 };
 
-inline bool operator==(const MDSCacheObjectInfo& l, const MDSCacheObjectInfo& r) {
+inline bool operator==(const MDSCacheObjectInfo& l,
+		       const MDSCacheObjectInfo& r) {
   if (l.ino || r.ino)
-    return l.ino == r.ino && l.snapid == r.snapid;
+    return l.ino == r.ino;
   else
     return l.dirfrag == r.dirfrag && l.dname == r.dname;
 }
@@ -1436,9 +1282,8 @@ inline ostream& operator<<(ostream& out, MDSCacheObject &o) {
 }
 
 inline ostream& operator<<(ostream& out, const MDSCacheObjectInfo &info) {
-  if (info.ino) return out << info.ino << "." << info.snapid;
-  if (info.dname.length()) return out << info.dirfrag << "/" << info.dname
-				      << " snap " << info.snapid;
+  if (info.ino) return out << info.ino;
+  if (info.dname.length()) return out << info.dirfrag << "/" << info.dname;
   return out << info.dirfrag;
 }
 

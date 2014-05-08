@@ -128,7 +128,6 @@ int main(int argc, const char **argv)
   // Retrieve inode of interest
   struct vinodeno_t vinode;
   vinode.ino = inode;
-  vinode.snapid = CEPH_NOSNAP;
   Inode *ino = ceph_ll_get_inode(client, vinode);
 
   // Retrieve dentry trace

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "common/config.h"
@@ -155,7 +155,6 @@ void LogSegment::try_to_expire(MDS *mds, C_GatherBuilder &gather_bld, int op_pri
     elist<CInode*>::iterator p = open_files.begin(member_offset(CInode, item_open_file));
     while (!p.end()) {
       CInode *in = *p;
-      assert(in->last == CEPH_NOSNAP);
       ++p;
       if (in->is_auth() && !in->is_ambiguous_auth() && in->is_any_caps()) {
 	if (in->is_any_caps_wanted()) {
@@ -392,13 +391,6 @@ void EMetaBlob::update_segment(LogSegment *ls)
   if (sessionmapv)
     ls->sessionmapv = sessionmapv;
 
-  // truncated inodes
-  // -> handled directly by Server.cc
-
-  // client requests
-  //  note the newest request per client
-  //if (!client_reqs.empty())
-    //    ls->last_client_tid[client_reqs.rbegin()->client] = client_reqs.rbegin()->tid);
 }
 
 // EMetaBlob::fullbit
@@ -406,8 +398,8 @@ void EMetaBlob::update_segment(LogSegment *ls)
 void EMetaBlob::fullbit::encode(bufferlist& bl) const {
   ENCODE_START(6, 5, bl);
   if (!_enc.length()) {
-    fullbit copy(dn, dnfirst, dnlast, dnv, inode, dirfragtree, xattrs, symlink,
-		 snapbl, state, &old_inodes);
+    fullbit copy(dn, dnv, inode, dirfragtree, xattrs, symlink,
+		 state);
     bl.append(copy._enc);
   } else {
     bl.append(_enc);
@@ -418,8 +410,6 @@ void EMetaBlob::fullbit::encode(bufferlist& bl) const {
 void EMetaBlob::fullbit::decode(bufferlist::iterator &bl) {
   DECODE_START_LEGACY_COMPAT_LEN(6, 5, 5, bl);
   ::decode(dn, bl);
-  ::decode(dnfirst, bl);
-  ::decode(dnlast, bl);
   ::decode(dnv, bl);
   ::decode(inode, bl);
   ::decode(xattrs, bl);
@@ -427,7 +417,6 @@ void EMetaBlob::fullbit::decode(bufferlist::iterator &bl) {
     ::decode(symlink, bl);
   if (inode.is_dir()) {
     ::decode(dirfragtree, bl);
-    ::decode(snapbl, bl);
     if ((struct_v == 2) || (struct_v == 3)) {
       bool dir_layout_exists;
       ::decode(dir_layout_exists, bl);
@@ -444,14 +433,6 @@ void EMetaBlob::fullbit::decode(bufferlist::iterator &bl) {
     bool dirty;
     ::decode(dirty, bl);
     state = dirty ? EMetaBlob::fullbit::STATE_DIRTY : 0;
-  }
-
-  if (struct_v >= 3) {
-    bool old_inodes_present;
-    ::decode(old_inodes_present, bl);
-    if (old_inodes_present) {
-      ::decode(old_inodes, bl);
-    }
   }
   DECODE_FINISH(bl);
 }
@@ -472,8 +453,6 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
     me->decode(p);
   }
   f->dump_string("dentry", dn);
-  f->dump_stream("snapid.first") << dnfirst;
-  f->dump_stream("snapid.last") << dnlast;
   f->dump_int("dentry version", dnv);
   f->open_object_section("inode");
   inode.dump(f);
@@ -489,7 +468,6 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
   }
   if (inode.is_dir()) {
     f->dump_stream("frag tree") << dirfragtree;
-    f->dump_string("has_snapbl", snapbl.length() ? "true" : "false");
     if (inode.has_layout()) {
       f->open_object_section("file layout policy");
       // FIXME
@@ -498,17 +476,6 @@ void EMetaBlob::fullbit::dump(Formatter *f) const
     }
   }
   f->dump_string("state", state_string());
-  if (!old_inodes.empty()) {
-    f->open_array_section("old inodes");
-    for (old_inodes_t::const_iterator iter = old_inodes.begin();
-	iter != old_inodes.end(); ++iter) {
-      f->open_object_section("inode");
-      f->dump_int("snapid", iter->first);
-      iter->second.dump(f);
-      f->close_section(); // inode
-    }
-    f->close_section(); // old inodes
-  }
 }
 
 void EMetaBlob::fullbit::generate_test_instances(list<EMetaBlob::fullbit*>& ls)
@@ -516,10 +483,9 @@ void EMetaBlob::fullbit::generate_test_instances(list<EMetaBlob::fullbit*>& ls)
   inode_t inode;
   fragtree_t fragtree;
   map<string,bufferptr> empty_xattrs;
-  bufferlist empty_snapbl;
-  fullbit *sample = new fullbit("/testdn", 0, 0, 0,
-                                inode, fragtree, empty_xattrs, "", empty_snapbl,
-                                false, NULL);
+  fullbit *sample = new fullbit("/testdn", 0,
+				inode, fragtree, empty_xattrs, "",
+				false);
   ls.push_back(sample);
 }
 
@@ -546,17 +512,9 @@ void EMetaBlob::fullbit::update_inode(MDS *mds, CInode *in)
 	}
       }
     }
-
-    /*
-     * we can do this before linking hte inode bc the split_at would
-     * be a no-op.. we have no children (namely open snaprealms) to
-     * divy up 
-     */
-    in->decode_snap_blob(snapbl);  
   } else if (in->inode.is_symlink()) {
     in->symlink = symlink;
   }
-  in->old_inodes = old_inodes;
 }
 
 // EMetaBlob::remotebit
@@ -565,7 +523,7 @@ void EMetaBlob::remotebit::encode(bufferlist& bl) const
 {
   ENCODE_START(2, 2, bl);
   if (!_enc.length()) {
-    remotebit copy(dn, dnfirst, dnlast, dnv, ino, d_type, dirty);
+    remotebit copy(dn, dnv, ino, d_type, dirty);
     bl.append(copy._enc);
   } else {
     bl.append(_enc);
@@ -577,8 +535,6 @@ void EMetaBlob::remotebit::decode(bufferlist::iterator &bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
   ::decode(dn, bl);
-  ::decode(dnfirst, bl);
-  ::decode(dnlast, bl);
   ::decode(dnv, bl);
   ::decode(ino, bl);
   ::decode(d_type, bl);
@@ -602,8 +558,6 @@ void EMetaBlob::remotebit::dump(Formatter *f) const
     me->decode(p);
   }
   f->dump_string("dentry", dn);
-  f->dump_int("snapid.first", dnfirst);
-  f->dump_int("snapid.last", dnlast);
   f->dump_int("dentry version", dnv);
   f->dump_int("inodeno", ino);
   uint32_t type = DTTOIF(d_type) & S_IFMT; // convert to type entries
@@ -633,7 +587,7 @@ void EMetaBlob::remotebit::dump(Formatter *f) const
 void EMetaBlob::remotebit::
 generate_test_instances(list<EMetaBlob::remotebit*>& ls)
 {
-  remotebit *remote = new remotebit("/test/dn", 0, 10, 15, 1, IFTODT(S_IFREG), false);
+  remotebit *remote = new remotebit("/test/dn", 0, 1, IFTODT(S_IFREG), false);
   ls.push_back(remote);
 }
 
@@ -643,7 +597,7 @@ void EMetaBlob::nullbit::encode(bufferlist& bl) const
 {
   ENCODE_START(2, 2, bl);
   if (!_enc.length()) {
-    nullbit copy(dn, dnfirst, dnlast, dnv, dirty);
+    nullbit copy(dn, dnv, dirty);
     bl.append(copy._enc);
   } else {
     bl.append(_enc);
@@ -655,8 +609,6 @@ void EMetaBlob::nullbit::decode(bufferlist::iterator &bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
   ::decode(dn, bl);
-  ::decode(dnfirst, bl);
-  ::decode(dnlast, bl);
   ::decode(dnv, bl);
   ::decode(dirty, bl);
   DECODE_FINISH(bl);
@@ -678,16 +630,14 @@ void EMetaBlob::nullbit::dump(Formatter *f) const
     me->decode(p);
   }
   f->dump_string("dentry", dn);
-  f->dump_int("snapid.first", dnfirst);
-  f->dump_int("snapid.last", dnlast);
   f->dump_int("dentry version", dnv);
   f->dump_string("dirty", dirty ? "true" : "false");
 }
 
 void EMetaBlob::nullbit::generate_test_instances(list<nullbit*>& ls)
 {
-  nullbit *sample = new nullbit("/test/dentry", 0, 10, 15, false);
-  nullbit *sample2 = new nullbit("/test/dirty", 10, 20, 25, true);
+  nullbit *sample = new nullbit("/test/dentry", 0, false);
+  nullbit *sample2 = new nullbit("/test/dirty", 10, true);
   ls.push_back(sample);
   ls.push_back(sample2);
 }
@@ -1049,34 +999,33 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
       dir->mark_complete();
     else if (lump.is_importing())
       dir->state_clear(CDir::STATE_COMPLETE);
-    
-    dout(10) << "EMetaBlob.replay updated dir " << *dir << dendl;  
+
+    dout(10) << "EMetaBlob.replay updated dir " << *dir << dendl;
 
     // decode bits
     lump._decode_bits();
 
     // full dentry+inode pairs
-    for (list<ceph::shared_ptr<fullbit> >::iterator pp = lump.get_dfull().begin();
+    for (list<ceph::shared_ptr<fullbit> >::iterator pp
+	   = lump.get_dfull().begin();
 	 pp != lump.get_dfull().end();
 	 ++pp) {
       ceph::shared_ptr<fullbit> p = *pp;
-      CDentry *dn = dir->lookup_exact_snap(p->dn, p->dnlast);
+      CDentry *dn = dir->lookup(p->dn);
       if (!dn) {
-	dn = dir->add_null_dentry(p->dn, p->dnfirst, p->dnlast);
+	dn = dir->add_null_dentry(p->dn);
 	dn->set_version(p->dnv);
 	if (p->is_dirty()) dn->_mark_dirty(logseg);
 	dout(10) << "EMetaBlob.replay added " << *dn << dendl;
       } else {
 	dn->set_version(p->dnv);
 	if (p->is_dirty()) dn->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay for [" << p->dnfirst << "," << p->dnlast << "] had " << *dn << dendl;
-	dn->first = p->dnfirst;
-	assert(dn->last == p->dnlast);
+	dout(10) << "EMetaBlob.replay for had " << *dn << dendl;
       }
 
-      CInode *in = mds->mdcache->get_inode(p->inode.ino, p->dnlast);
+      CInode *in = mds->mdcache->get_inode(p->inode.ino);
       if (!in) {
-	in = new CInode(mds->mdcache, true, p->dnfirst, p->dnlast);
+	in = new CInode(mds->mdcache, true);
 	p->update_inode(mds, in);
 	mds->mdcache->add_inode(in);
 	if (!dn->get_linkage()->is_null()) {
@@ -1097,7 +1046,8 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	dout(10) << "EMetaBlob.replay added " << *in << dendl;
       } else {
 	if (in->get_parent_dn() && in->inode.anchored != p->inode.anchored)
-	  in->get_parent_dn()->adjust_nested_anchors((int)p->inode.anchored - (int)in->inode.anchored);
+	  in->get_parent_dn()->adjust_nested_anchors(
+	    (int)p->inode.anchored - (int)in->inode.anchored);
 	p->update_inode(mds, in);
 	if (dn->get_linkage()->get_inode() != in && in->get_parent_dn()) {
 	  dout(10) << "EMetaBlob.replay unlinking " << *in << dendl;
@@ -1105,12 +1055,14 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	  in->get_parent_dir()->unlink_inode(in->get_parent_dn());
 	}
 	if (dn->get_linkage()->get_inode() != in) {
-	  if (!dn->get_linkage()->is_null()) { // note: might be remote.  as with stray reintegration.
+	  // note: might be remote.  as with stray reintegration.
+	  if (!dn->get_linkage()->is_null()) {
 	    if (dn->get_linkage()->is_primary()) {
 	      unlinked[dn->get_linkage()->get_inode()] = dir;
 	      stringstream ss;
-	      ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
-		 << " " << *dn->get_linkage()->get_inode() << " should be " << p->inode.ino;
+	      ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode "
+		 << *dn << " " << *dn->get_linkage()->get_inode()
+		 << " should be " << p->inode.ino;
 	      dout(0) << ss.str() << dendl;
 	      mds->clog.warn(ss);
 	    }
@@ -1120,12 +1072,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	    linked.insert(in);
 	  dir->link_primary_inode(dn, in);
 	  dout(10) << "EMetaBlob.replay linked " << *in << dendl;
-	} else {
-	  dout(10) << "EMetaBlob.replay for [" << p->dnfirst << "," << p->dnlast << "] had " << *in << dendl;
 	}
-	if (p->is_dirty()) in->_mark_dirty(logseg);
-	assert(in->first == p->dnfirst ||
-	       (in->is_multiversion() && in->first > p->dnfirst));
       }
       if (p->is_dirty_parent())
 	in->_mark_dirty_parent(logseg, p->is_dirty_pool());
@@ -1136,9 +1083,9 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     for (list<remotebit>::iterator p = lump.get_dremote().begin();
 	 p != lump.get_dremote().end();
 	 ++p) {
-      CDentry *dn = dir->lookup_exact_snap(p->dn, p->dnlast);
+      CDentry *dn = dir->lookup(p->dn);
       if (!dn) {
-	dn = dir->add_remote_dentry(p->dn, p->ino, p->d_type, p->dnfirst, p->dnlast);
+	dn = dir->add_remote_dentry(p->dn, p->ino, p->d_type);
 	dn->set_version(p->dnv);
 	if (p->dirty) dn->_mark_dirty(logseg);
 	dout(10) << "EMetaBlob.replay added " << *dn << dendl;
@@ -1148,8 +1095,9 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	  if (dn->get_linkage()->is_primary()) {
 	    unlinked[dn->get_linkage()->get_inode()] = dir;
 	    stringstream ss;
-	    ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode " << *dn
-	       << " " << *dn->get_linkage()->get_inode() << " should be remote " << p->ino;
+	    ss << "EMetaBlob.replay FIXME had dentry linked to wrong inode "
+	       << *dn << " " << *dn->get_linkage()->get_inode()
+	       << " should be remote " << p->ino;
 	    dout(0) << ss.str() << dendl;
 	  }
 	  dir->unlink_inode(dn);
@@ -1157,9 +1105,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	dir->link_remote_inode(dn, p->ino, p->d_type);
 	dn->set_version(p->dnv);
 	if (p->dirty) dn->_mark_dirty(logseg);
-	dout(10) << "EMetaBlob.replay for [" << p->dnfirst << "," << p->dnlast << "] had " << *dn << dendl;
-	dn->first = p->dnfirst;
-	assert(dn->last == p->dnlast);
+	dout(10) << "EMetaBlob.replay for had " << *dn << dendl;
       }
     }
 
@@ -1167,14 +1113,13 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
     for (list<nullbit>::iterator p = lump.get_dnull().begin();
 	 p != lump.get_dnull().end();
 	 ++p) {
-      CDentry *dn = dir->lookup_exact_snap(p->dn, p->dnlast);
+      CDentry *dn = dir->lookup(p->dn);
       if (!dn) {
-	dn = dir->add_null_dentry(p->dn, p->dnfirst, p->dnlast);
+	dn = dir->add_null_dentry(p->dn);
 	dn->set_version(p->dnv);
 	if (p->dirty) dn->_mark_dirty(logseg);
 	dout(10) << "EMetaBlob.replay added " << *dn << dendl;
       } else {
-	dn->first = p->dnfirst;
 	if (!dn->get_linkage()->is_null()) {
 	  dout(10) << "EMetaBlob.replay unlinking " << *dn << dendl;
 	  CInode *in = dn->get_linkage()->get_inode();
@@ -1190,7 +1135,6 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
 	dn->set_version(p->dnv);
 	if (p->dirty) dn->_mark_dirty(logseg);
 	dout(10) << "EMetaBlob.replay had " << *dn << dendl;
-	assert(dn->last == p->dnlast);
       }
       olddir = dir;
     }
@@ -1715,46 +1659,11 @@ void ETableClient::replay(MDS *mds)
   dout(10) << " ETableClient.replay " << get_mdstable_name(table)
 	   << " op " << get_mdstableserver_opname(op)
 	   << " tid " << tid << dendl;
-    
+
   MDSTableClient *client = mds->get_table_client(table);
   assert(op == TABLESERVER_OP_ACK);
   client->got_journaled_ack(tid);
 }
-
-
-// -----------------------
-// ESnap
-/*
-void ESnap::update_segment()
-{
-  _segment->tablev[TABLE_SNAP] = version;
-}
-
-void ESnap::replay(MDS *mds)
-{
-  if (mds->snaptable->get_version() >= version) {
-    dout(10) << "ESnap.replay event " << version
-	     << " <= table " << mds->snaptable->get_version() << dendl;
-    return;
-  } 
-  
-  dout(10) << " ESnap.replay event " << version
-	   << " - 1 == table " << mds->snaptable->get_version() << dendl;
-  assert(version-1 == mds->snaptable->get_version());
-
-  if (create) {
-    version_t v;
-    snapid_t s = mds->snaptable->create(snap.dirino, snap.name, snap.stamp, &v);
-    assert(s == snap.snapid);
-  } else {
-    mds->snaptable->remove(snap.snapid);
-  }
-
-  assert(version == mds->snaptable->get_version());
-}
-*/
-
-
 
 // -----------------------
 // EUpdate

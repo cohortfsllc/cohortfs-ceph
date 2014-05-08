@@ -91,7 +91,6 @@ void nest_info_t::encode(bufferlist &bl) const
   ::encode(rfiles, bl);
   ::encode(rsubdirs, bl);
   ::encode(ranchors, bl);
-  ::encode(rsnaprealms, bl);
   ::encode(rctime, bl);
   ENCODE_FINISH(bl);
 }
@@ -104,7 +103,6 @@ void nest_info_t::decode(bufferlist::iterator &bl)
   ::decode(rfiles, bl);
   ::decode(rsubdirs, bl);
   ::decode(ranchors, bl);
-  ::decode(rsnaprealms, bl);
   ::decode(rctime, bl);
   DECODE_FINISH(bl);
 }
@@ -116,7 +114,6 @@ void nest_info_t::dump(Formatter *f) const
   f->dump_unsigned("rfiles", rfiles);
   f->dump_unsigned("rsubdirs", rsubdirs);
   f->dump_unsigned("ranchors", ranchors);
-  f->dump_unsigned("rsnaprealms", rsnaprealms);
   f->dump_stream("rctime") << rctime;
 }
 
@@ -129,7 +126,6 @@ void nest_info_t::generate_test_instances(list<nest_info_t*>& ls)
   ls.back()->rfiles = 3;
   ls.back()->rsubdirs = 4;
   ls.back()->ranchors = 5;
-  ls.back()->rsnaprealms = 6;
   ls.back()->rctime = utime_t(7, 8);
 }
 
@@ -144,11 +140,9 @@ ostream& operator<<(ostream &out, const nest_info_t &n)
     out << " b" << n.rbytes;
   if (n.ranchors)
     out << " a" << n.ranchors;
-  if (n.rsnaprealms)
-    out << " sr" << n.rsnaprealms;
   if (n.rfiles || n.rsubdirs)
     out << " " << n.rsize() << "=" << n.rfiles << "+" << n.rsubdirs;
-  out << ")";    
+  out << ")";
   return out;
 }
 
@@ -162,7 +156,6 @@ void client_writeable_range_t::encode(bufferlist &bl) const
   ENCODE_START(2, 2, bl);
   ::encode(range.first, bl);
   ::encode(range.last, bl);
-  ::encode(follows, bl);
   ENCODE_FINISH(bl);
 }
 
@@ -171,7 +164,6 @@ void client_writeable_range_t::decode(bufferlist::iterator& bl)
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
   ::decode(range.first, bl);
   ::decode(range.last, bl);
-  ::decode(follows, bl);
   DECODE_FINISH(bl);
 }
 
@@ -181,7 +173,6 @@ void client_writeable_range_t::dump(Formatter *f) const
   f->dump_unsigned("first", range.first);
   f->dump_unsigned("last", range.last);
   f->close_section();
-  f->dump_unsigned("follows", follows);
 }
 
 void client_writeable_range_t::generate_test_instances(list<client_writeable_range_t*>& ls)
@@ -190,12 +181,11 @@ void client_writeable_range_t::generate_test_instances(list<client_writeable_ran
   ls.push_back(new client_writeable_range_t);
   ls.back()->range.first = 123;
   ls.back()->range.last = 456;
-  ls.back()->follows = 12;
 }
 
 ostream& operator<<(ostream& out, const client_writeable_range_t& r)
 {
-  return out << r.range.first << '-' << r.range.last << "@" << r.follows;
+  return out << r.range.first << '-' << r.range.last;
 }
 
 
@@ -383,59 +373,12 @@ void inode_t::generate_test_instances(list<inode_t*>& ls)
 
 
 /*
- * old_inode_t
- */
-void old_inode_t::encode(bufferlist& bl) const
-{
-  ENCODE_START(2, 2, bl);
-  ::encode(first, bl);
-  ::encode(inode, bl);
-  ::encode(xattrs, bl);
-  ENCODE_FINISH(bl);
-}
-
-void old_inode_t::decode(bufferlist::iterator& bl)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  ::decode(first, bl);
-  ::decode(inode, bl);
-  ::decode(xattrs, bl);
-  DECODE_FINISH(bl);
-}
-
-void old_inode_t::dump(Formatter *f) const
-{
-  f->dump_unsigned("first", first);
-  inode.dump(f);
-  f->open_object_section("xattrs");
-  for (map<string,bufferptr>::const_iterator p = xattrs.begin(); p != xattrs.end(); ++p) {
-    string v(p->second.c_str(), p->second.length());
-    f->dump_string(p->first.c_str(), v);
-  }
-  f->close_section();
-}
-
-void old_inode_t::generate_test_instances(list<old_inode_t*>& ls)
-{
-  ls.push_back(new old_inode_t);
-  ls.push_back(new old_inode_t);
-  ls.back()->first = 2;
-  list<inode_t*> ils;
-  inode_t::generate_test_instances(ils);
-  ls.back()->inode = *ils.back();
-  ls.back()->xattrs["user.foo"] = buffer::copy("asdf", 4);
-  ls.back()->xattrs["user.unprintable"] = buffer::copy("\000\001\002", 3);
-}
-
-
-/*
  * fnode_t
  */
 void fnode_t::encode(bufferlist &bl) const
 {
   ENCODE_START(2, 2, bl);
   ::encode(version, bl);
-  ::encode(snap_purged_thru, bl);
   ::encode(fragstat, bl);
   ::encode(accounted_fragstat, bl);
   ::encode(rstat, bl);
@@ -447,7 +390,6 @@ void fnode_t::decode(bufferlist::iterator &bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
   ::decode(version, bl);
-  ::decode(snap_purged_thru, bl);
   ::decode(fragstat, bl);
   ::decode(accounted_fragstat, bl);
   ::decode(rstat, bl);
@@ -458,7 +400,6 @@ void fnode_t::decode(bufferlist::iterator &bl)
 void fnode_t::dump(Formatter *f) const
 {
   f->dump_unsigned("version", version);
-  f->dump_unsigned("snap_purged_thru", snap_purged_thru);
 
   f->open_object_section("fragstat");
   fragstat.dump(f);
@@ -482,7 +423,6 @@ void fnode_t::generate_test_instances(list<fnode_t*>& ls)
   ls.push_back(new fnode_t);
   ls.push_back(new fnode_t);
   ls.back()->version = 1;
-  ls.back()->snap_purged_thru = 2;
   list<frag_info_t*> fls;
   frag_info_t::generate_test_instances(fls);
   ls.back()->fragstat = *fls.back();
@@ -493,49 +433,6 @@ void fnode_t::generate_test_instances(list<fnode_t*>& ls)
   ls.back()->accounted_rstat = *nls.back();
 }
 
-
-/*
- * old_rstat_t
- */
-void old_rstat_t::encode(bufferlist& bl) const
-{
-  ENCODE_START(2, 2, bl);
-  ::encode(first, bl);
-  ::encode(rstat, bl);
-  ::encode(accounted_rstat, bl);
-  ENCODE_FINISH(bl);
-}
-
-void old_rstat_t::decode(bufferlist::iterator& bl)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  ::decode(first, bl);
-  ::decode(rstat, bl);
-  ::decode(accounted_rstat, bl);
-  DECODE_FINISH(bl);
-}
-
-void old_rstat_t::dump(Formatter *f) const
-{
-  f->dump_unsigned("snapid", first);
-  f->open_object_section("rstat");
-  rstat.dump(f);
-  f->close_section();
-  f->open_object_section("accounted_rstat");
-  accounted_rstat.dump(f);
-  f->close_section();
-}
-
-void old_rstat_t::generate_test_instances(list<old_rstat_t*>& ls)
-{
-  ls.push_back(new old_rstat_t());
-  ls.push_back(new old_rstat_t());
-  ls.back()->first = 12;
-  list<nest_info_t*> nls;
-  nest_info_t::generate_test_instances(nls);
-  ls.back()->rstat = *nls.back();
-  ls.back()->accounted_rstat = *nls.front();
-}
 
 /*
  * session_info_t
@@ -623,43 +520,6 @@ void session_info_t::generate_test_instances(list<session_info_t*>& ls)
 
 
 /*
- * string_snap_t
- */
-void string_snap_t::encode(bufferlist& bl) const
-{
-  ENCODE_START(2, 2, bl);
-  ::encode(name, bl);
-  ::encode(snapid, bl);
-  ENCODE_FINISH(bl);
-}
-
-void string_snap_t::decode(bufferlist::iterator& bl)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  ::decode(name, bl);
-  ::decode(snapid, bl);
-  DECODE_FINISH(bl);
-}
-
-void string_snap_t::dump(Formatter *f) const
-{
-  f->dump_string("name", name);
-  f->dump_unsigned("snapid", snapid);
-}
-
-void string_snap_t::generate_test_instances(list<string_snap_t*>& ls)
-{
-  ls.push_back(new string_snap_t);
-  ls.push_back(new string_snap_t);
-  ls.back()->name = "foo";
-  ls.back()->snapid = 123;
-  ls.push_back(new string_snap_t);
-  ls.back()->name = "bar";
-  ls.back()->snapid = 456;
-}
-
-
-/*
  * MDSCacheObjectInfo
  */
 void MDSCacheObjectInfo::encode(bufferlist& bl) const
@@ -668,7 +528,6 @@ void MDSCacheObjectInfo::encode(bufferlist& bl) const
   ::encode(ino, bl);
   ::encode(dirfrag, bl);
   ::encode(dname, bl);
-  ::encode(snapid, bl);
   ENCODE_FINISH(bl);
 }
 
@@ -678,7 +537,6 @@ void MDSCacheObjectInfo::decode(bufferlist::iterator& p)
   ::decode(ino, p);
   ::decode(dirfrag, p);
   ::decode(dname, p);
-  ::decode(snapid, p);
   DECODE_FINISH(p);
 }
 
@@ -687,7 +545,6 @@ void MDSCacheObjectInfo::dump(Formatter *f) const
   f->dump_unsigned("ino", ino);
   f->dump_stream("dirfrag") << dirfrag;
   f->dump_string("name", dname);
-  f->dump_unsigned("snapid", snapid);
 }
 
 void MDSCacheObjectInfo::generate_test_instances(list<MDSCacheObjectInfo*>& ls)
@@ -697,12 +554,10 @@ void MDSCacheObjectInfo::generate_test_instances(list<MDSCacheObjectInfo*>& ls)
   ls.back()->ino = 1;
   ls.back()->dirfrag = dirfrag_t(2, 3);
   ls.back()->dname = "fooname";
-  ls.back()->snapid = CEPH_NOSNAP;
   ls.push_back(new MDSCacheObjectInfo);
   ls.back()->ino = 121;
   ls.back()->dirfrag = dirfrag_t(222, 0);
   ls.back()->dname = "bar foo";
-  ls.back()->snapid = 21322;
 }
 
 
@@ -880,7 +735,6 @@ void cap_reconnect_t::dump(Formatter *f) const
   f->dump_int("cap_id", capinfo.cap_id);
   f->dump_string("cap wanted", ccap_string(capinfo.wanted));
   f->dump_string("cap issued", ccap_string(capinfo.issued));
-  f->dump_int("snaprealm", capinfo.snaprealm);
   f->dump_int("path base ino", capinfo.pathbase);
   f->dump_string("has file locks", capinfo.flock_len ? "true" : "false");
 }

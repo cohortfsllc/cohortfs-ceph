@@ -11,7 +11,6 @@ noinst_HEADERS += \
 	messages/MClientRequest.h \
 	messages/MClientRequestForward.h \
 	messages/MClientSession.h \
-	messages/MClientSnap.h \
 	messages/MCommand.h \
 	messages/MCommandReply.h \
 	messages/MDentryLink.h \

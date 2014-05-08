@@ -55,7 +55,6 @@ public:
 
 int Filer::probe(inodeno_t ino,
 		 ceph_file_layout *layout,
-		 snapid_t snapid,
 		 uint64_t start_from,
 		 uint64_t *end,           // LB, when !fwd
 		 utime_t *pmtime,
@@ -68,9 +67,7 @@ int Filer::probe(inodeno_t ino,
 	   << " starting from " << start_from
 	   << dendl;
 
-  assert(snapid);  // (until there is a non-NOSNAP write)
-
-  Probe *probe = new Probe(ino, *layout, snapid, start_from, end, pmtime, flags, fwd, onfinish);
+  Probe *probe = new Probe(ino, *layout, start_from, end, pmtime, flags, fwd, onfinish);
   
   // period (bytes before we jump unto a new set of object(s))
   uint64_t period = (uint64_t)layout->fl_stripe_count * (uint64_t)layout->fl_object_size;
@@ -109,7 +106,7 @@ void Filer::_probe(Probe *probe)
        ++p) {
     ldout(cct, 10) << "_probe  probing " << p->oid << dendl;
     C_Probe *c = new C_Probe(this, probe, p->oid);
-    objecter->stat(p->oid, p->oloc, probe->snapid, &c->size, &c->mtime, 
+    objecter->stat(p->oid, p->oloc, CEPH_NOSNAP, &c->size, &c->mtime, 
 		   probe->flags | CEPH_OSD_FLAG_RWORDERED, c);
     probe->ops.insert(p->oid);
   }
@@ -225,7 +222,6 @@ void Filer::_probed(Probe *probe, const object_t& oid, uint64_t size, utime_t mt
 struct PurgeRange {
   inodeno_t ino;
   ceph_file_layout layout;
-  SnapContext snapc;
   uint64_t first, num;
   utime_t mtime;
   int flags;
@@ -235,7 +231,6 @@ struct PurgeRange {
 
 int Filer::purge_range(inodeno_t ino,
 		       ceph_file_layout *layout,
-		       const SnapContext& snapc,
 		       uint64_t first_obj, uint64_t num_obj,
 		       utime_t mtime,
 		       int flags,
@@ -247,7 +242,7 @@ int Filer::purge_range(inodeno_t ino,
   if (num_obj == 1) {
     object_t oid = file_object_t(ino, first_obj);
     object_locator_t oloc = objecter->osdmap->file_to_object_locator(*layout);
-    objecter->remove(oid, oloc, snapc, mtime, flags, NULL, oncommit);
+    objecter->remove(oid, oloc, ::SnapContext(), mtime, flags, NULL, oncommit);
     return 0;
   }
 
@@ -255,7 +250,6 @@ int Filer::purge_range(inodeno_t ino,
   PurgeRange *pr = new PurgeRange;
   pr->ino = ino;
   pr->layout = *layout;
-  pr->snapc = snapc;
   pr->first = first_obj;
   pr->num = num_obj;
   pr->mtime = mtime;
@@ -292,7 +286,7 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
   while (pr->num > 0 && max > 0) {
     object_t oid = file_object_t(pr->ino, pr->first);
     object_locator_t oloc = objecter->osdmap->file_to_object_locator(pr->layout);
-    objecter->remove(oid, oloc, pr->snapc, pr->mtime, pr->flags,
+    objecter->remove(oid, oloc, ::SnapContext(), pr->mtime, pr->flags,
 		     NULL, new C_PurgeRange(this, pr));
     pr->uncommitted++;
     pr->first++;

@@ -20,9 +20,9 @@ namespace ceph {
  *   newer.
  */
 struct inode_backpointer_t {
-  inodeno_t dirino;    // containing directory ino
-  string dname;        // linking dentry name
-  version_t version;   // child's version at time of backpointer creation
+  inodeno_t dirino; // containing directory ino
+  string dname; // linking dentry name
+  version_t version; // child's version at time of backpointer creation
 
   inode_backpointer_t() : version(0) {}
   inode_backpointer_t(inodeno_t i, const string &d, version_t v) : dirino(i), dname(d), version(v) {}

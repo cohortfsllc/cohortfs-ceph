@@ -7,36 +7,6 @@ namespace ceph {
 
 class Formatter;
 }
-struct SnapRealmInfo {
-  mutable ceph_mds_snap_realm h;
-  vector<snapid_t> my_snaps;
-  vector<snapid_t> prior_parent_snaps;  // before parent_since
-
-  SnapRealmInfo() {
-    memset(&h, 0, sizeof(h));
-  }
-  SnapRealmInfo(inodeno_t ino_, snapid_t created_, snapid_t seq_, snapid_t current_parent_since_) {
-    memset(&h, 0, sizeof(h));
-    h.ino = ino_;
-    h.created = created_;
-    h.seq = seq_;
-    h.parent_since = current_parent_since_;
-  }
-  
-  inodeno_t ino() const { return inodeno_t(h.ino); }
-  inodeno_t parent() const { return inodeno_t(h.parent); }
-  snapid_t seq() const { return snapid_t(h.seq); }
-  snapid_t parent_since() const { return snapid_t(h.parent_since); }
-  snapid_t created() const { return snapid_t(h.created); }
-
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<SnapRealmInfo*>& o);
-};
-WRITE_CLASS_ENCODER(SnapRealmInfo)
-
-
 struct SnapContext {
   snapid_t seq;            // 'time' stamp
   vector<snapid_t> snaps;  // existent snaps, in descending order

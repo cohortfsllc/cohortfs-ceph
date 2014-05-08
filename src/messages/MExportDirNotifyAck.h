@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MEXPORTDIRNOTIFYACK_H
@@ -24,7 +24,7 @@ class MExportDirNotifyAck : public Message {
 
  public:
   dirfrag_t get_dirfrag() { return dirfrag; }
-  
+
   MExportDirNotifyAck() {}
   MExportDirNotifyAck(dirfrag_t df, uint64_t tid) :
     Message(MSG_MDS_EXPORTDIRNOTIFYACK), dirfrag(df) {
@@ -46,7 +46,6 @@ public:
     bufferlist::iterator p = payload.begin();
     ::decode(dirfrag, p);
   }
-  
 };
 
 #endif

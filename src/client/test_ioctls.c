@@ -36,24 +36,24 @@ int main(int argc, char **argv)
 	}
 
 	/* get layout */
-        err = ioctl(fd, CEPH_IOC_GET_LAYOUT, (unsigned long)&l);
-        if (err < 0) {
-                perror("ioctl IOC_GET_LAYOUT error");
-                return 1;
-        }
-        printf("layout:\n stripe_unit %lld\n stripe_count %lld\n object_size %lld\n data_pool %lld\n",
-               (long long)l.stripe_unit, (long long)l.stripe_count, (long long)l.object_size, (long long)l.data_pool);
+	err = ioctl(fd, CEPH_IOC_GET_LAYOUT, (unsigned long)&l);
+	if (err < 0) {
+		perror("ioctl IOC_GET_LAYOUT error");
+		return 1;
+	}
+	printf("layout:\n stripe_unit %lld\n stripe_count %lld\n object_size %lld\n data_pool %lld\n",
+	       (long long)l.stripe_unit, (long long)l.stripe_count, (long long)l.object_size, (long long)l.data_pool);
 
 
-        /* set layout */
-        l.stripe_unit = 1048576;
-        l.stripe_count = 2;
-        err = ioctl(fd, CEPH_IOC_SET_LAYOUT, (unsigned long)&l);
-        if (err < 0) {
-               perror("ioctl IOC_SET_LAYOUT error");
-               return 1;
-        }
-        printf("set layout, writing to file\n");
+	/* set layout */
+	l.stripe_unit = 1048576;
+	l.stripe_count = 2;
+	err = ioctl(fd, CEPH_IOC_SET_LAYOUT, (unsigned long)&l);
+	if (err < 0) {
+	       perror("ioctl IOC_SET_LAYOUT error");
+	       return 1;
+	}
+	printf("set layout, writing to file\n");
 
 	printf("file %s\n", fn);
 	/* get layout again */
@@ -90,33 +90,33 @@ int main(int argc, char **argv)
 	/* set dir default layout */
 	printf("testing dir policy setting\n");
 	fd = open(argv[3], O_RDONLY);
-        if (fd < 0) {
-                perror("couldn't open dir");
-                return 1;
-        }
+	if (fd < 0) {
+		perror("couldn't open dir");
+		return 1;
+	}
 
-        l.object_size = 1048576;
-        l.stripe_count = 1;
-        err = ioctl(fd, CEPH_IOC_SET_LAYOUT_POLICY, (unsigned long)&l);
-        if (err < 0) {
-               perror("ioctl IOC_SET_LAYOUT_POLICY error");
-               return 1;
-        }
-        printf("set layout, creating file\n");
+	l.object_size = 1048576;
+	l.stripe_count = 1;
+	err = ioctl(fd, CEPH_IOC_SET_LAYOUT_POLICY, (unsigned long)&l);
+	if (err < 0) {
+	       perror("ioctl IOC_SET_LAYOUT_POLICY error");
+	       return 1;
+	}
+	printf("set layout, creating file\n");
 
-        snprintf(new_file_name, sizeof(new_file_name),
+	snprintf(new_file_name, sizeof(new_file_name),
 		 "%s/testfile", argv[3]);
-        fd = open(new_file_name, O_CREAT | O_RDWR, 0644);
-        if (fd < 0) {
-                perror("couldn't open file");
-                return 1;
-        }
-        err = ioctl(fd, CEPH_IOC_GET_LAYOUT, (unsigned long)&l);
-        if (err < 0) {
-                perror("ioctl IOC_GET_LAYOUT error");
-                return 1;
-        }
-        printf("layout:\n stripe_unit %lld\n stripe_count %lld\n object_size %lld\n data_pool %lld\n",
-               (long long)l.stripe_unit, (long long)l.stripe_count, (long long)l.object_size, (long long)l.data_pool);
-        return 0;
+	fd = open(new_file_name, O_CREAT | O_RDWR, 0644);
+	if (fd < 0) {
+		perror("couldn't open file");
+		return 1;
+	}
+	err = ioctl(fd, CEPH_IOC_GET_LAYOUT, (unsigned long)&l);
+	if (err < 0) {
+		perror("ioctl IOC_GET_LAYOUT error");
+		return 1;
+	}
+	printf("layout:\n stripe_unit %lld\n stripe_count %lld\n object_size %lld\n data_pool %lld\n",
+	       (long long)l.stripe_unit, (long long)l.stripe_count, (long long)l.object_size, (long long)l.data_pool);
+	return 0;
 }

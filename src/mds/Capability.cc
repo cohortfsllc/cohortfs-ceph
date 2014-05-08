@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,8 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
  */
 
 #include "Capability.h"
@@ -28,7 +27,6 @@ void Capability::Export::encode(bufferlist &bl) const
   ::encode(wanted, bl);
   ::encode(issued, bl);
   ::encode(pending, bl);
-  ::encode(client_follows, bl);
   ::encode(seq, bl);
   ::encode(mseq, bl);
   ::encode(last_issue_stamp, bl);
@@ -42,7 +40,6 @@ void Capability::Export::decode(bufferlist::iterator &p)
   ::decode(wanted, p);
   ::decode(issued, p);
   ::decode(pending, p);
-  ::decode(client_follows, p);
   ::decode(seq, p);
   ::decode(mseq, p);
   ::decode(last_issue_stamp, p);
@@ -55,7 +52,6 @@ void Capability::Export::dump(Formatter *f) const
   f->dump_unsigned("wanted", wanted);
   f->dump_unsigned("issued", issued);
   f->dump_unsigned("pending", pending);
-  f->dump_unsigned("client_follows", client_follows);
   f->dump_unsigned("seq", seq);
   f->dump_unsigned("migrate_seq", mseq);
   f->dump_stream("last_issue_stamp") << last_issue_stamp;
@@ -68,7 +64,6 @@ void Capability::Export::generate_test_instances(list<Capability::Export*>& ls)
   ls.back()->wanted = 1;
   ls.back()->issued = 2;
   ls.back()->pending = 3;
-  ls.back()->client_follows = 4;
   ls.back()->mseq = 5;
   ls.back()->last_issue_stamp = utime_t(6, 7);
 }

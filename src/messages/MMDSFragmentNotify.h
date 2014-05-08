@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MMDSFRAGMENTNOTIFY_H
@@ -38,7 +38,7 @@ class MMDSFragmentNotify : public Message {
 private:
   ~MMDSFragmentNotify() {}
 
-public:  
+public:
   const char *get_type_name() const { return "fragment_notify"; }
   void print(ostream& o) const {
     o << "fragment_notify(" << ino << "." << basefrag
@@ -58,7 +58,7 @@ public:
     ::decode(bits, p);
     ::decode(basebl, p);
   }
-  
+
 };
 
 #endif

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -52,8 +52,7 @@ ostream& operator<<(ostream& out, CDir& dir)
 {
   string path;
   dir.get_inode()->make_path_string_projected(path);
-  out << "[dir " << dir.dirfrag() << " " << path << "/"
-      << " [" << dir.first << ",head]";
+  out << "[dir " << dir.dirfrag() << " " << path << "/";
   if (dir.is_auth()) {
     out << " auth";
     if (dir.is_replicated())
@@ -121,10 +120,9 @@ ostream& operator<<(ostream& out, CDir& dir)
  }
 
   out << " hs=" << dir.get_num_head_items() << "+" << dir.get_num_head_null();
-  out << ",ss=" << dir.get_num_snap_items() << "+" << dir.get_num_snap_null();
   if (dir.get_num_dirty())
     out << " dirty=" << dir.get_num_dirty();
-  
+
   if (dir.get_num_ref()) {
     out << " |";
     dir.print_pin_set(out);
@@ -169,10 +167,7 @@ CDir::CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth) :
   frag = fg;
   this->cache = mdcache;
 
-  first = 2;
-  
   num_head_items = num_head_null = 0;
-  num_snap_items = num_snap_null = 0;
   num_dirty = 0;
 
   num_dentries_nested = 0;
@@ -217,33 +212,36 @@ bool CDir::check_rstats()
 
   dout(25) << "check_rstats on " << this << dendl;
   if (!is_complete() || !is_auth() || is_frozen()) {
-    dout(10) << "check_rstats bailing out -- incomplete or non-auth or frozen dir!" << dendl;
+    dout(10) << "check_rstats bailing out -- incomplete or non-auth or "
+	     << "frozen dir!" << dendl;
     return true;
   }
 
   // fragstat
   if(!(get_num_head_items()==
       (fnode.fragstat.nfiles + fnode.fragstat.nsubdirs))) {
-    dout(1) << "mismatch between head items and fnode.fragstat! printing dentries" << dendl;
+    dout(1) << "mismatch between head items and fnode.fragstat! "
+	    << "printing dentries" << dendl;
     dout(1) << "get_num_head_items() = " << get_num_head_items()
-             << "; fnode.fragstat.nfiles=" << fnode.fragstat.nfiles
-             << " fnode.fragstat.nsubdirs=" << fnode.fragstat.nsubdirs << dendl;
+	    << "; fnode.fragstat.nfiles=" << fnode.fragstat.nfiles
+	    << " fnode.fragstat.nsubdirs=" << fnode.fragstat.nsubdirs << dendl;
     for (map_t::iterator i = items.begin(); i != items.end(); ++i) {
       //if (i->second->get_linkage()->is_primary())
-        dout(1) << *(i->second) << dendl;
+      dout(1) << *(i->second) << dendl;
     }
-    assert(get_num_head_items() == (fnode.fragstat.nfiles + fnode.fragstat.nsubdirs));
+    assert(get_num_head_items() == (fnode.fragstat.nfiles
+				    + fnode.fragstat.nsubdirs));
   } else {
     dout(20) << "get_num_head_items() = " << get_num_head_items()
-             << "; fnode.fragstat.nfiles=" << fnode.fragstat.nfiles
-             << " fnode.fragstat.nsubdirs=" << fnode.fragstat.nsubdirs << dendl;
+	     << "; fnode.fragstat.nfiles=" << fnode.fragstat.nfiles
+	     << " fnode.fragstat.nsubdirs=" << fnode.fragstat.nsubdirs
+	     << dendl;
   }
 
   // rstat
   nest_info_t sub_info;
   for (map_t::iterator i = items.begin(); i != items.end(); ++i) {
-    if (i->second->get_linkage()->is_primary() &&
-	i->second->last == CEPH_NOSNAP) {
+    if (i->second->get_linkage()->is_primary()) {
       sub_info.add(i->second->get_linkage()->inode->inode.accounted_rstat);
     }
   }
@@ -256,9 +254,9 @@ bool CDir::check_rstats()
     dout(1) << "my rstats:              " << fnode.rstat << dendl;
     for (map_t::iterator i = items.begin(); i != items.end(); ++i) {
       if (i->second->get_linkage()->is_primary()) {
-        dout(1) << *(i->second) << " "
-                << i->second->get_linkage()->inode->inode.accounted_rstat
-                << dendl;
+	dout(1) << *(i->second) << " "
+		<< i->second->get_linkage()->inode->inode.accounted_rstat
+		<< dendl;
       }
     }
   } else {
@@ -274,105 +272,86 @@ bool CDir::check_rstats()
 }
 
 
-CDentry *CDir::lookup(const char *name, snapid_t snap)
-{ 
-  dout(20) << "lookup (" << snap << ", '" << name << "')" << dendl;
-  map_t::iterator iter = items.lower_bound(dentry_key_t(snap, name));
+CDentry *CDir::lookup(const string& name)
+{
+  dout(20) << "lookup (" << name << "')" << dendl;
+  map_t::iterator iter = items.find(name);
   if (iter == items.end())
     return 0;
-  if (iter->second->name == name &&
-      iter->second->first <= snap) {
-    dout(20) << "  hit -> " << iter->first << dendl;
-    return iter->second;
-  }
-  dout(20) << "  miss -> " << iter->first << dendl;
-  return 0;
+  dout(20) << "  hit -> " << iter->first << dendl;
+  return iter->second;
 }
-
-
-
-
 
 /***
  * linking fun
  */
 
-CDentry* CDir::add_null_dentry(const string& dname,
-			       snapid_t first, snapid_t last)
+CDentry* CDir::add_null_dentry(const string& dname)
 {
   // foreign
-  assert(lookup_exact_snap(dname, last) == 0);
-   
+  assert(lookup(dname) == 0);
+
   // create dentry
-  CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname), first, last);
-  if (is_auth()) 
+  CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname));
+  if (is_auth())
     dn->state_set(CDentry::STATE_AUTH);
   cache->lru.lru_insert_mid(dn);
 
   dn->dir = this;
-  dn->version = get_projected_version();
-  
-  // add to dir
-  assert(items.count(dn->key()) == 0);
-  //assert(null_items.count(dn->name) == 0);
+   dn->version = get_projected_version();
 
-  items[dn->key()] = dn;
-  if (last == CEPH_NOSNAP)
-    num_head_null++;
-  else
-    num_snap_null++;
+   // add to dir
+   assert(items.count(dn->name) == 0);
 
-  if (state_test(CDir::STATE_DNPINNEDFRAG)) {
-    dn->get(CDentry::PIN_FRAGMENTING);
-    dn->state_set(CDentry::STATE_FRAGMENTING);
-  }    
+   items[dn->name] = dn;
+   num_head_null++;
 
-  dout(12) << "add_null_dentry " << *dn << dendl;
+   if (state_test(CDir::STATE_DNPINNEDFRAG)) {
+     dn->get(CDentry::PIN_FRAGMENTING);
+     dn->state_set(CDentry::STATE_FRAGMENTING);
+   }
 
-  // pin?
-  if (get_num_any() == 1)
-    get(PIN_CHILD);
-  
-  assert(get_num_any() == items.size());
-  return dn;
-}
+   dout(12) << "add_null_dentry " << *dn << dendl;
+
+   // pin?
+   if (get_num_any() == 1)
+     get(PIN_CHILD);
+
+   assert(get_num_any() == items.size());
+   return dn;
+ }
 
 
-CDentry* CDir::add_primary_dentry(const string& dname, CInode *in,
-				  snapid_t first, snapid_t last) 
-{
-  // primary
-  assert(lookup_exact_snap(dname, last) == 0);
-  
-  // create dentry
-  CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname), first, last);
-  if (is_auth()) 
-    dn->state_set(CDentry::STATE_AUTH);
-  cache->lru.lru_insert_mid(dn);
+ CDentry* CDir::add_primary_dentry(const string& dname, CInode *in)
+ {
+   // primary
+   assert(lookup(dname) == 0);
 
-  dn->dir = this;
-  dn->version = get_projected_version();
-  
-  // add to dir
-  assert(items.count(dn->key()) == 0);
-  //assert(null_items.count(dn->name) == 0);
+   // create dentry
+   CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname));
+   if (is_auth())
+     dn->state_set(CDentry::STATE_AUTH);
+   cache->lru.lru_insert_mid(dn);
 
-  items[dn->key()] = dn;
+   dn->dir = this;
+   dn->version = get_projected_version();
+
+   // add to dir
+   assert(items.count(dn->name) == 0);
+
+  items[dn->name] = dn;
 
   dn->get_linkage()->inode = in;
   in->set_primary_parent(dn);
 
   link_inode_work(dn, in);
 
-  if (dn->last == CEPH_NOSNAP)
-    num_head_items++;
-  else
-    num_snap_items++;
-  
+  num_head_items++;
+
   if (state_test(CDir::STATE_DNPINNEDFRAG)) {
     dn->get(CDentry::PIN_FRAGMENTING);
     dn->state_set(CDentry::STATE_FRAGMENTING);
-  }    
+  }
 
   dout(12) << "add_primary_dentry " << *dn << dendl;
 
@@ -383,49 +362,47 @@ CDentry* CDir::add_primary_dentry(const string& dname, CInode *in,
   return dn;
 }
 
-CDentry* CDir::add_remote_dentry(const string& dname, inodeno_t ino, unsigned char d_type,
-				 snapid_t first, snapid_t last) 
+CDentry* CDir::add_remote_dentry(const string& dname, inodeno_t ino,
+				 unsigned char d_type)
 {
   // foreign
-  assert(lookup_exact_snap(dname, last) == 0);
+  assert(lookup(dname) == 0);
 
   // create dentry
-  CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname), ino, d_type, first, last);
-  if (is_auth()) 
+  CDentry* dn = new CDentry(dname, inode->hash_dentry_name(dname), ino,
+			    d_type);
+  if (is_auth())
     dn->state_set(CDentry::STATE_AUTH);
   cache->lru.lru_insert_mid(dn);
 
   dn->dir = this;
   dn->version = get_projected_version();
-  
+
   // add to dir
-  assert(items.count(dn->key()) == 0);
+  assert(items.count(dn->name) == 0);
   //assert(null_items.count(dn->name) == 0);
 
-  items[dn->key()] = dn;
-  if (last == CEPH_NOSNAP)
-    num_head_items++;
-  else
-    num_snap_items++;
+  items[dn->name] = dn;
+  num_head_items++;
 
   if (state_test(CDir::STATE_DNPINNEDFRAG)) {
     dn->get(CDentry::PIN_FRAGMENTING);
     dn->state_set(CDentry::STATE_FRAGMENTING);
-  }    
+  }
 
   dout(12) << "add_remote_dentry " << *dn << dendl;
 
   // pin?
   if (get_num_any() == 1)
     get(PIN_CHILD);
-  
+
   assert(get_num_any() == items.size());
   return dn;
 }
 
 
 
-void CDir::remove_dentry(CDentry *dn) 
+void CDir::remove_dentry(CDentry *dn)
 {
   dout(12) << "remove_dentry " << *dn << dendl;
 
@@ -435,27 +412,21 @@ void CDir::remove_dentry(CDentry *dn)
   if (state_test(CDir::STATE_DNPINNEDFRAG)) {
     dn->put(CDentry::PIN_FRAGMENTING);
     dn->state_clear(CDentry::STATE_FRAGMENTING);
-  }    
+  }
 
   if (dn->get_linkage()->is_null()) {
-    if (dn->last == CEPH_NOSNAP)
-      num_head_null--;
-    else
-      num_snap_null--;
+    num_head_null--;
   } else {
-    if (dn->last == CEPH_NOSNAP)
-      num_head_items--;
-    else
-      num_snap_items--;
+    num_head_items--;
   }
 
   if (!dn->get_linkage()->is_null())
     // detach inode and dentry
     unlink_inode_work(dn);
-  
+
   // remove from list
-  assert(items.count(dn->key()) == 1);
-  items.erase(dn->key());
+  assert(items.count(dn->name) == 1);
+  items.erase(dn->name);
 
   // clean?
   if (dn->is_dirty())
@@ -482,13 +453,8 @@ void CDir::link_remote_inode(CDentry *dn, inodeno_t ino, unsigned char d_type)
 
   dn->get_linkage()->set_remote(ino, d_type);
 
-  if (dn->last == CEPH_NOSNAP) {
-    num_head_items++;
-    num_head_null--;
-  } else {
-    num_snap_items++;
-    num_snap_null--;
-  }
+  num_head_items++;
+  num_head_null--;
   assert(get_num_any() == items.size());
 }
 
@@ -501,30 +467,22 @@ void CDir::link_primary_inode(CDentry *dn, CInode *in)
   in->set_primary_parent(dn);
 
   link_inode_work(dn, in);
-  
-  if (dn->last == CEPH_NOSNAP) {
-    num_head_items++;
-    num_head_null--;
-  } else {
-    num_snap_items++;
-    num_snap_null--;
-  }
+
+  num_head_items++;
+  num_head_null--;
 
   assert(get_num_any() == items.size());
 }
 
-void CDir::link_inode_work( CDentry *dn, CInode *in)
+void CDir::link_inode_work(CDentry *dn, CInode *in)
 {
   assert(dn->get_linkage()->get_inode() == in);
   assert(in->get_parent_dn() == dn);
 
-  // set inode version
-  //in->inode.version = dn->get_version();
-  
   // pin dentry?
   if (in->get_num_ref())
     dn->get(CDentry::PIN_INODEPIN);
-  
+
   // adjust auth pin count
   if (in->auth_pins + in->nested_auth_pins)
     dn->adjust_nested_auth_pins(in->auth_pins + in->nested_auth_pins, in->auth_pins, NULL);
@@ -532,9 +490,6 @@ void CDir::link_inode_work( CDentry *dn, CInode *in)
   if (in->inode.anchored + in->nested_anchors)
     dn->adjust_nested_anchors(in->nested_anchors + in->inode.anchored);
 
-  // verify open snaprealm parent
-  if (in->snaprealm)
-    in->snaprealm->adjust_parent();
 }
 
 void CDir::unlink_inode(CDentry *dn)
@@ -547,13 +502,9 @@ void CDir::unlink_inode(CDentry *dn)
 
   unlink_inode_work(dn);
 
-  if (dn->last == CEPH_NOSNAP) {
-    num_head_items--;
-    num_head_null++;
-  } else {
-    num_snap_items--;
-    num_snap_null++;
-  }
+  num_head_items--;
+  num_head_null++;
+
   assert(get_num_any() == items.size());
 }
 
@@ -617,7 +568,7 @@ void CDir::add_to_bloom(CDentry *dn)
     /* not create bloom filter for incomplete dir that was added by log replay */
     if (!is_complete())
       return;
-    unsigned size = get_num_head_items() + get_num_snap_items();
+    unsigned size = get_num_head_items();
     if (size < 100) size = 100;
     bloom = new bloom_filter(size, 1.0 / size, 0);
   }
@@ -649,7 +600,6 @@ void CDir::remove_null_dentries() {
       remove_dentry(dn);
   }
 
-  assert(num_snap_null == 0);
   assert(num_head_null == 0);
   assert(get_num_any() == items.size());
 }
@@ -663,75 +613,27 @@ void CDir::touch_dentries_bottom() {
     inode->mdcache->touch_dentry_bottom(p->second);
 }
 
-bool CDir::try_trim_snap_dentry(CDentry *dn, const set<snapid_t>& snaps)
-{
-  assert(dn->last != CEPH_NOSNAP);
-  set<snapid_t>::const_iterator p = snaps.lower_bound(dn->first);
-  CDentry::linkage_t *dnl= dn->get_linkage();
-  CInode *in = 0;
-  if (dnl->is_primary())
-    in = dnl->get_inode();
-  if ((p == snaps.end() || *p > dn->last) &&
-      (dn->get_num_ref() == dn->is_dirty()) &&
-      (!in || in->get_num_ref() == in->is_dirty())) {
-    dout(10) << " purging snapped " << *dn << dendl;
-    if (in && in->is_dirty())
-      in->mark_clean();
-    remove_dentry(dn);
-    if (in) {
-      dout(10) << " purging snapped " << *in << dendl;
-      cache->remove_inode(in);
-    }
-    return true;
-  }
-  return false;
-}
-
-
-void CDir::purge_stale_snap_data(const set<snapid_t>& snaps)
-{
-  dout(10) << "purge_stale_snap_data " << snaps << dendl;
-
-  CDir::map_t::iterator p = items.begin();
-  while (p != items.end()) {
-    CDentry *dn = p->second;
-    ++p;
-
-    if (dn->last == CEPH_NOSNAP)
-      continue;
-
-    try_trim_snap_dentry(dn, snaps);
-  }
-}
-
-
 /**
  * steal_dentry -- semi-violently move a dentry from one CDir to another
- * (*) violently, in that nitems, most pins, etc. are not correctly maintained 
+ * (*) violently, in that nitems, most pins, etc. are not correctly maintained
  * on the old CDir corpse; must call finish_old_fragment() when finished.
  */
 void CDir::steal_dentry(CDentry *dn)
 {
   dout(15) << "steal_dentry " << *dn << dendl;
 
-  items[dn->key()] = dn;
+  items[dn->name] = dn;
 
-  dn->dir->items.erase(dn->key());
+  dn->dir->items.erase(dn->name);
   if (dn->dir->items.empty())
     dn->dir->put(PIN_CHILD);
 
   if (get_num_any() == 0)
     get(PIN_CHILD);
   if (dn->get_linkage()->is_null()) {
-    if (dn->last == CEPH_NOSNAP)
-      num_head_null++;
-    else
-      num_snap_null++;
+    num_head_null++;
   } else {
-    if (dn->last == CEPH_NOSNAP)
-      num_head_items++;
-    else
-      num_snap_items++;
+    num_head_items++;
 
     if (dn->get_linkage()->is_primary()) {
       CInode *in = dn->get_linkage()->get_inode();
@@ -744,7 +646,6 @@ void CDir::steal_dentry(CDentry *dn)
       fnode.rstat.rfiles += pi->accounted_rstat.rfiles;
       fnode.rstat.rsubdirs += pi->accounted_rstat.rsubdirs;
       fnode.rstat.ranchors += pi->accounted_rstat.ranchors;
-      fnode.rstat.rsnaprealms += pi->accounted_rstat.ranchors;
       if (pi->accounted_rstat.rctime > fnode.rstat.rctime)
 	fnode.rstat.rctime = pi->accounted_rstat.rctime;
 
@@ -808,10 +709,9 @@ void CDir::finish_old_fragment(list<Context*>& waiters, bool replay)
   assert(auth_pins == 0);
 
   num_head_items = num_head_null = 0;
-  num_snap_items = num_snap_null = 0;
 
   // this mirrors init_fragment_pins()
-  if (is_auth()) 
+  if (is_auth())
     clear_replica_map();
   if (is_dirty())
     mark_clean();
@@ -1027,7 +927,6 @@ void CDir::resync_accounted_rstat()
     pf->rstat.version = pi->rstat.version;
     dout(10) << "resync_accounted_rstat " << pf->accounted_rstat << " -> " << pf->rstat << dendl;
     pf->accounted_rstat = pf->rstat;
-    dirty_old_rstat.clear();
   }
 }
 
@@ -1043,8 +942,6 @@ void CDir::assimilate_dirty_rstat_inodes()
 
     inode_t *pi = in->project_inode();
     pi->version = in->pre_dirty();
-
-    inode->mdcache->project_rstat_inode_to_frag(in, this, 0, 0);
   }
   state_set(STATE_ASSIMRSTAT);
   dout(10) << "assimilate_dirty_rstat_inodes done" << dendl;
@@ -1084,30 +981,24 @@ void CDir::assimilate_dirty_rstat_inodes_finish(MutationRef& mut, EMetaBlob *blo
  * WAITING
  */
 
-void CDir::add_dentry_waiter(const string& dname, snapid_t snapid, Context *c) 
+void CDir::add_dentry_waiter(const string& dname, Context *c)
 {
   if (waiting_on_dentry.empty())
     get(PIN_DNWAITER);
-  waiting_on_dentry[string_snap_t(dname, snapid)].push_back(c);
+  waiting_on_dentry[dname].push_back(c);
   dout(10) << "add_dentry_waiter dentry " << dname
-	   << " snap " << snapid
 	   << " " << c << " on " << *this << dendl;
 }
 
-void CDir::take_dentry_waiting(const string& dname, snapid_t first, snapid_t last,
-			       list<Context*>& ls)
+void CDir::take_dentry_waiting(const string& dname, list<Context*>& ls)
 {
   if (waiting_on_dentry.empty())
     return;
-  
-  string_snap_t lb(dname, first);
-  string_snap_t ub(dname, last);
-  map<string_snap_t, list<Context*> >::iterator p = waiting_on_dentry.lower_bound(lb);
-  while (p != waiting_on_dentry.end() &&
-	 !(ub < p->first)) {
+
+  map<string, list<Context*> >::iterator p = waiting_on_dentry.find(dname);
+  if (p != waiting_on_dentry.end()) {
     dout(10) << "take_dentry_waiting dentry " << dname
-	     << " [" << first << "," << last << "] found waiter on snap "
-	     << p->first.snapid
+	     << " found waiter "
 	     << " on " << *this << dendl;
     ls.splice(ls.end(), p->second);
     waiting_on_dentry.erase(p++);
@@ -1117,12 +1008,13 @@ void CDir::take_dentry_waiting(const string& dname, snapid_t first, snapid_t las
     put(PIN_DNWAITER);
 }
 
-void CDir::add_ino_waiter(inodeno_t ino, Context *c) 
+void CDir::add_ino_waiter(inodeno_t ino, Context *c)
 {
   if (waiting_on_ino.empty())
     get(PIN_INOWAITER);
   waiting_on_ino[ino].push_back(c);
-  dout(10) << "add_ino_waiter ino " << ino << " " << c << " on " << *this << dendl;
+  dout(10) << "add_ino_waiter ino " << ino << " " << c << " on " << *this
+	   << dendl;
 }
 
 void CDir::take_ino_waiting(inodeno_t ino, list<Context*>& ls)
@@ -1130,7 +1022,7 @@ void CDir::take_ino_waiting(inodeno_t ino, list<Context*>& ls)
   if (waiting_on_ino.empty()) return;
   if (waiting_on_ino.count(ino) == 0) return;
   dout(10) << "take_ino_waiting ino " << ino
-	   << " x " << waiting_on_ino[ino].size() 
+	   << " x " << waiting_on_ino[ino].size()
 	   << " on " << *this << dendl;
   ls.splice(ls.end(), waiting_on_ino[ino]);
   waiting_on_ino.erase(ino);
@@ -1142,17 +1034,18 @@ void CDir::take_sub_waiting(list<Context*>& ls)
 {
   dout(10) << "take_sub_waiting" << dendl;
   if (!waiting_on_dentry.empty()) {
-    for (map<string_snap_t, list<Context*> >::iterator p = waiting_on_dentry.begin(); 
+    for (map<string, list<Context*> >::iterator p
+	   = waiting_on_dentry.begin();
 	 p != waiting_on_dentry.end();
-	 ++p) 
+	 ++p)
       ls.splice(ls.end(), p->second);
     waiting_on_dentry.clear();
     put(PIN_DNWAITER);
   }
   if (!waiting_on_ino.empty()) {
-    for (map<inodeno_t, list<Context*> >::iterator p = waiting_on_ino.begin(); 
+    for (map<inodeno_t, list<Context*> >::iterator p = waiting_on_ino.begin();
 	 p != waiting_on_ino.end();
-	 ++p) 
+	 ++p)
       ls.splice(ls.end(), p->second);
     waiting_on_ino.clear();
     put(PIN_INOWAITER);
@@ -1161,7 +1054,7 @@ void CDir::take_sub_waiting(list<Context*>& ls)
 
 
 
-void CDir::add_waiter(uint64_t tag, Context *c) 
+void CDir::add_waiter(uint64_t tag, Context *c)
 {
   // hierarchical?
 
@@ -1170,17 +1063,21 @@ void CDir::add_waiter(uint64_t tag, Context *c)
     if (!(is_freezing_tree_root() || is_frozen_tree_root() ||
 	  is_freezing_dir() || is_frozen_dir())) {
       // try parent
-      dout(10) << "add_waiter " << std::hex << tag << std::dec << " " << c << " should be ATFREEZEROOT, " << *this << " is not root, trying parent" << dendl;
+      dout(10) << "add_waiter " << std::hex << tag << std::dec << " " << c
+	       << " should be ATFREEZEROOT, " << *this
+	       << " is not root, trying parent" << dendl;
       inode->parent->dir->add_waiter(tag, c);
       return;
     }
   }
-  
+
   // at subtree root?
   if (tag & WAIT_ATSUBTREEROOT) {
     if (!is_subtree_root()) {
       // try parent
-      dout(10) << "add_waiter " << std::hex << tag << std::dec << " " << c << " should be ATSUBTREEROOT, " << *this << " is not root, trying parent" << dendl;
+      dout(10) << "add_waiter " << std::hex << tag << std::dec << " " << c
+	       << " should be ATSUBTREEROOT, " << *this
+	       << " is not root, trying parent" << dendl;
       inode->parent->dir->add_waiter(tag, c);
       return;
     }
@@ -1197,15 +1094,15 @@ void CDir::take_waiting(uint64_t mask, list<Context*>& ls)
   if ((mask & WAIT_DENTRY) && !waiting_on_dentry.empty()) {
     // take all dentry waiters
     while (!waiting_on_dentry.empty()) {
-      map<string_snap_t, list<Context*> >::iterator p = waiting_on_dentry.begin(); 
-      dout(10) << "take_waiting dentry " << p->first.name
-	       << " snap " << p->first.snapid << " on " << *this << dendl;
+      map<string, list<Context*> >::iterator p = waiting_on_dentry.begin();
+      dout(10) << "take_waiting dentry " << p->first
+	       << " on " << *this << dendl;
       ls.splice(ls.end(), p->second);
       waiting_on_dentry.erase(p);
     }
     put(PIN_DNWAITER);
   }
-  
+
   // waiting
   MDSCacheObject::take_waiting(mask, ls);
 }
@@ -1526,226 +1423,6 @@ void CDir::_omap_fetched(bufferlist& hdrbl, map<string, bufferlist>& omap,
 
   list<CInode*> undef_inodes;
 
-  // purge stale snaps?
-  // only if we have past_parents open!
-  bool purged_any = false;
-  const set<snapid_t> *snaps = NULL;
-  SnapRealm *realm = inode->find_snaprealm();
-  if (!realm->have_past_parents_open()) {
-    dout(10) << " no snap purge, one or more past parents NOT open" << dendl;
-  } else if (fnode.snap_purged_thru < realm->get_last_destroyed()) {
-    snaps = &realm->get_snaps();
-    dout(10) << " snap_purged_thru " << fnode.snap_purged_thru
-	     << " < " << realm->get_last_destroyed()
-	     << ", snap purge based on " << *snaps << dendl;
-    fnode.snap_purged_thru = realm->get_last_destroyed();
-  }
-
-  bool stray = inode->is_stray();
-
-  unsigned pos = omap.size() - 1;
-  for (map<string, bufferlist>::reverse_iterator p = omap.rbegin();
-       p != omap.rend();
-       ++p, --pos) {
-    // dname
-    string dname;
-    snapid_t first, last;
-    dentry_key_t::decode_helper(p->first, dname, last);
-    
-    bufferlist::iterator q = p->second.begin();
-    ::decode(first, q);
-
-    // marker
-    char type;
-    ::decode(type, q);
-
-    dout(20) << "_fetched pos " << pos << " marker '" << type << "' dname '" << dname
-	     << " [" << first << "," << last << "]"
-	     << dendl;
-
-    bool stale = false;
-    if (snaps && last != CEPH_NOSNAP) {
-      set<snapid_t>::const_iterator p = snaps->lower_bound(first);
-      if (p == snaps->end() || *p > last) {
-	dout(10) << " skipping stale dentry on [" << first << "," << last << "]" << dendl;
-	stale = true;
-	purged_any = true;
-      }
-    }
-    
-    /*
-     * look for existing dentry for _last_ snap, because unlink +
-     * create may leave a "hole" (epochs during which the dentry
-     * doesn't exist) but for which no explicit negative dentry is in
-     * the cache.
-     */
-    CDentry *dn = NULL;
-    if (!stale)
-      dn = lookup(dname, last);
-
-    if (type == 'L') {
-      // hard link
-      inodeno_t ino;
-      unsigned char d_type;
-      ::decode(ino, q);
-      ::decode(d_type, q);
-
-      if (stale)
-	continue;
-
-      if (dn) {
-        if (dn->get_linkage()->get_inode() == 0) {
-          dout(12) << "_fetched  had NEG dentry " << *dn << dendl;
-        } else {
-          dout(12) << "_fetched  had dentry " << *dn << dendl;
-        }
-      } else {
-	// (remote) link
-	dn = add_remote_dentry(dname, ino, d_type, first, last);
-	
-	// link to inode?
-	CInode *in = cache->get_inode(ino);   // we may or may not have it.
-	if (in) {
-	  dn->link_remote(dn->get_linkage(), in);
-	  dout(12) << "_fetched  got remote link " << ino << " which we have " << *in << dendl;
-	} else {
-	  dout(12) << "_fetched  got remote link " << ino << " (dont' have it)" << dendl;
-	}
-      }
-    } 
-    else if (type == 'I') {
-      // inode
-      
-      // parse out inode
-      inode_t inode;
-      string symlink;
-      fragtree_t fragtree;
-      map<string, bufferptr> xattrs;
-      bufferlist snapbl;
-      map<snapid_t,old_inode_t> old_inodes;
-      ::decode(inode, q);
-      if (inode.is_symlink())
-        ::decode(symlink, q);
-      ::decode(fragtree, q);
-      ::decode(xattrs, q);
-      ::decode(snapbl, q);
-      ::decode(old_inodes, q);
-      
-      if (stale)
-	continue;
-
-      bool undef_inode = false;
-      if (dn) {
-	CInode *in = dn->get_linkage()->get_inode();
-	if (in) {
-	  dout(12) << "_fetched  had dentry " << *dn << dendl;
-	  if (in->state_test(CInode::STATE_REJOINUNDEF)) {
-	    undef_inodes.push_back(in);
-	    undef_inode = true;
-	  }
-	} else
-	  dout(12) << "_fetched  had NEG dentry " << *dn << dendl;
-      }
-
-      if (!dn || undef_inode) {
-	// add inode
-	CInode *in = cache->get_inode(inode.ino, last);
-	if (!in || undef_inode) {
-	  if (undef_inode && in)
-	    in->first = first;
-	  else
-	    in = new CInode(cache, true, first, last);
-	  
-	  in->inode = inode;
-	  // symlink?
-	  if (in->is_symlink()) 
-	    in->symlink = symlink;
-	  
-	  in->dirfragtree.swap(fragtree);
-	  in->xattrs.swap(xattrs);
-	  in->decode_snap_blob(snapbl);
-	  in->old_inodes.swap(old_inodes);
-	  if (snaps)
-	    in->purge_stale_snap_data(*snaps);
-
-	  if (undef_inode) {
-	    if (inode.anchored)
-	      dn->adjust_nested_anchors(1);
-	  } else {
-	    cache->add_inode( in ); // add
-	    dn = add_primary_dentry(dname, in, first, last); // link
-	  }
-	  dout(12) << "_fetched  got " << *dn << " " << *in << dendl;
-
-	  if (in->inode.is_dirty_rstat())
-	    in->mark_dirty_rstat();
-
-	  if (stray) {
-	    dn->state_set(CDentry::STATE_STRAY);
-	    if (in->inode.nlink == 0)
-	      in->state_set(CInode::STATE_ORPHAN);
-	  }
-
-	  //in->hack_accessed = false;
-	  //in->hack_load_stamp = ceph_clock_now(g_ceph_context);
-	  //num_new_inodes_loaded++;
-	} else {
-	  dout(0) << "_fetched  badness: got (but i already had) " << *in
-		  << " mode " << in->inode.mode
-		  << " mtime " << in->inode.mtime << dendl;
-	  string dirpath, inopath;
-	  this->inode->make_path_string(dirpath);
-	  in->make_path_string(inopath);
-	  clog.error() << "loaded dup inode " << inode.ino
-	    << " [" << first << "," << last << "] v" << inode.version
-	    << " at " << dirpath << "/" << dname
-	    << ", but inode " << in->vino() << " v" << in->inode.version
-	    << " already exists at " << inopath << "\n";
-	  continue;
-	}
-      }
-    } else {
-      dout(1) << "corrupt directory, i got tag char '" << type << "' pos " << pos << dendl;
-      assert(0);
-    }
-    
-    if (dn && want_dn.length() && want_dn == dname) {
-      dout(10) << " touching wanted dn " << *dn << dendl;
-      inode->mdcache->touch_dentry(dn);
-    }
-
-    /** clean underwater item?
-     * Underwater item is something that is dirty in our cache from
-     * journal replay, but was previously flushed to disk before the
-     * mds failed.
-     *
-     * We only do this is committed_version == 0. that implies either
-     * - this is a fetch after from a clean/empty CDir is created
-     *   (and has no effect, since the dn won't exist); or
-     * - this is a fetch after _recovery_, which is what we're worried 
-     *   about.  Items that are marked dirty from the journal should be
-     *   marked clean if they appear on disk.
-     */
-    if (committed_version == 0 &&     
-	dn &&
-	dn->get_version() <= got_fnode.version &&
-	dn->is_dirty()) {
-      dout(10) << "_fetched  had underwater dentry " << *dn << ", marking clean" << dendl;
-      dn->mark_clean();
-
-      if (dn->get_linkage()->is_primary()) {
-	assert(dn->get_linkage()->get_inode()->get_version() <= got_fnode.version);
-	dout(10) << "_fetched  had underwater inode " << *dn->get_linkage()->get_inode() << ", marking clean" << dendl;
-	dn->get_linkage()->get_inode()->mark_clean();
-      }
-    }
-  }
-
-  //cache->mds->logger->inc("newin", num_new_inodes_loaded);
-
-  if (purged_any)
-    log_mark_dirty();
-
   // mark complete, !fetching
   mark_complete();
   state_clear(STATE_FETCHING);
@@ -1825,22 +1502,11 @@ void CDir::_omap_commit(int op_prio)
   if (op_prio < 0)
     op_prio = CEPH_MSG_PRIO_DEFAULT;
 
-  // snap purge?
-  const set<snapid_t> *snaps = NULL;
-  SnapRealm *realm = inode->find_snaprealm();
-  if (!realm->have_past_parents_open()) {
-    dout(10) << " no snap purge, one or more past parents NOT open" << dendl;
-  } else if (fnode.snap_purged_thru < realm->get_last_destroyed()) {
-    snaps = &realm->get_snaps();
-    dout(10) << " snap_purged_thru " << fnode.snap_purged_thru
-	     << " < " << realm->get_last_destroyed()
-	     << ", snap purge based on " << *snaps << dendl;
-  }
-
   set<string> to_remove;
   map<string, bufferlist> to_set;
 
-  C_GatherBuilder gather(g_ceph_context, new C_Dir_Committed(this, get_version()));
+  C_GatherBuilder gather(g_ceph_context,
+			 new C_Dir_Committed(this, get_version()));
 
   SnapContext snapc;
   object_t oid = get_ondisk_object();
@@ -1851,31 +1517,20 @@ void CDir::_omap_commit(int op_prio)
     CDentry *dn = p->second;
     ++p;
 
-    string key;
-    dn->key().encode(key);
-
-    if (dn->last != CEPH_NOSNAP &&
-	snaps && try_trim_snap_dentry(dn, *snaps)) {
-      dout(10) << " rm " << dn->name << " " << *dn << dendl;
-      write_size += key.length();
-      to_remove.insert(key);
-      continue;
-    }
-
     if (!dn->is_dirty() &&
 	(!dn->state_test(CDentry::STATE_FRAGMENTING) || dn->get_linkage()->is_null()))
       continue;  // skip clean dentries
 
     if (dn->get_linkage()->is_null()) {
       dout(10) << " rm " << dn->name << " " << *dn << dendl;
-      write_size += key.length();
-      to_remove.insert(key);
+      write_size += dn->name.length();
+      to_remove.insert(dn->name);
     } else {
       dout(10) << " set " << dn->name << " " << *dn << dendl;
       bufferlist dnbl;
-      _encode_dentry(dn, dnbl, snaps);
-      write_size += key.length() + dnbl.length();
-      to_set[key].swap(dnbl);
+      _encode_dentry(dn, dnbl);
+      write_size += dn->name.length() + dnbl.length();
+      to_set[dn->name].swap(dnbl);
     }
 
     if (write_size >= max_write_size) {
@@ -1888,7 +1543,8 @@ void CDir::_omap_commit(int op_prio)
       if (!to_remove.empty())
 	op.omap_rm_keys(to_remove);
 
-      cache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
+      cache->mds->objecter->mutate(oid, oloc, op, snapc,
+				   ceph_clock_now(g_ceph_context),
 				   0, NULL, gather.new_sub());
 
       write_size = 0;
@@ -1902,12 +1558,13 @@ void CDir::_omap_commit(int op_prio)
   op.tmap_to_omap(true); // convert tmap to omap
 
   /*
-   * save the header at the last moment.. If we were to send it off before other
-   * updates, but die before sending them all, we'd think that the on-disk state
-   * was fully committed even though it wasn't! However, since the messages are
-   * strictly ordered between the MDS and the OSD, and since messages to a given
-   * PG are strictly ordered, if we simply send the message containing the header
-   * off last, we cannot get our header into an incorrect state.
+   * save the header at the last moment.. If we were to send it off
+   * before other updates, but die before sending them all, we'd think
+   * that the on-disk state was fully committed even though it wasn't!
+   * However, since the messages are strictly ordered between the MDS
+   * and the OSD, and since messages to a given PG are strictly
+   * ordered, if we simply send the message containing the header off
+   * last, we cannot get our header into an incorrect state.
    */
   bufferlist header;
   ::encode(fnode, header);
@@ -1918,56 +1575,48 @@ void CDir::_omap_commit(int op_prio)
   if (!to_remove.empty())
     op.omap_rm_keys(to_remove);
 
-  cache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
+  cache->mds->objecter->mutate(oid, oloc, op, snapc,
+			       ceph_clock_now(g_ceph_context),
 			       0, NULL, gather.new_sub());
 
   gather.activate();
 }
 
-void CDir::_encode_dentry(CDentry *dn, bufferlist& bl,
-			  const set<snapid_t> *snaps)
+void CDir::_encode_dentry(CDentry *dn, bufferlist& bl)
 {
   // clear dentry NEW flag, if any.  we can no longer silently drop it.
   dn->clear_new();
-
-  ::encode(dn->first, bl);
 
   // primary or remote?
   if (dn->linkage.is_remote()) {
     inodeno_t ino = dn->linkage.get_remote_ino();
     unsigned char d_type = dn->linkage.get_remote_d_type();
-    dout(14) << " pos " << bl.length() << " dn '" << dn->name << "' remote ino " << ino << dendl;
-    
+    dout(14) << " pos " << bl.length() << " dn '" << dn->name
+	     << "' remote ino " << ino << dendl;
+
     // marker, name, ino
-    bl.append('L');         // remote link
+    bl.append('L'); // remote link
     ::encode(ino, bl);
     ::encode(d_type, bl);
   } else {
     // primary link
     CInode *in = dn->linkage.get_inode();
     assert(in);
-    
+
     dout(14) << " pos " << bl.length() << " dn '" << dn->name << "' inode " << *in << dendl;
-    
+
     // marker, name, inode, [symlink string]
-    bl.append('I');         // inode
+    bl.append('I'); // inode
     ::encode(in->inode, bl);
-    
+
     if (in->is_symlink()) {
       // include symlink destination!
       dout(18) << "    including symlink ptr " << in->symlink << dendl;
       ::encode(in->symlink, bl);
     }
-    
+
     ::encode(in->dirfragtree, bl);
     ::encode(in->xattrs, bl);
-    bufferlist snapbl;
-    in->encode_snap_blob(snapbl);
-    ::encode(snapbl, bl);
-    
-    if (in->is_multiversion() && snaps)
-      in->purge_stale_snap_data(*snaps);
-    ::encode(in->old_inodes, bl);
   }
 }
 
@@ -2048,51 +1697,52 @@ void CDir::_committed(version_t v)
        it != items.end(); ) {
     CDentry *dn = it->second;
     ++it;
-    
+ 
     // inode?
     if (dn->linkage.is_primary()) {
       CInode *in = dn->linkage.get_inode();
       assert(in);
       assert(in->is_auth());
-      
+
       if (committed_version >= in->get_version()) {
 	if (in->is_dirty()) {
-	  dout(15) << " dir " << committed_version << " >= inode " << in->get_version() << " now clean " << *in << dendl;
+	  dout(15) << " dir " << committed_version << " >= inode "
+		   << in->get_version() << " now clean " << *in << dendl;
 	  in->mark_clean();
 	}
-      } else {
-	dout(15) << " dir " << committed_version << " < inode " << in->get_version() << " still dirty " << *in << dendl;
-	assert(in->is_dirty() || in->last < CEPH_NOSNAP);  // special case for cow snap items (not predirtied)
       }
     }
 
     // dentry
     if (committed_version >= dn->get_version()) {
       if (dn->is_dirty()) {
-	dout(15) << " dir " << committed_version << " >= dn " << dn->get_version() << " now clean " << *dn << dendl;
+	dout(15) << " dir " << committed_version << " >= dn "
+		 << dn->get_version() << " now clean " << *dn << dendl;
 	dn->mark_clean();
 
 	// drop clean null stray dentries immediately
-	if (stray && 
+	if (stray &&
 	    dn->get_num_ref() == 0 &&
 	    !dn->is_projected() &&
 	    dn->get_linkage()->is_null())
 	  remove_dentry(dn);
-      } 
+      }
     } else {
-      dout(15) << " dir " << committed_version << " < dn " << dn->get_version() << " still dirty " << *dn << dendl;
+      dout(15) << " dir " << committed_version << " < dn "
+	       << dn->get_version() << " still dirty " << *dn << dendl;
     }
   }
 
   // finishers?
   bool were_waiters = !waiting_for_commit.empty();
-  
+
   map<version_t, list<Context*> >::iterator p = waiting_for_commit.begin();
   while (p != waiting_for_commit.end()) {
     map<version_t, list<Context*> >::iterator n = p;
     ++n;
     if (p->first > committed_version) {
-      dout(10) << " there are waiters for " << p->first << ", committing again" << dendl;
+      dout(10) << " there are waiters for " << p->first
+	       << ", committing again" << dendl;
       _commit(p->first, -1);
       break;
     }
@@ -2116,9 +1766,7 @@ void CDir::_committed(version_t v)
 void CDir::encode_export(bufferlist& bl)
 {
   assert(!is_projected());
-  ::encode(first, bl);
   ::encode(fnode, bl);
-  ::encode(dirty_old_rstat, bl);
   ::encode(committed_version, bl);
 
   ::encode(state, bl);
@@ -2140,14 +1788,11 @@ void CDir::finish_export(utime_t now)
   pop_me.zero(now);
   pop_auth_subtree.zero(now);
   put(PIN_TEMPEXPORTING);
-  dirty_old_rstat.clear();
 }
 
 void CDir::decode_import(bufferlist::iterator& blp, utime_t now, LogSegment *ls)
 {
-  ::decode(first, blp);
   ::decode(fnode, blp);
-  ::decode(dirty_old_rstat, blp);
   projected_version = fnode.version;
   ::decode(committed_version, blp);
   committing_version = committed_version;
@@ -2174,11 +1819,6 @@ void CDir::decode_import(bufferlist::iterator& blp, utime_t now, LogSegment *ls)
   replica_nonce = 0;  // no longer defined
 
   // did we import some dirty scatterlock data?
-  if (dirty_old_rstat.size() ||
-      !(fnode.rstat == fnode.accounted_rstat)) {
-    cache->mds->locker->mark_updated_scatterlock(&inode->nestlock);
-    ls->dirty_dirfrag_nest.push_back(&inode->item_dirty_dirfrag_nest);
-  }
   if (!(fnode.fragstat == fnode.accounted_fragstat)) {
     cache->mds->locker->mark_updated_scatterlock(&inode->filelock);
     ls->dirty_dirfrag_dir.push_back(&inode->item_dirty_dirfrag_dir);

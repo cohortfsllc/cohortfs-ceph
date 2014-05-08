@@ -10,7 +10,6 @@ TYPE(compressible_bloom_filter)
 
 #include "common/snap_types.h"
 TYPE(SnapContext)
-TYPE(SnapRealmInfo)
 
 #include "common/DecayCounter.h"
 TYPE(DecayCounter)
@@ -135,21 +134,13 @@ TYPE(Journaler::Header)
 #include "mds/Anchor.h"
 TYPE(Anchor)
 
-#include "mds/snap.h"
-TYPE(SnapInfo)
-TYPE(snaplink_t)
-TYPE(sr_t)
-
 #include "mds/mdstypes.h"
 TYPE(frag_info_t)
 TYPE(nest_info_t)
 TYPE(client_writeable_range_t)
 TYPE(inode_t)
-TYPE(old_inode_t)
 TYPE(fnode_t)
-TYPE(old_rstat_t)
 TYPE(session_info_t)
-TYPE(string_snap_t)
 TYPE(MDSCacheObjectInfo)
 TYPE(mds_table_pending_t)
 TYPE(inode_load_vec_t)
@@ -171,9 +162,6 @@ TYPEWITHSTRAYDATA(AnchorServer)
 
 #include "mds/InoTable.h"
 TYPE(InoTable)
-
-#include "mds/SnapServer.h"
-TYPEWITHSTRAYDATA(SnapServer)
 
 #include "mds/SessionMap.h"
 TYPE(SessionMap)
@@ -349,8 +337,6 @@ MESSAGE(MClientRequest)
 MESSAGE(MClientRequestForward)
 #include "messages/MClientSession.h"
 MESSAGE(MClientSession)
-#include "messages/MClientSnap.h"
-MESSAGE(MClientSnap)
 #include "messages/MCommand.h"
 MESSAGE(MCommand)
 #include "messages/MCommandReply.h"

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -23,76 +23,69 @@
 
 #include "Trace.h"
 
-#define SYNCLIENT_FIRST_POOL	0
+#define SYNCLIENT_FIRST_POOL 0
 
-#define SYNCLIENT_MODE_RANDOMWALK  1
-#define SYNCLIENT_MODE_FULLWALK    2
-#define SYNCLIENT_MODE_REPEATWALK  3
+#define SYNCLIENT_MODE_RANDOMWALK 1
+#define SYNCLIENT_MODE_FULLWALK 2
+#define SYNCLIENT_MODE_REPEATWALK 3
 
-#define SYNCLIENT_MODE_MAKEDIRMESS  7
-#define SYNCLIENT_MODE_MAKEDIRS     8      // dirs files depth
-#define SYNCLIENT_MODE_STATDIRS     9     // dirs files depth
-#define SYNCLIENT_MODE_READDIRS     10     // dirs files depth
+#define SYNCLIENT_MODE_MAKEDIRMESS 7
+#define SYNCLIENT_MODE_MAKEDIRS 8 // dirs files depth
+#define SYNCLIENT_MODE_STATDIRS 9 // dirs files depth
+#define SYNCLIENT_MODE_READDIRS 10 // dirs files depth
 
-#define SYNCLIENT_MODE_MAKEFILES    11     // num count private
-#define SYNCLIENT_MODE_MAKEFILES2   12     // num count private
-#define SYNCLIENT_MODE_CREATESHARED 13     // num
-#define SYNCLIENT_MODE_OPENSHARED   14     // num count
+#define SYNCLIENT_MODE_MAKEFILES 11 // num count private
+#define SYNCLIENT_MODE_MAKEFILES2 12 // num count private
+#define SYNCLIENT_MODE_CREATESHARED 13 // num
+#define SYNCLIENT_MODE_OPENSHARED 14 // num count
 
-#define SYNCLIENT_MODE_RMFILE      19
-#define SYNCLIENT_MODE_WRITEFILE   20
-#define SYNCLIENT_MODE_READFILE    21
-#define SYNCLIENT_MODE_WRITEBATCH  22
-#define SYNCLIENT_MODE_WRSHARED    23
-#define SYNCLIENT_MODE_READSHARED    24
-#define SYNCLIENT_MODE_RDWRRANDOM    25
-#define SYNCLIENT_MODE_RDWRRANDOM_EX    26
+#define SYNCLIENT_MODE_RMFILE 19
+#define SYNCLIENT_MODE_WRITEFILE 20
+#define SYNCLIENT_MODE_READFILE 21
+#define SYNCLIENT_MODE_WRITEBATCH 22
+#define SYNCLIENT_MODE_WRSHARED 23
+#define SYNCLIENT_MODE_READSHARED 24
+#define SYNCLIENT_MODE_RDWRRANDOM 25
+#define SYNCLIENT_MODE_RDWRRANDOM_EX 26
 
-#define SYNCLIENT_MODE_LINKTEST   27
+#define SYNCLIENT_MODE_LINKTEST 27
 
 #define SYNCLIENT_MODE_OVERLOAD_OSD_0 28 // two args
 
-#define SYNCLIENT_MODE_DROPCACHE   29
+#define SYNCLIENT_MODE_DROPCACHE 29
 
-#define SYNCLIENT_MODE_TRACE       30
+#define SYNCLIENT_MODE_TRACE 30
 
 #define SYNCLIENT_MODE_CREATEOBJECTS 35
 #define SYNCLIENT_MODE_OBJECTRW 36
 
-#define SYNCLIENT_MODE_OPENTEST     40
-#define SYNCLIENT_MODE_OPTEST       41
+#define SYNCLIENT_MODE_OPENTEST 40
+#define SYNCLIENT_MODE_OPTEST 41
 
-#define SYNCLIENT_MODE_ONLY        50
-#define SYNCLIENT_MODE_ONLYRANGE   51
-#define SYNCLIENT_MODE_EXCLUDE     52
-#define SYNCLIENT_MODE_EXCLUDERANGE  53
+#define SYNCLIENT_MODE_ONLY 50
+#define SYNCLIENT_MODE_ONLYRANGE 51
+#define SYNCLIENT_MODE_EXCLUDE 52
+#define SYNCLIENT_MODE_EXCLUDERANGE 53
 
-#define SYNCLIENT_MODE_UNTIL       55
-#define SYNCLIENT_MODE_SLEEPUNTIL  56
+#define SYNCLIENT_MODE_UNTIL 55
+#define SYNCLIENT_MODE_SLEEPUNTIL 56
 
-#define SYNCLIENT_MODE_RANDOMSLEEP  61
-#define SYNCLIENT_MODE_SLEEP        62
+#define SYNCLIENT_MODE_RANDOMSLEEP 61
+#define SYNCLIENT_MODE_SLEEP 62
 
 #define SYNCLIENT_MODE_DUMP 63
 
-#define SYNCLIENT_MODE_LOOKUPHASH     70
-#define SYNCLIENT_MODE_LOOKUPINO     71
+#define SYNCLIENT_MODE_LOOKUPHASH 70
+#define SYNCLIENT_MODE_LOOKUPINO 71
 
-#define SYNCLIENT_MODE_TRUNCATE     200
+#define SYNCLIENT_MODE_TRUNCATE 200
 
-#define SYNCLIENT_MODE_FOO        100
-#define SYNCLIENT_MODE_THRASHLINKS  101
+#define SYNCLIENT_MODE_FOO 100
+#define SYNCLIENT_MODE_THRASHLINKS 101
 
 #define SYNCLIENT_MODE_IMPORTFIND 300
 
-#define SYNCLIENT_MODE_CHUNK    400
-
-#define SYNCLIENT_MODE_MKSNAP 1000
-#define SYNCLIENT_MODE_RMSNAP 1001
-
-#define SYNCLIENT_MODE_MKSNAPFILE 1002
-
-
+#define SYNCLIENT_MODE_CHUNK 400
 
 void parse_syn_options(vector<const char*>& args);
 
@@ -107,12 +100,11 @@ class SyntheticClient {
   void init_op_dist();
   int get_op();
 
-  
-  filepath             cwd;
+  filepath cwd;
   map<string, struct stat*> contents;
-  set<string>          subdirs;
-  bool                 did_readdir;
-  set<int>             open_files;
+  set<string> subdirs;
+  bool did_readdir;
+  set<int> open_files;
 
   void up();
 
@@ -133,7 +125,8 @@ class SyntheticClient {
   filepath n1;
   const char *get_random_subdir() {
     assert(!subdirs.empty());
-    int r = ((rand() % subdirs.size()) + (rand() % subdirs.size())) / 2;  // non-uniform distn
+    // non-uniform distn
+    int r = ((rand() % subdirs.size()) + (rand() % subdirs.size())) / 2;
     set<string>::iterator it = subdirs.begin();
     while (r--) ++it;
 
@@ -144,9 +137,11 @@ class SyntheticClient {
   filepath n2;
   const char *get_random_sub() {
     assert(!contents.empty());
-    int r = ((rand() % contents.size()) + (rand() % contents.size())) / 2;  // non-uniform distn
-    if (cwd.depth() && cwd.last_dentry().length()) 
-      r += cwd.last_dentry().c_str()[0];                                         // slightly permuted
+    // non-uniform distn
+    int r = ((rand() % contents.size()) + (rand() % contents.size())) / 2;
+    if (cwd.depth() && cwd.last_dentry().length())
+      // slightly permuted
+      r += cwd.last_dentry().c_str()[0];
     r %= contents.size();
 
     map<string,struct stat*>::iterator it = contents.begin();
@@ -156,7 +151,7 @@ class SyntheticClient {
     n2.push_dentry( it->first );
     return n2.get_path().c_str();
   }
-  
+
   filepath sub;
   char sub_s[50];
   const char *make_sub(const char *base) {
@@ -178,7 +173,7 @@ class SyntheticClient {
   bool run_me() {
     if (run_only >= 0) {
       if (run_only == client->get_nodeid())
-        return true;
+	return true;
       else
 	return false;
     }
@@ -208,11 +203,11 @@ class SyntheticClient {
 
   bool time_to_stop() {
     utime_t now = ceph_clock_now(client->cct);
-    if (0) cout << "time_to_stop .. now " << now 
-		<< " until " << run_until 
-		<< " start " << run_start 
+    if (0) cout << "time_to_stop .. now " << now
+		<< " until " << run_until
+		<< " start " << run_start
 		<< std::endl;
-    if (run_until.sec() && now > run_until) 
+    if (run_until.sec() && now > run_until)
       return true;
     else
       return false;
@@ -242,15 +237,16 @@ class SyntheticClient {
   int write_fd(int fd, int size, int wrsize);
 
   int write_batch(int nfile, int mb, int chunk);
-  int read_file(const std::string& fn, int mb, int chunk, bool ignoreprint=false);
+  int read_file(const std::string& fn, int mb, int chunk,
+		bool ignoreprint = false);
 
   int create_objects(int nobj, int osize, int inflight);
-  int object_rw(int nobj, int osize, int wrpc, int overlap, 
+  int object_rw(int nobj, int osize, int wrpc, int overlap,
 		double rskew, double wskew);
 
   int read_random(string& fn, int mb, int chunk);
   int read_random_ex(string& fn, int mb, int chunk);
-  
+
   int overload_osd_0(int n, int sie, int wrsize);
   int check_first_primary(int fd);
 
@@ -269,11 +265,6 @@ class SyntheticClient {
   int lookup_ino(inodeno_t ino);
 
   int chunk_file(string &filename);
-
-  void mksnap(const char *base, const char *name);
-  void rmsnap(const char *base, const char *name);
-  void mksnapfile(const char *dir);
-
 };
 
 #endif

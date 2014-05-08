@@ -91,13 +91,13 @@ enum {
 // ============================================
 // types for my local metadata cache
 /* basic structure:
-   
+
  - Dentries live in an LRU loop.  they get expired based on last access.
       see include/lru.h.  items can be bumped to "mid" or "top" of list, etc.
  - Inode has ref count for each Fh, Dir, or Dentry that points to it.
  - when Inode ref goes to 0, it's expired.
  - when Dir is empty, it's removed (and it's Inode ref--)
- 
+
 */
 
 /* getdir result */
@@ -106,27 +106,28 @@ struct DirEntry {
   struct stat st;
   int stmask;
   DirEntry(const string &s) : d_name(s), stmask(0) {}
-  DirEntry(const string &n, struct stat& s, int stm) : d_name(n), st(s), stmask(stm) {}
+  DirEntry(const string &n, struct stat& s, int stm) : d_name(n), st(s),
+						       stmask(stm) {}
 };
 
 class Inode;
 struct Cap;
 class Dir;
 class Dentry;
-struct SnapRealm;
 struct Fh;
-struct CapSnap;
 
 struct MetaSession;
 struct MetaRequest;
 
 
-typedef void (*client_ino_callback_t)(void *handle, vinodeno_t ino, int64_t off, int64_t len);
+typedef void (*client_ino_callback_t)(void *handle, vinodeno_t ino,
+				      int64_t off, int64_t len);
 
 typedef void (*client_dentry_callback_t)(void *handle, vinodeno_t dirino,
 					 vinodeno_t ino, string& name);
 
-typedef int (*client_getgroups_callback_t)(void *handle, uid_t uid, gid_t **sgids);
+typedef int (*client_getgroups_callback_t)(void *handle, uid_t uid,
+					   gid_t **sgids);
 
 // ========================================================
 // client interface
@@ -149,14 +150,14 @@ struct dir_result_t {
 
   Inode *inode;
 
-  int64_t offset;        // high bits: frag_t, low bits: an offset
+  int64_t offset; // high bits: frag_t, low bits: an offset
 
-  uint64_t this_offset;  // offset of last chunk, adjusted for . and ..
-  uint64_t next_offset;  // offset of next chunk (last_name's + 1)
-  string last_name;      // last entry in previous chunk
+  uint64_t this_offset; // offset of last chunk, adjusted for . and ..
+  uint64_t next_offset; // offset of next chunk (last_name's + 1)
+  string last_name; // last entry in previous chunk
 
   uint64_t release_count;
-  int start_shared_gen;  // dir shared_gen at start of readdir
+  int start_shared_gen; // dir shared_gen at start of readdir
 
   frag_t buffer_frag;
   vector<pair<string,Inode*> > *buffer;
@@ -172,7 +173,7 @@ struct dir_result_t {
     frag_t fg = offset >> SHIFT;
     if (fg.is_rightmost())
       set_end();
-    else 
+    else
       set_frag(fg.next());
   }
   void set_frag(frag_t f) {
@@ -245,7 +246,8 @@ public:
 
   bool have_open_session(int mds);
   void got_mds_push(MetaSession *s);
-  MetaSession *_get_mds_session(int mds, Connection *con);  ///< return session for mds *and* con; null otherwise
+  /// return session for mds *and* con; null otherwise
+  MetaSession *_get_mds_session(int mds, Connection *con);
   MetaSession *_get_or_open_mds_session(int mds);
   MetaSession *_open_mds_session(int mds);
   void _close_mds_session(MetaSession *s);
@@ -257,7 +259,7 @@ public:
   // mds requests
   ceph_tid_t last_tid, last_flush_seq;
   map<ceph_tid_t, MetaRequest*> mds_requests;
-  set<int>                 failed_mds;
+  set<int> failed_mds;
 
   void dump_mds_requests(Formatter *f);
   void dump_mds_sessions(Formatter *f);
@@ -295,43 +297,31 @@ public:
   int unsafe_sync_write;
 
 public:
-  entity_name_t get_myname() { return messenger->get_myname(); } 
+  entity_name_t get_myname() { return messenger->get_myname(); }
   void sync_write_commit(Inode *in);
 
 protected:
-  Filer                 *filer;     
-  ObjectCacher          *objectcacher;
-  Objecter              *objecter;     // (non-blocking) osd interface
+  Filer *filer;
+  ObjectCacher *objectcacher;
+  Objecter *objecter;     // (non-blocking) osd interface
   WritebackHandler      *writeback_handler;
 
   // cache
   ceph::unordered_map<vinodeno_t, Inode*> inode_map;
-  Inode*                 root;
-  LRU                    lru;    // lru list of Dentry's in our local metadata cache.
+  Inode* root;
+  LRU lru;    // lru list of Dentry's in our local metadata cache.
 
   // all inodes with caps sit on either cap_list or delayed_caps.
   xlist<Inode*> delayed_caps, cap_list;
   int num_flushing_caps;
-  ceph::unordered_map<inodeno_t,SnapRealm*> snap_realms;
 
   /* async block write barrier support */
   //map<uint64_t, BarrierContext* > barriers;
 
-  SnapRealm *get_snap_realm(inodeno_t r);
-  SnapRealm *get_snap_realm_maybe(inodeno_t r);
-  void put_snap_realm(SnapRealm *realm);
-  bool adjust_realm_parent(SnapRealm *realm, inodeno_t parent);
-  inodeno_t update_snap_trace(bufferlist& bl, bool must_flush=true);
-  inodeno_t _update_snap_trace(vector<SnapRealmInfo>& trace);
-  void invalidate_snaprealm_and_children(SnapRealm *realm);
-
-  Inode *open_snapdir(Inode *diri);
-
-
   // file handles, etc.
   interval_set<int> free_fd_set;  // unused fds
   ceph::unordered_map<int, Fh*> fd_map;
-  
+
   int get_fd() {
     int fd = free_fd_set.range_start();
     free_fd_set.erase(fd, 1);
@@ -353,7 +343,7 @@ protected:
 
   // global client lock
   //  - protects Client and buffer cache both!
-  Mutex                  client_lock;
+  Mutex client_lock;
 
   // helpers
   void wake_inode_waiters(MetaSession *s);
@@ -388,20 +378,21 @@ protected:
   // path traversal for high-level interface
   Inode *cwd;
   int path_walk(const filepath& fp, Inode **end, bool followsym=true);
-  int fill_stat(Inode *in, struct stat *st, frag_info_t *dirstat=0, nest_info_t *rstat=0);
+  int fill_stat(Inode *in, struct stat *st, frag_info_t *dirstat = 0,
+		nest_info_t *rstat=0);
   void touch_dn(Dentry *dn);
 
   // trim cache.
   void trim_cache();
   void trim_dentry(Dentry *dn);
   void trim_caps(MetaSession *s, int max);
-  
-  void dump_inode(Formatter *f, Inode *in, set<Inode*>& did, bool disconnected);
+
+  void dump_inode(Formatter *f, Inode *in, set<Inode*>& did,
+		  bool disconnected);
   void dump_cache(Formatter *f);  // debug
-  
+
   // trace generation
   ofstream traceout;
-
 
   Cond mount_cond, sync_cond;
 
@@ -413,7 +404,8 @@ protected:
   void ms_handle_connect(Connection *con);
   bool ms_handle_reset(Connection *con);
   void ms_handle_remote_reset(Connection *con);
-  bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool force_new);
+  bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
+			 bool force_new);
 
 
  public:
@@ -443,7 +435,7 @@ protected:
   // file caps
   void check_cap_issue(Inode *in, Cap *cap, unsigned issued);
   void add_update_cap(Inode *in, MetaSession *session, uint64_t cap_id,
-		      unsigned issued, unsigned seq, unsigned mseq, inodeno_t realm,
+		      unsigned issued, unsigned seq, unsigned mseq,
 		      int flags);
   void remove_cap(Cap *cap, bool queue_release);
   void remove_all_caps(Inode *in);
@@ -457,39 +449,36 @@ protected:
   int get_caps(Inode *in, int need, int want, int *have, loff_t endoff);
   int get_caps_used(Inode *in);
 
-  void maybe_update_snaprealm(SnapRealm *realm, snapid_t snap_created, snapid_t snap_highwater, 
-			      vector<snapid_t>& snaps);
-
-  void handle_snap(struct MClientSnap *m);
   void handle_caps(class MClientCaps *m);
-  void handle_cap_import(MetaSession *session, Inode *in, class MClientCaps *m);
-  void handle_cap_export(MetaSession *session, Inode *in, class MClientCaps *m);
+  void handle_cap_import(MetaSession *session, Inode *in,
+			 class MClientCaps *m);
+  void handle_cap_export(MetaSession *session, Inode *in,
+			 class MClientCaps *m);
   void handle_cap_trunc(MetaSession *session, Inode *in, class MClientCaps *m);
-  void handle_cap_flush_ack(MetaSession *session, Inode *in, Cap *cap, class MClientCaps *m);
-  void handle_cap_flushsnap_ack(MetaSession *session, Inode *in, class MClientCaps *m);
-  void handle_cap_grant(MetaSession *session, Inode *in, Cap *cap, class MClientCaps *m);
+  void handle_cap_flush_ack(MetaSession *session, Inode *in, Cap *cap,
+			    class MClientCaps *m);
+  void handle_cap_grant(MetaSession *session, Inode *in, Cap *cap,
+			class MClientCaps *m);
   void cap_delay_requeue(Inode *in);
   void send_cap(Inode *in, MetaSession *session, Cap *cap,
 		int used, int want, int retain, int flush);
   void check_caps(Inode *in, bool is_delayed);
   void get_cap_ref(Inode *in, int cap);
   void put_cap_ref(Inode *in, int cap);
-  void flush_snaps(Inode *in, bool all_again=false, CapSnap *again=0);
   void wait_sync_caps(uint64_t want);
-  void queue_cap_snap(Inode *in, snapid_t seq=0);
-  void finish_cap_snap(Inode *in, CapSnap *capsnap, int used);
-  void _flushed_cap_snap(Inode *in, snapid_t seq);
 
   void _schedule_invalidate_dentry_callback(Dentry *dn, bool del);
-  void _async_dentry_invalidate(vinodeno_t dirino, vinodeno_t ino, string& name);
+  void _async_dentry_invalidate(vinodeno_t dirino, vinodeno_t ino,
+				string& name);
   void _invalidate_inode_parents(Inode *in);
 
-  void _schedule_invalidate_callback(Inode *in, int64_t off, int64_t len, bool keep_caps);
+  void _schedule_invalidate_callback(Inode *in, int64_t off, int64_t len,
+				     bool keep_caps);
   void _invalidate_inode_cache(Inode *in);
   void _invalidate_inode_cache(Inode *in, int64_t off, int64_t len);
   void _async_invalidate(Inode *in, int64_t off, int64_t len, bool keep_caps);
   void _release(Inode *in);
-  
+
   /**
    * Initiate a flush of the data associated with the given inode.
    * If you specify a Context, you are responsible for holding an inode
@@ -498,7 +487,7 @@ protected:
    * @param in The Inode whose data you wish to flush.
    * @param c The Context you wish us to complete once the data is
    * flushed. If already flushed, this will be called in-line.
-   * 
+   *
    * @returns true if the data was already flushed, false otherwise.
    */
   bool _flush(Inode *in, Context *c=NULL);
@@ -511,32 +500,37 @@ protected:
 
   void lock_fh_pos(Fh *f);
   void unlock_fh_pos(Fh *f);
-  
+
   // metadata cache
   void update_dir_dist(Inode *in, DirStat *st);
 
-  void insert_readdir_results(MetaRequest *request, MetaSession *session, Inode *diri);
+  void insert_readdir_results(MetaRequest *request, MetaSession *session,
+			      Inode *diri);
   Inode* insert_trace(MetaRequest *request, MetaSession *session);
-  void update_inode_file_bits(Inode *in,
-			      uint64_t truncate_seq, uint64_t truncate_size, uint64_t size,
-			      uint64_t time_warp_seq, utime_t ctime, utime_t mtime, utime_t atime,
-			      version_t inline_version, bufferlist& inline_data,
-			      int issued);
+  void update_inode_file_bits(Inode *in, uint64_t truncate_seq,
+			      uint64_t truncate_size, uint64_t size,
+			      uint64_t time_warp_seq, utime_t ctime,
+			      utime_t mtime, utime_t atime,
+			      version_t inline_version,
+			      bufferlist& inline_data, int issued);
   Inode *add_update_inode(InodeStat *st, utime_t ttl, MetaSession *session);
-  Dentry *insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dlease, 
-			      Inode *in, utime_t from, MetaSession *session, bool set_offset,
-			      Dentry *old_dentry = NULL);
-  void update_dentry_lease(Dentry *dn, LeaseStat *dlease, utime_t from, MetaSession *session);
+  Dentry *insert_dentry_inode(Dir *dir, const string& dname, LeaseStat *dlease,
+			      Inode *in, utime_t from, MetaSession *session,
+			      bool set_offset, Dentry *old_dentry = NULL);
+  void update_dentry_lease(Dentry *dn, LeaseStat *dlease, utime_t from,
+			   MetaSession *session);
 
 
   // ----------------------
   // fs ops.
 private:
 
-  void fill_dirent(struct dirent *de, const char *name, int type, uint64_t ino, loff_t next_off);
+  void fill_dirent(struct dirent *de, const char *name, int type, uint64_t ino,
+		   loff_t next_off);
 
   // some readdir helpers
-  typedef int (*add_dirent_cb_t)(void *p, struct dirent *de, struct stat *st, int stmask, off_t off);
+  typedef int (*add_dirent_cb_t)(void *p, struct dirent *de, struct stat *st,
+				 int stmask, off_t off);
 
   int _opendir(Inode *in, dir_result_t **dirpp, int uid=-1, int gid=-1);
   void _readdir_drop_dirp_buffer(dir_result_t *dirp);
@@ -570,7 +564,8 @@ private:
     }
   };
 
-  int _read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl, bool *checkeof);
+  int _read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
+		 bool *checkeof);
   int _read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl);
 
   // internal interface
@@ -578,24 +573,36 @@ private:
   int _do_lookup(Inode *dir, const string& name, Inode **target);
   int _lookup(Inode *dir, const string& dname, Inode **target);
 
-  int _link(Inode *in, Inode *dir, const char *name, int uid=-1, int gid=-1, Inode **inp = 0);
-  int _unlink(Inode *dir, const char *name, int uid=-1, int gid=-1);
-  int _rename(Inode *olddir, const char *oname, Inode *ndir, const char *nname, int uid=-1, int gid=-1);
-  int _mkdir(Inode *dir, const char *name, mode_t mode, int uid=-1, int gid=-1, Inode **inp = 0);
-  int _rmdir(Inode *dir, const char *name, int uid=-1, int gid=-1);
-  int _symlink(Inode *dir, const char *name, const char *target, int uid=-1, int gid=-1, Inode **inp = 0);
-  int _mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev, int uid=-1, int gid=-1, Inode **inp = 0);
-  int _setattr(Inode *in, struct stat *attr, int mask, int uid=-1, int gid=-1, Inode **inp = 0);
-  int _getattr(Inode *in, int mask, int uid=-1, int gid=-1, bool force=false);
+  int _link(Inode *in, Inode *dir, const char *name, int uid = -1, int gid= -1,
+	    Inode **inp = 0);
+  int _unlink(Inode *dir, const char *name, int uid=-1, int gid = -1);
+  int _rename(Inode *olddir, const char *oname, Inode *ndir, const char *nname,
+	      int uid = -1, int gid = -1);
+  int _mkdir(Inode *dir, const char *name, mode_t mode, int uid = -1,
+	     int gid = -1, Inode **inp = 0);
+  int _rmdir(Inode *dir, const char *name, int uid = -1, int gid = -1);
+  int _symlink(Inode *dir, const char *name, const char *target,
+	       int uid = -1, int gid = -1, Inode **inp = 0);
+  int _mknod(Inode *dir, const char *name, mode_t mode, dev_t rdev,
+	     int uid = -1, int gid = -1, Inode **inp = 0);
+  int _setattr(Inode *in, struct stat *attr, int mask, int uid=-1, int gid=-1,
+	       Inode **inp = 0);
+  int _getattr(Inode *in, int mask, int uid = -1, int gid = -1,
+	       bool force=false);
   int _readlink(Inode *in, char *buf, size_t size);
-  int _getxattr(Inode *in, const char *name, void *value, size_t len, int uid=-1, int gid=-1);
-  int _listxattr(Inode *in, char *names, size_t len, int uid=-1, int gid=-1);
-  int _setxattr(Inode *in, const char *name, const void *value, size_t len, int flags, int uid=-1, int gid=-1);
-  int _removexattr(Inode *in, const char *nm, int uid=-1, int gid=-1);
-  int _open(Inode *in, int flags, mode_t mode, Fh **fhp, int uid=-1, int gid=-1);
-  int _create(Inode *in, const char *name, int flags, mode_t mode, Inode **inp, Fh **fhp,
-              int stripe_unit, int stripe_count, int object_size, const char *data_pool,
-	      bool *created = NULL, int uid=-1, int gid=-1);
+  int _getxattr(Inode *in, const char *name, void *value, size_t len,
+		int uid = -1, int gid = -1);
+  int _listxattr(Inode *in, char *names, size_t len, int uid = -1,
+		 int gid = -1);
+  int _setxattr(Inode *in, const char *name, const void *value, size_t len,
+		int flags, int uid = -1, int gid = -1);
+  int _removexattr(Inode *in, const char *nm, int uid = -1, int gid = -1);
+  int _open(Inode *in, int flags, mode_t mode, Fh **fhp,
+	    int uid = -1, int gid = -1);
+  int _create(Inode *in, const char *name, int flags, mode_t mode, Inode **inp,
+	      Fh **fhp, int stripe_unit, int stripe_count, int object_size,
+	      const char *data_pool, bool *created = NULL, int uid = -1,
+	      int gid=-1);
   loff_t _lseek(Fh *fh, loff_t offset, int whence);
   int _read(Fh *fh, int64_t offset, uint64_t size, bufferlist *bl);
   int _write(Fh *fh, int64_t offset, uint64_t size, const char *buf);
@@ -605,7 +612,7 @@ private:
   int _fallocate(Fh *fh, int mode, int64_t offset, int64_t length);
 
   int get_or_create(Inode *dir, const char* name,
-		    Dentry **pdn, bool expect_null=false);
+		    Dentry **pdn, bool expect_null = false);
 
   int check_permissions(Inode *in, int flags, int uid, int gid);
 
@@ -639,16 +646,19 @@ public:
 
   struct dirent * readdir(dir_result_t *d);
   int readdir_r(dir_result_t *dirp, struct dirent *de);
-  int readdirplus_r(dir_result_t *dirp, struct dirent *de, struct stat *st, int *stmask);
+  int readdirplus_r(dir_result_t *dirp, struct dirent *de, struct stat *st,
+		    int *stmask);
 
-  int getdir(const char *relpath, list<string>& names);  // get the whole dir at once.
+  // get the whole dir at once.
+  int getdir(const char *relpath, list<string>& names);
 
   /**
    * Returns the length of the buffer that got filled in, or -errno.
    * If it returns -ERANGE you just need to increase the size of the
    * buffer and try again.
    */
-  int _getdents(dir_result_t *dirp, char *buf, int buflen, bool ful);  // get a bunch of dentries at once
+  // get a bunch of dentries at once
+  int _getdents(dir_result_t *dirp, char *buf, int buflen, bool ful);
   int getdents(dir_result_t *dirp, char *buf, int buflen) {
     return _getdents(dirp, buf, buflen, true);
   }
@@ -675,8 +685,10 @@ public:
   int symlink(const char *existing, const char *newname);
 
   // inode stuff
-  int stat(const char *path, struct stat *stbuf, frag_info_t *dirstat=0, int mask=CEPH_STAT_CAP_INODE_ALL);
-  int lstat(const char *path, struct stat *stbuf, frag_info_t *dirstat=0, int mask=CEPH_STAT_CAP_INODE_ALL);
+  int stat(const char *path, struct stat *stbuf, frag_info_t *dirstat = 0,
+	   int mask = CEPH_STAT_CAP_INODE_ALL);
+  int lstat(const char *path, struct stat *stbuf, frag_info_t *dirstat = 0,
+	    int mask = CEPH_STAT_CAP_INODE_ALL);
   int lstatlite(const char *path, struct statlite *buf);
 
   int setattr(const char *relpath, struct stat *attr, int mask);
@@ -694,7 +706,8 @@ public:
   // file ops
   int mknod(const char *path, mode_t mode, dev_t rdev=0);
   int open(const char *path, int flags, mode_t mode=0);
-  int open(const char *path, int flags, mode_t mode, int stripe_unit, int stripe_count, int object_size, const char *data_pool);
+  int open(const char *path, int flags, mode_t mode, int stripe_unit,
+	   int stripe_count, int object_size, const char *data_pool);
   int lookup_hash(inodeno_t ino, inodeno_t dirino, const char *name);
   int lookup_ino(inodeno_t ino, Inode **inode=NULL);
   int lookup_parent(Inode *in, Inode **parent=NULL);
@@ -716,8 +729,10 @@ public:
   int llistxattr(const char *path, char *list, size_t size);
   int removexattr(const char *path, const char *name);
   int lremovexattr(const char *path, const char *name);
-  int setxattr(const char *path, const char *name, const void *value, size_t size, int flags);
-  int lsetxattr(const char *path, const char *name, const void *value, size_t size, int flags);
+  int setxattr(const char *path, const char *name, const void *value,
+	       size_t size, int flags);
+  int lsetxattr(const char *path, const char *name, const void *value,
+		size_t size, int flags);
 
   int sync_fs();
   int64_t drop_caches();
@@ -729,7 +744,8 @@ public:
   // expose file layout
   int describe_layout(const char *path, ceph_file_layout* layout);
   int fdescribe_layout(int fd, ceph_file_layout* layout);
-  int get_file_stripe_address(int fd, loff_t offset, vector<entity_addr_t>& address);
+  int get_file_stripe_address(int fd, loff_t offset,
+			      vector<entity_addr_t>& address);
   int get_file_extent_osds(int fd, loff_t off, loff_t *len, vector<int>& osds);
   int get_osd_addr(int osd, entity_addr_t& addr);
 
@@ -743,9 +759,6 @@ public:
   int enumerate_layout(int fd, vector<ObjectExtent>& result,
 		       loff_t length, loff_t offset);
 
-  int mksnap(const char *path, const char *name);
-  int rmsnap(const char *path, const char *name);
-
   // expose caps
   int get_caps_issued(int fd);
   int get_caps_issued(const char *path);
@@ -755,7 +768,6 @@ public:
     Mutex::Locker lock(client_lock);
     return _get_inodeno(in);
   }
-  snapid_t ll_get_snapid(Inode *in);
   vinodeno_t ll_get_vino(Inode *in) {
     Mutex::Locker lock(client_lock);
     return _get_vino(in);
@@ -776,7 +788,8 @@ public:
   int ll_listxattr(Inode *in, char *list, size_t size, int uid=-1, int gid=-1);
   int ll_opendir(Inode *in, dir_result_t **dirpp, int uid = -1, int gid = -1);
   int ll_releasedir(dir_result_t* dirp);
-  int ll_readlink(Inode *in, char *buf, size_t bufsize, int uid = -1, int gid = -1);
+  int ll_readlink(Inode *in, char *buf, size_t bufsize, int uid = -1,
+		  int gid = -1);
   int ll_mknod(Inode *in, const char *name, mode_t mode, dev_t rdev,
 	       struct stat *attr, Inode **out, int uid = -1, int gid = -1);
   int ll_mkdir(Inode *in, const char *name, mode_t mode, struct stat *attr,
@@ -799,7 +812,7 @@ public:
   int ll_write_block(Inode *in, uint64_t blockid,
 		     char* buf, uint64_t offset,
 		     uint64_t length, ceph_file_layout* layout,
-		     uint64_t snapseq, uint32_t sync);
+		     uint32_t sync);
   int ll_commit_blocks(Inode *in, uint64_t offset, uint64_t length);
 
   int ll_statfs(Inode *in, struct statvfs *stbuf);
@@ -808,7 +821,6 @@ public:
 			  int *cookie, int *eol, int uid, int gid);
   uint32_t ll_stripe_unit(Inode *in);
   int ll_file_layout(Inode *in, ceph_file_layout *layout);
-  uint64_t ll_snap_seq(Inode *in);
 
   int ll_read(Fh *fh, loff_t off, loff_t len, bufferlist *bl);
   int ll_write(Fh *fh, loff_t off, loff_t len, const char *data);
@@ -826,7 +838,8 @@ public:
   int ll_osdaddr(int osd, char* buf, size_t size);
   void ll_register_ino_invalidate_cb(client_ino_callback_t cb, void *handle);
 
-  void ll_register_dentry_invalidate_cb(client_dentry_callback_t cb, void *handle);
+  void ll_register_dentry_invalidate_cb(client_dentry_callback_t cb,
+					void *handle);
 
   void ll_register_getgroups_cb(client_getgroups_callback_t cb, void *handle);
 };

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include <sstream>
@@ -885,25 +885,6 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 	goto out;
       }
       pending_mdsmap.max_file_size = n;
-    } else if (var == "allow_new_snaps") {
-      if (val == "false" || val == "no" || (interr.length() == 0 && n == 0)) {
-	pending_mdsmap.clear_snaps_allowed();
-	ss << "disabled new snapshots";
-      } else if (val == "true" || val == "yes" || (interr.length() == 0 && n == 1)) {
-	string confirm;
-	if (!cmd_getval(g_ceph_context, cmdmap, "confirm", confirm) ||
-	    confirm != "--yes-i-really-mean-it") {
-	  ss << "Snapshots are unstable and will probably break your FS! Set to --yes-i-really-mean-it if you are sure you want to enable them";
-	  r = -EPERM;
-	  goto out;
-	}
-	pending_mdsmap.set_snaps_allowed();
-	ss << "enabled new snapshots";
-      } else {
-	ss << "value must be true|yes|1 or false|no|0";
-	r = -EINVAL;
-	goto out;
-      }
     } else {
       ss << "unknown variable " << var;
       goto out;

@@ -34,7 +34,6 @@ ObjectCacher::BufferHead *ObjectCacher::Object::split(BufferHead *left, loff_t o
   right->last_write_tid = left->last_write_tid;
   right->last_read_tid = left->last_read_tid;
   right->set_state(left->get_state());
-  right->snapc = left->snapc;
 
   loff_t newleftlen = off - left->start();
   right->set_start(off);
@@ -185,7 +184,7 @@ int ObjectCacher::Object::map_read(OSDRead *rd,
        ex_it != rd->extents.end();
        ++ex_it) {
     
-    if (ex_it->oid != oid.oid)
+    if (ex_it->oid != oid)
       continue;
 
     ldout(oc->cct, 10) << "map_read " << ex_it->oid 
@@ -319,7 +318,7 @@ ObjectCacher::BufferHead *ObjectCacher::Object::map_write(OSDWrite *wr)
        ex_it != wr->extents.end();
        ++ex_it) {
 
-    if (ex_it->oid != oid.oid) continue;
+    if (ex_it->oid != oid) continue;
 
     ldout(oc->cct, 10) << "map_write oex " << ex_it->oid
 		       << " " << ex_it->offset << "~" << ex_it->length << dendl;
@@ -524,7 +523,8 @@ ObjectCacher::~ObjectCacher()
   finisher.stop();
   perf_stop();
   // we should be empty.
-  for (vector<ceph::unordered_map<sobject_t, Object *> >::iterator i = objects.begin();
+  for (vector<ceph::unordered_map<object_t, Object *> >::iterator i
+	 = objects.begin();
       i != objects.end();
       ++i)
     assert(i->empty());
@@ -564,7 +564,7 @@ void ObjectCacher::perf_stop()
 }
 
 /* private */
-ObjectCacher::Object *ObjectCacher::get_object(sobject_t oid, ObjectSet *oset,
+ObjectCacher::Object *ObjectCacher::get_object(object_t oid, ObjectSet *oset,
 					       object_locator_t &l,
 					       uint64_t truncate_size,
 					       uint64_t truncate_seq)
@@ -598,7 +598,7 @@ void ObjectCacher::close_object(Object *ob)
   
   // ok!
   ob_lru.lru_remove(ob);
-  objects[ob->oloc.pool].erase(ob->get_soid());
+  objects[ob->oloc.pool].erase(ob->get_oid());
   ob->set_item.remove_myself();
   delete ob;
 }
@@ -620,14 +620,14 @@ void ObjectCacher::bh_read(BufferHead *bh)
 					    bh->start(), bh->length());
   // go
   writeback_handler.read(bh->ob->get_oid(), bh->ob->get_oloc(),
-			 bh->start(), bh->length(), bh->ob->get_snap(),
+			 bh->start(), bh->length(),
 			 &onfinish->bl, bh->ob->truncate_size, bh->ob->truncate_seq,
 			 onfinish);
 
   ++reads_outstanding;
 }
 
-void ObjectCacher::bh_read_finish(int64_t poolid, sobject_t oid, ceph_tid_t tid,
+void ObjectCacher::bh_read_finish(int64_t poolid, object_t oid, ceph_tid_t tid,
 				  loff_t start, uint64_t length,
 				  bufferlist &bl, int r,
 				  bool trust_enoent)
@@ -810,11 +810,11 @@ void ObjectCacher::bh_write(BufferHead *bh)
 
   // finishers
   C_WriteCommit *oncommit = new C_WriteCommit(this, bh->ob->oloc.pool,
-                                              bh->ob->get_soid(), bh->start(), bh->length());
+					      bh->ob->get_oid(), bh->start(), bh->length());
   // go
   ceph_tid_t tid = writeback_handler.write(bh->ob->get_oid(), bh->ob->get_oloc(),
 				      bh->start(), bh->length(),
-				      bh->snapc, bh->bl, bh->last_write,
+				      bh->bl, bh->last_write,
 				      bh->ob->truncate_size, bh->ob->truncate_seq,
 				      oncommit);
   ldout(cct, 20) << " tid " << tid << " on " << bh->ob->get_oid() << dendl;
@@ -831,7 +831,7 @@ void ObjectCacher::bh_write(BufferHead *bh)
   mark_tx(bh);
 }
 
-void ObjectCacher::bh_write_commit(int64_t poolid, sobject_t oid, loff_t start,
+void ObjectCacher::bh_write_commit(int64_t poolid, object_t oid, loff_t start,
 				   uint64_t length, ceph_tid_t tid, int r)
 {
   assert(lock.is_locked());
@@ -852,7 +852,7 @@ void ObjectCacher::bh_write_commit(int64_t poolid, sobject_t oid, loff_t start,
       ldout(cct, 10) << "bh_write_commit marking exists on " << *ob << dendl;
       ob->exists = true;
 
-      if (writeback_handler.may_copy_on_write(ob->get_oid(), start, length, ob->get_snap())) {
+      if (writeback_handler.may_copy_on_write(ob->get_oid(), start, length)) {
 	ldout(cct, 10) << "bh_write_commit may copy on write, clearing complete on " << *ob << dendl;
 	ob->complete = false;
       }
@@ -991,7 +991,7 @@ void ObjectCacher::trim()
 
 /* public */
 
-bool ObjectCacher::is_cached(ObjectSet *oset, vector<ObjectExtent>& extents, snapid_t snapid)
+bool ObjectCacher::is_cached(ObjectSet *oset, vector<ObjectExtent>& extents)
 {
   assert(lock.is_locked());
   for (vector<ObjectExtent>::iterator ex_it = extents.begin();
@@ -1000,8 +1000,8 @@ bool ObjectCacher::is_cached(ObjectSet *oset, vector<ObjectExtent>& extents, sna
     ldout(cct, 10) << "is_cached " << *ex_it << dendl;
 
     // get Object cache
-    sobject_t soid(ex_it->oid, snapid);
-    Object *o = get_object_maybe(soid, ex_it->oloc);
+    object_t oid(oid);
+    Object *o = get_object_maybe(oid, ex_it->oloc);
     if (!o)
       return false;
     if (!o->is_cached(ex_it->offset, ex_it->length))
@@ -1040,8 +1040,8 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
     total_bytes_read += ex_it->length;
 
     // get Object cache
-    sobject_t soid(ex_it->oid, rd->snap);
-    Object *o = get_object(soid, oset, ex_it->oloc, ex_it->truncate_size, oset->truncate_seq);
+    object_t oid = ex_it->oid;
+    Object *o = get_object(oid, oset, ex_it->oloc, ex_it->truncate_size, oset->truncate_seq);
     touch_ob(o);
 
     // does not exist and no hits?
@@ -1053,7 +1053,8 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
       ldout(cct, 10) << "readx  object !exists, 1 extent..." << dendl;
 
       // should we worry about COW underneaeth us?
-      if (writeback_handler.may_copy_on_write(soid.oid, ex_it->offset, ex_it->length, soid.snap)) {
+      if (writeback_handler.may_copy_on_write(oid, ex_it->offset,
+					      ex_it->length)) {
 	ldout(cct, 20) << "readx  may copy on write" << dendl;
 	bool wait = false;
 	for (map<loff_t, BufferHead*>::iterator bh_it = o->data.begin();
@@ -1276,13 +1277,12 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
        ex_it != wr->extents.end();
        ++ex_it) {
     // get object cache
-    sobject_t soid(ex_it->oid, CEPH_NOSNAP);
-    Object *o = get_object(soid, oset, ex_it->oloc, ex_it->truncate_size, oset->truncate_seq);
+    object_t oid = ex_it->oid;
+    Object *o = get_object(oid, oset, ex_it->oloc, ex_it->truncate_size, oset->truncate_seq);
 
     // map it all into a single bufferhead.
     BufferHead *bh = o->map_write(wr);
-    bh->snapc = wr->snapc;
-    
+
     bytes_written += bh->length();
     if (bh->is_tx()) {
       bytes_written_in_flush += bh->length();
@@ -1654,12 +1654,12 @@ bool ObjectCacher::flush_set(ObjectSet *oset, vector<ObjectExtent>& exv, Context
        p != exv.end();
        ++p) {
     ObjectExtent &ex = *p;
-    sobject_t soid(ex.oid, CEPH_NOSNAP);
-    if (objects[oset->poolid].count(soid) == 0)
+    object_t oid = ex.oid;
+    if (objects[oset->poolid].count(oid) == 0)
       continue;
-    Object *ob = objects[oset->poolid][soid];
+    Object *ob = objects[oset->poolid][oid];
 
-    ldout(cct, 20) << "flush_set " << oset << " ex " << ex << " ob " << soid << " " << ob << dendl;
+    ldout(cct, 20) << "flush_set " << oset << " ex " << ex << " ob " << oid << " " << ob << dendl;
 
     if (!flush(ob, ex.offset, ex.length)) {
       // we'll need to gather...
@@ -1777,11 +1777,11 @@ uint64_t ObjectCacher::release_all()
   ldout(cct, 10) << "release_all" << dendl;
   uint64_t unclean = 0;
   
-  vector<ceph::unordered_map<sobject_t, Object*> >::iterator i = objects.begin();
+  vector<ceph::unordered_map<object_t, Object*> >::iterator i = objects.begin();
   while (i != objects.end()) {
-    ceph::unordered_map<sobject_t, Object*>::iterator p = i->begin();
+    ceph::unordered_map<object_t, Object*>::iterator p = i->begin();
     while (p != i->end()) {
-      ceph::unordered_map<sobject_t, Object*>::iterator n = p;
+      ceph::unordered_map<object_t, Object*>::iterator n = p;
       ++n;
 
       Object *ob = p->second;
@@ -1846,11 +1846,11 @@ void ObjectCacher::discard_set(ObjectSet *oset, vector<ObjectExtent>& exls)
        ++p) {
     ldout(cct, 10) << "discard_set " << oset << " ex " << *p << dendl;
     ObjectExtent &ex = *p;
-    sobject_t soid(ex.oid, CEPH_NOSNAP);
-    if (objects[oset->poolid].count(soid) == 0)
+    object_t oid = ex.oid;
+    if (objects[oset->poolid].count(oid) == 0)
       continue;
-    Object *ob = objects[oset->poolid][soid];
-    
+    Object *ob = objects[oset->poolid][oid];
+
     ob->discard(ex.offset, ex.length);
   }
 
@@ -1866,10 +1866,10 @@ void ObjectCacher::verify_stats() const
   ldout(cct, 10) << "verify_stats" << dendl;
 
   loff_t clean = 0, zero = 0, dirty = 0, rx = 0, tx = 0, missing = 0, error = 0;
-  for (vector<ceph::unordered_map<sobject_t, Object*> >::const_iterator i = objects.begin();
+  for (vector<ceph::unordered_map<object_t, Object*> >::const_iterator i = objects.begin();
       i != objects.end();
       ++i) {
-    for (ceph::unordered_map<sobject_t, Object*>::const_iterator p = i->begin();
+    for (ceph::unordered_map<object_t, Object*>::const_iterator p = i->begin();
         p != i->end();
         ++p) {
       Object *ob = p->second;

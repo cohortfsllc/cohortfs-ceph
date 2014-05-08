@@ -27,7 +27,6 @@ class MClientCaps : public Message {
  public:
   struct ceph_mds_caps head;
   struct ceph_mds_cap_peer peer;
-  bufferlist snapbl;
   bufferlist xattrbl;
   bufferlist flockbl;
   version_t  inline_version;
@@ -41,7 +40,6 @@ class MClientCaps : public Message {
   ceph_seq_t get_mseq() { return head.migrate_seq; }
 
   inodeno_t get_ino() { return inodeno_t(head.ino); }
-  inodeno_t get_realm() { return inodeno_t(head.realm); }
   uint64_t get_cap_id() { return head.cap_id; }
 
   uint64_t get_size() { return head.size;  }
@@ -60,9 +58,6 @@ class MClientCaps : public Message {
 
   uint64_t get_client_tid() { return get_tid(); }
   void set_client_tid(uint64_t s) { set_tid(s); }
-
-  snapid_t get_snap_follows() { return snapid_t(head.snap_follows); }
-  void set_snap_follows(snapid_t s) { head.snap_follows = s; }
 
   void set_caps(int c) { head.caps = c; }
   void set_wanted(int w) { head.wanted = w; }
@@ -90,7 +85,6 @@ class MClientCaps : public Message {
   }
   MClientCaps(int op,
 	      inodeno_t ino,
-	      inodeno_t realm,
 	      uint64_t id,
 	      long seq,
 	      int caps,
@@ -101,7 +95,6 @@ class MClientCaps : public Message {
     memset(&head, 0, sizeof(head));
     head.op = op;
     head.ino = ino;
-    head.realm = realm;
     head.cap_id = id;
     head.seq = seq;
     head.caps = caps;
@@ -112,13 +105,12 @@ class MClientCaps : public Message {
     inline_version = 0;
   }
   MClientCaps(int op,
-	      inodeno_t ino, inodeno_t realm,
+	      inodeno_t ino,
 	      uint64_t id, int mseq)
     : Message(CEPH_MSG_CLIENT_CAPS, HEAD_VERSION) {
     memset(&head, 0, sizeof(head));
     head.op = op;
     head.ino = ino;
-    head.realm = realm;
     head.cap_id = id;
     head.migrate_seq = mseq;
     peer.cap_id = 0;
@@ -139,7 +131,6 @@ public:
     out << " caps=" << ccap_string(head.caps)
 	<< " dirty=" << ccap_string(head.dirty)
 	<< " wanted=" << ccap_string(head.wanted);
-    out << " follows " << snapid_t(head.snap_follows);
     if (head.migrate_seq)
       out << " mseq " << head.migrate_seq;
 
@@ -159,7 +150,6 @@ public:
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(head, p);
-    ::decode_nohead(head.snap_trace_len, snapbl, p);
 
     assert(middle.length() == head.xattr_len);
     if (head.xattr_len)
@@ -184,7 +174,6 @@ public:
     }
   }
   void encode_payload(uint64_t features) {
-    head.snap_trace_len = snapbl.length();
     head.xattr_len = xattrbl.length();
 
     // record peer in unused fields of cap export message
@@ -192,7 +181,6 @@ public:
       memcpy(&head.peer, &peer, sizeof(peer));
 
     ::encode(head, payload);
-    ::encode_nohead(snapbl, payload);
 
     middle = xattrbl;
 

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -132,8 +132,6 @@ class MClientReply;
 class MMDSBeacon;
 
 class InoTable;
-class SnapServer;
-class SnapClient;
 class AnchorServer;
 class AnchorClient;
 
@@ -144,8 +142,8 @@ class AuthAuthorizeHandlerRegistry;
 
 class MDS : public Dispatcher {
  public:
-  Mutex        mds_lock;
-  SafeTimer    timer;
+  Mutex mds_lock;
+  SafeTimer timer;
 
   AuthAuthorizeHandlerRegistry *authorize_handler_cluster_registry;
   AuthAuthorizeHandlerRegistry *authorize_handler_service_registry;
@@ -159,33 +157,30 @@ class MDS : public Dispatcher {
   string standby_for_name;
   bool standby_replaying;  // true if current replay pass is in standby-replay mode
 
-  Messenger    *messenger;
-  MonClient    *monc;
-  MDSMap       *mdsmap;
-  OSDMap       *osdmap;
-  Objecter     *objecter;
-  Filer        *filer;       // for reading/writing to/from osds
-  LogClient    clog;
+  Messenger *messenger;
+  MonClient *monc;
+  MDSMap *mdsmap;
+  OSDMap *osdmap;
+  Objecter *objecter;
+  Filer *filer;       // for reading/writing to/from osds
+  LogClient clog;
 
   // sub systems
-  Server       *server;
-  MDCache      *mdcache;
-  Locker       *locker;
-  MDLog        *mdlog;
-  MDBalancer   *balancer;
+  Server *server;
+  MDCache *mdcache;
+  Locker *locker;
+  MDLog *mdlog;
+  MDBalancer *balancer;
 
-  InoTable     *inotable;
+  InoTable *inotable;
 
   AnchorServer *anchorserver;
   AnchorClient *anchorclient;
 
-  SnapServer   *snapserver;
-  SnapClient   *snapclient;
-
   MDSTableClient *get_table_client(int t);
   MDSTableServer *get_table_server(int t);
 
-  PerfCounters       *logger, *mlogger;
+  PerfCounters *logger, *mlogger;
 
   int orig_argc;
   const char **orig_argv;
@@ -193,10 +188,11 @@ class MDS : public Dispatcher {
  protected:
   // -- MDS state --
   int last_state;
-  int state;         // my confirmed state
+  int state; // my confirmed state
   int want_state;    // the state i want
 
-  list<Context*> waiting_for_active, waiting_for_replay, waiting_for_reconnect, waiting_for_resolve;
+  list<Context*> waiting_for_active, waiting_for_replay, waiting_for_reconnect,
+    waiting_for_resolve;
   list<Context*> replay_queue;
   map<int, list<Context*> > waiting_for_active_peer;
   list<Message*> waiting_for_nolaggy;
@@ -207,14 +203,14 @@ class MDS : public Dispatcher {
   ceph_tid_t last_tid;    // for mds-initiated requests (e.g. stray rename)
 
  public:
-  void wait_for_active(Context *c) { 
-    waiting_for_active.push_back(c); 
+  void wait_for_active(Context *c) {
+    waiting_for_active.push_back(c);
   }
-  void wait_for_active_peer(int who, Context *c) { 
+  void wait_for_active_peer(int who, Context *c) {
     waiting_for_active_peer[who].push_back(c);
   }
-  void wait_for_replay(Context *c) { 
-    waiting_for_replay.push_back(c); 
+  void wait_for_replay(Context *c) {
+    waiting_for_replay.push_back(c);
   }
   void wait_for_reconnect(Context *c) {
     waiting_for_reconnect.push_back(c);
@@ -229,8 +225,8 @@ class MDS : public Dispatcher {
     replay_queue.push_back(c);
   }
 
-  int get_state() { return state; } 
-  int get_want_state() { return want_state; } 
+  int get_state() { return state; }
+  int get_want_state() { return want_state; }
   bool is_creating() { return state == MDSMap::STATE_CREATING; }
   bool is_starting() { return state == MDSMap::STATE_STARTING; }
   bool is_standby()  { return state == MDSMap::STATE_STANDBY; }
@@ -245,14 +241,14 @@ class MDS : public Dispatcher {
 
   bool is_oneshot_replay()   { return state == MDSMap::STATE_ONESHOT_REPLAY; }
   bool is_any_replay() { return (is_replay() || is_standby_replay() ||
-                                 is_oneshot_replay()); }
+				 is_oneshot_replay()); }
 
   bool is_stopped()  { return mdsmap->is_stopped(whoami); }
 
   void request_state(int s);
 
   ceph_tid_t issue_tid() { return ++last_tid; }
-    
+
 
   // -- waiters --
   list<Context*> finished_queue;
@@ -270,11 +266,11 @@ class MDS : public Dispatcher {
     replay_queue.pop_front();
     return true;
   }
-  
+
   // -- keepalive beacon --
-  version_t               beacon_last_seq;          // last seq sent to monitor
-  map<version_t,utime_t>  beacon_seq_stamp;         // seq # -> time sent
-  utime_t                 beacon_last_acked_stamp;  // last time we sent a beacon that got acked
+  version_t beacon_last_seq; // last seq sent to monitor
+  map<version_t,utime_t> beacon_seq_stamp; // seq # -> time sent
+  utime_t beacon_last_acked_stamp; // last time we sent a beacon that got acked
   bool was_laggy;
   utime_t laggy_until;
 

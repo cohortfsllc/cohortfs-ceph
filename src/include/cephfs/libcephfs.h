@@ -49,7 +49,6 @@ extern "C" {
 #ifndef __cplusplus
 
 #define CEPH_INO_ROOT  1
-#define CEPH_NOSNAP  ((uint64_t)(-2))
 
 struct ceph_file_layout {
 	/* file -> object mapping */
@@ -73,13 +72,8 @@ typedef struct _inodeno_t {
   uint64_t val;
 } inodeno_t;
 
-typedef struct _snapid_t {
-  uint64_t val;
-} snapid_t;
-
 typedef struct vinodeno_t {
   inodeno_t ino;
-  snapid_t snapid;
 } vinodeno_t;
 
 typedef struct Fh Fh;
@@ -1309,8 +1303,6 @@ uint32_t ceph_ll_stripe_unit(struct ceph_mount_info *cmount,
 uint32_t ceph_ll_file_layout(struct ceph_mount_info *cmount,
 			     struct Inode *in,
 			     struct ceph_file_layout *layout);
-uint64_t ceph_ll_snap_seq(struct ceph_mount_info *cmount,
-			  struct Inode *in);
 int ceph_ll_get_stripe_osd(struct ceph_mount_info *cmount,
 			   struct Inode *in,
 			   uint64_t blockno,
@@ -1328,7 +1320,7 @@ int ceph_ll_write_block(struct ceph_mount_info *cmount,
 			struct Inode *in, uint64_t blockid,
 			char* buf, uint64_t offset,
 			uint64_t length, struct ceph_file_layout* layout,
-			uint64_t snapseq, uint32_t sync);
+			uint32_t sync);
 int ceph_ll_commit_blocks(struct ceph_mount_info *cmount,
 			  struct Inode *in, uint64_t offset, uint64_t range);
 

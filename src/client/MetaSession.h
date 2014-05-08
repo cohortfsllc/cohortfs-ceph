@@ -13,7 +13,6 @@
 
 struct Cap;
 class Inode;
-struct CapSnap;
 struct MetaRequest;
 class MClientCapRelease;
 
@@ -39,7 +38,6 @@ struct MetaSession {
 
   xlist<Cap*> caps;
   xlist<Inode*> flushing_caps;
-  xlist<CapSnap*> flushing_capsnaps;
   xlist<MetaRequest*> requests;
   xlist<MetaRequest*> unsafe_requests;
 

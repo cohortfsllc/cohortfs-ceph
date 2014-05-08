@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MCLIENTSESSION_H
@@ -28,13 +28,13 @@ public:
   int get_max_leases() const { return head.max_leases; }
 
   MClientSession() : Message(CEPH_MSG_CLIENT_SESSION) { }
-  MClientSession(int o, version_t s=0) : 
+  MClientSession(int o, version_t s=0) :
     Message(CEPH_MSG_CLIENT_SESSION) {
     memset(&head, 0, sizeof(head));
     head.op = o;
     head.seq = s;
   }
-  MClientSession(int o, utime_t st) : 
+  MClientSession(int o, utime_t st) :
     Message(CEPH_MSG_CLIENT_SESSION) {
     memset(&head, 0, sizeof(head));
     head.op = o;
@@ -51,15 +51,16 @@ public:
     if (get_seq())
       out << " seq " << get_seq();
     if (get_op() == CEPH_SESSION_RECALL_STATE)
-      out << " max_caps " << head.max_caps << " max_leases " << head.max_leases;
+      out << " max_caps " << head.max_caps << " max_leases "
+	  << head.max_leases;
     out << ")";
   }
 
-  void decode_payload() { 
+  void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(head, p);
   }
-  void encode_payload(uint64_t features) { 
+  void encode_payload(uint64_t features) {
     ::encode(head, payload);
   }
 };

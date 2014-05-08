@@ -12,7 +12,6 @@
 #include "common/common_init.h"
 #include "common/config.h"
 #include "common/Mutex.h"
-#include "common/snap_types.h"
 #include "global/global_init.h"
 #include "include/atomic.h"
 #include "include/buffer.h"
@@ -69,7 +68,6 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
   atomic_t outstanding_reads;
   vector<ceph::shared_ptr<op_data> > ops;
   ObjectCacher::ObjectSet object_set(NULL, 0, 0);
-  SnapContext snapc;
   ceph::buffer::ptr bp(max_op_len);
   ceph::bufferlist bl;
   bp.zero();
@@ -96,7 +94,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
     std::cout << "op " << i << " " << (is_read ? "read" : "write")
 	      << " " << op->extent << "\n";
     if (op->is_read) {
-      ObjectCacher::OSDRead *rd = obc.prepare_read(CEPH_NOSNAP, &op->result, 0);
+      ObjectCacher::OSDRead *rd = obc.prepare_read(&op->result, 0);
       rd->extents.push_back(op->extent);
       outstanding_reads.inc();
       Context *completion = new C_Count(op.get(), &outstanding_reads);
@@ -109,7 +107,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
       else
 	assert(r == 0);
     } else {
-      ObjectCacher::OSDWrite *wr = obc.prepare_write(snapc, bl, utime_t(), 0);
+      ObjectCacher::OSDWrite *wr = obc.prepare_write(bl, utime_t(), 0);
       wr->extents.push_back(op->extent);
       lock.Lock();
       obc.writex(wr, &object_set, lock, NULL);

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -18,19 +18,21 @@
 
 /**
  *
- * MClientRequest - container for a client METADATA request.  created/sent by clients.  
- *    can be forwarded around between MDS's.
+ * MClientRequest - container for a client METADATA request.  created/sent
+ * by clients. can be forwarded around between MDS's.
  *
  *   int client - the originating client
- *   long tid   - transaction id, unique among requests for that client.  probably just a counter!
- *                -> the MDS passes the Request to the Reply constructor, so this always matches.
- *  
+ *   long tid   - transaction id, unique among requests for that client.
+ *                probably just a counter!
+ *                -> the MDS passes the Request to the Reply constructor,
+ *                   so this always matches.
+ *
  *   int op - the metadata op code.  MDS_OP_RENAME, etc.
  *   int caller_uid, _gid - guess
- * 
+ *
  * fixed size arguments are in a union.
  * there's also a string argument, for e.g. symlink().
- *  
+ *
  */
 
 #include "msg/Message.h"
@@ -90,7 +92,7 @@ public:
 
   metareqid_t get_reqid() {
     // FIXME: for now, assume clients always have 1 incarnation
-    return metareqid_t(get_orig_source(), header.tid); 
+    return metareqid_t(get_orig_source(), header.tid);
   }
 
   /*bool open_file_mode_is_readonly() {
@@ -98,8 +100,9 @@ public:
     }*/
   bool may_write() {
     return
-      (head.op & CEPH_MDS_OP_WRITE) || 
-      (head.op == CEPH_MDS_OP_OPEN && (head.args.open.flags & (O_CREAT|O_TRUNC)));
+      (head.op & CEPH_MDS_OP_WRITE) ||
+      (head.op == CEPH_MDS_OP_OPEN && (head.args.open.flags &
+				       (O_CREAT|O_TRUNC)));
   }
 
   int get_flags() const {
@@ -124,7 +127,7 @@ public:
   void set_replayed_op() {
     head.flags = head.flags | CEPH_MDS_FLAG_REPLAY;
   }
-    
+
   ceph_tid_t get_oldest_client_tid() const { return head.oldest_client_tid; }
   int get_num_fwd() const { return head.num_fwd; }
   int get_retry_attempt() const { return head.num_retry; }

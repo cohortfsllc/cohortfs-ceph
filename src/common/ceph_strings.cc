@@ -190,10 +190,6 @@ const char *ceph_mds_op_name(int op)
 	case CEPH_MDS_OP_SYMLINK: return "symlink";
 	case CEPH_MDS_OP_CREATE: return "create";
 	case CEPH_MDS_OP_OPEN: return "open";
-	case CEPH_MDS_OP_LOOKUPSNAP: return "lookupsnap";
-	case CEPH_MDS_OP_LSSNAP: return "lssnap";
-	case CEPH_MDS_OP_MKSNAP: return "mksnap";
-	case CEPH_MDS_OP_RMSNAP: return "rmsnap";
 	case CEPH_MDS_OP_SETFILELOCK: return "setfilelock";
 	case CEPH_MDS_OP_GETFILELOCK: return "getfilelock";
 	case CEPH_MDS_OP_FRAGMENTDIR: return "fragmentdir";
@@ -213,8 +209,6 @@ const char *ceph_cap_op_name(int op)
 	case CEPH_CAP_OP_DROP: return "drop";
 	case CEPH_CAP_OP_FLUSH: return "flush";
 	case CEPH_CAP_OP_FLUSH_ACK: return "flush_ack";
-	case CEPH_CAP_OP_FLUSHSNAP: return "flushsnap";
-	case CEPH_CAP_OP_FLUSHSNAP_ACK: return "flushsnap_ack";
 	case CEPH_CAP_OP_RELEASE: return "release";
 	case CEPH_CAP_OP_RENEW: return "renew";
 	}
@@ -228,17 +222,6 @@ const char *ceph_lease_op_name(int o)
 	case CEPH_MDS_LEASE_RELEASE: return "release";
 	case CEPH_MDS_LEASE_RENEW: return "renew";
 	case CEPH_MDS_LEASE_REVOKE_ACK: return "revoke_ack";
-	}
-	return "???";
-}
-
-const char *ceph_snap_op_name(int o)
-{
-	switch (o) {
-	case CEPH_SNAP_OP_UPDATE: return "update";
-	case CEPH_SNAP_OP_CREATE: return "create";
-	case CEPH_SNAP_OP_DESTROY: return "destroy";
-	case CEPH_SNAP_OP_SPLIT: return "split";
 	}
 	return "???";
 }

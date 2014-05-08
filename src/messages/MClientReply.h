@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -135,7 +135,6 @@ struct InodeStat {
     struct ceph_mds_reply_inode e;
     ::decode(e, p);
     vino.ino = inodeno_t(e.ino);
-    vino.snapid = snapid_t(e.snapid);
     version = e.version;
     layout = e.layout;
     cap = e.cap;
@@ -196,7 +195,6 @@ public:
   struct ceph_mds_reply_head head;
   bufferlist trace_bl;
   bufferlist extra_bl;
-  bufferlist snapbl;
 
  public:
   int get_op() const { return head.op; }
@@ -247,14 +245,12 @@ public:
     ::decode(head, p);
     ::decode(trace_bl, p);
     ::decode(extra_bl, p);
-    ::decode(snapbl, p);
     assert(p.end());
   }
   virtual void encode_payload(uint64_t features) {
     ::encode(head, payload);
     ::encode(trace_bl, payload);
     ::encode(extra_bl, payload);
-    ::encode(snapbl, payload);
   }
 
 

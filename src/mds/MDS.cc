@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include <unistd.h>
@@ -44,8 +44,6 @@
 
 #include "AnchorServer.h"
 #include "AnchorClient.h"
-#include "SnapServer.h"
-#include "SnapClient.h"
 
 #include "InoTable.h"
 
@@ -128,8 +126,6 @@ MDS::MDS(const std::string &n, Messenger *m, MonClient *mc) :
   balancer = new MDBalancer(this);
 
   inotable = new InoTable(this);
-  snapserver = new SnapServer(this);
-  snapclient = new SnapClient(this);
   anchorserver = new AnchorServer(this);
   anchorclient = new AnchorClient(this);
 
@@ -168,8 +164,6 @@ MDS::~MDS() {
   if (balancer) { delete balancer; balancer = NULL; }
   if (inotable) { delete inotable; inotable = NULL; }
   if (anchorserver) { delete anchorserver; anchorserver = NULL; }
-  if (snapserver) { delete snapserver; snapserver = NULL; }
-  if (snapclient) { delete snapclient; snapclient = NULL; }
   if (anchorclient) { delete anchorclient; anchorclient = NULL; }
   if (osdmap) { delete osdmap; osdmap = 0; }
   if (mdsmap) { delete mdsmap; mdsmap = 0; }
@@ -292,7 +286,6 @@ MDSTableClient *MDS::get_table_client(int t)
 {
   switch (t) {
   case TABLE_ANCHOR: return anchorclient;
-  case TABLE_SNAP: return snapclient;
   default: assert(0);
   }
 }
@@ -301,7 +294,6 @@ MDSTableServer *MDS::get_table_server(int t)
 {
   switch (t) {
   case TABLE_ANCHOR: return anchorserver;
-  case TABLE_SNAP: return snapserver;
   default: assert(0);
   }
 }
@@ -615,8 +607,6 @@ void MDS::tick()
     balancer->tick();
     mdcache->find_stale_fragment_freeze();
     mdcache->migrator->find_stale_export_freeze();
-    if (snapserver)
-      snapserver->check_osd_map(false);
   }
 }
 
@@ -1203,10 +1193,6 @@ void MDS::boot_create()
     dout(10) << "boot_create creating fresh anchortable" << dendl;
     anchorserver->reset();
     anchorserver->save(fin.new_sub());
-
-    dout(10) << "boot_create creating fresh snaptable" << dendl;
-    snapserver->reset();
-    snapserver->save(fin.new_sub());
   }
 
   assert(g_conf->mds_kill_create_at != 1);
@@ -1266,10 +1252,8 @@ void MDS::boot_start(int step, int r)
 	dout(2) << "boot_start " << step << ": opening anchor table" << dendl;
 	anchorserver->load(gather.new_sub());
 
-	dout(2) << "boot_start " << step << ": opening snap table" << dendl;	
-	snapserver->load(gather.new_sub());
       }
-      
+
       dout(2) << "boot_start " << step << ": opening mds log" << dendl;
       mdlog->open(gather.new_sub());
       gather.activate();
@@ -1278,7 +1262,8 @@ void MDS::boot_start(int step, int r)
 
   case 2:
     {
-      dout(2) << "boot_start " << step << ": loading/discovering base inodes" << dendl;
+      dout(2) << "boot_start " << step << ": loading/discovering base inodes"
+	      << dendl;
 
       C_GatherBuilder gather(g_ceph_context, new C_MDS_BootStart(this, 3));
 
@@ -1570,7 +1555,7 @@ void MDS::recovery_done(int oldstate)
 {
   dout(1) << "recovery_done -- successful recovery!" << dendl;
   assert(is_clientreplay() || is_active());
-  
+
   // kick anchortable (resent AGREEs)
   if (mdsmap->get_tableserver() == whoami) {
     set<int> active;
@@ -1578,7 +1563,6 @@ void MDS::recovery_done(int oldstate)
     mdsmap->get_mds_set(active, MDSMap::STATE_ACTIVE);
     mdsmap->get_mds_set(active, MDSMap::STATE_STOPPING);
     anchorserver->finish_recovery(active);
-    snapserver->finish_recovery(active);
   }
 
   if (oldstate == MDSMap::STATE_CREATING)
@@ -1588,14 +1572,12 @@ void MDS::recovery_done(int oldstate)
   mdcache->do_file_recover();
 
   mdcache->reissue_all_caps();
-  
-  // tell connected clients
-  //bcast_mds_map();     // not anymore, they get this from the monitor
 
+  // tell connected clients
   mdcache->populate_mydir();
 }
 
-void MDS::handle_mds_recovery(int who) 
+void MDS::handle_mds_recovery(int who)
 {
   dout(5) << "handle_mds_recovery mds." << who << dendl;
   
@@ -1603,7 +1585,6 @@ void MDS::handle_mds_recovery(int who)
 
   if (mdsmap->get_tableserver() == whoami) {
     anchorserver->handle_mds_recovery(who);
-    snapserver->handle_mds_recovery(who);
   }
 
   queue_waiters(waiting_for_active_peer[who]);
@@ -1621,7 +1602,6 @@ void MDS::handle_mds_failure(int who)
   mdcache->handle_mds_failure(who);
 
   anchorclient->handle_mds_failure(who);
-  snapclient->handle_mds_failure(who);
 }
 
 void MDS::stopping_start()
@@ -1630,7 +1610,8 @@ void MDS::stopping_start()
 
   if (mdsmap->get_num_in_mds() == 1 && !sessionmap.empty()) {
     // we're the only mds up!
-    dout(0) << "we are the last MDS, and have mounted clients: we cannot flush our journal.  suicide!" << dendl;
+    dout(0) << "we are the last MDS, and have mounted clients: we cannot" <<
+      "flush our journal.  suicide!" << dendl;
     suicide();
   }
 
@@ -1796,12 +1777,12 @@ bool MDS::handle_core_message(Message *m)
     ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON);
     handle_mds_beacon(static_cast<MMDSBeacon*>(m));
     break;
-    
+
     // misc
   case MSG_MON_COMMAND:
     ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON);
     handle_command(static_cast<MMonCommand*>(m));
-    break;    
+    break;
 
     // OSD
   case CEPH_MSG_OSD_OPREPLY:
@@ -1811,8 +1792,6 @@ bool MDS::handle_core_message(Message *m)
   case CEPH_MSG_OSD_MAP:
     ALLOW_MESSAGES_FROM(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD);
     objecter->handle_osd_map((MOSDMap*)m);
-    if (is_active() && snapserver)
-      snapserver->check_osd_map(true);
     break;
 
   default:

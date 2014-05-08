@@ -166,7 +166,6 @@ struct MDRequestImpl : public MutationImpl {
   vector<CDentry*> dn[2];
   CDentry *straydn;
   CInode *in[2];
-  snapid_t snapid;
 
   CInode *tracei;
   CDentry *tracedn;
@@ -174,7 +173,6 @@ struct MDRequestImpl : public MutationImpl {
   inodeno_t alloc_ino, used_prealloc_ino;  
   interval_set<inodeno_t> prealloc_inos;
 
-  int snap_caps;
   bool did_early_reply;
   bool o_trunc;           ///< request is an O_TRUNC mutation
   int getattr_caps;       ///< caps requested by getattr
@@ -226,10 +224,6 @@ struct MDRequestImpl : public MutationImpl {
     // for lock/flock
     bool flock_was_waiting;
 
-    // for snaps
-    version_t stid;
-    bufferlist snapidbl;
-
     // called when slave commits or aborts
     Context *slave_commit;
     bufferlist rollback_bl;
@@ -245,15 +239,15 @@ struct MDRequestImpl : public MutationImpl {
       src_reanchor_atid(0), dst_reanchor_atid(0), inode_import_v(0),
       rename_inode(0), is_freeze_authpin(false), is_ambiguous_auth(false),
       is_remote_frozen_authpin(false), is_inode_exporter(false),
-      flock_was_waiting(false), stid(0), slave_commit(0), export_dir(NULL)  { }
+      flock_was_waiting(false), slave_commit(0), export_dir(NULL)  { }
   } *_more;
 
 
   // ---------------------------------------------------
   MDRequestImpl() :
     session(0), item_session_request(this),
-    client_request(0), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
-    alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
+    client_request(0), straydn(NULL), tracei(0), tracedn(0),
+    alloc_ino(0), used_prealloc_ino(0), did_early_reply(false),
     o_trunc(false),
     getattr_caps(0),
     slave_request(0),
@@ -261,13 +255,13 @@ struct MDRequestImpl : public MutationImpl {
     retry(0),
     waited_for_osdmap(false),
     _more(0) {
-    in[0] = in[1] = 0; 
+    in[0] = in[1] = 0;
   }
   MDRequestImpl(metareqid_t ri, __u32 attempt, MClientRequest *req) :
     MutationImpl(ri, attempt),
     session(0), item_session_request(this),
-    client_request(req), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
-    alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
+    client_request(req), straydn(NULL), tracei(0), tracedn(0),
+    alloc_ino(0), used_prealloc_ino(0), did_early_reply(false),
     o_trunc(false),
     getattr_caps(0),
     slave_request(0),
@@ -275,13 +269,13 @@ struct MDRequestImpl : public MutationImpl {
     retry(0),
     waited_for_osdmap(false),
     _more(0) {
-    in[0] = in[1] = 0; 
+    in[0] = in[1] = 0;
   }
   MDRequestImpl(metareqid_t ri, __u32 attempt, int by) :
     MutationImpl(ri, attempt, by),
     session(0), item_session_request(this),
-    client_request(0), straydn(NULL), snapid(CEPH_NOSNAP), tracei(0), tracedn(0),
-    alloc_ino(0), used_prealloc_ino(0), snap_caps(0), did_early_reply(false),
+    client_request(0), straydn(NULL), tracei(0), tracedn(0),
+    alloc_ino(0), used_prealloc_ino(0), did_early_reply(false),
     o_trunc(false),
     getattr_caps(0),
     slave_request(0),

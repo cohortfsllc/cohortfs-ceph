@@ -30,7 +30,6 @@ inline const char *get_lock_type_name(int t) {
   case CEPH_LOCK_IDFT: return "idft";
   case CEPH_LOCK_INEST: return "inest";
   case CEPH_LOCK_IXATTR: return "ixattr";
-  case CEPH_LOCK_ISNAP: return "isnap";
   case CEPH_LOCK_INO: return "ino";
   case CEPH_LOCK_IFLOCK: return "iflock";
   case CEPH_LOCK_IPOLICY: return "ipolicy";
@@ -61,7 +60,6 @@ struct LockType {
     case CEPH_LOCK_IAUTH:
     case CEPH_LOCK_ILINK:
     case CEPH_LOCK_IXATTR:
-    case CEPH_LOCK_ISNAP:
     case CEPH_LOCK_IFLOCK:
     case CEPH_LOCK_IPOLICY:
       sm = &sm_simplelock;
@@ -134,9 +132,6 @@ public:
 
     case LOCK_PRE_SCAN: return "*->scan";
     case LOCK_SCAN: return "scan";
-
-    case LOCK_SNAP_SYNC: return "snap->sync";
-
     default: assert(0); return 0;
     }
   }
@@ -256,7 +251,6 @@ public:
     case CEPH_LOCK_IFILE:    return 8 + 5*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IVERSION: return 8 + 6*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IXATTR:   return 8 + 7*SimpleLock::WAIT_BITS;
-    case CEPH_LOCK_ISNAP:    return 8 + 8*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_INEST:    return 8 + 9*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IFLOCK:   return 8 +10*SimpleLock::WAIT_BITS;
     case CEPH_LOCK_IPOLICY:  return 8 +11*SimpleLock::WAIT_BITS;

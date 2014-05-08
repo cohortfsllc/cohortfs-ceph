@@ -261,7 +261,6 @@ OPTION(client_trace, OPT_STR, "")
 OPTION(client_readahead_min, OPT_LONGLONG, 128*1024)  // readahead at _least_ this much.
 OPTION(client_readahead_max_bytes, OPT_LONGLONG, 0)  //8 * 1024*1024
 OPTION(client_readahead_max_periods, OPT_LONGLONG, 4)  // as multiple of file layout period (object size * num stripes)
-OPTION(client_snapdir, OPT_STR, ".snap")
 OPTION(client_mountpoint, OPT_STR, "/")
 OPTION(client_notify_timeout, OPT_INT, 10) // in seconds
 OPTION(osd_client_watch_timeout, OPT_INT, 30) // in seconds
@@ -708,8 +707,6 @@ OPTION(rbd_cache_target_dirty, OPT_LONGLONG, 16<<20) // target dirty limit in by
 OPTION(rbd_cache_max_dirty_age, OPT_FLOAT, 1.0)      // seconds in cache before writeback starts
 OPTION(rbd_cache_block_writes_upfront, OPT_BOOL, false) // whether to block writes to the cache before the aio_write call completes (true), or block before the aio completion is called (false)
 OPTION(rbd_concurrent_management_ops, OPT_INT, 10) // how many operations can be in flight for a management operation like deleting or resizing an image
-OPTION(rbd_balance_snap_reads, OPT_BOOL, false)
-OPTION(rbd_localize_snap_reads, OPT_BOOL, false)
 OPTION(rbd_balance_parent_reads, OPT_BOOL, false)
 OPTION(rbd_localize_parent_reads, OPT_BOOL, true)
 

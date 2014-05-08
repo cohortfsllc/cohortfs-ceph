@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MEXPORTDIRPREPACK_H
@@ -24,7 +24,7 @@ class MExportDirPrepAck : public Message {
 
  public:
   dirfrag_t get_dirfrag() { return dirfrag; }
-  
+
   MExportDirPrepAck() {}
   MExportDirPrepAck(dirfrag_t df, bool s, uint64_t tid) :
     Message(MSG_MDS_EXPORTDIRPREPACK), dirfrag(df), success(s) {
@@ -33,7 +33,7 @@ class MExportDirPrepAck : public Message {
 private:
   ~MExportDirPrepAck() {}
 
-public:  
+public:
   bool is_success() { return success; }
   const char *get_type_name() const { return "ExPAck"; }
   void print(ostream& o) const {

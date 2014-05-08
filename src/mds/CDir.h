@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -170,11 +170,9 @@ public:
   }
 
   fnode_t fnode;
-  snapid_t first;
-  map<snapid_t,old_rstat_t> dirty_old_rstat;  // [value.first,key]
 
   // my inodes with dirty rstat data
-  elist<CInode*> dirty_rstat_inodes;     
+  elist<CInode*> dirty_rstat_inodes;
 
   void resync_accounted_fragstat();
   void resync_accounted_rstat();
@@ -223,15 +221,13 @@ public:
   void mark_new(LogSegment *ls);
 
 public:
-  typedef map<dentry_key_t, CDentry*> map_t;
+  typedef map<string, CDentry*> map_t;
 protected:
 
   // contents of this directory
   map_t items;       // non-null AND null
   unsigned num_head_items;
   unsigned num_head_null;
-  unsigned num_snap_items;
-  unsigned num_snap_null;
 
   int num_dirty;
 
@@ -298,7 +294,7 @@ protected:
 
 
   // -- accessors --
-  inodeno_t ino()     const { return inode->ino(); }          // deprecate me?
+  inodeno_t ino() const { return inode->ino(); } // deprecate me?
   frag_t    get_frag()    const { return frag; }
   dirfrag_t dirfrag() const { return dirfrag_t(inode->ino(), frag); }
 
@@ -310,10 +306,8 @@ protected:
 
   unsigned get_num_head_items() { return num_head_items; }
   unsigned get_num_head_null() { return num_head_null; }
-  unsigned get_num_snap_items() { return num_snap_items; }
-  unsigned get_num_snap_null() { return num_snap_null; }
-  unsigned get_num_any() { return num_head_items + num_head_null + num_snap_items + num_snap_null; }
-  
+  unsigned get_num_any() { return num_head_items + num_head_null; }
+
   bool check_rstats();
 
   void inc_num_dirty() { num_dirty++; }
@@ -329,43 +323,29 @@ protected:
 
   // -- dentries and inodes --
  public:
-  CDentry* lookup_exact_snap(const string& dname, snapid_t last) {
-    map_t::iterator p = items.find(dentry_key_t(last, dname.c_str()));
-    if (p == items.end())
-      return NULL;
-    return p->second;
-  }
-  CDentry* lookup(const string& n, snapid_t snap=CEPH_NOSNAP) {
-    return lookup(n.c_str(), snap);
-  }
-  CDentry* lookup(const char *n, snapid_t snap=CEPH_NOSNAP);
+  CDentry* lookup(const string& n);
 
-  CDentry* add_null_dentry(const string& dname, 
-			   snapid_t first=2, snapid_t last=CEPH_NOSNAP);
-  CDentry* add_primary_dentry(const string& dname, CInode *in, 
-			      snapid_t first=2, snapid_t last=CEPH_NOSNAP);
-  CDentry* add_remote_dentry(const string& dname, inodeno_t ino, unsigned char d_type, 
-			     snapid_t first=2, snapid_t last=CEPH_NOSNAP);
-  void remove_dentry( CDentry *dn );         // delete dentry
-  void link_remote_inode( CDentry *dn, inodeno_t ino, unsigned char d_type);
-  void link_remote_inode( CDentry *dn, CInode *in );
-  void link_primary_inode( CDentry *dn, CInode *in );
-  void unlink_inode( CDentry *dn );
+  CDentry* add_null_dentry(const string& dname);
+  CDentry* add_primary_dentry(const string& dname, CInode *in);
+  CDentry* add_remote_dentry(const string& dname, inodeno_t ino,
+			     unsigned char d_type);
+  void remove_dentry(CDentry *dn); // delete dentry
+  void link_remote_inode(CDentry *dn, inodeno_t ino, unsigned char d_type);
+  void link_remote_inode(CDentry *dn, CInode *in);
+  void link_primary_inode(CDentry *dn, CInode *in);
+  void unlink_inode(CDentry *dn);
   void try_remove_unlinked_dn(CDentry *dn);
 
   void add_to_bloom(CDentry *dn);
   bool is_in_bloom(const string& name);
-  bool has_bloom() { return (bloom ? true : false); }
+  bool has_bloom() {return (bloom ? true : false);}
   void remove_bloom();
 private:
-  void link_inode_work( CDentry *dn, CInode *in );
-  void unlink_inode_work( CDentry *dn );
+  void link_inode_work(CDentry *dn, CInode *in);
+  void unlink_inode_work(CDentry *dn);
   void remove_null_dentries();
-  void purge_stale_snap_data(const set<snapid_t>& snaps);
 public:
   void touch_dentries_bottom();
-  bool try_trim_snap_dentry(CDentry *dn, const set<snapid_t>& snaps);
-
 
 public:
   void split(int bits, list<CDir*>& subs, list<Context*>& waiters, bool replay);
@@ -446,13 +426,11 @@ private:
   }
 
   void _encode_base(bufferlist& bl) {
-    ::encode(first, bl);
     ::encode(fnode, bl);
     ::encode(dir_rep, bl);
     ::encode(dir_rep_by, bl);
   }
   void _decode_base(bufferlist::iterator& p) {
-    ::decode(first, p);
     ::decode(fnode, p);
     ::decode(dir_rep, p);
     ::decode(dir_rep_by, p);
@@ -500,7 +478,7 @@ protected:
   map<version_t, list<Context*> > waiting_for_commit;
   void _commit(version_t want, int op_prio);
   void _omap_commit(int op_prio);
-  void _encode_dentry(CDentry *dn, bufferlist& bl, const set<snapid_t> *snaps);
+  void _encode_dentry(CDentry *dn, bufferlist& bl);
   void _committed(version_t v);
 public:
   void wait_for_commit(Context *c, version_t v=0);
@@ -532,15 +510,15 @@ public:
     
   // -- waiters --
 protected:
-  map< string_snap_t, list<Context*> > waiting_on_dentry;
+  map< string, list<Context*> > waiting_on_dentry;
   map< inodeno_t, list<Context*> > waiting_on_ino;
 
 public:
-  bool is_waiting_for_dentry(const string& dname, snapid_t snap) {
-    return waiting_on_dentry.count(string_snap_t(dname, snap));
+  bool is_waiting_for_dentry(const string& dname) {
+    return waiting_on_dentry.count(dname);
   }
-  void add_dentry_waiter(const string& dentry, snapid_t snap, Context *c);
-  void take_dentry_waiting(const string& dentry, snapid_t first, snapid_t last, list<Context*>& ls);
+  void add_dentry_waiter(const string& dentry, Context *c);
+  void take_dentry_waiting(const string& dentry, list<Context*>& ls);
 
   bool is_waiting_for_ino(inodeno_t ino) {
     return waiting_on_ino.count(ino);
@@ -551,9 +529,10 @@ public:
   void take_sub_waiting(list<Context*>& ls);  // dentry or ino
 
   void add_waiter(uint64_t mask, Context *c);
-  void take_waiting(uint64_t mask, list<Context*>& ls);  // may include dentry waiters
-  void finish_waiting(uint64_t mask, int result = 0);    // ditto
-  
+  // may include dentry waiters
+  void take_waiting(uint64_t mask, list<Context*>& ls);
+  void finish_waiting(uint64_t mask, int result = 0); // ditto
+
 
   // -- import/export --
   void encode_export(bufferlist& bl);

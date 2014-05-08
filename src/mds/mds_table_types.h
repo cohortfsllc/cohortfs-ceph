@@ -18,14 +18,12 @@
 // MDS TABLES
 
 enum {
-  TABLE_ANCHOR,
-  TABLE_SNAP,
+  TABLE_ANCHOR
 };
 
 inline const char *get_mdstable_name(int t) {
   switch (t) {
   case TABLE_ANCHOR: return "anchortable";
-  case TABLE_SNAP: return "snaptable";
   default: assert(0);
   }
 }

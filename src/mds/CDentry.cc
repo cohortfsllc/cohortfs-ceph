@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -28,7 +28,8 @@
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
-#define dout_prefix *_dout << "mds." << dir->cache->mds->get_nodeid() << ".cache.den(" << dir->dirfrag() << " " << name << ") "
+#define dout_prefix *_dout << "mds." << dir->cache->mds->get_nodeid() \
+  << ".cache.den(" << dir->dirfrag() << " " << name << ") "
 
 
 ostream& CDentry::print_db_line_prefix(ostream& out) 
@@ -48,21 +49,12 @@ ostream& operator<<(ostream& out, CDentry& dn)
 {
   filepath path;
   dn.make_path(path);
-  
+
   out << "[dentry " << path;
-  
-  if (true || dn.first != 0 || dn.last != CEPH_NOSNAP) {
-    out << " [" << dn.first << ",";
-    if (dn.last == CEPH_NOSNAP) 
-      out << "head";
-    else
-      out << dn.last;
-    out << ']';
-  }
 
   if (dn.is_auth()) {
     out << " auth";
-    if (dn.is_replicated()) 
+    if (dn.is_replicated())
       out << dn.get_replicas();
   } else {
     out << " rep@" << dn.authority();
@@ -117,7 +109,7 @@ bool operator<(const CDentry& l, const CDentry& r)
   if ((l.get_dir()->ino() < r.get_dir()->ino()) ||
       (l.get_dir()->ino() == r.get_dir()->ino() &&
        (l.get_name() < r.get_name() ||
-	(l.get_name() == r.get_name() && l.last < r.last))))
+	(l.get_name() == r.get_name()))))
     return true;
   return false;
 }
@@ -434,8 +426,6 @@ void CDentry::decode_replica(bufferlist::iterator& p, bool is_new)
   __u32 nonce;
   ::decode(nonce, p);
   replica_nonce = nonce;
-  
-  ::decode(first, p);
 
   inodeno_t rino;
   unsigned char rdtype;
@@ -458,13 +448,10 @@ void CDentry::set_object_info(MDSCacheObjectInfo &info)
 {
   info.dirfrag = dir->dirfrag();
   info.dname = name;
-  info.snapid = last;
 }
 
 void CDentry::encode_lock_state(int type, bufferlist& bl)
 {
-  ::encode(first, bl);
-
   // null, ino, or remote_ino?
   char c;
   if (linkage.is_primary()) {
@@ -480,21 +467,12 @@ void CDentry::encode_lock_state(int type, bufferlist& bl)
   else if (linkage.is_null()) {
     // encode nothing.
   }
-  else assert(0);  
+  else assert(0);
 }
 
 void CDentry::decode_lock_state(int type, bufferlist& bl)
-{  
+{
   bufferlist::iterator p = bl.begin();
-
-  snapid_t newfirst;
-  ::decode(newfirst, p);
-
-  if (!is_auth() && newfirst != first) {
-    dout(10) << "decode_lock_state first " << first << " -> " << newfirst << dendl;
-    assert(newfirst > first);
-    first = newfirst;
-  }
 
   if (p.end()) {
     // null

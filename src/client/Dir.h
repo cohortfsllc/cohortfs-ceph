@@ -1,3 +1,4 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #ifndef CEPH_CLIENT_DIR_H
 #define CEPH_CLIENT_DIR_H
 

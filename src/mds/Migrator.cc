@@ -1251,10 +1251,9 @@ void Migrator::encode_export_inode(CInode *in, bufferlist& enc_state,
   }
 
   ::encode(in->inode.ino, enc_state);
-  ::encode(in->last, enc_state);
   in->encode_export(enc_state);
 
-  // caps 
+  // caps
   encode_export_inode_caps(in, true, enc_state, exported_client_map);
 }
 
@@ -1296,7 +1295,7 @@ void Migrator::finish_export_inode_caps(CInode *in, int peer,
     Capability *cap = it->second;
     dout(7) << "finish_export_inode_caps telling client." << it->first
 	    << " exported caps on " << *in << dendl;
-    MClientCaps *m = new MClientCaps(CEPH_CAP_OP_EXPORT, in->ino(), 0,
+    MClientCaps *m = new MClientCaps(CEPH_CAP_OP_EXPORT, in->ino(),
 				     cap->get_cap_id(), cap->get_mseq());
 
     map<client_t,Capability::Import>::iterator q = peer_imported.find(it->first);
@@ -1328,7 +1327,6 @@ void Migrator::finish_export_inode(CInode *in, utime_t now, int peer,
   in->filelock.export_twiddle();
   in->nestlock.export_twiddle();
   in->xattrlock.export_twiddle();
-  in->snaplock.export_twiddle();
   in->flocklock.export_twiddle();
   in->policylock.export_twiddle();
   
@@ -1380,61 +1378,60 @@ int Migrator::encode_export_dir(bufferlist& exportbl,
     dir->verify_fragstat();
 #endif
 
-  // dir 
+  // dir
   dirfrag_t df = dir->dirfrag();
   ::encode(df, exportbl);
   dir->encode_export(exportbl);
-  
+
   __u32 nden = dir->items.size();
   ::encode(nden, exportbl);
-  
+
   // dentries
   list<CDir*> subdirs;
   CDir::map_t::iterator it;
   for (it = dir->begin(); it != dir->end(); ++it) {
     CDentry *dn = it->second;
     CInode *in = dn->get_linkage()->get_inode();
-    
+
     if (!dn->is_replicated())
       dn->lock.replicate_relax();
 
     num_exported++;
-    
+
     // -- dentry
     dout(7) << "encode_export_dir exporting " << *dn << dendl;
-    
+
     // dn name
     ::encode(dn->name, exportbl);
-    ::encode(dn->last, exportbl);
-    
+
     // state
     dn->encode_export(exportbl);
-    
+
     // points to...
-    
+
     // null dentry?
     if (dn->get_linkage()->is_null()) {
       exportbl.append("N", 1);  // null dentry
       continue;
     }
-    
+
     if (dn->get_linkage()->is_remote()) {
       // remote link
       exportbl.append("L", 1);  // remote link
-      
+
       inodeno_t ino = dn->get_linkage()->get_remote_ino();
       unsigned char d_type = dn->get_linkage()->get_remote_d_type();
       ::encode(ino, exportbl);
       ::encode(d_type, exportbl);
       continue;
     }
-    
+
     // primary link
     // -- inode
     exportbl.append("I", 1);    // inode dentry
-    
+
     encode_export_inode(in, exportbl, exported_client_map);  // encode, and (update state for) export
-    
+
     // directory?
     list<CDir*> dfs;
     in->get_dirfrags(dfs);
@@ -1461,7 +1458,7 @@ void Migrator::finish_export_dir(CDir *dir, utime_t now, int peer,
 {
   dout(10) << "finish_export_dir " << *dir << dendl;
 
-  // release open_by 
+  // release open_by
   dir->clear_replica_map();
 
   // mark
@@ -2672,14 +2669,12 @@ void Migrator::decode_import_inode(CDentry *dn, bufferlist::iterator& blp, int o
   dout(15) << "decode_import_inode on " << *dn << dendl;
 
   inodeno_t ino;
-  snapid_t last;
   ::decode(ino, blp);
-  ::decode(last, blp);
 
   bool added = false;
-  CInode *in = cache->get_inode(ino, last);
+  CInode *in = cache->get_inode(ino);
   if (!in) {
-    in = new CInode(mds->mdcache, true, 1, last);
+    in = new CInode(mds->mdcache, true);
     added = true;
   } else {
     in->state_set(CInode::STATE_AUTH);
@@ -2840,17 +2835,15 @@ int Migrator::decode_import_dir(bufferlist::iterator& blp,
   
   for (; nden>0; nden--) {
     num_imported++;
-    
+
     // dentry
     string dname;
-    snapid_t last;
     ::decode(dname, blp);
-    ::decode(last, blp);
-    
-    CDentry *dn = dir->lookup_exact_snap(dname, last);
+
+    CDentry *dn = dir->lookup(dname);
     if (!dn)
-      dn = dir->add_null_dentry(dname, 1, last);
-    
+      dn = dir->add_null_dentry(dname);
+
     dn->decode_import(blp, ls);
 
     dn->add_replica(oldauth, CDentry::EXPORT_NONCE);

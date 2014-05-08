@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MCACHEEXPIRE_H
@@ -28,12 +28,13 @@ public:
   struct realm {
     map<vinodeno_t, uint32_t> inodes;
     map<dirfrag_t, uint32_t> dirs;
-    map<dirfrag_t, map<pair<string,snapid_t>,uint32_t> > dentries;
+    map<dirfrag_t, map<string,uint32_t> > dentries;
 
     void merge(realm& o) {
       inodes.insert(o.inodes.begin(), o.inodes.end());
       dirs.insert(o.dirs.begin(), o.dirs.end());
-      for (map<dirfrag_t,map<pair<string,snapid_t>,uint32_t> >::iterator p = o.dentries.begin();
+      for (map<dirfrag_t,map<string,uint32_t> >::iterator p
+	     = o.dentries.begin();
 	   p != o.dentries.end();
 	   ++p) {
 	if (dentries.count(p->first) == 0)
@@ -76,8 +77,9 @@ public:
   void add_dir(dirfrag_t r, dirfrag_t df, unsigned nonce) {
     realms[r].dirs[df] = nonce;
   }
-  void add_dentry(dirfrag_t r, dirfrag_t df, const string& dn, snapid_t last, unsigned nonce) {
-    realms[r].dentries[df][pair<string,snapid_t>(dn,last)] = nonce;
+  void add_dentry(dirfrag_t r, dirfrag_t df, const string& dn,
+		  unsigned nonce) {
+    realms[r].dentries[df][dn] = nonce;
   }
 
   void add_realm(dirfrag_t df, realm& r) {
@@ -92,7 +94,7 @@ public:
     ::decode(from, p);
     ::decode(realms, p);
   }
-    
+
   void encode_payload(uint64_t features) {
     ::encode(from, payload);
     ::encode(realms, payload);

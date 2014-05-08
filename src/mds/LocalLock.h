@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -21,8 +21,8 @@
 class LocalLock : public SimpleLock {
 public:
   client_t last_wrlock_client;
-  
-  LocalLock(MDSCacheObject *o, LockType *t) : 
+
+  LocalLock(MDSCacheObject *o, LockType *t) :
     SimpleLock(o, t) {
     set_state(LOCK_LOCK); // always.
   }

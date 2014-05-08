@@ -238,8 +238,7 @@ void Journaler::probe(Context *finish, uint64_t *end)
   ldout(cct, 1) << "probing for end of the log" << dendl;
   assert(state == STATE_PROBING || state == STATE_REPROBING);
   // probe the log
-  filer.probe(ino, &layout, CEPH_NOSNAP,
-	      write_pos, end, 0, true, 0, finish);
+  filer.probe(ino, &layout, write_pos, end, 0, true, 0, finish);
 }
 
 void Journaler::reprobe(Context *finish)
@@ -345,11 +344,10 @@ void Journaler::write_head(Context *oncommit)
 
   bufferlist bl;
   ::encode(last_written, bl);
-  SnapContext snapc;
-  
+
   object_t oid = file_object_t(ino, 0);
   object_locator_t oloc(pg_pool);
-  objecter->write_full(oid, oloc, snapc, bl, ceph_clock_now(cct), 0, 
+  objecter->write_full(oid, oloc, ::SnapContext(), bl, ceph_clock_now(cct), 0,
 		       NULL, 
 		       new C_WriteHead(this, last_written, oncommit));
 }
@@ -520,7 +518,6 @@ void Journaler::_do_flush(unsigned amount)
   // submit write for anything pending
   // flush _start_ pos to _finish_flush
   utime_t now = ceph_clock_now(cct);
-  SnapContext snapc;
 
   Context *onsafe = new C_Flush(this, flush_pos, now);  // on COMMIT
   pending_safe.insert(flush_pos);
@@ -534,14 +531,12 @@ void Journaler::_do_flush(unsigned amount)
     write_buf.splice(0, len, &write_bl);
   }
 
-  filer.write(ino, &layout, snapc,
-	      flush_pos, len, write_bl, ceph_clock_now(cct),
-	      0,
-	      NULL, onsafe);
+  filer.write(ino, &layout, flush_pos, len, write_bl, ceph_clock_now(cct),
+	      0, NULL, onsafe);
 
   flush_pos += len;
   assert(write_buf.length() == write_pos - flush_pos);
-    
+
   ldout(cct, 10) << "_do_flush (prezeroing/prezero)/write/flush/safe pointers now at "
 	   << "(" << prezeroing_pos << "/" << prezero_pos << ")/" << write_pos << "/" << flush_pos << "/" << safe_pos << dendl;
 
@@ -651,9 +646,8 @@ void Journaler::_issue_prezero()
       len = period - (prezeroing_pos % period);
       ldout(cct, 10) << "_issue_prezero zeroing " << prezeroing_pos << "~" << len << " (partial period)" << dendl;
     }
-    SnapContext snapc;
     Context *c = new C_Journaler_Prezero(this, prezeroing_pos, len);
-    filer.zero(ino, &layout, snapc, prezeroing_pos, len, ceph_clock_now(cct), 0, NULL, c);
+    filer.zero(ino, &layout, prezeroing_pos, len, ceph_clock_now(cct), 0, NULL, c);
     prezeroing_pos += len;
   }
 }
@@ -819,7 +813,7 @@ void Journaler::_issue_read(uint64_t len)
     if (l > len)
       l = len;
     C_Read *c = new C_Read(this, requested_pos);
-    filer.read(ino, &layout, CEPH_NOSNAP, requested_pos, l, &c->bl, 0, c);
+    filer.read(ino, &layout, requested_pos, l, &c->bl, 0, c);
     requested_pos += l;
     len -= l;
   }
@@ -1016,8 +1010,7 @@ void Journaler::trim()
   // delete range of objects
   uint64_t first = trimming_pos / period;
   uint64_t num = (trim_to - trimming_pos) / period;
-  SnapContext snapc;
-  filer.purge_range(ino, &layout, snapc, first, num, ceph_clock_now(cct), 0, 
+  filer.purge_range(ino, &layout, first, num, ceph_clock_now(cct), 0, 
 		    new C_Trim(this, trim_to));
   trimming_pos = trim_to;  
 }

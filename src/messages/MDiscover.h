@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -25,12 +25,11 @@ using namespace std;
 
 
 class MDiscover : public Message {
-  inodeno_t       base_ino;          // 1 -> root
-  frag_t          base_dir_frag;
+  inodeno_t base_ino; // 1 -> root
+  frag_t base_dir_frag;
 
-  snapid_t        snapid;
-  filepath        want;   // ... [/]need/this/stuff
-  inodeno_t       want_ino;
+  filepath want; // ... [/]need/this/stuff
+  inodeno_t want_ino;
 
   bool want_base_dir;
   bool want_xlocked;
@@ -38,7 +37,6 @@ class MDiscover : public Message {
  public:
   inodeno_t get_base_ino() { return base_ino; }
   frag_t    get_base_dir_frag() { return base_dir_frag; }
-  snapid_t  get_snapid() { return snapid; }
 
   filepath& get_want() { return want; }
   inodeno_t get_want_ino() { return want_ino; }
@@ -46,21 +44,19 @@ class MDiscover : public Message {
 
   bool wants_base_dir() { return want_base_dir; }
   bool wants_xlocked() { return want_xlocked; }
-  
+
   void set_base_dir_frag(frag_t f) { base_dir_frag = f; }
 
   MDiscover() : Message(MSG_MDS_DISCOVER) { }
   MDiscover(inodeno_t base_ino_,
 	    frag_t base_frag_,
-	    snapid_t s,
-            filepath& want_path_,
+	    filepath& want_path_,
 	    inodeno_t want_ino_,
-            bool want_base_dir_ = true,
+	    bool want_base_dir_ = true,
 	    bool discover_xlocks_ = false) :
     Message(MSG_MDS_DISCOVER),
     base_ino(base_ino_),
     base_dir_frag(base_frag_),
-    snapid(s),
     want(want_path_),
     want_ino(want_ino_),
     want_base_dir(want_base_dir_),
@@ -82,7 +78,6 @@ public:
     bufferlist::iterator p = payload.begin();
     ::decode(base_ino, p);
     ::decode(base_dir_frag, p);
-    ::decode(snapid, p);
     ::decode(want, p);
     ::decode(want_ino, p);
     ::decode(want_base_dir, p);
@@ -91,7 +86,6 @@ public:
   void encode_payload(uint64_t features) {
     ::encode(base_ino, payload);
     ::encode(base_dir_frag, payload);
-    ::encode(snapid, payload);
     ::encode(want, payload);
     ::encode(want_ino, payload);
     ::encode(want_base_dir, payload);

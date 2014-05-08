@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -60,7 +60,6 @@ struct MMDSOpenInoReply;
 class Message;
 class MClientRequest;
 class MMDSSlaveRequest;
-struct MClientSnap;
 
 class MMDSFragmentNotify;
 
@@ -135,13 +134,13 @@ public:
     int mds;
     inodeno_t ino;
     frag_t frag;
-    snapid_t snap;
     filepath want_path;
     inodeno_t want_ino;
     bool want_base_dir;
     bool want_xlocked;
 
-    discover_info_t() : tid(0), mds(-1), snap(CEPH_NOSNAP), want_base_dir(false), want_xlocked(false) {}
+    discover_info_t() : tid(0), mds(-1), want_base_dir(false),
+			want_xlocked(false) {}
   };
 
   map<ceph_tid_t, discover_info_t> discovers;
@@ -162,9 +161,9 @@ public:
   void discover_base_ino(inodeno_t want_ino, Context *onfinish, int from=-1);
   void discover_dir_frag(CInode *base, frag_t approx_fg, Context *onfinish,
 			 int from=-1);
-  void discover_path(CInode *base, snapid_t snap, filepath want_path, Context *onfinish,
+  void discover_path(CInode *base, filepath want_path, Context *onfinish,
 		     bool want_xlocked=false, int from=-1);
-  void discover_path(CDir *base, snapid_t snap, filepath want_path, Context *onfinish,
+  void discover_path(CDir *base, filepath want_path, Context *onfinish,
 		     bool want_xlocked=false);
   void discover_ino(CDir *base, inodeno_t want_ino, Context *onfinish,
 		    bool want_xlocked=false);
@@ -263,26 +262,13 @@ public:
   
   void request_kill(MDRequestRef& r);  // called when session closes
 
-  // journal/snap helpers
-  CInode *pick_inode_snap(CInode *in, snapid_t follows);
-  CInode *cow_inode(CInode *in, snapid_t last);
-  void journal_cow_dentry(MutationImpl *mut, EMetaBlob *metablob, CDentry *dn,
-                          snapid_t follows=CEPH_NOSNAP,
-			  CInode **pcow_inode=0, CDentry::linkage_t *dnl=0);
-  void journal_cow_inode(MutationRef& mut, EMetaBlob *metablob, CInode *in, snapid_t follows=CEPH_NOSNAP,
-			  CInode **pcow_inode=0);
-  void journal_dirty_inode(MutationImpl *mut, EMetaBlob *metablob, CInode *in, snapid_t follows=CEPH_NOSNAP);
+  void journal_dirty_inode(MutationImpl *mut, EMetaBlob *metablob, CInode *in);
 
-  void project_rstat_inode_to_frag(CInode *cur, CDir *parent, snapid_t first, int linkunlink);
-  void _project_rstat_inode_to_frag(inode_t& inode, snapid_t ofirst, snapid_t last,
-				    CDir *parent, int linkunlink=0);
-  void project_rstat_frag_to_inode(nest_info_t& rstat, nest_info_t& accounted_rstat,
-				   snapid_t ofirst, snapid_t last, 
-				   CInode *pin, bool cow_head);
+  void _project_rstat_inode_to_frag(inode_t& inode, CDir *parent,
+				    int linkunlink=0);
   void predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
 				CInode *in, CDir *parent,
-				int flags, int linkunlink=0,
-				snapid_t follows=CEPH_NOSNAP);
+				int flags, int linkunlink=0);
 
   // slaves
   void add_uncommitted_master(metareqid_t reqid, LogSegment *ls, set<int> &slaves, bool safe=false) {
@@ -436,7 +422,7 @@ protected:
   void rejoin_walk(CDir *dir, MMDSCacheRejoin *rejoin);
   void handle_cache_rejoin(MMDSCacheRejoin *m);
   void handle_cache_rejoin_weak(MMDSCacheRejoin *m);
-  CInode* rejoin_invent_inode(inodeno_t ino, snapid_t last);
+  CInode* rejoin_invent_inode(inodeno_t ino);
   CDir* rejoin_invent_dirfrag(dirfrag_t df);
   void handle_cache_rejoin_strong(MMDSCacheRejoin *m);
   void rejoin_scour_survivor_replicas(int from, MMDSCacheRejoin *ack,
@@ -481,15 +467,7 @@ public:
   }
 
   // [reconnect/rejoin caps]
-  map<CInode*,map<client_t, inodeno_t> >  reconnected_caps;   // inode -> client -> realmino
-  map<inodeno_t,map<client_t, snapid_t> > reconnected_snaprealms;  // realmino -> client -> realmseq
-
-  void add_reconnected_cap(CInode *in, client_t client, inodeno_t realm) {
-    reconnected_caps[in][client] = realm;
-  }
-  void add_reconnected_snaprealm(client_t client, inodeno_t ino, snapid_t seq) {
-    reconnected_snaprealms[ino][client] = seq;
-  }
+  map<CInode*,client_t> reconnected_caps;
 
   friend class C_MDC_RejoinOpenInoFinish;
   friend class C_MDC_RejoinSessionsOpened;
@@ -498,26 +476,15 @@ public:
 				   map<client_t,uint64_t>& sseqmap);
   bool process_imported_caps();
   void choose_lock_states_and_reconnect_caps();
-  void prepare_realm_split(SnapRealm *realm, client_t client, inodeno_t ino,
-			   map<client_t,MClientSnap*>& splits);
-  void do_realm_invalidate_and_update_notify(CInode *in, int snapop, bool nosend=false);
-  void send_snaps(map<client_t,MClientSnap*>& splits);
-  Capability* rejoin_import_cap(CInode *in, client_t client, ceph_mds_cap_reconnect& icr, int frommds);
-  void finish_snaprealm_reconnect(client_t client, SnapRealm *realm, snapid_t seq);
   void try_reconnect_cap(CInode *in, Session *session);
   void export_remaining_imported_caps();
 
-  // cap imports.  delayed snap parent opens.
-  //  realm inode -> client -> cap inodes needing to split to this realm
-  map<CInode*,map<client_t, set<inodeno_t> > > missing_snap_parents; 
   map<client_t,set<CInode*> > delayed_imported_caps;
 
   void do_cap_import(Session *session, CInode *in, Capability *cap,
 		     uint64_t p_cap_id, ceph_seq_t p_seq, ceph_seq_t p_mseq,
 		     int peer, int p_flags);
   void do_delayed_cap_imports();
-  void check_realm_past_parents(SnapRealm *realm);
-  void open_snap_parents();
 
   bool open_undef_inodes_dirfrags();
   void opened_undef_inode(CInode *in);
@@ -526,7 +493,7 @@ public:
   }
 
   void reissue_all_caps();
-  
+
 
   friend class Locker;
   friend class Migrator;
@@ -602,18 +569,18 @@ public:
 
   // inode_map
   bool have_inode(vinodeno_t vino) {
-    return inode_map.count(vino) ? true:false;
+    return inode_map.count(vino) ? true : false;
   }
-  bool have_inode(inodeno_t ino, snapid_t snap=CEPH_NOSNAP) {
-    return have_inode(vinodeno_t(ino, snap));
+  bool have_inode(inodeno_t ino) {
+    return have_inode(vinodeno_t(ino));
   }
   CInode* get_inode(vinodeno_t vino) {
     if (have_inode(vino))
       return inode_map[vino];
     return NULL;
   }
-  CInode* get_inode(inodeno_t ino, snapid_t s=CEPH_NOSNAP) {
-    return get_inode(vinodeno_t(ino, s));
+  CInode* get_inode(inodeno_t ino) {
+    return get_inode(vinodeno_t(ino));
   }
 
   CDir* get_dirfrag(dirfrag_t df) {
@@ -873,12 +840,6 @@ protected:
   friend class C_MDC_AnchorPrepared;
   friend class C_MDC_AnchorLogged;
 
-  // -- snaprealms --
-public:
-  void snaprealm_create(MDRequestRef& mdr, CInode *in);
-  void _snaprealm_create_finish(MDRequestRef& mdr, MutationRef& mut, CInode *in);
-
-  // -- stray --
 public:
   elist<CDentry*> delayed_eval_stray;
 
@@ -928,12 +889,10 @@ public:
   }
   void replicate_dentry(CDentry *dn, int to, bufferlist& bl) {
     ::encode(dn->name, bl);
-    ::encode(dn->last, bl);
     dn->encode_replica(to, bl);
   }
   void replicate_inode(CInode *in, int to, bufferlist& bl) {
     ::encode(in->inode.ino, bl);  // bleh, minor assymetry here
-    ::encode(in->last, bl);
     in->encode_replica(to, bl);
   }
   

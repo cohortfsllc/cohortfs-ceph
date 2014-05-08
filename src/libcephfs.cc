@@ -1291,10 +1291,10 @@ extern "C" int ceph_ll_write_block(class ceph_mount_info *cmount,
 				   char *buf, uint64_t offset,
 				   uint64_t length,
 				   struct ceph_file_layout *layout,
-				   uint64_t snapseq, uint32_t sync)
+				   uint32_t sync)
 {
   return (cmount->get_client()->ll_write_block(in, blockid, buf, offset,
-					       length, layout, snapseq, sync));
+					       length, layout, sync));
 }
 
 extern "C" int ceph_ll_commit_blocks(class ceph_mount_info *cmount,
@@ -1486,11 +1486,6 @@ extern "C" uint32_t ceph_ll_file_layout(class ceph_mount_info *cmount,
 					struct ceph_file_layout *layout)
 {
   return (cmount->get_client()->ll_file_layout(in, layout));
-}
-
-uint64_t ceph_ll_snap_seq(class ceph_mount_info *cmount, Inode *in)
-{
-  return (cmount->get_client()->ll_snap_seq(in));
 }
 
 extern "C" int ceph_ll_get_stripe_osd(class ceph_mount_info *cmount,

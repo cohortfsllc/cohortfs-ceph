@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -501,8 +501,6 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
     ::encode(failed, bl);
     ::encode(stopped, bl);
     ::encode(last_failure_osd_epoch, bl);
-    ::encode(ever_allowed_snaps, bl);
-    ::encode(explicitly_allowed_snaps, bl);
     ::encode(inline_data_enabled, bl);
     ENCODE_FINISH(bl);
   }
@@ -561,13 +559,6 @@ void MDSMap::decode(bufferlist::iterator& p)
   ::decode(stopped, p);
   if (ev >= 4)
     ::decode(last_failure_osd_epoch, p);
-  if (ev >= 6) {
-    ::decode(ever_allowed_snaps, p);
-    ::decode(explicitly_allowed_snaps, p);
-  } else {
-    ever_allowed_snaps = true;
-    explicitly_allowed_snaps = false;
-  }
   if (ev >= 7)
     ::decode(inline_data_enabled, p);
   DECODE_FINISH(p);

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -62,49 +62,65 @@ extern CompatSet get_mdsmap_compat_set_all();
 extern CompatSet get_mdsmap_compat_set_default();
 extern CompatSet get_mdsmap_compat_set_base(); // pre v0.20
 
-#define MDS_FEATURE_INCOMPAT_BASE CompatSet::Feature(1, "base v0.20")
-#define MDS_FEATURE_INCOMPAT_CLIENTRANGES CompatSet::Feature(2, "client writeable ranges")
-#define MDS_FEATURE_INCOMPAT_FILELAYOUT CompatSet::Feature(3, "default file layouts on dirs")
-#define MDS_FEATURE_INCOMPAT_DIRINODE CompatSet::Feature(4, "dir inode in separate object")
-#define MDS_FEATURE_INCOMPAT_ENCODING CompatSet::Feature(5, "mds uses versioned encoding")
-#define MDS_FEATURE_INCOMPAT_OMAPDIRFRAG CompatSet::Feature(6, "dirfrag is stored in omap")
-#define MDS_FEATURE_INCOMPAT_INLINE CompatSet::Feature(7, "mds uses inline data")
+#define MDS_FEATURE_INCOMPAT_BASE \
+  CompatSet::Feature(1, "base v0.20")
+#define MDS_FEATURE_INCOMPAT_CLIENTRANGES \
+  CompatSet::Feature(2, "client writeable ranges")
+#define MDS_FEATURE_INCOMPAT_FILELAYOUT \
+  CompatSet::Feature(3, "default file layouts on dirs")
+#define MDS_FEATURE_INCOMPAT_DIRINODE \
+  CompatSet::Feature(4, "dir inode in separate object")
+#define MDS_FEATURE_INCOMPAT_ENCODING \
+  CompatSet::Feature(5, "mds uses versioned encoding")
+#define MDS_FEATURE_INCOMPAT_OMAPDIRFRAG \
+  CompatSet::Feature(6, "dirfrag is stored in omap")
+#define MDS_FEATURE_INCOMPAT_INLINE \
+  CompatSet::Feature(7, "mds uses inline data")
 
 class MDSMap {
 public:
   // mds states
-  /*
-  static const int STATE_DNE =        CEPH_MDS_STATE_DNE;  // down, never existed.
-  static const int STATE_DESTROYING = CEPH_MDS_STATE_DESTROYING;  // down, existing, semi-destroyed.
-  static const int STATE_FAILED =     CEPH_MDS_STATE_FAILED;  // down, active subtrees; needs to be recovered.
-  */
-  static const int STATE_STOPPED =    CEPH_MDS_STATE_STOPPED;  // down, once existed, but no subtrees. empty log.
-  static const int STATE_BOOT     =   CEPH_MDS_STATE_BOOT;  // up, boot announcement.  destiny unknown.
-
-  static const int STATE_STANDBY  =   CEPH_MDS_STATE_STANDBY;  // up, idle.  waiting for assignment by monitor.
-  static const int STATE_STANDBY_REPLAY = CEPH_MDS_STATE_STANDBY_REPLAY;  // up, replaying active node; ready to take over.
-  static const int STATE_ONESHOT_REPLAY = CEPH_MDS_STATE_REPLAYONCE; //up, replaying active node journal to verify it, then shutting down
-
-  static const int STATE_CREATING  =  CEPH_MDS_STATE_CREATING;  // up, creating MDS instance (new journal, idalloc..).
-  static const int STATE_STARTING  =  CEPH_MDS_STATE_STARTING;  // up, starting prior stopped MDS instance.
-
-  static const int STATE_REPLAY    =  CEPH_MDS_STATE_REPLAY;  // up, starting prior failed instance. scanning journal.
-  static const int STATE_RESOLVE   =  CEPH_MDS_STATE_RESOLVE;  // up, disambiguating distributed operations (import, rename, etc.)
-  static const int STATE_RECONNECT =  CEPH_MDS_STATE_RECONNECT;  // up, reconnect to clients
-  static const int STATE_REJOIN    =  CEPH_MDS_STATE_REJOIN; // up, replayed journal, rejoining distributed cache
-  static const int STATE_CLIENTREPLAY = CEPH_MDS_STATE_CLIENTREPLAY; // up, active
-  static const int STATE_ACTIVE =     CEPH_MDS_STATE_ACTIVE; // up, active
-  static const int STATE_STOPPING  =  CEPH_MDS_STATE_STOPPING; // up, exporting metadata (-> standby or out)
+  // down, once existed, but no subtrees. empty log.
+  static const int STATE_STOPPED = CEPH_MDS_STATE_STOPPED;
+  // up, boot announcement.  destiny unknown.
+  static const int STATE_BOOT = CEPH_MDS_STATE_BOOT;
+  // up, idle.  waiting for assignment by monitor.
+  static const int STATE_STANDBY = CEPH_MDS_STATE_STANDBY;
+  // up, replaying active node; ready to take over.
+  static const int STATE_STANDBY_REPLAY = CEPH_MDS_STATE_STANDBY_REPLAY;
+  // up, replaying active node journal to verify it, then shutting down
+  static const int STATE_ONESHOT_REPLAY = CEPH_MDS_STATE_REPLAYONCE;
+  // up, creating MDS instance (new journal, idalloc..).
+  static const int STATE_CREATING = CEPH_MDS_STATE_CREATING;
+  // up, starting prior stopped MDS instance.
+  static const int STATE_STARTING = CEPH_MDS_STATE_STARTING;
+  // up, starting prior failed instance. scanning journal.
+  static const int STATE_REPLAY = CEPH_MDS_STATE_REPLAY;
+  // up, disambiguating distributed operations (import, rename, etc.)
+  static const int STATE_RESOLVE = CEPH_MDS_STATE_RESOLVE;
+  // up, reconnect to clients
+  static const int STATE_RECONNECT = CEPH_MDS_STATE_RECONNECT;
+  // up, replayed journal, rejoining distributed cache
+  static const int STATE_REJOIN = CEPH_MDS_STATE_REJOIN;
+  // up, active
+  static const int STATE_CLIENTREPLAY = CEPH_MDS_STATE_CLIENTREPLAY;
+  // up, active
+  static const int STATE_ACTIVE = CEPH_MDS_STATE_ACTIVE;
+  // up, exporting metadata (-> standby or out)
+  static const int STATE_STOPPING = CEPH_MDS_STATE_STOPPING;
 
   // indicate startup standby preferences for MDS
   // of course, if they have a specific rank to follow, they just set that!
-  static const int MDS_NO_STANDBY_PREF = -1; // doesn't have instructions to do anything
-  static const int MDS_STANDBY_ANY = -2; // is instructed to be standby-replay, may
-                                     // or may not have specific name to follow
-  static const int MDS_STANDBY_NAME = -3; // standby for a named MDS
-  static const int MDS_MATCHED_ACTIVE = -4; // has a matched standby, which if up
-                                            // it should follow, but otherwise should
-                                            // be assigned a rank
+  // doesn't have instructions to do anything
+  static const int MDS_NO_STANDBY_PREF = -1;
+  // is instructed to be standby-replay, may or may not have specific
+  // name to follow
+  static const int MDS_STANDBY_ANY = -2;
+  // standby for a named MDS
+  static const int MDS_STANDBY_NAME = -3;
+  // has a matched standby, which if up it should follow, but
+  // otherwise should be assigned a rank
+  static const int MDS_MATCHED_ACTIVE = -4;
 
   struct mds_info_t {
     uint64_t global_id;
@@ -119,13 +135,15 @@ public:
     string standby_for_name;
     set<int32_t> export_targets;
 
-    mds_info_t() : global_id(0), rank(-1), inc(0), state(STATE_STANDBY), state_seq(0),
-		   standby_for_rank(MDS_NO_STANDBY_PREF) { }
+    mds_info_t() : global_id(0), rank(-1), inc(0), state(STATE_STANDBY),
+		   state_seq(0), standby_for_rank(MDS_NO_STANDBY_PREF) { }
 
     bool laggy() const { return !(laggy_since == utime_t()); }
     void clear_laggy() { laggy_since = utime_t(); }
 
-    entity_inst_t get_inst() const { return entity_inst_t(entity_name_t::MDS(rank), addr); }
+    entity_inst_t get_inst() const {
+      return entity_inst_t(entity_name_t::MDS(rank), addr);
+    }
 
     void encode(bufferlist& bl, uint64_t features) const {
       if ((features & CEPH_FEATURE_MDSENC) == 0 ) encode_unversioned(bl);
@@ -143,23 +161,30 @@ public:
 protected:
   // base map
   epoch_t epoch;
-  uint32_t flags;        // flags
-  epoch_t last_failure;  // mds epoch of last failure
-  epoch_t last_failure_osd_epoch; // osd epoch of last failure; any mds entering replay needs
-                                  // at least this osdmap to ensure the blacklist propagates.
+  uint32_t flags; // flags
+  epoch_t last_failure; // mds epoch of last failure
+  // osd epoch of last failure; any mds entering replay needs at least
+  // this osdmap to ensure the blacklist propagates.
+  epoch_t last_failure_osd_epoch;
   utime_t created, modified;
 
-  int32_t tableserver;   // which MDS has anchortable, snaptable
-  int32_t root;          // which MDS has root directory
+  // which MDS has anchortable
+  int32_t tableserver;
+  // which MDS has root directory
+  int32_t root;
 
   __u32 session_timeout;
   __u32 session_autoclose;
   uint64_t max_file_size;
 
-  set<int64_t> data_pools;  // file data pools available to clients (via an ioctl).  first is the default.
-  int64_t cas_pool;            // where CAS objects go
-  int64_t metadata_pool;       // where fs metadata objects go
-  
+  // file data pools available to clients (via an ioctl).  first is
+  // the default.
+  set<int64_t> data_pools;
+  // where CAS objects go
+  int64_t cas_pool;
+  // where fs metadata objects go
+  int64_t metadata_pool;
+
   /*
    * in: the set of logical mds #'s that define the cluster.  this is the set
    *     of mds's the metadata may be distributed over.
@@ -170,16 +195,14 @@ protected:
    *    @up + @failed = @in.  @in * @stopped = {}.
    */
 
-  uint32_t max_mds; /* The maximum number of active MDSes. Also, the maximum rank. */
+  /* The maximum number of active MDSes. Also, the maximum rank. */
+  uint32_t max_mds;
 
-  set<int32_t> in;              // currently defined cluster
-  map<int32_t,int32_t> inc;     // most recent incarnation.
+  set<int32_t> in; // currently defined cluster
+  map<int32_t,int32_t> inc; // most recent incarnation.
   set<int32_t> failed, stopped; // which roles are failed or stopped
-  map<int32_t,uint64_t> up;        // who is in those roles
+  map<int32_t,uint64_t> up; // who is in those roles
   map<uint64_t,mds_info_t> mds_info;
-
-  bool ever_allowed_snaps; //< the cluster has ever allowed snap creation
-  bool explicitly_allowed_snaps; //< the user has explicitly enabled snap creation
 
   bool inline_data_enabled;
 
@@ -189,18 +212,12 @@ public:
   friend class MDSMonitor;
 
 public:
-  MDSMap() 
-    : epoch(0), flags(0), last_failure(0), last_failure_osd_epoch(0), tableserver(0), root(0),
-      session_timeout(0),
-      session_autoclose(0),
-      max_file_size(0),
-      cas_pool(-1),
-      metadata_pool(0),
-      max_mds(0),
-      ever_allowed_snaps(false),
-      explicitly_allowed_snaps(false),
-      inline_data_enabled(false)
-  { }
+  MDSMap()
+    : epoch(0), flags(0), last_failure(0), last_failure_osd_epoch(0),
+      tableserver(0), root(0), session_timeout(0), session_autoclose(0),
+      max_file_size(0), cas_pool(-1), metadata_pool(0), max_mds(0),
+      inline_data_enabled(false) {
+  }
 
   bool get_inline_data_enabled() { return inline_data_enabled; }
   void set_inline_data_enabled(bool enabled) { inline_data_enabled = enabled; }
@@ -209,19 +226,11 @@ public:
     return utime_t(session_timeout,0);
   }
   uint64_t get_max_filesize() { return max_file_size; }
-  
+
   int get_flags() const { return flags; }
   int test_flag(int f) const { return flags & f; }
   void set_flag(int f) { flags |= f; }
   void clear_flag(int f) { flags &= ~f; }
-
-  void set_snaps_allowed() {
-    set_flag(CEPH_MDSMAP_ALLOW_SNAPS);
-    ever_allowed_snaps = true;
-    explicitly_allowed_snaps = true;
-  }
-  bool allows_snaps() { return test_flag(CEPH_MDSMAP_ALLOW_SNAPS); }
-  void clear_snaps_allowed() { clear_flag(CEPH_MDSMAP_ALLOW_SNAPS); }
 
   epoch_t get_epoch() const { return epoch; }
   void inc_epoch() { epoch++; }
@@ -334,7 +343,8 @@ public:
     for (map<uint64_t,mds_info_t>::const_iterator p = mds_info.begin();
 	 p != mds_info.end();
 	 ++p)
-      if (p->second.state >= STATE_CLIENTREPLAY && p->second.state <= STATE_STOPPING)
+      if (p->second.state >= STATE_CLIENTREPLAY &&
+	  p->second.state <= STATE_STOPPING)
 	s.insert(p->second.rank);
   }
   void get_mds_set(set<int>& s, int state) {
@@ -343,7 +353,7 @@ public:
 	 ++p)
       if (p->second.state == state)
 	s.insert(p->second.rank);
-  } 
+  }
 
   int get_random_up_mds() {
     if (up.empty())
@@ -370,13 +380,16 @@ public:
     for (map<uint64_t,mds_info_t>::const_iterator p = mds_info.begin();
 	 p != mds_info.end();
 	 ++p) {
-      if ((p->second.state != MDSMap::STATE_STANDBY && p->second.state != MDSMap::STATE_STANDBY_REPLAY) ||
+      if ((p->second.state != MDSMap::STATE_STANDBY && p->second.state
+	   != MDSMap::STATE_STANDBY_REPLAY) ||
 	  p->second.laggy() ||
 	  p->second.rank >= 0)
 	continue;
-      if (p->second.standby_for_rank == mds || (name.length() && p->second.standby_for_name == name))
+      if (p->second.standby_for_rank == mds ||
+	  (name.length() && p->second.standby_for_name == name))
 	return p->first;
-      if (p->second.standby_for_rank < 0 && p->second.standby_for_name.length() == 0)
+      if (p->second.standby_for_rank < 0 &&
+	  p->second.standby_for_name.length() == 0)
 	generic_standby = p;
     }
     if (generic_standby != mds_info.end())
@@ -393,7 +406,8 @@ public:
 	continue;
       if ((p->second.standby_for_rank == MDS_NO_STANDBY_PREF ||
 	   p->second.standby_for_rank == MDS_MATCHED_ACTIVE ||
-	   (p->second.standby_for_rank == MDS_STANDBY_ANY && g_conf->mon_force_standby_active))) {
+	   (p->second.standby_for_rank == MDS_STANDBY_ANY &&
+	    g_conf->mon_force_standby_active))) {
 	return p->first;
       }
     }

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include <iostream>
@@ -58,180 +58,168 @@ void parse_syn_options(vector<const char*>& args)
     if (strcmp(args[i],"--syn") == 0) {
       ++i;
 
-      if (strcmp(args[i], "mksnap") == 0) {
-	syn_modes.push_back(SYNCLIENT_MODE_MKSNAP);
-	syn_sargs.push_back(args[++i]); // path
-	syn_sargs.push_back(args[++i]); // name
-      }
-      else if (strcmp(args[i], "rmsnap") == 0) {
-	syn_modes.push_back(SYNCLIENT_MODE_RMSNAP);
-	syn_sargs.push_back(args[++i]); // path
-	syn_sargs.push_back(args[++i]); // name
-      } else if (strcmp(args[i], "mksnapfile") == 0) {
-	syn_modes.push_back(SYNCLIENT_MODE_MKSNAPFILE);
-	syn_sargs.push_back(args[++i]); // path
-      } else if (strcmp(args[i],"rmfile") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_RMFILE );
+      if (strcmp(args[i],"rmfile") == 0) {
+	syn_modes.push_back( SYNCLIENT_MODE_RMFILE );
       } else if (strcmp(args[i],"writefile") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_WRITEFILE );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_WRITEFILE );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"wrshared") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_WRSHARED );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_WRSHARED );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"writebatch") == 0) {
-          syn_modes.push_back( SYNCLIENT_MODE_WRITEBATCH );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	  syn_modes.push_back( SYNCLIENT_MODE_WRITEBATCH );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"readfile") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_READFILE );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_READFILE );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"readwriterandom") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_RDWRRANDOM );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_RDWRRANDOM );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"readwriterandom_ex") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_RDWRRANDOM_EX );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_RDWRRANDOM_EX );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"overloadosd0") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_OVERLOAD_OSD_0 );
 	syn_iargs.push_back( atoi(args[++i]) );
 	syn_iargs.push_back( atoi(args[++i]) );
 	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"readshared") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_READSHARED );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_READSHARED );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"rw") == 0) {
-        int a = atoi(args[++i]);
-        int b = atoi(args[++i]);
-        syn_modes.push_back( SYNCLIENT_MODE_WRITEFILE );
-        syn_iargs.push_back( a );
-        syn_iargs.push_back( b );
-        syn_modes.push_back( SYNCLIENT_MODE_READFILE );
-        syn_iargs.push_back( a );
-        syn_iargs.push_back( b );
+	int a = atoi(args[++i]);
+	int b = atoi(args[++i]);
+	syn_modes.push_back( SYNCLIENT_MODE_WRITEFILE );
+	syn_iargs.push_back( a );
+	syn_iargs.push_back( b );
+	syn_modes.push_back( SYNCLIENT_MODE_READFILE );
+	syn_iargs.push_back( a );
+	syn_iargs.push_back( b );
       } else if (strcmp(args[i],"dumpplacement") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_DUMP );
 	syn_sargs.push_back( args[++i] );   
       } else if (strcmp(args[i],"dropcache") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_DROPCACHE );
       } else if (strcmp(args[i],"makedirs") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_MAKEDIRS );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_MAKEDIRS );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"makedirmess") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_MAKEDIRMESS );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_MAKEDIRMESS );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"statdirs") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_STATDIRS );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_STATDIRS );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"readdirs") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_READDIRS );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_READDIRS );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
 
       } else if (strcmp(args[i],"makefiles") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_MAKEFILES );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_MAKEFILES );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"makefiles2") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_MAKEFILES2 );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_MAKEFILES2 );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"linktest") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_LINKTEST );
+	syn_modes.push_back( SYNCLIENT_MODE_LINKTEST );
       } else if (strcmp(args[i],"createshared") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_CREATESHARED );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_CREATESHARED );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"openshared") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_OPENSHARED );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_OPENSHARED );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
 
       } else if (strcmp(args[i],"createobjects") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_CREATEOBJECTS );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_CREATEOBJECTS );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"objectrw") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_OBJECTRW );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_OBJECTRW );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
 
       } else if (strcmp(args[i],"walk") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_FULLWALK );
-        //syn_sargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_FULLWALK );
+	//syn_sargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"randomwalk") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_RANDOMWALK );
-        syn_iargs.push_back( atoi(args[++i]) );       
+	syn_modes.push_back( SYNCLIENT_MODE_RANDOMWALK );
+	syn_iargs.push_back( atoi(args[++i]) );	      
 
       } else if (strcmp(args[i],"trace") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_TRACE );
-        syn_sargs.push_back( args[++i] );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_TRACE );
+	syn_sargs.push_back( args[++i] );
+	syn_iargs.push_back( atoi(args[++i]) );
 	syn_iargs.push_back(1);// data
       } else if (strcmp(args[i],"mtrace") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_TRACE );
-        syn_sargs.push_back( args[++i] );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_TRACE );
+	syn_sargs.push_back( args[++i] );
+	syn_iargs.push_back( atoi(args[++i]) );
 	syn_iargs.push_back(0);// no data
       } else if (strcmp(args[i],"thrashlinks") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_THRASHLINKS );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_THRASHLINKS );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
 
       } else if (strcmp(args[i],"foo") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_FOO );
+	syn_modes.push_back( SYNCLIENT_MODE_FOO );
 
       } else if (strcmp(args[i],"until") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_UNTIL );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_UNTIL );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"sleepuntil") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_SLEEPUNTIL );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_SLEEPUNTIL );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"only") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_ONLY );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_ONLY );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"onlyrange") == 0) {
-        syn_modes.push_back( SYNCLIENT_MODE_ONLYRANGE );
-        syn_iargs.push_back( atoi(args[++i]) );
-        syn_iargs.push_back( atoi(args[++i]) );
-        
+	syn_modes.push_back( SYNCLIENT_MODE_ONLYRANGE );
+	syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
+	
       } else if (strcmp(args[i],"sleep") == 0) { 
-        syn_modes.push_back( SYNCLIENT_MODE_SLEEP );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_SLEEP );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"randomsleep") == 0) { 
-        syn_modes.push_back( SYNCLIENT_MODE_RANDOMSLEEP );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_RANDOMSLEEP );
+	syn_iargs.push_back( atoi(args[++i]) );
 
       } else if (strcmp(args[i],"opentest") == 0) { 
-        syn_modes.push_back( SYNCLIENT_MODE_OPENTEST );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_modes.push_back( SYNCLIENT_MODE_OPENTEST );
+	syn_iargs.push_back( atoi(args[++i]) );
       } else if (strcmp(args[i],"optest") == 0) {
 	syn_modes.push_back( SYNCLIENT_MODE_OPTEST );
-        syn_iargs.push_back( atoi(args[++i]) );
+	syn_iargs.push_back( atoi(args[++i]) );
 
       } else if (strcmp(args[i],"truncate") == 0) { 
-        syn_modes.push_back( SYNCLIENT_MODE_TRUNCATE );
+	syn_modes.push_back( SYNCLIENT_MODE_TRUNCATE );
 	syn_sargs.push_back(args[++i]);
-        syn_iargs.push_back(atoi(args[++i]));
+	syn_iargs.push_back(atoi(args[++i]));
       } else if (strcmp(args[i],"importfind") == 0) {
 	syn_modes.push_back(SYNCLIENT_MODE_IMPORTFIND);
 	syn_sargs.push_back(args[++i]);
@@ -251,8 +239,8 @@ void parse_syn_options(vector<const char*>& args)
 	syn_modes.push_back(SYNCLIENT_MODE_CHUNK);
 	syn_sargs.push_back(args[++i]);
       } else {
-        cerr << "unknown syn arg " << args[i] << std::endl;
-        assert(0);
+	cerr << "unknown syn arg " << args[i] << std::endl;
+	assert(0);
       }
     }
     else if (strcmp(args[i], "localize_reads") == 0) {
@@ -350,33 +338,33 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_ONLY:
       {
-        run_only = iargs.front();
-        iargs.pop_front();
-        if (run_only == client->get_nodeid())
-          dout(2) << "only " << run_only << dendl;
+	run_only = iargs.front();
+	iargs.pop_front();
+	if (run_only == client->get_nodeid())
+	  dout(2) << "only " << run_only << dendl;
       }
       break;
     case SYNCLIENT_MODE_ONLYRANGE:
       {
-        int first = iargs.front();
-        iargs.pop_front();
-        int last = iargs.front();
-        iargs.pop_front();
-        if (first <= client->get_nodeid() &&
+	int first = iargs.front();
+	iargs.pop_front();
+	int last = iargs.front();
+	iargs.pop_front();
+	if (first <= client->get_nodeid() &&
 	    last > client->get_nodeid()) {
 	  run_only = client->get_nodeid();
-          dout(2) << "onlyrange [" << first << ", " << last << ") includes me" << dendl;
+	  dout(2) << "onlyrange [" << first << ", " << last << ") includes me" << dendl;
 	} else
-	  run_only = client->get_nodeid().v+1;  // not me
+	  run_only = client->get_nodeid().v+1;	// not me
       }
       break;
     case SYNCLIENT_MODE_EXCLUDE:
       {
-        exclude = iargs.front();
-        iargs.pop_front();
-        if (exclude == client->get_nodeid()) {
+	exclude = iargs.front();
+	iargs.pop_front();
+	if (exclude == client->get_nodeid()) {
 	  run_only = client->get_nodeid().v + 1;
-          dout(2) << "not running " << exclude << dendl;
+	  dout(2) << "not running " << exclude << dendl;
 	} else
 	  run_only = -1;
       }
@@ -386,8 +374,8 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_UNTIL:
       {
-        int iarg1 = iargs.front();
-        iargs.pop_front();
+	int iarg1 = iargs.front();
+	iargs.pop_front();
 	if (run_me()) {
 	  if (iarg1) {
 	    dout(2) << "until " << iarg1 << dendl;
@@ -413,50 +401,50 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_RANDOMSLEEP:
       {
-        int iarg1 = iargs.front();
-        iargs.pop_front();
-        if (run_me()) {
-          srand(time(0) + getpid() + client->whoami.v);
-          sleep(rand() % iarg1);
-        }
+	int iarg1 = iargs.front();
+	iargs.pop_front();
+	if (run_me()) {
+	  srand(time(0) + getpid() + client->whoami.v);
+	  sleep(rand() % iarg1);
+	}
 	did_run_me();
       }
       break;
 
     case SYNCLIENT_MODE_SLEEP:
       {
-        int iarg1 = iargs.front();
-        iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "sleep " << iarg1 << dendl;
-          sleep(iarg1);
-        }
+	int iarg1 = iargs.front();
+	iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "sleep " << iarg1 << dendl;
+	  sleep(iarg1);
+	}
 	did_run_me();
       }
       break;
 
     case SYNCLIENT_MODE_SLEEPUNTIL:
       {
-        int iarg1 = iargs.front();
-        iargs.pop_front();
-        if (iarg1 && run_me()) {
-          dout(2) << "sleepuntil " << iarg1 << dendl;
-          utime_t at = ceph_clock_now(client->cct) - run_start;
-          if (at.sec() < iarg1) 
-            sleep(iarg1 - at.sec());
-        }
+	int iarg1 = iargs.front();
+	iargs.pop_front();
+	if (iarg1 && run_me()) {
+	  dout(2) << "sleepuntil " << iarg1 << dendl;
+	  utime_t at = ceph_clock_now(client->cct) - run_start;
+	  if (at.sec() < iarg1) 
+	    sleep(iarg1 - at.sec());
+	}
 	did_run_me();
       }
       break;
 
     case SYNCLIENT_MODE_RANDOMWALK:
       {
-        int iarg1 = iargs.front();
-        iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "randomwalk " << iarg1 << dendl;
-          random_walk(iarg1);
-        }
+	int iarg1 = iargs.front();
+	iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "randomwalk " << iarg1 << dendl;
+	  random_walk(iarg1);
+	}
 	did_run_me();
       }
       break;
@@ -483,51 +471,51 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_MAKEDIRMESS:
       {
-        string sarg1 = get_sarg(0);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "makedirmess " << sarg1 << " " << iarg1 << dendl;
-          make_dir_mess(sarg1.c_str(), iarg1);
-        }
+	string sarg1 = get_sarg(0);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "makedirmess " << sarg1 << " " << iarg1 << dendl;
+	  make_dir_mess(sarg1.c_str(), iarg1);
+	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_MAKEDIRS:
       {
-        string sarg1 = get_sarg(seq++);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
-        int iarg3 = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "makedirs " << sarg1 << " " << iarg1 << " " << iarg2 << " " << iarg3 << dendl;
-          make_dirs(sarg1.c_str(), iarg1, iarg2, iarg3);
-        }
+	string sarg1 = get_sarg(seq++);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
+	int iarg3 = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "makedirs " << sarg1 << " " << iarg1 << " " << iarg2 << " " << iarg3 << dendl;
+	  make_dirs(sarg1.c_str(), iarg1, iarg2, iarg3);
+	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_STATDIRS:
       {
-        string sarg1 = get_sarg(0);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
-        int iarg3 = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "statdirs " << sarg1 << " " << iarg1 << " " << iarg2 << " " << iarg3 << dendl;
-          stat_dirs(sarg1.c_str(), iarg1, iarg2, iarg3);
-        }
+	string sarg1 = get_sarg(0);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
+	int iarg3 = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "statdirs " << sarg1 << " " << iarg1 << " " << iarg2 << " " << iarg3 << dendl;
+	  stat_dirs(sarg1.c_str(), iarg1, iarg2, iarg3);
+	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_READDIRS:
       {
-        string sarg1 = get_sarg(0);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
-        int iarg3 = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "readdirs " << sarg1 << " " << iarg1 << " " << iarg2 << " " << iarg3 << dendl;
-          read_dirs(sarg1.c_str(), iarg1, iarg2, iarg3);
-        }
+	string sarg1 = get_sarg(0);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
+	int iarg3 = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "readdirs " << sarg1 << " " << iarg1 << " " << iarg2 << " " << iarg3 << dendl;
+	  read_dirs(sarg1.c_str(), iarg1, iarg2, iarg3);
+	}
 	did_run_me();
       }
       break;
@@ -535,15 +523,15 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_THRASHLINKS:
       {
-        string sarg1 = get_sarg(0);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
-        int iarg3 = iargs.front();  iargs.pop_front();
-        int iarg4 = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "thrashlinks " << sarg1 << " " << iarg1 << " " << iarg2 << " " << iarg3 << dendl;
-          thrash_links(sarg1.c_str(), iarg1, iarg2, iarg3, iarg4);
-        }
+	string sarg1 = get_sarg(0);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
+	int iarg3 = iargs.front();  iargs.pop_front();
+	int iarg4 = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "thrashlinks " << sarg1 << " " << iarg1 << " " << iarg2 << " " << iarg3 << dendl;
+	  thrash_links(sarg1.c_str(), iarg1, iarg2, iarg3, iarg4);
+	}
 	did_run_me();
       }
       break;
@@ -560,108 +548,108 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_MAKEFILES:
       {
-        int num = iargs.front();  iargs.pop_front();
-        int count = iargs.front();  iargs.pop_front();
-        int priv = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "makefiles " << num << " " << count << " " << priv << dendl;
-          make_files(num, count, priv, false);
-        }
+	int num = iargs.front();  iargs.pop_front();
+	int count = iargs.front();  iargs.pop_front();
+	int priv = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "makefiles " << num << " " << count << " " << priv << dendl;
+	  make_files(num, count, priv, false);
+	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_MAKEFILES2:
       {
-        int num = iargs.front();  iargs.pop_front();
-        int count = iargs.front();  iargs.pop_front();
-        int priv = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "makefiles2 " << num << " " << count << " " << priv << dendl;
-          make_files(num, count, priv, true);
-        }
+	int num = iargs.front();  iargs.pop_front();
+	int count = iargs.front();  iargs.pop_front();
+	int priv = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "makefiles2 " << num << " " << count << " " << priv << dendl;
+	  make_files(num, count, priv, true);
+	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_CREATESHARED:
       {
-        string sarg1 = get_sarg(0);
-        int num = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "createshared " << num << dendl;
-          create_shared(num);
-        }
+	string sarg1 = get_sarg(0);
+	int num = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "createshared " << num << dendl;
+	  create_shared(num);
+	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_OPENSHARED:
       {
-        string sarg1 = get_sarg(0);
-        int num = iargs.front();  iargs.pop_front();
-        int count = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "openshared " << num << dendl;
-          open_shared(num, count);
-        }
+	string sarg1 = get_sarg(0);
+	int num = iargs.front();  iargs.pop_front();
+	int count = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "openshared " << num << dendl;
+	  open_shared(num, count);
+	}
 	did_run_me();
       }
       break;
 
     case SYNCLIENT_MODE_CREATEOBJECTS:
       {
-        int count = iargs.front();  iargs.pop_front();
-        int size = iargs.front();  iargs.pop_front();
-        int inflight = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "createobjects " << cout << " of " << size << " bytes"
+	int count = iargs.front();  iargs.pop_front();
+	int size = iargs.front();  iargs.pop_front();
+	int inflight = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "createobjects " << cout << " of " << size << " bytes"
 		  << ", " << inflight << " in flight" << dendl;
-          create_objects(count, size, inflight);
-        }
+	  create_objects(count, size, inflight);
+	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_OBJECTRW:
       {
-        int count = iargs.front();  iargs.pop_front();
-        int size = iargs.front();  iargs.pop_front();
-        int wrpc = iargs.front();  iargs.pop_front();
-        int overlap = iargs.front();  iargs.pop_front();
-        int rskew = iargs.front();  iargs.pop_front();
-        int wskew = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          dout(2) << "objectrw " << cout << " " << size << " " << wrpc 
+	int count = iargs.front();  iargs.pop_front();
+	int size = iargs.front();  iargs.pop_front();
+	int wrpc = iargs.front();  iargs.pop_front();
+	int overlap = iargs.front();  iargs.pop_front();
+	int rskew = iargs.front();  iargs.pop_front();
+	int wskew = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  dout(2) << "objectrw " << cout << " " << size << " " << wrpc 
 		  << " " << overlap << " " << rskew << " " << wskew << dendl;
-          object_rw(count, size, wrpc, overlap, rskew, wskew);
-        }
+	  object_rw(count, size, wrpc, overlap, rskew, wskew);
+	}
 	did_run_me();
       }
       break;
 
     case SYNCLIENT_MODE_FULLWALK:
       {
-        string sarg1;// = get_sarg(0);
-        if (run_me()) {
-          dout(2) << "fullwalk" << sarg1 << dendl;
-          full_walk(sarg1);
-        }
+	string sarg1;// = get_sarg(0);
+	if (run_me()) {
+	  dout(2) << "fullwalk" << sarg1 << dendl;
+	  full_walk(sarg1);
+	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_REPEATWALK:
       {
-        string sarg1 = get_sarg(0);
-        if (run_me()) {
-          dout(2) << "repeatwalk " << sarg1 << dendl;
-          while (full_walk(sarg1) == 0) ;
-        }
+	string sarg1 = get_sarg(0);
+	if (run_me()) {
+	  dout(2) << "repeatwalk " << sarg1 << dendl;
+	  while (full_walk(sarg1) == 0) ;
+	}
 	did_run_me();
       }
       break;
 
     case SYNCLIENT_MODE_RMFILE:
       {
-        string sarg1 = get_sarg(0);
-        if (run_me()) {
-          rm_file(sarg1);
+	string sarg1 = get_sarg(0);
+	if (run_me()) {
+	  rm_file(sarg1);
 	}
 	did_run_me();
       }
@@ -669,12 +657,12 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_WRITEFILE:
       {
-        string sarg1 = get_sarg(0);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
-        dout(1) << "WRITING SYN CLIENT" << dendl;
-        if (run_me()) {
-          write_file(sarg1, iarg1, iarg2);
+	string sarg1 = get_sarg(0);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
+	dout(1) << "WRITING SYN CLIENT" << dendl;
+	if (run_me()) {
+	  write_file(sarg1, iarg1, iarg2);
 	}
 	did_run_me();
       }
@@ -682,7 +670,7 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_CHUNK:
       if (run_me()) {
-        string sarg1 = get_sarg(0);
+	string sarg1 = get_sarg(0);
 	chunk_file(sarg1);
       }
       did_run_me();
@@ -704,22 +692,22 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_WRSHARED:
       {
-        string sarg1 = "shared";
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          write_file(sarg1, iarg1, iarg2);
+	string sarg1 = "shared";
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  write_file(sarg1, iarg1, iarg2);
 	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_READSHARED:
       {
-        string sarg1 = "shared";
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          read_file(sarg1, iarg1, iarg2, true);
+	string sarg1 = "shared";
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  read_file(sarg1, iarg1, iarg2, true);
 	}
 	did_run_me();
       }
@@ -727,11 +715,11 @@ int SyntheticClient::run()
     case SYNCLIENT_MODE_WRITEBATCH:
       {
 	int iarg1 = iargs.front(); iargs.pop_front();
-        int iarg2 = iargs.front(); iargs.pop_front();
-        int iarg3 = iargs.front(); iargs.pop_front();
+	int iarg2 = iargs.front(); iargs.pop_front();
+	int iarg3 = iargs.front(); iargs.pop_front();
 
-        if (run_me()) {
-          write_batch(iarg1, iarg2, iarg3);
+	if (run_me()) {
+	  write_batch(iarg1, iarg2, iarg3);
 	}
 	did_run_me();
       }
@@ -739,13 +727,13 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_READFILE:
       {
-        string sarg1 = get_sarg(0);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
+	string sarg1 = get_sarg(0);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
 
-        dout(1) << "READING SYN CLIENT" << dendl;
-        if (run_me()) {
-          read_file(sarg1, iarg1, iarg2);
+	dout(1) << "READING SYN CLIENT" << dendl;
+	if (run_me()) {
+	  read_file(sarg1, iarg1, iarg2);
 	}
 	did_run_me();
       }
@@ -753,13 +741,13 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_RDWRRANDOM:
       {
-        string sarg1 = get_sarg(0);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
+	string sarg1 = get_sarg(0);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
 
-        dout(1) << "RANDOM READ WRITE SYN CLIENT" << dendl;
-        if (run_me()) {
-          read_random(sarg1, iarg1, iarg2);
+	dout(1) << "RANDOM READ WRITE SYN CLIENT" << dendl;
+	if (run_me()) {
+	  read_random(sarg1, iarg1, iarg2);
 	}
 	did_run_me();
       }
@@ -767,56 +755,56 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_RDWRRANDOM_EX:
       {
-        string sarg1 = get_sarg(0);
-        int iarg1 = iargs.front();  iargs.pop_front();
-        int iarg2 = iargs.front();  iargs.pop_front();
+	string sarg1 = get_sarg(0);
+	int iarg1 = iargs.front();  iargs.pop_front();
+	int iarg2 = iargs.front();  iargs.pop_front();
 
-        dout(1) << "RANDOM READ WRITE SYN CLIENT" << dendl;
-        if (run_me()) {
-          read_random_ex(sarg1, iarg1, iarg2);
+	dout(1) << "RANDOM READ WRITE SYN CLIENT" << dendl;
+	if (run_me()) {
+	  read_random_ex(sarg1, iarg1, iarg2);
 	}
 	did_run_me();
       }
       break;
     case SYNCLIENT_MODE_TRACE:
       {
-        string tfile = get_sarg(0);
-        sargs.push_front(string("~"));
-        int iarg1 = iargs.front();  iargs.pop_front();
+	string tfile = get_sarg(0);
+	sargs.push_front(string("~"));
+	int iarg1 = iargs.front();  iargs.pop_front();
 	int playdata = iargs.front(); iargs.pop_front();
-        string prefix = get_sarg(0);
+	string prefix = get_sarg(0);
 	char realtfile[100];
 	snprintf(realtfile, sizeof(realtfile), tfile.c_str(), (int)client->get_nodeid().v);
 
-        if (run_me()) {
-          dout(0) << "trace " << tfile << " prefix=" << prefix << " count=" << iarg1 << " data=" << playdata << dendl;
-          
-          Trace t(realtfile);
-          
+	if (run_me()) {
+	  dout(0) << "trace " << tfile << " prefix=" << prefix << " count=" << iarg1 << " data=" << playdata << dendl;
+	  
+	  Trace t(realtfile);
+	  
 	  if (iarg1 == 0) iarg1 = 1; // play trace at least once!
 
-          for (int i=0; i<iarg1; i++) {
-            utime_t start = ceph_clock_now(client->cct);
-            
-            if (time_to_stop()) break;
-            play_trace(t, prefix, !playdata);
-            if (time_to_stop()) break;
-            if (iarg1 > 1) clean_dir(prefix);  // clean only if repeat
-            
-            utime_t lat = ceph_clock_now(client->cct);
-            lat -= start;
-            
-            dout(0) << " trace " << tfile << " loop " << (i+1) << "/" << iarg1 << " done in " << (double)lat << " seconds" << dendl;
-            if (client->logger
-                && i > 0
-                && i < iarg1-1
-                ) {
-              //client->logger->finc("trsum", (double)lat);
-              //client->logger->inc("trnum");
-            }
-          }
+	  for (int i=0; i<iarg1; i++) {
+	    utime_t start = ceph_clock_now(client->cct);
+	    
+	    if (time_to_stop()) break;
+	    play_trace(t, prefix, !playdata);
+	    if (time_to_stop()) break;
+	    if (iarg1 > 1) clean_dir(prefix);  // clean only if repeat
+	    
+	    utime_t lat = ceph_clock_now(client->cct);
+	    lat -= start;
+	    
+	    dout(0) << " trace " << tfile << " loop " << (i+1) << "/" << iarg1 << " done in " << (double)lat << " seconds" << dendl;
+	    if (client->logger
+		&& i > 0
+		&& i < iarg1-1
+		) {
+	      //client->logger->finc("trsum", (double)lat);
+	      //client->logger->inc("trnum");
+	    }
+	  }
 	  dout(1) << "done " << dendl;
-        }
+	}
 	did_run_me();
       }
       break;
@@ -824,37 +812,37 @@ int SyntheticClient::run()
 
     case SYNCLIENT_MODE_OPENTEST:
       {
-        int count = iargs.front();  iargs.pop_front();
-        if (run_me()) {
-          for (int i=0; i<count; i++) {
-            int fd = client->open("test", (rand()%2) ? (O_WRONLY|O_CREAT) : O_RDONLY);
-            if (fd > 0) client->close(fd);
-          }
-        }
+	int count = iargs.front();  iargs.pop_front();
+	if (run_me()) {
+	  for (int i=0; i<count; i++) {
+	    int fd = client->open("test", (rand()%2) ? (O_WRONLY|O_CREAT) : O_RDONLY);
+	    if (fd > 0) client->close(fd);
+	  }
+	}
 	did_run_me();
       }
       break;
 
     case SYNCLIENT_MODE_OPTEST:
       {
-        int count = iargs.front();  iargs.pop_front();
-        if (run_me()) {
+	int count = iargs.front();  iargs.pop_front();
+	if (run_me()) {
 	  client->mknod("test", 0777);
 	  struct stat st;
 	  for (int i=0; i<count; i++) {
 	    client->lstat("test", &st);
 	    client->chmod("test", 0777);
-          }
-        }
+	  }
+	}
 	did_run_me();
       }
       break;
 
     case SYNCLIENT_MODE_TRUNCATE:
       {
-        string file = get_sarg(0);
-        sargs.push_front(file);
-        int iarg1 = iargs.front();  iargs.pop_front();
+	string file = get_sarg(0);
+	sargs.push_front(file);
+	int iarg1 = iargs.front();  iargs.pop_front();
 	if (run_me()) {
 	  client->truncate(file.c_str(), iarg1);
 	}
@@ -897,33 +885,6 @@ int SyntheticClient::run()
 	if (run_me()) {
 	  lookup_ino(ino);
 	}
-      }
-      break;
-      
-    case SYNCLIENT_MODE_MKSNAP:
-      {
-	string base = get_sarg(0);
-	string name = get_sarg(0);
-	if (run_me())
-	  mksnap(base.c_str(), name.c_str());
-	did_run_me();
-      }
-      break;
-    case SYNCLIENT_MODE_RMSNAP:
-      {
-	string base = get_sarg(0);
-	string name = get_sarg(0);
-	if (run_me())
-	  rmsnap(base.c_str(), name.c_str());
-	did_run_me();
-      }
-      break;
-    case SYNCLIENT_MODE_MKSNAPFILE:
-      {
-	string base = get_sarg(0);
-	if (run_me())
-	  mksnapfile(base.c_str());
-	did_run_me();
       }
       break;
 
@@ -1028,16 +989,18 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   if (prefix.length()) {
     client->mkdir(prefix.c_str(), 0755);
     struct stat attr;
-    i1 = client->ll_get_inode(vinodeno_t(1, CEPH_NOSNAP));
+    i1 = client->ll_get_inode(vinodeno_t(1));
     if (client->ll_lookup(i1, prefix.c_str(), &attr, &i2) == 0) {
       ll_inos[1] = attr.st_ino;
       dout(5) << "'root' ino is " << inodeno_t(attr.st_ino) << dendl;
       client->ll_put(i1);
     } else {
-      dout(0) << "warning: play_trace couldn't lookup up my per-client directory" << dendl;
+      dout(0)
+	<< "warning: play_trace couldn't lookup up my per-client directory"
+	<< dendl;
     }
   } else
-    (void) client->ll_get_inode(vinodeno_t(1, CEPH_NOSNAP));
+    client->ll_get_inode(vinodeno_t(1));
 
   utime_t last_status = start;
 
@@ -1049,7 +1012,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   bool ack;
   bool safe;
   C_GatherBuilder safeg(client->cct, new C_SafeCond(&lock, &cond, &safe));
-  Context *safegref = safeg.new_sub();  // take a ref
+  Context *safegref = safeg.new_sub();	// take a ref
 
   while (!t.end()) {
 
@@ -1086,7 +1049,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     } else if (strcmp(op, "rename") == 0) {
       const char *a = t.get_string(buf, p);
       const char *b = t.get_string(buf2, p);
-      client->rename(a,b);      
+      client->rename(a,b);	
     } else if (strcmp(op, "mkdir") == 0) {
       const char *a = t.get_string(buf, p);
       int64_t b = t.get_int();
@@ -1097,7 +1060,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     } else if (strcmp(op, "symlink") == 0) {
       const char *a = t.get_string(buf, p);
       const char *b = t.get_string(buf2, p);
-      client->symlink(a,b);      
+      client->symlink(a,b);	 
     } else if (strcmp(op, "readlink") == 0) {
       const char *a = t.get_string(buf, p);
       char buf[100];
@@ -1195,7 +1158,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t off = t.get_int();
       if (!metadata_only) {
 	char *b = new char[size];
-	memset(b, 1, size);            // let's write 1's!
+	memset(b, 1, size);	       // let's write 1's!
 	client->write(fd, b, size, off);
 	delete[] b;
       } else {
@@ -1230,7 +1193,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t r = t.get_int();
       struct stat attr;
       if (ll_inos.count(i)) {
-	  i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	  i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	  if (client->ll_lookup(i1, name, &attr, &i2) == 0)
 	    ll_inos[r] = attr.st_ino;
 	  client->ll_put(i1);
@@ -1238,15 +1201,15 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     } else if (strcmp(op, "ll_forget") == 0) {
       int64_t i = t.get_int();
       int64_t n = t.get_int();
-      if (ll_inos.count(i) && 
+      if (ll_inos.count(i) &&
 	  client->ll_forget(
-	    client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP)), n))
+	    client->ll_get_inode(vinodeno_t(ll_inos[i])), n))
 	ll_inos.erase(i);
     } else if (strcmp(op, "ll_getattr") == 0) {
       int64_t i = t.get_int();
       struct stat attr;
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	client->ll_getattr(i1, &attr);
 	client->ll_put(i1);
       }
@@ -1262,15 +1225,15 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       attr.st_atime = t.get_int();
       int mask = t.get_int();
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	client->ll_setattr(i1, &attr, mask);
 	client->ll_put(i1);
       }
     } else if (strcmp(op, "ll_readlink") == 0) {
       int64_t i = t.get_int();
       if (ll_inos.count(i)) {
-        char buf[PATH_MAX];
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	char buf[PATH_MAX];
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	client->ll_readlink(i1, buf, sizeof(buf));
 	client->ll_put(i1);
       }
@@ -1282,7 +1245,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t ri = t.get_int();
       struct stat attr;
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	if (client->ll_mknod(i1, n, m, r, &attr, &i2) == 0)
 	  ll_inos[ri] = attr.st_ino;
 	client->ll_put(i1);
@@ -1294,7 +1257,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t ri = t.get_int();
       struct stat attr;
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	if (client->ll_mkdir(i1, n, m, &attr, &i2) == 0)
 	  ll_inos[ri] = attr.st_ino;
 	client->ll_put(i1);
@@ -1306,7 +1269,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t ri = t.get_int();
       struct stat attr;
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	if (client->ll_symlink(i1, n, v, &attr, &i2) == 0)
 	  ll_inos[ri] = attr.st_ino;
 	client->ll_put(i1);
@@ -1315,7 +1278,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t i = t.get_int();
       const char *n = t.get_string(buf, p);
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	client->ll_unlink(i1, n);
 	client->ll_put(i1);
       }
@@ -1323,7 +1286,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t i = t.get_int();
       const char *n = t.get_string(buf, p);
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	client->ll_rmdir(i1, n);
 	client->ll_put(i1);
       }
@@ -1334,8 +1297,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       const char *nn = t.get_string(buf2, p);
       if (ll_inos.count(i) &&
 	  ll_inos.count(ni)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
-	i2 = client->ll_get_inode(vinodeno_t(ll_inos[ni],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
+	i2 = client->ll_get_inode(vinodeno_t(ll_inos[ni]));
 	client->ll_rename(i1, n, i2, nn);
 	client->ll_put(i1);
 	client->ll_put(i2);
@@ -1347,8 +1310,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       struct stat attr;
       if (ll_inos.count(i) &&
 	  ll_inos.count(ni)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
-	i2 = client->ll_get_inode(vinodeno_t(ll_inos[ni],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
+	i2 = client->ll_get_inode(vinodeno_t(ll_inos[ni]));
 	client->ll_link(i1, i2, nn, &attr);
 	client->ll_put(i1);
 	client->ll_put(i2);
@@ -1358,7 +1321,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t r = t.get_int();
       dir_result_t *dirp;
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	if (client->ll_opendir(i1, &dirp) == 0)
 	  ll_dirs[r] = dirp;
 	client->ll_put(i1);
@@ -1375,7 +1338,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       int64_t r = t.get_int();
       Fh *fhp;
       if (ll_inos.count(i)) {
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	if (client->ll_open(i1, f, &fhp) == 0)
 	  ll_files[r] = fhp;
 	client->ll_put(i1);
@@ -1390,7 +1353,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       struct stat attr;
       if (ll_inos.count(i)) {
 	Fh *fhp;
-	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
+	i1 = client->ll_get_inode(vinodeno_t(ll_inos[i]));
 	if (client->ll_create(i1, n, m, f, &attr, NULL, &fhp) == 0) {
 	  ll_inos[ri] = attr.st_ino;
 	  ll_files[r] = fhp;
@@ -1437,12 +1400,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 	client->ll_release(ll_files[f]);
 	ll_files.erase(f);
       }
-    } else if (strcmp(op, "ll_statfs") == 0) {
-      int64_t i = t.get_int();
-      if (ll_inos.count(i))
-	{} //client->ll_statfs(vinodeno_t(ll_inos[i],CEPH_NOSNAP));
     }
-
 
     // object-level traces
 
@@ -1454,7 +1412,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       object_locator_t oloc(SYNCLIENT_FIRST_POOL);
       uint64_t size;
       utime_t mtime;
-      client->objecter->stat(oid, oloc, CEPH_NOSNAP, &size, &mtime, 0, new C_SafeCond(&lock, &cond, &ack));
+      client->objecter->stat(oid, oloc, CEPH_NOSNAP, &size, &mtime, 0,
+			     new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.Wait(lock);
       lock.Unlock();
     }
@@ -1467,7 +1426,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       object_locator_t oloc(SYNCLIENT_FIRST_POOL);
       lock.Lock();
       bufferlist bl;
-      client->objecter->read(oid, oloc, off, len, CEPH_NOSNAP, &bl, 0, new C_SafeCond(&lock, &cond, &ack));
+      client->objecter->read(oid, oloc, off, len, CEPH_NOSNAP, &bl, 0,
+			     new C_SafeCond(&lock, &cond, &ack));
       while (!ack) cond.Wait(lock);
       lock.Unlock();
     }
@@ -1483,7 +1443,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       bufferlist bl;
       bl.push_back(bp);
       SnapContext snapc;
-      client->objecter->write(oid, oloc, off, len, snapc, bl, ceph_clock_now(client->cct), 0,
+      client->objecter->write(oid, oloc, off, len, snapc, bl,
+			      ceph_clock_now(client->cct), 0,
 			      new C_SafeCond(&lock, &cond, &ack),
 			      safeg.new_sub());
       safeg.activate();
@@ -1499,7 +1460,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
       object_locator_t oloc(SYNCLIENT_FIRST_POOL);
       lock.Lock();
       SnapContext snapc;
-      client->objecter->zero(oid, oloc, off, len, snapc, ceph_clock_now(client->cct), 0,
+      client->objecter->zero(oid, oloc, off, len, snapc,
+			     ceph_clock_now(client->cct), 0,
 			     new C_SafeCond(&lock, &cond, &ack),
 			     safeg.new_sub());
       safeg.activate();
@@ -1509,7 +1471,8 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 
 
     else {
-      dout(0) << (t.get_line()-1) << ": *** trace hit unrecognized symbol '" << op << "' " << dendl;
+      dout(0) << (t.get_line()-1) << ": *** trace hit unrecognized symbol '"
+	      << op << "' " << dendl;
       assert(0);
     }
   }
@@ -1681,7 +1644,7 @@ int SyntheticClient::full_walk(string& basedir)
 	(actual.nsubdirs != expect.nsubdirs ||
 	 actual.nfiles != expect.nfiles)) {
       dout(0) << dir << ": expected " << expect << dendl;
-      dout(0) << dir << ":      got " << actual << dendl;
+      dout(0) << dir << ":	got " << actual << dendl;
     }
   }
 
@@ -1732,7 +1695,7 @@ int SyntheticClient::dump_placement(string& fn) {
     for (vector<pair<uint64_t, uint64_t> >::iterator j = i->buffer_extents.begin();
 	 j != i->buffer_extents.end(); ++j) {
       dout(0) << "OSD " << osd << ", offset " << (*j).first
-	      << ", length " << (*j).second << dendl;    
+	      << ", length " << (*j).second << dendl;	 
     }
   }
   return 0;
@@ -1853,8 +1816,8 @@ int SyntheticClient::make_files(int num, int count, int priv, bool more)
     // shared
     if (true || whoami == 0) {
       for (int c=0; c<count; c++) {
-        snprintf(d, sizeof(d), "dir.%d.run%d", 0, c);
-        client->mkdir(d, 0755);
+	snprintf(d, sizeof(d), "dir.%d.run%d", 0, c);
+	client->mkdir(d, 0755);
       }
     } else {
       sleep(2);
@@ -1871,10 +1834,10 @@ int SyntheticClient::make_files(int num, int count, int priv, bool more)
       client->mknod(d, 0644);
 
       if (more) {
-        client->lstat(d, &st);
-        int fd = client->open(d, O_RDONLY);
-        client->unlink(d);
-        client->close(fd);
+	client->lstat(d, &st);
+	int fd = client->open(d, O_RDONLY);
+	client->unlink(d);
+	client->close(fd);
       }
 
       if (time_to_stop()) return 0;
@@ -2005,7 +1968,7 @@ int SyntheticClient::overload_osd_0(int n, int size, int wrsize) {
 // See what the primary is for the first object in this file.
 int SyntheticClient::check_first_primary(int fh) {
   vector<ObjectExtent> extents;
-  client->enumerate_layout(fh, extents, 1, 0);  
+  client->enumerate_layout(fh, extents, 1, 0);	
   return client->osdmap->get_pg_acting_primary(client->osdmap->object_locator_to_pg(extents.begin()->oid,
 									     extents.begin()->oloc));
 }
@@ -2047,7 +2010,7 @@ int SyntheticClient::write_file(string& fn, int size, loff_t wrsize)   // size i
     // = 128 bits (16 bytes)
     uint64_t *p = (uint64_t*)buf;
     while ((char*)p < buf + wrsize) {
-      *p = (uint64_t)i*(uint64_t)wrsize + (uint64_t)((char*)p - buf);      
+      *p = (uint64_t)i*(uint64_t)wrsize + (uint64_t)((char*)p - buf);	   
       p++;
       *p = client->get_nodeid().v;
       p++;
@@ -2105,7 +2068,7 @@ int SyntheticClient::write_fd(int fd, int size, int wrsize)   // size is in MB, 
     // = 128 bits (16 bytes)
     uint64_t *p = (uint64_t*)buf;
     while ((char*)p < buf + wrsize) {
-      *p = (uint64_t)i*(uint64_t)wrsize + (uint64_t)((char*)p - buf);      
+      *p = (uint64_t)i*(uint64_t)wrsize + (uint64_t)((char*)p - buf);	   
       p++;
       *p = client->get_nodeid().v;
       p++;
@@ -2182,11 +2145,11 @@ int SyntheticClient::read_file(const std::string& fn, int size,
       p++;
       if (readoff != wantoff ||
 	  readclient != client->get_nodeid()) {
-        if (!bad && !ignoreprint)
-          dout(0) << "WARNING: wrong data from OSD, block says fileoffset=" << readoff << " client=" << readclient
+	if (!bad && !ignoreprint)
+	  dout(0) << "WARNING: wrong data from OSD, block says fileoffset=" << readoff << " client=" << readclient
 		  << ", should be offset " << wantoff << " clietn " << client->get_nodeid()
 		  << dendl;
-        bad++;
+	bad++;
       }
     }
     if (bad && !ignoreprint) 
@@ -2255,10 +2218,10 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
 
   Mutex lock("create_objects lock");
   Cond cond;
-  
+
   int unack = 0;
   int unsafe = 0;
-  
+
   list<utime_t> starts;
 
   for (int i=start; i<end; i += inc) {
@@ -2267,15 +2230,16 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
     object_t oid = file_object_t(999, i);
     object_locator_t oloc(SYNCLIENT_FIRST_POOL);
     SnapContext snapc;
-    
+
     if (i % inflight == 0) {
       dout(6) << "create_objects " << i << "/" << (nobj+1) << dendl;
     }
     dout(10) << "writing " << oid << dendl;
-    
+
     starts.push_back(ceph_clock_now(client->cct));
     client->client_lock.Lock();
-    client->objecter->write(oid, oloc, 0, osize, snapc, bl, ceph_clock_now(client->cct), 0,
+    client->objecter->write(oid, oloc, 0, osize, snapc, bl,
+			    ceph_clock_now(client->cct), 0,
 			    new C_Ref(lock, cond, &unack),
 			    new C_Ref(lock, cond, &unsafe));
     client->client_lock.Unlock();
@@ -2286,7 +2250,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
       cond.Wait(lock);
     }
     lock.Unlock();
-    
+
     utime_t lat = ceph_clock_now(client->cct);
     lat -= starts.front();
     starts.pop_front();
@@ -2327,9 +2291,9 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
 
   // start with odd number > nobj
   rjhash<uint32_t> h;
-  unsigned prime = nobj + 1;             // this is the minimum!
-  prime += h(nobj) % (3*nobj);  // bump it up some
-  prime |= 1;                               // make it odd
+  unsigned prime = nobj + 1;		 // this is the minimum!
+  prime += h(nobj) % (3*nobj);	// bump it up some
+  prime |= 1;				    // make it odd
 
   while (true) {
     unsigned j;
@@ -2361,14 +2325,14 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       o = (long)trunc(pow(r, wskew) * (double)nobj);  // exponentially skew towards 0
       int pnoremap = (long)(r * 100.0);
       if (pnoremap >= overlappc) 
-	o = (o*prime) % nobj;    // remap
+	o = (o*prime) % nobj;	 // remap
     } else {
       o = (long)trunc(pow(r, rskew) * (double)nobj);  // exponentially skew towards 0
     }
     object_t oid = file_object_t(999, o);
     object_locator_t oloc(SYNCLIENT_FIRST_POOL);
     SnapContext snapc;
-    
+
     client->client_lock.Lock();
     utime_t start = ceph_clock_now(client->cct);
     if (write) {
@@ -2382,15 +2346,12 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
       op.indata = bl;
       m.ops.push_back(op);
       if (do_sync) {
-        OSDOp op;
-        op.op.op = CEPH_OSD_OP_STARTSYNC;
+	OSDOp op;
+	op.op.op = CEPH_OSD_OP_STARTSYNC;
 	m.ops.push_back(op);
       }
       client->objecter->mutate(oid, oloc, m, snapc, ceph_clock_now(client->cct), 0,
 			       NULL, new C_Ref(lock, cond, &unack));
-      /*client->objecter->write(oid, layout, 0, osize, snapc, bl, 0,
-			      new C_Ref(lock, cond, &unack),
-			      new C_Ref(lock, cond, &unsafe));*/
     } else {
       dout(10) << "read from " << oid << dendl;
       bufferlist inbl;
@@ -2466,36 +2427,36 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is 
     }
     if ( x < 0.5) 
     {
-        //dout(0) << "DECIDED TO READ " << x << dendl;
-        buf = new char[rdsize]; 
-        memset(buf, 1, rdsize);
-        read=true;
+	//dout(0) << "DECIDED TO READ " << x << dendl;
+	buf = new char[rdsize]; 
+	memset(buf, 1, rdsize);
+	read=true;
     }
     else
     {
        // dout(0) << "DECIDED TO WRITE " << x << dendl;
-        buf = new char[rdsize+100];   // 1 MB
-        memset(buf, 7, rdsize);
+	buf = new char[rdsize+100];   // 1 MB
+	memset(buf, 7, rdsize);
     }
 
-    //double  y  = drand48() ;
+    //double  y	 = drand48() ;
 
     //dout(0) << "OFFSET is |" << offset << "| chunks |" << chunks<<  dendl;
     
     if ( read)
     {
-        offset=(rand())%(chunks+1);
-        dout(2) << "reading block " << offset << "/" << chunks << dendl;
+	offset=(rand())%(chunks+1);
+	dout(2) << "reading block " << offset << "/" << chunks << dendl;
 
-        int r = client->read(fd, buf, rdsize,
-                        offset*rdsize);
-        if (r < rdsize) {
-                  dout(1) << "read_file got r = " << r << ", probably end of file" << dendl;
+	int r = client->read(fd, buf, rdsize,
+			offset*rdsize);
+	if (r < rdsize) {
+		  dout(1) << "read_file got r = " << r << ", probably end of file" << dendl;
     }
     }
     else
     {
-        dout(2) << "writing block " << offset << "/" << chunks << dendl;
+	dout(2) << "writing block " << offset << "/" << chunks << dendl;
 
     // fill buf with a 16 byte fingerprint
     // 64 bits : file offset
@@ -2512,14 +2473,14 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is 
       offset=(rand())%(chunks+1);
     __uint64_t *p = (__uint64_t*)buf;
     while ((char*)p < buf + rdsize) {
-      *p = offset*rdsize + (char*)p - buf;      
+      *p = offset*rdsize + (char*)p - buf;	
       p++;
       *p = client->get_nodeid().v;
       p++;
     }
 
       client->write(fd, buf, rdsize,
-                        offset*rdsize);
+			offset*rdsize);
       //}
       //}
     }
@@ -2538,11 +2499,11 @@ int SyntheticClient::read_random(string& fn, int size, int rdsize)   // size is 
       p++;
       if (readoff != wantoff ||
 	  readclient != client->get_nodeid()) {
-        if (!bad)
-          dout(0) << "WARNING: wrong data from OSD, block says fileoffset=" << readoff << " client=" << readclient
+	if (!bad)
+	  dout(0) << "WARNING: wrong data from OSD, block says fileoffset=" << readoff << " client=" << readclient
 		  << ", should be offset " << wantoff << " clietn " << client->get_nodeid()
 		  << dendl;
-        bad++;
+	bad++;
       }
     }
     if (bad) 
@@ -2603,7 +2564,7 @@ int normdist(int min, int max, int stdev) /* specifies input values */
   return result + min; /* send final result back */
 }
 
-int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)   // size is in MB, wrsize in bytes
+int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)	// size is in MB, wrsize in bytes
 {
   __uint64_t chunks = (__uint64_t)size * (__uint64_t)(1024*1024) / (__uint64_t)rdsize;
   
@@ -2639,25 +2600,25 @@ int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)   // size 
     }
     if ( x < 0.5) 
       {
-        //dout(0) << "DECIDED TO READ " << x << dendl;
-        buf = new char[rdsize]; 
-        memset(buf, 1, rdsize);
-        read=true;
+	//dout(0) << "DECIDED TO READ " << x << dendl;
+	buf = new char[rdsize]; 
+	memset(buf, 1, rdsize);
+	read=true;
       }
     else
       {
 	// dout(0) << "DECIDED TO WRITE " << x << dendl;
-        buf = new char[rdsize+100];   // 1 MB
-        memset(buf, 7, rdsize);
+	buf = new char[rdsize+100];   // 1 MB
+	memset(buf, 7, rdsize);
       }
     
-    //double  y  = drand48() ;
+    //double  y	 = drand48() ;
     
     //dout(0) << "OFFSET is |" << offset << "| chunks |" << chunks<<  dendl;
     
     if ( read)
       {
-        //offset=(rand())%(chunks+1);
+	//offset=(rand())%(chunks+1);
 	
 	/*    if ( chunks > 10000 ) 
 	      offset= normdist( 0 , chunks/1000 , 5  )*1000;
@@ -2667,17 +2628,17 @@ int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)   // size 
 	      offset= normdist( 0 , chunks/20 , 5  )*20;*/
 	
 	
-        dout(2) << "reading block " << offset << "/" << chunks << dendl;
+	dout(2) << "reading block " << offset << "/" << chunks << dendl;
 	
-        int r = client->read(fd, buf, rdsize,
+	int r = client->read(fd, buf, rdsize,
 			     offset*rdsize);
-        if (r < rdsize) {
+	if (r < rdsize) {
 	  dout(1) << "read_file got r = " << r << ", probably end of file" << dendl;
 	}
       }
     else
       {
-        dout(2) << "writing block " << offset << "/" << chunks << dendl;
+	dout(2) << "writing block " << offset << "/" << chunks << dendl;
 	
 	// fill buf with a 16 byte fingerprint
 	// 64 bits : file offset
@@ -2694,7 +2655,7 @@ int SyntheticClient::read_random_ex(string& fn, int size, int rdsize)   // size 
 	    offset=(rand())%(chunks+1);
 	    __uint64_t *p = (__uint64_t*)buf;
 	    while ((char*)p < buf + rdsize) {
-	      *p = offset*rdsize + (char*)p - buf;      
+	      *p = offset*rdsize + (char*)p - buf;	
 	      p++;
 	      *p = client->get_nodeid().v;
 	      p++;
@@ -2773,10 +2734,10 @@ int SyntheticClient::random_walk(int num_req)
 
     if (contents.empty() && roll_die(.3)) {
       if (did_readdir) {
-        dout(DBL) << "empty dir, up" << dendl;
-        up();
+	dout(DBL) << "empty dir, up" << dendl;
+	up();
       } else
-        op = CEPH_MDS_OP_READDIR;
+	op = CEPH_MDS_OP_READDIR;
     } else {
       op = op_dist.sample();
     }
@@ -2787,16 +2748,16 @@ int SyntheticClient::random_walk(int num_req)
     // do op
     if (op == CEPH_MDS_OP_UNLINK) {
       if (contents.empty())
-        op = CEPH_MDS_OP_READDIR;
+	op = CEPH_MDS_OP_READDIR;
       else 
-        r = client->unlink( get_random_sub() );   // will fail on dirs
+	r = client->unlink( get_random_sub() );	  // will fail on dirs
     }
      
     if (op == CEPH_MDS_OP_RENAME) {
       if (contents.empty())
-        op = CEPH_MDS_OP_READDIR;
+	op = CEPH_MDS_OP_READDIR;
       else {
-        r = client->rename( get_random_sub(), make_sub("ren") );
+	r = client->rename( get_random_sub(), make_sub("ren") );
       }
     }
     
@@ -2806,9 +2767,9 @@ int SyntheticClient::random_walk(int num_req)
     
     if (op == CEPH_MDS_OP_RMDIR) {
       if (!subdirs.empty())
-        r = client->rmdir( get_random_subdir() );
+	r = client->rmdir( get_random_subdir() );
       else
-        r = client->rmdir( cwd.c_str() );     // will pbly fail
+	r = client->rmdir( cwd.c_str() );     // will pbly fail
     }
     
     if (op == CEPH_MDS_OP_SYMLINK) {
@@ -2816,24 +2777,24 @@ int SyntheticClient::random_walk(int num_req)
     /*
     if (op == CEPH_MDS_OP_CHMOD) {
       if (contents.empty())
-        op = CEPH_MDS_OP_READDIR;
+	op = CEPH_MDS_OP_READDIR;
       else
-        r = client->chmod( get_random_sub(), rand() & 0755 );
+	r = client->chmod( get_random_sub(), rand() & 0755 );
     }
     
     if (op == CEPH_MDS_OP_CHOWN) {
-      if (contents.empty())         r = client->chown( cwd.c_str(), rand(), rand() );
+      if (contents.empty())	    r = client->chown( cwd.c_str(), rand(), rand() );
       else
-        r = client->chown( get_random_sub(), rand(), rand() );
+	r = client->chown( get_random_sub(), rand(), rand() );
     }
      
     if (op == CEPH_MDS_OP_UTIME) {
       struct utimbuf b;
       memset(&b, 1, sizeof(b));
       if (contents.empty()) 
-        r = client->utime( cwd.c_str(), &b );
+	r = client->utime( cwd.c_str(), &b );
       else
-        r = client->utime( get_random_sub(), &b );
+	r = client->utime( get_random_sub(), &b );
     }
     */
     if (op == CEPH_MDS_OP_LINK) {
@@ -2845,23 +2806,23 @@ int SyntheticClient::random_walk(int num_req)
      
     if (op == CEPH_MDS_OP_OPEN) {
       if (contents.empty())
-        op = CEPH_MDS_OP_READDIR;
+	op = CEPH_MDS_OP_READDIR;
       else {
-        r = client->open( get_random_sub(), O_RDONLY );
-        if (r > 0) {
-          assert(open_files.count(r) == 0);
-          open_files.insert(r);
-        }
+	r = client->open( get_random_sub(), O_RDONLY );
+	if (r > 0) {
+	  assert(open_files.count(r) == 0);
+	  open_files.insert(r);
+	}
       }
     }
 
-    /*if (op == CEPH_MDS_OP_RELEASE) {   // actually, close
+    /*if (op == CEPH_MDS_OP_RELEASE) {	 // actually, close
       if (open_files.empty())
-        op = CEPH_MDS_OP_STAT;
+	op = CEPH_MDS_OP_STAT;
       else {
-        int fh = get_random_fh();
-        r = client->close( fh );
-        if (r == 0) open_files.erase(fh);
+	int fh = get_random_fh();
+	r = client->close( fh );
+	if (r == 0) open_files.erase(fh);
       }
     }
     */
@@ -2869,17 +2830,17 @@ int SyntheticClient::random_walk(int num_req)
     if (op == CEPH_MDS_OP_GETATTR) {
       struct stat st;
       if (contents.empty()) {
-        if (did_readdir) {
-          if (roll_die(.1)) {
-            dout(DBL) << "stat in empty dir, up" << dendl;
-            up();
-          } else {
-            op = CEPH_MDS_OP_MKNOD;
-          }
-        } else
-          op = CEPH_MDS_OP_READDIR;
+	if (did_readdir) {
+	  if (roll_die(.1)) {
+	    dout(DBL) << "stat in empty dir, up" << dendl;
+	    up();
+	  } else {
+	    op = CEPH_MDS_OP_MKNOD;
+	  }
+	} else
+	  op = CEPH_MDS_OP_READDIR;
       } else
-        r = client->lstat(get_random_sub(), &st);
+	r = client->lstat(get_random_sub(), &st);
     }
 
     if (op == CEPH_MDS_OP_READDIR) {
@@ -2889,14 +2850,14 @@ int SyntheticClient::random_walk(int num_req)
       r = client->getdir( cwd.c_str(), c );
       
       for (list<string>::iterator it = c.begin();
-           it != c.end();
-           ++it) {
-        //dout(DBL) << " got " << *it << dendl;
+	   it != c.end();
+	   ++it) {
+	//dout(DBL) << " got " << *it << dendl;
 	assert(0);
 	/*contents[*it] = it->second;
-        if (it->second &&
+	if (it->second &&
 	    S_ISDIR(it->second->st_mode)) 
-          subdirs.insert(*it);
+	  subdirs.insert(*it);
 	*/
       }
       
@@ -2907,8 +2868,8 @@ int SyntheticClient::random_walk(int num_req)
     if (r < 0) {
       // reevaluate cwd.
       //while (cwd.depth()) {
-      //if (client->lookup(cwd)) break;   // it's in the cache
-        
+      //if (client->lookup(cwd)) break;	  // it's in the cache
+	
       //dout(DBL) << "r = " << r << ", client doesn't have " << cwd << ", cd .." << dendl;
       dout(DBL) << "r = " << r << ", client may not have " << cwd << ", cd .." << dendl;
       up();
@@ -3004,11 +2965,11 @@ void SyntheticClient::foo()
     assert(r>=0);
     r=client->close(handle);
     assert(r>=0);
-         
-    handle = client->open(fn,O_RDWR); // open the same  file, it must have some data already
-    assert(handle>=0);      
+	 
+    handle = client->open(fn,O_RDWR); // open the same	file, it must have some data already
+    assert(handle>=0);	    
     r=client->read(handle,buffer,8192);
-    assert(r==8192); //  THIS ASSERTION FAILS with disabled cache
+    assert(r==8192); //	 THIS ASSERTION FAILS with disabled cache
     r=client->close(handle);
     assert(r>=0);
 
@@ -3291,20 +3252,12 @@ void SyntheticClient::import_find(const char *base, const char *find, bool data)
 {
   dout(1) << "import_find " << base << " from " << find << " data=" << data << dendl;
 
-  /* use this to gather the static trace:
-   *
-   *  find . -exec ls -dilsn --time-style=+%s \{\} \;
-   * or if it's wafl,
-   *  find . -path ./.snapshot -prune -o -exec ls -dilsn --time-style=+%s \{\} \;
-   *
-   */
-
-  if (base[0] != '-') 
+  if (base[0] != '-')
     client->mkdir(base, 0755);
 
   ifstream f(find);
   assert(f.is_open());
-  
+
   int dirnum = 0;
 
   while (!f.eof()) {
@@ -3461,22 +3414,22 @@ int SyntheticClient::chunk_file(string &filename)
     Cond cond;
     bool done;
     bufferlist bl;
-    
+
     flock.Lock();
     Context *onfinish = new C_SafeCond(&flock, &cond, &done);
-    filer->read(inode.ino, &inode.layout, CEPH_NOSNAP, pos, get, &bl, 0, onfinish);
+    filer->read(inode.ino, &inode.layout, pos, get, &bl, 0, onfinish);
     while (!done)
       cond.Wait(flock);
     flock.Unlock();
 
     dout(0) << "got " << bl.length() << " bytes at " << pos << dendl;
-    
+
     if (from_before.length()) {
       dout(0) << " including bit from previous block" << dendl;
       pos -= from_before.length();
       from_before.claim_append(bl);
       bl.swap(from_before);
-    }      
+    }
 
     // ....
 
@@ -3489,39 +3442,4 @@ int SyntheticClient::chunk_file(string &filename)
 
   client->close(fd);
   return 0;
-}
-
-
-
-void SyntheticClient::mksnap(const char *base, const char *name)
-{
-  client->mksnap(base, name);
-}
-
-void SyntheticClient::rmsnap(const char *base, const char *name)
-{
-  client->rmsnap(base, name);
-}
-
-void SyntheticClient::mksnapfile(const char *dir)
-{
-  client->mkdir(dir, 0755);
-
-  string f = dir;
-  f += "/foo";
-  int fd = client->open(f.c_str(), O_WRONLY|O_CREAT|O_TRUNC);
-
-  char buf[1048576*4];
-  client->write(fd, buf, sizeof(buf), 0);
-  client->fsync(fd, true);
-  client->close(fd);
-  
-  string s = dir;
-  s += "/.snap/1";
-  client->mkdir(s.c_str(), 0755);
-
-  fd = client->open(f.c_str(), O_WRONLY);
-  client->write(fd, buf, 1048576*2, 1048576);
-  client->fsync(fd, true);
-  client->close(fd);
 }

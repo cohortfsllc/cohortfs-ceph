@@ -80,8 +80,6 @@ using namespace std;
 #include "messages/MOSDPGScan.h"
 #include "messages/MOSDPGBackfill.h"
 
-#include "messages/MRemoveSnaps.h"
-
 #include "messages/MMonMap.h"
 #include "messages/MMonGetMap.h"
 #include "messages/MMonGetVersion.h"
@@ -101,7 +99,6 @@ using namespace std;
 #include "messages/MClientCaps.h"
 #include "messages/MClientCapRelease.h"
 #include "messages/MClientLease.h"
-#include "messages/MClientSnap.h"
 
 #include "messages/MMDSSlaveRequest.h"
 
@@ -447,9 +444,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case MSG_OSD_SCRUB:
     m = new MOSDScrub;
     break;
-  case MSG_REMOVE_SNAPS:
-    m = new MRemoveSnaps;
-    break;
   case MSG_OSD_PG_MISSING:
     m = new MOSDPGMissing;
     break;
@@ -525,9 +519,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     break;
   case CEPH_MSG_CLIENT_LEASE:
     m = new MClientLease;
-    break;
-  case CEPH_MSG_CLIENT_SNAP:
-    m = new MClientSnap;
     break;
 
     // mds

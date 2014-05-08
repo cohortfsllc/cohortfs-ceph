@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -51,10 +51,6 @@
   - 'caps' is the _original_ FLUSH's caps (not actually important)
   - client can conclude that (dirty & ~caps) bits were successfully cleaned.
 
-- a FLUSHSNAP flushes snapshot metadata.
-  - 'dirty' indicates which caps, were dirty, if any.
-  - mds writes metadata.  if dirty!=0, replies with FLUSHSNAP_ACK.
-
  */
 
 class CInode;
@@ -82,13 +78,12 @@ public:
     int32_t wanted;
     int32_t issued;
     int32_t pending;
-    snapid_t client_follows;
     ceph_seq_t seq;
     ceph_seq_t mseq;
     utime_t last_issue_stamp;
     Export() {}
-    Export(int64_t id, int w, int i, int p, snapid_t cf, ceph_seq_t s, ceph_seq_t m, utime_t lis) :
-      cap_id(id), wanted(w), issued(i), pending(p), client_follows(cf),
+    Export(int64_t id, int w, int i, int p, ceph_seq_t s, ceph_seq_t m, utime_t lis) :
+      cap_id(id), wanted(w), issued(i), pending(p),
       seq(s), mseq(m), last_issue_stamp(lis) {}
     void encode(bufferlist &bl) const;
     void decode(bufferlist::iterator &p);
@@ -220,14 +215,12 @@ private:
   const static unsigned STATE_NEW		= (1<<1);
 
 public:
-  snapid_t client_follows;
   version_t client_xattr_version;
   version_t client_inline_version;
-  
-  xlist<Capability*>::item item_session_caps;
-  xlist<Capability*>::item item_snaprealm_caps;
 
-  Capability(CInode *i = NULL, uint64_t id = 0, client_t c = 0) : 
+  xlist<Capability*>::item item_session_caps;
+
+  Capability(CInode *i = NULL, uint64_t id = 0, client_t c = 0) :
     inode(i), client(c),
     cap_id(id),
     _wanted(0),
@@ -236,9 +229,9 @@ public:
     last_issue(0),
     mseq(0),
     suppress(0), state(0),
-    client_follows(0), client_xattr_version(0),
+    client_xattr_version(0),
     client_inline_version(0),
-    item_session_caps(this), item_snaprealm_caps(this) {
+    item_session_caps(this) {
     g_num_cap++;
     g_num_capa++;
   }
@@ -293,10 +286,11 @@ public:
     last_sent = 0;
     last_issue = 0;
   }
-  
+
   // -- exports --
   Export make_export() {
-    return Export(cap_id, _wanted, issued(), pending(), client_follows, last_sent, mseq+1, last_issue_stamp);
+    return Export(cap_id, _wanted, issued(), pending(), last_sent,
+		  mseq+1, last_issue_stamp);
   }
   void merge(Export& other, bool auth_cap) {
     if (!is_stale()) {
@@ -310,8 +304,6 @@ public:
     } else {
       issue(CEPH_CAP_PIN);
     }
-
-    client_follows = other.client_follows;
 
     // wanted
     _wanted = _wanted | other.wanted;

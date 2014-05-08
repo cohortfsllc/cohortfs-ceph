@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MEXPORTDIRNOTIFY_H
@@ -23,7 +23,8 @@ class MExportDirNotify : public Message {
   dirfrag_t base;
   bool ack;
   pair<__s32,__s32> old_auth, new_auth;
-  list<dirfrag_t> bounds;  // bounds; these dirs are _not_ included (tho the dirfragdes are)
+  // bounds; these dirs are _not_ included (tho the dirfragdes are)
+  list<dirfrag_t> bounds;
 
  public:
   dirfrag_t get_dirfrag() { return base; }
@@ -33,7 +34,8 @@ class MExportDirNotify : public Message {
   list<dirfrag_t>& get_bounds() { return bounds; }
 
   MExportDirNotify() {}
-  MExportDirNotify(dirfrag_t i, uint64_t tid, bool a, pair<__s32,__s32> oa, pair<__s32,__s32> na) :
+  MExportDirNotify(dirfrag_t i, uint64_t tid, bool a, pair<__s32,__s32> oa,
+		   pair<__s32,__s32> na) :
     Message(MSG_MDS_EXPORTDIRNOTIFY),
     base(i), ack(a), old_auth(oa), new_auth(na) {
     set_tid(tid);
@@ -46,12 +48,12 @@ public:
   void print(ostream& o) const {
     o << "export_notify(" << base;
     o << " " << old_auth << " -> " << new_auth;
-    if (ack) 
+    if (ack)
       o << " ack)";
     else
       o << " no ack)";
   }
-  
+
   void copy_bounds(list<dirfrag_t>& ex) {
     this->bounds = ex;
   }

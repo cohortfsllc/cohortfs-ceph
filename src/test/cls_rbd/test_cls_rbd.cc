@@ -30,14 +30,6 @@ using ::librbd::cls_client::dir_rename_image;
 using ::librbd::cls_client::get_stripe_unit_count;
 using ::librbd::cls_client::set_stripe_unit_count;
 
-static char *random_buf(size_t len)
-{
-  char *b = new char[len];
-  for (size_t i = 0; i < len; i++)
-    b[i] = (rand() % (128 - 32)) + 32;
-  return b;
-}
-
 TEST(cls_rbd, get_and_set_id)
 {
   librados::Rados rados;
