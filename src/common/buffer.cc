@@ -1654,7 +1654,7 @@ int buffer::list::write_fd_zero_copy(int fd) const
   return 0;
 }
 
-__u32 buffer::list::crc32c(__u32 crc) const
+uint32_t buffer::list::crc32c(uint32_t crc) const
 {
   for (std::list<ptr>::const_iterator it = _buffers.begin();
        it != _buffers.end();

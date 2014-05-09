@@ -22,8 +22,8 @@
 unsigned ceph_str_hash_rjenkins(const char *str, unsigned length)
 {
 	const unsigned char *k = (const unsigned char *)str;
-	__u32 a, b, c;  /* the internal state */
-	__u32 len;      /* how many key bytes still need mixing */
+	uint32_t a, b, c;  /* the internal state */
+	uint32_t len;      /* how many key bytes still need mixing */
 
 	/* Set up the internal state */
 	len = length;
@@ -33,12 +33,12 @@ unsigned ceph_str_hash_rjenkins(const char *str, unsigned length)
 
 	/* handle most of the key */
 	while (len >= 12) {
-		a = a + (k[0] + ((__u32)k[1] << 8) + ((__u32)k[2] << 16) +
-			 ((__u32)k[3] << 24));
-		b = b + (k[4] + ((__u32)k[5] << 8) + ((__u32)k[6] << 16) +
-			 ((__u32)k[7] << 24));
-		c = c + (k[8] + ((__u32)k[9] << 8) + ((__u32)k[10] << 16) +
-			 ((__u32)k[11] << 24));
+		a = a + (k[0] + ((uint32_t)k[1] << 8) + ((uint32_t)k[2] << 16) +
+			 ((uint32_t)k[3] << 24));
+		b = b + (k[4] + ((uint32_t)k[5] << 8) + ((uint32_t)k[6] << 16) +
+			 ((uint32_t)k[7] << 24));
+		c = c + (k[8] + ((uint32_t)k[9] << 8) + ((uint32_t)k[10] << 16) +
+			 ((uint32_t)k[11] << 24));
 		mix(a, b, c);
 		k = k + 12;
 		len = len - 12;
@@ -48,26 +48,26 @@ unsigned ceph_str_hash_rjenkins(const char *str, unsigned length)
 	c = c + length;
 	switch (len) {            /* all the case statements fall through */
 	case 11:
-		c = c + ((__u32)k[10] << 24);
+		c = c + ((uint32_t)k[10] << 24);
 	case 10:
-		c = c + ((__u32)k[9] << 16);
+		c = c + ((uint32_t)k[9] << 16);
 	case 9:
-		c = c + ((__u32)k[8] << 8);
+		c = c + ((uint32_t)k[8] << 8);
 		/* the first byte of c is reserved for the length */
 	case 8:
-		b = b + ((__u32)k[7] << 24);
+		b = b + ((uint32_t)k[7] << 24);
 	case 7:
-		b = b + ((__u32)k[6] << 16);
+		b = b + ((uint32_t)k[6] << 16);
 	case 6:
-		b = b + ((__u32)k[5] << 8);
+		b = b + ((uint32_t)k[5] << 8);
 	case 5:
 		b = b + k[4];
 	case 4:
-		a = a + ((__u32)k[3] << 24);
+		a = a + ((uint32_t)k[3] << 24);
 	case 3:
-		a = a + ((__u32)k[2] << 16);
+		a = a + ((uint32_t)k[2] << 16);
 	case 2:
-		a = a + ((__u32)k[1] << 8);
+		a = a + ((uint32_t)k[1] << 8);
 	case 1:
 		a = a + k[0];
 		/* case 0: nothing left to add */

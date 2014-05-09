@@ -833,8 +833,8 @@ void Client::insert_readdir_results(MetaRequest *request, MetaSession *session,
 
     // dirstat
     DirStat dst(p);
-    __u32 numdn;
-    __u8 complete, end;
+    uint32_t numdn;
+    uint8_t complete, end;
     ::decode(numdn, p);
     ::decode(end, p);
     ::decode(complete, p);
@@ -1025,7 +1025,7 @@ Inode* Client::insert_trace(MetaRequest *request, MetaSession *session)
 int Client::choose_target_mds(MetaRequest *req)
 {
   int mds = -1;
-  __u32 hash = 0;
+  uint32_t hash = 0;
   bool is_hash = false;
 
   Inode *in = NULL;

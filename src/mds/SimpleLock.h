@@ -152,14 +152,14 @@ protected:
   MDSCacheObject *parent;
 
   // lock state
-  __s16 state;
+  int16_t state;
 
 private:
-  __s16 num_rdlock;
-  __s32 num_client_lease;
+  int16_t num_rdlock;
+  int32_t num_client_lease;
 
   struct unstable_bits_t {
-    set<__s32> gather_set;  // auth+rep.  >= 0 is mds, < 0 is client
+    set<int32_t> gather_set;  // auth+rep.  >= 0 is mds, < 0 is client
 
     // local state
     int num_wrlock, num_xlock;
@@ -558,17 +558,17 @@ public:
     DECODE_FINISH(p);
   }
   void encode_state_for_replica(bufferlist& bl) const {
-    __s16 s = get_replica_state();
+    int16_t s = get_replica_state();
     ::encode(s, bl);
   }
   void decode_state(bufferlist::iterator& p, bool is_new=true) {
-    __s16 s;
+    int16_t s;
     ::decode(s, p);
     if (is_new)
       state = s;
   }
   void decode_state_rejoin(bufferlist::iterator& p, list<Context*>& waiters) {
-    __s16 s;
+    int16_t s;
     ::decode(s, p);
     set_state_rejoin(s, waiters);
   }

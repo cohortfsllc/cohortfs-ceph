@@ -423,13 +423,13 @@ void CDentry::adjust_nested_anchors(int by)
 
 void CDentry::decode_replica(bufferlist::iterator& p, bool is_new)
 {
-  __u32 nonce;
+  uint32_t nonce;
   ::decode(nonce, p);
   replica_nonce = nonce;
 
   inodeno_t rino;
   unsigned char rdtype;
-  __s32 ls;
+  int32_t ls;
   ::decode(rino, p);
   ::decode(rdtype, p);
   ::decode(ls, p);

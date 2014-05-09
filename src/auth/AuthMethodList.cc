@@ -51,9 +51,9 @@ bool AuthMethodList::is_supported_auth(int auth_type)
   return std::find(auth_supported.begin(), auth_supported.end(), auth_type) != auth_supported.end();
 }
 
-int AuthMethodList::pick(const std::set<__u32>& supported)
+int AuthMethodList::pick(const std::set<uint32_t>& supported)
 {
-  for (set<__u32>::const_reverse_iterator p = supported.rbegin(); p != supported.rend(); ++p)
+  for (set<uint32_t>::const_reverse_iterator p = supported.rbegin(); p != supported.rend(); ++p)
     if (is_supported_auth(*p))
       return *p;
   return CEPH_AUTH_UNKNOWN;
@@ -61,8 +61,8 @@ int AuthMethodList::pick(const std::set<__u32>& supported)
 
 void AuthMethodList::remove_supported_auth(int auth_type)
 {
-  for (list<__u32>::iterator p = auth_supported.begin(); p != auth_supported.end(); ) {
-    if (*p == (__u32)auth_type)
+  for (list<uint32_t>::iterator p = auth_supported.begin(); p != auth_supported.end(); ) {
+    if (*p == (uint32_t)auth_type)
       auth_supported.erase(p++);
     else 
       ++p;

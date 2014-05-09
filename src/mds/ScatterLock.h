@@ -190,7 +190,7 @@ public:
   }
 
   void encode_state_for_rejoin(bufferlist& bl, int rep) const {
-    __s16 s = get_replica_state();
+    int16_t s = get_replica_state();
     if (is_gathering(rep)) {
       // the recovering mds may hold rejoined wrlocks
       if (state == LOCK_MIX_SYNC)

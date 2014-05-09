@@ -426,11 +426,11 @@ struct RGWUserInfo
   map<string, RGWAccessKey> access_keys;
   map<string, RGWAccessKey> swift_keys;
   map<string, RGWSubUser> subusers;
-  __u8 suspended;
+  uint8_t suspended;
   uint32_t max_buckets;
   uint32_t op_mask;
   RGWUserCaps caps;
-  __u8 system;
+  uint8_t system;
   string default_placement;
   list<string> placement_tags;
   RGWQuotaInfo bucket_quota;
@@ -971,7 +971,7 @@ struct RGWBucketEnt {
   void encode(bufferlist& bl) const {
     ENCODE_START(5, 5, bl);
     uint64_t s = size;
-    __u32 mt = creation_time;
+    uint32_t mt = creation_time;
     string empty_str;  // originally had the bucket name here, but we encode bucket later
     ::encode(empty_str, bl);
     ::encode(s, bl);
@@ -984,7 +984,7 @@ struct RGWBucketEnt {
   }
   void decode(bufferlist::iterator& bl) {
     DECODE_START_LEGACY_COMPAT_LEN(5, 5, 5, bl);
-    __u32 mt;
+    uint32_t mt;
     uint64_t s;
     string empty_str;  // backward compatibility
     ::decode(empty_str, bl);

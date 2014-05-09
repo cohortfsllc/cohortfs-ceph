@@ -421,7 +421,7 @@ void EMetaBlob::fullbit::decode(bufferlist::iterator &bl) {
       bool dir_layout_exists;
       ::decode(dir_layout_exists, bl);
       if (dir_layout_exists) {
-	__u8 dir_struct_v;
+	uint8_t dir_struct_v;
 	::decode(dir_struct_v, bl); // default_file_layout version
 	::decode(inode.layout, bl); // and actual layout, that we care about
       }
@@ -823,7 +823,7 @@ void EMetaBlob::dump(Formatter *f) const
   f->close_section(); // roots
 
   f->open_array_section("tableclient tranactions");
-  for (list<pair<__u8,version_t> >::const_iterator i = table_tids.begin();
+  for (list<pair<uint8_t,version_t> >::const_iterator i = table_tids.begin();
        i != table_tids.end(); ++i) {
     f->open_object_section("transaction");
     f->dump_int("tid", i->first);
@@ -1219,7 +1219,7 @@ void EMetaBlob::replay(MDS *mds, LogSegment *logseg, MDSlaveUpdate *slaveup)
   }
 
   // table client transactions
-  for (list<pair<__u8,version_t> >::iterator p = table_tids.begin();
+  for (list<pair<uint8_t,version_t> >::iterator p = table_tids.begin();
        p != table_tids.end();
        ++p) {
     dout(10) << "EMetaBlob.replay noting " << get_mdstable_name(p->first)

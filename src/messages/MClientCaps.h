@@ -44,12 +44,12 @@ class MClientCaps : public Message {
 
   uint64_t get_size() { return head.size;  }
   uint64_t get_max_size() { return head.max_size;  }
-  __u32 get_truncate_seq() { return head.truncate_seq; }
+  uint32_t get_truncate_seq() { return head.truncate_seq; }
   uint64_t get_truncate_size() { return head.truncate_size; }
   utime_t get_ctime() { return utime_t(head.ctime); }
   utime_t get_mtime() { return utime_t(head.mtime); }
   utime_t get_atime() { return utime_t(head.atime); }
-  __u32 get_time_warp_seq() { return head.time_warp_seq; }
+  uint32_t get_time_warp_seq() { return head.time_warp_seq; }
 
   ceph_file_layout& get_layout() { return head.layout; }
 

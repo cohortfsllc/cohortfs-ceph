@@ -51,13 +51,13 @@ public:
     if (header.version >= 2) {
       ::decode(mkpg, p);
     } else {
-      __u32 n;
+      uint32_t n;
       ::decode(n, p);
       while (n--) {
 	pg_t pgid;
 	epoch_t created;   // epoch pg created
 	pg_t parent;       // split from parent (if != pg_t())
-	__s32 split_bits;
+	int32_t split_bits;
 	::decode(pgid, p);
 	::decode(created, p);
 	::decode(parent, p);

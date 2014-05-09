@@ -276,14 +276,14 @@ struct pg_t {
   pg_t(const ceph_pg& cpg) {
     m_pool = cpg.pool;
     m_seed = cpg.ps;
-    m_preferred = (__s16)cpg.preferred;
+    m_preferred = (int16_t)cpg.preferred;
   }
   old_pg_t get_old_pg() const {
     old_pg_t o;
     assert(m_pool < 0xffffffffull);
     o.v.pool = m_pool;
     o.v.ps = m_seed;
-    o.v.preferred = (__s16)m_preferred;
+    o.v.preferred = (int16_t)m_preferred;
     return o;
   }
   pg_t(const old_pg_t& opg) {
@@ -325,14 +325,14 @@ struct pg_t {
   unsigned get_split_bits(unsigned pg_num) const;
 
   void encode(bufferlist& bl) const {
-    __u8 v = 1;
+    uint8_t v = 1;
     ::encode(v, bl);
     ::encode(m_pool, bl);
     ::encode(m_seed, bl);
     ::encode(m_preferred, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 v;
+    uint8_t v;
     ::decode(v, bl);
     ::decode(m_pool, bl);
     ::decode(m_seed, bl);
@@ -577,7 +577,7 @@ class eversion_t {
 public:
   version_t version;
   epoch_t epoch;
-  __u32 __pad;
+  uint32_t __pad;
   eversion_t() : version(0), epoch(0), __pad(0) {}
   eversion_t(epoch_t e, version_t v) : version(v), epoch(e), __pad(0) {}
 
@@ -870,12 +870,12 @@ struct pg_pool_t {
   }
 
   uint64_t flags;           ///< FLAG_*
-  __u8 type;                ///< TYPE_*
-  __u8 size, min_size;      ///< number of osds in each pg
-  __u8 crush_ruleset;       ///< crush placement rule set
-  __u8 object_hash;         ///< hash mapping object name to ps
+  uint8_t type;                ///< TYPE_*
+  uint8_t size, min_size;      ///< number of osds in each pg
+  uint8_t crush_ruleset;       ///< crush placement rule set
+  uint8_t object_hash;         ///< hash mapping object name to ps
 private:
-  __u32 pg_num, pgp_num;    ///< number of pgs
+  uint32_t pg_num, pgp_num;    ///< number of pgs
 
 
 public:
@@ -885,7 +885,7 @@ public:
   snapid_t snap_seq;        ///< seq for per-pool snapshot
   epoch_t snap_epoch;       ///< osdmap epoch of last snap
   uint64_t auid;            ///< who owns the pg
-  __u32 crash_replay_interval; ///< seconds to allow clients to replay ACKed but unCOMMITted requests
+  uint32_t crash_replay_interval; ///< seconds to allow clients to replay ACKed but unCOMMITted requests
 
   uint64_t quota_max_bytes; ///< maximum number of bytes for this pool
   uint64_t quota_max_objects; ///< maximum number of objects for this pool
@@ -1295,7 +1295,7 @@ struct pg_stat_t {
   eversion_t version;
   version_t reported_seq;  // sequence number
   epoch_t reported_epoch;  // epoch of this report
-  __u32 state;
+  uint32_t state;
   utime_t last_fresh;   // last reported
   utime_t last_change;  // new state != previous state
   utime_t last_active;  // state & PG_STATE_ACTIVE
@@ -1308,7 +1308,7 @@ struct pg_stat_t {
   epoch_t created;
   epoch_t last_epoch_clean;
   pg_t parent;
-  __u32 parent_split_bits;
+  uint32_t parent_split_bits;
 
   eversion_t last_scrub;
   eversion_t last_deep_scrub;
@@ -1755,7 +1755,7 @@ struct pg_query_t {
     }
   }
 
-  __s32 type;
+  int32_t type;
   eversion_t since;
   pg_history_t history;
   epoch_t epoch_sent;
@@ -1974,7 +1974,7 @@ struct pg_log_entry_t {
     return get_op_name(op);
   }
 
-  __s32      op;
+  int32_t      op;
   hobject_t  soid;
   eversion_t version, prior_version, reverting_to;
   version_t user_version; // the user version for this entry
@@ -2235,13 +2235,13 @@ struct pg_ls_response_t {
   list<pair<object_t, string> > entries;
 
   void encode(bufferlist& bl) const {
-    __u8 v = 1;
+    uint8_t v = 1;
     ::encode(v, bl);
     ::encode(handle, bl);
     ::encode(entries, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 v;
+    uint8_t v;
     ::decode(v, bl);
     assert(v == 1);
     ::decode(handle, bl);
@@ -2346,7 +2346,7 @@ WRITE_CLASS_ENCODER(object_copy_data_t)
 struct pg_create_t {
   epoch_t created;   // epoch pg created
   pg_t parent;       // split from parent (if != pg_t())
-  __s32 split_bits;
+  int32_t split_bits;
 
   pg_create_t()
     : created(0), split_bits(0) {}
@@ -3077,11 +3077,11 @@ struct ScrubMap {
     uint64_t size;
     bool negative;
     map<string,bufferptr> attrs;
-    __u32 digest;
+    uint32_t digest;
     bool digest_present;
     uint32_t nlinks;
     set<snapid_t> snapcolls;
-    __u32 omap_digest;
+    uint32_t omap_digest;
     bool omap_digest_present;
     bool read_error;
 

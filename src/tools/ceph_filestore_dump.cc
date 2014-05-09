@@ -303,12 +303,12 @@ struct omap_section {
 };
 
 struct metadata_section {
-  __u8 struct_ver;
+  uint8_t struct_ver;
   epoch_t map_epoch;
   pg_info_t info;
   pg_log_t log;
 
-  metadata_section(__u8 struct_ver, epoch_t map_epoch, const pg_info_t &info,
+  metadata_section(uint8_t struct_ver, epoch_t map_epoch, const pg_info_t &info,
 		   const pg_log_t &log)
     : struct_ver(struct_ver),
       map_epoch(map_epoch),
@@ -548,7 +548,7 @@ int footer::get_footer()
 }
 
 int write_info(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
-    __u8 struct_ver)
+    uint8_t struct_ver)
 {
   //Empty for this
   interval_set<snapid_t> snap_collections; // obsolete
@@ -574,7 +574,7 @@ void write_log(ObjectStore::Transaction &t, pg_log_t &log)
 }
 
 int write_pg(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
-    pg_log_t &log, __u8 struct_ver)
+    pg_log_t &log, uint8_t struct_ver)
 {
   int ret = write_info(t, epoch, info, struct_ver);
   if (ret) return ret;
@@ -718,7 +718,7 @@ void write_super()
 }
 
 int do_export(ObjectStore *fs, coll_t coll, spg_t pgid, pg_info_t &info,
-    epoch_t map_epoch, __u8 struct_ver, const OSDSuperblock& superblock)
+    epoch_t map_epoch, uint8_t struct_ver, const OSDSuperblock& superblock)
 {
   PGLog::IndexedLog log;
   pg_missing_t missing;
@@ -1374,7 +1374,7 @@ int main(int argc, char **argv)
     hobject_t biginfo_oid = OSD::make_pg_biginfo_oid(pgid);
     interval_set<snapid_t> snap_collections;
   
-    __u8 struct_ver;
+    uint8_t struct_ver;
     r = PG::read_info(fs, coll, bl, info, past_intervals, biginfo_oid,
       infos_oid, snap_collections, struct_ver);
     if (r < 0) {

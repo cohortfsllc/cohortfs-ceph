@@ -36,7 +36,7 @@ int main(int argc, char **argv)
         printf("cwd = %d\n", cwd);
         while (num-- > 0) {
 		if (rand() % 10 == 0) {
-			__u64 transid;
+			uint64_t transid;
 			int r;
 			printf("sync starting\n");
 			r = ioctl(cwd, BTRFS_IOC_START_SYNC, &transid);

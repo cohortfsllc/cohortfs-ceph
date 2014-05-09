@@ -44,7 +44,7 @@ public:
   int      mds;                // who i am asking
   int      resend_mds;         // someone wants you to (re)send the request here
   bool     send_to_auth;       // must send to auth mds
-  __u32    sent_on_mseq;       // mseq at last submission of this request
+  uint32_t    sent_on_mseq;       // mseq at last submission of this request
   int      num_fwd;            // # of times i've been forwarded
   int      retry_attempt;
   int      ref;

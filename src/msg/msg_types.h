@@ -37,7 +37,7 @@ extern ostream& operator<<(ostream& out, const sockaddr_storage &ss);
 
 class entity_name_t {
 public:
-  __u8 _type;
+  uint8_t _type;
   int64_t _num;
 
 public:
@@ -177,8 +177,8 @@ static inline void decode(sockaddr_storage& a, bufferlist::iterator& bl) {
 }
 
 struct entity_addr_t {
-  __u32 type;
-  __u32 nonce;
+  uint32_t type;
+  uint32_t nonce;
   union {
     sockaddr_storage addr;
     sockaddr_in addr4;
@@ -209,8 +209,8 @@ struct entity_addr_t {
 #endif
   }
 
-  __u32 get_nonce() const { return nonce; }
-  void set_nonce(__u32 n) { nonce = n; }
+  uint32_t get_nonce() const { return nonce; }
+  void set_nonce(uint32_t n) { nonce = n; }
 
   int get_family() const {
     return addr.ss_family;

@@ -12,8 +12,6 @@
  *
  */
 
-#include "include/int_types.h"
-
 #include "common/admin_socket.h"
 #include "common/ceph_context.h"
 #include "common/errno.h"

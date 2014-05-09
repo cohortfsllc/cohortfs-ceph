@@ -243,8 +243,8 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
 {
   // verify crc
   if (!cct || !cct->_conf->ms_nocrc) {
-    __u32 front_crc = front.crc32c(0);
-    __u32 middle_crc = middle.crc32c(0);
+    uint32_t front_crc = front.crc32c(0);
+    uint32_t middle_crc = middle.crc32c(0);
 
     if (front_crc != footer.front_crc) {
       if (cct) {
@@ -266,7 +266,7 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     }
 
     if ((footer.flags & CEPH_MSG_FOOTER_NOCRC) == 0) {
-      __u32 data_crc = data.crc32c(0);
+      uint32_t data_crc = data.crc32c(0);
       if (data_crc != footer.data_crc) {
 	if (cct) {
 	  ldout(cct, 0) << "bad crc in data " << data_crc << " != exp " << footer.data_crc << dendl;

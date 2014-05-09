@@ -124,7 +124,7 @@ void LogMonitor::update_from_paxos(bool *need_bootstrap)
     assert(bl.length());
 
     bufferlist::iterator p = bl.begin();
-    __u8 v;
+    uint8_t v;
     ::decode(v, p);
     while (!p.end()) {
       LogEntry le;
@@ -193,7 +193,7 @@ void LogMonitor::encode_pending(MonitorDBStore::Transaction *t)
   version_t version = get_last_committed() + 1;
   bufferlist bl;
   dout(10) << __func__ << " v" << version << dendl;
-  __u8 v = 1;
+  uint8_t v = 1;
   ::encode(v, bl);
   multimap<utime_t,LogEntry>::iterator p;
   for (p = pending_log.begin(); p != pending_log.end(); ++p)
@@ -527,7 +527,7 @@ void LogMonitor::_create_sub_incremental(MLog *mlog, int level, version_t sv)
     assert(err == 0);
     assert(bl.length());
     bufferlist::iterator p = bl.begin();
-    __u8 v;
+    uint8_t v;
     ::decode(v,p);
     while (!p.end()) {
       LogEntry le;

@@ -55,9 +55,9 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
    * final read buffer.. hence OSDExtent.buffer_extents
    */
   
-  __u32 object_size = layout->fl_object_size;
-  __u32 su = layout->fl_stripe_unit;
-  __u32 stripe_count = layout->fl_stripe_count;
+  uint32_t object_size = layout->fl_object_size;
+  uint32_t su = layout->fl_stripe_unit;
+  uint32_t stripe_count = layout->fl_stripe_count;
   assert(object_size >= su);
   uint64_t stripes_per_object = object_size / su;
   ldout(cct, 20) << " su " << su << " sc " << stripe_count << " os " << object_size
@@ -147,9 +147,9 @@ void Striper::extent_to_file(CephContext *cct, ceph_file_layout *layout,
 {
   ldout(cct, 10) << "extent_to_file " << objectno << " " << off << "~" << len << dendl;
 
-  __u32 object_size = layout->fl_object_size;
-  __u32 su = layout->fl_stripe_unit;
-  __u32 stripe_count = layout->fl_stripe_count;
+  uint32_t object_size = layout->fl_object_size;
+  uint32_t su = layout->fl_stripe_unit;
+  uint32_t stripe_count = layout->fl_stripe_count;
   assert(object_size >= su);
   uint64_t stripes_per_object = object_size / su;
   ldout(cct, 20) << " stripes_per_object " << stripes_per_object << dendl;
@@ -184,9 +184,9 @@ uint64_t Striper::object_truncate_size(CephContext *cct, ceph_file_layout *layou
   if (trunc_size == 0 || trunc_size == (uint64_t)-1) {
     obj_trunc_size = trunc_size;
   } else {
-    __u32 object_size = layout->fl_object_size;
-    __u32 su = layout->fl_stripe_unit;
-    __u32 stripe_count = layout->fl_stripe_count;
+    uint32_t object_size = layout->fl_object_size;
+    uint32_t su = layout->fl_stripe_unit;
+    uint32_t stripe_count = layout->fl_stripe_count;
     assert(object_size >= su);
     uint64_t stripes_per_object = object_size / su;
 

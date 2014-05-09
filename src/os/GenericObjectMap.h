@@ -138,7 +138,7 @@ class GenericObjectMap {
 
   /// persistent state for store @see generate_header
   struct State {
-    __u8 v;
+    uint8_t v;
     uint64_t seq;
     State() : v(0), seq(1) {}
     State(uint64_t seq) : v(0), seq(seq) {}

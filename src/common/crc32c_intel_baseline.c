@@ -34,9 +34,8 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "include/int_types.h"
-
 #include <stdlib.h>
+#include <stdint.h>
 
 #define MAX_ITER	8
 

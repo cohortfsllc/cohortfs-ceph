@@ -49,10 +49,10 @@ void HitSet::encode(bufferlist &bl) const
   ENCODE_START(1, 1, bl);
   ::encode(sealed, bl);
   if (impl) {
-    ::encode((__u8)impl->get_type(), bl);
+    ::encode((uint8_t)impl->get_type(), bl);
     impl->encode(bl);
   } else {
-    ::encode((__u8)TYPE_NONE, bl);
+    ::encode((uint8_t)TYPE_NONE, bl);
   }
   ENCODE_FINISH(bl);
 }
@@ -61,7 +61,7 @@ void HitSet::decode(bufferlist::iterator &bl)
 {
   DECODE_START(1, bl);
   ::decode(sealed, bl);
-  __u8 type;
+  uint8_t type;
   ::decode(type, bl);
   switch ((impl_type_t)type) {
   case TYPE_EXPLICIT_HASH:
@@ -140,10 +140,10 @@ void HitSet::Params::encode(bufferlist &bl) const
 {
   ENCODE_START(1, 1, bl);
   if (impl) {
-    ::encode((__u8)impl->get_type(), bl);
+    ::encode((uint8_t)impl->get_type(), bl);
     impl->encode(bl);
   } else {
-    ::encode((__u8)TYPE_NONE, bl);
+    ::encode((uint8_t)TYPE_NONE, bl);
   }
   ENCODE_FINISH(bl);
 }
@@ -172,7 +172,7 @@ bool HitSet::Params::create_impl(impl_type_t type)
 void HitSet::Params::decode(bufferlist::iterator &bl)
 {
   DECODE_START(1, bl);
-  __u8 type;
+  uint8_t type;
   ::decode(type, bl);
   if (!create_impl((impl_type_t)type))
     throw buffer::malformed_input("unrecognized HitMap type");

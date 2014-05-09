@@ -61,7 +61,7 @@ public:
     ::encode(epoch, payload);
 
     // v2 was vector<pg_info_t>
-    __u32 n = pg_list.size();
+    uint32_t n = pg_list.size();
     ::encode(n, payload);
     for (vector<pair<pg_notify_t,pg_interval_map_t> >::iterator p = pg_list.begin();
 	 p != pg_list.end();
@@ -98,7 +98,7 @@ public:
     ::decode(epoch, p);
 
     // decode pg_info_t portion of the vector
-    __u32 n;
+    uint32_t n;
     ::decode(n, p);
     pg_list.resize(n);
     for (unsigned i=0; i<n; i++) {

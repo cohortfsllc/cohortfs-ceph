@@ -6,7 +6,6 @@
 # include <assert.h>
 # define kfree(x) do { if (x) free(x); } while (0)
 # define BUG_ON(x) assert(!(x))
-# include "include/int_types.h"
 #endif
 
 #include "crush.h"
@@ -29,7 +28,7 @@ const char *crush_bucket_alg_name(int alg)
  */
 int crush_get_bucket_item_weight(const struct crush_bucket *b, int p)
 {
-	if ((__u32)p >= b->size)
+	if ((uint32_t)p >= b->size)
 		return 0;
 
 	switch (b->alg) {
@@ -104,7 +103,7 @@ void crush_destroy(struct crush_map *map)
 {
 	/* buckets */
 	if (map->buckets) {
-		__s32 b;
+		int32_t b;
 		for (b = 0; b < map->max_buckets; b++) {
 			if (map->buckets[b] == NULL)
 				continue;
@@ -115,7 +114,7 @@ void crush_destroy(struct crush_map *map)
 
 	/* rules */
 	if (map->rules) {
-		__u32 b;
+		uint32_t b;
 		for (b = 0; b < map->max_rules; b++)
 			crush_destroy_rule(map->rules[b]);
 		kfree(map->rules);
@@ -131,17 +130,17 @@ void crush_destroy_rule(struct crush_rule *rule)
 }
 
 // methods to check for safe arithmetic operations
-int crush_addition_is_unsafe(__u32 a, __u32 b)
+int crush_addition_is_unsafe(uint32_t a, uint32_t b)
 {
-  if ((((__u32)(-1)) - b) < a)
+  if ((((uint32_t)(-1)) - b) < a)
     return 1;
   else
     return 0;
 }
 
-int crush_multiplication_is_unsafe(__u32  a, __u32 b)
+int crush_multiplication_is_unsafe(uint32_t  a, uint32_t b)
 {
-  if ((((__u32)(-1)) / b) < a)
+  if ((((uint32_t)(-1)) / b) < a)
     return 1;
   else
     return 0;

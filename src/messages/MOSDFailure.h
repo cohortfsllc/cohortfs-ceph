@@ -26,7 +26,7 @@ class MOSDFailure : public PaxosServiceMessage {
  public:
   uuid_d fsid;
   entity_inst_t target_osd;
-  __u8 is_failed;
+  uint8_t is_failed;
   epoch_t       epoch;
   int32_t failed_for;  // known to be failed since at least this long
 

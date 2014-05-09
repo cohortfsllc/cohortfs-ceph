@@ -14,7 +14,6 @@
  *
  */
 
-#include "include/int_types.h"
 #include "include/buffer.h"
 
 #include <iostream>

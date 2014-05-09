@@ -2495,7 +2495,7 @@ int PG::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
     map<epoch_t,pg_interval_t> &past_intervals,
     interval_set<snapid_t> &snap_collections,
     hobject_t &infos_oid,
-    __u8 info_struct_v, bool dirty_big_info, bool force_ver)
+    uint8_t info_struct_v, bool dirty_big_info, bool force_ver)
 {
   // pg state
 
@@ -2558,7 +2558,7 @@ epoch_t PG::peek_map_epoch(ObjectStore *store, coll_t coll, hobject_t &infos_oid
   int r = store->collection_getattr(coll, "info", *bl);
   assert(r > 0);
   bufferlist::iterator bp = bl->begin();
-  __u8 struct_v = 0;
+  uint8_t struct_v = 0;
   ::decode(struct_v, bp);
   if (struct_v < 5)
     return 0;
@@ -2696,7 +2696,7 @@ int PG::read_info(
   ObjectStore *store, const coll_t coll, bufferlist &bl,
   pg_info_t &info, map<epoch_t,pg_interval_t> &past_intervals,
   hobject_t &biginfo_oid, hobject_t &infos_oid,
-  interval_set<snapid_t>  &snap_collections, __u8 &struct_v)
+  interval_set<snapid_t>  &snap_collections, uint8_t &struct_v)
 {
   bufferlist::iterator p = bl.begin();
   bufferlist lbl;

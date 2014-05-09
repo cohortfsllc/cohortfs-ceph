@@ -25,7 +25,7 @@ namespace librbd {
     // Note that oloc, trunc_size, and trunc_seq are ignored
     virtual void read(const object_t& oid, const object_locator_t& oloc,
 		      uint64_t off, uint64_t len, bufferlist *pbl,
-		      uint64_t trunc_size,  __u32 trunc_seq,
+		      uint64_t trunc_size,  uint32_t trunc_seq,
 		      Context *onfinish);
 
     // Determine whether a read to this extent could be affected by a
@@ -37,7 +37,7 @@ namespace librbd {
     virtual ceph_tid_t write(const object_t& oid, const object_locator_t& oloc,
 			     uint64_t off, uint64_t len,
 			     const bufferlist &bl, utime_t mtime,
-			     uint64_t trunc_size, __u32 trunc_seq,
+			     uint64_t trunc_size, uint32_t trunc_seq,
 			     Context *oncommit);
 
     struct write_result_d {

@@ -129,7 +129,7 @@ void object_locator_t::encode(bufferlist& bl) const
 {
   // verify that nobody's corrupted the locator
   assert(hash == -1 || key.empty());
-  __u8 encode_compat = 3;
+  uint8_t encode_compat = 3;
   ENCODE_START(6, encode_compat, bl);
   ::encode(pool, bl);
   int32_t preferred = -1;  // tell old code there is no preferred osd (-1).
@@ -566,14 +566,14 @@ bool coll_t::is_removal(uint64_t *seq, spg_t *pgid) const
 
 void coll_t::encode(bufferlist& bl) const
 {
-  __u8 struct_v = 3;
+  uint8_t struct_v = 3;
   ::encode(struct_v, bl);
   ::encode(str, bl);
 }
 
 void coll_t::decode(bufferlist::iterator& bl)
 {
-  __u8 struct_v;
+  uint8_t struct_v;
   ::decode(struct_v, bl);
   switch (struct_v) {
   case 1: {
@@ -591,7 +591,7 @@ void coll_t::decode(bufferlist::iterator& bl)
   }
 
   case 2: {
-    __u8 type;
+    uint8_t type;
     spg_t pgid;
     snapid_t snap;
     
@@ -722,7 +722,7 @@ void pool_snap_info_t::dump(Formatter *f) const
 void pool_snap_info_t::encode(bufferlist& bl, uint64_t features) const
 {
   if ((features & CEPH_FEATURE_PGPOOL3) == 0) {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(snapid, bl);
     ::encode(stamp, bl);
@@ -1007,7 +1007,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
 {
   if ((features & CEPH_FEATURE_PGPOOL3) == 0) {
     // this encoding matches the old struct ceph_pg_pool
-    __u8 struct_v = 2;
+    uint8_t struct_v = 2;
     ::encode(struct_v, bl);
     ::encode(type, bl);
     ::encode(size, bl);
@@ -1015,14 +1015,14 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
     ::encode(object_hash, bl);
     ::encode(pg_num, bl);
     ::encode(pgp_num, bl);
-    __u32 lpg_num = 0, lpgp_num = 0;  // tell old code that there are no localized pgs.
+    uint32_t lpg_num = 0, lpgp_num = 0;  // tell old code that there are no localized pgs.
     ::encode(lpg_num, bl);
     ::encode(lpgp_num, bl);
     ::encode(last_change, bl);
     ::encode(snap_seq, bl);
     ::encode(snap_epoch, bl);
 
-    __u32 n = snaps.size();
+    uint32_t n = snaps.size();
     ::encode(n, bl);
     n = removed_snaps.num_intervals();
     ::encode(n, bl);
@@ -1035,7 +1035,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
   }
 
   if ((features & CEPH_FEATURE_OSDENC) == 0) {
-    __u8 struct_v = 4;
+    uint8_t struct_v = 4;
     ::encode(struct_v, bl);
     ::encode(type, bl);
     ::encode(size, bl);
@@ -1043,7 +1043,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
     ::encode(object_hash, bl);
     ::encode(pg_num, bl);
     ::encode(pgp_num, bl);
-    __u32 lpg_num = 0, lpgp_num = 0;  // tell old code that there are no localized pgs.
+    uint32_t lpg_num = 0, lpgp_num = 0;  // tell old code that there are no localized pgs.
     ::encode(lpg_num, bl);
     ::encode(lpgp_num, bl);
     ::encode(last_change, bl);
@@ -1057,7 +1057,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
     return;
   }
 
-  __u8 encode_compat = 5;
+  uint8_t encode_compat = 5;
   ENCODE_START(14, encode_compat, bl);
   ::encode(type, bl);
   ::encode(size, bl);
@@ -1065,7 +1065,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
   ::encode(object_hash, bl);
   ::encode(pg_num, bl);
   ::encode(pgp_num, bl);
-  __u32 lpg_num = 0, lpgp_num = 0;  // tell old code that there are no localized pgs.
+  uint32_t lpg_num = 0, lpgp_num = 0;  // tell old code that there are no localized pgs.
   ::encode(lpg_num, bl);
   ::encode(lpgp_num, bl);
   ::encode(last_change, bl);
@@ -1081,7 +1081,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
   ::encode(quota_max_objects, bl);
   ::encode(tiers, bl);
   ::encode(tier_of, bl);
-  __u8 c = cache_mode;
+  uint8_t c = cache_mode;
   ::encode(c, bl);
   ::encode(read_tier, bl);
   ::encode(write_tier, bl);
@@ -1110,7 +1110,7 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
   ::decode(pg_num, bl);
   ::decode(pgp_num, bl);
   {
-    __u32 lpg_num, lpgp_num;
+    uint32_t lpg_num, lpgp_num;
     ::decode(lpg_num, bl);
     ::decode(lpgp_num, bl);
   }
@@ -1123,7 +1123,7 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
     ::decode(removed_snaps, bl);
     ::decode(auid, bl);
   } else {
-    __u32 n, m;
+    uint32_t n, m;
     ::decode(n, bl);
     ::decode(m, bl);
     ::decode(auid, bl);
@@ -1158,7 +1158,7 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
   if (struct_v >= 9) {
     ::decode(tiers, bl);
     ::decode(tier_of, bl);
-    __u8 v;
+    uint8_t v;
     ::decode(v, bl);
     cache_mode = (cache_mode_t)v;
     ::decode(read_tier, bl);
@@ -1800,7 +1800,7 @@ void pool_stat_t::dump(Formatter *f) const
 void pool_stat_t::encode(bufferlist &bl, uint64_t features) const
 {
   if ((features & CEPH_FEATURE_OSDENC) == 0) {
-    __u8 v = 4;
+    uint8_t v = 4;
     ::encode(v, bl);
     ::encode(stats, bl);
     ::encode(log_size, bl);
@@ -2511,7 +2511,7 @@ void pg_log_entry_t::encode_with_checksum(bufferlist& bl) const
 {
   bufferlist ebl(sizeof(*this)*2);
   encode(ebl);
-  __u32 crc = ebl.crc32c(0);
+  uint32_t crc = ebl.crc32c(0);
   ::encode(ebl, bl);
   ::encode(crc, bl);
 }
@@ -2520,7 +2520,7 @@ void pg_log_entry_t::decode_with_checksum(bufferlist::iterator& p)
 {
   bufferlist bl;
   ::decode(bl, p);
-  __u32 crc;
+  uint32_t crc;
   ::decode(crc, p);
   if (crc != bl.crc32c(0))
     throw buffer::malformed_input("bad checksum on pg_log_entry_t");
@@ -3645,7 +3645,7 @@ void object_info_t::encode(bufferlist& bl) const
   ::encode(user_eversion, bl);
   ::encode(test_flag(FLAG_USES_TMAP), bl);
   ::encode(watchers, bl);
-  __u32 _flags = flags;
+  uint32_t _flags = flags;
   ::encode(_flags, bl);
   ENCODE_FINISH(bl);
 }
@@ -3687,7 +3687,7 @@ void object_info_t::decode(bufferlist::iterator& bl)
     // if this is struct_v >= 13, we will overwrite this
     // below since this field is just here for backwards
     // compatibility
-    __u8 lo;
+    uint8_t lo;
     ::decode(lo, bl);
     flags = (flag_t)lo;
   } else {
@@ -3721,7 +3721,7 @@ void object_info_t::decode(bufferlist::iterator& bl)
     }
   }
   if (struct_v >= 13) {
-    __u32 _flags;
+    uint32_t _flags;
     ::decode(_flags, bl);
     flags = (flag_t)_flags;
   }

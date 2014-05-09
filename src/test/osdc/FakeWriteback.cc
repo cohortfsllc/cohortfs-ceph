@@ -62,7 +62,7 @@ void FakeWriteback::read(const object_t& oid,
 			 const object_locator_t& oloc,
 			 uint64_t off, uint64_t len,
 			 bufferlist *pbl, uint64_t trunc_size,
-			 __u32 trunc_seq, Context *onfinish)
+			 uint32_t trunc_seq, Context *onfinish)
 {
   C_Delay *wrapper = new C_Delay(m_cct, onfinish, m_lock, off, pbl, m_delay_ns);
   m_finisher->queue(wrapper, len);
@@ -72,7 +72,7 @@ ceph_tid_t FakeWriteback::write(const object_t& oid,
 			   const object_locator_t& oloc,
 			   uint64_t off, uint64_t len,
 			   const bufferlist &bl, utime_t mtime,
-			   uint64_t trunc_size, __u32 trunc_seq,
+			   uint64_t trunc_size, uint32_t trunc_seq,
 			   Context *oncommit)
 {
   C_Delay *wrapper = new C_Delay(m_cct, oncommit, m_lock, off, NULL, m_delay_ns);;

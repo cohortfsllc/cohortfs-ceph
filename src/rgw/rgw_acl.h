@@ -64,7 +64,7 @@ WRITE_CLASS_ENCODER(ACLPermission)
 class ACLGranteeType
 {
 protected:
-  __u32 type;
+  uint32_t type;
 public:
   ACLGranteeType() : type(ACL_TYPE_UNKNOWN) {}
   virtual ~ACLGranteeType() {}
@@ -136,7 +136,7 @@ public:
     ::encode(email, bl);
     ::encode(permission, bl);
     ::encode(name, bl);
-    __u32 g = (__u32)group;
+    uint32_t g = (uint32_t)group;
     ::encode(g, bl);
     ENCODE_FINISH(bl);
   }
@@ -150,7 +150,7 @@ public:
     ::decode(permission, bl);
     ::decode(name, bl);
     if (struct_v > 1) {
-      __u32 g;
+      uint32_t g;
       ::decode(g, bl);
       group = (ACLGroupTypeEnum)g;
     } else {

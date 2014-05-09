@@ -35,7 +35,7 @@ class MMDSSlaveRequest;
 
 struct MutationImpl {
   metareqid_t reqid;
-  __u32 attempt;      // which attempt for this request
+  uint32_t attempt;      // which attempt for this request
   LogSegment *ls;  // the log segment i'm committing to
   utime_t now;
 
@@ -85,7 +85,7 @@ struct MutationImpl {
       locking(NULL),
       locking_target_mds(-1),
       done_locking(false), committing(false), aborted(false), killed(false) { }
-  MutationImpl(metareqid_t ri, __u32 att=0, int slave_to=-1)
+  MutationImpl(metareqid_t ri, uint32_t att=0, int slave_to=-1)
     : reqid(ri), attempt(att),
       ls(0),
       slave_to_mds(slave_to), 
@@ -257,7 +257,7 @@ struct MDRequestImpl : public MutationImpl {
     _more(0) {
     in[0] = in[1] = 0;
   }
-  MDRequestImpl(metareqid_t ri, __u32 attempt, MClientRequest *req) :
+  MDRequestImpl(metareqid_t ri, uint32_t attempt, MClientRequest *req) :
     MutationImpl(ri, attempt),
     session(0), item_session_request(this),
     client_request(req), straydn(NULL), tracei(0), tracedn(0),
@@ -271,7 +271,7 @@ struct MDRequestImpl : public MutationImpl {
     _more(0) {
     in[0] = in[1] = 0;
   }
-  MDRequestImpl(metareqid_t ri, __u32 attempt, int by) :
+  MDRequestImpl(metareqid_t ri, uint32_t attempt, int by) :
     MutationImpl(ri, attempt, by),
     session(0), item_session_request(this),
     client_request(0), straydn(NULL), tracei(0), tracedn(0),

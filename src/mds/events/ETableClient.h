@@ -22,8 +22,8 @@
 #include "../LogEvent.h"
 
 struct ETableClient : public LogEvent {
-  __u16 table;
-  __s16 op;
+  uint16_t table;
+  int16_t op;
   version_t tid;
 
   ETableClient() : LogEvent(EVENT_TABLECLIENT), table(0), op(0), tid(0) { }

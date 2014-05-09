@@ -17,7 +17,6 @@
 # define kmalloc(x, f) malloc(x)
 # define kfree(x) free(x)
 /*# define DEBUG_INDEP*/
-# include "include/int_types.h"
 #endif
 
 #include "crush.h"
@@ -36,7 +35,7 @@
  */
 int crush_find_rule(const struct crush_map *map, int ruleset, int type, int size)
 {
-	__u32 i;
+	uint32_t i;
 
 	for (i = 0; i < map->max_rules; i++) {
 		if (map->rules[i] &&
@@ -74,7 +73,7 @@ static int bucket_perm_choose(struct crush_bucket *bucket,
 	unsigned int i, s;
 
 	/* start a new permutation if @x has changed */
-	if (bucket->perm_x != (__u32)x || bucket->perm_n == 0) {
+	if (bucket->perm_x != (uint32_t)x || bucket->perm_n == 0) {
 		dprintk("bucket %d new x=%d\n", bucket->id, x);
 		bucket->perm_x = x;
 
@@ -140,7 +139,7 @@ static int bucket_list_choose(struct crush_bucket_list *bucket,
 	int i;
 
 	for (i = bucket->h.size-1; i >= 0; i--) {
-		__u64 w = crush_hash32_4(bucket->h.hash,x, bucket->h.items[i],
+		uint64_t w = crush_hash32_4(bucket->h.hash,x, bucket->h.items[i],
 					 r, bucket->h.id);
 		w &= 0xffff;
 		dprintk("list_choose i=%d x=%d r=%d item %d weight %x "
@@ -191,8 +190,8 @@ static int bucket_tree_choose(struct crush_bucket_tree *bucket,
 			      int x, int r)
 {
 	int n;
-	__u32 w;
-	__u64 t;
+	uint32_t w;
+	uint64_t t;
 
 	/* start at root */
 	n = bucket->num_nodes >> 1;
@@ -201,8 +200,8 @@ static int bucket_tree_choose(struct crush_bucket_tree *bucket,
 		int l;
 		/* pick point in [0, w) */
 		w = bucket->node_weights[n];
-		t = (__u64)crush_hash32_4(bucket->h.hash, x, n, r,
-					  bucket->h.id) * (__u64)w;
+		t = (uint64_t)crush_hash32_4(bucket->h.hash, x, n, r,
+					  bucket->h.id) * (uint64_t)w;
 		t = t >> 32;
 
 		/* descend to the left or right? */
@@ -222,10 +221,10 @@ static int bucket_tree_choose(struct crush_bucket_tree *bucket,
 static int bucket_straw_choose(struct crush_bucket_straw *bucket,
 			       int x, int r)
 {
-	__u32 i;
+	uint32_t i;
 	int high = 0;
-	__u64 high_draw = 0;
-	__u64 draw;
+	uint64_t high_draw = 0;
+	uint64_t draw;
 
 	for (i = 0; i < bucket->h.size; i++) {
 		draw = crush_hash32_3(bucket->h.hash, x, bucket->h.items[i], r);
@@ -267,7 +266,7 @@ static int crush_bucket_choose(struct crush_bucket *in, int x, int r)
  * of the cluster
  */
 static int is_out(const struct crush_map *map,
-		  const __u32 *weight, int weight_max,
+		  const uint32_t *weight, int weight_max,
 		  int item, int x)
 {
 	if (item >= weight_max)
@@ -302,7 +301,7 @@ static int is_out(const struct crush_map *map,
  */
 static int crush_choose_firstn(const struct crush_map *map,
 			       struct crush_bucket *bucket,
-			       const __u32 *weight, int weight_max,
+			       const uint32_t *weight, int weight_max,
 			       int x, int numrep, int type,
 			       int *out, int outpos,
 			       unsigned int tries,
@@ -480,7 +479,7 @@ reject:
  */
 static void crush_choose_indep(const struct crush_map *map,
 			       struct crush_bucket *bucket,
-			       const __u32 *weight, int weight_max,
+			       const uint32_t *weight, int weight_max,
 			       int x, int left, int numrep, int type,
 			       int *out, int outpos,
 			       unsigned int tries,
@@ -669,7 +668,7 @@ static void crush_choose_indep(const struct crush_map *map,
  */
 int crush_do_rule(const struct crush_map *map,
 		  int ruleno, int x, int *result, int result_max,
-		  const __u32 *weight, int weight_max,
+		  const uint32_t *weight, int weight_max,
 		  int *scratch)
 {
 	int result_len;
@@ -683,7 +682,7 @@ int crush_do_rule(const struct crush_map *map,
 	int osize;
 	int *tmp;
 	struct crush_rule *rule;
-	__u32 step;
+	uint32_t step;
 	int i, j;
 	int numrep;
 	/*
@@ -701,7 +700,7 @@ int crush_do_rule(const struct crush_map *map,
 
 	int vary_r = map->chooseleaf_vary_r;
 
-	if ((__u32)ruleno >= map->max_rules) {
+	if ((uint32_t)ruleno >= map->max_rules) {
 		dprintk(" bad ruleno %d\n", ruleno);
 		return 0;
 	}

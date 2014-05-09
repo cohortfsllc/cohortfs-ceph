@@ -280,7 +280,7 @@ private:
   int stickydir_ref;
 
 public:
-  __u32 hash_dentry_name(const string &dn);
+  uint32_t hash_dentry_name(const string &dn);
   frag_t pick_dirfrag(const string &dn);
   bool has_dirfrags() { return !dirfrags.empty(); }
   CDir* get_dirfrag(frag_t fg) {
@@ -498,14 +498,14 @@ private:
     if (!is_replicated())
       replicate_relax_locks();
     
-    __u32 nonce = add_replica(rep);
+    uint32_t nonce = add_replica(rep);
     ::encode(nonce, bl);
     
     _encode_base(bl);
     _encode_locks_state_for_replica(bl);
   }
   void decode_replica(bufferlist::iterator& p, bool is_new) {
-    __u32 nonce;
+    uint32_t nonce;
     ::decode(nonce, p);
     replica_nonce = nonce;
     

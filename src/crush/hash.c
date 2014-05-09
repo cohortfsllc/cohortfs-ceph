@@ -1,5 +1,3 @@
-#include "include/int_types.h"
-
 #if defined(__linux__)
 #include <linux/types.h>
 #elif defined(__FreeBSD__)
@@ -27,33 +25,33 @@
 
 #define crush_hash_seed 1315423911
 
-static __u32 crush_hash32_rjenkins1(__u32 a)
+static uint32_t crush_hash32_rjenkins1(uint32_t a)
 {
-	__u32 hash = crush_hash_seed ^ a;
-	__u32 b = a;
-	__u32 x = 231232;
-	__u32 y = 1232;
+	uint32_t hash = crush_hash_seed ^ a;
+	uint32_t b = a;
+	uint32_t x = 231232;
+	uint32_t y = 1232;
 	crush_hashmix(b, x, hash);
 	crush_hashmix(y, a, hash);
 	return hash;
 }
 
-static __u32 crush_hash32_rjenkins1_2(__u32 a, __u32 b)
+static uint32_t crush_hash32_rjenkins1_2(uint32_t a, uint32_t b)
 {
-	__u32 hash = crush_hash_seed ^ a ^ b;
-	__u32 x = 231232;
-	__u32 y = 1232;
+	uint32_t hash = crush_hash_seed ^ a ^ b;
+	uint32_t x = 231232;
+	uint32_t y = 1232;
 	crush_hashmix(a, b, hash);
 	crush_hashmix(x, a, hash);
 	crush_hashmix(b, y, hash);
 	return hash;
 }
 
-static __u32 crush_hash32_rjenkins1_3(__u32 a, __u32 b, __u32 c)
+static uint32_t crush_hash32_rjenkins1_3(uint32_t a, uint32_t b, uint32_t c)
 {
-	__u32 hash = crush_hash_seed ^ a ^ b ^ c;
-	__u32 x = 231232;
-	__u32 y = 1232;
+	uint32_t hash = crush_hash_seed ^ a ^ b ^ c;
+	uint32_t x = 231232;
+	uint32_t y = 1232;
 	crush_hashmix(a, b, hash);
 	crush_hashmix(c, x, hash);
 	crush_hashmix(y, a, hash);
@@ -62,11 +60,11 @@ static __u32 crush_hash32_rjenkins1_3(__u32 a, __u32 b, __u32 c)
 	return hash;
 }
 
-static __u32 crush_hash32_rjenkins1_4(__u32 a, __u32 b, __u32 c, __u32 d)
+static uint32_t crush_hash32_rjenkins1_4(uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
-	__u32 hash = crush_hash_seed ^ a ^ b ^ c ^ d;
-	__u32 x = 231232;
-	__u32 y = 1232;
+	uint32_t hash = crush_hash_seed ^ a ^ b ^ c ^ d;
+	uint32_t x = 231232;
+	uint32_t y = 1232;
 	crush_hashmix(a, b, hash);
 	crush_hashmix(c, d, hash);
 	crush_hashmix(a, x, hash);
@@ -76,12 +74,12 @@ static __u32 crush_hash32_rjenkins1_4(__u32 a, __u32 b, __u32 c, __u32 d)
 	return hash;
 }
 
-static __u32 crush_hash32_rjenkins1_5(__u32 a, __u32 b, __u32 c, __u32 d,
-				      __u32 e)
+static uint32_t crush_hash32_rjenkins1_5(uint32_t a, uint32_t b, uint32_t c, uint32_t d,
+				      uint32_t e)
 {
-	__u32 hash = crush_hash_seed ^ a ^ b ^ c ^ d ^ e;
-	__u32 x = 231232;
-	__u32 y = 1232;
+	uint32_t hash = crush_hash_seed ^ a ^ b ^ c ^ d ^ e;
+	uint32_t x = 231232;
+	uint32_t y = 1232;
 	crush_hashmix(a, b, hash);
 	crush_hashmix(c, d, hash);
 	crush_hashmix(e, x, hash);
@@ -94,7 +92,7 @@ static __u32 crush_hash32_rjenkins1_5(__u32 a, __u32 b, __u32 c, __u32 d,
 }
 
 
-__u32 crush_hash32(int type, __u32 a)
+uint32_t crush_hash32(int type, uint32_t a)
 {
 	switch (type) {
 	case CRUSH_HASH_RJENKINS1:
@@ -104,7 +102,7 @@ __u32 crush_hash32(int type, __u32 a)
 	}
 }
 
-__u32 crush_hash32_2(int type, __u32 a, __u32 b)
+uint32_t crush_hash32_2(int type, uint32_t a, uint32_t b)
 {
 	switch (type) {
 	case CRUSH_HASH_RJENKINS1:
@@ -114,7 +112,7 @@ __u32 crush_hash32_2(int type, __u32 a, __u32 b)
 	}
 }
 
-__u32 crush_hash32_3(int type, __u32 a, __u32 b, __u32 c)
+uint32_t crush_hash32_3(int type, uint32_t a, uint32_t b, uint32_t c)
 {
 	switch (type) {
 	case CRUSH_HASH_RJENKINS1:
@@ -124,7 +122,7 @@ __u32 crush_hash32_3(int type, __u32 a, __u32 b, __u32 c)
 	}
 }
 
-__u32 crush_hash32_4(int type, __u32 a, __u32 b, __u32 c, __u32 d)
+uint32_t crush_hash32_4(int type, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
 	switch (type) {
 	case CRUSH_HASH_RJENKINS1:
@@ -134,7 +132,7 @@ __u32 crush_hash32_4(int type, __u32 a, __u32 b, __u32 c, __u32 d)
 	}
 }
 
-__u32 crush_hash32_5(int type, __u32 a, __u32 b, __u32 c, __u32 d, __u32 e)
+uint32_t crush_hash32_5(int type, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e)
 {
 	switch (type) {
 	case CRUSH_HASH_RJENKINS1:

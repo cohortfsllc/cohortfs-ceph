@@ -677,7 +677,7 @@ void ReplicatedBackend::be_deep_scrub(
   bufferhash h, oh;
   bufferlist bl, hdrbl;
   int r;
-  __u64 pos = 0;
+  uint64_t pos = 0;
   while ( (r = store->read(
 	     coll,
 	     ghobject_t(

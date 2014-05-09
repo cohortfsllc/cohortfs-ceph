@@ -308,7 +308,7 @@ class MonitorDBStore
     virtual bool _is_valid() = 0;
 
   public:
-    __u32 crc() {
+    uint32_t crc() {
       if (g_conf->mon_sync_debug)
 	return crc_bl.crc32c(0);
       return 0;

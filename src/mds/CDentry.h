@@ -102,7 +102,7 @@ public:
 
 public:
   string name;
-  __u32 hash;
+  uint32_t hash;
 
 public:
   struct linkage_t {
@@ -166,7 +166,7 @@ public:
 
  public:
   // cons
-  CDentry(const string& n, __u32 h) :
+  CDentry(const string& n, uint32_t h) :
     name(n), hash(h),
     dir(0),
     version(0), projected_version(0),
@@ -177,7 +177,7 @@ public:
     g_num_dn++;
     g_num_dna++;
   }
-  CDentry(const string& n, __u32 h, inodeno_t ino, unsigned char dt) :
+  CDentry(const string& n, uint32_t h, inodeno_t ino, unsigned char dt) :
     name(n), hash(h),
     dir(0),
     version(0), projected_version(0),
@@ -199,7 +199,7 @@ public:
   CDir *get_dir() const { return dir; }
   const string& get_name() const { return name; }
 
-  __u32 get_hash() const { return hash; }
+  uint32_t get_hash() const { return hash; }
 
   // linkage
   linkage_t *get_linkage() { return &linkage; }
@@ -296,11 +296,11 @@ public:
     if (!is_replicated())
       lock.replicate_relax();
 
-    __u32 nonce = add_replica(mds);
+    uint32_t nonce = add_replica(mds);
     ::encode(nonce, bl);
     ::encode(linkage.remote_ino, bl);
     ::encode(linkage.remote_d_type, bl);
-    __s32 ls = lock.get_replica_state();
+    int32_t ls = lock.get_replica_state();
     ::encode(ls, bl);
   }
   void decode_replica(bufferlist::iterator& p, bool is_new);
@@ -329,7 +329,7 @@ public:
     put(PIN_TEMPEXPORTING);
   }
   void decode_import(bufferlist::iterator& blp, LogSegment *ls) {
-    __u32 nstate;
+    uint32_t nstate;
     ::decode(nstate, blp);
     ::decode(version, blp);
     ::decode(projected_version, blp);

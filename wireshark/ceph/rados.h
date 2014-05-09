@@ -33,9 +33,9 @@ static inline int ceph_fsid_compare(const struct ceph_fsid *a,
  * ino, object, etc.
  */
 typedef __le64 ceph_snapid_t;
-#define CEPH_SNAPDIR ((__u64)(-1))  /* reserved for hidden .snap dir */
-#define CEPH_NOSNAP  ((__u64)(-2))  /* "head", "live" revision */
-#define CEPH_MAXSNAP ((__u64)(-3))  /* largest valid snapid */
+#define CEPH_SNAPDIR ((uint64_t)(-1))  /* reserved for hidden .snap dir */
+#define CEPH_NOSNAP  ((uint64_t)(-2))  /* "head", "live" revision */
+#define CEPH_MAXSNAP ((uint64_t)(-3))  /* largest valid snapid */
 
 struct ceph_timespec {
 	__le32 tv_sec;
@@ -91,10 +91,10 @@ struct ceph_pg {
 #define CEPH_PG_TYPE_RAID4   2
 #define CEPH_PG_POOL_VERSION 2
 struct ceph_pg_pool {
-	__u8 type;                /* CEPH_PG_TYPE_* */
-	__u8 size;                /* number of osds in each pg */
-	__u8 crush_ruleset;       /* crush placement rule */
-	__u8 object_hash;         /* hash mapping object name to ps */
+	uint8_t type;                /* CEPH_PG_TYPE_* */
+	uint8_t size;                /* number of osds in each pg */
+	uint8_t crush_ruleset;       /* crush placement rule */
+	uint8_t object_hash;         /* hash mapping object name to ps */
 	__le32 pg_num, pgp_num;   /* number of pg's */
 	__le32 lpg_num, lpgp_num; /* number of localized pg's */
 	__le32 last_change;       /* most recent epoch changed */
@@ -358,13 +358,13 @@ struct ceph_osd_op {
 		struct {
 			__le32 name_len;
 			__le32 value_len;
-			__u8 cmp_op;       /* CEPH_OSD_CMPXATTR_OP_* */
-			__u8 cmp_mode;     /* CEPH_OSD_CMPXATTR_MODE_* */
+			uint8_t cmp_op;       /* CEPH_OSD_CMPXATTR_OP_* */
+			uint8_t cmp_mode;     /* CEPH_OSD_CMPXATTR_MODE_* */
 		} __attribute__ ((packed)) xattr;
 		struct {
-			__u8 class_len;
-			__u8 method_len;
-			__u8 argc;
+			uint8_t class_len;
+			uint8_t method_len;
+			uint8_t argc;
 			__le32 indata_len;
 		} __attribute__ ((packed)) cls;
 		struct {
@@ -376,7 +376,7 @@ struct ceph_osd_op {
 		struct {
 			__le64 cookie;
 			__le64 ver;
-			__u8 flag;	/* 0 = unwatch, 1 = watch */
+			uint8_t flag;	/* 0 = unwatch, 1 = watch */
 		} __attribute__ ((packed)) watch;
 };
 	__le32 payload_len;

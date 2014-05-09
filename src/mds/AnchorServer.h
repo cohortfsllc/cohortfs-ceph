@@ -59,7 +59,7 @@ class AnchorServer : public MDSTableServer {
       pending_ops[p->second].push_back(pair<version_t, Context*>(p->first, NULL));
   }
 
-  bool add(inodeno_t ino, inodeno_t dirino, __u32 dn_hash, bool replace);
+  bool add(inodeno_t ino, inodeno_t dirino, uint32_t dn_hash, bool replace);
   void inc(inodeno_t ino, int ref=1);
   void dec(inodeno_t ino, int ref=1);
   bool check_pending(version_t tid, MMDSTableRequest *req, list<Context *>& finished);

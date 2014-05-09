@@ -108,9 +108,9 @@ public:
   int get_pool_stats(std::list<string>& ls, map<string,::pool_stat_t>& result);
   int get_fs_stats(ceph_statfs& result);
 
-  int pool_create(string& name, unsigned long long auid=0, __u8 crush_rule=0);
+  int pool_create(string& name, unsigned long long auid=0, uint8_t crush_rule=0);
   int pool_create_async(string& name, PoolAsyncCompletionImpl *c, unsigned long long auid=0,
-			__u8 crush_rule=0);
+			uint8_t crush_rule=0);
   int pool_delete(const char *name);
 
   int pool_delete_async(const char *name, PoolAsyncCompletionImpl *c);

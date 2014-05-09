@@ -36,7 +36,7 @@ public:
     }
   }
 
-  __u32 op;
+  uint32_t op;
   epoch_t map_epoch, query_epoch;
   pg_shard_t from;
   spg_t pgid;
@@ -80,7 +80,7 @@ public:
   }
 
   MOSDPGScan() : Message(MSG_OSD_PG_SCAN, HEAD_VERSION, COMPAT_VERSION) {}
-  MOSDPGScan(__u32 o, pg_shard_t from,
+  MOSDPGScan(uint32_t o, pg_shard_t from,
 	     epoch_t e, epoch_t qe, spg_t p, hobject_t be, hobject_t en)
     : Message(MSG_OSD_PG_SCAN, HEAD_VERSION, COMPAT_VERSION),
       op(o),

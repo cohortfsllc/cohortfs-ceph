@@ -31,7 +31,7 @@
 /* this should be 4k */
 #define BTRFS_PATH_NAME_MAX 4087
 struct btrfs_ioctl_vol_args {
-	__s64 fd;
+	int64_t fd;
 	char name[BTRFS_PATH_NAME_MAX + 1];
 };
 
@@ -39,62 +39,62 @@ struct btrfs_ioctl_vol_args {
 
 #define BTRFS_SUBVOL_NAME_MAX 4039
 struct btrfs_ioctl_vol_args_v2 {
-	__s64 fd;
-	__u64 transid;
-	__u64 flags;
-	__u64 unused[4];
+	int64_t fd;
+	uint64_t transid;
+	uint64_t flags;
+	uint64_t unused[4];
 	char name[BTRFS_SUBVOL_NAME_MAX + 1];
 };
 
 #define BTRFS_INO_LOOKUP_PATH_MAX 4080
 struct btrfs_ioctl_ino_lookup_args {
-	__u64 treeid;
-	__u64 objectid;
+	uint64_t treeid;
+	uint64_t objectid;
 	char name[BTRFS_INO_LOOKUP_PATH_MAX];
 };
 
 struct btrfs_ioctl_search_key {
 	/* which root are we searching.  0 is the tree of tree roots */
-	__u64 tree_id;
+	uint64_t tree_id;
 
 	/* keys returned will be >= min and <= max */
-	__u64 min_objectid;
-	__u64 max_objectid;
+	uint64_t min_objectid;
+	uint64_t max_objectid;
 
 	/* keys returned will be >= min and <= max */
-	__u64 min_offset;
-	__u64 max_offset;
+	uint64_t min_offset;
+	uint64_t max_offset;
 
 	/* max and min transids to search for */
-	__u64 min_transid;
-	__u64 max_transid;
+	uint64_t min_transid;
+	uint64_t max_transid;
 
 	/* keys returned will be >= min and <= max */
-	__u32 min_type;
-	__u32 max_type;
+	uint32_t min_type;
+	uint32_t max_type;
 
 	/*
 	 * how many items did userland ask for, and how many are we
 	 * returning
 	 */
-	__u32 nr_items;
+	uint32_t nr_items;
 
 	/* align to 64 bits */
-	__u32 unused;
+	uint32_t unused;
 
 	/* some extra for later */
-	__u64 unused1;
-	__u64 unused2;
-	__u64 unused3;
-	__u64 unused4;
+	uint64_t unused1;
+	uint64_t unused2;
+	uint64_t unused3;
+	uint64_t unused4;
 };
 
 struct btrfs_ioctl_search_header {
-	__u64 transid;
-	__u64 objectid;
-	__u64 offset;
-	__u32 type;
-	__u32 len;
+	uint64_t transid;
+	uint64_t objectid;
+	uint64_t offset;
+	uint32_t type;
+	uint32_t len;
 };
 
 #define BTRFS_SEARCH_ARGS_BUFSIZE (4096 - sizeof(struct btrfs_ioctl_search_key))
@@ -109,9 +109,9 @@ struct btrfs_ioctl_search_args {
 };
 
 struct btrfs_ioctl_clone_range_args {
-  __s64 src_fd;
-  __u64 src_offset, src_length;
-  __u64 dest_offset;
+  int64_t src_fd;
+  uint64_t src_offset, src_length;
+  uint64_t dest_offset;
 };
 
 /* flags for the defrag range ioctl */
@@ -120,37 +120,37 @@ struct btrfs_ioctl_clone_range_args {
 
 struct btrfs_ioctl_defrag_range_args {
 	/* start of the defrag operation */
-	__u64 start;
+	uint64_t start;
 
 	/* number of bytes to defrag, use (u64)-1 to say all */
-	__u64 len;
+	uint64_t len;
 
 	/*
 	 * flags for the operation, which can include turning
 	 * on compression for this one defrag
 	 */
-	__u64 flags;
+	uint64_t flags;
 
 	/*
 	 * any extent bigger than this will be considered
 	 * already defragged.  Use 0 to take the kernel default
 	 * Use 1 to say every single extent must be rewritten
 	 */
-	__u32 extent_thresh;
+	uint32_t extent_thresh;
 
 	/* spare for later */
-	__u32 unused[5];
+	uint32_t unused[5];
 };
 
 struct btrfs_ioctl_space_info {
-	__u64 flags;
-	__u64 total_bytes;
-	__u64 used_bytes;
+	uint64_t flags;
+	uint64_t total_bytes;
+	uint64_t used_bytes;
 };
 
 struct btrfs_ioctl_space_args {
-	__u64 space_slots;
-	__u64 total_spaces;
+	uint64_t space_slots;
+	uint64_t total_spaces;
 	struct btrfs_ioctl_space_info spaces[0];
 };
 
@@ -194,8 +194,8 @@ struct btrfs_ioctl_space_args {
 #define BTRFS_IOC_DEFAULT_SUBVOL _IOW(BTRFS_IOCTL_MAGIC, 19, u64)
 #define BTRFS_IOC_SPACE_INFO _IOWR(BTRFS_IOCTL_MAGIC, 20, \
 				    struct btrfs_ioctl_space_args)
-#define BTRFS_IOC_START_SYNC _IOR(BTRFS_IOCTL_MAGIC, 24, __u64)
-#define BTRFS_IOC_WAIT_SYNC  _IOW(BTRFS_IOCTL_MAGIC, 22, __u64)
+#define BTRFS_IOC_START_SYNC _IOR(BTRFS_IOCTL_MAGIC, 24, uint64_t)
+#define BTRFS_IOC_WAIT_SYNC  _IOW(BTRFS_IOCTL_MAGIC, 22, uint64_t)
 #define BTRFS_IOC_SNAP_CREATE_V2 _IOW(BTRFS_IOCTL_MAGIC, 23, \
 				   struct btrfs_ioctl_vol_args_v2)
 #endif

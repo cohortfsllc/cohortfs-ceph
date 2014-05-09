@@ -18,11 +18,11 @@
 #include "messages/PaxosServiceMessage.h"
 
 struct MAuth : public PaxosServiceMessage {
-  __u32 protocol;
+  uint32_t protocol;
   bufferlist auth_payload;
   epoch_t monmap_epoch;
 
-  /* if protocol == 0, then auth_payload is a set<__u32> listing protocols the client supports */
+  /* if protocol == 0, then auth_payload is a set<uint32_t> listing protocols the client supports */
 
   MAuth() : PaxosServiceMessage(CEPH_MSG_AUTH, 0), protocol(0), monmap_epoch(0) { }
 private:

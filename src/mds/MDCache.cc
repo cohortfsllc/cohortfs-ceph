@@ -4363,7 +4363,7 @@ void MDCache::handle_cache_rejoin_ack(MMDSCacheRejoin *ack)
   //dout(10) << "inode_locks len " << ack->inode_locks.length() << " is " << ack->inode_locks << dendl;
   while (!p.end()) {
     inodeno_t ino;
-    __u32 nonce;
+    uint32_t nonce;
     bufferlist lockbl;
     ::decode(ino, p);
     ::decode(nonce, p);
@@ -7986,7 +7986,7 @@ MDRequestRef MDCache::request_start(MClientRequest *req)
   return mdr;
 }
 
-MDRequestRef MDCache::request_start_slave(metareqid_t ri, __u32 attempt, int by)
+MDRequestRef MDCache::request_start_slave(metareqid_t ri, uint32_t attempt, int by)
 {
   MDRequestRef mdr(new MDRequestImpl(ri, attempt, by));
   assert(active_requests.count(mdr->reqid) == 0);
@@ -9743,7 +9743,7 @@ void MDCache::send_dentry_link(CDentry *dn)
       replicate_inode(dnl->get_inode(), p->first, m->bl);
     } else if (dnl->is_remote()) {
       inodeno_t ino = dnl->get_remote_ino();
-      __u8 d_type = dnl->get_remote_d_type();
+      uint8_t d_type = dnl->get_remote_d_type();
       dout(10) << "  remote " << ino << " " << d_type << dendl;
       ::encode(ino, m->bl);
       ::encode(d_type, m->bl);
@@ -9783,7 +9783,7 @@ void MDCache::handle_dentry_link(MDentryLink *m)
     } else {
       // remote link, easy enough.
       inodeno_t ino;
-      __u8 d_type;
+      uint8_t d_type;
       ::decode(ino, p);
       ::decode(d_type, p);
       dir->link_remote_inode(dn, ino, d_type);

@@ -41,7 +41,7 @@ LogEvent *LogEvent::decode(bufferlist& bl)
 {
   // parse type, length
   bufferlist::iterator p = bl.begin();
-  __u32 type;
+  uint32_t type;
   LogEvent *event = NULL;
   ::decode(type, p);
 
@@ -62,7 +62,7 @@ LogEvent *LogEvent::decode(bufferlist& bl)
   return event;
 }
 
-LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, __u32 type)
+LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, uint32_t type)
 {
   int length = bl.length() - p.get_off();
   generic_dout(15) << "decode_log_event type " << type << ", size " << length << dendl;

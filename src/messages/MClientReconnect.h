@@ -49,7 +49,7 @@ public:
       ::encode(caps, data);
     } else if (features & CEPH_FEATURE_FLOCK) {
       // encode with old cap_reconnect_t encoding
-      __u32 n = caps.size();
+      uint32_t n = caps.size();
       ::encode(n, data);
       for (map<inodeno_t,cap_reconnect_t>::iterator p = caps.begin(); p != caps.end(); ++p) {
 	::encode(p->first, data);
@@ -71,7 +71,7 @@ public:
       // new protocol
       ::decode(caps, p);
     } else if (header.version == 2) {
-      __u32 n;
+      uint32_t n;
       ::decode(n, p);
       inodeno_t ino;
       while (n--) {

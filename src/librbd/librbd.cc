@@ -11,8 +11,6 @@
  * Foundation.	See file COPYING.
  *
  */
-#include "include/int_types.h"
-
 #include <errno.h>
 
 #include "common/Cond.h"

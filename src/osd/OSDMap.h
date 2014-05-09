@@ -90,8 +90,8 @@ ostream& operator<<(ostream& out, const osd_info_t& info);
 
 struct osd_xinfo_t {
   utime_t down_stamp;      ///< timestamp when we were last marked down
-  float laggy_probability; ///< encoded as __u32: 0 = definitely not laggy, 0xffffffff definitely laggy
-  __u32 laggy_interval;    ///< average interval between being marked laggy and recovering
+  float laggy_probability; ///< encoded as uint32_t: 0 = definitely not laggy, 0xffffffff definitely laggy
+  uint32_t laggy_interval;    ///< average interval between being marked laggy and recovering
   uint64_t features;       ///< features supported by this osd we should know about
 
   osd_xinfo_t() : laggy_probability(0), laggy_interval(0),
@@ -219,11 +219,11 @@ private:
   };
   ceph::shared_ptr<addrs_s> osd_addrs;
 
-  vector<__u32>   osd_weight;   // 16.16 fixed point, 0x10000 = "in", 0 = "out"
+  vector<uint32_t>   osd_weight;   // 16.16 fixed point, 0x10000 = "in", 0 = "out"
   vector<osd_info_t> osd_info;
   ceph::shared_ptr< map<pg_t,vector<int> > > pg_temp;  // temp pg mapping (e.g. while we rebuild)
   ceph::shared_ptr< map<pg_t,int > > primary_temp;  // temp primary mapping (e.g. while we rebuild)
-  ceph::shared_ptr< vector<__u32> > osd_primary_affinity; ///< 16.16 fixed point, 0x10000 = baseline
+  ceph::shared_ptr< vector<uint32_t> > osd_primary_affinity; ///< 16.16 fixed point, 0x10000 = baseline
 
   map<int64_t,pg_pool_t> pools;
   map<int64_t,string> pool_name;
@@ -361,7 +361,7 @@ public:
   void set_primary_affinity(int o, int w) {
     assert(o < max_osd);
     if (!osd_primary_affinity)
-      osd_primary_affinity.reset(new vector<__u32>(max_osd,
+      osd_primary_affinity.reset(new vector<uint32_t>(max_osd,
 						   CEPH_OSD_DEFAULT_PRIMARY_AFFINITY));
     (*osd_primary_affinity)[o] = w;
   }

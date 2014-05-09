@@ -1383,7 +1383,7 @@ int Migrator::encode_export_dir(bufferlist& exportbl,
   ::encode(df, exportbl);
   dir->encode_export(exportbl);
 
-  __u32 nden = dir->items.size();
+  uint32_t nden = dir->items.size();
   ::encode(nden, exportbl);
 
   // dentries
@@ -2830,7 +2830,7 @@ int Migrator::decode_import_dir(bufferlist::iterator& blp,
   dout(15) << "doing contents" << dendl;
   
   // contents
-  __u32 nden;
+  uint32_t nden;
   ::decode(nden, blp);
   
   for (; nden>0; nden--) {

@@ -612,7 +612,7 @@ int main(int argc, const char **argv)
 
     {
       ostringstream oss;
-      vector<__u32> weights(crush.get_max_devices(), 0x10000);
+      vector<uint32_t> weights(crush.get_max_devices(), 0x10000);
       crush.dump_tree(weights, &oss, NULL);
       dout(1) << "\n" << oss.str() << dendl;
     }

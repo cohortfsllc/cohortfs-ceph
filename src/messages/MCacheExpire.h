@@ -18,7 +18,7 @@
 #include "mds/mdstypes.h"
 
 class MCacheExpire : public Message {
-  __s32 from;
+  int32_t from;
 
 public:
   /*

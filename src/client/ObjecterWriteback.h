@@ -13,7 +13,7 @@ public:
 
   virtual void read(const object_t& oid, const object_locator_t& oloc,
 		    uint64_t off, uint64_t len,
-		    bufferlist *pbl, uint64_t trunc_size,  __u32 trunc_seq,
+		    bufferlist *pbl, uint64_t trunc_size,  uint32_t trunc_seq,
 		    Context *onfinish) {
     m_objecter->read_trunc(oid, oloc, off, len, CEPH_NOSNAP, pbl, 0,
 			   trunc_size, trunc_seq, onfinish);
@@ -27,7 +27,7 @@ public:
   virtual ceph_tid_t write(const object_t& oid, const object_locator_t& oloc,
 		      uint64_t off, uint64_t len,
 		      const bufferlist &bl, utime_t mtime, uint64_t trunc_size,
-		      __u32 trunc_seq, Context *oncommit) {
+		      uint32_t trunc_seq, Context *oncommit) {
     return m_objecter->write_trunc(oid, oloc, off, len, ::SnapContext(), bl,
 				   mtime, 0, trunc_size, trunc_seq, NULL,
 				   oncommit);

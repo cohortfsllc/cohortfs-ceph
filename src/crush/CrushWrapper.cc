@@ -810,7 +810,7 @@ void CrushWrapper::encode(bufferlist& bl, bool lean) const
 {
   assert(crush);
 
-  __u32 magic = CRUSH_MAGIC;
+  uint32_t magic = CRUSH_MAGIC;
   ::encode(magic, bl);
 
   ::encode(crush->max_buckets, bl);
@@ -819,7 +819,7 @@ void CrushWrapper::encode(bufferlist& bl, bool lean) const
 
   // buckets
   for (int i=0; i<crush->max_buckets; i++) {
-    __u32 alg = 0;
+    uint32_t alg = 0;
     if (crush->buckets[i]) alg = crush->buckets[i]->alg;
     ::encode(alg, bl);
     if (!alg)
@@ -867,7 +867,7 @@ void CrushWrapper::encode(bufferlist& bl, bool lean) const
 
   // rules
   for (unsigned i=0; i<crush->max_rules; i++) {
-    __u32 yes = crush->rules[i] ? 1:0;
+    uint32_t yes = crush->rules[i] ? 1:0;
     ::encode(yes, bl);
     if (!yes)
       continue;
@@ -894,13 +894,13 @@ void CrushWrapper::encode(bufferlist& bl, bool lean) const
 static void decode_32_or_64_string_map(map<int32_t,string>& m, bufferlist::iterator& blp)
 {
   m.clear();
-  __u32 n;
+  uint32_t n;
   ::decode(n, blp);
   while (n--) {
-    __s32 key;
+    int32_t key;
     ::decode(key, blp);
 
-    __u32 strlen;
+    uint32_t strlen;
     ::decode(strlen, blp);
     if (strlen == 0) {
       // der, key was actually 64-bits!
@@ -914,7 +914,7 @@ void CrushWrapper::decode(bufferlist::iterator& blp)
 {
   create();
 
-  __u32 magic;
+  uint32_t magic;
   ::decode(magic, blp);
   if (magic != CRUSH_MAGIC)
     throw buffer::malformed_input("bad magic number");
@@ -936,14 +936,14 @@ void CrushWrapper::decode(bufferlist::iterator& blp)
     // rules
     crush->rules = (crush_rule**)calloc(1, crush->max_rules * sizeof(crush_rule*));
     for (unsigned i = 0; i < crush->max_rules; ++i) {
-      __u32 yes;
+      uint32_t yes;
       ::decode(yes, blp);
       if (!yes) {
 	crush->rules[i] = NULL;
 	continue;
       }
 
-      __u32 len;
+      uint32_t len;
       ::decode(len, blp);
       crush->rules[i] = (crush_rule*)calloc(1, crush_rule_size(len));
       crush->rules[i]->len = len;
@@ -982,7 +982,7 @@ void CrushWrapper::decode(bufferlist::iterator& blp)
 
 void CrushWrapper::decode_crush_bucket(crush_bucket** bptr, bufferlist::iterator &blp)
 {
-  __u32 alg;
+  uint32_t alg;
   ::decode(alg, blp);
   if (!alg) {
     *bptr = NULL;
@@ -1020,12 +1020,12 @@ void CrushWrapper::decode_crush_bucket(crush_bucket** bptr, bufferlist::iterator
   ::decode(bucket->weight, blp);
   ::decode(bucket->size, blp);
 
-  bucket->items = (__s32*)calloc(1, bucket->size * sizeof(__s32));
+  bucket->items = (int32_t*)calloc(1, bucket->size * sizeof(int32_t));
   for (unsigned j = 0; j < bucket->size; ++j) {
     ::decode(bucket->items[j], blp);
   }
 
-  bucket->perm = (__u32*)calloc(1, bucket->size * sizeof(__s32));
+  bucket->perm = (uint32_t*)calloc(1, bucket->size * sizeof(int32_t));
   bucket->perm_n = 0;
 
   switch (bucket->alg) {
@@ -1035,8 +1035,8 @@ void CrushWrapper::decode_crush_bucket(crush_bucket** bptr, bufferlist::iterator
 
   case CRUSH_BUCKET_LIST: {
     crush_bucket_list* cbl = (crush_bucket_list*)bucket;
-    cbl->item_weights = (__u32*)calloc(1, bucket->size * sizeof(__u32));
-    cbl->sum_weights = (__u32*)calloc(1, bucket->size * sizeof(__u32));
+    cbl->item_weights = (uint32_t*)calloc(1, bucket->size * sizeof(uint32_t));
+    cbl->sum_weights = (uint32_t*)calloc(1, bucket->size * sizeof(uint32_t));
 
     for (unsigned j = 0; j < bucket->size; ++j) {
       ::decode(cbl->item_weights[j], blp);
@@ -1048,7 +1048,7 @@ void CrushWrapper::decode_crush_bucket(crush_bucket** bptr, bufferlist::iterator
   case CRUSH_BUCKET_TREE: {
     crush_bucket_tree* cbt = (crush_bucket_tree*)bucket;
     ::decode(cbt->num_nodes, blp);
-    cbt->node_weights = (__u32*)calloc(1, cbt->num_nodes * sizeof(__u32));
+    cbt->node_weights = (uint32_t*)calloc(1, cbt->num_nodes * sizeof(uint32_t));
     for (unsigned j=0; j<cbt->num_nodes; j++) {
       ::decode(cbt->node_weights[j], blp);
     }
@@ -1057,8 +1057,8 @@ void CrushWrapper::decode_crush_bucket(crush_bucket** bptr, bufferlist::iterator
 
   case CRUSH_BUCKET_STRAW: {
     crush_bucket_straw* cbs = (crush_bucket_straw*)bucket;
-    cbs->straws = (__u32*)calloc(1, bucket->size * sizeof(__u32));
-    cbs->item_weights = (__u32*)calloc(1, bucket->size * sizeof(__u32));
+    cbs->straws = (uint32_t*)calloc(1, bucket->size * sizeof(uint32_t));
+    cbs->item_weights = (uint32_t*)calloc(1, bucket->size * sizeof(uint32_t));
     for (unsigned j = 0; j < bucket->size; ++j) {
       ::decode(cbs->item_weights[j], blp);
       ::decode(cbs->straws[j], blp);
@@ -1267,7 +1267,7 @@ struct qi {
   qi(int i, int d, float w) : item(i), depth(d), weight(w) {}
 };
 
-void CrushWrapper::dump_tree(const vector<__u32>& w, ostream *out, Formatter *f) const
+void CrushWrapper::dump_tree(const vector<uint32_t>& w, ostream *out, Formatter *f) const
 {
   if (out)
     *out << "# id\tweight\ttype name\treweight\n";

@@ -1971,7 +1971,7 @@ int RGWUser::execute_modify(RGWUserAdminOpState& op_state, std::string *err_msg)
     user_info.user_quota = op_state.get_user_quota();
 
   if (op_state.has_suspension_op()) {
-    __u8 suspended = op_state.get_suspension_status();
+    uint8_t suspended = op_state.get_suspension_status();
     user_info.suspended = suspended;
 
     RGWUserBuckets buckets;

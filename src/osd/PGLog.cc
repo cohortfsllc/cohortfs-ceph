@@ -946,10 +946,10 @@ void PGLog::read_log_old(ObjectStore *store, coll_t coll, hobject_t log_oid,
       if (ondisklog_has_checksums) {
 	bufferlist ebl;
 	::decode(ebl, p);
-	__u32 crc;
+	uint32_t crc;
 	::decode(crc, p);
 	
-	__u32 got = ebl.crc32c(0);
+	uint32_t got = ebl.crc32c(0);
 	if (crc == got) {
 	  bufferlist::iterator q = ebl.begin();
 	  ::decode(e, q);

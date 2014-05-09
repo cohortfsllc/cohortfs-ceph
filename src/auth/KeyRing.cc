@@ -205,7 +205,7 @@ void KeyRing::decode_plaintext(bufferlist::iterator& bli)
 }
 
 void KeyRing::decode(bufferlist::iterator& bl) {
-  __u8 struct_v;
+  uint8_t struct_v;
   bufferlist::iterator start_pos = bl;
   try {
     ::decode(struct_v, bl);

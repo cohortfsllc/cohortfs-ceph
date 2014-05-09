@@ -35,12 +35,12 @@ class Anchor {
 public:
   inodeno_t ino;      // anchored ino
   inodeno_t dirino;
-  __u32     dn_hash;
+  uint32_t     dn_hash;
   int       nref;     // reference count
   version_t updated;
 
   Anchor() : dn_hash(0), nref(0), updated(0) {}
-  Anchor(inodeno_t i, inodeno_t di, __u32 hash, int nr, version_t u) :
+  Anchor(inodeno_t i, inodeno_t di, uint32_t hash, int nr, version_t u) :
     ino(i), dirino(di), dn_hash(hash), nref(nr), updated(u) { }
   
   void encode(bufferlist &bl) const;

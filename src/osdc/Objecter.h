@@ -1305,7 +1305,7 @@ public:
     Context *onfinish, *ontimeout;
     int pool_op;
     uint64_t auid;
-    __u8 crush_rule;
+    uint8_t crush_rule;
     snapid_t snapid;
     bufferlist *blp;
 
@@ -1796,7 +1796,7 @@ public:
 
   ceph_tid_t read_trunc(const object_t& oid, const object_locator_t& oloc,
 	     uint64_t off, uint64_t len, snapid_t snap, bufferlist *pbl, int flags,
-	     uint64_t trunc_size, __u32 trunc_seq,
+	     uint64_t trunc_size, uint32_t trunc_seq,
 	     Context *onfinish,
 	     version_t *objver = NULL, ObjectOperation *extra_ops = NULL) {
     vector<OSDOp> ops;
@@ -1916,7 +1916,7 @@ public:
   ceph_tid_t write_trunc(const object_t& oid, const object_locator_t& oloc,
 	      uint64_t off, uint64_t len, const SnapContext& snapc, const bufferlist &bl,
 	      utime_t mtime, int flags,
-	      uint64_t trunc_size, __u32 trunc_seq,
+	      uint64_t trunc_size, uint32_t trunc_seq,
 	      Context *onack, Context *oncommit,
 	      version_t *objver = NULL, ObjectOperation *extra_ops = NULL) {
     vector<OSDOp> ops;
@@ -1950,7 +1950,7 @@ public:
   ceph_tid_t trunc(const object_t& oid, const object_locator_t& oloc,
 	      const SnapContext& snapc,
 	      utime_t mtime, int flags,
-	      uint64_t trunc_size, __u32 trunc_seq,
+	      uint64_t trunc_size, uint32_t trunc_seq,
               Context *onack, Context *oncommit,
 	      version_t *objver = NULL, ObjectOperation *extra_ops = NULL) {
     vector<OSDOp> ops;
@@ -2128,11 +2128,11 @@ public:
     }
     void finish(int r) {
       objecter->_sg_read_finish(extents, resultbl, bl, onfinish);
-    }      
+    }
   };
 
   void sg_read_trunc(vector<ObjectExtent>& extents, snapid_t snap, bufferlist *bl, int flags,
-		uint64_t trunc_size, __u32 trunc_seq, Context *onfinish) {
+		uint64_t trunc_size, uint32_t trunc_seq, Context *onfinish) {
     if (extents.size() == 1) {
       read_trunc(extents[0].oid, extents[0].oloc, extents[0].offset, extents[0].length,
 	   snap, bl, flags, extents[0].truncate_size, trunc_seq, onfinish);
@@ -2154,7 +2154,7 @@ public:
   }
 
   void sg_write_trunc(vector<ObjectExtent>& extents, const SnapContext& snapc, const bufferlist& bl, utime_t mtime,
-		int flags, uint64_t trunc_size, __u32 trunc_seq,
+		int flags, uint64_t trunc_size, uint32_t trunc_seq,
 		Context *onack, Context *oncommit) {
     if (extents.size() == 1) {
       write_trunc(extents[0].oid, extents[0].oloc, extents[0].offset, extents[0].length,

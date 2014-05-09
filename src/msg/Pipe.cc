@@ -792,8 +792,8 @@ int Pipe::connect()
   ldout(msgr->cct,10) << "connect " << connect_seq << dendl;
   assert(pipe_lock.is_locked());
 
-  __u32 cseq = connect_seq;
-  __u32 gseq = msgr->get_global_seq();
+  uint32_t cseq = connect_seq;
+  uint32_t gseq = msgr->get_global_seq();
 
   // stop reader thrad
   join_reader();
@@ -1771,7 +1771,7 @@ int Pipe::read_message(Message **pm, AuthSessionHandler* auth_handler)
   
   ceph_msg_header header; 
   ceph_msg_footer footer;
-  __u32 header_crc;
+  uint32_t header_crc;
   
   if (connection_state->has_feature(CEPH_FEATURE_NOSRCADDR)) {
     if (tcp_read((char*)&header, sizeof(header)) < 0)

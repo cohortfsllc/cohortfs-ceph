@@ -3,8 +3,6 @@
 #ifndef CEPH_MDSTYPES_H
 #define CEPH_MDSTYPES_H
 
-#include "include/int_types.h"
-
 #include <math.h>
 #include <ostream>
 #include <set>
@@ -482,7 +480,7 @@ WRITE_CLASS_ENCODER(session_info_t)
  */
 struct mds_table_pending_t {
   uint64_t reqid;
-  __s32 mds;
+  int32_t mds;
   version_t tid;
   mds_table_pending_t() : reqid(0), mds(0), tid(0) {}
   void encode(bufferlist& bl) const;
@@ -1016,7 +1014,7 @@ class MDSCacheObject {
   // --------------------------------------------
   // state
  protected:
-  __u32 state;     // state bits
+  uint32_t state;     // state bits
 
  public:
   unsigned get_state() const { return state; }
@@ -1040,7 +1038,7 @@ class MDSCacheObject {
   // --------------------------------------------
   // pins
 protected:
-  __s32      ref;       // reference count
+  int32_t      ref;       // reference count
 #ifdef MDS_REF_SET
   map<int,int> ref_map;
 #endif

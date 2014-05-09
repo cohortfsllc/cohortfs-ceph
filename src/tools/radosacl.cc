@@ -48,7 +48,7 @@ struct ACLID {
 };
 WRITE_CLASS_ENCODER(ACLID)
 
-typedef __u32 ACLFlags;
+typedef uint32_t ACLFlags;
 
 
 inline bool operator<(const ACLID& l, const ACLID& r)

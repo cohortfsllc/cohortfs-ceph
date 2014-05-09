@@ -173,8 +173,8 @@ protected:
   // which MDS has root directory
   int32_t root;
 
-  __u32 session_timeout;
-  __u32 session_autoclose;
+  uint32_t session_timeout;
+  uint32_t session_autoclose;
   uint64_t max_file_size;
 
   // file data pools available to clients (via an ioctl).  first is

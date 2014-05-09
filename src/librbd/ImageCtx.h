@@ -3,8 +3,6 @@
 #ifndef CEPH_LIBRBD_IMAGECTX_H
 #define CEPH_LIBRBD_IMAGECTX_H
 
-#include "include/int_types.h"
-
 #include <map>
 #include <set>
 #include <string>

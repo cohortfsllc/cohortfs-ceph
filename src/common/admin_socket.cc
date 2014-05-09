@@ -12,7 +12,6 @@
  * 
  */
 
-#include "include/int_types.h"
 
 #include "common/Thread.h"
 #include "common/admin_socket.h"

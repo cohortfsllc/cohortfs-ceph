@@ -11,8 +11,6 @@
  * Foundation.  See file COPYING.
  *
  */
-#include "include/int_types.h"
-
 #include "gtest/gtest.h"
 #include "include/cephfs/libcephfs.h"
 #include "include/ceph_fs.h"

@@ -810,7 +810,7 @@ public:
   int get_bucket_item(int id, int pos) const {
     const crush_bucket *b = get_bucket(id);
     if (IS_ERR(b)) return PTR_ERR(b);
-    if ((__u32)pos >= b->size)
+    if ((uint32_t)pos >= b->size)
       return PTR_ERR(b);
     return b->items[pos];
   }
@@ -837,7 +837,7 @@ public:
 
   void start_choose_profile() {
     free(crush->choose_tries);
-    crush->choose_tries = (__u32 *)malloc(sizeof(*crush->choose_tries) * crush->choose_total_tries);
+    crush->choose_tries = (uint32_t *)malloc(sizeof(*crush->choose_tries) * crush->choose_total_tries);
     memset(crush->choose_tries, 0,
 	   sizeof(*crush->choose_tries) * crush->choose_total_tries);
   }
@@ -846,7 +846,7 @@ public:
     crush->choose_tries = 0;
   }
 
-  int get_choose_profile(__u32 **vec) {
+  int get_choose_profile(uint32_t **vec) {
     if (crush->choose_tries) {
       *vec = crush->choose_tries;
       return crush->choose_total_tries;
@@ -864,7 +864,7 @@ public:
     return crush_find_rule(crush, ruleset, type, size);
   }
   void do_rule(int rule, int x, vector<int>& out, int maxout,
-	       const vector<__u32>& weight) const {
+	       const vector<uint32_t>& weight) const {
     Mutex::Locker l(mapper_lock);
     int rawout[maxout];
     int scratch[maxout * 3];
@@ -899,7 +899,7 @@ public:
   void dump_rule(int ruleset, Formatter *f) const;
   void dump_tunables(Formatter *f) const;
   void list_rules(Formatter *f) const;
-  void dump_tree(const vector<__u32>& w, ostream *out, Formatter *f) const;
+  void dump_tree(const vector<uint32_t>& w, ostream *out, Formatter *f) const;
   static void generate_test_instances(list<CrushWrapper*>& o);
 
   static int get_osd_pool_default_crush_replicated_ruleset(CephContext *cct);

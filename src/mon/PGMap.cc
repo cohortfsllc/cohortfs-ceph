@@ -16,7 +16,7 @@
 void PGMap::Incremental::encode(bufferlist &bl, uint64_t features) const
 {
   if ((features & CEPH_FEATURE_MONENC) == 0) {
-    __u8 v = 4;
+    uint8_t v = 4;
     ::encode(v, bl);
     ::encode(version, bl);
     ::encode(pg_stat_updates, bl);
@@ -51,7 +51,7 @@ void PGMap::Incremental::decode(bufferlist::iterator &bl)
   ::decode(version, bl);
   if (struct_v < 3) {
     pg_stat_updates.clear();
-    __u32 n;
+    uint32_t n;
     ::decode(n, bl);
     while (n--) {
       old_pg_t opgid;
@@ -72,7 +72,7 @@ void PGMap::Incremental::decode(bufferlist::iterator &bl)
   }
   if (struct_v < 3) {
     pg_remove.clear();
-    __u32 n;
+    uint32_t n;
     ::decode(n, bl);
     while (n--) {
       old_pg_t opgid;
@@ -494,7 +494,7 @@ epoch_t PGMap::calc_min_last_epoch_clean() const
 void PGMap::encode(bufferlist &bl, uint64_t features) const
 {
   if ((features & CEPH_FEATURE_MONENC) == 0) {
-    __u8 v = 3;
+    uint8_t v = 3;
     ::encode(v, bl);
     ::encode(version, bl);
     ::encode(pg_stat, bl);
@@ -525,7 +525,7 @@ void PGMap::decode(bufferlist::iterator &bl)
   ::decode(version, bl);
   if (struct_v < 3) {
     pg_stat.clear();
-    __u32 n;
+    uint32_t n;
     ::decode(n, bl);
     while (n--) {
       old_pg_t opgid;

@@ -31,9 +31,9 @@ class MMDSBeacon : public PaxosServiceMessage {
   uint64_t global_id;
   string name;
 
-  __u32 state;
+  uint32_t state;
   version_t seq;
-  __s32 standby_for_rank;
+  int32_t standby_for_rank;
   string standby_for_name;
 
   CompatSet compat;

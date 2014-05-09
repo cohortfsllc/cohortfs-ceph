@@ -25,7 +25,6 @@
  * parameters as the client sees them - it would be silly to mention
  * in each one that they take an input and an output bufferlist.
  */
-#include "include/int_types.h"
 #include "include/types.h"
 
 #include <algorithm>

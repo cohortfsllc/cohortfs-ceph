@@ -11,7 +11,6 @@
  * Foundation.  See file COPYING.
  *
  */
-#include "include/int_types.h"
 
 #include "rados_sync.h"
 #include "common/errno.h"

@@ -12,8 +12,6 @@
  *
  */
 
-#include "include/int_types.h"
-
 #include <string>
 #include <stdio.h>
 
@@ -305,7 +303,7 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
 
 // dirfrags
 
-__u32 CInode::hash_dentry_name(const string &dn)
+uint32_t CInode::hash_dentry_name(const string &dn)
 {
   int which = inode.dir_layout.dl_dir_hash;
   if (!which)
@@ -318,7 +316,7 @@ frag_t CInode::pick_dirfrag(const string& dn)
   if (dirfragtree.empty())
     return frag_t();          // avoid the string hash if we can.
 
-  __u32 h = hash_dentry_name(dn);
+  uint32_t h = hash_dentry_name(dn);
   return dirfragtree[h];
 }
 
@@ -1122,7 +1120,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       dout(15) << "encode_lock_state inode.dirstat is " << inode.dirstat << dendl;
       ::encode(inode.dirstat, bl);  // only meaningful if i am auth.
       bufferlist tmp;
-      __u32 n = 0;
+      uint32_t n = 0;
       for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
 	   p != dirfrags.end();
 	   ++p) {
@@ -1156,7 +1154,7 @@ void CInode::encode_lock_state(int type, bufferlist& bl)
       dout(15) << "encode_lock_state inode.rstat is " << inode.rstat << dendl;
       ::encode(inode.rstat, bl);  // only meaningful if i am auth.
       bufferlist tmp;
-      __u32 n = 0;
+      uint32_t n = 0;
       for (map<frag_t,CDir*>::iterator p = dirfrags.begin();
 	   p != dirfrags.end();
 	   ++p) {
@@ -1308,7 +1306,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	dout(10) << " taking inode dirstat " << dirstat << " for " << *this << dendl;
 	inode.dirstat = dirstat;    // take inode summation if replica
       }
-      __u32 n;
+      uint32_t n;
       ::decode(n, p);
       dout(10) << " ...got " << n << " fragstats on " << *this << dendl;
       while (n--) {
@@ -1361,7 +1359,7 @@ void CInode::decode_lock_state(int type, bufferlist& bl)
 	dout(10) << " taking inode rstat " << rstat << " for " << *this << dendl;
 	inode.rstat = rstat;    // take inode summation if replica
       }
-      __u32 n;
+      uint32_t n;
       ::decode(n, p);
       while (n--) {
 	frag_t fg;
@@ -2538,11 +2536,11 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
   // do we have room?
   if (max_bytes) {
     unsigned bytes = sizeof(e);
-    bytes += sizeof(__u32);
-    bytes += (sizeof(__u32) + sizeof(__u32)) * dirfragtree._splits.size();
-    bytes += sizeof(__u32) + symlink.length();
-    bytes += sizeof(__u32) + xbl.length();
-    bytes += sizeof(version_t) + sizeof(__u32) + inline_data.length();
+    bytes += sizeof(uint32_t);
+    bytes += (sizeof(uint32_t) + sizeof(uint32_t)) * dirfragtree._splits.size();
+    bytes += sizeof(uint32_t) + symlink.length();
+    bytes += sizeof(uint32_t) + xbl.length();
+    bytes += sizeof(version_t) + sizeof(uint32_t) + inline_data.length();
     if (bytes > max_bytes)
       return -ENOSPC;
   }

@@ -169,7 +169,7 @@ class DispatchQueue;
     bool halt_delivery; //if a pipe's queue is destroyed, stop adding to it
     bool close_on_empty;
     
-    __u32 connect_seq, peer_global_seq;
+    uint32_t connect_seq, peer_global_seq;
     uint64_t out_seq;
     uint64_t in_seq, in_seq_acked;
     
@@ -222,7 +222,7 @@ class DispatchQueue;
     static const Pipe& Server(int s);
     static const Pipe& Client(const entity_addr_t& pi);
 
-    __u32 get_out_seq() { return out_seq; }
+    uint32_t get_out_seq() { return out_seq; }
 
     bool is_queued() { return !out_q.empty() || send_keepalive || send_keepalive_ack; }
 

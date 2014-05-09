@@ -92,7 +92,7 @@ namespace librbd {
   void LibrbdWriteback::read(const object_t& oid, const object_locator_t& oloc,
 			     uint64_t off, uint64_t len,
 			     bufferlist *pbl, uint64_t trunc_size,
-			     __u32 trunc_seq, Context *onfinish)
+			     uint32_t trunc_seq, Context *onfinish)
   {
     // on completion, take the mutex and then call onfinish.
     Context *req = new C_Request(m_ictx->cct, onfinish, &m_lock);
@@ -117,7 +117,7 @@ namespace librbd {
 				    const object_locator_t& oloc,
 				    uint64_t off, uint64_t len,
 				    const bufferlist &bl, utime_t mtime,
-				    uint64_t trunc_size, __u32 trunc_seq,
+				    uint64_t trunc_size, uint32_t trunc_seq,
 				    Context *oncommit)
   {
     uint64_t object_no = oid_to_object_no(oid.name, m_ictx->object_prefix);

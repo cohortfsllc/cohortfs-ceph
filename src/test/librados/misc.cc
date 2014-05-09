@@ -76,7 +76,7 @@ static std::string read_key_from_tmap(IoCtx& ioctx, const std::string &obj,
 static std::string add_key_to_tmap(IoCtx &ioctx, const std::string &obj,
 	  const std::string &key, const std::string &val)
 {
-  __u8 c = CEPH_OSD_TMAP_SET;
+  uint8_t c = CEPH_OSD_TMAP_SET;
 
   bufferlist tmbl;
   ::encode(c, tmbl);
@@ -97,7 +97,7 @@ static std::string add_key_to_tmap(IoCtx &ioctx, const std::string &obj,
 static int remove_key_from_tmap(IoCtx &ioctx, const std::string &obj,
 					const std::string &key)
 {
-  __u8 c = CEPH_OSD_TMAP_RM;
+  uint8_t c = CEPH_OSD_TMAP_RM;
 
   bufferlist tmbl;
   ::encode(c, tmbl);
@@ -114,7 +114,7 @@ static int remove_key_from_tmap(IoCtx &ioctx, const std::string &obj,
 TEST_F(LibRadosMiscPP, TmapUpdatePP) {
   // create tmap
   {
-    __u8 c = CEPH_OSD_TMAP_CREATE;
+    uint8_t c = CEPH_OSD_TMAP_CREATE;
     std::string my_tmap("my_tmap");
     bufferlist emptybl;
 
@@ -143,7 +143,7 @@ TEST_F(LibRadosMiscPP, TmapUpdatePP) {
 TEST_F(LibRadosMiscPP, TmapUpdateMisorderedPP) {
   // create tmap
   {
-    __u8 c = CEPH_OSD_TMAP_CREATE;
+    uint8_t c = CEPH_OSD_TMAP_CREATE;
     std::string my_tmap("my_tmap");
     bufferlist emptybl;
 
@@ -156,7 +156,7 @@ TEST_F(LibRadosMiscPP, TmapUpdateMisorderedPP) {
 
   // good update
   {
-    __u8 c = CEPH_OSD_TMAP_SET;
+    uint8_t c = CEPH_OSD_TMAP_SET;
     bufferlist tmbl;
     ::encode(c, tmbl);
     ::encode("a", tmbl);
@@ -177,7 +177,7 @@ TEST_F(LibRadosMiscPP, TmapUpdateMisorderedPP) {
 
   // bad update
   {
-    __u8 c = CEPH_OSD_TMAP_SET;
+    uint8_t c = CEPH_OSD_TMAP_SET;
     bufferlist tmbl;
     ::encode(c, tmbl);
     ::encode("b", tmbl);

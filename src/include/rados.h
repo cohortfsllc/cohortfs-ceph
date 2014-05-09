@@ -25,9 +25,9 @@ static inline int ceph_fsid_compare(const struct ceph_fsid *a,
  * ino, object, etc.
  */
 typedef __le64 ceph_snapid_t;
-#define CEPH_SNAPDIR ((__u64)(-1))  /* reserved for hidden .snap dir */
-#define CEPH_NOSNAP  ((__u64)(-2))  /* "head", "live" revision */
-#define CEPH_MAXSNAP ((__u64)(-3))  /* largest valid snapid */
+#define CEPH_SNAPDIR ((uint64_t)(-1))  /* reserved for hidden .snap dir */
+#define CEPH_NOSNAP  ((uint64_t)(-2))  /* "head", "live" revision */
+#define CEPH_MAXSNAP ((uint64_t)(-3))  /* largest valid snapid */
 
 struct ceph_timespec {
 	__le32 tv_sec;
@@ -429,13 +429,13 @@ struct ceph_osd_op {
 		struct {
 			__le32 name_len;
 			__le32 value_len;
-			__u8 cmp_op;       /* CEPH_OSD_CMPXATTR_OP_* */
-			__u8 cmp_mode;     /* CEPH_OSD_CMPXATTR_MODE_* */
+			uint8_t cmp_op;       /* CEPH_OSD_CMPXATTR_OP_* */
+			uint8_t cmp_mode;     /* CEPH_OSD_CMPXATTR_MODE_* */
 		} __attribute__ ((packed)) xattr;
 		struct {
-			__u8 class_len;
-			__u8 method_len;
-			__u8 argc;
+			uint8_t class_len;
+			uint8_t method_len;
+			uint8_t argc;
 			__le32 indata_len;
 		} __attribute__ ((packed)) cls;
 		struct {
@@ -448,7 +448,7 @@ struct ceph_osd_op {
 		struct {
 			__le64 cookie;
 			__le64 ver;
-			__u8 flag;	/* 0 = unwatch, 1 = watch */
+			uint8_t flag;	/* 0 = unwatch, 1 = watch */
 		} __attribute__ ((packed)) watch;
 		struct {
 			__le64 unused;
@@ -464,13 +464,13 @@ struct ceph_osd_op {
 		struct {
 			__le64 snapid;
 			__le64 src_version;
-			__u8 flags;
+			uint8_t flags;
 		} __attribute__ ((packed)) copy_from;
 		struct {
 			struct ceph_timespec stamp;
 		} __attribute__ ((packed)) hit_set_get;
 		struct {
-			__u8 flags;
+			uint8_t flags;
 		} __attribute__ ((packed)) tmap2omap;
 		struct {
 			__le64 expected_object_size;

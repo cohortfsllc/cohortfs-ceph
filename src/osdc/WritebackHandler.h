@@ -14,7 +14,7 @@ class WritebackHandler {
 
   virtual void read(const object_t& oid, const object_locator_t& oloc,
 		    uint64_t off, uint64_t len,
-		    bufferlist *pbl, uint64_t trunc_size,  __u32 trunc_seq,
+		    bufferlist *pbl, uint64_t trunc_size,  uint32_t trunc_seq,
 		    Context *onfinish) = 0;
   /**
    * check if a given extent read result may change due to a write
@@ -31,7 +31,7 @@ class WritebackHandler {
   virtual ceph_tid_t write(const object_t& oid, const object_locator_t& oloc,
 			   uint64_t off, uint64_t len,
 			   const bufferlist &bl, utime_t mtime,
-			   uint64_t trunc_size, __u32 trunc_seq,
+			   uint64_t trunc_size, uint32_t trunc_seq,
 			   Context *oncommit) = 0;
   virtual ceph_tid_t lock(const object_t& oid, const object_locator_t& oloc,
 			  int op, int flags, Context *onack, Context *oncommit) {

@@ -1,6 +1,5 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
-#include "include/int_types.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -283,7 +282,7 @@ namespace librbd {
   int tmap_set(IoCtx& io_ctx, const string& imgname)
   {
     bufferlist cmdbl, emptybl;
-    __u8 c = CEPH_OSD_TMAP_SET;
+    uint8_t c = CEPH_OSD_TMAP_SET;
     ::encode(c, cmdbl);
     ::encode(imgname, cmdbl);
     ::encode(emptybl, cmdbl);
@@ -293,7 +292,7 @@ namespace librbd {
   int tmap_rm(IoCtx& io_ctx, const string& imgname)
   {
     bufferlist cmdbl;
-    __u8 c = CEPH_OSD_TMAP_RM;
+    uint8_t c = CEPH_OSD_TMAP_RM;
     ::encode(c, cmdbl);
     ::encode(imgname, cmdbl);
     return io_ctx.tmap_update(RBD_DIRECTORY, cmdbl);

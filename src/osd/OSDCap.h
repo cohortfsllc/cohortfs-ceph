@@ -32,22 +32,22 @@ using std::ostream;
 
 #include "include/types.h"
 
-static const __u8 OSD_CAP_R     = (1 << 1);      // read
-static const __u8 OSD_CAP_W     = (1 << 2);      // write
-static const __u8 OSD_CAP_CLS_R = (1 << 3);      // class read
-static const __u8 OSD_CAP_CLS_W = (1 << 4);      // class write
-static const __u8 OSD_CAP_X     = (OSD_CAP_CLS_R | OSD_CAP_CLS_W); // execute
-static const __u8 OSD_CAP_ANY   = 0xff;          // *
+static const uint8_t OSD_CAP_R     = (1 << 1);      // read
+static const uint8_t OSD_CAP_W     = (1 << 2);      // write
+static const uint8_t OSD_CAP_CLS_R = (1 << 3);      // class read
+static const uint8_t OSD_CAP_CLS_W = (1 << 4);      // class write
+static const uint8_t OSD_CAP_X     = (OSD_CAP_CLS_R | OSD_CAP_CLS_W); // execute
+static const uint8_t OSD_CAP_ANY   = 0xff;          // *
 
 struct osd_rwxa_t {
-  __u8 val;
+  uint8_t val;
 
-  osd_rwxa_t(__u8 v = 0) : val(v) {}
-  osd_rwxa_t& operator=(__u8 v) {
+  osd_rwxa_t(uint8_t v = 0) : val(v) {}
+  osd_rwxa_t& operator=(uint8_t v) {
     val = v;
     return *this;
   }
-  operator __u8() const {
+  operator uint8_t() const {
     return val;
   }
 };

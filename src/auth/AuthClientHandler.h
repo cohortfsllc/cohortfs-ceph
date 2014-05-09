@@ -47,12 +47,12 @@ public:
 
   void init(EntityName& n) { name = n; }
   
-  void set_want_keys(__u32 keys) {
+  void set_want_keys(uint32_t keys) {
     RWLock::WLocker l(lock);
     want = keys | CEPH_ENTITY_TYPE_AUTH;
     validate_tickets();
   }
-  void add_want_keys(__u32 keys) {
+  void add_want_keys(uint32_t keys) {
     RWLock::WLocker l(lock);
     want |= keys;
     validate_tickets();

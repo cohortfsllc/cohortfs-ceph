@@ -31,14 +31,14 @@ struct EntityAuth {
   EntityAuth() : auid(CEPH_AUTH_UID_DEFAULT) {}
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 2;
+    uint8_t struct_v = 2;
     ::encode(struct_v, bl);
     ::encode(auid, bl);
     ::encode(key, bl);
     ::encode(caps, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     if (struct_v >= 2)
       ::decode(auid, bl);
@@ -60,16 +60,16 @@ struct AuthCapsInfo {
   AuthCapsInfo() : allow_all(false) {}
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
-    __u8 a = (__u8)allow_all;
+    uint8_t a = (uint8_t)allow_all;
     ::encode(a, bl);
     ::encode(caps, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
-    __u8 a;
+    uint8_t a;
     ::decode(a, bl);
     allow_all = (bool)a;
     ::decode(caps, bl);
@@ -88,7 +88,7 @@ struct AuthTicket {
   uint64_t auid;
   utime_t created, renew_after, expires;
   AuthCapsInfo caps;
-  __u32 flags;
+  uint32_t flags;
 
   AuthTicket() : global_id(0), auid(CEPH_AUTH_UID_DEFAULT), flags(0){}
 
@@ -101,7 +101,7 @@ struct AuthTicket {
   }
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 2;
+    uint8_t struct_v = 2;
     ::encode(struct_v, bl);
     ::encode(name, bl);
     ::encode(global_id, bl);
@@ -112,7 +112,7 @@ struct AuthTicket {
     ::encode(flags, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(name, bl);
     ::decode(global_id, bl);
@@ -132,11 +132,11 @@ WRITE_CLASS_ENCODER(AuthTicket)
  * abstract authorizer class
  */
 struct AuthAuthorizer {
-  __u32 protocol;
+  uint32_t protocol;
   bufferlist bl;
   CryptoKey session_key;
 
-  AuthAuthorizer(__u32 p) : protocol(p) {}
+  AuthAuthorizer(uint32_t p) : protocol(p) {}
   virtual ~AuthAuthorizer() {}
   virtual bool verify_reply(bufferlist::iterator& reply) = 0;
 };
@@ -152,13 +152,13 @@ struct ExpiringCryptoKey {
   utime_t expiration;
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(key, bl);
     ::encode(expiration, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(key, bl);
     ::decode(expiration, bl);
@@ -178,13 +178,13 @@ struct RotatingSecrets {
   RotatingSecrets() : max_ver(0) {}
   
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(secrets, bl);
     ::encode(max_ver, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(secrets, bl);
     ::decode(max_ver, bl);

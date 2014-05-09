@@ -247,8 +247,8 @@ protected:
   int nested_anchors;
 
   // cache control  (defined for authority; hints for replicas)
-  __s32      dir_rep;
-  set<__s32> dir_rep_by;      // if dir_rep == REP_LIST
+  int32_t      dir_rep;
+  set<int32_t> dir_rep_by;      // if dir_rep == REP_LIST
 
   // popularity
   dirfrag_load_vec_t pop_me;
@@ -413,8 +413,8 @@ private:
      * note: encoding matches struct ceph_client_reply_dirfrag
      */
     frag_t frag = get_frag();
-    __s32 auth;
-    set<__s32> dist;
+    int32_t auth;
+    set<int32_t> dist;
     
     auth = dir_auth.first;
     if (is_auth()) 
@@ -436,12 +436,12 @@ private:
     ::decode(dir_rep_by, p);
   }
   void encode_replica(int who, bufferlist& bl) {
-    __u32 nonce = add_replica(who);
+    uint32_t nonce = add_replica(who);
     ::encode(nonce, bl);
     _encode_base(bl);
   }
   void decode_replica(bufferlist::iterator& p) {
-    __u32 nonce;
+    uint32_t nonce;
     ::decode(nonce, p);
     replica_nonce = nonce;
     _decode_base(p);

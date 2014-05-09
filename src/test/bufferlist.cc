@@ -1815,7 +1815,7 @@ TEST(BufferList, write_fd) {
 
 TEST(BufferList, crc32c) {
   bufferlist bl;
-  __u32 crc = 0;
+  uint32_t crc = 0;
   bl.append("A");
   crc = bl.crc32c(crc);
   EXPECT_EQ((unsigned)0xB3109EBF, crc);

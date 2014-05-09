@@ -74,10 +74,10 @@ struct ceph_file_layout {
 int ceph_file_layout_is_valid(const struct ceph_file_layout *layout);
 
 struct ceph_dir_layout {
-	__u8   dl_dir_hash;   /* see ceph_hash.h for ids */
-	__u8   dl_unused1;
-	__u16  dl_unused2;
-	__u32  dl_unused3;
+	uint8_t   dl_dir_hash;   /* see ceph_hash.h for ids */
+	uint8_t   dl_unused1;
+	uint16_t  dl_unused2;
+	uint32_t  dl_unused3;
 } __attribute__ ((packed));
 
 /* crypto algorithms */
@@ -91,7 +91,7 @@ struct ceph_dir_layout {
 #define CEPH_AUTH_NONE	 	0x1
 #define CEPH_AUTH_CEPHX	 	0x2
 
-#define CEPH_AUTH_UID_DEFAULT ((__u64) -1)
+#define CEPH_AUTH_UID_DEFAULT ((uint64_t) -1)
 
 
 /*********************************************
@@ -226,7 +226,7 @@ struct ceph_client_mount {
 
 struct ceph_mon_subscribe_item {
 	__le64 have_version;    __le64 have;
-	__u8 onetime;
+	uint8_t onetime;
 } __attribute__ ((packed));
 
 struct ceph_mon_subscribe_ack {
@@ -394,13 +394,13 @@ union ceph_mds_request_args {
 		struct ceph_file_layout layout;
 	} __attribute__ ((packed)) setlayout;
 	struct {
-		__u8 rule; /* currently fcntl or flock */
-		__u8 type; /* shared, exclusive, remove*/
+		uint8_t rule; /* currently fcntl or flock */
+		uint8_t type; /* shared, exclusive, remove*/
 		__le64 owner; /* who requests/holds the lock */
 		__le64 pid; /* process id requesting the lock */
 		__le64 start; /* initial location to lock */
 		__le64 length; /* num bytes to lock from start */
-		__u8 wait; /* will caller wait for lock to become available? */
+		uint8_t wait; /* will caller wait for lock to become available? */
 	} __attribute__ ((packed)) filelock_change;
 } __attribute__ ((packed));
 
@@ -411,7 +411,7 @@ struct ceph_mds_request_head {
 	__le64 oldest_client_tid;
 	__le32 mdsmap_epoch;           /* on client */
 	__le32 flags;                  /* CEPH_MDS_FLAG_* */
-	__u8 num_retry, num_fwd;       /* count retry, fwd attempts */
+	uint8_t num_retry, num_fwd;       /* count retry, fwd attempts */
 	__le16 num_releases;           /* # include cap/lease release records */
 	__le32 op;                     /* mds op code */
 	__le32 caller_uid, caller_gid;
@@ -434,8 +434,8 @@ struct ceph_mds_reply_head {
 	__le32 op;
 	__le32 result;
 	__le32 mdsmap_epoch;
-	__u8 safe;                     /* true if committed to disk */
-	__u8 is_dentry, is_target;     /* true if dentry, target inode records
+	uint8_t safe;                     /* true if committed to disk */
+	uint8_t is_dentry, is_target;     /* true if dentry, target inode records
 					  are included with reply */
 } __attribute__ ((packed));
 
@@ -456,7 +456,7 @@ struct ceph_mds_reply_cap {
 	__le64 cap_id;
 	__le32 seq, mseq;
 	__le64 realm;                  /* snap realm */
-	__u8 flags;                    /* CEPH_CAP_FLAG_* */
+	uint8_t flags;                    /* CEPH_CAP_FLAG_* */
 } __attribute__ ((packed));
 
 #define CEPH_CAP_FLAG_AUTH  1          /* cap is issued by auth mds */
@@ -509,7 +509,7 @@ struct ceph_filelock {
 	__le64 client; /* which client holds the lock */
 	__le64 owner; /* who requests/holds the lock */
 	__le64 pid; /* process id holding the lock on the client */
-	__u8 type; /* shared lock, exclusive lock, or unlock */
+	uint8_t type; /* shared lock, exclusive lock, or unlock */
 } __attribute__ ((packed));
 
 
@@ -677,7 +677,7 @@ extern const char *ceph_lease_op_name(int o);
 
 /* lease msg header */
 struct ceph_mds_lease {
-	__u8 action;            /* CEPH_MDS_LEASE_* */
+	uint8_t action;            /* CEPH_MDS_LEASE_* */
 	__le16 mask;            /* which lease */
 	__le64 ino;
 	__le64 first, last;     /* snap range */

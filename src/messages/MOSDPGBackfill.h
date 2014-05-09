@@ -36,7 +36,7 @@ public:
     }
   }
 
-  __u32 op;
+  uint32_t op;
   epoch_t map_epoch, query_epoch;
   spg_t pgid;
   hobject_t last_backfill;
@@ -88,7 +88,7 @@ public:
   MOSDPGBackfill() :
     Message(MSG_OSD_PG_BACKFILL, HEAD_VERSION, COMPAT_VERSION),
     compat_stat_sum(false) {}
-  MOSDPGBackfill(__u32 o, epoch_t e, epoch_t qe, spg_t p)
+  MOSDPGBackfill(uint32_t o, epoch_t e, epoch_t qe, spg_t p)
     : Message(MSG_OSD_PG_BACKFILL, HEAD_VERSION, COMPAT_VERSION),
       op(o),
       map_epoch(e), query_epoch(e),

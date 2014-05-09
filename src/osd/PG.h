@@ -281,8 +281,8 @@ public:
   }
   // pg state
   pg_info_t        info;
-  __u8 info_struct_v;
-  static const __u8 cur_struct_v = 7;
+  uint8_t info_struct_v;
+  static const uint8_t cur_struct_v = 7;
   bool must_upgrade() {
     return info_struct_v < 7;
   }
@@ -1983,7 +1983,7 @@ public:
     map<epoch_t,pg_interval_t> &past_intervals,
     interval_set<snapid_t> &snap_collections,
     hobject_t &infos_oid,
-    __u8 info_struct_v, bool dirty_big_info, bool force_ver = false);
+    uint8_t info_struct_v, bool dirty_big_info, bool force_ver = false);
   void write_if_dirty(ObjectStore::Transaction& t);
 
   eversion_t get_next_version() const {
@@ -2006,7 +2006,7 @@ public:
     ObjectStore *store, const coll_t coll,
     bufferlist &bl, pg_info_t &info, map<epoch_t,pg_interval_t> &past_intervals,
     hobject_t &biginfo_oid, hobject_t &infos_oid,
-    interval_set<snapid_t>  &snap_collections, __u8 &);
+    interval_set<snapid_t>  &snap_collections, uint8_t &);
   void read_state(ObjectStore *store, bufferlist &bl);
   static epoch_t peek_map_epoch(ObjectStore *store, coll_t coll,
                                hobject_t &infos_oid, bufferlist *bl);

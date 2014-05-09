@@ -19,14 +19,14 @@
 #include "common/errno.h"
 
 struct MAuthReply : public Message {
-  __u32 protocol;
-  __s32 result;
+  uint32_t protocol;
+  int32_t result;
   uint64_t global_id;      // if zero, meaningless
   string result_msg;
   bufferlist result_bl;
 
   MAuthReply() : Message(CEPH_MSG_AUTH_REPLY), protocol(0), result(0), global_id(0) {}
-  MAuthReply(__u32 p, bufferlist *bl = NULL, int r = 0, uint64_t gid=0, const char *msg = "") :
+  MAuthReply(uint32_t p, bufferlist *bl = NULL, int r = 0, uint64_t gid=0, const char *msg = "") :
     Message(CEPH_MSG_AUTH_REPLY),
     protocol(p), result(r), global_id(gid),
     result_msg(msg) {

@@ -3,7 +3,7 @@
  */
 #include "include/types.h"
 
-int ceph_frag_compare(__u32 a, __u32 b)
+int ceph_frag_compare(uint32_t a, uint32_t b)
 {
 	unsigned va = ceph_frag_value(a);
 	unsigned vb = ceph_frag_value(b);

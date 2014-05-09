@@ -20,7 +20,7 @@
 
 class MCommandReply : public Message {
  public:
-  __s32 r;
+  int32_t r;
   string rs;
   
   MCommandReply()

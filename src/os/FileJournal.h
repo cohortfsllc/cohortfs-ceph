@@ -104,8 +104,8 @@ public:
 
     uint64_t flags;
     uuid_d fsid;
-    __u32 block_size;
-    __u32 alignment;
+    uint32_t block_size;
+    uint32_t alignment;
     int64_t max_size;   // max size of journal ring buffer
     int64_t start;      // offset of first entry
     uint64_t committed_up_to; // committed up to
@@ -139,7 +139,7 @@ public:
     }
 
     void encode(bufferlist& bl) const {
-      __u32 v = 4;
+      uint32_t v = 4;
       ::encode(v, bl);
       bufferlist em;
       {
@@ -155,11 +155,11 @@ public:
       ::encode(em, bl);
     }
     void decode(bufferlist::iterator& bl) {
-      __u32 v;
+      uint32_t v;
       ::decode(v, bl);
       if (v < 2) {  // normally 0, but concievably 1
 	// decode old header_t struct (pre v0.40).
-	bl.advance(4); // skip __u32 flags (it was unused by any old code)
+	bl.advance(4); // skip uint32_t flags (it was unused by any old code)
 	flags = 0;
 	uint64_t tfsid;
 	::decode(tfsid, bl);

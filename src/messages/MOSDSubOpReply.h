@@ -44,7 +44,7 @@ public:
   vector<OSDOp> ops;
 
   // result
-  __u8 ack_type;
+  uint8_t ack_type;
   int32_t result;
   
   // piggybacked osd state
@@ -90,7 +90,7 @@ public:
     ::encode(reqid, payload);
     ::encode(pgid.pgid, payload);
     ::encode(poid, payload);
-    __u32 num_ops = ops.size();
+    uint32_t num_ops = ops.size();
     ::encode(num_ops, payload);
     for (unsigned i = 0; i < ops.size(); i++) {
       ::encode(ops[i].op, payload);

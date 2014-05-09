@@ -37,8 +37,8 @@ class MOSDOp : public Message {
 
 private:
   uint32_t client_inc;
-  __u32 osdmap_epoch;
-  __u32 flags;
+  uint32_t osdmap_epoch;
+  uint32_t flags;
   utime_t mtime;
   eversion_t reassert_version;
   int32_t retry_attempt;   // 0 is first attempt.  -1 if we don't know.
@@ -206,7 +206,7 @@ struct ceph_osd_request_head {
 
       ::encode(client_inc, payload);
 
-      __u32 su = 0;
+      uint32_t su = 0;
       ::encode(pgid, payload);
       ::encode(su, payload);
 
@@ -215,15 +215,15 @@ struct ceph_osd_request_head {
       ::encode(mtime, payload);
       ::encode(reassert_version, payload);
 
-      __u32 oid_len = oid.name.length();
+      uint32_t oid_len = oid.name.length();
       ::encode(oid_len, payload);
       ::encode(snapid, payload);
       ::encode(snap_seq, payload);
-      __u32 num_snaps = snaps.size();
+      uint32_t num_snaps = snaps.size();
       ::encode(num_snaps, payload);
-      
+
       //::encode(ops, payload);
-      __u16 num_ops = ops.size();
+      uint16_t num_ops = ops.size();
       ::encode(num_ops, payload);
       for (unsigned i = 0; i < ops.size(); i++)
 	::encode(ops[i].op, payload);
@@ -241,7 +241,7 @@ struct ceph_osd_request_head {
       ::encode(pgid, payload);
       ::encode(oid, payload);
 
-      __u16 num_ops = ops.size();
+      uint16_t num_ops = ops.size();
       ::encode(num_ops, payload);
       for (unsigned i = 0; i < ops.size(); i++)
 	::encode(ops[i].op, payload);
@@ -265,7 +265,7 @@ struct ceph_osd_request_head {
       ::decode_raw(opgid, p);
       pgid = opgid;
 
-      __u32 su;
+      uint32_t su;
       ::decode(su, p);
       oloc.pool = pgid.pool();
 
@@ -274,15 +274,15 @@ struct ceph_osd_request_head {
       ::decode(mtime, p);
       ::decode(reassert_version, p);
 
-      __u32 oid_len;
+      uint32_t oid_len;
       ::decode(oid_len, p);
       ::decode(snapid, p);
       ::decode(snap_seq, p);
-      __u32 num_snaps;
+      uint32_t num_snaps;
       ::decode(num_snaps, p);
-      
+
       //::decode(ops, p);
-      __u16 num_ops;
+      uint16_t num_ops;
       ::decode(num_ops, p);
       ops.resize(num_ops);
       for (unsigned i = 0; i < num_ops; i++)
@@ -318,7 +318,7 @@ struct ceph_osd_request_head {
       ::decode(oid, p);
 
       //::decode(ops, p);
-      __u16 num_ops;
+      uint16_t num_ops;
       ::decode(num_ops, p);
       ops.resize(num_ops);
       for (unsigned i = 0; i < num_ops; i++)

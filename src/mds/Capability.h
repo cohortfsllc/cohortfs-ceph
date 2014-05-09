@@ -107,7 +107,7 @@ private:
 
   uint64_t cap_id;
 
-  __u32 _wanted;     // what the client wants (ideally)
+  uint32_t _wanted;     // what the client wants (ideally)
 
   utime_t last_issue_stamp;
 
@@ -117,17 +117,17 @@ private:
   //  - track revocations in _revokes list
 public:
   struct revoke_info {
-    __u32 before;
+    uint32_t before;
     ceph_seq_t seq, last_issue;
     revoke_info() {}
-    revoke_info(__u32 b, ceph_seq_t s, ceph_seq_t li) : before(b), seq(s), last_issue(li) {}
+    revoke_info(uint32_t b, ceph_seq_t s, ceph_seq_t li) : before(b), seq(s), last_issue(li) {}
     void encode(bufferlist& bl) const;
     void decode(bufferlist::iterator& bl);
     void dump(Formatter *f) const;
     static void generate_test_instances(list<revoke_info*>& ls);
   };
 private:
-  __u32 _pending, _issued;
+  uint32_t _pending, _issued;
   list<revoke_info> _revokes;
 
 public:

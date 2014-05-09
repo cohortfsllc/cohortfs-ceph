@@ -11,7 +11,6 @@
  * Foundation.  See file COPYING.
  *
  */
-#include "include/int_types.h"
 
 #include "common/ceph_argparse.h"
 #include "common/config.h"

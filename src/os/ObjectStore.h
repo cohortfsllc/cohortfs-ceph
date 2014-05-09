@@ -469,15 +469,15 @@ public:
     uint32_t get_data_offset() {
       if (largest_data_off_in_tbl) {
 	return largest_data_off_in_tbl +
-	  sizeof(__u8) +  // encode struct_v
-	  sizeof(__u8) +  // encode compat_v
-	  sizeof(__u32) + // encode len
+	  sizeof(uint8_t) +  // encode struct_v
+	  sizeof(uint8_t) +  // encode compat_v
+	  sizeof(uint32_t) + // encode len
 	  sizeof(ops) +
 	  sizeof(pad_unused_bytes) +
 	  sizeof(largest_data_len) +
 	  sizeof(largest_data_off) +
 	  sizeof(largest_data_off_in_tbl) +
-	  sizeof(__u32);  // tbl length
+	  sizeof(uint32_t);  // tbl length
       }
       return 0;  // none
     }
@@ -538,7 +538,7 @@ public:
        * correct type.
        */
       int get_op() {
-	__u32 op;
+	uint32_t op;
 	::decode(op, p);
 	return op;
       }
@@ -616,13 +616,13 @@ public:
 
     /// Commence a global file system sync operation.
     void start_sync() {
-      __u32 op = OP_STARTSYNC;
+      uint32_t op = OP_STARTSYNC;
       ::encode(op, tbl);
       ops++;
     }
     /// noop. 'nuf said
     void nop() {
-      __u32 op = OP_NOP;
+      uint32_t op = OP_NOP;
       ::encode(op, tbl);
       ops++;
     }
@@ -633,7 +633,7 @@ public:
      * empty object if necessary
      */
     void touch(coll_t cid, const ghobject_t& oid) {
-      __u32 op = OP_TOUCH;
+      uint32_t op = OP_TOUCH;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -651,7 +651,7 @@ public:
      */
     void write(coll_t cid, const ghobject_t& oid, uint64_t off, uint64_t len,
 	       const bufferlist& data) {
-      __u32 op = OP_WRITE;
+      uint32_t op = OP_WRITE;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -661,7 +661,7 @@ public:
       if (data.length() > largest_data_len) {
 	largest_data_len = data.length();
 	largest_data_off = off;
-	largest_data_off_in_tbl = tbl.length() + sizeof(__u32);  // we are about to
+	largest_data_off_in_tbl = tbl.length() + sizeof(uint32_t);  // we are about to
       }
       ::encode(data, tbl);
       ops++;
@@ -672,7 +672,7 @@ public:
      * underlying storage space.
      */
     void zero(coll_t cid, const ghobject_t& oid, uint64_t off, uint64_t len) {
-      __u32 op = OP_ZERO;
+      uint32_t op = OP_ZERO;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -682,7 +682,7 @@ public:
     }
     /// Discard all data in the object beyond the specified size.
     void truncate(coll_t cid, const ghobject_t& oid, uint64_t off) {
-      __u32 op = OP_TRUNCATE;
+      uint32_t op = OP_TRUNCATE;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -691,7 +691,7 @@ public:
     }
     /// Remove an object. All four parts of the object are removed.
     void remove(coll_t cid, const ghobject_t& oid) {
-      __u32 op = OP_REMOVE;
+      uint32_t op = OP_REMOVE;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -704,7 +704,7 @@ public:
     }
     /// Set an xattr of an object
     void setattr(coll_t cid, const ghobject_t& oid, const string& s, bufferlist& val) {
-      __u32 op = OP_SETATTR;
+      uint32_t op = OP_SETATTR;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -714,7 +714,7 @@ public:
     }
     /// Set multiple xattrs of an object
     void setattrs(coll_t cid, const ghobject_t& oid, map<string,bufferptr>& attrset) {
-      __u32 op = OP_SETATTRS;
+      uint32_t op = OP_SETATTRS;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -723,7 +723,7 @@ public:
     }
     /// Set multiple xattrs of an object
     void setattrs(coll_t cid, const ghobject_t& oid, map<string,bufferlist>& attrset) {
-      __u32 op = OP_SETATTRS;
+      uint32_t op = OP_SETATTRS;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -737,7 +737,7 @@ public:
     }
     /// remove an xattr from an object
     void rmattr(coll_t cid, const ghobject_t& oid, const string& s) {
-      __u32 op = OP_RMATTR;
+      uint32_t op = OP_RMATTR;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -746,7 +746,7 @@ public:
     }
     /// remove all xattrs from an object
     void rmattrs(coll_t cid, const ghobject_t& oid) {
-      __u32 op = OP_RMATTRS;
+      uint32_t op = OP_RMATTRS;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -764,7 +764,7 @@ public:
      * which case its previous contents are discarded.
      */
     void clone(coll_t cid, const ghobject_t& oid, ghobject_t noid) {
-      __u32 op = OP_CLONE;
+      uint32_t op = OP_CLONE;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -780,7 +780,7 @@ public:
      */
     void clone_range(coll_t cid, const ghobject_t& oid, ghobject_t noid,
 		     uint64_t srcoff, uint64_t srclen, uint64_t dstoff) {
-      __u32 op = OP_CLONERANGE2;
+      uint32_t op = OP_CLONERANGE2;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -792,14 +792,14 @@ public:
     }
     /// Create the collection
     void create_collection(coll_t cid) {
-      __u32 op = OP_MKCOLL;
+      uint32_t op = OP_MKCOLL;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ops++;
     }
     /// remove the collection, the collection must be empty
     void remove_collection(coll_t cid) {
-      __u32 op = OP_RMCOLL;
+      uint32_t op = OP_RMCOLL;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ops++;
@@ -814,7 +814,7 @@ public:
      * of the conversion infrastructure.
      */
     void collection_add(coll_t cid, coll_t ocid, const ghobject_t& oid) {
-      __u32 op = OP_COLL_ADD;
+      uint32_t op = OP_COLL_ADD;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(ocid, tbl);
@@ -822,7 +822,7 @@ public:
       ops++;
     }
     void collection_remove(coll_t cid, const ghobject_t& oid) {
-      __u32 op = OP_COLL_REMOVE;
+      uint32_t op = OP_COLL_REMOVE;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -835,7 +835,7 @@ public:
     }
     void collection_move_rename(coll_t oldcid, const ghobject_t& oldoid,
 				coll_t cid, const ghobject_t& oid) {
-      __u32 op = OP_COLL_MOVE_RENAME;
+      uint32_t op = OP_COLL_MOVE_RENAME;
       ::encode(op, tbl);
       ::encode(oldcid, tbl);
       ::encode(oldoid, tbl);
@@ -851,7 +851,7 @@ public:
     }
     /// Set an xattr on a collection
     void collection_setattr(coll_t cid, const string& name, bufferlist& val) {
-      __u32 op = OP_COLL_SETATTR;
+      uint32_t op = OP_COLL_SETATTR;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(name, tbl);
@@ -866,7 +866,7 @@ public:
     }
     /// Remove an xattr from a collection
     void collection_rmattr(coll_t cid, const string& name) {
-      __u32 op = OP_COLL_RMATTR;
+      uint32_t op = OP_COLL_RMATTR;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(name, tbl);
@@ -874,7 +874,7 @@ public:
     }
     /// Set multiple xattrs on a collection
     void collection_setattrs(coll_t cid, map<string,bufferptr>& aset) {
-      __u32 op = OP_COLL_SETATTRS;
+      uint32_t op = OP_COLL_SETATTRS;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(aset, tbl);
@@ -882,7 +882,7 @@ public:
     }
     /// Set multiple xattrs on a collection
     void collection_setattrs(coll_t cid, map<string,bufferlist>& aset) {
-      __u32 op = OP_COLL_SETATTRS;
+      uint32_t op = OP_COLL_SETATTRS;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(aset, tbl);
@@ -890,7 +890,7 @@ public:
     }
     /// Change the name of a collection
     void collection_rename(coll_t cid, coll_t ncid) {
-      __u32 op = OP_COLL_RENAME;
+      uint32_t op = OP_COLL_RENAME;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(ncid, tbl);
@@ -902,7 +902,7 @@ public:
       coll_t cid,           ///< [in] Collection containing oid
       const ghobject_t &oid  ///< [in] Object from which to remove omap
       ) {
-      __u32 op = OP_OMAP_CLEAR;
+      uint32_t op = OP_OMAP_CLEAR;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -914,7 +914,7 @@ public:
       const ghobject_t &oid,                ///< [in] Object to update
       const map<string, bufferlist> &attrset ///< [in] Replacement keys and values
       ) {
-      __u32 op = OP_OMAP_SETKEYS;
+      uint32_t op = OP_OMAP_SETKEYS;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -927,7 +927,7 @@ public:
       const ghobject_t &oid,  ///< [in] Object from which to remove the omap
       const set<string> &keys ///< [in] Keys to clear
       ) {
-      __u32 op = OP_OMAP_RMKEYS;
+      uint32_t op = OP_OMAP_RMKEYS;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -942,7 +942,7 @@ public:
       const string& first,    ///< [in] first key in range
       const string& last      ///< [in] first key past range, range is [first,last)
       ) {
-      __u32 op = OP_OMAP_RMKEYRANGE;
+      uint32_t op = OP_OMAP_RMKEYRANGE;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -957,7 +957,7 @@ public:
       const ghobject_t &oid,  ///< [in] Object
       const bufferlist &bl    ///< [in] Header value
       ) {
-      __u32 op = OP_OMAP_SETHEADER;
+      uint32_t op = OP_OMAP_SETHEADER;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);
@@ -972,7 +972,7 @@ public:
       uint32_t bits,
       uint32_t rem,
       coll_t destination) {
-      __u32 op = OP_SPLIT_COLLECTION2;
+      uint32_t op = OP_SPLIT_COLLECTION2;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(bits, tbl);
@@ -987,7 +987,7 @@ public:
       uint64_t expected_object_size,
       uint64_t expected_write_size
     ) {
-      __u32 op = OP_SETALLOCHINT;
+      uint32_t op = OP_SETALLOCHINT;
       ::encode(op, tbl);
       ::encode(cid, tbl);
       ::encode(oid, tbl);

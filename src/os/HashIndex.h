@@ -76,7 +76,7 @@ private:
     
     void encode(bufferlist &bl) const
     {
-      __u8 v = 1;
+      uint8_t v = 1;
       ::encode(v, bl);
       ::encode(objs, bl);
       ::encode(subdirs, bl);
@@ -85,7 +85,7 @@ private:
     
     void decode(bufferlist::iterator &bl)
     {
-      __u8 v;
+      uint8_t v;
       ::decode(v, bl);
       assert(v == 1);
       ::decode(objs, bl);
@@ -114,14 +114,14 @@ private:
     bool is_merge() const { return op == MERGE; }
 
     void encode(bufferlist &bl) const {
-      __u8 v = 1;
+      uint8_t v = 1;
       ::encode(v, bl);
       ::encode(op, bl);
       ::encode(path, bl);
     }
 
     void decode(bufferlist::iterator &bl) {
-      __u8 v;
+      uint8_t v;
       ::decode(v, bl);
       assert(v == 1);
       ::decode(op, bl);

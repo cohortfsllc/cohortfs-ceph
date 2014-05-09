@@ -28,8 +28,8 @@ struct Cap {
   unsigned implemented;
   unsigned wanted;   // as known to mds.
   uint64_t seq, issue_seq;
-  __u32 mseq;  // migration seq
-  __u32 gen;
+  uint32_t mseq;  // migration seq
+  uint32_t gen;
 
   Cap() : session(NULL), inode(NULL), cap_item(this), cap_id(0), issued(0),
 	       implemented(0), wanted(0), seq(0), issue_seq(0), mseq(0), gen(0) {}
@@ -95,7 +95,7 @@ class Inode {
     return false;
   }
 
-  __u32 hash_dentry_name(const string &dn) {
+  uint32_t hash_dentry_name(const string &dn) {
     int which = dir_layout.dl_dir_hash;
     if (!which)
       which = CEPH_STR_HASH_LINUX;
@@ -113,7 +113,7 @@ class Inode {
   Cap *auth_cap;
   unsigned dirty_caps, flushing_caps;
   uint64_t flushing_cap_seq;
-  __u16 flushing_cap_tid[CEPH_CAP_BITS];
+  uint16_t flushing_cap_tid[CEPH_CAP_BITS];
   int shared_gen, cache_gen;
   utime_t hold_caps_until;
   xlist<Inode*>::item cap_item, flushing_cap_item;
@@ -185,7 +185,7 @@ class Inode {
   {
     memset(&dir_layout, 0, sizeof(dir_layout));
     memset(&layout, 0, sizeof(layout));
-    memset(&flushing_cap_tid, 0, sizeof(__u16)*CEPH_CAP_BITS);
+    memset(&flushing_cap_tid, 0, sizeof(uint16_t)*CEPH_CAP_BITS);
   }
   ~Inode() { }
 

@@ -48,7 +48,7 @@ class MMonPaxos : public Message {
   }
 
   epoch_t epoch;   // monitor epoch
-  __s32 op;          // paxos op
+  int32_t op;          // paxos op
 
   version_t first_committed;  // i've committed to
   version_t last_committed;  // i've committed to

@@ -33,11 +33,11 @@
  * Rollover-safe type and comparator for 32-bit sequence numbers.
  * Comparator returns -1, 0, or 1.
  */
-typedef __u32 ceph_seq_t;
+typedef uint32_t ceph_seq_t;
 
-static inline __s32 ceph_seq_cmp(__u32 a, __u32 b)
+static inline int32_t ceph_seq_cmp(uint32_t a, uint32_t b)
 {
-       return (__s32)a - (__s32)b;
+       return (int32_t)a - (int32_t)b;
 }
 
 
@@ -46,7 +46,7 @@ static inline __s32 ceph_seq_cmp(__u32 a, __u32 b)
  * network, e.g. 'mds0' or 'osd3'.
  */
 struct ceph_entity_name {
-	__u8 type;      /* CEPH_ENTITY_TYPE_* */
+	uint8_t type;      /* CEPH_ENTITY_TYPE_* */
 	__le64 num;
 } __attribute__ ((packed));
 
@@ -105,17 +105,17 @@ struct ceph_msg_connect {
 	__le32 protocol_version;
 	__le32 authorizer_protocol;
 	__le32 authorizer_len;
-	__u8  flags;         /* CEPH_MSG_CONNECT_* */
+	uint8_t  flags;         /* CEPH_MSG_CONNECT_* */
 } __attribute__ ((packed));
 
 struct ceph_msg_connect_reply {
-	__u8 tag;
+	uint8_t tag;
 	__le64 features;     /* feature bits for this session */
 	__le32 global_seq;
 	__le32 connect_seq;
 	__le32 protocol_version;
 	__le32 authorizer_len;
-	__u8 flags;
+	uint8_t flags;
 } __attribute__ ((packed));
 
 #define CEPH_MSG_CONNECT_LOSSY  1  /* messages i send may be safely dropped */
@@ -172,7 +172,7 @@ struct ceph_msg_header {
  */
 struct ceph_msg_footer {
 	__le32 front_crc, middle_crc, data_crc;
-	__u8 flags;
+	uint8_t flags;
 } __attribute__ ((packed));
 
 #define CEPH_MSG_FOOTER_COMPLETE  (1<<0)   /* msg wasn't aborted */

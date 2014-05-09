@@ -2575,7 +2575,7 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   if (req->head.args.open.object_size)
     layout.fl_object_size = req->head.args.open.object_size;
   if (req->get_connection()->has_feature(CEPH_FEATURE_CREATEPOOLID) &&
-      (__s32)req->head.args.open.pool >= 0) {
+      (int32_t)req->head.args.open.pool >= 0) {
     layout.fl_pg_pool = req->head.args.open.pool;
 
     // make sure we have as new a map as the client
@@ -2688,7 +2688,7 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
     return;
 
   // which frag?
-  frag_t fg = (__u32)req->head.args.readdir.frag;
+  frag_t fg = (uint32_t)req->head.args.readdir.frag;
   string offset_str = req->get_path2();
   dout(10) << " frag " << fg << " offset '" << offset_str << "'" << dendl;
 
@@ -2740,13 +2740,13 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
 
   // count bytes available.
   //  this isn't perfect, but we should capture the main variable/unbounded size items!
-  int front_bytes = dirbl.length() + sizeof(__u32) + sizeof(__u8)*2;
+  int front_bytes = dirbl.length() + sizeof(uint32_t) + sizeof(uint8_t)*2;
   int bytes_left = max_bytes - front_bytes;
 
   // build dir contents
   bufferlist dnbl;
-  __u32 numfiles = 0;
-  __u8 end = (dir->begin() == dir->end());
+  uint32_t numfiles = 0;
+  uint8_t end = (dir->begin() == dir->end());
   for (CDir::map_t::iterator it = dir->begin();
        !end && numfiles < max;
        end = (it == dir->end())) {
@@ -2801,7 +2801,7 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
     }
     assert(in);
 
-    if ((int)(dnbl.length() + dn->name.length() + sizeof(__u32) + sizeof(LeaseStat)) > bytes_left) {
+    if ((int)(dnbl.length() + dn->name.length() + sizeof(uint32_t) + sizeof(LeaseStat)) > bytes_left) {
       dout(10) << " ran out of room, stopping at " << dnbl.length() << " < " << bytes_left << dendl;
       break;
     }
@@ -2831,7 +2831,7 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
     mdcache->lru.lru_touch(dn);
   }
   
-  __u8 complete = (end && offset_str.empty());  // FIXME: what purpose does this serve
+  uint8_t complete = (end && offset_str.empty());  // FIXME: what purpose does this serve
   
   // finish final blob
   ::encode(numfiles, dirbl);
@@ -3054,7 +3054,7 @@ void Server::handle_client_setattr(MDRequestRef& mdr)
     return;
   }
 
-  __u32 mask = req->head.args.setattr.mask;
+  uint32_t mask = req->head.args.setattr.mask;
 
   // xlock inode
   if (mask & (CEPH_SETATTR_MODE|CEPH_SETATTR_UID|CEPH_SETATTR_GID))

@@ -113,9 +113,9 @@ public:
   bufferlist rollback;
   string type;
   metareqid_t reqid;
-  __s32 master;
-  __u8 op;  // prepare, commit, abort
-  __u8 origop; // link | rename
+  int32_t master;
+  uint8_t op;  // prepare, commit, abort
+  uint8_t origop; // link | rename
 
   ESlaveUpdate() : LogEvent(EVENT_SLAVEUPDATE), master(0), op(0), origop(0) { }
   ESlaveUpdate(MDLog *mdlog, const char *s, metareqid_t ri, int mastermds, int o, int oo) : 

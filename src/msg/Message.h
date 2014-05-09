@@ -488,7 +488,7 @@ public:
   void set_seq(unsigned s) { header.seq = s; }
 
   unsigned get_priority() const { return header.priority; }
-  void set_priority(__s16 p) { header.priority = p; }
+  void set_priority(int16_t p) { header.priority = p; }
 
   // source/dest
   entity_inst_t get_source_inst() const {

@@ -15,7 +15,6 @@
 #define CEPH_TYPES_H
 
 // this is needed for ceph_fs to compile in userland
-#include "int_types.h"
 #include "byteorder.h"
 
 #include "uuid.h"
@@ -23,6 +22,7 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <string.h>
+#include <inttypes.h>
 
 // <macro hackery>
 // temporarily remap __le* to ceph_le* for benefit of shared kernel/userland headers
@@ -234,7 +234,7 @@ WRITE_RAW_ENCODER(ceph_mon_statfs_reply)
 // NOTE: these must match ceph_fs.h typedefs
 typedef uint64_t ceph_tid_t; // transaction id
 typedef uint64_t version_t;
-typedef __u32 epoch_t;       // map epoch  (32bits -> 13 epochs/second for 10 years)
+typedef uint32_t epoch_t;       // map epoch  (32bits -> 13 epochs/second for 10 years)
 
 // --------------------------------------
 // identify individual mount clients by 64bit value

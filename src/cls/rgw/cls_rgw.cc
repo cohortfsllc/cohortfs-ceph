@@ -1,7 +1,6 @@
 // -*- mode:C; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include "include/int_types.h"
 #include "include/types.h"
 
 #include <iostream>
@@ -712,7 +711,7 @@ int rgw_dir_suggest_changes(cls_method_context_t hctx, bufferlist *in, bufferlis
   bufferlist::iterator in_iter = in->begin();
 
   while (!in_iter.end()) {
-    __u8 op;
+    uint8_t op;
     rgw_bucket_dir_entry cur_change;
     rgw_bucket_dir_entry cur_disk;
     try {

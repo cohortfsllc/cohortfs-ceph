@@ -91,7 +91,7 @@ int get_num_dups(const vector<int>& v)
 
 TEST(CRUSH, indep_toosmall) {
   CrushWrapper *c = build_indep_map(g_ceph_context, 1, 3, 1);
-  vector<__u32> weight(c->get_max_devices(), 0x10000);
+  vector<uint32_t> weight(c->get_max_devices(), 0x10000);
   c->dump_tree(weight, &cout, NULL);
 
   for (int x = 0; x < 100; ++x) {
@@ -111,7 +111,7 @@ TEST(CRUSH, indep_toosmall) {
 
 TEST(CRUSH, indep_basic) {
   CrushWrapper *c = build_indep_map(g_ceph_context, 3, 3, 3);
-  vector<__u32> weight(c->get_max_devices(), 0x10000);
+  vector<uint32_t> weight(c->get_max_devices(), 0x10000);
   c->dump_tree(weight, &cout, NULL);
 
   for (int x = 0; x < 100; ++x) {
@@ -131,7 +131,7 @@ TEST(CRUSH, indep_basic) {
 
 TEST(CRUSH, indep_out_alt) {
   CrushWrapper *c = build_indep_map(g_ceph_context, 3, 3, 3);
-  vector<__u32> weight(c->get_max_devices(), 0x10000);
+  vector<uint32_t> weight(c->get_max_devices(), 0x10000);
 
   // mark a bunch of osds out
   int num = 3*3*3;
@@ -158,7 +158,7 @@ TEST(CRUSH, indep_out_alt) {
 
 TEST(CRUSH, indep_out_contig) {
   CrushWrapper *c = build_indep_map(g_ceph_context, 3, 3, 3);
-  vector<__u32> weight(c->get_max_devices(), 0x10000);
+  vector<uint32_t> weight(c->get_max_devices(), 0x10000);
 
   // mark a bunch of osds out
   int num = 3*3*3;
@@ -186,12 +186,12 @@ TEST(CRUSH, indep_out_contig) {
 TEST(CRUSH, indep_out_progressive) {
   CrushWrapper *c = build_indep_map(g_ceph_context, 3, 3, 3);
   c->crush->choose_total_tries = 100;
-  vector<__u32> tweight(c->get_max_devices(), 0x10000);
+  vector<uint32_t> tweight(c->get_max_devices(), 0x10000);
   c->dump_tree(tweight, &cout, NULL);
 
   int tchanged = 0;
   for (int x = 1; x < 5; ++x) {
-    vector<__u32> weight(c->get_max_devices(), 0x10000);
+    vector<uint32_t> weight(c->get_max_devices(), 0x10000);
 
     std::map<int,unsigned> pos;
     vector<int> prev;

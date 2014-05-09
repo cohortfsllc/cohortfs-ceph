@@ -1,8 +1,6 @@
 #ifndef FS_CEPH_IOCTL_H
 #define FS_CEPH_IOCTL_H
 
-#include "include/int_types.h"
-
 #if defined(__linux__)
 #include <linux/ioctl.h>
 #include <linux/types.h>
@@ -15,9 +13,9 @@
 
 /* just use u64 to align sanely on all archs */
 struct ceph_ioctl_layout {
-	__u64 stripe_unit, stripe_count, object_size;
-	__u64 data_pool;
-	__s64 unused;
+	uint64_t stripe_unit, stripe_count, object_size;
+	uint64_t data_pool;
+	int64_t unused;
 };
 
 #define CEPH_IOC_GET_LAYOUT _IOR(CEPH_IOCTL_MAGIC, 1,		\
@@ -32,14 +30,14 @@ struct ceph_ioctl_layout {
  * file offset.
  */
 struct ceph_ioctl_dataloc {
-	__u64 file_offset;           /* in+out: file offset */
-	__u64 object_offset;         /* out: offset in object */
-	__u64 object_no;             /* out: object # */
-	__u64 object_size;           /* out: object size */
+	uint64_t file_offset;           /* in+out: file offset */
+	uint64_t object_offset;         /* out: offset in object */
+	uint64_t object_no;             /* out: object # */
+	uint64_t object_size;           /* out: object size */
 	char object_name[64];        /* out: object name */
-	__u64 block_offset;          /* out: offset in block */
-	__u64 block_size;            /* out: block length */
-	__s64 osd;                   /* out: osd # */
+	uint64_t block_offset;          /* out: offset in block */
+	uint64_t block_size;            /* out: block length */
+	int64_t osd;                   /* out: osd # */
 	struct sockaddr_storage osd_addr; /* out: osd address */
 };
 

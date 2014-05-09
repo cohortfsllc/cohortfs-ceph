@@ -2552,9 +2552,9 @@ void ReplicatedPG::snap_trimmer()
   return;
 }
 
-int ReplicatedPG::do_xattr_cmp_u64(int op, __u64 v1, bufferlist& xattr)
+int ReplicatedPG::do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr)
 {
-  __u64 v2;
+  uint64_t v2;
   if (xattr.length())
     v2 = atoll(xattr.c_str());
   else
@@ -2648,7 +2648,7 @@ int ReplicatedPG::do_tmapup_slow(OpContext *ctx, bufferlist::iterator& bp, OSDOp
 
   // do the update(s)
   while (!bp.end()) {
-    __u8 op;
+    uint8_t op;
     string key;
     ::decode(op, bp);
 
@@ -2729,7 +2729,7 @@ int ReplicatedPG::do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd
 
     // header
     bufferlist header;
-    __u32 nkeys = 0;
+    uint32_t nkeys = 0;
     if (newop.outdata.length()) {
       ::decode(header, ip);
       ::decode(nkeys, ip);
@@ -2766,7 +2766,7 @@ int ReplicatedPG::do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd
     }
     result = 0;
     while (!bp.end() && !result) {
-      __u8 op;
+      uint8_t op;
       string key;
       try {
 	::decode(op, bp);
@@ -3002,7 +3002,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     case CEPH_OSD_OP_READ:
       ++ctx->num_read;
       {
-	__u32 seq = oi.truncate_seq;
+	uint32_t seq = oi.truncate_seq;
 	uint64_t size = oi.size;
 	bool trimmed_read = false;
 	// are we beyond truncate_size?
@@ -3428,7 +3428,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    }
 	    dout(10) << "CEPH_OSD_OP_CMPXATTR name=" << name << " val=" << u64val
 		     << " op=" << (int)op.xattr.cmp_op << " mode=" << (int)op.xattr.cmp_mode << dendl;
-	    result = do_xattr_cmp_u64(op.xattr.cmp_op, u64val, xattr);
+	    result = do_xattr_cmp_uint64_t(op.xattr.cmp_op, u64val, xattr);
 	  }
 	  break;
 
@@ -3673,7 +3673,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  }
 	}
 
-        __u32 seq = oi.truncate_seq;
+        uint32_t seq = oi.truncate_seq;
         if (seq && (seq > op.extent.truncate_seq) &&
             (op.extent.offset + op.extent.length > oi.size)) {
 	  // old write, arrived after trimtrunc

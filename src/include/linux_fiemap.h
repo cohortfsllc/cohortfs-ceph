@@ -10,36 +10,34 @@
 #ifndef _LINUX_FIEMAP_H
 #define _LINUX_FIEMAP_H
 
-#include "include/int_types.h"
-
 #if defined(__linux__)
 #include <linux/types.h>
 #elif defined(__FreeBSD_)
 #include <sys/types.h>
 #endif
 
-#include "include/int_types.h"
+#include <inttypes.h>
 
 struct fiemap_extent {
-	__u64 fe_logical;  /* logical offset in bytes for the start of
+	uint64_t fe_logical;  /* logical offset in bytes for the start of
 			    * the extent from the beginning of the file */
-	__u64 fe_physical; /* physical offset in bytes for the start
+	uint64_t fe_physical; /* physical offset in bytes for the start
 			    * of the extent from the beginning of the disk */
-	__u64 fe_length;   /* length in bytes for this extent */
-	__u64 fe_reserved64[2];
-	__u32 fe_flags;    /* FIEMAP_EXTENT_* flags for this extent */
-	__u32 fe_reserved[3];
+	uint64_t fe_length;   /* length in bytes for this extent */
+	uint64_t fe_reserved64[2];
+	uint32_t fe_flags;    /* FIEMAP_EXTENT_* flags for this extent */
+	uint32_t fe_reserved[3];
 };
 
 struct fiemap {
-	__u64 fm_start;		/* logical offset (inclusive) at
+	uint64_t fm_start;		/* logical offset (inclusive) at
 				 * which to start mapping (in) */
-	__u64 fm_length;	/* logical length of mapping which
+	uint64_t fm_length;	/* logical length of mapping which
 				 * userspace wants (in) */
-	__u32 fm_flags;		/* FIEMAP_FLAG_* flags for request (in/out) */
-	__u32 fm_mapped_extents;/* number of extents that were mapped (out) */
-	__u32 fm_extent_count;  /* size of fm_extents array (in) */
-	__u32 fm_reserved;
+	uint32_t fm_flags;		/* FIEMAP_FLAG_* flags for request (in/out) */
+	uint32_t fm_mapped_extents;/* number of extents that were mapped (out) */
+	uint32_t fm_extent_count;  /* size of fm_extents array (in) */
+	uint32_t fm_reserved;
 	struct fiemap_extent fm_extents[0]; /* array of mapped extents (out) */
 };
 

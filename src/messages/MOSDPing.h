@@ -49,11 +49,11 @@ class MOSDPing : public Message {
 
   uuid_d fsid;
   epoch_t map_epoch, peer_as_of_epoch;
-  __u8 op;
+  uint8_t op;
   osd_peer_stat_t peer_stat;
   utime_t stamp;
 
-  MOSDPing(const uuid_d& f, epoch_t e, __u8 o, utime_t s)
+  MOSDPing(const uuid_d& f, epoch_t e, uint8_t o, utime_t s)
     : Message(MSG_OSD_PING, HEAD_VERSION, COMPAT_VERSION),
       fsid(f), map_epoch(e), peer_as_of_epoch(0), op(o), stamp(s)
   { }

@@ -17,8 +17,6 @@
 
 #include "GenericFileStoreBackend.h"
 
-#include "include/int_types.h"
-
 class XfsFileStoreBackend : public GenericFileStoreBackend {
 private:
   bool m_has_extsize;

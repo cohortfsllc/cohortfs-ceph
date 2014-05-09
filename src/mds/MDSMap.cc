@@ -373,7 +373,7 @@ void MDSMap::mds_info_t::encode_versioned(bufferlist& bl, uint64_t features) con
 
 void MDSMap::mds_info_t::encode_unversioned(bufferlist& bl) const
 {
-  __u8 struct_v = 3;
+  uint8_t struct_v = 3;
   ::encode(struct_v, bl);
   ::encode(global_id, bl);
   ::encode(name, bl);
@@ -411,7 +411,7 @@ void MDSMap::mds_info_t::decode(bufferlist::iterator& bl)
 void MDSMap::encode(bufferlist& bl, uint64_t features) const
 {
   if ((features & CEPH_FEATURE_PGID64) == 0) {
-    __u16 v = 2;
+    uint16_t v = 2;
     ::encode(v, bl);
     ::encode(epoch, bl);
     ::encode(flags, bl);
@@ -421,7 +421,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
     ::encode(session_autoclose, bl);
     ::encode(max_file_size, bl);
     ::encode(max_mds, bl);
-    __u32 n = mds_info.size();
+    uint32_t n = mds_info.size();
     ::encode(n, bl);
     for (map<uint64_t, mds_info_t>::const_iterator i = mds_info.begin();
 	i != mds_info.end(); ++i) {
@@ -439,7 +439,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
     ::encode(m, bl);
     return;
   } else if ((features & CEPH_FEATURE_MDSENC) == 0) {
-    __u16 v = 3;
+    uint16_t v = 3;
     ::encode(v, bl);
     ::encode(epoch, bl);
     ::encode(flags, bl);
@@ -449,7 +449,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
     ::encode(session_autoclose, bl);
     ::encode(max_file_size, bl);
     ::encode(max_mds, bl);
-    __u32 n = mds_info.size();
+    uint32_t n = mds_info.size();
     ::encode(n, bl);
     for (map<uint64_t, mds_info_t>::const_iterator i = mds_info.begin();
 	i != mds_info.end(); ++i) {
@@ -460,7 +460,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
     ::encode(cas_pool, bl);
 
     // kclient ignores everything from here
-    __u16 ev = 5;
+    uint16_t ev = 5;
     ::encode(ev, bl);
     ::encode(compat, bl);
     ::encode(metadata_pool, bl);
@@ -488,7 +488,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
     ::encode(cas_pool, bl);
 
     // kclient ignores everything from here
-    __u16 ev = 7;
+    uint16_t ev = 7;
     ::encode(ev, bl);
     ::encode(compat, bl);
     ::encode(metadata_pool, bl);
@@ -519,14 +519,14 @@ void MDSMap::decode(bufferlist::iterator& p)
   ::decode(max_mds, p);
   ::decode(mds_info, p);
   if (struct_v < 3) {
-    __u32 n;
+    uint32_t n;
     ::decode(n, p);
     while (n--) {
-      __u32 m;
+      uint32_t m;
       ::decode(m, p);
       data_pools.insert(m);
     }
-    __s32 s;
+    int32_t s;
     ::decode(s, p);
     cas_pool = s;
   } else {
@@ -535,7 +535,7 @@ void MDSMap::decode(bufferlist::iterator& p)
   }
 
   // kclient ignores everything from here
-  __u16 ev = 1;
+  uint16_t ev = 1;
   if (struct_v >= 2)
     ::decode(ev, p);
   if (ev >= 3)
@@ -543,7 +543,7 @@ void MDSMap::decode(bufferlist::iterator& p)
   else
     compat = get_mdsmap_compat_set_base();
   if (ev < 5) {
-    __u32 n;
+    uint32_t n;
     ::decode(n, p);
     metadata_pool = n;
   } else {

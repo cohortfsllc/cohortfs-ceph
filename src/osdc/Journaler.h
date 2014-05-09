@@ -79,7 +79,7 @@ public:
     }
 
     void encode(bufferlist &bl) const {
-      __u8 struct_v = 1;
+      uint8_t struct_v = 1;
       ::encode(struct_v, bl);
       ::encode(magic, bl);
       ::encode(trimmed_pos, bl);
@@ -89,7 +89,7 @@ public:
       ::encode(layout, bl);
     }
     void decode(bufferlist::iterator &bl) {
-      __u8 struct_v;
+      uint8_t struct_v;
       ::decode(struct_v, bl);
       ::decode(magic, bl);
       ::decode(trimmed_pos, bl);

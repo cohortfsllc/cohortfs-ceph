@@ -19,14 +19,14 @@ public:
 
   virtual void read(const object_t& oid, const object_locator_t& oloc,
 		    uint64_t off, uint64_t len,
-		    bufferlist *pbl, uint64_t trunc_size,  __u32 trunc_seq,
+		    bufferlist *pbl, uint64_t trunc_size,  uint32_t trunc_seq,
 		    Context *onfinish);
 
   virtual ceph_tid_t write(const object_t& oid, const object_locator_t& oloc,
 			   uint64_t off, uint64_t len,
 			   const bufferlist &bl,
 			   utime_t mtime, uint64_t trunc_size,
-			   __u32 trunc_seq, Context *oncommit);
+			   uint32_t trunc_seq, Context *oncommit);
 
   virtual bool may_copy_on_write(const object_t&, uint64_t, uint64_t);
 private:

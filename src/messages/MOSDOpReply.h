@@ -177,7 +177,7 @@ public:
       ::encode(bad_replay_version, payload);
       ::encode(osdmap_epoch, payload);
 
-      __u32 num_ops = ops.size();
+      uint32_t num_ops = ops.size();
       ::encode(num_ops, payload);
       for (unsigned i = 0; i < num_ops; i++)
 	::encode(ops[i].op, payload);
@@ -217,7 +217,7 @@ public:
       ::decode(bad_replay_version, p);
       ::decode(osdmap_epoch, p);
 
-      __u32 num_ops = ops.size();
+      uint32_t num_ops = ops.size();
       ::decode(num_ops, p);
       ops.resize(num_ops);
       for (unsigned i = 0; i < num_ops; i++)

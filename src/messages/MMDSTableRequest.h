@@ -21,8 +21,8 @@
 
 class MMDSTableRequest : public Message {
  public:
-  __u16 table;
-  __s16 op;
+  uint16_t table;
+  int16_t op;
   uint64_t reqid;
   bufferlist bl;
 

@@ -138,7 +138,7 @@ TEST(pg_interval_t, check_new_interval)
   epoch_t last_epoch_clean = same_interval_since;
   int64_t pool_id = 200;
   int pg_num = 4;
-  __u8 min_size = 2;
+  uint8_t min_size = 2;
   {
     OSDMap::Incremental inc(epoch + 1);
     inc.new_pools[pool_id].min_size = min_size;
@@ -369,7 +369,7 @@ TEST(pg_interval_t, check_new_interval)
     osdmap->set_state(osd_id, CEPH_OSD_EXISTS);
     osdmap->set_epoch(epoch);
     OSDMap::Incremental inc(epoch + 1);
-    __u8 new_min_size = min_size + 1;
+    uint8_t new_min_size = min_size + 1;
     inc.new_pools[pool_id].min_size = new_min_size;
     inc.new_pools[pool_id].set_pg_num(pg_num);
     osdmap->apply_incremental(inc);
@@ -453,7 +453,7 @@ TEST(pg_interval_t, check_new_interval)
     osdmap->set_state(osd_id, CEPH_OSD_EXISTS);
     osdmap->set_epoch(epoch);
     OSDMap::Incremental inc(epoch + 1);
-    __u8 new_min_size = old_acting.size();
+    uint8_t new_min_size = old_acting.size();
     inc.new_pools[pool_id].min_size = new_min_size;
     inc.new_pools[pool_id].set_pg_num(pg_num);
     osdmap->apply_incremental(inc);

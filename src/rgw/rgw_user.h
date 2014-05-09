@@ -127,8 +127,8 @@ struct RGWUserAdminOpState {
   std::string user_email;
   std::string display_name;
   uint32_t max_buckets;
-  __u8 suspended;
-  __u8 system;
+  uint8_t suspended;
+  uint8_t system;
   std::string caps;
   RGWObjVersionTracker objv;
   uint32_t op_mask;
@@ -257,11 +257,11 @@ struct RGWUserAdminOpState {
     key_type = type;
     type_specified = true;
   }
-  void set_suspension(__u8 is_suspended) {
+  void set_suspension(uint8_t is_suspended) {
     suspended = is_suspended;
     suspension_op = true;
   }
-  void set_system(__u8 is_system) {
+  void set_system(uint8_t is_system) {
     system = is_system;
     system_specified = true;
   }
@@ -336,7 +336,7 @@ struct RGWUserAdminOpState {
   void set_existing_email(bool flag) { existing_email = flag; };
   void set_purge_data(bool flag) { purge_data = flag; };
   void set_generate_subuser(bool flag) { gen_subuser = flag; };
-  __u8 get_suspension_status() { return suspended; };
+  uint8_t get_suspension_status() { return suspended; };
   int32_t get_key_type() {return key_type; };
   uint32_t get_subuser_perm() { return perm_mask; };
   uint32_t get_max_buckets() { return max_buckets; };

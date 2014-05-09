@@ -49,9 +49,9 @@ using namespace std;
 
 struct LeaseStat {
   // this matches ceph_mds_reply_lease
-  __u16 mask;
-  __u32 duration_ms;  
-  __u32 seq;
+  uint16_t mask;
+  uint32_t duration_ms;  
+  uint32_t seq;
 
   LeaseStat() : mask(0), duration_ms(0), seq(0) {}
 
@@ -75,8 +75,8 @@ inline ostream& operator<<(ostream& out, const LeaseStat& l) {
 struct DirStat {
   // mds distribution hints
   frag_t frag;
-  __s32 auth;
-  set<__s32> dist;
+  int32_t auth;
+  set<int32_t> dist;
   
   DirStat() : auth(CDIR_AUTH_PARENT) {}
   DirStat(bufferlist::iterator& p) {
@@ -164,7 +164,7 @@ struct InodeStat {
     while (n) {
       ceph_frag_tree_split s;
       ::decode(s, p);
-      dirfragtree._splits[(__u32)s.frag] = s.by;
+      dirfragtree._splits[(uint32_t)s.frag] = s.by;
       n--;
     }
     ::decode(symlink, p);
@@ -202,7 +202,7 @@ public:
   void set_mdsmap_epoch(epoch_t e) { head.mdsmap_epoch = e; }
   epoch_t get_mdsmap_epoch() const { return head.mdsmap_epoch; }
 
-  int get_result() const { return (__s32)(__u32)head.result; }
+  int get_result() const { return (uint32_t)head.result; }
 
   void set_result(int r) { head.result = r; }
 
@@ -211,7 +211,7 @@ public:
   bool is_safe() const { return head.safe; }
 
   MClientReply() : Message(CEPH_MSG_CLIENT_REPLY) {}
-  MClientReply(MClientRequest *req, int result = 0) : 
+  MClientReply(MClientRequest *req, int result = 0) :
     Message(CEPH_MSG_CLIENT_REPLY) {
     memset(&head, 0, sizeof(head));
     header.tid = req->get_tid();

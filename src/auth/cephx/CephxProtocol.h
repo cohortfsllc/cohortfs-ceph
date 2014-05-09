@@ -101,12 +101,12 @@ struct CephXServerChallenge {
   uint64_t server_challenge;
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(server_challenge, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(server_challenge, bl);
   }
@@ -117,7 +117,7 @@ WRITE_CLASS_ENCODER(CephXServerChallenge);
 // request/reply headers, for subsequent exchanges.
 
 struct CephXRequestHeader {
-  __u16 request_type;
+  uint16_t request_type;
 
   void encode(bufferlist& bl) const {
     ::encode(request_type, bl);
@@ -150,14 +150,14 @@ struct CephXTicketBlob {
   CephXTicketBlob() : secret_id(0) {}
 
   void encode(bufferlist& bl) const {
-     __u8 struct_v = 1;
+     uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(secret_id, bl);
     ::encode(blob, bl);
   }
 
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(secret_id, bl);
     ::decode(blob, bl);
@@ -172,14 +172,14 @@ struct CephXAuthenticate {
   CephXTicketBlob old_ticket;
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(client_challenge, bl);
     ::encode(key, bl);
     ::encode(old_ticket, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(client_challenge, bl);
     ::decode(key, bl);
@@ -238,12 +238,12 @@ struct CephXServiceTicketRequest {
   uint32_t keys;
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(keys, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(keys, bl);
   }
@@ -258,12 +258,12 @@ WRITE_CLASS_ENCODER(CephXServiceTicketRequest);
 struct CephXAuthorizeReply {
   uint64_t nonce_plus_one;
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(nonce_plus_one, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(nonce_plus_one, bl);
   }
@@ -353,13 +353,13 @@ struct CephXServiceTicket {
   utime_t validity;
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(session_key, bl);
     ::encode(validity, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(session_key, bl);
     ::decode(validity, bl);
@@ -373,13 +373,13 @@ struct CephXServiceTicketInfo {
   CryptoKey session_key;
 
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(ticket, bl);
     ::encode(session_key, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(ticket, bl);
     ::decode(session_key, bl);
@@ -390,12 +390,12 @@ WRITE_CLASS_ENCODER(CephXServiceTicketInfo);
 struct CephXAuthorize {
   uint64_t nonce;
   void encode(bufferlist& bl) const {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(nonce, bl);
   }
   void decode(bufferlist::iterator& bl) {
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, bl);
     ::decode(nonce, bl);
   }
@@ -438,7 +438,7 @@ void decode_decrypt_enc_bl(CephContext *cct, T& t, CryptoKey key, bufferlist& bl
     return;
 
   bufferlist::iterator iter2 = bl.begin();
-  __u8 struct_v;
+  uint8_t struct_v;
   ::decode(struct_v, iter2);
   ::decode(magic, iter2);
   if (magic != AUTH_ENC_MAGIC) {
@@ -456,7 +456,7 @@ void encode_encrypt_enc_bl(CephContext *cct, const T& t, const CryptoKey& key,
 			   bufferlist& out, std::string &error)
 {
   bufferlist bl;
-  __u8 struct_v = 1;
+  uint8_t struct_v = 1;
   ::encode(struct_v, bl);
   uint64_t magic = AUTH_ENC_MAGIC;
   ::encode(magic, bl);

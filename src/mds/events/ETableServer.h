@@ -22,10 +22,10 @@
 #include "../LogEvent.h"
 
 struct ETableServer : public LogEvent {
-  __u16 table;
-  __s16 op;
+  uint16_t table;
+  int16_t op;
   uint64_t reqid;
-  __s32 bymds;
+  int32_t bymds;
   bufferlist mutation;
   version_t tid;
   version_t version;

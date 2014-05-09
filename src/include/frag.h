@@ -162,7 +162,7 @@ inline std::ostream& operator<<(std::ostream& out, frag_t hb)
 
 inline void encode(frag_t f, bufferlist& bl) { encode_raw(f._enc, bl); }
 inline void decode(frag_t &f, bufferlist::iterator& p) { 
-  __u32 v;
+  uint32_t v;
   decode_raw(v, p); 
   f._enc = v;
 }

@@ -112,7 +112,7 @@ class Filer {
 		 bufferlist *bl,  // ptr to data
 		 int flags,
 		 uint64_t truncate_size,
-		 __u32 truncate_seq,
+		 uint32_t truncate_seq,
 		 Context *onfinish) {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len, truncate_size,
@@ -146,7 +146,7 @@ class Filer {
 		  utime_t mtime,
 		  int flags,
 		  uint64_t truncate_size,
-		  __u32 truncate_seq,
+		  uint32_t truncate_seq,
 		  Context *onack,
 		  Context *oncommit) {
     vector<ObjectExtent> extents;
@@ -161,7 +161,7 @@ class Filer {
 	       ceph_file_layout *layout,
 	       uint64_t offset,
 	       uint64_t len,
-	       __u32 truncate_seq,
+	       uint32_t truncate_seq,
 	       utime_t mtime,
 	       int flags,
 	       Context *onack,

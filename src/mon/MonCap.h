@@ -12,21 +12,21 @@ using std::ostream;
 
 class CephContext;
 
-static const __u8 MON_CAP_R     = (1 << 1);      // read
-static const __u8 MON_CAP_W     = (1 << 2);      // write
-static const __u8 MON_CAP_X     = (1 << 3);      // execute
-static const __u8 MON_CAP_ALL   = MON_CAP_R | MON_CAP_W | MON_CAP_X;
-static const __u8 MON_CAP_ANY   = 0xff;          // *
+static const uint8_t MON_CAP_R     = (1 << 1);      // read
+static const uint8_t MON_CAP_W     = (1 << 2);      // write
+static const uint8_t MON_CAP_X     = (1 << 3);      // execute
+static const uint8_t MON_CAP_ALL   = MON_CAP_R | MON_CAP_W | MON_CAP_X;
+static const uint8_t MON_CAP_ANY   = 0xff;          // *
 
 struct mon_rwxa_t {
-  __u8 val;
+  uint8_t val;
 
-  mon_rwxa_t(__u8 v = 0) : val(v) {}
-  mon_rwxa_t& operator=(__u8 v) {
+  mon_rwxa_t(uint8_t v = 0) : val(v) {}
+  mon_rwxa_t& operator=(uint8_t v) {
     val = v;
     return *this;
   }
-  operator __u8() const {
+  operator uint8_t() const {
     return val;
   }
 };

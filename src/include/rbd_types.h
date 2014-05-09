@@ -70,7 +70,7 @@ struct rbd_obj_header_ondisk {
 	char signature[4];
 	char version[8];
 	struct {
-		__u8 order;
+		uint8_t order;
 	} __attribute__((packed)) options;
 	__le64 image_size;
 } __attribute__((packed));

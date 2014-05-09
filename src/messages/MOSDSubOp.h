@@ -40,7 +40,7 @@ public:
   hobject_t poid;
   object_locator_t oloc;
   
-  __u8 acks_wanted;
+  uint8_t acks_wanted;
 
   // op to exec
   vector<OSDOp> ops;
@@ -107,7 +107,7 @@ public:
     ::decode(pgid.pgid, p);
     ::decode(poid, p);
 
-    __u32 num_ops;
+    uint32_t num_ops;
     ::decode(num_ops, p);
     ops.resize(num_ops);
     unsigned off = 0;
@@ -183,7 +183,7 @@ public:
     ::encode(pgid.pgid, payload);
     ::encode(poid, payload);
 
-    __u32 num_ops = ops.size();
+    uint32_t num_ops = ops.size();
     ::encode(num_ops, payload);
     for (unsigned i = 0; i < ops.size(); i++) {
       ops[i].op.payload_len = ops[i].indata.length();

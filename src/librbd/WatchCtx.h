@@ -3,8 +3,6 @@
 #ifndef CEPH_LIBRBD_WATCHCTX_H
 #define CEPH_LIBRBD_WATCHCTX_H
 
-#include "include/int_types.h"
-
 #include "common/Mutex.h"
 #include "include/buffer.h"
 #include "include/rados/librados.hpp"

@@ -30,7 +30,7 @@
 class utime_t {
 public:
   struct {
-    __u32 tv_sec, tv_nsec;
+    uint32_t tv_sec, tv_nsec;
   } tv;
 
   friend class Clock;
@@ -63,8 +63,8 @@ public:
     ts->tv_nsec = tv.tv_nsec;
   }
   void set_from_double(double d) { 
-    tv.tv_sec = (__u32)trunc(d);
-    tv.tv_nsec = (__u32)((d - (double)tv.tv_sec) * (double)1000000000.0);
+    tv.tv_sec = (uint32_t)trunc(d);
+    tv.tv_nsec = (uint32_t)((d - (double)tv.tv_sec) * (double)1000000000.0);
   }
 
   // accessors
@@ -73,8 +73,8 @@ public:
   int           nsec() const { return tv.tv_nsec; }
 
   // ref accessors/modifiers
-  __u32&         sec_ref()  { return tv.tv_sec; }
-  __u32&         nsec_ref() { return tv.tv_nsec; }
+  uint32_t&         sec_ref()  { return tv.tv_sec; }
+  uint32_t&         nsec_ref() { return tv.tv_nsec; }
 
   uint64_t to_nsec() const {
     return (uint64_t)tv.tv_nsec + (uint64_t)tv.tv_sec * 1000000000ull;

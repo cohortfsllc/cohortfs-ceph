@@ -14,8 +14,6 @@
 #ifndef CEPH_ENCODING_H
 #define CEPH_ENCODING_H
 
-#include "include/int_types.h"
-
 #include "include/memory.h"
 
 #include "byteorder.h"
@@ -61,8 +59,8 @@ inline void decode_raw(T& t, bufferlist::iterator &p)
   inline void encode(const type &v, bufferlist& bl, uint64_t features=0) { encode_raw(v, bl); } \
   inline void decode(type &v, bufferlist::iterator& p) { __ASSERT_FUNCTION decode_raw(v, p); }
 
-WRITE_RAW_ENCODER(__u8)
-WRITE_RAW_ENCODER(__s8)
+WRITE_RAW_ENCODER(uint8_t)
+WRITE_RAW_ENCODER(int8_t)
 WRITE_RAW_ENCODER(char)
 WRITE_RAW_ENCODER(ceph_le64)
 WRITE_RAW_ENCODER(ceph_le32)
@@ -73,11 +71,11 @@ WRITE_RAW_ENCODER(float)
 WRITE_RAW_ENCODER(double)
 
 inline void encode(const bool &v, bufferlist& bl) {
-  __u8 vv = v;
+  uint8_t vv = v;
   encode_raw(vv, bl);
 }
 inline void decode(bool &v, bufferlist::iterator& p) {
-  __u8 vv;
+  uint8_t vv;
   decode_raw(vv, p);
   v = vv;
 }
@@ -162,13 +160,13 @@ WRITE_INTTYPE_ENCODER(int16_t, le16)
 // string
 inline void encode(const std::string& s, bufferlist& bl, uint64_t features=0)
 {
-  __u32 len = s.length();
+  uint32_t len = s.length();
   encode(len, bl);
   bl.append(s.data(), len);
 }
 inline void decode(std::string& s, bufferlist::iterator& p)
 {
-  __u32 len;
+  uint32_t len;
   decode(len, p);
   s.clear();
   p.copy(len, s);
@@ -187,7 +185,7 @@ inline void decode_nohead(int len, std::string& s, bufferlist::iterator& p)
 // const char* (encode only, string compatible)
 inline void encode(const char *s, bufferlist& bl) 
 {
-  __u32 len = strlen(s);
+  uint32_t len = strlen(s);
   encode(len, bl);
   bl.append(s, len);
 }
@@ -215,14 +213,14 @@ inline void decode_array_nohead(A a[], int n, bufferlist::iterator &p)
 // bufferptr (encapsulated)
 inline void encode(const buffer::ptr& bp, bufferlist& bl) 
 {
-  __u32 len = bp.length();
+  uint32_t len = bp.length();
   encode(len, bl);
   if (len)
     bl.append(bp);
 }
 inline void decode(buffer::ptr& bp, bufferlist::iterator& p)
 {
-  __u32 len;
+  uint32_t len;
   decode(len, p);
 
   bufferlist s;
@@ -239,19 +237,19 @@ inline void decode(buffer::ptr& bp, bufferlist::iterator& p)
 // bufferlist (encapsulated)
 inline void encode(const bufferlist& s, bufferlist& bl) 
 {
-  __u32 len = s.length();
+  uint32_t len = s.length();
   encode(len, bl);
   bl.append(s);
 }
 inline void encode_destructively(bufferlist& s, bufferlist& bl) 
 {
-  __u32 len = s.length();
+  uint32_t len = s.length();
   encode(len, bl);
   bl.claim_append(s);
 }
 inline void decode(bufferlist& s, bufferlist::iterator& p)
 {
-  __u32 len;
+  uint32_t len;
   decode(len, p);
   s.clear();
   p.copy(len, s);
@@ -300,7 +298,7 @@ inline void decode(T &o, bufferlist& bl)
 template<typename T>
 inline void encode(const boost::optional<T> &p, bufferlist &bl)
 {
-  __u8 present = static_cast<bool>(p);
+  uint8_t present = static_cast<bool>(p);
   ::encode(present, bl);
   if (p)
     encode(p.get(), bl);
@@ -309,7 +307,7 @@ inline void encode(const boost::optional<T> &p, bufferlist &bl)
 template<typename T>
 inline void decode(boost::optional<T> &p, bufferlist::iterator &bp)
 {
-  __u8 present;
+  uint8_t present;
   ::decode(present, bp);
   if (present) {
     T t;
@@ -372,7 +370,7 @@ inline void encode(const std::list<T>& ls, bufferlist& bl)
     en = n;
     bl.copy_in(pos, sizeof(en), (char*)&en);
   } else {
-    __u32 n = ls.size();    // FIXME: this is slow on a list.
+    uint32_t n = ls.size();    // FIXME: this is slow on a list.
     encode(n, bl);
     for (typename std::list<T>::const_iterator p = ls.begin(); p != ls.end(); ++p)
       encode(*p, bl);
@@ -381,7 +379,7 @@ inline void encode(const std::list<T>& ls, bufferlist& bl)
 template<class T>
 inline void decode(std::list<T>& ls, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   ls.clear();
   while (n--) {
@@ -407,7 +405,7 @@ inline void encode(const std::list<ceph::shared_ptr<T> >& ls, bufferlist& bl)
     en = n;
     bl.copy_in(pos, sizeof(en), (char*)&en);
   } else {
-    __u32 n = ls.size();    // FIXME: this is slow on a list.
+    uint32_t n = ls.size();    // FIXME: this is slow on a list.
     encode(n, bl);
     for (typename std::list<ceph::shared_ptr<T> >::const_iterator p = ls.begin(); p != ls.end(); ++p)
       encode(**p, bl);
@@ -416,7 +414,7 @@ inline void encode(const std::list<ceph::shared_ptr<T> >& ls, bufferlist& bl)
 template<class T>
 inline void decode(std::list<ceph::shared_ptr<T> >& ls, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   ls.clear();
   while (n--) {
@@ -430,7 +428,7 @@ inline void decode(std::list<ceph::shared_ptr<T> >& ls, bufferlist::iterator& p)
 template<class T>
 inline void encode(const std::set<T>& s, bufferlist& bl)
 {
-  __u32 n = s.size();
+  uint32_t n = s.size();
   encode(n, bl);
   for (typename std::set<T>::const_iterator p = s.begin(); p != s.end(); ++p)
     encode(*p, bl);
@@ -438,7 +436,7 @@ inline void encode(const std::set<T>& s, bufferlist& bl)
 template<class T>
 inline void decode(std::set<T>& s, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   s.clear();
   while (n--) {
@@ -452,7 +450,7 @@ inline void decode(std::set<T>& s, bufferlist::iterator& p)
 /*template<class T>
 inline void encode(const std::vector<T*>& v, bufferlist& bl)
 {
-  __u32 n = v.size();
+  uint32_t n = v.size();
   encode(n, bl);
   for (typename std::vector<T*>::const_iterator p = v.begin(); p != v.end(); ++p)
     encode(**p, bl);
@@ -460,10 +458,10 @@ inline void encode(const std::vector<T*>& v, bufferlist& bl)
 template<class T>
 inline void decode(std::vector<T*>& v, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   v.resize(n);
-  for (__u32 i=0; i<n; i++) 
+  for (uint32_t i=0; i<n; i++) 
     v[i] = new T(p);
 }
 */
@@ -471,7 +469,7 @@ inline void decode(std::vector<T*>& v, bufferlist::iterator& p)
 template<class T>
 inline void encode(const std::vector<T>& v, bufferlist& bl, uint64_t features)
 {
-  __u32 n = v.size();
+  uint32_t n = v.size();
   encode(n, bl);
   for (typename std::vector<T>::const_iterator p = v.begin(); p != v.end(); ++p)
     encode(*p, bl, features);
@@ -479,7 +477,7 @@ inline void encode(const std::vector<T>& v, bufferlist& bl, uint64_t features)
 template<class T>
 inline void encode(const std::vector<T>& v, bufferlist& bl)
 {
-  __u32 n = v.size();
+  uint32_t n = v.size();
   encode(n, bl);
   for (typename std::vector<T>::const_iterator p = v.begin(); p != v.end(); ++p)
     encode(*p, bl);
@@ -487,10 +485,10 @@ inline void encode(const std::vector<T>& v, bufferlist& bl)
 template<class T>
 inline void decode(std::vector<T>& v, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   v.resize(n);
-  for (__u32 i=0; i<n; i++) 
+  for (uint32_t i=0; i<n; i++) 
     decode(v[i], p);
 }
 
@@ -504,7 +502,7 @@ template<class T>
 inline void decode_nohead(int len, std::vector<T>& v, bufferlist::iterator& p)
 {
   v.resize(len);
-  for (__u32 i=0; i<v.size(); i++) 
+  for (uint32_t i=0; i<v.size(); i++) 
     decode(v[i], p);
 }
 
@@ -512,7 +510,7 @@ inline void decode_nohead(int len, std::vector<T>& v, bufferlist::iterator& p)
 template<class T>
 inline void encode(const std::vector<ceph::shared_ptr<T> >& v, bufferlist& bl)
 {
-  __u32 n = v.size();
+  uint32_t n = v.size();
   encode(n, bl);
   for (typename std::vector<ceph::shared_ptr<T> >::const_iterator p = v.begin(); p != v.end(); ++p)
     if (*p)
@@ -523,10 +521,10 @@ inline void encode(const std::vector<ceph::shared_ptr<T> >& v, bufferlist& bl)
 template<class T>
 inline void decode(std::vector<ceph::shared_ptr<T> >& v, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   v.resize(n);
-  for (__u32 i=0; i<n; i++) {
+  for (uint32_t i=0; i<n; i++) {
     v[i].reset(new T());
     decode(*v[i], p);
   }
@@ -537,7 +535,7 @@ inline void decode(std::vector<ceph::shared_ptr<T> >& v, bufferlist::iterator& p
 template<class T, class U>
 inline void encode(const std::map<T,U*>& m, bufferlist& bl)
 {
-  __u32 n = m.size();
+  uint32_t n = m.size();
   encode(n, bl);
   for (typename std::map<T,U*>::const_iterator p = m.begin(); p != m.end(); ++p) {
     encode(p->first, bl);
@@ -547,7 +545,7 @@ inline void encode(const std::map<T,U*>& m, bufferlist& bl)
 template<class T, class U>
 inline void decode(std::map<T,U*>& m, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   m.clear();
   while (n--) {
@@ -561,7 +559,7 @@ inline void decode(std::map<T,U*>& m, bufferlist::iterator& p)
 template<class T, class U>
 inline void encode(const std::map<T,U>& m, bufferlist& bl)
 {
-  __u32 n = m.size();
+  uint32_t n = m.size();
   encode(n, bl);
   for (typename std::map<T,U>::const_iterator p = m.begin(); p != m.end(); ++p) {
     encode(p->first, bl);
@@ -571,7 +569,7 @@ inline void encode(const std::map<T,U>& m, bufferlist& bl)
 template<class T, class U>
 inline void encode(const std::map<T,U>& m, bufferlist& bl, uint64_t features)
 {
-  __u32 n = m.size();
+  uint32_t n = m.size();
   encode(n, bl);
   for (typename std::map<T,U>::const_iterator p = m.begin(); p != m.end(); ++p) {
     encode(p->first, bl, features);
@@ -581,7 +579,7 @@ inline void encode(const std::map<T,U>& m, bufferlist& bl, uint64_t features)
 template<class T, class U>
 inline void decode(std::map<T,U>& m, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   m.clear();
   while (n--) {
@@ -593,7 +591,7 @@ inline void decode(std::map<T,U>& m, bufferlist::iterator& p)
 template<class T, class U>
 inline void decode_noclear(std::map<T,U>& m, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   while (n--) {
     T k;
@@ -632,7 +630,7 @@ inline void decode_nohead(int n, std::map<T,U>& m, bufferlist::iterator& p)
 template<class T, class U>
 inline void encode(const std::multimap<T,U>& m, bufferlist& bl)
 {
-  __u32 n = m.size();
+  uint32_t n = m.size();
   encode(n, bl);
   for (typename std::multimap<T,U>::const_iterator p = m.begin(); p != m.end(); ++p) {
     encode(p->first, bl);
@@ -642,7 +640,7 @@ inline void encode(const std::multimap<T,U>& m, bufferlist& bl)
 template<class T, class U>
 inline void decode(std::multimap<T,U>& m, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   m.clear();
   while (n--) {
@@ -657,7 +655,7 @@ inline void decode(std::multimap<T,U>& m, bufferlist::iterator& p)
 template<class T, class U>
 inline void encode(const unordered_map<T,U>& m, bufferlist& bl)
 {
-  __u32 n = m.size();
+  uint32_t n = m.size();
   encode(n, bl);
   for (typename unordered_map<T,U>::const_iterator p = m.begin(); p != m.end(); ++p) {
     encode(p->first, bl);
@@ -667,7 +665,7 @@ inline void encode(const unordered_map<T,U>& m, bufferlist& bl)
 template<class T, class U>
 inline void decode(unordered_map<T,U>& m, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   m.clear();
   while (n--) {
@@ -681,7 +679,7 @@ inline void decode(unordered_map<T,U>& m, bufferlist::iterator& p)
 template<class T>
 inline void encode(const ceph::unordered_set<T>& m, bufferlist& bl)
 {
-  __u32 n = m.size();
+  uint32_t n = m.size();
   encode(n, bl);
   for (typename ceph::unordered_set<T>::const_iterator p = m.begin(); p != m.end(); ++p)
     encode(*p, bl);
@@ -689,7 +687,7 @@ inline void encode(const ceph::unordered_set<T>& m, bufferlist& bl)
 template<class T>
 inline void decode(ceph::unordered_set<T>& m, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   m.clear();
   while (n--) {
@@ -703,7 +701,7 @@ inline void decode(ceph::unordered_set<T>& m, bufferlist::iterator& p)
 template<class T>
 inline void encode(const std::deque<T>& ls, bufferlist& bl)
 {
-  __u32 n = ls.size();
+  uint32_t n = ls.size();
   encode(n, bl);
   for (typename std::deque<T>::const_iterator p = ls.begin(); p != ls.end(); ++p)
     encode(*p, bl);
@@ -711,7 +709,7 @@ inline void encode(const std::deque<T>& ls, bufferlist& bl)
 template<class T>
 inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
 {
-  __u32 n;
+  uint32_t n;
   decode(n, p);
   ls.clear();
   while (n--) {
@@ -734,7 +732,7 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
  * @param bl bufferlist to encode to
  */
 #define ENCODE_START(v, compat, bl)			     \
-  __u8 struct_v = v, struct_compat = compat;		     \
+  uint8_t struct_v = v, struct_compat = compat;		     \
   ::encode(struct_v, bl);				     \
   ::encode(struct_compat, bl);				     \
   buffer::list::iterator struct_compat_it = bl.end();	     \
@@ -790,12 +788,12 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
  * @param bl bufferlist::iterator for the encoded data
  */
 #define DECODE_START(v, bl)						\
-  __u8 struct_v, struct_compat;						\
+  uint8_t struct_v, struct_compat;						\
   ::decode(struct_v, bl);						\
   ::decode(struct_compat, bl);						\
   if (v < struct_compat)						\
     throw buffer::malformed_input(DECODE_ERR_VERSION(__PRETTY_FUNCTION__, v)); \
-  __u32 struct_len;							\
+  uint32_t struct_len;							\
   ::decode(struct_len, bl);						\
   if (struct_len > bl.get_remaining())					\
     throw buffer::malformed_input(DECODE_ERR_PAST(__PRETTY_FUNCTION__)); \
@@ -803,10 +801,10 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
   do {
 
 #define __DECODE_START_LEGACY_COMPAT_LEN(v, compatv, lenv, skip_v, bl)	\
-  __u8 struct_v;							\
+  uint8_t struct_v;							\
   ::decode(struct_v, bl);						\
   if (struct_v >= compatv) {						\
-    __u8 struct_compat;							\
+    uint8_t struct_compat;							\
     ::decode(struct_compat, bl);					\
     if (v < struct_compat)						\
       throw buffer::malformed_input(DECODE_ERR_VERSION(__PRETTY_FUNCTION__, v)); \
@@ -817,7 +815,7 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
   }									\
   unsigned struct_end = 0;						\
   if (struct_v >= lenv) {						\
-    __u32 struct_len;							\
+    uint32_t struct_len;							\
     ::decode(struct_len, bl);						\
     if (struct_len > bl.get_remaining())				\
       throw buffer::malformed_input(DECODE_ERR_PAST(__PRETTY_FUNCTION__)); \
@@ -828,15 +826,15 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
 /**
  * start a decoding block with legacy support for older encoding schemes
  *
- * The old encoding schemes has a __u8 struct_v only, or lacked either
+ * The old encoding schemes has a uint8_t struct_v only, or lacked either
  * the compat version or length.  Skip those fields conditionally.
  *
  * Most of the time, v, compatv, and lenv will all match the version
  * where the structure was switched over to the new macros.
  *
  * @param v current version of the encoding that the code supports/encodes
- * @param compatv oldest version that includes a __u8 compat version field
- * @param lenv oldest version that includes a __u32 length wrapper
+ * @param compatv oldest version that includes a uint8_t compat version field
+ * @param lenv oldest version that includes a uint32_t length wrapper
  * @param bl bufferlist::iterator containing the encoded data
  */
 #define DECODE_START_LEGACY_COMPAT_LEN(v, compatv, lenv, bl)		\
@@ -848,15 +846,15 @@ inline void decode(std::deque<T>& ls, bufferlist::iterator& p)
  * This version of the macro assumes the legacy encoding had a 32 bit
  * version
  *
- * The old encoding schemes has a __u8 struct_v only, or lacked either
+ * The old encoding schemes has a uint8_t struct_v only, or lacked either
  * the compat version or length.  Skip those fields conditionally.
  *
  * Most of the time, v, compatv, and lenv will all match the version
  * where the structure was switched over to the new macros.
  *
  * @param v current version of the encoding that the code supports/encodes
- * @param compatv oldest version that includes a __u8 compat version field
- * @param lenv oldest version that includes a __u32 length wrapper
+ * @param compatv oldest version that includes a uint8_t compat version field
+ * @param lenv oldest version that includes a uint32_t length wrapper
  * @param bl bufferlist::iterator containing the encoded data
  */
 #define DECODE_START_LEGACY_COMPAT_LEN_32(v, compatv, lenv, bl)		\

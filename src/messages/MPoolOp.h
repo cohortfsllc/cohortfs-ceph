@@ -25,12 +25,12 @@ class MPoolOp : public PaxosServiceMessage {
 
 public:
   uuid_d fsid;
-  __u32 pool;
+  uint32_t pool;
   string name;
-  __u32 op;
+  uint32_t op;
   uint64_t auid;
   snapid_t snapid;
-  __s16 crush_rule;
+  int16_t crush_rule;
 
   MPoolOp()
     : PaxosServiceMessage(CEPH_MSG_POOLOP, 0, HEAD_VERSION, COMPAT_VERSION) { }
@@ -69,7 +69,7 @@ public:
     ::encode(auid, payload);
     ::encode(snapid, payload);
     ::encode(name, payload);
-    __u8 pad = 0;
+    uint8_t pad = 0;
     ::encode(pad, payload);  /* for v3->v4 encoding change */
     ::encode(crush_rule, payload);
   }
@@ -87,7 +87,7 @@ public:
       ::decode(name, p);
 
     if (header.version >= 3) {
-      __u8 pad;
+      uint8_t pad;
       ::decode(pad, p);
       if (header.version >= 4)
 	::decode(crush_rule, p);

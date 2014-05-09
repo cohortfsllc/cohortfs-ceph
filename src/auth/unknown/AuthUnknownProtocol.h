@@ -20,7 +20,7 @@
 struct AuthUnknownAuthorizer : public AuthAuthorizer {
   AuthUnknownAuthorizer() : AuthAuthorizer(CEPH_AUTH_UNKNOWN) { }
   bool build_authorizer(const EntityName &ename, uint64_t global_id) {
-    __u8 struct_v = 1;
+    uint8_t struct_v = 1;
     ::encode(struct_v, bl);
     ::encode(ename, bl);
     ::encode(global_id, bl);

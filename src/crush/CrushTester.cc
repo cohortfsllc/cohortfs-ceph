@@ -88,7 +88,7 @@ map<int,int> CrushTester::get_collapsed_mapping()
   return collapse_mask;
 }
 
-void CrushTester::adjust_weights(vector<__u32>& weight)
+void CrushTester::adjust_weights(vector<uint32_t>& weight)
 {
 
   if (mark_down_device_ratio > 0) {
@@ -145,7 +145,7 @@ void CrushTester::adjust_weights(vector<__u32>& weight)
   }
 }
 
-bool CrushTester::check_valid_placement(int ruleno, vector<int> in, const vector<__u32>& weight)
+bool CrushTester::check_valid_placement(int ruleno, vector<int> in, const vector<uint32_t>& weight)
 {
 
   bool valid_placement = true;
@@ -236,7 +236,7 @@ bool CrushTester::check_valid_placement(int ruleno, vector<int> in, const vector
   return valid_placement;
 }
 
-int CrushTester::random_placement(int ruleno, vector<int>& out, int maxout, vector<__u32>& weight)
+int CrushTester::random_placement(int ruleno, vector<int>& out, int maxout, vector<uint32_t>& weight)
 {
   // get the total weight of the system
   int total_weight = 0;
@@ -362,7 +362,7 @@ int CrushTester::test()
   }
 
   // initial osd weights
-  vector<__u32> weight;
+  vector<uint32_t> weight;
 
   /*
    * note device weight is set by crushtool
@@ -386,7 +386,7 @@ int CrushTester::test()
 
 
   int num_devices_active = 0;
-  for (vector<__u32>::iterator p = weight.begin(); p != weight.end(); ++p)
+  for (vector<uint32_t>::iterator p = weight.begin(); p != weight.end(); ++p)
     if (*p > 0)
       num_devices_active++;
 
@@ -582,7 +582,7 @@ int CrushTester::test()
   }
 
   if (output_choose_tries) {
-    __u32 *v = 0;
+    uint32_t *v = 0;
     int n = crush.get_choose_profile(&v);
     for (int i=0; i<n; i++) {
       cout.setf(std::ios::right);

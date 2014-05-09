@@ -24,12 +24,12 @@ class MLock : public Message {
   int32_t     action;  // action type
   int32_t     asker;  // who is initiating this request
   metareqid_t reqid;  // for remote lock requests
-  
-  __u16      lock_type;  // lock object type
-  MDSCacheObjectInfo object_info;  
-  
+
+  uint16_t      lock_type;  // lock object type
+  MDSCacheObjectInfo object_info;
+
   bufferlist lockdata;  // and possibly some data
-  
+
 public:
   bufferlist& get_data() { return lockdata; }
   int get_asker() { return asker; }

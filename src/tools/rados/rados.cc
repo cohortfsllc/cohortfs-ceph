@@ -2066,14 +2066,14 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
   else if (strcmp(nargs[0], "mkpool") == 0) {
     int auid = 0;
-    __u8 crush_rule = 0;
+    uint8_t crush_rule = 0;
     if (nargs.size() < 2)
       usage_exit();
     if (nargs.size() > 2) {
       auid = strtol(nargs[2], 0, 10);
       cerr << "setting auid:" << auid << std::endl;
       if (nargs.size() > 3) {
-	crush_rule = (__u8)strtol(nargs[3], 0, 10);
+	crush_rule = (uint8_t)strtol(nargs[3], 0, 10);
 	cerr << "using crush rule " << (int)crush_rule << std::endl;
       }
     }

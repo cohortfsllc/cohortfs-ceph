@@ -39,7 +39,7 @@ class CrushTester {
  * mark a ratio of devices down, can be used to simulate placement distributions
  * under degrated cluster conditions
  */
-  void adjust_weights(vector<__u32>& weight);
+  void adjust_weights(vector<uint32_t>& weight);
 
   /*
    * Get the maximum number of devices that could be selected to satisfy ruleno.
@@ -64,14 +64,14 @@ class CrushTester {
    * Essentially a re-implementation of CRUSH. Given a vector of devices
    * check that the vector represents a valid placement for a given ruleno.
    */
-  bool check_valid_placement(int ruleno, vector<int> in, const vector<__u32>& weight);
+  bool check_valid_placement(int ruleno, vector<int> in, const vector<uint32_t>& weight);
 
   /*
    * Generate a random selection of devices which satisfies ruleno. Essentially a
    * monte-carlo simulator for CRUSH placements which can be used to compare the
    * statistical distribution of the CRUSH algorithm to a random number generator
    */
-  int random_placement(int ruleno, vector<int>& out, int maxout, vector<__u32>& weight);
+  int random_placement(int ruleno, vector<int>& out, int maxout, vector<uint32_t>& weight);
 
   // scaffolding to store data for off-line processing
    struct tester_data_set {

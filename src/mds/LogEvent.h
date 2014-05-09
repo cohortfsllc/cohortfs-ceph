@@ -54,9 +54,9 @@ class LogSegment;
 // generic log event
 class LogEvent {
  private:
-  __u32 _type;
+  uint32_t _type;
   uint64_t _start_off;
-  static LogEvent *decode_event(bufferlist& bl, bufferlist::iterator& p, __u32 type);
+  static LogEvent *decode_event(bufferlist& bl, bufferlist::iterator& p, uint32_t type);
 
 protected:
   utime_t stamp;

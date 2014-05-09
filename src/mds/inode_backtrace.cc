@@ -72,7 +72,7 @@ void inode_backtrace_t::decode(bufferlist::iterator& bl)
   if (struct_v >= 4) {
     ::decode(ancestors, bl);
   } else {
-    __u32 n;
+    uint32_t n;
     ::decode(n, bl);
     while (n--) {
       ancestors.push_back(inode_backpointer_t());

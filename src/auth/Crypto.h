@@ -31,7 +31,7 @@ class CryptoHandler;
  */
 class CryptoKey {
 protected:
-  __u16 type;
+  uint16_t type;
   utime_t created;
   bufferptr secret;
 
@@ -46,14 +46,14 @@ public:
   void encode(bufferlist& bl) const {
     ::encode(type, bl);
     ::encode(created, bl);
-    __u16 len = secret.length();
+    uint16_t len = secret.length();
     ::encode(len, bl);
     bl.append(secret);
   }
   void decode(bufferlist::iterator& bl) {
     ::decode(type, bl);
     ::decode(created, bl);
-    __u16 len;
+    uint16_t len;
     ::decode(len, bl);
     bl.copy(len, secret);
     secret.c_str();   // make sure it's a single buffer!

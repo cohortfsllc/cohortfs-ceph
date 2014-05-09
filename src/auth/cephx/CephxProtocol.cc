@@ -85,7 +85,7 @@ bool cephx_build_service_ticket_reply(CephContext *cct,
                      CryptoKey& ticket_enc_key,
                      bufferlist& reply)
 {
-  __u8 service_ticket_reply_v = 1;
+  uint8_t service_ticket_reply_v = 1;
   ::encode(service_ticket_reply_v, reply);
 
   uint32_t num = ticket_info_vec.size();
@@ -99,7 +99,7 @@ bool cephx_build_service_ticket_reply(CephContext *cct,
     CephXSessionAuthInfo& info = *ticket_iter;
     ::encode(info.service_id, reply);
 
-    __u8 service_ticket_v = 1;
+    uint8_t service_ticket_v = 1;
     ::encode(service_ticket_v, reply);
 
     CephXServiceTicket msg_a;
@@ -122,7 +122,7 @@ bool cephx_build_service_ticket_reply(CephContext *cct,
     service_ticket_bl.hexdump(*_dout);
     *_dout << dendl;
 
-    ::encode((__u8)should_encrypt_ticket, reply);
+    ::encode((uint8_t)should_encrypt_ticket, reply);
     if (should_encrypt_ticket) {
       if (encode_encrypt(cct, service_ticket_bl, ticket_enc_key, reply, error)) {
 	ldout(cct, -1) << "error encoding encrypted ticket: " << error << dendl;
@@ -142,7 +142,7 @@ bool cephx_build_service_ticket_reply(CephContext *cct,
 bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
 						     bufferlist::iterator& indata)
 {
-  __u8 service_ticket_v;
+  uint8_t service_ticket_v;
   ::decode(service_ticket_v, indata);
 
   CephXServiceTicket msg_a;
@@ -152,7 +152,7 @@ bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
     return false;
   }
   
-  __u8 ticket_enc;
+  uint8_t ticket_enc;
   ::decode(ticket_enc, indata);
 
   bufferlist service_ticket_bl;
@@ -261,7 +261,7 @@ void CephXTicketManager::invalidate_ticket(uint32_t service_id)
 bool CephXTicketManager::verify_service_ticket_reply(CryptoKey& secret,
 						     bufferlist::iterator& indata)
 {
-  __u8 service_ticket_reply_v;
+  uint8_t service_ticket_reply_v;
   ::decode(service_ticket_reply_v, indata);
 
   uint32_t num;
@@ -296,7 +296,7 @@ CephXAuthorizer *CephXTicketHandler::build_authorizer(uint64_t global_id) const
   a->session_key = session_key;
   a->nonce = ((uint64_t)rand() << 32) + rand();
 
-  __u8 authorizer_v = 1;
+  uint8_t authorizer_v = 1;
   ::encode(authorizer_v, a->bl);
   ::encode(global_id, a->bl);
   ::encode(service_id, a->bl);
@@ -390,7 +390,7 @@ bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
 			     bufferlist::iterator& indata,
 			     CephXServiceTicketInfo& ticket_info, bufferlist& reply_bl)
 {
-  __u8 authorizer_v;
+  uint8_t authorizer_v;
   uint32_t service_id;
   uint64_t global_id;
   CryptoKey service_secret;

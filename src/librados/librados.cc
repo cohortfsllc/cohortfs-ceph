@@ -1613,7 +1613,7 @@ int librados::Rados::pool_create(const char *name, uint64_t auid)
   return client->pool_create(str, auid);
 }
 
-int librados::Rados::pool_create(const char *name, uint64_t auid, __u8 crush_rule)
+int librados::Rados::pool_create(const char *name, uint64_t auid, uint8_t crush_rule)
 {
   string str(name);
   return client->pool_create(str, auid, crush_rule);
@@ -1631,7 +1631,7 @@ int librados::Rados::pool_create_async(const char *name, uint64_t auid, PoolAsyn
   return client->pool_create_async(str, c->pc, auid);
 }
 
-int librados::Rados::pool_create_async(const char *name, uint64_t auid, __u8 crush_rule,
+int librados::Rados::pool_create_async(const char *name, uint64_t auid, uint8_t crush_rule,
 				       PoolAsyncCompletion *c)
 {
   string str(name);
@@ -2407,7 +2407,7 @@ extern "C" int rados_pool_create_with_auid(rados_t cluster, const char *name,
 }
 
 extern "C" int rados_pool_create_with_crush_rule(rados_t cluster, const char *name,
-						 __u8 crush_rule_num)
+						 uint8_t crush_rule_num)
 {
   librados::RadosClient *radosp = (librados::RadosClient *)cluster;
   string sname(name);
@@ -2415,7 +2415,7 @@ extern "C" int rados_pool_create_with_crush_rule(rados_t cluster, const char *na
 }
 
 extern "C" int rados_pool_create_with_all(rados_t cluster, const char *name,
-					  uint64_t auid, __u8 crush_rule_num)
+					  uint64_t auid, uint8_t crush_rule_num)
 {
   librados::RadosClient *radosp = (librados::RadosClient *)cluster;
   string sname(name);

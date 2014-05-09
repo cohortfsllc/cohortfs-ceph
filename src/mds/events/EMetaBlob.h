@@ -69,7 +69,7 @@ public:
     fragtree_t dirfragtree;
     map<string,bufferptr> xattrs;
     string symlink;
-    __u8 state;
+    uint8_t state;
 
     bufferlist _enc;
 
@@ -79,7 +79,7 @@ public:
     fullbit(const string& d,
 	    version_t v, const inode_t& i, const fragtree_t &dft, 
 	    const map<string,bufferptr> &xa, const string& sym,
-	    __u8 st) :
+	    uint8_t st) :
       _enc(1024)
     {
       ::encode(d, _enc);
@@ -209,8 +209,8 @@ public:
 
     //version_t  dirv;
     fnode_t fnode;
-    __u32 state;
-    __u32 nfull, nremote, nnull;
+    uint32_t state;
+    uint32_t nfull, nremote, nnull;
 
   private:
     mutable bufferlist dnbl;
@@ -297,7 +297,7 @@ private:
   map<dirfrag_t, dirlump> lump_map;
   list<ceph::shared_ptr<fullbit> > roots;
 
-  list<pair<__u8,version_t> > table_tids;  // tableclient transactions
+  list<pair<uint8_t,version_t> > table_tids;  // tableclient transactions
 
   inodeno_t opened_ino;
 public:
@@ -349,7 +349,7 @@ private:
   }
 
   void add_table_transaction(int table, version_t tid) {
-    table_tids.push_back(pair<__u8, version_t>(table, tid));
+    table_tids.push_back(pair<uint8_t, version_t>(table, tid));
   }
 
   void add_opened_ino(inodeno_t ino) {
@@ -414,13 +414,13 @@ private:
   // return remote pointer to to-be-journaled inode
   void add_primary_dentry(CDentry *dn, CInode *in, bool dirty,
 			  bool dirty_parent=false, bool dirty_pool=false) {
-    __u8 state = 0;
+    uint8_t state = 0;
     if (dirty) state |= fullbit::STATE_DIRTY;
     if (dirty_parent) state |= fullbit::STATE_DIRTYPARENT;
     if (dirty_pool) state |= fullbit::STATE_DIRTYPOOL;
     add_primary_dentry(add_dir(dn->get_dir(), false), dn, in, state);
   }
-  void add_primary_dentry(dirlump& lump, CDentry *dn, CInode *in, __u8 state) {
+  void add_primary_dentry(dirlump& lump, CDentry *dn, CInode *in, uint8_t state) {
     if (!in) 
       in = dn->get_projected_linkage()->get_inode();
 

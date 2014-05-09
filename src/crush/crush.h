@@ -1,8 +1,7 @@
 #ifndef CEPH_CRUSH_CRUSH_H
 #define CEPH_CRUSH_CRUSH_H
 
-#include "include/int_types.h"
-
+#include <inttypes.h>
 #if defined(__linux__)
 #include <linux/types.h>
 #elif defined(__FreeBSD__)
@@ -39,9 +38,9 @@
  * to generate the set of output devices.
  */
 struct crush_rule_step {
-	__u32 op;
-	__s32 arg1;
-	__s32 arg2;
+	uint32_t op;
+	int32_t arg1;
+	int32_t arg2;
 };
 
 /* step op codes */
@@ -75,14 +74,14 @@ enum {
  * rule list for a matching rule_mask.
  */
 struct crush_rule_mask {
-	__u8 ruleset;
-	__u8 type;
-	__u8 min_size;
-	__u8 max_size;
+	uint8_t ruleset;
+	uint8_t type;
+	uint8_t min_size;
+	uint8_t max_size;
 };
 
 struct crush_rule {
-	__u32 len;
+	uint32_t len;
 	struct crush_rule_mask mask;
 	struct crush_rule_step steps[0];
 };
@@ -115,46 +114,46 @@ enum {
 extern const char *crush_bucket_alg_name(int alg);
 
 struct crush_bucket {
-	__s32 id;        /* this'll be negative */
-	__u16 type;      /* non-zero; type=0 is reserved for devices */
-	__u8 alg;        /* one of CRUSH_BUCKET_* */
-	__u8 hash;       /* which hash function to use, CRUSH_HASH_* */
-	__u32 weight;    /* 16-bit fixed point */
-	__u32 size;      /* num items */
-	__s32 *items;
+	int32_t id;        /* this'll be negative */
+	uint16_t type;      /* non-zero; type=0 is reserved for devices */
+	uint8_t alg;        /* one of CRUSH_BUCKET_* */
+	uint8_t hash;       /* which hash function to use, CRUSH_HASH_* */
+	uint32_t weight;    /* 16-bit fixed point */
+	uint32_t size;      /* num items */
+	int32_t *items;
 
 	/*
 	 * cached random permutation: used for uniform bucket and for
 	 * the linear search fallback for the other bucket types.
 	 */
-	__u32 perm_x;  /* @x for which *perm is defined */
-	__u32 perm_n;  /* num elements of *perm that are permuted/defined */
-	__u32 *perm;
+	uint32_t perm_x;  /* @x for which *perm is defined */
+	uint32_t perm_n;  /* num elements of *perm that are permuted/defined */
+	uint32_t *perm;
 };
 
 struct crush_bucket_uniform {
 	struct crush_bucket h;
-	__u32 item_weight;  /* 16-bit fixed point; all items equally weighted */
+	uint32_t item_weight;  /* 16-bit fixed point; all items equally weighted */
 };
 
 struct crush_bucket_list {
 	struct crush_bucket h;
-	__u32 *item_weights;  /* 16-bit fixed point */
-	__u32 *sum_weights;   /* 16-bit fixed point.  element i is sum
+	uint32_t *item_weights;  /* 16-bit fixed point */
+	uint32_t *sum_weights;   /* 16-bit fixed point.  element i is sum
 				 of weights 0..i, inclusive */
 };
 
 struct crush_bucket_tree {
 	struct crush_bucket h;  /* note: h.size is _tree_ size, not number of
 				   actual items */
-	__u8 num_nodes;
-	__u32 *node_weights;
+	uint8_t num_nodes;
+	uint32_t *node_weights;
 };
 
 struct crush_bucket_straw {
 	struct crush_bucket h;
-	__u32 *item_weights;   /* 16-bit fixed point */
-	__u32 *straws;         /* 16-bit fixed point */
+	uint32_t *item_weights;   /* 16-bit fixed point */
+	uint32_t *straws;         /* 16-bit fixed point */
 };
 
 
@@ -166,37 +165,37 @@ struct crush_map {
 	struct crush_bucket **buckets;
 	struct crush_rule **rules;
 
-	__s32 max_buckets;
-	__u32 max_rules;
-	__s32 max_devices;
+	int32_t max_buckets;
+	uint32_t max_rules;
+	int32_t max_devices;
 
 	/* choose local retries before re-descent */
-	__u32 choose_local_tries;
+	uint32_t choose_local_tries;
 	/* choose local attempts using a fallback permutation before
 	 * re-descent */
-	__u32 choose_local_fallback_tries;
-	/* choose attempts before giving up */ 
-	__u32 choose_total_tries;
+	uint32_t choose_local_fallback_tries;
+	/* choose attempts before giving up */
+	uint32_t choose_total_tries;
 	/* attempt chooseleaf inner descent once for firstn mode; on
 	 * reject retry outer descent.  Note that this does *not*
 	 * apply to a collision: in that case we will retry as we used
 	 * to. */
-	__u32 chooseleaf_descend_once;
+	uint32_t chooseleaf_descend_once;
 
 	/* if non-zero, feed r into chooseleaf, bit-shifted right by (r-1)
 	 * bits.  a value of 1 is best for new clusters.  for legacy clusters
 	 * that want to limit reshuffling, a value of 3 or 4 will make the
 	 * mappings line up a bit better with previous mappings. */
-	__u8 chooseleaf_vary_r;
+	uint8_t chooseleaf_vary_r;
 
-	__u32 *choose_tries;
+	uint32_t *choose_tries;
 };
 
 
 /* crush.c */
 extern int crush_get_bucket_item_weight(const struct crush_bucket *b, int pos);
-extern int crush_addition_is_unsafe(__u32 a, __u32 b);
-extern int crush_multiplication_is_unsafe(__u32  a, __u32 b);
+extern int crush_addition_is_unsafe(uint32_t a, uint32_t b);
+extern int crush_multiplication_is_unsafe(uint32_t  a, uint32_t b);
 extern void crush_destroy_bucket_uniform(struct crush_bucket_uniform *b);
 extern void crush_destroy_bucket_list(struct crush_bucket_list *b);
 extern void crush_destroy_bucket_tree(struct crush_bucket_tree *b);

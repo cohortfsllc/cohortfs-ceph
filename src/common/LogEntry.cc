@@ -143,7 +143,7 @@ void LogEntry::log_to_syslog(string level, string facility)
 void LogEntry::encode(bufferlist& bl) const
 {
   ENCODE_START(2, 2, bl);
-  __u16 t = type;
+  uint16_t t = type;
   ::encode(who, bl);
   ::encode(stamp, bl);
   ::encode(seq, bl);
@@ -155,7 +155,7 @@ void LogEntry::encode(bufferlist& bl) const
 void LogEntry::decode(bufferlist::iterator& bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  __u16 t;
+  uint16_t t;
   ::decode(who, bl);
   ::decode(stamp, bl);
   ::decode(seq, bl);

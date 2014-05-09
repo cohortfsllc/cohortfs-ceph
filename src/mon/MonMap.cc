@@ -20,7 +20,7 @@ using ceph::Formatter;
 void MonMap::encode(bufferlist& blist, uint64_t features) const
 {
   if ((features & CEPH_FEATURE_MONNAMES) == 0) {
-    __u16 v = 1;
+    uint16_t v = 1;
     ::encode(v, blist);
     ::encode_raw(fsid, blist);
     ::encode(epoch, blist);
@@ -34,7 +34,7 @@ void MonMap::encode(bufferlist& blist, uint64_t features) const
   }
 
   if ((features & CEPH_FEATURE_MONENC) == 0) {
-    __u16 v = 2;
+    uint16_t v = 2;
     ::encode(v, blist);
     ::encode_raw(fsid, blist);
     ::encode(epoch, blist);

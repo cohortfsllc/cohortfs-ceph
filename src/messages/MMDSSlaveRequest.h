@@ -92,15 +92,15 @@ class MMDSSlaveRequest : public Message {
 
  private:
   metareqid_t reqid;
-  __u32 attempt;
-  __s16 op;
-  __u16 flags;
+  uint32_t attempt;
+  int16_t op;
+  uint16_t flags;
 
   static const unsigned FLAG_NONBLOCK	= 1;
   static const unsigned FLAG_WOULDBLOCK	= 2;
 
   // for locking
-  __u16 lock_type;  // lock object type
+  uint16_t lock_type;  // lock object type
   MDSCacheObjectInfo object_info;
   
   // for authpins
@@ -110,7 +110,7 @@ class MMDSSlaveRequest : public Message {
   // for rename prep
   filepath srcdnpath;
   filepath destdnpath;
-  set<__s32> witnesses;
+  set<int32_t> witnesses;
   bufferlist inode_export;
   version_t inode_export_v;
   bufferlist srci_replica;
@@ -120,7 +120,7 @@ class MMDSSlaveRequest : public Message {
 
 public:
   metareqid_t get_reqid() { return reqid; }
-  __u32 get_attempt() const { return attempt; }
+  uint32_t get_attempt() const { return attempt; }
   int get_op() { return op; }
   bool is_reply() { return op < 0; }
 
@@ -139,7 +139,7 @@ public:
 
   // ----
   MMDSSlaveRequest() : Message(MSG_MDS_SLAVE_REQUEST) { }
-  MMDSSlaveRequest(metareqid_t ri, __u32 att, int o) : 
+  MMDSSlaveRequest(metareqid_t ri, uint32_t att, int o) : 
     Message(MSG_MDS_SLAVE_REQUEST),
     reqid(ri), attempt(att), op(o), flags(0), lock_type(0),
     inode_export_v(0) { }

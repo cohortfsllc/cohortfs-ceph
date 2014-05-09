@@ -194,7 +194,7 @@ void SessionMap::decode(bufferlist::iterator& p)
     version = pre;
 
     // this is a meaningless upper bound.  can be ignored.
-    __u32 n;
+    uint32_t n;
     ::decode(n, p);
     
     while (n-- && !p.end()) {

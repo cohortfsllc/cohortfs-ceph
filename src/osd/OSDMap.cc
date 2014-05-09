@@ -41,7 +41,7 @@ void osd_info_t::dump(Formatter *f) const
 
 void osd_info_t::encode(bufferlist& bl) const
 {
-  __u8 struct_v = 1;
+  uint8_t struct_v = 1;
   ::encode(struct_v, bl);
   ::encode(last_clean_begin, bl);
   ::encode(last_clean_end, bl);
@@ -53,7 +53,7 @@ void osd_info_t::encode(bufferlist& bl) const
 
 void osd_info_t::decode(bufferlist::iterator& bl)
 {
-  __u8 struct_v;
+  uint8_t struct_v;
   ::decode(struct_v, bl);
   ::decode(last_clean_begin, bl);
   ::decode(last_clean_end, bl);
@@ -101,7 +101,7 @@ void osd_xinfo_t::encode(bufferlist& bl) const
 {
   ENCODE_START(2, 1, bl);
   ::encode(down_stamp, bl);
-  __u32 lp = laggy_probability * 0xfffffffful;
+  uint32_t lp = laggy_probability * 0xfffffffful;
   ::encode(lp, bl);
   ::encode(laggy_interval, bl);
   ::encode(features, bl);
@@ -112,7 +112,7 @@ void osd_xinfo_t::decode(bufferlist::iterator& bl)
 {
   DECODE_START(1, bl);
   ::decode(down_stamp, bl);
-  __u32 lp;
+  uint32_t lp;
   ::decode(lp, bl);
   laggy_probability = (float)lp / (float)0xffffffff;
   ::decode(laggy_interval, bl);
@@ -286,7 +286,7 @@ bool OSDMap::containing_subtree_is_down(CephContext *cct, int id, int subtree_ty
 
 void OSDMap::Incremental::encode_client_old(bufferlist& bl) const
 {
-  __u16 v = 5;
+  uint16_t v = 5;
   ::encode(v, bl);
   ::encode(fsid, bl);
   ::encode(epoch, bl);
@@ -299,7 +299,7 @@ void OSDMap::Incremental::encode_client_old(bufferlist& bl) const
 
   ::encode(new_max_osd, bl);
   // for ::encode(new_pools, bl);
-  __u32 n = new_pools.size();
+  uint32_t n = new_pools.size();
   ::encode(n, bl);
   for (map<int64_t,pg_pool_t>::const_iterator p = new_pools.begin();
        p != new_pools.end();
@@ -346,7 +346,7 @@ void OSDMap::Incremental::encode_classic(bufferlist& bl, uint64_t features) cons
   }
 
   // base
-  __u16 v = 6;
+  uint16_t v = 6;
   ::encode(v, bl);
   ::encode(fsid, bl);
   ::encode(epoch, bl);
@@ -366,7 +366,7 @@ void OSDMap::Incremental::encode_classic(bufferlist& bl, uint64_t features) cons
   ::encode(new_pg_temp, bl);
 
   // extended
-  __u16 ev = 10;
+  uint16_t ev = 10;
   ::encode(ev, bl);
   ::encode(new_hb_back_up, bl);
   ::encode(new_up_thru, bl);
@@ -439,9 +439,9 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
 
 void OSDMap::Incremental::decode_classic(bufferlist::iterator &p)
 {
-  __u32 n, t;
+  uint32_t n, t;
   // base
-  __u16 v;
+  uint16_t v;
   ::decode(v, p);
   ::decode(fsid, p);
   ::decode(epoch, p);
@@ -507,7 +507,7 @@ void OSDMap::Incremental::decode_classic(bufferlist::iterator &p)
     return;
 
   // extended
-  __u16 ev = 0;
+  uint16_t ev = 0;
   if (v >= 5)
     ::decode(ev, p);
   ::decode(new_hb_back_up, p);
@@ -1645,7 +1645,7 @@ bool OSDMap::primary_changed(
 // serialize, unserialize
 void OSDMap::encode_client_old(bufferlist& bl) const
 {
-  __u16 v = 5;
+  uint16_t v = 5;
   ::encode(v, bl);
 
   // base
@@ -1655,7 +1655,7 @@ void OSDMap::encode_client_old(bufferlist& bl) const
   ::encode(modified, bl);
 
   // for ::encode(pools, bl);
-  __u32 n = pools.size();
+  uint32_t n = pools.size();
   ::encode(n, bl);
   for (map<int64_t,pg_pool_t>::const_iterator p = pools.begin();
        p != pools.end();
@@ -1709,7 +1709,7 @@ void OSDMap::encode_classic(bufferlist& bl, uint64_t features) const
     return;
   }
 
-  __u16 v = 6;
+  uint16_t v = 6;
   ::encode(v, bl);
 
   // base
@@ -1737,7 +1737,7 @@ void OSDMap::encode_classic(bufferlist& bl, uint64_t features) const
   ::encode(cbl, bl);
 
   // extended
-  __u16 ev = 10;
+  uint16_t ev = 10;
   ::encode(ev, bl);
   ::encode(osd_addrs->hb_back_addr, bl);
   ::encode(osd_info, bl);
@@ -1783,7 +1783,7 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
     if (osd_primary_affinity) {
       ::encode(*osd_primary_affinity, bl);
     } else {
-      vector<__u32> v;
+      vector<uint32_t> v;
       ::encode(v, bl);
     }
 
@@ -1820,8 +1820,8 @@ void OSDMap::decode(bufferlist& bl)
 
 void OSDMap::decode_classic(bufferlist::iterator& p)
 {
-  __u32 n, t;
-  __u16 v;
+  uint32_t n, t;
+  uint16_t v;
   ::decode(v, p);
 
   // base
@@ -1890,7 +1890,7 @@ void OSDMap::decode_classic(bufferlist::iterator& p)
   crush->decode(cblp);
 
   // extended
-  __u16 ev = 0;
+  uint16_t ev = 0;
   if (v >= 5)
     ::decode(ev, p);
   ::decode(osd_addrs->hb_back_addr, p);
@@ -1970,7 +1970,7 @@ void OSDMap::decode(bufferlist::iterator& bl)
     ::decode(*pg_temp, bl);
     ::decode(*primary_temp, bl);
     if (struct_v >= 2) {
-      osd_primary_affinity.reset(new vector<__u32>);
+      osd_primary_affinity.reset(new vector<uint32_t>);
       ::decode(*osd_primary_affinity, bl);
       if (osd_primary_affinity->empty())
 	osd_primary_affinity.reset();

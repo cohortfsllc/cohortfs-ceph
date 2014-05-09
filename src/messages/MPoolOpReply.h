@@ -20,7 +20,7 @@
 class MPoolOpReply : public PaxosServiceMessage {
 public:
   uuid_d fsid;
-  __u32 replyCode;
+  uint32_t replyCode;
   epoch_t epoch;
   bufferlist response_data;
 

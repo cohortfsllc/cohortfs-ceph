@@ -7,7 +7,7 @@
 class PaxosServiceMessage : public Message {
  public:
   version_t version;
-  __s16 deprecated_session_mon;
+  int16_t deprecated_session_mon;
   uint64_t deprecated_session_mon_tid;
 
   // track which epoch the leader received a forwarded request in, so we can

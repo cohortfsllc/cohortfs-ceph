@@ -7,8 +7,8 @@
 #ifndef CEPH_BYTEORDER_H
 #define CEPH_BYTEORDER_H
 
+#include <stdint.h>
 #include <sys/param.h>
-#include "int_types.h"
 
 #if defined(__APPLE__)
 # if __DARWIN_BYTE_ORDER == __DARWIN_LITTLE_ENDIAN
@@ -34,11 +34,11 @@
 # endif
 #endif
 
-static __inline__ __u16 swab16(__u16 val) 
+static __inline__ uint16_t swab16(uint16_t val) 
 {
   return (val >> 8) | (val << 8);
 }
-static __inline__ __u32 swab32(__u32 val) 
+static __inline__ uint32_t swab32(uint32_t val) 
 {
   return (( val >> 24) |
 	  ((val >> 8)  & 0xff00) |
@@ -73,13 +73,13 @@ static __inline__ uint64_t swab64(uint64_t val)
 #ifdef __cplusplus
 
 #define MAKE_LE_CLASS(bits)						\
-  struct ceph_le##bits {							\
-    __u##bits v;							\
-    ceph_le##bits &operator=(__u##bits nv) {				\
+  struct ceph_le##bits {						\
+    uint##bits##_t v;							\
+    ceph_le##bits &operator=(uint##bits##_t nv) {			\
       v = mswab##bits(nv);						\
       return *this;							\
     }									\
-    operator __u##bits() const { return mswab##bits(v); }		\
+    operator uint##bits##_t() const { return mswab##bits(v); }		\
   } __attribute__ ((packed));						\
   static inline bool operator==(ceph_le##bits a, ceph_le##bits b) {		\
     return a.v == b.v;							\
@@ -92,9 +92,9 @@ MAKE_LE_CLASS(16)
 
 #endif /* __cplusplus */
 
-#define init_le64(x) { (__u64)mswab64(x) }
-#define init_le32(x) { (__u32)mswab32(x) }
-#define init_le16(x) { (__u16)mswab16(x) }
+#define init_le64(x) { (uint64_t)mswab64(x) }
+#define init_le32(x) { (uint32_t)mswab32(x) }
+#define init_le16(x) { (uint16_t)mswab16(x) }
 
   /*
 #define cpu_to_le64(x) (x)
@@ -102,7 +102,7 @@ MAKE_LE_CLASS(16)
 #define cpu_to_le16(x) (x)
   */
 #define le64_to_cpu(x) ((uint64_t)x)
-#define le32_to_cpu(x) ((__u32)x)
-#define le16_to_cpu(x) ((__u16)x)
+#define le32_to_cpu(x) ((uint32_t)x)
+#define le16_to_cpu(x) ((uint16_t)x)
 
 #endif

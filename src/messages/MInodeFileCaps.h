@@ -18,7 +18,7 @@
 
 class MInodeFileCaps : public Message {
   inodeno_t ino;
-  __u32     caps;
+  uint32_t     caps;
 
  public:
   inodeno_t get_ino() { return ino; }

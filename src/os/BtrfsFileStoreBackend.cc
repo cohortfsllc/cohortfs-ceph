@@ -12,7 +12,6 @@
  *
  */
 
-#include "include/int_types.h"
 #include "include/types.h"
 
 #include <unistd.h>
@@ -152,7 +151,7 @@ int BtrfsFileStoreBackend::detect_features()
   }
 
   // start_sync?
-  __u64 transid = 0;
+  uint64_t transid = 0;
   r = ::ioctl(get_basedir_fd(), BTRFS_IOC_START_SYNC, &transid);
   if (r < 0) {
     int err = errno;

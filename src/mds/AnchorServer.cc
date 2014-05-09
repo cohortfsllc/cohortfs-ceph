@@ -72,7 +72,7 @@ void AnchorServer::generate_test_instances(list<AnchorServer*>& ls)
  * Returns true if it changed the anchor_map contents.
  */
 
-bool AnchorServer::add(inodeno_t ino, inodeno_t dirino, __u32 dn_hash,
+bool AnchorServer::add(inodeno_t ino, inodeno_t dirino, uint32_t dn_hash,
                        bool replace)
 {
   //dout(17) << "add " << ino << " dirfrag " << dirfrag << dendl;
@@ -147,7 +147,7 @@ void AnchorServer::dec(inodeno_t ino, int ref)
 void AnchorServer::_prepare(bufferlist &bl, uint64_t reqid, int bymds)
 {
   bufferlist::iterator p = bl.begin();
-  __u32 what;
+  uint32_t what;
   inodeno_t ino;
   vector<Anchor> trace;
   ::decode(what, p);

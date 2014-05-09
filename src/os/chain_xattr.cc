@@ -3,8 +3,6 @@
 
 #include "chain_xattr.h"
 
-#include "include/int_types.h"
-
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>

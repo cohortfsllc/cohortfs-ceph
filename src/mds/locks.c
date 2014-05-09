@@ -3,8 +3,6 @@ typedef char bool;
 #define false 0
 #define true  1
 
-#include "include/int_types.h"
-
 #include <netinet/in.h>
 #if defined(__linux__)
 #include <linux/types.h>

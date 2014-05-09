@@ -3,8 +3,6 @@
 #ifndef CEPH_LIBRBD_AIOREQUEST_H
 #define CEPH_LIBRBD_AIOREQUEST_H
 
-#include "include/int_types.h"
-
 #include <map>
 
 #include "include/buffer.h"

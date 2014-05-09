@@ -1,5 +1,4 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
-#include "include/int_types.h"
 
 #include "common/Mutex.h"
 #include "common/Cond.h"

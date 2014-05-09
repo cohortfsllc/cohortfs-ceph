@@ -304,7 +304,7 @@ TEST(ErasureCodeTest, create_ruleset)
     // successfully map get_chunk_count() devices from the crushmap,
     // at least once.
     //
-    vector<__u32> weight(c->get_max_devices(), 0x10000);
+    vector<uint32_t> weight(c->get_max_devices(), 0x10000);
     vector<int> out;
     int x = 0;
     c->do_rule(ruleset, x, out, jerasure.get_chunk_count(), weight);

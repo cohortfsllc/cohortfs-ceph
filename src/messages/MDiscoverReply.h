@@ -81,10 +81,10 @@ class MDiscoverReply : public Message {
   string error_dentry;   // dentry that was not found (to trigger waiters on asker)
   bool unsolicited;
 
-  __s32 dir_auth_hint;
+  int32_t dir_auth_hint;
 
  public:
-  __u8 starts_with;
+  uint8_t starts_with;
   bufferlist trace;
 
   enum { DIR, DENTRY, INODE };

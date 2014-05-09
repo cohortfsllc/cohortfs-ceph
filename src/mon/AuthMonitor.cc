@@ -138,7 +138,7 @@ void AuthMonitor::update_from_paxos(bool *need_bootstrap)
     dout(7) << __func__ << " loading summary e " << latest_full << dendl;
     dout(7) << __func__ << " latest length " << latest_bl.length() << dendl;
     bufferlist::iterator p = latest_bl.begin();
-    __u8 struct_v;
+    uint8_t struct_v;
     ::decode(struct_v, p);
     ::decode(max_global_id, p);
     ::decode(mon->key_server, p);
@@ -165,7 +165,7 @@ void AuthMonitor::update_from_paxos(bool *need_bootstrap)
              << " len " << bl.length() << dendl;
 
     bufferlist::iterator p = bl.begin();
-    __u8 v;
+    uint8_t v;
     ::decode(v, p);
     while (!p.end()) {
       Incremental inc;
@@ -234,7 +234,7 @@ void AuthMonitor::encode_pending(MonitorDBStore::Transaction *t)
 
   bufferlist bl;
 
-  __u8 v = 1;
+  uint8_t v = 1;
   ::encode(v, bl);
   vector<Incremental>::iterator p;
   for (p = pending_auth.begin(); p != pending_auth.end(); ++p)
@@ -255,7 +255,7 @@ void AuthMonitor::encode_full(MonitorDBStore::Transaction *t)
   Mutex::Locker l(mon->key_server.get_lock());
   if (mon->key_server.has_secrets()) {
     dout(20) << __func__ << " key server has secrets!" << dendl;
-    __u8 v = 1;
+    uint8_t v = 1;
     ::encode(v, full_bl);
     ::encode(max_global_id, full_bl);
     ::encode(mon->key_server, full_bl);
@@ -367,16 +367,16 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
   MAuthReply *reply;
   bufferlist response_bl;
   bufferlist::iterator indata = m->auth_payload.begin();
-  __u32 proto = m->protocol;
+  uint32_t proto = m->protocol;
   bool start = false;
   EntityName entity_name;
 
   // set up handler?
   if (m->protocol == 0 && !s->auth_handler) {
-    set<__u32> supported;
+    set<uint32_t> supported;
 
     try {
-      __u8 struct_v = 1;
+      uint8_t struct_v = 1;
       ::decode(struct_v, indata);
       ::decode(supported, indata);
       ::decode(entity_name, indata);

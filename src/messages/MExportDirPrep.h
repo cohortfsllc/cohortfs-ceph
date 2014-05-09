@@ -26,13 +26,13 @@ class MExportDirPrep : public Message {
   list<dirfrag_t> bounds;
   list<bufferlist> traces;
 private:
-  set<__s32> bystanders;
+  set<int32_t> bystanders;
   bool b_did_assim;
 
 public:
   dirfrag_t get_dirfrag() { return dirfrag; }
   list<dirfrag_t>& get_bounds() { return bounds; }
-  set<__s32> &get_bystanders() { return bystanders; }
+  set<int32_t> &get_bystanders() { return bystanders; }
 
   bool did_assim() { return b_did_assim; }
   void mark_assim() { b_did_assim = true; }

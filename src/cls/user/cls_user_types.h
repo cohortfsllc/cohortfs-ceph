@@ -81,7 +81,7 @@ struct cls_user_bucket_entry {
   void encode(bufferlist& bl) const {
     ENCODE_START(6, 5, bl);
     uint64_t s = size;
-    __u32 mt = creation_time;
+    uint32_t mt = creation_time;
     string empty_str;  // originally had the bucket name here, but we encode bucket later
     ::encode(empty_str, bl);
     ::encode(s, bl);
@@ -95,7 +95,7 @@ struct cls_user_bucket_entry {
   }
   void decode(bufferlist::iterator& bl) {
     DECODE_START_LEGACY_COMPAT_LEN(6, 5, 5, bl);
-    __u32 mt;
+    uint32_t mt;
     uint64_t s;
     string empty_str;  // backward compatibility
     ::decode(empty_str, bl);

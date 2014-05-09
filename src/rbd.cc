@@ -8,8 +8,6 @@
  * LGPL2.  See file COPYING.
  *
  */
-#include "include/int_types.h"
-
 #include "mon/MonClient.h"
 #include "mon/MonMap.h"
 #include "common/config.h"

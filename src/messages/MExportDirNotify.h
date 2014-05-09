@@ -22,20 +22,20 @@ using namespace std;
 class MExportDirNotify : public Message {
   dirfrag_t base;
   bool ack;
-  pair<__s32,__s32> old_auth, new_auth;
+  pair<int32_t,int32_t> old_auth, new_auth;
   // bounds; these dirs are _not_ included (tho the dirfragdes are)
   list<dirfrag_t> bounds;
 
  public:
   dirfrag_t get_dirfrag() { return base; }
-  pair<__s32,__s32> get_old_auth() { return old_auth; }
-  pair<__s32,__s32> get_new_auth() { return new_auth; }
+  pair<int32_t,int32_t> get_old_auth() { return old_auth; }
+  pair<int32_t,int32_t> get_new_auth() { return new_auth; }
   bool wants_ack() { return ack; }
   list<dirfrag_t>& get_bounds() { return bounds; }
 
   MExportDirNotify() {}
-  MExportDirNotify(dirfrag_t i, uint64_t tid, bool a, pair<__s32,__s32> oa,
-		   pair<__s32,__s32> na) :
+  MExportDirNotify(dirfrag_t i, uint64_t tid, bool a, pair<int32_t,int32_t> oa,
+		   pair<int32_t,int32_t> na) :
     Message(MSG_MDS_EXPORTDIRNOTIFY),
     base(i), ack(a), old_auth(oa), new_auth(na) {
     set_tid(tid);

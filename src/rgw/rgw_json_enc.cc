@@ -445,7 +445,7 @@ void RGWUserInfo::decode_json(JSONObj *obj)
   JSONDecoder::decode_json("email", user_email, obj);
   bool susp = false;
   JSONDecoder::decode_json("suspended", susp, obj);
-  suspended = (__u8)susp;
+  suspended = (uint8_t)susp;
   JSONDecoder::decode_json("max_buckets", max_buckets, obj);
   JSONDecoder::decode_json("auid", auid, obj);
 
@@ -461,7 +461,7 @@ void RGWUserInfo::decode_json(JSONObj *obj)
 
   bool sys = false;
   JSONDecoder::decode_json("system", sys, obj);
-  system = (__u8)sys;
+  system = (uint8_t)sys;
   JSONDecoder::decode_json("default_placement", default_placement, obj);
   JSONDecoder::decode_json("placement_tags", placement_tags, obj);
   JSONDecoder::decode_json("bucket_quota", bucket_quota, obj);

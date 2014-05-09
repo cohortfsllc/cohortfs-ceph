@@ -12,7 +12,6 @@
  *
  */
 
-#include "include/int_types.h"
 
 #include "common/perf_counters.h"
 #include "common/dout.h"
