@@ -131,6 +131,11 @@ endif(CRYPTOPP_FOUND)
 #option for RGW
 option(WITH_RADOSGW "Rados Gateway is enabled" ON)
 
+option(WITH_FIO "Support for fio engines" OFF)
+if(WITH_FIO)
+	find_package(fio REQUIRED)
+endif(WITH_FIO)
+
 # Now create a useable config.h
 configure_file(
   ${PROJECT_SOURCE_DIR}/src/include/config-h.in.cmake
@@ -139,7 +144,7 @@ configure_file(
 
 add_definitions(-D__linux__)
 
-set(Boost_USE_STATIC_LIBS   ON)
+#set(Boost_USE_STATIC_LIBS   ON)
 set(Boost_USE_MULTITHREADED ON)
 find_package(Boost COMPONENTS thread system REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})

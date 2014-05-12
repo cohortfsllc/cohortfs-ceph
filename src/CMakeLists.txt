@@ -73,6 +73,7 @@ add_subdirectory(client)
 add_subdirectory(erasure-code)
 add_subdirectory(json_spirit)
 add_subdirectory(tools)
+add_subdirectory(test)
 
 if(${WITH_RADOSGW})
 add_subdirectory(rgw)
