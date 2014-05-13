@@ -15,7 +15,7 @@ public:
 		    uint64_t off, uint64_t len,
 		    bufferlist *pbl, uint64_t trunc_size,  uint32_t trunc_seq,
 		    Context *onfinish) {
-    m_objecter->read_trunc(oid, oloc, off, len, CEPH_NOSNAP, pbl, 0,
+    m_objecter->read_trunc(oid, oloc, off, len, pbl, 0,
 			   trunc_size, trunc_seq, onfinish);
   }
 
@@ -28,7 +28,7 @@ public:
 		      uint64_t off, uint64_t len,
 		      const bufferlist &bl, utime_t mtime, uint64_t trunc_size,
 		      uint32_t trunc_seq, Context *oncommit) {
-    return m_objecter->write_trunc(oid, oloc, off, len, ::SnapContext(), bl,
+    return m_objecter->write_trunc(oid, oloc, off, len, bl,
 				   mtime, 0, trunc_size, trunc_seq, NULL,
 				   oncommit);
   }

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 #include "acconfig.h"
 
@@ -157,7 +157,6 @@ CompatSet OSD::get_osd_initial_compat_set() {
   ceph_osd_feature_incompat.insert(CEPH_OSD_FEATURE_INCOMPAT_BIGINFO);
   ceph_osd_feature_incompat.insert(CEPH_OSD_FEATURE_INCOMPAT_LEVELDBINFO);
   ceph_osd_feature_incompat.insert(CEPH_OSD_FEATURE_INCOMPAT_LEVELDBLOG);
-  ceph_osd_feature_incompat.insert(CEPH_OSD_FEATURE_INCOMPAT_SNAPMAPPER);
   return CompatSet(ceph_osd_feature_compat, ceph_osd_feature_ro_compat,
 		   ceph_osd_feature_incompat);
 }
@@ -184,7 +183,6 @@ OSDService::OSDService(OSD *osd) :
   op_wq(osd->op_wq),
   peering_wq(osd->peering_wq),
   recovery_wq(osd->recovery_wq),
-  snap_trim_wq(osd->snap_trim_wq),
   scrub_wq(osd->scrub_wq),
   scrub_finalize_wq(osd->scrub_finalize_wq),
   rep_scrub_wq(osd->rep_scrub_wq),
@@ -588,7 +586,7 @@ int OSD::convert_collection(ObjectStore *store, coll_t cid)
     objects.clear();
     ghobject_t start = next;
     r = store->collection_list_partial(cid, start,
-				       200, 300, 0,
+				       200, 300,
 				       &objects, &next);
     if (r < 0)
       return r;
@@ -950,7 +948,6 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   recovery_ops_active(0),
   recovery_wq(this, cct->_conf->osd_recovery_thread_timeout, &recovery_tp),
   replay_queue_lock("OSD::replay_queue_lock"),
-  snap_trim_wq(this, cct->_conf->osd_snap_trim_thread_timeout, &disk_tp),
   scrub_wq(this, cct->_conf->osd_scrub_thread_timeout, &disk_tp),
   scrub_finalize_wq(cct->_conf->osd_scrub_finalize_thread_timeout, &op_tp),
   rep_scrub_wq(this, cct->_conf->osd_scrub_thread_timeout, &disk_tp),
@@ -1204,16 +1201,6 @@ int OSD::init()
     dout(10) << "init creating/touching snapmapper object" << dendl;
     ObjectStore::Transaction t;
     t.touch(coll_t::META_COLL, service.infos_oid);
-    r = store->apply_transaction(t);
-    if (r < 0)
-      goto out;
-  }
-
-  // make sure snap mapper object exists
-  if (!store->exists(coll_t::META_COLL, OSD::make_snapmapper_oid())) {
-    dout(10) << "init creating/touching infos object" << dendl;
-    ObjectStore::Transaction t;
-    t.touch(coll_t::META_COLL, OSD::make_snapmapper_oid());
     r = store->apply_transaction(t);
     if (r < 0)
       goto out;
@@ -1778,14 +1765,12 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
 {
   OSDriver driver(
     store,
-    coll_t(),
-    make_snapmapper_oid());
+    coll_t());
 
   spg_t pg;
   tmp.is_pg_prefix(pg);
 
   ObjectStore::Transaction t;
-  SnapMapper mapper(&driver, 0, 0, 0, pg.shard);
 
   vector<ghobject_t> objects;
   store->collection_list(tmp, objects);
@@ -1796,9 +1781,6 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
        p != objects.end();
        ++p, removed++) {
     OSDriver::OSTransaction _t(driver.get_transaction(&t));
-    int r = mapper.remove_oid(p->hobj, &_t);
-    if (r != 0 && r != -ENOENT)
-      assert(0);
     t.collection_remove(tmp, *p);
     if (removed > 300) {
       int r = store->apply_transaction(t);
@@ -1827,12 +1809,8 @@ PGPool OSD::_get_pool(int id, OSDMapRef createmap)
 
   PGPool p = PGPool(id, createmap->get_pool_name(id),
 		    createmap->get_pg_pool(id)->auid);
-    
   const pg_pool_t *pi = createmap->get_pg_pool(id);
   p.info = *pi;
-  p.snapc = pi->get_snap_context();
-
-  pi->build_removed_snaps(p.cached_removed_snaps);
   dout(10) << "_get_pool " << p.id << dendl;
   return p;
 }
@@ -2045,12 +2023,10 @@ void OSD::load_pgs()
   }
 
   set<spg_t> head_pgs;
-  map<spg_t, interval_set<snapid_t> > pgs;
   for (vector<coll_t>::iterator it = ls.begin();
        it != ls.end();
        ++it) {
     spg_t pgid;
-    snapid_t snap;
     uint64_t seq;
 
     if (it->is_temp(pgid) ||
@@ -2060,32 +2036,17 @@ void OSD::load_pgs()
       continue;
     }
 
-    if (it->is_pg(pgid, snap)) {
-      if (snap != CEPH_NOSNAP) {
-	dout(10) << "load_pgs skipping snapped dir " << *it
-		 << " (pg " << pgid << " snap " << snap << ")" << dendl;
-	pgs[pgid].insert(snap);
-      } else {
-	pgs[pgid];
-	head_pgs.insert(pgid);
-      }
-      continue;
+    if (it->is_pg(pgid)) {
+      head_pgs.insert(pgid);
     }
 
     dout(10) << "load_pgs ignoring unrecognized " << *it << dendl;
   }
 
-  bool has_upgraded = false;
-  for (map<spg_t, interval_set<snapid_t> >::iterator i = pgs.begin();
-       i != pgs.end();
+  for (set<spg_t>::iterator i = head_pgs.begin();
+       i != head_pgs.end();
        ++i) {
-    spg_t pgid(i->first);
-
-    if (!head_pgs.count(pgid)) {
-      dout(10) << __func__ << ": " << pgid << " has orphan snap collections " << i->second
-	       << " with no head" << dendl;
-      continue;
-    }
+    spg_t pgid(*i);
 
     if (!osdmap->have_pg_pool(pgid.pool())) {
       dout(10) << __func__ << ": skipping PG " << pgid << " because we don't have pool "
@@ -2101,46 +2062,14 @@ void OSD::load_pgs()
 
     dout(10) << "pgid " << pgid << " coll " << coll_t(pgid) << dendl;
     bufferlist bl;
-    epoch_t map_epoch = PG::peek_map_epoch(store, coll_t(pgid), service.infos_oid, &bl);
+    epoch_t map_epoch = PG::peek_map_epoch(store, coll_t(pgid),
+					   service.infos_oid, &bl);
 
-    PG *pg = _open_lock_pg(map_epoch == 0 ? osdmap : service.get_map(map_epoch), pgid);
+    PG *pg = _open_lock_pg(map_epoch == 0 ? osdmap :
+			   service.get_map(map_epoch), pgid);
 
     // read pg state, log
     pg->read_state(store, bl);
-
-    if (pg->must_upgrade()) {
-      if (!has_upgraded) {
-	derr << "PGs are upgrading" << dendl;
-	has_upgraded = true;
-      }
-      dout(10) << "PG " << pg->info.pgid
-	       << " must upgrade..." << dendl;
-      pg->upgrade(store, i->second);
-    } else if (!i->second.empty()) {
-      // handle upgrade bug
-      for (interval_set<snapid_t>::iterator j = i->second.begin();
-	   j != i->second.end();
-	   ++j) {
-	for (snapid_t k = j.get_start();
-	     k != j.get_start() + j.get_len();
-	     ++k) {
-	  assert(store->collection_empty(coll_t(pgid, k)));
-	  ObjectStore::Transaction t;
-	  t.remove_collection(coll_t(pgid, k));
-	  store->apply_transaction(t);
-	}
-      }
-    }
-
-    if (!pg->snap_collections.empty()) {
-      pg->snap_collections.clear();
-      pg->dirty_big_info = true;
-      pg->dirty_info = true;
-      ObjectStore::Transaction t;
-      pg->write_if_dirty(t);
-      store->apply_transaction(t);
-    }
-
     service.init_splits_between(pg->info.pgid, pg->get_osdmap(), osdmap);
 
     // generate state for PG's current mapping
@@ -3449,7 +3378,7 @@ void TestOpsSocketHook::test_ops(OSDService *service, ObjectStore *store,
 // =========================================
 bool remove_dir(
   CephContext *cct,
-  ObjectStore *store, SnapMapper *mapper,
+  ObjectStore *store,
   OSDriver *osdriver,
   ObjectStore::Sequencer *osr,
   coll_t coll, DeletingStateRef dstate,
@@ -3466,17 +3395,12 @@ bool remove_dir(
       next,
       store->get_ideal_list_min(),
       store->get_ideal_list_max(),
-      0,
       &olist,
       &next);
     for (vector<ghobject_t>::iterator i = olist.begin();
 	 i != olist.end();
 	 ++i, ++num) {
       OSDriver::OSTransaction _t(osdriver->get_transaction(t));
-      int r = mapper->remove_oid(i->hobj, &_t);
-      if (r != 0 && r != -ENOENT) {
-	assert(0);
-      }
       t->remove(coll, *i);
       if (num >= cct->_conf->osd_target_transaction_size) {
 	C_SaferCond waiter;
@@ -3514,7 +3438,6 @@ void OSD::RemoveWQ::_process(
   ThreadPool::TPHandle &handle)
 {
   PGRef pg(item.first);
-  SnapMapper &mapper = pg->snap_mapper;
   OSDriver &driver = pg->osdriver;
   coll_t coll = coll_t(pg->info.pgid);
   pg->osr->flush();
@@ -3528,7 +3451,7 @@ void OSD::RemoveWQ::_process(
        i != colls_to_remove.end();
        ++i) {
     bool cont = remove_dir(
-      pg->cct, store, &mapper, &driver, pg->osr.get(), *i, item.second,
+      pg->cct, store, &driver, pg->osr.get(), *i, item.second,
       handle);
     if (!cont)
       return;
@@ -6190,9 +6113,6 @@ void OSD::split_pgs(
 {
   unsigned pg_num = nextmap->get_pg_num(
     parent->pool.id);
-  parent->update_snap_mapper_bits(
-    parent->info.pgid.get_split_bits(pg_num)
-    );
 
   vector<object_stat_sum_t> updated_stats(childpgids.size() + 1);
   parent->info.stats.stats.sum.split(updated_stats);
@@ -7438,12 +7358,6 @@ void OSD::handle_op(OpRequestRef op)
       return;
     }
 
-    // invalid?
-    if (m->get_snapid() != CEPH_NOSNAP) {
-      service.reply_op_error(op, -EINVAL);
-      return;
-    }
-
     // too big?
     if (cct->_conf->osd_max_write_size &&
 	m->get_data_len() > cct->_conf->osd_max_write_size << 20) {
@@ -7823,7 +7737,7 @@ int OSD::init_op_flags(OpRequestRef op)
       op->set_read();
 
     // set READ flag if there are src_oids
-    if (iter->soid.oid.name.length())
+    if (iter->oid.name.length())
       op->set_read();
 
     // set PGOP flag if there are PG ops

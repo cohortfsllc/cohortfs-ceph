@@ -182,47 +182,6 @@ int OSDMap::Incremental::identify_osd(uuid_d u) const
   return -1;
 }
 
-int OSDMap::Incremental::propagate_snaps_to_tiers(CephContext *cct,
-						  const OSDMap& osdmap)
-{
-  assert(epoch == osdmap.get_epoch() + 1);
-  for (map<int64_t,pg_pool_t>::iterator p = new_pools.begin();
-       p != new_pools.end(); ++p) {
-    if (!p->second.tiers.empty()) {
-      pg_pool_t& base = p->second;
-      for (set<uint64_t>::const_iterator q = base.tiers.begin();
-	   q != base.tiers.end();
-	   ++q) {
-	map<int64_t,pg_pool_t>::iterator r = new_pools.find(*q);
-	pg_pool_t *tier = 0;
-	if (r == new_pools.end()) {
-	  const pg_pool_t *orig = osdmap.get_pg_pool(*q);
-	  if (!orig) {
-	    lderr(cct) << __func__ << " no pool " << *q << dendl;
-	    return -EIO;
-	  }
-	  tier = get_new_pool(*q, orig);
-	} else {
-	  tier = &r->second;
-	}
-	if (tier->tier_of != p->first) {
-	  lderr(cct) << __func__ << " " << r->first << " tier_of != " << p->first << dendl;
-	  return -EIO;
-	}
-
-	ldout(cct, 10) << __func__ << " from " << p->first << " to "
-		       << r->first << dendl;
-	tier->snap_seq = base.snap_seq;
-	tier->snap_epoch = base.snap_epoch;
-	tier->snaps = base.snaps;
-	tier->removed_snaps = base.removed_snaps;
-      }
-    }
-  }
-  return 0;
-}
-
-
 bool OSDMap::subtree_is_down(int id, set<int> *down_cache) const
 {
   if (id >= 0)
@@ -375,7 +334,6 @@ void OSDMap::Incremental::encode_classic(bufferlist& bl, uint64_t features) cons
   ::encode(new_blacklist, bl);
   ::encode(old_blacklist, bl);
   ::encode(new_up_cluster, bl);
-  ::encode(cluster_snapshot, bl);
   ::encode(new_uuid, bl);
   ::encode(new_xinfo, bl);
   ::encode(new_hb_front_up, bl);
@@ -425,7 +383,6 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
     ::encode(new_blacklist, bl);
     ::encode(old_blacklist, bl);
     ::encode(new_up_cluster, bl);
-    ::encode(cluster_snapshot, bl);
     ::encode(new_uuid, bl);
     ::encode(new_xinfo, bl);
     ::encode(new_hb_front_up, bl);
@@ -520,8 +477,6 @@ void OSDMap::Incremental::decode_classic(bufferlist::iterator &p)
   ::decode(old_blacklist, p);
   if (ev >= 6)
     ::decode(new_up_cluster, p);
-  if (ev >= 7)
-    ::decode(cluster_snapshot, p);
   if (ev >= 8)
     ::decode(new_uuid, p);
   if (ev >= 9)
@@ -589,7 +544,6 @@ void OSDMap::Incremental::decode(bufferlist::iterator& bl)
     ::decode(new_blacklist, bl);
     ::decode(old_blacklist, bl);
     ::decode(new_up_cluster, bl);
-    ::decode(cluster_snapshot, bl);
     ::decode(new_uuid, bl);
     ::decode(new_xinfo, bl);
     ::decode(new_hb_front_up, bl);
@@ -764,9 +718,6 @@ void OSDMap::Incremental::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
-
-  if (cluster_snapshot.size())
-    f->dump_string("cluster_snapshot", cluster_snapshot);
 
   f->open_array_section("new_uuid");
   for (map<int32_t,uuid_d>::const_iterator p = new_uuid.begin(); p != new_uuid.end(); ++p) {
@@ -1315,15 +1266,6 @@ int OSDMap::apply_incremental(const Incremental &inc)
        ++p)
     blacklist.erase(*p);
 
-  // cluster snapshot?
-  if (inc.cluster_snapshot.length()) {
-    cluster_snapshot = inc.cluster_snapshot;
-    cluster_snapshot_epoch = inc.epoch;
-  } else {
-    cluster_snapshot.clear();
-    cluster_snapshot_epoch = 0;
-  }
-
   // do new crush map last (after up/down stuff)
   if (inc.crush.length()) {
     bufferlist bl(inc.crush);
@@ -1743,8 +1685,6 @@ void OSDMap::encode_classic(bufferlist& bl, uint64_t features) const
   ::encode(osd_info, bl);
   ::encode(blacklist, bl);
   ::encode(osd_addrs->cluster_addr, bl);
-  ::encode(cluster_snapshot_epoch, bl);
-  ::encode(cluster_snapshot, bl);
   ::encode(*osd_uuid, bl);
   ::encode(osd_xinfo, bl);
   ::encode(osd_addrs->hb_front_addr, bl);
@@ -1801,8 +1741,6 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
     ::encode(osd_info, bl);
     ::encode(blacklist, bl);
     ::encode(osd_addrs->cluster_addr, bl);
-    ::encode(cluster_snapshot_epoch, bl);
-    ::encode(cluster_snapshot, bl);
     ::encode(*osd_uuid, bl);
     ::encode(osd_xinfo, bl);
     ::encode(osd_addrs->hb_front_addr, bl);
@@ -1904,11 +1842,6 @@ void OSDMap::decode_classic(bufferlist::iterator& p)
   else
     osd_addrs->cluster_addr.resize(osd_addrs->client_addr.size());
 
-  if (ev >= 7) {
-    ::decode(cluster_snapshot_epoch, p);
-    ::decode(cluster_snapshot, p);
-  }
-
   if (ev >= 8) {
     ::decode(*osd_uuid, p);
   } else {
@@ -1997,8 +1930,6 @@ void OSDMap::decode(bufferlist::iterator& bl)
     ::decode(osd_info, bl);
     ::decode(blacklist, bl);
     ::decode(osd_addrs->cluster_addr, bl);
-    ::decode(cluster_snapshot_epoch, bl);
-    ::decode(cluster_snapshot, bl);
     ::decode(*osd_uuid, bl);
     ::decode(osd_xinfo, bl);
     ::decode(osd_addrs->hb_front_addr, bl);
@@ -2056,7 +1987,6 @@ void OSDMap::dump(Formatter *f) const
   f->dump_stream("created") << get_created();
   f->dump_stream("modified") << get_modified();
   f->dump_string("flags", get_flag_string());
-  f->dump_string("cluster_snapshot", get_cluster_snapshot());
   f->dump_int("pool_max", get_pool_max());
   f->dump_int("max_osd", get_max_osd());
 
@@ -2217,9 +2147,6 @@ void OSDMap::print(ostream& out) const
       << "modified " << get_modified() << "\n";
 
   out << "flags " << get_flag_string() << "\n";
-  if (get_cluster_snapshot().length())
-    out << "cluster_snapshot " << get_cluster_snapshot() << "\n";
-  out << "\n";
 
   for (map<int64_t,pg_pool_t>::const_iterator p = pools.begin(); p != pools.end(); ++p) {
     std::string name("<unknown>");
@@ -2229,12 +2156,6 @@ void OSDMap::print(ostream& out) const
     out << "pool " << p->first
 	<< " '" << name
 	<< "' " << p->second << "\n";
-    for (map<snapid_t,pool_snap_info_t>::const_iterator q = p->second.snaps.begin();
-	 q != p->second.snaps.end();
-	 ++q)
-      out << "\tsnap " << q->second.snapid << " '" << q->second.name << "' " << q->second.stamp << "\n";
-    if (!p->second.removed_snaps.empty())
-      out << "\tremoved_snaps " << p->second.removed_snaps << "\n";
   }
   out << std::endl;
 

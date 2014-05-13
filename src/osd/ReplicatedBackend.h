@@ -54,7 +54,6 @@ public:
   void recover_object(
     const hobject_t &hoid,
     eversion_t v,
-    ObjectContextRef head,
     ObjectContextRef obc,
     RecoveryHandle *h
     );
@@ -272,14 +271,7 @@ private:
 			map<string, bufferlist> &attrs,
 			map<string, bufferlist> &omap_entries,
 			ObjectStore::Transaction *t);
-  void submit_push_complete(ObjectRecoveryInfo &recovery_info,
-			    ObjectStore::Transaction *t);
 
-  void calc_clone_subsets(
-    SnapSet& snapset, const hobject_t& poid, const pg_missing_t& missing,
-    const hobject_t &last_backfill,
-    interval_set<uint64_t>& data_subset,
-    map<hobject_t, interval_set<uint64_t> >& clone_subsets);
   void prepare_pull(
     eversion_t v,
     const hobject_t& soid,
@@ -299,18 +291,7 @@ private:
 		 const hobject_t& soid, pg_shard_t peer,
 		 eversion_t version,
 		 interval_set<uint64_t> &data_subset,
-		 map<hobject_t, interval_set<uint64_t> >& clone_subsets,
 		 PushOp *op);
-  void calc_head_subsets(ObjectContextRef obc, SnapSet& snapset, const hobject_t& head,
-			 const pg_missing_t& missing,
-			 const hobject_t &last_backfill,
-			 interval_set<uint64_t>& data_subset,
-			 map<hobject_t, interval_set<uint64_t> >& clone_subsets);
-  ObjectRecoveryInfo recalc_subsets(
-    const ObjectRecoveryInfo& recovery_info,
-    SnapSetContext *ssc
-    );
-
   /**
    * Client IO
    */

@@ -41,7 +41,6 @@ public:
   void recover_object(
     const hobject_t &hoid,
     eversion_t v,
-    ObjectContextRef head,
     ObjectContextRef obc,
     RecoveryHandle *h
     );

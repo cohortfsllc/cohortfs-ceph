@@ -101,7 +101,7 @@ class Filer {
 	   Context *onfinish) {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len, 0, extents);
-    objecter->sg_read(extents, CEPH_NOSNAP, bl, flags, onfinish);
+    objecter->sg_read(extents, bl, flags, onfinish);
     return 0;
   }
 
@@ -117,7 +117,7 @@ class Filer {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len, truncate_size,
 			     extents);
-    objecter->sg_read_trunc(extents, CEPH_NOSNAP, bl, flags,
+    objecter->sg_read_trunc(extents, bl, flags,
 			    truncate_size, truncate_seq, onfinish);
     return 0;
   }
@@ -133,7 +133,7 @@ class Filer {
 	    Context *oncommit) {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len, 0, extents);
-    objecter->sg_write(extents, ::SnapContext(), bl, mtime, flags, onack,
+    objecter->sg_write(extents, bl, mtime, flags, onack,
 		       oncommit);
     return 0;
   }
@@ -152,8 +152,8 @@ class Filer {
     vector<ObjectExtent> extents;
     Striper::file_to_extents(cct, ino, layout, offset, len, truncate_size,
 			     extents);
-    objecter->sg_write_trunc(extents, ::SnapContext(), bl, mtime, flags,
-		       truncate_size, truncate_seq, onack, oncommit);
+    objecter->sg_write_trunc(extents, bl, mtime, flags, truncate_size,
+			     truncate_seq, onack, oncommit);
     return 0;
   }
 
@@ -174,7 +174,7 @@ class Filer {
       ops[0].op.extent.truncate_seq = truncate_seq;
       ops[0].op.extent.truncate_size = extents[0].offset;
       objecter->_modify(extents[0].oid, extents[0].oloc, ops, mtime,
-			::SnapContext(), flags, onack, oncommit);
+			flags, onack, oncommit);
     } else {
       C_GatherBuilder gack(cct, onack);
       C_GatherBuilder gcom(cct, oncommit);
@@ -185,9 +185,9 @@ class Filer {
 	ops[0].op.op = CEPH_OSD_OP_TRIMTRUNC;
 	ops[0].op.extent.truncate_size = p->offset;
 	ops[0].op.extent.truncate_seq = truncate_seq;
-	objecter->_modify(p->oid, p->oloc, ops, mtime, ::SnapContext(), flags,
-			  onack ? gack.new_sub():0,
-			  oncommit ? gcom.new_sub():0);
+	objecter->_modify(p->oid, p->oloc, ops, mtime, flags,
+			  onack ? gack.new_sub() : 0,
+			  oncommit ? gcom.new_sub() : 0);
       }
       gack.activate();
       gcom.activate();
@@ -211,10 +211,10 @@ class Filer {
 	  layout->fl_object_size &&
 	  (!keep_first || extents[0].objectno != 0))
 	objecter->remove(extents[0].oid, extents[0].oloc,
-			 ::SnapContext(), mtime, flags, onack, oncommit);
+			 mtime, flags, onack, oncommit);
       else
 	objecter->zero(extents[0].oid, extents[0].oloc, extents[0].offset,
-		       extents[0].length, ::SnapContext(), mtime, flags,
+		       extents[0].length, mtime, flags,
 		       onack, oncommit);
     } else {
       C_GatherBuilder gack(cct, onack);
@@ -224,15 +224,13 @@ class Filer {
 	   ++p) {
 	if (p->offset == 0 && p->length == layout->fl_object_size &&
 	    (!keep_first || p->objectno != 0))
-	  objecter->remove(p->oid, p->oloc,
-			   ::SnapContext(), mtime, flags,
-			   onack ? gack.new_sub():0,
-			   oncommit ? gcom.new_sub():0);
+	  objecter->remove(p->oid, p->oloc, mtime, flags,
+			   onack ? gack.new_sub() : 0,
+			   oncommit ? gcom.new_sub() : 0);
 	else
-	  objecter->zero(p->oid, p->oloc, p->offset, p->length,
-			 ::SnapContext(), mtime, flags,
-			 onack ? gack.new_sub():0,
-			 oncommit ? gcom.new_sub():0);
+	  objecter->zero(p->oid, p->oloc, p->offset, p->length, mtime, flags,
+			 onack ? gack.new_sub() : 0,
+			 oncommit ? gcom.new_sub() : 0);
       }
       gack.activate();
       gcom.activate();

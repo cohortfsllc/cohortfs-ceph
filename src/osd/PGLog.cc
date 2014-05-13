@@ -17,7 +17,7 @@
 
 #include "PGLog.h"
 #include "PG.h"
-#include "SnapMapper.h"
+#include "OSDriver.h"
 #include "../include/unordered_map.h"
 
 #define dout_subsys ceph_subsys_osd
@@ -387,46 +387,16 @@ void PGLog::_merge_object_divergent_entries(
   dout(10) << __func__ << ": hoid " << hoid
 	   << " must be rolled back or recovered, attempting to rollback"
 	   << dendl;
-  bool can_rollback = true;
-  /// Distinguish between 4) and 5)
-  for (list<pg_log_entry_t>::const_reverse_iterator i = entries.rbegin();
-       i != entries.rend();
-       ++i) {
-    if (!i->mod_desc.can_rollback() || i->version <= olog_can_rollback_to) {
-      dout(10) << __func__ << ": hoid " << hoid << " cannot rollback "
-	       << *i << dendl;
-      can_rollback = false;
-      break;
-    }
-  }
-
-  if (can_rollback) {
-    /// Case 4)
-    for (list<pg_log_entry_t>::const_reverse_iterator i = entries.rbegin();
-	 i != entries.rend();
-	 ++i) {
-      assert(i->mod_desc.can_rollback() && i->version > olog_can_rollback_to);
-      dout(10) << __func__ << ": hoid " << hoid
-	       << " rolling back " << *i << dendl;
-      if (rollbacker)
-	rollbacker->rollback(*i);
-    }
-    dout(10) << __func__ << ": hoid " << hoid << " rolled back" << dendl;
-    return;
-  } else {
-    /// Case 5)
-    dout(10) << __func__ << ": hoid " << hoid << " cannot roll back, "
-	     << "removing and adding to missing" << dendl;
-    if (rollbacker && !object_not_in_store)
-      rollbacker->remove(hoid);
-    missing.add(hoid, prior_version, eversion_t());
-    if (prior_version <= info.log_tail) {
-      dout(10) << __func__ << ": hoid " << hoid
-	       << " prior_version " << prior_version << " <= info.log_tail "
-	       << info.log_tail << dendl;
-      if (new_divergent_prior)
-	*new_divergent_prior = make_pair(prior_version, hoid);
-    }
+  /// Case 5)
+  dout(10) << __func__ << ": hoid " << hoid << " cannot roll back, "
+	   << "removing and adding to missing" << dendl;
+  missing.add(hoid, prior_version, eversion_t());
+  if (prior_version <= info.log_tail) {
+    dout(10) << __func__ << ": hoid " << hoid
+	     << " prior_version " << prior_version << " <= info.log_tail "
+	     << info.log_tail << dendl;
+    if (new_divergent_prior)
+      *new_divergent_prior = make_pair(prior_version, hoid);
   }
 }
 
@@ -621,7 +591,6 @@ void PGLog::merge_log(ObjectStore::Transaction& t,
     info.last_update = log.head = olog.head;
 
     info.last_user_version = oinfo.last_user_version;
-    info.purged_snaps = oinfo.purged_snaps;
 
     map<eversion_t, hobject_t> new_priors;
     _merge_divergent_entries(

@@ -127,7 +127,6 @@ struct ceph_dir_layout {
 #define CEPH_MSG_CLIENT_REPLY           26
 #define CEPH_MSG_CLIENT_CAPS            0x310
 #define CEPH_MSG_CLIENT_LEASE           0x311
-#define CEPH_MSG_CLIENT_SNAP            0x312
 #define CEPH_MSG_CLIENT_CAPRELEASE      0x313
 
 /* pool ops */
@@ -154,10 +153,6 @@ enum {
   POOL_OP_CREATE			= 0x01,
   POOL_OP_DELETE			= 0x02,
   POOL_OP_AUID_CHANGE			= 0x03,
-  POOL_OP_CREATE_SNAP			= 0x11,
-  POOL_OP_DELETE_SNAP			= 0x12,
-  POOL_OP_CREATE_UNMANAGED_SNAP		= 0x21,
-  POOL_OP_DELETE_UNMANAGED_SNAP		= 0x22,
 };
 
 struct ceph_mon_request_header {
@@ -190,7 +185,6 @@ struct ceph_mon_poolop {
 	__le32 pool;
 	__le32 op;
 	__le64 auid;
-	__le64 snapid;
 	__le32 name_len;
 } __attribute__ ((packed));
 
@@ -201,10 +195,6 @@ struct ceph_mon_poolop_reply {
 	__le32 epoch;
 	char has_data;
 	char data[0];
-} __attribute__ ((packed));
-
-struct ceph_mon_unmanaged_snap {
-	__le64 snapid;
 } __attribute__ ((packed));
 
 struct ceph_osd_getmap {
@@ -268,7 +258,6 @@ extern const char *ceph_mds_state_name(int s);
  */
 #define CEPH_LOCK_DVERSION    1
 #define CEPH_LOCK_DN          2
-#define CEPH_LOCK_ISNAP       16
 #define CEPH_LOCK_IVERSION    32    /* mds internal */
 #define CEPH_LOCK_IFILE       64
 #define CEPH_LOCK_IAUTH       128
@@ -335,11 +324,6 @@ enum {
 	CEPH_MDS_OP_CREATE     = 0x01301,
 	CEPH_MDS_OP_OPEN       = 0x00302,
 	CEPH_MDS_OP_READDIR    = 0x00305,
-
-	CEPH_MDS_OP_LOOKUPSNAP = 0x00400,
-	CEPH_MDS_OP_MKSNAP     = 0x01400,
-	CEPH_MDS_OP_RMSNAP     = 0x01401,
-	CEPH_MDS_OP_LSSNAP     = 0x00402,
 };
 
 extern const char *ceph_mds_op_name(int op);
@@ -455,7 +439,6 @@ struct ceph_mds_reply_cap {
 	__le32 caps, wanted;           /* caps issued, wanted */
 	__le64 cap_id;
 	__le32 seq, mseq;
-	__le64 realm;                  /* snap realm */
 	uint8_t flags;                    /* CEPH_CAP_FLAG_* */
 } __attribute__ ((packed));
 
@@ -464,7 +447,6 @@ struct ceph_mds_reply_cap {
 /* inode record, for bundling with mds reply */
 struct ceph_mds_reply_inode {
 	__le64 ino;
-	__le64 snapid;
 	__le32 rdev;
 	__le64 version;                /* inode version */
 	__le64 xattr_version;          /* version for xattr blob */
@@ -618,8 +600,6 @@ enum {
 	CEPH_CAP_OP_DROP,          /* client->mds drop cap bits */
 	CEPH_CAP_OP_FLUSH,         /* client->mds cap writeback */
 	CEPH_CAP_OP_FLUSH_ACK,     /* mds->client flushed */
-	CEPH_CAP_OP_FLUSHSNAP,     /* client->mds flush snapped metadata */
-	CEPH_CAP_OP_FLUSHSNAP_ACK, /* mds->client flushed snapped metadata */
 	CEPH_CAP_OP_RELEASE,       /* client->mds release (clean) cap */
 	CEPH_CAP_OP_RENEW,         /* client->mds renewal request */
 };
@@ -636,8 +616,6 @@ struct ceph_mds_caps {
 	__le32 seq, issue_seq;
 	__le32 caps, wanted, dirty; /* latest issued/wanted/dirty */
 	__le32 migrate_seq;
-	__le64 snap_follows;
-	__le32 snap_trace_len;
 
 	/* authlock */
 	__le32 uid, gid, mode;
@@ -680,7 +658,6 @@ struct ceph_mds_lease {
 	uint8_t action;            /* CEPH_MDS_LEASE_* */
 	__le16 mask;            /* which lease */
 	__le64 ino;
-	__le64 first, last;     /* snap range */
 	__le32 seq;
 	__le32 duration_ms;     /* duration of renewal */
 } __attribute__ ((packed));
@@ -691,7 +668,6 @@ struct ceph_mds_cap_reconnect {
 	__le64 cap_id;
 	__le32 wanted;
 	__le32 issued;
-	__le64 snaprealm;
 	__le64 pathbase;        /* base ino for our path to this ino */
 	__le32 flock_len;       /* size of flock state blob, if any */
 } __attribute__ ((packed));
@@ -703,50 +679,7 @@ struct ceph_mds_cap_reconnect_v1 {
 	__le32 issued;
 	__le64 size;
 	struct ceph_timespec mtime, atime;
-	__le64 snaprealm;
 	__le64 pathbase;        /* base ino for our path to this ino */
 } __attribute__ ((packed));
-
-struct ceph_mds_snaprealm_reconnect {
-	__le64 ino;     /* snap realm base */
-	__le64 seq;     /* snap seq for this snap realm */
-	__le64 parent;  /* parent realm */
-} __attribute__ ((packed));
-
-/*
- * snaps
- */
-enum {
-	CEPH_SNAP_OP_UPDATE,  /* CREATE or DESTROY */
-	CEPH_SNAP_OP_CREATE,
-	CEPH_SNAP_OP_DESTROY,
-	CEPH_SNAP_OP_SPLIT,
-};
-
-extern const char *ceph_snap_op_name(int o);
-
-/* snap msg header */
-struct ceph_mds_snap_head {
-	__le32 op;                /* CEPH_SNAP_OP_* */
-	__le64 split;             /* ino to split off, if any */
-	__le32 num_split_inos;    /* # inos belonging to new child realm */
-	__le32 num_split_realms;  /* # child realms udner new child realm */
-	__le32 trace_len;         /* size of snap trace blob */
-} __attribute__ ((packed));
-/* followed by split ino list, then split realms, then the trace blob */
-
-/*
- * encode info about a snaprealm, as viewed by a client
- */
-struct ceph_mds_snap_realm {
-	__le64 ino;           /* ino */
-	__le64 created;       /* snap: when created */
-	__le64 parent;        /* ino: parent realm */
-	__le64 parent_since;  /* snap: same parent since */
-	__le64 seq;           /* snap: version */
-	__le32 num_snaps;
-	__le32 num_prior_parent_snaps;
-} __attribute__ ((packed));
-/* followed by my snap list, then prior parent snap list */
 
 #endif

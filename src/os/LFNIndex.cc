@@ -145,11 +145,10 @@ int LFNIndex::collection_list(vector<ghobject_t> *ls)
 int LFNIndex::collection_list_partial(const ghobject_t &start,
 				      int min_count,
 				      int max_count,
-				      snapid_t seq,
 				      vector<ghobject_t> *ls,
 				      ghobject_t *next)
 {
-  return _collection_list_partial(start, min_count, max_count, seq, ls, next);
+  return _collection_list_partial(start, min_count, max_count, ls, next);
 }
 
 /* Derived class utility methods */

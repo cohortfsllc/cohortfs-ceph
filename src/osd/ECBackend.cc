@@ -609,7 +609,6 @@ void ECBackend::run_recovery_op(
 void ECBackend::recover_object(
   const hobject_t &hoid,
   eversion_t v,
-  ObjectContextRef head,
   ObjectContextRef obc,
   RecoveryHandle *_h)
 {
@@ -1264,7 +1263,6 @@ void ECBackend::submit_transaction(
       desc.setattrs(old_attrs);
       i->mod_desc.swap(desc);
       i->mod_desc.claim_append(desc);
-      assert(i->mod_desc.can_rollback());
     }
   }
 

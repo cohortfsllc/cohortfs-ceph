@@ -591,12 +591,12 @@ int ObjectStore::collection_list(coll_t c, vector<hobject_t>& o)
 }
 
 int ObjectStore::collection_list_partial(coll_t c, hobject_t start,
-			      int min, int max, snapid_t snap,
-				      vector<hobject_t> *ls, hobject_t *next)
+					 int min, int max,
+					 vector<hobject_t> *ls, hobject_t *next)
 {
   vector<ghobject_t> go;
   ghobject_t gnext, gstart(start);
-  int ret = collection_list_partial(c, gstart, min, max, snap, &go, &gnext);
+  int ret = collection_list_partial(c, gstart, min, max, &go, &gnext);
   if (ret == 0) {
     *next = gnext.hobj;
     ls->reserve(go.size());
@@ -607,11 +607,11 @@ int ObjectStore::collection_list_partial(coll_t c, hobject_t start,
 }
 
 int ObjectStore::collection_list_range(coll_t c, hobject_t start, hobject_t end,
-			    snapid_t seq, vector<hobject_t> *ls)
+				       vector<hobject_t> *ls)
 {
   vector<ghobject_t> go;
   ghobject_t gstart(start), gend(end);
-  int ret = collection_list_range(c, gstart, gend, seq, &go);
+  int ret = collection_list_range(c, gstart, gend, &go);
   if (ret == 0) {
     ls->reserve(go.size());
     for (vector<ghobject_t>::iterator i = go.begin(); i != go.end() ; ++i)

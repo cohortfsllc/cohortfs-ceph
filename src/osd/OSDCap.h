@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,10 +7,10 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
- * OSDCaps: Hold the capabilities associated with a single authenticated 
+ *
+ * OSDCaps: Hold the capabilities associated with a single authenticated
  * user key. These are specified by text strings of the form
  * "allow r" (which allows reading anything on the OSD)
  * "allow rwx auid foo" (which allows full access to listed auids)

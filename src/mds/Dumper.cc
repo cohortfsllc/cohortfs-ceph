@@ -177,7 +177,7 @@ void Dumper::undump(const char *dump_file)
   Cond cond;
 
   cout << "writing header " << oid << std::endl;
-  objecter->write_full(oid, oloc, ::SnapContext(), hbl,
+  objecter->write_full(oid, oloc, hbl,
 		       ceph_clock_now(g_ceph_context),
 		       0, NULL, new C_SafeCond(&lock, &cond, &done));
 

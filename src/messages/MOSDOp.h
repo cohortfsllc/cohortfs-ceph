@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -48,25 +48,8 @@ private:
   pg_t pgid;
 public:
   vector<OSDOp> ops;
-private:
 
-  snapid_t snapid;
-  snapid_t snap_seq;
-  vector<snapid_t> snaps;
-
-public:
   friend class MOSDOpReply;
-
-  // read
-  snapid_t get_snapid() { return snapid; }
-  void set_snapid(snapid_t s) { snapid = s; }
-  // writ
-  snapid_t get_snap_seq() const { return snap_seq; }
-  const vector<snapid_t> &get_snaps() const { return snaps; }
-  void set_snaps(const vector<snapid_t>& i) {
-    snaps = i;
-  }
-  void set_snap_seq(snapid_t s) { snap_seq = s; }
 
   osd_reqid_t get_reqid() const {
     return osd_reqid_t(get_orig_source(),
@@ -180,28 +163,6 @@ public:
     OSDOp::merge_osd_op_vector_in_data(ops, data);
 
     if ((features & CEPH_FEATURE_OBJECTLOCATOR) == 0) {
-      // here is the old structure we are encoding to: //
-#if 0
-struct ceph_osd_request_head {
-	__le32 client_inc;                 /* client incarnation */
-	struct ceph_object_layout layout;  /* pgid */
-	__le32 osdmap_epoch;               /* client's osdmap epoch */
-
-	__le32 flags;
-
-	struct ceph_timespec mtime;        /* for mutations only */
-	struct ceph_eversion reassert_version; /* if we are replaying op */
-
-	__le32 object_len;     /* length of object name */
-
-	__le64 snapid;         /* snapid to read */
-	__le64 snap_seq;       /* writer's snap context */
-	__le32 num_snaps;
-
-	__le16 num_ops;
-	struct ceph_osd_op ops[];  /* followed by ops[], obj, ticket, snaps */
-} __attribute__ ((packed));
-#endif
       header.version = 1;
 
       ::encode(client_inc, payload);
@@ -217,19 +178,13 @@ struct ceph_osd_request_head {
 
       uint32_t oid_len = oid.name.length();
       ::encode(oid_len, payload);
-      ::encode(snapid, payload);
-      ::encode(snap_seq, payload);
-      uint32_t num_snaps = snaps.size();
-      ::encode(num_snaps, payload);
 
-      //::encode(ops, payload);
       uint16_t num_ops = ops.size();
       ::encode(num_ops, payload);
       for (unsigned i = 0; i < ops.size(); i++)
 	::encode(ops[i].op, payload);
 
       ::encode_nohead(oid.name, payload);
-      ::encode_nohead(snaps, payload);
     } else {
       ::encode(client_inc, payload);
       ::encode(osdmap_epoch, payload);
@@ -245,10 +200,6 @@ struct ceph_osd_request_head {
       ::encode(num_ops, payload);
       for (unsigned i = 0; i < ops.size(); i++)
 	::encode(ops[i].op, payload);
-
-      ::encode(snapid, payload);
-      ::encode(snap_seq, payload);
-      ::encode(snaps, payload);
 
       ::encode(retry_attempt, payload);
     }
@@ -276,12 +227,7 @@ struct ceph_osd_request_head {
 
       uint32_t oid_len;
       ::decode(oid_len, p);
-      ::decode(snapid, p);
-      ::decode(snap_seq, p);
-      uint32_t num_snaps;
-      ::decode(num_snaps, p);
 
-      //::decode(ops, p);
       uint16_t num_ops;
       ::decode(num_ops, p);
       ops.resize(num_ops);
@@ -289,7 +235,6 @@ struct ceph_osd_request_head {
 	::decode(ops[i].op, p);
 
       decode_nohead(oid_len, oid.name, p);
-      decode_nohead(num_snaps, snaps, p);
 
       // recalculate pgid hash value
       pgid.set_ps(ceph_str_hash(CEPH_STR_HASH_RJENKINS,
@@ -324,10 +269,6 @@ struct ceph_osd_request_head {
       for (unsigned i = 0; i < num_ops; i++)
 	::decode(ops[i].op, p);
 
-      ::decode(snapid, p);
-      ::decode(snap_seq, p);
-      ::decode(snaps, p);
-
       if (header.version >= 4)
 	::decode(retry_attempt, p);
       else
@@ -349,16 +290,6 @@ struct ceph_osd_request_head {
       out << oloc.nspace << "/";
     out << oid;
 
-#if 0
-    out << " ";
-    if (may_read())
-      out << "r";
-    if (may_write())
-      out << "w";
-#endif
-    if (snapid != CEPH_NOSNAP)
-      out << "@" << snapid;
-
     if (oloc.key.size())
       out << " " << oloc;
 
@@ -368,8 +299,6 @@ struct ceph_osd_request_head {
       out << " RETRY=" << get_retry_attempt();
     if (reassert_version != eversion_t())
       out << " reassert_version=" << reassert_version;
-    if (get_snap_seq())
-      out << " snapc " << get_snap_seq() << "=" << snaps;
     out << " " << ceph_osd_flag_string(get_flags());
     out << " e" << osdmap_epoch;
     out << ")";

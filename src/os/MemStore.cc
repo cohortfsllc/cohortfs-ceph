@@ -474,11 +474,11 @@ int MemStore::collection_list(coll_t cid, vector<ghobject_t>& o)
 }
 
 int MemStore::collection_list_partial(coll_t cid, ghobject_t start,
-				      int min, int max, snapid_t snap, 
+				      int min, int max,
 				      vector<ghobject_t> *ls, ghobject_t *next)
 {
   dout(10) << __func__ << " " << cid << " " << start << " " << min << "-"
-	   << max << " " << snap << dendl;
+	   << max << " " << dendl;
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
@@ -499,10 +499,10 @@ int MemStore::collection_list_partial(coll_t cid, ghobject_t start,
 
 int MemStore::collection_list_range(coll_t cid,
 				    ghobject_t start, ghobject_t end,
-				    snapid_t seq, vector<ghobject_t> *ls)
+				    vector<ghobject_t> *ls)
 {
   dout(10) << __func__ << " " << cid << " " << start << " " << end
-	   << " " << seq << dendl;
+	   << dendl;
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;

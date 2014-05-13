@@ -379,7 +379,6 @@ static int get_hobject_from_oinfo(const char *dir, const char *file,
 int FlatIndex::collection_list_partial(const ghobject_t &start,
 				       int min_count,
 				       int max_count,
-				       snapid_t seq,
 				       vector<ghobject_t> *ls,
 				       ghobject_t *next) {
   assert(0); // Should not be called

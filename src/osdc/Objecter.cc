@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "Objecter.h"
@@ -310,8 +310,6 @@ void Objecter::send_linger(LingerOp *info)
 		 opv, info->target.flags | CEPH_OSD_FLAG_READ,
 		 onack, oncommit,
 		 info->pobjver);
-  o->snapid = info->snap;
-  o->snapc = info->snapc;
   o->mtime = info->mtime;
 
   // do not resend this; we will send a new op to reregister
@@ -386,18 +384,17 @@ void Objecter::unregister_linger(uint64_t linger_id)
 }
 
 ceph_tid_t Objecter::linger_mutate(const object_t& oid, const object_locator_t& oloc,
-			      ObjectOperation& op,
-			      const SnapContext& snapc, utime_t mtime,
-			      bufferlist& inbl, int flags,
-			      Context *onack, Context *oncommit,
-			      version_t *objver)
+				   ObjectOperation& op,
+				   utime_t mtime,
+				   bufferlist& inbl, int flags,
+				   Context *onack, Context *oncommit,
+				   version_t *objver)
 {
   LingerOp *info = new LingerOp;
   info->target.base_oid = oid;
   info->target.base_oloc = oloc;
   if (info->target.base_oloc.key == oid)
     info->target.base_oloc.key.clear();
-  info->snapc = snapc;
   info->mtime = mtime;
   info->target.flags = flags | CEPH_OSD_FLAG_WRITE;
   info->ops = op.ops;
@@ -418,17 +415,15 @@ ceph_tid_t Objecter::linger_mutate(const object_t& oid, const object_locator_t& 
 }
 
 ceph_tid_t Objecter::linger_read(const object_t& oid, const object_locator_t& oloc,
-			    ObjectOperation& op,
-			    snapid_t snap, bufferlist& inbl, bufferlist *poutbl, int flags,
-			    Context *onfinish,
-			    version_t *objver)
+				 ObjectOperation& op, bufferlist& inbl,
+				 bufferlist *poutbl, int flags,
+				 Context *onfinish, version_t *objver)
 {
   LingerOp *info = new LingerOp;
   info->target.base_oid = oid;
   info->target.base_oloc = oloc;
   if (info->target.base_oloc.key == oid)
     info->target.base_oloc.key.clear();
-  info->snap = snap;
   info->target.flags = flags;
   info->ops = op.ops;
   info->inbl = inbl;
@@ -1293,7 +1288,6 @@ ceph_tid_t Objecter::_op_submit(Op *op)
     case CEPH_OSD_OP_DELETE: code = l_osdc_osdop_delete; break;
     case CEPH_OSD_OP_MAPEXT: code = l_osdc_osdop_mapext; break;
     case CEPH_OSD_OP_SPARSE_READ: code = l_osdc_osdop_sparse_read; break;
-    case CEPH_OSD_OP_CLONERANGE: code = l_osdc_osdop_clonerange; break;
     case CEPH_OSD_OP_GETXATTR: code = l_osdc_osdop_getxattr; break;
     case CEPH_OSD_OP_SETXATTR: code = l_osdc_osdop_setxattr; break;
     case CEPH_OSD_OP_CMPXATTR: code = l_osdc_osdop_cmpxattr; break;
@@ -1643,10 +1637,6 @@ void Objecter::send_op(Op *op)
 			 osdmap->get_epoch(),
 			 flags);
 
-  m->set_snapid(op->snapid);
-  m->set_snap_seq(op->snapc.seq);
-  m->set_snaps(op->snapc.snaps);
-
   m->ops = op->ops;
   m->set_mtime(op->mtime);
   m->set_retry_attempt(op->attempts++);
@@ -1877,12 +1867,11 @@ void Objecter::list_objects(ListContext *list_context, Context *onfinish)
   assert(client_lock.is_locked());
   ldout(cct, 10) << "list_objects" << dendl;
   ldout(cct, 20) << " pool_id " << list_context->pool_id
-	   << " pool_snap_seq " << list_context->pool_snap_seq
-	   << " max_entries " << list_context->max_entries
-	   << " list_context " << list_context
-	   << " onfinish " << onfinish
-	   << " list_context->current_pg " << list_context->current_pg
-	   << " list_context->cookie " << list_context->cookie << dendl;
+		 << " max_entries " << list_context->max_entries
+		 << " list_context " << list_context
+		 << " onfinish " << onfinish
+		 << " list_context->current_pg " << list_context->current_pg
+		 << " list_context->cookie " << list_context->cookie << dendl;
 
   if (list_context->at_end_of_pg) {
     list_context->at_end_of_pg = false;
@@ -1980,108 +1969,6 @@ void Objecter::_list_reply(ListContext *list_context, int r,
 }
 
 
-
-//snapshots
-
-int Objecter::create_pool_snap(int64_t pool, string& snap_name, Context *onfinish)
-{
-  ldout(cct, 10) << "create_pool_snap; pool: " << pool << "; snap: " << snap_name << dendl;
-
-  const pg_pool_t *p = osdmap->get_pg_pool(pool);
-  if (!p)
-    return -EINVAL;
-  if (p->snap_exists(snap_name.c_str()))
-    return -EEXIST;
-
-  PoolOp *op = new PoolOp;
-  if (!op)
-    return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  op->name = snap_name;
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_CREATE_SNAP;
-  pool_ops[op->tid] = op;
-
-  pool_op_submit(op);
-
-  return 0;
-}
-
-struct C_SelfmanagedSnap : public Context {
-  bufferlist bl;
-  snapid_t *psnapid;
-  Context *fin;
-  C_SelfmanagedSnap(snapid_t *ps, Context *f) : psnapid(ps), fin(f) {}
-  void finish(int r) {
-    if (r == 0) {
-      bufferlist::iterator p = bl.begin();
-      ::decode(*psnapid, p);
-    }
-    fin->complete(r);
-  }
-};
-
-int Objecter::allocate_selfmanaged_snap(int64_t pool, snapid_t *psnapid,
-					Context *onfinish)
-{
-  ldout(cct, 10) << "allocate_selfmanaged_snap; pool: " << pool << dendl;
-  PoolOp *op = new PoolOp;
-  if (!op) return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  C_SelfmanagedSnap *fin = new C_SelfmanagedSnap(psnapid, onfinish);
-  op->onfinish = fin;
-  op->blp = &fin->bl;
-  op->pool_op = POOL_OP_CREATE_UNMANAGED_SNAP;
-  pool_ops[op->tid] = op;
-
-  pool_op_submit(op);
-  return 0;
-}
-
-int Objecter::delete_pool_snap(int64_t pool, string& snap_name, Context *onfinish)
-{
-  ldout(cct, 10) << "delete_pool_snap; pool: " << pool << "; snap: " << snap_name << dendl;
-
-  const pg_pool_t *p = osdmap->get_pg_pool(pool);
-  if (!p)
-    return -EINVAL;
-  if (!p->snap_exists(snap_name.c_str()))
-    return -ENOENT;
-
-  PoolOp *op = new PoolOp;
-  if (!op)
-    return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  op->name = snap_name;
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_DELETE_SNAP;
-  pool_ops[op->tid] = op;
-  
-  pool_op_submit(op);
-  
-  return 0;
-}
-
-int Objecter::delete_selfmanaged_snap(int64_t pool, snapid_t snap,
-				      Context *onfinish) {
-  ldout(cct, 10) << "delete_selfmanaged_snap; pool: " << pool << "; snap: " 
-	   << snap << dendl;
-  PoolOp *op = new PoolOp;
-  if (!op) return -ENOMEM;
-  op->tid = ++last_tid;
-  op->pool = pool;
-  op->onfinish = onfinish;
-  op->pool_op = POOL_OP_DELETE_UNMANAGED_SNAP;
-  op->snapid = snap;
-  pool_ops[op->tid] = op;
-
-  pool_op_submit(op);
-
-  return 0;
-}
 
 int Objecter::create_pool(string& name, Context *onfinish, uint64_t auid,
 			  int crush_rule)
@@ -2182,7 +2069,6 @@ void Objecter::_pool_op_submit(PoolOp *op)
   MPoolOp *m = new MPoolOp(monc->get_fsid(), op->tid, op->pool,
 			   op->name, op->pool_op,
 			   op->auid, last_seen_osdmap_version);
-  if (op->snapid) m->snapid = op->snapid;
   if (op->crush_rule) m->crush_rule = op->crush_rule;
   monc->send_mon_message(m);
   op->last_submit = ceph_clock_now(cct);
@@ -2571,8 +2457,6 @@ void Objecter::dump_ops(Formatter *fmt) const
     op->target.dump(fmt);
     fmt->dump_stream("last_sent") << op->stamp;
     fmt->dump_int("attempts", op->attempts);
-    fmt->dump_stream("snapid") << op->snapid;
-    fmt->dump_stream("snap_context") << op->snapc;
     fmt->dump_stream("mtime") << op->mtime;
 
     fmt->open_array_section("osd_ops");
@@ -2598,7 +2482,6 @@ void Objecter::dump_linger_ops(Formatter *fmt) const
     fmt->open_object_section("linger_op");
     fmt->dump_unsigned("linger_id", op->linger_id);
     op->target.dump(fmt);
-    fmt->dump_stream("snapid") << op->snap;
     fmt->dump_stream("registered") << op->registered;
     fmt->close_section(); // linger_op object
   }
@@ -2642,7 +2525,6 @@ void Objecter::dump_pool_ops(Formatter *fmt) const
     fmt->dump_int("operation_type", op->pool_op);
     fmt->dump_unsigned("auid", op->auid);
     fmt->dump_unsigned("crush_rule", op->crush_rule);
-    fmt->dump_stream("snapid") << op->snapid;
     fmt->dump_stream("last_sent") << op->last_submit;
     fmt->close_section(); // pool_op object
   }

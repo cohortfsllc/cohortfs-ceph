@@ -51,7 +51,6 @@ void ReplicatedBackend::run_recovery_op(
 void ReplicatedBackend::recover_object(
   const hobject_t &hoid,
   eversion_t v,
-  ObjectContextRef head,
   ObjectContextRef obc,
   RecoveryHandle *_h
   )
@@ -64,7 +63,7 @@ void ReplicatedBackend::recover_object(
     prepare_pull(
       v,
       hoid,
-      head,
+      obc,
       h);
     return;
   } else {

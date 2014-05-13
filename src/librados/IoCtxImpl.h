@@ -17,7 +17,6 @@
 
 #include "common/Cond.h"
 #include "common/Mutex.h"
-#include "common/snap_types.h"
 #include "include/atomic.h"
 #include "include/types.h"
 #include "include/rados/librados.h"
@@ -33,8 +32,6 @@ struct librados::IoCtxImpl {
   RadosClient *client;
   int64_t poolid;
   string pool_name;
-  snapid_t snap_seq;
-  ::SnapContext snapc;
   uint64_t assert_ver;
   map<object_t, uint64_t> assert_src_version;
   version_t last_objver;
@@ -52,15 +49,13 @@ struct librados::IoCtxImpl {
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
-	    int poolid, const char *pool_name, snapid_t s);
+	    int poolid, const char *pool_name);
 
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count
     client = rhs.client;
     poolid = rhs.poolid;
     pool_name = rhs.pool_name;
-    snap_seq = rhs.snap_seq;
-    snapc = rhs.snapc;
     assert_ver = rhs.assert_ver;
     assert_src_version = rhs.assert_src_version;
     last_objver = rhs.last_objver;
@@ -69,9 +64,6 @@ struct librados::IoCtxImpl {
     lock = rhs.lock;
     objecter = rhs.objecter;
   }
-
-  void set_snap_read(snapid_t s);
-  int set_snap_write_context(snapid_t seq, vector<snapid_t>& snaps);
 
   void get() {
     ref_cnt.inc();
@@ -96,19 +88,6 @@ struct librados::IoCtxImpl {
 
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);
 
-  // snaps
-  int snap_list(vector<uint64_t> *snaps);
-  int snap_lookup(const char *name, uint64_t *snapid);
-  int snap_get_name(uint64_t snapid, std::string *s);
-  int snap_get_stamp(uint64_t snapid, time_t *t);
-  int snap_create(const char* snapname);
-  int selfmanaged_snap_create(uint64_t *snapid);
-  int snap_remove(const char* snapname);
-  int rollback(const object_t& oid, const char *snapName);
-  int selfmanaged_snap_remove(uint64_t snapid);
-  int selfmanaged_snap_rollback_object(const object_t& oid,
-                                       ::SnapContext& snapc, uint64_t snapid);
-
   // io
   int list(Objecter::ListContext *context, int max_entries);
   uint32_t list_seek(Objecter::ListContext *context, uint32_t pos);
@@ -117,8 +96,6 @@ struct librados::IoCtxImpl {
   int write(const object_t& oid, bufferlist& bl, size_t len, uint64_t off);
   int append(const object_t& oid, bufferlist& bl, size_t len);
   int write_full(const object_t& oid, bufferlist& bl);
-  int clone_range(const object_t& dst_oid, uint64_t dst_offset,
-                  const object_t& src_oid, uint64_t src_offset, uint64_t len);
   int read(const object_t& oid, bufferlist& bl, size_t len, uint64_t off);
   int mapext(const object_t& oid, uint64_t off, size_t len,
 	     std::map<uint64_t,uint64_t>& m);
@@ -143,8 +120,7 @@ struct librados::IoCtxImpl {
   int operate(const object_t& oid, ::ObjectOperation *o, time_t *pmtime, int flags=0);
   int operate_read(const object_t& oid, ::ObjectOperation *o, bufferlist *pbl, int flags=0);
   int aio_operate(const object_t& oid, ::ObjectOperation *o,
-		  AioCompletionImpl *c, const SnapContext& snap_context,
-		  int flags);
+		  AioCompletionImpl *c, int flags);
   int aio_operate_read(const object_t& oid, ::ObjectOperation *o,
 		       AioCompletionImpl *c, int flags, bufferlist *pbl);
 
@@ -169,12 +145,12 @@ struct librados::IoCtxImpl {
   };
 
   int aio_read(const object_t oid, AioCompletionImpl *c,
-	       bufferlist *pbl, size_t len, uint64_t off, uint64_t snapid);
+	       bufferlist *pbl, size_t len, uint64_t off);
   int aio_read(object_t oid, AioCompletionImpl *c,
-	       char *buf, size_t len, uint64_t off, uint64_t snapid);
+	       char *buf, size_t len, uint64_t off);
   int aio_sparse_read(const object_t oid, AioCompletionImpl *c,
 		      std::map<uint64_t,uint64_t> *m, bufferlist *data_bl,
-		      size_t len, uint64_t off, uint64_t snapid);
+		      size_t len, uint64_t off);
   int aio_write(const object_t &oid, AioCompletionImpl *c,
 		const bufferlist& bl, size_t len, uint64_t off);
   int aio_append(const object_t &oid, AioCompletionImpl *c,

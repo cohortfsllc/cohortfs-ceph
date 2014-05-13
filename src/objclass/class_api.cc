@@ -334,15 +334,6 @@ int cls_cxx_setxattr(cls_method_context_t hctx, const char *name,
   return r;
 }
 
-int cls_cxx_snap_revert(cls_method_context_t hctx, snapid_t snapid)
-{
-  ReplicatedPG::OpContext **pctx = (ReplicatedPG::OpContext **)hctx;
-  vector<OSDOp> ops(1);
-  ops[0].op.op = CEPH_OSD_OP_ROLLBACK;
-  ops[0].op.snap.snapid = snapid;
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
-}
-
 int cls_cxx_map_get_all_vals(cls_method_context_t hctx, map<string, bufferlist>* vals)
 {
   ReplicatedPG::OpContext **pctx = (ReplicatedPG::OpContext **)hctx;

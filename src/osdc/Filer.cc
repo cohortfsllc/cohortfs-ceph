@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -100,13 +100,13 @@ void Filer::_probe(Probe *probe)
   probe->probing.clear();
   Striper::file_to_extents(cct, probe->ino, &probe->layout,
 			   probe->probing_off, probe->probing_len, 0, probe->probing);
-  
+
   for (vector<ObjectExtent>::iterator p = probe->probing.begin();
        p != probe->probing.end();
        ++p) {
     ldout(cct, 10) << "_probe  probing " << p->oid << dendl;
     C_Probe *c = new C_Probe(this, probe, p->oid);
-    objecter->stat(p->oid, p->oloc, CEPH_NOSNAP, &c->size, &c->mtime, 
+    objecter->stat(p->oid, p->oloc, &c->size, &c->mtime,
 		   probe->flags | CEPH_OSD_FLAG_RWORDERED, c);
     probe->ops.insert(p->oid);
   }
@@ -242,7 +242,7 @@ int Filer::purge_range(inodeno_t ino,
   if (num_obj == 1) {
     object_t oid = file_object_t(ino, first_obj);
     object_locator_t oloc = objecter->osdmap->file_to_object_locator(*layout);
-    objecter->remove(oid, oloc, ::SnapContext(), mtime, flags, NULL, oncommit);
+    objecter->remove(oid, oloc, mtime, flags, NULL, oncommit);
     return 0;
   }
 
@@ -286,7 +286,7 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
   while (pr->num > 0 && max > 0) {
     object_t oid = file_object_t(pr->ino, pr->first);
     object_locator_t oloc = objecter->osdmap->file_to_object_locator(pr->layout);
-    objecter->remove(oid, oloc, ::SnapContext(), pr->mtime, pr->flags,
+    objecter->remove(oid, oloc, pr->mtime, pr->flags,
 		     NULL, new C_PurgeRange(this, pr));
     pr->uncommitted++;
     pr->first++;

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "common/perf_counters.h"
@@ -146,7 +146,7 @@ void Journaler::read_head(Context *on_finish, bufferlist *bl)
 
   object_t oid = file_object_t(ino, 0);
   object_locator_t oloc(pg_pool);
-  objecter->read_full(oid, oloc, CEPH_NOSNAP, bl, 0, on_finish);
+  objecter->read_full(oid, oloc, bl, 0, on_finish);
 }
 
 /**
@@ -347,9 +347,8 @@ void Journaler::write_head(Context *oncommit)
 
   object_t oid = file_object_t(ino, 0);
   object_locator_t oloc(pg_pool);
-  objecter->write_full(oid, oloc, ::SnapContext(), bl, ceph_clock_now(cct), 0,
-		       NULL, 
-		       new C_WriteHead(this, last_written, oncommit));
+  objecter->write_full(oid, oloc, bl, ceph_clock_now(cct), 0,
+		       NULL, new C_WriteHead(this, last_written, oncommit));
 }
 
 void Journaler::_finish_write_head(int r, Header &wrote, Context *oncommit)

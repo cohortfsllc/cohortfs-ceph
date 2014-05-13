@@ -36,7 +36,6 @@
 #include "messages/MPoolOpReply.h"
 #include "messages/MOSDPGTemp.h"
 #include "messages/MMonCommand.h"
-#include "messages/MRemoveSnaps.h"
 #include "messages/MOSDScrub.h"
 
 #include "common/Timer.h"
@@ -541,12 +540,9 @@ void OSDMonitor::encode_pending(MonitorDBStore::Transaction *t)
 {
   dout(10) << "encode_pending e " << pending_inc.epoch
 	   << dendl;
-  
+
   // finalize up pending_inc
   pending_inc.modified = ceph_clock_now(g_ceph_context);
-
-  int r = pending_inc.propagate_snaps_to_tiers(g_ceph_context, osdmap);
-  assert(r == 0);
 
   bufferlist bl;
 
@@ -697,9 +693,7 @@ bool OSDMonitor::preprocess_query(PaxosServiceMessage *m)
   case CEPH_MSG_POOLOP:
     return preprocess_pool_op(static_cast<MPoolOp*>(m));
 
-  case MSG_REMOVE_SNAPS:
-    return preprocess_remove_snaps(static_cast<MRemoveSnaps*>(m));
-    
+
   default:
     assert(0);
     m->put();
@@ -726,12 +720,9 @@ bool OSDMonitor::prepare_update(PaxosServiceMessage *m)
 
   case MSG_MON_COMMAND:
     return prepare_command(static_cast<MMonCommand*>(m));
-    
+
   case CEPH_MSG_POOLOP:
     return prepare_pool_op(static_cast<MPoolOp*>(m));
-
-  case MSG_REMOVE_SNAPS:
-    return prepare_remove_snaps(static_cast<MRemoveSnaps*>(m));
 
   default:
     assert(0);
@@ -1534,76 +1525,6 @@ bool OSDMonitor::prepare_pgtemp(MOSDPGTemp *m)
   }
   pending_inc.new_up_thru[from] = m->map_epoch;   // set up_thru too, so the osd doesn't have to ask again
   wait_for_finished_proposal(new C_ReplyMap(this, m, m->map_epoch));
-  return true;
-}
-
-
-// ---
-
-bool OSDMonitor::preprocess_remove_snaps(MRemoveSnaps *m)
-{
-  dout(7) << "preprocess_remove_snaps " << *m << dendl;
-
-  // check privilege, ignore if failed
-  MonSession *session = m->get_session();
-  if (!session)
-    goto ignore;
-  if (!session->is_capable("osd", MON_CAP_R | MON_CAP_W)) {
-    dout(0) << "got preprocess_remove_snaps from entity with insufficient caps "
-	    << session->caps << dendl;
-    goto ignore;
-  }
-
-  for (map<int, vector<snapid_t> >::iterator q = m->snaps.begin();
-       q != m->snaps.end();
-       ++q) {
-    if (!osdmap.have_pg_pool(q->first)) {
-      dout(10) << " ignoring removed_snaps " << q->second << " on non-existent pool " << q->first << dendl;
-      continue;
-    }
-    const pg_pool_t *pi = osdmap.get_pg_pool(q->first);
-    for (vector<snapid_t>::iterator p = q->second.begin(); 
-	 p != q->second.end();
-	 ++p) {
-      if (*p > pi->get_snap_seq() ||
-	  !pi->removed_snaps.contains(*p))
-	return false;
-    }
-  }
-
- ignore:
-  m->put();
-  return true;
-}
-
-bool OSDMonitor::prepare_remove_snaps(MRemoveSnaps *m)
-{
-  dout(7) << "prepare_remove_snaps " << *m << dendl;
-
-  for (map<int, vector<snapid_t> >::iterator p = m->snaps.begin(); 
-       p != m->snaps.end();
-       ++p) {
-    pg_pool_t& pi = osdmap.pools[p->first];
-    for (vector<snapid_t>::iterator q = p->second.begin();
-	 q != p->second.end();
-	 ++q) {
-      if (!pi.removed_snaps.contains(*q) &&
-	  (!pending_inc.new_pools.count(p->first) ||
-	   !pending_inc.new_pools[p->first].removed_snaps.contains(*q))) {
-	pg_pool_t *newpi = pending_inc.get_new_pool(p->first, &pi);
-	newpi->removed_snaps.insert(*q);
-	dout(10) << " pool " << p->first << " removed_snaps added " << *q
-		 << " (now " << newpi->removed_snaps << ")" << dendl;
-	if (*q > newpi->get_snap_seq()) {
-	  dout(10) << " pool " << p->first << " snap_seq " << newpi->get_snap_seq() << " -> " << *q << dendl;
-	  newpi->set_snap_seq(*q);
-	}
-	newpi->set_snap_epoch(pending_inc.epoch);
-      }
-    }
-  }
-
-  m->put();
   return true;
 }
 
@@ -4282,11 +4203,6 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
       err = -EINVAL;
     }
 
-  } else if (prefix == "osd cluster_snap") {
-    // ** DISABLE THIS FOR NOW **
-    ss << "cluster snapshot currently disabled (broken implementation)";
-    // ** DISABLE THIS FOR NOW **
-
   } else if (prefix == "osd down" ||
 	     prefix == "osd out" ||
 	     prefix == "osd in" ||
@@ -4658,85 +4574,6 @@ done:
 	goto reply;
       }
     }
-  } else if (prefix == "osd pool mksnap") {
-    string poolstr;
-    cmd_getval(g_ceph_context, cmdmap, "pool", poolstr);
-    int64_t pool = osdmap.lookup_pg_pool_name(poolstr.c_str());
-    if (pool < 0) {
-      ss << "unrecognized pool '" << poolstr << "'";
-      err = -ENOENT;
-      goto reply;
-    }
-    string snapname;
-    cmd_getval(g_ceph_context, cmdmap, "snap", snapname);
-    const pg_pool_t *p = osdmap.get_pg_pool(pool);
-    if (p->is_unmanaged_snaps_mode()) {
-      ss << "pool " << poolstr << " is in unmanaged snaps mode";
-      err = -EINVAL;
-      goto reply;
-    } else if (p->snap_exists(snapname.c_str())) {
-      ss << "pool " << poolstr << " snap " << snapname << " already exists";
-      err = 0;
-      goto reply;
-    }
-    pg_pool_t *pp = 0;
-    if (pending_inc.new_pools.count(pool))
-      pp = &pending_inc.new_pools[pool];
-    if (!pp) {
-      pp = &pending_inc.new_pools[pool];
-      *pp = *p;
-    }
-    if (pp->snap_exists(snapname.c_str())) {
-      ss << "pool " << poolstr << " snap " << snapname << " already exists";
-    } else {
-      pp->add_snap(snapname.c_str(), ceph_clock_now(g_ceph_context));
-      pp->set_snap_epoch(pending_inc.epoch);
-      ss << "created pool " << poolstr << " snap " << snapname;
-    }
-    getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-					      get_last_committed() + 1));
-    return true;
-  } else if (prefix == "osd pool rmsnap") {
-    string poolstr;
-    cmd_getval(g_ceph_context, cmdmap, "pool", poolstr);
-    int64_t pool = osdmap.lookup_pg_pool_name(poolstr.c_str());
-    if (pool < 0) {
-      ss << "unrecognized pool '" << poolstr << "'";
-      err = -ENOENT;
-      goto reply;
-    }
-    string snapname;
-    cmd_getval(g_ceph_context, cmdmap, "snap", snapname);
-    const pg_pool_t *p = osdmap.get_pg_pool(pool);
-    if (p->is_unmanaged_snaps_mode()) {
-      ss << "pool " << poolstr << " is in unmanaged snaps mode";
-      err = -EINVAL;
-      goto reply;
-    } else if (!p->snap_exists(snapname.c_str())) {
-      ss << "pool " << poolstr << " snap " << snapname << " does not exist";
-      err = 0;
-      goto reply;
-    }
-    pg_pool_t *pp = 0;
-    if (pending_inc.new_pools.count(pool))
-      pp = &pending_inc.new_pools[pool];
-    if (!pp) {
-      pp = &pending_inc.new_pools[pool];
-      *pp = *p;
-    }
-    snapid_t sn = pp->snap_exists(snapname.c_str());
-    if (sn) {
-      pp->remove_snap(sn);
-      pp->set_snap_epoch(pending_inc.epoch);
-      ss << "removed pool " << poolstr << " snap " << snapname;
-    } else {
-      ss << "already removed pool " << poolstr << " snap " << snapname;
-    }
-    getline(ss, rs);
-    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-					      get_last_committed() + 1));
-    return true;
   } else if (prefix == "osd pool create") {
     int64_t  pg_num;
     int64_t pgp_num;
@@ -4975,7 +4812,6 @@ done:
       return true;
     }
     np->tiers.insert(tierpool_id);
-    np->set_snap_epoch(pending_inc.epoch); // tier will update to our snap info
     ntp->tier_of = pool_id;
     ss << "pool '" << tierpoolstr << "' is now (or already was) a tier of '" << poolstr << "'";
     wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, ss.str(),
@@ -5223,7 +5059,6 @@ done:
       return true;
     }
     np->tiers.insert(tierpool_id);
-    np->set_snap_epoch(pending_inc.epoch); // tier will update to our snap info
     ntp->tier_of = pool_id;
     ntp->cache_mode = mode;
     ntp->hit_set_count = g_conf->osd_tier_default_cache_hit_set_count;
@@ -5335,49 +5170,7 @@ bool OSDMonitor::preprocess_pool_op(MPoolOp *m)
     return true;
   }
 
-  // check if the snap and snapname exists
-  bool snap_exists = false;
-  const pg_pool_t *p = osdmap.get_pg_pool(m->pool);
-  if (p->snap_exists(m->name.c_str()))
-    snap_exists = true;
-  
   switch (m->op) {
-  case POOL_OP_CREATE_SNAP:
-    if (p->is_unmanaged_snaps_mode()) {
-      _pool_op_reply(m, -EINVAL, osdmap.get_epoch());
-      return true;
-    }
-    if (snap_exists) {
-      _pool_op_reply(m, 0, osdmap.get_epoch());
-      return true;
-    }
-    return false;
-  case POOL_OP_CREATE_UNMANAGED_SNAP:
-    if (p->is_pool_snaps_mode()) {
-      _pool_op_reply(m, -EINVAL, osdmap.get_epoch());
-      return true;
-    }
-    return false;
-  case POOL_OP_DELETE_SNAP:
-    if (p->is_unmanaged_snaps_mode()) {
-      _pool_op_reply(m, -EINVAL, osdmap.get_epoch());
-      return true;
-    }
-    if (!snap_exists) {
-      _pool_op_reply(m, 0, osdmap.get_epoch());
-      return true;
-    }
-    return false;
-  case POOL_OP_DELETE_UNMANAGED_SNAP:
-    if (p->is_pool_snaps_mode()) {
-      _pool_op_reply(m, -EINVAL, osdmap.get_epoch());
-      return true;
-    }
-    if (p->is_removed_snap(m->snapid)) {
-      _pool_op_reply(m, 0, osdmap.get_epoch());
-      return true;
-    }
-    return false;
   case POOL_OP_DELETE:
     if (osdmap.lookup_pg_pool_name(m->name.c_str()) >= 0) {
       _pool_op_reply(m, 0, osdmap.get_epoch());
@@ -5435,42 +5228,6 @@ bool OSDMonitor::prepare_pool_op(MPoolOp *m)
     return false;
   }
 
-  const pg_pool_t *pool = osdmap.get_pg_pool(m->pool);
-
-  switch (m->op) {
-    case POOL_OP_CREATE_SNAP:
-    case POOL_OP_DELETE_SNAP:
-      if (!pool->is_unmanaged_snaps_mode()) {
-        bool snap_exists = pool->snap_exists(m->name.c_str());
-        if ((m->op == POOL_OP_CREATE_SNAP && snap_exists)
-          || (m->op == POOL_OP_DELETE_SNAP && !snap_exists)) {
-          ret = 0;
-        } else {
-          break;
-        }
-      } else {
-        ret = -EINVAL;
-      }
-      _pool_op_reply(m, ret, osdmap.get_epoch());
-      return false;
-
-    case POOL_OP_DELETE_UNMANAGED_SNAP:
-      // we won't allow removal of an unmanaged snapshot from a pool
-      // not in unmanaged snaps mode.
-      if (!pool->is_unmanaged_snaps_mode()) {
-        _pool_op_reply(m, -ENOTSUP, osdmap.get_epoch());
-        return false;
-      }
-      /* fall-thru */
-    case POOL_OP_CREATE_UNMANAGED_SNAP:
-      // but we will allow creating an unmanaged snapshot on any pool
-      // as long as it is not in 'pool' snaps mode.
-      if (pool->is_pool_snaps_mode()) {
-        _pool_op_reply(m, -EINVAL, osdmap.get_epoch());
-        return false;
-      }
-  }
-
   // projected pool info
   pg_pool_t pp;
   if (pending_inc.new_pools.count(m->pool))
@@ -5480,59 +5237,7 @@ bool OSDMonitor::prepare_pool_op(MPoolOp *m)
 
   bufferlist reply_data;
 
-  // pool snaps vs unmanaged snaps are mutually exclusive
   switch (m->op) {
-  case POOL_OP_CREATE_SNAP:
-  case POOL_OP_DELETE_SNAP:
-    if (pp.is_unmanaged_snaps_mode()) {
-      ret = -EINVAL;
-      goto out;
-    }
-    break;
-
-  case POOL_OP_CREATE_UNMANAGED_SNAP:
-  case POOL_OP_DELETE_UNMANAGED_SNAP:
-    if (pp.is_pool_snaps_mode()) {
-      ret = -EINVAL;
-      goto out;
-    }
-  }
-
-  switch (m->op) {
-  case POOL_OP_CREATE_SNAP:
-    if (!pp.snap_exists(m->name.c_str())) {
-      pp.add_snap(m->name.c_str(), ceph_clock_now(g_ceph_context));
-      dout(10) << "create snap in pool " << m->pool << " " << m->name << " seq " << pp.get_snap_epoch() << dendl;
-      changed = true;
-    }
-    break;
-
-  case POOL_OP_DELETE_SNAP:
-    {
-      snapid_t s = pp.snap_exists(m->name.c_str());
-      if (s) {
-	pp.remove_snap(s);
-	changed = true;
-      }
-    }
-    break;
-
-  case POOL_OP_CREATE_UNMANAGED_SNAP: 
-    {
-      uint64_t snapid;
-      pp.add_unmanaged_snap(snapid);
-      ::encode(snapid, reply_data);
-      changed = true;
-    }
-    break;
-
-  case POOL_OP_DELETE_UNMANAGED_SNAP:
-    if (!pp.is_removed_snap(m->snapid)) {
-      pp.remove_unmanaged_snap(m->snapid);
-      changed = true;
-    }
-    break;
-
   case POOL_OP_AUID_CHANGE:
     if (pp.auid != m->auid) {
       pp.auid = m->auid;
@@ -5546,15 +5251,12 @@ bool OSDMonitor::prepare_pool_op(MPoolOp *m)
   }
 
   if (changed) {
-    pp.set_snap_epoch(pending_inc.epoch);
     pending_inc.new_pools[m->pool] = pp;
   }
 
- out:
   wait_for_finished_proposal(new OSDMonitor::C_PoolOp(this, m, ret, pending_inc.epoch, &reply_data));
   return true;
 }
-
 bool OSDMonitor::prepare_pool_op_create(MPoolOp *m)
 {
   int err = prepare_new_pool(m);

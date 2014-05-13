@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MPOOLOP_H
@@ -29,7 +29,6 @@ public:
   string name;
   uint32_t op;
   uint64_t auid;
-  snapid_t snapid;
   int16_t crush_rule;
 
   MPoolOp()
@@ -37,14 +36,14 @@ public:
   MPoolOp(const uuid_d& f, ceph_tid_t t, int p, string& n, int o, version_t v)
     : PaxosServiceMessage(CEPH_MSG_POOLOP, v, HEAD_VERSION, COMPAT_VERSION),
       fsid(f), pool(p), name(n), op(o),
-      auid(0), snapid(0), crush_rule(0) {
+      auid(0), crush_rule(0) {
     set_tid(t);
   }
   MPoolOp(const uuid_d& f, ceph_tid_t t, int p, string& n,
 	  int o, uint64_t uid, version_t v)
     : PaxosServiceMessage(CEPH_MSG_POOLOP, v, HEAD_VERSION, COMPAT_VERSION),
       fsid(f), pool(p), name(n), op(o),
-      auid(uid), snapid(0), crush_rule(0) {
+      auid(uid), crush_rule(0) {
     set_tid(t);
   }
 
@@ -67,7 +66,6 @@ public:
     ::encode(pool, payload);
     ::encode(op, payload);
     ::encode(auid, payload);
-    ::encode(snapid, payload);
     ::encode(name, payload);
     uint8_t pad = 0;
     ::encode(pad, payload);  /* for v3->v4 encoding change */
@@ -82,7 +80,6 @@ public:
       ::decode(name, p);
     ::decode(op, p);
     ::decode(auid, p);
-    ::decode(snapid, p);
     if (header.version >= 2)
       ::decode(name, p);
 

@@ -5303,8 +5303,7 @@ void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
   object_locator_t oloc(mds->mdsmap->get_metadata_pool());
 
   dout(10) << "purge_prealloc_ino " << ino << " oid " << oid << dendl;
-  SnapContext snapc;
-  mds->objecter->remove(oid, oloc, snapc, ceph_clock_now(g_ceph_context), 0, 0, fin);
+  mds->objecter->remove(oid, oloc, ceph_clock_now(g_ceph_context), 0, 0, fin);
 }
 
 
@@ -8529,7 +8528,7 @@ void MDCache::fetch_backtrace(inodeno_t ino, int64_t pool, bufferlist& bl,
 {
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
   mds->objecter->getxattr(oid, object_locator_t(pool), "parent",
-			  CEPH_NOSNAP, &bl, 0, fin);
+			  &bl, 0, fin);
 }
 
 class C_MDC_PurgeStrayPurged : public Context {
@@ -8571,7 +8570,6 @@ void MDCache::purge_stray(CDentry *dn)
   // that is implicit in the dentry's presence and non-use in the stray
   // dir.  on recovery, we'll need to re-eval all strays anyway.
 
-  SnapContext snapc;
   C_GatherBuilder gather(g_ceph_context, new C_MDC_PurgeStrayPurged(this, dn));
 
   if (in->is_dir()) {
@@ -8585,7 +8583,7 @@ void MDCache::purge_stray(CDentry *dn)
 	 ++p) {
       object_t oid = CInode::get_object_name(in->inode.ino, *p, "");
       dout(10) << "purge_stray remove dirfrag " << oid << dendl;
-      mds->objecter->remove(oid, oloc, snapc, ceph_clock_now(g_ceph_context),
+      mds->objecter->remove(oid, oloc, ceph_clock_now(g_ceph_context),
 			    0, NULL, gather.new_sub());
     }
     assert(gather.has_subs());
@@ -8618,8 +8616,8 @@ void MDCache::purge_stray(CDentry *dn)
   if (!gather.has_subs()) {
     object_locator_t oloc(pi->layout.fl_pg_pool);
     dout(10) << "purge_stray remove backtrace object " << oid
-	     << " pool " << oloc.pool << " snapc " << snapc << dendl;
-    mds->objecter->remove(oid, oloc, ::SnapContext(),
+	     << " pool " << oloc.pool << dendl;
+    mds->objecter->remove(oid, oloc,
 			  ceph_clock_now(g_ceph_context), 0, NULL,
 			  gather.new_sub());
   }
@@ -8628,8 +8626,7 @@ void MDCache::purge_stray(CDentry *dn)
        p != pi->old_pools.end();
        ++p) {
     object_locator_t oloc(*p);
-    mds->objecter->remove(oid, oloc, ::SnapContext(),
-			  ceph_clock_now(g_ceph_context), 0,
+    mds->objecter->remove(oid, oloc, ceph_clock_now(g_ceph_context), 0,
 			  NULL, gather.new_sub());
   }
   assert(gather.has_subs());
@@ -10647,7 +10644,6 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   // remove old frags
   C_GatherBuilder gather(g_ceph_context, new C_MDC_FragmentFinish(this, basedirfrag, resultfrags));
 
-  SnapContext snapc;
   object_locator_t oloc(mds->mdsmap->get_metadata_pool());
   for (list<frag_t>::iterator p = uf.old_frags.begin();
        p != uf.old_frags.end();
@@ -10663,7 +10659,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
       dout(10) << " removing orphan dirfrag " << oid << dendl;
       op.remove();
     }
-    mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
+    mds->objecter->mutate(oid, oloc, op, ceph_clock_now(g_ceph_context),
 			  0, NULL, gather.new_sub());
   }
 

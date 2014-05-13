@@ -2463,7 +2463,7 @@ int KeyValueStore::_collection_remove_recursive(const coll_t &cid,
   vector<ghobject_t> objects;
   ghobject_t max;
   while (!max.is_max()) {
-    r = collection_list_partial(cid, max, 200, 300, 0, &objects, &max);
+    r = collection_list_partial(cid, max, 200, 300, &objects, &max);
     if (r < 0)
       return r;
 
@@ -2510,10 +2510,10 @@ int KeyValueStore::_collection_rename(const coll_t &cid, const coll_t &ncid,
   int move_size = 0;
   while (1) {
     collection_list_partial(cid, current, get_ideal_list_min(),
-                            get_ideal_list_max(), 0, &objects, &next);
+			    get_ideal_list_max(), &objects, &next);
 
     dout(20) << __func__ << cid << "objects size: " << objects.size()
-             << dendl;
+	     << dendl;
 
     if (objects.empty())
       break;
@@ -2578,8 +2578,8 @@ bool KeyValueStore::collection_empty(coll_t c)
 }
 
 int KeyValueStore::collection_list_range(coll_t c, ghobject_t start,
-                                         ghobject_t end, snapid_t seq,
-                                         vector<ghobject_t> *ls)
+					 ghobject_t end,
+					 vector<ghobject_t> *ls)
 {
   bool done = false;
   ghobject_t next = start;
@@ -2587,8 +2587,8 @@ int KeyValueStore::collection_list_range(coll_t c, ghobject_t start,
   while (!done) {
     vector<ghobject_t> next_objects;
     int r = collection_list_partial(c, next, get_ideal_list_min(),
-                                    get_ideal_list_max(), seq,
-                                    &next_objects, &next);
+				    get_ideal_list_max(),
+				    &next_objects, &next);
     if (r < 0)
       return r;
 
@@ -2613,9 +2613,9 @@ int KeyValueStore::collection_list_range(coll_t c, ghobject_t start,
 }
 
 int KeyValueStore::collection_list_partial(coll_t c, ghobject_t start,
-                                           int min, int max, snapid_t seq,
-                                           vector<ghobject_t> *ls,
-                                           ghobject_t *next)
+					   int min, int max,
+					   vector<ghobject_t> *ls,
+					   ghobject_t *next)
 {
   dout(10) << __func__ << " " << c << " start:" << start << " is_max:"
            << start.is_max() << dendl;
@@ -2631,7 +2631,7 @@ int KeyValueStore::collection_list_partial(coll_t c, ghobject_t start,
 
 int KeyValueStore::collection_list(coll_t c, vector<ghobject_t>& ls)
 {
-  return collection_list_partial(c, ghobject_t(), 0, 0, 0, &ls, 0);
+  return collection_list_partial(c, ghobject_t(), 0, 0, &ls, 0);
 }
 
 int KeyValueStore::collection_version_current(coll_t c, uint32_t *version)
@@ -2902,13 +2902,13 @@ int KeyValueStore::_split_collection(coll_t cid, uint32_t bits, uint32_t rem,
     int move_size = 0;
     while (1) {
       collection_list_partial(cid, current, get_ideal_list_min(),
-                              get_ideal_list_max(), 0, &objects, &next);
+			      get_ideal_list_max(), &objects, &next);
 
       dout(20) << __func__ << cid << "objects size: " << objects.size()
-              << dendl;
+	       << dendl;
 
       if (objects.empty())
-        break;
+	break;
 
       for (vector<ghobject_t>::iterator i = objects.begin();
           i != objects.end(); ++i) {
@@ -2933,7 +2933,7 @@ int KeyValueStore::_split_collection(coll_t cid, uint32_t bits, uint32_t rem,
     ghobject_t next;
     while (1) {
       collection_list_partial(cid, next, get_ideal_list_min(),
-                              get_ideal_list_max(), 0, &objects, &next);
+			      get_ideal_list_max(), &objects, &next);
       if (objects.empty())
         break;
 
@@ -2949,7 +2949,7 @@ int KeyValueStore::_split_collection(coll_t cid, uint32_t bits, uint32_t rem,
     next = ghobject_t();
     while (1) {
       collection_list_partial(dest, next, get_ideal_list_min(),
-                              get_ideal_list_max(), 0, &objects, &next);
+			      get_ideal_list_max(), &objects, &next);
       if (objects.empty())
         break;
 

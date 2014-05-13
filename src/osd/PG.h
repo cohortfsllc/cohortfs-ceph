@@ -34,7 +34,6 @@
 #include "include/buffer.h"
 #include "include/xlist.h"
 #include "include/atomic.h"
-#include "SnapMapper.h"
 
 #include "PGLog.h"
 #include "OpRequest.h"
@@ -49,6 +48,7 @@
 #include "common/ceph_context.h"
 #include "include/str_list.h"
 #include "PGBackend.h"
+#include "OSDriver.h"
 
 #include <list>
 #include <memory>
@@ -164,11 +164,7 @@ struct PGPool {
   string name;
   uint64_t auid;
 
-  pg_pool_t info;      
-  SnapContext snapc;   // the default pool snapc, ready to go.
-
-  interval_set<snapid_t> cached_removed_snaps;      // current removed_snaps set
-  interval_set<snapid_t> newly_removed_snaps;  // newly removed in the last epoch
+  pg_pool_t info;
 
   PGPool(int64_t i, const char *_name, uint64_t au) :
     id(i), auid(au) {
@@ -192,14 +188,9 @@ protected:
   OSDService *osd;
   CephContext *cct;
   OSDriver osdriver;
-  SnapMapper snap_mapper;
 
   virtual PGBackend *get_pgbackend() = 0;
-public:
-  void update_snap_mapper_bits(uint32_t bits) {
-    snap_mapper.update_bits(bits);
-  }
-protected:
+
   // Ops waiting for map, should be queued at back
   Mutex map_lock;
   list<OpRequestRef> waiting_for_map;
@@ -280,16 +271,9 @@ public:
     return pool.info.ec_pool();
   }
   // pg state
-  pg_info_t        info;
+  pg_info_t info;
   uint8_t info_struct_v;
   static const uint8_t cur_struct_v = 7;
-  bool must_upgrade() {
-    return info_struct_v < 7;
-  }
-  void upgrade(
-    ObjectStore *store,
-    const interval_set<snapid_t> &snapcolls);
-
   const coll_t coll;
   PGLog  pg_log;
   static string get_info_key(spg_t pgid) {
@@ -419,15 +403,12 @@ public:
       return needs_recovery_map;
     }
   } missing_loc;
-  
-  interval_set<snapid_t> snap_collections; // obsolete
-  map<epoch_t,pg_interval_t> past_intervals;
 
-  interval_set<snapid_t> snap_trimq;
+  map<epoch_t,pg_interval_t> past_intervals;
 
   /* You should not use these items without taking their respective queue locks
    * (if they have one) */
-  xlist<PG*>::item recovery_item, scrub_item, scrub_finalize_item, snap_trim_item, stat_queue_item;
+  xlist<PG*>::item recovery_item, scrub_item, scrub_finalize_item, stat_queue_item;
   int recovery_ops_active;
   set<pg_shard_t> waiting_on_backfill;
 #ifdef DEBUG_RECOVERY_OIDS
@@ -767,27 +748,11 @@ public:
     }
   };
 
-  struct SnapRollBacker : public ObjectModDesc::Visitor {
-    const hobject_t &soid;
-    PG *pg;
-    ObjectStore::Transaction *t;
-    SnapRollBacker(const hobject_t &soid, PG *pg, ObjectStore::Transaction *t)
-      : soid(soid), pg(pg), t(t) {}
-    void update_snaps(set<snapid_t> &snaps) {
-      pg->update_object_snap_mapping(t, soid, snaps);
-    }
-    void create() {
-      pg->clear_object_snap_mapping(
-	t,
-	soid);
-    }
-  };
-
   struct PGLogEntryHandler : public PGLog::LogEntryHandler {
     list<pg_log_entry_t> to_rollback;
     set<hobject_t> to_remove;
     list<pg_log_entry_t> to_trim;
-    
+
     // LogEntryHandler
     void remove(const hobject_t &hoid) {
       to_remove.insert(hoid);
@@ -800,19 +765,10 @@ public:
     }
 
     void apply(PG *pg, ObjectStore::Transaction *t) {
-      for (list<pg_log_entry_t>::iterator j = to_rollback.begin();
-	   j != to_rollback.end();
-	   ++j) {
-	assert(j->mod_desc.can_rollback());
-	pg->get_pgbackend()->rollback(j->soid, j->mod_desc, t);
-	SnapRollBacker rollbacker(j->soid, pg, t);
-	j->mod_desc.visit(&rollbacker);
-      }
       for (set<hobject_t>::iterator i = to_remove.begin();
 	   i != to_remove.end();
 	   ++i) {
-	pg->get_pgbackend()->rollback_create(*i, t);
-	pg->remove_snap_mapped_object(*t, *i);
+	pg->remove_object(*t, *i);
       }
       for (list<pg_log_entry_t>::reverse_iterator i = to_trim.rbegin();
 	   i != to_trim.rend();
@@ -822,16 +778,10 @@ public:
       }
     }
   };
-  
-  friend struct SnapRollBacker;
+
   friend struct PGLogEntryHandler;
   friend struct LogEntryTrimmer;
-  void update_object_snap_mapping(
-    ObjectStore::Transaction *t, const hobject_t &soid,
-    const set<snapid_t> &snaps);
-  void clear_object_snap_mapping(
-    ObjectStore::Transaction *t, const hobject_t &soid);
-  void remove_snap_mapped_object(
+  void remove_object(
     ObjectStore::Transaction& t, const hobject_t& soid);
   void merge_log(
     ObjectStore::Transaction& t, pg_info_t &oinfo,
@@ -929,7 +879,8 @@ public:
   void finish_recovery_op(const hobject_t& soid, bool dequeue=false);
 
   void split_into(pg_t child_pgid, PG *child, unsigned split_bits);
-  virtual void _split_into(pg_t child_pgid, PG *child, unsigned split_bits) = 0;
+  virtual void _split_into(pg_t child_pgid, PG *child,
+			   unsigned split_bits) = 0;
 
   loff_t get_log_write_pos() {
     return 0;
@@ -941,15 +892,12 @@ public:
   // -- scrub --
   struct Scrubber {
     Scrubber() :
-      reserved(false), reserve_failed(false),
-      epoch_start(0),
-      block_writes(false), active(false), queue_snap_trim(false),
-      waiting_on(0), shallow_errors(0), deep_errors(0), fixed(0),
-      active_rep_scrub(0),
-      must_scrub(false), must_deep_scrub(false), must_repair(false),
-      classic(false),
-      finalizing(false), is_chunky(false), state(INACTIVE),
-      deep(false)
+      reserved(false), reserve_failed(false), epoch_start(0),
+      block_writes(false), active(false), waiting_on(0),
+      shallow_errors(0), deep_errors(0), fixed(0),
+      active_rep_scrub(0), must_scrub(false), must_deep_scrub(false),
+      must_repair(false), classic(false), finalizing(false), is_chunky(false),
+      state(INACTIVE), deep(false)
     {
     }
 
@@ -961,7 +909,6 @@ public:
     // common to both scrubs
     bool block_writes;
     bool active;
-    bool queue_snap_trim;
     int waiting_on;
     set<pg_shard_t> waiting_on_whom;
     int shallow_errors;
@@ -978,7 +925,6 @@ public:
     // Maps from objects with errors to missing/inconsistent peers
     map<hobject_t, set<pg_shard_t> > missing;
     map<hobject_t, set<pg_shard_t> > inconsistent;
-    map<hobject_t, set<pg_shard_t> > inconsistent_snapcolls;
 
     // Map from object with errors to good peer
     map<hobject_t, pair<ScrubMap::object, pg_shard_t> > authoritative;
@@ -1060,12 +1006,11 @@ public:
       finalizing = false;
       block_writes = false;
       active = false;
-      queue_snap_trim = false;
       waiting_on = 0;
       waiting_on_whom.clear();
       if (active_rep_scrub) {
-        active_rep_scrub->put();
-        active_rep_scrub = NULL;
+	active_rep_scrub->put();
+	active_rep_scrub = NULL;
       }
       received_maps.clear();
 
@@ -1107,10 +1052,9 @@ public:
   void scrub_finish();
   void scrub_clear_state();
   bool scrub_gather_replica_maps();
-  void _scan_snaps(ScrubMap &map);
   void _request_scrub_map_classic(pg_shard_t replica, eversion_t version);
   void _request_scrub_map(pg_shard_t replica, eversion_t version,
-                          hobject_t start, hobject_t end, bool deep);
+			  hobject_t start, hobject_t end, bool deep);
   int build_scrub_map_chunk(
     ScrubMap &map,
     hobject_t start, hobject_t end, bool deep,
@@ -1134,11 +1078,6 @@ public:
     int split_bits,
     int seed,
     ObjectStore::Transaction *t) = 0;
-  virtual bool _report_snap_collection_errors(
-    const hobject_t &hoid,
-    const map<string, bufferptr> &attrs,
-    pg_shard_t osd,
-    ostream &out) { return false; };
   void clear_scrub_reserved();
   void scrub_reserve_replicas();
   void scrub_unreserve_replicas();
@@ -1981,7 +1920,6 @@ public:
   static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
     pg_info_t &info, coll_t coll,
     map<epoch_t,pg_interval_t> &past_intervals,
-    interval_set<snapid_t> &snap_collections,
     hobject_t &infos_oid,
     uint8_t info_struct_v, bool dirty_big_info, bool force_ver = false);
   void write_if_dirty(ObjectStore::Transaction& t);
@@ -2005,20 +1943,12 @@ public:
   static int read_info(
     ObjectStore *store, const coll_t coll,
     bufferlist &bl, pg_info_t &info, map<epoch_t,pg_interval_t> &past_intervals,
-    hobject_t &biginfo_oid, hobject_t &infos_oid,
-    interval_set<snapid_t>  &snap_collections, uint8_t &);
+    hobject_t &biginfo_oid, hobject_t &infos_oid, uint8_t &);
   void read_state(ObjectStore *store, bufferlist &bl);
   static epoch_t peek_map_epoch(ObjectStore *store, coll_t coll,
-                               hobject_t &infos_oid, bufferlist *bl);
-  void update_snap_map(
-    vector<pg_log_entry_t> &log_entries,
-    ObjectStore::Transaction& t);
-
-  void filter_snapc(vector<snapid_t> &snaps);
-
+				hobject_t &infos_oid, bufferlist *bl);
   void log_weirdness();
 
-  void queue_snap_trim();
   bool queue_scrub();
 
   /// share pg info after a pg is active
@@ -2117,7 +2047,6 @@ public:
     ThreadPool::TPHandle &handle
   ) = 0;
   virtual void do_backfill(OpRequestRef op) = 0;
-  virtual void snap_trimmer() = 0;
 
   virtual int do_command(cmdmap_t cmdmap, ostream& ss,
 			 bufferlist& idata, bufferlist& odata) = 0;

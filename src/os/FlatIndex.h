@@ -78,7 +78,6 @@ public:
     const ghobject_t &start,
     int min_count,
     int max_count,
-    snapid_t seq,
     vector<ghobject_t> *ls,
     ghobject_t *next
     );

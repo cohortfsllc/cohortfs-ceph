@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "PG.h"
@@ -133,23 +133,6 @@ void PGPool::update(OSDMapRef map)
   info = *pi;
   auid = pi->auid;
   name = map->get_pool_name(id);
-  if (pi->get_snap_epoch() == map->get_epoch()) {
-    pi->build_removed_snaps(newly_removed_snaps);
-    newly_removed_snaps.subtract(cached_removed_snaps);
-    cached_removed_snaps.union_of(newly_removed_snaps);
-    snapc = pi->get_snap_context();
-  } else {
-    newly_removed_snaps.clear();
-  }
-  lgeneric_subdout(g_ceph_context, osd, 20)
-    << "PGPool::update cached_removed_snaps "
-    << cached_removed_snaps
-    << " newly_removed_snaps "
-    << newly_removed_snaps
-    << " snapc " << snapc
-    << (pi->get_snap_epoch() == map->get_epoch() ?
-	" (updated)":" (no change)")
-    << dendl;
 }
 
 PG::PG(OSDService *o, OSDMapRef curmap,
@@ -157,13 +140,7 @@ PG::PG(OSDService *o, OSDMapRef curmap,
        const hobject_t& ioid) :
   osd(o),
   cct(o->cct),
-  osdriver(osd->store, coll_t(), OSD::make_snapmapper_oid()),
-  snap_mapper(
-    &osdriver,
-    p.ps(),
-    p.get_split_bits(curmap->get_pg_num(_pool.id)),
-    _pool.id,
-    p.shard),
+  osdriver(osd->store, coll_t()),
   map_lock("PG::map_lock"),
   osdmap_ref(curmap), last_persisted_osdmap_ref(curmap), pool(_pool),
   _lock("PG::_lock"),
@@ -176,7 +153,8 @@ PG::PG(OSDService *o, OSDMapRef curmap,
   info_struct_v(0),
   coll(p), pg_log(cct), log_oid(loid), biginfo_oid(ioid),
   missing_loc(this),
-  recovery_item(this), scrub_item(this), scrub_finalize_item(this), snap_trim_item(this), stat_queue_item(this),
+  recovery_item(this), scrub_item(this), scrub_finalize_item(this),
+  stat_queue_item(this),
   recovery_ops_active(0),
   role(0),
   state(0),
@@ -320,46 +298,10 @@ bool PG::proc_replica_info(pg_shard_t from, const pg_info_t &oinfo)
   return true;
 }
 
-void PG::remove_snap_mapped_object(
+void PG::remove_object(
   ObjectStore::Transaction &t, const hobject_t &soid)
 {
-  t.remove(
-    coll,
-    ghobject_t(soid, ghobject_t::NO_GEN, pg_whoami.shard));
-  clear_object_snap_mapping(&t, soid);
-}
-
-void PG::clear_object_snap_mapping(
-  ObjectStore::Transaction *t, const hobject_t &soid)
-{
-  OSDriver::OSTransaction _t(osdriver.get_transaction(t));
-  if (soid.snap < CEPH_MAXSNAP) {
-    int r = snap_mapper.remove_oid(
-      soid,
-      &_t);
-    if (!(r == 0 || r == -ENOENT)) {
-      derr << __func__ << ": remove_oid returned " << cpp_strerror(r) << dendl;
-      assert(0);
-    }
-  }
-}
-
-void PG::update_object_snap_mapping(
-  ObjectStore::Transaction *t, const hobject_t &soid, const set<snapid_t> &snaps)
-{
-  OSDriver::OSTransaction _t(osdriver.get_transaction(t));
-  assert(soid.snap < CEPH_MAXSNAP);
-  int r = snap_mapper.remove_oid(
-    soid,
-    &_t);
-  if (!(r == 0 || r == -ENOENT)) {
-    derr << __func__ << ": remove_oid returned " << cpp_strerror(r) << dendl;
-    assert(0);
-  }
-  snap_mapper.add_oid(
-    soid,
-    snaps,
-    &_t);
+  t.remove(coll, ghobject_t(soid, ghobject_t::NO_GEN, pg_whoami.shard));
 }
 
 void PG::merge_log(
@@ -832,8 +774,6 @@ void PG::clear_primary_state()
 
   last_update_ondisk = eversion_t();
 
-  snap_trimq.clear();
-
   finish_sync_event = 0;  // so that _finish_recvoery doesn't go off in another thread
 
   missing_loc.clear();
@@ -844,7 +784,6 @@ void PG::clear_primary_state()
   scrub_after_recovery = false;
 
   osd->recovery_wq.dequeue(this);
-  osd->snap_trim_wq.dequeue(this);
 
   agent_clear();
 
@@ -897,20 +836,11 @@ map<pg_shard_t, pg_info_t>::const_iterator PG::find_best_info(
       continue;
     }
     // Prefer newer last_update
-    if (pool.info.require_rollback()) {
-      if (p->second.last_update > best->second.last_update)
-	continue;
-      if (p->second.last_update < best->second.last_update) {
-	best = p;
-	continue;
-      }
-    } else {
-      if (p->second.last_update < best->second.last_update)
-	continue;
-      if (p->second.last_update > best->second.last_update) {
-	best = p;
-	continue;
-      }
+    if (p->second.last_update < best->second.last_update)
+      continue;
+    if (p->second.last_update > best->second.last_update) {
+      best = p;
+      continue;
     }
 
     // Prefer longer tail
@@ -1452,17 +1382,6 @@ void PG::activate(ObjectStore::Transaction& t,
 
   // find out when we commit
   t.register_on_complete(new C_PG_ActivateCommitted(this, query_epoch));
-  
-  // initialize snap_trimq
-  if (is_primary()) {
-    dout(20) << "activate - purged_snaps " << info.purged_snaps
-	     << " cached_removed_snaps " << pool.cached_removed_snaps << dendl;
-    snap_trimq = pool.cached_removed_snaps;
-    snap_trimq.subtract(info.purged_snaps);
-    dout(10) << "activate - snap_trimq " << snap_trimq << dendl;
-    if (!snap_trimq.empty() && is_clean())
-      queue_snap_trim();
-  }
 
   // init complete pointer
   if (missing.num_missing() == 0) {
@@ -1812,17 +1731,9 @@ void PG::all_activated_and_committed()
   queue_peering_event(
     CephPeeringEvtRef(
       new CephPeeringEvt(
-        get_osdmap()->get_epoch(),
-        get_osdmap()->get_epoch(),
-        AllReplicasActivated())));
-}
-
-void PG::queue_snap_trim()
-{
-  if (osd->queue_for_snap_trim(this))
-    dout(10) << "queue_snap_trim -- queuing" << dendl;
-  else
-    dout(10) << "queue_snap_trim -- already trimming" << dendl;
+	get_osdmap()->get_epoch(),
+	get_osdmap()->get_epoch(),
+	AllReplicasActivated())));
 }
 
 bool PG::queue_scrub()
@@ -1866,9 +1777,6 @@ void PG::mark_clean()
   info.history.last_epoch_clean = get_osdmap()->get_epoch();
 
   trim_past_intervals();
-
-  if (is_clean() && !snap_trimq.empty())
-    queue_snap_trim();
 
   dirty_info = true;
 }
@@ -2003,7 +1911,6 @@ void PG::split_ops(PG *child, unsigned split_bits) {
 
 void PG::split_into(pg_t child_pgid, PG *child, unsigned split_bits)
 {
-  child->update_snap_mapper_bits(split_bits);
   child->update_osdmap_ref(get_osdmap());
 
   child->pool = pool;
@@ -2027,15 +1934,12 @@ void PG::split_into(pg_t child_pgid, PG *child, unsigned split_bits)
 
   // Info
   child->info.history = info.history;
-  child->info.purged_snaps = info.purged_snaps;
   child->info.last_backfill = info.last_backfill;
 
   child->info.stats = info.stats;
   info.stats.stats_invalid = true;
   child->info.stats.stats_invalid = true;
   child->info.last_epoch_started = info.last_epoch_started;
-
-  child->snap_trimq = snap_trimq;
 
   // There can't be recovery/backfill going on now
   int primary, up_primary;
@@ -2355,145 +2259,9 @@ void PG::init(
   write_if_dirty(*t);
 }
 
-void PG::upgrade(ObjectStore *store, const interval_set<snapid_t> &snapcolls)
-{
-  unsigned removed = 0;
-  for (interval_set<snapid_t>::const_iterator i = snapcolls.begin();
-       i != snapcolls.end();
-       ++i) {
-    for (snapid_t next_dir = i.get_start();
-	 next_dir != i.get_start() + i.get_len();
-	 ++next_dir) {
-      ++removed;
-      coll_t cid(info.pgid, next_dir);
-      dout(1) << "Removing collection " << cid
-	      << " (" << removed << "/" << snapcolls.size()
-	      << ")" << dendl;
-
-      hobject_t cur;
-      vector<hobject_t> objects;
-      while (1) {
-	int r = get_pgbackend()->objects_list_partial(
-	  cur,
-	  store->get_ideal_list_min(),
-	  store->get_ideal_list_max(),
-	  0,
-	  &objects,
-	  &cur);
-	if (r != 0) {
-	  derr << __func__ << ": collection_list_partial returned "
-	       << cpp_strerror(r) << dendl;
-	  assert(0);
-	}
-	if (objects.empty()) {
-	  assert(cur.is_max());
-	  break;
-	}
-	ObjectStore::Transaction t;
-	for (vector<hobject_t>::iterator j = objects.begin();
-	     j != objects.end();
-	     ++j) {
-	  t.remove(cid, *j);
-	}
-	r = store->apply_transaction(t);
-	if (r != 0) {
-	  derr << __func__ << ": apply_transaction returned "
-	       << cpp_strerror(r) << dendl;
-	  assert(0);
-	}
-	objects.clear();
-      }
-      ObjectStore::Transaction t;
-      t.remove_collection(cid);
-      int r = store->apply_transaction(t);
-      if (r != 0) {
-	derr << __func__ << ": apply_transaction returned "
-	     << cpp_strerror(r) << dendl;
-	assert(0);
-      }
-    }
-  }
-
-  hobject_t cur;
-  coll_t cid(info.pgid);
-  unsigned done = 0;
-  vector<hobject_t> objects;
-  while (1) {
-    dout(1) << "Updating snap_mapper from main collection, "
-	    << done << " objects done" << dendl;
-    int r = get_pgbackend()->objects_list_partial(
-      cur,
-      store->get_ideal_list_min(),
-      store->get_ideal_list_max(),
-      0,
-      &objects,
-      &cur);
-    if (r != 0) {
-      derr << __func__ << ": collection_list_partial returned "
-	   << cpp_strerror(r) << dendl;
-      assert(0);
-    }
-    if (objects.empty()) {
-      assert(cur.is_max());
-      break;
-    }
-    done += objects.size();
-    ObjectStore::Transaction t;
-    for (vector<hobject_t>::iterator j = objects.begin();
-	 j != objects.end();
-	 ++j) {
-      if (j->snap < CEPH_MAXSNAP) {
-	OSDriver::OSTransaction _t(osdriver.get_transaction(&t));
-	bufferlist bl;
-	r = get_pgbackend()->objects_get_attr(
-	  *j,
-	  OI_ATTR,
-	  &bl);
-	if (r < 0) {
-	  derr << __func__ << ": getattr returned "
-	       << cpp_strerror(r) << dendl;
-	  assert(0);
-	}
-	object_info_t oi(bl);
-	set<snapid_t> oi_snaps(oi.snaps.begin(), oi.snaps.end());
-	set<snapid_t> cur_snaps;
-	r = snap_mapper.get_snaps(*j, &cur_snaps);
-	if (r == 0) {
-	  assert(cur_snaps == oi_snaps);
-	} else if (r == -ENOENT) {
-	  snap_mapper.add_oid(*j, oi_snaps, &_t);
-	} else {
-	  derr << __func__ << ": get_snaps returned "
-	       << cpp_strerror(r) << dendl;
-	  assert(0);
-	}
-      }
-    }
-    r = store->apply_transaction(t);
-    if (r != 0) {
-      derr << __func__ << ": apply_transaction returned "
-	   << cpp_strerror(r) << dendl;
-      assert(0);
-    }
-    objects.clear();
-  }
-  ObjectStore::Transaction t;
-  snap_collections.clear();
-  dirty_info = true;
-  write_if_dirty(t);
-  int r = store->apply_transaction(t);
-  if (r != 0) {
-    derr << __func__ << ": apply_transaction returned "
-	 << cpp_strerror(r) << dendl;
-    assert(0);
-  }
-  assert(r == 0);
-}
-
 int PG::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
     pg_info_t &info, coll_t coll,
     map<epoch_t,pg_interval_t> &past_intervals,
-    interval_set<snapid_t> &snap_collections,
     hobject_t &infos_oid,
     uint8_t info_struct_v, bool dirty_big_info, bool force_ver)
 {
@@ -2511,21 +2279,15 @@ int PG::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
     dirty_big_info = true;
   }
 
-  // info.  store purged_snaps separately.
-  interval_set<snapid_t> purged_snaps;
+  // info.
   map<string,bufferlist> v;
   ::encode(epoch, v[get_epoch_key(info.pgid)]);
-  purged_snaps.swap(info.purged_snaps);
   ::encode(info, v[get_info_key(info.pgid)]);
-  purged_snaps.swap(info.purged_snaps);
 
   if (dirty_big_info) {
     // potentially big stuff
     bufferlist& bigbl = v[get_biginfo_key(info.pgid)];
     ::encode(past_intervals, bigbl);
-    ::encode(snap_collections, bigbl);
-    ::encode(info.purged_snaps, bigbl);
-    //dout(20) << "write_info bigbl " << bigbl.length() << dendl;
   }
 
   t.omap_setkeys(coll_t::META_COLL, infos_oid, v);
@@ -2539,8 +2301,8 @@ void PG::write_info(ObjectStore::Transaction& t)
   unstable_stats.clear();
 
   int ret = _write_info(t, get_osdmap()->get_epoch(), info, coll,
-     past_intervals, snap_collections, osd->infos_oid,
-     info_struct_v, dirty_big_info);
+			past_intervals, osd->infos_oid,
+			info_struct_v, dirty_big_info);
   assert(ret == 0);
   last_persisted_osdmap_ref = osdmap_ref;
 
@@ -2552,8 +2314,7 @@ epoch_t PG::peek_map_epoch(ObjectStore *store, coll_t coll, hobject_t &infos_oid
 {
   assert(bl);
   spg_t pgid;
-  snapid_t snap;
-  bool ok = coll.is_pg(pgid, snap);
+  bool ok = coll.is_pg(pgid);
   assert(ok);
   int r = store->collection_getattr(coll, "info", *bl);
   assert(r > 0);
@@ -2643,8 +2404,6 @@ void PG::append_log(
   vector<pg_log_entry_t>& logv, eversion_t trim_to, ObjectStore::Transaction &t,
   bool transaction_applied)
 {
-  if (transaction_applied)
-    update_snap_map(logv, t);
   dout(10) << "append_log " << pg_log.get_log() << " " << logv << dendl;
 
   map<string,bufferlist> keys;
@@ -2696,7 +2455,7 @@ int PG::read_info(
   ObjectStore *store, const coll_t coll, bufferlist &bl,
   pg_info_t &info, map<epoch_t,pg_interval_t> &past_intervals,
   hobject_t &biginfo_oid, hobject_t &infos_oid,
-  interval_set<snapid_t>  &snap_collections, uint8_t &struct_v)
+  uint8_t &struct_v)
 {
   bufferlist::iterator p = bl.begin();
   bufferlist lbl;
@@ -2707,11 +2466,6 @@ int PG::read_info(
     ::decode(info, p);
   if (struct_v < 2) {
     ::decode(past_intervals, p);
-  
-    // snap_collections
-    store->collection_getattr(coll, "snap_collections", lbl);
-    p = lbl.begin();
-    ::decode(struct_v, p);
   } else {
     if (struct_v < 6) {
       int r = store->read(coll_t::META_COLL, biginfo_oid, 0, 0, lbl);
@@ -2739,29 +2493,13 @@ int PG::read_info(
     }
   }
 
-  if (struct_v < 3) {
-    set<snapid_t> snap_collections_temp;
-    ::decode(snap_collections_temp, p);
-    snap_collections.clear();
-    for (set<snapid_t>::iterator i = snap_collections_temp.begin();
-	 i != snap_collections_temp.end();
-	 ++i) {
-      snap_collections.insert(*i);
-    }
-  } else {
-    ::decode(snap_collections, p);
-    if (struct_v >= 4 && struct_v < 6)
-      ::decode(info, p);
-    else if (struct_v >= 6)
-      ::decode(info.purged_snaps, p);
-  }
   return 0;
 }
 
 void PG::read_state(ObjectStore *store, bufferlist &bl)
 {
   int r = read_info(store, coll, bl, info, past_intervals, biginfo_oid,
-    osd->infos_oid, snap_collections, info_struct_v);
+    osd->infos_oid, info_struct_v);
   assert(r >= 0);
 
   ostringstream oss;
@@ -2815,81 +2553,6 @@ void PG::log_weirdness()
 		      << " caller_ops.size " << pg_log.get_log().caller_ops.size()
 		      << " > log size " << pg_log.get_log().log.size()
 		      << "\n";
-  }
-}
-
-void PG::update_snap_map(
-  vector<pg_log_entry_t> &log_entries,
-  ObjectStore::Transaction &t)
-{
-  for (vector<pg_log_entry_t>::iterator i = log_entries.begin();
-       i != log_entries.end();
-       ++i) {
-    OSDriver::OSTransaction _t(osdriver.get_transaction(&t));
-    if (i->soid.snap < CEPH_MAXSNAP) {
-      if (i->is_delete()) {
-	int r = snap_mapper.remove_oid(
-	  i->soid,
-	  &_t);
-	assert(r == 0);
-      } else {
-	assert(i->snaps.length() > 0);
-	vector<snapid_t> snaps;
-	bufferlist::iterator p = i->snaps.begin();
-	try {
-	  ::decode(snaps, p);
-	} catch (...) {
-	  snaps.clear();
-	}
-	set<snapid_t> _snaps(snaps.begin(), snaps.end());
-
-	if (i->is_clone() || i->is_promote()) {
-	  snap_mapper.add_oid(
-	    i->soid,
-	    _snaps,
-	    &_t);
-	} else if (i->is_modify()) {
-	  assert(i->is_modify());
-	  int r = snap_mapper.update_snaps(
-	    i->soid,
-	    _snaps,
-	    0,
-	    &_t);
-	  assert(r == 0);
-	} else {
-	  assert(i->is_clean());
-	}
-      }
-    }
-  }
-}
-
-/**
- * filter trimming|trimmed snaps out of snapcontext
- */
-void PG::filter_snapc(vector<snapid_t> &snaps)
-{
-  bool filtering = false;
-  vector<snapid_t> newsnaps;
-  for (vector<snapid_t>::iterator p = snaps.begin();
-       p != snaps.end();
-       ++p) {
-    if (snap_trimq.contains(*p) || info.purged_snaps.contains(*p)) {
-      if (!filtering) {
-	// start building a new vector with what we've seen so far
-	dout(10) << "filter_snapc filtering " << snaps << dendl;
-	newsnaps.insert(newsnaps.begin(), snaps.begin(), p);
-	filtering = true;
-      }
-      dout(20) << "filter_snapc  removing trimq|purged snap " << *p << dendl;
-    } else {
-      if (filtering)
-	newsnaps.push_back(*p);  // continue building new vector
-    }
-  }
-  if (filtering) {
-    snaps.swap(newsnaps);
-    dout(10) << "filter_snapc  result " << snaps << dendl;
   }
 }
 
@@ -3261,77 +2924,6 @@ void PG::scrub_unreserve_replicas()
   }
 }
 
-void PG::_scan_snaps(ScrubMap &smap) 
-{
-  for (map<hobject_t, ScrubMap::object>::iterator i = smap.objects.begin();
-       i != smap.objects.end();
-       ++i) {
-    const hobject_t &hoid = i->first;
-    ScrubMap::object &o = i->second;
-
-    if (hoid.snap < CEPH_MAXSNAP) {
-      // fake nlinks for old primaries
-      bufferlist bl;
-      bl.push_back(o.attrs[OI_ATTR]);
-      object_info_t oi(bl);
-      if (oi.snaps.empty()) {
-	// Just head
-	o.nlinks = 1;
-      } else if (oi.snaps.size() == 1) {
-	// Just head + only snap
-	o.nlinks = 2;
-      } else {
-	// Just head + 1st and last snaps
-	o.nlinks = 3;
-      }
-
-      // check and if necessary fix snap_mapper
-      set<snapid_t> oi_snaps(oi.snaps.begin(), oi.snaps.end());
-      set<snapid_t> cur_snaps;
-      int r = snap_mapper.get_snaps(hoid, &cur_snaps);
-      if (r != 0 && r != -ENOENT) {
-	derr << __func__ << ": get_snaps returned " << cpp_strerror(r) << dendl;
-	assert(0);
-      }
-      if (r == -ENOENT || cur_snaps != oi_snaps) {
-	ObjectStore::Transaction t;
-	OSDriver::OSTransaction _t(osdriver.get_transaction(&t));
-	if (r == 0) {
-	  r = snap_mapper.remove_oid(hoid, &_t);
-	  if (r != 0) {
-	    derr << __func__ << ": remove_oid returned " << cpp_strerror(r)
-		 << dendl;
-	    assert(0);
-	  }
-	  osd->clog.error() << "osd." << osd->whoami
-			    << " found snap mapper error on pg "
-			    << info.pgid
-			    << " oid " << hoid << " snaps in mapper: "
-			    << cur_snaps << ", oi: "
-			    << oi_snaps
-			    << "...repaired";
-	} else {
-	  osd->clog.error() << "osd." << osd->whoami
-			    << " found snap mapper error on pg "
-			    << info.pgid
-			    << " oid " << hoid << " snaps missing in mapper"
-			    << ", should be: "
-			    << oi_snaps
-			    << "...repaired";
-	}
-	snap_mapper.add_oid(hoid, oi_snaps, &_t);
-	r = osd->store->apply_transaction(t);
-	if (r != 0) {
-	  derr << __func__ << ": apply_transaction got " << cpp_strerror(r)
-	       << dendl;
-	}
-      }
-    } else {
-      o.nlinks = 1;
-    }
-  }
-}
-
 /*
  * build a scrub map over a chunk without releasing the lock
  * only used by chunky scrub
@@ -3348,14 +2940,13 @@ int PG::build_scrub_map_chunk(
 
   // objects
   vector<hobject_t> ls;
-  int ret = get_pgbackend()->objects_list_range(start, end, 0, &ls);
+  int ret = get_pgbackend()->objects_list_range(start, end, &ls);
   if (ret < 0) {
     dout(5) << "objects_list_range error: " << ret << dendl;
     return ret;
   }
 
   get_pgbackend()->be_scan_list(map, ls, deep, handle);
-  _scan_snaps(map);
 
   // pg attrs
   osd->store->collection_getattrs(coll, map.attrs);
@@ -3387,7 +2978,6 @@ void PG::build_scrub_map(ScrubMap &map, ThreadPool::TPHandle &handle)
 
   get_pgbackend()->be_scan_list(map, ls, false, handle);
   lock();
-  _scan_snaps(map);
 
   if (pg_has_reset_since(epoch)) {
     dout(10) << "scrub  pg changed, aborting" << dendl;
@@ -3858,11 +3448,11 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
 
     switch (scrubber.state) {
       case PG::Scrubber::INACTIVE:
-        dout(10) << "scrub start" << dendl;
+	dout(10) << "scrub start" << dendl;
 
-        publish_stats_to_osd();
-        scrubber.epoch_start = info.history.same_interval_since;
-        scrubber.active = true;
+	publish_stats_to_osd();
+	scrubber.epoch_start = info.history.same_interval_since;
+	scrubber.active = true;
 
 	osd->inc_scrubs_active(scrubber.reserved);
 	if (scrubber.reserved) {
@@ -3870,58 +3460,57 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
 	  scrubber.reserved_peers.clear();
 	}
 
-        scrubber.start = hobject_t();
-        scrubber.state = PG::Scrubber::NEW_CHUNK;
+	scrubber.start = hobject_t();
+	scrubber.state = PG::Scrubber::NEW_CHUNK;
 
-        break;
+	break;
 
       case PG::Scrubber::NEW_CHUNK:
-        scrubber.primary_scrubmap = ScrubMap();
-        scrubber.received_maps.clear();
+	scrubber.primary_scrubmap = ScrubMap();
+	scrubber.received_maps.clear();
 
-        {
+	{
 	  hobject_t end;
 
-          // get the start and end of our scrub chunk
-          //
-          // start and end need to lie on a hash boundary. We test for this by
-          // requesting a list and searching backward from the end looking for a
-          // boundary. If there's no boundary, we request a list after the first
-          // list, and so forth.
+	  // get the start and end of our scrub chunk
+	  //
+	  // start and end need to lie on a hash boundary. We test for this by
+	  // requesting a list and searching backward from the end looking for a
+	  // boundary. If there's no boundary, we request a list after the first
+	  // list, and so forth.
 
-          bool boundary_found = false;
-          hobject_t start = scrubber.start;
-          while (!boundary_found) {
-            vector<hobject_t> objects;
-            ret = get_pgbackend()->objects_list_partial(
+	  bool boundary_found = false;
+	  hobject_t start = scrubber.start;
+	  while (!boundary_found) {
+	    vector<hobject_t> objects;
+	    ret = get_pgbackend()->objects_list_partial(
 	      start,
 	      cct->_conf->osd_scrub_chunk_min,
 	      cct->_conf->osd_scrub_chunk_max,
-	      0,
 	      &objects,
 	      &end);
-            assert(ret >= 0);
+	    assert(ret >= 0);
 
-            // in case we don't find a boundary: start again at the end
-            start = end;
+	    // in case we don't find a boundary: start again at the end
+	    start = end;
 
-            // special case: reached end of file store, implicitly a boundary
-            if (objects.empty()) {
-              break;
-            }
+	    // special case: reached end of file store, implicitly a boundary
+	    if (objects.empty()) {
+	      break;
+	    }
 
-            // search backward from the end looking for a boundary
-            objects.push_back(end);
-            while (!boundary_found && objects.size() > 1) {
-              hobject_t end = objects.back().get_boundary();
-              objects.pop_back();
+	    // search backward from the end looking for a boundary
+	    objects.push_back(end);
+	    while (!boundary_found && objects.size() > 1) {
+	      hobject_t end = objects.back().get_boundary();
+	      objects.pop_back();
 
-              if (objects.back().get_filestore_key() != end.get_filestore_key()) {
-                end = end;
-                boundary_found = true;
-              }
-            }
-          }
+	      if (objects.back().get_filestore_key() != end.get_filestore_key()) {
+		end = end;
+		boundary_found = true;
+	      }
+	    }
+	  }
 
 	  if (!_range_available_for_scrub(scrubber.start, end)) {
 	    // we'll be requeued by whatever made us unavailable for scrub
@@ -3929,120 +3518,120 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
 	    break;
 	  }
 	  scrubber.end = end;
-        }
-        scrubber.block_writes = true;
+	}
+	scrubber.block_writes = true;
 
-        // walk the log to find the latest update that affects our chunk
-        scrubber.subset_last_update = pg_log.get_tail();
-        for (list<pg_log_entry_t>::const_iterator p = pg_log.get_log().log.begin();
-             p != pg_log.get_log().log.end();
-             ++p) {
-          if (p->soid >= scrubber.start && p->soid < scrubber.end)
-            scrubber.subset_last_update = p->version;
-        }
+	// walk the log to find the latest update that affects our chunk
+	scrubber.subset_last_update = pg_log.get_tail();
+	for (list<pg_log_entry_t>::const_iterator p = pg_log.get_log().log.begin();
+	     p != pg_log.get_log().log.end();
+	     ++p) {
+	  if (p->soid >= scrubber.start && p->soid < scrubber.end)
+	    scrubber.subset_last_update = p->version;
+	}
 
-        // ask replicas to wait until last_update_applied >= scrubber.subset_last_update and then scan
-        scrubber.waiting_on_whom.insert(pg_whoami);
-        ++scrubber.waiting_on;
+	// ask replicas to wait until last_update_applied >= scrubber.subset_last_update and then scan
+	scrubber.waiting_on_whom.insert(pg_whoami);
+	++scrubber.waiting_on;
 
-        // request maps from replicas
+	// request maps from replicas
 	for (set<pg_shard_t>::iterator i = actingbackfill.begin();
 	     i != actingbackfill.end();
 	     ++i) {
 	  if (*i == pg_whoami) continue;
-          _request_scrub_map(*i, scrubber.subset_last_update,
-                             scrubber.start, scrubber.end, scrubber.deep);
-          scrubber.waiting_on_whom.insert(*i);
-          ++scrubber.waiting_on;
-        }
+	  _request_scrub_map(*i, scrubber.subset_last_update,
+			     scrubber.start, scrubber.end, scrubber.deep);
+	  scrubber.waiting_on_whom.insert(*i);
+	  ++scrubber.waiting_on;
+	}
 
-        scrubber.state = PG::Scrubber::WAIT_PUSHES;
+	scrubber.state = PG::Scrubber::WAIT_PUSHES;
 
-        break;
+	break;
 
       case PG::Scrubber::WAIT_PUSHES:
-        if (active_pushes == 0) {
-          scrubber.state = PG::Scrubber::WAIT_LAST_UPDATE;
-        } else {
-          dout(15) << "wait for pushes to apply" << dendl;
-          done = true;
-        }
-        break;
+	if (active_pushes == 0) {
+	  scrubber.state = PG::Scrubber::WAIT_LAST_UPDATE;
+	} else {
+	  dout(15) << "wait for pushes to apply" << dendl;
+	  done = true;
+	}
+	break;
 
       case PG::Scrubber::WAIT_LAST_UPDATE:
-        if (last_update_applied >= scrubber.subset_last_update) {
-          scrubber.state = PG::Scrubber::BUILD_MAP;
-        } else {
-          // will be requeued by op_applied
-          dout(15) << "wait for writes to flush" << dendl;
-          done = true;
-        }
-        break;
+	if (last_update_applied >= scrubber.subset_last_update) {
+	  scrubber.state = PG::Scrubber::BUILD_MAP;
+	} else {
+	  // will be requeued by op_applied
+	  dout(15) << "wait for writes to flush" << dendl;
+	  done = true;
+	}
+	break;
 
       case PG::Scrubber::BUILD_MAP:
-        assert(last_update_applied >= scrubber.subset_last_update);
+	assert(last_update_applied >= scrubber.subset_last_update);
 
-        // build my own scrub map
-        ret = build_scrub_map_chunk(scrubber.primary_scrubmap,
-                                    scrubber.start, scrubber.end,
-                                    scrubber.deep,
+	// build my own scrub map
+	ret = build_scrub_map_chunk(scrubber.primary_scrubmap,
+				    scrubber.start, scrubber.end,
+				    scrubber.deep,
 				    handle);
-        if (ret < 0) {
-          dout(5) << "error building scrub map: " << ret << ", aborting" << dendl;
-          scrub_clear_state();
-          scrub_unreserve_replicas();
-          return;
-        }
+	if (ret < 0) {
+	  dout(5) << "error building scrub map: " << ret << ", aborting" << dendl;
+	  scrub_clear_state();
+	  scrub_unreserve_replicas();
+	  return;
+	}
 
-        --scrubber.waiting_on;
-        scrubber.waiting_on_whom.erase(pg_whoami);
+	--scrubber.waiting_on;
+	scrubber.waiting_on_whom.erase(pg_whoami);
 
-        scrubber.state = PG::Scrubber::WAIT_REPLICAS;
-        break;
+	scrubber.state = PG::Scrubber::WAIT_REPLICAS;
+	break;
 
       case PG::Scrubber::WAIT_REPLICAS:
-        if (scrubber.waiting_on > 0) {
-          // will be requeued by sub_op_scrub_map
-          dout(10) << "wait for replicas to build scrub map" << dendl;
-          done = true;
-        } else {
-          scrubber.state = PG::Scrubber::COMPARE_MAPS;
-        }
-        break;
+	if (scrubber.waiting_on > 0) {
+	  // will be requeued by sub_op_scrub_map
+	  dout(10) << "wait for replicas to build scrub map" << dendl;
+	  done = true;
+	} else {
+	  scrubber.state = PG::Scrubber::COMPARE_MAPS;
+	}
+	break;
 
       case PG::Scrubber::COMPARE_MAPS:
-        assert(last_update_applied >= scrubber.subset_last_update);
-        assert(scrubber.waiting_on == 0);
+	assert(last_update_applied >= scrubber.subset_last_update);
+	assert(scrubber.waiting_on == 0);
 
-        scrub_compare_maps();
-        scrubber.block_writes = false;
+	scrub_compare_maps();
+	scrubber.block_writes = false;
 	scrubber.run_callbacks();
 
-        // requeue the writes from the chunk that just finished
-        requeue_ops(waiting_for_active);
+	// requeue the writes from the chunk that just finished
+	requeue_ops(waiting_for_active);
 
-        if (scrubber.end < hobject_t::get_max()) {
-          // schedule another leg of the scrub
-          scrubber.start = scrubber.end;
+	if (scrubber.end < hobject_t::get_max()) {
+	  // schedule another leg of the scrub
+	  scrubber.start = scrubber.end;
 
-          scrubber.state = PG::Scrubber::NEW_CHUNK;
-          osd->scrub_wq.queue(this);
-          done = true;
-        } else {
-          scrubber.state = PG::Scrubber::FINISH;
-        }
+	  scrubber.state = PG::Scrubber::NEW_CHUNK;
+	  osd->scrub_wq.queue(this);
+	  done = true;
+	} else {
+	  scrubber.state = PG::Scrubber::FINISH;
+	}
 
-        break;
+	break;
 
       case PG::Scrubber::FINISH:
-        scrub_finish();
-        scrubber.state = PG::Scrubber::INACTIVE;
-        done = true;
+	scrub_finish();
+	scrubber.state = PG::Scrubber::INACTIVE;
+	done = true;
 
-        break;
+	break;
 
       default:
-        assert(0);
+	assert(0);
     }
   }
 }
@@ -4060,11 +3649,6 @@ void PG::scrub_clear_state()
     osd->dec_scrubs_active();
 
   requeue_ops(waiting_for_active);
-
-  if (scrubber.queue_snap_trim) {
-    dout(10) << "scrub finished, requeuing snap_trimmer" << dendl;
-    queue_snap_trim();
-  }
 
   scrubber.reset();
 
@@ -4131,14 +3715,13 @@ void PG::scrub_compare_maps()
       scrubber.missing,
       scrubber.inconsistent,
       authoritative,
-      scrubber.inconsistent_snapcolls,
       scrubber.shallow_errors,
       scrubber.deep_errors,
       info.pgid, acting,
       ss);
     dout(2) << ss.str() << dendl;
 
-    if (!authoritative.empty() || !scrubber.inconsistent_snapcolls.empty()) {
+    if (!authoritative.empty()) {
       osd->clog.error(ss);
     }
 
@@ -4163,6 +3746,38 @@ void PG::scrub_compare_maps()
   _scrub(authmap);
 }
 
+void PG::scrub_finalize()
+{
+  lock();
+  if (deleting) {
+    unlock();
+    return;
+  }
+
+  assert(last_update_applied == info.last_update);
+
+  if (scrubber.epoch_start != info.history.same_interval_since) {
+    dout(10) << "scrub  pg changed, aborting" << dendl;
+    scrub_clear_state();
+    scrub_unreserve_replicas();
+    unlock();
+    return;
+  }
+
+  if (!scrub_gather_replica_maps()) {
+    dout(10) << "maps not yet up to date, sent out new requests" << dendl;
+    unlock();
+    return;
+  }
+
+  scrub_compare_maps();
+
+  scrub_finish();
+
+  dout(10) << "scrub done" << dendl;
+  unlock();
+}
+
 void PG::scrub_process_inconsistent()
 {
   dout(10) << "process_inconsistent() checking authoritative" << dendl;
@@ -4172,19 +3787,6 @@ void PG::scrub_process_inconsistent()
 
   if (!scrubber.authoritative.empty() || !scrubber.inconsistent.empty()) {
     stringstream ss;
-    for (map<hobject_t, set<pg_shard_t> >::iterator obj =
-	   scrubber.inconsistent_snapcolls.begin();
-	 obj != scrubber.inconsistent_snapcolls.end();
-	 ++obj) {
-      for (set<pg_shard_t>::iterator j = obj->second.begin();
-	   j != obj->second.end();
-	   ++j) {
-	++scrubber.shallow_errors;
-	ss << info.pgid << " " << mode << " " << " object " << obj->first
-	   << " has inconsistent snapcolls on " << *j << std::endl;
-      }
-    }
-
     ss << info.pgid << " " << mode << " "
        << scrubber.missing.size() << " missing, "
        << scrubber.inconsistent.size() << " inconsistent objects\n";
@@ -4226,40 +3828,8 @@ void PG::scrub_process_inconsistent()
   }
 }
 
-void PG::scrub_finalize()
-{
-  lock();
-  if (deleting) {
-    unlock();
-    return;
-  }
-
-  assert(last_update_applied == info.last_update);
-
-  if (scrubber.epoch_start != info.history.same_interval_since) {
-    dout(10) << "scrub  pg changed, aborting" << dendl;
-    scrub_clear_state();
-    scrub_unreserve_replicas();
-    unlock();
-    return;
-  }
-
-  if (!scrub_gather_replica_maps()) {
-    dout(10) << "maps not yet up to date, sent out new requests" << dendl;
-    unlock();
-    return;
-  }
-
-  scrub_compare_maps();
-
-  scrub_finish();
-
-  dout(10) << "scrub done" << dendl;
-  unlock();
-}
-
 // the part that actually finalizes a scrub
-void PG::scrub_finish() 
+void PG::scrub_finish()
 {
   bool repair = state_test(PG_STATE_REPAIR);
   bool deep_scrub = state_test(PG_STATE_DEEP_SCRUB);
@@ -4822,36 +4392,6 @@ void PG::proc_primary_info(ObjectStore::Transaction &t, const pg_info_t &oinfo)
   reg_next_scrub();
 
   if (last_complete_ondisk.epoch >= info.history.last_epoch_started) {
-    // DEBUG: verify that the snaps are empty in snap_mapper
-    if (cct->_conf->osd_debug_verify_snaps_on_info) {
-      interval_set<snapid_t> p;
-      p.union_of(oinfo.purged_snaps, info.purged_snaps);
-      p.subtract(info.purged_snaps);
-      if (!p.empty()) {
-	for (interval_set<snapid_t>::iterator i = p.begin();
-	     i != p.end();
-	     ++i) {
-	  for (snapid_t snap = i.get_start();
-	       snap != i.get_len() + i.get_start();
-	       ++snap) {
-	    hobject_t hoid;
-	    int r = snap_mapper.get_next_object_to_trim(snap, &hoid);
-	    if (r != 0 && r != -ENOENT) {
-	      derr << __func__ << ": snap_mapper get_next_object_to_trim returned "
-		   << cpp_strerror(r) << dendl;
-	      assert(0);
-	    } else if (r != -ENOENT) {
-	      derr << __func__ << ": snap_mapper get_next_object_to_trim returned "
-		   << cpp_strerror(r) << " for object "
-		   << hoid << " on snap " << snap
-		   << " which should have been fully trimmed " << dendl;
-	      assert(0);
-	    }
-	  }
-	}
-      }
-    }
-    info.purged_snaps = oinfo.purged_snaps;
     dirty_info = true;
     dirty_big_info = true;
   }
@@ -4922,9 +4462,6 @@ ostream& operator<<(ostream& out, const PG& pg)
 	out << " u=" << unfound;
     }
   }
-  if (pg.snap_trimq.size())
-    out << " snaptrimq=" << pg.snap_trimq;
-
   out << "]";
 
 
@@ -6222,12 +5759,6 @@ boost::statechart::result PG::RecoveryState::Active::react(const AdvMap& advmap)
 {
   PG *pg = context< RecoveryMachine >().pg;
   dout(10) << "Active advmap" << dendl;
-  if (!pg->pool.newly_removed_snaps.empty()) {
-    pg->snap_trimq.union_of(pg->pool.newly_removed_snaps);
-    dout(10) << *pg << " snap_trimq now " << pg->snap_trimq << dendl;
-    pg->dirty_info = true;
-    pg->dirty_big_info = true;
-  }
 
   for (vector<int>::iterator p = pg->want_acting.begin();
        p != pg->want_acting.end(); ++p) {
@@ -6283,12 +5814,6 @@ boost::statechart::result PG::RecoveryState::Active::react(const ActMap&)
       //pg->mark_all_unfound_lost(*context< RecoveryMachine >().get_cur_transaction());
     } else
       pg->osd->clog.error() << pg->info.pgid << " has " << unfound << " objects unfound and apparently lost\n";
-  }
-
-  if (!pg->snap_trimq.empty() &&
-      pg->is_clean()) {
-    dout(10) << "Active: queuing snap trim" << dendl;
-    pg->queue_snap_trim();
   }
 
   if (!pg->is_clean() &&

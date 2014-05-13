@@ -273,16 +273,15 @@
     *
     * obc may be NULL if the primary lacks the object.
     *
-    * head may be NULL only if the head/snapdir is missing
+    * head may be NULL only if the head is missing
     *
     * @param missing [in] set of info, missing pairs for queried nodes
     * @param overlaps [in] mapping of object to file offset overlaps
     */
    virtual void recover_object(
      const hobject_t &hoid, ///< [in] object to recover
-     eversion_t v,          ///< [in] version to recover
-     ObjectContextRef head,  ///< [in] context of the head/snapdir object
-     ObjectContextRef obc,  ///< [in] context of the object
+     eversion_t v, ///< [in] version to recover
+     ObjectContextRef head,  ///< [in] context of the head object
      RecoveryHandle *h      ///< [in,out] handle to attach recovery op to
      ) = 0;
 
@@ -497,40 +496,12 @@
      boost::optional<pg_hit_set_history_t> &hset_history,
      Context *on_local_applied_sync,      ///< [in] called when applied locally
      Context *on_all_applied,             ///< [in] called when all acked
-     Context *on_all_commit,              ///< [in] called when all commit
-     ceph_tid_t tid,                      ///< [in] tid
-     osd_reqid_t reqid,                   ///< [in] reqid
-     OpRequestRef op                      ///< [in] op
+     Context *on_all_commit, ///< [in] called when all commit
+     ceph_tid_t tid, ///< [in] tid
+     osd_reqid_t reqid, ///< [in] reqid
+     OpRequestRef op ///< [in] op
      ) = 0;
 
-
-   void rollback(
-     const hobject_t &hoid,
-     const ObjectModDesc &desc,
-     ObjectStore::Transaction *t);
-
-   /// Reapply old attributes
-   void rollback_setattrs(
-     const hobject_t &hoid,
-     map<string, boost::optional<bufferlist> > &old_attrs,
-     ObjectStore::Transaction *t);
-
-   /// Truncate object to rollback append
-   virtual void rollback_append(
-     const hobject_t &hoid,
-     uint64_t old_size,
-     ObjectStore::Transaction *t);
-
-   /// Unstash object to rollback stash
-   void rollback_stash(
-     const hobject_t &hoid,
-     version_t old_version,
-     ObjectStore::Transaction *t);
-
-   /// Delete object to rollback create
-   void rollback_create(
-     const hobject_t &hoid,
-     ObjectStore::Transaction *t);
 
    /// Trim object stashed at stashed_version
    void trim_stashed_object(
@@ -543,14 +514,12 @@
      const hobject_t &begin,
      int min,
      int max,
-     snapid_t seq,
      vector<hobject_t> *ls,
      hobject_t *next);
 
    int objects_list_range(
      const hobject_t &start,
      const hobject_t &end,
-     snapid_t seq,
      vector<hobject_t> *ls);
 
    int objects_get_attr(
@@ -590,7 +559,6 @@
      map<hobject_t, set<pg_shard_t> > &missing,
      map<hobject_t, set<pg_shard_t> > &inconsistent,
      map<hobject_t, pg_shard_t> &authoritative,
-     map<hobject_t, set<pg_shard_t> > &invalid_snapcolls,
      int &shallow_errors, int &deep_errors,
      const spg_t pgid,
      const vector<int> &acting,

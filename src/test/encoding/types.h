@@ -8,9 +8,6 @@ TYPE(filepath)
 TYPE(bloom_filter)
 TYPE(compressible_bloom_filter)
 
-#include "common/snap_types.h"
-TYPE(SnapContext)
-
 #include "common/DecayCounter.h"
 TYPE(DecayCounter)
 
@@ -47,7 +44,6 @@ TYPE(coll_t)
 TYPE(objectstore_perf_stat_t)
 TYPE(osd_stat_t)
 TYPE(OSDSuperblock)
-TYPE_FEATUREFUL(pool_snap_info_t)
 TYPE_FEATUREFUL(pg_pool_t)
 TYPE(object_stat_sum_t)
 TYPE(object_stat_collection_t)
@@ -67,7 +63,6 @@ TYPE(object_copy_data_t)
 TYPE(pg_create_t)
 TYPE(watch_info_t)
 TYPE(object_info_t)
-TYPE(SnapSet)
 TYPE(ObjectRecoveryInfo)
 TYPE(ObjectRecoveryProgress)
 TYPE(ScrubMap::object)
@@ -76,7 +71,6 @@ TYPE(pg_hit_set_info_t)
 TYPE(pg_hit_set_history_t)
 TYPE(osd_peer_stat_t)
 TYPE(clone_info)
-TYPE(obj_list_snap_response_t)
 TYPE(PullOp)
 TYPE(PushOp)
 TYPE(PushReplyOp)
@@ -497,8 +491,6 @@ MESSAGE(MPing)
 MESSAGE(MPoolOp)
 #include "messages/MPoolOpReply.h"
 MESSAGE(MPoolOpReply)
-#include "messages/MRemoveSnaps.h"
-MESSAGE(MRemoveSnaps)
 #include "messages/MRoute.h"
 MESSAGE(MRoute)
 #include "messages/MStatfs.h"

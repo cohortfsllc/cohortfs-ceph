@@ -33,7 +33,6 @@ const char *ceph_osd_flag_name(unsigned flag)
   case CEPH_OSD_FLAG_RETRY: return "retry";
   case CEPH_OSD_FLAG_READ: return "read";
   case CEPH_OSD_FLAG_WRITE: return "write";
-  case CEPH_OSD_FLAG_ORDERSNAP: return "ordersnap";
   case CEPH_OSD_FLAG_PEERSTAT_OLD: return "peerstat_old";
   case CEPH_OSD_FLAG_BALANCE_READS: return "balance_reads";
   case CEPH_OSD_FLAG_PARALLELEXEC: return "parallelexec";
@@ -46,8 +45,6 @@ const char *ceph_osd_flag_name(unsigned flag)
   case CEPH_OSD_FLAG_SKIPRWLOCKS: return "skiprwlocks";
   case CEPH_OSD_FLAG_IGNORE_OVERLAY: return "ignore_overlay";
   case CEPH_OSD_FLAG_FLUSH: return "flush";
-  case CEPH_OSD_FLAG_MAP_SNAP_CLONE: return "map_snap_clone";
-  case CEPH_OSD_FLAG_ENFORCE_SNAPC: return "enforce_snapc";
   default: return "???";
   }
 }
@@ -266,8 +263,6 @@ void osd_stat_t::dump(Formatter *f) const
   for (vector<int>::const_iterator p = hb_out.begin(); p != hb_out.end(); ++p)
     f->dump_int("osd", *p);
   f->close_section();
-  f->dump_int("snap_trim_queue_len", snap_trim_queue_len);
-  f->dump_int("num_snap_trimming", num_snap_trimming);
   f->open_object_section("op_queue_age_hist");
   op_queue_age_hist.dump(f);
   f->close_section();
@@ -282,8 +277,6 @@ void osd_stat_t::encode(bufferlist &bl) const
   ::encode(kb, bl);
   ::encode(kb_used, bl);
   ::encode(kb_avail, bl);
-  ::encode(snap_trim_queue_len, bl);
-  ::encode(num_snap_trimming, bl);
   ::encode(hb_in, bl);
   ::encode(hb_out, bl);
   ::encode(op_queue_age_hist, bl);
@@ -297,8 +290,6 @@ void osd_stat_t::decode(bufferlist::iterator &bl)
   ::decode(kb, bl);
   ::decode(kb_used, bl);
   ::decode(kb_avail, bl);
-  ::decode(snap_trim_queue_len, bl);
-  ::decode(num_snap_trimming, bl);
   ::decode(hb_in, bl);
   ::decode(hb_out, bl);
   if (struct_v >= 3)
@@ -320,8 +311,6 @@ void osd_stat_t::generate_test_instances(std::list<osd_stat_t*>& o)
   o.back()->hb_in.push_back(6);
   o.back()->hb_out = o.back()->hb_in;
   o.back()->hb_out.push_back(7);
-  o.back()->snap_trim_queue_len = 8;
-  o.back()->num_snap_trimming = 99;
 }
 
 // -- pg_t --
@@ -513,23 +502,12 @@ bool coll_t::is_temp(spg_t& pgid) const
   return false;
 }
 
-bool coll_t::is_pg(spg_t& pgid, snapid_t& snap) const
+bool coll_t::is_pg(spg_t& pgid) const
 {
   const char *cstr(str.c_str());
 
   if (!pgid.parse(cstr))
     return false;
-  const char *snap_start = strchr(cstr, '_');
-  if (!snap_start)
-    return false;
-  if (strncmp(snap_start, "_head", 5) == 0) {
-    snap = CEPH_NOSNAP;
-  } else {
-    errno = 0;
-    snap = strtoull(snap_start+1, 0, 16);
-    if (errno)
-      return false;
-  }
   return true;
 }
 
@@ -538,9 +516,6 @@ bool coll_t::is_pg_prefix(spg_t& pgid) const
   const char *cstr(str.c_str());
 
   if (!pgid.parse(cstr))
-    return false;
-  const char *snap_start = strchr(cstr, '_');
-  if (!snap_start)
     return false;
   return true;
 }
@@ -578,26 +553,21 @@ void coll_t::decode(bufferlist::iterator& bl)
   switch (struct_v) {
   case 1: {
     spg_t pgid;
-    snapid_t snap;
 
     ::decode(pgid, bl);
-    ::decode(snap, bl);
-    // infer the type
-    if (pgid == spg_t() && snap == 0)
+    if (pgid == spg_t())
       str = "meta";
     else
-      str = pg_and_snap_to_str(pgid, snap);
+      str = pg_to_str(pgid);
     break;
   }
 
   case 2: {
     uint8_t type;
     spg_t pgid;
-    snapid_t snap;
-    
+
     ::decode(type, bl);
     ::decode(pgid, bl);
-    ::decode(snap, bl);
     switch (type) {
     case 0:
       str = "meta";
@@ -606,7 +576,7 @@ void coll_t::decode(bufferlist::iterator& bl)
       str = "temp";
       break;
     case 2:
-      str = pg_and_snap_to_str(pgid, snap);
+      str = pg_to_str(pgid);
       break;
     default: {
       ostringstream oss;
@@ -711,50 +681,6 @@ string eversion_t::get_key_name() const
 }
 
 
-// -- pool_snap_info_t --
-void pool_snap_info_t::dump(Formatter *f) const
-{
-  f->dump_unsigned("snapid", snapid);
-  f->dump_stream("stamp") << stamp;
-  f->dump_string("name", name);
-}
-
-void pool_snap_info_t::encode(bufferlist& bl, uint64_t features) const
-{
-  if ((features & CEPH_FEATURE_PGPOOL3) == 0) {
-    uint8_t struct_v = 1;
-    ::encode(struct_v, bl);
-    ::encode(snapid, bl);
-    ::encode(stamp, bl);
-    ::encode(name, bl);
-    return;
-  }
-  ENCODE_START(2, 2, bl);
-  ::encode(snapid, bl);
-  ::encode(stamp, bl);
-  ::encode(name, bl);
-  ENCODE_FINISH(bl);
-}
-
-void pool_snap_info_t::decode(bufferlist::iterator& bl)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  ::decode(snapid, bl);
-  ::decode(stamp, bl);
-  ::decode(name, bl);
-  DECODE_FINISH(bl);
-}
-
-void pool_snap_info_t::generate_test_instances(list<pool_snap_info_t*>& o)
-{
-  o.push_back(new pool_snap_info_t);
-  o.push_back(new pool_snap_info_t);
-  o.back()->snapid = 1;
-  o.back()->stamp = utime_t(1, 2);
-  o.back()->name = "foo";
-}
-
-
 // -- pg_pool_t --
 
 void pg_pool_t::dump(Formatter *f) const
@@ -771,17 +697,6 @@ void pg_pool_t::dump(Formatter *f) const
   f->dump_unsigned("crash_replay_interval", get_crash_replay_interval());
   f->dump_stream("last_change") << get_last_change();
   f->dump_unsigned("auid", get_auid());
-  f->dump_string("snap_mode", is_pool_snaps_mode() ? "pool" : "selfmanaged");
-  f->dump_unsigned("snap_seq", get_snap_seq());
-  f->dump_unsigned("snap_epoch", get_snap_epoch());
-  f->open_array_section("pool_snaps");
-  for (map<snapid_t, pool_snap_info_t>::const_iterator p = snaps.begin(); p != snaps.end(); ++p) {
-    f->open_object_section("pool_snap_info");
-    p->second.dump(f);
-    f->close_section();
-  }
-  f->close_section();
-  f->dump_stream("removed_snaps") << removed_snaps;
   f->dump_int("quota_max_bytes", quota_max_bytes);
   f->dump_int("quota_max_objects", quota_max_objects);
   f->open_array_section("tiers");
@@ -835,105 +750,6 @@ unsigned pg_pool_t::get_pg_num_divisor(pg_t pgid) const
     return pg_num_mask + 1;           // smaller bin size (already split)
   else
     return (pg_num_mask + 1) >> 1;    // bigger bin (not yet split)
-}
-
-/*
- * we have two snap modes:
- *  - pool global snaps
- *    - snap existence/non-existence defined by snaps[] and snap_seq
- *  - user managed snaps
- *    - removal governed by removed_snaps
- *
- * we know which mode we're using based on whether removed_snaps is empty.
- */
-bool pg_pool_t::is_pool_snaps_mode() const
-{
-  return removed_snaps.empty() && get_snap_seq() > 0;
-}
-
-bool pg_pool_t::is_unmanaged_snaps_mode() const
-{
-  return removed_snaps.size() && get_snap_seq() > 0;
-}
-
-bool pg_pool_t::is_removed_snap(snapid_t s) const
-{
-  if (is_pool_snaps_mode())
-    return s <= get_snap_seq() && snaps.count(s) == 0;
-  else
-    return removed_snaps.contains(s);
-}
-
-/*
- * build set of known-removed sets from either pool snaps or
- * explicit removed_snaps set.
- */
-void pg_pool_t::build_removed_snaps(interval_set<snapid_t>& rs) const
-{
-  if (is_pool_snaps_mode()) {
-    rs.clear();
-    for (snapid_t s = 1; s <= get_snap_seq(); s = s + 1)
-      if (snaps.count(s) == 0)
-	rs.insert(s);
-  } else {
-    rs = removed_snaps;
-  }
-}
-
-snapid_t pg_pool_t::snap_exists(const char *s) const
-{
-  for (map<snapid_t,pool_snap_info_t>::const_iterator p = snaps.begin();
-       p != snaps.end();
-       ++p)
-    if (p->second.name == s)
-      return p->second.snapid;
-  return 0;
-}
-
-void pg_pool_t::add_snap(const char *n, utime_t stamp)
-{
-  assert(!is_unmanaged_snaps_mode());
-  snapid_t s = get_snap_seq() + 1;
-  snap_seq = s;
-  snaps[s].snapid = s;
-  snaps[s].name = n;
-  snaps[s].stamp = stamp;
-}
-
-void pg_pool_t::add_unmanaged_snap(uint64_t& snapid)
-{
-  if (removed_snaps.empty()) {
-    assert(!is_pool_snaps_mode());
-    removed_snaps.insert(snapid_t(1));
-    snap_seq = 1;
-  }
-  snapid = snap_seq = snap_seq + 1;
-}
-
-void pg_pool_t::remove_snap(snapid_t s)
-{
-  assert(snaps.count(s));
-  snaps.erase(s);
-  snap_seq = snap_seq + 1;
-}
-
-void pg_pool_t::remove_unmanaged_snap(snapid_t s)
-{
-  assert(is_unmanaged_snaps_mode());
-  removed_snaps.insert(s);
-  snap_seq = snap_seq + 1;
-  removed_snaps.insert(get_snap_seq());
-}
-
-SnapContext pg_pool_t::get_snap_context() const
-{
-  vector<snapid_t> s(snaps.size());
-  unsigned i = 0;
-  for (map<snapid_t, pool_snap_info_t>::const_reverse_iterator p = snaps.rbegin();
-       p != snaps.rend();
-       ++p)
-    s[i++] = p->first;
-  return SnapContext(get_snap_seq(), s);
 }
 
 static string make_hash_str(const string &inkey, const string &nspace)
@@ -1019,18 +835,9 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
     ::encode(lpg_num, bl);
     ::encode(lpgp_num, bl);
     ::encode(last_change, bl);
-    ::encode(snap_seq, bl);
-    ::encode(snap_epoch, bl);
-
-    uint32_t n = snaps.size();
-    ::encode(n, bl);
-    n = removed_snaps.num_intervals();
-    ::encode(n, bl);
 
     ::encode(auid, bl);
 
-    ::encode_nohead(snaps, bl, features);
-    removed_snaps.encode_nohead(bl);
     return;
   }
 
@@ -1047,10 +854,6 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
     ::encode(lpg_num, bl);
     ::encode(lpgp_num, bl);
     ::encode(last_change, bl);
-    ::encode(snap_seq, bl);
-    ::encode(snap_epoch, bl);
-    ::encode(snaps, bl, features);
-    ::encode(removed_snaps, bl);
     ::encode(auid, bl);
     ::encode(flags, bl);
     ::encode(crash_replay_interval, bl);
@@ -1069,10 +872,6 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
   ::encode(lpg_num, bl);
   ::encode(lpgp_num, bl);
   ::encode(last_change, bl);
-  ::encode(snap_seq, bl);
-  ::encode(snap_epoch, bl);
-  ::encode(snaps, bl, features);
-  ::encode(removed_snaps, bl);
   ::encode(auid, bl);
   ::encode(flags, bl);
   ::encode(crash_replay_interval, bl);
@@ -1115,20 +914,14 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
     ::decode(lpgp_num, bl);
   }
   ::decode(last_change, bl);
-  ::decode(snap_seq, bl);
-  ::decode(snap_epoch, bl);
 
   if (struct_v >= 3) {
-    ::decode(snaps, bl);
-    ::decode(removed_snaps, bl);
     ::decode(auid, bl);
   } else {
     uint32_t n, m;
     ::decode(n, bl);
     ::decode(m, bl);
     ::decode(auid, bl);
-    ::decode_nohead(n, snaps, bl);
-    removed_snaps.decode_nohead(m, bl);
   }
 
   if (struct_v >= 4) {
@@ -1216,23 +1009,14 @@ void pg_pool_t::generate_test_instances(list<pg_pool_t*>& o)
   a.pg_num = 6;
   a.pgp_num = 5;
   a.last_change = 9;
-  a.snap_seq = 10;
-  a.snap_epoch = 11;
   a.auid = 12;
   a.crash_replay_interval = 13;
   a.quota_max_bytes = 473;
   a.quota_max_objects = 474;
   o.push_back(new pg_pool_t(a));
 
-  a.snaps[3].name = "asdf";
-  a.snaps[3].snapid = 3;
-  a.snaps[3].stamp = utime_t(123, 4);
-  a.snaps[6].name = "qwer";
-  a.snaps[6].snapid = 6;
-  a.snaps[6].stamp = utime_t(23423, 4);
   o.push_back(new pg_pool_t(a));
 
-  a.removed_snaps.insert(2);   // not quite valid to combine with snaps!
   a.quota_max_bytes = 2473;
   a.quota_max_objects = 4374;
   a.tiers.insert(0);
@@ -1954,7 +1738,6 @@ void pg_info_t::encode(bufferlist &bl) const
   ::encode(last_backfill, bl);
   ::encode(stats, bl);
   history.encode(bl);
-  ::encode(purged_snaps, bl);
   ::encode(last_epoch_started, bl);
   ::encode(last_user_version, bl);
   ::encode(hit_set, bl);
@@ -1983,12 +1766,6 @@ void pg_info_t::decode(bufferlist::iterator &bl)
     ::decode(last_backfill, bl);
   ::decode(stats, bl);
   history.decode(bl);
-  if (struct_v >= 22)
-    ::decode(purged_snaps, bl);
-  else {
-    set<snapid_t> snap_trimq;
-    ::decode(snap_trimq, bl);
-  }
   if (struct_v < 27) {
     last_epoch_started = history.last_epoch_started;
   } else {
@@ -2017,7 +1794,6 @@ void pg_info_t::dump(Formatter *f) const
   f->dump_stream("log_tail") << log_tail;
   f->dump_int("last_user_version", last_user_version);
   f->dump_stream("last_backfill") << last_backfill;
-  f->dump_stream("purged_snaps") << purged_snaps;
   f->open_object_section("history");
   history.dump(f);
   f->close_section();
@@ -2392,12 +2168,6 @@ void ObjectModDesc::visit(Visitor *visitor) const
 	visitor->create();
 	break;
       }
-      case UPDATE_SNAPS: {
-	set<snapid_t> snaps;
-	::decode(snaps, bp);
-	visitor->update_snaps(snaps);
-	break;
-      }
       default:
 	assert(0 == "Invalid rollback code");
       }
@@ -2440,12 +2210,6 @@ struct DumpVisitor : public ObjectModDesc::Visitor {
     f->dump_string("code", "CREATE");
     f->close_section();
   }
-  void update_snaps(set<snapid_t> &snaps) {
-    f->open_object_section("op");
-    f->dump_string("code", "UPDATE_SNAPS");
-    f->dump_stream("snaps") << snaps;
-    f->close_section();
-  }
 };
 
 void ObjectModDesc::dump(Formatter *f) const
@@ -2466,7 +2230,6 @@ void ObjectModDesc::generate_test_instances(list<ObjectModDesc*>& o)
 {
   map<string, boost::optional<bufferlist> > attrs;
   attrs[OI_ATTR];
-  attrs[SS_ATTR];
   attrs["asdf"];
   o.push_back(new ObjectModDesc());
   o.back()->append(100);
@@ -2479,7 +2242,6 @@ void ObjectModDesc::generate_test_instances(list<ObjectModDesc*>& o)
   o.push_back(new ObjectModDesc());
   o.back()->create();
   o.back()->setattrs(attrs);
-  o.back()->mark_unrollbackable();
   o.back()->append(1000);
 }
 
@@ -2551,7 +2313,6 @@ void pg_log_entry_t::encode(bufferlist &bl) const
   ::encode(mtime, bl);
   if (op == LOST_REVERT)
     ::encode(prior_version, bl);
-  ::encode(snaps, bl);
   ::encode(user_version, bl);
   ::encode(mod_desc, bl);
   ENCODE_FINISH(bl);
@@ -2565,7 +2326,7 @@ void pg_log_entry_t::decode(bufferlist::iterator &bl)
     sobject_t old_soid;
     ::decode(old_soid, bl);
     soid.oid = old_soid.oid;
-    soid.snap = old_soid.snap;
+    soid.snap = CEPH_NOSNAP;
     invalid_hash = true;
   } else {
     ::decode(soid, bl);
@@ -2591,10 +2352,6 @@ void pg_log_entry_t::decode(bufferlist::iterator &bl)
       reverting_to = prior_version;
     }
   }
-  if (struct_v >= 7 ||  // for v >= 7, this is for all ops.
-      op == CLONE) {    // for v < 7, it's only present for CLONE.
-    ::decode(snaps, bl);
-  }
 
   if (struct_v >= 8)
     ::decode(user_version, bl);
@@ -2603,8 +2360,6 @@ void pg_log_entry_t::decode(bufferlist::iterator &bl)
 
   if (struct_v >= 9)
     ::decode(mod_desc, bl);
-  else
-    mod_desc.mark_unrollbackable();
 
   DECODE_FINISH(bl);
 }
@@ -2617,20 +2372,6 @@ void pg_log_entry_t::dump(Formatter *f) const
   f->dump_stream("prior_version") << version;
   f->dump_stream("reqid") << reqid;
   f->dump_stream("mtime") << mtime;
-  if (snaps.length() > 0) {
-    vector<snapid_t> v;
-    bufferlist c = snaps;
-    bufferlist::iterator p = c.begin();
-    try {
-      ::decode(v, p);
-    } catch (...) {
-      v.clear();
-    }
-    f->open_object_section("snaps");
-    for (vector<snapid_t>::iterator p = v.begin(); p != v.end(); ++p)
-      f->dump_unsigned("snap", *p);
-    f->close_section();
-  }
   {
     f->open_object_section("mod_desc");
     mod_desc.dump(f);
@@ -2651,17 +2392,6 @@ ostream& operator<<(ostream& out, const pg_log_entry_t& e)
 {
   out << e.version << " (" << e.prior_version << ") "
       << e.get_op_name() << ' ' << e.soid << " by " << e.reqid << " " << e.mtime;
-  if (e.snaps.length()) {
-    vector<snapid_t> snaps;
-    bufferlist c = e.snaps;
-    bufferlist::iterator p = c.begin();
-    try {
-      ::decode(snaps, p);
-    } catch (...) {
-      snaps.clear();
-    }
-    out << " snaps " << snaps;
-  }
   return out;
 }
 
@@ -3093,8 +2823,6 @@ void object_copy_data_t::encode(bufferlist& bl) const
   ::encode(omap, bl);
   ::encode(cursor, bl);
   ::encode(omap_header, bl);
-  ::encode(snaps, bl);
-  ::encode(snap_seq, bl);
   ENCODE_FINISH(bl);
 }
 
@@ -3110,13 +2838,6 @@ void object_copy_data_t::decode(bufferlist::iterator& bl)
   ::decode(cursor, bl);
   if (struct_v >= 2)
     ::decode(omap_header, bl);
-  if (struct_v >= 3) {
-    ::decode(snaps, bl);
-    ::decode(snap_seq, bl);
-  } else {
-    snaps.clear();
-    snap_seq = 0;
-  }
   DECODE_FINISH(bl);
 }
 
@@ -3146,7 +2867,6 @@ void object_copy_data_t::generate_test_instances(list<object_copy_data_t*>& o)
   bufferptr databp("iamsomedatatocontain", 20);
   o.back()->data.push_back(databp);
   o.back()->omap_header.append("this is an omap header");
-  o.back()->snaps.push_back(123);
 }
 
 void object_copy_data_t::dump(Formatter *f) const
@@ -3162,11 +2882,6 @@ void object_copy_data_t::dump(Formatter *f) const
   f->dump_int("omap_size", omap.size());
   f->dump_int("omap_header_length", omap_header.length());
   f->dump_int("data_length", data.length());
-  f->open_array_section("snaps");
-  for (vector<snapid_t>::const_iterator p = snaps.begin();
-       p != snaps.end(); ++p)
-    f->dump_unsigned("snap", *p);
-  f->close_section();
 }
 
 // -- pg_create_t --
@@ -3404,133 +3119,6 @@ void OSDSuperblock::generate_test_instances(list<OSDSuperblock*>& o)
   o.push_back(new OSDSuperblock(z));
 }
 
-// -- SnapSet --
-
-void SnapSet::encode(bufferlist& bl) const
-{
-  ENCODE_START(2, 2, bl);
-  ::encode(seq, bl);
-  ::encode(head_exists, bl);
-  ::encode(snaps, bl);
-  ::encode(clones, bl);
-  ::encode(clone_overlap, bl);
-  ::encode(clone_size, bl);
-  ENCODE_FINISH(bl);
-}
-
-void SnapSet::decode(bufferlist::iterator& bl)
-{
-  DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, bl);
-  ::decode(seq, bl);
-  ::decode(head_exists, bl);
-  ::decode(snaps, bl);
-  ::decode(clones, bl);
-  ::decode(clone_overlap, bl);
-  ::decode(clone_size, bl);
-  DECODE_FINISH(bl);
-}
-
-void SnapSet::dump(Formatter *f) const
-{
-  SnapContext sc(seq, snaps);
-  f->open_object_section("snap_context");
-  sc.dump(f);
-  f->close_section();
-  f->dump_int("head_exists", head_exists);
-  f->open_array_section("clones");
-  for (vector<snapid_t>::const_iterator p = clones.begin(); p != clones.end(); ++p) {
-    f->open_object_section("clone");
-    f->dump_unsigned("snap", *p);
-    f->dump_unsigned("size", clone_size.find(*p)->second);
-    f->dump_stream("overlap") << clone_overlap.find(*p)->second;
-    f->close_section();
-  }
-  f->close_section();
-}
-
-void SnapSet::generate_test_instances(list<SnapSet*>& o)
-{
-  o.push_back(new SnapSet);
-  o.push_back(new SnapSet);
-  o.back()->head_exists = true;
-  o.back()->seq = 123;
-  o.back()->snaps.push_back(123);
-  o.back()->snaps.push_back(12);
-  o.push_back(new SnapSet);
-  o.back()->head_exists = true;
-  o.back()->seq = 123;
-  o.back()->snaps.push_back(123);
-  o.back()->snaps.push_back(12);
-  o.back()->clones.push_back(12);
-  o.back()->clone_size[12] = 12345;
-  o.back()->clone_overlap[12];
-}
-
-ostream& operator<<(ostream& out, const SnapSet& cs)
-{
-  return out << cs.seq << "=" << cs.snaps << ":"
-	     << cs.clones
-	     << (cs.head_exists ? "+head":"");
-}
-
-void SnapSet::from_snap_set(const librados::snap_set_t& ss)
-{
-  // NOTE: our reconstruction of snaps (and the snapc) is not strictly
-  // correct: it will not include snaps that still logically exist
-  // but for which there was no clone that is defined.  For all
-  // practical purposes this doesn't matter, since we only use that
-  // information to clone on the OSD, and we have already moved
-  // forward past that part of the object history.
-
-  seq = ss.seq;
-  set<snapid_t> _snaps;
-  set<snapid_t> _clones;
-  head_exists = false;
-  for (vector<librados::clone_info_t>::const_iterator p = ss.clones.begin();
-       p != ss.clones.end();
-       ++p) {
-    if (p->cloneid == librados::SNAP_HEAD) {
-      head_exists = true;
-    } else {
-      _clones.insert(p->cloneid);
-      _snaps.insert(p->snaps.begin(), p->snaps.end());
-      clone_size[p->cloneid] = p->size;
-      clone_overlap[p->cloneid];  // the entry must exist, even if it's empty.
-      for (vector<pair<uint64_t, uint64_t> >::const_iterator q =
-	     p->overlap.begin(); q != p->overlap.end(); ++q)
-	clone_overlap[p->cloneid].insert(q->first, q->second);
-    }
-  }
-
-  // ascending
-  clones.clear();
-  clones.reserve(_clones.size());
-  for (set<snapid_t>::iterator p = _clones.begin(); p != _clones.end(); ++p)
-    clones.push_back(*p);
-
-  // descending
-  snaps.clear();
-  snaps.reserve(_snaps.size());
-  for (set<snapid_t>::reverse_iterator p = _snaps.rbegin();
-       p != _snaps.rend(); ++p)
-    snaps.push_back(*p);
-}
-
-uint64_t SnapSet::get_clone_bytes(snapid_t clone) const
-{
-  assert(clone_size.count(clone));
-  uint64_t size = clone_size.find(clone)->second;
-  assert(clone_overlap.count(clone));
-  const interval_set<uint64_t> &overlap = clone_overlap.find(clone)->second;
-  for (interval_set<uint64_t>::const_iterator i = overlap.begin();
-       i != overlap.end();
-       ++i) {
-    assert(size >= i.get_len());
-    size -= i.get_len();
-  }
-  return size;
-}
-
 // -- watch_info_t --
 
 void watch_info_t::encode(bufferlist& bl) const
@@ -3631,10 +3219,7 @@ void object_info_t::encode(bufferlist& bl) const
   ::encode(last_reqid, bl);
   ::encode(size, bl);
   ::encode(mtime, bl);
-  if (soid.snap == CEPH_NOSNAP)
-    ::encode(wrlock_by, bl);
-  else
-    ::encode(snaps, bl);
+  ::encode(wrlock_by, bl);
   ::encode(truncate_seq, bl);
   ::encode(truncate_size, bl);
   ::encode(is_lost(), bl);
@@ -3659,17 +3244,17 @@ void object_info_t::decode(bufferlist::iterator& bl)
     sobject_t obj;
     ::decode(obj, bl);
     ::decode(myoloc, bl);
-    soid = hobject_t(obj.oid, myoloc.key, obj.snap, 0, 0 , "");
+    soid = hobject_t(obj.oid, myoloc.key, CEPH_NOSNAP, 0, 0 , "");
     soid.hash = legacy_object_locator_to_ps(soid.oid, myoloc);
   } else if (struct_v >= 6) {
     ::decode(soid, bl);
     ::decode(myoloc, bl);
     if (struct_v == 6) {
-      hobject_t hoid(soid.oid, myoloc.key, soid.snap, soid.hash, 0 , "");
+      hobject_t hoid(soid.oid, myoloc.key, CEPH_NOSNAP, soid.hash, 0 , "");
       soid = hoid;
     }
   }
-    
+
   if (struct_v >= 5)
     ::decode(category, bl);
   ::decode(version, bl);
@@ -3677,10 +3262,7 @@ void object_info_t::decode(bufferlist::iterator& bl)
   ::decode(last_reqid, bl);
   ::decode(size, bl);
   ::decode(mtime, bl);
-  if (soid.snap == CEPH_NOSNAP)
-    ::decode(wrlock_by, bl);
-  else
-    ::decode(snaps, bl);
+  ::decode(wrlock_by, bl);
   ::decode(truncate_seq, bl);
   ::decode(truncate_size, bl);
   if (struct_v >= 3) {
@@ -3743,10 +3325,6 @@ void object_info_t::dump(Formatter *f) const
   f->dump_unsigned("lost", (int)is_lost());
   f->dump_unsigned("flags", (int)flags);
   f->dump_stream("wrlock_by") << wrlock_by;
-  f->open_array_section("snaps");
-  for (vector<snapid_t>::const_iterator p = snaps.begin(); p != snaps.end(); ++p)
-    f->dump_unsigned("snap", *p);
-  f->close_section();
   f->dump_unsigned("truncate_seq", truncate_seq);
   f->dump_unsigned("truncate_size", truncate_size);
   f->open_object_section("watchers");
@@ -3773,10 +3351,7 @@ ostream& operator<<(ostream& out, const object_info_t& oi)
 {
   out << oi.soid << "(" << oi.version
       << " " << oi.last_reqid;
-  if (oi.soid.snap == CEPH_NOSNAP)
-    out << " wrlock_by=" << oi.wrlock_by;
-  else
-    out << " " << oi.snaps;
+  out << " wrlock_by=" << oi.wrlock_by;
   if (oi.flags)
     out << " " << oi.get_flag_string();
   out << " s " << oi.size;
@@ -3856,7 +3431,6 @@ void ObjectRecoveryInfo::encode(bufferlist &bl) const
   ::encode(version, bl);
   ::encode(size, bl);
   ::encode(oi, bl);
-  ::encode(ss, bl);
   ::encode(copy_subset, bl);
   ::encode(clone_subset, bl);
   ENCODE_FINISH(bl);
@@ -3870,7 +3444,6 @@ void ObjectRecoveryInfo::decode(bufferlist::iterator &bl,
   ::decode(version, bl);
   ::decode(size, bl);
   ::decode(oi, bl);
-  ::decode(ss, bl);
   ::decode(copy_subset, bl);
   ::decode(clone_subset, bl);
   DECODE_FINISH(bl);
@@ -3909,11 +3482,6 @@ void ObjectRecoveryInfo::dump(Formatter *f) const
   {
     f->open_object_section("object_info");
     oi.dump(f);
-    f->close_section();
-  }
-  {
-    f->open_object_section("snapset");
-    ss.dump(f);
     f->close_section();
   }
   f->dump_stream("copy_subset") << copy_subset;
@@ -4229,7 +3797,6 @@ void ScrubMap::dump(Formatter *f) const
     f->dump_string("name", p->first.oid.name);
     f->dump_unsigned("hash", p->first.hash);
     f->dump_string("key", p->first.get_key());
-    f->dump_int("snapid", p->first.snap);
     p->second.dump(f);
     f->close_section();
   }
@@ -4262,7 +3829,6 @@ void ScrubMap::object::encode(bufferlist& bl) const
   ::encode(digest, bl);
   ::encode(digest_present, bl);
   ::encode(nlinks, bl);
-  ::encode(snapcolls, bl);
   ::encode(omap_digest, bl);
   ::encode(omap_digest_present, bl);
   ::encode(read_error, bl);
@@ -4281,7 +3847,6 @@ void ScrubMap::object::decode(bufferlist::iterator& bl)
   }
   if (struct_v >= 4) {
     ::decode(nlinks, bl);
-    ::decode(snapcolls, bl);
   } else {
     /* Indicates that encoder was not aware of this field since stat must
      * return nlink >= 1 */
@@ -4333,7 +3898,6 @@ ostream& operator<<(ostream& out, const OSDOp& op)
     case CEPH_OSD_OP_STAT:
     case CEPH_OSD_OP_DELETE:
     case CEPH_OSD_OP_LIST_WATCHERS:
-    case CEPH_OSD_OP_LIST_SNAPS:
     case CEPH_OSD_OP_UNDIRTY:
     case CEPH_OSD_OP_ISDIRTY:
     case CEPH_OSD_OP_CACHE_FLUSH:
@@ -4349,9 +3913,6 @@ ostream& operator<<(ostream& out, const OSDOp& op)
     case CEPH_OSD_OP_MASKTRUNC:
     case CEPH_OSD_OP_TRIMTRUNC:
       out << " " << op.op.extent.truncate_seq << "@" << (int64_t)op.op.extent.truncate_size;
-      break;
-    case CEPH_OSD_OP_ROLLBACK:
-      out << " " << snapid_t(op.op.snap.snapid);
       break;
     case CEPH_OSD_OP_WATCH:
       out << (op.op.watch.flag ? " add":" remove")
@@ -4405,17 +3966,12 @@ ostream& operator<<(ostream& out, const OSDOp& op)
     }
   } else if (ceph_osd_op_type_multi(op.op.op)) {
     switch (op.op.op) {
-    case CEPH_OSD_OP_CLONERANGE:
-      out << " " << op.op.clonerange.offset << "~" << op.op.clonerange.length
-	  << " from " << op.soid
-	  << " offset " << op.op.clonerange.src_offset;
-      break;
     case CEPH_OSD_OP_ASSERT_SRC_VERSION:
       out << " v" << op.op.watch.ver
-	  << " of " << op.soid;
+	  << " of " << op.oid;
       break;
     case CEPH_OSD_OP_SRC_CMPXATTR:
-      out << " " << op.soid;
+      out << " " << op.oid;
       if (op.op.xattr.name_len && op.indata.length()) {
 	out << " ";
 	op.indata.write(0, op.op.xattr.name_len, out);
@@ -4436,7 +3992,7 @@ void OSDOp::split_osd_op_vector_in_data(vector<OSDOp>& ops, bufferlist& in)
   bufferlist::iterator datap = in.begin();
   for (unsigned i = 0; i < ops.size(); i++) {
     if (ceph_osd_op_type_multi(ops[i].op.op)) {
-      ::decode(ops[i].soid, datap);
+      ::decode(ops[i].oid, datap);
     }
     if (ops[i].op.payload_len) {
       datap.copy(ops[i].op.payload_len, ops[i].indata);
@@ -4448,7 +4004,7 @@ void OSDOp::merge_osd_op_vector_in_data(vector<OSDOp>& ops, bufferlist& out)
 {
   for (unsigned i = 0; i < ops.size(); i++) {
     if (ceph_osd_op_type_multi(ops[i].op.op)) {
-      ::encode(ops[i].soid, out);
+      ::encode(ops[i].oid, out);
     }
     if (ops[i].indata.length()) {
       ops[i].op.payload_len = ops[i].indata.length();

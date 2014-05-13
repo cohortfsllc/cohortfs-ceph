@@ -27,7 +27,6 @@ const char *ceph_osd_op_name(int op)
 	case CEPH_OSD_OP_NOTIFY_ACK: return "notify-ack";
 	case CEPH_OSD_OP_ASSERT_VER: return "assert-version";
 	case CEPH_OSD_OP_LIST_WATCHERS: return "list-watchers";
-	case CEPH_OSD_OP_LIST_SNAPS: return "list-snaps";
 
 	case CEPH_OSD_OP_MASKTRUNC: return "masktrunc";
 
@@ -37,7 +36,6 @@ const char *ceph_osd_op_name(int op)
 	case CEPH_OSD_OP_TRUNCATE: return "truncate";
 	case CEPH_OSD_OP_ZERO: return "zero";
 	case CEPH_OSD_OP_WRITEFULL: return "writefull";
-	case CEPH_OSD_OP_ROLLBACK: return "rollback";
 
 	case CEPH_OSD_OP_APPEND: return "append";
 	case CEPH_OSD_OP_STARTSYNC: return "startsync";
@@ -58,7 +56,6 @@ const char *ceph_osd_op_name(int op)
 	case CEPH_OSD_OP_CACHE_EVICT: return "cache-evict";
 	case CEPH_OSD_OP_CACHE_TRY_FLUSH: return "cache-try-flush";
 
-	case CEPH_OSD_OP_CLONERANGE: return "clonerange";
 	case CEPH_OSD_OP_ASSERT_SRC_VERSION: return "assert-src-version";
 	case CEPH_OSD_OP_SRC_CMPXATTR: return "src-cmpxattr";
 
@@ -232,10 +229,6 @@ const char *ceph_pool_op_name(int op)
 	case POOL_OP_CREATE: return "create";
 	case POOL_OP_DELETE: return "delete";
 	case POOL_OP_AUID_CHANGE: return "auid change";
-	case POOL_OP_CREATE_SNAP: return "create snap";
-	case POOL_OP_DELETE_SNAP: return "delete snap";
-	case POOL_OP_CREATE_UNMANAGED_SNAP: return "create unmanaged snap";
-	case POOL_OP_DELETE_UNMANAGED_SNAP: return "delete unmanaged snap";
 	}
 	return "???";
 }

@@ -15,7 +15,7 @@ libosd_la_SOURCES = \
 	osd/ClassHandler.cc \
 	osd/OpRequest.cc \
 	common/TrackedOp.cc \
-	osd/SnapMapper.cc \
+	osd/OSDriver.cc \
 	osd/osd_types.cc \
 	osd/ECUtil.cc \
 	objclass/class_api.cc
@@ -31,7 +31,7 @@ noinst_HEADERS += \
 	osd/OSDMap.h \
 	osd/ObjectVersioner.h \
 	osd/OpRequest.h \
-	osd/SnapMapper.h \
+	osd/OSDriver.h \
 	osd/PG.h \
 	osd/PGLog.h \
 	osd/ReplicatedPG.h \

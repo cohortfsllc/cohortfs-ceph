@@ -73,19 +73,12 @@ void usage(ostream& out)
 "   create <obj-name> [category]     create object\n"
 "   rm <obj-name> ...                remove object(s)\n"
 "   cp <obj-name> [target-obj]       copy object\n"
-"   clonedata <src-obj> <dst-obj>    clone object data\n"
 "   listxattr <obj-name>\n"
 "   getxattr <obj-name> attr\n"
 "   setxattr <obj-name> attr val\n"
 "   rmxattr <obj-name> attr\n"
 "   stat objname                     stat the named object\n"
 "   mapext <obj-name>\n"
-"   lssnap                           list snaps\n"
-"   mksnap <snap-name>               create snap <snap-name>\n"
-"   rmsnap <snap-name>               remove snap <snap-name>\n"
-"   rollback <obj-name> <snap-name>  roll back object to snap <snap-name>\n"
-"\n"
-"   listsnaps <obj-name>             list the snapshots of this object\n"
 "   bench <seconds> write|seq|rand [-t concurrent_operations] [--no-cleanup] [--run-name run_name]\n"
 "                                    default is 16 concurrent IOs and 4 MB ops\n"
 "                                    default is to clean up after write benchmark\n"
@@ -154,9 +147,6 @@ void usage(ostream& out)
 "        select target pool by name\n"
 "   -b op_size\n"
 "        set the size of write ops for put or benchmarking\n"
-"   -s name\n"
-"   --snap name\n"
-"        select given snap name for (read) IO\n"
 "   -i infile\n"
 "   --create\n"
 "        create the pool or directory that was specified\n"
@@ -343,26 +333,6 @@ static int do_copy(IoCtx& io_ctx, const char *objname, IoCtx& target_ctx, const 
 err:
   target_ctx.remove(target_oid);
   return ret;
-}
-
-static int do_clone_data(IoCtx& io_ctx, const char *objname, IoCtx& target_ctx, const char *target_obj)
-{
-  string oid(objname);
-
-  // get size
-  uint64_t size;
-  int r = target_ctx.stat(oid, &size, NULL);
-  if (r < 0)
-    return r;
-
-  librados::ObjectWriteOperation write_op;
-  string target_oid(target_obj);
-
-  /* reset data stream only */
-  write_op.create(false);
-  write_op.truncate(0);
-  write_op.clone_range(0, oid, 0, size);
-  return target_ctx.operate(target_oid, &write_op);
 }
 
 static int do_copy_pool(Rados& rados, const char *src_pool, const char *target_pool)
@@ -1177,8 +1147,6 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   int concurrent_ios = 16;
   int op_size = 1 << 22;
   bool cleanup = true;
-  const char *snapname = NULL;
-  snap_t snapid = CEPH_NOSNAP;
   std::map<std::string, std::string>::const_iterator i;
   std::string category;
 
@@ -1243,14 +1211,6 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
   i = opts.find("block-size");
   if (i != opts.end()) {
     op_size = strtol(i->second.c_str(), NULL, 10);
-  }
-  i = opts.find("snap");
-  if (i != opts.end()) {
-    snapname = i->second.c_str();
-  }
-  i = opts.find("snapid");
-  if (i != opts.end()) {
-    snapid = strtoll(i->second.c_str(), NULL, 10);
   }
   i = opts.find("min-object-size");
   if (i != opts.end()) {
@@ -1361,30 +1321,11 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
   }
 
-  // snapname?
-  if (snapname) {
-    ret = io_ctx.snap_lookup(snapname, &snapid);
-    if (ret < 0) {
-      cerr << "error looking up snap '" << snapname << "': " << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-  }
   if (oloc.size()) {
     io_ctx.locator_set_key(oloc);
   }
   if (!nspace.empty()) {
     io_ctx.set_namespace(nspace);
-  }
-  if (snapid != CEPH_NOSNAP) {
-    string name;
-    ret = io_ctx.snap_get_name(snapid, &name);
-    if (ret < 0) {
-      cerr << "snapid " << snapid << " doesn't exist in pool "
-	   << io_ctx.get_pool_name() << std::endl;
-      goto out;
-    }
-    io_ctx.snap_set_read(snapid);
-    cout << "selected snap " << snapid << " '" << snapname << "'" << std::endl;
   }
 
   assert(!nargs.empty());
@@ -1424,10 +1365,10 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     if (!formatter) {
       printf("%-15s %-15s"
 	     "%12s %12s %12s %12s "
-	     "%12s %12s %12s %12s %12s\n",
+	     "%12s %12s %12s %12s\n",
 	     "pool name",
 	     "category",
-	     "KB", "objects", "clones", "degraded",
+	     "KB", "objects", "degraded",
 	     "unfound", "rd", "rd KB", "wr", "wr KB");
     } else {
       formatter->open_object_section("stats");
@@ -1447,50 +1388,48 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
         formatter->open_array_section("categories");
       }
       for (stats_map::iterator i = m.begin(); i != m.end(); ++i) {
-        const char *category = (i->first.size() ? i->first.c_str() : "");
-        pool_stat_t& s = i->second;
-        if (!formatter) {
-          if (!*category)
-            category = "-";
-          printf("%-15s "
-                 "%-15s "
-	         "%12lld %12lld %12lld %12lld"
-	         "%12lld %12lld %12lld %12lld %12lld\n",
-	         pool_name,
-                 category,
-	         (long long)s.num_kb,
-	         (long long)s.num_objects,
-	         (long long)s.num_object_clones,
-	         (long long)s.num_objects_degraded,
-	         (long long)s.num_objects_unfound,
-	         (long long)s.num_rd, (long long)s.num_rd_kb,
-	         (long long)s.num_wr, (long long)s.num_wr_kb);
-        } else {
-          formatter->open_object_section("category");
-          if (category)
-            formatter->dump_string("name", category);
-          formatter->dump_format("size_bytes", "%lld", s.num_bytes);
-          formatter->dump_format("size_kb", "%lld", s.num_kb);
-          formatter->dump_format("num_objects", "%lld", s.num_objects);
-          formatter->dump_format("num_object_clones", "%lld", s.num_object_clones);
-          formatter->dump_format("num_object_copies", "%lld", s.num_object_copies);
-          formatter->dump_format("num_objects_missing_on_primary", "%lld", s.num_objects_missing_on_primary);
-          formatter->dump_format("num_objects_unfound", "%lld", s.num_objects_unfound);
-          formatter->dump_format("num_objects_degraded", "%lld", s.num_objects_degraded);
-          formatter->dump_format("read_bytes", "%lld", s.num_rd);
-          formatter->dump_format("read_kb", "%lld", s.num_rd_kb);
-          formatter->dump_format("write_bytes", "%lld", s.num_wr);
-          formatter->dump_format("write_kb", "%lld", s.num_wr_kb);
-          formatter->flush(cout);
-        }
-        if (formatter) {
-          formatter->close_section();
-        }
+	const char *category = (i->first.size() ? i->first.c_str() : "");
+	pool_stat_t& s = i->second;
+	if (!formatter) {
+	  if (!*category)
+	    category = "-";
+	  printf("%-15s "
+		 "%-15s "
+		 "%12lld %12lld %12lld %12lld"
+		 "%12lld %12lld %12lld %12lld\n",
+		 pool_name,
+		 category,
+		 (long long)s.num_kb,
+		 (long long)s.num_objects,
+		 (long long)s.num_objects_degraded,
+		 (long long)s.num_objects_unfound,
+		 (long long)s.num_rd, (long long)s.num_rd_kb,
+		 (long long)s.num_wr, (long long)s.num_wr_kb);
+	} else {
+	  formatter->open_object_section("category");
+	  if (category)
+	    formatter->dump_string("name", category);
+	  formatter->dump_format("size_bytes", "%lld", s.num_bytes);
+	  formatter->dump_format("size_kb", "%lld", s.num_kb);
+	  formatter->dump_format("num_objects", "%lld", s.num_objects);
+	  formatter->dump_format("num_object_copies", "%lld", s.num_object_copies);
+	  formatter->dump_format("num_objects_missing_on_primary", "%lld", s.num_objects_missing_on_primary);
+	  formatter->dump_format("num_objects_unfound", "%lld", s.num_objects_unfound);
+	  formatter->dump_format("num_objects_degraded", "%lld", s.num_objects_degraded);
+	  formatter->dump_format("read_bytes", "%lld", s.num_rd);
+	  formatter->dump_format("read_kb", "%lld", s.num_rd_kb);
+	  formatter->dump_format("write_bytes", "%lld", s.num_wr);
+	  formatter->dump_format("write_kb", "%lld", s.num_wr_kb);
+	  formatter->flush(cout);
+	}
+	if (formatter) {
+	  formatter->close_section();
+	}
       }
       if (formatter) {
-        formatter->close_section();
-        formatter->close_section();
-        formatter->flush(cout);
+	formatter->close_section();
+	formatter->close_section();
+	formatter->flush(cout);
       }
     }
 
@@ -1893,55 +1832,12 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
     ret = do_copy(io_ctx, nargs[1], target_ctx, target_obj);
     if (ret < 0) {
-      cerr << "error copying " << pool_name << "/" << nargs[1] << " => " << target << "/" << target_obj << ": " << cpp_strerror(ret) << std::endl;
+      cerr << "error copying " << pool_name << "/" << nargs[1] << " => "
+	   << target << "/" << target_obj << ": " << cpp_strerror(ret) << std::endl;
       goto out;
     }
   }
-  else if (strcmp(nargs[0], "clonedata") == 0) {
-    if (!pool_name)
-      usage_exit();
-
-    if (nargs.size() < 2 || nargs.size() > 3)
-      usage_exit();
-
-    const char *target = target_pool_name;
-    if (!target)
-      target = pool_name;
-
-    const char *target_obj;
-    if (nargs.size() < 3) {
-      if (strcmp(target, pool_name) == 0) {
-        cerr << "cannot copy object into itself" << std::endl;
-        ret = -1;
-	goto out;
-      }
-      target_obj = nargs[1];
-    } else {
-      target_obj = nargs[2];
-    }
-
-    // open io context.
-    IoCtx target_ctx;
-    ret = rados.ioctx_create(target, target_ctx);
-    if (ret < 0) {
-      cerr << "error opening target pool " << target << ": "
-           << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-    if (oloc.size()) {
-      target_ctx.locator_set_key(oloc);
-    } else {
-      cerr << "must specify locator for clone" << std::endl;
-      ret = -1;
-      goto out;
-    }
-
-    ret = do_clone_data(io_ctx, nargs[1], target_ctx, target_obj);
-    if (ret < 0) {
-      cerr << "error cloning " << pool_name << "/" << nargs[1] << " => " << target << "/" << target_obj << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-  } else if (strcmp(nargs[0], "rm") == 0) {
+   else if (strcmp(nargs[0], "rm") == 0) {
     if (!pool_name || nargs.size() < 2)
       usage_exit();
     vector<const char *>::iterator iter = nargs.begin();
@@ -2125,79 +2021,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       cerr << "pool " << nargs[1] << " does not exist" << std::endl;
     }
   }
-  else if (strcmp(nargs[0], "lssnap") == 0) {
-    if (!pool_name || nargs.size() != 1)
-      usage_exit();
 
-    vector<snap_t> snaps;
-    io_ctx.snap_list(&snaps);
-    for (vector<snap_t>::iterator i = snaps.begin();
-	 i != snaps.end();
-	 ++i) {
-      string s;
-      time_t t;
-      if (io_ctx.snap_get_name(*i, &s) < 0)
-	continue;
-      if (io_ctx.snap_get_stamp(*i, &t) < 0)
-	continue;
-      struct tm bdt;
-      localtime_r(&t, &bdt);
-      cout << *i << "\t" << s << "\t";
-
-      cout.setf(std::ios::right);
-      cout.fill('0');
-      cout << std::setw(4) << (bdt.tm_year+1900)
-	   << '.' << std::setw(2) << (bdt.tm_mon+1)
-	   << '.' << std::setw(2) << bdt.tm_mday
-	   << ' '
-	   << std::setw(2) << bdt.tm_hour
-	   << ':' << std::setw(2) << bdt.tm_min
-	   << ':' << std::setw(2) << bdt.tm_sec
-	   << std::endl;
-      cout.unsetf(std::ios::right);
-    }
-    cout << snaps.size() << " snaps" << std::endl;
-  }
-
-  else if (strcmp(nargs[0], "mksnap") == 0) {
-    if (!pool_name || nargs.size() < 2)
-      usage_exit();
-
-    ret = io_ctx.snap_create(nargs[1]);
-    if (ret < 0) {
-      cerr << "error creating pool " << pool_name << " snapshot " << nargs[1]
-	   << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-    cout << "created pool " << pool_name << " snap " << nargs[1] << std::endl;
-  }
-
-  else if (strcmp(nargs[0], "rmsnap") == 0) {
-    if (!pool_name || nargs.size() < 2)
-      usage_exit();
-
-    ret = io_ctx.snap_remove(nargs[1]);
-    if (ret < 0) {
-      cerr << "error removing pool " << pool_name << " snapshot " << nargs[1]
-	   << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-    cout << "removed pool " << pool_name << " snap " << nargs[1] << std::endl;
-  }
-
-  else if (strcmp(nargs[0], "rollback") == 0) {
-    if (!pool_name || nargs.size() < 3)
-      usage_exit();
-
-    ret = io_ctx.rollback(nargs[1], nargs[2]);
-    if (ret < 0) {
-      cerr << "error rolling back pool " << pool_name << " to snapshot " << nargs[1]
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-    cout << "rolled back pool " << pool_name
-	 << " to snapshot " << nargs[2] << std::endl;
-  }
   else if (strcmp(nargs[0], "bench") == 0) {
     if (!pool_name || nargs.size() < 3)
       usage_exit();
@@ -2348,135 +2172,10 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
     else
       ret = 0;
-    
+
     for (std::list<obj_watch_t>::iterator i = lw.begin(); i != lw.end(); ++i) {
       cout << "watcher=" << i->addr << " client." << i->watcher_id << " cookie=" << i->cookie << std::endl;
     }
-  } else if (strcmp(nargs[0], "listsnaps") == 0) {
-    if (!pool_name || nargs.size() < 2)
-      usage_exit();
-
-    string oid(nargs[1]);
-    snap_set_t ls;
-
-    io_ctx.snap_set_read(LIBRADOS_SNAP_DIR);
-    ret = io_ctx.list_snaps(oid, &ls);
-    if (ret < 0) {
-      cerr << "error listing snap shots " << pool_name << "/" << oid << ": " << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-    else
-      ret = 0;
-
-    map<snap_t,string> snamemap;
-    if (formatter || pretty_format) {
-      vector<snap_t> snaps;
-      io_ctx.snap_list(&snaps);
-      for (vector<snap_t>::iterator i = snaps.begin();
-          i != snaps.end(); ++i) {
-        string s;
-        if (io_ctx.snap_get_name(*i, &s) < 0)
-          continue;
-        snamemap.insert(pair<snap_t,string>(*i, s));
-      }
-    }
-
-    if (formatter) {
-      formatter->open_object_section("object");
-      formatter->dump_string("name", oid);
-      formatter->open_array_section("clones");
-    } else {
-      cout << oid << ":" << std::endl;
-      cout << "cloneid	snaps	size	overlap" << std::endl;
-    }
-
-    for (std::vector<clone_info_t>::iterator ci = ls.clones.begin();
-          ci != ls.clones.end(); ++ci) {
-
-      if (formatter) formatter->open_object_section("clone");
-
-      if (ci->cloneid == librados::SNAP_HEAD) {
-        if (formatter)
-          formatter->dump_string("id", "head");
-        else
-          cout << "head";
-      } else {
-        if (formatter)
-          formatter->dump_unsigned("id", ci->cloneid);
-        else
-          cout << ci->cloneid;
-      }
-
-      if (formatter)
-        formatter->open_array_section("snapshots");
-      else
-        cout << "\t";
-
-      if (!formatter && ci->snaps.empty()) {
-        cout << "-";
-      }
-      for (std::vector<snap_t>::const_iterator snapindex = ci->snaps.begin();
-          snapindex != ci->snaps.end(); ++snapindex) {
-
-        map<snap_t,string>::iterator si;
-
-        if (formatter || pretty_format) si = snamemap.find(*snapindex);
-
-        if (formatter) {
-          formatter->open_object_section("snapshot");
-          formatter->dump_unsigned("id", *snapindex);
-          if (si != snamemap.end())
-            formatter->dump_string("name", si->second);
-          formatter->close_section(); //snapshot
-        } else {
-          if (snapindex != ci->snaps.begin()) cout << ",";
-          if (!pretty_format || (si == snamemap.end()))
-            cout << *snapindex;
-          else
-            cout << si->second << "(" << *snapindex << ")";
-        }
-      }
-
-      if (formatter) {
-        formatter->close_section();	//Snapshots
-        formatter->dump_unsigned("size", ci->size);
-      } else {
-        cout << "\t" << ci->size;
-      }
-
-      if (ci->cloneid != librados::SNAP_HEAD) {
-        if (formatter)
-          formatter->open_array_section("overlaps");
-        else
-          cout << "\t[";
-
-        for (std::vector< std::pair<uint64_t,uint64_t> >::iterator ovi = ci->overlap.begin();
-            ovi != ci->overlap.end(); ++ovi) {
-          if (formatter) {
-            formatter->open_object_section("section");
-            formatter->dump_unsigned("start", ovi->first);
-            formatter->dump_unsigned("length", ovi->second);
-            formatter->close_section(); //section
-          } else {
-            if (ovi != ci->overlap.begin()) cout << ",";
-            cout << ovi->first << "~" << ovi->second;
-          }
-        }
-        if (formatter)
-          formatter->close_section(); //overlaps
-        else
-          cout << "]" << std::endl;
-      }
-      if (formatter) formatter->close_section(); //clone
-    }
-    if (formatter) {
-      formatter->close_section(); //clones
-      formatter->close_section(); //object
-      formatter->flush(cout);
-    } else {
-      cout << std::endl;
-    }
-
   } else if (strcmp(nargs[0], "cache-flush") == 0) {
     if (!pool_name || nargs.size() < 2)
       usage_exit();
@@ -2590,10 +2289,6 @@ int main(int argc, const char **argv)
       opts["block-size"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "-b", (char*)NULL)) {
       opts["block-size"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "-s", "--snap", (char*)NULL)) {
-      opts["snap"] = val;
-    } else if (ceph_argparse_witharg(args, i, &val, "-S", "--snapid", (char*)NULL)) {
-      opts["snapid"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--min-object-size", (char*)NULL)) {
       opts["min-object-size"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "--max-object-size", (char*)NULL)) {

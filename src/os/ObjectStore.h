@@ -1445,7 +1445,7 @@ public:
    * @return zero on success, or negative error
    */
   virtual int collection_list_partial(coll_t c, ghobject_t start,
-				      int min, int max, snapid_t snap,
+				      int min, int max,
 				      vector<ghobject_t> *ls, ghobject_t *next) = 0;
 
   /**
@@ -1459,22 +1459,21 @@ public:
    * @return zero on success, or negative error
    */
   virtual int collection_list_range(coll_t c, ghobject_t start, ghobject_t end,
-	                            snapid_t seq, vector<ghobject_t> *ls) = 0;
+				    vector<ghobject_t> *ls) = 0;
 
   //TODO: Remove
   int collection_list(coll_t c, vector<hobject_t>& o);
 
-  int collection_list_partial(coll_t c, hobject_t start,
-				      int min, int max, snapid_t snap,
-				      vector<hobject_t> *ls, hobject_t *next);
+  int collection_list_partial(coll_t c, hobject_t start, int min, int max,
+			      vector<hobject_t> *ls, hobject_t *next);
 
   int collection_list_range(coll_t c, hobject_t start, hobject_t end,
-	                            snapid_t seq, vector<hobject_t> *ls);
+			    vector<hobject_t> *ls);
 
   /// OMAP
   /// Get omap contents
   virtual int omap_get(
-    coll_t c,                ///< [in] Collection containing oid
+    coll_t c, ///< [in] Collection containing oid
     const ghobject_t &oid,   ///< [in] Object containing omap
     bufferlist *header,      ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map

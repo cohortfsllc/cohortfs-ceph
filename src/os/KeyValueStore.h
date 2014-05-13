@@ -145,7 +145,7 @@ class StripObjectMap: public GenericObjectMap {
 
 
 class KeyValueStore : public ObjectStore,
-                      public md_config_obs_t {
+		      public md_config_obs_t {
  public:
   objectstore_perf_stat_t get_cur_stats() {
     objectstore_perf_stat_t ret;
@@ -483,32 +483,32 @@ class KeyValueStore : public ObjectStore,
   int collection_getattrs(coll_t cid, map<string,bufferptr> &aset);
 
   int _collection_setattr(coll_t c, const char *name, const void *value,
-                          size_t size, BufferTransaction &t);
+			  size_t size, BufferTransaction &t);
   int _collection_rmattr(coll_t c, const char *name, BufferTransaction &t);
   int _collection_setattrs(coll_t cid, map<string,bufferptr> &aset,
-                           BufferTransaction &t);
+			   BufferTransaction &t);
 
   // collections
   int _create_collection(coll_t c, BufferTransaction &t);
   int _destroy_collection(coll_t c, BufferTransaction &t);
   int _collection_add(coll_t c, coll_t ocid, const ghobject_t& oid,
-                      BufferTransaction &t);
+		      BufferTransaction &t);
   int _collection_move_rename(coll_t oldcid, const ghobject_t& oldoid,
-                              coll_t c, const ghobject_t& o,
-                              BufferTransaction &t);
+			      coll_t c, const ghobject_t& o,
+			      BufferTransaction &t);
   int _collection_remove_recursive(const coll_t &cid,
-                                   BufferTransaction &t);
+				   BufferTransaction &t);
   int _collection_rename(const coll_t &cid, const coll_t &ncid,
-                         BufferTransaction &t);
+			 BufferTransaction &t);
   int list_collections(vector<coll_t>& ls);
   bool collection_exists(coll_t c);
   bool collection_empty(coll_t c);
   int collection_list(coll_t c, vector<ghobject_t>& oid);
   int collection_list_partial(coll_t c, ghobject_t start,
-                              int min, int max, snapid_t snap,
-                              vector<ghobject_t> *ls, ghobject_t *next);
+			      int min, int max,
+			      vector<ghobject_t> *ls, ghobject_t *next);
   int collection_list_range(coll_t c, ghobject_t start, ghobject_t end,
-                            snapid_t seq, vector<ghobject_t> *ls);
+			    vector<ghobject_t> *ls);
   int collection_version_current(coll_t c, uint32_t *version);
 
   // omap (see ObjectStore.h for documentation)

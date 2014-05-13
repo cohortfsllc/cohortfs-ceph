@@ -324,7 +324,6 @@ public:
   ThreadPool::WorkQueueVal<pair<PGRef, OpRequestRef>, PGRef> &op_wq;
   ThreadPool::BatchWorkQueue<PG> &peering_wq;
   ThreadPool::WorkQueue<PG> &recovery_wq;
-  ThreadPool::WorkQueue<PG> &snap_trim_wq;
   ThreadPool::WorkQueue<PG> &scrub_wq;
   ThreadPool::WorkQueue<PG> &scrub_finalize_wq;
   ThreadPool::WorkQueue<MOSDRepScrub> &rep_scrub_wq;
@@ -615,9 +614,6 @@ public:
 
   void queue_for_peering(PG *pg);
   bool queue_for_recovery(PG *pg);
-  bool queue_for_snap_trim(PG *pg) {
-    return snap_trim_wq.queue(pg);
-  }
   bool queue_for_scrub(PG *pg) {
     return scrub_wq.queue(pg);
   }
@@ -833,22 +829,15 @@ public:
   ClassHandler  *class_handler;
   int get_nodeid() { return whoami; }
   
-  static hobject_t get_osdmap_pobject_name(epoch_t epoch) { 
+  static hobject_t get_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(foo), 0)); 
+    return hobject_t(sobject_t(object_t(foo), 0));
   }
-  static hobject_t get_inc_osdmap_pobject_name(epoch_t epoch) { 
+  static hobject_t get_inc_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "inc_osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(foo), 0)); 
-  }
-
-  static hobject_t make_snapmapper_oid() {
-    return hobject_t(
-      sobject_t(
-	object_t("snapmapper"),
-	0));
+    return hobject_t(sobject_t(object_t(foo), 0));
   }
 
   static hobject_t make_pg_log_oid(spg_t pg) {
@@ -1647,47 +1636,8 @@ protected:
   // replay / delayed pg activation
   Mutex replay_queue_lock;
   list< pair<spg_t, utime_t > > replay_queue;
-  
+
   void check_replay_queue();
-
-
-  // -- snap trimming --
-  xlist<PG*> snap_trim_queue;
-  
-  struct SnapTrimWQ : public ThreadPool::WorkQueue<PG> {
-    OSD *osd;
-    SnapTrimWQ(OSD *o, time_t ti, ThreadPool *tp)
-      : ThreadPool::WorkQueue<PG>("OSD::SnapTrimWQ", ti, 0, tp), osd(o) {}
-
-    bool _empty() {
-      return osd->snap_trim_queue.empty();
-    }
-    bool _enqueue(PG *pg) {
-      if (pg->snap_trim_item.is_on_list())
-	return false;
-      pg->get("SnapTrimWQ");
-      osd->snap_trim_queue.push_back(&pg->snap_trim_item);
-      return true;
-    }
-    void _dequeue(PG *pg) {
-      if (pg->snap_trim_item.remove_myself())
-	pg->put("SnapTrimWQ");
-    }
-    PG *_dequeue() {
-      if (osd->snap_trim_queue.empty())
-	return NULL;
-      PG *pg = osd->snap_trim_queue.front();
-      osd->snap_trim_queue.pop_front();
-      return pg;
-    }
-    void _process(PG *pg) {
-      pg->snap_trimmer();
-      pg->put("SnapTrimWQ");
-    }
-    void _clear() {
-      osd->snap_trim_queue.clear();
-    }
-  } snap_trim_wq;
 
 
   // -- scrubbing --

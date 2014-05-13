@@ -85,7 +85,6 @@ set (libcommon_files
 	fd.cc 
 	xattr.c 
 	safe_io.c 
-	snap_types.cc 
 	str_list.cc 
 	errno.cc
 	bloom_filter.cc

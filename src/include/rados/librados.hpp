@@ -39,7 +39,6 @@ namespace librados
     uint64_t num_bytes;    // in bytes
     uint64_t num_kb;       // in KB
     uint64_t num_objects;
-    uint64_t num_object_clones;
     uint64_t num_object_copies;  // num_objects * num_replicas
     uint64_t num_objects_missing_on_primary;
     uint64_t num_objects_unfound;
@@ -141,8 +140,8 @@ namespace librados
    * These flags apply to the ObjectOperation as a whole.
    *
    * BALANCE_READS and LOCALIZE_READS should only be used
-   * when reading from data you're certain won't change,
-   * like a snapshot, or where eventual consistency is ok.
+   * when reading from data you're certain won't change
+   * or where eventual consistency is ok.
    *
    * ORDER_READS_WRITES will order reads the same way writes are
    * ordered (e.g., waiting for degraded objects).  In particular, it
@@ -261,19 +260,6 @@ namespace librados
     void setxattr(const char *name, const bufferlist& bl);
     void tmap_update(const bufferlist& cmdbl);
     void tmap_put(const bufferlist& bl);
-    void clone_range(uint64_t dst_off,
-                     const std::string& src_oid, uint64_t src_off,
-                     size_t len);
-    void selfmanaged_snap_rollback(uint64_t snapid);
-
-    /**
-     * Rollback an object to the specified snapshot id
-     *
-     * Used with pool snapshots
-     *
-     * @param snapid [in] snopshot id specified
-     */
-    void snap_rollback(uint64_t snapid);
 
     /**
      * set keys and values according to map
@@ -434,22 +420,6 @@ namespace librados
     void list_watchers(std::list<obj_watch_t> *out_watchers, int *prval);
 
     /**
-     * list snapshot clones associated with a logical object
-     *
-     * This will include a record for each version of the object,
-     * include the "HEAD" (which will have a cloneid of SNAP_HEAD).
-     * Each clone includes a vector of snap ids for which it is
-     * defined to exist.
-     *
-     * NOTE: this operation must be submitted from an IoCtx with a
-     * read snapid of SNAP_DIR for reliable results.
-     *
-     * @param out_snaps [out] pointer to resulting snap_set_t
-     * @param prval [out] place error code in prval upon completion
-     */
-    void list_snaps(snap_set_t *out_snaps, int *prval);
-
-    /**
      * query dirty state of an object
      *
      * @param out_dirty [out] pointer to resulting bool
@@ -546,9 +516,6 @@ namespace librados
      * NOTE: this call steals the contents of @param bl.
      */
     int write_full(const std::string& oid, bufferlist& bl);
-    int clone_range(const std::string& dst_oid, uint64_t dst_off,
-                   const std::string& src_oid, uint64_t src_off,
-                   size_t len);
     int read(const std::string& oid, bufferlist& bl, size_t len, uint64_t off);
     int remove(const std::string& oid);
     int trunc(const std::string& oid, uint64_t size);
@@ -595,43 +562,12 @@ namespace librados
                               const std::set<std::string>& keys,
                               std::map<std::string, bufferlist> *vals);
     int omap_set(const std::string& oid,
-                 const std::map<std::string, bufferlist>& map);
+		 const std::map<std::string, bufferlist>& map);
     int omap_set_header(const std::string& oid,
-                        const bufferlist& bl);
+			const bufferlist& bl);
     int omap_clear(const std::string& oid);
     int omap_rm_keys(const std::string& oid,
-                     const std::set<std::string>& keys);
-
-    void snap_set_read(snap_t seq);
-    int selfmanaged_snap_set_write_ctx(snap_t seq, std::vector<snap_t>& snaps);
-
-    // Create a snapshot with a given name
-    int snap_create(const char *snapname);
-
-    // Look up a snapshot by name.
-    // Returns 0 on success; error code otherwise
-    int snap_lookup(const char *snapname, snap_t *snap);
-
-    // Gets a timestamp for a snap
-    int snap_get_stamp(snap_t snapid, time_t *t);
-
-    // Gets the name of a snap
-    int snap_get_name(snap_t snapid, std::string *s);
-
-    // Remove a snapshot from this pool
-    int snap_remove(const char *snapname);
-
-    int snap_list(std::vector<snap_t> *snaps);
-
-    int snap_rollback(const std::string& oid, const char *snapname);
-    // Deprecated name kept for backward compatibility - same as snap_rollback()
-    int rollback(const std::string& oid, const char *snapname);
-
-    int selfmanaged_snap_create(uint64_t *snapid);
-
-    int selfmanaged_snap_remove(uint64_t snapid);
-
-    int selfmanaged_snap_rollback(const std::string& oid, uint64_t snapid);
+		     const std::set<std::string>& keys);
 
     // Advisory locking on rados objects.
     int lock_exclusive(const std::string &oid, const std::string &name,
@@ -688,54 +624,9 @@ namespace librados
 
     int aio_read(const std::string& oid, AioCompletion *c,
 		 bufferlist *pbl, size_t len, uint64_t off);
-    /**
-     * Asynchronously read from an object at a particular snapshot
-     *
-     * This is the same as normal aio_read, except that it chooses
-     * the snapshot to read from from its arguments instead of the
-     * internal IoCtx state.
-     *
-     * The return value of the completion will be number of bytes read on
-     * success, negative error code on failure.
-     *
-     * @param oid the name of the object to read from
-     * @param c what to do when the read is complete
-     * @param pbl where to store the results
-     * @param len the number of bytes to read
-     * @param off the offset to start reading from in the object
-     * @param snapid the id of the snapshot to read from
-     * @returns 0 on success, negative error code on failure
-     */
-    int aio_read(const std::string& oid, AioCompletion *c,
-		 bufferlist *pbl, size_t len, uint64_t off, uint64_t snapid);
     int aio_sparse_read(const std::string& oid, AioCompletion *c,
 			std::map<uint64_t,uint64_t> *m, bufferlist *data_bl,
 			size_t len, uint64_t off);
-    /**
-     * Asynchronously read existing extents from an object at a
-     * particular snapshot
-     *
-     * This is the same as normal aio_sparse_read, except that it chooses
-     * the snapshot to read from from its arguments instead of the
-     * internal IoCtx state.
-     *
-     * m will be filled in with a map of extents in the object,
-     * mapping offsets to lengths (in bytes) within the range
-     * requested. The data for all of the extents are stored
-     * back-to-back in offset order in data_bl.
-     *
-     * @param oid the name of the object to read from
-     * @param c what to do when the read is complete
-     * @param m where to store the map of extents
-     * @param data_bl where to store the data
-     * @param len the number of bytes to read
-     * @param off the offset to start reading from in the object
-     * @param snapid the id of the snapshot to read from
-     * @returns 0 on success, negative error code on failure
-     */
-    int aio_sparse_read(const std::string& oid, AioCompletion *c,
-			std::map<uint64_t,uint64_t> *m, bufferlist *data_bl,
-			size_t len, uint64_t off, uint64_t snapid);
     int aio_write(const std::string& oid, AioCompletion *c, const bufferlist& bl,
 		  size_t len, uint64_t off);
     int aio_append(const std::string& oid, AioCompletion *c, const bufferlist& bl,
@@ -753,8 +644,7 @@ namespace librados
      * @param io the context to operate in
      * @param oid the name of the object
      * @param completion what to do when the remove is safe and complete
-     * @returns 0 on success, -EROFS if the io context specifies a snap_seq
-     * other than SNAP_HEAD
+     * @returns 0 on success
      */
     int aio_remove(const std::string& oid, AioCompletion *c);
 
@@ -785,30 +675,8 @@ namespace librados
     int operate(const std::string& oid, ObjectReadOperation *op, bufferlist *pbl);
     int aio_operate(const std::string& oid, AioCompletion *c, ObjectWriteOperation *op);
     int aio_operate(const std::string& oid, AioCompletion *c, ObjectWriteOperation *op, int flags);
-    /**
-     * Schedule an async write operation with explicit snapshot parameters
-     *
-     * This is the same as the first aio_operate(), except that it
-     * gets the snapshot context from its arguments instead of the
-     * IoCtx internal state.
-     *
-     * @param oid the object to operate on
-     * @param c what to do when the operation is complete and safe
-     * @param op which operations to perform
-     * @param seq latest selfmanaged snapshot sequence number for this object
-     * @param snaps currently existing selfmanaged snapshot ids for this object
-     * @returns 0 on success, negative error code on failure
-     */
-    int aio_operate(const std::string& oid, AioCompletion *c,
-		    ObjectWriteOperation *op, snap_t seq,
-		    std::vector<snap_t>& snaps);
     int aio_operate(const std::string& oid, AioCompletion *c,
 		    ObjectReadOperation *op, bufferlist *pbl);
-
-    int aio_operate(const std::string& oid, AioCompletion *c,
-		    ObjectReadOperation *op, snap_t snapid, int flags,
-		    bufferlist *pbl)
-      __attribute__ ((deprecated));
 
     int aio_operate(const std::string& oid, AioCompletion *c,
 		    ObjectReadOperation *op, int flags,
@@ -820,7 +688,6 @@ namespace librados
     int unwatch(const std::string& o, uint64_t handle);
     int notify(const std::string& o, uint64_t ver, bufferlist& bl);
     int list_watchers(const std::string& o, std::list<obj_watch_t> *out_watchers);
-    int list_snaps(const std::string& o, snap_set_t *out_snaps);
     void set_notify_timeout(uint32_t timeout);
 
     /**

@@ -345,9 +345,6 @@ private:
     }
   };
 
-  bool preprocess_remove_snaps(struct MRemoveSnaps *m);
-  bool prepare_remove_snaps(struct MRemoveSnaps *m);
-
  public:
   OSDMonitor(Monitor *mn, Paxos *p, string service_name)
   : PaxosService(mn, p, service_name),
@@ -364,7 +361,7 @@ private:
   bool prepare_command_impl(MMonCommand *m, map<string,cmd_vartype> &cmdmap);
 
   int prepare_command_pool_set(map<string,cmd_vartype> &cmdmap,
-                               stringstream& ss);
+			       stringstream& ss);
 
   void handle_osd_timeouts(const utime_t &now,
 			   std::map<int,utime_t> &last_osd_report);

@@ -14,7 +14,7 @@ set(osd_srcs
 	PGLog.cc 
 	ReplicatedBackend.cc 
 	ReplicatedPG.cc 
-	SnapMapper.cc
+	OSDriver.cc
 	Watch.cc 
 )
 

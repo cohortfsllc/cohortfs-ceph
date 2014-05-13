@@ -185,7 +185,6 @@ protected:
     const ghobject_t &start,
     int min_count,
     int max_count,
-    snapid_t seq,
     vector<ghobject_t> *ls,
     ghobject_t *next
     );
@@ -321,7 +320,6 @@ private:
     const vector<string> &path,            /// [in] Path to list
     const string *lower_bound,             /// [in] list > *lower_bound
     const ghobject_t *next_object,          /// [in] list > *next_object
-    const snapid_t *seq,                   /// [in] list >= *seq
     set<string> *hash_prefixes,            /// [out] prefixes in dir
     set<pair<string, ghobject_t> > *objects /// [out] objects
     );
@@ -331,7 +329,6 @@ private:
     const vector<string> &path, /// [in] Path to list
     int min_count,              /// [in] List at least min_count
     int max_count,              /// [in] List at most max_count
-    snapid_t seq,               /// [in] list only objects where snap >= seq
     ghobject_t *next,            /// [in,out] List objects >= *next
     vector<ghobject_t> *out      /// [out] Listed objects
     ); ///< @return Error Code, 0 on success

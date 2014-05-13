@@ -190,8 +190,6 @@ enum {
 
 	CEPH_OSD_OP_LIST_WATCHERS = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 9,
 
-	CEPH_OSD_OP_LIST_SNAPS = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 10,
-
 	/* sync */
 	CEPH_OSD_OP_SYNC_READ = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 11,
 
@@ -213,7 +211,6 @@ enum {
 	CEPH_OSD_OP_TMAPGET = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 12,
 
 	CEPH_OSD_OP_CREATE  = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 13,
-	CEPH_OSD_OP_ROLLBACK= CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 14,
 
 	CEPH_OSD_OP_WATCH   = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 15,
 
@@ -246,7 +243,6 @@ enum {
 	CEPH_OSD_OP_SETALLOCHINT = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 35,
 
 	/** multi **/
-	CEPH_OSD_OP_CLONERANGE = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_MULTI | 1,
 	CEPH_OSD_OP_ASSERT_SRC_VERSION = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_MULTI | 2,
 	CEPH_OSD_OP_SRC_CMPXATTR = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_MULTI | 3,
 
@@ -359,7 +355,6 @@ enum {
 	CEPH_OSD_FLAG_RETRY =          0x0008,  /* resend attempt */
 	CEPH_OSD_FLAG_READ =           0x0010,  /* op may read */
 	CEPH_OSD_FLAG_WRITE =          0x0020,  /* op may write */
-	CEPH_OSD_FLAG_ORDERSNAP =      0x0040,  /* EOLDSNAP if snapc is out of order */
 	CEPH_OSD_FLAG_PEERSTAT_OLD =   0x0080,  /* DEPRECATED msg includes osd_peer_stat */
 	CEPH_OSD_FLAG_BALANCE_READS =  0x0100,
 	CEPH_OSD_FLAG_PARALLELEXEC =   0x0200,  /* execute op in parallel */
@@ -371,11 +366,7 @@ enum {
 	CEPH_OSD_FLAG_IGNORE_CACHE =   0x8000,  /* ignore cache logic */
 	CEPH_OSD_FLAG_SKIPRWLOCKS =   0x10000,  /* skip rw locks */
 	CEPH_OSD_FLAG_IGNORE_OVERLAY =0x20000,  /* ignore pool overlay */
-	CEPH_OSD_FLAG_FLUSH =         0x40000,  /* this is part of flush */
-	CEPH_OSD_FLAG_MAP_SNAP_CLONE =0x80000,  /* map snap direct to clone id
-						 */
-	CEPH_OSD_FLAG_ENFORCE_SNAPC    =0x100000,  /* use snapc provided even if
-						      pool uses pool snaps */
+	CEPH_OSD_FLAG_FLUSH =         0x40000  /* this is part of flush */
 };
 
 enum {
@@ -383,7 +374,6 @@ enum {
 	CEPH_OSD_OP_FLAG_FAILOK = 2,    /* continue despite failure */
 };
 
-#define EOLDSNAPC    85  /* ORDERSNAP flag set; writer has old snapc*/
 #define EBLACKLISTED 108 /* blacklisted */
 
 /* xattr comparison */
@@ -404,9 +394,7 @@ enum {
 enum {
 	CEPH_OSD_COPY_FROM_FLAG_FLUSH = 1,     /* part of a flush operation */
 	CEPH_OSD_COPY_FROM_FLAG_IGNORE_OVERLAY = 2,  /* ignore pool overlay */
-	CEPH_OSD_COPY_FROM_FLAG_IGNORE_CACHE = 4, /* ignore osd cache logic */
-	CEPH_OSD_COPY_FROM_FLAG_MAP_SNAP_CLONE = 8, /* map snap direct to
-						     * cloneid */
+	CEPH_OSD_COPY_FROM_FLAG_IGNORE_CACHE = 4 /* ignore osd cache logic */
 };
 
 enum {
@@ -442,9 +430,6 @@ struct ceph_osd_op {
 			__le64 count;
 			__le32 start_epoch; /* for the pgls sequence */
 		} __attribute__ ((packed)) pgls;
-	        struct {
-		        __le64 snapid;
-	        } __attribute__ ((packed)) snap;
 		struct {
 			__le64 cookie;
 			__le64 ver;
@@ -455,14 +440,9 @@ struct ceph_osd_op {
 			__le64 ver;
 		} __attribute__ ((packed)) assert_ver;
 		struct {
-			__le64 offset, length;
-			__le64 src_offset;
-		} __attribute__ ((packed)) clonerange;
-		struct {
 			__le64 max;     /* max data in reply */
 		} __attribute__ ((packed)) copy_get;
 		struct {
-			__le64 snapid;
 			__le64 src_version;
 			uint8_t flags;
 		} __attribute__ ((packed)) copy_from;

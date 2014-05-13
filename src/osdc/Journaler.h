@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,14 +7,15 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 /* Journaler
  *
- * This class stripes a serial log over objects on the store.  Four logical pointers:
+ * This class stripes a serial log over objects on the store.  Four
+ * logical pointers:
  *
  *  write_pos - where we're writing new entries
  *   unused_field - where we're reading old entires
@@ -23,27 +24,33 @@
  *
  *  trimmed_pos <= expire_pos <= unused_field <= write_pos.
  *
- * Often, unused_field <= write_pos (as with MDS log).  During recovery, write_pos is undefined
- * until the end of the log is discovered.
+ * Often, unused_field <= write_pos (as with MDS log).  During
+ * recovery, write_pos is undefined until the end of the log is
+ * discovered.
  *
  * A "head" struct at the beginning of the log is used to store metadata at
  * regular intervals.  The basic invariants include:
  *
- *   head.unused_field   <= unused_field   -- the head may "lag", since it's updated lazily.
+ *   head.unused_field <= unused_field -- the head may "lag", since
+ *                                        it's updated lazily.
  *   head.write_pos  <= write_pos
  *   head.expire_pos <= expire_pos
  *   head.trimmed_pos   <= trimmed_pos
  *
  * More significantly,
  *
- *   head.expire_pos >= trimmed_pos -- this ensures we can find the "beginning" of the log
- *                                  as last recorded, before it is trimmed.  trimming will
- *                                  block until a sufficiently current expire_pos is committed.
+ *   head.expire_pos >= trimmed_pos -- this ensures we can find the
+ *                                  "beginning" of the log as last
+ *                                  recorded, before it is trimmed.
+ *                                  trimming will block until a
+ *                                  sufficiently current expire_pos is
+ *                                  committed.
  *
- * To recover log state, we simply start at the last write_pos in the head, and probe the
- * object sequence sizes until we read the end.  
+ * To recover log state, we simply start at the last write_pos in the
+ * head, and probe the object sequence sizes until we read the end.
  *
- * Head struct is stored in the first object.  Actual journal starts after layout.period() bytes.
+ * Head struct is stored in the first object.  Actual journal starts
+ * after layout.period() bytes.
  *
  */
 
@@ -203,7 +210,7 @@ private:
   uint64_t prezero_pos;     // we zero journal space ahead of write_pos to avoid problems with tail probing
   uint64_t write_pos;       // logical write position, where next entry will go
   uint64_t flush_pos;       // where we will flush. if write_pos>flush_pos, we're buffering writes.
-  uint64_t safe_pos;        // what has been committed safely to disk.
+  uint64_t safe_pos; // what has been committed safely to disk.
   bufferlist write_buf;  // write buffer.  flush_pos + write_buf.length() == write_pos.
 
   bool waiting_for_zero;

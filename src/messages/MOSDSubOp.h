@@ -51,13 +51,10 @@ public:
   uint64_t old_size;
   eversion_t old_version;
 
-  SnapSet snapset;
-  SnapContext snapc;
-
   // transaction to exec
   bufferlist logbl;
   pg_stat_t pg_stats;
-  
+
   // subop metadata
   eversion_t version;
 
@@ -123,8 +120,6 @@ public:
     ::decode(old_exists, p);
     ::decode(old_size, p);
     ::decode(old_version, p);
-    ::decode(snapset, p);
-    ::decode(snapc, p);
     ::decode(logbl, p);
     ::decode(pg_stats, p);
     ::decode(pg_trim_to, p);
@@ -197,8 +192,6 @@ public:
     ::encode(old_exists, payload);
     ::encode(old_size, payload);
     ::encode(old_version, payload);
-    ::encode(snapset, payload);
-    ::encode(snapc, payload);
     ::encode(logbl, payload);
     ::encode(pg_stats, payload);
     ::encode(pg_trim_to, payload);
@@ -262,8 +255,7 @@ public:
       out << " first";
     if (complete)
       out << " complete";
-    out << " v " << version
-	<< " snapset=" << snapset << " snapc=" << snapc;    
+    out << " v " << version;
     if (!data_subset.empty()) out << " subset " << data_subset;
     if (updated_hit_set_history)
       out << ", has_updated_hit_set_history";

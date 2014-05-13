@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -10,9 +10,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_OSD_TYPES_H
@@ -35,7 +35,6 @@
 #include "common/Formatter.h"
 #include "common/bloom_filter.hpp"
 #include "common/hobject.h"
-#include "common/snap_types.h"
 #include "HitSet.h"
 #include "Watch.h"
 #include "OpRequest.h"
@@ -52,7 +51,6 @@
 #define CEPH_OSD_FEATURE_INCOMPAT_BIGINFO CompatSet::Feature(7, "biginfo")
 #define CEPH_OSD_FEATURE_INCOMPAT_LEVELDBINFO CompatSet::Feature(8, "leveldbinfo")
 #define CEPH_OSD_FEATURE_INCOMPAT_LEVELDBLOG CompatSet::Feature(9, "leveldblog")
-#define CEPH_OSD_FEATURE_INCOMPAT_SNAPMAPPER CompatSet::Feature(10, "snapmapper")
 #define CEPH_OSD_FEATURE_INCOMPAT_SHARDS CompatSet::Feature(11, "sharded objects")
 
 
@@ -475,8 +473,8 @@ public:
     : str(str_)
   { }
 
-  explicit coll_t(spg_t pgid, snapid_t snap = CEPH_NOSNAP)
-    : str(pg_and_snap_to_str(pgid, snap))
+  explicit coll_t(spg_t pgid)
+    : str(pg_to_str(pgid))
   { }
 
   static coll_t make_temp_coll(spg_t pgid) {
@@ -500,7 +498,7 @@ public:
   }
 
   bool is_pg_prefix(spg_t& pgid) const;
-  bool is_pg(spg_t& pgid, snapid_t& snap) const;
+  bool is_pg(spg_t& pgid) const;
   bool is_temp(spg_t& pgid) const;
   bool is_removal(uint64_t *seq, spg_t *pgid) const;
   void encode(bufferlist& bl) const;
@@ -516,9 +514,9 @@ public:
   static void generate_test_instances(list<coll_t*>& o);
 
 private:
-  static std::string pg_and_snap_to_str(spg_t p, snapid_t s) {
+  static std::string pg_to_str(spg_t p) {
     std::ostringstream oss;
-    oss << p << "_" << s;
+    oss << p;
     return oss.str();
   }
   static std::string pg_to_tmp_str(spg_t p) {
@@ -675,21 +673,17 @@ WRITE_CLASS_ENCODER(objectstore_perf_stat_t)
 struct osd_stat_t {
   int64_t kb, kb_used, kb_avail;
   vector<int> hb_in, hb_out;
-  int32_t snap_trim_queue_len, num_snap_trimming;
 
   pow2_hist_t op_queue_age_hist;
 
   objectstore_perf_stat_t fs_perf_stat;
 
-  osd_stat_t() : kb(0), kb_used(0), kb_avail(0),
-		 snap_trim_queue_len(0), num_snap_trimming(0) {}
+  osd_stat_t() : kb(0), kb_used(0), kb_avail(0) {}
 
   void add(const osd_stat_t& o) {
     kb += o.kb;
     kb_used += o.kb_used;
     kb_avail += o.kb_avail;
-    snap_trim_queue_len += o.snap_trim_queue_len;
-    num_snap_trimming += o.num_snap_trimming;
     op_queue_age_hist.add(o.op_queue_age_hist);
     fs_perf_stat.add(o.fs_perf_stat);
   }
@@ -697,8 +691,6 @@ struct osd_stat_t {
     kb -= o.kb;
     kb_used -= o.kb_used;
     kb_avail -= o.kb_avail;
-    snap_trim_queue_len -= o.snap_trim_queue_len;
-    num_snap_trimming -= o.num_snap_trimming;
     op_queue_age_hist.sub(o.op_queue_age_hist);
     fs_perf_stat.sub(o.fs_perf_stat);
   }
@@ -714,8 +706,6 @@ inline bool operator==(const osd_stat_t& l, const osd_stat_t& r) {
   return l.kb == r.kb &&
     l.kb_used == r.kb_used &&
     l.kb_avail == r.kb_avail &&
-    l.snap_trim_queue_len == r.snap_trim_queue_len &&
-    l.num_snap_trimming == r.num_snap_trimming &&
     l.hb_in == r.hb_in &&
     l.hb_out == r.hb_out;
 }
@@ -762,29 +752,6 @@ inline ostream& operator<<(ostream& out, const osd_stat_t& s) {
 #define PG_STATE_RECOVERY_WAIT (1<<22) // waiting for recovery reservations
 
 std::string pg_state_string(int state);
-
-
-/*
- * pool_snap_info_t
- *
- * attributes for a single pool snapshot.  
- */
-struct pool_snap_info_t {
-  snapid_t snapid;
-  utime_t stamp;
-  string name;
-
-  void dump(Formatter *f) const;
-  void encode(bufferlist& bl, uint64_t features) const;
-  void decode(bufferlist::iterator& bl);
-  static void generate_test_instances(list<pool_snap_info_t*>& o);
-};
-WRITE_CLASS_ENCODER_FEATURES(pool_snap_info_t)
-
-inline ostream& operator<<(ostream& out, const pool_snap_info_t& si) {
-  return out << si.snapid << '(' << si.name << ' ' << si.stamp << ')';
-}
-
 
 /*
  * pg_pool
@@ -881,28 +848,12 @@ private:
 public:
   map<string,string> properties;  ///< OBSOLETE
   string erasure_code_profile; ///< name of the erasure code profile in OSDMap
-  epoch_t last_change;      ///< most recent epoch changed, exclusing snapshot changes
-  snapid_t snap_seq;        ///< seq for per-pool snapshot
-  epoch_t snap_epoch;       ///< osdmap epoch of last snap
+  epoch_t last_change;      ///< most recent epoch changed
   uint64_t auid;            ///< who owns the pg
   uint32_t crash_replay_interval; ///< seconds to allow clients to replay ACKed but unCOMMITted requests
 
   uint64_t quota_max_bytes; ///< maximum number of bytes for this pool
   uint64_t quota_max_objects; ///< maximum number of objects for this pool
-
-  /*
-   * Pool snaps (global to this pool).  These define a SnapContext for
-   * the pool, unless the client manually specifies an alternate
-   * context.
-   */
-  map<snapid_t, pool_snap_info_t> snaps;
-  /*
-   * Alternatively, if we are definining non-pool snaps (e.g. via the
-   * Ceph MDS), we must track @removed_snaps (since @snaps is not
-   * used).  Snaps and removed_snaps are to be used exclusive of each
-   * other!
-   */
-  interval_set<snapid_t> removed_snaps;
 
   unsigned pg_num_mask, pgp_num_mask;
 
@@ -940,7 +891,6 @@ public:
       crush_ruleset(0), object_hash(0),
       pg_num(0), pgp_num(0),
       last_change(0),
-      snap_seq(0), snap_epoch(0),
       auid(0),
       crash_replay_interval(0),
       quota_max_bytes(0), quota_max_objects(0),
@@ -966,10 +916,6 @@ public:
   bool ec_pool() const {
     return type == TYPE_ERASURE;
   }
-  bool require_rollback() const {
-    return ec_pool() || flags & FLAG_DEBUG_FAKE_EC_POOL;
-  }
-
   unsigned get_type() const { return type; }
   unsigned get_size() const { return size; }
   unsigned get_min_size() const { return min_size; }
@@ -979,13 +925,8 @@ public:
     return ceph_str_hash_name(get_object_hash());
   }
   epoch_t get_last_change() const { return last_change; }
-  epoch_t get_snap_epoch() const { return snap_epoch; }
-  snapid_t get_snap_seq() const { return snap_seq; }
   uint64_t get_auid() const { return auid; }
   unsigned get_crash_replay_interval() const { return crash_replay_interval; }
-
-  void set_snap_seq(snapid_t s) { snap_seq = s; }
-  void set_snap_epoch(epoch_t e) { snap_epoch = e; }
 
   void set_stripe_width(uint32_t s) { stripe_width = s; }
   uint32_t get_stripe_width() const { return stripe_width; }
@@ -1043,33 +984,6 @@ public:
 
   static int calc_bits_of(int t);
   void calc_pg_masks();
-
-  /*
-   * we have two snap modes:
-   *  - pool global snaps
-   *    - snap existence/non-existence defined by snaps[] and snap_seq
-   *  - user managed snaps
-   *    - removal governed by removed_snaps
-   *
-   * we know which mode we're using based on whether removed_snaps is empty.
-   * If nothing has been created, both functions report false.
-   */
-  bool is_pool_snaps_mode() const;
-  bool is_unmanaged_snaps_mode() const;
-  bool is_removed_snap(snapid_t s) const;
-
-  /*
-   * build set of known-removed sets from either pool snaps or
-   * explicit removed_snaps set.
-   */
-  void build_removed_snaps(interval_set<snapid_t>& rs) const;
-  snapid_t snap_exists(const char *s) const;
-  void add_snap(const char *n, utime_t stamp);
-  void add_unmanaged_snap(uint64_t& snapid);
-  void remove_snap(snapid_t s);
-  void remove_unmanaged_snap(snapid_t s);
-
-  SnapContext get_snap_context() const;
 
   /// hash a object name+namespace key to a hash position
   uint32_t hash_key(const string& key, const string& ns) const;
@@ -1587,14 +1501,12 @@ struct pg_info_t {
   eversion_t last_update;    // last object version applied to store.
   eversion_t last_complete;  // last version pg was complete through.
   epoch_t last_epoch_started;// last epoch at which this pg started on this osd
-  
+
   version_t last_user_version; // last user object version applied to store
 
   eversion_t log_tail;     // oldest log entry.
 
   hobject_t last_backfill;   // objects >= this and < last_complete may be missing
-
-  interval_set<snapid_t> purged_snaps;
 
   pg_stat_t stats;
 
@@ -1610,7 +1522,7 @@ struct pg_info_t {
       last_epoch_started(0), last_user_version(0),
       last_backfill(hobject_t::get_max())
   { }
-  
+
   bool is_empty() const { return last_update.version == 0; }
   bool dne() const { return history.epoch_created == 0; }
 
@@ -1815,7 +1727,6 @@ public:
     virtual void setattrs(map<string, boost::optional<bufferlist> > &attrs) {}
     virtual void rmobject(version_t old_version) {}
     virtual void create() {}
-    virtual void update_snaps(set<snapid_t> &old_snaps) {}
     virtual ~Visitor() {}
   };
   void visit(Visitor *visitor) const;
@@ -1824,8 +1735,7 @@ public:
     APPEND = 1,
     SETATTRS = 2,
     DELETE = 3,
-    CREATE = 4,
-    UPDATE_SNAPS = 5
+    CREATE = 4
   };
   ObjectModDesc() : can_local_rollback(true), stashed(false) {}
   void claim(ObjectModDesc &other) {
@@ -1837,10 +1747,6 @@ public:
   void claim_append(ObjectModDesc &other) {
     if (!can_local_rollback || stashed)
       return;
-    if (!other.can_local_rollback) {
-      mark_unrollbackable();
-      return;
-    }
     bl.claim_append(other.bl);
     stashed = other.stashed;
   }
@@ -1892,23 +1798,7 @@ public:
     append_id(CREATE);
     ENCODE_FINISH(bl);
   }
-  void update_snaps(set<snapid_t> &old_snaps) {
-    if (!can_local_rollback || stashed)
-      return;
-    ENCODE_START(1, 1, bl);
-    append_id(UPDATE_SNAPS);
-    ::encode(old_snaps, bl);
-    ENCODE_FINISH(bl);
-  }
 
-  // cannot be rolled back
-  void mark_unrollbackable() {
-    can_local_rollback = false;
-    bl.clear();
-  }
-  bool can_rollback() const {
-    return can_local_rollback;
-  }
   bool empty() const {
     return can_local_rollback && (bl.length() == 0);
   }
@@ -1980,8 +1870,7 @@ struct pg_log_entry_t {
   version_t user_version; // the user version for this entry
   osd_reqid_t reqid;  // caller+tid to uniquely identify request
   utime_t     mtime;  // this is the _user_ mtime, mind you
-  bufferlist snaps;   // only for clone entries
-  bool invalid_hash; // only when decoding sobject_t based entries
+  bool invalid_hash; // only when decoding object_t based entries
   bool invalid_pool; // only when decoding pool-less hobject based entries
 
   uint64_t offset;   // [soft state] my offset on disk
@@ -2324,10 +2213,6 @@ struct object_copy_data_t {
   map<string, bufferlist> omap;
   string category;
 
-  /// which snaps we are defined for (if a snap and not the head)
-  vector<snapid_t> snaps;
-  ///< latest snap seq for the object (if head)
-  snapid_t snap_seq;
 public:
   object_copy_data_t() : size((uint64_t)-1) {}
 
@@ -2457,46 +2342,7 @@ inline ostream& operator<<(ostream& out, const OSDSuperblock& sb)
 WRITE_CLASS_ENCODER(interval_set<uint64_t>)
 
 
-
-
-
-/*
- * attached to object head.  describes most recent snap context, and
- * set of existing clones.
- */
-struct SnapSet {
-  snapid_t seq;
-  bool head_exists;
-  vector<snapid_t> snaps;    // descending
-  vector<snapid_t> clones;   // ascending
-  map<snapid_t, interval_set<uint64_t> > clone_overlap;  // overlap w/ next newest
-  map<snapid_t, uint64_t> clone_size;
-
-  SnapSet() : seq(0), head_exists(false) {}
-  SnapSet(bufferlist& bl) {
-    bufferlist::iterator p = bl.begin();
-    decode(p);
-  }
-
-  /// populate SnapSet from a librados::snap_set_t
-  void from_snap_set(const librados::snap_set_t& ss);
-
-  /// get space accounted to clone
-  uint64_t get_clone_bytes(snapid_t clone) const;
-    
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<SnapSet*>& o);  
-};
-WRITE_CLASS_ENCODER(SnapSet)
-
-ostream& operator<<(ostream& out, const SnapSet& cs);
-
-
-
 #define OI_ATTR "_"
-#define SS_ATTR "snapset"
 
 struct watch_info_t {
   uint64_t cookie;
@@ -2579,7 +2425,6 @@ struct object_info_t {
   }
 
   osd_reqid_t wrlock_by;   // [head]
-  vector<snapid_t> snaps;  // [clone]
 
   uint64_t truncate_seq, truncate_size;
 
@@ -2648,21 +2493,9 @@ struct ObjectState {
 };
 
 
-struct SnapSetContext {
-  hobject_t oid;
-  int ref;
-  bool registered;
-  SnapSet snapset;
-  bool exists;
-
-  SnapSetContext(const hobject_t& o) :
-    oid(o), ref(0), registered(false), exists(true) { }
-};
-
-
 /*
   * keep tabs on object modifications that are in flight.
-  * we need to know the projected existence, size, snapset,
+  * we need to know the projected existence, size,
   * etc., because we don't send writes down to disk until after
   * replicas ack.
   */
@@ -2673,8 +2506,6 @@ typedef ceph::shared_ptr<ObjectContext> ObjectContextRef;
 
 struct ObjectContext {
   ObjectState obs;
-
-  SnapSetContext *ssc;  // may be null
 
   Context *destructor_callback;
 
@@ -2720,14 +2551,10 @@ public:
     /// if set, restart backfill when we can get a read lock
     bool backfill_read_marker;
 
-    /// if set, requeue snaptrim on lock release
-    bool snaptrimmer_write_marker;
-
     RWState()
       : state(RWNONE),
 	count(0),
-	backfill_read_marker(false),
-	snaptrimmer_write_marker(false)
+	backfill_read_marker(false)
     {}
     bool get_read(OpRequestRef op) {
       if (get_read_lock()) {
@@ -2821,14 +2648,6 @@ public:
   bool get_write(OpRequestRef op) {
     return rwstate.get_write(op);
   }
-  bool get_snaptrimmer_write() {
-    if (rwstate.get_write_lock()) {
-      return true;
-    } else {
-      rwstate.snaptrimmer_write_marker = true;
-      return false;
-    }
-  }
   bool get_backfill_read() {
     rwstate.backfill_read_marker = true;
     if (rwstate.get_read_lock()) {
@@ -2845,22 +2664,16 @@ public:
     rwstate.put_read(to_wake);
   }
   void put_write(list<OpRequestRef> *to_wake,
-		 bool *requeue_recovery,
-		 bool *requeue_snaptrimmer) {
+		 bool *requeue_recovery) {
     rwstate.put_write(to_wake);
     if (rwstate.empty() && rwstate.backfill_read_marker) {
       rwstate.backfill_read_marker = false;
       *requeue_recovery = true;
     }
-    if (rwstate.empty() && rwstate.snaptrimmer_write_marker) {
-      rwstate.snaptrimmer_write_marker = false;
-      *requeue_snaptrimmer = true;
-    }
   }
 
   ObjectContext()
-    : ssc(NULL),
-      destructor_callback(0),
+    : destructor_callback(0),
       lock("ReplicatedPG::ObjectContext::lock"),
       unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0),
       blocked(false), requeue_scrub_on_unblock(false) {}
@@ -2970,7 +2783,6 @@ struct ObjectRecoveryInfo {
   eversion_t version;
   uint64_t size;
   object_info_t oi;
-  SnapSet ss;
   interval_set<uint64_t> copy_subset;
   map<hobject_t, interval_set<uint64_t> > clone_subset;
 
@@ -3080,7 +2892,6 @@ struct ScrubMap {
     uint32_t digest;
     bool digest_present;
     uint32_t nlinks;
-    set<snapid_t> snapcolls;
     uint32_t omap_digest;
     bool omap_digest_present;
     bool read_error;
@@ -3116,7 +2927,7 @@ WRITE_CLASS_ENCODER(ScrubMap)
 
 struct OSDOp {
   ceph_osd_op op;
-  sobject_t soid;
+  object_t oid;
 
   bufferlist indata, outdata;
   int32_t rval;
@@ -3137,7 +2948,7 @@ struct OSDOp {
    * merge indata nembers of a vector of OSDOp into a single bufferlist
    *
    * Notably this also encodes certain other OSDOp data into the data
-   * buffer, including the sobject_t soid.
+   * buffer, including the object_t oid.
    *
    * @param ops [in] vector of OSDOps
    * @param in  [out] combined data buffer
@@ -3254,44 +3065,27 @@ struct obj_list_watch_response_t {
 WRITE_CLASS_ENCODER(obj_list_watch_response_t)
 
 struct clone_info {
-  snapid_t cloneid;
-  vector<snapid_t> snaps;  // ascending
   vector< pair<uint64_t,uint64_t> > overlap;
   uint64_t size;
 
-  clone_info() : cloneid(CEPH_NOSNAP), size(0) {}
+  clone_info() : size(0) {}
 
   void encode(bufferlist& bl) const {
     ENCODE_START(1, 1, bl);
-    ::encode(cloneid, bl);
-    ::encode(snaps, bl);
     ::encode(overlap, bl);
     ::encode(size, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator& bl) {
     DECODE_START(1, bl);
-    ::decode(cloneid, bl);
-    ::decode(snaps, bl);
     ::decode(overlap, bl);
     ::decode(size, bl);
     DECODE_FINISH(bl);
   }
   void dump(Formatter *f) const {
-    if (cloneid == CEPH_NOSNAP)
-      f->dump_string("cloneid", "HEAD");
-    else
-      f->dump_unsigned("cloneid", cloneid.val);
-    f->open_array_section("snapshots");
-    for (vector<snapid_t>::const_iterator p = snaps.begin(); p != snaps.end(); ++p) {
-      f->open_object_section("snap");
-      f->dump_unsigned("id", p->val);
-      f->close_section();
-    }
-    f->close_section();
     f->open_array_section("overlaps");
     for (vector< pair<uint64_t,uint64_t> >::const_iterator q = overlap.begin();
-          q != overlap.end(); ++q) {
+	 q != overlap.end(); ++q) {
       f->open_object_section("overlap");
       f->dump_unsigned("offset", q->first);
       f->dump_unsigned("length", q->second);
@@ -3303,71 +3097,14 @@ struct clone_info {
   static void generate_test_instances(list<clone_info*>& o) {
     o.push_back(new clone_info);
     o.push_back(new clone_info);
-    o.back()->cloneid = 1;
-    o.back()->snaps.push_back(1);
     o.back()->overlap.push_back(pair<uint64_t,uint64_t>(0,4096));
     o.back()->overlap.push_back(pair<uint64_t,uint64_t>(8192,4096));
     o.back()->size = 16384;
     o.push_back(new clone_info);
-    o.back()->cloneid = CEPH_NOSNAP;
     o.back()->size = 32768;
   }
 };
 WRITE_CLASS_ENCODER(clone_info)
-
-/**
- * obj list snaps response format
- *
- */
-struct obj_list_snap_response_t {
-  vector<clone_info> clones;   // ascending
-  snapid_t seq;
-
-  void encode(bufferlist& bl) const {
-    ENCODE_START(2, 1, bl);
-    ::encode(clones, bl);
-    ::encode(seq, bl);
-    ENCODE_FINISH(bl);
-  }
-  void decode(bufferlist::iterator& bl) {
-    DECODE_START(2, bl);
-    ::decode(clones, bl);
-    if (struct_v >= 2)
-      ::decode(seq, bl);
-    else
-      seq = CEPH_NOSNAP;
-    DECODE_FINISH(bl);
-  }
-  void dump(Formatter *f) const {
-    f->open_array_section("clones");
-    for (vector<clone_info>::const_iterator p = clones.begin(); p != clones.end(); ++p) {
-      f->open_object_section("clone");
-      p->dump(f);
-      f->close_section();
-    }
-    f->dump_unsigned("seq", seq);
-    f->close_section();
-  }
-  static void generate_test_instances(list<obj_list_snap_response_t*>& o) {
-    o.push_back(new obj_list_snap_response_t);
-    o.push_back(new obj_list_snap_response_t);
-    clone_info cl;
-    cl.cloneid = 1;
-    cl.snaps.push_back(1);
-    cl.overlap.push_back(pair<uint64_t,uint64_t>(0,4096));
-    cl.overlap.push_back(pair<uint64_t,uint64_t>(8192,4096));
-    cl.size = 16384;
-    o.back()->clones.push_back(cl);
-    cl.cloneid = CEPH_NOSNAP;
-    cl.snaps.clear();
-    cl.overlap.clear();
-    cl.size = 32768;
-    o.back()->clones.push_back(cl);
-    o.back()->seq = 123;
-  }
-};
-
-WRITE_CLASS_ENCODER(obj_list_snap_response_t)
 
 enum scrub_error_type {
   CLEAN,

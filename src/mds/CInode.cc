@@ -799,14 +799,13 @@ void CInode::store(Context *fin)
   encode_store(bl);
 
   // write it.
-  SnapContext snapc;
   ObjectOperation m;
   m.write_full(bl);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
   object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pool());
 
-  mdcache->mds->objecter->mutate(oid, oloc, m, snapc, ceph_clock_now(g_ceph_context), 0,
+  mdcache->mds->objecter->mutate(oid, oloc, m, ceph_clock_now(g_ceph_context), 0,
 				 NULL, new C_Inode_Stored(this, get_version(), fin) );
 }
 
@@ -842,12 +841,12 @@ void CInode::fetch(Context *fin)
   ObjectOperation rd;
   rd.getxattr("inode", &c->bl, NULL);
 
-  mdcache->mds->objecter->read(oid, oloc, rd, CEPH_NOSNAP,
+  mdcache->mds->objecter->read(oid, oloc, rd,
 			       (bufferlist*)NULL, 0, gather.new_sub());
 
   // read from separate object too
   object_t oid2 = CInode::get_object_name(ino(), frag_t(), ".inode");
-  mdcache->mds->objecter->read(oid2, oloc, 0, 0, CEPH_NOSNAP, &c->bl2,
+  mdcache->mds->objecter->read(oid2, oloc, 0, 0, &c->bl2,
 			       0, gather.new_sub());
 
   gather.activate();
@@ -937,21 +936,20 @@ void CInode::store_backtrace(Context *fin)
   op.create(false);
   op.setxattr("parent", bl);
 
-  SnapContext snapc;
   object_t oid = get_object_name(ino(), frag_t(), "");
   object_locator_t oloc(pool);
   Context *fin2 = new C_Inode_StoredBacktrace(this, inode.backtrace_version,
 					      fin);
 
   if (!state_test(STATE_DIRTYPOOL) || inode.old_pools.empty()) {
-    mdcache->mds->objecter->mutate(oid, oloc, op, snapc,
+    mdcache->mds->objecter->mutate(oid, oloc, op,
 				   ceph_clock_now(g_ceph_context), 0,
 				   NULL, fin2);
     return;
   }
 
   C_GatherBuilder gather(g_ceph_context, fin2);
-  mdcache->mds->objecter->mutate(oid, oloc, op, snapc,
+  mdcache->mds->objecter->mutate(oid, oloc, op,
 				 ceph_clock_now(g_ceph_context),
 				 0, NULL, gather.new_sub());
 
@@ -967,7 +965,7 @@ void CInode::store_backtrace(Context *fin)
     op.setxattr("parent", bl);
 
     object_locator_t oloc(*p);
-    mdcache->mds->objecter->mutate(oid, oloc, op, snapc,
+    mdcache->mds->objecter->mutate(oid, oloc, op,
 				   ceph_clock_now(g_ceph_context),
 				   0, NULL, gather.new_sub());
     old_pools.insert(*p);
@@ -1032,7 +1030,6 @@ void CInode::decode_store(bufferlist::iterator& bl) {
     ::decode(symlink, bl);
   ::decode(dirfragtree, bl);
   ::decode(xattrs, bl);
-  bufferlist snapbl;
   if (struct_v == 2 && inode.is_dir()) {
     bool default_layout_exists;
     ::decode(default_layout_exists, bl);

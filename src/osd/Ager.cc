@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
 #include "include/types.h"
@@ -20,9 +20,9 @@
 #endif // DARWIN || __FreeBSD__
 
 
-int myrand() 
+int myrand()
 {
-  if (0) 
+  if (0)
     return rand();
   else {
     static int n = 0;

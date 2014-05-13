@@ -449,8 +449,6 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
   m_journal_dio(g_conf->journal_dio),
   m_journal_aio(g_conf->journal_aio),
   m_journal_force_aio(g_conf->journal_force_aio),
-  m_osd_rollback_to_cluster_snap(g_conf->osd_rollback_to_cluster_snap),
-  m_osd_use_stale_snap(g_conf->osd_use_stale_snap),
   m_filestore_queue_max_ops(g_conf->filestore_queue_max_ops),
   m_filestore_queue_max_bytes(g_conf->filestore_queue_max_bytes),
   m_filestore_queue_committing_max_ops(g_conf->filestore_queue_committing_max_ops),
@@ -3966,7 +3964,7 @@ int FileStore::_collection_remove_recursive(const coll_t &cid,
   ghobject_t max;
   r = 0;
   while (!max.is_max()) {
-    r = collection_list_partial(cid, max, 200, 300, 0, &objects, &max);
+    r = collection_list_partial(cid, max, 200, 300, &objects, &max);
     if (r < 0)
       return r;
     for (vector<ghobject_t>::iterator i = objects.begin();
@@ -4136,7 +4134,7 @@ bool FileStore::collection_empty(coll_t c)
     return false;
   vector<ghobject_t> ls;
   collection_list_handle_t handle;
-  r = index->collection_list_partial(ghobject_t(), 1, 1, 0, &ls, NULL);
+  r = index->collection_list_partial(ghobject_t(), 1, 1, &ls, NULL);
   if (r < 0) {
     assert(!m_filestore_fail_eio || r != -EIO);
     return false;
@@ -4145,7 +4143,7 @@ bool FileStore::collection_empty(coll_t c)
 }
 
 int FileStore::collection_list_range(coll_t c, ghobject_t start, ghobject_t end,
-                                     snapid_t seq, vector<ghobject_t> *ls)
+				     vector<ghobject_t> *ls)
 {
   bool done = false;
   ghobject_t next = start;
@@ -4153,8 +4151,8 @@ int FileStore::collection_list_range(coll_t c, ghobject_t start, ghobject_t end,
   while (!done) {
     vector<ghobject_t> next_objects;
     int r = collection_list_partial(c, next,
-                                get_ideal_list_min(), get_ideal_list_max(),
-                                seq, &next_objects, &next);
+				    get_ideal_list_min(), get_ideal_list_max(),
+				    &next_objects, &next);
     if (r < 0)
       return r;
 
@@ -4179,7 +4177,7 @@ int FileStore::collection_list_range(coll_t c, ghobject_t start, ghobject_t end,
 }
 
 int FileStore::collection_list_partial(coll_t c, ghobject_t start,
-				       int min, int max, snapid_t seq,
+				       int min, int max,
 				       vector<ghobject_t> *ls, ghobject_t *next)
 {
   dout(10) << "collection_list_partial: " << c << dendl;
@@ -4188,7 +4186,7 @@ int FileStore::collection_list_partial(coll_t c, ghobject_t start,
   if (r < 0)
     return r;
   r = index->collection_list_partial(start,
-				     min, max, seq,
+				     min, max,
 				     ls, next);
   if (r < 0) {
     assert(!m_filestore_fail_eio || r != -EIO);
@@ -4639,7 +4637,7 @@ int FileStore::_split_collection(coll_t cid,
       collection_list_partial(
 	cid,
 	next,
-	get_ideal_list_min(), get_ideal_list_max(), 0,
+	get_ideal_list_min(), get_ideal_list_max(),
 	&objects,
 	&next);
       if (objects.empty())
@@ -4658,7 +4656,7 @@ int FileStore::_split_collection(coll_t cid,
       collection_list_partial(
 	dest,
 	next,
-	get_ideal_list_min(), get_ideal_list_max(), 0,
+	get_ideal_list_min(), get_ideal_list_max(),
 	&objects,
 	&next);
       if (objects.empty())

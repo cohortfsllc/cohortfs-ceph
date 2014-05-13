@@ -152,8 +152,6 @@ public:
     map<int32_t, entity_addr_t> new_hb_back_up;
     map<int32_t, entity_addr_t> new_hb_front_up;
 
-    string cluster_snapshot;
-
     int get_net_marked_out(const OSDMap *previous) const;
     int get_net_marked_down(const OSDMap *previous) const;
     int identify_osd(uuid_d u) const;
@@ -193,11 +191,8 @@ public:
 				  const map<string,string> &profile) {
       new_erasure_code_profiles[name] = profile;
     }
-
-    /// propage update pools' snap metadata to any of their tiers
-    int propagate_snaps_to_tiers(CephContext *cct, const OSDMap &base);
   };
-  
+
 private:
   uuid_d fsid;
   epoch_t epoch;        // what epoch of the osd cluster descriptor is this
@@ -235,8 +230,6 @@ private:
 
   ceph::unordered_map<entity_addr_t,utime_t> blacklist;
 
-  epoch_t cluster_snapshot_epoch;
-  string cluster_snapshot;
   bool new_blacklist_entries;
 
  public:
@@ -255,7 +248,6 @@ private:
 	     pg_temp(new map<pg_t,vector<int> >),
 	     primary_temp(new map<pg_t,int>),
 	     osd_uuid(new vector<uuid_d>),
-	     cluster_snapshot_epoch(0),
 	     new_blacklist_entries(false),
 	     crush(new CrushWrapper) {
     memset(&fsid, 0, sizeof(fsid));
@@ -297,12 +289,6 @@ public:
 
   bool is_blacklisted(const entity_addr_t& a) const;
   void get_blacklist(list<pair<entity_addr_t,utime_t > > *bl) const;
-
-  string get_cluster_snapshot() const {
-    if (cluster_snapshot_epoch == epoch)
-      return cluster_snapshot;
-    return string();
-  }
 
   /***** cluster state *****/
   /* osds */

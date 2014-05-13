@@ -340,8 +340,7 @@ int librados::RadosClient::create_ioctx(const char *name, IoCtxImpl **io)
   if (poolid < 0)
     return (int)poolid;
 
-  *io = new librados::IoCtxImpl(this, objecter, &lock, poolid, name,
-				CEPH_NOSNAP);
+  *io = new librados::IoCtxImpl(this, objecter, &lock, poolid, name);
   return 0;
 }
 

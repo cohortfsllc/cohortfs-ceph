@@ -108,12 +108,6 @@ enum {
 /** @endcond */
 /** @} */
 
-/*
- * snap id contants
- */
-#define LIBRADOS_SNAP_HEAD  ((uint64_t)(-2))
-#define LIBRADOS_SNAP_DIR   ((uint64_t)(-1))
-
 /**
  * @typedef rados_t
  *
@@ -144,9 +138,6 @@ typedef void *rados_config_t;
  * An io context encapsulates a few settings for all I/O operations
  * done on it:
  * - pool - set when the io context is created (see rados_ioctx_create())
- * - snapshot context for writes (see
- *   rados_ioctx_selfmanaged_snap_set_write_ctx())
- * - snapshot id to read from (see rados_ioctx_snap_set_read())
  * - object locator for all single-object operations (see
  *   rados_ioctx_locator_set_key())
  *
@@ -165,12 +156,6 @@ typedef void *rados_ioctx_t;
  * rados_objects_list_close().
  */
 typedef void *rados_list_ctx_t;
-
-/**
- * @typedef rados_snap_t
- * The id of a snapshot.
- */
-typedef uint64_t rados_snap_t;
 
 /**
  * @typedef rados_xattrs_iter_t
@@ -858,194 +843,6 @@ void rados_objects_list_close(rados_list_ctx_t ctx);
 /** @} Listing Objects */
 
 /**
- * @defgroup librados_h_snaps Snapshots
- *
- * RADOS snapshots are based upon sequence numbers that form a
- * snapshot context. They are pool-specific. The snapshot context
- * consists of the current snapshot sequence number for a pool, and an
- * array of sequence numbers at which snapshots were taken, in
- * descending order. Whenever a snapshot is created or deleted, the
- * snapshot sequence number for the pool is increased. To add a new
- * snapshot, the new snapshot sequence number must be increased and
- * added to the snapshot context.
- *
- * There are two ways to manage these snapshot contexts:
- * -# within the RADOS cluster
- *    These are called pool snapshots, and store the snapshot context
- *    in the OSDMap. These represent a snapshot of all the objects in
- *    a pool.
- * -# within the RADOS clients
- *    These are called self-managed snapshots, and push the
- *    responsibility for keeping track of the snapshot context to the
- *    clients. For every write, the client must send the snapshot
- *    context. In librados, this is accomplished with
- *    rados_selfmanaged_snap_set_write_ctx(). These are more
- *    difficult to manage, but are restricted to specific objects
- *    instead of applying to an entire pool.
- *
- * @{
- */
-
-/**
- * Create a pool-wide snapshot
- *
- * @param io the pool to snapshot
- * @param snapname the name of the snapshot
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_snap_create(rados_ioctx_t io, const char *snapname);
-
-/**
- * Delete a pool snapshot
- *
- * @param io the pool to delete the snapshot from
- * @param snapname which snapshot to delete
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_snap_remove(rados_ioctx_t io, const char *snapname);
-
-/**
- * Rollback an object to a pool snapshot
- *
- * The contents of the object will be the same as
- * when the snapshot was taken.
- *
- * @param io the pool in which the object is stored
- * @param oid the name of the object to rollback
- * @param snapname which snapshot to rollback to
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_snap_rollback(rados_ioctx_t io, const char *oid,
-		   const char *snapname);
-
-/**
- * Rollback an object to a pool snapshot *DEPRECATED*
- *
- * Deprecated interface which is not rados_ioctx_snap_rollback()
- * This function could go away in the future
- *
- * @param io the pool in which the object is stored
- * @param oid the name of the object to rollback
- * @param snapname which snapshot to rollback to
- * @returns 0 on success, negative error code on failure
- */
-int rados_rollback(rados_ioctx_t io, const char *oid,
-		   const char *snapname);
-
-/**
- * Set the snapshot from which reads are performed.
- *
- * Subsequent reads will return data as it was at the time of that
- * snapshot.
- *
- * @param io the io context to change
- * @param snap the id of the snapshot to set, or LIBRADOS_SNAP_HEAD for no
- * snapshot (i.e. normal operation)
- */
-void rados_ioctx_snap_set_read(rados_ioctx_t io, rados_snap_t snap);
-
-/**
- * Allocate an ID for a self-managed snapshot
- *
- * Get a unique ID to put in the snaphot context to create a
- * snapshot. A clone of an object is not created until a write with
- * the new snapshot context is completed.
- *
- * @param io the pool in which the snapshot will exist
- * @param snapid where to store the newly allocated snapshot ID
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_selfmanaged_snap_create(rados_ioctx_t io, rados_snap_t *snapid);
-
-/**
- * Remove a self-managed snapshot
- *
- * This increases the snapshot sequence number, which will cause
- * snapshots to be removed lazily.
- *
- * @param io the pool in which the snapshot will exist
- * @param snapid where to store the newly allocated snapshot ID
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_selfmanaged_snap_remove(rados_ioctx_t io, rados_snap_t snapid);
-
-/**
- * Rollback an object to a self-managed snapshot
- *
- * The contents of the object will be the same as
- * when the snapshot was taken.
- *
- * @param io the pool in which the object is stored
- * @param oid the name of the object to rollback
- * @param snapid which snapshot to rollback to
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_selfmanaged_snap_rollback(rados_ioctx_t io, const char *oid, rados_snap_t snapid);
-
-/**
- * Set the snapshot context for use when writing to objects
- *
- * This is stored in the io context, and applies to all future writes.
- *
- * @param io the io context to change
- * @param seq the newest snapshot sequence number for the pool
- * @param snaps array of snapshots in sorted by descending id
- * @param num_snaps how many snaphosts are in the snaps array
- * @returns 0 on success, negative error code on failure
- * @returns -EINVAL if snaps are not in descending order
- */
-int rados_ioctx_selfmanaged_snap_set_write_ctx(rados_ioctx_t io, rados_snap_t seq, rados_snap_t *snaps, int num_snaps);
-
-/**
- * List all the ids of pool snapshots
- *
- * If the output array does not have enough space to fit all the
- * snapshots, -ERANGE is returned and the caller should retry with a
- * larger array.
- *
- * @param io the pool to read from
- * @param snaps where to store the results
- * @param maxlen the number of rados_snap_t that fit in the snaps array
- * @returns number of snapshots on success, negative error code on failure
- * @returns -ERANGE is returned if the snaps array is too short
- */
-int rados_ioctx_snap_list(rados_ioctx_t io, rados_snap_t *snaps, int maxlen);
-
-/**
- * Get the id of a pool snapshot
- *
- * @param io the pool to read from
- * @param name the snapshot to find
- * @param id where to store the result
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_snap_lookup(rados_ioctx_t io, const char *name, rados_snap_t *id);
-
-/**
- * Get the name of a pool snapshot
- *
- * @param io the pool to read from
- * @param id the snapshot to find
- * @param name where to store the result
- * @param maxlen the size of the name array
- * @returns 0 on success, negative error code on failure
- * @returns -ERANGE if the name array is too small
- */
-int rados_ioctx_snap_get_name(rados_ioctx_t io, rados_snap_t id, char *name, int maxlen);
-
-/**
- * Find when a pool snapshot occurred
- *
- * @param io the pool the snapshot was taken in
- * @param id the snapshot to lookup
- * @param t where to store the result
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_snap_get_stamp(rados_ioctx_t io, rados_snap_t id, time_t *t);
-
-/** @} Snapshots */
-
-/**
  * @defgroup librados_h_synch_io Synchronous I/O
  * Writes are replicated to a number of OSDs based on the
  * configuration of the pool they are in. These write functions block
@@ -1131,9 +928,6 @@ int rados_append(rados_ioctx_t io, const char *oid, const char *buf, size_t len)
 /**
  * Read data from an object
  *
- * The io context determines the snapshot to read from, if any was set
- * by rados_ioctx_snap_set_read().
- *
  * @param io the context in which to perform the read
  * @param oid the name of the object to read from
  * @param buf where to store the results
@@ -1146,8 +940,6 @@ int rados_read(rados_ioctx_t io, const char *oid, char *buf, size_t len, uint64_
 
 /**
  * Delete an object
- *
- * @note This does not delete any snapshots of the object.
  *
  * @param io the pool to delete the object from
  * @param oid the name of the object to delete
@@ -1584,8 +1376,7 @@ void rados_aio_release(rados_completion_t c);
  * @param buf data to write
  * @param len length of the data, in bytes
  * @param off byte offset in the object to begin writing at
- * @returns 0 on success, -EROFS if the io context specifies a snap_seq
- * other than LIBRADOS_SNAP_HEAD
+ * @returns 0 on success
  */
 int rados_aio_write(rados_ioctx_t io, const char *oid,
 		    rados_completion_t completion,
@@ -1604,8 +1395,7 @@ int rados_aio_write(rados_ioctx_t io, const char *oid,
  * @param completion what to do when the append is safe and complete
  * @param buf the data to append
  * @param len length of buf (in bytes)
- * @returns 0 on success, -EROFS if the io context specifies a snap_seq
- * other than LIBRADOS_SNAP_HEAD
+ * @returns 0 on success
  */
 int rados_aio_append(rados_ioctx_t io, const char *oid,
 		     rados_completion_t completion,
@@ -1626,8 +1416,7 @@ int rados_aio_append(rados_ioctx_t io, const char *oid,
  * @param completion what to do when the write_full is safe and complete
  * @param buf data to write
  * @param len length of the data, in bytes
- * @returns 0 on success, -EROFS if the io context specifies a snap_seq
- * other than LIBRADOS_SNAP_HEAD
+ * @returns 0 on success
  */
 int rados_aio_write_full(rados_ioctx_t io, const char *oid,
 			 rados_completion_t completion,
@@ -1644,17 +1433,13 @@ int rados_aio_write_full(rados_ioctx_t io, const char *oid,
  * @param io the context to operate in
  * @param oid the name of the object
  * @param completion what to do when the remove is safe and complete
- * @returns 0 on success, -EROFS if the io context specifies a snap_seq
- * other than LIBRADOS_SNAP_HEAD
+ * @returns 0 on success
  */
 int rados_aio_remove(rados_ioctx_t io, const char *oid,
 		     rados_completion_t completion);
 
 /**
  * Asychronously read data from an object
- *
- * The io context determines the snapshot to read from, if any was set
- * by rados_ioctx_snap_set_read().
  *
  * The return value of the completion will be number of bytes read on
  * success, negative error code on failure.

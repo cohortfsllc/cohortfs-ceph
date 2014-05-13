@@ -139,10 +139,6 @@ enum {
   POOL_OP_CREATE			= 0x01,
   POOL_OP_DELETE			= 0x02,
   POOL_OP_AUID_CHANGE			= 0x03,
-  POOL_OP_CREATE_SNAP			= 0x11,
-  POOL_OP_DELETE_SNAP			= 0x12,
-  POOL_OP_CREATE_UNMANAGED_SNAP		= 0x21,
-  POOL_OP_DELETE_UNMANAGED_SNAP		= 0x22,
 };
 
 struct ceph_mon_request_header {
@@ -175,7 +171,6 @@ struct ceph_mon_poolop {
 	__le32 pool;
 	__le32 op;
 	__le64 auid;
-	__le64 snapid;
 	__le32 name_len;
 } __attribute__ ((packed));
 
@@ -186,10 +181,6 @@ struct ceph_mon_poolop_reply {
 	__le32 epoch;
 	char has_data;
 	char data[0];
-} __attribute__ ((packed));
-
-struct ceph_mon_unmanaged_snap {
-	__le64 snapid;
 } __attribute__ ((packed));
 
 struct ceph_osd_getmap {

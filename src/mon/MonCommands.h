@@ -1,18 +1,18 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
  *
- * Copyright (C) 2013 Inktank Storage, Inc. 
+ * Copyright (C) 2013 Inktank Storage, Inc.
  * Copyright (C) 2013,2014 Cloudwatt <libre.licensing@cloudwatt.com>
  *
  * Author: Loic Dachary <loic@dachary.org>
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 /* no guard; may be included multiple times */
@@ -252,7 +252,7 @@ COMMAND("mds set_max_mds " \
 	"name=maxmds,type=CephInt,range=0", \
 	"set max MDS index", "mds", "rw", "cli,rest")
 COMMAND("mds set " \
-	"name=var,type=CephChoices,strings=max_mds|max_file_size|allow_new_snaps|inline_data " \
+	"name=var,type=CephChoices,strings=max_mds|max_file_size|inline_data " \
 	"name=val,type=CephString "					\
 	"name=confirm,type=CephString,req=false",			\
 	"set mds parameter <var> to <val>", "mds", "rw", "cli,rest")
@@ -477,8 +477,6 @@ COMMAND("osd set " \
 COMMAND("osd unset " \
 	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin|nobackfill|norecover|noscrub|nodeep-scrub|notieragent", \
 	"unset <key>", "osd", "rw", "cli,rest")
-COMMAND("osd cluster_snap", "take cluster snapshot (disabled)", \
-	"osd", "r", "")
 COMMAND("osd down " \
 	"type=CephString,name=ids,n=N", \
 	"set osd(s) <id> [<id>...] down", "osd", "rw", "cli,rest")
@@ -524,19 +522,11 @@ COMMAND("osd blacklist " \
 	"name=expire,type=CephFloat,range=0.0,req=false", \
 	"add (optionally until <expire> seconds from now) or remove <addr> from blacklist", \
 	"osd", "rw", "cli,rest")
-COMMAND("osd pool mksnap " \
-	"name=pool,type=CephPoolname " \
-	"name=snap,type=CephString", \
-	"make snapshot <snap> in <pool>", "osd", "rw", "cli,rest")
-COMMAND("osd pool rmsnap " \
-	"name=pool,type=CephPoolname " \
-	"name=snap,type=CephString", \
-	"remove snapshot <snap> from <pool>", "osd", "rw", "cli,rest")
 COMMAND("osd pool create " \
 	"name=pool,type=CephPoolname " \
 	"name=pg_num,type=CephInt,range=0 " \
 	"name=pgp_num,type=CephInt,range=0,req=false " \
-        "name=pool_type,type=CephChoices,strings=replicated|erasure,req=false " \
+	"name=pool_type,type=CephChoices,strings=replicated|erasure,req=false " \
 	"name=erasure_code_profile,type=CephString,req=false,goodchars=[A-Za-z0-9-_.=] " \
 	"name=ruleset,type=CephString,req=false,goodchars=[A-Za-z0-9-_.=]", \
 	"create pool", "osd", "rw", "cli,rest")
