@@ -16,3 +16,5 @@ invalidate=0	# mandatory
 
 [filestore]
 iodepth=1
+osdpath=/mnt/fio_ceph_filestore.XXXXXXX
+journalpath=/var/lib/ceph/osd/journal-ram/fio_ceph_filestore.XXXXXXX
