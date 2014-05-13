@@ -155,7 +155,7 @@ int main(int argc, const char **argv)
   //cout << "stop at " << end << std::endl;
   cout << "# offset\tack\tcommit" << std::endl;
   while (now < end) {
-    sobject_t poid(object_t("streamtest"), 0);
+    object_t poid("streamtest");
 
     set_start(pos, ceph_clock_now(g_ceph_context));
     ObjectStore::Transaction *t = new ObjectStore::Transaction;

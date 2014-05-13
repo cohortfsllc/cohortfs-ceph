@@ -1970,7 +1970,7 @@ TEST_F(LibRadosTierPP, HitSetRead) {
 
     string name = "foo";
     uint32_t hash = ioctx.get_object_hash_position(name);
-    hobject_t oid(sobject_t(name, CEPH_NOSNAP), "", hash,
+    hobject_t oid(object_t(name), "", hash,
 		  cluster.pool_lookup(pool_name.c_str()), "");
 
     bufferlist bl;
@@ -2087,7 +2087,7 @@ TEST_F(LibRadosTierPP, HitSetWrite) {
   for (int i=0; i<1000; ++i) {
     string n = stringify(i);
     uint32_t hash = ioctx.get_object_hash_position(n);
-    hobject_t oid(sobject_t(n, CEPH_NOSNAP), "", hash,
+    hobject_t oid(object_t(n), "", hash,
 		  cluster.pool_lookup(pool_name.c_str()), "");
     std::cout << "checking for " << oid << std::endl;
     bool found = false;
@@ -2129,7 +2129,7 @@ TEST_F(LibRadosTierPP, HitSetTrim) {
   while (true) {
     string name = "foo";
     uint32_t hash = ioctx.get_object_hash_position(name);
-    hobject_t oid(sobject_t(name, CEPH_NOSNAP), "", hash, -1, "");
+    hobject_t oid(object_t(name), "", hash, -1, "");
 
     bufferlist bl;
     bl.append("f");
@@ -3964,7 +3964,7 @@ TEST_F(LibRadosTierECPP, HitSetRead) {
 
     string name = "foo";
     uint32_t hash = ioctx.get_object_hash_position(name);
-    hobject_t oid(sobject_t(name, CEPH_NOSNAP), "", hash,
+    hobject_t oid(object_t(name), "", hash,
 		  cluster.pool_lookup(pool_name.c_str()), "");
 
     bufferlist bl;
@@ -4052,7 +4052,7 @@ TEST_F(LibRadosTierECPP, HitSetWrite) {
   for (int i=0; i<1000; ++i) {
     string n = stringify(i);
     uint32_t hash = ioctx.get_object_hash_position(n);
-    hobject_t oid(sobject_t(n, CEPH_NOSNAP), "", hash,
+    hobject_t oid(object_t(n), "", hash,
 		  cluster.pool_lookup(pool_name.c_str()), "");
     std::cout << "checking for " << oid << std::endl;
     bool found = false;
@@ -4098,7 +4098,7 @@ TEST_F(LibRadosTierECPP, HitSetTrim) {
   while (true) {
     string name = "foo";
     uint32_t hash = ioctx.get_object_hash_position(name);
-    hobject_t oid(sobject_t(name, CEPH_NOSNAP), "", hash, -1, "");
+    hobject_t oid(object_t(name), "", hash, -1, "");
 
     bufferlist bl;
     bl.append(buf, bsize);

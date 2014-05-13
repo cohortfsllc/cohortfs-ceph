@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #ifndef __CEPH_CMP_H
 #define __CEPH_CMP_H
 
@@ -100,6 +103,49 @@
 		      (l.b == r.b && (l.c < r.c ||			\
 				      (l.c == r.c && (l.d < r.d ||	\
 						      (l.d == r.d && l.e <= r.e))))))); \
+  }
+
+#define WRITE_EQ_OPERATORS_6(type, a, b, c, d, e, f)			\
+  inline bool operator==(const type &l, const type &r) {		\
+    return l.a == r.a && l.b == r.b && l.c == r.c && l.d == r.d &&	\
+      l.e == r.e && l.f == r.f;						\
+  }									\
+  inline bool operator!=(const type &l, const type &r) {		\
+    return l.a != r.a || l.b != r.b || l.c != r.c || l.d != r.d ||	\
+      l.e != r.e || l.f != r.f;						\
+  }
+#define WRITE_CMP_OPERATORS_6(type, a, b, c, d, e, f)			\
+  inline bool operator<=(const type &l, const type &r) {		\
+    return l.a < r.a ||							\
+      (l.a == r.a && (l.b < r.b ||					\
+		      (l.b == r.b && (l.c < r.c ||			\
+				      (l.c == r.c && (l.d < r.d ||	\
+						      (l.d == r.d && (l.e < r.e || \
+								      (l.e == r.e && (l.f < r.f)))))))))); \
+  }									\
+  inline bool operator>=(const type &l, const type &r) {		\
+    return l.a > r.a ||							\
+      (l.a == r.a && (l.b > r.b ||					\
+		      (l.b == r.b && (l.c > r.c ||			\
+				      (l.c == r.c && (l.d > r.d ||	\
+						      (l.d == r.d && (l.e > r.e || \
+								      (l.e == r.e && (l.f >= r.f)))))))))); \
+  }									\
+  inline bool operator>(const type &l, const type &r) {			\
+    return l.a > r.a ||							\
+      (l.a == r.a && (l.b > r.b ||					\
+		      (l.b == r.b && (l.c > r.c ||			\
+				      (l.c == r.c && (l.d > r.d ||	\
+						      (l.d == r.d && (l.e > r.e || \
+								      (l.e == r.e && (l.f > r.f)))))))))); \
+  }									\
+  inline bool operator<(const type &l, const type &r) {			\
+    return l.a < r.a ||							\
+      (l.a == r.a && (l.b < r.b ||					\
+		      (l.b == r.b && (l.c < r.c ||			\
+				      (l.c == r.c && (l.d < r.d ||	\
+						      (l.d == r.d && (l.e < r.e || \
+								      (l.e == r.e && (l.f < r.f)))))))))); \
   }
 
 #define WRITE_EQ_OPERATORS_7(type, a, b, c, d, e, f, g)			\

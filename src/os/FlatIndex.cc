@@ -158,19 +158,12 @@ static int append_oname(const ghobject_t &oid, char *s, int len)
 
   int size = t - s;
 
-  if (oid.hobj.snap == CEPH_NOSNAP)
-    size += snprintf(t, end - t, "_head");
-  else if (oid.hobj.snap == CEPH_SNAPDIR)
-    size += snprintf(t, end - t, "_snapdir");
-  else
-    size += snprintf(t, end - t, "_%llx", (long long unsigned)oid.hobj.snap);
-
   return size;
 }
 
 static bool parse_object(char *s, ghobject_t& oid)
 {
-  sobject_t o;
+  object_t o;
   char *bar = s + strlen(s) - 1;
   while (*bar != '_' &&
 	 bar > s)
@@ -194,13 +187,7 @@ static bool parse_object(char *s, ghobject_t& oid)
       i++;
     }
     *t = 0;
-    o.oid.name = string(buf, t-buf);
-    if (strcmp(bar+1, "head") == 0)
-      o.snap = CEPH_NOSNAP;
-    else if (strcmp(bar+1, "snapdir") == 0)
-      o.snap = CEPH_SNAPDIR;
-    else
-      o.snap = strtoull(bar+1, &s, 16);
+    o.name = string(buf, t-buf);
     oid = ghobject_t(hobject_t(o));
     return true;
   }

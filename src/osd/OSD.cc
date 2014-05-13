@@ -756,7 +756,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	object_t oid("disk_bw_test");
 	for (int i=0; i<1000; i++) {
 	  ObjectStore::Transaction *t = new ObjectStore::Transaction;
-	  t->write(coll_t::META_COLL, hobject_t(sobject_t(oid, 0)), i*bl.length(), bl.length(), bl);
+	  t->write(coll_t::META_COLL, ghobject_t(oid), i*bl.length(), bl.length(), bl);
 	  store->queue_transaction_and_cleanup(NULL, t);
 	}
 	store->sync();
@@ -764,7 +764,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	end -= start;
 	dout(0) << "measured " << (1000.0 / (double)end) << " mb/sec" << dendl;
 	ObjectStore::Transaction tr;
-	tr.remove(coll_t::META_COLL, hobject_t(sobject_t(oid, 0)));
+	tr.remove(coll_t::META_COLL, hobject_t(oid));
 	ret = store->apply_transaction(tr);
 	if (ret) {
 	  derr << "OSD::mkfs: error while benchmarking: apply_transaction returned "
@@ -3297,7 +3297,7 @@ void TestOpsSocketHook::test_ops(OSDService *service, ObjectStore *store,
     }
     spg_t pgid = spg_t(curmap->raw_pg_to_pg(rawpg), ghobject_t::no_shard());
 
-    hobject_t obj(object_t(objname), string(""), CEPH_NOSNAP, rawpg.ps(), pool, nspace);
+    hobject_t obj(object_t(objname), string(""), rawpg.ps(), pool, nspace);
     ObjectStore::Transaction t;
 
     if (command == "setomapval") {
@@ -4333,7 +4333,7 @@ void OSD::do_command(Connection *con, ceph_tid_t tid, vector<string>& cmd, buffe
       char nm[30];
       snprintf(nm, sizeof(nm), "disk_bw_test_%lld", (long long)pos);
       object_t oid(nm);
-      hobject_t soid(sobject_t(oid, 0));
+      hobject_t soid(oid);
       ObjectStore::Transaction *t = new ObjectStore::Transaction;
       t->write(coll_t::META_COLL, soid, 0, bsize, bl);
       store->queue_transaction_and_cleanup(NULL, t);

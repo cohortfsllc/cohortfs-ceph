@@ -97,16 +97,16 @@ void HitSet::generate_test_instances(list<HitSet*>& o)
   o.push_back(new HitSet);
   o.push_back(new HitSet(new BloomHitSet(10, .1, 1)));
   o.back()->insert(hobject_t());
-  o.back()->insert(hobject_t("asdf", "", CEPH_NOSNAP, 123, 1, ""));
-  o.back()->insert(hobject_t("qwer", "", CEPH_NOSNAP, 456, 1, ""));
+  o.back()->insert(hobject_t("asdf", "", 123, 1, ""));
+  o.back()->insert(hobject_t("qwer", "", 456, 1, ""));
   o.push_back(new HitSet(new ExplicitHashHitSet));
   o.back()->insert(hobject_t());
-  o.back()->insert(hobject_t("asdf", "", CEPH_NOSNAP, 123, 1, ""));
-  o.back()->insert(hobject_t("qwer", "", CEPH_NOSNAP, 456, 1, ""));
+  o.back()->insert(hobject_t("asdf", "", 123, 1, ""));
+  o.back()->insert(hobject_t("qwer", "", 456, 1, ""));
   o.push_back(new HitSet(new ExplicitObjectHitSet));
   o.back()->insert(hobject_t());
-  o.back()->insert(hobject_t("asdf", "", CEPH_NOSNAP, 123, 1, ""));
-  o.back()->insert(hobject_t("qwer", "", CEPH_NOSNAP, 456, 1, ""));
+  o.back()->insert(hobject_t("asdf", "", 123, 1, ""));
+  o.back()->insert(hobject_t("qwer", "", 456, 1, ""));
 }
 
 HitSet::Params::Params(const Params& o)

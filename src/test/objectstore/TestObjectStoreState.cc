@@ -181,7 +181,7 @@ hobject_t *TestObjectStoreState::coll_entry_t::touch_obj(int id)
   memset(buf, 0, 100);
   snprintf(buf, 100, "obj%d", id);
 
-  hobject_t *obj = new hobject_t(sobject_t(object_t(buf), CEPH_NOSNAP));
+  hobject_t *obj = new hobject_t(object_t(buf));
   m_objects.insert(make_pair(id, obj));
 
   dout(5) << "touch_obj coll id " << m_id << " name " << buf << dendl;

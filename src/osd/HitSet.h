@@ -245,8 +245,8 @@ public:
     o.push_back(new ExplicitHashHitSet);
     o.push_back(new ExplicitHashHitSet);
     o.back()->insert(hobject_t());
-    o.back()->insert(hobject_t("asdf", "", CEPH_NOSNAP, 123, 1, ""));
-    o.back()->insert(hobject_t("qwer", "", CEPH_NOSNAP, 456, 1, ""));
+    o.back()->insert(hobject_t("asdf", "", 123, 1, ""));
+    o.back()->insert(hobject_t("qwer", "", 456, 1, ""));
   }
 };
 WRITE_CLASS_ENCODER(ExplicitHashHitSet)
@@ -325,8 +325,8 @@ public:
     o.push_back(new ExplicitObjectHitSet);
     o.push_back(new ExplicitObjectHitSet);
     o.back()->insert(hobject_t());
-    o.back()->insert(hobject_t("asdf", "", CEPH_NOSNAP, 123, 1, ""));
-    o.back()->insert(hobject_t("qwer", "", CEPH_NOSNAP, 456, 1, ""));
+    o.back()->insert(hobject_t("asdf", "", 123, 1, ""));
+    o.back()->insert(hobject_t("qwer", "", 456, 1, ""));
   }
 };
 WRITE_CLASS_ENCODER(ExplicitObjectHitSet)
@@ -468,8 +468,8 @@ public:
     o.push_back(new BloomHitSet);
     o.push_back(new BloomHitSet(10, .1, 1));
     o.back()->insert(hobject_t());
-    o.back()->insert(hobject_t("asdf", "", CEPH_NOSNAP, 123, 1, ""));
-    o.back()->insert(hobject_t("qwer", "", CEPH_NOSNAP, 456, 1, ""));
+    o.back()->insert(hobject_t("asdf", "", 123, 1, ""));
+    o.back()->insert(hobject_t("qwer", "", 456, 1, ""));
   }
 };
 WRITE_CLASS_ENCODER(BloomHitSet)

@@ -118,7 +118,7 @@ TEST_P(StoreTest, SimpleObjectTest) {
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
-  ghobject_t hoid(hobject_t(sobject_t("Object 1", CEPH_NOSNAP)));
+  ghobject_t hoid(hobject_t(object_t("Object 1")));
   {
     ObjectStore::Transaction t;
     t.touch(cid, hoid);
@@ -146,7 +146,7 @@ TEST_P(StoreTest, SimpleObjectLongnameTest) {
     r = store->apply_transaction(t);
     ASSERT_EQ(r, 0);
   }
-  ghobject_t hoid(hobject_t(sobject_t("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaObjectaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1", CEPH_NOSNAP)));
+  ghobject_t hoid(hobject_t(object_t("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaObjectaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1")));
   {
     ObjectStore::Transaction t;
     t.touch(cid, hoid);
@@ -184,7 +184,7 @@ TEST_P(StoreTest, ManyObjectTest) {
     ObjectStore::Transaction t;
     char buf[100];
     snprintf(buf, sizeof(buf), "%d", i);
-    ghobject_t hoid(hobject_t(sobject_t(string(buf) + base, CEPH_NOSNAP)));
+    ghobject_t hoid(hobject_t(object_t(string(buf) + base)));
     t.touch(cid, hoid);
     created.insert(hoid);
     r = store->apply_transaction(t);

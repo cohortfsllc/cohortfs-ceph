@@ -201,7 +201,7 @@ TEST_F(TestLFNIndex, remove_object) {
   {
     std::string mangled_name;
     int exists = 666;
-    ghobject_t hoid(hobject_t(sobject_t("ABC", CEPH_NOSNAP)));
+    ghobject_t hoid(hobject_t(object_t("ABC")));
 
     EXPECT_EQ(0, ::chmod("PATH", 0000));
     EXPECT_EQ(-EACCES, remove_object(path, hoid));
@@ -221,7 +221,7 @@ TEST_F(TestLFNIndex, remove_object) {
     std::string mangled_name;
     int exists;
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(sobject_t(object_name, CEPH_NOSNAP)));
+    ghobject_t hoid(hobject_t(object_t(object_name)));
 
     EXPECT_EQ(0, get_mangled_name(path, hoid, &mangled_name, &exists));
     EXPECT_EQ(0, exists);
@@ -242,7 +242,7 @@ TEST_F(TestLFNIndex, remove_object) {
     std::string mangled_name;
     int exists;
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(sobject_t(object_name, CEPH_NOSNAP)));
+    ghobject_t hoid(hobject_t(object_t(object_name)));
 
     //
     //   PATH/AAA..._0_long => does not match long object name
@@ -291,7 +291,7 @@ TEST_F(TestLFNIndex, remove_object) {
     std::string mangled_name;
     int exists;
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(sobject_t(object_name, CEPH_NOSNAP)));
+    ghobject_t hoid(hobject_t(object_t(object_name)));
 
     //
     //   PATH/AAA..._0_long => matches long object name
@@ -339,7 +339,7 @@ TEST_F(TestLFNIndex, get_mangled_name) {
   {
     std::string mangled_name;
     int exists = 666;
-    ghobject_t hoid(hobject_t(sobject_t("ABC", CEPH_NOSNAP)));
+    ghobject_t hoid(hobject_t(object_t("ABC")));
 
     EXPECT_EQ(0, get_mangled_name(path, hoid, &mangled_name, &exists));
     EXPECT_NE(std::string::npos, mangled_name.find("ABC__head"));
@@ -359,11 +359,11 @@ TEST_F(TestLFNIndex, get_mangled_name) {
     std::string mangled_name;
     int exists;
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(sobject_t(object_name, CEPH_NOSNAP)));
+    ghobject_t hoid(hobject_t(object_t(object_name)));
 
     //
     // long version of the mangled name and no matching
-    // file exists 
+    // file exists
     //
     mangled_name.clear();
     exists = 666;

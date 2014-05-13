@@ -42,14 +42,14 @@ void TestFileStoreBackend::write(
 
 
   coll_t c(coll_str);
-  hobject_t h(sobject_t(oid.substr(sep+1), 0));
+  hobject_t h(object_t(oid.substr(sep+1)));
   t->write(c, h, offset, bl.length(), bl);
 
   if (write_infos) {
     bufferlist bl2;
     for (uint64_t j = 0; j < 128; ++j) bl2.append(0);
     coll_t meta("meta");
-    hobject_t info(sobject_t(string("info_")+coll_str, 0));
+    hobject_t info(object_t(string("info_")+coll_str));
     t->write(meta, info, 0, bl2.length(), bl2);
   }
 
@@ -71,7 +71,7 @@ void TestFileStoreBackend::read(
   assert(sep != string::npos);
   assert(sep + 1 < oid.size());
   coll_t c(oid.substr(0, sep));
-  hobject_t h(sobject_t(oid.substr(sep+1), 0));
+  hobject_t h(object_t(oid.substr(sep+1)));
   os->read(c, h, offset, length, *bl);
   finisher.queue(on_complete);
 }

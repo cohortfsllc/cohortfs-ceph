@@ -197,7 +197,7 @@ class KeyValueStore : public ObjectStore,
     return coll_t("COLLECTIONS");
   }
   static ghobject_t make_ghobject_for_coll(const coll_t &col) {
-    return ghobject_t(hobject_t(sobject_t(col.to_str(), CEPH_NOSNAP)));
+    return ghobject_t(hobject_t(object_t(col.to_str())));
   }
 
   // Each transaction has side effect which may influent the following

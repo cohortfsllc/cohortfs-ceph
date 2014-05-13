@@ -207,8 +207,8 @@ void ECSubRead::dump(Formatter *f) const
 
 void ECSubRead::generate_test_instances(list<ECSubRead*>& o)
 {
-  hobject_t hoid1(sobject_t("asdf", 1));
-  hobject_t hoid2(sobject_t("asdf2", CEPH_NOSNAP));
+  hobject_t hoid1(object_t("asdf"));
+  hobject_t hoid2(object_t("asdf2"));
   o.push_back(new ECSubRead());
   o.back()->from = pg_shard_t(2, 255);
   o.back()->tid = 1;
@@ -317,8 +317,8 @@ void ECSubReadReply::dump(Formatter *f) const
 
 void ECSubReadReply::generate_test_instances(list<ECSubReadReply*>& o)
 {
-  hobject_t hoid1(sobject_t("asdf", 1));
-  hobject_t hoid2(sobject_t("asdf2", CEPH_NOSNAP));
+  hobject_t hoid1(object_t("asdf"));
+  hobject_t hoid2(object_t("asdf2"));
   bufferlist bl;
   bl.append_zero(100);
   bufferlist bl2;

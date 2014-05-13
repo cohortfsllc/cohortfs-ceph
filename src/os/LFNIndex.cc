@@ -573,7 +573,7 @@ string LFNIndex::lfn_generate_object_name_keyless(const ghobject_t &oid)
   while (*i && t < end) {
     if (*i == '\\') {
       *t++ = '\\';
-      *t++ = '\\';      
+      *t++ = '\\';
     } else if (*i == '.' && i == oid.hobj.oid.name.c_str()) {  // only escape leading .
       *t++ = '\\';
       *t++ = '.';
@@ -585,12 +585,6 @@ string LFNIndex::lfn_generate_object_name_keyless(const ghobject_t &oid)
     i++;
   }
 
-  if (oid.hobj.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, "_head");
-  else if (oid.hobj.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, "_snapdir");
-  else
-    t += snprintf(t, end - t, "_%llx", (long long unsigned)oid.hobj.snap);
   snprintf(t, end - t, "_%.*X", (int)(sizeof(oid.hobj.hash)*2), oid.hobj.hash);
 
   return string(s);
@@ -634,17 +628,10 @@ string LFNIndex::lfn_generate_object_name(const ghobject_t &oid)
   append_escaped(i, oid.hobj.oid.name.end(), &full_name);
   full_name.append("_");
   append_escaped(oid.hobj.get_key().begin(), oid.hobj.get_key().end(), &full_name);
-  full_name.append("_");
 
   char buf[PATH_MAX];
   char *t = buf;
   char *end = t + sizeof(buf);
-  if (oid.hobj.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, "head");
-  else if (oid.hobj.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, "snapdir");
-  else
-    t += snprintf(t, end - t, "%llx", (long long unsigned)oid.hobj.snap);
   snprintf(t, end - t, "_%.*X", (int)(sizeof(oid.hobj.hash)*2), oid.hobj.hash);
   full_name += string(buf);
   full_name.append("_");
@@ -698,17 +685,10 @@ string LFNIndex::lfn_generate_object_name_poolless(const ghobject_t &oid)
   append_escaped(i, oid.hobj.oid.name.end(), &full_name);
   full_name.append("_");
   append_escaped(oid.hobj.get_key().begin(), oid.hobj.get_key().end(), &full_name);
-  full_name.append("_");
 
   char snap_with_hash[PATH_MAX];
   char *t = snap_with_hash;
   char *end = t + sizeof(snap_with_hash);
-  if (oid.hobj.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, "head");
-  else if (oid.hobj.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, "snapdir");
-  else
-    t += snprintf(t, end - t, "%llx", (long long unsigned)oid.hobj.snap);
   snprintf(t, end - t, "_%.*X", (int)(sizeof(oid.hobj.hash)*2), oid.hobj.hash);
   full_name += string(snap_with_hash);
   return full_name;
@@ -932,12 +912,6 @@ static int parse_object(const char *s, ghobject_t& o)
     }
     *t = 0;
     o.hobj.oid.name = string(buf, t-buf);
-    if (strncmp(bar+1, "head", 4) == 0)
-      o.hobj.snap = CEPH_NOSNAP;
-    else if (strncmp(bar+1, "snapdir", 7) == 0)
-      o.hobj.snap = CEPH_SNAPDIR;
-    else 
-      o.hobj.snap = strtoull(bar+1, NULL, 16);
     sscanf(hash, "_%X", &o.hobj.hash);
 
     return 1;
@@ -1024,20 +998,7 @@ bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
   for ( ; end != long_name.end() && *end != '_'; ++end) ;
   if (end == long_name.end())
     return false;
-  string snap_str(current, end);
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end != long_name.end())
-    return false;
   string hash_str(current, end);
-
-  if (snap_str == "head")
-    snap = CEPH_NOSNAP;
-  else if (snap_str == "snapdir")
-    snap = CEPH_SNAPDIR;
-  else
-    snap = strtoull(snap_str.c_str(), NULL, 16);
   sscanf(hash_str.c_str(), "%X", &hash);
 
 
@@ -1045,7 +1006,7 @@ bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
   spg_t pg;
   if (coll().is_pg_prefix(pg))
     pool = (int64_t)pg.pgid.pool();
-  (*out) = ghobject_t(hobject_t(name, key, snap, hash, pool, ""));
+  (*out) = ghobject_t(hobject_t(name, key, hash, pool, ""));
   return true;
 }
 
@@ -1100,12 +1061,6 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, ghobject_t *out)
   for ( ; end != long_name.end() && *end != '_'; ++end) ;
   if (end == long_name.end())
     return false;
-  string snap_str(current, end);
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
   string hash_str(current, end);
 
   current = ++end;
@@ -1138,13 +1093,6 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, ghobject_t *out)
 
     shard_id = (shard_t)strtoul(shardstring.c_str(), NULL, 16);
   }
-
-  if (snap_str == "head")
-    snap = CEPH_NOSNAP;
-  else if (snap_str == "snapdir")
-    snap = CEPH_SNAPDIR;
-  else
-    snap = strtoull(snap_str.c_str(), NULL, 16);
   sscanf(hash_str.c_str(), "%X", &hash);
 
   if (pstring == "none")
@@ -1152,7 +1100,8 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, ghobject_t *out)
   else
     pool = strtoull(pstring.c_str(), NULL, 16);
 
-  (*out) = ghobject_t(hobject_t(name, key, snap, hash, (int64_t)pool, ns), generation, shard_id);
+  (*out) = ghobject_t(hobject_t(name, key, hash,
+				(int64_t)pool, ns), generation, shard_id);
   return true;
 }
 

@@ -55,12 +55,12 @@ public:
   }
 
   void set_key(const string &objname, const string &key, const string &value) {
-    set_key(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
+    set_key(ghobject_t(hobject_t(objname)),
 	    key, value);
   }
 
   void set_xattr(const string &objname, const string &key, const string &value) {
-    set_xattr(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
+    set_xattr(ghobject_t(hobject_t(objname)),
 	      key, value);
   }
 
@@ -85,7 +85,7 @@ public:
   }
 
   void set_header(const string &objname, const string &value) {
-    set_header(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
+    set_header(ghobject_t(hobject_t(objname)),
 	       value);
   }
 
@@ -97,7 +97,7 @@ public:
   }
 
   int get_header(const string &objname, string *value) {
-    return get_header(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
+    return get_header(ghobject_t(hobject_t(objname)),
 		      value);
   }
 
@@ -115,7 +115,7 @@ public:
   }
 
   int get_xattr(const string &objname, const string &key, string *value) {
-    return get_xattr(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
+    return get_xattr(ghobject_t(hobject_t(objname)),
 		     key, value);
   }
 
@@ -135,7 +135,7 @@ public:
   }
 
   int get_key(const string &objname, const string &key, string *value) {
-    return get_key(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
+    return get_key(ghobject_t(hobject_t(objname)),
 		   key, value);
   }
 
@@ -155,7 +155,7 @@ public:
   }
 
   void remove_key(const string &objname, const string &key) {
-    remove_key(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
+    remove_key(ghobject_t(hobject_t(objname)),
 	       key);
   }
 
@@ -167,7 +167,7 @@ public:
   }
 
   void remove_xattr(const string &objname, const string &key) {
-    remove_xattr(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
+    remove_xattr(ghobject_t(hobject_t(objname)),
 		 key);
   }
 
@@ -179,8 +179,8 @@ public:
   }
 
   void clone(const string &objname, const string &target) {
-    clone(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))),
-	  ghobject_t(hobject_t(sobject_t(target, CEPH_NOSNAP))));
+    clone(ghobject_t(hobject_t(objname)),
+	  ghobject_t(hobject_t(target)));
   }
 
   void clone(ghobject_t hoid,
@@ -189,7 +189,7 @@ public:
   }
 
   void clear(const string &objname) {
-    clear(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))));
+    clear(ghobject_t(hobject_t(objname)));
   }
 
   void clear(ghobject_t hoid) {
@@ -197,7 +197,7 @@ public:
   }
 
   void clear_omap(const string &objname) {
-    clear_omap(ghobject_t(hobject_t(sobject_t(objname, CEPH_NOSNAP))));
+    clear_omap(ghobject_t(hobject_t(objname)));
   }
 
   void clear_omap(const ghobject_t &objname) {
@@ -559,7 +559,7 @@ int main(int argc, char **argv) {
 }
 
 TEST_F(ObjectMapTest, CreateOneObject) {
-  ghobject_t hoid(hobject_t(sobject_t("foo", CEPH_NOSNAP)), 100, 0);
+  ghobject_t hoid(hobject_t("foo"), 100, 0);
   map<string, bufferlist> to_set;
   string key("test");
   string val("test_val");
@@ -614,8 +614,8 @@ TEST_F(ObjectMapTest, CreateOneObject) {
 }
 
 TEST_F(ObjectMapTest, CloneOneObject) {
-  ghobject_t hoid(hobject_t(sobject_t("foo", CEPH_NOSNAP)), 200, 0);
-  ghobject_t hoid2(hobject_t(sobject_t("foo2", CEPH_NOSNAP)), 201, 1);
+  ghobject_t hoid(hobject_t("foo"), 200, 0);
+  ghobject_t hoid2(hobject_t("foo2"), 201, 1);
 
   tester.set_key(hoid, "foo", "bar");
   tester.set_key(hoid, "foo2", "bar2");
@@ -675,8 +675,8 @@ TEST_F(ObjectMapTest, CloneOneObject) {
 }
 
 TEST_F(ObjectMapTest, OddEvenClone) {
-  ghobject_t hoid(hobject_t(sobject_t("foo", CEPH_NOSNAP)));
-  ghobject_t hoid2(hobject_t(sobject_t("foo2", CEPH_NOSNAP)));
+  ghobject_t hoid(hobject_t("foo"));
+  ghobject_t hoid2(hobject_t("foo2"));
 
   for (unsigned i = 0; i < 1000; ++i) {
     tester.set_key(hoid, "foo" + num_str(i), "bar" + num_str(i));

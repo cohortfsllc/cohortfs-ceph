@@ -1132,8 +1132,8 @@ void ReplicatedPG::do_op(OpRequestRef op)
 	   << dendl;
 
   hobject_t head(m->get_oid(), m->get_object_locator().key,
-		 CEPH_NOSNAP, m->get_pg().ps(),
-		 info.pgid.pool(), m->get_object_locator().nspace);
+		 m->get_pg().ps(), info.pgid.pool(),
+		 m->get_object_locator().nspace);
 
 
   if (write_ordered && scrubber.write_blocked_by_scrub(head)) {
@@ -1189,7 +1189,6 @@ void ReplicatedPG::do_op(OpRequestRef op)
   hobject_t missing_oid;
   hobject_t oid(m->get_oid(),
 		m->get_object_locator().key,
-		CEPH_NOSNAP,
 		m->get_pg().ps(),
 		m->get_object_locator().get_pool(),
 		m->get_object_locator().nspace);
@@ -1275,7 +1274,7 @@ void ReplicatedPG::do_op(OpRequestRef op)
     if (osd_op.oid.name.length()) {
       object_locator_t src_oloc;
       get_src_oloc(m->get_oid(), m->get_object_locator(), src_oloc);
-      hobject_t src_oid(sobject_t(osd_op.oid, CEPH_NOSNAP), src_oloc.key,
+      hobject_t src_oid(osd_op.oid, src_oloc.key,
 			m->get_pg().ps(), info.pgid.pool(),
 			m->get_object_locator().nspace);
       if (!src_obc.count(src_oid)) {
@@ -1283,7 +1282,7 @@ void ReplicatedPG::do_op(OpRequestRef op)
 	hobject_t wait_oid;
 	int r;
 
-	if (src_oid.is_head() && is_missing_object(src_oid)) {
+	if (is_missing_object(src_oid)) {
 	  wait_for_unreadable_object(src_oid, op);
 	} else if ((r = find_object_context(
 		      src_oid, &sobc, false,
@@ -2490,7 +2489,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       MOSDOp *m = static_cast<MOSDOp *>(ctx->op->get_req());
       object_locator_t src_oloc;
       get_src_oloc(soid.oid, m->get_object_locator(), src_oloc);
-      hobject_t src_oid(sobject_t(osd_op.oid, CEPH_NOSNAP), src_oloc.key,
+      hobject_t src_oid(osd_op.oid, src_oloc.key,
 			soid.hash, info.pgid.pool(), src_oloc.nspace);
       src_obc = ctx->src_obc[src_oid];
       dout(10) << " src_oid " << src_oid << " obc " << src_obc << dendl;
@@ -3750,7 +3749,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  // start
 	  pg_t raw_pg;
 	  get_osdmap()->object_locator_to_pg(src_name, src_oloc, raw_pg);
-	  hobject_t src(src_name, src_oloc.key, CEPH_NOSNAP,
+	  hobject_t src(src_name, src_oloc.key,
 			raw_pg.ps(), raw_pg.pool(),
 			src_oloc.nspace);
 	  if (src == soid) {
@@ -5684,7 +5683,7 @@ int ReplicatedPG::find_object_context(const hobject_t& oid,
 				      bool can_create,
 				      hobject_t *pmissing)
 {
-  hobject_t head(oid.oid, oid.get_key(), CEPH_NOSNAP, oid.hash,
+  hobject_t head(oid.oid, oid.get_key(), oid.hash,
 		 info.pgid.pool(), oid.get_namespace());
 
   ObjectContextRef obc = get_object_context(head, can_create);
@@ -7658,7 +7657,6 @@ int ReplicatedPG::recover_primary(int max, ThreadPool::TPHandle &handle)
     ++p;
 
     hobject_t head = soid;
-    head.snap = CEPH_NOSNAP;
 
     eversion_t need = item.need;
 
@@ -8513,8 +8511,7 @@ hobject_t ReplicatedPG::get_hit_set_current_object(utime_t stamp)
 {
   ostringstream ss;
   ss << "hit_set_" << info.pgid.pgid << "_current_" << stamp;
-  hobject_t hoid(sobject_t(ss.str(), CEPH_NOSNAP), "",
-		 info.pgid.ps(), info.pgid.pool(),
+  hobject_t hoid(ss.str(), "", info.pgid.ps(), info.pgid.pool(),
 		 cct->_conf->osd_hit_set_namespace);
   dout(20) << __func__ << " " << hoid << dendl;
   return hoid;
@@ -8524,7 +8521,7 @@ hobject_t ReplicatedPG::get_hit_set_archive_object(utime_t start, utime_t end)
 {
   ostringstream ss;
   ss << "hit_set_" << info.pgid.pgid << "_archive_" << start << "_" << end;
-  hobject_t hoid(sobject_t(ss.str(), CEPH_NOSNAP), "",
+  hobject_t hoid(ss.str(), "",
 		 info.pgid.ps(), info.pgid.pool(),
 		 cct->_conf->osd_hit_set_namespace);
   dout(20) << __func__ << " " << hoid << dendl;

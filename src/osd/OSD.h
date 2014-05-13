@@ -832,12 +832,12 @@ public:
   static hobject_t get_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(foo), 0));
+    return hobject_t(object_t(foo));
   }
   static hobject_t get_inc_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "inc_osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(foo), 0));
+    return hobject_t(object_t(foo));
   }
 
   static hobject_t make_pg_log_oid(spg_t pg) {
@@ -845,7 +845,7 @@ public:
     ss << "pglog_" << pg;
     string s;
     getline(ss, s);
-    return hobject_t(sobject_t(object_t(s.c_str()), 0));
+    return hobject_t(object_t(s.c_str()));
   }
   
   static hobject_t make_pg_biginfo_oid(spg_t pg) {
@@ -853,10 +853,10 @@ public:
     ss << "pginfo_" << pg;
     string s;
     getline(ss, s);
-    return hobject_t(sobject_t(object_t(s.c_str()), 0));
+    return hobject_t(object_t(s.c_str()));
   }
   static hobject_t make_infos_oid() {
-    hobject_t oid(sobject_t("infos", CEPH_NOSNAP));
+    hobject_t oid(object_t("infos"));
     return oid;
   }
   static void recursive_remove_collection(ObjectStore *store, coll_t tmp);

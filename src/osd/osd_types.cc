@@ -1823,7 +1823,7 @@ void pg_info_t::generate_test_instances(list<pg_info_t*>& o)
   o.back()->last_complete = eversion_t(5, 6);
   o.back()->last_user_version = 2;
   o.back()->log_tail = eversion_t(7, 8);
-  o.back()->last_backfill = hobject_t(object_t("objname"), "key", 123, 456, -1, "");
+  o.back()->last_backfill = hobject_t(object_t("objname"), "key", 456, -1, "");
   {
     list<pg_stat_t*> s;
     pg_stat_t::generate_test_instances(s);
@@ -2322,15 +2322,7 @@ void pg_log_entry_t::decode(bufferlist::iterator &bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(8, 4, 4, bl);
   ::decode(op, bl);
-  if (struct_v < 2) {
-    sobject_t old_soid;
-    ::decode(old_soid, bl);
-    soid.oid = old_soid.oid;
-    soid.snap = CEPH_NOSNAP;
-    invalid_hash = true;
-  } else {
-    ::decode(soid, bl);
-  }
+  ::decode(soid, bl);
   if (struct_v < 3)
     invalid_hash = true;
   ::decode(version, bl);
@@ -2382,7 +2374,7 @@ void pg_log_entry_t::dump(Formatter *f) const
 void pg_log_entry_t::generate_test_instances(list<pg_log_entry_t*>& o)
 {
   o.push_back(new pg_log_entry_t());
-  hobject_t oid(object_t("objname"), "key", 123, 456, 0, "");
+  hobject_t oid(object_t("objname"), "key", 456, 0, "");
   o.push_back(new pg_log_entry_t(MODIFY, oid, eversion_t(1,2), eversion_t(3,4),
 				 1, osd_reqid_t(entity_name_t::CLIENT(777), 8, 999),
 				 utime_t(8,9)));
@@ -2581,10 +2573,10 @@ void pg_missing_t::generate_test_instances(list<pg_missing_t*>& o)
 {
   o.push_back(new pg_missing_t);
   o.push_back(new pg_missing_t);
-  o.back()->add(hobject_t(object_t("foo"), "foo", 123, 456, 0, ""), eversion_t(5, 6), eversion_t(5, 1));
+  o.back()->add(hobject_t(object_t("foo"), "foo", 456, 0, ""), eversion_t(5, 6), eversion_t(5, 1));
 }
 
-ostream& operator<<(ostream& out, const pg_missing_t::item& i) 
+ostream& operator<<(ostream& out, const pg_missing_t::item& i)
 {
   out << i.need;
   if (i.have != eversion_t())
@@ -3240,19 +3232,11 @@ void object_info_t::decode(bufferlist::iterator& bl)
   object_locator_t myoloc;
   DECODE_START_LEGACY_COMPAT_LEN(13, 8, 8, bl);
   map<entity_name_t, watch_info_t> old_watchers;
-  if (struct_v >= 2 && struct_v <= 5) {
-    sobject_t obj;
-    ::decode(obj, bl);
-    ::decode(myoloc, bl);
-    soid = hobject_t(obj.oid, myoloc.key, CEPH_NOSNAP, 0, 0 , "");
-    soid.hash = legacy_object_locator_to_ps(soid.oid, myoloc);
-  } else if (struct_v >= 6) {
-    ::decode(soid, bl);
-    ::decode(myoloc, bl);
-    if (struct_v == 6) {
-      hobject_t hoid(soid.oid, myoloc.key, CEPH_NOSNAP, soid.hash, 0 , "");
-      soid = hoid;
-    }
+  ::decode(soid, bl);
+  ::decode(myoloc, bl);
+  if (struct_v == 6) {
+    hobject_t hoid(soid.oid, myoloc.key, soid.hash, 0 , "");
+    soid = hoid;
   }
 
   if (struct_v >= 5)
@@ -3468,7 +3452,7 @@ void ObjectRecoveryInfo::generate_test_instances(
   list<ObjectRecoveryInfo*>& o)
 {
   o.push_back(new ObjectRecoveryInfo);
-  o.back()->soid = hobject_t(sobject_t("key", CEPH_NOSNAP));
+  o.back()->soid = hobject_t(object_t("key"));
   o.back()->version = eversion_t(0,0);
   o.back()->size = 100;
 }
@@ -3507,9 +3491,9 @@ void PushReplyOp::generate_test_instances(list<PushReplyOp*> &o)
 {
   o.push_back(new PushReplyOp);
   o.push_back(new PushReplyOp);
-  o.back()->soid = hobject_t(sobject_t("asdf", 2));
+  o.back()->soid = hobject_t(object_t("asdf"));
   o.push_back(new PushReplyOp);
-  o.back()->soid = hobject_t(sobject_t("asdf", CEPH_NOSNAP));
+  o.back()->soid = hobject_t(object_t("asdf"));
 }
 
 void PushReplyOp::encode(bufferlist &bl) const
@@ -3555,10 +3539,10 @@ void PullOp::generate_test_instances(list<PullOp*> &o)
 {
   o.push_back(new PullOp);
   o.push_back(new PullOp);
-  o.back()->soid = hobject_t(sobject_t("asdf", 2));
+  o.back()->soid = hobject_t(object_t("asdf"));
   o.back()->recovery_info.version = eversion_t(3, 10);
   o.push_back(new PullOp);
-  o.back()->soid = hobject_t(sobject_t("asdf", CEPH_NOSNAP));
+  o.back()->soid = hobject_t(object_t("asdf"));
   o.back()->recovery_info.version = eversion_t(0, 0);
 }
 
@@ -3620,10 +3604,10 @@ void PushOp::generate_test_instances(list<PushOp*> &o)
 {
   o.push_back(new PushOp);
   o.push_back(new PushOp);
-  o.back()->soid = hobject_t(sobject_t("asdf", 2));
+  o.back()->soid = hobject_t(object_t("asdf"));
   o.back()->version = eversion_t(3, 10);
   o.push_back(new PushOp);
-  o.back()->soid = hobject_t(sobject_t("asdf", CEPH_NOSNAP));
+  o.back()->soid = hobject_t(object_t("asdf"));
   o.back()->version = eversion_t(0, 0);
 }
 
@@ -3813,9 +3797,9 @@ void ScrubMap::generate_test_instances(list<ScrubMap*>& o)
   o.back()->attrs["bar"] = buffer::copy("barval", 6);
   list<object*> obj;
   object::generate_test_instances(obj);
-  o.back()->objects[hobject_t(object_t("foo"), "fookey", 123, 456, 0, "")] = *obj.back();
+  o.back()->objects[hobject_t(object_t("foo"), "fookey", 456, 0, "")] = *obj.back();
   obj.pop_back();
-  o.back()->objects[hobject_t(object_t("bar"), string(), 123, 456, 0, "")] = *obj.back();
+  o.back()->objects[hobject_t(object_t("bar"), string(), 456, 0, "")] = *obj.back();
 }
 
 // -- ScrubMap::object --

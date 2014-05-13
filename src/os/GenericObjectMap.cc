@@ -133,16 +133,6 @@ string GenericObjectMap::header_key(const coll_t &cid, const ghobject_t &oid)
   append_escaped(oid.hobj.oid.name, &full_name);
   full_name.append(GHOBJECT_KEY_SEP_S);
 
-  t = buf;
-  if (oid.hobj.snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, "head");
-  else if (oid.hobj.snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, "snapdir");
-  else
-    // Keep length align
-    t += snprintf(t, end - t, "%016llx", (long long unsigned)oid.hobj.snap);
-  full_name += string(buf);
-
   if (oid.generation != ghobject_t::NO_GEN) {
     assert(oid.shard_id != ghobject_t::NO_SHARD);
     full_name.append(GHOBJECT_KEY_SEP_S);
@@ -252,8 +242,8 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
   }
 
   if (out) {
-    (*out) = ghobject_t(hobject_t(name, key, snap, hash, (int64_t)pool, ns),
-                        generation, shard_id);
+    (*out) = ghobject_t(hobject_t(name, key, hash, (int64_t)pool, ns),
+			generation, shard_id);
     // restore reversed hash. see calculate_key
     out->hobj.hash = out->get_filestore_key();
   }

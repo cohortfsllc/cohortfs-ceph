@@ -31,7 +31,6 @@ namespace ceph {
 
 struct hobject_t {
   object_t oid;
-  snapid_t snap;
   uint32_t hash;
 private:
   bool max;
@@ -58,26 +57,20 @@ public:
   }
 
   static hobject_t make_temp(const string &name) {
-    hobject_t ret(object_t(name), "", CEPH_NOSNAP, 0, POOL_IS_TEMP, "");
+    hobject_t ret(object_t(name), "", 0, POOL_IS_TEMP, "");
     return ret;
   }
   bool is_temp() const {
     return pool == POOL_IS_TEMP;
   }
-  
-  hobject_t() : snap(0), hash(0), max(false), pool(-1) {}
 
-  hobject_t(object_t oid, const string& key, snapid_t snap, uint64_t hash,
+  hobject_t() : hash(0), max(false), pool(-1) {}
+
+  hobject_t(object_t oid, const string& key, uint64_t hash,
 	    int64_t pool, string nspace) :
-    oid(oid), snap(snap), hash(hash), max(false),
+    oid(oid), hash(hash), max(false),
     pool(pool), nspace(nspace),
     key(oid.name == key ? string() : key) {}
-
-  hobject_t(const sobject_t &soid, const string &key, uint32_t hash,
-	    int64_t pool, string nspace) :
-    oid(soid.oid), snap(soid.snap), hash(hash), max(false),
-    pool(pool), nspace(nspace),
-    key(soid.oid.name == key ? string() : key) {}
 
   /// @return min hobject_t ret s.t. ret.hash == this->hash
   hobject_t get_boundary() const {
@@ -91,41 +84,13 @@ public:
   /// @return head version of this hobject_t
   hobject_t get_head() const {
     hobject_t ret(*this);
-    ret.snap = CEPH_NOSNAP;
     return ret;
-  }
-
-  /// @return snapdir version of this hobject_t
-  hobject_t get_snapdir() const {
-    hobject_t ret(*this);
-    ret.snap = CEPH_SNAPDIR;
-    return ret;
-  }
-
-  /// @return true if object is snapdir
-  bool is_snapdir() const {
-    return snap == CEPH_SNAPDIR;
-  }
-
-  /// @return true if object is head
-  bool is_head() const {
-    return snap == CEPH_NOSNAP;
-  }
-
-  /// @return true if object is neither head nor snapdir
-  bool is_snap() const {
-    return (snap != CEPH_NOSNAP) && (snap != CEPH_SNAPDIR);
-  }
-
-  /// @return true iff the object should have a snapset in it's attrs
-  bool has_snapset() const {
-    return !is_snap();
   }
 
   /* Do not use when a particular hash function is needed */
-  explicit hobject_t(const sobject_t &o) :
-    oid(o.oid), snap(o.snap), max(false), pool(-1) {
-    hash = CEPH_HASH_NAMESPACE::hash<sobject_t>()(o);
+  explicit hobject_t(const object_t &o) :
+    oid(o), max(false), pool(-1) {
+    hash = CEPH_HASH_NAMESPACE::hash<object_t>()(o);
   }
 
   // maximum sorted value.
@@ -139,8 +104,7 @@ public:
   }
   bool is_min() const {
     // this needs to match how it's constructed
-    return snap == 0 &&
-	   hash == 0 &&
+    return hash == 0 &&
 	   !max &&
 	   pool == -1;
   }
@@ -211,24 +175,22 @@ CEPH_HASH_NAMESPACE_START
   template<> struct hash<hobject_t> {
     size_t operator()(const hobject_t &r) const {
       static hash<object_t> H;
-      static rjhash<uint64_t> I;
-      return H(r.oid) ^ I(r.snap);
+      return H(r.oid);
     }
   };
 CEPH_HASH_NAMESPACE_END
 
 ostream& operator<<(ostream& out, const hobject_t& o);
 
-WRITE_EQ_OPERATORS_7(hobject_t, oid, get_key(), snap, hash, max, pool, nspace)
-// sort hobject_t's by <max, get_filestore_key(hash), key, oid, snapid>
-WRITE_CMP_OPERATORS_7(hobject_t,
+WRITE_EQ_OPERATORS_6(hobject_t, oid, get_key(), hash, max, pool, nspace)
+// sort hobject_t's by <max, get_filestore_key(hash), key, oid>
+WRITE_CMP_OPERATORS_6(hobject_t,
 		      max,
 		      get_filestore_key(),
 		      nspace,
 		      pool,
 		      get_effective_key(),
-		      oid,
-		      snap)
+		      oid)
 
 typedef version_t gen_t;
 typedef uint8_t shard_t;
@@ -251,6 +213,8 @@ public:
   static const gen_t NO_GEN = UINT64_MAX;
 
   ghobject_t() : generation(NO_GEN), shard_id(NO_SHARD) {}
+
+  ghobject_t(const object_t &obj) : hobj(obj), generation(NO_GEN), shard_id(NO_SHARD) {}
 
   ghobject_t(const hobject_t &obj) : hobj(obj), generation(NO_GEN), shard_id(NO_SHARD) {}
 
@@ -319,8 +283,7 @@ CEPH_HASH_NAMESPACE_START
   template<> struct hash<ghobject_t> {
     size_t operator()(const ghobject_t &r) const {
       static hash<object_t> H;
-      static rjhash<uint64_t> I;
-      return H(r.hobj.oid) ^ I(r.hobj.snap);
+      return H(r.hobj.oid);
     }
   };
 CEPH_HASH_NAMESPACE_END

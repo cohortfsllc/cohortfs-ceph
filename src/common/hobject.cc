@@ -73,9 +73,9 @@ string hobject_t::to_str() const
 {
   string out;
 
-  char snap_with_hash[1000];
-  char *t = snap_with_hash;
-  char *end = t + sizeof(snap_with_hash);
+  char snapstr[1000];
+  char *t = snapstr;
+  char *end = t + sizeof(snapstr);
 
   uint64_t poolid(pool);
   t += snprintf(t, end - t, "%.*llX", 16, (long long unsigned)poolid);
@@ -83,14 +83,7 @@ string hobject_t::to_str() const
   uint32_t revhash(get_filestore_key_u32());
   t += snprintf(t, end - t, ".%.*X", 8, revhash);
 
-  if (snap == CEPH_NOSNAP)
-    t += snprintf(t, end - t, ".head");
-  else if (snap == CEPH_SNAPDIR)
-    t += snprintf(t, end - t, ".snapdir");
-  else
-    t += snprintf(t, end - t, ".%llx", (long long unsigned)snap);
-
-  out += string(snap_with_hash);
+  out += string(snapstr);
 
   out.push_back('.');
   append_escaped(oid.name, &out);
@@ -107,7 +100,6 @@ void hobject_t::encode(bufferlist& bl) const
   ENCODE_START(4, 3, bl);
   ::encode(key, bl);
   ::encode(oid, bl);
-  ::encode(snap, bl);
   ::encode(hash, bl);
   ::encode(max, bl);
   ::encode(nspace, bl);
@@ -121,7 +113,6 @@ void hobject_t::decode(bufferlist::iterator& bl)
   if (struct_v >= 1)
     ::decode(key, bl);
   ::decode(oid, bl);
-  ::decode(snap, bl);
   ::decode(hash, bl);
   if (struct_v >= 2)
     ::decode(max, bl);
@@ -144,8 +135,6 @@ void hobject_t::decode(json_spirit::Value& v)
       oid.name = p.value_.get_str();
     else if (p.name_ == "key")
       key = p.value_.get_str();
-    else if (p.name_ == "snapid")
-      snap = p.value_.get_uint64();
     else if (p.name_ == "hash")
       hash = p.value_.get_int();
     else if (p.name_ == "max")
@@ -161,7 +150,6 @@ void hobject_t::dump(Formatter *f) const
 {
   f->dump_string("oid", oid.name);
   f->dump_string("key", key);
-  f->dump_int("snapid", snap);
   f->dump_int("hash", hash);
   f->dump_int("max", (int)max);
   f->dump_int("pool", pool);
@@ -173,11 +161,11 @@ void hobject_t::generate_test_instances(list<hobject_t*>& o)
   o.push_back(new hobject_t);
   o.push_back(new hobject_t);
   o.back()->max = true;
-  o.push_back(new hobject_t(object_t("oname"), string(), 1, 234, -1, ""));
-  o.push_back(new hobject_t(object_t("oname2"), string("okey"), CEPH_NOSNAP,
+  o.push_back(new hobject_t(object_t("oname"), string(), 234, -1, ""));
+  o.push_back(new hobject_t(object_t("oname2"), string("okey"),
 	67, 0, "n1"));
   o.push_back(new hobject_t(object_t("oname3"), string("oname3"),
-	CEPH_SNAPDIR, 910, 1, "n2"));
+	910, 1, "n2"));
 }
 
 ostream& operator<<(ostream& out, const hobject_t& o)
@@ -187,7 +175,7 @@ ostream& operator<<(ostream& out, const hobject_t& o)
   out << std::hex << o.hash << std::dec;
   if (o.get_key().length())
     out << "." << o.get_key();
-  out << "/" << o.oid << "/" << o.snap;
+  out << "/" << o.oid;
   out << "/" << o.nspace << "/" << o.pool;
   return out;
 }
@@ -199,7 +187,6 @@ void ghobject_t::encode(bufferlist& bl) const
   ENCODE_START(5, 3, bl);
   ::encode(hobj.key, bl);
   ::encode(hobj.oid, bl);
-  ::encode(hobj.snap, bl);
   ::encode(hobj.hash, bl);
   ::encode(hobj.max, bl);
   ::encode(hobj.nspace, bl);
@@ -215,7 +202,6 @@ void ghobject_t::decode(bufferlist::iterator& bl)
   if (struct_v >= 1)
     ::decode(hobj.key, bl);
   ::decode(hobj.oid, bl);
-  ::decode(hobj.snap, bl);
   ::decode(hobj.hash, bl);
   if (struct_v >= 2)
     ::decode(hobj.max, bl);
@@ -249,24 +235,24 @@ void ghobject_t::generate_test_instances(list<ghobject_t*>& o)
   o.push_back(new ghobject_t);
   o.push_back(new ghobject_t);
   o.back()->hobj.max = true;
-  o.push_back(new ghobject_t(hobject_t(object_t("oname"), string(), 1, 234, -1, "")));
+  o.push_back(new ghobject_t(hobject_t(object_t("oname"), string(), 234, -1, "")));
 
-  o.push_back(new ghobject_t(hobject_t(object_t("oname2"), string("okey"), CEPH_NOSNAP,
+  o.push_back(new ghobject_t(hobject_t(object_t("oname2"), string("okey"),
 	67, 0, "n1"), 1, 0));
-  o.push_back(new ghobject_t(hobject_t(object_t("oname2"), string("okey"), CEPH_NOSNAP,
+  o.push_back(new ghobject_t(hobject_t(object_t("oname2"), string("okey"),
 	67, 0, "n1"), 1, 1));
-  o.push_back(new ghobject_t(hobject_t(object_t("oname2"), string("okey"), CEPH_NOSNAP,
+  o.push_back(new ghobject_t(hobject_t(object_t("oname2"), string("okey"),
 	67, 0, "n1"), 1, 2));
   o.push_back(new ghobject_t(hobject_t(object_t("oname3"), string("oname3"),
-	CEPH_SNAPDIR, 910, 1, "n2"), 1, 0));
+	910, 1, "n2"), 1, 0));
   o.push_back(new ghobject_t(hobject_t(object_t("oname3"), string("oname3"),
-	CEPH_SNAPDIR, 910, 1, "n2"), 2, 0));
+	910, 1, "n2"), 2, 0));
   o.push_back(new ghobject_t(hobject_t(object_t("oname3"), string("oname3"),
-	CEPH_SNAPDIR, 910, 1, "n2"), 3, 0));
+	910, 1, "n2"), 3, 0));
   o.push_back(new ghobject_t(hobject_t(object_t("oname3"), string("oname3"),
-	CEPH_SNAPDIR, 910, 1, "n2"), 3, 1));
+	910, 1, "n2"), 3, 1));
   o.push_back(new ghobject_t(hobject_t(object_t("oname3"), string("oname3"),
-	CEPH_SNAPDIR, 910, 1, "n2"), 3, 2));
+	910, 1, "n2"), 3, 2));
 }
 
 ostream& operator<<(ostream& out, const ghobject_t& o)
