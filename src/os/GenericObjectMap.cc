@@ -161,7 +161,6 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
   string key;
   string ns;
   uint32_t hash;
-  snapid_t snap;
   uint64_t pool;
   gen_t generation = ghobject_t::NO_GEN;
   shard_t shard_id = ghobject_t::NO_SHARD;
@@ -212,15 +211,6 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
     return false;
 
   current = ++end;
-  for ( ; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
-  string snap_str(current, end);
-  if (snap_str == "head")
-    snap = CEPH_NOSNAP;
-  else if (snap_str == "snapdir")
-    snap = CEPH_SNAPDIR;
-  else
-    snap = strtoull(snap_str.c_str(), NULL, 16);
-
   // Optional generation/shard_id
   string genstring, shardstring;
   if (end != long_name.end()) {

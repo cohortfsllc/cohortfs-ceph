@@ -24,10 +24,6 @@ static inline int ceph_fsid_compare(const struct ceph_fsid *a,
 /*
  * ino, object, etc.
  */
-typedef __le64 ceph_snapid_t;
-#define CEPH_SNAPDIR ((uint64_t)(-1))  /* reserved for hidden .snap dir */
-#define CEPH_NOSNAP  ((uint64_t)(-2))  /* "head", "live" revision */
-#define CEPH_MAXSNAP ((uint64_t)(-3))  /* largest valid snapid */
 
 struct ceph_timespec {
 	__le32 tv_sec;

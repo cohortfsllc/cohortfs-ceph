@@ -108,28 +108,4 @@ struct file_object_t {
   }
 };
 
-
-// ---------------------------
-// snaps
-
-struct snapid_t {
-  uint64_t val;
-  snapid_t(uint64_t v=0) : val(v) {}
-  snapid_t operator+=(snapid_t o) { val += o.val; return *this; }
-  snapid_t operator++() { ++val; return *this; }
-  operator uint64_t() const { return val; }
-};
-
-inline void encode(snapid_t i, bufferlist &bl) { encode(i.val, bl); }
-inline void decode(snapid_t &i, bufferlist::iterator &p) { decode(i.val, p); }
-
-inline ostream& operator<<(ostream& out, snapid_t s) {
-  if (s == CEPH_NOSNAP)
-    return out << "head";
-  else if (s == CEPH_SNAPDIR)
-    return out << "snapdir";
-  else
-    return out << hex << s.val << dec;
-}
-
 #endif

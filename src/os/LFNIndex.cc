@@ -962,7 +962,6 @@ bool LFNIndex::lfn_parse_object_name_poolless(const string &long_name,
   string name;
   string key;
   uint32_t hash;
-  snapid_t snap;
 
   string::const_iterator current = long_name.begin();
   if (*current == '\\') {
@@ -1017,7 +1016,6 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, ghobject_t *out)
   string key;
   string ns;
   uint32_t hash;
-  snapid_t snap;
   uint64_t pool;
   gen_t generation = ghobject_t::NO_GEN;
   shard_t shard_id = ghobject_t::NO_SHARD;

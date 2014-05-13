@@ -181,7 +181,6 @@ bool DBObjectMap::parse_ghobject_key_v0(const string &in, coll_t *c,
   string coll;
   string name;
   string key;
-  snapid_t snap;
   uint32_t hash;
 
   string::const_iterator current = in.begin();
@@ -215,20 +214,7 @@ bool DBObjectMap::parse_ghobject_key_v0(const string &in, coll_t *c,
   for (; end != in.end() && *end != '.'; ++end) ;
   if (end == in.end())
     return false;
-  string snap_str(current, end);
-  
-  current = ++end;
-  for (; end != in.end() && *end != '.'; ++end) ;
-  if (end != in.end())
-    return false;
   string hash_str(current, end);
-
-  if (snap_str == "head")
-    snap = CEPH_NOSNAP;
-  else if (snap_str == "snapdir")
-    snap = CEPH_SNAPDIR;
-  else
-    snap = strtoull(snap_str.c_str(), NULL, 16);
   sscanf(hash_str.c_str(), "%X", &hash);
 
   *c = coll_t(coll);
