@@ -18,4 +18,5 @@ invalidate=0	# mandatory
 iodepth=1
 # create a memstore
 objectstore=memstore
-osdpath=/mnt/fio_ceph_filestore.XXXXXXX
+directory=/mnt/fio_ceph_filestore.XXXXXXX
+filestore_debug=0
