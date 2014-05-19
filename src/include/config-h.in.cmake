@@ -226,4 +226,7 @@
 /* define if radosgw enabled */
 #cmakedefine WITH_RADOSGW
 
+/* Defined if FIO */
+#cmakedefine WITH_XIO
+
 #endif /* CONFIG_H */
