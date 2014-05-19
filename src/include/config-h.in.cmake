@@ -232,4 +232,7 @@
 /* Define if Xio is enabled */
 #cmakedefine HAVE_XIO
 
+/* Defined if FIO */
+#cmakedefine WITH_FIO
+
 #endif /* CONFIG_H */
