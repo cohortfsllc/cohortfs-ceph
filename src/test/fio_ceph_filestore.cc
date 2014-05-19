@@ -161,13 +161,11 @@ static int fio_ceph_filestore_getevents(struct thread_data *td, unsigned int min
 static int fio_ceph_filestore_queue(struct thread_data *td, struct io_u *io_u)
 {
 	int r = -1;
-	char buf[32];
 	struct ceph_filestore_data *ceph_filestore_data = (struct ceph_filestore_data *) td->io_ops->data;
 	uint64_t len = io_u->xfer_buflen;
 	uint64_t off = io_u->offset;
 	ObjectStore *fs = ceph_filestore_data->fs;
-	object_t poid(buf);
-	snprintf(buf, sizeof(buf), "XXX_%lu_%lu", io_u->start_time.tv_usec, io_u->start_time.tv_sec);
+	object_t poid(io_u->file->file_name);
 
 	fio_ro_check(td, io_u);
 
