@@ -16,24 +16,32 @@
 #ifndef CEPH_MEMSTORE_H
 #define CEPH_MEMSTORE_H
 
-#include "include/assert.h"
 #include "include/unordered_map.h"
 #include "include/memory.h"
 #include "common/Finisher.h"
 #include "common/RWLock.h"
 #include "ObjectStore.h"
+#include "PageSet.h"
+#include "include/assert.h"
+
 
 class MemStore : public ObjectStore {
+private:
+  static const size_t PageSize = 64 << 10;
+  typedef PageSet<PageSize> page_set;
 public:
   struct Object {
-    bufferlist data;
+    page_set data;
+    size_t data_len;
     map<string,bufferptr> xattr;
     bufferlist omap_header;
     map<string,bufferlist> omap;
 
+    Object() : data_len(0) {}
+
     void encode(bufferlist& bl) const {
       ENCODE_START(1, 1, bl);
-      ::encode(data, bl);
+      //::encode(data, bl);
       ::encode(xattr, bl);
       ::encode(omap_header, bl);
       ::encode(omap, bl);
@@ -41,14 +49,14 @@ public:
     }
     void decode(bufferlist::iterator& p) {
       DECODE_START(1, p);
-      ::decode(data, p);
+      //::decode(data, p);
       ::decode(xattr, p);
       ::decode(omap_header, p);
       ::decode(omap, p);
       DECODE_FINISH(p);
     }
     void dump(Formatter *f) const {
-      f->dump_int("data_len", data.length());
+      f->dump_int("data_len", data_len);
       f->dump_int("omap_header_len", omap_header.length());
 
       f->open_array_section("xattrs");
@@ -184,7 +192,8 @@ private:
 
   void _do_transaction(Transaction& t);
 
-  void _write_into_bl(const bufferlist& src, unsigned offset, bufferlist *dst);
+  int _read_pages(page_set &pages, unsigned offset, size_t len, bufferlist &dst);
+  void _write_pages(const bufferlist& src, unsigned offset, page_set &pages);
 
   int _touch(coll_t cid, const hobject_t& oid);
   int _write(coll_t cid, const hobject_t& oid, uint64_t offset, size_t len, const bufferlist& bl,
