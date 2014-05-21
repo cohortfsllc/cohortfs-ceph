@@ -102,6 +102,7 @@ add_subdirectory(common)
 add_subdirectory(osdc)
 add_subdirectory(cls)
 add_subdirectory(librados)
+add_subdirectory(librbd)
 add_subdirectory(mon)
 add_subdirectory(os)
 add_subdirectory(global)
@@ -181,7 +182,7 @@ set(librados_config_srcs
 )
 
 add_executable(librados-config ${librados_config_srcs})
-target_link_libraries(librados-config librados global)
+target_link_libraries(librados-config rados global)
 
 
 #ceph-fuse

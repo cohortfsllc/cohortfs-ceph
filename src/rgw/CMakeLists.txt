@@ -61,7 +61,7 @@ set(radosgw_srcs
 
 add_executable(radosgw ${radosgw_srcs})
 
-target_link_libraries(radosgw librgw_a librados curl expat global fcgi resolv)
+target_link_libraries(radosgw librgw_a rados curl expat global fcgi resolv)
 install(TARGETS radosgw DESTINATION bin)
 
 set_target_properties(radosgw 
