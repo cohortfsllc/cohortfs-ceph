@@ -148,8 +148,11 @@ set (libcommon_files
 	ipaddr.cc 
 	pick_address.cc
 	addr_parsing.c 
+	secret.c
 	SloppyCRCMap.cc
 	TrackedOp.cc
+	TextTable.cc
+	util.cc
 	${arch_files}
 	${auth_files}
 	${crush_files}
