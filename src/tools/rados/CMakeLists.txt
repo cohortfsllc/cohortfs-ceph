@@ -1,12 +1,13 @@
-set(rados_srcs
+set(radostool_srcs
 	rados.cc 
 	rados_import.cc 
 	rados_export.cc 
 	rados_sync.cc 
 	${CMAKE_SOURCE_DIR}/src/common/obj_bencher.cc
 )
-add_executable(rados ${rados_srcs})
-target_link_libraries(rados cls_lock librados global)
+add_executable(radostool ${radostool_srcs})
+target_link_libraries(radostool cls_lock rados global)
+set_target_properties(radostool PROPERTIES OUTPUT_NAME rados)
 
-install(TARGETS rados DESTINATION bin)
+install(TARGETS radostool DESTINATION bin)
 

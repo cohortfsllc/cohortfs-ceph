@@ -1,5 +1,6 @@
 add_subdirectory(lock)
 add_subdirectory(log)
+add_subdirectory(rbd)
 add_subdirectory(refcount)
 add_subdirectory(replica_log)
 add_subdirectory(rgw)

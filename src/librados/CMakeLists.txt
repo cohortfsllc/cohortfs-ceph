@@ -1,16 +1,17 @@
 
-set(librados_srcs
-	../librados/librados.cc 
-	../librados/RadosClient.cc
-	../librados/IoCtxImpl.cc 
+set(rados_srcs
+	librados.cc 
+	RadosClient.cc
+	IoCtxImpl.cc 
+	snap_set_diff.cc
 )
 
-add_library(librados ${librados_srcs})
+add_library(rados SHARED ${rados_srcs})
 
-add_dependencies(librados cls_lock osdc)
+add_dependencies(rados cls_lock osdc)
 
-target_link_libraries(librados osdc cls_lock common ${CRYPTO_LIBS} ${EXTRALIBS})
+target_link_libraries(rados osdc cls_lock common ${CRYPTO_LIBS} ${EXTRALIBS})
 
-set_target_properties(librados PROPERTIES VERSION 2.0.0 SOVERSION 1)
+set_target_properties(rados PROPERTIES VERSION 2.0.0 SOVERSION 1)
 
-
+install(TARGETS rados DESTINATION lib)
