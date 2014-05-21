@@ -41,6 +41,15 @@ struct Page {
     }
   };
 
+  void encode(bufferlist &bl) const {
+    bl.append(buffer::copy(data, PageSize));
+    ::encode(offset, bl);
+  }
+  void decode(bufferlist::iterator &p) {
+    ::decode_array_nohead(data, PageSize, p);
+    ::decode(offset, p);
+  }
+
 private: // copy disabled
   Page(const Page<PageSize>&) {}
   const Page<PageSize>& operator=(const Page<PageSize>&) { return *this; }
@@ -140,6 +149,24 @@ public:
     if (cur->offset < offset)
       cur++;
     free_pages(cur, pages.end());
+  }
+
+  void encode(bufferlist &bl) const {
+    unsigned count = pages.size();
+    ::encode(count, bl);
+    for (const_reverse_iterator p = pages.rbegin(); p != pages.rend(); ++p)
+      p->encode(bl);
+  }
+  void decode(bufferlist::iterator &p) {
+    assert(empty());
+    unsigned count;
+    ::decode(count, p);
+    iterator cur = pages.end();
+    for (unsigned i = 0; i < count; i++) {
+      page_type *page = new page_type;
+      page->decode(p);
+      cur = pages.insert_before(cur, *page);
+    }
   }
 };
 

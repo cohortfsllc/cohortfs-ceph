@@ -40,16 +40,18 @@ public:
     Object() : data_len(0) {}
 
     void encode(bufferlist& bl) const {
-      ENCODE_START(1, 1, bl);
-      //::encode(data, bl);
+      ENCODE_START(2, 2, bl);
+      ::encode(data_len, bl);
+      data.encode(bl);
       ::encode(xattr, bl);
       ::encode(omap_header, bl);
       ::encode(omap, bl);
       ENCODE_FINISH(bl);
     }
     void decode(bufferlist::iterator& p) {
-      DECODE_START(1, p);
-      //::decode(data, p);
+      DECODE_START(2, p);
+      ::decode(data_len, p);
+      data.decode(p);
       ::decode(xattr, p);
       ::decode(omap_header, p);
       ::decode(omap, p);
