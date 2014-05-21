@@ -7,11 +7,8 @@ set(rados_srcs
 )
 
 add_library(rados SHARED ${rados_srcs})
-
-add_dependencies(rados cls_lock osdc)
-
-target_link_libraries(rados osdc cls_lock common ${CRYPTO_LIBS} ${EXTRALIBS})
-
+target_link_libraries(rados osdc cls_lock_client common ${CRYPTO_LIBS} ${EXTRALIBS})
 set_target_properties(rados PROPERTIES VERSION 2.0.0 SOVERSION 1)
 
 install(TARGETS rados DESTINATION lib)
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/rados" DESTINATION include)

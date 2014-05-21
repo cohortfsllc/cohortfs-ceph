@@ -33,8 +33,8 @@ set(librgw_a_srcs
 
 add_library(librgw_a ${librgw_a_srcs})
 
-target_link_libraries(librgw_a cls_log cls_statelog cls_refcount cls_replica_log cls_rgw cls_user cls_version)
- 
+target_link_libraries(librgw_a cls_log_client cls_statelog_client cls_refcount_client cls_replica_log_client cls_rgw_client cls_user_client cls_version_client ${TCMALLOC_LIBS})
+
 set(radosgw_srcs
 	rgw_http_client.cc 
 	rgw_main.cc
@@ -57,6 +57,7 @@ set(radosgw_srcs
 	rgw_loadgen.cc
 	rgw_civetweb.cc
 	${CMAKE_SOURCE_DIR}/src/civetweb/src/civetweb.c
+	${TCMALLOC_srcs}
 )
 
 add_executable(radosgw ${radosgw_srcs})

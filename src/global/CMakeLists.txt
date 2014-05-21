@@ -1,9 +1,9 @@
 
 set(libglobal_srcs
-	../global/global_context.cc 
-	../global/global_init.cc 
-	../global/pidfile.cc 
-	../global/signal_handler.cc
+	global_context.cc 
+	global_init.cc 
+	pidfile.cc 
+	signal_handler.cc
 )
 
 add_library(global ${libglobal_srcs})

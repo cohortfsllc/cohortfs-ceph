@@ -163,8 +163,11 @@ set (libcommon_files
 	pick_address.cc
 	address_helper.cc
 	addr_parsing.c 
+	secret.c
 	SloppyCRCMap.cc
 	TrackedOp.cc
+	TextTable.cc
+	util.cc
 	${arch_files}
 	${auth_files}
 	${crush_files}

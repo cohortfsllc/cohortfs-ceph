@@ -98,6 +98,14 @@ ${CMAKE_BINARY_DIR}/ceph-debugpack
 
 include_directories(".")
 
+if(${WITH_TCMALLOC})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
+  set(TCMALLOC_LIBS tcmalloc)
+  set(TCMALLOC_srcs ${CMAKE_SOURCE_DIR}/src/perfglue/heap_profiler.cc)
+else()
+  set(TCMALLOC_srcs ${CMAKE_SOURCE_DIR}/src/perfglue/disabled_heap_profiler.cc)
+endif(${WITH_TCMALLOC})
+
 add_subdirectory(common)
 add_subdirectory(osdc)
 add_subdirectory(cls)
@@ -110,20 +118,13 @@ add_subdirectory(osd)
 add_subdirectory(mds)
 add_subdirectory(client)
 add_subdirectory(erasure-code)
+add_subdirectory(json_spirit)
 add_subdirectory(tools)
 add_subdirectory(test)
 
 if(${WITH_RADOSGW})
 add_subdirectory(rgw)
 endif(${WITH_RADOSGW})
-
-if(${WITH_TCMALLOC})
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
-  set(TCMALLOC_LIBS tcmalloc)
-  set(TCMALLOC_srcs perfglue/heap_profiler.cc)
-else()
-  set(TCMALLOC_srcs perfglue/disabled_heap_profiler.cc)
-endif(${WITH_TCMALLOC})
 
 #monitor
 set(ceph_mon_srcs 
@@ -158,13 +159,17 @@ target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global ${TCMALLOC_LIBS}
 
 # admin tools
 
-if(FALSE) # removed due to conflict with libcephfs target
-	# cephfs
-	set(cephfs_srcs cephfs.cc)
-	add_executable(cephfs ${cephfs_srcs})
-	target_link_libraries(cephfs common)
-	install(TARGETS cephfs DESTINATION bin)
-endif(FALSE)
+# cephfs
+add_executable(cephfstool cephfs.cc)
+target_link_libraries(cephfstool common)
+set_target_properties(cephfstool PROPERTIES OUTPUT_NAME cephfs)
+install(TARGETS cephfstool DESTINATION bin)
+
+# rbd
+add_executable(rbdtool rbd.cc ${TCMALLOC_srcs})
+target_link_libraries(rbdtool rbd rados global common keyutils blkid ${TCMALLOC_LIBS})
+set_target_properties(rbdtool PROPERTIES OUTPUT_NAME rbd)
+install(TARGETS rbdtool DESTINATION bin)
 
 # synthetic client
 set(ceph_syn_srcs
