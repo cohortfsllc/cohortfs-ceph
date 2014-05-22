@@ -938,6 +938,12 @@ void MemStore::_do_transaction(Transaction& t)
 
     case Transaction::OP_SETALLOCHINT:
       // nop
+      {
+	coll_t cid = i.get_cid();
+	hobject_t oid = i.get_oid();
+	(void)i.get_length(); // expected_object_size
+	(void)i.get_length(); // expected_write_size
+      }
       break;
 
     default:
