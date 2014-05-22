@@ -8,7 +8,6 @@
 #include "common/config.h"
 #include "msg/Message.h"
 #include "messages/MOSDOp.h"
-#include "messages/MOSDSubOp.h"
 #include "include/assert.h"
 #include "osd/osd_types.h"
 
@@ -18,10 +17,6 @@ OpRequest::OpRequest(Message *req, OpTracker *tracker) :
   TrackedOp(req, tracker),
   rmw_flags(0),
   hit_flag_points(0), latest_flag_point(0) {
-  if (req->get_priority() < tracker->cct->_conf->osd_client_op_priority) {
-    // don't warn as quickly for low priority ops
-    warn_interval_multiplier = tracker->cct->_conf->osd_recovery_op_warn_multiple;
-  }
 }
 
 void OpRequest::_dump(utime_t now, Formatter *f) const
@@ -54,8 +49,6 @@ void OpRequest::init_from_message()
 {
   if (request->get_type() == CEPH_MSG_OSD_OP) {
     reqid = static_cast<MOSDOp*>(request)->get_reqid();
-  } else if (request->get_type() == MSG_OSD_SUBOP) {
-    reqid = static_cast<MOSDSubOp*>(request)->reqid;
   }
 }
 

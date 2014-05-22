@@ -138,8 +138,6 @@ public:
     map<int32_t,entity_addr_t> new_up_cluster;
     map<int32_t,uint8_t> new_state;             // XORed onto previous state.
     map<int32_t,uint32_t> new_weight;
-    map<pg_t,vector<int32_t> > new_pg_temp;     // [] to remove
-    map<pg_t, int> new_primary_temp;            // [-1] to remove
     map<int32_t,uint32_t> new_primary_affinity;
     map<int32_t,epoch_t> new_up_thru;
     map<int32_t,pair<epoch_t,epoch_t> > new_last_clean_interval;
@@ -216,8 +214,6 @@ private:
 
   vector<uint32_t>   osd_weight;   // 16.16 fixed point, 0x10000 = "in", 0 = "out"
   vector<osd_info_t> osd_info;
-  ceph::shared_ptr< map<pg_t,vector<int> > > pg_temp;  // temp pg mapping (e.g. while we rebuild)
-  ceph::shared_ptr< map<pg_t,int > > primary_temp;  // temp primary mapping (e.g. while we rebuild)
   ceph::shared_ptr< vector<uint32_t> > osd_primary_affinity; ///< 16.16 fixed point, 0x10000 = baseline
 
   map<int64_t,pg_pool_t> pools;
@@ -245,8 +241,6 @@ private:
 	     flags(0),
 	     num_osd(0), max_osd(0),
 	     osd_addrs(new addrs_s),
-	     pg_temp(new map<pg_t,vector<int> >),
-	     primary_temp(new map<pg_t,int>),
 	     osd_uuid(new vector<uuid_d>),
 	     new_blacklist_entries(false),
 	     crush(new CrushWrapper) {
@@ -263,8 +257,6 @@ public:
 
   void deepish_copy_from(const OSDMap& o) {
     *this = o;
-    primary_temp.reset(new map<pg_t,int>(*o.primary_temp));
-    pg_temp.reset(new map<pg_t,vector<int> >(*o.pg_temp));
     osd_uuid.reset(new vector<uuid_d>(*o.osd_uuid));
 
     // NOTE: this still references shared entity_addr_t's.
@@ -534,11 +526,6 @@ public:
   /// try to re-use/reference addrs in oldmap from newmap
   static void dedup(const OSDMap *oldmap, OSDMap *newmap);
 
-  static void remove_redundant_temporaries(CephContext *cct, const OSDMap& osdmap,
-					   Incremental *pending_inc);
-  static void remove_down_temps(CephContext *cct, const OSDMap& osdmap,
-                                Incremental *pending_inc);
-
   // serialize, unserialize
 private:
   void encode_client_old(bufferlist& bl) const;
@@ -581,7 +568,7 @@ public:
 private:
   /// pg -> (raw osd list)
   int _pg_to_osds(const pg_pool_t& pool, pg_t pg,
-                  vector<int> *osds, int *primary,
+		  vector<int> *osds, int *primary,
 		  ps_t *ppps) const;
   void _remove_nonexistent_osds(const pg_pool_t& pool, vector<int>& osds) const;
 
@@ -592,21 +579,6 @@ private:
   void _raw_to_up_osds(const pg_pool_t& pool, const vector<int>& raw,
                        vector<int> *up, int *primary) const;
 
-  /**
-   * Get the pg and primary temp, if they are specified.
-   * @param temp_pg [out] Will be empty or contain the temp PG mapping on return
-   * @param temp_primary [out] Will be the value in primary_temp, or a value derived
-   * from the pg_temp (if specified), or -1 if you should use the calculated (up_)primary.
-   */
-  void _get_temp_osds(const pg_pool_t& pool, pg_t pg,
-                      vector<int> *temp_pg, int *temp_primary) const;
-
-  /**
-   *  map to up and acting. Fills in whatever fields are non-NULL.
-   */
-  void _pg_to_up_acting_osds(pg_t pg, vector<int> *up, int *up_primary,
-                             vector<int> *acting, int *acting_primary) const;
-
 public:
   /***
    * This is suitable only for looking at raw CRUSH outputs. It skips
@@ -615,17 +587,7 @@ public:
    * raw and primary must be non-NULL
    */
   int pg_to_osds(pg_t pg, vector<int> *raw, int *primary) const;
-  /// map a pg to its acting set. @return acting set size
-  int pg_to_acting_osds(pg_t pg, vector<int> *acting,
-                        int *acting_primary) const {
-    _pg_to_up_acting_osds(pg, NULL, NULL, acting, acting_primary);
-    return acting->size();
-  }
-  int pg_to_acting_osds(pg_t pg, vector<int>& acting) const {
-    int primary;
-    int r = pg_to_acting_osds(pg, &acting, &primary);
-    return r;
-  }
+
   /**
    * This does not apply temp overrides and should not be used
    * by anybody for data mapping purposes. Specify both pointers.
@@ -635,44 +597,9 @@ public:
    * map a pg to its acting set as well as its up set. You must use
    * the acting set for data mapping purposes, but some users will
    * also find the up set useful for things like deciding what to
-   * set as pg_temp.
    * Each of these pointers must be non-NULL.
    */
-  void pg_to_up_acting_osds(pg_t pg, vector<int> *up, int *up_primary,
-                            vector<int> *acting, int *acting_primary) const {
-    _pg_to_up_acting_osds(pg, up, up_primary, acting, acting_primary);
-  }
-  void pg_to_up_acting_osds(pg_t pg, vector<int>& up, vector<int>& acting) const {
-    int up_primary, acting_primary;
-    pg_to_up_acting_osds(pg, &up, &up_primary, &acting, &acting_primary);
-  }
-  bool pg_is_ec(pg_t pg) const {
-    map<int64_t, pg_pool_t>::const_iterator i = pools.find(pg.pool());
-    assert(i != pools.end());
-    return i->second.ec_pool();
-  }
-  bool get_primary_shard(pg_t pgid, spg_t *out) const {
-    map<int64_t, pg_pool_t>::const_iterator i = get_pools().find(pgid.pool());
-    if (i == get_pools().end()) {
-      return false;
-    }
-    int primary;
-    vector<int> acting;
-    pg_to_acting_osds(pgid, &acting, &primary);
-    if (i->second.ec_pool()) {
-      for (shard_id_t i = 0; i < acting.size(); ++i) {
-	if (acting[i] == primary) {
-	  *out = spg_t(pgid, i);
-	  return true;
-	}
-      }
-    } else {
-      *out = spg_t(pgid);
-      return true;
-    }
-    return false;
-  }
-
+  void pg_to_osd(pg_t pg, int &osd) const;
   int64_t lookup_pg_pool_name(const string& name) {
     if (name_pool.count(name))
       return name_pool[name];
@@ -720,45 +647,13 @@ public:
     return pools.find(pg.pool())->second.raw_pg_to_pg(pg);
   }
 
-  // pg -> acting primary osd
-  int get_pg_acting_primary(pg_t pg) const {
-    vector<int> group;
-    int nrep = pg_to_acting_osds(pg, group);
-    if (nrep > 0)
-      return group[0];
-    return -1;  // we fail!
-  }
-  int get_pg_acting_tail(pg_t pg) const {
-    vector<int> group;
-    int nrep = pg_to_acting_osds(pg, group);
-    if (nrep > 0)
-      return group[group.size()-1];
-    return -1;  // we fail!
-  }
-
-
   /* what replica # is a given osd? 0 primary, -1 for none. */
   static int calc_pg_rank(int osd, const vector<int>& acting, int nrep=0);
-  static int calc_pg_role(int osd, const vector<int>& acting, int nrep=0);
   static bool primary_changed(
     int oldprimary,
     const vector<int> &oldacting,
     int newprimary,
     const vector<int> &newacting);
-  
-  /* rank is -1 (stray), 0 (primary), 1,2,3,... (replica) */
-  int get_pg_acting_rank(pg_t pg, int osd) const {
-    vector<int> group;
-    int nrep = pg_to_acting_osds(pg, group);
-    return calc_pg_rank(osd, group, nrep);
-  }
-  /* role is -1 (stray), 0 (primary), 1 (replica) */
-  int get_pg_acting_role(pg_t pg, int osd) const {
-    vector<int> group;
-    int nrep = pg_to_acting_osds(pg, group);
-    return calc_pg_role(osd, group, nrep);
-  }
-
 
   /*
    * handy helpers to build simple maps...
@@ -766,10 +661,10 @@ public:
   /**
    * Build an OSD map suitable for basic usage. If **num_osd** is >= 0
    * it will be initialized with the specified number of OSDs in a
-   * single host. If **num_osd** is < 0 the layout of the OSD map will 
+   * single host. If **num_osd** is < 0 the layout of the OSD map will
    * be built by reading the content of the configuration file.
    *
-   * @param cct [in] in core ceph context 
+   * @param cct [in] in core ceph context
    * @param e [in] initial epoch
    * @param fsid [in] id of the cluster
    * @param num_osd [in] number of OSDs if >= 0 or read from conf if < 0
@@ -788,11 +683,6 @@ public:
 					 ostream *ss);
 
   bool crush_ruleset_in_use(int ruleset) const;
-
-  void clear_temp() {
-    pg_temp->clear();
-    primary_temp->clear();
-  }
 
 private:
   void print_osd_line(int cur, ostream *out, Formatter *f) const;

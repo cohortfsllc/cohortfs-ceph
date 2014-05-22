@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include <sys/stat.h>
@@ -37,8 +37,6 @@ using namespace std;
 
 #include <sys/types.h>
 #include <fcntl.h>
-
-extern int syn_filer_flags;
 
 int main(int argc, const char **argv, char *envp[]) 
 {
@@ -72,7 +70,6 @@ int main(int argc, const char **argv, char *envp[])
     mclients[i] = new MonClient(g_ceph_context);
     mclients[i]->build_initial_monmap();
     Client *client = new Client(messengers[i], mclients[i]);
-    client->set_filer_flags(syn_filer_flags);
     SyntheticClient *syn = new SyntheticClient(client);
     clients.push_back(client);
     synclients.push_back(syn);

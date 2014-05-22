@@ -35,16 +35,17 @@
  *            - F - 0
  * @endverbatim
  *
- * A file is located at the longest existing directory from the root 
+ * A file is located at the longest existing directory from the root
  * given by the hex characters in the hash beginning with the least
  * significant.
- * 
- * ex: ghobject_t("object", CEPH_NO_SNAP, 0xA4CEE0D2)
+ *
+ * ex: hobject_t("object", 0xA4CEE0D2)
  * would be located in (root)/2/D/0/
- * 
- * Subdirectories are created when the number of objects in a directory
- * exceed (abs(merge_threshhold)) * 16 * split_multiplier.  The number of objects in a directory 
- * is encoded as subdir_info_s in an xattr on the directory.
+ *
+ * Subdirectories are created when the number of objects in a
+ * directory exceed (abs(merge_threshhold)) * 16 * split_multiplier.
+ * The number of objects in a directory is encoded as subdir_info_s in
+ * an xattr on the directory.
  */
 class HashIndex : public LFNIndex {
 private:
@@ -158,35 +159,35 @@ public:
     uint32_t bits,
     ceph::shared_ptr<CollectionIndex> dest
     );
-	
+
 protected:
   int _init();
 
   int _created(
     const vector<string> &path,
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const string &mangled_name
     );
   int _remove(
     const vector<string> &path,
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const string &mangled_name
     );
   int _lookup(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     vector<string> *path,
     string *mangled_name,
     int *exists
     );
   int _collection_list(
-    vector<ghobject_t> *ls
+    vector<hobject_t> *ls
     );
   int _collection_list_partial(
-    const ghobject_t &start,
+    const hobject_t &start,
     int min_count,
     int max_count,
-    vector<ghobject_t> *ls,
-    ghobject_t *next
+    vector<hobject_t> *ls,
+    hobject_t *next
     );
 private:
   /// Recursively remove path and its subdirs
@@ -262,28 +263,28 @@ private:
 
   /// Determine path components from hoid hash
   void get_path_components(
-    const ghobject_t &oid, ///< [in] Object for which to get path components
+    const hobject_t &oid, ///< [in] Object for which to get path components
     vector<string> *path   ///< [out] Path components for hoid.
     );
 
   /// do collection split for path
   static int col_split_level(
-    HashIndex &from,            ///< [in] from index
-    HashIndex &dest,            ///< [in] to index
+    HashIndex &from, ///< [in] from index
+    HashIndex &dest, ///< [in] to index
     const vector<string> &path, ///< [in] path to split
-    uint32_t bits,              ///< [in] num bits to match
-    uint32_t match,             ///< [in] bits to match
-    unsigned *mkdirred          ///< [in,out] path[:mkdirred] has been mkdirred
+    uint32_t bits, ///< [in] num bits to match
+    uint32_t match, ///< [in] bits to match
+    unsigned *mkdirred ///< [in,out] path[:mkdirred] has been mkdirred
     );
-    
 
-  /** 
-   * Get string representation of ghobject_t/hash
+
+  /**
+   * Get string representation of hobject_t/hash
    *
    * e.g: 0x01234567 -> "76543210"
    */
   static string get_path_str(
-    const ghobject_t &oid ///< [in] Object to get hash string for
+    const hobject_t &oid ///< [in] Object to get hash string for
     ); ///< @return Hash string for hoid.
 
   /// Get string from hash, @see get_path_str
@@ -317,20 +318,20 @@ private:
 
   /// Get path contents by hash
   int get_path_contents_by_hash(
-    const vector<string> &path,            /// [in] Path to list
-    const string *lower_bound,             /// [in] list > *lower_bound
-    const ghobject_t *next_object,          /// [in] list > *next_object
-    set<string> *hash_prefixes,            /// [out] prefixes in dir
-    set<pair<string, ghobject_t> > *objects /// [out] objects
+    const vector<string> &path, /// [in] Path to list
+    const string *lower_bound, /// [in] list > *lower_bound
+    const hobject_t *next_object, /// [in] list > *next_object
+    set<string> *hash_prefixes, /// [out] prefixes in dir
+    set<pair<string, hobject_t> > *objects /// [out] objects
     );
 
-  /// List objects in collection in ghobject_t order
+  /// List objects in collection in hobject_t order
   int list_by_hash(
     const vector<string> &path, /// [in] Path to list
-    int min_count,              /// [in] List at least min_count
-    int max_count,              /// [in] List at most max_count
-    ghobject_t *next,            /// [in,out] List objects >= *next
-    vector<ghobject_t> *out      /// [out] Listed objects
+    int min_count, /// [in] List at least min_count
+    int max_count, /// [in] List at most max_count
+    hobject_t *next, /// [in,out] List objects >= *next
+    vector<hobject_t> *out      /// [out] Listed objects
     ); ///< @return Error Code, 0 on success
 };
 

@@ -1,11 +1,6 @@
 set(osd_srcs
 	Ager.cc 
 	ClassHandler.cc
-	ECBackend.cc
-	ECMsgTypes.cc
-	ECTransaction.cc
-	ECUtil.cc
-	HitSet.cc 
 	OpRequest.cc 
 	OSD.cc 
 	OSDCap.cc 

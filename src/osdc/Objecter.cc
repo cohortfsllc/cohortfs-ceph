@@ -1369,31 +1369,13 @@ int Objecter::op_cancel(ceph_tid_t tid, int r)
   return 0;
 }
 
-bool Objecter::is_pg_changed(
-  int oldprimary,
-  const vector<int>& oldacting,
-  int newprimary,
-  const vector<int>& newacting,
-  bool any_change)
-{
-  if (OSDMap::primary_changed(
-	oldprimary,
-	oldacting,
-	newprimary,
-	newacting))
-    return true;
-  if (any_change && oldacting != newacting)
-    return true;
-  return false;      // same primary (tho replicas may have changed)
-}
-
 bool Objecter::target_should_be_paused(op_target_t *t)
 {
   bool pauserd = osdmap->test_flag(CEPH_OSDMAP_PAUSERD);
   bool pausewr = osdmap->test_flag(CEPH_OSDMAP_PAUSEWR) || osdmap_full_flag();
 
   return (t->flags & CEPH_OSD_FLAG_READ && pauserd) ||
-         (t->flags & CEPH_OSD_FLAG_WRITE && pausewr);
+    (t->flags & CEPH_OSD_FLAG_WRITE && pausewr);
 }
 
 
@@ -1428,28 +1410,11 @@ int64_t Objecter::get_object_pg_hash_position(int64_t pool, const string& key,
 
 int Objecter::calc_target(op_target_t *t)
 {
-  bool is_read = t->flags & CEPH_OSD_FLAG_READ;
-  bool is_write = t->flags & CEPH_OSD_FLAG_WRITE;
-
-  bool need_check_tiering = false;
   if (t->target_oid.name.empty()) {
     t->target_oid = t->base_oid;
-    need_check_tiering = true;
   }
   if (t->target_oloc.empty()) {
     t->target_oloc = t->base_oloc;
-    need_check_tiering = true;
-  }
-  
-  if (need_check_tiering &&
-      (t->flags & CEPH_OSD_FLAG_IGNORE_OVERLAY) == 0) {
-    const pg_pool_t *pi = osdmap->get_pg_pool(t->base_oloc.pool);
-    if (pi) {
-      if (is_read && pi->has_read_tier())
-	t->target_oloc.pool = pi->read_tier;
-      if (is_write && pi->has_write_tier())
-	t->target_oloc.pool = pi->write_tier;
-    }
   }
 
   pg_t pgid;
@@ -1466,9 +1431,8 @@ int Objecter::calc_target(op_target_t *t)
     if (ret == -ENOENT)
       return RECALC_OP_TARGET_POOL_DNE;
   }
-  int primary;
-  vector<int> acting;
-  osdmap->pg_to_acting_osds(pgid, &acting, &primary);
+  int osd;
+  osdmap->pg_to_osd(pgid, osd);
 
   bool need_resend = false;
 
@@ -1479,53 +1443,9 @@ int Objecter::calc_target(op_target_t *t)
   }
 
   if (t->pgid != pgid ||
-      is_pg_changed(t->primary, t->acting, primary, acting, t->used_replica)) {
+      t->osd != osd) {
     t->pgid = pgid;
-    t->acting = acting;
-    t->primary = primary;
-    ldout(cct, 10) << __func__ << " pgid " << pgid
-		   << " acting " << acting << dendl;
-    t->used_replica = false;
-    if (primary == -1) {
-      t->osd = -1;
-    } else {
-      int osd;
-      bool read = is_read && !is_write;
-      if (read && (t->flags & CEPH_OSD_FLAG_BALANCE_READS)) {
-	int p = rand() % acting.size();
-	if (p)
-	  t->used_replica = true;
-	osd = acting[p];
-	ldout(cct, 10) << " chose random osd." << osd << " of " << acting << dendl;
-      } else if (read && (t->flags & CEPH_OSD_FLAG_LOCALIZE_READS) &&
-		 acting.size() > 1) {
-	// look for a local replica.  prefer the primary if the
-	// distance is the same.
-	int best = -1;
-	int best_locality;
-	for (unsigned i = 0; i < acting.size(); ++i) {
-	  int locality = osdmap->crush->get_common_ancestor_distance(
-		 cct, acting[i], crush_location);
-	  ldout(cct, 20) << __func__ << " localize: rank " << i
-			 << " osd." << acting[i]
-			 << " locality " << locality << dendl;
-	  if (i == 0 ||
-	      (locality >= 0 && best_locality >= 0 &&
-	       locality < best_locality) ||
-	      (best_locality < 0 && locality >= 0)) {
-	    best = i;
-	    best_locality = locality;
-	    if (i)
-	      t->used_replica = true;
-	  }
-	}
-	assert(best >= 0);
-	osd = acting[best];
-      } else {
-	osd = primary;
-      }
-      t->osd = osd;
-    }
+    t->osd = osd;
     need_resend = true;
   }
   if (need_resend) {
@@ -1561,8 +1481,8 @@ bool Objecter::recalc_linger_op_target(LingerOp *linger_op)
   if (r == RECALC_OP_TARGET_NEED_RESEND) {
     ldout(cct, 10) << "recalc_linger_op_target tid " << linger_op->linger_id
 		   << " pgid " << linger_op->target.pgid
-		   << " acting " << linger_op->target.acting << dendl;
-    
+		   << " osd " << linger_op->target.osd << dendl;
+
     OSDSession *s = linger_op->target.osd != -1 ?
       get_session(linger_op->target.osd) : NULL;
     if (linger_op->session != s) {
@@ -2415,7 +2335,6 @@ void Objecter::op_target_t::dump(Formatter *f) const
   f->dump_stream("target_object_id") << target_oid;
   f->dump_stream("target_object_locator") << target_oloc;
   f->dump_int("paused", (int)paused);
-  f->dump_int("used_replica", (int)used_replica);
   f->dump_int("precalc_pgid", (int)precalc_pgid);
 }
 
@@ -2694,11 +2613,10 @@ int Objecter::recalc_command_target(CommandOp *c)
       c->map_check_error_str = "pool dne";
       return RECALC_OP_TARGET_POOL_DNE;
     }
-    int primary;
-    vector<int> acting;
-    osdmap->pg_to_acting_osds(c->target_pg, &acting, &primary);
-    if (primary != -1)
-      s = get_session(primary);
+    int osd;
+    osdmap->pg_to_osd(c->target_pg, osd);
+    if (osd != -1)
+      s = get_session(osd);
   }
   if (c->session != s) {
     ldout(cct, 10) << "recalc_command_target " << c->tid << " now " << c->session << dendl;

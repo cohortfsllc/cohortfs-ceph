@@ -40,8 +40,6 @@ class Monitor;
 #include "messages/MOSDFailure.h"
 #include "messages/MPoolOp.h"
 
-#include "erasure-code/ErasureCodeInterface.h"
-
 #define OSD_METADATA_PREFIX "osd_metadata"
 
 /// information about a particular peer's failure reports for one osd
@@ -143,11 +141,6 @@ private:
   void check_failures(utime_t now);
   bool check_failure(utime_t now, int target_osd, failure_info_t& fi);
 
-  // map thrashing
-  int thrash_map;
-  int thrash_last_up_osd;
-  bool thrash();
-
   bool _have_pending_crush();
   CrushWrapper &_get_stable_crush();
   void _get_pending_crush(CrushWrapper& newcrush);
@@ -231,9 +224,6 @@ private:
   bool prepare_alive(class MOSDAlive *m);
   void _reply_map(PaxosServiceMessage *m, epoch_t e);
 
-  bool preprocess_pgtemp(class MOSDPGTemp *m);
-  bool prepare_pgtemp(class MOSDPGTemp *m);
-
   int _check_remove_pool(int64_t pool, const pg_pool_t *pi, ostream *ss);
   int _prepare_remove_pool(int64_t pool, ostream *ss);
   int _prepare_rename_pool(int64_t pool, string newname);
@@ -243,38 +233,18 @@ private:
   bool prepare_pool_op (MPoolOp *m);
   bool prepare_pool_op_create (MPoolOp *m);
   bool prepare_pool_op_delete(MPoolOp *m);
-  int crush_ruleset_create_erasure(const string &name,
-				   const string &profile,
-				   int *ruleset,
-				   stringstream &ss);
-  int get_erasure_code(const string &erasure_code_profile,
-		       ErasureCodeInterfaceRef *erasure_code,
-		       stringstream &ss);
   int prepare_pool_crush_ruleset(const unsigned pool_type,
-				 const string &erasure_code_profile,
 				 const string &ruleset_name,
 				 int *crush_ruleset,
 				 stringstream &ss);
-  bool erasure_code_profile_in_use(const map<int64_t, pg_pool_t> &pools,
-				   const string &profile,
-				   ostream &ss);
-  int parse_erasure_code_profile(const vector<string> &erasure_code_profile,
-				 map<string,string> *erasure_code_profile_map,
-				 stringstream &ss);
   int prepare_pool_size(const unsigned pool_type,
-			const string &erasure_code_profile,
 			unsigned *size,
 			stringstream &ss);
-  int prepare_pool_stripe_width(const unsigned pool_type,
-				const string &erasure_code_profile,
-				unsigned *stripe_width,
-				stringstream &ss);
   int prepare_new_pool(string& name, uint64_t auid,
 		       int crush_ruleset,
 		       const string &crush_ruleset_name,
-                       unsigned pg_num, unsigned pgp_num,
-		       const string &erasure_code_profile,
-                       const unsigned pool_type,
+		       unsigned pg_num, unsigned pgp_num,
+		       const unsigned pool_type,
 		       stringstream &ss);
   int prepare_new_pool(MPoolOp *m);
 
@@ -347,8 +317,7 @@ private:
 
  public:
   OSDMonitor(Monitor *mn, Paxos *p, string service_name)
-  : PaxosService(mn, p, service_name),
-    thrash_map(0), thrash_last_up_osd(-1) { }
+  : PaxosService(mn, p, service_name) { }
 
   void tick();  // check state, take actions
 

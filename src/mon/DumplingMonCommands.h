@@ -126,15 +126,6 @@ COMMAND("pg dump_stuck " \
 	"pg", "r", "cli,rest")
 COMMAND("pg map name=pgid,type=CephPgid", "show mapping of pg to osds", \
 	"pg", "r", "cli,rest")
-COMMAND("pg scrub name=pgid,type=CephPgid", "start scrub on <pgid>", \
-	"pg", "rw", "cli,rest")
-COMMAND("pg deep-scrub name=pgid,type=CephPgid", "start deep-scrub on <pgid>", \
-	"pg", "rw", "cli,rest")
-COMMAND("pg repair name=pgid,type=CephPgid", "start repair on <pgid>", \
-	"pg", "rw", "cli,rest")
-COMMAND("pg debug " \
-	"name=debugop,type=CephChoices,strings=unfound_objects_exist|degraded_pgs_exist", \
-	"show debug info about pgs", "pg", "r", "cli,rest")
 COMMAND("pg force_create_pg name=pgid,type=CephPgid", \
 	"force creation of pg <pgid>", "pg", "rw", "cli,rest")
 COMMAND("pg set_full_ratio name=ratio,type=CephFloat,range=0.0|1.0", \
@@ -334,15 +325,6 @@ COMMAND("osd map " \
 	"name=pool,type=CephPoolname " \
 	"name=object,type=CephObjectname", \
 	"find pg for <object> in <pool>", "osd", "r", "cli,rest")
-COMMAND("osd scrub " \
-	"name=who,type=CephString", \
-	"initiate scrub on osd <who>", "osd", "rw", "cli,rest")
-COMMAND("osd deep-scrub " \
-	"name=who,type=CephString", \
-	"initiate deep scrub on osd <who>", "osd", "rw", "cli,rest")
-COMMAND("osd repair " \
-	"name=who,type=CephString", \
-	"initiate repair on osd <who>", "osd", "rw", "cli,rest")
 COMMAND("osd lspools " \
 	"name=auid,type=CephInt,req=false", \
 	"list pools", "osd", "r", "cli,rest")
@@ -426,10 +408,10 @@ COMMAND("osd setmaxosd " \
 COMMAND("osd pause", "pause osd", "osd", "rw", "cli,rest")
 COMMAND("osd unpause", "unpause osd", "osd", "rw", "cli,rest")
 COMMAND("osd set " \
-	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin|nobackfill|norecover|noscrub|nodeep-scrub", \
+	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin|nobackfill", \
 	"set <key>", "osd", "rw", "cli,rest")
 COMMAND("osd unset " \
-	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin|nobackfill|norecover|noscrub|nodeep-scrub", \
+	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin|nobackfill", \
 	"unset <key>", "osd", "rw", "cli,rest")
 COMMAND("osd down " \
 	"type=CephString,name=ids,n=N", \

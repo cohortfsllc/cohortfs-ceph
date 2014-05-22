@@ -124,7 +124,7 @@ void MemStore::dump(Formatter *f)
     f->close_section();
 
     f->open_array_section("objects");
-    for (map<ghobject_t,ObjectRef>::iterator q = p->second->object_map.begin();
+    for (map<hobject_t,ObjectRef>::iterator q = p->second->object_map.begin();
 	 q != p->second->object_map.end();
 	 ++q) {
       f->open_object_section("object");
@@ -248,7 +248,7 @@ MemStore::CollectionRef MemStore::get_collection(coll_t cid)
 // ---------------
 // read operations
 
-bool MemStore::exists(coll_t cid, const ghobject_t& oid)
+bool MemStore::exists(coll_t cid, const hobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -263,7 +263,7 @@ bool MemStore::exists(coll_t cid, const ghobject_t& oid)
 
 int MemStore::stat(
     coll_t cid,
-    const ghobject_t& oid,
+    const hobject_t& oid,
     struct stat *st,
     bool allow_eio)
 {
@@ -285,7 +285,7 @@ int MemStore::stat(
 
 int MemStore::read(
     coll_t cid,
-    const ghobject_t& oid,
+    const hobject_t& oid,
     uint64_t offset,
     size_t len,
     bufferlist& bl,
@@ -313,7 +313,7 @@ int MemStore::read(
   return bl.length();
 }
 
-int MemStore::fiemap(coll_t cid, const ghobject_t& oid,
+int MemStore::fiemap(coll_t cid, const hobject_t& oid,
 		     uint64_t offset, size_t len, bufferlist& bl)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << offset << "~"
@@ -337,7 +337,7 @@ int MemStore::fiemap(coll_t cid, const ghobject_t& oid,
   return 0;  
 }
 
-int MemStore::getattr(coll_t cid, const ghobject_t& oid,
+int MemStore::getattr(coll_t cid, const hobject_t& oid,
 		      const char *name, bufferptr& value)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << name << dendl;
@@ -357,7 +357,7 @@ int MemStore::getattr(coll_t cid, const ghobject_t& oid,
   return 0;
 }
 
-int MemStore::getattrs(coll_t cid, const ghobject_t& oid,
+int MemStore::getattrs(coll_t cid, const hobject_t& oid,
 		       map<string,bufferptr>& aset, bool user_only)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -458,7 +458,7 @@ bool MemStore::collection_empty(coll_t cid)
   return c->object_map.empty();
 }
 
-int MemStore::collection_list(coll_t cid, vector<ghobject_t>& o)
+int MemStore::collection_list(coll_t cid, vector<hobject_t>& o)
 {
   dout(10) << __func__ << " " << cid << dendl;
   CollectionRef c = get_collection(cid);
@@ -466,16 +466,16 @@ int MemStore::collection_list(coll_t cid, vector<ghobject_t>& o)
     return -ENOENT;
   RWLock::RLocker l(c->lock);
 
-  for (map<ghobject_t,ObjectRef>::iterator p = c->object_map.begin();
+  for (map<hobject_t,ObjectRef>::iterator p = c->object_map.begin();
        p != c->object_map.end();
        ++p)
     o.push_back(p->first);
   return 0;
 }
 
-int MemStore::collection_list_partial(coll_t cid, ghobject_t start,
+int MemStore::collection_list_partial(coll_t cid, hobject_t start,
 				      int min, int max,
-				      vector<ghobject_t> *ls, ghobject_t *next)
+				      vector<hobject_t> *ls, hobject_t *next)
 {
   dout(10) << __func__ << " " << cid << " " << start << " " << min << "-"
 	   << max << " " << dendl;
@@ -484,22 +484,22 @@ int MemStore::collection_list_partial(coll_t cid, ghobject_t start,
     return -ENOENT;
   RWLock::RLocker l(c->lock);
 
-  map<ghobject_t,ObjectRef>::iterator p = c->object_map.lower_bound(start);
+  map<hobject_t,ObjectRef>::iterator p = c->object_map.lower_bound(start);
   while (p != c->object_map.end() &&
 	 ls->size() < (unsigned)max) {
     ls->push_back(p->first);
     ++p;
   }
   if (p == c->object_map.end())
-    *next = ghobject_t::get_max();
+    *next = hobject_t::get_max();
   else
     *next = p->first;
   return 0;
 }
 
 int MemStore::collection_list_range(coll_t cid,
-				    ghobject_t start, ghobject_t end,
-				    vector<ghobject_t> *ls)
+				    hobject_t start, hobject_t end,
+				    vector<hobject_t> *ls)
 {
   dout(10) << __func__ << " " << cid << " " << start << " " << end
 	   << dendl;
@@ -508,7 +508,7 @@ int MemStore::collection_list_range(coll_t cid,
     return -ENOENT;
   RWLock::RLocker l(c->lock);
 
-  map<ghobject_t,ObjectRef>::iterator p = c->object_map.lower_bound(start);
+  map<hobject_t,ObjectRef>::iterator p = c->object_map.lower_bound(start);
   while (p != c->object_map.end() &&
 	 p->first < end) {
     ls->push_back(p->first);
@@ -519,7 +519,7 @@ int MemStore::collection_list_range(coll_t cid,
 
 int MemStore::omap_get(
     coll_t cid,                ///< [in] Collection containing oid
-    const ghobject_t &oid,   ///< [in] Object containing omap
+    const hobject_t &oid,   ///< [in] Object containing omap
     bufferlist *header,      ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map
     )
@@ -540,7 +540,7 @@ int MemStore::omap_get(
 
 int MemStore::omap_get_header(
     coll_t cid,                ///< [in] Collection containing oid
-    const ghobject_t &oid,   ///< [in] Object containing omap
+    const hobject_t &oid,   ///< [in] Object containing omap
     bufferlist *header,      ///< [out] omap header
     bool allow_eio ///< [in] don't assert on eio
     )
@@ -560,7 +560,7 @@ int MemStore::omap_get_header(
 
 int MemStore::omap_get_keys(
     coll_t cid,              ///< [in] Collection containing oid
-    const ghobject_t &oid, ///< [in] Object containing omap
+    const hobject_t &oid, ///< [in] Object containing omap
     set<string> *keys      ///< [out] Keys defined on oid
     )
 {
@@ -582,7 +582,7 @@ int MemStore::omap_get_keys(
 
 int MemStore::omap_get_values(
     coll_t cid,                    ///< [in] Collection containing oid
-    const ghobject_t &oid,       ///< [in] Object containing omap
+    const hobject_t &oid,       ///< [in] Object containing omap
     const set<string> &keys,     ///< [in] Keys to get
     map<string, bufferlist> *out ///< [out] Returned keys and values
     )
@@ -608,7 +608,7 @@ int MemStore::omap_get_values(
 
 int MemStore::omap_check_keys(
     coll_t cid,                ///< [in] Collection containing oid
-    const ghobject_t &oid,   ///< [in] Object containing omap
+    const hobject_t &oid,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
     set<string> *out         ///< [out] Subset of keys defined on oid
     )
@@ -633,7 +633,7 @@ int MemStore::omap_check_keys(
 }
 
 ObjectMap::ObjectMapIterator MemStore::get_omap_iterator(coll_t cid,
-							 const ghobject_t& oid)
+							 const hobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -694,7 +694,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_TOUCH:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	r = _touch(cid, oid);
       }
       break;
@@ -702,7 +702,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_WRITE:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	uint64_t off = i.get_length();
 	uint64_t len = i.get_length();
 	bool replica = i.get_replica();
@@ -715,7 +715,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_ZERO:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	uint64_t off = i.get_length();
 	uint64_t len = i.get_length();
 	r = _zero(cid, oid, off, len);
@@ -735,7 +735,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_TRUNCATE:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	uint64_t off = i.get_length();
 	r = _truncate(cid, oid, off);
       }
@@ -744,7 +744,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_REMOVE:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	r = _remove(cid, oid);
       }
       break;
@@ -752,7 +752,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_SETATTR:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	string name = i.get_attrname();
 	bufferlist bl;
 	i.get_bl(bl);
@@ -765,7 +765,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_SETATTRS:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	map<string, bufferptr> aset;
 	i.get_attrset(aset);
 	r = _setattrs(cid, oid, aset);
@@ -775,7 +775,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_RMATTR:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	string name = i.get_attrname();
 	r = _rmattr(cid, oid, name.c_str());
       }
@@ -784,7 +784,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_RMATTRS:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	r = _rmattrs(cid, oid);
       }
       break;
@@ -792,8 +792,8 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_CLONE:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	ghobject_t noid = i.get_oid();
+	hobject_t oid = i.get_oid();
+	hobject_t noid = i.get_oid();
 	r = _clone(cid, oid, noid);
       }
       break;
@@ -801,8 +801,8 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_CLONERANGE:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	ghobject_t noid = i.get_oid();
+	hobject_t oid = i.get_oid();
+	hobject_t noid = i.get_oid();
  	uint64_t off = i.get_length();
 	uint64_t len = i.get_length();
 	r = _clone_range(cid, oid, noid, off, len, off);
@@ -812,8 +812,8 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_CLONERANGE2:
       {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	ghobject_t noid = i.get_oid();
+	hobject_t oid = i.get_oid();
+	hobject_t noid = i.get_oid();
  	uint64_t srcoff = i.get_length();
 	uint64_t len = i.get_length();
  	uint64_t dstoff = i.get_length();
@@ -839,7 +839,7 @@ void MemStore::_do_transaction(Transaction& t)
       {
 	coll_t ncid = i.get_cid();
 	coll_t ocid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	r = _collection_add(ncid, ocid, oid);
       }
       break;
@@ -847,7 +847,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_COLL_REMOVE:
        {
 	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	r = _remove(cid, oid);
        }
       break;
@@ -859,9 +859,9 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_COLL_MOVE_RENAME:
       {
 	coll_t oldcid = i.get_cid();
-	ghobject_t oldoid = i.get_oid();
+	hobject_t oldoid = i.get_oid();
 	coll_t newcid = i.get_cid();
-	ghobject_t newoid = i.get_oid();
+	hobject_t newoid = i.get_oid();
 	r = _collection_move_rename(oldcid, oldoid, newcid, newoid);
       }
       break;
@@ -895,14 +895,14 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_OMAP_CLEAR:
       {
 	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	r = _omap_clear(cid, oid);
       }
       break;
     case Transaction::OP_OMAP_SETKEYS:
       {
 	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	map<string, bufferlist> aset;
 	i.get_attrset(aset);
 	r = _omap_setkeys(cid, oid, aset);
@@ -911,7 +911,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_OMAP_RMKEYS:
       {
 	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	set<string> keys;
 	i.get_keyset(keys);
 	r = _omap_rmkeys(cid, oid, keys);
@@ -920,7 +920,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_OMAP_RMKEYRANGE:
       {
 	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	string first, last;
 	first = i.get_key();
 	last = i.get_key();
@@ -930,7 +930,7 @@ void MemStore::_do_transaction(Transaction& t)
     case Transaction::OP_OMAP_SETHEADER:
       {
 	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
+	hobject_t oid = i.get_oid();
 	bufferlist bl;
 	i.get_bl(bl);
 	r = _omap_setheader(cid, oid, bl);
@@ -1006,7 +1006,7 @@ void MemStore::_do_transaction(Transaction& t)
   }
 }
 
-int MemStore::_touch(coll_t cid, const ghobject_t& oid)
+int MemStore::_touch(coll_t cid, const hobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1023,7 +1023,7 @@ int MemStore::_touch(coll_t cid, const ghobject_t& oid)
   return 0;
 }
 
-int MemStore::_write(coll_t cid, const ghobject_t& oid,
+int MemStore::_write(coll_t cid, const hobject_t& oid,
 		     uint64_t offset, size_t len, const bufferlist& bl,
 		     bool replica)
 {
@@ -1076,7 +1076,7 @@ void MemStore::_write_into_bl(const bufferlist& src, unsigned offset,
   dst->claim(newdata);
 }
 
-int MemStore::_zero(coll_t cid, const ghobject_t& oid,
+int MemStore::_zero(coll_t cid, const hobject_t& oid,
 		    uint64_t offset, size_t len)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << offset << "~"
@@ -1088,7 +1088,7 @@ int MemStore::_zero(coll_t cid, const ghobject_t& oid,
   return _write(cid, oid, offset, len, bl);
 }
 
-int MemStore::_truncate(coll_t cid, const ghobject_t& oid, uint64_t size)
+int MemStore::_truncate(coll_t cid, const hobject_t& oid, uint64_t size)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << size << dendl;
   CollectionRef c = get_collection(cid);
@@ -1113,7 +1113,7 @@ int MemStore::_truncate(coll_t cid, const ghobject_t& oid, uint64_t size)
   return 0;
 }
 
-int MemStore::_remove(coll_t cid, const ghobject_t& oid)
+int MemStore::_remove(coll_t cid, const hobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1129,7 +1129,7 @@ int MemStore::_remove(coll_t cid, const ghobject_t& oid)
   return 0;
 }
 
-int MemStore::_setattrs(coll_t cid, const ghobject_t& oid,
+int MemStore::_setattrs(coll_t cid, const hobject_t& oid,
 			map<string,bufferptr>& aset)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -1146,7 +1146,7 @@ int MemStore::_setattrs(coll_t cid, const ghobject_t& oid,
   return 0;
 }
 
-int MemStore::_rmattr(coll_t cid, const ghobject_t& oid, const char *name)
+int MemStore::_rmattr(coll_t cid, const hobject_t& oid, const char *name)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << name << dendl;
   CollectionRef c = get_collection(cid);
@@ -1163,7 +1163,7 @@ int MemStore::_rmattr(coll_t cid, const ghobject_t& oid, const char *name)
   return 0;
 }
 
-int MemStore::_rmattrs(coll_t cid, const ghobject_t& oid)
+int MemStore::_rmattrs(coll_t cid, const hobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1178,8 +1178,8 @@ int MemStore::_rmattrs(coll_t cid, const ghobject_t& oid)
   return 0;
 }
 
-int MemStore::_clone(coll_t cid, const ghobject_t& oldoid,
-		     const ghobject_t& newoid)
+int MemStore::_clone(coll_t cid, const hobject_t& oldoid,
+		     const hobject_t& newoid)
 {
   dout(10) << __func__ << " " << cid << " " << oldoid
 	   << " -> " << newoid << dendl;
@@ -1203,8 +1203,8 @@ int MemStore::_clone(coll_t cid, const ghobject_t& oldoid,
   return 0;
 }
 
-int MemStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
-			   const ghobject_t& newoid,
+int MemStore::_clone_range(coll_t cid, const hobject_t& oldoid,
+			   const hobject_t& newoid,
 			   uint64_t srcoff, uint64_t len, uint64_t dstoff)
 {
   dout(10) << __func__ << " " << cid << " "
@@ -1235,7 +1235,7 @@ int MemStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
   return len;
 }
 
-int MemStore::_omap_clear(coll_t cid, const ghobject_t &oid)
+int MemStore::_omap_clear(coll_t cid, const hobject_t &oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1250,7 +1250,7 @@ int MemStore::_omap_clear(coll_t cid, const ghobject_t &oid)
   return 0;
 }
 
-int MemStore::_omap_setkeys(coll_t cid, const ghobject_t &oid,
+int MemStore::_omap_setkeys(coll_t cid, const hobject_t &oid,
 			    const map<string, bufferlist> &aset)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -1267,7 +1267,7 @@ int MemStore::_omap_setkeys(coll_t cid, const ghobject_t &oid,
   return 0;
 }
 
-int MemStore::_omap_rmkeys(coll_t cid, const ghobject_t &oid,
+int MemStore::_omap_rmkeys(coll_t cid, const hobject_t &oid,
 			   const set<string> &keys)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -1284,7 +1284,7 @@ int MemStore::_omap_rmkeys(coll_t cid, const ghobject_t &oid,
   return 0;
 }
 
-int MemStore::_omap_rmkeyrange(coll_t cid, const ghobject_t &oid,
+int MemStore::_omap_rmkeyrange(coll_t cid, const hobject_t &oid,
 			       const string& first, const string& last)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << first
@@ -1304,7 +1304,7 @@ int MemStore::_omap_rmkeyrange(coll_t cid, const ghobject_t &oid,
   return 0;
 }
 
-int MemStore::_omap_setheader(coll_t cid, const ghobject_t &oid,
+int MemStore::_omap_setheader(coll_t cid, const hobject_t &oid,
 			      const bufferlist &bl)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -1347,7 +1347,7 @@ int MemStore::_destroy_collection(coll_t cid)
   return 0;
 }
 
-int MemStore::_collection_add(coll_t cid, coll_t ocid, const ghobject_t& oid)
+int MemStore::_collection_add(coll_t cid, coll_t ocid, const hobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << ocid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1369,8 +1369,8 @@ int MemStore::_collection_add(coll_t cid, coll_t ocid, const ghobject_t& oid)
   return 0;
 }
 
-int MemStore::_collection_move_rename(coll_t oldcid, const ghobject_t& oldoid,
-				      coll_t cid, const ghobject_t& oid)
+int MemStore::_collection_move_rename(coll_t oldcid, const hobject_t& oldoid,
+				      coll_t cid, const hobject_t& oid)
 {
   dout(10) << __func__ << " " << oldcid << " " << oldoid << " -> "
 	   << cid << " " << oid << dendl;
@@ -1465,7 +1465,7 @@ int MemStore::_split_collection(coll_t cid, uint32_t bits, uint32_t match,
   RWLock::WLocker l1(MIN(sc, dc)->lock);
   RWLock::WLocker l2(MAX(sc, dc)->lock);
 
-  map<ghobject_t,ObjectRef>::iterator p = sc->object_map.begin();
+  map<hobject_t,ObjectRef>::iterator p = sc->object_map.begin();
   while (p != sc->object_map.end()) {
     if (p->first.match(bits, match)) {
       dout(20) << " moving " << p->first << dendl;

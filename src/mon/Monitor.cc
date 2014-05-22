@@ -1710,9 +1710,6 @@ void Monitor::finish_election()
 void Monitor::apply_quorum_to_compatset_features()
 {
   CompatSet new_features(features);
-  if (quorum_features & CEPH_FEATURE_OSD_ERASURE_CODES) {
-    new_features.incompat.insert(CEPH_MON_FEATURE_INCOMPAT_OSD_ERASURE_CODES);
-  }
   if (quorum_features & CEPH_FEATURE_OSDMAP_ENC) {
     new_features.incompat.insert(CEPH_MON_FEATURE_INCOMPAT_OSDMAP_ENC);
   }
@@ -1733,9 +1730,6 @@ void Monitor::apply_quorum_to_compatset_features()
 void Monitor::apply_compatset_features_to_quorum_requirements()
 {
   required_features = 0;
-  if (features.incompat.contains(CEPH_MON_FEATURE_INCOMPAT_OSD_ERASURE_CODES)) {
-    required_features |= CEPH_FEATURE_OSD_ERASURE_CODES;
-  }
   if (features.incompat.contains(CEPH_MON_FEATURE_INCOMPAT_OSDMAP_ENC)) {
     required_features |= CEPH_FEATURE_OSDMAP_ENC;
   }
@@ -2970,10 +2964,6 @@ bool Monitor::dispatch(MonSession *s, Message *m, const bool src_is_mon)
     case MSG_OSD_BOOT:
     case MSG_OSD_ALIVE:
     case MSG_OSD_PGTEMP:
-      paxos_service[PAXOS_OSDMAP]->dispatch((PaxosServiceMessage*)m);
-      break;
-
-    case MSG_REMOVE_SNAPS:
       paxos_service[PAXOS_OSDMAP]->dispatch((PaxosServiceMessage*)m);
       break;
 

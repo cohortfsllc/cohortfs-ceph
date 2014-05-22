@@ -49,8 +49,6 @@ using namespace std;
 
 #include "messages/MCommand.h"
 #include "messages/MCommandReply.h"
-#include "messages/MBackfillReserve.h"
-#include "messages/MRecoveryReserve.h"
 
 #include "messages/MRoute.h"
 #include "messages/MForward.h"
@@ -63,22 +61,11 @@ using namespace std;
 #include "messages/MOSDPing.h"
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
-#include "messages/MOSDSubOp.h"
-#include "messages/MOSDSubOpReply.h"
 #include "messages/MOSDMap.h"
 
-#include "messages/MOSDPGNotify.h"
-#include "messages/MOSDPGQuery.h"
-#include "messages/MOSDPGLog.h"
 #include "messages/MOSDPGRemove.h"
-#include "messages/MOSDPGInfo.h"
 #include "messages/MOSDPGCreate.h"
-#include "messages/MOSDPGTrim.h"
-#include "messages/MOSDPGMissing.h"
-#include "messages/MOSDScrub.h"
-#include "messages/MOSDRepScrub.h"
 #include "messages/MOSDPGScan.h"
-#include "messages/MOSDPGBackfill.h"
 
 #include "messages/MMonMap.h"
 #include "messages/MMonGetMap.h"
@@ -151,15 +138,6 @@ using namespace std;
 #include "messages/MTimeCheck.h"
 
 #include "common/config.h"
-
-#include "messages/MOSDPGPush.h"
-#include "messages/MOSDPGPushReply.h"
-#include "messages/MOSDPGPull.h"
-
-#include "messages/MOSDECSubOpWrite.h"
-#include "messages/MOSDECSubOpWriteReply.h"
-#include "messages/MOSDECSubOpRead.h"
-#include "messages/MOSDECSubOpReadReply.h"
 
 #define DEBUGLVL  10    // debug level of output
 
@@ -353,12 +331,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case MSG_COMMAND_REPLY:
     m = new MCommandReply;
     break;
-  case MSG_OSD_BACKFILL_RESERVE:
-    m = new MBackfillReserve;
-    break;
-  case MSG_OSD_RECOVERY_RESERVE:
-    m = new MRecoveryReserve;
-    break;
 
   case MSG_ROUTE:
     m = new MRoute;
@@ -366,7 +338,7 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case MSG_FORWARD:
     m = new MForward;
     break;
-    
+
   case CEPH_MSG_MON_MAP:
     m = new MMonMap;
     break;
@@ -404,12 +376,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case CEPH_MSG_OSD_OPREPLY:
     m = new MOSDOpReply();
     break;
-  case MSG_OSD_SUBOP:
-    m = new MOSDSubOp();
-    break;
-  case MSG_OSD_SUBOPREPLY:
-    m = new MOSDSubOpReply();
-    break;
 
   case CEPH_MSG_OSD_MAP:
     m = new MOSDMap;
@@ -419,65 +385,16 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     m = new MWatchNotify;
     break;
 
-  case MSG_OSD_PG_NOTIFY:
-    m = new MOSDPGNotify;
-    break;
-  case MSG_OSD_PG_QUERY:
-    m = new MOSDPGQuery;
-    break;
-  case MSG_OSD_PG_LOG:
-    m = new MOSDPGLog;
-    break;
   case MSG_OSD_PG_REMOVE:
     m = new MOSDPGRemove;
-    break;
-  case MSG_OSD_PG_INFO:
-    m = new MOSDPGInfo;
     break;
   case MSG_OSD_PG_CREATE:
     m = new MOSDPGCreate;
     break;
-  case MSG_OSD_PG_TRIM:
-    m = new MOSDPGTrim;
-    break;
 
-  case MSG_OSD_SCRUB:
-    m = new MOSDScrub;
-    break;
-  case MSG_OSD_PG_MISSING:
-    m = new MOSDPGMissing;
-    break;
-  case MSG_OSD_REP_SCRUB:
-    m = new MOSDRepScrub;
-    break;
   case MSG_OSD_PG_SCAN:
     m = new MOSDPGScan;
     break;
-  case MSG_OSD_PG_BACKFILL:
-    m = new MOSDPGBackfill;
-    break;
-  case MSG_OSD_PG_PUSH:
-    m = new MOSDPGPush;
-    break;
-  case MSG_OSD_PG_PULL:
-    m = new MOSDPGPull;
-    break;
-  case MSG_OSD_PG_PUSH_REPLY:
-    m = new MOSDPGPushReply;
-    break;
-  case MSG_OSD_EC_WRITE:
-    m = new MOSDECSubOpWrite;
-    break;
-  case MSG_OSD_EC_WRITE_REPLY:
-    m = new MOSDECSubOpWriteReply;
-    break;
-  case MSG_OSD_EC_READ:
-    m = new MOSDECSubOpRead;
-    break;
-  case MSG_OSD_EC_READ_REPLY:
-    m = new MOSDECSubOpReadReply;
-    break;
-   // auth
   case CEPH_MSG_AUTH:
     m = new MAuth;
     break;

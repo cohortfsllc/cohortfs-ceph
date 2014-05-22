@@ -36,16 +36,14 @@
   * is responsible for:
   *
   * 1) Handling client operations
-  * 2) Handling object recovery
   * 3) Handling object access
-  * 4) Handling scrub, deep-scrub, repair
   */
  class PGBackend {
  protected:
    ObjectStore *store;
    const coll_t coll;
    const coll_t temp_coll;
- public:	
+ public:
    /**
     * Provides interfaces for PGBackend callbacks
     *
@@ -56,44 +54,6 @@
    class Listener {
    public:
      /// Recovery
-
-     virtual void on_local_recover_start(
-       const hobject_t &oid,
-       ObjectStore::Transaction *t) = 0;
-     /**
-      * Called with the transaction recovering oid
-      */
-     virtual void on_local_recover(
-       const hobject_t &oid,
-       const object_stat_sum_t &stat_diff,
-       const ObjectRecoveryInfo &recovery_info,
-       ObjectContextRef obc,
-       ObjectStore::Transaction *t
-       ) = 0;
-
-     /**
-      * Called when transaction recovering oid is durable and
-      * applied on all replicas
-      */
-     virtual void on_global_recover(const hobject_t &oid) = 0;
-
-     /**
-      * Called when peer is recovered
-      */
-     virtual void on_peer_recover(
-       pg_shard_t peer,
-       const hobject_t &oid,
-       const ObjectRecoveryInfo &recovery_info,
-       const object_stat_sum_t &stat
-       ) = 0;
-
-     virtual void begin_peer_recover(
-       pg_shard_t peer,
-       const hobject_t oid) = 0;
-
-     virtual void failed_push(pg_shard_t from, const hobject_t &soid) = 0;
-     
-     virtual void cancel_pull(const hobject_t &soid) = 0;
 
      /**
       * Bless a context
@@ -112,52 +72,9 @@
        ) = 0;
      virtual epoch_t get_epoch() const = 0;
 
-     virtual const set<pg_shard_t> &get_actingbackfill_shards() const = 0;
-     virtual const set<pg_shard_t> &get_acting_shards() const = 0;
-     virtual const set<pg_shard_t> &get_backfill_shards() const = 0;
-
      virtual std::string gen_dbg_prefix() const = 0;
 
-     virtual const map<hobject_t, set<pg_shard_t> > &get_missing_loc_shards()
-       const = 0;
-
-     virtual const pg_missing_t &get_local_missing() const = 0;
-     virtual const map<pg_shard_t, pg_missing_t> &get_shard_missing()
-       const = 0;
-     virtual boost::optional<const pg_missing_t &> maybe_get_shard_missing(
-       pg_shard_t peer) const {
-       if (peer == primary_shard()) {
-	 return get_local_missing();
-       } else {
-	 map<pg_shard_t, pg_missing_t>::const_iterator i =
-	   get_shard_missing().find(peer);
-	 if (i == get_shard_missing().end()) {
-	   return boost::optional<const pg_missing_t &>();
-	 } else {
-	   return i->second;
-	 }
-       }
-     }
-     virtual const pg_missing_t &get_shard_missing(pg_shard_t peer) const {
-       boost::optional<const pg_missing_t &> m = maybe_get_shard_missing(peer);
-       assert(m);
-       return *m;
-     }
-
-     virtual const map<pg_shard_t, pg_info_t> &get_shard_info() const = 0;
-     virtual const pg_info_t &get_shard_info(pg_shard_t peer) const {
-       if (peer == primary_shard()) {
-	 return get_info();
-       } else {
-	 map<pg_shard_t, pg_info_t>::const_iterator i =
-	   get_shard_info().find(peer);
-	 assert(i != get_shard_info().end());
-	 return i->second;
-       }
-     }
-
      virtual const PGLog &get_log() const = 0;
-     virtual bool pgb_is_primary() const = 0;
      virtual OSDMapRef pgb_get_osdmap() const = 0;
      virtual const pg_info_t &get_info() const = 0;
      virtual const pg_pool_t &get_pool() const = 0;
@@ -169,20 +86,10 @@
      virtual void op_applied(
        const eversion_t &applied_version) = 0;
 
-     virtual bool should_send_op(
-       pg_shard_t peer,
-       const hobject_t &hoid) = 0;
-
      virtual void log_operation(
        vector<pg_log_entry_t> &logv,
-       boost::optional<pg_hit_set_history_t> &hset_history,
-       const eversion_t &trim_to,
        bool transaction_applied,
        ObjectStore::Transaction *t) = 0;
-
-     virtual void update_peer_last_complete_ondisk(
-       pg_shard_t fromosd,
-       eversion_t lcod) = 0;
 
      virtual void update_last_complete_ondisk(
        eversion_t lcod) = 0;
@@ -193,24 +100,10 @@
      virtual void schedule_work(
        GenContext<ThreadPool::TPHandle&> *c) = 0;
 
-     virtual pg_shard_t whoami_shard() const = 0;
-     int whoami() const {
-       return whoami_shard().osd;
-     }
-     spg_t whoami_spg_t() const {
+     pg_t whoami_pg_t() const {
        return get_info().pgid;
      }
 
-     virtual spg_t primary_spg_t() const = 0;
-     virtual pg_shard_t primary_shard() const = 0;
-
-     virtual void send_message_osd_cluster(
-       int peer, Message *m, epoch_t from_epoch) = 0;
-     virtual void send_message_osd_cluster(
-       Message *m, Connection *con) = 0;
-     virtual void send_message_osd_cluster(
-       Message *m, const ConnectionRef& con) = 0;
-     virtual ConnectionRef get_con_osd_cluster(int peer, epoch_t from_epoch) = 0;
      virtual entity_name_t get_cluster_msgr_name() = 0;
 
      virtual PerfCounters *get_logger() = 0;
@@ -228,7 +121,6 @@
      coll(coll),
      temp_coll(temp_coll),
      parent(l), temp_created(false) {}
-   bool is_primary() const { return get_parent()->pgb_is_primary(); }
    OSDMapRef get_osdmap() const { return get_parent()->pgb_get_osdmap(); }
    const pg_info_t &get_info() { return get_parent()->get_info(); }
 
@@ -248,109 +140,19 @@
      virtual ~RecoveryHandle() {}
    };
 
-   /// Get a fresh recovery operation
-   virtual RecoveryHandle *open_recovery_op() = 0;
-
-   /// run_recovery_op: finish the operation represented by h
-   virtual void run_recovery_op(
-     RecoveryHandle *h,     ///< [in] op to finish
-     int priority           ///< [in] msg priority
-     ) = 0;
-
-   /**
-    * recover_object
-    *
-    * Triggers a recovery operation on the specified hobject_t
-    * onreadable must be called before onwriteable
-    *
-    * On each replica (primary included), get_parent()->on_not_missing()
-    * must be called when the transaction finalizing the recovery
-    * is queued.  Similarly, get_parent()->on_readable() must be called
-    * when the transaction is applied in the backing store.
-    *
-    * get_parent()->on_not_degraded() should be called on the primary
-    * when writes can resume on the object.
-    *
-    * obc may be NULL if the primary lacks the object.
-    *
-    * head may be NULL only if the head is missing
-    *
-    * @param missing [in] set of info, missing pairs for queried nodes
-    * @param overlaps [in] mapping of object to file offset overlaps
-    */
-   virtual void recover_object(
-     const hobject_t &hoid, ///< [in] object to recover
-     eversion_t v, ///< [in] version to recover
-     ObjectContextRef head,  ///< [in] context of the head object
-     RecoveryHandle *h      ///< [in,out] handle to attach recovery op to
-     ) = 0;
-
-   /**
-    * true if PGBackend can handle this message while inactive
-    *
-    * If it returns true, handle_message *must* also return true
-    */
-   virtual bool can_handle_while_inactive(OpRequestRef op) = 0;
-
-   /// gives PGBackend a crack at an incoming message
-   virtual bool handle_message(
-     OpRequestRef op ///< [in] message received
-     ) = 0; ///< @return true if the message was handled
-
-   virtual void check_recovery_sources(const OSDMapRef osdmap) = 0;
-
    /**
     * implementation should clear itself, contexts blessed prior to on_change
     * won't be called after on_change()
     */
    void on_change(ObjectStore::Transaction *t);
    virtual void _on_change(ObjectStore::Transaction *t) = 0;
-   virtual void clear_state() = 0;
 
    virtual void on_flushed() = 0;
-
-   class IsRecoverablePredicate {
-   public:
-     /**
-      * have encodes the shards available
-      */
-     virtual bool operator()(const set<pg_shard_t> &have) const = 0;
-     virtual ~IsRecoverablePredicate() {}
-   };
-   virtual IsRecoverablePredicate *get_is_recoverable_predicate() = 0;
-
-   class IsReadablePredicate {
-   public:
-     /**
-      * have encodes the shards available
-      */
-     virtual bool operator()(const set<pg_shard_t> &have) const = 0;
-     virtual ~IsReadablePredicate() {}
-   };
-   virtual IsReadablePredicate *get_is_readable_predicate() = 0;
 
    void temp_colls(list<coll_t> *out) {
      if (temp_created)
        out->push_back(temp_coll);
    }
-   void split_colls(
-     spg_t child,
-     int split_bits,
-     int seed,
-     ObjectStore::Transaction *t) {
-     coll_t target = coll_t::make_temp_coll(child);
-     if (!temp_created)
-       return;
-     t->create_collection(target);
-     t->split_collection(
-       temp_coll,
-       split_bits,
-       seed,
-       target);
-   }
-
-   virtual void dump_recovery_info(Formatter *f) const = 0;
-
  private:
    bool temp_created;
    set<hobject_t> temp_contents;
@@ -490,10 +292,7 @@
      const hobject_t &hoid,               ///< [in] object
      const eversion_t &at_version,        ///< [in] version
      PGTransaction *t,                    ///< [in] trans to execute
-     const eversion_t &trim_to,           ///< [in] trim log to here
      vector<pg_log_entry_t> &log_entries, ///< [in] log entries for t
-     /// [in] hitset history (if updated with this transaction)
-     boost::optional<pg_hit_set_history_t> &hset_history,
      Context *on_local_applied_sync,      ///< [in] called when applied locally
      Context *on_all_applied,             ///< [in] called when all acked
      Context *on_all_commit, ///< [in] called when all commit
@@ -543,32 +342,8 @@
 		pair<bufferlist*, Context*> > > &to_read,
      Context *on_complete) = 0;
 
-   virtual bool scrub_supported() { return false; }
-   void be_scan_list(
-     ScrubMap &map, const vector<hobject_t> &ls, bool deep,
-     ThreadPool::TPHandle &handle);
-   enum scrub_error_type be_compare_scrub_objects(
-     const ScrubMap::object &auth,
-     const ScrubMap::object &candidate,
-     ostream &errorstream);
-   map<pg_shard_t, ScrubMap *>::const_iterator be_select_auth_object(
-     const hobject_t &obj,
-     const map<pg_shard_t,ScrubMap*> &maps);
-   void be_compare_scrubmaps(
-     const map<pg_shard_t,ScrubMap*> &maps,
-     map<hobject_t, set<pg_shard_t> > &missing,
-     map<hobject_t, set<pg_shard_t> > &inconsistent,
-     map<hobject_t, pg_shard_t> &authoritative,
-     int &shallow_errors, int &deep_errors,
-     const spg_t pgid,
-     const vector<int> &acting,
-     ostream &errorstream);
    virtual uint64_t be_get_ondisk_size(
      uint64_t logical_size) { assert(0); return 0; }
-   virtual void be_deep_scrub(
-     const hobject_t &poid,
-     ScrubMap::object &o,
-     ThreadPool::TPHandle &handle) { assert(0); }
 
    static PGBackend *build_pg_backend(
      const pg_pool_t &pool,
@@ -579,19 +354,6 @@
      ObjectStore *store,
      CephContext *cct);
  };
-
-struct PG_SendMessageOnConn: public Context {
-  PGBackend::Listener *pg;
-  Message *reply;
-  ConnectionRef conn;
-  PG_SendMessageOnConn(
-    PGBackend::Listener *pg,
-    Message *reply,
-    ConnectionRef conn) : pg(pg), reply(reply), conn(conn) {}
-  void finish(int) {
-    pg->send_message_osd_cluster(reply, conn.get());
-  }
-};
 
 struct PG_QueueAsync : public Context {
   PGBackend::Listener *pg;

@@ -385,15 +385,6 @@ OPTION(mds_standby_replay, OPT_BOOL, false)
 // If true, compact leveldb store on mount
 OPTION(osd_compact_leveldb_on_mount, OPT_BOOL, false)
 
-// Maximum number of backfills to or from a single osd
-OPTION(osd_max_backfills, OPT_U64, 10)
-
-// Refuse backfills when OSD full ratio is above this value
-OPTION(osd_backfill_full_ratio, OPT_FLOAT, 0.85)
-
-// Seconds to wait before retrying refused backfills
-OPTION(osd_backfill_retry_interval, OPT_DOUBLE, 10.0)
-
 // max agent flush ops
 OPTION(osd_agent_max_ops, OPT_INT, 4)
 OPTION(osd_agent_min_evict_effort, OPT_FLOAT, .1)
@@ -443,33 +434,16 @@ OPTION(osd_pool_default_cache_min_evict_age, OPT_INT, 0)  // seconds
 OPTION(osd_hit_set_min_size, OPT_INT, 1000)  // min target size for a HitSet
 OPTION(osd_hit_set_namespace, OPT_STR, ".ceph-internal") // rados namespace for hit_set tracking
 
-OPTION(osd_tier_default_cache_mode, OPT_STR, "writeback")
-OPTION(osd_tier_default_cache_hit_set_count, OPT_INT, 4)
-OPTION(osd_tier_default_cache_hit_set_period, OPT_INT, 1200)
-OPTION(osd_tier_default_cache_hit_set_type, OPT_STR, "bloom")
-
 OPTION(osd_map_dedup, OPT_BOOL, true)
 OPTION(osd_map_cache_size, OPT_INT, 500)
 OPTION(osd_map_message_max, OPT_INT, 100)  // max maps per MOSDMap message
 OPTION(osd_map_share_max_epochs, OPT_INT, 100)  // cap on # of inc maps we send to peers, clients
 OPTION(osd_op_threads, OPT_INT, 2)    // 0 == no threading
-OPTION(osd_peering_wq_batch_size, OPT_U64, 20)
 OPTION(osd_op_pq_max_tokens_per_priority, OPT_U64, 4194304)
 OPTION(osd_op_pq_min_cost, OPT_U64, 65536)
 OPTION(osd_disk_threads, OPT_INT, 1)
-OPTION(osd_recovery_threads, OPT_INT, 1)
-OPTION(osd_recover_clone_overlap, OPT_BOOL, true)   // preserve clone_overlap during recovery/migration
 
-// Only use clone_overlap for recovery if there are fewer than
-// osd_recover_clone_overlap_limit entries in the overlap set
-OPTION(osd_recover_clone_overlap_limit, OPT_INT, 10)
-
-OPTION(osd_backfill_scan_min, OPT_INT, 64)
-OPTION(osd_backfill_scan_max, OPT_INT, 512)
 OPTION(osd_op_thread_timeout, OPT_INT, 15)
-OPTION(osd_recovery_thread_timeout, OPT_INT, 30)
-OPTION(osd_scrub_thread_timeout, OPT_INT, 60)
-OPTION(osd_scrub_finalize_thread_timeout, OPT_INT, 60*10)
 OPTION(osd_remove_thread_timeout, OPT_INT, 60*60)
 OPTION(osd_command_thread_timeout, OPT_INT, 10*60)
 OPTION(osd_age, OPT_FLOAT, .8)
@@ -490,31 +464,12 @@ OPTION(osd_pg_stat_report_interval_max, OPT_INT, 500)  // report pg stats for an
 OPTION(osd_mon_ack_timeout, OPT_INT, 30) // time out a mon if it doesn't ack stats
 OPTION(osd_default_data_pool_replay_window, OPT_INT, 45)
 OPTION(osd_preserve_trimmed_log, OPT_BOOL, false)
-OPTION(osd_auto_mark_unfound_lost, OPT_BOOL, false)
-OPTION(osd_recovery_delay_start, OPT_FLOAT, 0)
-OPTION(osd_recovery_max_active, OPT_INT, 15)
-OPTION(osd_recovery_max_single_start, OPT_INT, 5)
-OPTION(osd_recovery_max_chunk, OPT_U64, 8<<20)  // max size of push chunk
-OPTION(osd_copyfrom_max_chunk, OPT_U64, 8<<20)   // max size of a COPYFROM chunk
-OPTION(osd_push_per_object_cost, OPT_U64, 1000)  // push cost per object
-OPTION(osd_max_push_cost, OPT_U64, 8<<20)  // max size of push message
-OPTION(osd_max_push_objects, OPT_U64, 10)  // max objects in single push op
-OPTION(osd_recovery_forget_lost_objects, OPT_BOOL, false)   // off for now
-OPTION(osd_max_scrubs, OPT_INT, 1)
-OPTION(osd_scrub_load_threshold, OPT_FLOAT, 0.5)
-OPTION(osd_scrub_min_interval, OPT_FLOAT, 60*60*24)    // if load is low
-OPTION(osd_scrub_max_interval, OPT_FLOAT, 7*60*60*24)  // regardless of load
-OPTION(osd_scrub_chunk_min, OPT_INT, 5)
-OPTION(osd_scrub_chunk_max, OPT_INT, 25)
-OPTION(osd_deep_scrub_interval, OPT_FLOAT, 60*60*24*7) // once a week
-OPTION(osd_deep_scrub_stride, OPT_INT, 524288)
 OPTION(osd_scan_list_ping_tp_interval, OPT_U64, 100)
 OPTION(osd_auto_weight, OPT_BOOL, false)
 OPTION(osd_class_dir, OPT_STR, CEPH_LIBDIR "/rados-classes") // where rados plugins are stored
 OPTION(osd_open_classes_on_start, OPT_BOOL, true)
 OPTION(osd_check_for_log_corruption, OPT_BOOL, false)
 OPTION(osd_default_notify_timeout, OPT_U32, 30) // default notify timeout in seconds
-OPTION(osd_kill_backfill_at, OPT_INT, 0)
 
 // Bounds how infrequently a new map epoch will be persisted for a pg
 OPTION(osd_pg_epoch_persisted_max_stale, OPT_U32, 200)
@@ -532,8 +487,6 @@ OPTION(osd_debug_drop_pg_create_duration, OPT_INT, 1)
 OPTION(osd_debug_drop_op_probability, OPT_DOUBLE, 0)   // probability of stalling/dropping a client op
 OPTION(osd_debug_op_order, OPT_BOOL, false)
 OPTION(osd_debug_verify_stray_on_activate, OPT_BOOL, false)
-OPTION(osd_debug_skip_full_check_in_backfill_reservation, OPT_BOOL, false)
-OPTION(osd_debug_reject_backfill_probability, OPT_DOUBLE, 0)
 OPTION(osd_enable_op_tracker, OPT_BOOL, true) // enable/disable OSD op tracking
 OPTION(osd_op_history_size, OPT_U32, 20)    // Max number of completed ops to track
 OPTION(osd_op_history_duration, OPT_U32, 600) // Oldest completed op to track
@@ -562,20 +515,7 @@ OPTION(leveldb_paranoid, OPT_BOOL, false) // leveldb paranoid flag
 OPTION(leveldb_log, OPT_STR, "/dev/null")  // enable leveldb log file
 OPTION(leveldb_compact_on_mount, OPT_BOOL, false)
 
-/**
- * osd_client_op_priority and osd_recovery_op_priority adjust the relative
- * priority of client io vs recovery io.
- *
- * osd_client_op_priority/osd_recovery_op_priority determines the ratio of
- * available io between client and recovery.  Each option may be set between
- * 1..63.
- *
- * osd_recovery_op_warn_multiple scales the normal warning threshhold,
- * osd_op_complaint_time, so that slow recovery ops won't cause noise
- */
 OPTION(osd_client_op_priority, OPT_U32, 63)
-OPTION(osd_recovery_op_priority, OPT_U32, 10)
-OPTION(osd_recovery_op_warn_multiple, OPT_U32, 16)
 
 // Max time to wait between notifying mon of shutdown and shutting down
 OPTION(osd_mon_shutdown_timeout, OPT_DOUBLE, 5)

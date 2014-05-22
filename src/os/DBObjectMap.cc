@@ -129,54 +129,49 @@ bool DBObjectMap::check(std::ostream &out)
   return retval;
 }
 
-string DBObjectMap::ghobject_key(const ghobject_t &oid)
+string DBObjectMap::hobject_key(const hobject_t &oid)
 {
   string out;
-  append_escaped(oid.hobj.oid.name, &out);
+  append_escaped(oid.oid.name, &out);
   out.push_back('.');
-  append_escaped(oid.hobj.get_key(), &out);
+  append_escaped(oid.get_key(), &out);
   out.push_back('.');
-  append_escaped(oid.hobj.nspace, &out);
+  append_escaped(oid.nspace, &out);
   out.push_back('.');
 
   char hashstr[1000];
   char *t = hashstr;
   char *end = t + sizeof(hashstr);
-  if (oid.hobj.pool == -1)
+  if (oid.pool == -1)
     t += snprintf(t, end - t, ".none");
   else
-    t += snprintf(t, end - t, ".%"PRIx64, oid.hobj.pool);
-  snprintf(t, end - t, ".%.*X", (int)(sizeof(oid.hobj.hash)*2), oid.hobj.hash);
+    t += snprintf(t, end - t, ".%"PRIx64, oid.pool);
+  snprintf(t, end - t, ".%.*X", (int)(sizeof(oid.hash)*2), oid.hash);
 
-  if (oid.generation != ghobject_t::NO_GEN ||
-      oid.shard_id != ghobject_t::NO_SHARD) {
-    t += snprintf(t, end - t, ".%llx", (long long unsigned)oid.generation);
-    t += snprintf(t, end - t, ".%x", (int)oid.shard_id);
-  }
   out += string(hashstr);
   return out;
 }
 
-string DBObjectMap::ghobject_key_v0(coll_t c, const ghobject_t &oid)
+string DBObjectMap::hobject_key_v0(coll_t c, const hobject_t &oid)
 {
   string out;
   append_escaped(c.to_str(), &out);
   out.push_back('.');
-  append_escaped(oid.hobj.oid.name, &out);
+  append_escaped(oid.oid.name, &out);
   out.push_back('.');
-  append_escaped(oid.hobj.get_key(), &out);
+  append_escaped(oid.get_key(), &out);
   out.push_back('.');
 
   char hashstr[1000];
   char *t = hashstr;
   char *end = t + sizeof(hashstr);
-  snprintf(t, end - t, ".%.*X", (int)(sizeof(oid.hobj.hash)*2), oid.hobj.hash);
+  snprintf(t, end - t, ".%.*X", (int)(sizeof(oid.hash)*2), oid.hash);
   out += string(hashstr);
   return out;
 }
 
-bool DBObjectMap::parse_ghobject_key_v0(const string &in, coll_t *c,
-				       ghobject_t *oid)
+bool DBObjectMap::parse_hobject_key_v0(const string &in, coll_t *c,
+				       hobject_t *oid)
 {
   string coll;
   string name;
@@ -219,16 +214,16 @@ bool DBObjectMap::parse_ghobject_key_v0(const string &in, coll_t *c,
 
   *c = coll_t(coll);
   int64_t pool = -1;
-  spg_t pg;
+  pg_t pg;
   if (c->is_pg_prefix(pg))
-    pool = (int64_t)pg.pgid.pool();
-  (*oid) = ghobject_t(hobject_t(name, key, hash, pool, ""));
+    pool = (int64_t)pg.pool();
+  (*oid) = hobject_t(hobject_t(name, key, hash, pool, ""));
   return true;
 }
 
-string DBObjectMap::map_header_key(const ghobject_t &oid)
+string DBObjectMap::map_header_key(const hobject_t &oid)
 {
-  return ghobject_key(oid);
+  return hobject_key(oid);
 }
 
 string DBObjectMap::header_key(uint64_t seq)
@@ -289,7 +284,7 @@ int DBObjectMap::DBObjectMapIteratorImpl::init()
 }
 
 ObjectMap::ObjectMapIterator DBObjectMap::get_iterator(
-  const ghobject_t &oid)
+  const hobject_t &oid)
 {
   Header header = lookup_map_header(oid);
   if (!header)
@@ -474,7 +469,7 @@ int DBObjectMap::DBObjectMapIteratorImpl::status()
   return r;
 }
 
-int DBObjectMap::set_keys(const ghobject_t &oid,
+int DBObjectMap::set_keys(const hobject_t &oid,
 			  const map<string, bufferlist> &set,
 			  const SequencerPosition *spos)
 {
@@ -490,7 +485,7 @@ int DBObjectMap::set_keys(const ghobject_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::set_header(const ghobject_t &oid,
+int DBObjectMap::set_header(const hobject_t &oid,
 			    const bufferlist &bl,
 			    const SequencerPosition *spos)
 {
@@ -512,7 +507,7 @@ void DBObjectMap::_set_header(Header header, const bufferlist &bl,
   t->set(sys_prefix(header), to_set);
 }
 
-int DBObjectMap::get_header(const ghobject_t &oid,
+int DBObjectMap::get_header(const hobject_t &oid,
 			    bufferlist *bl)
 {
   Header header = lookup_map_header(oid);
@@ -546,7 +541,7 @@ int DBObjectMap::_get_header(Header header,
   return 0;
 }
 
-int DBObjectMap::clear(const ghobject_t &oid,
+int DBObjectMap::clear(const hobject_t &oid,
 		       const SequencerPosition *spos)
 {
   KeyValueDB::Transaction t = db->get_transaction();
@@ -666,7 +661,7 @@ int DBObjectMap::need_parent(DBObjectMapIterator iter)
   return 1;
 }
 
-int DBObjectMap::rm_keys(const ghobject_t &oid,
+int DBObjectMap::rm_keys(const hobject_t &oid,
 			 const set<string> &to_clear,
 			 const SequencerPosition *spos)
 {
@@ -740,7 +735,7 @@ int DBObjectMap::rm_keys(const ghobject_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::clear_keys_header(const ghobject_t &oid,
+int DBObjectMap::clear_keys_header(const hobject_t &oid,
 				   const SequencerPosition *spos)
 {
   KeyValueDB::Transaction t = db->get_transaction();
@@ -776,7 +771,7 @@ int DBObjectMap::clear_keys_header(const ghobject_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::get(const ghobject_t &oid,
+int DBObjectMap::get(const hobject_t &oid,
 		     bufferlist *_header,
 		     map<string, bufferlist> *out)
 {
@@ -793,7 +788,7 @@ int DBObjectMap::get(const ghobject_t &oid,
   return 0;
 }
 
-int DBObjectMap::get_keys(const ghobject_t &oid,
+int DBObjectMap::get_keys(const hobject_t &oid,
 			  set<string> *keys)
 {
   Header header = lookup_map_header(oid);
@@ -830,7 +825,7 @@ int DBObjectMap::scan(Header header,
   return 0;
 }
 
-int DBObjectMap::get_values(const ghobject_t &oid,
+int DBObjectMap::get_values(const hobject_t &oid,
 			    const set<string> &keys,
 			    map<string, bufferlist> *out)
 {
@@ -840,7 +835,7 @@ int DBObjectMap::get_values(const ghobject_t &oid,
   return scan(header, keys, 0, out);
 }
 
-int DBObjectMap::check_keys(const ghobject_t &oid,
+int DBObjectMap::check_keys(const hobject_t &oid,
 			    const set<string> &keys,
 			    set<string> *out)
 {
@@ -850,7 +845,7 @@ int DBObjectMap::check_keys(const ghobject_t &oid,
   return scan(header, keys, out, 0);
 }
 
-int DBObjectMap::get_xattrs(const ghobject_t &oid,
+int DBObjectMap::get_xattrs(const hobject_t &oid,
 			    const set<string> &to_get,
 			    map<string, bufferlist> *out)
 {
@@ -860,7 +855,7 @@ int DBObjectMap::get_xattrs(const ghobject_t &oid,
   return db->get(xattr_prefix(header), to_get, out);
 }
 
-int DBObjectMap::get_all_xattrs(const ghobject_t &oid,
+int DBObjectMap::get_all_xattrs(const hobject_t &oid,
 				set<string> *out)
 {
   Header header = lookup_map_header(oid);
@@ -874,7 +869,7 @@ int DBObjectMap::get_all_xattrs(const ghobject_t &oid,
   return iter->status();
 }
 
-int DBObjectMap::set_xattrs(const ghobject_t &oid,
+int DBObjectMap::set_xattrs(const hobject_t &oid,
 			    const map<string, bufferlist> &to_set,
 			    const SequencerPosition *spos)
 {
@@ -888,7 +883,7 @@ int DBObjectMap::set_xattrs(const ghobject_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::remove_xattrs(const ghobject_t &oid,
+int DBObjectMap::remove_xattrs(const hobject_t &oid,
 			       const set<string> &to_remove,
 			       const SequencerPosition *spos)
 {
@@ -902,8 +897,8 @@ int DBObjectMap::remove_xattrs(const ghobject_t &oid,
   return db->submit_transaction(t);
 }
 
-int DBObjectMap::clone(const ghobject_t &oid,
-		       const ghobject_t &target,
+int DBObjectMap::clone(const hobject_t &oid,
+		       const hobject_t &target,
 		       const SequencerPosition *spos)
 {
   if (oid == target)
@@ -987,9 +982,9 @@ int DBObjectMap::upgrade()
 		 to_get);
 
       coll_t coll;
-      ghobject_t oid;
-      assert(parse_ghobject_key_v0(iter->key(), &coll, &oid));
-      new_map_headers[ghobject_key(oid)] = got.begin()->second;
+      hobject_t oid;
+      assert(parse_hobject_key_v0(iter->key(), &coll, &oid));
+      new_map_headers[hobject_key(oid)] = got.begin()->second;
     }
 
     t->rmkeys(LEAF_PREFIX, legacy_to_remove);
@@ -1052,7 +1047,7 @@ int DBObjectMap::init(bool do_upgrade)
   return 0;
 }
 
-int DBObjectMap::sync(const ghobject_t *oid,
+int DBObjectMap::sync(const hobject_t *oid,
 		      const SequencerPosition *spos) {
   KeyValueDB::Transaction t = db->get_transaction();
   write_state(t);
@@ -1081,7 +1076,7 @@ int DBObjectMap::write_state(KeyValueDB::Transaction _t) {
 }
 
 
-DBObjectMap::Header DBObjectMap::_lookup_map_header(const ghobject_t &oid)
+DBObjectMap::Header DBObjectMap::_lookup_map_header(const hobject_t &oid)
 {
   while (map_header_in_use.count(oid))
     header_cond.Wait(header_lock);
@@ -1101,7 +1096,7 @@ DBObjectMap::Header DBObjectMap::_lookup_map_header(const ghobject_t &oid)
   return ret;
 }
 
-DBObjectMap::Header DBObjectMap::_generate_new_header(const ghobject_t &oid,
+DBObjectMap::Header DBObjectMap::_generate_new_header(const hobject_t &oid,
 						      Header parent)
 {
   Header header = Header(new _Header(), RemoveOnDelete(this));
@@ -1151,7 +1146,7 @@ DBObjectMap::Header DBObjectMap::lookup_parent(Header input)
 }
 
 DBObjectMap::Header DBObjectMap::lookup_create_map_header(
-  const ghobject_t &oid,
+  const hobject_t &oid,
   KeyValueDB::Transaction t)
 {
   Mutex::Locker l(header_lock);
@@ -1183,7 +1178,7 @@ void DBObjectMap::set_header(Header header, KeyValueDB::Transaction t)
   t->set(sys_prefix(header), to_write);
 }
 
-void DBObjectMap::remove_map_header(const ghobject_t &oid,
+void DBObjectMap::remove_map_header(const hobject_t &oid,
 				    Header header,
 				    KeyValueDB::Transaction t)
 {
@@ -1194,7 +1189,7 @@ void DBObjectMap::remove_map_header(const ghobject_t &oid,
   t->rmkeys(HOBJECT_TO_SEQ, to_remove);
 }
 
-void DBObjectMap::set_map_header(const ghobject_t &oid, _Header header,
+void DBObjectMap::set_map_header(const hobject_t &oid, _Header header,
 				 KeyValueDB::Transaction t)
 {
   dout(20) << "set_map_header: setting " << header.seq
@@ -1205,7 +1200,7 @@ void DBObjectMap::set_map_header(const ghobject_t &oid, _Header header,
   t->set(HOBJECT_TO_SEQ, to_set);
 }
 
-bool DBObjectMap::check_spos(const ghobject_t &oid,
+bool DBObjectMap::check_spos(const hobject_t &oid,
 			     Header header,
 			     const SequencerPosition *spos)
 {
@@ -1226,7 +1221,7 @@ bool DBObjectMap::check_spos(const ghobject_t &oid,
   }
 }
 
-int DBObjectMap::list_objects(vector<ghobject_t> *out)
+int DBObjectMap::list_objects(vector<hobject_t> *out)
 {
   KeyValueDB::Iterator iter = db->get_iterator(HOBJECT_TO_SEQ);
   for (iter->seek_to_first(); iter->valid(); iter->next()) {

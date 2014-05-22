@@ -39,10 +39,6 @@ namespace librados
     uint64_t num_bytes;    // in bytes
     uint64_t num_kb;       // in KB
     uint64_t num_objects;
-    uint64_t num_object_copies;  // num_objects * num_replicas
-    uint64_t num_objects_missing_on_primary;
-    uint64_t num_objects_unfound;
-    uint64_t num_objects_degraded;
     uint64_t num_rd, num_rd_kb, num_wr, num_wr_kb;
   };
 
@@ -146,24 +142,13 @@ namespace librados
    * ORDER_READS_WRITES will order reads the same way writes are
    * ordered (e.g., waiting for degraded objects).  In particular, it
    * will make a write followed by a read sequence be preserved.
-   *
-   * IGNORE_CACHE will skip the caching logic on the OSD that normally
-   * handles promotion of objects between tiers.  This allows an operation
-   * to operate (or read) the cached (or uncached) object, even if it is
-   * not coherent.
-   *
-   * IGNORE_OVERLAY will ignore the pool overlay tiering metadata and
-   * process the op directly on the destination pool.  This is useful
-   * for CACHE_FLUSH and CACHE_EVICT operations.
    */
   enum ObjectOperationGlobalFlags {
-    OPERATION_NOFLAG         = 0,
+    OPERATION_NOFLAG = 0,
     OPERATION_BALANCE_READS  = 1,
     OPERATION_LOCALIZE_READS = 2,
     OPERATION_ORDER_READS_WRITES = 4,
-    OPERATION_IGNORE_CACHE = 8,
     OPERATION_SKIPRWLOCKS = 16,
-    OPERATION_IGNORE_OVERLAY = 32,
   };
 
   /*
@@ -288,34 +273,13 @@ namespace librados
     void omap_rm_keys(const std::set<std::string> &to_rm);
 
     /**
-     * Copy an object
-     *
-     * Copies an object from another location.  The operation is atomic in that
-     * the copy either succeeds in its entirety or fails (e.g., because the
-     * source object was modified while the copy was in progress).
-     *
-     * @param src source object name
-     * @param src_ioctx ioctx for the source object
-     * @param version current version of the source object
-     */
-    void copy_from(const std::string& src, const IoCtx& src_ioctx,
-		   uint64_t src_version);
-
-    /**
-     * undirty an object
-     *
-     * Clear an objects dirty flag
-     */
-    void undirty();
-
-    /**
      * Set allocation hint for an object
      *
      * @param expected_object_size expected size of the object, in bytes
      * @param expected_write_size expected size of writes to the object, in bytes
      */
     void set_alloc_hint(uint64_t expected_object_size,
-                        uint64_t expected_write_size);
+			uint64_t expected_write_size);
 
     friend class IoCtx;
   };
@@ -418,40 +382,6 @@ namespace librados
      * @param prval [out] place error code in prval upon completion
      */
     void list_watchers(std::list<obj_watch_t> *out_watchers, int *prval);
-
-    /**
-     * query dirty state of an object
-     *
-     * @param out_dirty [out] pointer to resulting bool
-     * @param prval [out] place error code in prval upon completion
-     */
-    void is_dirty(bool *isdirty, int *prval);
-
-    /**
-     * flush a cache tier object to backing tier; will block racing
-     * updates.
-     *
-     * This should be used in concert with OPERATION_IGNORE_CACHE to avoid
-     * triggering a promotion.
-     */
-    void cache_flush();
-
-    /**
-     * Flush a cache tier object to backing tier; will EAGAIN if we race
-     * with an update.  Must be used with the SKIPRWLOCKS flag.
-     *
-     * This should be used in concert with OPERATION_IGNORE_CACHE to avoid
-     * triggering a promotion.
-     */
-    void cache_try_flush();
-
-    /**
-     * evict a clean cache tier object
-     *
-     * This should be used in concert with OPERATION_IGNORE_CACHE to avoid
-     * triggering a promote on the OSD (that is then evicted).
-     */
-    void cache_evict();
   };
 
   /* IoCtx : This is a context in which we can perform I/O.
@@ -490,9 +420,6 @@ namespace librados
     int get_auid(uint64_t *auid_);
 
     std::string get_pool_name();
-
-    bool pool_requires_alignment();
-    uint64_t pool_required_alignment();
 
     // create an object
     int create(const std::string& oid, bool exclusive);
@@ -598,27 +525,6 @@ namespace librados
     ObjectIterator objects_begin(uint32_t start_hash_position);
     /// Iterator indicating the end of a pool
     const ObjectIterator& objects_end() const;
-
-    /**
-     * List available hit set objects
-     *
-     * @param uint32_t [in] hash position to query
-     * @param c [in] completion
-     * @param pls [out] list of available intervals
-     */
-    int hit_set_list(uint32_t hash, AioCompletion *c,
-		     std::list< std::pair<time_t, time_t> > *pls);
-
-    /**
-     * Retrieve hit set for a given hash, and time
-     *
-     * @param uint32_t [in] hash position
-     * @param c [in] completion
-     * @param stamp [in] time interval that falls within the hit set's interval
-     * @param pbl [out] buffer to store the result in
-     */
-    int hit_set_get(uint32_t hash, AioCompletion *c, time_t stamp,
-		    bufferlist *pbl);
 
     uint64_t get_last_version();
 
@@ -727,7 +633,6 @@ namespace librados
     IoCtx(IoCtxImpl *io_ctx_impl_);
 
     friend class Rados; // Only Rados can use our private constructor to create IoCtxes.
-    friend class ObjectWriteOperation;  // copy_from needs to see our IoCtxImpl
 
     IoCtxImpl *io_ctx_impl;
   };

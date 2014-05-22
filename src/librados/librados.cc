@@ -265,17 +265,11 @@ void librados::ObjectReadOperation::list_watchers(
   o->list_watchers(out_watchers, prval);
 }
 
-void librados::ObjectReadOperation::is_dirty(bool *is_dirty, int *prval)
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->is_dirty(is_dirty, prval);
-}
-
 int librados::IoCtx::omap_get_vals(const std::string& oid,
-                                   const std::string& start_after,
-                                   const std::string& filter_prefix,
-                                   uint64_t max_return,
-                                   std::map<std::string, bufferlist> *out_vals)
+				   const std::string& start_after,
+				   const std::string& filter_prefix,
+				   uint64_t max_return,
+				   std::map<std::string, bufferlist> *out_vals)
 {
   ObjectReadOperation op;
   int r;
@@ -382,38 +376,6 @@ void librados::ObjectWriteOperation::omap_rm_keys(
 {
   ::ObjectOperation *o = (::ObjectOperation *)impl;
   o->omap_rm_keys(to_rm);
-}
-
-void librados::ObjectWriteOperation::copy_from(const std::string& src,
-					       const IoCtx& src_ioctx,
-					       uint64_t src_version)
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->copy_from(object_t(src), src_ioctx.io_ctx_impl->oloc, src_version, 0);
-}
-
-void librados::ObjectWriteOperation::undirty()
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->undirty();
-}
-
-void librados::ObjectReadOperation::cache_flush()
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->cache_flush();
-}
-
-void librados::ObjectReadOperation::cache_try_flush()
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->cache_try_flush();
-}
-
-void librados::ObjectReadOperation::cache_evict()
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->cache_evict();
 }
 
 void librados::ObjectWriteOperation::tmap_put(const bufferlist &bl)
@@ -736,16 +698,6 @@ int librados::IoCtx::get_auid(uint64_t *auid_)
   return rados_ioctx_pool_get_auid(io_ctx_impl, auid_);
 }
 
-bool librados::IoCtx::pool_requires_alignment()
-{
-  return io_ctx_impl->client->pool_requires_alignment(get_id());
-}
-
-uint64_t librados::IoCtx::pool_required_alignment()
-{
-  return io_ctx_impl->client->pool_required_alignment(get_id());
-}
-
 std::string librados::IoCtx::get_pool_name()
 {
   std::string s;
@@ -973,18 +925,10 @@ int librados::IoCtx::omap_rm_keys(const std::string& oid,
 static int translate_flags(int flags)
 {
   int op_flags = 0;
-  if (flags & librados::OPERATION_BALANCE_READS)
-    op_flags |= CEPH_OSD_FLAG_BALANCE_READS;
-  if (flags & librados::OPERATION_LOCALIZE_READS)
-    op_flags |= CEPH_OSD_FLAG_LOCALIZE_READS;
   if (flags & librados::OPERATION_ORDER_READS_WRITES)
     op_flags |= CEPH_OSD_FLAG_RWORDERED;
-  if (flags & librados::OPERATION_IGNORE_CACHE)
-    op_flags |= CEPH_OSD_FLAG_IGNORE_CACHE;
   if (flags & librados::OPERATION_SKIPRWLOCKS)
     op_flags |= CEPH_OSD_FLAG_SKIPRWLOCKS;
-  if (flags & librados::OPERATION_IGNORE_OVERLAY)
-    op_flags |= CEPH_OSD_FLAG_IGNORE_OVERLAY;
 
   return op_flags;
 }
@@ -1133,20 +1077,6 @@ const librados::ObjectIterator& librados::IoCtx::objects_end() const
 {
   return ObjectIterator::__EndObjectIterator;
 }
-
-int librados::IoCtx::hit_set_list(uint32_t hash, AioCompletion *c,
-				  std::list< std::pair<time_t, time_t> > *pls)
-{
-  return io_ctx_impl->hit_set_list(hash, c->pc, pls);
-}
-
-int librados::IoCtx::hit_set_get(uint32_t hash,  AioCompletion *c, time_t stamp,
-				 bufferlist *pbl)
-{
-  return io_ctx_impl->hit_set_get(hash, c->pc, stamp, pbl);
-}
-
-
 
 uint64_t librados::IoCtx::get_last_version()
 {
@@ -1533,7 +1463,7 @@ int librados::Rados::get_pool_stats(std::list<string>& v, string& category,
       cats.push_back(cat);
       map<string,object_stat_sum_t>::iterator iter;
       for (iter = p->second.stats.cat_sum.begin(); iter != p->second.stats.cat_sum.end(); ++iter) {
-        cats.push_back(iter->first);
+	cats.push_back(iter->first);
       }
     } else {
       cats.push_back(category);
@@ -1545,22 +1475,18 @@ int librados::Rados::get_pool_stats(std::list<string>& v, string& category,
       object_stat_sum_t *sum;
 
       if (!cur_category.size()) {
-         sum = &p->second.stats.sum;
+	sum = &p->second.stats.sum;
       } else {
-        map<string,object_stat_sum_t>::iterator iter = p->second.stats.cat_sum.find(cur_category);
-        if (iter == p->second.stats.cat_sum.end())
-          continue;
-        sum = &iter->second;
+	map<string,object_stat_sum_t>::iterator iter = p->second.stats.cat_sum.find(cur_category);
+	if (iter == p->second.stats.cat_sum.end())
+	  continue;
+	sum = &iter->second;
       }
 
       pool_stat_t& pv = c[cur_category];
       pv.num_kb = SHIFT_ROUND_UP(sum->num_bytes, 10);
       pv.num_bytes = sum->num_bytes;
       pv.num_objects = sum->num_objects;
-      pv.num_object_copies = sum->num_object_copies;
-      pv.num_objects_missing_on_primary = sum->num_objects_missing_on_primary;
-      pv.num_objects_unfound = sum->num_objects_unfound;
-      pv.num_objects_degraded = sum->num_objects_degraded;
       pv.num_rd = sum->num_rd;
       pv.num_rd_kb = sum->num_rd_kb;
       pv.num_wr = sum->num_wr;
@@ -2100,11 +2026,6 @@ extern "C" int rados_ioctx_pool_stat(rados_ioctx_t io, struct rados_pool_stat_t 
   stats->num_kb = SHIFT_ROUND_UP(r.stats.sum.num_bytes, 10);
   stats->num_bytes = r.stats.sum.num_bytes;
   stats->num_objects = r.stats.sum.num_objects;
-  stats->num_object_clones = r.stats.sum.num_object_clones;
-  stats->num_object_copies = r.stats.sum.num_object_copies;
-  stats->num_objects_missing_on_primary = r.stats.sum.num_objects_missing_on_primary;
-  stats->num_objects_unfound = r.stats.sum.num_objects_unfound;
-  stats->num_objects_degraded = r.stats.sum.num_objects_degraded;
   stats->num_rd = r.stats.sum.num_rd;
   stats->num_rd_kb = r.stats.sum.num_rd_kb;
   stats->num_wr = r.stats.sum.num_wr;
@@ -2234,18 +2155,6 @@ extern "C" int rados_ioctx_pool_get_auid(rados_ioctx_t io, uint64_t *auid)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
   return ctx->client->pool_get_auid(ctx->get_id(), (unsigned long long *)auid);
-}
-
-extern "C" int rados_ioctx_pool_requires_alignment(rados_ioctx_t io)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->client->pool_requires_alignment(ctx->get_id());
-}
-
-extern "C" uint64_t rados_ioctx_pool_required_alignment(rados_ioctx_t io)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->client->pool_required_alignment(ctx->get_id());
 }
 
 extern "C" void rados_ioctx_locator_set_key(rados_ioctx_t io, const char *key)

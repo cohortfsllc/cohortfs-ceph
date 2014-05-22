@@ -367,25 +367,24 @@ int main(int argc, const char **argv)
 		 g_conf->osd_client_message_cap));
 
   uint64_t supported =
-    CEPH_FEATURE_UID | 
+    CEPH_FEATURE_UID |
     CEPH_FEATURE_NOSRCADDR |
     CEPH_FEATURE_PGID64 |
-    CEPH_FEATURE_MSG_AUTH |
-    CEPH_FEATURE_OSD_ERASURE_CODES;
+    CEPH_FEATURE_MSG_AUTH;
 
   ms_public->set_default_policy(Messenger::Policy::stateless_server(supported, 0));
   ms_public->set_policy_throttlers(entity_name_t::TYPE_CLIENT,
 				   client_byte_throttler.get(),
 				   client_msg_throttler.get());
   ms_public->set_policy(entity_name_t::TYPE_MON,
-                               Messenger::Policy::lossy_client(supported,
+			Messenger::Policy::lossy_client(supported,
 							       CEPH_FEATURE_UID |
 							       CEPH_FEATURE_PGID64 |
 							       CEPH_FEATURE_OSDENC));
   //try to poison pill any OSD connections on the wrong address
   ms_public->set_policy(entity_name_t::TYPE_OSD,
 			Messenger::Policy::stateless_server(0,0));
-  
+
   ms_cluster->set_default_policy(Messenger::Policy::stateless_server(0, 0));
   ms_cluster->set_policy(entity_name_t::TYPE_MON, Messenger::Policy::lossy_client(0,0));
   ms_cluster->set_policy(entity_name_t::TYPE_OSD,

@@ -35,13 +35,13 @@ const string GenericObjectMap::GLOBAL_STATE_KEY = "HEADER";
 const string GenericObjectMap::USER_PREFIX = "_SEQ_";
 const string GenericObjectMap::INTERN_PREFIX = "_INTERN_";
 const string GenericObjectMap::COMPLETE_PREFIX = "_COMPLETE_";
-const string GenericObjectMap::GHOBJECT_TO_SEQ_PREFIX = "_GHOBJTOSEQ_";
+const string GenericObjectMap::HOBJECT_TO_SEQ_PREFIX = "_HOBJTOSEQ_";
 const string GenericObjectMap::PARENT_KEY = "_PARENT_HEADER_";
 
 // In order to make right ordering for leveldb matching with hobject_t,
 // so use "!" to separated
-const string GenericObjectMap::GHOBJECT_KEY_SEP_S = "!";
-const char GenericObjectMap::GHOBJECT_KEY_SEP_C = '!';
+const string GenericObjectMap::HOBJECT_KEY_SEP_S = "!";
+const char GenericObjectMap::HOBJECT_KEY_SEP_C = '!';
 
 // ============== GenericObjectMap Key Function =================
 
@@ -54,7 +54,7 @@ static void append_escaped(const string &in, string *out)
     } else if (*i == '.') {
       out->push_back('%');
       out->push_back('e');
-    } else if (*i == GenericObjectMap::GHOBJECT_KEY_SEP_C) {
+    } else if (*i == GenericObjectMap::HOBJECT_KEY_SEP_C) {
       out->push_back('%');
       out->push_back('u');
     } else if (*i == '!') {
@@ -78,7 +78,7 @@ static bool append_unescaped(string::const_iterator begin,
       else if (*i == 'e')
         out->push_back('.');
       else if (*i == 'u')
-        out->push_back(GenericObjectMap::GHOBJECT_KEY_SEP_C);
+        out->push_back(GenericObjectMap::HOBJECT_KEY_SEP_C);
       else if (*i == 's')
         out->push_back('!');
       else
@@ -95,66 +95,49 @@ string GenericObjectMap::header_key(const coll_t &cid)
   string full_name;
 
   append_escaped(cid.to_str(), &full_name);
-  full_name.append(GHOBJECT_KEY_SEP_S);
+  full_name.append(HOBJECT_KEY_SEP_S);
   return full_name;
 }
 
-string GenericObjectMap::header_key(const coll_t &cid, const ghobject_t &oid)
+string GenericObjectMap::header_key(const coll_t &cid, const hobject_t &oid)
 {
   string full_name;
 
   append_escaped(cid.to_str(), &full_name);
-  full_name.append(GHOBJECT_KEY_SEP_S);
+  full_name.append(HOBJECT_KEY_SEP_S);
 
   char buf[PATH_MAX];
   char *t = buf;
   char *end = t + sizeof(buf);
 
   // make field ordering match with hobject_t compare operations
-  snprintf(t, end - t, "%.*X", (int)(sizeof(oid.hobj.hash)*2),
-           (uint32_t)oid.get_filestore_key_u32());
+  snprintf(t, end - t, "%.*X", (int)(sizeof(oid.hash)*2),
+	   (uint32_t)oid.get_filestore_key_u32());
   full_name += string(buf);
-  full_name.append(GHOBJECT_KEY_SEP_S);
+  full_name.append(HOBJECT_KEY_SEP_S);
 
-  append_escaped(oid.hobj.nspace, &full_name);
-  full_name.append(GHOBJECT_KEY_SEP_S);
+  append_escaped(oid.nspace, &full_name);
+  full_name.append(HOBJECT_KEY_SEP_S);
 
   t = buf;
-  if (oid.hobj.pool == -1)
+  if (oid.pool == -1)
     t += snprintf(t, end - t, "none");
   else
-    t += snprintf(t, end - t, "%llx", (long long unsigned)oid.hobj.pool);
+    t += snprintf(t, end - t, "%llx", (long long unsigned)oid.pool);
   full_name += string(buf);
-  full_name.append(GHOBJECT_KEY_SEP_S);
+  full_name.append(HOBJECT_KEY_SEP_S);
 
-  append_escaped(oid.hobj.get_key(), &full_name);
-  full_name.append(GHOBJECT_KEY_SEP_S);
+  append_escaped(oid.get_key(), &full_name);
+  full_name.append(HOBJECT_KEY_SEP_S);
 
-  append_escaped(oid.hobj.oid.name, &full_name);
-  full_name.append(GHOBJECT_KEY_SEP_S);
-
-  if (oid.generation != ghobject_t::NO_GEN) {
-    assert(oid.shard_id != ghobject_t::NO_SHARD);
-    full_name.append(GHOBJECT_KEY_SEP_S);
-
-    t = buf;
-    end = t + sizeof(buf);
-    t += snprintf(t, end - t, "%llx", (long long unsigned)oid.generation);
-    full_name += string(buf);
-
-    full_name.append(GHOBJECT_KEY_SEP_S);
-
-    t = buf;
-    end = t + sizeof(buf);
-    t += snprintf(t, end - t, "%x", (int)oid.shard_id);
-    full_name += string(buf);
-  }
+  append_escaped(oid.oid.name, &full_name);
+  full_name.append(HOBJECT_KEY_SEP_S);
 
   return full_name;
 }
 
 bool GenericObjectMap::parse_header_key(const string &long_name,
-                                          coll_t *out_coll, ghobject_t *out)
+					coll_t *out_coll, hobject_t *out)
 {
   string coll;
   string name;
@@ -162,32 +145,30 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
   string ns;
   uint32_t hash;
   uint64_t pool;
-  gen_t generation = ghobject_t::NO_GEN;
-  shard_t shard_id = ghobject_t::NO_SHARD;
 
   string::const_iterator current = long_name.begin();
   string::const_iterator end;
 
-  for (end = current; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
+  for (end = current; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
   if (!append_unescaped(current, end, &coll))
     return false;
 
   current = ++end;
-  for ( ; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
+  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
   if (end == long_name.end())
     return false;
   string hash_str(current, end);
   sscanf(hash_str.c_str(), "%X", &hash);
 
   current = ++end;
-  for ( ; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
+  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
   if (end == long_name.end())
     return false;
   if (!append_unescaped(current, end, &ns))
     return false;
 
   current = ++end;
-  for ( ; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
+  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
   if (end == long_name.end())
     return false;
   string pstring(current, end);
@@ -197,45 +178,25 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
     pool = strtoull(pstring.c_str(), NULL, 16);
 
   current = ++end;
-  for ( ; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
+  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
   if (end == long_name.end())
     return false;
   if (!append_unescaped(current, end, &key))
     return false;
 
   current = ++end;
-  for ( ; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
+  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
   if (end == long_name.end())
     return false;
   if (!append_unescaped(current, end, &name))
     return false;
 
   current = ++end;
-  // Optional generation/shard_id
-  string genstring, shardstring;
-  if (end != long_name.end()) {
-    current = ++end;
-    for ( ; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
-    if (end == long_name.end())
-      return false;
-    genstring = string(current, end);
-
-    generation = (gen_t)strtoull(genstring.c_str(), NULL, 16);
-
-    current = ++end;
-    for ( ; end != long_name.end() && *end != GHOBJECT_KEY_SEP_C; ++end) ;
-    if (end != long_name.end())
-      return false;
-    shardstring = string(current, end);
-
-    shard_id = (shard_t)strtoul(shardstring.c_str(), NULL, 16);
-  }
 
   if (out) {
-    (*out) = ghobject_t(hobject_t(name, key, hash, (int64_t)pool, ns),
-			generation, shard_id);
+    (*out) = hobject_t(name, key, hash, (int64_t)pool, ns);
     // restore reversed hash. see calculate_key
-    out->hobj.hash = out->get_filestore_key();
+    out->hash = out->get_filestore_key();
   }
 
   if (out_coll)
@@ -293,7 +254,7 @@ int GenericObjectMap::GenericObjectMapIteratorImpl::init()
 }
 
 ObjectMap::ObjectMapIterator GenericObjectMap::get_iterator(
-    const coll_t &cid, const ghobject_t &oid, const string &prefix)
+    const coll_t &cid, const hobject_t &oid, const string &prefix)
 {
   Header header = lookup_header(cid, oid);
   if (!header)
@@ -569,7 +530,7 @@ int GenericObjectMap::rm_keys(const Header header,
   return 0;
 }
 
-int GenericObjectMap::get(const coll_t &cid, const ghobject_t &oid,
+int GenericObjectMap::get(const coll_t &cid, const hobject_t &oid,
                           const string &prefix,
                           map<string, bufferlist> *out)
 {
@@ -587,7 +548,7 @@ int GenericObjectMap::get(const coll_t &cid, const ghobject_t &oid,
   return 0;
 }
 
-int GenericObjectMap::get_keys(const coll_t &cid, const ghobject_t &oid,
+int GenericObjectMap::get_keys(const coll_t &cid, const hobject_t &oid,
                                const string &prefix,
                                set<string> *keys)
 {
@@ -604,7 +565,7 @@ int GenericObjectMap::get_keys(const coll_t &cid, const ghobject_t &oid,
   return 0;
 }
 
-int GenericObjectMap::get_values(const coll_t &cid, const ghobject_t &oid,
+int GenericObjectMap::get_values(const coll_t &cid, const hobject_t &oid,
                                  const string &prefix,
                                  const set<string> &keys,
                                  map<string, bufferlist> *out)
@@ -615,7 +576,7 @@ int GenericObjectMap::get_values(const coll_t &cid, const ghobject_t &oid,
   return scan(header, prefix, keys, 0, out);
 }
 
-int GenericObjectMap::check_keys(const coll_t &cid, const ghobject_t &oid,
+int GenericObjectMap::check_keys(const coll_t &cid, const hobject_t &oid,
                                  const string &prefix,
                                  const set<string> &keys,
                                  set<string> *out)
@@ -627,7 +588,7 @@ int GenericObjectMap::check_keys(const coll_t &cid, const ghobject_t &oid,
 }
 
 void GenericObjectMap::clone(const Header parent, const coll_t &cid,
-                             const ghobject_t &target,
+                             const hobject_t &target,
                              KeyValueDB::Transaction t,
                              Header *old_header, Header *new_header)
 {
@@ -658,7 +619,7 @@ void GenericObjectMap::clone(const Header parent, const coll_t &cid,
 }
 
 void GenericObjectMap::rename(const Header old_header, const coll_t &cid,
-                              const ghobject_t &target,
+                              const hobject_t &target,
                               KeyValueDB::Transaction t)
 {
   if (old_header->oid == target && old_header->cid == cid)
@@ -718,7 +679,7 @@ bool GenericObjectMap::check(std::ostream &out)
   bool retval = true;
   map<uint64_t, uint64_t> parent_to_num_children;
   map<uint64_t, uint64_t> parent_to_actual_num_children;
-  KeyValueDB::Iterator iter = db->get_iterator(GHOBJECT_TO_SEQ_PREFIX);
+  KeyValueDB::Iterator iter = db->get_iterator(HOBJECT_TO_SEQ_PREFIX);
 
   for (iter->seek_to_first(); iter->valid(); iter->next()) {
     _Header header;
@@ -899,7 +860,7 @@ int GenericObjectMap::write_state(KeyValueDB::Transaction t)
 // NOTE(haomai): It may occur dead lock if thread A hold header A try to header
 // B and thread hold header B try to get header A
 GenericObjectMap::Header GenericObjectMap::_lookup_header(
-    const coll_t &cid, const ghobject_t &oid)
+    const coll_t &cid, const hobject_t &oid)
 {
   set<string> to_get;
   to_get.insert(header_key(cid, oid));
@@ -909,7 +870,7 @@ GenericObjectMap::Header GenericObjectMap::_lookup_header(
     map<string, bufferlist> out;
     bool try_again = false;
 
-    int r = db->get(GHOBJECT_TO_SEQ_PREFIX, to_get, &out);
+    int r = db->get(HOBJECT_TO_SEQ_PREFIX, to_get, &out);
     if (r < 0)
       return Header();
     if (out.empty())
@@ -938,7 +899,7 @@ GenericObjectMap::Header GenericObjectMap::_lookup_header(
 }
 
 GenericObjectMap::Header GenericObjectMap::_generate_new_header(
-    const coll_t &cid, const ghobject_t &oid, Header parent,
+    const coll_t &cid, const hobject_t &oid, Header parent,
     KeyValueDB::Transaction t)
 {
   Header header = Header(new _Header(), RemoveOnDelete(this));
@@ -989,7 +950,7 @@ GenericObjectMap::Header GenericObjectMap::lookup_parent(Header input)
 }
 
 GenericObjectMap::Header GenericObjectMap::lookup_create_header(
-    const coll_t &cid, const ghobject_t &oid, KeyValueDB::Transaction t)
+    const coll_t &cid, const hobject_t &oid, KeyValueDB::Transaction t)
 {
   Mutex::Locker l(header_lock);
   Header header = _lookup_header(cid, oid);
@@ -1018,19 +979,19 @@ void GenericObjectMap::clear_header(Header header, KeyValueDB::Transaction t)
   t->rmkeys(parent_seq_prefix(header->seq), keys);
 }
 
-// only remove GHOBJECT_TO_SEQ
+// only remove HOBJECT_TO_SEQ
 void GenericObjectMap::remove_header(const coll_t &cid,
-                                     const ghobject_t &oid, Header header,
+                                     const hobject_t &oid, Header header,
                                      KeyValueDB::Transaction t)
 {
   dout(20) << __func__ << " removing " << header->seq
            << " cid " << cid << " oid " << oid << dendl;
   set<string> to_remove;
   to_remove.insert(header_key(cid, oid));
-  t->rmkeys(GHOBJECT_TO_SEQ_PREFIX, to_remove);
+  t->rmkeys(HOBJECT_TO_SEQ_PREFIX, to_remove);
 }
 
-void GenericObjectMap::set_header(const coll_t &cid, const ghobject_t &oid,
+void GenericObjectMap::set_header(const coll_t &cid, const hobject_t &oid,
                                   _Header header, KeyValueDB::Transaction t)
 {
   dout(20) << __func__ << " setting " << header.seq
@@ -1038,11 +999,11 @@ void GenericObjectMap::set_header(const coll_t &cid, const ghobject_t &oid,
            << header.parent << dendl;
   map<string, bufferlist> to_set;
   header.encode(to_set[header_key(cid, oid)]);
-  t->set(GHOBJECT_TO_SEQ_PREFIX, to_set);
+  t->set(HOBJECT_TO_SEQ_PREFIX, to_set);
 }
 
-int GenericObjectMap::list_objects(const coll_t &cid, ghobject_t start, int max,
-                                   vector<ghobject_t> *out, ghobject_t *next)
+int GenericObjectMap::list_objects(const coll_t &cid, hobject_t start, int max,
+                                   vector<hobject_t> *out, hobject_t *next)
 {
   // FIXME
   Mutex::Locker l(header_lock);
@@ -1050,10 +1011,10 @@ int GenericObjectMap::list_objects(const coll_t &cid, ghobject_t start, int max,
   if (start.is_max())
       return 0;
 
-  if (start.hobj.is_min()) {
-    vector<ghobject_t> oids;
+  if (start.is_min()) {
+    vector<hobject_t> oids;
 
-    KeyValueDB::Iterator iter = db->get_iterator(GHOBJECT_TO_SEQ_PREFIX);
+    KeyValueDB::Iterator iter = db->get_iterator(HOBJECT_TO_SEQ_PREFIX);
     for (iter->lower_bound(header_key(cid)); iter->valid(); iter->next()) {
       bufferlist bl = iter->value();
       bufferlist::iterator bliter = bl.begin();
@@ -1068,14 +1029,14 @@ int GenericObjectMap::list_objects(const coll_t &cid, ghobject_t start, int max,
 
     if (oids.empty()) {
       if (next)
-        *next = ghobject_t::get_max();
+        *next = hobject_t::get_max();
       return 0;
     }
     start = oids[0];
   }
 
   int size = 0;
-  KeyValueDB::Iterator iter = db->get_iterator(GHOBJECT_TO_SEQ_PREFIX);
+  KeyValueDB::Iterator iter = db->get_iterator(HOBJECT_TO_SEQ_PREFIX);
   for (iter->lower_bound(header_key(cid, start)); iter->valid(); iter->next()) {
     bufferlist bl = iter->value();
     bufferlist::iterator bliter = bl.begin();
@@ -1084,7 +1045,7 @@ int GenericObjectMap::list_objects(const coll_t &cid, ghobject_t start, int max,
 
     if (header.cid != cid) {
       if (next)
-        *next = ghobject_t::get_max();
+        *next = hobject_t::get_max();
       break;
     }
 
@@ -1108,7 +1069,7 @@ int GenericObjectMap::list_objects(const coll_t &cid, ghobject_t start, int max,
 
   if (!iter->valid())
     if (next)
-      *next = ghobject_t::get_max();
+      *next = hobject_t::get_max();
 
   return 0;
 }

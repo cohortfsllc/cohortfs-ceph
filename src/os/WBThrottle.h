@@ -44,7 +44,7 @@ enum {
  * Tracks, throttles, and flushes outstanding IO
  */
 class WBThrottle : Thread, public md_config_obs_t {
-  ghobject_t clearing;
+  hobject_t clearing;
 
   /* *_limits.first is the start_flusher limit and
    * *_limits.second is the hard limit
@@ -89,11 +89,11 @@ class WBThrottle : Thread, public md_config_obs_t {
   /**
    * Flush objects in lru order
    */
-  list<ghobject_t> lru;
-  map<ghobject_t, list<ghobject_t>::iterator> rev_lru;
-  void remove_object(const ghobject_t &oid) {
+  list<hobject_t> lru;
+  map<hobject_t, list<hobject_t>::iterator> rev_lru;
+  void remove_object(const hobject_t &oid) {
     assert(lock.is_locked());
-    map<ghobject_t, list<ghobject_t>::iterator>::iterator iter =
+    map<hobject_t, list<hobject_t>::iterator>::iterator iter =
       rev_lru.find(oid);
     if (iter == rev_lru.end())
       return;
@@ -101,24 +101,24 @@ class WBThrottle : Thread, public md_config_obs_t {
     lru.erase(iter->second);
     rev_lru.erase(iter);
   }
-  ghobject_t pop_object() {
+  hobject_t pop_object() {
     assert(!lru.empty());
-    ghobject_t oid(lru.front());
+    hobject_t oid(lru.front());
     lru.pop_front();
     rev_lru.erase(oid);
     return oid;
   }
-  void insert_object(const ghobject_t &oid) {
+  void insert_object(const hobject_t &oid) {
     assert(rev_lru.find(oid) == rev_lru.end());
     lru.push_back(oid);
     rev_lru.insert(make_pair(oid, --lru.end()));
   }
 
-  map<ghobject_t, pair<PendingWB, FDRef> > pending_wbs;
+  map<hobject_t, pair<PendingWB, FDRef> > pending_wbs;
 
   /// get next flush to perform
   bool get_next_should_flush(
-    boost::tuple<ghobject_t, FDRef, PendingWB> *next ///< [out] next to flush
+    boost::tuple<hobject_t, FDRef, PendingWB> *next ///< [out] next to flush
     ); ///< @return false if we are shutting down
 public:
   enum FS {
@@ -146,7 +146,7 @@ public:
   /// Queue wb on oid, fd taking throttle (does not block)
   void queue_wb(
     FDRef fd,              ///< [in] FDRef to oid
-    const ghobject_t &oid, ///< [in] object
+    const hobject_t &oid, ///< [in] object
     uint64_t offset,       ///< [in] offset written
     uint64_t len,          ///< [in] length written
     bool nocache           ///< [in] try to clear out of cache after write
@@ -156,7 +156,7 @@ public:
   void clear();
 
   /// Clear object
-  void clear_object(const ghobject_t &oid);
+  void clear_object(const hobject_t &oid);
 
   /// Block until there is throttle available
   void throttle();

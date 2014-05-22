@@ -26,7 +26,7 @@
  * @see user_prefix
  * @see sys_prefix
  *
- * - GHOBJECT_TO_SEQ: Contains leaf mapping from ghobject_t->hobj.seq and
+ * - HOBJECT_TO_SEQ: Contains leaf mapping from hobject_t->hobj.seq and
  *                   corresponding omap header
  * - SYS_PREFIX: GLOBAL_STATE_KEY - contains next seq number
  *                                  @see State
@@ -66,94 +66,94 @@ public:
    * Set of headers currently in use
    */
   set<uint64_t> in_use;
-  set<ghobject_t> map_header_in_use;
+  set<hobject_t> map_header_in_use;
 
   DBObjectMap(KeyValueDB *db) : db(db),
 				header_lock("DBOBjectMap")
     {}
 
   int set_keys(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const map<string, bufferlist> &set,
     const SequencerPosition *spos=0
     );
 
   int set_header(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const bufferlist &bl,
     const SequencerPosition *spos=0
     );
 
   int get_header(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     bufferlist *bl
     );
 
   int clear(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const SequencerPosition *spos=0
     );
 
   int clear_keys_header(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const SequencerPosition *spos=0
     );
 
   int rm_keys(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const set<string> &to_clear,
     const SequencerPosition *spos=0
     );
 
   int get(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     bufferlist *header,
     map<string, bufferlist> *out
     );
 
   int get_keys(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     set<string> *keys
     );
 
   int get_values(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const set<string> &keys,
     map<string, bufferlist> *out
     );
 
   int check_keys(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const set<string> &keys,
     set<string> *out
     );
 
   int get_xattrs(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const set<string> &to_get,
     map<string, bufferlist> *out
     );
 
   int get_all_xattrs(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     set<string> *out
     );
 
   int set_xattrs(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const map<string, bufferlist> &to_set,
     const SequencerPosition *spos=0
     );
 
   int remove_xattrs(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const set<string> &to_remove,
     const SequencerPosition *spos=0
     );
 
   int clone(
-    const ghobject_t &oid,
-    const ghobject_t &target,
+    const hobject_t &oid,
+    const hobject_t &target,
     const SequencerPosition *spos=0
     );
 
@@ -167,13 +167,13 @@ public:
   bool check(std::ostream &out);
 
   /// Ensure that all previous operations are durable
-  int sync(const ghobject_t *oid=0, const SequencerPosition *spos=0);
+  int sync(const hobject_t *oid=0, const SequencerPosition *spos=0);
 
   /// Util, list all objects, there must be no other concurrent access
-  int list_objects(vector<ghobject_t> *objs ///< [out] objects
+  int list_objects(vector<hobject_t> *objs ///< [out] objects
     );
 
-  ObjectMapIterator get_iterator(const ghobject_t &oid);
+  ObjectMapIterator get_iterator(const hobject_t &oid);
 
   static const string USER_PREFIX;
   static const string XATTR_PREFIX;
@@ -228,7 +228,7 @@ public:
     uint64_t num_children;
 
     coll_t c;
-    ghobject_t oid;
+    hobject_t oid;
 
     SequencerPosition spos;
 
@@ -274,15 +274,15 @@ public:
   };
 
   /// String munging (public for testing)
-  static string ghobject_key(const ghobject_t &oid);
-  static string ghobject_key_v0(coll_t c, const ghobject_t &oid);
-  static bool parse_ghobject_key_v0(const string &in,
-				   coll_t *c, ghobject_t *oid);
+  static string hobject_key(const hobject_t &oid);
+  static string hobject_key_v0(coll_t c, const hobject_t &oid);
+  static bool parse_hobject_key_v0(const string &in,
+				   coll_t *c, hobject_t *oid);
 private:
   /// Implicit lock on Header->seq
   typedef ceph::shared_ptr<_Header> Header;
 
-  string map_header_key(const ghobject_t &oid);
+  string map_header_key(const hobject_t &oid);
   string header_key(uint64_t seq);
   string complete_prefix(Header header);
   string user_prefix(Header header);
@@ -374,21 +374,21 @@ private:
   void set_header(Header input, KeyValueDB::Transaction t);
 
   /// Remove leaf node corresponding to oid in c
-  void remove_map_header(const ghobject_t &oid,
+  void remove_map_header(const hobject_t &oid,
 			 Header header,
 			 KeyValueDB::Transaction t);
 
   /// Set leaf node for c and oid to the value of header
-  void set_map_header(const ghobject_t &oid, _Header header,
+  void set_map_header(const hobject_t &oid, _Header header,
 		      KeyValueDB::Transaction t);
 
   /// Set leaf node for c and oid to the value of header
-  bool check_spos(const ghobject_t &oid,
+  bool check_spos(const hobject_t &oid,
 		  Header header,
 		  const SequencerPosition *spos);
 
   /// Lookup or create header for c oid
-  Header lookup_create_map_header(const ghobject_t &oid,
+  Header lookup_create_map_header(const hobject_t &oid,
 				  KeyValueDB::Transaction t);
 
   /**
@@ -396,15 +396,15 @@ private:
    *
    * Has the side effect of syncronously saving the new DBObjectMap state
    */
-  Header _generate_new_header(const ghobject_t &oid, Header parent);
-  Header generate_new_header(const ghobject_t &oid, Header parent) {
+  Header _generate_new_header(const hobject_t &oid, Header parent);
+  Header generate_new_header(const hobject_t &oid, Header parent) {
     Mutex::Locker l(header_lock);
     return _generate_new_header(oid, parent);
   }
 
   /// Lookup leaf header for c oid
-  Header _lookup_map_header(const ghobject_t &oid);
-  Header lookup_map_header(const ghobject_t &oid) {
+  Header _lookup_map_header(const hobject_t &oid);
+  Header lookup_map_header(const hobject_t &oid) {
     Mutex::Locker l(header_lock);
     return _lookup_map_header(oid);
   }
@@ -453,8 +453,8 @@ private:
   class RemoveMapHeaderOnDelete {
   public:
     DBObjectMap *db;
-    ghobject_t oid;
-    RemoveMapHeaderOnDelete(DBObjectMap *db, const ghobject_t &oid) :
+    hobject_t oid;
+    RemoveMapHeaderOnDelete(DBObjectMap *db, const hobject_t &oid) :
       db(db), oid(oid) {}
     void operator() (_Header *header) {
       Mutex::Locker l(db->header_lock);

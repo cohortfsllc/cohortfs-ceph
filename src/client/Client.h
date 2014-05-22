@@ -409,9 +409,6 @@ protected:
 
 
  public:
-  void set_filer_flags(int flags);
-  void clear_filer_flags(int flags);
-
   Client(Messenger *m, MonClient *mc);
   ~Client();
   void tear_down_cache();
@@ -745,8 +742,8 @@ public:
   int describe_layout(const char *path, ceph_file_layout* layout);
   int fdescribe_layout(int fd, ceph_file_layout* layout);
   int get_file_stripe_address(int fd, loff_t offset,
-			      vector<entity_addr_t>& address);
-  int get_file_extent_osds(int fd, loff_t off, loff_t *len, vector<int>& osds);
+			      entity_addr_t& address);
+  int get_file_extent_osd(int fd, loff_t off, loff_t *len, int& osd);
   int get_osd_addr(int osd, entity_addr_t& addr);
 
   // expose osdmap

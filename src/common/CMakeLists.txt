@@ -110,8 +110,6 @@ set (libcommon_files
 	hobject.cc 
 	../osd/OSDMap.cc 
 	../osd/osd_types.cc
-	../osd/ECMsgTypes.cc 
-	../osd/HitSet.cc  
 	../mds/MDSMap.cc 
 	../mds/inode_backtrace.cc 
 	../mds/mdstypes.cc 

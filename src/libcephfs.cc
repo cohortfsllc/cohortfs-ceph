@@ -981,34 +981,26 @@ extern "C" int ceph_set_default_preferred_pg(struct ceph_mount_info *cmount, int
   return -EOPNOTSUPP;
 }
 
-extern "C" int ceph_get_file_extent_osds(struct ceph_mount_info *cmount, int fh,
-    int64_t offset, int64_t *length, int *osds, int nosds)
+extern "C" int ceph_get_file_extent_osd(struct ceph_mount_info *cmount, int fh,
+					int64_t offset, int64_t *length,
+					int *osd)
 {
-  if (nosds < 0)
-    return -EINVAL;
-
   if (!cmount->is_mounted())
     return -ENOTCONN;
 
-  vector<int> vosds;
-  int ret = cmount->get_client()->get_file_extent_osds(fh, offset, length, vosds);
+  int vosd;
+  int ret = cmount->get_client()->get_file_extent_osd(fh, offset, length,
+						      vosd);
   if (ret < 0)
     return ret;
 
-  if (!nosds)
-    return vosds.size();
+  *osd = vosd;
 
-  if ((int)vosds.size() > nosds)
-    return -ERANGE;
-
-  for (int i = 0; i < (int)vosds.size(); i++)
-    osds[i] = vosds[i];
-
-  return vosds.size();
+  return 1;
 }
 
 extern "C" int ceph_get_osd_crush_location(struct ceph_mount_info *cmount,
-    int osd, char *path, size_t len)
+					   int osd, char *path, size_t len)
 {
   if (!cmount->is_mounted())
     return -ENOTCONN;
@@ -1064,15 +1056,12 @@ extern "C" int ceph_get_osd_addr(struct ceph_mount_info *cmount, int osd,
   return 0;
 }
 
-extern "C" int ceph_get_file_stripe_address(struct ceph_mount_info *cmount, int fh,
-					    int64_t offset, struct sockaddr_storage *addr, int naddr)
+extern "C" int ceph_get_file_stripe_address(struct ceph_mount_info *cmount,
+					    int fh, int64_t offset,
+					    struct sockaddr_storage *addr)
 {
-  vector<entity_addr_t> address;
-  unsigned i;
+  entity_addr_t address;
   int r;
-
-  if (naddr < 0)
-    return -EINVAL;
 
   if (!cmount->is_mounted())
     return -ENOTCONN;
@@ -1081,25 +1070,9 @@ extern "C" int ceph_get_file_stripe_address(struct ceph_mount_info *cmount, int 
   if (r < 0)
     return r;
 
-  for (i = 0; i < (unsigned)naddr && i < address.size(); i++)
-    memcpy(&addr[i], &address[i].ss_addr(), sizeof(*addr));
+  memcpy(addr, &address.ss_addr(), sizeof(*addr));
 
-  /* naddr == 0: drop through and return actual size */
-  if (naddr && (address.size() > (unsigned)naddr))
-    return -ERANGE;
-
-  return address.size();
-}
-
-extern "C" int ceph_localize_reads(struct ceph_mount_info *cmount, int val)
-{
-  if (!cmount->is_mounted())
-    return -ENOTCONN;
-  if (!val)
-    cmount->get_client()->clear_filer_flags(CEPH_OSD_FLAG_LOCALIZE_READS);
-  else
-    cmount->get_client()->set_filer_flags(CEPH_OSD_FLAG_LOCALIZE_READS);
-  return 0;
+  return 1;
 }
 
 extern "C" CephContext *ceph_get_mount_context(struct ceph_mount_info *cmount)

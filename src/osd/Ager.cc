@@ -114,7 +114,7 @@ uint64_t Ager::age_fill(float pc, utime_t until) {
       bufferlist sbl;
       sbl.substr_of(bl, 0, t);
       ObjectStore::Transaction tr;
-      ghobject_t oid = hobject_t(object_t(poid));
+      hobject_t oid = hobject_t(object_t(poid));
       tr.write(coll_t(), oid, off, t, sbl);
       store->apply_transaction(tr);
       off += t;

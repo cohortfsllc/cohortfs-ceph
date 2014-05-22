@@ -38,8 +38,7 @@ public:
 
   uint32_t op;
   epoch_t map_epoch, query_epoch;
-  pg_shard_t from;
-  spg_t pgid;
+  pg_t pgid;
   hobject_t begin, end;
 
   virtual void decode_payload() {
@@ -47,7 +46,7 @@ public:
     ::decode(op, p);
     ::decode(map_epoch, p);
     ::decode(query_epoch, p);
-    ::decode(pgid.pgid, p);
+    ::decode(pgid, p);
     ::decode(begin, p);
     ::decode(end, p);
 
@@ -56,36 +55,23 @@ public:
       begin.pool = pgid.pool();
     if (!end.is_max() && end.pool == -1)
       end.pool = pgid.pool();
-
-    if (header.version >= 2) {
-      ::decode(from, p);
-      ::decode(pgid.shard, p);
-    } else {
-      from = pg_shard_t(
-	get_source().num(),
-	ghobject_t::NO_SHARD);
-      pgid.shard = ghobject_t::NO_SHARD;
-    }
   }
 
   virtual void encode_payload(uint64_t features) {
     ::encode(op, payload);
     ::encode(map_epoch, payload);
     ::encode(query_epoch, payload);
-    ::encode(pgid.pgid, payload);
+    ::encode(pgid, payload);
     ::encode(begin, payload);
     ::encode(end, payload);
-    ::encode(from, payload);
-    ::encode(pgid.shard, payload);
   }
 
   MOSDPGScan() : Message(MSG_OSD_PG_SCAN, HEAD_VERSION, COMPAT_VERSION) {}
-  MOSDPGScan(uint32_t o, pg_shard_t from,
-	     epoch_t e, epoch_t qe, spg_t p, hobject_t be, hobject_t en)
+  MOSDPGScan(uint32_t o,
+	     epoch_t e, epoch_t qe, pg_t p, hobject_t be, hobject_t en)
     : Message(MSG_OSD_PG_SCAN, HEAD_VERSION, COMPAT_VERSION),
       op(o),
       map_epoch(e), query_epoch(e),
-      from(from),
       pgid(p),
       begin(be), end(en) {
   }

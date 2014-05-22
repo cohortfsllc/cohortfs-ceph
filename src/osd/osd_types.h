@@ -35,7 +35,6 @@
 #include "common/Formatter.h"
 #include "common/bloom_filter.hpp"
 #include "common/hobject.h"
-#include "HitSet.h"
 #include "Watch.h"
 #include "OpRequest.h"
 #include "include/cmp.h"
@@ -45,44 +44,19 @@
 #define CEPH_OSD_FEATURE_INCOMPAT_BASE CompatSet::Feature(1, "initial feature set(~v.18)")
 #define CEPH_OSD_FEATURE_INCOMPAT_PGINFO CompatSet::Feature(2, "pginfo object")
 #define CEPH_OSD_FEATURE_INCOMPAT_OLOC CompatSet::Feature(3, "object locator")
-#define CEPH_OSD_FEATURE_INCOMPAT_LEC  CompatSet::Feature(4, "last_epoch_clean")
 #define CEPH_OSD_FEATURE_INCOMPAT_CATEGORIES  CompatSet::Feature(5, "categories")
 #define CEPH_OSD_FEATURE_INCOMPAT_HOBJECTPOOL  CompatSet::Feature(6, "hobjectpool")
-#define CEPH_OSD_FEATURE_INCOMPAT_BIGINFO CompatSet::Feature(7, "biginfo")
 #define CEPH_OSD_FEATURE_INCOMPAT_LEVELDBINFO CompatSet::Feature(8, "leveldbinfo")
 #define CEPH_OSD_FEATURE_INCOMPAT_LEVELDBLOG CompatSet::Feature(9, "leveldblog")
-#define CEPH_OSD_FEATURE_INCOMPAT_SHARDS CompatSet::Feature(11, "sharded objects")
 
 
 typedef hobject_t collection_list_handle_t;
-
-typedef uint8_t shard_id_t;
 
 /// convert a single CPEH_OSD_FLAG_* to a string
 const char *ceph_osd_flag_name(unsigned flag);
 
 /// convert CEPH_OSD_FLAG_* op flags to a string
 string ceph_osd_flag_string(unsigned flags);
-
-struct pg_shard_t {
-  int osd;
-  shard_id_t shard;
-  pg_shard_t() : osd(-1), shard(ghobject_t::NO_SHARD) {}
-  explicit pg_shard_t(int osd) : osd(osd), shard(ghobject_t::NO_SHARD) {}
-  pg_shard_t(int osd, shard_id_t shard) : osd(osd), shard(shard) {}
-  static pg_shard_t undefined_shard() {
-    return pg_shard_t(-1, ghobject_t::NO_SHARD);
-  }
-  bool is_undefined() const {
-    return osd == -1;
-  }
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-};
-WRITE_CLASS_ENCODER(pg_shard_t)
-WRITE_EQ_OPERATORS_2(pg_shard_t, osd, shard)
-WRITE_CMP_OPERATORS_2(pg_shard_t, osd, shard)
-ostream &operator<<(ostream &lhs, const pg_shard_t &rhs);
 
 inline ostream& operator<<(ostream& out, const osd_reqid_t& r) {
   return out << r.name << "." << r.inc << ":" << r.tid;
@@ -390,75 +364,6 @@ CEPH_HASH_NAMESPACE_START
   };
 CEPH_HASH_NAMESPACE_END
 
-struct spg_t {
-  pg_t pgid;
-  shard_id_t shard;
-  spg_t() : shard(ghobject_t::NO_SHARD) {}
-  spg_t(pg_t pgid, shard_id_t shard) : pgid(pgid), shard(shard) {}
-  explicit spg_t(pg_t pgid) : pgid(pgid), shard(ghobject_t::NO_SHARD) {}
-  unsigned get_split_bits(unsigned pg_num) const {
-    return pgid.get_split_bits(pg_num);
-  }
-  spg_t get_parent() const {
-    return spg_t(pgid.get_parent(), shard);
-  }
-  ps_t ps() const {
-    return pgid.ps();
-  }
-  uint64_t pool() const {
-    return pgid.pool();
-  }
-  int32_t preferred() const {
-    return pgid.preferred();
-  }
-  bool parse(const char *s);
-  bool is_split(unsigned old_pg_num, unsigned new_pg_num,
-		set<spg_t> *pchildren) const {
-    set<pg_t> _children;
-    set<pg_t> *children = pchildren ? &_children : NULL;
-    bool is_split = pgid.is_split(old_pg_num, new_pg_num, children);
-    if (pchildren && is_split) {
-      for (set<pg_t>::iterator i = _children.begin();
-	   i != _children.end();
-	   ++i) {
-	pchildren->insert(spg_t(*i, shard));
-      }
-    }
-    return is_split;
-  }
-  bool is_no_shard() const {
-    return shard == ghobject_t::NO_SHARD;
-  }
-  void encode(bufferlist &bl) const {
-    ENCODE_START(1, 1, bl);
-    ::encode(pgid, bl);
-    ::encode(shard, bl);
-    ENCODE_FINISH(bl);
-  }
-  void decode(bufferlist::iterator &bl) {
-    DECODE_START(1, bl);
-    ::decode(pgid, bl);
-    ::decode(shard, bl);
-    DECODE_FINISH(bl);
-  }
-};
-WRITE_CLASS_ENCODER(spg_t)
-WRITE_EQ_OPERATORS_2(spg_t, pgid, shard)
-WRITE_CMP_OPERATORS_2(spg_t, pgid, shard)
-
-CEPH_HASH_NAMESPACE_START
-  template<> struct hash< spg_t >
-  {
-    size_t operator()( const spg_t& x ) const
-      {
-      static hash<uint32_t> H;
-      return H(hash<pg_t>()(x.pgid) ^ x.shard);
-    }
-  };
-CEPH_HASH_NAMESPACE_END
-
-ostream& operator<<(ostream& out, const spg_t &pg);
-
 // ----------------------
 
 class coll_t {
@@ -473,15 +378,15 @@ public:
     : str(str_)
   { }
 
-  explicit coll_t(spg_t pgid)
+  explicit coll_t(pg_t pgid)
     : str(pg_to_str(pgid))
   { }
 
-  static coll_t make_temp_coll(spg_t pgid) {
+  static coll_t make_temp_coll(pg_t pgid) {
     return coll_t(pg_to_tmp_str(pgid));
   }
 
-  static coll_t make_removal_coll(uint64_t seq, spg_t pgid) {
+  static coll_t make_removal_coll(uint64_t seq, pg_t pgid) {
     return coll_t(seq_to_removal_str(seq, pgid));
   }
 
@@ -497,10 +402,10 @@ public:
     return str < rhs.str;
   }
 
-  bool is_pg_prefix(spg_t& pgid) const;
-  bool is_pg(spg_t& pgid) const;
-  bool is_temp(spg_t& pgid) const;
-  bool is_removal(uint64_t *seq, spg_t *pgid) const;
+  bool is_pg_prefix(pg_t& pgid) const;
+  bool is_pg(pg_t& pgid) const;
+  bool is_temp(pg_t& pgid) const;
+  bool is_removal(uint64_t *seq, pg_t *pgid) const;
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   inline bool operator==(const coll_t& rhs) const {
@@ -514,17 +419,17 @@ public:
   static void generate_test_instances(list<coll_t*>& o);
 
 private:
-  static std::string pg_to_str(spg_t p) {
+  static std::string pg_to_str(pg_t p) {
     std::ostringstream oss;
     oss << p;
     return oss.str();
   }
-  static std::string pg_to_tmp_str(spg_t p) {
+  static std::string pg_to_tmp_str(pg_t p) {
     std::ostringstream oss;
     oss << p << "_TEMP";
     return oss.str();
   }
-  static std::string seq_to_removal_str(uint64_t seq, spg_t pgid) {
+  static std::string seq_to_removal_str(uint64_t seq, pg_t pgid) {
     std::ostringstream oss;
     oss << "FORREMOVAL_" << seq << "_" << pgid;
     return oss.str();
@@ -730,26 +635,8 @@ inline ostream& operator<<(ostream& out, const osd_stat_t& s) {
  */
 #define PG_STATE_CREATING     (1<<0)  // creating
 #define PG_STATE_ACTIVE       (1<<1)  // i am active.  (primary: replicas too)
-#define PG_STATE_CLEAN        (1<<2)  // peers are complete, clean of stray replicas.
 #define PG_STATE_DOWN         (1<<4)  // a needed replica is down, PG offline
-#define PG_STATE_REPLAY       (1<<5)  // crashed, waiting for replay
-//#define PG_STATE_STRAY      (1<<6)  // i must notify the primary i exist.
-#define PG_STATE_SPLITTING    (1<<7)  // i am splitting
-#define PG_STATE_SCRUBBING    (1<<8)  // scrubbing
-#define PG_STATE_SCRUBQ       (1<<9)  // queued for scrub
-#define PG_STATE_DEGRADED     (1<<10) // pg membership not complete
-#define PG_STATE_INCONSISTENT (1<<11) // pg replicas are inconsistent (but shouldn't be)
-#define PG_STATE_PEERING      (1<<12) // pg is (re)peering
-#define PG_STATE_REPAIR       (1<<13) // pg should repair on next scrub
-#define PG_STATE_RECOVERING   (1<<14) // pg is recovering/migrating objects
-#define PG_STATE_BACKFILL_WAIT     (1<<15) // [active] reserving backfill
-#define PG_STATE_INCOMPLETE   (1<<16) // incomplete content, peering failed.
-#define PG_STATE_STALE        (1<<17) // our state for this pg is stale, unknown.
 #define PG_STATE_REMAPPED     (1<<18) // pg is explicitly remapped to different OSDs than CRUSH
-#define PG_STATE_DEEP_SCRUB   (1<<19) // deep scrub: check CRC32 on files
-#define PG_STATE_BACKFILL  (1<<20) // [active] backfilling pg content
-#define PG_STATE_BACKFILL_TOOFULL (1<<21) // backfill can't proceed: too full
-#define PG_STATE_RECOVERY_WAIT (1<<22) // waiting for recovery reservations
 
 std::string pg_state_string(int state);
 
@@ -759,14 +646,10 @@ std::string pg_state_string(int state);
 struct pg_pool_t {
   enum {
     TYPE_REPLICATED = 1,     // replication
-    //TYPE_RAID4 = 2,   // raid4 (never implemented)
-    TYPE_ERASURE = 3,      // erasure-coded
   };
   static const char *get_type_name(int t) {
     switch (t) {
     case TYPE_REPLICATED: return "replicated";
-      //case TYPE_RAID4: return "raid4";
-    case TYPE_ERASURE: return "erasure";
     default: return "???";
     }
   }
@@ -779,15 +662,13 @@ struct pg_pool_t {
 
   enum {
     FLAG_HASHPSPOOL = 1, // hash pg seed and pool together (instead of adding)
-    FLAG_FULL       = 2, // pool is full
-    FLAG_DEBUG_FAKE_EC_POOL = 1<<2, // require ReplicatedPG to act like an EC pg
+    FLAG_FULL       = 2 // pool is full
   };
 
   static const char *get_flag_name(int f) {
     switch (f) {
     case FLAG_HASHPSPOOL: return "hashpspool";
     case FLAG_FULL: return "full";
-    case FLAG_DEBUG_FAKE_EC_POOL: return "require_local_rollback";
     default: return "???";
     }
   }
@@ -806,50 +687,19 @@ struct pg_pool_t {
     return get_flags_string(flags);
   }
 
-  typedef enum {
-    CACHEMODE_NONE = 0,                  ///< no caching
-    CACHEMODE_WRITEBACK = 1,             ///< write to cache, flush later
-    CACHEMODE_FORWARD = 2,               ///< forward if not in cache
-    CACHEMODE_READONLY = 3,              ///< handle reads, forward writes [not strongly consistent]
-  } cache_mode_t;
-  static const char *get_cache_mode_name(cache_mode_t m) {
-    switch (m) {
-    case CACHEMODE_NONE: return "none";
-    case CACHEMODE_WRITEBACK: return "writeback";
-    case CACHEMODE_FORWARD: return "forward";
-    case CACHEMODE_READONLY: return "readonly";
-    default: return "unknown";
-    }
-  }
-  static cache_mode_t get_cache_mode_from_str(const string& s) {
-    if (s == "none")
-      return CACHEMODE_NONE;
-    if (s == "writeback")
-      return CACHEMODE_WRITEBACK;
-    if (s == "forward")
-      return CACHEMODE_FORWARD;
-    if (s == "readonly")
-      return CACHEMODE_READONLY;
-    return (cache_mode_t)-1;
-  }
-  const char *get_cache_mode_name() const {
-    return get_cache_mode_name(cache_mode);
-  }
-
-  uint64_t flags;           ///< FLAG_*
-  uint8_t type;                ///< TYPE_*
-  uint8_t size, min_size;      ///< number of osds in each pg
-  uint8_t crush_ruleset;       ///< crush placement rule set
-  uint8_t object_hash;         ///< hash mapping object name to ps
+  uint64_t flags; ///< FLAG_*
+  uint8_t type; ///< TYPE_*
+  uint8_t size, min_size; ///< number of osds in each pg
+  uint8_t crush_ruleset; ///< crush placement rule set
+  uint8_t object_hash; ///< hash mapping object name to ps
 private:
   uint32_t pg_num, pgp_num;    ///< number of pgs
 
 
 public:
   map<string,string> properties;  ///< OBSOLETE
-  string erasure_code_profile; ///< name of the erasure code profile in OSDMap
   epoch_t last_change;      ///< most recent epoch changed
-  uint64_t auid;            ///< who owns the pg
+  uint64_t auid; ///< who owns the pg
   uint32_t crash_replay_interval; ///< seconds to allow clients to replay ACKed but unCOMMITted requests
 
   uint64_t quota_max_bytes; ///< maximum number of bytes for this pool
@@ -857,34 +707,12 @@ public:
 
   unsigned pg_num_mask, pgp_num_mask;
 
-  set<uint64_t> tiers;      ///< pools that are tiers of us
-  int64_t tier_of;         ///< pool for which we are a tier
-  // Note that write wins for read+write ops
-  int64_t read_tier;       ///< pool/tier for objecter to direct reads to
-  int64_t write_tier;      ///< pool/tier for objecter to direct writes to
-  cache_mode_t cache_mode;  ///< cache pool mode
-
-  bool is_tier() const { return tier_of >= 0; }
-  void clear_tier() { tier_of = -1; }
-  bool has_read_tier() const { return read_tier >= 0; }
-  void clear_read_tier() { read_tier = -1; }
-  bool has_write_tier() const { return write_tier >= 0; }
-  void clear_write_tier() { write_tier = -1; }
-
-  uint64_t target_max_bytes;   ///< tiering: target max pool size
-  uint64_t target_max_objects; ///< tiering: target max pool size
 
   uint32_t cache_target_dirty_ratio_micro; ///< cache: fraction of target to leave dirty
   uint32_t cache_target_full_ratio_micro;  ///< cache: fraction of target to fill before we evict in earnest
 
   uint32_t cache_min_flush_age;  ///< minimum age (seconds) before we can flush
   uint32_t cache_min_evict_age;  ///< minimum age (seconds) before we can evict
-
-  HitSet::Params hit_set_params; ///< The HitSet params to use on this pool
-  uint32_t hit_set_period;      ///< periodicity of HitSet segments (seconds)
-  uint32_t hit_set_count;       ///< number of periods to retain
-
-  uint32_t stripe_width;        ///< erasure coded stripe size in bytes
 
   pg_pool_t()
     : flags(0), type(0), size(0), min_size(0),
@@ -894,28 +722,13 @@ public:
       auid(0),
       crash_replay_interval(0),
       quota_max_bytes(0), quota_max_objects(0),
-      pg_num_mask(0), pgp_num_mask(0),
-      tier_of(-1), read_tier(-1), write_tier(-1),
-      cache_mode(CACHEMODE_NONE),
-      target_max_bytes(0), target_max_objects(0),
-      cache_target_dirty_ratio_micro(0),
-      cache_target_full_ratio_micro(0),
-      cache_min_flush_age(0),
-      cache_min_evict_age(0),
-      hit_set_params(),
-      hit_set_period(0),
-      hit_set_count(0),
-      stripe_width(0)
+      pg_num_mask(0), pgp_num_mask(0)
   { }
 
   void dump(Formatter *f) const;
 
   uint64_t get_flags() const { return flags; }
 
-  /// This method will later return true for ec pools as well
-  bool ec_pool() const {
-    return type == TYPE_ERASURE;
-  }
   unsigned get_type() const { return type; }
   unsigned get_size() const { return size; }
   unsigned get_min_size() const { return min_size; }
@@ -926,23 +739,13 @@ public:
   }
   epoch_t get_last_change() const { return last_change; }
   uint64_t get_auid() const { return auid; }
-  unsigned get_crash_replay_interval() const { return crash_replay_interval; }
-
-  void set_stripe_width(uint32_t s) { stripe_width = s; }
-  uint32_t get_stripe_width() const { return stripe_width; }
 
   bool is_replicated()   const { return get_type() == TYPE_REPLICATED; }
-  bool is_erasure() const { return get_type() == TYPE_ERASURE; }
-
-  bool requires_aligned_append() const { return is_erasure(); }
-  uint64_t required_alignment() const { return stripe_width; }
 
   bool can_shift_osds() const {
     switch (get_type()) {
     case TYPE_REPLICATED:
       return true;
-    case TYPE_ERASURE:
-      return false;
     default:
       assert(0 == "unhandled pool type");
     }
@@ -995,7 +798,7 @@ public:
    * map a raw pg (with full precision ps) into an actual pg, for storage
    */
   pg_t raw_pg_to_pg(pg_t pg) const;
-  
+
   /*
    * map raw pg (full precision ps) into a placement seed.  include
    * pool id in that value so that different pools don't use the same
@@ -1024,105 +827,48 @@ ostream& operator<<(ostream& out, const pg_pool_t& p);
 struct object_stat_sum_t {
   int64_t num_bytes;    // in bytes
   int64_t num_objects;
-  int64_t num_object_clones;
-  int64_t num_object_copies;  // num_objects * num_replicas
-  int64_t num_objects_missing_on_primary;
-  int64_t num_objects_degraded;
-  int64_t num_objects_unfound;
   int64_t num_rd, num_rd_kb;
   int64_t num_wr, num_wr_kb;
-  int64_t num_scrub_errors;	// total deep and shallow scrub errors
-  int64_t num_shallow_scrub_errors;
-  int64_t num_deep_scrub_errors;
-  int64_t num_objects_recovered;
-  int64_t num_bytes_recovered;
-  int64_t num_keys_recovered;
-  int64_t num_objects_dirty;
-  int64_t num_whiteouts;
   int64_t num_objects_omap;
-  int64_t num_objects_hit_set_archive;
 
   object_stat_sum_t()
-    : num_bytes(0),
-      num_objects(0), num_object_clones(0), num_object_copies(0),
-      num_objects_missing_on_primary(0), num_objects_degraded(0), num_objects_unfound(0),
-      num_rd(0), num_rd_kb(0), num_wr(0), num_wr_kb(0),
-      num_scrub_errors(0), num_shallow_scrub_errors(0),
-      num_deep_scrub_errors(0),
-      num_objects_recovered(0),
-      num_bytes_recovered(0),
-      num_keys_recovered(0),
-      num_objects_dirty(0),
-      num_whiteouts(0),
-      num_objects_omap(0),
-      num_objects_hit_set_archive(0)
+    : num_bytes(0), num_objects(0), num_rd(0), num_rd_kb(0),
+      num_wr(0), num_wr_kb(0), num_objects_omap(0)
   {}
 
   void floor(int64_t f) {
 #define FLOOR(x) if (x < f) x = f
     FLOOR(num_bytes);
     FLOOR(num_objects);
-    FLOOR(num_object_clones);
-    FLOOR(num_object_copies);
-    FLOOR(num_objects_missing_on_primary);
-    FLOOR(num_objects_degraded);
-    FLOOR(num_objects_unfound);
     FLOOR(num_rd);
     FLOOR(num_rd_kb);
     FLOOR(num_wr);
     FLOOR(num_wr_kb);
-    FLOOR(num_scrub_errors);
-    FLOOR(num_shallow_scrub_errors);
-    FLOOR(num_deep_scrub_errors);
-    FLOOR(num_objects_recovered);
-    FLOOR(num_bytes_recovered);
-    FLOOR(num_keys_recovered);
-    FLOOR(num_objects_dirty);
-    FLOOR(num_whiteouts);
     FLOOR(num_objects_omap);
-    FLOOR(num_objects_hit_set_archive);
 #undef FLOOR
   }
 
   void split(vector<object_stat_sum_t> &out) const {
-#define SPLIT(PARAM)                            \
+#define SPLIT(PARAM)				\
     for (unsigned i = 0; i < out.size(); ++i) { \
-      out[i].PARAM = PARAM / out.size();        \
-      if (i < (PARAM % out.size())) {           \
-	out[i].PARAM++;                         \
-      }                                         \
-    }                                           \
+      out[i].PARAM = PARAM / out.size();	\
+      if (i < (PARAM % out.size())) {		\
+      out[i].PARAM++;				\
+      }						\
+    }						\
 
     SPLIT(num_bytes);
     SPLIT(num_objects);
-    SPLIT(num_object_clones);
-    SPLIT(num_object_copies);
-    SPLIT(num_objects_missing_on_primary);
-    SPLIT(num_objects_degraded);
-    SPLIT(num_objects_unfound);
     SPLIT(num_rd);
     SPLIT(num_rd_kb);
     SPLIT(num_wr);
     SPLIT(num_wr_kb);
-    SPLIT(num_scrub_errors);
-    SPLIT(num_shallow_scrub_errors);
-    SPLIT(num_deep_scrub_errors);
-    SPLIT(num_objects_recovered);
-    SPLIT(num_bytes_recovered);
-    SPLIT(num_keys_recovered);
-    SPLIT(num_objects_dirty);
-    SPLIT(num_whiteouts);
     SPLIT(num_objects_omap);
-    SPLIT(num_objects_hit_set_archive);
 #undef SPLIT
   }
 
   void clear() {
     memset(this, 0, sizeof(*this));
-  }
-
-  void calc_copies(int nrep) {
-    num_object_copies = nrep * num_objects;
   }
 
   bool is_zero() const {
@@ -1148,12 +894,6 @@ WRITE_CLASS_ENCODER(object_stat_sum_t)
 struct object_stat_collection_t {
   object_stat_sum_t sum;
   map<string,object_stat_sum_t> cat_sum;
-
-  void calc_copies(int nrep) {
-    sum.calc_copies(nrep);
-    for (map<string,object_stat_sum_t>::iterator p = cat_sum.begin(); p != cat_sum.end(); ++p)
-      p->second.calc_copies(nrep);
-  }
 
   void dump(Formatter *f) const;
   void encode(bufferlist& bl) const;
@@ -1213,69 +953,33 @@ struct pg_stat_t {
   utime_t last_fresh;   // last reported
   utime_t last_change;  // new state != previous state
   utime_t last_active;  // state & PG_STATE_ACTIVE
-  utime_t last_clean;   // state & PG_STATE_CLEAN
   utime_t last_unstale; // (state & PG_STATE_STALE) == 0
 
   eversion_t log_start;         // (log_start,version]
   eversion_t ondisk_log_start;  // there may be more on disk
 
   epoch_t created;
-  epoch_t last_epoch_clean;
   pg_t parent;
   uint32_t parent_split_bits;
 
-  eversion_t last_scrub;
-  eversion_t last_deep_scrub;
-  utime_t last_scrub_stamp;
-  utime_t last_deep_scrub_stamp;
-  utime_t last_clean_scrub_stamp;
-
   object_stat_collection_t stats;
-  bool stats_invalid;
 
   int64_t log_size;
   int64_t ondisk_log_size;    // >= active_log_size
 
-  vector<int> up, acting;
-  epoch_t mapping_epoch;
-
   utime_t last_became_active;
 
-  /// true if num_objects_dirty is not accurate (because it was not
-  /// maintained starting from pool creation)
-  bool dirty_stats_invalid;
-  bool omap_stats_invalid;
-  bool hitset_stats_invalid;
-
-  /// up, acting primaries
-  int up_primary;
-  int acting_primary;
+  int osd;
 
   pg_stat_t()
     : reported_seq(0),
       reported_epoch(0),
       state(0),
-      created(0), last_epoch_clean(0),
+      created(0),
       parent_split_bits(0),
-      stats_invalid(false),
       log_size(0), ondisk_log_size(0),
-      mapping_epoch(0),
-      dirty_stats_invalid(false),
-      omap_stats_invalid(false),
-      hitset_stats_invalid(false),
-      up_primary(-1),
-      acting_primary(-1)
+      osd(-1)
   { }
-
-  epoch_t get_effective_last_epoch_clean() const {
-    if (state & PG_STATE_CLEAN) {
-      // we are clean as of this report, and should thus take the
-      // reported epoch
-      return reported_epoch;
-    } else {
-      return last_epoch_clean;
-    }
-  }
 
   pair<epoch_t, version_t> get_version_pair() const {
     return make_pair(reported_epoch, reported_seq);
@@ -1354,47 +1058,6 @@ WRITE_CLASS_ENCODER_FEATURES(pool_stat_t)
 
 // -----------------------------------------
 
-/**
- * pg_hit_set_info_t - information about a single recorded HitSet
- *
- * Track basic metadata about a HitSet, like the nubmer of insertions
- * and the time range it covers.
- */
-struct pg_hit_set_info_t {
-  utime_t begin, end;   ///< time interval
-  eversion_t version;   ///< version this HitSet object was written
-
-  pg_hit_set_info_t() {}
-  pg_hit_set_info_t(utime_t b)
-    : begin(b) {}
-
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<pg_hit_set_info_t*>& o);
-};
-WRITE_CLASS_ENCODER(pg_hit_set_info_t)
-
-/**
- * pg_hit_set_history_t - information about a history of hitsets
- *
- * Include information about the currently accumulating hit set as well
- * as archived/historical ones.
- */
-struct pg_hit_set_history_t {
-  eversion_t current_last_update;  ///< last version inserted into current set
-  utime_t current_last_stamp;      ///< timestamp of last insert
-  pg_hit_set_info_t current_info;  ///< metadata about the current set
-  list<pg_hit_set_info_t> history; ///< archived sets, sorted oldest -> newest
-
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<pg_hit_set_history_t*>& o);
-};
-WRITE_CLASS_ENCODER(pg_hit_set_history_t)
-
-
 // -----------------------------------------
 
 /**
@@ -1420,17 +1083,11 @@ struct pg_history_t {
   epoch_t same_interval_since;   // same acting AND up set since
   epoch_t same_primary_since;  // same primary at least back through this epoch.
 
-  eversion_t last_scrub;
-  eversion_t last_deep_scrub;
-  utime_t last_scrub_stamp;
-  utime_t last_deep_scrub_stamp;
-  utime_t last_clean_scrub_stamp;
-
   pg_history_t()
     : epoch_created(0),
       last_epoch_started(0), last_epoch_clean(0), last_epoch_split(0),
       same_up_since(0), same_interval_since(0), same_primary_since(0) {}
-  
+
   bool merge(const pg_history_t &other) {
     // Here, we only update the fields which cannot be calculated from the OSDmap.
     bool modified = false;
@@ -1448,26 +1105,6 @@ struct pg_history_t {
     }
     if (last_epoch_split < other.last_epoch_split) {
       last_epoch_split = other.last_epoch_split; 
-      modified = true;
-    }
-    if (other.last_scrub > last_scrub) {
-      last_scrub = other.last_scrub;
-      modified = true;
-    }
-    if (other.last_scrub_stamp > last_scrub_stamp) {
-      last_scrub_stamp = other.last_scrub_stamp;
-      modified = true;
-    }
-    if (other.last_deep_scrub > last_deep_scrub) {
-      last_deep_scrub = other.last_deep_scrub;
-      modified = true;
-    }
-    if (other.last_deep_scrub_stamp > last_deep_scrub_stamp) {
-      last_deep_scrub_stamp = other.last_deep_scrub_stamp;
-      modified = true;
-    }
-    if (other.last_clean_scrub_stamp > last_clean_scrub_stamp) {
-      last_clean_scrub_stamp = other.last_clean_scrub_stamp;
       modified = true;
     }
     return modified;
@@ -1497,7 +1134,7 @@ inline ostream& operator<<(ostream& out, const pg_history_t& h) {
  *    otherwise, we have no idea what the pg is supposed to contain.
  */
 struct pg_info_t {
-  spg_t pgid;
+  pg_t pgid;
   eversion_t last_update;    // last object version applied to store.
   eversion_t last_complete;  // last version pg was complete through.
   epoch_t last_epoch_started;// last epoch at which this pg started on this osd
@@ -1511,13 +1148,12 @@ struct pg_info_t {
   pg_stat_t stats;
 
   pg_history_t history;
-  pg_hit_set_history_t hit_set;
 
   pg_info_t()
     : last_epoch_started(0), last_user_version(0),
       last_backfill(hobject_t::get_max())
   { }
-  pg_info_t(spg_t p)
+  pg_info_t(pg_t p)
     : pgid(p),
       last_epoch_started(0), last_user_version(0),
       last_backfill(hobject_t::get_max())
@@ -1567,22 +1203,15 @@ struct pg_notify_t {
   epoch_t query_epoch;
   epoch_t epoch_sent;
   pg_info_t info;
-  shard_id_t to;
-  shard_id_t from;
   pg_notify_t() :
-    query_epoch(0), epoch_sent(0), to(ghobject_t::no_shard()),
-    from(ghobject_t::no_shard()) {}
+    query_epoch(0), epoch_sent(0) {}
   pg_notify_t(
-    shard_id_t to,
-    shard_id_t from,
     epoch_t query_epoch,
     epoch_t epoch_sent,
     const pg_info_t &info)
     : query_epoch(query_epoch),
       epoch_sent(epoch_sent),
-      info(info), to(to), from(from) {
-    assert(from == info.pgid.shard);
-  }
+      info(info) { }
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator &p);
   void dump(Formatter *f) const;
@@ -1593,59 +1222,6 @@ ostream &operator<<(ostream &lhs, const pg_notify_t &notify);
 
 
 /**
- * pg_interval_t - information about a past interval
- */
-class OSDMap;
-struct pg_interval_t {
-  vector<int> up, acting;
-  epoch_t first, last;
-  bool maybe_went_rw;
-  int primary;
-  int up_primary;
-
-  pg_interval_t()
-    : first(0), last(0),
-      maybe_went_rw(false),
-      primary(-1),
-      up_primary(-1)
-  {}
-
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<pg_interval_t*>& o);
-
-  /**
-   * Integrates a new map into *past_intervals, returns true
-   * if an interval was closed out.
-   */
-  static bool check_new_interval(
-    int old_acting_primary,                     ///< [in] primary as of lastmap
-    int new_acting_primary,                     ///< [in] primary as of lastmap
-    const vector<int> &old_acting,              ///< [in] acting as of lastmap
-    const vector<int> &new_acting,              ///< [in] acting as of osdmap
-    int old_up_primary,                         ///< [in] up primary of lastmap
-    int new_up_primary,                         ///< [in] up primary of osdmap
-    const vector<int> &old_up,                  ///< [in] up as of lastmap
-    const vector<int> &new_up,                  ///< [in] up as of osdmap
-    epoch_t same_interval_since,                ///< [in] as of osdmap
-    epoch_t last_epoch_clean,                   ///< [in] current
-    ceph::shared_ptr<const OSDMap> osdmap,  ///< [in] current map
-    ceph::shared_ptr<const OSDMap> lastmap, ///< [in] last map
-    int64_t poolid,                             ///< [in] pool for pg
-    pg_t pgid,                                  ///< [in] pgid for pg
-    map<epoch_t, pg_interval_t> *past_intervals,///< [out] intervals
-    ostream *out = 0                            ///< [out] debug ostream
-    );
-};
-WRITE_CLASS_ENCODER(pg_interval_t)
-
-ostream& operator<<(ostream& out, const pg_interval_t& i);
-
-typedef map<epoch_t, pg_interval_t> pg_interval_map_t;
-
-
-/** 
  * pg_query_t - used to ask a peer for information about a pg.
  *
  * note: if version=0, type=LOG, then we just provide our full log.
@@ -1671,35 +1247,27 @@ struct pg_query_t {
   eversion_t since;
   pg_history_t history;
   epoch_t epoch_sent;
-  shard_id_t to;
-  shard_id_t from;
 
-  pg_query_t() : type(-1), epoch_sent(0), to(ghobject_t::NO_SHARD),
-		 from(ghobject_t::NO_SHARD) {}
+  pg_query_t() : type(-1), epoch_sent(0) { }
   pg_query_t(
     int t,
-    shard_id_t to,
-    shard_id_t from,
     const pg_history_t& h,
     epoch_t epoch_sent)
     : type(t),
       history(h),
-      epoch_sent(epoch_sent),
-      to(to), from(from) {
+      epoch_sent(epoch_sent) {
     assert(t != LOG);
   }
   pg_query_t(
     int t,
-    shard_id_t to,
-    shard_id_t from,
     eversion_t s,
     const pg_history_t& h,
     epoch_t epoch_sent)
     : type(t), since(s), history(h),
-      epoch_sent(epoch_sent), to(to), from(from) {
+      epoch_sent(epoch_sent) {
     assert(t == LOG);
   }
-  
+
   void encode(bufferlist &bl, uint64_t features) const;
   void decode(bufferlist::iterator &bl);
 
@@ -1833,15 +1401,12 @@ struct pg_log_entry_t {
     LOST_REVERT = 5, // lost new version, revert to an older version.
     LOST_DELETE = 6, // lost new version, revert to no object (deleted).
     LOST_MARK = 7,   // lost new version, now EIO
-    PROMOTE = 8,     // promoted object from another tier
     CLEAN = 9,       // mark an object clean
   };
   static const char *get_op_name(int op) {
     switch (op) {
     case MODIFY:
       return "modify  ";
-    case PROMOTE:
-      return "promote ";
     case CLONE:
       return "clone   ";
     case DELETE:
@@ -1892,7 +1457,6 @@ struct pg_log_entry_t {
       
   bool is_clone() const { return op == CLONE; }
   bool is_modify() const { return op == MODIFY; }
-  bool is_promote() const { return op == PROMOTE; }
   bool is_clean() const { return op == CLEAN; }
   bool is_backlog() const { return op == BACKLOG; }
   bool is_lost_revert() const { return op == LOST_REVERT; }
@@ -1901,7 +1465,7 @@ struct pg_log_entry_t {
 
   bool is_update() const {
     return
-      is_clone() || is_modify() || is_promote() || is_clean() ||
+      is_clone() || is_modify() || is_clean() ||
       is_backlog() || is_lost_revert() || is_lost_mark();
   }
   bool is_delete() const {
@@ -2047,80 +1611,11 @@ inline ostream& operator<<(ostream& out, const pg_log_t& log)
 
 
 /**
- * pg_missing_t - summary of missing objects.
- *
- *  kept in memory, as a supplement to pg_log_t
- *  also used to pass missing info in messages.
- */
-struct pg_missing_t {
-  struct item {
-    eversion_t need, have;
-    item() {}
-    item(eversion_t n) : need(n) {}  // have no old version
-    item(eversion_t n, eversion_t h) : need(n), have(h) {}
-
-    void encode(bufferlist& bl) const {
-      ::encode(need, bl);
-      ::encode(have, bl);
-    }
-    void decode(bufferlist::iterator& bl) {
-      ::decode(need, bl);
-      ::decode(have, bl);
-    }
-    void dump(Formatter *f) const {
-      f->dump_stream("need") << need;
-      f->dump_stream("have") << have;
-    }
-    static void generate_test_instances(list<item*>& o) {
-      o.push_back(new item);
-      o.push_back(new item);
-      o.back()->need = eversion_t(1, 2);
-      o.back()->have = eversion_t(1, 1);
-    }
-  }; 
-  WRITE_CLASS_ENCODER(item)
-
-  map<hobject_t, item> missing;         // oid -> (need v, have v)
-  map<version_t, hobject_t> rmissing;  // v -> oid
-
-  unsigned int num_missing() const;
-  bool have_missing() const;
-  void swap(pg_missing_t& o);
-  bool is_missing(const hobject_t& oid) const;
-  bool is_missing(const hobject_t& oid, eversion_t v) const;
-  eversion_t have_old(const hobject_t& oid) const;
-  void add_next_event(const pg_log_entry_t& e);
-  void revise_need(hobject_t oid, eversion_t need);
-  void revise_have(hobject_t oid, eversion_t have);
-  void add(const hobject_t& oid, eversion_t need, eversion_t have);
-  void rm(const hobject_t& oid, eversion_t v);
-  void rm(const std::map<hobject_t, pg_missing_t::item>::iterator &m);
-  void got(const hobject_t& oid, eversion_t v);
-  void got(const std::map<hobject_t, pg_missing_t::item>::iterator &m);
-  void split_into(pg_t child_pgid, unsigned split_bits, pg_missing_t *omissing);
-
-  void clear() {
-    missing.clear();
-    rmissing.clear();
-  }
-
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl, int64_t pool = -1);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<pg_missing_t*>& o);
-};
-WRITE_CLASS_ENCODER(pg_missing_t::item)
-WRITE_CLASS_ENCODER(pg_missing_t)
-
-ostream& operator<<(ostream& out, const pg_missing_t::item& i);
-ostream& operator<<(ostream& out, const pg_missing_t& missing);
-
-/**
  * pg list objects response format
  *
  */
 struct pg_ls_response_t {
-  collection_list_handle_t handle; 
+  collection_list_handle_t handle;
   list<pair<object_t, string> > entries;
 
   void encode(bufferlist& bl) const {
@@ -2313,7 +1808,7 @@ public:
   epoch_t last_map_marked_full; // last epoch osdmap was marked full
 
   OSDSuperblock() : 
-    whoami(-1), 
+    whoami(-1),
     current_epoch(0), oldest_map(0), newest_map(0), weight(0),
     mounted(0), clean_thru(0), last_map_marked_full(0) {
   }
@@ -2394,26 +1889,13 @@ struct object_info_t {
   // note: these are currently encoded into a total 16 bits; see
   // encode()/decode() for the weirdness.
   typedef enum {
-    FLAG_LOST     = 1<<0,
-    FLAG_WHITEOUT = 1<<1,  // object logically does not exist
-    FLAG_DIRTY    = 1<<2,  // object has been modified since last flushed or undirtied
-    FLAG_OMAP     = 1 << 3,  // has (or may have) some/any omap data
-    // ...
-    FLAG_USES_TMAP = 1<<8,  // deprecated; no longer used.
+    FLAG_OMAP     = 1 << 3  // has (or may have) some/any omap data
   } flag_t;
 
   flag_t flags;
 
   static string get_flag_string(flag_t flags) {
     string s;
-    if (flags & FLAG_LOST)
-      s += "|lost";
-    if (flags & FLAG_WHITEOUT)
-      s += "|whiteout";
-    if (flags & FLAG_DIRTY)
-      s += "|dirty";
-    if (flags & FLAG_USES_TMAP)
-      s += "|uses_tmap";
     if (flags & FLAG_OMAP)
       s += "|omap";
     if (s.length())
@@ -2443,15 +1925,6 @@ struct object_info_t {
   }
   void clear_flag(flag_t f) {
     flags = (flag_t)(flags & ~f);
-  }
-  bool is_lost() const {
-    return test_flag(FLAG_LOST);
-  }
-  bool is_whiteout() const {
-    return test_flag(FLAG_WHITEOUT);
-  }
-  bool is_dirty() const {
-    return test_flag(FLAG_DIRTY);
   }
   bool is_omap() const {
     return test_flag(FLAG_OMAP);
@@ -2514,14 +1987,6 @@ private:
 public:
   Cond cond;
   int unstable_writes, readers, writers_waiting, readers_waiting;
-
-  /// in-progress copyfrom ops for this object
-  bool blocked;
-
-  // set if writes for this object are blocked on another objects recovery
-  ObjectContextRef blocked_by;      // object blocking our writes
-  set<ObjectContextRef> blocking;   // objects whose writes we block
-  bool requeue_scrub_on_unblock;    // true if we need to requeue scrub on unblock
 
   // any entity in obs.oi.watchers MUST be in either watchers or unconnected_watchers.
   map<pair<uint64_t, entity_name_t>, WatchRef> watchers;
@@ -2675,25 +2140,12 @@ public:
   ObjectContext()
     : destructor_callback(0),
       lock("ReplicatedPG::ObjectContext::lock"),
-      unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0),
-      blocked(false), requeue_scrub_on_unblock(false) {}
+      unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0) {}
 
   ~ObjectContext() {
     assert(rwstate.empty());
     if (destructor_callback)
       destructor_callback->complete(0);
-  }
-
-  void start_block() {
-    assert(!blocked);
-    blocked = true;
-  }
-  void stop_block() {
-    assert(blocked);
-    blocked = false;
-  }
-  bool is_blocked() const {
-    return blocked;
   }
 
   // do simple synchronous mutual exclusion, for now.  now waitqueues or anything fancy.
@@ -2772,158 +2224,7 @@ inline ostream& operator<<(ostream& out, const ObjectContext& obc)
   return out << "obc(" << obc.obs << " " << obc.rwstate << ")";
 }
 
-
 ostream& operator<<(ostream& out, const object_info_t& oi);
-
-
-
-// Object recovery
-struct ObjectRecoveryInfo {
-  hobject_t soid;
-  eversion_t version;
-  uint64_t size;
-  object_info_t oi;
-  interval_set<uint64_t> copy_subset;
-  map<hobject_t, interval_set<uint64_t> > clone_subset;
-
-  ObjectRecoveryInfo() : size(0) { }
-
-  static void generate_test_instances(list<ObjectRecoveryInfo*>& o);
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl, int64_t pool = -1);
-  ostream &print(ostream &out) const;
-  void dump(Formatter *f) const;
-};
-WRITE_CLASS_ENCODER(ObjectRecoveryInfo)
-ostream& operator<<(ostream& out, const ObjectRecoveryInfo &inf);
-
-struct ObjectRecoveryProgress {
-  bool first;
-  uint64_t data_recovered_to;
-  bool data_complete;
-  string omap_recovered_to;
-  bool omap_complete;
-
-  ObjectRecoveryProgress()
-    : first(true),
-      data_recovered_to(0),
-      data_complete(false), omap_complete(false) { }
-
-  bool is_complete(const ObjectRecoveryInfo& info) const {
-    return (data_recovered_to >= (
-      info.copy_subset.empty() ?
-      0 : info.copy_subset.range_end())) &&
-      omap_complete;
-  }
-
-  static void generate_test_instances(list<ObjectRecoveryProgress*>& o);
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  ostream &print(ostream &out) const;
-  void dump(Formatter *f) const;
-};
-WRITE_CLASS_ENCODER(ObjectRecoveryProgress)
-ostream& operator<<(ostream& out, const ObjectRecoveryProgress &prog);
-
-struct PushReplyOp {
-  hobject_t soid;
-
-  static void generate_test_instances(list<PushReplyOp*>& o);
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  ostream &print(ostream &out) const;
-  void dump(Formatter *f) const;
-
-  uint64_t cost(CephContext *cct) const;
-};
-WRITE_CLASS_ENCODER(PushReplyOp)
-ostream& operator<<(ostream& out, const PushReplyOp &op);
-
-struct PullOp {
-  hobject_t soid;
-
-  ObjectRecoveryInfo recovery_info;
-  ObjectRecoveryProgress recovery_progress;
-
-  static void generate_test_instances(list<PullOp*>& o);
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  ostream &print(ostream &out) const;
-  void dump(Formatter *f) const;
-
-  uint64_t cost(CephContext *cct) const;
-};
-WRITE_CLASS_ENCODER(PullOp)
-ostream& operator<<(ostream& out, const PullOp &op);
-
-struct PushOp {
-  hobject_t soid;
-  eversion_t version;
-  bufferlist data;
-  interval_set<uint64_t> data_included;
-  bufferlist omap_header;
-  map<string, bufferlist> omap_entries;
-  map<string, bufferlist> attrset;
-
-  ObjectRecoveryInfo recovery_info;
-  ObjectRecoveryProgress before_progress;
-  ObjectRecoveryProgress after_progress;
-
-  static void generate_test_instances(list<PushOp*>& o);
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  ostream &print(ostream &out) const;
-  void dump(Formatter *f) const;
-
-  uint64_t cost(CephContext *cct) const;
-};
-WRITE_CLASS_ENCODER(PushOp)
-ostream& operator<<(ostream& out, const PushOp &op);
-
-
-/*
- * summarize pg contents for purposes of a scrub
- */
-struct ScrubMap {
-  struct object {
-    uint64_t size;
-    bool negative;
-    map<string,bufferptr> attrs;
-    uint32_t digest;
-    bool digest_present;
-    uint32_t nlinks;
-    uint32_t omap_digest;
-    bool omap_digest_present;
-    bool read_error;
-
-    object() :
-      // Init invalid size so it won't match if we get a stat EIO error
-      size(-1), negative(false), digest(0), digest_present(false),
-      nlinks(0), omap_digest(0), omap_digest_present(false),
-      read_error(false) {}
-
-    void encode(bufferlist& bl) const;
-    void decode(bufferlist::iterator& bl);
-    void dump(Formatter *f) const;
-    static void generate_test_instances(list<object*>& o);
-  };
-  WRITE_CLASS_ENCODER(object)
-
-  map<hobject_t,object> objects;
-  map<string,bufferptr> attrs;
-  eversion_t valid_through;
-  eversion_t incr_since;
-
-  void merge_incr(const ScrubMap &l);
-
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& bl, int64_t pool=-1);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<ScrubMap*>& o);
-};
-WRITE_CLASS_ENCODER(ScrubMap::object)
-WRITE_CLASS_ENCODER(ScrubMap)
-
 
 struct OSDOp {
   ceph_osd_op op;
@@ -3106,9 +2407,4 @@ struct clone_info {
 };
 WRITE_CLASS_ENCODER(clone_info)
 
-enum scrub_error_type {
-  CLEAN,
-  DEEP_ERROR,
-  SHALLOW_ERROR
-};
 #endif

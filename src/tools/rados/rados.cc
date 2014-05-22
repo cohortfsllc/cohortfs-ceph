@@ -45,7 +45,7 @@ using namespace librados;
 #include "include/compat.h"
 
 int rados_tool_sync(const std::map < std::string, std::string > &opts,
-                             std::vector<const char*> &args);
+		    std::vector<const char*> &args);
 
 // two steps seem to be necessary to do this right
 #define STR(x) _STR(x)
@@ -129,13 +129,6 @@ void usage(ostream& out)
 "       --lock-description           Description of lock\n"
 "       --lock-duration              Lock duration (in seconds)\n"
 "       --lock-type                  Lock type (shared, exclusive)\n"
-"\n"
-"CACHE POOLS: (for testing/development only)\n"
-"   cache-flush <obj-name>           flush cache pool object (blocking)\n"
-"   cache-try-flush <obj-name>       flush cache pool object (non-blocking)\n"
-"   cache-evict <obj-name>           evict cache pool object\n"
-"   cache-flush-evict-all            flush+evict all objects\n"
-"   cache-try-flush-evict-all        try-flush+evict all objects\n"
 "\n"
 "GLOBAL OPTIONS:\n"
 "   --object_locator object_locator\n"
@@ -1043,96 +1036,6 @@ static int do_lock_cmd(std::vector<const char*> &nargs,
   return 0;
 }
 
-static int do_cache_flush(IoCtx& io_ctx, string oid)
-{
-  ObjectReadOperation op;
-  op.cache_flush();
-  librados::AioCompletion *completion =
-    librados::Rados::aio_create_completion();
-  io_ctx.aio_operate(oid.c_str(), completion, &op,
-		     librados::OPERATION_IGNORE_CACHE |
-		     librados::OPERATION_IGNORE_OVERLAY,
-		     NULL);
-  completion->wait_for_safe();
-  int r = completion->get_return_value();
-  completion->release();
-  return r;
-}
-
-static int do_cache_try_flush(IoCtx& io_ctx, string oid)
-{
-  ObjectReadOperation op;
-  op.cache_try_flush();
-  librados::AioCompletion *completion =
-    librados::Rados::aio_create_completion();
-  io_ctx.aio_operate(oid.c_str(), completion, &op,
-		     librados::OPERATION_IGNORE_CACHE |
-		     librados::OPERATION_IGNORE_OVERLAY |
-		     librados::OPERATION_SKIPRWLOCKS,
-		     NULL);
-  completion->wait_for_safe();
-  int r = completion->get_return_value();
-  completion->release();
-  return r;
-}
-
-static int do_cache_evict(IoCtx& io_ctx, string oid)
-{
-  ObjectReadOperation op;
-  op.cache_evict();
-  librados::AioCompletion *completion =
-    librados::Rados::aio_create_completion();
-  io_ctx.aio_operate(oid.c_str(), completion, &op,
-		     librados::OPERATION_IGNORE_CACHE |
-		     librados::OPERATION_IGNORE_OVERLAY |
-		     librados::OPERATION_SKIPRWLOCKS,
-		     NULL);
-  completion->wait_for_safe();
-  int r = completion->get_return_value();
-  completion->release();
-  return r;
-}
-
-static int do_cache_flush_evict_all(IoCtx& io_ctx, bool blocking)
-{
-  int r;
-  int errors = 0;
-  try {
-    librados::ObjectIterator i = io_ctx.objects_begin();
-    librados::ObjectIterator i_end = io_ctx.objects_end();
-    for (; i != i_end; ++i) {
-      cout << i->first << "\t" << i->second << std::endl;
-      if (i->second.size()) {
-	io_ctx.locator_set_key(i->second);
-      } else {
-	io_ctx.locator_set_key(string());
-      }
-      if (blocking)
-	r = do_cache_flush(io_ctx, i->first);
-      else
-	r = do_cache_try_flush(io_ctx, i->first);
-      if (r < 0) {
-	cerr << "failed to flush " << i->first << ": "
-	     << cpp_strerror(r) << std::endl;
-	++errors;
-	continue;
-      }
-      r = do_cache_evict(io_ctx, i->first);
-      if (r < 0) {
-	cerr << "failed to evict " << i->first << ": "
-	     << cpp_strerror(r) << std::endl;
-	++errors;
-	continue;
-      }
-    }
-  }
-  catch (const std::runtime_error& e) {
-    cerr << e.what() << std::endl;
-    return -1;
-  }
-  return errors ? -1 : 0;
-}
-
 /**********************************************
 
 **********************************************/
@@ -1395,14 +1298,11 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 	    category = "-";
 	  printf("%-15s "
 		 "%-15s "
-		 "%12lld %12lld %12lld %12lld"
-		 "%12lld %12lld %12lld %12lld\n",
+		 "%12lld %12lld %12lld %12lld %12lld %12lld\n",
 		 pool_name,
 		 category,
 		 (long long)s.num_kb,
 		 (long long)s.num_objects,
-		 (long long)s.num_objects_degraded,
-		 (long long)s.num_objects_unfound,
 		 (long long)s.num_rd, (long long)s.num_rd_kb,
 		 (long long)s.num_wr, (long long)s.num_wr_kb);
 	} else {
@@ -1412,10 +1312,6 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 	  formatter->dump_format("size_bytes", "%lld", s.num_bytes);
 	  formatter->dump_format("size_kb", "%lld", s.num_kb);
 	  formatter->dump_format("num_objects", "%lld", s.num_objects);
-	  formatter->dump_format("num_object_copies", "%lld", s.num_object_copies);
-	  formatter->dump_format("num_objects_missing_on_primary", "%lld", s.num_objects_missing_on_primary);
-	  formatter->dump_format("num_objects_unfound", "%lld", s.num_objects_unfound);
-	  formatter->dump_format("num_objects_degraded", "%lld", s.num_objects_degraded);
 	  formatter->dump_format("read_bytes", "%lld", s.num_rd);
 	  formatter->dump_format("read_kb", "%lld", s.num_rd_kb);
 	  formatter->dump_format("write_bytes", "%lld", s.num_wr);
@@ -2175,54 +2071,6 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
 
     for (std::list<obj_watch_t>::iterator i = lw.begin(); i != lw.end(); ++i) {
       cout << "watcher=" << i->addr << " client." << i->watcher_id << " cookie=" << i->cookie << std::endl;
-    }
-  } else if (strcmp(nargs[0], "cache-flush") == 0) {
-    if (!pool_name || nargs.size() < 2)
-      usage_exit();
-    string oid(nargs[1]);
-    ret = do_cache_flush(io_ctx, oid);
-    if (ret < 0) {
-      cerr << "error from cache-flush " << oid << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-  } else if (strcmp(nargs[0], "cache-try-flush") == 0) {
-    if (!pool_name || nargs.size() < 2)
-      usage_exit();
-    string oid(nargs[1]);
-    ret = do_cache_try_flush(io_ctx, oid);
-    if (ret < 0) {
-      cerr << "error from cache-try-flush " << oid << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-  } else if (strcmp(nargs[0], "cache-evict") == 0) {
-    if (!pool_name || nargs.size() < 2)
-      usage_exit();
-    string oid(nargs[1]);
-    ret = do_cache_evict(io_ctx, oid);
-    if (ret < 0) {
-      cerr << "error from cache-evict " << oid << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-  } else if (strcmp(nargs[0], "cache-flush-evict-all") == 0) {
-    if (!pool_name)
-      usage_exit();
-    ret = do_cache_flush_evict_all(io_ctx, true);
-    if (ret < 0) {
-      cerr << "error from cache-flush-evict-all: "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-  } else if (strcmp(nargs[0], "cache-try-flush-evict-all") == 0) {
-    if (!pool_name)
-      usage_exit();
-    ret = do_cache_flush_evict_all(io_ctx, false);
-    if (ret < 0) {
-      cerr << "error from cache-try-flush-evict-all: "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
     }
   } else {
     cerr << "unrecognized command " << nargs[0] << "; -h or --help for usage" << std::endl;

@@ -34,13 +34,13 @@
 
 
 /**
- * Genericobjectmap: Provide with key/value associated to ghobject_t APIs to caller
+ * Genericobjectmap: Provide with key/value associated to hobject_t APIs to caller
  * and avoid concerning too much. Wrap and combine KeyValueDB/ObjectMap APIs
- * with ghobject_t and adding clone capacity.
+ * with hobject_t and adding clone capacity.
  *
  * Prefix space structure:
  *
- * - GHOBJECT_TO_SEQ: Contains leaf mapping from ghobject_t->Header(including
+ * - HOBJECT_TO_SEQ: Contains leaf mapping from hobject_t->Header(including
  *                    hobj.seq and related metadata)
  * - INTERN_PREFIX: GLOBAL_STATE_KEY - contains the global state
  *                                  @see State
@@ -49,7 +49,7 @@
  *                                  @see generate_new_header
  * - INTERN_PREFIX + header_key(header->seq) + COMPLETE_PREFIX: see below
  * - INTERN_PREFIX + header_key(header->seq) + PARENT_KEY
- *              : used to store parent header(same as headers in GHOBJECT_TO_SEQ)
+ *              : used to store parent header(same as headers in HOBJECT_TO_SEQ)
  * - USER_PREFIX + header_key(header->seq) + [CUSTOM_PREFIX]
  *              : key->value which set by callers
  *
@@ -85,21 +85,21 @@ class GenericObjectMap {
 
   int get(
     const coll_t &cid,
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const string &prefix,
     map<string, bufferlist> *out
     );
 
   int get_keys(
     const coll_t &cid,
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const string &prefix,
     set<string> *keys
     );
 
   int get_values(
     const coll_t &cid,
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const string &prefix,
     const set<string> &keys,
     map<string, bufferlist> *out
@@ -107,7 +107,7 @@ class GenericObjectMap {
 
   int check_keys(
     const coll_t &cid,
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const string &prefix,
     const set<string> &keys,
     set<string> *out
@@ -123,12 +123,12 @@ class GenericObjectMap {
   bool check(std::ostream &out);
 
   /// Util, list all objects, there must be no other concurrent access
-  int list_objects(const coll_t &cid, ghobject_t start, int max,
-                   vector<ghobject_t> *objs, ///< [out] objects
-                   ghobject_t *next);
+  int list_objects(const coll_t &cid, hobject_t start, int max,
+                   vector<hobject_t> *objs, ///< [out] objects
+                   hobject_t *next);
 
   ObjectMap::ObjectMapIterator get_iterator(const coll_t &cid,
-                                            const ghobject_t &oid,
+                                            const hobject_t &oid,
                                             const string &prefix);
 
   KeyValueDB::Transaction get_transaction() { return db->get_transaction(); }
@@ -173,7 +173,7 @@ class GenericObjectMap {
     uint64_t num_children;
 
     coll_t cid;
-    ghobject_t oid;
+    hobject_t oid;
 
     // Used by successor
     bufferlist data;
@@ -213,17 +213,17 @@ class GenericObjectMap {
 
   typedef ceph::shared_ptr<_Header> Header;
 
-  Header lookup_header(const coll_t &cid, const ghobject_t &oid) {
+  Header lookup_header(const coll_t &cid, const hobject_t &oid) {
     Mutex::Locker l(header_lock);
     return _lookup_header(cid, oid);
   }
 
   /// Lookup or create header for c oid
-  Header lookup_create_header(const coll_t &cid, const ghobject_t &oid,
+  Header lookup_create_header(const coll_t &cid, const hobject_t &oid,
     KeyValueDB::Transaction t);
 
   /// Set leaf node for c and oid to the value of header
-  void set_header(const coll_t &cid, const ghobject_t &oid, _Header header,
+  void set_header(const coll_t &cid, const hobject_t &oid, _Header header,
     KeyValueDB::Transaction t);
 
   // Move all modify member function to "protect", in order to indicate these
@@ -250,7 +250,7 @@ class GenericObjectMap {
   void clone(
     const Header origin_header,
     const coll_t &cid,
-    const ghobject_t &target,
+    const hobject_t &target,
     KeyValueDB::Transaction t,
     Header *old_header,
     Header *new_header
@@ -259,7 +259,7 @@ class GenericObjectMap {
   void rename(
     const Header header,
     const coll_t &cid,
-    const ghobject_t &target,
+    const hobject_t &target,
     KeyValueDB::Transaction t
     );
 
@@ -273,17 +273,17 @@ class GenericObjectMap {
   static const string INTERN_PREFIX;
   static const string PARENT_PREFIX;
   static const string COMPLETE_PREFIX;
-  static const string GHOBJECT_TO_SEQ_PREFIX;
+  static const string HOBJECT_TO_SEQ_PREFIX;
 
-  static const string GHOBJECT_KEY_SEP_S;
-  static const char GHOBJECT_KEY_SEP_C;
+  static const string HOBJECT_KEY_SEP_S;
+  static const char HOBJECT_KEY_SEP_C;
 
 private:
   /// Implicit lock on Header->seq
 
   static string header_key(const coll_t &cid);
-  static string header_key(const coll_t &cid, const ghobject_t &oid);
-  static bool parse_header_key(const string &in, coll_t *c, ghobject_t *oid);
+  static string header_key(const coll_t &cid, const hobject_t &oid);
+  static bool parse_header_key(const string &in, coll_t *c, hobject_t *oid);
 
   string seq_key(uint64_t seq) {
     char buf[100];
@@ -384,7 +384,7 @@ protected:
   void set_parent_header(Header input, KeyValueDB::Transaction t);
 
     /// Remove leaf node corresponding to oid in c
-  void remove_header(const coll_t &cid, const ghobject_t &oid, Header header,
+  void remove_header(const coll_t &cid, const hobject_t &oid, Header header,
       KeyValueDB::Transaction t);
 
   /**
@@ -392,16 +392,16 @@ protected:
    *
    * Has the side effect of syncronously saving the new GenericObjectMap state
    */
-  Header _generate_new_header(const coll_t &cid, const ghobject_t &oid,
+  Header _generate_new_header(const coll_t &cid, const hobject_t &oid,
                               Header parent, KeyValueDB::Transaction t);
-  Header generate_new_header(const coll_t &cid, const ghobject_t &oid,
-                             Header parent, KeyValueDB::Transaction t) {
+  Header generate_new_header(const coll_t &cid, const hobject_t &oid,
+			     Header parent, KeyValueDB::Transaction t) {
     Mutex::Locker l(header_lock);
     return _generate_new_header(cid, oid, parent, t);
   }
 
   // Lookup leaf header for c oid
-  Header _lookup_header(const coll_t &cid, const ghobject_t &oid);
+  Header _lookup_header(const coll_t &cid, const hobject_t &oid);
 
   // Lookup header node for input
   Header lookup_parent(Header input);

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 /*
@@ -45,8 +45,6 @@ class TextTable;
 class PGMonitor : public PaxosService {
 public:
   PGMap pg_map;
-
-  bool need_check_down_pgs;
 
   epoch_t last_map_pg_create_osd_epoch;
 
@@ -128,15 +126,6 @@ private:
   void send_pg_creates(int osd, Connection *con);
 
   /**
-   * check pgs for down primary osds
-   *
-   * clears need_check_down_pgs
-   *
-   * @return true if we updated pending_inc (and should propose)
-   */
-  bool check_down_pgs();
-
-  /**
    * Dump stats from pgs stuck in specified states.
    *
    * @return 0 on success, negative error code on failure
@@ -146,12 +135,11 @@ private:
 			  vector<string>& args) const;
 
   void dump_object_stat_sum(TextTable &tbl, Formatter *f,
-                            object_stat_sum_t &sum, bool verbose);
+			    object_stat_sum_t &sum, bool verbose);
 
 public:
   PGMonitor(Monitor *mn, Paxos *p, const string& service_name)
     : PaxosService(mn, p, service_name),
-      need_check_down_pgs(false),
       last_map_pg_create_osd_epoch(0),
       pgmap_meta_prefix("pgmap_meta"),
       pgmap_pg_prefix("pgmap_pg"),

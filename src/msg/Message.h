@@ -71,46 +71,23 @@
 #define MSG_OSD_ALIVE        73
 #define MSG_OSD_MARK_ME_DOWN 74
 
-#define MSG_OSD_SUBOP        76
-#define MSG_OSD_SUBOPREPLY   77
-
 #define MSG_OSD_PGTEMP       78
 
-#define MSG_OSD_PG_NOTIFY      80
-#define MSG_OSD_PG_QUERY       81
 #define MSG_OSD_PG_SUMMARY     82
-#define MSG_OSD_PG_LOG         83
 #define MSG_OSD_PG_REMOVE      84
-#define MSG_OSD_PG_INFO        85
-#define MSG_OSD_PG_TRIM        86
 
 #define MSG_PGSTATS            87
 #define MSG_PGSTATSACK         88
 
 #define MSG_OSD_PG_CREATE      89
-#define MSG_REMOVE_SNAPS       90
 
-#define MSG_OSD_SCRUB          91
 #define MSG_OSD_PG_MISSING     92
-#define MSG_OSD_REP_SCRUB      93
 
 #define MSG_OSD_PG_SCAN        94
-#define MSG_OSD_PG_BACKFILL    95
 
 #define MSG_COMMAND            97
 #define MSG_COMMAND_REPLY      98
 
-#define MSG_OSD_BACKFILL_RESERVE 99
-#define MSG_OSD_RECOVERY_RESERVE 150
-
-#define MSG_OSD_PG_PUSH        105
-#define MSG_OSD_PG_PULL        106
-#define MSG_OSD_PG_PUSH_REPLY  107
-
-#define MSG_OSD_EC_WRITE       108
-#define MSG_OSD_EC_WRITE_REPLY 109
-#define MSG_OSD_EC_READ        110
-#define MSG_OSD_EC_READ_REPLY  111
 
 // *** MDS ***
 

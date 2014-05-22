@@ -20,13 +20,7 @@
 #include "osd_types.h"
 #include "../include/memory.h"
 
-struct C_ReplicatedBackend_OnPullComplete;
 class ReplicatedBackend : public PGBackend {
-  struct RPGHandle : public PGBackend::RecoveryHandle {
-    map<pg_shard_t, vector<PushOp> > pushes;
-    map<pg_shard_t, vector<PullOp> > pulls;
-  };
-  friend struct C_ReplicatedBackend_OnPullComplete;
 public:
   CephContext *cct;
 
@@ -37,116 +31,8 @@ public:
     ObjectStore *store,
     CephContext *cct);
 
-  /// @see PGBackend::open_recovery_op
-  RPGHandle *_open_recovery_op() {
-    return new RPGHandle();
-  }
-  PGBackend::RecoveryHandle *open_recovery_op() {
-    return _open_recovery_op();
-  }
-
-  /// @see PGBackend::run_recovery_op
-  void run_recovery_op(
-    PGBackend::RecoveryHandle *h,
-    int priority);
-
-  /// @see PGBackend::recover_object
-  void recover_object(
-    const hobject_t &hoid,
-    eversion_t v,
-    ObjectContextRef obc,
-    RecoveryHandle *h
-    );
-
-  void check_recovery_sources(const OSDMapRef osdmap);
-
-  /// @see PGBackend::delay_message_until_active
-  bool can_handle_while_inactive(OpRequestRef op);
-
-  /// @see PGBackend::handle_message
-  bool handle_message(
-    OpRequestRef op
-    );
-
   void _on_change(ObjectStore::Transaction *t);
-  void clear_state();
   void on_flushed();
-
-  class RPCRecPred : public IsRecoverablePredicate {
-  public:
-    bool operator()(const set<pg_shard_t> &have) const {
-      return !have.empty();
-    }
-  };
-  IsRecoverablePredicate *get_is_recoverable_predicate() {
-    return new RPCRecPred;
-  }
-
-  class RPCReadPred : public IsReadablePredicate {
-    pg_shard_t whoami;
-  public:
-    RPCReadPred(pg_shard_t whoami) : whoami(whoami) {}
-    bool operator()(const set<pg_shard_t> &have) const {
-      return have.count(whoami);
-    }
-  };
-  IsReadablePredicate *get_is_readable_predicate() {
-    return new RPCReadPred(get_parent()->whoami_shard());
-  }
-
-  virtual void dump_recovery_info(Formatter *f) const {
-    {
-      f->open_array_section("pull_from_peer");
-      for (map<pg_shard_t, set<hobject_t> >::const_iterator i = pull_from_peer.begin();
-	   i != pull_from_peer.end();
-	   ++i) {
-	f->open_object_section("pulling_from");
-	f->dump_stream("pull_from") << i->first;
-	{
-	  f->open_array_section("pulls");
-	  for (set<hobject_t>::const_iterator j = i->second.begin();
-	       j != i->second.end();
-	       ++j) {
-	    f->open_object_section("pull_info");
-	    assert(pulling.count(*j));
-	    pulling.find(*j)->second.dump(f);
-	    f->close_section();
-	  }
-	  f->close_section();
-	}
-	f->close_section();
-      }
-      f->close_section();
-    }
-    {
-      f->open_array_section("pushing");
-      for (map<hobject_t, map<pg_shard_t, PushInfo> >::const_iterator i =
-	     pushing.begin();
-	   i != pushing.end();
-	   ++i) {
-	f->open_object_section("object");
-	f->dump_stream("pushing") << i->first;
-	{
-	  f->open_array_section("pushing_to");
-	  for (map<pg_shard_t, PushInfo>::const_iterator j = i->second.begin();
-	       j != i->second.end();
-	       ++j) {
-	    f->open_object_section("push_progress");
-	    f->dump_stream("pushing_to") << j->first;
-	    {
-	      f->open_object_section("push_info");
-	      j->second.dump(f);
-	      f->close_section();
-	    }
-	    f->close_section();
-	  }
-	  f->close_section();
-	}
-	f->close_section();
-      }
-      f->close_section();
-    }
-  }
 
   int objects_read_sync(
     const hobject_t &hoid,
@@ -161,144 +47,11 @@ public:
     Context *on_complete);
 
 private:
-  // push
-  struct PushInfo {
-    ObjectRecoveryProgress recovery_progress;
-    ObjectRecoveryInfo recovery_info;
-    ObjectContextRef obc;
-    object_stat_sum_t stat;
-
-    void dump(Formatter *f) const {
-      {
-	f->open_object_section("recovery_progress");
-	recovery_progress.dump(f);
-	f->close_section();
-      }
-      {
-	f->open_object_section("recovery_info");
-	recovery_info.dump(f);
-	f->close_section();
-      }
-    }
-  };
-  map<hobject_t, map<pg_shard_t, PushInfo> > pushing;
-
-  // pull
-  struct PullInfo {
-    ObjectRecoveryProgress recovery_progress;
-    ObjectRecoveryInfo recovery_info;
-    ObjectContextRef head_ctx;
-    ObjectContextRef obc;
-    object_stat_sum_t stat;
-
-    void dump(Formatter *f) const {
-      {
-	f->open_object_section("recovery_progress");
-	recovery_progress.dump(f);
-	f->close_section();
-      }
-      {
-	f->open_object_section("recovery_info");
-	recovery_info.dump(f);
-	f->close_section();
-      }
-    }
-
-    bool is_complete() const {
-      return recovery_progress.is_complete(recovery_info);
-    }
-  };
-
-  map<hobject_t, PullInfo> pulling;
-
-  // Reverse mapping from osd peer to objects beging pulled from that peer
-  map<pg_shard_t, set<hobject_t> > pull_from_peer;
-
-  void sub_op_push(OpRequestRef op);
-  void sub_op_push_reply(OpRequestRef op);
-  void sub_op_pull(OpRequestRef op);
-
-  void _do_push(OpRequestRef op);
-  void _do_pull_response(OpRequestRef op);
-  void do_push(OpRequestRef op) {
-    if (is_primary()) {
-      _do_pull_response(op);
-    } else {
-      _do_push(op);
-    }
-  }
-  void do_pull(OpRequestRef op);
-  void do_push_reply(OpRequestRef op);
-
-  bool handle_push_reply(pg_shard_t peer, PushReplyOp &op, PushOp *reply);
-  void handle_pull(pg_shard_t peer, PullOp &op, PushOp *reply);
-  bool handle_pull_response(
-    pg_shard_t from, PushOp &op, PullOp *response,
-    list<hobject_t> *to_continue,
-    ObjectStore::Transaction *t);
-  void handle_push(pg_shard_t from, PushOp &op, PushReplyOp *response,
-		   ObjectStore::Transaction *t);
-
-  static void trim_pushed_data(const interval_set<uint64_t> &copy_subset,
-			       const interval_set<uint64_t> &intervals_received,
-			       bufferlist data_received,
-			       interval_set<uint64_t> *intervals_usable,
-			       bufferlist *data_usable);
-  void _failed_push(pg_shard_t from, const hobject_t &soid);
-
-  void send_pushes(int prio, map<pg_shard_t, vector<PushOp> > &pushes);
-  void prep_push_op_blank(const hobject_t& soid, PushOp *op);
-  int send_push_op_legacy(int priority, pg_shard_t peer,
-			  PushOp &pop);
-  int send_pull_legacy(int priority, pg_shard_t peer,
-		       const ObjectRecoveryInfo& recovery_info,
-		       ObjectRecoveryProgress progress);
-  void send_pulls(
-    int priority,
-    map<pg_shard_t, vector<PullOp> > &pulls);
-
-  int build_push_op(const ObjectRecoveryInfo &recovery_info,
-		    const ObjectRecoveryProgress &progress,
-		    ObjectRecoveryProgress *out_progress,
-		    PushOp *out_op,
-		    object_stat_sum_t *stat = 0);
-  void submit_push_data(ObjectRecoveryInfo &recovery_info,
-			bool first,
-			bool complete,
-			const interval_set<uint64_t> &intervals_included,
-			bufferlist data_included,
-			bufferlist omap_header,
-			map<string, bufferlist> &attrs,
-			map<string, bufferlist> &omap_entries,
-			ObjectStore::Transaction *t);
-
-  void prepare_pull(
-    eversion_t v,
-    const hobject_t& soid,
-    ObjectContextRef headctx,
-    RPGHandle *h);
-  int start_pushes(
-    const hobject_t &soid,
-    ObjectContextRef obj,
-    RPGHandle *h);
-  void prep_push_to_replica(
-    ObjectContextRef obc, const hobject_t& soid, pg_shard_t peer,
-    PushOp *pop);
-  void prep_push(ObjectContextRef obc,
-		 const hobject_t& oid, pg_shard_t dest,
-		 PushOp *op);
-  void prep_push(ObjectContextRef obc,
-		 const hobject_t& soid, pg_shard_t peer,
-		 eversion_t version,
-		 interval_set<uint64_t> &data_subset,
-		 PushOp *op);
   /**
    * Client IO
    */
   struct InProgressOp {
     ceph_tid_t tid;
-    set<pg_shard_t> waiting_for_commit;
-    set<pg_shard_t> waiting_for_applied;
     Context *on_commit;
     Context *on_applied;
     OpRequestRef op;
@@ -308,10 +61,6 @@ private:
       OpRequestRef op, eversion_t v)
       : tid(tid), on_commit(on_commit), on_applied(on_applied),
 	op(op), v(v) {}
-    bool done() const {
-      return waiting_for_commit.empty() &&
-	waiting_for_applied.empty();
-    }
   };
   map<ceph_tid_t, InProgressOp> in_progress_ops;
 public:
@@ -322,9 +71,7 @@ public:
     const hobject_t &hoid,
     const eversion_t &at_version,
     PGTransaction *t,
-    const eversion_t &trim_to,
     vector<pg_log_entry_t> &log_entries,
-    boost::optional<pg_hit_set_history_t> &hset_history,
     Context *on_local_applied_sync,
     Context *on_all_applied,
     Context *on_all_commit,
@@ -334,22 +81,8 @@ public:
     );
 
 private:
-  void issue_op(
-    const hobject_t &soid,
-    const eversion_t &at_version,
-    ceph_tid_t tid,
-    osd_reqid_t reqid,
-    eversion_t pg_trim_to,
-    hobject_t new_temp_oid,
-    hobject_t discard_temp_oid,
-    vector<pg_log_entry_t> &log_entries,
-    boost::optional<pg_hit_set_history_t> &hset_history,
-    InProgressOp *op,
-    ObjectStore::Transaction *op_t);
   void op_applied(InProgressOp *op);
   void op_commit(InProgressOp *op);
-  void sub_op_modify_reply(OpRequestRef op);
-  void sub_op_modify(OpRequestRef op);
 
   struct RepModify {
     OpRequestRef op;
@@ -361,38 +94,12 @@ private:
     uint64_t bytes_written;
 
     ObjectStore::Transaction opt, localt;
-    
+
     RepModify() : applied(false), committed(false), ackerosd(-1),
 		  epoch_started(0), bytes_written(0) {}
   };
   typedef ceph::shared_ptr<RepModify> RepModifyRef;
 
-  struct C_OSD_RepModifyApply : public Context {
-    ReplicatedBackend *pg;
-    RepModifyRef rm;
-    C_OSD_RepModifyApply(ReplicatedBackend *pg, RepModifyRef r)
-      : pg(pg), rm(r) {}
-    void finish(int r) {
-      pg->sub_op_modify_applied(rm);
-    }
-  };
-  struct C_OSD_RepModifyCommit : public Context {
-    ReplicatedBackend *pg;
-    RepModifyRef rm;
-    C_OSD_RepModifyCommit(ReplicatedBackend *pg, RepModifyRef r)
-      : pg(pg), rm(r) {}
-    void finish(int r) {
-      pg->sub_op_modify_commit(rm);
-    }
-  };
-  void sub_op_modify_applied(RepModifyRef rm);
-  void sub_op_modify_commit(RepModifyRef rm);
-  bool scrub_supported() { return true; }
-
-  void be_deep_scrub(
-    const hobject_t &obj,
-    ScrubMap::object &o,
-    ThreadPool::TPHandle &handle);
   uint64_t be_get_ondisk_size(uint64_t logical_size) { return logical_size; }
 };
 

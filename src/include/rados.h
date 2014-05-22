@@ -133,11 +133,6 @@ extern const char *ceph_osd_state_name(int s);
 #define CEPH_OSDMAP_NODOWN   (1<<6)  /* block osd mark-down/failure */
 #define CEPH_OSDMAP_NOOUT    (1<<7)  /* block osd auto mark-out */
 #define CEPH_OSDMAP_NOIN     (1<<8)  /* block osd auto mark-in */
-#define CEPH_OSDMAP_NOBACKFILL (1<<9) /* block osd backfill */
-#define CEPH_OSDMAP_NORECOVER (1<<10) /* block osd recovery and backfill */
-#define CEPH_OSDMAP_NOSCRUB  (1<<11) /* block periodic scrub */
-#define CEPH_OSDMAP_NODEEP_SCRUB (1<<12) /* block periodic deep-scrub */
-#define CEPH_OSDMAP_NOTIERAGENT (1<<13) /* disable tiering agent */
 
 /*
  * The error code to return when an OSD can't handle a write
@@ -157,7 +152,6 @@ extern const char *ceph_osd_state_name(int s);
 #define CEPH_OSD_OP_MODE_WR    0x2000
 #define CEPH_OSD_OP_MODE_RMW   0x3000
 #define CEPH_OSD_OP_MODE_SUB   0x4000
-#define CEPH_OSD_OP_MODE_CACHE 0x8000
 
 #define CEPH_OSD_OP_TYPE       0x0f00
 #define CEPH_OSD_OP_TYPE_LOCK  0x0100
@@ -221,16 +215,6 @@ enum {
 	CEPH_OSD_OP_OMAPCLEAR     = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 23,
 	CEPH_OSD_OP_OMAPRMKEYS    = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 24,
 	CEPH_OSD_OP_OMAP_CMP      = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 25,
-
-	/* tiering */
-	CEPH_OSD_OP_COPY_FROM = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 26,
-	CEPH_OSD_OP_COPY_GET_CLASSIC = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 27,
-	CEPH_OSD_OP_UNDIRTY   = CEPH_OSD_OP_MODE_WR | CEPH_OSD_OP_TYPE_DATA | 28,
-	CEPH_OSD_OP_ISDIRTY   = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 29,
-	CEPH_OSD_OP_COPY_GET = CEPH_OSD_OP_MODE_RD | CEPH_OSD_OP_TYPE_DATA | 30,
-	CEPH_OSD_OP_CACHE_FLUSH = CEPH_OSD_OP_MODE_CACHE | CEPH_OSD_OP_TYPE_DATA | 31,
-	CEPH_OSD_OP_CACHE_EVICT = CEPH_OSD_OP_MODE_CACHE | CEPH_OSD_OP_TYPE_DATA | 32,
-	CEPH_OSD_OP_CACHE_TRY_FLUSH = CEPH_OSD_OP_MODE_CACHE | CEPH_OSD_OP_TYPE_DATA | 33,
 
 	/* convert tmap to omap */
 	CEPH_OSD_OP_TMAP2OMAP = CEPH_OSD_OP_MODE_RMW | CEPH_OSD_OP_TYPE_DATA | 34,
@@ -322,10 +306,6 @@ static inline int ceph_osd_op_mode_modify(int op)
 {
 	return op & CEPH_OSD_OP_MODE_WR;
 }
-static inline int ceph_osd_op_mode_cache(int op)
-{
-	return op & CEPH_OSD_OP_MODE_CACHE;
-}
 
 /*
  * note that the following tmap stuff is also defined in the ceph librados.h
@@ -352,17 +332,12 @@ enum {
 	CEPH_OSD_FLAG_READ =           0x0010,  /* op may read */
 	CEPH_OSD_FLAG_WRITE =          0x0020,  /* op may write */
 	CEPH_OSD_FLAG_PEERSTAT_OLD =   0x0080,  /* DEPRECATED msg includes osd_peer_stat */
-	CEPH_OSD_FLAG_BALANCE_READS =  0x0100,
 	CEPH_OSD_FLAG_PARALLELEXEC =   0x0200,  /* execute op in parallel */
 	CEPH_OSD_FLAG_PGOP =           0x0400,  /* pg op, no object */
 	CEPH_OSD_FLAG_EXEC =           0x0800,  /* op may exec */
 	CEPH_OSD_FLAG_EXEC_PUBLIC =    0x1000,  /* DEPRECATED op may exec (public) */
-	CEPH_OSD_FLAG_LOCALIZE_READS = 0x2000,  /* read from nearby replica, if any */
 	CEPH_OSD_FLAG_RWORDERED =      0x4000,  /* order wrt concurrent reads */
-	CEPH_OSD_FLAG_IGNORE_CACHE =   0x8000,  /* ignore cache logic */
 	CEPH_OSD_FLAG_SKIPRWLOCKS =   0x10000,  /* skip rw locks */
-	CEPH_OSD_FLAG_IGNORE_OVERLAY =0x20000,  /* ignore pool overlay */
-	CEPH_OSD_FLAG_FLUSH =         0x40000  /* this is part of flush */
 };
 
 enum {
@@ -385,12 +360,6 @@ enum {
 enum {
 	CEPH_OSD_CMPXATTR_MODE_STRING = 1,
 	CEPH_OSD_CMPXATTR_MODE_U64    = 2
-};
-
-enum {
-	CEPH_OSD_COPY_FROM_FLAG_FLUSH = 1,     /* part of a flush operation */
-	CEPH_OSD_COPY_FROM_FLAG_IGNORE_OVERLAY = 2,  /* ignore pool overlay */
-	CEPH_OSD_COPY_FROM_FLAG_IGNORE_CACHE = 4 /* ignore osd cache logic */
 };
 
 enum {

@@ -1240,8 +1240,6 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  bool fs_sharded_objects = fs->get_allow_sharded_objects();
-
   int ret = 0;
   vector<coll_t> ls;
   vector<coll_t>::iterator it;
@@ -1265,13 +1263,6 @@ int main(int argc, char **argv)
   p = bl.begin();
   ::decode(superblock, p);
 
-#ifdef INTERNAL_TEST2
-  fs->set_allow_sharded_objects();
-  assert(fs->get_allow_sharded_objects());
-  fs_sharded_objects = true;
-  superblock.compat_features.incompat.insert(CEPH_OSD_FEATURE_INCOMPAT_SHARDS);
-#endif
-
   if (debug && file_fd != STDOUT_FILENO) {
     cout << "Supported features: " << supported << std::endl;
     cout << "On-disk features: " << superblock.compat_features << std::endl;
@@ -1279,20 +1270,6 @@ int main(int argc, char **argv)
   if (supported.compare(superblock.compat_features) == -1) {
     cout << "On-disk OSD incompatible features set "
       << superblock.compat_features << std::endl;
-    ret = EINVAL;
-    goto out;
-  }
-
-  // If there was a crash as an OSD was transitioning to sharded objects
-  // and hadn't completed a set_allow_sharded_objects().
-  // This utility does not want to attempt to finish that transition.
-  if (superblock.compat_features.incompat.contains(CEPH_OSD_FEATURE_INCOMPAT_SHARDS) != fs_sharded_objects) {
-    // An OSD should never have call set_allow_sharded_objects() before
-    // updating its own OSD features.
-    if (fs_sharded_objects)
-      cout << "FileStore sharded but OSD not set, Corruption?" << std::endl;
-    else
-      cout << "Found incomplete transition to sharded objects" << std::endl;
     ret = EINVAL;
     goto out;
   }

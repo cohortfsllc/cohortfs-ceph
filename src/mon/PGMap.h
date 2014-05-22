@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,11 +7,11 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
- 
+
 /*
  * Placement Group Map. Placement Groups are logical sets of objects
  * that are replicated by the same set of devices. pgid=(r,hash(o)&m)
@@ -105,7 +105,6 @@ public:
   ceph::unordered_map<int,pool_stat_t> pg_pool_sum;
   pool_stat_t pg_sum;
   osd_stat_t osd_sum;
-  mutable epoch_t min_last_epoch_clean;
 
   utime_t stamp;
 
@@ -157,31 +156,21 @@ public:
                     list<pair<pool_stat_t,utime_t> > *delta_avg_list);
 
   void update_one_pool_delta(CephContext *cct,
-                             const utime_t ts,
-                             const uint64_t pool,
-                             const pool_stat_t& old_pool_sum);
-
-  epoch_t calc_min_last_epoch_clean() const;
+			     const utime_t ts,
+			     const uint64_t pool,
+			     const pool_stat_t& old_pool_sum);
 
  public:
 
   set<pg_t> creating_pgs;   // lru: front = new additions, back = recently pinged
   map<int,set<pg_t> > creating_pgs_by_osd;
 
-  enum StuckPG {
-    STUCK_INACTIVE,
-    STUCK_UNCLEAN,
-    STUCK_STALE,
-    STUCK_NONE
-  };
-  
   PGMap()
     : version(0),
       last_osdmap_epoch(0), last_pg_scan(0),
       full_ratio(0), nearfull_ratio(0),
       num_pg(0),
-      num_osd(0),
-      min_last_epoch_clean(0)
+      num_osd(0)
   {}
 
   void set_full_ratios(float full, float nearfull) {
@@ -253,27 +242,11 @@ public:
 
   void dump_pg_stats_plain(ostream& ss,
 			   const ceph::unordered_map<pg_t, pg_stat_t>& pg_stats) const;
-  void get_stuck_stats(StuckPG type, utime_t cutoff,
-		       ceph::unordered_map<pg_t, pg_stat_t>& stuck_pgs) const;
-  void dump_stuck(Formatter *f, StuckPG type, utime_t cutoff) const;
-  void dump_stuck_plain(ostream& ss, StuckPG type, utime_t cutoff) const;
-
   void dump(ostream& ss) const;
 
   void dump_osd_perf_stats(Formatter *f) const;
   void print_osd_perf_stats(std::ostream *ss) const;
 
-  void recovery_summary(Formatter *f, ostream *out,
-                        const pool_stat_t& delta_sum) const;
-  void overall_recovery_summary(Formatter *f, ostream *out) const;
-  void pool_recovery_summary(Formatter *f, ostream *out,
-                             uint64_t poolid) const;
-  void recovery_rate_summary(Formatter *f, ostream *out,
-                             const pool_stat_t& delta_sum,
-                             utime_t delta_stamp) const;
-  void overall_recovery_rate_summary(Formatter *f, ostream *out) const;
-  void pool_recovery_rate_summary(Formatter *f, ostream *out,
-                                  uint64_t poolid) const;
   /**
    * Obtain a formatted/plain output for client I/O, source from stats for a
    * given @p delta_sum pool over a given @p delta_stamp period of time.
@@ -292,16 +265,10 @@ public:
    * from @p per_pool_sum_delta.
    */
   void pool_client_io_rate_summary(Formatter *f, ostream *out,
-                                   uint64_t poolid) const;
+				   uint64_t poolid) const;
 
   void print_summary(Formatter *f, ostream *out) const;
   void print_oneline_summary(ostream *out) const;
-
-  epoch_t get_min_last_epoch_clean() const {
-    if (!min_last_epoch_clean)
-      min_last_epoch_clean = calc_min_last_epoch_clean();
-    return min_last_epoch_clean;
-  }
 
   static void generate_test_instances(list<PGMap*>& o);
 };

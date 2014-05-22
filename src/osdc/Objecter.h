@@ -568,196 +568,6 @@ struct ObjectOperation {
     }
   }
 
-  struct C_ObjectOperation_copyget : public Context {
-    bufferlist bl;
-    object_copy_cursor_t *cursor;
-    uint64_t *out_size;
-    utime_t *out_mtime;
-    string *out_category;
-    std::map<std::string,bufferlist> *out_attrs;
-    bufferlist *out_data, *out_omap_header;
-    std::map<std::string,bufferlist> *out_omap;
-    int *prval;
-    C_ObjectOperation_copyget(object_copy_cursor_t *c,
-			      uint64_t *s,
-			      utime_t *m,
-			      string *cat,
-			      std::map<std::string,bufferlist> *a,
-			      bufferlist *d, bufferlist *oh,
-			      std::map<std::string,bufferlist> *o,
-			      int *r)
-      : cursor(c),
-	out_size(s), out_mtime(m), out_category(cat),
-	out_attrs(a), out_data(d), out_omap_header(oh),
-	out_omap(o), prval(r) {}
-    void finish(int r) {
-      if (r < 0)
-	return;
-      try {
-	bufferlist::iterator p = bl.begin();
-	object_copy_data_t copy_reply;
-	::decode(copy_reply, p);
-	if (out_size)
-	  *out_size = copy_reply.size;
-	if (out_mtime)
-	  *out_mtime = copy_reply.mtime;
-	if (out_category)
-	  *out_category = copy_reply.category;
-	if (out_attrs)
-	  *out_attrs = copy_reply.attrs;
-	if (out_data)
-	  out_data->claim_append(copy_reply.data);
-	if (out_omap_header)
-	  out_omap_header->claim_append(copy_reply.omap_header);
-	if (out_omap)
-	  *out_omap = copy_reply.omap;
-	*cursor = copy_reply.cursor;
-      } catch (buffer::error& e) {
-	if (prval)
-	  *prval = -EIO;
-      }
-    }
-  };
-
-  void copy_get(object_copy_cursor_t *cursor,
-		uint64_t max,
-		uint64_t *out_size,
-		utime_t *out_mtime,
-		string *out_category,
-		std::map<std::string,bufferlist> *out_attrs,
-		bufferlist *out_data,
-		bufferlist *out_omap_header,
-		std::map<std::string,bufferlist> *out_omap,
-		int *prval) {
-    OSDOp& osd_op = add_op(CEPH_OSD_OP_COPY_GET);
-    osd_op.op.copy_get.max = max;
-    ::encode(*cursor, osd_op.indata);
-    ::encode(max, osd_op.indata);
-    unsigned p = ops.size() - 1;
-    out_rval[p] = prval;
-    C_ObjectOperation_copyget *h =
-      new C_ObjectOperation_copyget(cursor, out_size, out_mtime, out_category,
-				    out_attrs, out_data, out_omap_header,
-				    out_omap, prval);
-    out_bl[p] = &h->bl;
-    out_handler[p] = h;
-  }
-
-  void undirty() {
-    add_op(CEPH_OSD_OP_UNDIRTY);
-  }
-
-  struct C_ObjectOperation_isdirty : public Context {
-    bufferlist bl;
-    bool *pisdirty;
-    int *prval;
-    C_ObjectOperation_isdirty(bool *p, int *r)
-      : pisdirty(p), prval(r) {}
-    void finish(int r) {
-      if (r < 0)
-	return;
-      try {
-	bufferlist::iterator p = bl.begin();
-	bool isdirty;
-	::decode(isdirty, p);
-	if (pisdirty)
-	  *pisdirty = isdirty;
-      } catch (buffer::error& e) {
-	if (prval)
-	  *prval = -EIO;
-      }
-    }
-  };
-
-  void is_dirty(bool *pisdirty, int *prval) {
-    add_op(CEPH_OSD_OP_ISDIRTY);
-    unsigned p = ops.size() - 1;
-    out_rval[p] = prval;
-    C_ObjectOperation_isdirty *h =
-      new C_ObjectOperation_isdirty(pisdirty, prval);
-    out_bl[p] = &h->bl;
-    out_handler[p] = h;
-  }
-
-  struct C_ObjectOperation_hit_set_ls : public Context {
-    bufferlist bl;
-    std::list< std::pair<time_t, time_t> > *ptls;
-    std::list< std::pair<utime_t, utime_t> > *putls;
-    int *prval;
-    C_ObjectOperation_hit_set_ls(std::list< std::pair<time_t, time_t> > *t,
-				 std::list< std::pair<utime_t, utime_t> > *ut,
-				 int *r)
-      : ptls(t), putls(ut), prval(r) {}
-    void finish(int r) {
-      if (r < 0)
-	return;
-      try {
-	bufferlist::iterator p = bl.begin();
-	std::list< std::pair<utime_t, utime_t> > ls;
-	::decode(ls, p);
-	if (ptls) {
-	  ptls->clear();
-	  for (list< pair<utime_t,utime_t> >::iterator p = ls.begin(); p != ls.end(); ++p)
-	    // round initial timestamp up to the next full second to keep this a valid interval.
-	    ptls->push_back(make_pair(p->first.usec() ? p->first.sec() + 1 : p->first.sec(), p->second.sec()));
-	}
-	if (putls)
-	  putls->swap(ls);
-      } catch (buffer::error& e) {
-	r = -EIO;
-      }
-      if (prval)
-	*prval = r;
-    }
-  };
-
-  /**
-   * list available HitSets.
-   *
-   * We will get back a list of time intervals.  Note that the most recent range may have
-   * an empty end timestamp if it is still accumulating.
-   *
-   * @param pls [out] list of time intervals
-   * @param prval [out] return value
-   */
-  void hit_set_ls(std::list< std::pair<time_t, time_t> > *pls, int *prval) {
-    add_op(CEPH_OSD_OP_PG_HITSET_LS);
-    unsigned p = ops.size() - 1;
-    out_rval[p] = prval;
-    C_ObjectOperation_hit_set_ls *h =
-      new C_ObjectOperation_hit_set_ls(pls, NULL, prval);
-    out_bl[p] = &h->bl;
-    out_handler[p] = h;
-  }
-  void hit_set_ls(std::list< std::pair<utime_t, utime_t> > *pls, int *prval) {
-    add_op(CEPH_OSD_OP_PG_HITSET_LS);
-    unsigned p = ops.size() - 1;
-    out_rval[p] = prval;
-    C_ObjectOperation_hit_set_ls *h =
-      new C_ObjectOperation_hit_set_ls(NULL, pls, prval);
-    out_bl[p] = &h->bl;
-    out_handler[p] = h;
-  }
-
-  /**
-   * get HitSet
-   *
-   * Return an encoded HitSet that includes the provided time
-   * interval.
-   *
-   * @param stamp [in] timestamp
-   * @param pbl [out] target buffer for encoded HitSet
-   * @param prval [out] return value
-   */
-  void hit_set_get(utime_t stamp, bufferlist *pbl, int *prval) {
-    OSDOp& op = add_op(CEPH_OSD_OP_PG_HITSET_GET);
-    op.op.hit_set_get.stamp.tv_sec = stamp.sec();
-    op.op.hit_set_get.stamp.tv_nsec = stamp.nsec();
-    unsigned p = ops.size() - 1;
-    out_rval[p] = prval;
-    out_bl[p] = pbl;
-  }
-
   void omap_get_header(bufferlist *bl, int *prval) {
     add_op(CEPH_OSD_OP_OMAPGETHEADER);
     unsigned p = ops.size() - 1;
@@ -852,60 +662,10 @@ struct ObjectOperation {
     o.op.xattr.cmp_mode = mode;
   }
 
-  void copy_from(object_t src, object_locator_t src_oloc,
-		 version_t src_version, unsigned flags) {
-    OSDOp& osd_op = add_op(CEPH_OSD_OP_COPY_FROM);
-    osd_op.op.copy_from.src_version = src_version;
-    osd_op.op.copy_from.flags = flags;
-    ::encode(src, osd_op.indata);
-    ::encode(src_oloc, osd_op.indata);
-  }
-
-  /**
-   * writeback content to backing tier
-   *
-   * If object is marked dirty in the cache tier, write back content
-   * to backing tier. If the object is clean this is a no-op.
-   *
-   * If writeback races with an update, the update will block.
-   *
-   * use with IGNORE_CACHE to avoid triggering promote.
-   */
-  void cache_flush() {
-    add_op(CEPH_OSD_OP_CACHE_FLUSH);
-  }
-
-  /**
-   * writeback content to backing tier
-   *
-   * If object is marked dirty in the cache tier, write back content
-   * to backing tier. If the object is clean this is a no-op.
-   *
-   * If writeback races with an update, return EAGAIN.  Requires that
-   * the SKIPRWLOCKS flag be set.
-   *
-   * use with IGNORE_CACHE to avoid triggering promote.
-   */
-  void cache_try_flush() {
-    add_op(CEPH_OSD_OP_CACHE_TRY_FLUSH);
-  }
-
-  /**
-   * evict object from cache tier
-   *
-   * If object is marked clean, remove the object from the cache tier.
-   * Otherwise, return EBUSY.
-   *
-   * use with IGNORE_CACHE to avoid triggering promote.
-   */
-  void cache_evict() {
-    add_op(CEPH_OSD_OP_CACHE_EVICT);
-  }
-
   void set_alloc_hint(uint64_t expected_object_size,
-                      uint64_t expected_write_size ) {
+		      uint64_t expected_write_size ) {
     add_alloc_hint(CEPH_OSD_OP_SETALLOCHINT, expected_object_size,
-                   expected_write_size);
+		   expected_write_size);
 
     // CEPH_OSD_OP_SETALLOCHINT op is advisory and therefore deemed
     // not worth a feature bit.  Set FAILOK per-op flag to make
@@ -993,11 +753,8 @@ public:
     bool precalc_pgid;   ///< true if we are directed at base_pgid, not base_oid
     pg_t base_pgid;      ///< explciti pg target, if any
 
-    pg_t pgid;           ///< last pg we mapped to
-    vector<int> acting;  ///< acting for last pg we mapped to
-    int primary;         ///< primary for last pg we mapped to
+    pg_t pgid; ///< last pg we mapped to
 
-    bool used_replica;
     bool paused;
 
     int osd;      ///< the final target osd, or -1
@@ -1007,8 +764,6 @@ public:
 	base_oid(oid),
 	base_oloc(oloc),
 	precalc_pgid(false),
-	primary(-1),
-	used_replica(false),
 	paused(false),
 	osd(-1)
     {}
@@ -1377,12 +1132,6 @@ public:
   void send_op(Op *op);
   void cancel_linger_op(Op *op);
   void finish_op(Op *op);
-  static bool is_pg_changed(
-    int oldprimary,
-    const vector<int>& oldacting,
-    int newprimary,
-    const vector<int>& newacting,
-    bool any_change=false);
   enum recalc_op_target_result {
     RECALC_OP_TARGET_NO_ACTION = 0,
     RECALC_OP_TARGET_NEED_RESEND,

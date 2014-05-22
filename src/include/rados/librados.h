@@ -97,13 +97,11 @@ enum {
  */
 /** @cond TODO_enums_not_yet_in_asphyxiate */
 enum {
-  LIBRADOS_OPERATION_NOFLAG             = 0,
-  LIBRADOS_OPERATION_BALANCE_READS      = 1,
-  LIBRADOS_OPERATION_LOCALIZE_READS     = 2,
+  LIBRADOS_OPERATION_NOFLAG = 0,
+  LIBRADOS_OPERATION_BALANCE_READS = 1,
+  LIBRADOS_OPERATION_LOCALIZE_READS = 2,
   LIBRADOS_OPERATION_ORDER_READS_WRITES = 4,
-  LIBRADOS_OPERATION_IGNORE_CACHE       = 8,
-  LIBRADOS_OPERATION_SKIPRWLOCKS        = 16,
-  LIBRADOS_OPERATION_IGNORE_OVERLAY     = 32,
+  LIBRADOS_OPERATION_SKIPRWLOCKS = 16
 };
 /** @endcond */
 /** @} */
@@ -185,13 +183,6 @@ struct rados_pool_stat_t {
   uint64_t num_kb;
   /// number of objects in the pool
   uint64_t num_objects;
-  /// number of clones of objects
-  uint64_t num_object_clones;
-  /// num_objects * num_replicas
-  uint64_t num_object_copies;
-  uint64_t num_objects_missing_on_primary;
-  /// number of objects found on no OSDs
-  uint64_t num_objects_unfound;
   /// number of objects replicated fewer times than they should be
   /// (but found on at least one OSD)
   uint64_t num_objects_degraded;
@@ -727,9 +718,6 @@ int rados_ioctx_pool_set_auid(rados_ioctx_t io, uint64_t auid);
  */
 int rados_ioctx_pool_get_auid(rados_ioctx_t io, uint64_t *auid);
 
-int rados_ioctx_pool_requires_alignment(rados_ioctx_t io);
-uint64_t rados_ioctx_pool_required_alignment(rados_ioctx_t io);
-
 /**
  * Get the pool id of the io context
  *
@@ -892,27 +880,6 @@ int rados_write(rados_ioctx_t io, const char *oid, const char *buf, size_t len, 
  * @returns 0 on success, negative error code on failure
  */
 int rados_write_full(rados_ioctx_t io, const char *oid, const char *buf, size_t len);
-
-/**
- * Efficiently copy a portion of one object to another
- *
- * If the underlying filesystem on the OSD supports it, this will be a
- * copy-on-write clone.
- *
- * The src and dest objects must be in the same pg. To ensure this,
- * the io context should have a locator key set (see
- * rados_ioctx_locator_set_key()).
- *
- * @param io the context in which the data is cloned
- * @param dst the name of the destination object
- * @param dst_off the offset within the destination object (in bytes)
- * @param src the name of the source object
- * @param src_off the offset within the source object (in bytes)
- * @param len how much data to copy
- * @returns 0 on success, negative error code on failure
- */
-int rados_clone_range(rados_ioctx_t io, const char *dst, uint64_t dst_off,
-                      const char *src, uint64_t src_off, size_t len);
 
 /**
  * Append data to an object

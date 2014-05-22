@@ -1089,12 +1089,11 @@ int ceph_get_pool_replication(struct ceph_mount_info *cmount, int pool_id);
  * @param offset the offset into the file to specify the stripe.  The offset can be
  *	anywhere within the stripe unit.
  * @param addr the address of the OSD holding that stripe
- * @param naddr the capacity of the address passed in.
  * @returns the size of the addressed filled into the @ref addr parameter, or a negative
  *	error code on failure.
  */
 int ceph_get_file_stripe_address(struct ceph_mount_info *cmount, int fd, int64_t offset,
-				 struct sockaddr_storage *addr, int naddr);
+				 struct sockaddr_storage *addr);
 
 /**
  * Get the list of OSDs where the objects containing a file offset are located.
@@ -1104,13 +1103,12 @@ int ceph_get_file_stripe_address(struct ceph_mount_info *cmount, int fd, int64_t
  * @param offset the offset within the file.
  * @param length return the number of bytes between the offset and the end of
  * the stripe unit (optional).
- * @param osds an integer array to hold the OSD ids.
- * @param nosds the size of the integer array.
+ * @param osd an integer to hold the OSD id.
  * @returns the number of items stored in the output array, or -ERANGE if the
  * array is not large enough.
  */
 int ceph_get_file_extent_osds(struct ceph_mount_info *cmount, int fh,
-                              int64_t offset, int64_t *length, int *osds, int nosds);
+			      int64_t offset, int64_t *length, int *osd);
 
 /**
  * Get the fully qualified CRUSH location of an OSD.
@@ -1158,16 +1156,6 @@ int ceph_set_default_file_stripe_count(struct ceph_mount_info *cmount, int count
 int ceph_set_default_object_size(struct ceph_mount_info *cmount, int size);
 int ceph_set_default_preferred_pg(struct ceph_mount_info *cmount, int osd);
 int ceph_set_default_file_replication(struct ceph_mount_info *cmount, int replication);
-
-/**
- * Read from local replicas when possible.
- *
- * @param cmount the ceph mount handle to use.
- * @param val a boolean to set (1) or clear (0) the option to favor local objects
- *     for reads.
- * @returns 0
- */
-int ceph_localize_reads(struct ceph_mount_info *cmount, int val);
 
 /**
  * Get the osd id of the local osd (if any)

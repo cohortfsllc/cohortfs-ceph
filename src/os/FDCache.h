@@ -49,7 +49,7 @@ public:
   };
 
 private:
-  SharedLRU<ghobject_t, FD> registry;
+  SharedLRU<hobject_t, FD> registry;
   CephContext *cct;
 
 public:
@@ -63,16 +63,16 @@ public:
   }
   typedef ceph::shared_ptr<FD> FDRef;
 
-  FDRef lookup(const ghobject_t &hoid) {
+  FDRef lookup(const hobject_t &hoid) {
     return registry.lookup(hoid);
   }
 
-  FDRef add(const ghobject_t &hoid, int fd) {
+  FDRef add(const hobject_t &hoid, int fd) {
     return registry.add(hoid, new FD(fd));
   }
 
   /// clear cached fd for hoid, subsequent lookups will get an empty FD
-  void clear(const ghobject_t &hoid) {
+  void clear(const hobject_t &hoid) {
     registry.clear(hoid);
     assert(!registry.lookup(hoid));
   }

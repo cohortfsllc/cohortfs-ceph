@@ -2542,32 +2542,6 @@ out:
 
 /*
  * Class:     com_ceph_fs_CephMount
- * Method:    native_ceph_localize_reads
- * Signature: (JZ)I
- */
-JNIEXPORT jint JNICALL Java_com_ceph_fs_CephMount_native_1ceph_1localize_1reads
-	(JNIEnv *env, jclass clz, jlong j_mntp, jboolean j_on)
-{
-	struct ceph_mount_info *cmount = get_ceph_mount(j_mntp);
-	CephContext *cct = ceph_get_mount_context(cmount);
-	int ret, val = j_on ? 1 : 0;
-
-	CHECK_MOUNTED(cmount, -1);
-
-	ldout(cct, 10) << "jni: localize_reads: val " << val << dendl;
-
-	ret = ceph_localize_reads(cmount, val);
-
-	ldout(cct, 10) << "jni: localize_reads: exit ret " << ret << dendl;
-
-	if (ret)
-		handle_error(env, ret);
-
-	return ret;
-}
-
-/*
- * Class:     com_ceph_fs_CephMount
  * Method:    native_ceph_get_stripe_unit_granularity
  * Signature: (J)I
  */

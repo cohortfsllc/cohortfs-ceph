@@ -129,15 +129,6 @@ COMMAND("pg dump_stuck " \
 	"pg", "r", "cli,rest")
 COMMAND("pg map name=pgid,type=CephPgid", "show mapping of pg to osds", \
 	"pg", "r", "cli,rest")
-COMMAND("pg scrub name=pgid,type=CephPgid", "start scrub on <pgid>", \
-	"pg", "rw", "cli,rest")
-COMMAND("pg deep-scrub name=pgid,type=CephPgid", "start deep-scrub on <pgid>", \
-	"pg", "rw", "cli,rest")
-COMMAND("pg repair name=pgid,type=CephPgid", "start repair on <pgid>", \
-	"pg", "rw", "cli,rest")
-COMMAND("pg debug " \
-	"name=debugop,type=CephChoices,strings=unfound_objects_exist|degraded_pgs_exist", \
-	"show debug info about pgs", "pg", "r", "cli,rest")
 COMMAND("pg force_create_pg name=pgid,type=CephPgid", \
 	"force creation of pg <pgid>", "pg", "rw", "cli,rest")
 COMMAND("pg set_full_ratio name=ratio,type=CephFloat,range=0.0|1.0", \
@@ -351,15 +342,6 @@ COMMAND("osd map " \
 	"name=pool,type=CephPoolname " \
 	"name=object,type=CephObjectname", \
 	"find pg for <object> in <pool>", "osd", "r", "cli,rest")
-COMMAND("osd scrub " \
-	"name=who,type=CephString", \
-	"initiate scrub on osd <who>", "osd", "rw", "cli,rest")
-COMMAND("osd deep-scrub " \
-	"name=who,type=CephString", \
-	"initiate deep scrub on osd <who>", "osd", "rw", "cli,rest")
-COMMAND("osd repair " \
-	"name=who,type=CephString", \
-	"initiate repair on osd <who>", "osd", "rw", "cli,rest")
 COMMAND("osd lspools " \
 	"name=auid,type=CephInt,req=false", \
 	"list pools", "osd", "r", "cli,rest")
@@ -440,12 +422,7 @@ COMMAND("osd crush rule create-simple " \
 	"name=root,type=CephString,goodchars=[A-Za-z0-9-_.] " \
 	"name=type,type=CephString,goodchars=[A-Za-z0-9-_.] " \
 	"name=mode,type=CephChoices,strings=firstn|indep,req=false",
-	"create crush rule <name> to start from <root>, replicate across buckets of type <type>, using a choose mode of <firstn|indep> (default firstn; indep best for erasure pools)", \
-	"osd", "rw", "cli,rest")
-COMMAND("osd crush rule create-erasure " \
-	"name=name,type=CephString,goodchars=[A-Za-z0-9-_.] " \
-	"name=profile,type=CephString,req=false,goodchars=[A-Za-z0-9-_.=]", \
-	"create crush rule <name> for erasure coded pool created with <profile> (default default)", \
+	"create crush rule <name> to start from <root>, replicate across buckets of type <type>, using a choose mode of <firstn|indep> (default firstn)", \
 	"osd", "rw", "cli,rest")
 COMMAND("osd crush rule rm " \
 	"name=name,type=CephString,goodchars=[A-Za-z0-9-_.] ",	\
@@ -455,27 +432,11 @@ COMMAND("osd setmaxosd " \
 	"set new maximum osd value", "osd", "rw", "cli,rest")
 COMMAND("osd pause", "pause osd", "osd", "rw", "cli,rest")
 COMMAND("osd unpause", "unpause osd", "osd", "rw", "cli,rest")
-COMMAND("osd erasure-code-profile set " \
-	"name=name,type=CephString,goodchars=[A-Za-z0-9-_.] " \
-	"name=profile,type=CephString,n=N,req=false,goodchars=[A-Za-z0-9-_.=]", \
-	"create erasure code profile <name> with [<key[=value]> ...] pairs. Add a --force at the end to override an existing profile (VERY DANGEROUS)", \
-	"osd", "rw", "cli,rest")
-COMMAND("osd erasure-code-profile get " \
-	"name=name,type=CephString,goodchars=[A-Za-z0-9-_.]", \
-	"get erasure code profile <name>", \
-	"osd", "r", "cli,rest")
-COMMAND("osd erasure-code-profile rm " \
-	"name=name,type=CephString,goodchars=[A-Za-z0-9-_.]", \
-	"remove erasure code profile <name>", \
-	"osd", "rw", "cli,rest")
-COMMAND("osd erasure-code-profile ls", \
-	"list all erasure code profiles", \
-	"osd", "r", "cli,rest")
 COMMAND("osd set " \
-	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin|nobackfill|norecover|noscrub|nodeep-scrub|notieragent", \
+	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin", \
 	"set <key>", "osd", "rw", "cli,rest")
 COMMAND("osd unset " \
-	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin|nobackfill|norecover|noscrub|nodeep-scrub|notieragent", \
+	"name=key,type=CephChoices,strings=pause|noup|nodown|noout|noin", \
 	"unset <key>", "osd", "rw", "cli,rest")
 COMMAND("osd down " \
 	"type=CephString,name=ids,n=N", \
@@ -526,8 +487,7 @@ COMMAND("osd pool create " \
 	"name=pool,type=CephPoolname " \
 	"name=pg_num,type=CephInt,range=0 " \
 	"name=pgp_num,type=CephInt,range=0,req=false " \
-	"name=pool_type,type=CephChoices,strings=replicated|erasure,req=false " \
-	"name=erasure_code_profile,type=CephString,req=false,goodchars=[A-Za-z0-9-_.=] " \
+	"name=pool_type,type=CephChoices,strings=replicated,req=false " \
 	"name=ruleset,type=CephString,req=false,goodchars=[A-Za-z0-9-_.=]", \
 	"create pool", "osd", "rw", "cli,rest")
 COMMAND("osd pool delete " \
@@ -569,35 +529,6 @@ COMMAND("osd reweight-by-utilization " \
 COMMAND("osd thrash " \
 	"name=num_epochs,type=CephInt,range=0", \
 	"thrash OSDs for <num_epochs>", "osd", "rw", "cli,rest")
-
-// tiering
-COMMAND("osd tier add " \
-	"name=pool,type=CephPoolname " \
-	"name=tierpool,type=CephPoolname " \
-	"name=force_nonempty,type=CephChoices,strings=--force-nonempty,req=false",
-	"add the tier <tierpool> to base pool <pool>", "osd", "rw", "cli,rest")
-COMMAND("osd tier remove " \
-	"name=pool,type=CephPoolname " \
-	"name=tierpool,type=CephPoolname",
-	"remove the tier <tierpool> from base pool <pool>", "osd", "rw", "cli,rest")
-COMMAND("osd tier cache-mode " \
-	"name=pool,type=CephPoolname " \
-	"name=mode,type=CephChoices,strings=none|writeback|forward|readonly", \
-	"specify the caching mode for cache tier <pool>", "osd", "rw", "cli,rest")
-COMMAND("osd tier set-overlay " \
-	"name=pool,type=CephPoolname " \
-	"name=overlaypool,type=CephPoolname", \
-	"set the overlay pool for base pool <pool> to be <overlaypool>", "osd", "rw", "cli,rest")
-COMMAND("osd tier remove-overlay " \
-	"name=pool,type=CephPoolname ", \
-	"remove the overlay pool for base pool <pool>", "osd", "rw", "cli,rest")
-
-COMMAND("osd tier add-cache " \
-	"name=pool,type=CephPoolname " \
-	"name=tierpool,type=CephPoolname " \
-	"name=size,type=CephInt,range=0", \
-	"add a cache <tierpool> of size <size> to existing pool <pool>", \
-	"osd", "rw", "cli,rest")
 
 /*
  * mon/ConfigKeyService.cc

@@ -52,34 +52,34 @@ public:
 
   /// @see CollectionIndex
   int created(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     const char *path
     );
 
   /// @see CollectionIndex
   int unlink(
-    const ghobject_t &oid
+    const hobject_t &oid
     );
 
   /// @see CollectionIndex
   int lookup(
-    const ghobject_t &oid,
+    const hobject_t &oid,
     IndexedPath *path,
     int *exist
     );
 
   /// @see CollectionIndex
   int collection_list(
-    vector<ghobject_t> *ls
+    vector<hobject_t> *ls
     );
 
   /// @see CollectionIndex
   int collection_list_partial(
-    const ghobject_t &start,
+    const hobject_t &start,
     int min_count,
     int max_count,
-    vector<ghobject_t> *ls,
-    ghobject_t *next
+    vector<hobject_t> *ls,
+    hobject_t *next
     );
 };
 

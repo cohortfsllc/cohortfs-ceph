@@ -473,8 +473,6 @@ MESSAGE(MOSDPGTemp)
 MESSAGE(MOSDPGTrim)
 #include "messages/MOSDPing.h"
 MESSAGE(MOSDPing)
-#include "messages/MOSDRepScrub.h"
-MESSAGE(MOSDRepScrub)
 #include "messages/MOSDScrub.h"
 MESSAGE(MOSDScrub)
 #include "messages/MOSDSubOp.h"

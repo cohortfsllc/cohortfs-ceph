@@ -8099,7 +8099,7 @@ int Client::get_pool_replication(int64_t pool)
   return osdmap->get_pg_pool(pool)->get_size();
 }
 
-int Client::get_file_extent_osds(int fd, loff_t off, loff_t *len, vector<int>& osds)
+int Client::get_file_extent_osd(int fd, loff_t off, loff_t *len, int& osd)
 {
   Mutex::Locker lock(client_lock);
 
@@ -8113,8 +8113,8 @@ int Client::get_file_extent_osds(int fd, loff_t off, loff_t *len, vector<int>& o
   assert(extents.size() == 1);
 
   pg_t pg = osdmap->object_locator_to_pg(extents[0].oid, extents[0].oloc);
-  osdmap->pg_to_acting_osds(pg, osds);
-  if (osds.empty())
+  osdmap->pg_to_osd(pg, osd);
+  if (osd == -1)
     return -EINVAL;
 
   /*
@@ -8147,7 +8147,8 @@ int Client::get_osd_crush_location(int id, vector<pair<string, string> >& path)
   return osdmap->crush->get_full_location_ordered(id, path);
 }
 
-int Client::get_file_stripe_address(int fd, loff_t offset, vector<entity_addr_t>& address)
+int Client::get_file_stripe_address(int fd, loff_t offset,
+				    entity_addr_t& address)
 {
   Mutex::Locker lock(client_lock);
 
@@ -8163,15 +8164,12 @@ int Client::get_file_stripe_address(int fd, loff_t offset, vector<entity_addr_t>
 
   // now we have the object and its 'layout'
   pg_t pg = osdmap->object_locator_to_pg(extents[0].oid, extents[0].oloc);
-  vector<int> osds;
-  osdmap->pg_to_acting_osds(pg, osds);
-  if (osds.empty())
+  int osd;
+  osdmap->pg_to_osd(pg, osd);
+  if (osd == -1)
     return -EINVAL;
 
-  for (unsigned i = 0; i < osds.size(); i++) {
-    entity_addr_t addr = osdmap->get_addr(osds[i]);
-    address.push_back(addr);
-  }
+  address = osdmap->get_addr(osd);
 
   return 0;
 }
@@ -8301,19 +8299,3 @@ bool Client::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool 
   *authorizer = monclient->auth->build_authorizer(dest_type);
   return true;
 }
-
-void Client::set_filer_flags(int flags)
-{
-  Mutex::Locker l(client_lock);
-  assert(flags == 0 ||
-	 flags == CEPH_OSD_FLAG_LOCALIZE_READS);
-  objecter->add_global_op_flags(flags);
-}
-
-void Client::clear_filer_flags(int flags)
-{
-  Mutex::Locker l(client_lock);
-  assert(flags == CEPH_OSD_FLAG_LOCALIZE_READS);
-  objecter->clear_global_op_flag(flags);
-}
-
