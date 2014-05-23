@@ -6,7 +6,6 @@ set(osd_srcs
 	OSDCap.cc 
 	PG.cc
 	PGBackend.cc
-	PGLog.cc 
 	ReplicatedBackend.cc 
 	ReplicatedPG.cc 
 	OSDriver.cc

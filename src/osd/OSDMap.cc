@@ -31,59 +31,44 @@
 
 void osd_info_t::dump(Formatter *f) const
 {
-  f->dump_int("last_clean_begin", last_clean_begin);
-  f->dump_int("last_clean_end", last_clean_end);
   f->dump_int("up_from", up_from);
   f->dump_int("up_thru", up_thru);
   f->dump_int("down_at", down_at);
-  f->dump_int("lost_at", lost_at);
 }
 
 void osd_info_t::encode(bufferlist& bl) const
 {
   uint8_t struct_v = 1;
   ::encode(struct_v, bl);
-  ::encode(last_clean_begin, bl);
-  ::encode(last_clean_end, bl);
   ::encode(up_from, bl);
   ::encode(up_thru, bl);
   ::encode(down_at, bl);
-  ::encode(lost_at, bl);
 }
 
 void osd_info_t::decode(bufferlist::iterator& bl)
 {
   uint8_t struct_v;
   ::decode(struct_v, bl);
-  ::decode(last_clean_begin, bl);
-  ::decode(last_clean_end, bl);
   ::decode(up_from, bl);
   ::decode(up_thru, bl);
   ::decode(down_at, bl);
-  ::decode(lost_at, bl);
 }
 
 void osd_info_t::generate_test_instances(list<osd_info_t*>& o)
 {
   o.push_back(new osd_info_t);
   o.push_back(new osd_info_t);
-  o.back()->last_clean_begin = 1;
-  o.back()->last_clean_end = 2;
   o.back()->up_from = 30;
   o.back()->up_thru = 40;
   o.back()->down_at = 5;
-  o.back()->lost_at = 6;
 }
 
 ostream& operator<<(ostream& out, const osd_info_t& info)
 {
   out << "up_from " << info.up_from
       << " up_thru " << info.up_thru
-      << " down_at " << info.down_at
-      << " last_clean_interval [" << info.last_clean_begin << "," << info.last_clean_end << ")";
-  if (info.lost_at)
-    out << " lost_at " << info.lost_at;
-  return out;
+      << " down_at " << info.down_at;
+    return out;
 }
 
 // ----------------------------------
@@ -318,8 +303,6 @@ void OSDMap::Incremental::encode_classic(bufferlist& bl, uint64_t features) cons
   ::encode(ev, bl);
   ::encode(new_hb_back_up, bl);
   ::encode(new_up_thru, bl);
-  ::encode(new_last_clean_interval, bl);
-  ::encode(new_lost, bl);
   ::encode(new_blacklist, bl);
   ::encode(old_blacklist, bl);
   ::encode(new_up_cluster, bl);
@@ -365,8 +348,6 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
     ENCODE_START(2, 1, bl); // extended, osd-only data
     ::encode(new_hb_back_up, bl);
     ::encode(new_up_thru, bl);
-    ::encode(new_last_clean_interval, bl);
-    ::encode(new_lost, bl);
     ::encode(new_blacklist, bl);
     ::encode(old_blacklist, bl);
     ::encode(new_up_cluster, bl);
@@ -446,8 +427,6 @@ void OSDMap::Incremental::decode_classic(bufferlist::iterator &p)
   if (v < 5)
     ::decode(new_pool_names, p);
   ::decode(new_up_thru, p);
-  ::decode(new_last_clean_interval, p);
-  ::decode(new_lost, p);
   ::decode(new_blacklist, p);
   ::decode(old_blacklist, p);
   if (ev >= 6)
@@ -512,8 +491,6 @@ void OSDMap::Incremental::decode(bufferlist::iterator& bl)
     DECODE_START(2, bl); // extended, osd-only data
     ::decode(new_hb_back_up, bl);
     ::decode(new_up_thru, bl);
-    ::decode(new_last_clean_interval, bl);
-    ::decode(new_lost, bl);
     ::decode(new_blacklist, bl);
     ::decode(old_blacklist, bl);
     ::decode(new_up_cluster, bl);
@@ -625,28 +602,7 @@ void OSDMap::Incremental::dump(Formatter *f) const
   }
   f->close_section();
 
-  f->open_array_section("new_lost");
-  for (map<int32_t,uint32_t>::const_iterator p = new_lost.begin(); p != new_lost.end(); ++p) {
-    f->open_object_section("osd");
-    f->dump_int("osd", p->first);
-    f->dump_int("epoch_lost", p->second);
-    f->close_section();
-  }
-  f->close_section();
-
-  f->open_array_section("new_last_clean_interval");
-  for (map<int32_t,pair<epoch_t,epoch_t> >::const_iterator p = new_last_clean_interval.begin();
-       p != new_last_clean_interval.end();
-       ++p) {
-    f->open_object_section("osd");
-    f->dump_int("osd", p->first);
-    f->dump_int("first", p->second.first);
-    f->dump_int("last", p->second.second);
-    f->close_section();
-  }
-  f->close_section();
-
-  f->open_array_section("new_blacklist");
+    f->open_array_section("new_blacklist");
   for (map<entity_addr_t,utime_t>::const_iterator p = new_blacklist.begin();
        p != new_blacklist.end();
        ++p) {
@@ -1082,14 +1038,6 @@ int OSDMap::apply_incremental(const Incremental &inc)
        i != inc.new_up_thru.end();
        ++i)
     osd_info[i->first].up_thru = i->second;
-  for (map<int32_t,pair<epoch_t,epoch_t> >::const_iterator i = inc.new_last_clean_interval.begin();
-       i != inc.new_last_clean_interval.end();
-       ++i) {
-    osd_info[i->first].last_clean_begin = i->second.first;
-    osd_info[i->first].last_clean_end = i->second.second;
-  }
-  for (map<int32_t,epoch_t>::const_iterator p = inc.new_lost.begin(); p != inc.new_lost.end(); ++p)
-    osd_info[p->first].lost_at = p->second;
 
   // xinfo
   for (map<int32_t,osd_xinfo_t>::const_iterator p = inc.new_xinfo.begin(); p != inc.new_xinfo.end(); ++p)

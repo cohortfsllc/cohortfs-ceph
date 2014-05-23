@@ -448,24 +448,6 @@ void ReplicatedPG::do_op(OpRequestRef op)
 		 m->get_object_locator().nspace);
 
 
-  // dup/replay?
-  if (op->may_write() || op->may_cache()) {
-    const pg_log_entry_t *entry = pg_log.get_log().get_request(m->get_reqid());
-    if (entry) {
-      const eversion_t& oldv = entry->version;
-      dout(3) << __func__ << " dup " << m->get_reqid()
-	      << " was " << oldv << dendl;
-      if (m->wants_ack()) {
-	dout(10) << " waiting for " << oldv << " to ack" << dendl;
-	waiting_for_ack[oldv].push_back(op);
-      }
-      dout(10) << " waiting for " << oldv << " to commit" << dendl;
-      waiting_for_ondisk[oldv].push_back(op);  // always queue ondisk waiters, so that we can requeue if needed
-      op->mark_delayed("waiting for ondisk");
-      return;
-    }
-  }
-
   ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
   hobject_t missing_oid;
@@ -2545,18 +2527,15 @@ int ReplicatedPG::prepare_transaction(OpContext *ctx)
 
   make_writeable(ctx);
 
-  finish_ctx(ctx,
-	     ctx->new_obs.exists ? pg_log_entry_t::MODIFY :
-	     pg_log_entry_t::DELETE);
+  finish_ctx(ctx);
 
   return result;
 }
 
-void ReplicatedPG::finish_ctx(OpContext *ctx, int log_op_type)
+void ReplicatedPG::finish_ctx(OpContext *ctx)
 {
   const hobject_t& soid = ctx->obs->oi.soid;
   dout(20) << __func__ << " " << soid << " " << ctx
-	   << " op " << pg_log_entry_t::get_op_name(log_op_type)
 	   << dendl;
 
   // finish and log the op.
@@ -2591,13 +2570,6 @@ void ReplicatedPG::finish_ctx(OpContext *ctx, int log_op_type)
   } else {
     ctx->new_obs.oi = object_info_t(ctx->obc->obs.oi.soid);
   }
-
-  // append to log
-  ctx->log.push_back(pg_log_entry_t(log_op_type, soid, ctx->at_version,
-				    ctx->obs->oi.version,
-				    ctx->user_at_version, ctx->reqid,
-				    ctx->mtime));
-  ctx->log.back().mod_desc.claim(ctx->mod_desc);
 
   // apply new object state.
   ctx->obc->obs = ctx->new_obs;
@@ -2680,7 +2652,6 @@ void ReplicatedPG::repop_all_committed(RepGather *repop)
   if (!repop->rep_aborted) {
     if (repop->v != eversion_t()) {
       last_update_ondisk = repop->v;
-      last_complete_ondisk = repop->pg_local_last_complete;
     }
     eval_repop(repop);
   }
@@ -2853,7 +2824,6 @@ void ReplicatedPG::issue_repop(RepGather *repop, utime_t now)
     soid,
     repop->ctx->at_version,
     repop->ctx->op_t,
-    repop->ctx->log,
     onapplied_sync,
     on_all_applied,
     on_all_commit,
@@ -2871,7 +2841,7 @@ ReplicatedPG::RepGather *ReplicatedPG::new_repop(OpContext *ctx, ObjectContextRe
   else
     dout(10) << "new_repop rep_tid " << rep_tid << " (no op)" << dendl;
 
-  RepGather *repop = new RepGather(ctx, obc, rep_tid, info.last_complete);
+  RepGather *repop = new RepGather(ctx, obc, rep_tid);
 
   repop->start = ceph_clock_now(cct);
 
@@ -2981,12 +2951,6 @@ void ReplicatedPG::check_blacklisted_obc_watchers(ObjectContextRef obc)
 void ReplicatedPG::populate_obc_watchers(ObjectContextRef obc)
 {
   assert(is_active());
-  assert((pg_log.get_log().objects.count(obc->obs.oi.soid) && // or this is a revert... see recover_primary()
-	  pg_log.get_log().objects.find(obc->obs.oi.soid)->second->op ==
-	    pg_log_entry_t::LOST_REVERT &&
-	  pg_log.get_log().objects.find(obc->obs.oi.soid)->second->reverting_to ==
-	    obc->obs.oi.version));
-
   dout(10) << "populate_obc_watchers " << obc->obs.oi.soid << dendl;
   assert(obc->watchers.empty());
   // populate unconnected_watchers
@@ -3035,12 +2999,6 @@ void ReplicatedPG::handle_watch_timeout(WatchRef watch)
 
   PGBackend::PGTransaction *t = ctx->op_t;
 
-  ctx->log.push_back(pg_log_entry_t(pg_log_entry_t::MODIFY, obc->obs.oi.soid,
-				    ctx->at_version,
-				    obc->obs.oi.version,
-				    0,
-				    osd_reqid_t(), ctx->mtime));
-
   obc->obs.oi.prior_version = repop->obc->obs.oi.version;
   obc->obs.oi.version = ctx->at_version;
   bufferlist bl;
@@ -3069,11 +3027,6 @@ ObjectContextRef ReplicatedPG::create_object_context(const object_info_t& oi)
 ObjectContextRef ReplicatedPG::get_object_context(
   const hobject_t& soid, bool can_create, map<string, bufferlist> *attrs)
 {
-  assert(attrs ||
-	 // or this is a revert... see recover_primary()
-	 (pg_log.get_log().objects.count(soid) &&
-	  pg_log.get_log().objects.find(soid)->second->op ==
-	  pg_log_entry_t::LOST_REVERT));
   ObjectContextRef obc = object_contexts.lookup(soid);
   if (obc) {
     dout(10) << __func__ << ": found obc in cache: " << obc
@@ -3268,7 +3221,6 @@ void ReplicatedPG::on_removal(ObjectStore::Transaction *t)
   dout(10) << "on_removal" << dendl;
 
   // adjust info to backfill
-  info.last_backfill = hobject_t();
   dirty_info = true;
   write_if_dirty(*t);
 
@@ -3327,44 +3279,6 @@ void ReplicatedPG::on_change(ObjectStore::Transaction *t)
 void ReplicatedPG::on_pool_change()
 {
   dout(10) << __func__ << dendl;
-}
-
-/** check_local
- *
- * verifies that stray objects have been deleted
- */
-void ReplicatedPG::check_local()
-{
-  dout(10) << __func__ << dendl;
-
-  assert(info.last_update >= pg_log.get_tail());  // otherwise we need some help!
-
-  if (!cct->_conf->osd_debug_verify_stray_on_activate)
-    return;
-
-  // just scan the log.
-  set<hobject_t> did;
-  for (list<pg_log_entry_t>::const_reverse_iterator p = pg_log.get_log().log.rbegin();
-       p != pg_log.get_log().log.rend();
-       ++p) {
-    if (did.count(p->soid))
-      continue;
-    did.insert(p->soid);
-
-    if (p->is_delete()) {
-      dout(10) << " checking " << p->soid
-	       << " at " << p->version << dendl;
-      struct stat st;
-      int r = osd->store->stat(coll, p->soid, &st);
-      if (r != -ENOENT) {
-	derr << __func__ << " " << p->soid << " exists, but should have been "
-	     << "deleted" << dendl;
-	assert(0 == "erroneously present object");
-      }
-    } else {
-      // ignore old(+missing) objects
-    }
-  }
 }
 
 void ReplicatedPG::replace_cached_attrs(

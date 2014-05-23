@@ -135,7 +135,7 @@ PG::PG(OSDService *o, OSDMapRef curmap,
   deleting(false), dirty_info(false),
   info(p),
   info_struct_v(0),
-  coll(p), pg_log(cct), log_oid(loid),
+  coll(p), log_oid(loid),
   stat_queue_item(this),
   state(0),
   pg_stats_publish_lock("PG::pg_stats_publish_lock"),
@@ -204,7 +204,6 @@ void PG::clear_primary_state()
   last_update_ondisk = eversion_t();
 
   finish_sync_event = 0;  // so that _finish_recvoery doesn't go off in another thread
-  pg_log.reset_recovery_pointers();
 
   osd->remove_want_pg_temp(info.pgid);
 }
@@ -237,9 +236,6 @@ void PG::activate(ObjectStore::Transaction& t,
 
   // find out when we commit
   t.register_on_complete(new C_PG_ActivateCommitted(this, query_epoch));
-
-  pg_log.activate_not_complete(info);
-  log_weirdness();
 }
 
 bool PG::op_has_sufficient_caps(OpRequestRef op)
@@ -346,12 +342,6 @@ void PG::_update_calc_stats()
 {
   info.stats.version = info.last_update;
   info.stats.created = info.history.epoch_created;
-
-  info.stats.log_size = pg_log.get_head().version - pg_log.get_tail().version;
-  info.stats.ondisk_log_size =
-    pg_log.get_head().version - pg_log.get_tail().version;
-  info.stats.log_start = pg_log.get_tail();
-  info.stats.ondisk_log_start = pg_log.get_tail();
 }
 
 void PG::publish_stats_to_osd()
@@ -494,86 +484,6 @@ void PG::write_if_dirty(ObjectStore::Transaction& t)
 {
   if (dirty_info)
     write_info(t);
-  pg_log.write_log(t, log_oid);
-}
-
-void PG::add_log_entry(pg_log_entry_t& e, bufferlist& log_bl)
-{
-  // raise last_complete only if we were previously up to date
-  if (info.last_complete == info.last_update)
-    info.last_complete = e.version;
-  
-  // raise last_update.
-  assert(e.version > info.last_update);
-  info.last_update = e.version;
-
-  // raise user_version, if it increased (it may have not get bumped
-  // by all logged updates)
-  if (e.user_version > info.last_user_version)
-    info.last_user_version = e.user_version;
-
-  /**
-   * Make sure we don't keep around more than we need to in the
-   * in-memory log
-   */
-  e.mod_desc.trim_bl();
-
-  // log mutation
-  pg_log.add(e);
-  dout(10) << "add_log_entry " << e << dendl;
-
-  e.encode_with_checksum(log_bl);
-}
-
-
-void PG::append_log(
-  vector<pg_log_entry_t>& logv, ObjectStore::Transaction &t,
-  bool transaction_applied)
-{
-  dout(10) << "append_log " << pg_log.get_log() << " " << logv << dendl;
-
-  map<string,bufferlist> keys;
-  for (vector<pg_log_entry_t>::iterator p = logv.begin();
-       p != logv.end();
-       ++p) {
-    p->offset = 0;
-    add_log_entry(*p, keys[p->get_key_name()]);
-  }
-  if (!transaction_applied)
-    pg_log.clear_can_rollback_to();
-
-  dout(10) << "append_log  adding " << keys.size() << " keys" << dendl;
-  t.omap_setkeys(coll_t::META_COLL, log_oid, keys);
-  PGLogEntryHandler handler;
-  handler.apply(this, &t);
-
-  // update the local pg, pg log
-  dirty_info = true;
-  write_if_dirty(t);
-}
-
-bool PG::check_log_for_corruption(ObjectStore *store)
-{
-  /// TODO: this method needs to work with the omap log
-  return true;
-}
-
-//! Get the name we're going to save our corrupt page log as
-std::string PG::get_corrupt_pg_log_name() const
-{
-  const int MAX_BUF = 512;
-  char buf[MAX_BUF];
-  struct tm tm_buf;
-  time_t my_time(time(NULL));
-  const struct tm *t = localtime_r(&my_time, &tm_buf);
-  int ret = strftime(buf, sizeof(buf), "corrupt_log_%Y-%m-%d_%k:%M_", t);
-  if (ret == 0) {
-    dout(0) << "strftime failed" << dendl;
-    return "corrupt_log_unknown_time";
-  }
-  string out(buf);
-  out += stringify(info.pgid);
-  return out;
 }
 
 int PG::read_info(
@@ -606,57 +516,8 @@ void PG::read_state(ObjectStore *store, bufferlist &bl)
   assert(r >= 0);
 
   ostringstream oss;
-  if (pg_log.read_log(
-      store, coll, log_oid, info,
-      oss)) {
-    /* We don't want to leave the old format around in case the next log
-     * write happens to be an append_log()
-     */
-    pg_log.mark_log_for_rewrite();
-    ObjectStore::Transaction t;
-    t.remove(coll_t(), log_oid); // remove old version
-    pg_log.write_log(t, log_oid);
-    int r = osd->store->apply_transaction(t);
-    assert(!r);
-  }
   if (oss.str().length())
     osd->clog.error() << oss;
-
-  // log any weirdness
-  log_weirdness();
-}
-
-void PG::log_weirdness()
-{
-  if (pg_log.get_tail() != info.log_tail)
-    osd->clog.error() << info.pgid
-		      << " info mismatch, log.tail " << pg_log.get_tail()
-		      << " != info.log_tail " << info.log_tail
-		      << "\n";
-  if (pg_log.get_head() != info.last_update)
-    osd->clog.error() << info.pgid
-		      << " info mismatch, log.head " << pg_log.get_head()
-		      << " != info.last_update " << info.last_update
-		      << "\n";
-
-  if (!pg_log.get_log().empty()) {
-    // sloppy check
-    if ((pg_log.get_log().log.begin()->version <= pg_log.get_tail()))
-      osd->clog.error() << info.pgid
-			<< " log bound mismatch, info (" << pg_log.get_tail() << ","
-			<< pg_log.get_head() << "]"
-			<< " actual ["
-			<< pg_log.get_log().log.begin()->version << ","
-			<< pg_log.get_log().log.rbegin()->version << "]"
-			<< "\n";
-  }
-  
-  if (pg_log.get_log().caller_ops.size() > pg_log.get_log().log.size()) {
-    osd->clog.error() << info.pgid
-		      << " caller_ops.size " << pg_log.get_log().caller_ops.size()
-		      << " > log size " << pg_log.get_log().log.size()
-		      << "\n";
-  }
 }
 
 void PG::requeue_object_waiters(map<hobject_t, list<OpRequestRef> >& m)
@@ -690,22 +551,6 @@ ostream& operator<<(ostream& out, const PG& pg)
 
   if (pg.last_update_ondisk != pg.info.last_update)
     out << " luod=" << pg.last_update_ondisk;
-
-  if (pg.pg_log.get_tail() != pg.info.log_tail ||
-      pg.pg_log.get_head() != pg.info.last_update)
-    out << " (info mismatch, " << pg.pg_log.get_log() << ")";
-
-  if (!pg.pg_log.get_log().empty()) {
-    if ((pg.pg_log.get_log().log.begin()->version <= pg.pg_log.get_tail())) {
-      out << " (log bound mismatch, actual=["
-	  << pg.pg_log.get_log().log.begin()->version << ","
-	  << pg.pg_log.get_log().log.rbegin()->version << "]";
-      out << ")";
-    }
-  }
-
-  if (pg.last_complete_ondisk != pg.info.last_complete)
-    out << " lcod " << pg.last_complete_ondisk;
 
   out << " " << pg_state_string(pg.get_state());
   out << "]";

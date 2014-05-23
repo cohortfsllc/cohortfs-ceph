@@ -52,32 +52,13 @@ using namespace std;
  * the last epoch the osd is known to have _started_.  i.e., a lower
  * bound on the actual osd death.  down_at (if it is > up_from) is an
  * upper bound on the actual osd death.
- *
- * the second is the last_clean interval [first,last].  in that case,
- * the last interval is the last epoch known to have been either
- * _finished_, or during which the osd cleanly shut down.  when
- * possible, we push this forward to the epoch the osd was eventually
- * marked down.
- *
- * the lost_at is used to allow build_prior to proceed without waiting
- * for an osd to recover.  In certain cases, progress may be blocked 
- * because an osd is down that may contain updates (i.e., a pg may have
- * gone rw during an interval).  If the osd can't be brought online, we
- * can force things to proceed knowing that we _might_ be losing some
- * acked writes.  If the osd comes back to life later, that's fine to,
- * but those writes will still be lost (the divergent objects will be
- * thrown out).
  */
 struct osd_info_t {
-  epoch_t last_clean_begin;  // last interval that ended with a clean osd shutdown
-  epoch_t last_clean_end;
   epoch_t up_from;   // epoch osd marked up
   epoch_t up_thru;   // lower bound on actual osd death (if > up_from)
   epoch_t down_at;   // upper bound on actual osd death (if > up_from)
-  epoch_t lost_at;   // last epoch we decided data was "lost"
-  
-  osd_info_t() : last_clean_begin(0), last_clean_end(0),
-		 up_from(0), up_thru(0), down_at(0), lost_at(0) {}
+
+  osd_info_t() : up_from(0), up_thru(0), down_at(0) {}
 
   void dump(Formatter *f) const;
   void encode(bufferlist& bl) const;
@@ -140,8 +121,6 @@ public:
     map<int32_t,uint32_t> new_weight;
     map<int32_t,uint32_t> new_primary_affinity;
     map<int32_t,epoch_t> new_up_thru;
-    map<int32_t,pair<epoch_t,epoch_t> > new_last_clean_interval;
-    map<int32_t,epoch_t> new_lost;
     map<int32_t,uuid_d> new_uuid;
     map<int32_t,osd_xinfo_t> new_xinfo;
 

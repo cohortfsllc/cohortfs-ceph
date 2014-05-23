@@ -955,17 +955,11 @@ struct pg_stat_t {
   utime_t last_active;  // state & PG_STATE_ACTIVE
   utime_t last_unstale; // (state & PG_STATE_STALE) == 0
 
-  eversion_t log_start;         // (log_start,version]
-  eversion_t ondisk_log_start;  // there may be more on disk
-
   epoch_t created;
   pg_t parent;
   uint32_t parent_split_bits;
 
   object_stat_collection_t stats;
-
-  int64_t log_size;
-  int64_t ondisk_log_size;    // >= active_log_size
 
   utime_t last_became_active;
 
@@ -977,7 +971,6 @@ struct pg_stat_t {
       state(0),
       created(0),
       parent_split_bits(0),
-      log_size(0), ondisk_log_size(0),
       osd(-1)
   { }
 
@@ -987,21 +980,13 @@ struct pg_stat_t {
 
   void floor(int64_t f) {
     stats.floor(f);
-    if (log_size < f)
-      log_size = f;
-    if (ondisk_log_size < f)
-      ondisk_log_size = f;
   }
 
   void add(const pg_stat_t& o) {
     stats.add(o.stats);
-    log_size += o.log_size;
-    ondisk_log_size += o.ondisk_log_size;
   }
   void sub(const pg_stat_t& o) {
     stats.sub(o.stats);
-    log_size -= o.log_size;
-    ondisk_log_size -= o.ondisk_log_size;
   }
 
   void dump(Formatter *f) const;
@@ -1017,35 +1002,20 @@ WRITE_CLASS_ENCODER(pg_stat_t)
  */
 struct pool_stat_t {
   object_stat_collection_t stats;
-  int64_t log_size;
-  int64_t ondisk_log_size;    // >= active_log_size
-
-  pool_stat_t() : log_size(0), ondisk_log_size(0)
-  { }
 
   void floor(int64_t f) {
     stats.floor(f);
-    if (log_size < f)
-      log_size = f;
-    if (ondisk_log_size < f)
-      ondisk_log_size = f;
   }
 
   void add(const pg_stat_t& o) {
     stats.add(o.stats);
-    log_size += o.log_size;
-    ondisk_log_size += o.ondisk_log_size;
   }
   void sub(const pg_stat_t& o) {
     stats.sub(o.stats);
-    log_size -= o.log_size;
-    ondisk_log_size -= o.ondisk_log_size;
   }
 
   bool is_zero() const {
-    return (stats.is_zero() &&
-	    log_size == 0 &&
-	    ondisk_log_size == 0);
+    return stats.is_zero();
   }
 
   void dump(Formatter *f) const;
@@ -1069,23 +1039,15 @@ WRITE_CLASS_ENCODER_FEATURES(pool_stat_t)
 struct pg_history_t {
   epoch_t epoch_created;       // epoch in which PG was created
   epoch_t last_epoch_started;  // lower bound on last epoch started (anywhere, not necessarily locally)
-  epoch_t last_epoch_clean;    // lower bound on last epoch the PG was completely clean.
   epoch_t last_epoch_split;    // as parent
-  
-  /**
-   * In the event of a map discontinuity, same_*_since may reflect the first
-   * map the osd has seen in the new map sequence rather than the actual start
-   * of the interval.  This is ok since a discontinuity at epoch e means there
-   * must have been a clean interval between e and now and that we cannot be
-   * in the active set during the interval containing e.
-   */
+
   epoch_t same_up_since;       // same acting set since
   epoch_t same_interval_since;   // same acting AND up set since
   epoch_t same_primary_since;  // same primary at least back through this epoch.
 
   pg_history_t()
     : epoch_created(0),
-      last_epoch_started(0), last_epoch_clean(0), last_epoch_split(0),
+      last_epoch_started(0), last_epoch_split(0),
       same_up_since(0), same_interval_since(0), same_primary_since(0) {}
 
   bool merge(const pg_history_t &other) {
@@ -1099,12 +1061,8 @@ struct pg_history_t {
       last_epoch_started = other.last_epoch_started;
       modified = true;
     }
-    if (last_epoch_clean < other.last_epoch_clean) {
-      last_epoch_clean = other.last_epoch_clean;
-      modified = true;
-    }
     if (last_epoch_split < other.last_epoch_split) {
-      last_epoch_split = other.last_epoch_split; 
+      last_epoch_split = other.last_epoch_split;
       modified = true;
     }
     return modified;
@@ -1119,59 +1077,39 @@ WRITE_CLASS_ENCODER(pg_history_t)
 
 inline ostream& operator<<(ostream& out, const pg_history_t& h) {
   return out << "ec=" << h.epoch_created
-	     << " les/c " << h.last_epoch_started << "/" << h.last_epoch_clean
+	     << " les/c " << h.last_epoch_started 
 	     << " " << h.same_up_since << "/" << h.same_interval_since << "/" << h.same_primary_since;
 }
 
 
 /**
  * pg_info_t - summary of PG statistics.
- *
- * some notes: 
- *  - last_complete implies we have all objects that existed as of that
- *    stamp, OR a newer object, OR have already applied a later delete.
- *  - if last_complete >= log.bottom, then we know pg contents thru log.head.
- *    otherwise, we have no idea what the pg is supposed to contain.
  */
 struct pg_info_t {
   pg_t pgid;
   eversion_t last_update;    // last object version applied to store.
-  eversion_t last_complete;  // last version pg was complete through.
   epoch_t last_epoch_started;// last epoch at which this pg started on this osd
 
   version_t last_user_version; // last user object version applied to store
-
-  eversion_t log_tail;     // oldest log entry.
-
-  hobject_t last_backfill;   // objects >= this and < last_complete may be missing
 
   pg_stat_t stats;
 
   pg_history_t history;
 
   pg_info_t()
-    : last_epoch_started(0), last_user_version(0),
-      last_backfill(hobject_t::get_max())
+    : last_epoch_started(0), last_user_version(0)
   { }
   pg_info_t(pg_t p)
     : pgid(p),
-      last_epoch_started(0), last_user_version(0),
-      last_backfill(hobject_t::get_max())
+      last_epoch_started(0), last_user_version(0)
   { }
 
   bool is_empty() const { return last_update.version == 0; }
   bool dne() const { return history.epoch_created == 0; }
 
-  bool is_incomplete() const { return !last_backfill.is_max(); }
-
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& p);
   void dump(Formatter *f) const;
-  bool overlaps_with(const pg_info_t &oinfo) const {
-    return last_update > oinfo.log_tail ?
-      oinfo.last_update >= log_tail :
-      last_update >= oinfo.log_tail;
-  }
   static void generate_test_instances(list<pg_info_t*>& o);
 };
 WRITE_CLASS_ENCODER(pg_info_t)
@@ -1183,15 +1121,8 @@ inline ostream& operator<<(ostream& out, const pg_info_t& pgi)
     out << " DNE";
   if (pgi.is_empty())
     out << " empty";
-  else {
+  else
     out << " v " << pgi.last_update;
-    if (pgi.last_complete != pgi.last_update)
-      out << " lc " << pgi.last_complete;
-    out << " (" << pgi.log_tail << "," << pgi.last_update << "]";
-  }
-  if (pgi.is_incomplete())
-    out << " lb " << pgi.last_backfill;
-  //out << " c " << pgi.epoch_created;
   out << " local-les=" << pgi.last_epoch_started;
   out << " n=" << pgi.stats.stats.sum.num_objects;
   out << " " << pgi.history
@@ -1223,22 +1154,14 @@ ostream &operator<<(ostream &lhs, const pg_notify_t &notify);
 
 /**
  * pg_query_t - used to ask a peer for information about a pg.
- *
- * note: if version=0, type=LOG, then we just provide our full log.
  */
 struct pg_query_t {
   enum {
-    INFO = 0,
-    LOG = 1,
-    MISSING = 4,
-    FULLLOG = 5,
+    INFO = 0
   };
   const char *get_type_name() const {
     switch (type) {
     case INFO: return "info";
-    case LOG: return "log";
-    case MISSING: return "missing";
-    case FULLLOG: return "fulllog";
     default: return "???";
     }
   }
@@ -1256,7 +1179,6 @@ struct pg_query_t {
     : type(t),
       history(h),
       epoch_sent(epoch_sent) {
-    assert(t != LOG);
   }
   pg_query_t(
     int t,
@@ -1265,7 +1187,6 @@ struct pg_query_t {
     epoch_t epoch_sent)
     : type(t), since(s), history(h),
       epoch_sent(epoch_sent) {
-    assert(t == LOG);
   }
 
   void encode(bufferlist &bl, uint64_t features) const;
@@ -1278,8 +1199,6 @@ WRITE_CLASS_ENCODER_FEATURES(pg_query_t)
 
 inline ostream& operator<<(ostream& out, const pg_query_t& q) {
   out << "query(" << q.get_type_name() << " " << q.since;
-  if (q.type == pg_query_t::LOG)
-    out << " " << q.history;
   out << ")";
   return out;
 }
@@ -1389,228 +1308,6 @@ WRITE_CLASS_ENCODER(ObjectModDesc)
 
 
 /**
- * pg_log_entry_t - single entry/event in pg log
- *
- */
-struct pg_log_entry_t {
-  enum {
-    MODIFY = 1,   // some unspecified modification (but not *all* modifications)
-    CLONE = 2,    // cloned object from head
-    DELETE = 3,   // deleted object
-    BACKLOG = 4,  // event invented by generate_backlog [deprecated]
-    LOST_REVERT = 5, // lost new version, revert to an older version.
-    LOST_DELETE = 6, // lost new version, revert to no object (deleted).
-    LOST_MARK = 7,   // lost new version, now EIO
-    CLEAN = 9,       // mark an object clean
-  };
-  static const char *get_op_name(int op) {
-    switch (op) {
-    case MODIFY:
-      return "modify  ";
-    case CLONE:
-      return "clone   ";
-    case DELETE:
-      return "delete  ";
-    case BACKLOG:
-      return "backlog ";
-    case LOST_REVERT:
-      return "l_revert";
-    case LOST_DELETE:
-      return "l_delete";
-    case LOST_MARK:
-      return "l_mark  ";
-    case CLEAN:
-      return "clean   ";
-    default:
-      return "unknown ";
-    }
-  }
-  const char *get_op_name() const {
-    return get_op_name(op);
-  }
-
-  int32_t      op;
-  hobject_t  soid;
-  eversion_t version, prior_version, reverting_to;
-  version_t user_version; // the user version for this entry
-  osd_reqid_t reqid;  // caller+tid to uniquely identify request
-  utime_t     mtime;  // this is the _user_ mtime, mind you
-  bool invalid_hash; // only when decoding object_t based entries
-  bool invalid_pool; // only when decoding pool-less hobject based entries
-
-  uint64_t offset;   // [soft state] my offset on disk
-
-  /// describes state for a locally-rollbackable entry
-  ObjectModDesc mod_desc;
-      
-  pg_log_entry_t()
-    : op(0), user_version(0),
-      invalid_hash(false), invalid_pool(false), offset(0) {}
-  pg_log_entry_t(int _op, const hobject_t& _soid, 
-		 const eversion_t& v, const eversion_t& pv,
-		 version_t uv,
-		 const osd_reqid_t& rid, const utime_t& mt)
-    : op(_op), soid(_soid), version(v),
-      prior_version(pv), user_version(uv),
-      reqid(rid), mtime(mt), invalid_hash(false), invalid_pool(false),
-      offset(0) {}
-      
-  bool is_clone() const { return op == CLONE; }
-  bool is_modify() const { return op == MODIFY; }
-  bool is_clean() const { return op == CLEAN; }
-  bool is_backlog() const { return op == BACKLOG; }
-  bool is_lost_revert() const { return op == LOST_REVERT; }
-  bool is_lost_delete() const { return op == LOST_DELETE; }
-  bool is_lost_mark() const { return op == LOST_MARK; }
-
-  bool is_update() const {
-    return
-      is_clone() || is_modify() || is_clean() ||
-      is_backlog() || is_lost_revert() || is_lost_mark();
-  }
-  bool is_delete() const {
-    return op == DELETE || op == LOST_DELETE;
-  }
-      
-  bool reqid_is_indexed() const {
-    return reqid != osd_reqid_t() && (op == MODIFY || op == DELETE);
-  }
-
-  string get_key_name() const;
-  void encode_with_checksum(bufferlist& bl) const;
-  void decode_with_checksum(bufferlist::iterator& p);
-
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<pg_log_entry_t*>& o);
-
-};
-WRITE_CLASS_ENCODER(pg_log_entry_t)
-
-ostream& operator<<(ostream& out, const pg_log_entry_t& e);
-
-
-
-/**
- * pg_log_t - incremental log of recent pg changes.
- *
- *  serves as a recovery queue for recent changes.
- */
-struct pg_log_t {
-  /*
-   *   head - newest entry (update|delete)
-   *   tail - entry previous to oldest (update|delete) for which we have
-   *          complete negative information.  
-   * i.e. we can infer pg contents for any store whose last_update >= tail.
-   */
-  eversion_t head;    // newest entry
-  eversion_t tail;    // version prior to oldest
-
-  // We can rollback rollback-able entries > can_rollback_to
-  eversion_t can_rollback_to;
-
-  list<pg_log_entry_t> log;  // the actual log.
-  
-  pg_log_t() {}
-
-  void clear() {
-    eversion_t z;
-    can_rollback_to = head = tail = z;
-    log.clear();
-  }
-
-  bool empty() const {
-    return log.empty();
-  }
-
-  bool null() const {
-    return head.version == 0 && head.epoch == 0;
-  }
-
-  size_t approx_size() const {
-    return head.version - tail.version;
-  }
-
-  list<pg_log_entry_t>::const_iterator find_entry(eversion_t v) const {
-    int fromhead = head.version - v.version;
-    int fromtail = v.version - tail.version;
-    list<pg_log_entry_t>::const_iterator p;
-    if (fromhead < fromtail) {
-      p = log.end();
-      --p;
-      while (p->version > v)
-	--p;
-      return p;
-    } else {
-      p = log.begin();
-      while (p->version < v)
-	++p;
-      return p;
-    }      
-  }
-
-  list<pg_log_entry_t>::iterator find_entry(eversion_t v) {
-    int fromhead = head.version - v.version;
-    int fromtail = v.version - tail.version;
-    list<pg_log_entry_t>::iterator p;
-    if (fromhead < fromtail) {
-      p = log.end();
-      --p;
-      while (p->version > v)
-	--p;
-      return p;
-    } else {
-      p = log.begin();
-      while (p->version < v)
-	++p;
-      return p;
-    }      
-  }
-
-  /**
-   * copy entries from the tail of another pg_log_t
-   *
-   * @param other pg_log_t to copy from
-   * @param from copy entries after this version
-   */
-  void copy_after(const pg_log_t &other, eversion_t from);
-
-  /**
-   * copy a range of entries from another pg_log_t
-   *
-   * @param other pg_log_t to copy from
-   * @param from copy entries after this version
-   * @parem to up to and including this version
-   */
-  void copy_range(const pg_log_t &other, eversion_t from, eversion_t to);
-
-  /**
-   * copy up to N entries
-   *
-   * @param o source log
-   * @param max max number of entreis to copy
-   */
-  void copy_up_to(const pg_log_t &other, int max);
-
-  ostream& print(ostream& out) const;
-
-  void encode(bufferlist &bl) const;
-  void decode(bufferlist::iterator &bl, int64_t pool = -1);
-  void dump(Formatter *f) const;
-  static void generate_test_instances(list<pg_log_t*>& o);
-};
-WRITE_CLASS_ENCODER(pg_log_t)
-
-inline ostream& operator<<(ostream& out, const pg_log_t& log) 
-{
-  out << "log((" << log.tail << "," << log.head << "], crt="
-      << log.can_rollback_to << ")";
-  return out;
-}
-
-
-/**
  * pg list objects response format
  *
  */
@@ -1652,73 +1349,6 @@ struct pg_ls_response_t {
 };
 
 WRITE_CLASS_ENCODER(pg_ls_response_t)
-
-/**
- * object_copy_cursor_t
- */
-struct object_copy_cursor_t {
-  bool attr_complete;
-  uint64_t data_offset;
-  bool data_complete;
-  string omap_offset;
-  bool omap_complete;
-
-  object_copy_cursor_t()
-    : attr_complete(false),
-      data_offset(0),
-      data_complete(false),
-      omap_complete(false)
-  {}
-
-  bool is_initial() const {
-    return !attr_complete && data_offset == 0 && omap_offset.empty();
-  }
-  bool is_complete() const {
-    return attr_complete && data_complete && omap_complete;
-  }
-
-  static void generate_test_instances(list<object_copy_cursor_t*>& o);
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator &bl);
-  void dump(Formatter *f) const;
-};
-WRITE_CLASS_ENCODER(object_copy_cursor_t)
-
-/**
- * object_copy_data_t
- *
- * Return data from a copy request. The semantics are a little strange
- * as a result of the encoding's heritage.
- *
- * In particular, the sender unconditionally fills in the cursor (from what
- * it receives and sends), the size, and the mtime, but is responsible for
- * figuring out whether it should put any data in the attrs, data, or
- * omap members (corresponding to xattrs, object data, and the omap entries)
- * based on external data (the client includes a max amount to return with
- * the copy request). The client then looks into the attrs, data, and/or omap
- * based on the contents of the cursor.
- */
-struct object_copy_data_t {
-  object_copy_cursor_t cursor;
-  uint64_t size;
-  utime_t mtime;
-  map<string, bufferlist> attrs;
-  bufferlist data;
-  bufferlist omap_header;
-  map<string, bufferlist> omap;
-  string category;
-
-public:
-  object_copy_data_t() : size((uint64_t)-1) {}
-
-  static void generate_test_instances(list<object_copy_data_t*>& o);
-  void encode_classic(bufferlist& bl) const;
-  void decode_classic(bufferlist::iterator& bl);
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& bl);
-  void dump(Formatter *f) const;
-};
-WRITE_CLASS_ENCODER(object_copy_data_t)
 
 /**
  * pg creation info
@@ -1804,13 +1434,12 @@ public:
 
   // last interval over which i mounted and was then active
   epoch_t mounted;     // last epoch i mounted
-  epoch_t clean_thru;  // epoch i was active and clean thru
   epoch_t last_map_marked_full; // last epoch osdmap was marked full
 
-  OSDSuperblock() : 
+  OSDSuperblock() :
     whoami(-1),
     current_epoch(0), oldest_map(0), newest_map(0), weight(0),
-    mounted(0), clean_thru(0), last_map_marked_full(0) {
+    mounted(0), last_map_marked_full(0) {
   }
 
   void encode(bufferlist &bl) const;
@@ -1823,12 +1452,12 @@ WRITE_CLASS_ENCODER(OSDSuperblock)
 inline ostream& operator<<(ostream& out, const OSDSuperblock& sb)
 {
   return out << "sb(" << sb.cluster_fsid
-             << " osd." << sb.whoami
+	     << " osd." << sb.whoami
 	     << " " << sb.osd_fsid
-             << " e" << sb.current_epoch
-             << " [" << sb.oldest_map << "," << sb.newest_map << "]"
-	     << " lci=[" << sb.mounted << "," << sb.clean_thru << "]"
-             << ")";
+	     << " e" << sb.current_epoch
+	     << " [" << sb.oldest_map << "," << sb.newest_map << "]"
+	     << " lci=[" << sb.mounted << "," << "]"
+	     << ")";
 }
 
 
@@ -2013,13 +1642,8 @@ public:
     uint64_t count;              ///< number of readers or writers
     list<OpRequestRef> waiters;  ///< ops waiting on state change
 
-    /// if set, restart backfill when we can get a read lock
-    bool backfill_read_marker;
-
     RWState()
-      : state(RWNONE),
-	count(0),
-	backfill_read_marker(false)
+      : state(RWNONE), count(0)
     {}
     bool get_read(OpRequestRef op) {
       if (get_read_lock()) {
@@ -2060,8 +1684,7 @@ public:
     }
     bool get_write_lock() {
       // don't starve anybody!
-      if (!waiters.empty() ||
-	  backfill_read_marker) {
+      if (!waiters.empty()) {
 	return false;
       }
       switch (state) {
@@ -2113,28 +1736,12 @@ public:
   bool get_write(OpRequestRef op) {
     return rwstate.get_write(op);
   }
-  bool get_backfill_read() {
-    rwstate.backfill_read_marker = true;
-    if (rwstate.get_read_lock()) {
-      return true;
-    }
-    return false;
-  }
-  void drop_backfill_read(list<OpRequestRef> *ls) {
-    assert(rwstate.backfill_read_marker);
-    rwstate.put_read(ls);
-    rwstate.backfill_read_marker = false;
-  }
   void put_read(list<OpRequestRef> *to_wake) {
     rwstate.put_read(to_wake);
   }
   void put_write(list<OpRequestRef> *to_wake,
 		 bool *requeue_recovery) {
     rwstate.put_write(to_wake);
-    if (rwstate.empty() && rwstate.backfill_read_marker) {
-      rwstate.backfill_read_marker = false;
-      *requeue_recovery = true;
-    }
   }
 
   ObjectContext()

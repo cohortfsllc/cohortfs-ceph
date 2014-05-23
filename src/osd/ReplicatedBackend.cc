@@ -330,7 +330,6 @@ void ReplicatedBackend::submit_transaction(
   const hobject_t &soid,
   const eversion_t &at_version,
   PGTransaction *_t,
-  vector<pg_log_entry_t> &log_entries,
   Context *on_local_applied_sync,
   Context *on_all_acked,
   Context *on_all_commit,
@@ -362,7 +361,6 @@ void ReplicatedBackend::submit_transaction(
   }
   clear_temp_objs(t->get_temp_cleared());
 
-  parent->log_operation(log_entries, true, &local_t);
   local_t.append(*op_t);
   local_t.swap(*op_t);
 

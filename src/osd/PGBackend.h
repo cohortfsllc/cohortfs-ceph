@@ -19,7 +19,6 @@
 #define PGBACKEND_H
 
 #include "OSDMap.h"
-#include "PGLog.h"
 #include "osd_types.h"
 #include "common/WorkQueue.h"
 #include "osd_types.h"
@@ -74,7 +73,6 @@
 
      virtual std::string gen_dbg_prefix() const = 0;
 
-     virtual const PGLog &get_log() const = 0;
      virtual OSDMapRef pgb_get_osdmap() const = 0;
      virtual const pg_info_t &get_info() const = 0;
      virtual const pg_pool_t &get_pool() const = 0;
@@ -85,14 +83,6 @@
 
      virtual void op_applied(
        const eversion_t &applied_version) = 0;
-
-     virtual void log_operation(
-       vector<pg_log_entry_t> &logv,
-       bool transaction_applied,
-       ObjectStore::Transaction *t) = 0;
-
-     virtual void update_last_complete_ondisk(
-       eversion_t lcod) = 0;
 
      virtual void update_stats(
        const pg_stat_t &stat) = 0;
@@ -105,8 +95,6 @@
      }
 
      virtual entity_name_t get_cluster_msgr_name() = 0;
-
-     virtual PerfCounters *get_logger() = 0;
 
      virtual ceph_tid_t get_tid() = 0;
 
@@ -289,12 +277,11 @@
 
    /// execute implementation specific transaction
    virtual void submit_transaction(
-     const hobject_t &hoid,               ///< [in] object
-     const eversion_t &at_version,        ///< [in] version
-     PGTransaction *t,                    ///< [in] trans to execute
-     vector<pg_log_entry_t> &log_entries, ///< [in] log entries for t
-     Context *on_local_applied_sync,      ///< [in] called when applied locally
-     Context *on_all_applied,             ///< [in] called when all acked
+     const hobject_t &hoid, ///< [in] object
+     const eversion_t &at_version, ///< [in] version
+     PGTransaction *t, ///< [in] trans to execute
+     Context *on_local_applied_sync, ///< [in] called when applied locally
+     Context *on_all_applied, ///< [in] called when all acked
      Context *on_all_commit, ///< [in] called when all commit
      ceph_tid_t tid, ///< [in] tid
      osd_reqid_t reqid, ///< [in] reqid

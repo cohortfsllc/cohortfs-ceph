@@ -246,132 +246,6 @@ void OSDService::init()
 #undef dout_prefix
 #define dout_prefix *_dout
 
-int OSD::convert_collection(ObjectStore *store, coll_t cid)
-{
-  coll_t tmp0("convertfs_temp");
-  coll_t tmp1("convertfs_temp1");
-  vector<hobject_t> objects;
-
-  map<string, bufferptr> aset;
-  int r = store->collection_getattrs(cid, aset);
-  if (r < 0)
-    return r;
-
-  {
-    ObjectStore::Transaction t;
-    t.create_collection(tmp0);
-    for (map<string, bufferptr>::iterator i = aset.begin();
-	 i != aset.end();
-	 ++i) {
-      bufferlist val;
-      val.push_back(i->second);
-      t.collection_setattr(tmp0, i->first, val);
-    }
-    store->apply_transaction(t);
-  }
-
-  hobject_t next;
-  while (!next.is_max()) {
-    objects.clear();
-    hobject_t start = next;
-    r = store->collection_list_partial(cid, start,
-				       200, 300,
-				       &objects, &next);
-    if (r < 0)
-      return r;
-
-    ObjectStore::Transaction t;
-    for (vector<hobject_t>::iterator i = objects.begin();
-	 i != objects.end();
-	 ++i) {
-      t.collection_add(tmp0, cid, *i);
-    }
-    store->apply_transaction(t);
-  }
-
-  {
-    ObjectStore::Transaction t;
-    t.collection_rename(cid, tmp1);
-    t.collection_rename(tmp0, cid);
-    store->apply_transaction(t);
-  }
-
-  recursive_remove_collection(store, tmp1);
-  store->sync_and_flush();
-  store->sync();
-  return 0;
-}
-
-int OSD::do_convertfs(ObjectStore *store)
-{
-  int r = store->mount();
-  if (r < 0)
-    return r;
-
-  uint32_t version;
-  r = store->version_stamp_is_valid(&version);
-  if (r < 0)
-    return r;
-  if (r == 1)
-    return store->umount();
-
-  derr << "ObjectStore is old at version " << version << ".  Updating..."  << dendl;
-
-  derr << "Removing tmp pgs" << dendl;
-  vector<coll_t> collections;
-  r = store->list_collections(collections);
-  if (r < 0)
-    return r;
-  for (vector<coll_t>::iterator i = collections.begin();
-       i != collections.end();
-       ++i) {
-    pg_t pgid;
-    if (i->is_temp(pgid))
-      recursive_remove_collection(store, *i);
-    else if (i->to_str() == "convertfs_temp" ||
-	     i->to_str() == "convertfs_temp1")
-      recursive_remove_collection(store, *i);
-  }
-  store->flush();
-
-
-  derr << "Getting collections" << dendl;
-
-  derr << collections.size() << " to process." << dendl;
-  collections.clear();
-  r = store->list_collections(collections);
-  if (r < 0)
-    return r;
-  int processed = 0;
-  for (vector<coll_t>::iterator i = collections.begin();
-       i != collections.end();
-       ++i, ++processed) {
-    derr << processed << "/" << collections.size() << " processed" << dendl;
-    uint32_t collection_version;
-    r = store->collection_version_current(*i, &collection_version);
-    if (r < 0) {
-      return r;
-    } else if (r == 1) {
-      derr << "Collection " << *i << " is up to date" << dendl;
-    } else {
-      derr << "Updating collection " << *i << " current version is " 
-	   << collection_version << dendl;
-      r = convert_collection(store, *i);
-      if (r < 0)
-	return r;
-      derr << "collection " << *i << " updated" << dendl;
-    }
-  }
-  derr << "All collections up to date, updating version stamp..." << dendl;
-  r = store->update_version_stamp();
-  if (r < 0)
-    return r;
-  store->sync_and_flush();
-  store->sync();
-  derr << "Version stamp updated, done with upgrade!" << dendl;
-  return store->umount();
-}
-
 int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	      uuid_d fsid, int whoami)
 {
@@ -1273,7 +1147,6 @@ int OSD::shutdown()
   // note unmount epoch
   dout(10) << "noting clean unmount in epoch " << osdmap->get_epoch() << dendl;
   superblock.mounted = boot_epoch;
-  superblock.clean_thru = osdmap->get_epoch();
   ObjectStore::Transaction t;
   write_superblock(t);
   int r = store->apply_transaction(t);
@@ -1617,8 +1490,7 @@ void OSD::load_pgs()
     int osd;
     pg->get_osdmap()->pg_to_osd(pgid, osd);
 
-    dout(10) << "load_pgs loaded " << *pg << " " << pg->pg_log.get_log()
-	     << dendl;
+    dout(10) << "load_pgs loaded " << *pg << dendl;
     pg->unlock();
   }
   dout(0) << "load_pgs opened " << pg_map.size() << " pgs" << dendl;
@@ -2327,11 +2199,6 @@ void OSD::RemoveWQ::_process(
     return;
 
   ObjectStore::Transaction *t = new ObjectStore::Transaction;
-  PGLog::clear_info_log(
-    pg->info.pgid,
-    OSD::make_infos_oid(),
-    pg->log_oid,
-    t);
 
   for (list<coll_t>::iterator i = colls_to_remove.begin();
        i != colls_to_remove.end();
@@ -4085,7 +3952,6 @@ void OSD::handle_osd_map(MOSDMap *m)
   // note in the superblock that we were clean thru the prior epoch
   if (boot_epoch && boot_epoch >= superblock.mounted) {
     superblock.mounted = boot_epoch;
-    superblock.clean_thru = osdmap->get_epoch();
   }
 
   // superblock and commit
@@ -4604,7 +4470,6 @@ void OSD::handle_pg_create(OpRequestRef op)
     // figure history
     pg_history_t history;
     history.epoch_created = created;
-    history.last_epoch_clean = created;
     // register.
     creating_pgs[on].history = history;
     creating_pgs[on].parent = parent;

@@ -35,7 +35,6 @@
 #include "include/xlist.h"
 #include "include/atomic.h"
 
-#include "PGLog.h"
 #include "OpRequest.h"
 #include "OSDMap.h"
 #include "os/ObjectStore.h"
@@ -187,7 +186,6 @@ public:
   uint8_t info_struct_v;
   static const uint8_t cur_struct_v = 7;
   const coll_t coll;
-  PGLog  pg_log;
   static string get_info_key(pg_t pgid) {
     return stringify(pgid) + "_info";
   }
@@ -205,9 +203,10 @@ protected:
   unsigned    state;   // PG_STATE_*
 
 public:
-  eversion_t  last_update_ondisk;    // last_update that has committed; ONLY DEFINED WHEN is_active()
-  eversion_t  last_complete_ondisk;  // last_complete that has committed.
+  // last_update that has committed; ONLY DEFINED WHEN is_active()
+  eversion_t  last_update_ondisk;
   eversion_t  last_update_applied;
+
 
 protected:
 
@@ -253,39 +252,6 @@ public:
     }
   };
 
-  struct PGLogEntryHandler : public PGLog::LogEntryHandler {
-    list<pg_log_entry_t> to_rollback;
-    set<hobject_t> to_remove;
-    list<pg_log_entry_t> to_trim;
-
-    // LogEntryHandler
-    void remove(const hobject_t &hoid) {
-      to_remove.insert(hoid);
-    }
-    void rollback(const pg_log_entry_t &entry) {
-      to_rollback.push_back(entry);
-    }
-    void trim(const pg_log_entry_t &entry) {
-      to_trim.push_back(entry);
-    }
-
-    void apply(PG *pg, ObjectStore::Transaction *t) {
-      for (set<hobject_t>::iterator i = to_remove.begin();
-	   i != to_remove.end();
-	   ++i) {
-	pg->remove_object(*t, *i);
-      }
-      for (list<pg_log_entry_t>::reverse_iterator i = to_trim.rbegin();
-	   i != to_trim.rend();
-	   ++i) {
-	LogEntryTrimmer trimmer(i->soid, pg, t);
-	i->mod_desc.visit(&trimmer);
-      }
-    }
-  };
-
-  friend struct PGLogEntryHandler;
-  friend struct LogEntryTrimmer;
   void remove_object(
     ObjectStore::Transaction& t, const hobject_t& soid);
 
@@ -294,8 +260,6 @@ public:
   void activate(ObjectStore::Transaction& t, epoch_t query_epoch);
   void _activate_committed(epoch_t e);
   void all_activated_and_committed();
-
-  virtual void check_local() = 0;
 
   Context *finish_sync_event;
 
@@ -325,8 +289,6 @@ public:
   void state_set(int m) { state |= m; }
   void state_clear(int m) { state &= ~m; }
 
-  bool is_complete() const { return info.last_complete == info.last_update; }
-
   int get_state() const { return state; }
   bool       is_active() const { return state_test(PG_STATE_ACTIVE); }
   bool       is_down() const { return state_test(PG_STATE_DOWN); }
@@ -345,20 +307,16 @@ public:
   void write_if_dirty(ObjectStore::Transaction& t);
 
   eversion_t get_next_version() const {
+    // XXX Be careful here, we're not sure if this is thread safe.  It
+    // probably isn't and is just protected by too many locks.  Come
+    // back and find an atomic way to do this later that works with a
+    // compound version.
     eversion_t at_version(get_osdmap()->get_epoch(),
-			  pg_log.get_head().version+1);
+			  info.last_update.version + 1);
     assert(at_version > info.last_update);
-    assert(at_version > pg_log.get_head());
     return at_version;
   }
 
-  void add_log_entry(pg_log_entry_t& e, bufferlist& log_bl);
-  void append_log(
-    vector<pg_log_entry_t>& logv, ObjectStore::Transaction &t,
-    bool transaction_applied = true);
-  bool check_log_for_corruption(ObjectStore *store);
-
-  std::string get_corrupt_pg_log_name() const;
   static int read_info(
     ObjectStore *store, const coll_t coll,
     bufferlist &bl, pg_info_t &info,

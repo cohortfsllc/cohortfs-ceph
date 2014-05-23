@@ -616,7 +616,7 @@ void PGMap::dump_osd_stats(Formatter *f) const
 void PGMap::dump_pg_stats_plain(ostream& ss,
 				const ceph::unordered_map<pg_t, pg_stat_t>& pg_stats) const
 {
-  ss << "pg_stat\tobjects\tbytes\tlog\tdisklog\tstate"
+  ss << "pg_stat\tobjects\tbytes\tstate"
      << "\tstate_stamp\tv\treported\tosd"
      << std::endl;
   for (ceph::unordered_map<pg_t, pg_stat_t>::const_iterator i
@@ -626,8 +626,6 @@ void PGMap::dump_pg_stats_plain(ostream& ss,
     ss << i->first
        << "\t" << st.stats.sum.num_objects
        << "\t" << st.stats.sum.num_bytes
-       << "\t" << st.log_size
-       << "\t" << st.ondisk_log_size
        << "\t" << pg_state_string(st.state)
        << "\t" << st.last_change
        << "\t" << st.version
@@ -653,13 +651,9 @@ void PGMap::dump(ostream& ss) const
        << "\t" << p->second.stats.sum.num_objects
       //<< "\t" << p->second.num_object_copies
        << "\t" << p->second.stats.sum.num_bytes
-       << "\t" << p->second.log_size
-       << "\t" << p->second.ondisk_log_size
        << std::endl;
   ss << " sum\t" << pg_sum.stats.sum.num_objects
      << "\t" << pg_sum.stats.sum.num_bytes
-     << "\t" << pg_sum.log_size
-     << "\t" << pg_sum.ondisk_log_size
      << std::endl;
   ss << "osdstat\tkbused\tkbavail\tkb\thb in\thb out" << std::endl;
   for (ceph::unordered_map<int32_t,osd_stat_t>::const_iterator p = osd_stat.begin();

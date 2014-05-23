@@ -152,9 +152,6 @@ public:
 
   std::string gen_dbg_prefix() const { return gen_prefix(); }
 
-  const PGLog &get_log() const {
-    return pg_log;
-  }
   OSDMapRef pgb_get_osdmap() const {
     return get_osdmap();
   }
@@ -169,20 +166,9 @@ public:
     map<string, bufferlist> &attrs) {
     return get_object_context(hoid, true, &attrs);
   }
-  void log_operation(
-    vector<pg_log_entry_t> &logv,
-    bool transaction_applied,
-    ObjectStore::Transaction *t) {
-    append_log(logv, *t, transaction_applied);
-  }
 
   void op_applied(
     const eversion_t &applied_version);
-
-  void update_last_complete_ondisk(
-    eversion_t lcod) {
-    last_complete_ondisk = lcod;
-  }
 
   void update_stats(
     const pg_stat_t &stat) {
@@ -240,7 +226,6 @@ public:
     int current_osd_subop_num;
 
     PGBackend::PGTransaction *op_t;
-    vector<pg_log_entry_t> log;
 
     interval_set<uint64_t> modified_ranges;
     ObjectContextRef obc;
@@ -369,26 +354,20 @@ public:
     bool all_applied;
     bool all_committed;
     bool sent_ack;
-    //bool sent_nvram;
     bool sent_disk;
 
     utime_t   start;
 
-    eversion_t pg_local_last_complete;
-
     Context *on_applied;
 
-    RepGather(OpContext *c, ObjectContextRef pi, ceph_tid_t rt,
-	      eversion_t lc) :
+    RepGather(OpContext *c, ObjectContextRef pi, ceph_tid_t rt) :
       queue_item(this),
       nref(1),
       ctx(c), obc(pi),
       rep_tid(rt),
       rep_aborted(false), rep_done(false),
       all_applied(false), all_committed(false), sent_ack(false),
-      //sent_nvram(false),
       sent_disk(false),
-      pg_local_last_complete(lc),
       on_applied(NULL) { }
 
     RepGather *get() {
@@ -535,11 +514,10 @@ protected:
   // low level ops
 
   void execute_ctx(OpContext *ctx);
-  void finish_ctx(OpContext *ctx, int log_op_type);
+  void finish_ctx(OpContext *ctx);
   void reply_ctx(OpContext *ctx, int err);
   void reply_ctx(OpContext *ctx, int err, eversion_t v, version_t uv);
   void make_writeable(OpContext *ctx);
-  void log_op_stats(OpContext *ctx);
 
   void write_update_size_and_usage(object_stat_sum_t& stats, object_info_t& oi,
 				   interval_set<uint64_t>& modified,
@@ -551,9 +529,6 @@ protected:
   int prepare_transaction(OpContext *ctx);
   list<pair<OpRequestRef, OpContext*> > in_progress_async_reads;
   void complete_read_ctx(int result, OpContext *ctx);
-
-  // pg on-disk content
-  void check_local();
 
   struct C_OSD_OndiskWriteUnlock : public Context {
     ObjectContextRef obc, obc2, obc3;
@@ -691,6 +666,7 @@ public:
     ObjectContextRef obc,
     map<string, bufferlist> *out,
     bool user_only = false);
+  void log_op_stats(OpContext *ctx);
 };
 
 inline ostream& operator<<(ostream& out, ReplicatedPG::RepGather& repop)

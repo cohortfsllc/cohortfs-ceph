@@ -71,7 +71,6 @@ public:
     const hobject_t &hoid,
     const eversion_t &at_version,
     PGTransaction *t,
-    vector<pg_log_entry_t> &log_entries,
     Context *on_local_applied_sync,
     Context *on_all_applied,
     Context *on_all_commit,

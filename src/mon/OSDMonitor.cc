@@ -1168,15 +1168,6 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
       pending_inc.new_uuid[from] = m->sb.osd_fsid;
     }
 
-    // fresh osd?
-    if (m->sb.newest_map == 0 && osdmap.exists(from)) {
-      const osd_info_t& i = osdmap.get_info(from);
-      if (i.up_from > i.lost_at) {
-	dout(10) << " fresh osd; marking lost_at too" << dendl;
-	pending_inc.new_lost[from] = osdmap.get_epoch();
-      }
-    }
-
     // metadata
     bufferlist osd_metadata;
     ::encode(m->metadata, osd_metadata);
@@ -1185,18 +1176,6 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
     // adjust last clean unmount epoch?
     const osd_info_t& info = osdmap.get_info(from);
     dout(10) << " old osd_info: " << info << dendl;
-    if (m->sb.mounted > info.last_clean_begin ||
-	(m->sb.mounted == info.last_clean_begin &&
-	 m->sb.clean_thru > info.last_clean_end)) {
-      epoch_t begin = m->sb.mounted;
-      epoch_t end = m->sb.clean_thru;
-
-      dout(10) << "prepare_boot osd." << from << " last_clean_interval "
-	       << "[" << info.last_clean_begin << "," << info.last_clean_end << ")"
-	       << " -> [" << begin << "-" << end << ")"
-	       << dendl;
-      pending_inc.new_last_clean_interval[from] = pair<epoch_t,epoch_t>(begin, end);
-    }
 
     osd_xinfo_t xi = osdmap.get_xinfo(from);
     if (m->boot_epoch == 0) {
@@ -3616,32 +3595,6 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
     if (osdmap.exists(id)) {
       pending_inc.new_weight[id] = ww;
       ss << "reweighted osd." << id << " to " << w << " (" << ios::hex << ww << ios::dec << ")";
-      getline(ss, rs);
-      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						get_last_committed() + 1));
-      return true;
-    }
-
-  } else if (prefix == "osd lost") {
-    int64_t id;
-    if (!cmd_getval(g_ceph_context, cmdmap, "id", id)) {
-      ss << "unable to parse osd id value '"
-         << cmd_vartype_stringify(cmdmap["id"]) << "'";
-      err = -EINVAL;
-      goto reply;
-    }
-    string sure;
-    if (!cmd_getval(g_ceph_context, cmdmap, "sure", sure) || sure != "--yes-i-really-mean-it") {
-      ss << "are you SURE?  this might mean real, permanent data loss.  pass "
-	    "--yes-i-really-mean-it if you really do.";
-      err = -EPERM;
-      goto reply;
-    } else if (!osdmap.exists(id) || !osdmap.is_down(id)) {
-      ss << "osd." << id << " is not down or doesn't exist";
-    } else {
-      epoch_t e = osdmap.get_info(id).down_at;
-      pending_inc.new_lost[id] = e;
-      ss << "marked osd lost in epoch " << e;
       getline(ss, rs);
       wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
 						get_last_committed() + 1));

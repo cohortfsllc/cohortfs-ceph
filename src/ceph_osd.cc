@@ -61,7 +61,7 @@ void handle_osd_signal(int signum)
 void usage() 
 {
   derr << "usage: ceph-osd -i osdid [--osd-data=path] [--osd-journal=path] "
-       << "[--mkfs] [--mkjournal] [--convert-filestore]" << dendl;
+       << "[--mkfs] [--mkjournal]" << dendl;
   derr << "   --debug_osd N   set debug level (e.g. 10)" << dendl;
   generic_server_usage();
 }
@@ -81,11 +81,9 @@ int main(int argc, const char **argv)
   bool mkkey = false;
   bool flushjournal = false;
   bool dump_journal = false;
-  bool convertfilestore = false;
   bool get_journal_fsid = false;
   bool get_osd_fsid = false;
   bool get_cluster_fsid = false;
-  std::string dump_pg_log;
 
   std::string val;
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
@@ -102,10 +100,6 @@ int main(int argc, const char **argv)
       mkkey = true;
     } else if (ceph_argparse_flag(args, i, "--flush-journal", (char*)NULL)) {
       flushjournal = true;
-    } else if (ceph_argparse_flag(args, i, "--convert-filestore", (char*)NULL)) {
-      convertfilestore = true;
-    } else if (ceph_argparse_witharg(args, i, &val, "--dump-pg-log", (char*)NULL)) {
-      dump_pg_log = val;
     } else if (ceph_argparse_flag(args, i, "--dump-journal", (char*)NULL)) {
       dump_journal = true;
     } else if (ceph_argparse_flag(args, i, "--get-cluster-fsid", (char*)NULL)) {
@@ -121,31 +115,6 @@ int main(int argc, const char **argv)
   if (!args.empty()) {
     derr << "unrecognized arg " << args[0] << dendl;
     usage();
-  }
-
-  if (!dump_pg_log.empty()) {
-    common_init_finish(g_ceph_context);
-    bufferlist bl;
-    std::string error;
-    int r = bl.read_file(dump_pg_log.c_str(), &error);
-    if (r >= 0) {
-      pg_log_entry_t e;
-      bufferlist::iterator p = bl.begin();
-      while (!p.end()) {
-	uint64_t pos = p.get_off();
-	try {
-	  ::decode(e, p);
-	}
-	catch (const buffer::error &e) {
-	  derr << "failed to decode LogEntry at offset " << pos << dendl;
-	  return 1;
-	}
-	derr << pos << ":\t" << e << dendl;
-      }
-    } else {
-      derr << "unable to open " << dump_pg_log << ": " << error << dendl;
-    }
-    return 0;
   }
 
   // whoami
@@ -267,17 +236,6 @@ int main(int argc, const char **argv)
 
   }
 
-
-  if (convertfilestore) {
-    int err = OSD::do_convertfs(store);
-    if (err < 0) {
-      derr << TEXT_RED << " ** ERROR: error converting store " << g_conf->osd_data
-	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
-      exit(1);
-    }
-    exit(0);
-  }
-  
   if (get_journal_fsid) {
     uuid_d fsid;
     int r = store->peek_journal_fsid(&fsid);
@@ -435,15 +393,6 @@ int main(int argc, const char **argv)
   // Set up crypto, daemonize, etc.
   global_init_daemonize(g_ceph_context, 0);
   common_init_finish(g_ceph_context);
-
-  if (g_conf->filestore_update_to >= (int)store->get_target_version()) {
-    int err = OSD::do_convertfs(store);
-    if (err < 0) {
-      derr << TEXT_RED << " ** ERROR: error converting store " << g_conf->osd_data
-	   << ": " << cpp_strerror(-err) << TEXT_NORMAL << dendl;
-      exit(1);
-    }
-  }
 
   MonClient mc(g_ceph_context);
   if (mc.build_initial_monmap() < 0)
