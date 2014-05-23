@@ -91,8 +91,7 @@ PG::PG(OSDService *o, OSDMapRef curmap,
   pg_stats_publish_valid(false),
   osr(osd->osr_registry.lookup_or_create(p, (stringify(p)))),
   finish_sync_event(NULL),
-  coll(p), temp_coll(coll_t::make_temp_coll(p)),
-  temp_created(false)
+  coll(p)
 {
 }
 
@@ -816,15 +815,7 @@ void PG::on_change(ObjectStore::Transaction *t)
 
   dout(10) << __func__ << dendl;
   // clear temp
-  for (set<hobject_t>::iterator i = temp_contents.begin();
-       i != temp_contents.end();
-       ++i) {
-    dout(10) << __func__ << ": Removing oid "
-	     << *i << " from the temp collection" << dendl;
-    t->remove(get_temp_coll(t), *i);
-  }
-  temp_contents.clear();
-  unstable_stats.clear();
+    unstable_stats.clear();
   _on_change(t);
 }
 
@@ -3134,19 +3125,10 @@ void PG::do_osd_op_effects(OpContext *ctx)
   }
 }
 
-hobject_t PG::generate_temp_object()
-{
-  ostringstream ss;
-  ss << "temp_" << info.pgid << "_" << osd->monc->get_global_id() << "_" << (++temp_seq);
-  hobject_t hoid = hobject_t::make_temp(ss.str());
-  dout(20) << __func__ << " " << hoid << dendl;
-  return hoid;
-}
-
 int PG::prepare_transaction(OpContext *ctx)
 {
   assert(!ctx->ops.empty());
-  
+
   const hobject_t& soid = ctx->obs->oi.soid;
 
   // prepare the actual mutation
@@ -3867,16 +3849,6 @@ void intrusive_ptr_release(PG::RepGather *repop) { repop->put(); }
 
 // From the Backend
 
-coll_t PG::get_temp_coll(ObjectStore::Transaction *t)
-{
-  if (temp_created)
-    return temp_coll;
-  if (!osd->store->collection_exists(temp_coll))
-      t->create_collection(temp_coll);
-  temp_created = true;
-  return temp_coll;
-}
-
 int PG::objects_list_partial(const hobject_t &begin,
 			     int min, int max,
 			     vector<hobject_t> *ls,
@@ -3931,8 +3903,7 @@ int PG::objects_get_attr(const hobject_t &hoid, const string &attr,
 			 bufferlist *out)
 {
   bufferptr bp;
-  int r = osd->store->getattr(hoid.is_temp() ? temp_coll : coll,
-			 hoid, attr.c_str(), bp);
+  int r = osd->store->getattr(coll, hoid, attr.c_str(), bp);
   if (r >= 0 && out) {
     out->clear();
     out->push_back(bp);
@@ -3942,14 +3913,12 @@ int PG::objects_get_attr(const hobject_t &hoid, const string &attr,
 
 int PG::objects_get_attrs(const hobject_t &hoid, map<string, bufferlist> *out)
 {
-  return osd->store->getattrs(hoid.is_temp() ? temp_coll : coll,
-			      hoid, *out);
+  return osd->store->getattrs(coll, hoid, *out);
 }
 
 void PG::trim_stashed_object(const hobject_t &hoid, version_t old_version,
 			     ObjectStore::Transaction *t)
 {
-  assert(!hoid.is_temp());
   t->remove(coll, hoid);
 }
 
@@ -4089,18 +4058,6 @@ void PG::Transaction::zero(const hobject_t &hoid, uint64_t off,
 
 void PG::Transaction::append(Transaction *to_append) {
   t->append(*(to_append->t));
-  for (set<hobject_t>::iterator i = to_append->temp_added.begin();
-       i != to_append->temp_added.end();
-       ++i) {
-    temp_cleared.erase(*i);
-    temp_added.insert(*i);
-  }
-  for (set<hobject_t>::iterator i = to_append->temp_cleared.begin();
-       i != to_append->temp_cleared.end();
-       ++i) {
-    temp_added.erase(*i);
-    temp_cleared.insert(*i);
-  }
 }
 
 void PG::Transaction::nop() {
@@ -4155,9 +4112,6 @@ void PG::submit_transaction(const hobject_t &soid,
 {
   ObjectStore::Transaction *op_t = t->get_transaction();
 
-  assert(t->get_temp_added().size() <= 1);
-  assert(t->get_temp_cleared().size() <= 1);
-
   assert(!in_progress_ops.count(tid));
   InProgressOp &op = in_progress_ops.insert(
     make_pair(
@@ -4169,12 +4123,6 @@ void PG::submit_transaction(const hobject_t &soid,
     ).first->second;
 
   ObjectStore::Transaction local_t;
-  if (t->get_temp_added().size()) {
-    get_temp_coll(&local_t);
-    add_temp_objs(t->get_temp_added());
-  }
-  clear_temp_objs(t->get_temp_cleared());
-
   local_t.append(*op_t);
   local_t.swap(*op_t);
 

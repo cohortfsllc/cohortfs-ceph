@@ -148,42 +148,21 @@ public:
    */
   class Transaction {
     coll_t coll;
-    coll_t temp_coll;
-    set<hobject_t> temp_added;
-    set<hobject_t> temp_cleared;
     ObjectStore::Transaction *t;
     const coll_t &get_coll_ct(const hobject_t &hoid) {
-      if (hoid.is_temp()) {
-	temp_cleared.erase(hoid);
-	temp_added.insert(hoid);
-      }
       return get_coll(hoid);
     }
     const coll_t &get_coll_rm(const hobject_t &hoid) {
-      if (hoid.is_temp()) {
-	temp_added.erase(hoid);
-	temp_cleared.insert(hoid);
-      }
       return get_coll(hoid);
     }
     const coll_t &get_coll(const hobject_t &hoid) {
-      if (hoid.is_temp())
-	return temp_coll;
-      else
-	return coll;
+      return coll;
     }
 
   public:
-    Transaction(coll_t coll, coll_t temp_coll) :
-      coll(coll), temp_coll(temp_coll), t(new ObjectStore::Transaction) {}
+    Transaction(coll_t coll) :
+      coll(coll), t(new ObjectStore::Transaction) {}
     ObjectStore::Transaction *get_transaction();
-    const set<hobject_t>& get_temp_added() {
-      return temp_added;
-    }
-
-    const set<hobject_t>& get_temp_cleared() {
-      return temp_cleared;
-    }
 
     void touch(const hobject_t &hoid);
     void stash(const hobject_t &hoid, version_t former_version);
@@ -308,9 +287,6 @@ public:
 
     int num_read;    ///< count read ops
     int num_write;   ///< count update ops
-
-    hobject_t new_temp_oid,
-      discard_temp_oid;  ///< temp objects we should start/stop tracking
 
     // pending xattr updates
     map<ObjectContextRef,
@@ -745,9 +721,6 @@ protected:
   void clear_publish_stats();
 
 private:
-  uint64_t temp_seq; ///< last id for naming temp objects
-  coll_t get_temp_coll(ObjectStore::Transaction *t);
-  hobject_t generate_temp_object();  ///< generate a new temp object name
   int _delete_oid(OpContext *ctx, bool no_whiteout);
   void _on_change(ObjectStore::Transaction *t);
 
@@ -855,7 +828,6 @@ public:
 				hobject_t &infos_oid, bufferlist *bl);
   void get_colls(list<coll_t> *out) {
     out->push_back(coll);
-    return temp_colls(out);
   }
 
   // OpRequest queueing
@@ -901,16 +873,8 @@ public:
   // From the Backend
 protected:
   const coll_t coll;
-  const coll_t temp_coll;
 
-public:
-  void temp_colls(list<coll_t> *out) {
-    if (temp_created)
-      out->push_back(temp_coll);
-  }
 private:
-  bool temp_created;
-  set<hobject_t> temp_contents;
   struct RepModify {
     OpRequestRef op;
     bool applied, committed;
@@ -925,29 +889,6 @@ private:
     RepModify() : applied(false), committed(false), ackerosd(-1),
 		  epoch_started(0), bytes_written(0) {}
   };
-public:
-  coll_t get_temp_coll() const {
-    return temp_coll;
-  }
-  bool have_temp_coll() const { return temp_created; }
-
-  // Track contents of temp collection, clear on reset
-  void add_temp_obj(const hobject_t &oid) {
-    temp_contents.insert(oid);
-  }
-  void add_temp_objs(const set<hobject_t> &oids) {
-    temp_contents.insert(oids.begin(), oids.end());
-  }
-  void clear_temp_obj(const hobject_t &oid) {
-    temp_contents.erase(oid);
-  }
-  void clear_temp_objs(const set<hobject_t> &oids) {
-    for (set<hobject_t>::const_iterator i = oids.begin();
-	 i != oids.end();
-	 ++i) {
-      temp_contents.erase(*i);
-    }
-  }
 
   /// execute implementation specific transaction
   void submit_transaction(const hobject_t &hoid,
@@ -994,7 +935,7 @@ public:
 			  Context *on_complete);
 
   Transaction* get_transaction() {
-    return new Transaction(coll, get_temp_coll());
+    return new Transaction(coll);
   }
 };
 
