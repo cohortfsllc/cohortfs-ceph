@@ -6,7 +6,7 @@
  * Copyright (C) 2004-2006 Sage Weil <sage@newdream.net>
  *
  * This is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
+ * modify it under the terms of the GNU Lesser Generansactionl Public
  * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
  *
@@ -39,8 +39,8 @@
 #include "common/tracked_int_ptr.hpp"
 #include "common/WorkQueue.h"
 #include "common/ceph_context.h"
+#include "common/LogClient.h"
 #include "include/str_list.h"
-#include "PGBackend.h"
 #include "OSDriver.h"
 
 #include <list>
@@ -54,9 +54,6 @@ using namespace std;
 #include "messages/MOSDOpReply.h"
 
 #include "common/sharedptr_registry.hpp"
-
-#include "PGBackend.h"
-#include "ReplicatedBackend.h"
 
 
 class OSD;
@@ -123,61 +120,102 @@ public:
 /** PG - Replica Placement Group
  */
 
-class PG : public PGBackend::Listener {
+class PG {
   friend class OSD;
   friend class Watch;
+  friend class C_OSD_OnOpCommit;
+  friend class C_OSD_OnOpApplied;
 
 public:
   std::string gen_prefix() const;
 
   struct OpContext;
-
-  boost::scoped_ptr<PGBackend> pgbackend;
-  PGBackend *get_pgbackend() {
-    return pgbackend.get();
-  }
-
-  /// Listener methods
-
-  template <typename T>
-  class BlessedGenContext : public GenContext<T> {
-    PGRef pg;
-    GenContext<T> *c;
-  public:
-    BlessedGenContext(PG *pg, GenContext<T> *c, epoch_t e)
-      : pg(pg), c(c) {}
-    void finish(T t) {
-      pg->lock();
-      if (pg->deleting)
-	delete c;
-      else
-	c->complete(t);
-      pg->unlock();
-    }
+  struct InProgressOp {
+    ceph_tid_t tid;
+    Context *on_commit;
+    Context *on_applied;
+    OpRequestRef op;
+    eversion_t v;
+    InProgressOp(
+      ceph_tid_t tid, Context *on_commit, Context *on_applied,
+      OpRequestRef op, eversion_t v)
+      : tid(tid), on_commit(on_commit), on_applied(on_applied),
+	op(op), v(v) {}
   };
-  class BlessedContext : public Context {
-    PGRef pg;
-    Context *c;
-  public:
-    BlessedContext(PG *pg, Context *c)
-      : pg(pg), c(c) {}
-    void finish(int r) {
-      pg->lock();
-      if (pg->deleting)
-	delete c;
-      else
-	c->complete(r);
-      pg->unlock();
+  map<ceph_tid_t, InProgressOp> in_progress_ops;
+  /**
+   * Client IO Interface
+   */
+  class Transaction {
+    coll_t coll;
+    coll_t temp_coll;
+    set<hobject_t> temp_added;
+    set<hobject_t> temp_cleared;
+    ObjectStore::Transaction *t;
+    const coll_t &get_coll_ct(const hobject_t &hoid) {
+      if (hoid.is_temp()) {
+	temp_cleared.erase(hoid);
+	temp_added.insert(hoid);
+      }
+      return get_coll(hoid);
     }
+    const coll_t &get_coll_rm(const hobject_t &hoid) {
+      if (hoid.is_temp()) {
+	temp_added.erase(hoid);
+	temp_cleared.insert(hoid);
+      }
+      return get_coll(hoid);
+    }
+    const coll_t &get_coll(const hobject_t &hoid) {
+      if (hoid.is_temp())
+	return temp_coll;
+      else
+	return coll;
+    }
+
+  public:
+    Transaction(coll_t coll, coll_t temp_coll) :
+      coll(coll), temp_coll(temp_coll), t(new ObjectStore::Transaction) {}
+    ObjectStore::Transaction *get_transaction();
+    const set<hobject_t>& get_temp_added() {
+      return temp_added;
+    }
+
+    const set<hobject_t>& get_temp_cleared() {
+      return temp_cleared;
+    }
+
+    void touch(const hobject_t &hoid);
+    void stash(const hobject_t &hoid, version_t former_version);
+    void remove(const hobject_t &hoid);
+    void setattrs(const hobject_t &hoid, map<string, bufferlist> &attrs);
+    void setattr(const hobject_t &hoid, const string &attrname,
+		 bufferlist &bl);
+    void rmattr(const hobject_t &hoid, const string &attrname);
+    void rename(const hobject_t &from, const hobject_t &to);
+    void set_alloc_hint(const hobject_t &hoid, uint64_t expected_object_size,
+			uint64_t expected_write_size);
+    void write(const hobject_t &hoid, uint64_t off,
+	       uint64_t len, bufferlist &bl);
+    void omap_setkeys(const hobject_t &hoid,
+		      map<string, bufferlist> &keys);
+    void omap_rmkeys(const hobject_t &hoid,
+		     set<string> &keys);
+    void omap_clear(const hobject_t &hoid);
+    void omap_setheader(const hobject_t &hoid, bufferlist &header);
+    void truncate(const hobject_t &hoid, uint64_t off);
+    void zero(const hobject_t &hoid, uint64_t off, uint64_t len);
+    /// off must be the current object size
+    void append(const hobject_t &hoid, uint64_t off,
+		uint64_t len, bufferlist &bl) {
+      write(hoid, off, len, bl);
+    }
+    void append(Transaction *to_append);
+    void nop();
+    bool empty() const;
+    uint64_t get_bytes_written() const;
+    ~Transaction();
   };
-  Context *bless_context(Context *c) {
-    return new BlessedContext(this, c);
-  }
-  GenContext<ThreadPool::TPHandle&> *bless_gencontext(
-    GenContext<ThreadPool::TPHandle&> *c) {
-    return new BlessedGenContext<ThreadPool::TPHandle&>(
-      this, c, get_osdmap()->get_epoch());
-  }
 
   void send_message(int to_osd, Message *m);
   void queue_transaction(ObjectStore::Transaction *t, OpRequestRef op);
@@ -202,16 +240,13 @@ public:
     return get_object_context(hoid, true, &attrs);
   }
 
-  void op_applied(
-    const eversion_t &applied_version);
+  void op_applied(InProgressOp *op);
+  void op_commit(InProgressOp *op);
 
   void update_stats(
     const pg_stat_t &stat) {
     info.stats = stat;
   }
-
-  void schedule_work(
-    GenContext<ThreadPool::TPHandle&> *c);
 
   entity_name_t get_cluster_msgr_name();
 
@@ -258,7 +293,7 @@ public:
 
     int current_osd_subop_num;
 
-    PGBackend::PGTransaction *op_t;
+    Transaction *op_t;
 
     interval_set<uint64_t> modified_ranges;
     ObjectContextRef obc;
@@ -349,7 +384,7 @@ public:
       if (reply)
 	reply->put();
       for (list<pair<pair<uint64_t, uint64_t>,
-		     pair<bufferlist*, Context*> > >::iterator i =
+	     pair<bufferlist*, Context*> > >::iterator i =
 	     pending_async_reads.begin();
 	   i != pending_async_reads.end();
 	   pending_async_reads.erase(i++)) {
@@ -574,7 +609,6 @@ public:
   pg_info_t info;
   uint8_t info_struct_v;
   static const uint8_t cur_struct_v = 7;
-  const coll_t coll;
   static string get_info_key(pg_t pgid) {
     return stringify(pgid) + "_info";
   }
@@ -607,7 +641,7 @@ protected:
       pg(p), obc(o) {}
     void finish(int r) {
       pg->object_context_destructor_callback(obc);
-     }
+    }
   };
 
   int find_object_context(const hobject_t& oid,
@@ -668,7 +702,6 @@ public:
   eversion_t  last_update_ondisk;
   eversion_t  last_update_applied;
 
-  virtual void _split_into(pg_t child_pgid, PG *child, unsigned split_bits);
   void apply_repops(bool requeue);
 
   int do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr);
@@ -716,6 +749,7 @@ private:
   coll_t get_temp_coll(ObjectStore::Transaction *t);
   hobject_t generate_temp_object();  ///< generate a new temp object name
   int _delete_oid(OpContext *ctx, bool no_whiteout);
+  void _on_change(ObjectStore::Transaction *t);
 
 public:
   void clear_primary_state();
@@ -736,10 +770,10 @@ public:
 
   friend class C_OSD_RepModify_Commit;
 
-  int active_pushes;
+  PG(OSDService *o, OSDMapRef curmap, const PGPool &_pool, pg_t p,
+     const hobject_t& oid, const hobject_t& ioid);
 
-  PG(OSDService *o, OSDMapRef curmap,
-     const PGPool &_pool, pg_t p, const hobject_t& oid, const hobject_t& ioid);
+
   ~PG();
   // attr cache handling
   void replace_cached_attrs(
@@ -749,13 +783,13 @@ public:
   void setattr_maybe_cache(
     ObjectContextRef obc,
     OpContext *op,
-    PGBackend::PGTransaction *t,
+    Transaction *t,
     const string &key,
     bufferlist &val);
   void rmattr_maybe_cache(
     ObjectContextRef obc,
     OpContext *op,
-    PGBackend::PGTransaction *t,
+    Transaction *t,
     const string &key);
   int getattr_maybe_cache(
     ObjectContextRef obc,
@@ -767,12 +801,12 @@ public:
     bool user_only = false);
   void log_op_stats(OpContext *ctx);
 
- private:
+private:
   // Prevent copying
   PG(const PG& rhs);
   PG& operator=(const PG& rhs);
 
- public:
+public:
   pg_t      get_pgid() const { return info.pgid; }
 
   //int  get_state() const { return state; }
@@ -797,8 +831,8 @@ private:
 
 public:
   static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
-    pg_info_t &info, coll_t coll, hobject_t &infos_oid,
-    uint8_t info_struct_v, bool force_ver = false);
+			 pg_info_t &info, coll_t coll, hobject_t &infos_oid,
+			 uint8_t info_struct_v, bool force_ver = false);
   void write_if_dirty(ObjectStore::Transaction& t);
 
   eversion_t get_next_version() const {
@@ -821,7 +855,7 @@ public:
 				hobject_t &infos_oid, bufferlist *bl);
   void get_colls(list<coll_t> *out) {
     out->push_back(coll);
-    return pgbackend->temp_colls(out);
+    return temp_colls(out);
   }
 
   // OpRequest queueing
@@ -863,6 +897,105 @@ public:
   void on_shutdown();
   void check_blacklisted_watchers();
   void get_watchers(std::list<obj_watch_item_t>&);
+
+  // From the Backend
+protected:
+  const coll_t coll;
+  const coll_t temp_coll;
+
+public:
+  void temp_colls(list<coll_t> *out) {
+    if (temp_created)
+      out->push_back(temp_coll);
+  }
+private:
+  bool temp_created;
+  set<hobject_t> temp_contents;
+  struct RepModify {
+    OpRequestRef op;
+    bool applied, committed;
+    int ackerosd;
+    eversion_t last_complete;
+    epoch_t epoch_started;
+
+    uint64_t bytes_written;
+
+    ObjectStore::Transaction opt, localt;
+
+    RepModify() : applied(false), committed(false), ackerosd(-1),
+		  epoch_started(0), bytes_written(0) {}
+  };
+public:
+  coll_t get_temp_coll() const {
+    return temp_coll;
+  }
+  bool have_temp_coll() const { return temp_created; }
+
+  // Track contents of temp collection, clear on reset
+  void add_temp_obj(const hobject_t &oid) {
+    temp_contents.insert(oid);
+  }
+  void add_temp_objs(const set<hobject_t> &oids) {
+    temp_contents.insert(oids.begin(), oids.end());
+  }
+  void clear_temp_obj(const hobject_t &oid) {
+    temp_contents.erase(oid);
+  }
+  void clear_temp_objs(const set<hobject_t> &oids) {
+    for (set<hobject_t>::const_iterator i = oids.begin();
+	 i != oids.end();
+	 ++i) {
+      temp_contents.erase(*i);
+    }
+  }
+
+  /// execute implementation specific transaction
+  void submit_transaction(const hobject_t &hoid,
+			  const eversion_t &at_version,
+			  Transaction *t,
+			  Context *on_local_applied_sync,
+			  Context *on_all_applied,
+			  Context *on_all_commit,
+			  ceph_tid_t tid,
+			  osd_reqid_t reqid,
+			  OpRequestRef op);
+  /// Trim object stashed at stashed_version
+  void trim_stashed_object(
+    const hobject_t &hoid,
+    version_t stashed_version,
+    ObjectStore::Transaction *t);
+
+  /// List objects in collection
+  int objects_list_partial(
+    const hobject_t &begin,
+    int min,
+    int max,
+    vector<hobject_t> *ls,
+    hobject_t *next);
+
+  int objects_list_range(
+    const hobject_t &start,
+    const hobject_t &end,
+    vector<hobject_t> *ls);
+
+  int objects_get_attr(
+    const hobject_t &hoid,
+    const string &attr,
+    bufferlist *out);
+
+  int objects_get_attrs(const hobject_t &hoid, map<string, bufferlist> *out);
+
+  int objects_read_sync(const hobject_t &hoid, uint64_t off,
+			uint64_t len, bufferlist *bl);
+
+  void objects_read_async(const hobject_t &hoid,
+			  const list<pair<pair<uint64_t, uint64_t>,
+			  pair<bufferlist*, Context*> > > &to_read,
+			  Context *on_complete);
+
+  Transaction* get_transaction() {
+    return new Transaction(coll, get_temp_coll());
+  }
 };
 
 ostream& operator<<(ostream& out, const PG& pg);

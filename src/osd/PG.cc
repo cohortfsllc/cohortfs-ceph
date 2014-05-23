@@ -8,7 +8,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
- * Foundation.  See file COPYING.
+ * Foundation.	See file COPYING.
  *
  */
 
@@ -74,10 +74,6 @@ void PGPool::update(OSDMapRef map)
 PG::PG(OSDService *o, OSDMapRef curmap,
        const PGPool &_pool, pg_t p, const hobject_t& loid,
        const hobject_t& ioid) :
-  pgbackend(
-    PGBackend::build_pg_backend(
-      _pool.info, curmap, this, coll_t(p), coll_t::make_temp_coll(p),
-      o->store, cct)),
   osd(o),
   cct(o->cct),
   osdriver(osd->store, coll_t()),
@@ -88,14 +84,15 @@ PG::PG(OSDService *o, OSDMapRef curmap,
   deleting(false), dirty_info(false),
   info(p),
   info_struct_v(0),
-  coll(p), log_oid(loid),
+  log_oid(loid),
   stat_queue_item(this),
   state(0),
   pg_stats_publish_lock("PG::pg_stats_publish_lock"),
   pg_stats_publish_valid(false),
   osr(osd->osr_registry.lookup_or_create(p, (stringify(p)))),
   finish_sync_event(NULL),
-  active_pushes(0)
+  coll(p), temp_coll(coll_t::make_temp_coll(p)),
+  temp_created(false)
 {
 }
 
@@ -206,7 +203,7 @@ bool PG::op_has_sufficient_caps(OpRequestRef op)
     key = req->get_oid().name;
 
   bool cap = caps.is_capable(pool.name, req->get_object_locator().nspace,
-                             pool.auid, key,
+			     pool.auid, key,
 			     op->need_read_cap(),
 			     op->need_write_cap(),
 			     op->need_class_read_cap(),
@@ -739,7 +736,7 @@ void PG::do_op(OpRequestRef op)
   OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops,
 				 &obc->obs,
 				 this);
-  ctx->op_t = pgbackend->get_transaction();
+  ctx->op_t = get_transaction();
   ctx->obc = obc;
 
   if (m->get_flags() & CEPH_OSD_FLAG_SKIPRWLOCKS) {
@@ -817,9 +814,18 @@ void PG::on_change(ObjectStore::Transaction *t)
   // any dups
   apply_repops(true);
 
-  pgbackend->on_change(t);
-
+  dout(10) << __func__ << dendl;
+  // clear temp
+  for (set<hobject_t>::iterator i = temp_contents.begin();
+       i != temp_contents.end();
+       ++i) {
+    dout(10) << __func__ << ": Removing oid "
+	     << *i << " from the temp collection" << dendl;
+    t->remove(get_temp_coll(t), *i);
+  }
+  temp_contents.clear();
   unstable_stats.clear();
+  _on_change(t);
 }
 
 void PG::on_activate()
@@ -966,7 +972,7 @@ struct OnReadComplete : public Context {
 void PG::OpContext::start_async_reads(PG *pg)
 {
   inflightreads = 1;
-  pg->pgbackend->objects_read_async(
+  pg->objects_read_async(
     obc->obs.oi.soid,
     pending_async_reads,
     new OnReadComplete(pg, this));
@@ -982,16 +988,6 @@ void PG::OpContext::finish_read(PG *pg)
     pg->in_progress_async_reads.pop_front();
     pg->complete_read_ctx(async_read_result, this);
   }
-}
-
-// ======================
-// PGBackend::Listener
-
-
-void PG::schedule_work(
-  GenContext<ThreadPool::TPHandle&> *c)
-{
-  osd->gen_wq.queue(c);
 }
 
 PerfCounters *PG::get_logger()
@@ -1035,11 +1031,9 @@ bool PGLSPlainFilter::filter(bufferlist& xattr_data, bufferlist& outdata)
 bool PG::pgls_filter(PGLSFilter *filter, hobject_t& sobj, bufferlist& outdata)
 {
   bufferlist bl;
-  int ret = pgbackend->objects_get_attr(
-    sobj,
-    filter->get_xattr(),
-    &bl);
-  dout(0) << "getattr (sobj=" << sobj << ", attr=" << filter->get_xattr() << ") returned " << ret << dendl;
+  int ret = objects_get_attr(sobj, filter->get_xattr(), &bl);
+  dout(0) << "getattr (sobj=" << sobj << ", attr=" << filter->get_xattr()
+	  << ") returned " << ret << dendl;
   if (ret < 0)
     return false;
 
@@ -1107,7 +1101,7 @@ void PG::do_pg_op(OpRequestRef op)
       }
       result = get_pgls_filter(bp, &filter);
       if (result < 0)
-        break;
+	break;
 
       assert(filter);
 
@@ -1136,12 +1130,8 @@ void PG::do_pg_op(OpRequestRef op)
 	hobject_t next;
 	hobject_t current = response.handle;
 	osr->flush();
-	int r = pgbackend->objects_list_partial(
-	  current,
-	  list_size,
-	  list_size,
-	  &sentries,
-	  &next);
+	int r = objects_list_partial(
+	  current, list_size, list_size, &sentries, &next);
 	if (r != 0) {
 	  result = -EINVAL;
 	  break;
@@ -1229,7 +1219,7 @@ void PG::execute_ctx(OpContext *ctx)
   // this method must be idempotent since we may call it several times
   // before we finally apply the resulting transaction.
   delete ctx->op_t;
-  ctx->op_t = pgbackend->get_transaction();
+  ctx->op_t = get_transaction();
 
   if (op->may_write() || op->may_cache()) {
     op->mark_started();
@@ -1302,7 +1292,7 @@ void PG::execute_ctx(OpContext *ctx)
   // and it has already been applied, we will return 0 with no
   // payload.  Non-deterministic behavior is no good.  However, it is
   // possible to construct an operation that does a read, does a guard
-  // check (e.g., CMPXATTR), and then a write.  Then we either succeed
+  // check (e.g., CMPXATTR), and then a write.	Then we either succeed
   // with the write, or return a CMPXATTR and the read value.
   if (successful_write) {
     // write.  normalize the result code.
@@ -1650,10 +1640,10 @@ int PG::do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op)
 	  // copy untouched.
 	  ::encode(nextkey, newkeydata);
 	  ::encode(nextval, newkeydata);
-	  dout(20) << "  keep " << nextkey << " " << nextval.length() << dendl;
+	  dout(20) << "	 keep " << nextkey << " " << nextval.length() << dendl;
 	} else {
 	  // don't copy; discard old value.  and stop.
-	  dout(20) << "  drop " << nextkey << " " << nextval.length() << dendl;
+	  dout(20) << "	 drop " << nextkey << " " << nextval.length() << dendl;
 	  key_exists = true;
 	  nkeys--;
 	}
@@ -1675,7 +1665,7 @@ int PG::do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op)
 	}
 	::encode(key, newkeydata);
 	::encode(val, newkeydata);
-	dout(20) << "   set " << key << " " << val.length() << dendl;
+	dout(20) << "	set " << key << " " << val.length() << dendl;
 	nkeys++;
       } else if (op == CEPH_OSD_TMAP_CREATE) {
 	if (key_exists) {
@@ -1690,7 +1680,7 @@ int PG::do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op)
 	}
 	::encode(key, newkeydata);
 	::encode(val, newkeydata);
-	dout(20) << "   create " << key << " " << val.length() << dendl;
+	dout(20) << "	create " << key << " " << val.length() << dendl;
 	nkeys++;
       } else if (op == CEPH_OSD_TMAP_RM) {
 	// do nothing.
@@ -1782,7 +1772,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
   bool first_read = true;
 
-  PGBackend::PGTransaction* t = ctx->op_t;
+  Transaction* t = ctx->op_t;
 
   dout(10) << "do_osd_op " << soid << " " << ops << dendl;
 
@@ -1822,7 +1812,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       op.extent.truncate_seq = 0;
     }
 
-    // munge ZERO -> TRUNCATE?  (don't munge to DELETE or we risk hosing attributes)
+    // munge ZERO -> TRUNCATE?	(don't munge to DELETE or we risk hosing attributes)
     if (op.op == CEPH_OSD_OP_ZERO &&
 	obs.exists &&
 	op.extent.offset < cct->_conf->osd_max_object_size &&
@@ -1830,7 +1820,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	op.extent.length <= cct->_conf->osd_max_object_size &&
 	op.extent.offset + op.extent.length >= oi.size) {
       if (op.extent.offset >= oi.size) {
-        // no-op
+	// no-op
 	goto fail;
       }
       dout(10) << " munging ZERO " << op.extent.offset << "~" << op.extent.length
@@ -1869,7 +1859,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  // a read operation of 0 bytes does *not* do nothing, this is why
 	  // the trimmed_read boolean is needed
 	} else {
-	  int r = pgbackend->objects_read_sync(
+	  int r = objects_read_sync(
 	    soid, op.extent.offset, op.extent.length, &osd_op.outdata);
 	  if (r >= 0)
 	    op.extent.length = r;
@@ -1917,45 +1907,48 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
 	// read into a buffer
 	bufferlist bl;
-        int total_read = 0;
+	int total_read = 0;
 	int r = osd->store->fiemap(coll, soid, op.extent.offset, op.extent.length, bl);
 	if (r < 0)  {
 	  result = r;
-          break;
+	  break;
 	}
-        map<uint64_t, uint64_t> m;
-        bufferlist::iterator iter = bl.begin();
-        ::decode(m, iter);
-        map<uint64_t, uint64_t>::iterator miter;
-        bufferlist data_bl;
+	map<uint64_t, uint64_t> m;
+	bufferlist::iterator iter = bl.begin();
+	::decode(m, iter);
+	map<uint64_t, uint64_t>::iterator miter;
+	bufferlist data_bl;
 	uint64_t last = op.extent.offset;
-        for (miter = m.begin(); miter != m.end(); ++miter) {
+	for (miter = m.begin(); miter != m.end(); ++miter) {
 	  // verify hole?
 	  if (cct->_conf->osd_verify_sparse_read_holes &&
 	      last < miter->first) {
 	    bufferlist t;
 	    uint64_t len = miter->first - last;
-	    r = pgbackend->objects_read_sync(
+	    r = objects_read_sync(
 	      soid, last, len, &t);
 	    if (!t.is_zero()) {
-	      osd->clog.error() << coll << " " << soid << " sparse-read found data in hole "
+	      osd->clog.error() << coll << " " << soid
+				<< " sparse-read found data in hole "
 				<< last << "~" << len << "\n";
 	    }
 	  }
 
-          bufferlist tmpbl;
-	  r = pgbackend->objects_read_sync(
+	  bufferlist tmpbl;
+	  r = objects_read_sync(
 	    soid, miter->first, miter->second, &tmpbl);
-          if (r < 0)
-            break;
+	  if (r < 0)
+	    break;
 
-          if (r < (int)miter->second) /* this is usually happen when we get extent that exceeds the actual file size */
-            miter->second = r;
-          total_read += r;
-          dout(10) << "sparse-read " << miter->first << "@" << miter->second << dendl;
+	  /* this is usually happen when we get extent that exceeds
+	     the actual file size */
+	  if (r < (int)miter->second)
+	    miter->second = r;
+	  total_read += r;
+	  dout(10) << "sparse-read " << miter->first << "@" << miter->second << dendl;
 	  data_bl.claim_append(tmpbl);
 	  last = miter->first + r;
-        }
+	}
 
 	// verify trailing hole?
 	if (cct->_conf->osd_verify_sparse_read_holes) {
@@ -1963,24 +1956,24 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (last < end) {
 	    bufferlist t;
 	    uint64_t len = end - last;
-	    r = pgbackend->objects_read_sync(
-	      soid, last, len, &t);
+	    r = objects_read_sync(soid, last, len, &t);
 	    if (!t.is_zero()) {
-	      osd->clog.error() << coll << " " << soid << " sparse-read found data in hole "
+	      osd->clog.error() << coll << " " << soid
+				<< " sparse-read found data in hole "
 				<< last << "~" << len << "\n";
 	    }
 	  }
 	}
 
-        if (r < 0) {
-          result = r;
-          break;
-        }
+	if (r < 0) {
+	  result = r;
+	  break;
+	}
 
-        op.extent.length = total_read;
+	op.extent.length = total_read;
 
-        ::encode(m, osd_op.outdata);
-        ::encode(data_bl, osd_op.outdata);
+	::encode(m, osd_op.outdata);
+	::encode(data_bl, osd_op.outdata);
 
 	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(op.extent.length, 10);
 	ctx->delta_stats.num_rd++;
@@ -2087,12 +2080,12 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ctx->obc,
 	  &out,
 	  true);
-        
-        bufferlist bl;
-        ::encode(out, bl);
+	
+	bufferlist bl;
+	::encode(out, bl);
 	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(bl.length(), 10);
-        ctx->delta_stats.num_rd++;
-        osd_op.outdata.claim_append(bl);
+	ctx->delta_stats.num_rd++;
+	osd_op.outdata.claim_append(bl);
       }
       break;
       
@@ -2134,7 +2127,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  }
 	  break;
 
-        case CEPH_OSD_CMPXATTR_MODE_U64:
+	case CEPH_OSD_CMPXATTR_MODE_U64:
 	  {
 	    uint64_t u64val;
 	    try {
@@ -2227,12 +2220,12 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       {
 	uint32_t ver;
 	uint32_t timeout;
-        bufferlist bl;
+	bufferlist bl;
 
 	try {
-          ::decode(ver, bp);
+	  ::decode(ver, bp);
 	  ::decode(timeout, bp);
-          ::decode(bl, bp);
+	  ::decode(bl, bp);
 	} catch (const buffer::error &e) {
 	  timeout = 0;
 	}
@@ -2242,7 +2235,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	notify_info_t n;
 	n.timeout = timeout;
 	n.cookie = op.watch.cookie;
-        n.bl = bl;
+	n.bl = bl;
 	ctx->notifies.push_back(n);
       }
       break;
@@ -2270,16 +2263,16 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     case CEPH_OSD_OP_SETALLOCHINT:
       ++ctx->num_write;
       {
-        if (!obs.exists) {
-          ctx->mod_desc.create();
-          t->touch(soid);
-          ctx->delta_stats.num_objects++;
-          obs.exists = true;
-        }
-        t->set_alloc_hint(soid, op.alloc_hint.expected_object_size,
-                          op.alloc_hint.expected_write_size);
-        ctx->delta_stats.num_wr++;
-        result = 0;
+	if (!obs.exists) {
+	  ctx->mod_desc.create();
+	  t->touch(soid);
+	  ctx->delta_stats.num_objects++;
+	  obs.exists = true;
+	}
+	t->set_alloc_hint(soid, op.alloc_hint.expected_object_size,
+			  op.alloc_hint.expected_write_size);
+	ctx->delta_stats.num_wr++;
+	result = 0;
       }
       break;
 
@@ -2425,15 +2418,15 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	      }
 	    }
 	  }
-          if (result >= 0) {
-            if (!obs.exists)
-              ctx->mod_desc.create();
-            t->touch(soid);
-            if (!obs.exists) {
-              ctx->delta_stats.num_objects++;
-              obs.exists = true;
-            }
-          }
+	  if (result >= 0) {
+	    if (!obs.exists)
+	      ctx->mod_desc.create();
+	    t->touch(soid);
+	    if (!obs.exists) {
+	      ctx->delta_stats.num_objects++;
+	      obs.exists = true;
+	    }
+	  }
 	}
       }
       break;
@@ -2524,19 +2517,19 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    t->nop();  // make sure update the object_info on disk!
 	  }
 	  ctx->watch_connects.push_back(w);
-        } else {
+	} else {
 	  map<pair<uint64_t, entity_name_t>, watch_info_t>::iterator oi_iter =
 	    oi.watchers.find(make_pair(cookie, entity));
 	  if (oi_iter != oi.watchers.end()) {
 	    dout(10) << " removed watch " << oi_iter->second << " by "
 		     << entity << dendl;
-            oi.watchers.erase(oi_iter);
+	    oi.watchers.erase(oi_iter);
 	    t->nop();  // update oi on disk
 	    ctx->watch_disconnects.push_back(w);
 	  } else {
 	    dout(10) << " can't remove: no watch by " << entity << dendl;
 	  }
-        }
+	}
       }
       break;
 
@@ -2590,7 +2583,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	newop.op.extent.offset = oi.size;
 	newop.op.extent.length = op.extent.length;
 	newop.op.extent.truncate_seq = oi.truncate_seq;
-        newop.indata = osd_op.indata;
+	newop.indata = osd_op.indata;
 	result = do_osd_ops(ctx, nops);
 	osd_op.outdata.claim(newop.outdata);
       }
@@ -2972,7 +2965,7 @@ inline int PG::_delete_oid(OpContext *ctx, bool no_whiteout)
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
   const hobject_t& soid = oi.soid;
-  PGBackend::PGTransaction* t = ctx->op_t;
+  Transaction* t = ctx->op_t;
 
   if (!obs.exists)
     return -ENOENT;
@@ -2997,7 +2990,7 @@ inline int PG::_delete_oid(OpContext *ctx, bool no_whiteout)
 void PG::make_writeable(OpContext *ctx)
 {
   const hobject_t& soid = ctx->obs->oi.soid;
-  PGBackend::PGTransaction *t = pgbackend->get_transaction();
+  Transaction *t = get_transaction();
 
   if ((ctx->new_obs.exists &&
        ctx->new_obs.oi.is_omap()) &&
@@ -3139,11 +3132,6 @@ void PG::do_osd_op_effects(OpContext *ctx)
       i->second->notify_ack(p->notify_id);
     }
   }
-}
-
-coll_t PG::get_temp_coll(ObjectStore::Transaction *t)
-{
-  return pgbackend->get_temp_coll(t);
 }
 
 hobject_t PG::generate_temp_object()
@@ -3308,14 +3296,24 @@ void PG::repop_all_committed(RepGather *repop)
   }
 }
 
-void PG::op_applied(const eversion_t &applied_version)
+void PG::op_applied(InProgressOp *op)
 {
+  eversion_t applied_version = op->v;
   dout(10) << "op_applied on primary on version " << applied_version << dendl;
+  if (op->op)
+    op->op->mark_event("op_applied");
   if (applied_version == eversion_t())
     return;
   assert(applied_version > last_update_applied);
   assert(applied_version <= info.last_update);
   last_update_applied = applied_version;
+}
+
+void PG::op_commit(InProgressOp *op)
+{
+  dout(10) << __func__ << ": " << op->tid << dendl;
+  if (op->op)
+    op->op->mark_event("op_commit");
 }
 
 void PG::eval_repop(RepGather *repop)
@@ -3374,7 +3372,7 @@ void PG::eval_repop(RepGather *repop)
 	else {
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0, true);
 	  reply->set_reply_versions(repop->ctx->at_version,
-	                            repop->ctx->user_at_version);
+				    repop->ctx->user_at_version);
 	}
 	reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
 	dout(10) << " sending commit on " << *repop << " " << reply << dendl;
@@ -3396,7 +3394,7 @@ void PG::eval_repop(RepGather *repop)
 	  MOSDOp *m = (MOSDOp*)(*i)->get_req();
 	  MOSDOpReply *reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0, true);
 	  reply->set_reply_versions(repop->ctx->at_version,
-	                            repop->ctx->user_at_version);
+				    repop->ctx->user_at_version);
 	  reply->add_flags(CEPH_OSD_FLAG_ACK);
 	  osd->send_message_osd_client(reply, m->get_connection());
 	}
@@ -3411,11 +3409,11 @@ void PG::eval_repop(RepGather *repop)
 	else {
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0, true);
 	  reply->set_reply_versions(repop->ctx->at_version,
-	                            repop->ctx->user_at_version);
+				    repop->ctx->user_at_version);
 	}
 	reply->add_flags(CEPH_OSD_FLAG_ACK);
 	dout(10) << " sending ack on " << *repop << " " << reply << dendl;
-        assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
+	assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
 	osd->send_message_osd_client(reply, m->get_connection());
 	repop->sent_ack = true;
       }
@@ -3471,7 +3469,7 @@ void PG::issue_repop(RepGather *repop, utime_t now)
   Context *onapplied_sync = new C_OSD_OndiskWriteUnlock(
     repop->obc,
     ObjectContextRef());
-  pgbackend->submit_transaction(
+  submit_transaction(
     soid,
     repop->ctx->at_version,
     repop->ctx->op_t,
@@ -3524,7 +3522,7 @@ PG::RepGather *PG::simple_repop_create(ObjectContextRef obc)
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, rep_tid);
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
-  ctx->op_t = pgbackend->get_transaction();
+  ctx->op_t = get_transaction();
   ctx->mtime = ceph_clock_now(g_ceph_context);
   ctx->obc = obc;
   RepGather *repop = new_repop(ctx, obc, rep_tid);
@@ -3555,7 +3553,7 @@ void PG::handle_watch_timeout(WatchRef watch)
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, rep_tid);
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
-  ctx->op_t = pgbackend->get_transaction();
+  ctx->op_t = get_transaction();
   ctx->mtime = ceph_clock_now(cct);
   ctx->at_version = get_next_version();
 
@@ -3563,7 +3561,7 @@ void PG::handle_watch_timeout(WatchRef watch)
 
   RepGather *repop = new_repop(ctx, obc, rep_tid);
 
-  PGBackend::PGTransaction *t = ctx->op_t;
+  Transaction *t = ctx->op_t;
 
   obc->obs.oi.prior_version = repop->obc->obs.oi.version;
   obc->obs.oi.version = ctx->at_version;
@@ -3604,7 +3602,7 @@ ObjectContextRef PG::get_object_context(
       assert(attrs->count(OI_ATTR));
       bv = attrs->find(OI_ATTR)->second;
     } else {
-      int r = pgbackend->objects_get_attr(soid, OI_ATTR, &bv);
+      int r = objects_get_attr(soid, OI_ATTR, &bv);
       if (r < 0) {
 	if (!can_create) {
 	  dout(10) << __func__ << ": no obc for soid "
@@ -3717,11 +3715,6 @@ void PG::add_object_context_to_pg_stat(ObjectContextRef obc, pg_stat_t *pgstat)
     pgstat->stats.cat_sum[oi.category].add(stat);
 }
 
-void PG::_split_into(pg_t child_pgid, PG *child, unsigned split_bits)
-{
-  assert(repop_queue.empty());
-}
-
 /*
  * pg status change notification
  */
@@ -3803,7 +3796,7 @@ void PG::replace_cached_attrs(
 void PG::setattr_maybe_cache(
   ObjectContextRef obc,
   OpContext *op,
-  PGBackend::PGTransaction *t,
+  Transaction *t,
   const string &key,
   bufferlist &val)
 {
@@ -3813,7 +3806,7 @@ void PG::setattr_maybe_cache(
 void PG::rmattr_maybe_cache(
   ObjectContextRef obc,
   OpContext *op,
-  PGBackend::PGTransaction *t,
+  Transaction *t,
   const string &key)
 {
   t->rmattr(obc->obs.oi.soid, key);
@@ -3824,7 +3817,7 @@ int PG::getattr_maybe_cache(
   const string &key,
   bufferlist *val)
 {
-  return pgbackend->objects_get_attr(obc->obs.oi.soid, key, val);
+  return objects_get_attr(obc->obs.oi.soid, key, val);
 }
 
 int PG::getattrs_maybe_cache(
@@ -3833,7 +3826,7 @@ int PG::getattrs_maybe_cache(
   bool user_only)
 {
   int r = 0;
-  r = pgbackend->objects_get_attrs(obc->obs.oi.soid, out);
+  r = objects_get_attrs(obc->obs.oi.soid, out);
   if (out && user_only) {
     map<string, bufferlist> tmp;
     for (map<string, bufferlist>::iterator i = out->begin();
@@ -3871,3 +3864,325 @@ LogClientTemp PG::clog_error() {
 
 void intrusive_ptr_add_ref(PG::RepGather *repop) { repop->get(); }
 void intrusive_ptr_release(PG::RepGather *repop) { repop->put(); }
+
+// From the Backend
+
+coll_t PG::get_temp_coll(ObjectStore::Transaction *t)
+{
+  if (temp_created)
+    return temp_coll;
+  if (!osd->store->collection_exists(temp_coll))
+      t->create_collection(temp_coll);
+  temp_created = true;
+  return temp_coll;
+}
+
+int PG::objects_list_partial(const hobject_t &begin,
+			     int min, int max,
+			     vector<hobject_t> *ls,
+			     hobject_t *next)
+{
+  assert(ls);
+  hobject_t _next(begin);
+  ls->reserve(max);
+  int r = 0;
+  while (!_next.is_max() && ls->size() < (unsigned)min) {
+    vector<hobject_t> objects;
+    int r = osd->store->collection_list_partial(
+      coll,
+      _next,
+      min - ls->size(),
+      max - ls->size(),
+      &objects,
+      &_next);
+    if (r != 0)
+      break;
+    for (vector<hobject_t>::iterator i = objects.begin();
+	 i != objects.end();
+	 ++i) {
+      ls->push_back(*i);
+    }
+  }
+  if (r == 0)
+    *next = _next;
+  return r;
+}
+
+int PG::objects_list_range(const hobject_t &start, const hobject_t &end,
+			   vector<hobject_t> *ls)
+{
+  assert(ls);
+  vector<hobject_t> objects;
+  int r = osd->store->collection_list_range(
+    coll,
+    start,
+    end,
+    &objects);
+  ls->reserve(objects.size());
+  for (vector<hobject_t>::iterator i = objects.begin();
+       i != objects.end();
+       ++i) {
+      ls->push_back(*i);
+  }
+  return r;
+}
+
+int PG::objects_get_attr(const hobject_t &hoid, const string &attr,
+			 bufferlist *out)
+{
+  bufferptr bp;
+  int r = osd->store->getattr(hoid.is_temp() ? temp_coll : coll,
+			 hoid, attr.c_str(), bp);
+  if (r >= 0 && out) {
+    out->clear();
+    out->push_back(bp);
+  }
+  return r;
+}
+
+int PG::objects_get_attrs(const hobject_t &hoid, map<string, bufferlist> *out)
+{
+  return osd->store->getattrs(hoid.is_temp() ? temp_coll : coll,
+			      hoid, *out);
+}
+
+void PG::trim_stashed_object(const hobject_t &hoid, version_t old_version,
+			     ObjectStore::Transaction *t)
+{
+  assert(!hoid.is_temp());
+  t->remove(coll, hoid);
+}
+
+void PG::_on_change(ObjectStore::Transaction *t)
+{
+  for (map<ceph_tid_t, InProgressOp>::iterator i = in_progress_ops.begin();
+       i != in_progress_ops.end();
+       in_progress_ops.erase(i++)) {
+    if (i->second.on_commit)
+      delete i->second.on_commit;
+    if (i->second.on_applied)
+      delete i->second.on_applied;
+  }
+}
+
+int PG::objects_read_sync(
+  const hobject_t &hoid,
+  uint64_t off,
+  uint64_t len,
+  bufferlist *bl)
+{
+  return osd->store->read(coll, hoid, off, len, *bl);
+}
+
+void PG::objects_read_async(const hobject_t &hoid,
+			    const list<pair<pair<uint64_t, uint64_t>,
+			    pair<bufferlist*, Context*> > > &to_read,
+			    Context *on_complete)
+{
+  int r = 0;
+  for (list<pair<pair<uint64_t, uint64_t>,
+	 pair<bufferlist*, Context*> > >::const_iterator i =
+	 to_read.begin();
+       i != to_read.end() && r >= 0;
+       ++i) {
+    int _r = osd->store->read(coll, hoid, i->first.first,
+			 i->first.second, *(i->second.first));
+    if (i->second.second) {
+      i->second.second->complete(_r);
+    }
+    if (_r < 0)
+      r = _r;
+  }
+  on_complete->complete(r);
+}
+
+
+ObjectStore::Transaction* PG::Transaction::get_transaction() {
+  ObjectStore::Transaction *_t = t;
+  t = 0;
+  return _t;
+}
+
+void PG::Transaction::touch(const hobject_t &hoid)
+{
+  t->touch(get_coll_ct(hoid), hoid);
+}
+
+void PG::Transaction::stash(const hobject_t &hoid,
+			    version_t former_version)
+{
+  t->collection_move_rename(coll, hoid, coll, hoid);
+}
+
+void PG::Transaction::remove(const hobject_t &hoid)
+{
+  t->remove(get_coll_rm(hoid), hoid);
+}
+
+void PG::Transaction::setattrs(const hobject_t &hoid,
+			       map<string, bufferlist> &attrs)
+{
+  t->setattrs(get_coll(hoid), hoid, attrs);
+}
+
+void PG::Transaction::setattr(const hobject_t &hoid, const string &attrname,
+			      bufferlist &bl)
+{
+  t->setattr(get_coll(hoid), hoid, attrname, bl);
+}
+
+void PG::Transaction::rmattr(const hobject_t &hoid, const string &attrname)
+{
+  t->rmattr(get_coll(hoid), hoid, attrname);
+}
+
+void PG::Transaction::rename(const hobject_t &from, const hobject_t &to)
+{
+  t->collection_move_rename(get_coll_rm(from), from,
+			    get_coll_ct(to), to);
+}
+void PG::Transaction::set_alloc_hint(const hobject_t &hoid,
+				     uint64_t expected_object_size,
+				     uint64_t expected_write_size)
+{
+  t->set_alloc_hint(get_coll(hoid), hoid, expected_object_size,
+		    expected_write_size);
+}
+
+void PG::Transaction::write(const hobject_t &hoid, uint64_t off,
+			    uint64_t len, bufferlist &bl)
+{
+  t->write(get_coll_ct(hoid), hoid, off, len, bl);
+}
+
+void PG::Transaction::omap_setkeys(const hobject_t &hoid,
+				   map<string, bufferlist> &keys)
+{
+  return t->omap_setkeys(get_coll(hoid), hoid, keys);
+}
+
+void PG::Transaction::omap_rmkeys(const hobject_t &hoid, set<string> &keys)
+{
+  t->omap_rmkeys(get_coll(hoid), hoid, keys);
+}
+
+void PG::Transaction::omap_clear(const hobject_t &hoid)
+{
+  t->omap_clear(get_coll(hoid), hoid);
+}
+
+void PG::Transaction::omap_setheader(const hobject_t &hoid, bufferlist &header)
+{
+  t->omap_setheader(get_coll(hoid), hoid, header);
+}
+
+void PG::Transaction::truncate(const hobject_t &hoid, uint64_t off)
+{
+  t->truncate(get_coll(hoid), hoid, off);
+}
+
+void PG::Transaction::zero(const hobject_t &hoid, uint64_t off,
+			   uint64_t len)
+{
+  t->zero(get_coll(hoid), hoid, off, len);
+}
+
+void PG::Transaction::append(Transaction *to_append) {
+  t->append(*(to_append->t));
+  for (set<hobject_t>::iterator i = to_append->temp_added.begin();
+       i != to_append->temp_added.end();
+       ++i) {
+    temp_cleared.erase(*i);
+    temp_added.insert(*i);
+  }
+  for (set<hobject_t>::iterator i = to_append->temp_cleared.begin();
+       i != to_append->temp_cleared.end();
+       ++i) {
+    temp_added.erase(*i);
+    temp_cleared.insert(*i);
+  }
+}
+
+void PG::Transaction::nop() {
+  t->nop();
+}
+
+bool PG::Transaction::empty() const {
+  return t->empty();
+}
+
+uint64_t PG::Transaction::get_bytes_written() const {
+  return t->get_encoded_bytes();
+}
+
+PG::Transaction::~Transaction()
+{
+  delete t;
+}
+
+class C_OSD_OnOpCommit : public Context {
+  PG *pg;
+  PG::InProgressOp *op;
+public:
+  C_OSD_OnOpCommit(PG *pg, PG::InProgressOp *op)
+    : pg(pg), op(op) {}
+  void finish(int) {
+    pg->op_commit(op);
+  }
+};
+
+class C_OSD_OnOpApplied : public Context {
+  PG *pg;
+  PG::InProgressOp *op;
+public:
+  C_OSD_OnOpApplied(PG *pg, PG::InProgressOp *op)
+    : pg(pg), op(op) {}
+  void finish(int) {
+    pg->op_applied(op);
+  }
+};
+
+
+void PG::submit_transaction(const hobject_t &soid,
+			    const eversion_t &at_version,
+			    Transaction *t,
+			    Context *on_local_applied_sync,
+			    Context *on_all_acked,
+			    Context *on_all_commit,
+			    ceph_tid_t tid,
+			    osd_reqid_t reqid,
+			    OpRequestRef orig_op)
+{
+  ObjectStore::Transaction *op_t = t->get_transaction();
+
+  assert(t->get_temp_added().size() <= 1);
+  assert(t->get_temp_cleared().size() <= 1);
+
+  assert(!in_progress_ops.count(tid));
+  InProgressOp &op = in_progress_ops.insert(
+    make_pair(
+      tid,
+      InProgressOp(
+	tid, on_all_commit, on_all_acked,
+	orig_op, at_version)
+      )
+    ).first->second;
+
+  ObjectStore::Transaction local_t;
+  if (t->get_temp_added().size()) {
+    get_temp_coll(&local_t);
+    add_temp_objs(t->get_temp_added());
+  }
+  clear_temp_objs(t->get_temp_cleared());
+
+  local_t.append(*op_t);
+  local_t.swap(*op_t);
+
+  op_t->register_on_applied_sync(on_local_applied_sync);
+  op_t->register_on_applied(new C_OSD_OnOpApplied(this, &op));
+  op_t->register_on_applied(new ObjectStore::C_DeleteTransaction(op_t));
+  op_t->register_on_commit(new C_OSD_OnOpCommit(this, &op));
+
+  queue_transaction(op_t, op.op);
+  delete t;
+}

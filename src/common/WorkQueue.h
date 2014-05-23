@@ -307,7 +307,6 @@ public:
 private:
   vector<WorkQueue_*> work_queues;
   int last_work_queue;
- 
 
   // threads
   struct WorkThread : public Thread {
@@ -318,7 +317,7 @@ private:
       return 0;
     }
   };
-  
+
   set<WorkThread*> _threads;
   list<WorkThread*> _old_threads;  ///< need to be joined
   int processing;
@@ -336,7 +335,7 @@ public:
     Mutex::Locker l(_lock);
     return _num_threads;
   }
-  
+
   /// assign a work queue to this thread pool
   void add_work_queue(WorkQueue_* wq) {
     work_queues.push_back(wq);
@@ -388,45 +387,6 @@ public:
   void unpause();
   /// wait for all work to complete
   void drain(WorkQueue_* wq = 0);
-};
-
-class GenContextWQ :
-  public ThreadPool::WorkQueueVal<GenContext<ThreadPool::TPHandle&>*> {
-  list<GenContext<ThreadPool::TPHandle&>*> _queue;
-public:
-  GenContextWQ(const string &name, time_t ti, ThreadPool *tp)
-    : ThreadPool::WorkQueueVal<
-      GenContext<ThreadPool::TPHandle&>*>(name, ti, ti*10, tp) {}
-  
-  void _enqueue(GenContext<ThreadPool::TPHandle&> *c) {
-    _queue.push_back(c);
-  };
-  void _enqueue_front(GenContext<ThreadPool::TPHandle&> *c) {
-    _queue.push_front(c);
-  }
-  bool _empty() {
-    return _queue.empty();
-  }
-  GenContext<ThreadPool::TPHandle&> *_dequeue() {
-    assert(!_queue.empty());
-    GenContext<ThreadPool::TPHandle&> *c = _queue.front();
-    _queue.pop_front();
-    return c;
-  }
-  void _process(GenContext<ThreadPool::TPHandle&> *c, ThreadPool::TPHandle &tp) {
-    c->complete(tp);
-  }
-};
-
-class C_QueueInWQ : public Context {
-  GenContextWQ *wq;
-  GenContext<ThreadPool::TPHandle&> *c;
-public:
-  C_QueueInWQ(GenContextWQ *wq, GenContext<ThreadPool::TPHandle &> *c)
-    : wq(wq), c(c) {}
-  void finish(int) {
-    wq->queue(c);
-  }
 };
 
 #endif

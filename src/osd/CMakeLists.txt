@@ -5,8 +5,6 @@ set(osd_srcs
 	OSD.cc 
 	OSDCap.cc 
 	PG.cc
-	PGBackend.cc
-	ReplicatedBackend.cc 
 	OSDriver.cc
 	Watch.cc 
 )

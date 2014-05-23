@@ -134,7 +134,6 @@ class ObjectStore;
 class OSDMap;
 class MLog;
 class MClass;
-class MOSDPGMissing;
 class Objecter;
 
 class Watch;
@@ -266,7 +265,6 @@ public:
   PerfCounters *&logger;
   MonClient   *&monc;
   ThreadPool::WorkQueueVal<pair<PGRef, OpRequestRef>, PGRef> &op_wq;
-  GenContextWQ gen_wq;
   ClassHandler  *&class_handler;
 
   void dequeue_pg(PG *pg, list<OpRequestRef> *dequeued);
@@ -872,13 +870,13 @@ private:
   OSDMapRef get_osdmap() {
     return osdmap;
   }
-  utime_t         had_map_since;
-  RWLock          map_lock;
-  list<OpRequestRef>  waiting_for_osdmap;
+  utime_t had_map_since;
+  RWLock map_lock;
+  list<OpRequestRef> waiting_for_osdmap;
 
   Mutex peer_map_epoch_lock;
   map<int, epoch_t> peer_map_epoch;
-  
+
   epoch_t get_peer_epoch(int p);
   epoch_t note_peer_epoch(int p, epoch_t e);
   void forget_peer_epoch(int p, epoch_t e);

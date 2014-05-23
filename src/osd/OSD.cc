@@ -152,7 +152,6 @@ OSDService::OSDService(OSD *osd) :
   logger(osd->logger),
   monc(osd->monc),
   op_wq(osd->op_wq),
-  gen_wq("gen_wq", cct->_conf->osd_op_thread_timeout, &osd->op_tp),
   class_handler(osd->class_handler),
   publish_lock("OSDService::publish_lock"),
   pre_publish_lock("OSDService::pre_publish_lock"),
