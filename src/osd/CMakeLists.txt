@@ -7,7 +7,6 @@ set(osd_srcs
 	PG.cc
 	PGBackend.cc
 	ReplicatedBackend.cc 
-	ReplicatedPG.cc 
 	OSDriver.cc
 	Watch.cc 
 )

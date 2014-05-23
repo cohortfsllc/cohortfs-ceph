@@ -45,8 +45,6 @@
 
 #include "os/ObjectStore.h"
 
-#include "ReplicatedPG.h"
-
 #include "Ager.h"
 
 
@@ -1319,11 +1317,7 @@ PG* OSD::_make_pg(
   PG *pg;
   hobject_t logoid = make_pg_log_oid(pgid);
   hobject_t infooid = make_pg_biginfo_oid(pgid);
-  if (createmap->get_pg_type(pgid) == pg_pool_t::TYPE_REPLICATED)
-    pg = new ReplicatedPG(&service, createmap, pool, pgid, logoid, infooid);
-  else
-    assert(0);
-
+  pg = new PG(&service, createmap, pool, pgid, logoid, infooid);
   return pg;
 }
 
