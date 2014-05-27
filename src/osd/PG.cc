@@ -735,7 +735,7 @@ void PG::do_op(OpRequestRef op)
   OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops,
 				 &obc->obs,
 				 this);
-  ctx->op_t = get_transaction();
+  ctx->op_t = new ObjectStore::Transaction();
   ctx->obc = obc;
 
   if (m->get_flags() & CEPH_OSD_FLAG_SKIPRWLOCKS) {
@@ -815,8 +815,7 @@ void PG::on_change(ObjectStore::Transaction *t)
 
   dout(10) << __func__ << dendl;
   // clear temp
-    unstable_stats.clear();
-  _on_change(t);
+  unstable_stats.clear();
 }
 
 void PG::on_activate()
@@ -1210,7 +1209,7 @@ void PG::execute_ctx(OpContext *ctx)
   // this method must be idempotent since we may call it several times
   // before we finally apply the resulting transaction.
   delete ctx->op_t;
-  ctx->op_t = get_transaction();
+  ctx->op_t = new ObjectStore::Transaction();
 
   if (op->may_write() || op->may_cache()) {
     op->mark_started();
@@ -1231,9 +1230,6 @@ void PG::execute_ctx(OpContext *ctx)
   if (!ctx->user_at_version)
     ctx->user_at_version = obc->obs.oi.user_version;
   dout(30) << __func__ << " user_at_version " << ctx->user_at_version << dendl;
-
-  // note my stats
-  utime_t now = ceph_clock_now(cct);
 
   if (op->may_read()) {
     dout(10) << " taking ondisk_read_lock" << dendl;
@@ -1312,8 +1308,6 @@ void PG::execute_ctx(OpContext *ctx)
   // note: repop now owns ctx AND ctx->op
 
   repop->src_obc.swap(src_obc); // and src_obc.
-
-  issue_repop(repop, now);
 
   eval_repop(repop);
   repop->put();
@@ -1763,14 +1757,14 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
   bool first_read = true;
 
-  Transaction* t = ctx->op_t;
+  ObjectStore::Transaction* t = ctx->op_t;
 
   dout(10) << "do_osd_op " << soid << " " << ops << dendl;
 
   for (vector<OSDOp>::iterator p = ops.begin(); p != ops.end(); ++p, ctx->current_osd_subop_num++) {
     OSDOp& osd_op = *p;
     ceph_osd_op& op = osd_op.op;
- 
+
     dout(10) << "do_osd_op  " << osd_op << dendl;
 
     bufferlist::iterator bp = osd_op.indata.begin();
@@ -1820,7 +1814,6 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
     }
 
     switch (op.op) {
-      
       // --- READS ---
 
     case CEPH_OSD_OP_SYNC_READ:
@@ -1850,8 +1843,8 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  // a read operation of 0 bytes does *not* do nothing, this is why
 	  // the trimmed_read boolean is needed
 	} else {
-	  int r = objects_read_sync(
-	    soid, op.extent.offset, op.extent.length, &osd_op.outdata);
+	  int r = osd->store->read(coll, soid, op.extent.offset,
+				   op.extent.length, osd_op.outdata);
 	  if (r >= 0)
 	    op.extent.length = r;
 	  else {
@@ -1916,8 +1909,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	      last < miter->first) {
 	    bufferlist t;
 	    uint64_t len = miter->first - last;
-	    r = objects_read_sync(
-	      soid, last, len, &t);
+	    r = osd->store->read(coll, soid, last, len, t);
 	    if (!t.is_zero()) {
 	      osd->clog.error() << coll << " " << soid
 				<< " sparse-read found data in hole "
@@ -1926,8 +1918,8 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  }
 
 	  bufferlist tmpbl;
-	  r = objects_read_sync(
-	    soid, miter->first, miter->second, &tmpbl);
+	  r = osd->store->read(coll, soid, miter->first, miter->second,
+			       tmpbl);
 	  if (r < 0)
 	    break;
 
@@ -1947,7 +1939,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (last < end) {
 	    bufferlist t;
 	    uint64_t len = end - last;
-	    r = objects_read_sync(soid, last, len, &t);
+	    r = osd->store->read(coll, soid, last, len, t);
 	    if (!t.is_zero()) {
 	      osd->clog.error() << coll << " " << soid
 				<< " sparse-read found data in hole "
@@ -2049,10 +2041,9 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	string aname;
 	bp.copy(op.xattr.name_len, aname);
 	string name = "_" + aname;
-	int r = getattr_maybe_cache(
-	  ctx->obc,
-	  name,
-	  &(osd_op.outdata));
+	int r = objects_get_attr(ctx->obc->obs.oi.soid,
+				 name,
+				 &(osd_op.outdata));
 	if (r >= 0) {
 	  op.xattr.value_len = r;
 	  result = 0;
@@ -2067,11 +2058,8 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       ++ctx->num_read;
       {
 	map<string, bufferlist> out;
-	result = getattrs_maybe_cache(
-	  ctx->obc,
-	  &out,
-	  true);
-	
+	result = osd->store->getattrs(coll, ctx->obc->obs.oi.soid, out, true);
+
 	bufferlist bl;
 	::encode(out, bl);
 	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(bl.length(), 10);
@@ -2079,7 +2067,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	osd_op.outdata.claim_append(bl);
       }
       break;
-      
+
     case CEPH_OSD_OP_CMPXATTR:
     case CEPH_OSD_OP_SRC_CMPXATTR:
       ++ctx->num_read;
@@ -2091,18 +2079,18 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	
 	bufferlist xattr;
 	if (op.op == CEPH_OSD_OP_CMPXATTR)
-	  result = getattr_maybe_cache(
-	    ctx->obc,
+	  result = objects_get_attr(
+	    ctx->obc->obs.oi.soid,
 	    name,
 	    &xattr);
 	else
-	  result = getattr_maybe_cache(
-	    src_obc,
+	  result = objects_get_attr(
+	    src_obc->obs.oi.soid,
 	    name,
 	    &xattr);
 	if (result < 0 && result != -EEXIST && result != -ENODATA)
 	  break;
-	
+
 	ctx->delta_stats.num_rd++;
 	ctx->delta_stats.num_rd_kb += SHIFT_ROUND_UP(xattr.length(), 10);
 
@@ -2256,11 +2244,11 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
       {
 	if (!obs.exists) {
 	  ctx->mod_desc.create();
-	  t->touch(soid);
+	  t->touch(coll, soid);
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
 	}
-	t->set_alloc_hint(soid, op.alloc_hint.expected_object_size,
+	t->set_alloc_hint(coll, soid, op.alloc_hint.expected_object_size,
 			  op.alloc_hint.expected_write_size);
 	ctx->delta_stats.num_wr++;
 	result = 0;
@@ -2303,7 +2291,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (obs.exists) {
 	    dout(10) << " truncate_seq " << op.extent.truncate_seq << " > current " << seq
 		     << ", truncating to " << op.extent.truncate_size << dendl;
-	    t->truncate(soid, op.extent.truncate_size);
+	    t->truncate(coll, soid, op.extent.truncate_size);
 	    oi.truncate_seq = op.extent.truncate_seq;
 	    oi.truncate_size = op.extent.truncate_size;
 	    if (op.extent.truncate_size != oi.size) {
@@ -2322,7 +2310,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 					 cct->_conf->osd_max_object_size);
 	if (result < 0)
 	  break;
-	t->write(soid, op.extent.offset, op.extent.length, osd_op.indata);
+	t->write(coll, soid, op.extent.offset, op.extent.length, osd_op.indata);
 	write_update_size_and_usage(ctx->delta_stats, oi, ctx->modified_ranges,
 				    op.extent.offset, op.extent.length, true);
 	if (!obs.exists) {
@@ -2344,9 +2332,10 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  break;
 
 	if (obs.exists) {
-	  t->truncate(soid, 0);
+	  t->truncate(coll, soid, 0);
 	}
-	t->write(soid, op.extent.offset, op.extent.length, osd_op.indata);
+	t->write(coll, soid, op.extent.offset, op.extent.length,
+		 osd_op.indata);
 	if (!obs.exists) {
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
@@ -2373,7 +2362,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  break;
 	assert(op.extent.length);
 	if (obs.exists) {
-	  t->zero(soid, op.extent.offset, op.extent.length);
+	  t->zero(coll, soid, op.extent.offset, op.extent.length);
 	  interval_set<uint64_t> ch;
 	  ch.insert(op.extent.offset, op.extent.length);
 	  ctx->modified_ranges.union_of(ch);
@@ -2412,7 +2401,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  if (result >= 0) {
 	    if (!obs.exists)
 	      ctx->mod_desc.create();
-	    t->touch(soid);
+	    t->touch(coll, soid);
 	    if (!obs.exists) {
 	      ctx->delta_stats.num_objects++;
 	      obs.exists = true;
@@ -2453,7 +2442,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  oi.truncate_size = op.extent.truncate_size;
 	}
 
-	t->truncate(soid, op.extent.offset);
+	t->truncate(coll, soid, op.extent.offset);
 	if (oi.size > op.extent.offset) {
 	  interval_set<uint64_t> trim;
 	  trim.insert(op.extent.offset, oi.size-op.extent.offset);
@@ -2468,7 +2457,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	// do no set exists, or we will break above DELETE -> TRUNCATE munging.
       }
       break;
-    
+
     case CEPH_OSD_OP_DELETE:
       ++ctx->num_write;
       if (ctx->obc->obs.oi.watchers.size()) {
@@ -2537,7 +2526,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	}
 	if (!obs.exists) {
 	  ctx->mod_desc.create();
-	  t->touch(soid);
+	  t->touch(coll, soid);
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
 	}
@@ -2547,7 +2536,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
 	bufferlist bl;
 	bp.copy(op.xattr.value_len, bl);
-	setattr_maybe_cache(ctx->obc, ctx, t, name, bl);
+	t->setattr(coll, soid, name, bl);
 	ctx->delta_stats.num_wr++;
       }
       break;
@@ -2558,7 +2547,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	string aname;
 	bp.copy(op.xattr.name_len, aname);
 	string name = "_" + aname;
-	rmattr_maybe_cache(ctx->obc, ctx, t, name);
+	t->rmattr(coll, soid, name);
 	ctx->delta_stats.num_wr++;
       }
       break;
@@ -2836,7 +2825,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
 	}
-	t->touch(soid);
+	t->touch(coll, soid);
 	map<string, bufferlist> to_set;
 	try {
 	  ::decode(to_set, bp);
@@ -2851,7 +2840,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	     ++i) {
 	  dout(20) << "\t" << i->first << dendl;
 	}
-	t->omap_setkeys(soid, to_set);
+	t->omap_setkeys(coll, soid, to_set);
 	ctx->delta_stats.num_wr++;
       }
       obs.oi.set_flag(object_info_t::FLAG_OMAP);
@@ -2864,8 +2853,8 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  ctx->delta_stats.num_objects++;
 	  obs.exists = true;
 	}
-	t->touch(soid);
-	t->omap_setheader(soid, osd_op.indata);
+	t->touch(coll, soid);
+	t->omap_setheader(coll, soid, osd_op.indata);
 	ctx->delta_stats.num_wr++;
       }
       obs.oi.set_flag(object_info_t::FLAG_OMAP);
@@ -2878,8 +2867,8 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -ENOENT;
 	  break;
 	}
-	t->touch(soid);
-	t->omap_clear(soid);
+	t->touch(coll, soid);
+	t->omap_clear(coll, soid);
 	ctx->delta_stats.num_wr++;
       }
       obs.oi.set_flag(object_info_t::FLAG_OMAP);
@@ -2892,7 +2881,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -ENOENT;
 	  break;
 	}
-	t->touch(soid);
+	t->touch(coll, soid);
 	set<string> to_rm;
 	try {
 	  ::decode(to_rm, bp);
@@ -2901,7 +2890,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	  result = -EINVAL;
 	  goto fail;
 	}
-	t->omap_rmkeys(soid, to_rm);
+	t->omap_rmkeys(coll, soid, to_rm);
 	ctx->delta_stats.num_wr++;
       }
       obs.oi.set_flag(object_info_t::FLAG_OMAP);
@@ -2916,7 +2905,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
     ctx->bytes_read += osd_op.outdata.length();
 
-  fail:
+    fail:
     osd_op.rval = result;
     if (result < 0 && (op.flags & CEPH_OSD_OP_FLAG_FAILOK))
       result = 0;
@@ -2956,12 +2945,12 @@ inline int PG::_delete_oid(OpContext *ctx, bool no_whiteout)
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
   const hobject_t& soid = oi.soid;
-  Transaction* t = ctx->op_t;
+  ObjectStore::Transaction* t = ctx->op_t;
 
   if (!obs.exists)
     return -ENOENT;
 
-  t->remove(soid);
+  t->remove(coll, soid);
 
   if (oi.size > 0) {
     interval_set<uint64_t> ch;
@@ -2981,7 +2970,7 @@ inline int PG::_delete_oid(OpContext *ctx, bool no_whiteout)
 void PG::make_writeable(OpContext *ctx)
 {
   const hobject_t& soid = ctx->obs->oi.soid;
-  Transaction *t = get_transaction();
+  ObjectStore::Transaction *t = new ObjectStore::Transaction();
 
   if ((ctx->new_obs.exists &&
        ctx->new_obs.oi.is_omap()) &&
@@ -2997,7 +2986,7 @@ void PG::make_writeable(OpContext *ctx)
   }
 
   // prepend transaction to op_t
-  t->append(ctx->op_t);
+  t->append(*ctx->op_t);
   delete ctx->op_t;
   ctx->op_t = t;
 
@@ -3171,8 +3160,8 @@ void PG::finish_ctx(OpContext *ctx)
       ctx->user_at_version = ctx->at_version.version;
     ctx->new_obs.oi.user_version = ctx->user_at_version;
   }
-  ctx->bytes_written = ctx->op_t->get_bytes_written();
- 
+  ctx->bytes_written = ctx->op_t->get_encoded_bytes();
+
   if (ctx->new_obs.exists) {
     // on the head object
     ctx->new_obs.oi.version = ctx->at_version;
@@ -3187,7 +3176,7 @@ void PG::finish_ctx(OpContext *ctx)
 
     bufferlist bv(sizeof(ctx->new_obs.oi));
     ::encode(ctx->new_obs.oi, bv);
-    setattr_maybe_cache(ctx->obc, ctx, ctx->op_t, OI_ATTR, bv);
+    ctx->op_t->setattr(coll, ctx->obc->obs.oi.soid, OI_ATTR, bv);
   } else {
     ctx->new_obs.oi = object_info_t(ctx->obc->obs.oi.soid);
   }
@@ -3278,24 +3267,16 @@ void PG::repop_all_committed(RepGather *repop)
   }
 }
 
-void PG::op_applied(InProgressOp *op)
+void PG::op_applied(OpRequestRef *op)
 {
-  eversion_t applied_version = op->v;
-  dout(10) << "op_applied on primary on version " << applied_version << dendl;
-  if (op->op)
-    op->op->mark_event("op_applied");
-  if (applied_version == eversion_t())
-    return;
-  assert(applied_version > last_update_applied);
-  assert(applied_version <= info.last_update);
-  last_update_applied = applied_version;
+  if (*op)
+    (*op)->mark_event("op_applied");
 }
 
-void PG::op_commit(InProgressOp *op)
+void PG::op_commit(OpRequestRef *op)
 {
-  dout(10) << __func__ << ": " << op->tid << dendl;
-  if (op->op)
-    op->op->mark_event("op_commit");
+  if (*op)
+    (*op)->mark_event("op_commit");
 }
 
 void PG::eval_repop(RepGather *repop)
@@ -3428,42 +3409,6 @@ void PG::eval_repop(RepGather *repop)
   }
 }
 
-void PG::issue_repop(RepGather *repop, utime_t now)
-{
-  OpContext *ctx = repop->ctx;
-  const hobject_t& soid = ctx->obs->oi.soid;
-  if (ctx->op &&
-    ((static_cast<MOSDOp *>(
-	ctx->op->get_req()))->get_flags() & CEPH_OSD_FLAG_PARALLELEXEC)) {
-    // replicate original op for parallel execution on replica
-    assert(0 == "broken implementation, do not use");
-  }
-  dout(7) << "issue_repop rep_tid " << repop->rep_tid
-	  << " o " << soid
-	  << dendl;
-
-  repop->v = ctx->at_version;
-  repop->obc->ondisk_write_lock();
-  repop->ctx->apply_pending_attrs();
-
-  Context *on_all_commit = new C_OSD_RepopCommit(this, repop);
-  Context *on_all_applied = new C_OSD_RepopApplied(this, repop);
-  Context *onapplied_sync = new C_OSD_OndiskWriteUnlock(
-    repop->obc,
-    ObjectContextRef());
-  submit_transaction(
-    soid,
-    repop->ctx->at_version,
-    repop->ctx->op_t,
-    onapplied_sync,
-    on_all_applied,
-    on_all_commit,
-    repop->rep_tid,
-    repop->ctx->reqid,
-    repop->ctx->op);
-  repop->ctx->op_t = NULL;
-}
-
 PG::RepGather *PG::new_repop(OpContext *ctx, ObjectContextRef obc,
 						 ceph_tid_t rep_tid)
 {
@@ -3504,7 +3449,7 @@ PG::RepGather *PG::simple_repop_create(ObjectContextRef obc)
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, rep_tid);
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
-  ctx->op_t = get_transaction();
+  ctx->op_t = new ObjectStore::Transaction;
   ctx->mtime = ceph_clock_now(g_ceph_context);
   ctx->obc = obc;
   RepGather *repop = new_repop(ctx, obc, rep_tid);
@@ -3514,7 +3459,6 @@ PG::RepGather *PG::simple_repop_create(ObjectContextRef obc)
 void PG::simple_repop_submit(RepGather *repop)
 {
   dout(20) << __func__ << " " << repop << dendl;
-  issue_repop(repop, repop->ctx->mtime);
   eval_repop(repop);
   repop->put();
 }
@@ -3526,7 +3470,7 @@ void PG::handle_watch_timeout(WatchRef watch)
   ObjectContextRef obc = watch->get_obc(); // handle_watch_timeout owns this ref
   dout(10) << "handle_watch_timeout obc " << obc << dendl;
 
-    obc->watchers.erase(make_pair(watch->get_cookie(), watch->get_entity()));
+  obc->watchers.erase(make_pair(watch->get_cookie(), watch->get_entity()));
   obc->obs.oi.watchers.erase(make_pair(watch->get_cookie(), watch->get_entity()));
   watch->remove();
 
@@ -3535,7 +3479,7 @@ void PG::handle_watch_timeout(WatchRef watch)
   osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, rep_tid);
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
-  ctx->op_t = get_transaction();
+  ctx->op_t = new ObjectStore::Transaction();
   ctx->mtime = ceph_clock_now(cct);
   ctx->at_version = get_next_version();
 
@@ -3543,16 +3487,15 @@ void PG::handle_watch_timeout(WatchRef watch)
 
   RepGather *repop = new_repop(ctx, obc, rep_tid);
 
-  Transaction *t = ctx->op_t;
+  ObjectStore::Transaction *t = ctx->op_t;
 
   obc->obs.oi.prior_version = repop->obc->obs.oi.version;
   obc->obs.oi.version = ctx->at_version;
   bufferlist bl;
   ::encode(obc->obs.oi, bl);
-  setattr_maybe_cache(obc, repop->ctx, t, OI_ATTR, bl);
+  t->setattr(coll, obc->obs.oi.soid, OI_ATTR, bl);
 
   // obc ref swallowed by repop!
-  issue_repop(repop, repop->ctx->mtime);
   eval_repop(repop);
   repop->put();
 }
@@ -3757,81 +3700,6 @@ void PG::apply_repops(bool requeue)
   waiting_for_ack.clear();
 }
 
-void PG::replace_cached_attrs(
-  OpContext *ctx,
-  ObjectContextRef obc,
-  const map<string, bufferlist> &new_attrs)
-{
-  ctx->pending_attrs[obc].clear();
-  for (map<string, bufferlist>::iterator i = obc->attr_cache.begin();
-       i != obc->attr_cache.end();
-       ++i) {
-    ctx->pending_attrs[obc][i->first] = boost::optional<bufferlist>();
-  }
-  for (map<string, bufferlist>::const_iterator i = new_attrs.begin();
-       i != new_attrs.end();
-       ++i) {
-    ctx->pending_attrs[obc][i->first] = i->second;
-  }
-}
-
-void PG::setattr_maybe_cache(
-  ObjectContextRef obc,
-  OpContext *op,
-  Transaction *t,
-  const string &key,
-  bufferlist &val)
-{
-  t->setattr(obc->obs.oi.soid, key, val);
-}
-
-void PG::rmattr_maybe_cache(
-  ObjectContextRef obc,
-  OpContext *op,
-  Transaction *t,
-  const string &key)
-{
-  t->rmattr(obc->obs.oi.soid, key);
-}
-
-int PG::getattr_maybe_cache(
-  ObjectContextRef obc,
-  const string &key,
-  bufferlist *val)
-{
-  return objects_get_attr(obc->obs.oi.soid, key, val);
-}
-
-int PG::getattrs_maybe_cache(
-  ObjectContextRef obc,
-  map<string, bufferlist> *out,
-  bool user_only)
-{
-  int r = 0;
-  r = objects_get_attrs(obc->obs.oi.soid, out);
-  if (out && user_only) {
-    map<string, bufferlist> tmp;
-    for (map<string, bufferlist>::iterator i = out->begin();
-	 i != out->end();
-	 ++i) {
-      if (i->first.size() > 1 && i->first[0] == '_')
-	tmp[i->first.substr(1, i->first.size())].claim(i->second);
-    }
-    tmp.swap(*out);
-  }
-  return r;
-}
-
-void PG::send_message(int to_osd, Message *m) {
-  osd->send_message_osd_cluster(to_osd, m, get_osdmap()->get_epoch());
-}
-
-void PG::queue_transaction(ObjectStore::Transaction *t, OpRequestRef op) {
-  list<ObjectStore::Transaction *> tls;
-  tls.push_back(t);
-  osd->store->queue_transaction(osr.get(), t, 0, 0, 0, op);
-}
-
 entity_name_t PG::get_cluster_msgr_name() {
   return osd->get_cluster_msgr_name();
 }
@@ -3911,38 +3779,6 @@ int PG::objects_get_attr(const hobject_t &hoid, const string &attr,
   return r;
 }
 
-int PG::objects_get_attrs(const hobject_t &hoid, map<string, bufferlist> *out)
-{
-  return osd->store->getattrs(coll, hoid, *out);
-}
-
-void PG::trim_stashed_object(const hobject_t &hoid, version_t old_version,
-			     ObjectStore::Transaction *t)
-{
-  t->remove(coll, hoid);
-}
-
-void PG::_on_change(ObjectStore::Transaction *t)
-{
-  for (map<ceph_tid_t, InProgressOp>::iterator i = in_progress_ops.begin();
-       i != in_progress_ops.end();
-       in_progress_ops.erase(i++)) {
-    if (i->second.on_commit)
-      delete i->second.on_commit;
-    if (i->second.on_applied)
-      delete i->second.on_applied;
-  }
-}
-
-int PG::objects_read_sync(
-  const hobject_t &hoid,
-  uint64_t off,
-  uint64_t len,
-  bufferlist *bl)
-{
-  return osd->store->read(coll, hoid, off, len, *bl);
-}
-
 void PG::objects_read_async(const hobject_t &hoid,
 			    const list<pair<pair<uint64_t, uint64_t>,
 			    pair<bufferlist*, Context*> > > &to_read,
@@ -3965,172 +3801,3 @@ void PG::objects_read_async(const hobject_t &hoid,
   on_complete->complete(r);
 }
 
-
-ObjectStore::Transaction* PG::Transaction::get_transaction() {
-  ObjectStore::Transaction *_t = t;
-  t = 0;
-  return _t;
-}
-
-void PG::Transaction::touch(const hobject_t &hoid)
-{
-  t->touch(get_coll_ct(hoid), hoid);
-}
-
-void PG::Transaction::stash(const hobject_t &hoid,
-			    version_t former_version)
-{
-  t->collection_move_rename(coll, hoid, coll, hoid);
-}
-
-void PG::Transaction::remove(const hobject_t &hoid)
-{
-  t->remove(get_coll_rm(hoid), hoid);
-}
-
-void PG::Transaction::setattrs(const hobject_t &hoid,
-			       map<string, bufferlist> &attrs)
-{
-  t->setattrs(get_coll(hoid), hoid, attrs);
-}
-
-void PG::Transaction::setattr(const hobject_t &hoid, const string &attrname,
-			      bufferlist &bl)
-{
-  t->setattr(get_coll(hoid), hoid, attrname, bl);
-}
-
-void PG::Transaction::rmattr(const hobject_t &hoid, const string &attrname)
-{
-  t->rmattr(get_coll(hoid), hoid, attrname);
-}
-
-void PG::Transaction::rename(const hobject_t &from, const hobject_t &to)
-{
-  t->collection_move_rename(get_coll_rm(from), from,
-			    get_coll_ct(to), to);
-}
-void PG::Transaction::set_alloc_hint(const hobject_t &hoid,
-				     uint64_t expected_object_size,
-				     uint64_t expected_write_size)
-{
-  t->set_alloc_hint(get_coll(hoid), hoid, expected_object_size,
-		    expected_write_size);
-}
-
-void PG::Transaction::write(const hobject_t &hoid, uint64_t off,
-			    uint64_t len, bufferlist &bl)
-{
-  t->write(get_coll_ct(hoid), hoid, off, len, bl);
-}
-
-void PG::Transaction::omap_setkeys(const hobject_t &hoid,
-				   map<string, bufferlist> &keys)
-{
-  return t->omap_setkeys(get_coll(hoid), hoid, keys);
-}
-
-void PG::Transaction::omap_rmkeys(const hobject_t &hoid, set<string> &keys)
-{
-  t->omap_rmkeys(get_coll(hoid), hoid, keys);
-}
-
-void PG::Transaction::omap_clear(const hobject_t &hoid)
-{
-  t->omap_clear(get_coll(hoid), hoid);
-}
-
-void PG::Transaction::omap_setheader(const hobject_t &hoid, bufferlist &header)
-{
-  t->omap_setheader(get_coll(hoid), hoid, header);
-}
-
-void PG::Transaction::truncate(const hobject_t &hoid, uint64_t off)
-{
-  t->truncate(get_coll(hoid), hoid, off);
-}
-
-void PG::Transaction::zero(const hobject_t &hoid, uint64_t off,
-			   uint64_t len)
-{
-  t->zero(get_coll(hoid), hoid, off, len);
-}
-
-void PG::Transaction::append(Transaction *to_append) {
-  t->append(*(to_append->t));
-}
-
-void PG::Transaction::nop() {
-  t->nop();
-}
-
-bool PG::Transaction::empty() const {
-  return t->empty();
-}
-
-uint64_t PG::Transaction::get_bytes_written() const {
-  return t->get_encoded_bytes();
-}
-
-PG::Transaction::~Transaction()
-{
-  delete t;
-}
-
-class C_OSD_OnOpCommit : public Context {
-  PG *pg;
-  PG::InProgressOp *op;
-public:
-  C_OSD_OnOpCommit(PG *pg, PG::InProgressOp *op)
-    : pg(pg), op(op) {}
-  void finish(int) {
-    pg->op_commit(op);
-  }
-};
-
-class C_OSD_OnOpApplied : public Context {
-  PG *pg;
-  PG::InProgressOp *op;
-public:
-  C_OSD_OnOpApplied(PG *pg, PG::InProgressOp *op)
-    : pg(pg), op(op) {}
-  void finish(int) {
-    pg->op_applied(op);
-  }
-};
-
-
-void PG::submit_transaction(const hobject_t &soid,
-			    const eversion_t &at_version,
-			    Transaction *t,
-			    Context *on_local_applied_sync,
-			    Context *on_all_acked,
-			    Context *on_all_commit,
-			    ceph_tid_t tid,
-			    osd_reqid_t reqid,
-			    OpRequestRef orig_op)
-{
-  ObjectStore::Transaction *op_t = t->get_transaction();
-
-  assert(!in_progress_ops.count(tid));
-  InProgressOp &op = in_progress_ops.insert(
-    make_pair(
-      tid,
-      InProgressOp(
-	tid, on_all_commit, on_all_acked,
-	orig_op, at_version)
-      )
-    ).first->second;
-
-  ObjectStore::Transaction local_t;
-  local_t.append(*op_t);
-  local_t.swap(*op_t);
-
-  op_t->register_on_applied_sync(on_local_applied_sync);
-  op_t->register_on_applied(new C_OSD_OnOpApplied(this, &op));
-  op_t->register_on_applied(new ObjectStore::C_DeleteTransaction(op_t));
-  op_t->register_on_commit(new C_OSD_OnOpCommit(this, &op));
-
-  queue_transaction(op_t, op.op);
-  delete t;
-}

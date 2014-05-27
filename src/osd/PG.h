@@ -123,81 +123,11 @@ public:
 class PG {
   friend class OSD;
   friend class Watch;
-  friend class C_OSD_OnOpCommit;
-  friend class C_OSD_OnOpApplied;
 
 public:
   std::string gen_prefix() const;
 
   struct OpContext;
-  struct InProgressOp {
-    ceph_tid_t tid;
-    Context *on_commit;
-    Context *on_applied;
-    OpRequestRef op;
-    eversion_t v;
-    InProgressOp(
-      ceph_tid_t tid, Context *on_commit, Context *on_applied,
-      OpRequestRef op, eversion_t v)
-      : tid(tid), on_commit(on_commit), on_applied(on_applied),
-	op(op), v(v) {}
-  };
-  map<ceph_tid_t, InProgressOp> in_progress_ops;
-  /**
-   * Client IO Interface
-   */
-  class Transaction {
-    coll_t coll;
-    ObjectStore::Transaction *t;
-    const coll_t &get_coll_ct(const hobject_t &hoid) {
-      return get_coll(hoid);
-    }
-    const coll_t &get_coll_rm(const hobject_t &hoid) {
-      return get_coll(hoid);
-    }
-    const coll_t &get_coll(const hobject_t &hoid) {
-      return coll;
-    }
-
-  public:
-    Transaction(coll_t coll) :
-      coll(coll), t(new ObjectStore::Transaction) {}
-    ObjectStore::Transaction *get_transaction();
-
-    void touch(const hobject_t &hoid);
-    void stash(const hobject_t &hoid, version_t former_version);
-    void remove(const hobject_t &hoid);
-    void setattrs(const hobject_t &hoid, map<string, bufferlist> &attrs);
-    void setattr(const hobject_t &hoid, const string &attrname,
-		 bufferlist &bl);
-    void rmattr(const hobject_t &hoid, const string &attrname);
-    void rename(const hobject_t &from, const hobject_t &to);
-    void set_alloc_hint(const hobject_t &hoid, uint64_t expected_object_size,
-			uint64_t expected_write_size);
-    void write(const hobject_t &hoid, uint64_t off,
-	       uint64_t len, bufferlist &bl);
-    void omap_setkeys(const hobject_t &hoid,
-		      map<string, bufferlist> &keys);
-    void omap_rmkeys(const hobject_t &hoid,
-		     set<string> &keys);
-    void omap_clear(const hobject_t &hoid);
-    void omap_setheader(const hobject_t &hoid, bufferlist &header);
-    void truncate(const hobject_t &hoid, uint64_t off);
-    void zero(const hobject_t &hoid, uint64_t off, uint64_t len);
-    /// off must be the current object size
-    void append(const hobject_t &hoid, uint64_t off,
-		uint64_t len, bufferlist &bl) {
-      write(hoid, off, len, bl);
-    }
-    void append(Transaction *to_append);
-    void nop();
-    bool empty() const;
-    uint64_t get_bytes_written() const;
-    ~Transaction();
-  };
-
-  void send_message(int to_osd, Message *m);
-  void queue_transaction(ObjectStore::Transaction *t, OpRequestRef op);
   epoch_t get_epoch() const {
     return get_osdmap()->get_epoch();
   }
@@ -219,8 +149,8 @@ public:
     return get_object_context(hoid, true, &attrs);
   }
 
-  void op_applied(InProgressOp *op);
-  void op_commit(InProgressOp *op);
+  void op_applied(OpRequestRef *op);
+  void op_commit(OpRequestRef *op);
 
   void update_stats(
     const pg_stat_t &stat) {
@@ -272,7 +202,7 @@ public:
 
     int current_osd_subop_num;
 
-    Transaction *op_t;
+    ObjectStore::Transaction *op_t;
 
     interval_set<uint64_t> modified_ranges;
     ObjectContextRef obc;
@@ -287,32 +217,6 @@ public:
 
     int num_read;    ///< count read ops
     int num_write;   ///< count update ops
-
-    // pending xattr updates
-    map<ObjectContextRef,
-	map<string, boost::optional<bufferlist> > > pending_attrs;
-    void apply_pending_attrs() {
-      for (map<ObjectContextRef,
-	     map<string, boost::optional<bufferlist> > >::iterator i =
-	     pending_attrs.begin();
-	   i != pending_attrs.end();
-	   ++i) {
-	if (i->first->obs.exists) {
-	  for (map<string, boost::optional<bufferlist> >::iterator j =
-		 i->second.begin();
-	       j != i->second.end();
-	       ++j) {
-	    if (j->second)
-	      i->first->attr_cache[j->first] = j->second.get();
-	    else
-	      i->first->attr_cache.erase(j->first);
-	  }
-	} else {
-	  i->first->attr_cache.clear();
-	}
-      }
-      pending_attrs.clear();
-    }
 
     // pending async reads <off, len> -> <outbl, outr>
     list<pair<pair<uint64_t, uint64_t>,
@@ -546,7 +450,6 @@ protected:
   void repop_all_applied(RepGather *repop);
   void repop_all_committed(RepGather *repop);
   void eval_repop(RepGather*);
-  void issue_repop(RepGather *repop, utime_t now);
   RepGather *new_repop(OpContext *ctx, ObjectContextRef obc, ceph_tid_t rep_tid);
   void remove_repop(RepGather *repop);
 
@@ -722,7 +625,6 @@ protected:
 
 private:
   int _delete_oid(OpContext *ctx, bool no_whiteout);
-  void _on_change(ObjectStore::Transaction *t);
 
 public:
   void clear_primary_state();
@@ -748,30 +650,6 @@ public:
 
 
   ~PG();
-  // attr cache handling
-  void replace_cached_attrs(
-    OpContext *ctx,
-    ObjectContextRef obc,
-    const map<string, bufferlist> &new_attrs);
-  void setattr_maybe_cache(
-    ObjectContextRef obc,
-    OpContext *op,
-    Transaction *t,
-    const string &key,
-    bufferlist &val);
-  void rmattr_maybe_cache(
-    ObjectContextRef obc,
-    OpContext *op,
-    Transaction *t,
-    const string &key);
-  int getattr_maybe_cache(
-    ObjectContextRef obc,
-    const string &key,
-    bufferlist *val);
-  int getattrs_maybe_cache(
-    ObjectContextRef obc,
-    map<string, bufferlist> *out,
-    bool user_only = false);
   void log_op_stats(OpContext *ctx);
 
 private:
@@ -890,22 +768,6 @@ private:
 		  epoch_started(0), bytes_written(0) {}
   };
 
-  /// execute implementation specific transaction
-  void submit_transaction(const hobject_t &hoid,
-			  const eversion_t &at_version,
-			  Transaction *t,
-			  Context *on_local_applied_sync,
-			  Context *on_all_applied,
-			  Context *on_all_commit,
-			  ceph_tid_t tid,
-			  osd_reqid_t reqid,
-			  OpRequestRef op);
-  /// Trim object stashed at stashed_version
-  void trim_stashed_object(
-    const hobject_t &hoid,
-    version_t stashed_version,
-    ObjectStore::Transaction *t);
-
   /// List objects in collection
   int objects_list_partial(
     const hobject_t &begin,
@@ -924,19 +786,10 @@ private:
     const string &attr,
     bufferlist *out);
 
-  int objects_get_attrs(const hobject_t &hoid, map<string, bufferlist> *out);
-
-  int objects_read_sync(const hobject_t &hoid, uint64_t off,
-			uint64_t len, bufferlist *bl);
-
   void objects_read_async(const hobject_t &hoid,
 			  const list<pair<pair<uint64_t, uint64_t>,
 			  pair<bufferlist*, Context*> > > &to_read,
 			  Context *on_complete);
-
-  Transaction* get_transaction() {
-    return new Transaction(coll);
-  }
 };
 
 ostream& operator<<(ostream& out, const PG& pg);
