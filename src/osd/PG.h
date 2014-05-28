@@ -149,9 +149,6 @@ public:
     return get_object_context(hoid, true, &attrs);
   }
 
-  void op_applied(OpRequestRef *op);
-  void op_commit(OpRequestRef *op);
-
   void update_stats(
     const pg_stat_t &stat) {
     info.stats = stat;
@@ -284,9 +281,9 @@ public:
   /*
    * State on the PG primary associated with the replicated mutation
    */
-  class RepGather {
+  class Mutation {
   public:
-    xlist<RepGather*>::item queue_item;
+    xlist<Mutation*>::item queue_item;
     int nref;
 
     eversion_t v;
@@ -295,30 +292,27 @@ public:
     ObjectContextRef obc;
     map<hobject_t,ObjectContextRef> src_obc;
 
-    ceph_tid_t rep_tid;
+    ceph_tid_t tid;
 
-    bool rep_aborted, rep_done;
+    bool aborted, done;
 
-    bool all_applied;
-    bool all_committed;
-    bool sent_ack;
+    bool applied;
+    bool committed;
+
     bool sent_disk;
-
-    utime_t   start;
 
     Context *on_applied;
 
-    RepGather(OpContext *c, ObjectContextRef pi, ceph_tid_t rt) :
+    Mutation(OpContext *c, ObjectContextRef pi, ceph_tid_t tid) :
       queue_item(this),
       nref(1),
       ctx(c), obc(pi),
-      rep_tid(rt),
-      rep_aborted(false), rep_done(false),
-      all_applied(false), all_committed(false), sent_ack(false),
-      sent_disk(false),
+      tid(tid),
+      aborted(false), done(false),
+      applied(false), committed(false), sent_disk(false),
       on_applied(NULL) { }
 
-    RepGather *get() {
+    Mutation *get() {
       nref++;
       return this;
     }
@@ -328,14 +322,10 @@ public:
 	delete ctx; // must already be unlocked
 	assert(on_applied == NULL);
 	delete this;
-	//generic_dout(0) << "deleting " << this << dendl;
       }
     }
   };
 
-
-
-  /*** PG ****/
 protected:
   OSDService *osd;
   CephContext *cct;
@@ -442,19 +432,20 @@ protected:
 
   // replica ops
   // [primary|tail]
-  xlist<RepGather*> repop_queue;
-  map<ceph_tid_t, RepGather*> repop_map;
+  xlist<Mutation*> mutation_queue;
+  map<ceph_tid_t, Mutation*> mutation_map;
 
-  friend class C_OSD_RepopApplied;
-  friend class C_OSD_RepopCommit;
-  void repop_all_applied(RepGather *repop);
-  void repop_all_committed(RepGather *repop);
-  void eval_repop(RepGather*);
-  RepGather *new_repop(OpContext *ctx, ObjectContextRef obc, ceph_tid_t rep_tid);
-  void remove_repop(RepGather *repop);
+  friend class C_OSD_MutationApplied;
+  friend class C_OSD_MutationCommit;
+  void mutations_all_applied(Mutation *mutation);
+  void mutations_all_committed(Mutation *mutation);
+  void eval_mutation(Mutation *mutation);
+  void issue_mutation(Mutation *mutation, utime_t now);
+  Mutation *new_mutation(OpContext *ctx, ObjectContextRef obc, ceph_tid_t rep_tid);
+  void remove_mutation(Mutation *mutation);
 
-  RepGather *simple_repop_create(ObjectContextRef obc);
-  void simple_repop_submit(RepGather *repop);
+  Mutation *simple_mutation_create(ObjectContextRef obc);
+  void simple_mutation_submit(Mutation *mutation);
 
   // projected object info
   SharedPtrRegistry<hobject_t, ObjectContext> object_contexts;
@@ -581,7 +572,7 @@ public:
   eversion_t  last_update_ondisk;
   eversion_t  last_update_applied;
 
-  void apply_repops(bool requeue);
+  void apply_mutations(bool requeue);
 
   int do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr);
   int do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr);
@@ -793,22 +784,7 @@ private:
 };
 
 ostream& operator<<(ostream& out, const PG& pg);
-inline ostream& operator<<(ostream& out, PG::RepGather& repop)
-{
-  out << "repgather(" << &repop
-      << " " << repop.v
-      << " rep_tid=" << repop.rep_tid
-      << " committed?=" << repop.all_committed
-      << " applied?=" << repop.all_applied;
-  if (repop.ctx->lock_to_release != PG::OpContext::NONE)
-    out << " lock=" << (int)repop.ctx->lock_to_release;
-  if (repop.ctx->op)
-    out << " op=" << *(repop.ctx->op->get_req());
-  out << ")";
-  return out;
-}
-
-void intrusive_ptr_add_ref(PG::RepGather *repop);
-void intrusive_ptr_release(PG::RepGather *repop);
+void intrusive_ptr_add_ref(PG::Mutation *mutation);
+void intrusive_ptr_release(PG::Mutation *mutation);
 
 #endif

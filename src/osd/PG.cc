@@ -811,7 +811,7 @@ void PG::on_change(ObjectStore::Transaction *t)
 
   // this will requeue ops we were working on but didn't finish, and
   // any dups
-  apply_repops(true);
+  apply_mutations(true);
 
   dout(10) << __func__ << dendl;
   // clear temp
@@ -834,7 +834,7 @@ void PG::on_shutdown()
   // handles queue races
   deleting = true;
 
-  apply_repops(false);
+  apply_mutations(false);
   context_registry_on_change();
 
   clear_primary_state();
@@ -1205,6 +1205,7 @@ void PG::execute_ctx(OpContext *ctx)
   ObjectContextRef obc = ctx->obc;
   const hobject_t& soid = obc->obs.oi.soid;
   map<hobject_t,ObjectContextRef>& src_obc = ctx->src_obc;
+  utime_t now = ceph_clock_now(cct);
 
   // this method must be idempotent since we may call it several times
   // before we finally apply the resulting transaction.
@@ -1303,14 +1304,14 @@ void PG::execute_ctx(OpContext *ctx)
 
   assert(op->may_write() || op->may_cache());
   // issue replica writes
-  ceph_tid_t rep_tid = osd->get_tid();
-  RepGather *repop = new_repop(ctx, obc, rep_tid);  // new repop claims our obc, src_obc refs
-  // note: repop now owns ctx AND ctx->op
+  ceph_tid_t tid = osd->get_tid();
+  Mutation *mutation = new_mutation(ctx, obc, tid);
 
-  repop->src_obc.swap(src_obc); // and src_obc.
+  mutation->src_obc.swap(src_obc); // and src_obc.
 
-  eval_repop(repop);
-  repop->put();
+  issue_mutation(mutation, now);
+  eval_mutation(mutation);
+  mutation->put();
 }
 
 void PG::reply_ctx(OpContext *ctx, int r)
@@ -3216,251 +3217,230 @@ void PG::complete_read_ctx(int result, OpContext *ctx)
 // ========================================================================
 // rep op gather
 
-class C_OSD_RepopApplied : public Context {
+class C_OSD_MutationApplied : public Context {
   PGRef pg;
-  boost::intrusive_ptr<PG::RepGather> repop;
+  boost::intrusive_ptr<PG::Mutation> mutation;
 public:
-  C_OSD_RepopApplied(PG *pg, PG::RepGather *repop)
-  : pg(pg), repop(repop) {}
+  C_OSD_MutationApplied(PG *pg, PG::Mutation *mutation)
+  : pg(pg), mutation(mutation) {}
   void finish(int) {
-    pg->repop_all_applied(repop.get());
+    pg->mutations_all_applied(mutation.get());
   }
 };
 
 
-void PG::repop_all_applied(RepGather *repop)
+void PG::mutations_all_applied(Mutation *mutation)
 {
-  dout(10) << __func__ << ": repop tid " << repop->rep_tid << " all applied "
-	   << dendl;
-  repop->all_applied = true;
-  if (!repop->rep_aborted) {
-    eval_repop(repop);
-    if (repop->on_applied) {
-     repop->on_applied->complete(0);
-     repop->on_applied = NULL;
+  dout(10) << __func__ << ": mutation tid "
+	   << mutation->tid << " all applied " << dendl;
+  mutation->applied = true;
+  if (!mutation->aborted) {
+    eval_mutation(mutation);
+    if (mutation->on_applied) {
+     mutation->on_applied->complete(0);
+     mutation->on_applied = NULL;
     }
   }
 }
 
-class C_OSD_RepopCommit : public Context {
+class C_OSD_MutationCommit : public Context {
   PGRef pg;
-  boost::intrusive_ptr<PG::RepGather> repop;
+  boost::intrusive_ptr<PG::Mutation> mutation;
 public:
-  C_OSD_RepopCommit(PG *pg, PG::RepGather *repop)
-    : pg(pg), repop(repop) {}
+  C_OSD_MutationCommit(PG *pg, PG::Mutation *mutation)
+    : pg(pg), mutation(mutation) {}
   void finish(int) {
-    pg->repop_all_committed(repop.get());
+    pg->mutations_all_committed(mutation.get());
   }
 };
 
-void PG::repop_all_committed(RepGather *repop)
+void PG::mutations_all_committed(Mutation *mutation)
 {
-  dout(10) << __func__ << ": repop tid " << repop->rep_tid << " all committed "
-	   << dendl;
-  repop->all_committed = true;
+  dout(10) << __func__ << ": mutation tid " << mutation->tid
+	   << " all committed " << dendl;
+  mutation->committed = true;
 
-  if (!repop->rep_aborted) {
-    if (repop->v != eversion_t()) {
-      last_update_ondisk = repop->v;
+  if (!mutation->aborted) {
+    if (mutation->v != eversion_t()) {
+      last_update_ondisk = mutation->v;
     }
-    eval_repop(repop);
+    eval_mutation(mutation);
   }
 }
 
-void PG::op_applied(OpRequestRef *op)
-{
-  if (*op)
-    (*op)->mark_event("op_applied");
-}
-
-void PG::op_commit(OpRequestRef *op)
-{
-  if (*op)
-    (*op)->mark_event("op_commit");
-}
-
-void PG::eval_repop(RepGather *repop)
+void PG::eval_mutation(Mutation *mutation)
 {
   MOSDOp *m = NULL;
-  if (repop->ctx->op)
-    m = static_cast<MOSDOp *>(repop->ctx->op->get_req());
+  if (mutation->ctx->op)
+    m = static_cast<MOSDOp *>(mutation->ctx->op->get_req());
 
-  if (m)
-    dout(10) << "eval_repop " << *repop
-	     << " wants=" << (m->wants_ack() ? "a":"") << (m->wants_ondisk() ? "d":"")
-	     << (repop->rep_done ? " DONE" : "")
-	     << dendl;
-  else
-    dout(10) << "eval_repop " << *repop << " (no op)"
-	     << (repop->rep_done ? " DONE" : "")
-	     << dendl;
-
-  if (repop->rep_done)
+  if (mutation->done)
     return;
 
   if (m) {
-
     // an 'ondisk' reply implies 'ack'. so, prefer to send just one
     // ondisk instead of ack followed by ondisk.
 
     // ondisk?
-    if (repop->all_committed) {
+    if (mutation->committed) {
 
-      log_op_stats(repop->ctx);
+      log_op_stats(mutation->ctx);
       publish_stats_to_osd();
 
       // send dup commits, in order
-      if (waiting_for_ondisk.count(repop->v)) {
-	assert(waiting_for_ondisk.begin()->first == repop->v);
-	for (list<OpRequestRef>::iterator i = waiting_for_ondisk[repop->v].begin();
-	     i != waiting_for_ondisk[repop->v].end();
+      if (waiting_for_ondisk.count(mutation->v)) {
+	assert(waiting_for_ondisk.begin()->first == mutation->v);
+	for (list<OpRequestRef>::iterator i
+	       = waiting_for_ondisk[mutation->v].begin();
+	     i != waiting_for_ondisk[mutation->v].end();
 	     ++i) {
-	  osd->reply_op_error(*i, 0, repop->ctx->at_version,
-			      repop->ctx->user_at_version);
+	  osd->reply_op_error(*i, 0, mutation->ctx->at_version,
+			      mutation->ctx->user_at_version);
 	}
-	waiting_for_ondisk.erase(repop->v);
+	waiting_for_ondisk.erase(mutation->v);
       }
 
       // clear out acks, we sent the commits above
-      if (waiting_for_ack.count(repop->v)) {
-	assert(waiting_for_ack.begin()->first == repop->v);
-	waiting_for_ack.erase(repop->v);
+      if (waiting_for_ack.count(mutation->v)) {
+	assert(waiting_for_ack.begin()->first == mutation->v);
+	waiting_for_ack.erase(mutation->v);
       }
 
-      if (m->wants_ondisk() && !repop->sent_disk) {
+      if (m->wants_ondisk() && !mutation->sent_disk) {
 	// send commit.
-	MOSDOpReply *reply = repop->ctx->reply;
+	MOSDOpReply *reply = mutation->ctx->reply;
 	if (reply)
-	  repop->ctx->reply = NULL;
+	  mutation->ctx->reply = NULL;
 	else {
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0, true);
-	  reply->set_reply_versions(repop->ctx->at_version,
-				    repop->ctx->user_at_version);
+	  reply->set_reply_versions(mutation->ctx->at_version,
+				    mutation->ctx->user_at_version);
 	}
 	reply->add_flags(CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK);
-	dout(10) << " sending commit on " << *repop << " " << reply << dendl;
+	dout(10) << " sending commit on " << mutation->tid << " "
+		 << reply << dendl;
 	osd->send_message_osd_client(reply, m->get_connection());
-	repop->sent_disk = true;
-	repop->ctx->op->mark_commit_sent();
+	mutation->sent_disk = true;
+	mutation->ctx->op->mark_commit_sent();
       }
     }
 
     // applied?
-    if (repop->all_applied) {
-
+    if (mutation->applied) {
       // send dup acks, in order
-      if (waiting_for_ack.count(repop->v)) {
-	assert(waiting_for_ack.begin()->first == repop->v);
-	for (list<OpRequestRef>::iterator i = waiting_for_ack[repop->v].begin();
-	     i != waiting_for_ack[repop->v].end();
+      if (waiting_for_ack.count(mutation->v)) {
+	assert(waiting_for_ack.begin()->first == mutation->v);
+	for (list<OpRequestRef>::iterator i
+	       = waiting_for_ack[mutation->v].begin();
+	     i != waiting_for_ack[mutation->v].end();
 	     ++i) {
 	  MOSDOp *m = (MOSDOp*)(*i)->get_req();
-	  MOSDOpReply *reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0, true);
-	  reply->set_reply_versions(repop->ctx->at_version,
-				    repop->ctx->user_at_version);
+	  MOSDOpReply *reply = new MOSDOpReply(
+	    m, 0,get_osdmap()->get_epoch(), 0, true);
+	  reply->set_reply_versions(mutation->ctx->at_version,
+				    mutation->ctx->user_at_version);
 	  reply->add_flags(CEPH_OSD_FLAG_ACK);
 	  osd->send_message_osd_client(reply, m->get_connection());
 	}
-	waiting_for_ack.erase(repop->v);
+	waiting_for_ack.erase(mutation->v);
       }
 
-      if (m->wants_ack() && !repop->sent_ack && !repop->sent_disk) {
+      if (m->wants_ack() && !mutation->sent_disk) {
 	// send ack
-	MOSDOpReply *reply = repop->ctx->reply;
+	MOSDOpReply *reply = mutation->ctx->reply;
 	if (reply)
-	  repop->ctx->reply = NULL;
+	  mutation->ctx->reply = NULL;
 	else {
 	  reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0, true);
-	  reply->set_reply_versions(repop->ctx->at_version,
-				    repop->ctx->user_at_version);
+	  reply->set_reply_versions(mutation->ctx->at_version,
+				    mutation->ctx->user_at_version);
 	}
 	reply->add_flags(CEPH_OSD_FLAG_ACK);
-	dout(10) << " sending ack on " << *repop << " " << reply << dendl;
+	dout(10) << " sending ack on " << mutation->tid << " " << reply
+		 << dendl;
 	assert(entity_name_t::TYPE_OSD != m->get_connection()->peer_type);
 	osd->send_message_osd_client(reply, m->get_connection());
-	repop->sent_ack = true;
       }
 
       // note the write is now readable (for rlatency calc).  note
       // that this will only be defined if the write is readable
       // _prior_ to being committed; it will not get set with
       // writeahead journaling, for instance.
-      if (repop->ctx->readable_stamp == utime_t())
-	repop->ctx->readable_stamp = ceph_clock_now(cct);
+      if (mutation->ctx->readable_stamp == utime_t())
+	mutation->ctx->readable_stamp = ceph_clock_now(cct);
     }
   }
 
   // done.
-  if (repop->all_applied && repop->all_committed) {
-    repop->rep_done = true;
+  if (mutation->applied && mutation->committed) {
+    mutation->done = true;
 
-    release_op_ctx_locks(repop->ctx);
+    release_op_ctx_locks(mutation->ctx);
 
-    dout(10) << " removing " << *repop << dendl;
-    assert(!repop_queue.empty());
-    dout(20) << "   q front is " << *repop_queue.front() << dendl;
-    if (repop_queue.front() != repop) {
-      dout(0) << " removing " << *repop << dendl;
-      dout(0) << "   q front is " << *repop_queue.front() << dendl;
-      assert(repop_queue.front() == repop);
+    dout(10) << " removing " << mutation->tid << dendl;
+    assert(!mutation_queue.empty());
+    dout(20) << "   q front is " << mutation_queue.front()->tid << dendl;
+    if (mutation_queue.front() != mutation) {
+      dout(0) << " removing " << mutation->tid << dendl;
+      dout(0) << "   q front is " << mutation_queue.front()->tid << dendl;
+      assert(mutation_queue.front() == mutation);
     }
-    repop_queue.pop_front();
-    remove_repop(repop);
+    mutation_queue.pop_front();
+    remove_mutation(mutation);
   }
 }
 
-PG::RepGather *PG::new_repop(OpContext *ctx, ObjectContextRef obc,
-						 ceph_tid_t rep_tid)
+PG::Mutation *PG::new_mutation(OpContext *ctx, ObjectContextRef obc,
+				ceph_tid_t tid)
 {
   if (ctx->op)
-    dout(10) << "new_repop rep_tid " << rep_tid << " on " << *ctx->op->get_req() << dendl;
+    dout(10) << "new_mutation tid " << tid << " on " << *ctx->op->get_req() << dendl;
   else
-    dout(10) << "new_repop rep_tid " << rep_tid << " (no op)" << dendl;
+    dout(10) << "new_mutation _tid " << tid << " (no op)" << dendl;
 
-  RepGather *repop = new RepGather(ctx, obc, rep_tid);
+  Mutation *mutation = new Mutation(ctx, obc, tid);
 
-  repop->start = ceph_clock_now(cct);
+  mutation_queue.push_back(&mutation->queue_item);
+  mutation_map[mutation->tid] = mutation;
+  mutation->get();
 
-  repop_queue.push_back(&repop->queue_item);
-  repop_map[repop->rep_tid] = repop;
-  repop->get();
+  osd->logger->set(l_osd_op_wip, mutation_map.size());
 
-  osd->logger->set(l_osd_op_wip, repop_map.size());
-
-  return repop;
+  return mutation;
 }
  
-void PG::remove_repop(RepGather *repop)
+void PG::remove_mutation(Mutation *mutation)
 {
-  dout(20) << __func__ << " " << *repop << dendl;
-  release_op_ctx_locks(repop->ctx);
-  repop->ctx->finish(0);  // FIXME: return value here is sloppy
-  repop_map.erase(repop->rep_tid);
-  repop->put();
+  dout(20) << __func__ << " " << mutation->tid << dendl;
+  release_op_ctx_locks(mutation->ctx);
+  mutation->ctx->finish(0);  // FIXME: return value here is sloppy
+  mutation_map.erase(mutation->tid);
+  mutation->put();
 
-  osd->logger->set(l_osd_op_wip, repop_map.size());
+  osd->logger->set(l_osd_op_wip, mutation_map.size());
 }
 
-PG::RepGather *PG::simple_repop_create(ObjectContextRef obc)
+PG::Mutation *PG::simple_mutation_create(ObjectContextRef obc)
 {
   dout(20) << __func__ << " " << obc->obs.oi.soid << dendl;
   vector<OSDOp> ops;
-  ceph_tid_t rep_tid = osd->get_tid();
-  osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, rep_tid);
+  ceph_tid_t tid = osd->get_tid();
+  osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
   ctx->op_t = new ObjectStore::Transaction;
   ctx->mtime = ceph_clock_now(g_ceph_context);
   ctx->obc = obc;
-  RepGather *repop = new_repop(ctx, obc, rep_tid);
-  return repop;
+  Mutation *mutation = new_mutation(ctx, obc, tid);
+  return mutation;
 }
 
-void PG::simple_repop_submit(RepGather *repop)
+void PG::simple_mutation_submit(Mutation *mutation)
 {
-  dout(20) << __func__ << " " << repop << dendl;
-  eval_repop(repop);
-  repop->put();
+  dout(20) << __func__ << " " << mutation->tid << dendl;
+  issue_mutation(mutation, mutation->ctx->mtime);
+  eval_mutation(mutation);
+  mutation->put();
 }
 
 // -------------------------------------------------------
@@ -3475,8 +3455,8 @@ void PG::handle_watch_timeout(WatchRef watch)
   watch->remove();
 
   vector<OSDOp> ops;
-  ceph_tid_t rep_tid = osd->get_tid();
-  osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, rep_tid);
+  ceph_tid_t tid = osd->get_tid();
+  osd_reqid_t reqid(osd->get_cluster_msgr_name(), 0, tid);
   OpContext *ctx = new OpContext(OpRequestRef(), reqid, ops,
 				 &obc->obs, this);
   ctx->op_t = new ObjectStore::Transaction();
@@ -3485,19 +3465,20 @@ void PG::handle_watch_timeout(WatchRef watch)
 
   entity_inst_t nobody;
 
-  RepGather *repop = new_repop(ctx, obc, rep_tid);
+  Mutation *mutation = new_mutation(ctx, obc, tid);
 
   ObjectStore::Transaction *t = ctx->op_t;
 
-  obc->obs.oi.prior_version = repop->obc->obs.oi.version;
+  obc->obs.oi.prior_version = mutation->obc->obs.oi.version;
   obc->obs.oi.version = ctx->at_version;
   bufferlist bl;
   ::encode(obc->obs.oi, bl);
   t->setattr(coll, obc->obs.oi.soid, OI_ATTR, bl);
 
-  // obc ref swallowed by repop!
-  eval_repop(repop);
-  repop->put();
+  // obc ref swallowed by mutation!
+  issue_mutation(mutation, mutation->ctx->mtime);
+  eval_mutation(mutation);
+  mutation->put();
 }
 
 ObjectContextRef PG::create_object_context(const object_info_t& oi)
@@ -3644,30 +3625,30 @@ void PG::add_object_context_to_pg_stat(ObjectContextRef obc, pg_stat_t *pgstat)
  * pg status change notification
  */
 
-void PG::apply_repops(bool requeue)
+void PG::apply_mutations(bool requeue)
 {
   list<OpRequestRef> rq;
 
-  // apply all repops
-  while (!repop_queue.empty()) {
-    RepGather *repop = repop_queue.front();
-    repop_queue.pop_front();
-    dout(10) << " applying repop tid " << repop->rep_tid << dendl;
-    repop->rep_aborted = true;
-    if (repop->on_applied) {
-      delete repop->on_applied;
-      repop->on_applied = NULL;
+  // apply all mutations
+  while (!mutation_queue.empty()) {
+    Mutation *mutation = mutation_queue.front();
+    mutation_queue.pop_front();
+    dout(10) << " applying mutation tid " << mutation->tid << dendl;
+    mutation->aborted = true;
+    if (mutation->on_applied) {
+      delete mutation->on_applied;
+      mutation->on_applied = NULL;
     }
 
     if (requeue) {
-      if (repop->ctx->op) {
-	dout(10) << " requeuing " << *repop->ctx->op->get_req() << dendl;
-	rq.push_back(repop->ctx->op);
-	repop->ctx->op = OpRequestRef();
+      if (mutation->ctx->op) {
+	dout(10) << " requeuing " << *mutation->ctx->op->get_req() << dendl;
+	rq.push_back(mutation->ctx->op);
+	mutation->ctx->op = OpRequestRef();
       }
 
       // also requeue any dups, interleaved into position
-      map<eversion_t, list<OpRequestRef> >::iterator p = waiting_for_ondisk.find(repop->v);
+      map<eversion_t, list<OpRequestRef> >::iterator p = waiting_for_ondisk.find(mutation->v);
       if (p != waiting_for_ondisk.end()) {
 	dout(10) << " also requeuing ondisk waiters " << p->second << dendl;
 	rq.splice(rq.end(), p->second);
@@ -3675,7 +3656,7 @@ void PG::apply_repops(bool requeue)
       }
     }
 
-    remove_repop(repop);
+    remove_mutation(mutation);
   }
 
   if (requeue) {
@@ -3712,8 +3693,8 @@ LogClientTemp PG::clog_error() {
   return osd->clog.error();
 }
 
-void intrusive_ptr_add_ref(PG::RepGather *repop) { repop->get(); }
-void intrusive_ptr_release(PG::RepGather *repop) { repop->put(); }
+void intrusive_ptr_add_ref(PG::Mutation *mutation) { mutation->get(); }
+void intrusive_ptr_release(PG::Mutation *mutation) { mutation->put(); }
 
 // From the Backend
 
@@ -3801,3 +3782,30 @@ void PG::objects_read_async(const hobject_t &hoid,
   on_complete->complete(r);
 }
 
+void PG::issue_mutation(Mutation *mutation, utime_t now)
+{
+  OpContext *ctx = mutation->ctx;
+  const hobject_t& soid = ctx->obs->oi.soid;
+  ObjectStore::Transaction *op_t = ctx->op_t;
+
+  dout(7) << "issue_mutation tid " << mutation->tid
+	  << " o " << soid
+	  << dendl;
+
+  mutation->v = ctx->at_version;
+  mutation->obc->ondisk_write_lock();
+
+  Context *on_all_commit = new C_OSD_MutationCommit(this, mutation);
+  Context *on_all_applied = new C_OSD_MutationApplied(this, mutation);
+  Context *onapplied_sync = new C_OSD_OndiskWriteUnlock(mutation->obc,
+							ObjectContextRef(),
+							ObjectContextRef());
+
+  op_t->register_on_applied_sync(onapplied_sync);
+  op_t->register_on_applied(on_all_applied);
+  op_t->register_on_applied(new ObjectStore::C_DeleteTransaction(op_t));
+  op_t->register_on_commit(on_all_commit);
+
+  osd->store->queue_transaction(osr.get(), op_t, 0, 0, 0, mutation->ctx->op);
+  mutation->ctx->op_t = NULL;
+}
