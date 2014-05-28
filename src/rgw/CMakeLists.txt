@@ -65,10 +65,10 @@ target_link_libraries(radosgw librgw_a librados curl expat global fcgi resolv)
 install(TARGETS radosgw DESTINATION bin)
 
 set_target_properties(radosgw 
-PROPERTIES COMPILE_FLAGS "-Woverloaded-virtual -I${CMAKE_SOURCE_DIR}/src/civetweb/include")
+PROPERTIES COMPILE_FLAGS "-Wno-overloaded-virtual -I${CMAKE_SOURCE_DIR}/src/civetweb/include")
 
 set_target_properties(librgw_a 
-PROPERTIES COMPILE_FLAGS -Woverloaded-virtual)
+PROPERTIES COMPILE_FLAGS -Wno-overloaded-virtual)
 
 get_target_property(radosgw_flags radosgw COMPILE_FLAGS)
 

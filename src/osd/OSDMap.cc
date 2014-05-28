@@ -228,96 +228,8 @@ bool OSDMap::containing_subtree_is_down(CephContext *cct, int id, int subtree_ty
   }
 }
 
-void OSDMap::Incremental::encode_client_old(bufferlist& bl) const
-{
-  uint16_t v = 5;
-  ::encode(v, bl);
-  ::encode(fsid, bl);
-  ::encode(epoch, bl);
-  ::encode(modified, bl);
-  int32_t new_t = new_pool_max;
-  ::encode(new_t, bl);
-  ::encode(new_flags, bl);
-  ::encode(fullmap, bl);
-  ::encode(crush, bl);
-
-  ::encode(new_max_osd, bl);
-  // for ::encode(new_pools, bl);
-  uint32_t n = new_pools.size();
-  ::encode(n, bl);
-  for (map<int64_t,pg_pool_t>::const_iterator p = new_pools.begin();
-       p != new_pools.end();
-       ++p) {
-    n = p->first;
-    ::encode(n, bl);
-    ::encode(p->second, bl, 0);
-  }
-  // for ::encode(new_pool_names, bl);
-  n = new_pool_names.size();
-  ::encode(n, bl);
-  for (map<int64_t, string>::const_iterator p = new_pool_names.begin(); p != new_pool_names.end(); ++p) {
-    n = p->first;
-    ::encode(n, bl);
-    ::encode(p->second, bl);
-  }
-  // for ::encode(old_pools, bl);
-  n = old_pools.size();
-  ::encode(n, bl);
-  for (set<int64_t>::iterator p = old_pools.begin(); p != old_pools.end(); ++p) {
-    n = *p;
-    ::encode(n, bl);
-  }
-  ::encode(new_up_client, bl);
-  ::encode(new_state, bl);
-  ::encode(new_weight, bl);
-}
-
-void OSDMap::Incremental::encode_classic(bufferlist& bl, uint64_t features) const
-{
-  if ((features & CEPH_FEATURE_PGID64) == 0) {
-    encode_client_old(bl);
-    return;
-  }
-
-  // base
-  uint16_t v = 6;
-  ::encode(v, bl);
-  ::encode(fsid, bl);
-  ::encode(epoch, bl);
-  ::encode(modified, bl);
-  ::encode(new_pool_max, bl);
-  ::encode(new_flags, bl);
-  ::encode(fullmap, bl);
-  ::encode(crush, bl);
-
-  ::encode(new_max_osd, bl);
-  ::encode(new_pools, bl, features);
-  ::encode(new_pool_names, bl);
-  ::encode(old_pools, bl);
-  ::encode(new_up_client, bl);
-  ::encode(new_state, bl);
-  ::encode(new_weight, bl);
-
-  // extended
-  uint16_t ev = 10;
-  ::encode(ev, bl);
-  ::encode(new_hb_back_up, bl);
-  ::encode(new_up_thru, bl);
-  ::encode(new_blacklist, bl);
-  ::encode(old_blacklist, bl);
-  ::encode(new_up_cluster, bl);
-  ::encode(new_uuid, bl);
-  ::encode(new_xinfo, bl);
-  ::encode(new_hb_front_up, bl);
-}
-
 void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
 {
-  if ((features & CEPH_FEATURE_OSDMAP_ENC) == 0) {
-    encode_classic(bl, features);
-    return;
-  }
-
   // meta-encoding: how we include client-used and osd-specific data
   ENCODE_START(7, 7, bl);
 
@@ -339,8 +251,8 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
     ::encode(new_state, bl);
     ::encode(new_weight, bl);
     ::encode(new_primary_affinity, bl);
-    ::encode(new_erasure_code_profiles, bl);
-    ::encode(old_erasure_code_profiles, bl);
+    ::encode(vol_additions, bl);
+    ::encode(vol_removals, bl);
     ENCODE_FINISH(bl); // client-usable data
   }
 
@@ -362,83 +274,6 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
 
 }
 
-void OSDMap::Incremental::decode_classic(bufferlist::iterator &p)
-{
-  uint32_t n, t;
-  // base
-  uint16_t v;
-  ::decode(v, p);
-  ::decode(fsid, p);
-  ::decode(epoch, p);
-  ::decode(modified, p);
-  if (v == 4 || v == 5) {
-    ::decode(n, p);
-    new_pool_max = n;
-  } else if (v >= 6)
-    ::decode(new_pool_max, p);
-  ::decode(new_flags, p);
-  ::decode(fullmap, p);
-  ::decode(crush, p);
-
-  ::decode(new_max_osd, p);
-  if (v < 6) {
-    new_pools.clear();
-    ::decode(n, p);
-    while (n--) {
-      ::decode(t, p);
-      ::decode(new_pools[t], p);
-    }
-  } else {
-    ::decode(new_pools, p);
-  }
-  if (v == 5) {
-    new_pool_names.clear();
-    ::decode(n, p);
-    while (n--) {
-      ::decode(t, p);
-      ::decode(new_pool_names[t], p);
-    }
-  } else if (v >= 6) {
-    ::decode(new_pool_names, p);
-  }
-  if (v < 6) {
-    old_pools.clear();
-    ::decode(n, p);
-    while (n--) {
-      ::decode(t, p);
-      old_pools.insert(t);
-    }
-  } else {
-    ::decode(old_pools, p);
-  }
-  ::decode(new_up_client, p);
-  ::decode(new_state, p);
-  ::decode(new_weight, p);
-
-  // decode short map, too.
-  if (v == 5 && p.end())
-    return;
-
-  // extended
-  uint16_t ev = 0;
-  if (v >= 5)
-    ::decode(ev, p);
-  ::decode(new_hb_back_up, p);
-  if (v < 5)
-    ::decode(new_pool_names, p);
-  ::decode(new_up_thru, p);
-  ::decode(new_blacklist, p);
-  ::decode(old_blacklist, p);
-  if (ev >= 6)
-    ::decode(new_up_cluster, p);
-  if (ev >= 8)
-    ::decode(new_uuid, p);
-  if (ev >= 9)
-    ::decode(new_xinfo, p);
-  if (ev >= 10)
-    ::decode(new_hb_front_up, p);
-}
-
 void OSDMap::Incremental::decode(bufferlist::iterator& bl)
 {
   /**
@@ -449,13 +284,6 @@ void OSDMap::Incremental::decode(bufferlist::iterator& bl)
    * classic decoder.
    */
   DECODE_START_LEGACY_COMPAT_LEN(7, 7, 7, bl); // wrapper
-  if (struct_v < 7) {
-    int struct_v_size = sizeof(struct_v);
-    bl.advance(-struct_v_size);
-    decode_classic(bl);
-    encode_features = 0;
-    return;
-  }
   {
     DECODE_START(3, bl); // client-usable data
     ::decode(fsid, bl);
@@ -473,17 +301,9 @@ void OSDMap::Incremental::decode(bufferlist::iterator& bl)
     ::decode(new_up_client, bl);
     ::decode(new_state, bl);
     ::decode(new_weight, bl);
-    if (struct_v >= 2)
-      ::decode(new_primary_affinity, bl);
-    else
-      new_primary_affinity.clear();
-    if (struct_v >= 3) {
-      ::decode(new_erasure_code_profiles, bl);
-      ::decode(old_erasure_code_profiles, bl);
-    } else {
-      new_erasure_code_profiles.clear();
-      old_erasure_code_profiles.clear();
-    }
+    ::decode(new_primary_affinity, bl);
+    ::decode(vol_additions, bl);
+    ::decode(vol_removals, bl);
     DECODE_FINISH(bl); // client-usable data
   }
 
@@ -633,20 +453,35 @@ void OSDMap::Incremental::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
-
-  OSDMap::dump_erasure_code_profiles(new_erasure_code_profiles, f);
-  f->open_array_section("old_erasure_code_profiles");
-  for (vector<string>::const_iterator p = old_erasure_code_profiles.begin();
-       p != old_erasure_code_profiles.end();
-       p++) {
-    f->dump_string("old", p->c_str());
-  }
-  f->close_section();
 }
 
 void OSDMap::Incremental::generate_test_instances(list<Incremental*>& o)
 {
   o.push_back(new Incremental);
+}
+
+void OSDMap::Incremental::vol_inc_add::encode(bufferlist& bl, uint64_t features) const
+{
+  ::encode(sequence, bl);
+  ::encode(*vol, bl);
+}
+
+void OSDMap::Incremental::vol_inc_add::decode(bufferlist::iterator &p)
+{
+  ::decode(sequence, p);
+  vol = Volume::decode_volume(p);
+}
+
+void OSDMap::Incremental::vol_inc_remove::encode(bufferlist& bl, uint64_t features) const
+{
+  ::encode(sequence, bl);
+  ::encode(uuid, bl);
+}
+
+void OSDMap::Incremental::vol_inc_remove::decode(bufferlist::iterator &p)
+{
+  ::decode(sequence, p);
+  ::decode(uuid, p);
 }
 
 // ----------------------------------
@@ -922,7 +757,7 @@ int OSDMap::apply_incremental(const Incremental &inc)
     fsid = inc.fsid;
   else if (inc.fsid != fsid)
     return -EINVAL;
-  
+
   assert(inc.epoch == epoch+1);
   epoch++;
   modified = inc.modified;
@@ -982,19 +817,6 @@ int OSDMap::apply_incremental(const Incremental &inc)
     set_primary_affinity(i->first, i->second);
   }
 
-  // erasure_code_profiles
-  for (map<string,map<string,string> >::const_iterator i =
-	 inc.new_erasure_code_profiles.begin();
-       i != inc.new_erasure_code_profiles.end();
-       i++) {
-    set_erasure_code_profile(i->first, i->second);
-  }
-  
-  for (vector<string>::const_iterator i = inc.old_erasure_code_profiles.begin();
-       i != inc.old_erasure_code_profiles.end();
-       i++)
-    erasure_code_profiles.erase(*i);
-  
   // up/down
   for (map<int32_t,uint8_t>::const_iterator i = inc.new_state.begin();
        i != inc.new_state.end();
@@ -1068,6 +890,21 @@ int OSDMap::apply_incremental(const Incremental &inc)
   }
 
   calc_num_osds();
+
+  for (vector<OSDMap::Incremental::vol_inc_add>::const_iterator p =
+      inc.vol_additions.begin();
+      p != inc.vol_additions.end();
+      ++p) {
+    add_volume(p->vol);
+  }
+
+  for (vector<OSDMap::Incremental::vol_inc_remove>::const_iterator p =
+      inc.vol_removals.begin();
+      p != inc.vol_removals.end();
+      ++p) {
+    remove_volume(p->uuid);
+  }
+
   return 0;
 }
 
@@ -1307,104 +1144,8 @@ bool OSDMap::primary_changed(
 
 
 // serialize, unserialize
-void OSDMap::encode_client_old(bufferlist& bl) const
-{
-  uint16_t v = 5;
-  ::encode(v, bl);
-
-  // base
-  ::encode(fsid, bl);
-  ::encode(epoch, bl);
-  ::encode(created, bl);
-  ::encode(modified, bl);
-
-  // for ::encode(pools, bl);
-  uint32_t n = pools.size();
-  ::encode(n, bl);
-  for (map<int64_t,pg_pool_t>::const_iterator p = pools.begin();
-       p != pools.end();
-       ++p) {
-    n = p->first;
-    ::encode(n, bl);
-    ::encode(p->second, bl, 0);
-  }
-  // for ::encode(pool_name, bl);
-  n = pool_name.size();
-  ::encode(n, bl);
-  for (map<int64_t, string>::const_iterator p = pool_name.begin();
-       p != pool_name.end();
-       ++p) {
-    n = p->first;
-    ::encode(n, bl);
-    ::encode(p->second, bl);
-  }
-  // for ::encode(pool_max, bl);
-  n = pool_max;
-  ::encode(n, bl);
-
-  ::encode(flags, bl);
-
-  ::encode(max_osd, bl);
-  ::encode(osd_state, bl);
-  ::encode(osd_weight, bl);
-  ::encode(osd_addrs->client_addr, bl);
-
-  // crush
-  bufferlist cbl;
-  crush->encode(cbl);
-  ::encode(cbl, bl);
-}
-
-void OSDMap::encode_classic(bufferlist& bl, uint64_t features) const
-{
-  if ((features & CEPH_FEATURE_PGID64) == 0) {
-    encode_client_old(bl);
-    return;
-  }
-
-  uint16_t v = 6;
-  ::encode(v, bl);
-
-  // base
-  ::encode(fsid, bl);
-  ::encode(epoch, bl);
-  ::encode(created, bl);
-  ::encode(modified, bl);
-
-  ::encode(pools, bl, features);
-  ::encode(pool_name, bl);
-  ::encode(pool_max, bl);
-
-  ::encode(flags, bl);
-
-  ::encode(max_osd, bl);
-  ::encode(osd_state, bl);
-  ::encode(osd_weight, bl);
-  ::encode(osd_addrs->client_addr, bl);
-
-  // crush
-  bufferlist cbl;
-  crush->encode(cbl);
-  ::encode(cbl, bl);
-
-  // extended
-  uint16_t ev = 10;
-  ::encode(ev, bl);
-  ::encode(osd_addrs->hb_back_addr, bl);
-  ::encode(osd_info, bl);
-  ::encode(blacklist, bl);
-  ::encode(osd_addrs->cluster_addr, bl);
-  ::encode(*osd_uuid, bl);
-  ::encode(osd_xinfo, bl);
-  ::encode(osd_addrs->hb_front_addr, bl);
-}
-
 void OSDMap::encode(bufferlist& bl, uint64_t features) const
 {
-  if ((features & CEPH_FEATURE_OSDMAP_ENC) == 0) {
-    encode_classic(bl, features);
-    return;
-  }
   // meta-encoding: how we include client-used and osd-specific data
   ENCODE_START(7, 7, bl);
 
@@ -1438,7 +1179,16 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
     bufferlist cbl;
     crush->encode(cbl);
     ::encode(cbl, bl);
-    ::encode(erasure_code_profiles, bl);
+
+    uint32_t count;
+    count = vols.by_uuid.size();
+    ::encode(count, bl);
+    for (map<uuid_d,VolumeRef>::const_iterator v
+	   = vols.by_uuid.begin();
+	 v != vols.by_uuid.end();
+	 ++v) {
+      v->second->encode(bl);
+    }
     ENCODE_FINISH(bl); // client-usable data
   }
 
@@ -1463,101 +1213,6 @@ void OSDMap::decode(bufferlist& bl)
   decode(p);
 }
 
-void OSDMap::decode_classic(bufferlist::iterator& p)
-{
-  uint32_t n, t;
-  uint16_t v;
-  ::decode(v, p);
-
-  // base
-  ::decode(fsid, p);
-  ::decode(epoch, p);
-  ::decode(created, p);
-  ::decode(modified, p);
-
-  if (v < 6) {
-    if (v < 4) {
-      int32_t max_pools = 0;
-      ::decode(max_pools, p);
-      pool_max = max_pools;
-    }
-    pools.clear();
-    ::decode(n, p);
-    while (n--) {
-      ::decode(t, p);
-      ::decode(pools[t], p);
-    }
-    if (v == 4) {
-      ::decode(n, p);
-      pool_max = n;
-    } else if (v == 5) {
-      pool_name.clear();
-      ::decode(n, p);
-      while (n--) {
-	::decode(t, p);
-	::decode(pool_name[t], p);
-      }
-      ::decode(n, p);
-      pool_max = n;
-    }
-  } else {
-    ::decode(pools, p);
-    ::decode(pool_name, p);
-    ::decode(pool_max, p);
-  }
-  // kludge around some old bug that zeroed out pool_max (#2307)
-  if (pools.size() && pool_max < pools.rbegin()->first) {
-    pool_max = pools.rbegin()->first;
-  }
-
-  ::decode(flags, p);
-
-  ::decode(max_osd, p);
-  ::decode(osd_state, p);
-  ::decode(osd_weight, p);
-  ::decode(osd_addrs->client_addr, p);
-
-  // crush
-  bufferlist cbl;
-  ::decode(cbl, p);
-  bufferlist::iterator cblp = cbl.begin();
-  crush->decode(cblp);
-
-  // extended
-  uint16_t ev = 0;
-  if (v >= 5)
-    ::decode(ev, p);
-  ::decode(osd_addrs->hb_back_addr, p);
-  ::decode(osd_info, p);
-  if (v < 5)
-    ::decode(pool_name, p);
-
-  ::decode(blacklist, p);
-  if (ev >= 6)
-    ::decode(osd_addrs->cluster_addr, p);
-  else
-    osd_addrs->cluster_addr.resize(osd_addrs->client_addr.size());
-
-  if (ev >= 8) {
-    ::decode(*osd_uuid, p);
-  } else {
-    osd_uuid->resize(max_osd);
-  }
-  if (ev >= 9)
-    ::decode(osd_xinfo, p);
-  else
-    osd_xinfo.resize(max_osd);
-
-  if (ev >= 10)
-    ::decode(osd_addrs->hb_front_addr, p);
-  else
-    osd_addrs->hb_front_addr.resize(osd_addrs->hb_back_addr.size());
-
-  osd_primary_affinity.reset();
-
-  post_decode();
-}
-
 void OSDMap::decode(bufferlist::iterator& bl)
 {
   /**
@@ -1568,12 +1223,6 @@ void OSDMap::decode(bufferlist::iterator& bl)
    * classic decoder.
    */
   DECODE_START_LEGACY_COMPAT_LEN(7, 7, 7, bl); // wrapper
-  if (struct_v < 7) {
-    int struct_v_size = sizeof(struct_v);
-    bl.advance(-struct_v_size);
-    decode_classic(bl);
-    return;
-  }
   /**
    * Since we made it past that hurdle, we can use our normal paths.
    */
@@ -1595,25 +1244,25 @@ void OSDMap::decode(bufferlist::iterator& bl)
     ::decode(osd_state, bl);
     ::decode(osd_weight, bl);
     ::decode(osd_addrs->client_addr, bl);
-
-    if (struct_v >= 2) {
-      osd_primary_affinity.reset(new vector<uint32_t>);
-      ::decode(*osd_primary_affinity, bl);
-      if (osd_primary_affinity->empty())
-	osd_primary_affinity.reset();
-    } else {
+    osd_primary_affinity.reset(new vector<uint32_t>);
+    ::decode(*osd_primary_affinity, bl);
+    if (osd_primary_affinity->empty())
       osd_primary_affinity.reset();
-    }
 
     // crush
     bufferlist cbl;
     ::decode(cbl, bl);
     bufferlist::iterator cblp = cbl.begin();
     crush->decode(cblp);
-    if (struct_v >= 3) {
-      ::decode(erasure_code_profiles, bl);
-    } else {
-      erasure_code_profiles.clear();
+
+    // Volumes
+
+    uint32_t count;
+    vols.by_uuid.clear();
+    ::decode(count, bl);
+    for (uint32_t i = 0; i < count; ++i) {
+      VolumeRef v = Volume::decode_volume(bl);
+      vols.by_uuid[v->uuid] = v;
     }
     DECODE_FINISH(bl); // client-usable data
   }
@@ -1645,24 +1294,16 @@ void OSDMap::post_decode()
   }
 
   calc_num_osds();
-}
 
-void OSDMap::dump_erasure_code_profiles(const map<string,map<string,string> > &profiles,
-					Formatter *f)
-{
-  f->open_object_section("erasure_code_profiles");
-  for (map<string,map<string,string> >::const_iterator i = profiles.begin();
-       i != profiles.end();
-       i++) {
-    f->open_object_section(i->first.c_str());
-    for (map<string,string>::const_iterator j = i->second.begin();
-	 j != i->second.end();
-	 j++) {
-      f->dump_string(j->first.c_str(), j->second.c_str());
-    }
-    f->close_section();
+  vols.by_name.clear();
+
+  // build name map from uuid map (only uuid map is encoded)
+  for(map<uuid_d,VolumeRef>::const_iterator i
+	= vols.by_uuid.begin();
+      i != vols.by_uuid.end();
+      ++i) {
+    vols.by_name[i->second->name] = i->second;
   }
-  f->close_section();
 }
 
 void OSDMap::dump_json(ostream& out) const
@@ -1746,7 +1387,15 @@ void OSDMap::dump(Formatter *f) const
   }
   f->close_section();
 
-  dump_erasure_code_profiles(erasure_code_profiles, f);
+  f->open_array_section("volumes");
+  for(map<uuid_d,VolumeRef>::const_iterator i = vols.by_uuid.begin();
+      i != vols.by_uuid.end();
+      ++i) {
+    f->open_object_section("volume_info");
+    i->second->dump(f);
+    f->close_section();
+  }
+  f->close_section();
 }
 
 void OSDMap::generate_test_instances(list<OSDMap*>& o)
@@ -2119,13 +1768,6 @@ int OSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
     set_weight(i, CEPH_OSD_OUT);
   }
 
-  map<string,string> erasure_code_profile_map;
-  r = get_str_map(cct->_conf->osd_pool_default_erasure_code_profile,
-		  ss,
-		  &erasure_code_profile_map);
-  erasure_code_profile_map["directory"] =
-    cct->_conf->osd_pool_default_erasure_code_directory;
-  set_erasure_code_profile("default", erasure_code_profile_map);
   return r;
 }
 
@@ -2262,7 +1904,60 @@ int OSDMap::build_simple_crush_rulesets(CephContext *cct,
 			       "firstn", pg_pool_t::TYPE_REPLICATED, ss);
   if (r < 0)
     return r;
-  // do not add an erasure rule by default or else we will implicitly
-  // require the crush_v2 feature of clients
+  return 0;
+}
+
+int OSDMap::create_volume(VolumeRef vol, uuid_d& out)
+{
+  vol->uuid.generate_random();
+  vol->last_update = epoch + 1;
+  out = vol->uuid;
+  return add_volume(vol);
+}
+
+/*
+ * Generates a UUID for the new volume and tries to add it to the
+ * DB. Returns the uuid generated in the uuid_out parameter.
+ */
+int OSDMap::add_volume(VolumeRef vol) {
+  string error_message;
+  if (!vol->valid(error_message)) {
+    dout(0) << "attempt to add invalid volume: " << error_message
+	    << dendl;
+    return -EINVAL;
+  }
+
+  if (vols.by_uuid.count(vol->uuid) > 0) {
+    dout(0) << "attempt to add volume with existing uuid "
+	    << vol->uuid << dendl;
+    return -EEXIST;
+  }
+
+  if (vols.by_name.count(vol->name) > 0) {
+    dout(0) << "attempt to add volume with existing name \""
+	    << vol->name << "\"" << dendl;
+    return -EEXIST;
+  }
+
+  vols.by_uuid[vol->uuid] = vol;
+  vols.by_name[vol->name] = vol;
+  return 0;
+}
+
+int OSDMap::remove_volume(uuid_d uuid)
+{
+  map<uuid_d,VolumeRef>::iterator i = vols.by_uuid.find(uuid);
+
+  if (i == vols.by_uuid.end()) {
+    dout(0) << "attempt to remove volume with non-existing uuid "
+	    << uuid << dendl;
+    return -ENOENT;
+  }
+
+  VolumeRef v = i->second;
+
+  vols.by_name.erase(v->name);
+  vols.by_uuid.erase(uuid);
+
   return 0;
 }

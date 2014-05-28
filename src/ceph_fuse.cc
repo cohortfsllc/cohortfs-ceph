@@ -45,7 +45,6 @@ void usage()
 }
 
 int main(int argc, const char **argv, const char *envp[]) {
-  int filer_flags = 0;
   //cerr << "ceph-fuse starting " << myrank << "/" << world << std::endl;
   vector<const char*> args;
   argv_to_vec(argc, argv, args);
@@ -53,16 +52,6 @@ int main(int argc, const char **argv, const char *envp[]) {
 
   global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_DAEMON,
 	      CINIT_FLAG_UNPRIVILEGED_DAEMON_DEFAULTS);
-  for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
-    if (ceph_argparse_double_dash(args, i)) {
-      break;
-    } else if (ceph_argparse_flag(args, i, "--localize-reads", (char*)NULL)) {
-      cerr << "setting CEPH_OSD_FLAG_LOCALIZE_READS" << std::endl;
-      filer_flags |= CEPH_OSD_FLAG_LOCALIZE_READS;
-    } else {
-      ++i;
-    }
-  }
 
   // args for fuse
   const char **newargv;
@@ -128,9 +117,6 @@ int main(int argc, const char **argv, const char *envp[]) {
 			  Messenger::Policy::lossless_client(0, 0));
 
     client = new Client(messenger, &mc);
-    if (filer_flags) {
-      client->set_filer_flags(filer_flags);
-    }
 
     cfuse = new CephFuse(client, fd[1]);
 

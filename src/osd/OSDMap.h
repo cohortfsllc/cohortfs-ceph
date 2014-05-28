@@ -30,6 +30,7 @@
 #include "msg/Message.h"
 #include "common/Mutex.h"
 #include "common/Clock.h"
+#include "vol/Volume.h"
 
 #include "include/ceph_features.h"
 
@@ -113,8 +114,6 @@ public:
     map<int64_t,pg_pool_t> new_pools;
     map<int64_t,string> new_pool_names;
     set<int64_t> old_pools;
-    map<string,map<string,string> > new_erasure_code_profiles;
-    vector<string> old_erasure_code_profiles;
     map<int32_t,entity_addr_t> new_up_client;
     map<int32_t,entity_addr_t> new_up_cluster;
     map<int32_t,uint8_t> new_state;             // XORed onto previous state.
@@ -133,10 +132,7 @@ public:
     int get_net_marked_down(const OSDMap *previous) const;
     int identify_osd(uuid_d u) const;
 
-    void encode_client_old(bufferlist& bl) const;
-    void encode_classic(bufferlist& bl, uint64_t features) const;
     void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
-    void decode_classic(bufferlist::iterator &p);
     void decode(bufferlist::iterator &bl);
     void dump(Formatter *f) const;
     static void generate_test_instances(list<Incremental*>& o);
@@ -159,14 +155,42 @@ public:
 	new_pools[pool] = *orig;
       return &new_pools[pool];
     }
-    bool has_erasure_code_profile(const string &name) const {
-      map<string,map<string,string> >::const_iterator i =
-	new_erasure_code_profiles.find(name);
-      return i != new_erasure_code_profiles.end();
+
+    struct vol_inc_add {
+      uint16_t sequence;
+      VolumeRef vol;
+
+      void encode(bufferlist& bl, uint64_t features = -1) const;
+      void decode(bufferlist::iterator& bl);
+      void decode(bufferlist& bl);
+    };
+
+    struct vol_inc_remove {
+      uint16_t sequence;
+      uuid_d uuid;
+
+      void encode(bufferlist& bl, uint64_t features = -1) const;
+      void decode(bufferlist::iterator& bl);
+      void decode(bufferlist& bl);
+    };
+
+    version_t vol_version;
+    uint16_t vol_next_sequence;
+    vector<vol_inc_add> vol_additions;
+    vector<vol_inc_remove> vol_removals;
+
+    void include_addition(VolumeRef vol) {
+      vol_inc_add increment;
+      increment.sequence = vol_next_sequence++;
+      increment.vol = vol;
+      vol_additions.push_back(increment);
     }
-    void set_erasure_code_profile(const string &name,
-				  const map<string,string> &profile) {
-      new_erasure_code_profiles[name] = profile;
+
+    void include_removal(const uuid_d &uuid) {
+      vol_inc_remove increment;
+      increment.sequence = vol_next_sequence++;
+      increment.uuid = uuid;
+      vol_removals.push_back(increment);
     }
   };
 
@@ -181,6 +205,11 @@ private:
   int num_osd;         // not saved
   int32_t max_osd;
   vector<uint8_t> osd_state;
+
+  struct {
+    map<uuid_d,VolumeRef> by_uuid;
+    map<string,VolumeRef> by_name;
+  } vols;
 
   struct addrs_s {
     vector<ceph::shared_ptr<entity_addr_t> > client_addr;
@@ -197,7 +226,6 @@ private:
 
   map<int64_t,pg_pool_t> pools;
   map<int64_t,string> pool_name;
-  map<string,map<string,string> > erasure_code_profiles;
   map<string,int64_t> name_pool;
 
   ceph::shared_ptr< vector<uuid_d> > osd_uuid;
@@ -332,30 +360,6 @@ public:
     return (float)get_primary_affinity(o) / (float)CEPH_OSD_MAX_PRIMARY_AFFINITY;
   }
 
-  bool has_erasure_code_profile(const string &name) const {
-    map<string,map<string,string> >::const_iterator i =
-      erasure_code_profiles.find(name);
-    return i != erasure_code_profiles.end();
-  }
-  void set_erasure_code_profile(const string &name,
-				const map<string,string> &profile) {
-    erasure_code_profiles[name] = profile;
-  }
-  const map<string,string> &get_erasure_code_profile(const string &name) const {
-    map<string,map<string,string> >::const_iterator i =
-      erasure_code_profiles.find(name);
-    static map<string,string> empty;
-    if (i == erasure_code_profiles.end())
-      return empty;
-    else
-      return i->second;
-  }
-  map<string,string> &get_erasure_code_profile(const string &name) {
-    return erasure_code_profiles[name];
-  }
-  const map<string,map<string,string> > &get_erasure_code_profiles() const {
-    return erasure_code_profiles;
-  }
 
   bool exists(int osd) const {
     //assert(osd >= 0);
@@ -507,9 +511,6 @@ public:
 
   // serialize, unserialize
 private:
-  void encode_client_old(bufferlist& bl) const;
-  void encode_classic(bufferlist& bl, uint64_t features) const;
-  void decode_classic(bufferlist::iterator& p);
   void post_decode();
 public:
   void encode(bufferlist& bl, uint64_t features=CEPH_FEATURES_ALL) const;
@@ -669,15 +670,42 @@ public:
 
   string get_flag_string() const;
   static string get_flag_string(unsigned flags);
-  static void dump_erasure_code_profiles(const map<string,map<string,string> > &profiles,
-					 Formatter *f);
   void dump_json(ostream& out) const;
   void dump(Formatter *f) const;
   static void generate_test_instances(list<OSDMap*>& o);
   bool check_new_blacklist_entries() const { return new_blacklist_entries; }
+
+  int create_volume(VolumeRef volume, uuid_d& out);
+  int add_volume(VolumeRef volume);
+  int remove_volume(uuid_d uuid);
+
+  bool find_by_uuid(const uuid_d& uuid, VolumeRef& vol) {
+    map<uuid_d,VolumeRef>::iterator v = vols.by_uuid.find(uuid);
+    if (v == vols.by_uuid.end()) {
+      return false;
+    } else {
+      vol = v->second;
+      return true;
+    }
+  }
+  bool find_by_name(const string& name, VolumeRef& vol) {
+    map<string,VolumeRef>::iterator v = vols.by_name.find(name);
+    if (v == vols.by_name.end()) {
+      return false;
+    } else {
+      vol = v->second;
+      return true;
+    }
+  }
+
+  bool volmap_empty(void) {
+    return vols.by_uuid.empty();
+  }
 };
 WRITE_CLASS_ENCODER_FEATURES(OSDMap)
 WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
+WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_add)
+WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_remove)
 
 typedef ceph::shared_ptr<const OSDMap> OSDMapRef;
 

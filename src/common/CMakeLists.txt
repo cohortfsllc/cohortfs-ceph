@@ -109,6 +109,9 @@ set (libcommon_files
 	../msg/msg_types.cc 
 	hobject.cc 
 	../osd/OSDMap.cc 
+	../vol/Volume.cc 
+	../cohort/erasure.cc 
+	../cohort/CohortVolume.cc 
 	../osd/osd_types.cc
 	../mds/MDSMap.cc 
 	../mds/inode_backtrace.cc 

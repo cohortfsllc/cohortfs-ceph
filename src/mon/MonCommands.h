@@ -77,10 +77,10 @@
  * Example:
  *
  * COMMAND("auth add " \
- *   	   "name=entity,type=CephString " \
- *   	   "name=caps,type=CephString,n=N,req=false", \
- *   	   "add auth info for <name> from input file, or random key " \
- *   	   "if no input given, and/or any caps specified in the command")
+ *	   "name=entity,type=CephString "	      \
+ *	   "name=caps,type=CephString,n=N,req=false", \
+ *	   "add auth info for <name> from input file, or random key " \
+ *	   "if no input given, and/or any caps specified in the command")
  *
  * defines a command "auth add" that takes a required argument "entity"
  * of type "CephString", and from 1 to N arguments named "caps" of type
@@ -89,10 +89,10 @@
  * enters auth add client.admin 'mon rwx' 'osd *'.  The result will be a
  * JSON object like {"prefix":"auth add", "entity":"client.admin",
  * "caps":["mon rwx", "osd *"]}.
- * Note that 
- * 	- string literals are accumulated into 'prefix'
- * 	- n=1 descriptors are given normal string or int object values
- * 	- n=N descriptors are given array values
+ * Note that
+ *	- string literals are accumulated into 'prefix'
+ *	- n=1 descriptors are given normal string or int object values
+ *	- n=N descriptors are given array values
  *
  * NOTE: be careful with spaces.  Each descriptor must be separated by
  * one space, no other characters, so if you split lines as above, be
@@ -325,10 +325,10 @@ COMMAND("osd getcrushmap " \
 	"name=epoch,type=CephInt,range=0,req=false", \
 	"get CRUSH map", "osd", "r", "cli,rest")
 COMMAND("osd perf", \
-        "print dump of OSD perf summary stats", \
-        "osd", \
-        "r", \
-        "cli,rest")
+	"print dump of OSD perf summary stats", \
+	"osd",					\
+	"r",					\
+	"cli,rest")
 COMMAND("osd getmaxosd", "show largest OSD id", "osd", "r", "cli,rest")
 COMMAND("osd find " \
 	"name=id,type=CephInt,range=0", \
@@ -458,12 +458,12 @@ COMMAND("osd pg-temp " \
 	"name=pgid,type=CephPgid " \
 	"name=id,type=CephString,n=N,req=false", \
 	"set pg_temp mapping pgid:[<id> [<id>...]] (developers only)", \
-        "osd", "rw", "cli,rest")
+	"osd", "rw", "cli,rest")
 COMMAND("osd primary-temp " \
 	"name=pgid,type=CephPgid " \
 	"name=id,type=CephString", \
-        "set primary_temp mapping pgid:<id>|-1 (developers only)", \
-        "osd", "rw", "cli,rest")
+	"set primary_temp mapping pgid:<id>|-1 (developers only)",	\
+	"osd", "rw", "cli,rest")
 COMMAND("osd primary-affinity " \
 	"name=id,type=CephOsdName " \
 	"type=CephFloat,name=weight,range=0.0|1.0", \
@@ -519,16 +519,32 @@ COMMAND("osd pool set-quota " \
 	"name=val,type=CephString",
 	"set object or byte limit on pool", "osd", "rw", "cli,rest")
 COMMAND("osd pool stats " \
-        "name=name,type=CephString,req=false",
-        "obtain stats from all pools, or from specified pool",
-        "osd", "r", "cli,rest")
+	"name=name,type=CephString,req=false",
+	"obtain stats from all pools, or from specified pool",
+	"osd", "r", "cli,rest")
 COMMAND("osd reweight-by-utilization " \
 	"name=oload,type=CephInt,range=100,req=false", \
 	"reweight OSDs by utilization [overload-percentage-for-consideration, default 120]", \
 	"osd", "rw", "cli,rest")
-COMMAND("osd thrash " \
-	"name=num_epochs,type=CephInt,range=0", \
-	"thrash OSDs for <num_epochs>", "osd", "rw", "cli,rest")
+COMMAND("osd volume create "					 \
+	"name=volumeName,type=CephString "			 \
+	"name=placeCode,type=CephString "			 \
+	"name=placeSymbols,type=CephString "			 \
+	"name=erasureType,type=CephString "			 \
+	"name=erasureSize,type=CephInt,range=4096,req=false "	 \
+	"name=erasureDataBlocks,type=CephInt,range=1,req=false " \
+	"name=erasureCodeBlocks,type=CephInt,range=0,req=false " \
+	"name=erasureWordSize,type=CephInt,range=0,req=false "	 \
+	"name=erasurePktSize,type=CephInt,range=0,req=false ",	 \
+	"Create a new volume",					 \
+	"vol", "rw", "cli,rest")
+COMMAND("osd volume remove "		   \
+	"name=volumeName,type=CephString", \
+	"Remove a volume",		   \
+	"vol", "rw", "cli,rest")
+COMMAND("osd volume list",			\
+	"list volumes",				\
+	"vol", "r", "cli,rest")
 
 /*
  * mon/ConfigKeyService.cc
