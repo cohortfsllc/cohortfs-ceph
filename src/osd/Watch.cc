@@ -280,7 +280,7 @@ Watch::~Watch() {
   assert(!conn);
 }
 
-bool Watch::connected() { return conn; }
+bool Watch::connected() { return !!conn; }
 
 Context *Watch::get_delayed_cb()
 {
