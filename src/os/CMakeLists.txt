@@ -6,6 +6,7 @@ set(libos_srcs
 	JournalingObjectStore.cc 
 	KeyValueStore.cc
 	MemStore.cc
+	CDSMemStore.cc
 	LFNIndex.cc 
 	HashIndex.cc 
 	IndexManager.cc 
