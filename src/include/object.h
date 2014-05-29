@@ -99,7 +99,7 @@ struct file_object_t {
 
   const char *c_str() const {
     if (!buf[0])
-      sprintf(buf, "%"PRIx64".%08"PRIx64, ino, bno);
+      sprintf(buf, "%" PRIx64 ".%08" PRIx64, ino, bno);
     return buf;
   }
 

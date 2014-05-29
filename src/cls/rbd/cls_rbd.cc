@@ -147,7 +147,7 @@ int create(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
   }
 
   CLS_LOG(20,
-	  "create object_prefix=%s size=%"PRIu64" order=%u features=%"PRIu64,
+	  "create object_prefix=%s size=%" PRIu64 " order=%u features=%" PRIu64,
 	  object_prefix.c_str(), size, order, features);
 
   if (features & ~RBD_FEATURES_ALL) {
@@ -232,7 +232,7 @@ int require_feature(cls_method_context_t hctx, uint64_t need)
   if (r < 0)
     return r;
   if ((features & need) != need) {
-    CLS_LOG(10, "require_feature missing feature %"PRIx64", have %"PRIx64,
+    CLS_LOG(10, "require_feature missing feature %" PRIx64 ", have %" PRIx64,
 	    need, features);
     return -ENOEXEC;
   }
@@ -300,7 +300,7 @@ int set_size(cls_method_context_t hctx, bufferlist *in, bufferlist *out)
     return r;
   }
 
-  CLS_LOG(20, "set_size size=%"PRIu64" orig_size=%"PRIu64, size, orig_size);
+  CLS_LOG(20, "set_size size=%" PRIu64 " orig_size=%" PRIu64, size, orig_size);
 
   bufferlist sizebl;
   ::encode(size, sizebl);
@@ -420,7 +420,7 @@ int set_stripe_unit_count(cls_method_context_t hctx, bufferlist *in, bufferlist 
     return r;
   }
   if ((1ull << order) % stripe_unit || stripe_unit > (1ull << order)) {
-    CLS_ERR("stripe unit %"PRIu64" is not a factor of the object size %llu",
+    CLS_ERR("stripe unit %" PRIu64 " is not a factor of the object size %llu",
 	    stripe_unit, 1ull << order);
     return -EINVAL;
   }

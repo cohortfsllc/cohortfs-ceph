@@ -591,7 +591,7 @@ string LFNIndex::lfn_generate_object_name(const hobject_t &oid)
   char buf[PATH_MAX];
   char *t = buf;
   char *end = t + sizeof(buf);
-  snprintf(t, end - t, "_%"PRIu32"_%"PRIu32, oid.stripetype, oid.stripeno);
+  snprintf(t, end - t, "_%" PRIu32 "_%" PRIu32, oid.stripetype, oid.stripeno);
   full_name += string(buf);
 
   return full_name;
@@ -842,7 +842,7 @@ bool LFNIndex::lfn_parse_object_name(const string &long_name, hobject_t *out)
     return false;
   string stripe_str(current, end);
 
-  sscanf(stripe_str.c_str(), "%"SCNu32"_%"SCNu32, (uint32_t *) &stripetype,
+  sscanf(stripe_str.c_str(), "%" SCNu32 "_%" SCNu32, (uint32_t *) &stripetype,
 	 &stripeno);
 
   (*out) = hobject_t(name, stripetype, stripeno);

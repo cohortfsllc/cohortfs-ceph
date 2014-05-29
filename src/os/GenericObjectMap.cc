@@ -111,7 +111,7 @@ string GenericObjectMap::header_key(const coll_t &cid, const hobject_t &oid)
   char *end = t + sizeof(buf);
 
   // make field ordering match with hobject_t compare operations
-  snprintf(t, end - t, "%"PRIu32"_%"PRIu32, oid.stripetype, oid.stripeno);
+  snprintf(t, end - t, "%" PRIu32 "_%" PRIu32, oid.stripetype, oid.stripeno);
   full_name += string(buf);
   full_name.append(HOBJECT_KEY_SEP_S);
 
@@ -141,7 +141,7 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
   if (end == long_name.end())
     return false;
   string extra_str(current, end);
-  sscanf(extra_str.c_str(), "%"SCNu32"_%"SCNu32, (uint32_t *) &stripetype,
+  sscanf(extra_str.c_str(), "%" SCNu32 "_%" SCNu32, (uint32_t *) &stripetype,
 	 &stripeno);
 
   current = ++end;

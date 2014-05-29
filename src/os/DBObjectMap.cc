@@ -140,7 +140,7 @@ string DBObjectMap::hobject_key(coll_t c, const hobject_t &oid)
   char extra_str[1000];
   char *t = extra_str;
   char *end = t + sizeof(extra_str);
-  snprintf(t, end - t, ".%"PRIu32".%"PRIu32, oid.stripetype,
+  snprintf(t, end - t, ".%" PRIu32 ".%" PRIu32, oid.stripetype,
 	   oid.stripeno);
   out += string(extra_str);
   return out;
@@ -174,7 +174,7 @@ bool DBObjectMap::parse_hobject_key(const string &in, coll_t *c,
   if (end == in.end())
     return false;
   string extra_str(current, end);
-  sscanf(extra_str.c_str(), "%"PRIu32".%"PRIu32, &stripetype, &stripeno);
+  sscanf(extra_str.c_str(), "%" PRIu32 ".%" PRIu32, &stripetype, &stripeno);
 
   *c = coll_t(coll);
   (*oid) = hobject_t(object_t(name), (stripetype_t) stripetype, stripeno);
