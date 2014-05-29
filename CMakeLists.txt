@@ -176,6 +176,11 @@ if(WITH_FIO)
 	find_package(fio REQUIRED)
 endif(WITH_FIO)
 
+option(WITH_CDS "Support for CDS MemStore and fio engines" ON)
+if(WITH_CDS)
+	find_package(cds REQUIRED)
+endif(WITH_CDS)
+
 # Now create a useable config.h
 configure_file(
   ${PROJECT_SOURCE_DIR}/src/include/config-h.in.cmake
