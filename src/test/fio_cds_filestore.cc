@@ -82,6 +82,8 @@ struct cds_filestore_data {
 	}
 	pthread_mutex_unlock(&mtx);
 
+	cds::threading::Manager::attachThread();
+
 	// tsdata
 	td->io_ops->data = new cds_thread_data(td);
 
