@@ -12,7 +12,8 @@ if (WITH_FIO)
 	  include_directories(${CDS_INC_DIR})
 	  add_library(fio_cds_filestore SHARED fio_cds_filestore.cc)
 	  target_link_libraries(
-	    fio_cds_filestore os global ${CRYPTO_LIBS} ${EXTRA_LIBS})
+	    fio_cds_filestore os global ${CRYPTO_LIBS} ${EXTRA_LIBS}
+	    ${CDS_LIBS})
 	  install(TARGETS fio_cds_filestore DESTINATION lib)
 	endif (WITH_CDS)
 
