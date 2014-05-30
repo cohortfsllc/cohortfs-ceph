@@ -89,8 +89,6 @@ struct librados::IoCtxImpl {
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);
 
   // io
-  int list(Objecter::ListContext *context, int max_entries);
-  uint32_t list_seek(Objecter::ListContext *context, uint32_t pos);
   int create(const object_t& oid, bool exclusive);
   int create(const object_t& oid, bool exclusive, const std::string& category);
   int write(const object_t& oid, bufferlist& bl, size_t len, uint64_t off);

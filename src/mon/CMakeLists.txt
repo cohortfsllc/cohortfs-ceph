@@ -11,8 +11,6 @@ set(lib_mon_srcs
 	OSDMonitor.cc 
 	MDSMonitor.cc 
 	MonmapMonitor.cc 
-	PGMonitor.cc 
-	PGMap.cc 
 	LogMonitor.cc 
 	AuthMonitor.cc 
 	Elector.cc 

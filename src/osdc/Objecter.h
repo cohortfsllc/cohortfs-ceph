@@ -199,15 +199,6 @@ struct ObjectOperation {
 
   // ------
 
-  // pg
-  void pg_ls(uint64_t count, bufferlist& filter, collection_list_handle_t cookie, epoch_t start_epoch) {
-    if (filter.length() == 0)
-      add_pgls(CEPH_OSD_OP_PGLS, count, cookie, start_epoch);
-    else
-      add_pgls_filter(CEPH_OSD_OP_PGLS_FILTER, count, filter, cookie, start_epoch);
-    flags |= CEPH_OSD_FLAG_PGOP;
-  }
-
   void create(bool excl) {
     OSDOp& o = add_op(CEPH_OSD_OP_CREATE);
     o.op.flags = (excl ? CEPH_OSD_OP_FLAG_EXCL : 0);
@@ -1731,10 +1722,6 @@ public:
     o->mtime = mtime;
     return op_submit(o);
   }
-
-  void list_objects(ListContext *p, Context *onfinish);
-  uint32_t list_objects_seek(ListContext *p, uint32_t pos);
-
   // -------------------------
   // pool ops
 private:

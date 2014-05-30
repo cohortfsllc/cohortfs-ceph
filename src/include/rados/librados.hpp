@@ -22,11 +22,9 @@ namespace librados
   class IoCtx;
   struct IoCtxImpl;
   class ObjectOperationImpl;
-  struct ObjListCtx;
   struct PoolAsyncCompletionImpl;
   class RadosClient;
 
-  typedef void *list_ctx_t;
   typedef uint64_t auid_t;
   typedef void *config_t;
 
@@ -52,35 +50,6 @@ namespace librados
 
   typedef void *completion_t;
   typedef void (*callback_t)(completion_t cb, void *arg);
-
-  class ObjectIterator : public std::iterator <std::forward_iterator_tag, std::string> {
-  public:
-    static const ObjectIterator __EndObjectIterator;
-    ObjectIterator() {}
-    ObjectIterator(ObjListCtx *ctx_);
-    ~ObjectIterator();
-    ObjectIterator(const ObjectIterator &rhs);
-    ObjectIterator& operator=(const ObjectIterator& rhs);
-
-    bool operator==(const ObjectIterator& rhs) const;
-    bool operator!=(const ObjectIterator& rhs) const;
-    const std::pair<std::string, std::string>& operator*() const;
-    const std::pair<std::string, std::string>* operator->() const;
-    ObjectIterator &operator++(); // Preincrement
-    ObjectIterator operator++(int); // Postincrement
-    friend class IoCtx;
-
-    /// get current hash position of the iterator, rounded to the current pg
-    uint32_t get_pg_hash_position() const;
-
-    /// move the iterator to a given hash position.  this may (will!) be rounded to the nearest pg.
-    uint32_t seek(uint32_t pos);
-
-  private:
-    void get_next();
-    ceph::shared_ptr < ObjListCtx > ctx;
-    std::pair<std::string, std::string> cur_obj;
-  };
 
   class WatchCtx {
   public:
@@ -303,7 +272,7 @@ namespace librados
      * see aio_sparse_read()
      */
     void sparse_read(uint64_t off, uint64_t len, std::map<uint64_t,uint64_t> *m,
-                    bufferlist *data_bl, int *prval);
+		     bufferlist *data_bl, int *prval);
     void tmap_get(bufferlist *pbl, int *prval);
 
     /**
@@ -519,13 +488,6 @@ namespace librados
 		     std::list<librados::locker_t> *lockers);
 
 
-    /// Start enumerating objects for a pool
-    ObjectIterator objects_begin();
-    /// Start enumerating objects for a pool starting from a hash position
-    ObjectIterator objects_begin(uint32_t start_hash_position);
-    /// Iterator indicating the end of a pool
-    const ObjectIterator& objects_end() const;
-
     uint64_t get_last_version();
 
     int aio_read(const std::string& oid, AioCompletion *c,
@@ -682,12 +644,11 @@ namespace librados
     // Features useful for test cases
     void test_blacklist_self(bool set);
 
-    /* listing objects */
     int pool_list(std::list<std::string>& v);
     int get_pool_stats(std::list<std::string>& v,
 		       std::map<std::string, stats_map>& stats);
     int get_pool_stats(std::list<std::string>& v,
-                       std::string& category,
+		       std::string& category,
 		       std::map<std::string, stats_map>& stats);
     int cluster_stat(cluster_stat_t& result);
     int cluster_fsid(std::string *fsid);

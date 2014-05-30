@@ -69,7 +69,6 @@
 #include "OSDMonitor.h"
 #include "MDSMonitor.h"
 #include "MonmapMonitor.h"
-#include "PGMonitor.h"
 #include "LogMonitor.h"
 #include "AuthMonitor.h"
 #include "mon/QuorumService.h"
@@ -100,9 +99,6 @@ MonCommand mon_commands[] = {
 #define COMMAND(parsesig, helptext, modulename, req_perms, avail) \
   {parsesig, helptext, modulename, req_perms, avail},
 #include <mon/MonCommands.h>
-};
-MonCommand classic_mon_commands[] = {
-#include <mon/DumplingMonCommands.h>
 };
 
 
@@ -186,7 +182,6 @@ Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
   paxos_service[PAXOS_MDSMAP] = new MDSMonitor(this, paxos, "mdsmap");
   paxos_service[PAXOS_MONMAP] = new MonmapMonitor(this, paxos, "monmap");
   paxos_service[PAXOS_OSDMAP] = new OSDMonitor(this, paxos, "osdmap");
-  paxos_service[PAXOS_PGMAP] = new PGMonitor(this, paxos, "pgmap");
   paxos_service[PAXOS_LOG] = new LogMonitor(this, paxos, "logm");
   paxos_service[PAXOS_AUTH] = new AuthMonitor(this, paxos, "auth");
 
@@ -217,8 +212,6 @@ PaxosService *Monitor::get_paxos_service_by_name(const string& name)
     return paxos_service[PAXOS_MONMAP];
   if (name == "osdmap")
     return paxos_service[PAXOS_OSDMAP];
-  if (name == "pgmap")
-    return paxos_service[PAXOS_PGMAP];
   if (name == "logm")
     return paxos_service[PAXOS_LOG];
   if (name == "auth")
@@ -237,8 +230,7 @@ Monitor::~Monitor()
   delete paxos;
   assert(session_map.sessions.empty());
   delete mon_caps;
-  if (leader_supported_mon_commands != mon_commands &&
-      leader_supported_mon_commands != classic_mon_commands)
+  if (leader_supported_mon_commands != mon_commands)
     delete[] leader_supported_mon_commands;
 }
 
@@ -598,8 +590,6 @@ int Monitor::init()
   int cmdsize;
   get_locally_supported_monitor_commands(&cmds, &cmdsize);
   MonCommand::encode_array(cmds, cmdsize, supported_commands_bl);
-  get_classic_monitor_commands(&cmds, &cmdsize);
-  MonCommand::encode_array(cmds, cmdsize, classic_commands_bl);
 
   lock.Unlock();
   return 0;
@@ -1613,7 +1603,7 @@ void Monitor::win_standalone_election()
   const MonCommand *my_cmds;
   int cmdsize;
   get_locally_supported_monitor_commands(&my_cmds, &cmdsize);
-  win_election(1, q, CEPH_FEATURES_ALL, my_cmds, cmdsize, NULL);
+  win_election(1, q, CEPH_FEATURES_ALL, my_cmds, cmdsize);
 }
 
 const utime_t& Monitor::get_leader_since() const
@@ -1628,8 +1618,7 @@ epoch_t Monitor::get_epoch()
 }
 
 void Monitor::win_election(epoch_t epoch, set<int>& active, uint64_t features,
-                           const MonCommand *cmdset, int cmdsize,
-                           const set<int> *classic_monitors)
+			   const MonCommand *cmdset, int cmdsize)
 {
   dout(10) << __func__ << " epoch " << epoch << " quorum " << active
 	   << " features " << features << dendl;
@@ -1645,8 +1634,6 @@ void Monitor::win_election(epoch_t epoch, set<int>& active, uint64_t features,
 		<< " won leader election with quorum " << quorum << "\n";
 
   set_leader_supported_commands(cmdset, cmdsize);
-  if (classic_monitors)
-    classic_mons = *classic_monitors;
 
   paxos->leader_init();
   // NOTE: tell monmap monitor first.  This is important for the
@@ -2024,9 +2011,6 @@ void Monitor::get_cluster_status(stringstream &ss, Formatter *f)
     f->open_object_section("osdmap");
     osdmon()->osdmap.print_summary(f, cout);
     f->close_section();
-    f->open_object_section("pgmap");
-    pgmon()->pg_map.print_summary(f, NULL);
-    f->close_section();
     f->open_object_section("mdsmap");
     mdsmon()->mdsmap.print_summary(f, NULL);
     f->close_section();
@@ -2039,7 +2023,6 @@ void Monitor::get_cluster_status(stringstream &ss, Formatter *f)
     if (mdsmon()->mdsmap.get_epoch() > 1)
       ss << "     mdsmap " << mdsmon()->mdsmap << "\n";
     osdmon()->osdmap.print_summary(NULL, ss);
-    pgmon()->pg_map.print_summary(NULL, &ss);
   }
 }
 
@@ -2129,15 +2112,9 @@ void Monitor::get_leader_supported_commands(const MonCommand **cmds, int *count)
   *cmds = leader_supported_mon_commands;
   *count = leader_supported_mon_commands_size;
 }
-void Monitor::get_classic_monitor_commands(const MonCommand **cmds, int *count)
-{
-  *cmds = classic_mon_commands;
-  *count = ARRAY_SIZE(classic_mon_commands);
-}
 void Monitor::set_leader_supported_commands(const MonCommand *cmds, int size)
 {
-  if (leader_supported_mon_commands != mon_commands &&
-      leader_supported_mon_commands != classic_mon_commands)
+  if (leader_supported_mon_commands != mon_commands)
     delete[] leader_supported_mon_commands;
   leader_supported_mon_commands = cmds;
   leader_supported_mon_commands_size = size;
@@ -2257,10 +2234,6 @@ void Monitor::handle_command(MMonCommand *m)
     return;
   }
 
-  if (module == "pg") {
-    pgmon()->dispatch(m);
-    return;
-  }
   if (module == "mon") {
     monmon()->dispatch(m);
     return;
@@ -2361,21 +2334,6 @@ void Monitor::handle_command(MMonCommand *m)
 	comb.append(rdata);
       rdata = comb;
       r = 0;
-    } else if (prefix == "df") {
-      bool verbose = (detail == "detail");
-      if (f)
-        f->open_object_section("stats");
-
-      pgmon()->dump_fs_stats(ds, f.get(), verbose);
-      if (!f)
-        ds << '\n';
-      pgmon()->dump_pool_stats(ds, f.get(), verbose);
-
-      if (f) {
-        f->close_section();
-        f->flush(ds);
-        ds << '\n';
-      }
     } else {
       assert(0 == "We should never get here!");
       return;
@@ -2406,7 +2364,6 @@ void Monitor::handle_command(MMonCommand *m)
     monmon()->dump_info(f.get());
     osdmon()->dump_info(f.get());
     mdsmon()->dump_info(f.get());
-    pgmon()->dump_info(f.get());
     authmon()->dump_info(f.get());
 
     paxos->dump_info(f.get());
@@ -2981,12 +2938,6 @@ bool Monitor::dispatch(MonSession *s, Message *m, const bool src_is_mon)
       break;
 
     // pg
-    case CEPH_MSG_STATFS:
-    case MSG_PGSTATS:
-    case MSG_GETPOOLSTATS:
-      paxos_service[PAXOS_PGMAP]->dispatch((PaxosServiceMessage*)m);
-      break;
-
     case CEPH_MSG_POOLOP:
       paxos_service[PAXOS_OSDMAP]->dispatch((PaxosServiceMessage*)m);
       break;
@@ -3511,10 +3462,6 @@ void Monitor::handle_subscribe(MMonSubscribe *m)
     } else if (p->first == "osdmap") {
       if ((int)s->is_capable("osd", MON_CAP_R)) {
         osdmon()->check_sub(s->sub_map["osdmap"]);
-      }
-    } else if (p->first == "osd_pg_creates") {
-      if ((int)s->is_capable("osd", MON_CAP_W)) {
-	pgmon()->check_sub(s->sub_map["osd_pg_creates"]);
       }
     } else if (p->first == "monmap") {
       check_sub(s->sub_map["monmap"]);

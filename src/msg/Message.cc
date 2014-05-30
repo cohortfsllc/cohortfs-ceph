@@ -15,11 +15,7 @@ using namespace std;
 
 #include "Message.h"
 #include "Pipe.h"
-#include "messages/MPGStats.h"
-
 #include "messages/MGenericMessage.h"
-
-#include "messages/MPGStatsAck.h"
 
 #include "messages/MStatfs.h"
 #include "messages/MStatfsReply.h"
@@ -55,7 +51,6 @@ using namespace std;
 
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDAlive.h"
-#include "messages/MOSDPGTemp.h"
 #include "messages/MOSDFailure.h"
 #include "messages/MOSDMarkMeDown.h"
 #include "messages/MOSDPing.h"
@@ -63,9 +58,6 @@ using namespace std;
 #include "messages/MOSDOpReply.h"
 #include "messages/MOSDMap.h"
 
-#include "messages/MOSDPGRemove.h"
-#include "messages/MOSDPGCreate.h"
-#include "messages/MOSDPGScan.h"
 
 #include "messages/MMonMap.h"
 #include "messages/MMonGetMap.h"
@@ -264,13 +256,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
 
     // -- with payload --
 
-  case MSG_PGSTATS:
-    m = new MPGStats;
-    break;
-  case MSG_PGSTATSACK:
-    m = new MPGStatsAck;
-    break;
-
   case CEPH_MSG_STATFS:
     m = new MStatfs;
     break;
@@ -358,9 +343,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case MSG_OSD_ALIVE:
     m = new MOSDAlive();
     break;
-  case MSG_OSD_PGTEMP:
-    m = new MOSDPGTemp;
-    break;
   case MSG_OSD_FAILURE:
     m = new MOSDFailure();
     break;
@@ -385,16 +367,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
     m = new MWatchNotify;
     break;
 
-  case MSG_OSD_PG_REMOVE:
-    m = new MOSDPGRemove;
-    break;
-  case MSG_OSD_PG_CREATE:
-    m = new MOSDPGCreate;
-    break;
-
-  case MSG_OSD_PG_SCAN:
-    m = new MOSDPGScan;
-    break;
   case CEPH_MSG_AUTH:
     m = new MAuth;
     break;

@@ -20,7 +20,6 @@
 #include "OSDMonitor.h"
 #include "Monitor.h"
 #include "MDSMonitor.h"
-#include "PGMonitor.h"
 
 #include "MonitorDBStore.h"
 
@@ -34,7 +33,6 @@
 #include "messages/MOSDAlive.h"
 #include "messages/MPoolOp.h"
 #include "messages/MPoolOpReply.h"
-#include "messages/MOSDPGTemp.h"
 #include "messages/MMonCommand.h"
 
 #include "common/Timer.h"
@@ -98,8 +96,7 @@ void OSDMonitor::create_initial()
     newmap.decode(bl);
     newmap.set_fsid(mon->monmap->fsid);
   } else {
-    newmap.build_simple(g_ceph_context, 0, mon->monmap->fsid, 0,
-			g_conf->osd_pg_bits, g_conf->osd_pgp_bits);
+    newmap.build_simple(g_ceph_context, 0, mon->monmap->fsid, 0);
   }
   newmap.set_epoch(1);
   newmap.created = newmap.modified = ceph_clock_now(g_ceph_context);
@@ -258,11 +255,6 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
     osd_epoch.erase(p++);
   }
 
-  if (mon->is_leader()) {
-    // kick pgmon, make sure it's seen the latest map
-    mon->pgmon()->check_osd_map(osdmap.epoch);
-  }
-
   check_subs();
 
   share_map_with_random_osd();
@@ -332,86 +324,6 @@ void OSDMonitor::update_logger()
   mon->cluster_logger->set(l_cluster_num_osd_up, osdmap.get_num_up_osds());
   mon->cluster_logger->set(l_cluster_num_osd_in, osdmap.get_num_in_osds());
   mon->cluster_logger->set(l_cluster_osd_epoch, osdmap.get_epoch());
-}
-
-/* Assign a lower weight to overloaded OSDs.
- *
- * The osds that will get a lower weight are those with with a utilization
- * percentage 'oload' percent greater than the average utilization.
- */
-int OSDMonitor::reweight_by_utilization(int oload, std::string& out_str)
-{
-  if (oload <= 100) {
-    ostringstream oss;
-    oss << "You must give a percentage higher than 100. "
-      "The reweighting threshold will be calculated as <average-utilization> "
-      "times <input-percentage>. For example, an argument of 200 would "
-      "reweight OSDs which are twice as utilized as the average OSD.\n";
-    out_str = oss.str();
-    dout(0) << "reweight_by_utilization: " << out_str << dendl;
-    return -EINVAL;
-  }
-
-  // Avoid putting a small number (or 0) in the denominator when calculating
-  // average_util
-  const PGMap &pgm = mon->pgmon()->pg_map;
-  if (pgm.osd_sum.kb < 1024) {
-    ostringstream oss;
-    oss << "Refusing to reweight: we only have " << pgm.osd_sum << " kb "
-      "across all osds!\n";
-    out_str = oss.str();
-    dout(0) << "reweight_by_utilization: " << out_str << dendl;
-    return -EDOM;
-  }
-
-  if (pgm.osd_sum.kb_used < 5 * 1024) {
-    ostringstream oss;
-    oss << "Refusing to reweight: we only have " << pgm.osd_sum << " kb "
-      "used across all osds!\n";
-    out_str = oss.str();
-    dout(0) << "reweight_by_utilization: " << out_str << dendl;
-    return -EDOM;
-  }
-
-  float average_util = pgm.osd_sum.kb_used;
-  average_util /= pgm.osd_sum.kb;
-  float overload_util = average_util * oload / 100.0;
-
-  ostringstream oss;
-  char buf[128];
-  snprintf(buf, sizeof(buf), "average_util: %04f, overload_util: %04f. ",
-	   average_util, overload_util);
-  oss << buf;
-  std::string sep;
-  oss << "overloaded osds: ";
-  bool changed = false;
-  for (ceph::unordered_map<int,osd_stat_t>::const_iterator p = pgm.osd_stat.begin();
-       p != pgm.osd_stat.end();
-       ++p) {
-    float util = p->second.kb_used;
-    util /= p->second.kb;
-    if (util >= overload_util) {
-      sep = ", ";
-      // Assign a lower weight to overloaded OSDs. The current weight
-      // is a factor to take into account the original weights,
-      // to represent e.g. differing storage capacities
-      unsigned weight = osdmap.get_weight(p->first);
-      unsigned new_weight = (unsigned)((average_util / util) * (float)weight);
-      pending_inc.new_weight[p->first] = new_weight;
-      char buf[128];
-      snprintf(buf, sizeof(buf), "%d [%04f -> %04f]", p->first,
-	       (float)weight / (float)0x10000,
-	       (float)new_weight / (float)0x10000);
-      oss << buf << sep;
-      changed = true;
-    }
-  }
-  if (sep.empty()) {
-    oss << "(none)";
-  }
-  out_str = oss.str();
-  dout(0) << "reweight_by_utilization: finished with " << out_str << dendl;
-  return changed;
 }
 
 void OSDMonitor::create_pending()
@@ -527,25 +439,22 @@ void OSDMonitor::share_map_with_random_osd()
 
 version_t OSDMonitor::get_trim_to()
 {
-  if (mon->pgmon()->is_readable() &&
-      mon->pgmon()->pg_map.creating_pgs.empty()) {
-    epoch_t floor;
-    dout(10) << " min_last_epoch_clean " << dendl;
-    if (g_conf->mon_osd_force_trim_to > 0 &&
-	g_conf->mon_osd_force_trim_to < (int)get_last_committed()) {
-      floor = g_conf->mon_osd_force_trim_to;
-      dout(10) << " explicit mon_osd_force_trim_to = " << floor << dendl;
-    }
-    unsigned min = g_conf->mon_min_osdmap_epochs;
-    if (floor + min > get_last_committed()) {
-      if (min < get_last_committed())
-	floor = get_last_committed() - min;
-      else
-	floor = 0;
-    }
-    if (floor > get_first_committed())
-      return floor;
+  epoch_t floor;
+  dout(10) << " min_last_epoch_clean " << dendl;
+  if (g_conf->mon_osd_force_trim_to > 0 &&
+      g_conf->mon_osd_force_trim_to < (int)get_last_committed()) {
+    floor = g_conf->mon_osd_force_trim_to;
+    dout(10) << " explicit mon_osd_force_trim_to = " << floor << dendl;
   }
+  unsigned min = g_conf->mon_min_osdmap_epochs;
+  if (floor + min > get_last_committed()) {
+    if (min < get_last_committed())
+      floor = get_last_committed() - min;
+    else
+      floor = 0;
+  }
+  if (floor > get_first_committed())
+    return floor;
   return 0;
 }
 
@@ -1481,13 +1390,13 @@ void OSDMonitor::check_sub(Subscription *sub)
 
 void OSDMonitor::tick()
 {
+  bool do_propose = false;
   if (!is_active()) return;
 
   dout(10) << osdmap << dendl;
 
   if (!mon->is_leader()) return;
 
-  bool do_propose = false;
   utime_t now = ceph_clock_now(g_ceph_context);
 
   // mark osds down?
@@ -1578,49 +1487,13 @@ void OSDMonitor::tick()
     }
   }
 
-  //if map full setting has changed, get that info out there!
-  if (mon->pgmon()->is_readable()) {
-    if (!mon->pgmon()->pg_map.full_osds.empty()) {
-      dout(5) << "There are full osds, setting full flag" << dendl;
-      add_flag(CEPH_OSDMAP_FULL);
-    } else if (osdmap.test_flag(CEPH_OSDMAP_FULL)){
-      dout(10) << "No full osds, removing full flag" << dendl;
-      remove_flag(CEPH_OSDMAP_FULL);
-    }
-    if (pending_inc.new_flags != -1 &&
-	(pending_inc.new_flags ^ osdmap.flags) & CEPH_OSDMAP_FULL) {
-      dout(1) << "New setting for CEPH_OSDMAP_FULL -- doing propose" << dendl;
-      do_propose = true;
-    }
-  }
-  // ---------------
-#define SWAP_PRIMARIES_AT_START 0
-#define SWAP_TIME 1
-#if 0
-  if (SWAP_PRIMARIES_AT_START) {
-    // For all PGs that have OSD 0 as the primary,
-    // switch them to use the first replca
-    ps_t numps = osdmap.get_pg_num();
-    for (int64_t pool=0; pool<1; pool++)
-      for (ps_t ps = 0; ps < numps; ++ps) {
-	pg_t pgid = pg_t(pg_t::TYPE_REPLICATED, ps, pool, -1);
-	vector<int> osds;
-	osdmap.pg_to_osds(pgid, osds); 
-	if (osds[0] == 0) {
-	  pending_inc.new_pg_swap_primary[pgid] = osds[1];
-	  dout(3) << "Changing primary for PG " << pgid << " from " << osds[0] << " to "
-		  << osds[1] << dendl;
-	  do_propose = true;
-	}
-      }
-  }
-#endif
-  // ---------------
-
-  if (update_pools_status())
+  if (pending_inc.new_flags != -1 &&
+      (pending_inc.new_flags ^ osdmap.flags) & CEPH_OSDMAP_FULL) {
+    dout(1) << "New setting for CEPH_OSDMAP_FULL -- doing propose" << dendl;
     do_propose = true;
+  }
 
-  if (do_propose)  // also propose if we adjusted pg_temp
+  if (do_propose)
     propose_pending();
 }
 
@@ -1717,19 +1590,6 @@ void OSDMonitor::get_health(list<pair<health_status_t,string> >& summary,
 	detail->push_back(make_pair(HEALTH_WARN, ss.str()));
     }
 
-    // old crush tunables?
-    if (g_conf->mon_warn_on_legacy_crush_tunables) {
-      if (osdmap.crush->has_legacy_tunables()) {
-	ostringstream ss;
-	ss << "crush map has legacy tunables";
-	summary.push_back(make_pair(HEALTH_WARN, ss.str()));
-	if (detail) {
-	  ss << "; see http://ceph.com/docs/master/rados/operations/crush-map/#tunables";
-	  detail->push_back(make_pair(HEALTH_WARN, ss.str()));
-	}
-      }
-    }
-
     // Warn if 'mon_osd_down_out_interval' is set to zero.
     // Having this option set to zero on the leader acts much like the
     // 'noout' flag.  It's hard to figure out what's going wrong with clusters
@@ -1752,8 +1612,6 @@ void OSDMonitor::get_health(list<pair<health_status_t,string> >& summary,
 	detail->push_back(make_pair(HEALTH_WARN, ss.str()));
       }
     }
-
-    get_pools_health(summary, detail);
   }
 }
 
@@ -1819,8 +1677,7 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
 	   prefix == "osd tree" ||
 	   prefix == "osd ls" ||
 	   prefix == "osd getmap" ||
-	   prefix == "osd getcrushmap" ||
-	   prefix == "osd perf") {
+	   prefix == "osd getcrushmap") {
     string val;
 
     epoch_t epoch = 0;
@@ -1893,30 +1750,6 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
     } else if (prefix == "osd getcrushmap") {
       p->crush->encode(rdata);
       ss << "got crush map from osdmap epoch " << p->get_epoch();
-    } else if (prefix == "osd perf") {
-      const PGMap &pgm = mon->pgmon()->pg_map;
-      if (f) {
-	f->open_object_section("osdstats");
-	pgm.dump_osd_perf_stats(f.get());
-	f->close_section();
-	f->flush(ds);
-      } else {
-	pgm.print_osd_perf_stats(&ds);
-      }
-      rdata.append(ds);
-    }
-    if (p != &osdmap)
-      delete p;
-  } else if (prefix == "osd getmaxosd") {
-    if (f) {
-      f->open_object_section("getmaxosd");
-      f->dump_int("epoch", osdmap.get_epoch());
-      f->dump_int("max_osd", osdmap.get_max_osd());
-      f->close_section();
-      f->flush(rdata);
-    } else {
-      ds << "max_osd = " << osdmap.get_max_osd() << " in epoch " << osdmap.get_epoch();
-      rdata.append(ds);
     }
   } else if (prefix  == "osd find") {
     int64_t osd;
@@ -2115,8 +1948,6 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
     string pool_name;
     cmd_getval(g_ceph_context, cmdmap, "name", pool_name);
 
-    PGMap& pg_map = mon->pgmon()->pg_map;
-
     int64_t poolid = -ENOENT;
     bool one_pool = false;
     if (!pool_name.empty()) {
@@ -2273,146 +2104,6 @@ void OSDMonitor::update_pool_flags(int64_t pool_id, uint64_t flags)
   pending_inc.get_new_pool(pool_id, pool)->flags = flags;
 }
 
-bool OSDMonitor::update_pools_status()
-{
-  if (!mon->pgmon()->is_readable())
-    return false;
-
-  bool ret = false;
-
-  const map<int64_t,pg_pool_t>& pools = osdmap.get_pools();
-  for (map<int64_t,pg_pool_t>::const_iterator it = pools.begin();
-       it != pools.end();
-       ++it) {
-    if (!mon->pgmon()->pg_map.pg_pool_sum.count(it->first))
-      continue;
-    pool_stat_t& stats = mon->pgmon()->pg_map.pg_pool_sum[it->first];
-    object_stat_sum_t& sum = stats.stats.sum;
-    const pg_pool_t &pool = it->second;
-    const char *pool_name = osdmap.get_pool_name(it->first);
-
-    bool pool_is_full =
-      (pool.quota_max_bytes > 0 && (uint64_t)sum.num_bytes >= pool.quota_max_bytes) ||
-      (pool.quota_max_objects > 0 && (uint64_t)sum.num_objects >= pool.quota_max_objects);
-
-    if (pool.get_flags() & pg_pool_t::FLAG_FULL) {
-      if (pool_is_full)
-	continue;
-
-      mon->clog.info() << "pool '" << pool_name
-		       << "' no longer full; removing FULL flag";
-
-      update_pool_flags(it->first, pool.get_flags() & ~pg_pool_t::FLAG_FULL);
-      ret = true;
-    } else {
-      if (!pool_is_full)
-	continue;
-
-      if (pool.quota_max_bytes > 0 &&
-	  (uint64_t)sum.num_bytes >= pool.quota_max_bytes) {
-	mon->clog.warn() << "pool '" << pool_name << "' is full"
-			 << " (reached quota's max_bytes: "
-			 << si_t(pool.quota_max_bytes) << ")";
-      } else if (pool.quota_max_objects > 0 &&
-		 (uint64_t)sum.num_objects >= pool.quota_max_objects) {
-	mon->clog.warn() << "pool '" << pool_name << "' is full"
-			 << " (reached quota's max_objects: "
-			 << pool.quota_max_objects << ")";
-      } else {
-	assert(0 == "we shouldn't reach this");
-      }
-      update_pool_flags(it->first, pool.get_flags() | pg_pool_t::FLAG_FULL);
-      ret = true;
-    }
-  }
-  return ret;
-}
-
-void OSDMonitor::get_pools_health(
-    list<pair<health_status_t,string> >& summary,
-    list<pair<health_status_t,string> > *detail) const
-{
-  const map<int64_t,pg_pool_t>& pools = osdmap.get_pools();
-  for (map<int64_t,pg_pool_t>::const_iterator it = pools.begin();
-       it != pools.end(); ++it) {
-    if (!mon->pgmon()->pg_map.pg_pool_sum.count(it->first))
-      continue;
-    pool_stat_t& stats = mon->pgmon()->pg_map.pg_pool_sum[it->first];
-    object_stat_sum_t& sum = stats.stats.sum;
-    const pg_pool_t &pool = it->second;
-    const char *pool_name = osdmap.get_pool_name(it->first);
-
-    if (pool.get_flags() & pg_pool_t::FLAG_FULL) {
-      // uncomment these asserts if/when we update the FULL flag on pg_stat update
-      //assert((pool.quota_max_objects > 0) || (pool.quota_max_bytes > 0));
-
-      stringstream ss;
-      ss << "pool '" << pool_name << "' is full";
-      summary.push_back(make_pair(HEALTH_WARN, ss.str()));
-      if (detail)
-	detail->push_back(make_pair(HEALTH_WARN, ss.str()));
-    }
-
-    float warn_threshold = g_conf->mon_pool_quota_warn_threshold/100;
-    float crit_threshold = g_conf->mon_pool_quota_crit_threshold/100;
-
-    if (pool.quota_max_objects > 0) {
-      stringstream ss;
-      health_status_t status = HEALTH_OK;
-      if ((uint64_t)sum.num_objects >= pool.quota_max_objects) {
-	// uncomment these asserts if/when we update the FULL flag on pg_stat update
-	//assert(pool.get_flags() & pg_pool_t::FLAG_FULL);
-      } else if (crit_threshold > 0 &&
-		 sum.num_objects >= pool.quota_max_objects*crit_threshold) {
-	ss << "pool '" << pool_name
-	   << "' has " << sum.num_objects << " objects"
-	   << " (max " << pool.quota_max_objects << ")";
-	status = HEALTH_ERR;
-      } else if (warn_threshold > 0 &&
-		 sum.num_objects >= pool.quota_max_objects*warn_threshold) {
-	ss << "pool '" << pool_name
-	   << "' has " << sum.num_objects << " objects"
-	   << " (max " << pool.quota_max_objects << ")";
-	status = HEALTH_WARN;
-      }
-      if (status != HEALTH_OK) {
-	pair<health_status_t,string> s(status, ss.str());
-	summary.push_back(s);
-	if (detail)
-	  detail->push_back(s);
-      }
-    }
-
-    if (pool.quota_max_bytes > 0) {
-      health_status_t status = HEALTH_OK;
-      stringstream ss;
-      if ((uint64_t)sum.num_bytes >= pool.quota_max_bytes) {
-	// uncomment these asserts if/when we update the FULL flag on pg_stat update
-	//assert(pool.get_flags() & pg_pool_t::FLAG_FULL);
-      } else if (crit_threshold > 0 &&
-		 sum.num_bytes >= pool.quota_max_bytes*crit_threshold) {
-	ss << "pool '" << pool_name
-	   << "' has " << si_t(sum.num_bytes) << " bytes"
-	   << " (max " << si_t(pool.quota_max_bytes) << ")";
-	status = HEALTH_ERR;
-      } else if (warn_threshold > 0 &&
-		 sum.num_bytes >= pool.quota_max_bytes*warn_threshold) {
-	ss << "pool '" << pool_name
-	   << "' has " << si_t(sum.num_bytes) << " objects"
-	   << " (max " << si_t(pool.quota_max_bytes) << ")";
-	status = HEALTH_WARN;
-      }
-      if (status != HEALTH_OK) {
-	pair<health_status_t,string> s(status, ss.str());
-	summary.push_back(s);
-	if (detail)
-	  detail->push_back(s);
-      }
-    }
-  }
-}
-
-
 int OSDMonitor::prepare_new_pool(MPoolOp *m)
 {
   dout(10) << "prepare_new_pool from " << m->get_connection() << dendl;
@@ -2563,8 +2254,6 @@ int OSDMonitor::prepare_new_pool(string& name, uint64_t auid,
   pi->min_size = g_conf->get_osd_pool_default_min_size();
   pi->crush_ruleset = crush_ruleset;
   pi->object_hash = CEPH_STR_HASH_RJENKINS;
-  pi->set_pg_num(pg_num ? pg_num : g_conf->osd_pool_default_pg_num);
-  pi->set_pgp_num(pgp_num ? pgp_num : g_conf->osd_pool_default_pgp_num);
   pi->last_change = pending_inc.epoch;
   pi->auid = auid;
   pending_inc.new_pool_names[pool] = name;
@@ -2703,14 +2392,6 @@ int OSDMonitor::prepare_command_pool_set(map<string,cmd_vartype> &cmdmap,
 	 << ')';
       return -E2BIG;
     }
-    for(set<pg_t>::iterator i = mon->pgmon()->pg_map.creating_pgs.begin();
-	i != mon->pgmon()->pg_map.creating_pgs.end();
-	++i) {
-      if (i->m_pool == static_cast<uint64_t>(pool)) {
-	ss << "currently creating pgs, wait";
-	return -EBUSY;
-      }
-    }
     p.set_pg_num(n);
   } else if (var == "pgp_num") {
     if (interr.length()) {
@@ -2724,14 +2405,6 @@ int OSDMonitor::prepare_command_pool_set(map<string,cmd_vartype> &cmdmap,
     if (n > (int)p.get_pg_num()) {
       ss << "specified pgp_num " << n << " > pg_num " << p.get_pg_num();
       return -EINVAL;
-    }
-    for(set<pg_t>::iterator i = mon->pgmon()->pg_map.creating_pgs.begin();
-	i != mon->pgmon()->pg_map.creating_pgs.end();
-	++i) {
-      if (i->m_pool == static_cast<uint64_t>(pool)) {
-	ss << "currently creating pgs, wait";
-	return -EBUSY;
-      }
     }
     p.set_pgp_num(n);
   } else if (var == "crush_ruleset") {
@@ -3469,12 +3142,6 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
       err = -EINVAL;
       goto reply;
     }
-    PGMap& pg_map = mon->pgmon()->pg_map;
-    if (!pg_map.pg_stat.count(pgid)) {
-      ss << "pg " << pgid << " does not exist";
-      err = -ENOENT;
-      goto reply;
-    }
 
     vector<string> id_vec;
     vector<int32_t> new_pg_temp;
@@ -3513,13 +3180,6 @@ bool OSDMonitor::prepare_command_impl(MMonCommand *m,
       err = -EINVAL;
       goto reply;
     }
-    PGMap& pg_map = mon->pgmon()->pg_map;
-    if (!pg_map.pg_stat.count(pgid)) {
-      ss << "pg " << pgid << " does not exist";
-      err = -ENOENT;
-      goto reply;
-    }
-
     string id;
     int32_t osd;
     if (!cmd_getval(g_ceph_context, cmdmap, "id", id)) {
@@ -3730,10 +3390,8 @@ done:
     int64_t  pg_num;
     int64_t pgp_num;
     cmd_getval(g_ceph_context, cmdmap, "pg_num", pg_num, int64_t(0));
-    if ((pg_num == 0) || (pg_num > g_conf->mon_max_pool_pg_num)) {
-      ss << "'pg_num' must be greater than 0 and less than or equal to "
-	 << g_conf->mon_max_pool_pg_num
-	 << " (you may adjust 'mon max pool pg num' for higher values)";
+    if (pg_num == 0) {
+      ss << "'pg_num' must be greater than 0.";
       err = -ERANGE;
       goto reply;
     }
@@ -3928,23 +3586,6 @@ done:
 					      get_last_committed() + 1));
     return true;
 
-  } else if (prefix == "osd reweight-by-utilization") {
-    int64_t oload;
-    cmd_getval(g_ceph_context, cmdmap, "oload", oload, int64_t(120));
-    string out_str;
-    err = reweight_by_utilization(oload, out_str);
-    if (err < 0) {
-      ss << "FAILED reweight-by-utilization: " << out_str;
-    }
-    else if (err == 0) {
-      ss << "no change: " << out_str;
-    } else {
-      ss << "SUCCESSFUL reweight-by-utilization: " << out_str;
-      getline(ss, rs);
-      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						get_last_committed() + 1));
-      return true;
-    }
   } else if (prefix == "osd volume create") {
     /* Factor this out into its own function sometime. */
     string name;

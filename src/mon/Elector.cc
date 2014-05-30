@@ -61,7 +61,6 @@ void Elector::bump_epoch(epoch_t e)
   // clear up some state
   electing_me = false;
   acked_me.clear();
-  classic_mons.clear();
 }
 
 
@@ -74,11 +73,10 @@ void Elector::start()
   dout(5) << "start -- can i be leader?" << dendl;
 
   acked_me.clear();
-  classic_mons.clear();
   init();
-  
+
   // start by trying to elect me
-  if (epoch % 2 == 0) 
+  if (epoch % 2 == 0)
     bump_epoch(epoch+1);  // odd == election cycle
   start_stamp = ceph_clock_now(g_ceph_context);
   electing_me = true;
@@ -102,7 +100,6 @@ void Elector::defer(int who)
   if (electing_me) {
     // drop out
     acked_me.clear();
-    classic_mons.clear();
     electing_me = false;
   }
 
@@ -168,11 +165,6 @@ void Elector::victory()
     features &= p->second;
   }
 
-  // decide what command set we're supporting
-  bool use_classic_commands = !classic_mons.empty();
-  // keep a copy to share with the monitor; we clear classic_mons in bump_epoch
-  set<int> copy_classic_mons = classic_mons;
-  
   cancel_timer();
   
   assert(epoch % 2 == 1);  // election
@@ -182,14 +174,10 @@ void Elector::victory()
   const bufferlist *cmds_bl = NULL;
   const MonCommand *cmds;
   int cmdsize;
-  if (use_classic_commands) {
-    mon->get_classic_monitor_commands(&cmds, &cmdsize);
-    cmds_bl = &mon->get_classic_commands_bl();
-  } else {
-    mon->get_locally_supported_monitor_commands(&cmds, &cmdsize);
-    cmds_bl = &mon->get_supported_commands_bl();
-  }
-  
+  mon->get_locally_supported_monitor_commands(&cmds, &cmdsize);
+  cmds_bl = &mon->get_supported_commands_bl();
+
+
   // tell everyone!
   for (set<int>::iterator p = quorum.begin();
        p != quorum.end();
@@ -203,7 +191,7 @@ void Elector::victory()
   }
     
   // tell monitor
-  mon->win_election(epoch, quorum, features, cmds, cmdsize, &copy_classic_mons);
+  mon->win_election(epoch, quorum, features, cmds, cmdsize);
 }
 
 
@@ -289,10 +277,7 @@ void Elector::handle_ack(MMonElection *m)
   if (electing_me) {
     // thanks
     acked_me[from] = m->get_connection()->get_features();
-    if (!m->sharing_bl.length())
-      classic_mons.insert(from);
-    dout(5) << " so far i have " << acked_me << dendl;
-    
+
     // is that _everyone_?
     if (acked_me.size() == mon->monmap->size()) {
       // if yes, shortcut to election finish
@@ -340,11 +325,6 @@ void Elector::handle_victory(MMonElection *m)
     int cmdsize;
     bufferlist::iterator bi = m->sharing_bl.begin();
     MonCommand::decode_array(&new_cmds, &cmdsize, bi);
-    mon->set_leader_supported_commands(new_cmds, cmdsize);
-  } else { // they are a legacy monitor; use known legacy command set
-    const MonCommand *new_cmds;
-    int cmdsize;
-    mon->get_classic_monitor_commands(&new_cmds, &cmdsize);
     mon->set_leader_supported_commands(new_cmds, cmdsize);
   }
 

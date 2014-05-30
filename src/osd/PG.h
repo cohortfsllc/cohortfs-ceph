@@ -83,40 +83,6 @@ struct PGPool {
   void update(OSDMapRef map);
 };
 
-class PGLSFilter {
-protected:
-  string xattr;
-public:
-  PGLSFilter();
-  virtual ~PGLSFilter();
-  virtual bool filter(bufferlist& xattr_data, bufferlist& outdata) = 0;
-  virtual string& get_xattr() { return xattr; }
-};
-
-class PGLSPlainFilter : public PGLSFilter {
-  string val;
-public:
-  PGLSPlainFilter(bufferlist::iterator& params) {
-    ::decode(xattr, params);
-    ::decode(val, params);
-  }
-  virtual ~PGLSPlainFilter() {}
-  virtual bool filter(bufferlist& xattr_data, bufferlist& outdata);
-};
-
-class PGLSParentFilter : public PGLSFilter {
-  inodeno_t parent_ino;
-public:
-  PGLSParentFilter(bufferlist::iterator& params) {
-    xattr = "_parent";
-    ::decode(parent_ino, params);
-    generic_dout(0) << "parent_ino=" << parent_ino << dendl;
-  }
-  virtual ~PGLSParentFilter() {}
-  virtual bool filter(bufferlist& xattr_data, bufferlist& outdata);
-};
-
-
 /** PG - Replica Placement Group
  */
 
@@ -577,10 +543,6 @@ public:
   int do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr);
   int do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr);
 
-  bool pgls_filter(PGLSFilter *filter, hobject_t& sobj, bufferlist& outdata);
-  int get_pgls_filter(bufferlist::iterator& iter, PGLSFilter **pfilter);
-
-  void do_pg_op(OpRequestRef op);
   int do_osd_ops(OpContext *ctx, vector<OSDOp>& ops);
 
   int _get_tmap(OpContext *ctx, bufferlist *header, bufferlist *vals);
@@ -701,7 +663,6 @@ public:
 
   // OpRequest queueing
   bool can_discard_op(OpRequestRef op);
-  bool can_discard_scan(OpRequestRef op);
   bool can_discard_request(OpRequestRef op);
 
   template<typename T, int MSGTYPE>

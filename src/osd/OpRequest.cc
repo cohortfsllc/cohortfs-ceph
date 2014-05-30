@@ -58,7 +58,6 @@ bool OpRequest::check_rmw(int flag) {
 bool OpRequest::may_read() { return need_read_cap() || need_class_read_cap(); }
 bool OpRequest::may_write() { return need_write_cap() || need_class_write_cap(); }
 bool OpRequest::may_cache() { return check_rmw(CEPH_OSD_RMW_FLAG_CACHE); }
-bool OpRequest::includes_pg_op() { return check_rmw(CEPH_OSD_RMW_FLAG_PGOP); }
 bool OpRequest::need_read_cap() {
   return check_rmw(CEPH_OSD_RMW_FLAG_READ);
 }

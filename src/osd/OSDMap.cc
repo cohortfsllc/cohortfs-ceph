@@ -1405,7 +1405,7 @@ void OSDMap::generate_test_instances(list<OSDMap*>& o)
   CephContext *cct = new CephContext(CODE_ENVIRONMENT_UTILITY);
   o.push_back(new OSDMap);
   uuid_d fsid;
-  o.back()->build_simple(cct, 1, fsid, 16, 7, 8);
+  o.back()->build_simple(cct, 1, fsid, 16);
   o.back()->created = o.back()->modified = utime_t(1, 2);  // fix timestamp
   cct->put();
 }
@@ -1682,11 +1682,10 @@ bool OSDMap::crush_ruleset_in_use(int ruleset) const
 }
 
 int OSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
-			  int nosd, int pg_bits, int pgp_bits)
+			  int nosd)
 {
   ldout(cct, 10) << "build_simple on " << num_osd
-		 << " osds with " << pg_bits << " pg bits per osd, "
-		 << dendl;
+		 << " osds." << dendl;
   epoch = e;
   set_fsid(fsid);
   created = modified = ceph_clock_now(cct);
@@ -1721,16 +1720,10 @@ int OSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
     set_max_osd(maxosd + 1);
   }
 
-  // pgp_num <= pg_num
-  if (pgp_bits > pg_bits)
-    pgp_bits = pg_bits;
-
   vector<string> pool_names;
   pool_names.push_back("data");
   pool_names.push_back("metadata");
   pool_names.push_back("rbd");
-
-  int poolbase = get_max_osd() ? get_max_osd() : 1;
 
   for (vector<string>::iterator p = pool_names.begin();
        p != pool_names.end(); ++p) {
@@ -1744,8 +1737,6 @@ int OSDMap::build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
     pools[pool].crush_ruleset =
       CrushWrapper::get_osd_pool_default_crush_replicated_ruleset(cct);
     pools[pool].object_hash = CEPH_STR_HASH_RJENKINS;
-    pools[pool].set_pg_num(poolbase << pg_bits);
-    pools[pool].set_pgp_num(poolbase << pgp_bits);
     pools[pool].last_change = epoch;
     if (*p == "data")
       pools[pool].crash_replay_interval = cct->_conf->osd_default_data_pool_replay_window;

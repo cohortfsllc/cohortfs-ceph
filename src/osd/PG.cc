@@ -27,9 +27,7 @@
 #include "common/Timer.h"
 
 #include "messages/MOSDOp.h"
-#include "messages/MOSDPGRemove.h"
 #include "messages/MOSDOpReply.h"
-#include "messages/MOSDPGScan.h"
 #include "messages/MOSDPing.h"
 #include "messages/MWatchNotify.h"
 #include "Watch.h"
@@ -147,8 +145,6 @@ void PG::clear_primary_state()
   last_update_ondisk = eversion_t();
 
   finish_sync_event = 0;  // so that _finish_recvoery doesn't go off in another thread
-
-  osd->remove_want_pg_temp(info.pgid);
 }
 
 struct C_PG_ActivateCommitted : public Context {
@@ -314,7 +310,6 @@ void PG::publish_stats_to_osd()
   dout(15) << "publish_stats_to_osd " << pg_stats_publish.reported_epoch
 	   << ":" << pg_stats_publish.reported_seq << dendl;
   pg_stats_publish_lock.Unlock();
-  osd->pg_stat_queue_enqueue(this);
 }
 
 void PG::clear_publish_stats()
@@ -323,8 +318,6 @@ void PG::clear_publish_stats()
   pg_stats_publish_lock.Lock();
   pg_stats_publish_valid = false;
   pg_stats_publish_lock.Unlock();
-
-  osd->pg_stat_queue_dequeue(this);
 }
 
 /**
@@ -519,39 +512,19 @@ bool PG::can_discard_op(OpRequestRef op)
   return false;
 }
 
-bool PG::can_discard_scan(OpRequestRef op)
-{
-  MOSDPGScan *m = static_cast<MOSDPGScan *>(op->get_req());
-  assert(m->get_header().type == MSG_OSD_PG_SCAN);
-
-  return false;
-}
-
 bool PG::can_discard_request(OpRequestRef op)
 {
-  switch (op->get_req()->get_type()) {
-  case CEPH_MSG_OSD_OP:
+  if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
     return can_discard_op(op);
-  case MSG_OSD_PG_SCAN:
-    return can_discard_scan(op);
-  }
   return true;
 }
 
 bool PG::op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op)
 {
-  switch (op->get_req()->get_type()) {
-  case CEPH_MSG_OSD_OP:
+  if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
     return !have_same_or_newer_map(
-      curmap,
-      static_cast<MOSDOp*>(op->get_req())->get_map_epoch());
+      curmap, static_cast<MOSDOp*>(op->get_req())->get_map_epoch());
 
-  case MSG_OSD_PG_SCAN:
-    return !have_same_or_newer_map(
-      curmap,
-      static_cast<MOSDPGScan*>(op->get_req())->map_epoch);
-  }
-  assert(0);
   return false;
 }
 
@@ -572,18 +545,6 @@ void PG::handle_advance_map(OSDMapRef osdmap, OSDMapRef lastmap)
 
 void PG::handle_activate_map()
 {
-  dout(10) << "handle_activate_map " << dendl;
-  if (osdmap_ref->get_epoch() - last_persisted_osdmap_ref->get_epoch() >
-    cct->_conf->osd_pg_epoch_persisted_max_stale) {
-    dout(20) << __func__ << ": Dirtying info: last_persisted is "
-	     << last_persisted_osdmap_ref->get_epoch()
-	     << " while current is " << osdmap_ref->get_epoch() << dendl;
-    dirty_info = true;
-  } else {
-    dout(20) << __func__ << ": Not dirtying info: last_persisted is "
-	     << last_persisted_osdmap_ref->get_epoch()
-	     << " while current is " << osdmap_ref->get_epoch() << dendl;
-  }
   if (osdmap_ref->check_new_blacklist_entries()) check_blacklisted_watchers();
 }
 
@@ -633,9 +594,6 @@ void PG::do_op(OpRequestRef op)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   assert(m->get_header().type == CEPH_MSG_OSD_OP);
-  if (op->includes_pg_op()) {
-    return do_pg_op(op);
-  }
 
   if (get_osdmap()->is_blacklisted(m->get_source_addr())) {
     dout(10) << "do_op " << m->get_source_addr() << " is blacklisted" << dendl;
@@ -828,7 +786,6 @@ void PG::on_shutdown()
   dout(10) << "on_shutdown" << dendl;
 
   // remove from queues
-  osd->pg_stat_queue_dequeue(this);
   osd->dequeue_pg(this, 0);
 
   // handles queue races
@@ -936,14 +893,6 @@ int PG::whoami() {
   return osd->whoami;
 }
 
-PGLSFilter::PGLSFilter()
-{
-}
-
-PGLSFilter::~PGLSFilter()
-{
-}
-
 struct OnReadComplete : public Context {
   PG *pg;
   PG::OpContext *opcontext;
@@ -986,208 +935,9 @@ PerfCounters *PG::get_logger()
 }
 
 
-bool PGLSParentFilter::filter(bufferlist& xattr_data, bufferlist& outdata)
-{
-  bufferlist::iterator iter = xattr_data.begin();
-  inode_backtrace_t bt;
-
-  generic_dout(0) << "PGLSParentFilter::filter" << dendl;
-
-  ::decode(bt, iter);
-
-  vector<inode_backpointer_t>::iterator vi;
-  for (vi = bt.ancestors.begin(); vi != bt.ancestors.end(); ++vi) {
-    generic_dout(0) << "vi->dirino=" << vi->dirino << " parent_ino=" << parent_ino << dendl;
-    if ( vi->dirino == parent_ino) {
-      ::encode(*vi, outdata);
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool PGLSPlainFilter::filter(bufferlist& xattr_data, bufferlist& outdata)
-{
-  if (val.size() != xattr_data.length())
-    return false;
-
-  if (memcmp(val.c_str(), xattr_data.c_str(), val.size()))
-    return false;
-
-  return true;
-}
-
-bool PG::pgls_filter(PGLSFilter *filter, hobject_t& sobj, bufferlist& outdata)
-{
-  bufferlist bl;
-  int ret = objects_get_attr(sobj, filter->get_xattr(), &bl);
-  dout(0) << "getattr (sobj=" << sobj << ", attr=" << filter->get_xattr()
-	  << ") returned " << ret << dendl;
-  if (ret < 0)
-    return false;
-
-  return filter->filter(bl, outdata);
-}
-
-int PG::get_pgls_filter(bufferlist::iterator& iter, PGLSFilter **pfilter)
-{
-  string type;
-  PGLSFilter *filter;
-
-  try {
-    ::decode(type, iter);
-  }
-  catch (buffer::error& e) {
-    return -EINVAL;
-  }
-
-  if (type.compare("parent") == 0) {
-    filter = new PGLSParentFilter(iter);
-  } else if (type.compare("plain") == 0) {
-    filter = new PGLSPlainFilter(iter);
-  } else {
-    return -EINVAL;
-  }
-
-  *pfilter = filter;
-
-  return  0;
-}
-
-
 // ==========================================================
 
 // ==========================================================
-
-void PG::do_pg_op(OpRequestRef op)
-{
-  MOSDOp *m = static_cast<MOSDOp *>(op->get_req());
-  assert(m->get_header().type == CEPH_MSG_OSD_OP);
-  dout(10) << "do_pg_op " << *m << dendl;
-
-  op->mark_started();
-
-  int result = 0;
-  string cname, mname;
-  PGLSFilter *filter = NULL;
-  bufferlist filter_out;
-
-  vector<OSDOp> ops = m->ops;
-
-  for (vector<OSDOp>::iterator p = ops.begin(); p != ops.end(); ++p) {
-    OSDOp& osd_op = *p;
-    bufferlist::iterator bp = p->indata.begin();
-    switch (p->op.op) {
-    case CEPH_OSD_OP_PGLS_FILTER:
-      try {
-	::decode(cname, bp);
-	::decode(mname, bp);
-      }
-      catch (const buffer::error& e) {
-	dout(0) << "unable to decode PGLS_FILTER description in " << *m << dendl;
-	result = -EINVAL;
-	break;
-      }
-      result = get_pgls_filter(bp, &filter);
-      if (result < 0)
-	break;
-
-      assert(filter);
-
-      // fall through
-
-    case CEPH_OSD_OP_PGLS:
-      if (m->get_pg() != info.pgid) {
-	dout(10) << " pgls pg=" << m->get_pg() << " != " << info.pgid << dendl;
-	result = 0; // hmm?
-      } else {
-	unsigned list_size = MIN(cct->_conf->osd_max_pgls, p->op.pgls.count);
-
-	dout(10) << " pgls pg=" << m->get_pg() << " count " << list_size << dendl;
-	// read into a buffer
-	vector<hobject_t> sentries;
-	pg_ls_response_t response;
-	try {
-	  ::decode(response.handle, bp);
-	}
-	catch (const buffer::error& e) {
-	  dout(0) << "unable to decode PGLS handle in " << *m << dendl;
-	  result = -EINVAL;
-	  break;
-	}
-
-	hobject_t next;
-	hobject_t current = response.handle;
-	osr->flush();
-	int r = objects_list_partial(
-	  current, list_size, list_size, &sentries, &next);
-	if (r != 0) {
-	  result = -EINVAL;
-	  break;
-	}
-
-	vector<hobject_t>::iterator ls_iter = sentries.begin();
-	hobject_t _max = hobject_t::get_max();
-	while (1) {
-	  const hobject_t &lcand =
-	    ls_iter == sentries.end() ?
-	    _max :
-	    *ls_iter;
-
-	  hobject_t candidate;
-	  candidate = lcand;
-	  assert(!lcand.is_max());
-	  ++ls_iter;
-
-	  if (candidate >= next) {
-	    break;
-	  }
-
-	  if (response.entries.size() == list_size) {
-	    next = candidate;
-	    break;
-	  }
-
-	  // skip wrong namespace
-	  if (candidate.get_namespace() != m->get_object_locator().nspace)
-	    continue;
-
-	  if (filter && !pgls_filter(filter, candidate, filter_out))
-	    continue;
-
-	  response.entries.push_back(make_pair(candidate.oid,
-					       candidate.get_key()));
-	}
-	if (next.is_max() && ls_iter == sentries.end()) {
-	  result = 1;
-	}
-	response.handle = next;
-	::encode(response, osd_op.outdata);
-	if (filter)
-	  ::encode(filter_out, osd_op.outdata);
-	dout(10) << " pgls result=" << result << " outdata.length()="
-		 << osd_op.outdata.length() << dendl;
-      }
-      break;
-
-
-    default:
-      result = -EINVAL;
-      break;
-    }
-  }
-
-  // reply
-  MOSDOpReply *reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(),
-				       CEPH_OSD_FLAG_ACK | CEPH_OSD_FLAG_ONDISK,
-				       false);
-  reply->claim_op_out_data(ops);
-  reply->set_result(result);
-  reply->set_reply_versions(info.last_update, info.last_user_version);
-  osd->send_message_osd_client(reply, m->get_connection());
-  delete filter;
-}
 
 void PG::get_src_oloc(const object_t& oid, const object_locator_t& oloc, object_locator_t& src_oloc)
 {

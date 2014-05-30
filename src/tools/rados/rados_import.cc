@@ -196,7 +196,7 @@ private:
 };
 
 int do_rados_import(ThreadPool *tp, IoCtx &io_ctx, IoCtxDistributor* io_ctx_dist,
-	   const char *dir_name, bool force, bool delete_after)
+		    const char *dir_name, bool force)
 {
   auto_ptr <ExportDir> export_dir;
   export_dir.reset(ExportDir::from_file_system(dir_name));
@@ -223,16 +223,6 @@ int do_rados_import(ThreadPool *tp, IoCtx &io_ctx, IoCtxDistributor* io_ctx_dist
   }
   import_file_wq.drain();
 
-  if (delete_after) {
-    ImportValidateExistingWQ import_val_wq(export_dir.get(), io_ctx_dist,
-					   time(NULL), tp);
-    librados::ObjectIterator oi = io_ctx.objects_begin();
-    librados::ObjectIterator oi_end = io_ctx.objects_end();
-    for (; oi != oi_end; ++oi) {
-      import_val_wq.queue(new std::string((*oi).first));
-    }
-    import_val_wq.drain();
-  }
   cout << "[done]" << std::endl;
   return 0;
 }

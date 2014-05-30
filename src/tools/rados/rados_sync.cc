@@ -780,11 +780,10 @@ int BackedUpObject::read_xattrs_from_rados(IoCtx &io_ctx)
 }
 
 int rados_tool_sync(const std::map < std::string, std::string > &opts,
-                             std::vector<const char*> &args)
+		    std::vector<const char*> &args)
 {
   int ret;
   bool force = opts.count("force");
-  bool delete_after = opts.count("delete-after");
   bool create = opts.count("create");
 
   std::map < std::string, std::string >::const_iterator n = opts.find("workers");
@@ -885,16 +884,8 @@ int rados_tool_sync(const std::map < std::string, std::string > &opts,
   ThreadPool thread_pool(g_ceph_context, "rados_sync_threadpool", num_threads);
   thread_pool.start();
 
-  if (action == "import") {
-    ret = do_rados_import(&thread_pool, io_ctx, io_ctx_dist, src.c_str(),
-		     force, delete_after);
-    thread_pool.stop();
-    return ret;
-  }
-  else {
-    ret = do_rados_export(&thread_pool, io_ctx, io_ctx_dist, dst.c_str(),
-		     create, force, delete_after);
-    thread_pool.stop();
-    return ret;
-  }
+  ret = do_rados_import(&thread_pool, io_ctx, io_ctx_dist, src.c_str(),
+			force);
+  thread_pool.stop();
+  return ret;
 }

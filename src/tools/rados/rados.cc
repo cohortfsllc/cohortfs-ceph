@@ -59,11 +59,9 @@ void usage(ostream& out)
 "   lspools                          list pools\n"
 "   mkpool <pool-name> [123[ 4]]     create pool <pool-name>'\n"
 "                                    [with auid 123[and using crush rule 4]]\n"
-"   cppool <pool-name> <dest-pool>   copy content of a pool\n"
 "   rmpool <pool-name> [<pool-name> --yes-i-really-really-mean-it]\n"
 "                                    remove pool <pool-name>'\n"
 "   df                               show per-pool and total usage\n"
-"   ls                               list objects in pool\n\n"
 "   chown 123                        change the pool owner to auid 123\n"
 "\n"
 "OBJECT COMMANDS\n"
@@ -107,9 +105,6 @@ void usage(ostream& out)
 "       Download <rados-pool> to <local-directory>\n"
 "   options:\n"
 "       -f / --force                 Copy everything, even if it hasn't changed.\n"
-"       -d / --delete-after          After synchronizing, delete unreferenced\n"
-"                                    files or objects from the target bucket\n"
-"                                    or directory.\n"
 "       --workers                    Number of worker threads to spawn \n"
 "                                    (default " STR(DEFAULT_NUM_RADOS_WORKER_THREADS) ")\n"
 "\n"
@@ -326,43 +321,6 @@ static int do_copy(IoCtx& io_ctx, const char *objname, IoCtx& target_ctx, const 
 err:
   target_ctx.remove(target_oid);
   return ret;
-}
-
-static int do_copy_pool(Rados& rados, const char *src_pool, const char *target_pool)
-{
-  IoCtx src_ctx, target_ctx;
-  int ret = rados.ioctx_create(src_pool, src_ctx);
-  if (ret < 0) {
-    cerr << "cannot open source pool: " << src_pool << std::endl;
-    return ret;
-  }
-  ret = rados.ioctx_create(target_pool, target_ctx);
-  if (ret < 0) {
-    cerr << "cannot open target pool: " << target_pool << std::endl;
-    return ret;
-  }
-  librados::ObjectIterator i = src_ctx.objects_begin();
-  librados::ObjectIterator i_end = src_ctx.objects_end();
-  for (; i != i_end; ++i) {
-    string oid = i->first;
-    string locator = i->second;
-    if (i->second.size())
-      cout << src_pool << ":" << oid << "(@" << locator << ")" << " => "
-           << target_pool << ":" << oid << "(@" << locator << ")" << std::endl;
-    else
-      cout << src_pool << ":" << oid << " => "
-           << target_pool << ":" << oid << std::endl;
-
-
-    target_ctx.locator_set_key(locator);
-    ret = do_copy(src_ctx, oid.c_str(), target_ctx, oid.c_str());
-    if (ret < 0) {
-      cerr << "error copying object: " << cpp_strerror(errno) << std::endl;
-      return ret;
-    }
-  }
-
-  return 0;
 }
 
 static int do_put(IoCtx& io_ctx, const char *objname, const char *infile, int op_size)
@@ -794,8 +752,6 @@ class RadosBencher : public ObjBencher {
   librados::AioCompletion **completions;
   librados::Rados& rados;
   librados::IoCtx& io_ctx;
-  librados::ObjectIterator oi;
-  bool iterator_valid;
 protected:
   int completions_init(int concurrentios) {
     completions = new librados::AioCompletion *[concurrentios];
@@ -852,33 +808,9 @@ protected:
     return completions[slot]->get_return_value();
   }
 
-  bool get_objects(std::list<std::string>* objects, int num) {
-    int count = 0;
-
-    if (!iterator_valid) {
-      oi = io_ctx.objects_begin();
-      iterator_valid = true;
-    }
-
-    librados::ObjectIterator ei = io_ctx.objects_end();
-
-    if (oi == ei) {
-      iterator_valid = false;
-      return false;
-    }
-
-    objects->clear();
-    for ( ; oi != ei && count < num; ++oi) {
-      objects->push_back(oi->first);
-      ++count;
-    }
-
-    return true;
-  }
-
 public:
   RadosBencher(CephContext *cct_, librados::Rados& _r, librados::IoCtx& _i)
-    : ObjBencher(cct_), completions(NULL), rados(_r), io_ctx(_i), iterator_valid(false) {}
+    : ObjBencher(cct_), completions(NULL), rados(_r), io_ctx(_i) {}
   ~RadosBencher() { }
 };
 
@@ -1352,40 +1284,6 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     }
   }
 
-  else if (strcmp(nargs[0], "ls") == 0) {
-    if (!pool_name) {
-      cerr << "pool name was not specified" << std::endl;
-      ret = -1;
-      goto out;
-    }
-
-    bool stdout = (nargs.size() < 2) || (strcmp(nargs[1], "-") == 0);
-    ostream *outstream;
-    if(stdout)
-      outstream = &cout;
-    else
-      outstream = new ofstream(nargs[1]);
-
-    {
-      try {
-	librados::ObjectIterator i = io_ctx.objects_begin();
-	librados::ObjectIterator i_end = io_ctx.objects_end();
-	for (; i != i_end; ++i) {
-	  if (i->second.size())
-	    *outstream << i->first << "\t" << i->second << std::endl;
-	  else
-	    *outstream << i->first << std::endl;
-	}
-      }
-      catch (const std::runtime_error& e) {
-	cerr << e.what() << std::endl;
-	ret = -1;
-	goto out;
-      }
-    }
-    if (!stdout)
-      delete outstream;
-  }
   else if (strcmp(nargs[0], "chown") == 0) {
     if (!pool_name || nargs.size() < 2)
       usage_exit();
@@ -1876,26 +1774,6 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       goto out;
     }
     cout << "successfully created pool " << nargs[1] << std::endl;
-  }
-  else if (strcmp(nargs[0], "cppool") == 0) {
-    if (nargs.size() != 3)
-      usage_exit();
-    const char *src_pool = nargs[1];
-    const char *target_pool = nargs[2];
-
-    if (strcmp(src_pool, target_pool) == 0) {
-      cerr << "cannot copy pool into itself" << std::endl;
-      ret = -1;
-      goto out;
-    }
-
-    ret = do_copy_pool(rados, src_pool, target_pool);
-    if (ret < 0) {
-      cerr << "error copying pool " << src_pool << " => " << target_pool << ": "
-	   << cpp_strerror(ret) << std::endl;
-      goto out;
-    }
-    cout << "successfully copied pool " << nargs[1] << std::endl;
   }
   else if (strcmp(nargs[0], "rmpool") == 0) {
     if (nargs.size() < 2)

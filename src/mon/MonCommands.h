@@ -29,7 +29,7 @@
  * helpstring: displays in CLI help, API help (nice if it refers to
  *             parameter names from signature, 40-a few hundred chars)
  * modulename: the monitor module or daemon this applies to:
- *             mds, osd, pg (osd), mon, auth, log, config-key
+ *             mds, osd, mon, auth, log, config-key
  * req perms:  required permission in that modulename space to execute command
  *             this also controls what type of REST command is accepted
  * availability: cli, rest, or both
@@ -39,11 +39,10 @@
  * the command descriptions, and generate a JSON object that contains
  * key:value mappings of parameter names to validated parameter values.
  *
- * 'signature' is a space-separated list of individual command descriptors;
- * each descriptor is either a literal string, which can contain no spaces or
- * '=' signs (for instance, in "pg stat", both "pg" and "stat" are literal
- * strings representing one descriptor each), or a list of key=val[,key=val...]
- * which also includes no spaces.  
+ * 'signature' is a space-separated list of individual command
+ * descriptors; each descriptor is either a literal string, which can
+ * contain no spaces or '=' signs or a list of key=val[,key=val...]
+ * which also includes no spaces.
  *
  * The key=val form describes a non-literal parameter.  Each will have at
  * least a name= and type=, and each type can have its own type-specific
@@ -65,7 +64,6 @@
  * CephEntityAddr: CephIPAddr + optional '/nonce'
  * CephPoolname: Plainold string
  * CephObjectname: Another plainold string
- * CephPgid: n.xxx where n is an int > 0, xxx is a hex number > 0
  * CephName: daemon name, '*' or '<type>.<id>' (id must be int for type osd)
  * CephOsdName: osd name, '*' or '<id> or 'osd.<id>' (id must be int)
  * CephChoices: strings="foo|bar" means this param can be either
@@ -106,43 +104,11 @@
 */
 
 /*
- * pg commands PgMonitor.cc
- */
-
-COMMAND("pg stat", "show placement group status.", "pg", "r", "cli,rest")
-COMMAND("pg getmap", "get binary pg map to -o/stdout", "pg", "r", "cli,rest")
-COMMAND("pg send_pg_creates", "trigger pg creates to be issued",\
-	"pg", "rw", "cli,rest")
-COMMAND("pg dump " \
-	"name=dumpcontents,type=CephChoices,strings=all|summary|sum|delta|pools|osds|pgs|pgs_brief,n=N,req=false", \
-	"show human-readable versions of pg map (only 'all' valid with plain)", "pg", "r", "cli,rest")
-COMMAND("pg dump_json " \
-	"name=dumpcontents,type=CephChoices,strings=all|summary|sum|pools|osds|pgs,n=N,req=false", \
-	"show human-readable version of pg map in json only",\
-	"pg", "r", "cli,rest")
-COMMAND("pg dump_pools_json", "show pg pools info in json only",\
-	"pg", "r", "cli,rest")
-COMMAND("pg dump_stuck " \
-	"name=stuckops,type=CephChoices,strings=inactive|unclean|stale,n=N,req=false " \
-	"name=threshold,type=CephInt,req=false",
-	"show information about stuck pgs",\
-	"pg", "r", "cli,rest")
-COMMAND("pg map name=pgid,type=CephPgid", "show mapping of pg to osds", \
-	"pg", "r", "cli,rest")
-COMMAND("pg force_create_pg name=pgid,type=CephPgid", \
-	"force creation of pg <pgid>", "pg", "rw", "cli,rest")
-COMMAND("pg set_full_ratio name=ratio,type=CephFloat,range=0.0|1.0", \
-	"set ratio at which pgs are considered full", "pg", "rw", "cli,rest")
-COMMAND("pg set_nearfull_ratio name=ratio,type=CephFloat,range=0.0|1.0", \
-	"set ratio at which pgs are considered nearly full", \
-	"pg", "rw", "cli,rest")
-
-/*
  * auth commands AuthMonitor.cc
  */
 
 COMMAND("auth export name=entity,type=CephString,req=false", \
-       	"write keyring for requested entity, or master keyring if none given", \
+	"write keyring for requested entity, or master keyring if none given", \
 	"auth", "rx", "cli,rest")
 COMMAND("auth get name=entity,type=CephString", \
 	"write keyring file with requested key", "auth", "rx", "cli,rest")
@@ -195,8 +161,6 @@ COMMAND("injectargs " \
 COMMAND("status", "show cluster status", "mon", "r", "cli,rest")
 COMMAND("health name=detail,type=CephChoices,strings=detail,req=false", \
 	"show cluster health", "mon", "r", "cli,rest")
-COMMAND("df name=detail,type=CephChoices,strings=detail,req=false", \
-	"show cluster free space stats", "mon", "r", "cli,rest")
 COMMAND("report name=tags,type=CephString,n=N,req=false", \
 	"report full status of cluster, optional title tag strings", \
 	"mon", "r", "cli,rest")
@@ -324,11 +288,6 @@ COMMAND("osd getmap " \
 COMMAND("osd getcrushmap " \
 	"name=epoch,type=CephInt,range=0,req=false", \
 	"get CRUSH map", "osd", "r", "cli,rest")
-COMMAND("osd perf", \
-	"print dump of OSD perf summary stats", \
-	"osd",					\
-	"r",					\
-	"cli,rest")
 COMMAND("osd getmaxosd", "show largest OSD id", "osd", "r", "cli,rest")
 COMMAND("osd find " \
 	"name=id,type=CephInt,range=0", \
@@ -338,10 +297,6 @@ COMMAND("osd metadata " \
 	"name=id,type=CephInt,range=0", \
 	"fetch metadata for osd <id>", \
 	"osd", "r", "cli,rest")
-COMMAND("osd map " \
-	"name=pool,type=CephPoolname " \
-	"name=object,type=CephObjectname", \
-	"find pg for <object> in <pool>", "osd", "r", "cli,rest")
 COMMAND("osd lspools " \
 	"name=auid,type=CephInt,req=false", \
 	"list pools", "osd", "r", "cli,rest")
@@ -454,21 +409,6 @@ COMMAND("osd reweight " \
 	"name=id,type=CephInt,range=0 " \
 	"type=CephFloat,name=weight,range=0.0|1.0", \
 	"reweight osd to 0.0 < <weight> < 1.0", "osd", "rw", "cli,rest")
-COMMAND("osd pg-temp " \
-	"name=pgid,type=CephPgid " \
-	"name=id,type=CephString,n=N,req=false", \
-	"set pg_temp mapping pgid:[<id> [<id>...]] (developers only)", \
-	"osd", "rw", "cli,rest")
-COMMAND("osd primary-temp " \
-	"name=pgid,type=CephPgid " \
-	"name=id,type=CephString", \
-	"set primary_temp mapping pgid:<id>|-1 (developers only)",	\
-	"osd", "rw", "cli,rest")
-COMMAND("osd primary-affinity " \
-	"name=id,type=CephOsdName " \
-	"type=CephFloat,name=weight,range=0.0|1.0", \
-	"adjust osd primary-affinity from 0.0 <= <weight> <= 1.0", \
-	"osd", "rw", "cli,rest")
 COMMAND("osd lost " \
 	"name=id,type=CephInt,range=0 " \
 	"name=sure,type=CephChoices,strings=--yes-i-really-mean-it,req=false", \
@@ -522,10 +462,6 @@ COMMAND("osd pool stats " \
 	"name=name,type=CephString,req=false",
 	"obtain stats from all pools, or from specified pool",
 	"osd", "r", "cli,rest")
-COMMAND("osd reweight-by-utilization " \
-	"name=oload,type=CephInt,range=100,req=false", \
-	"reweight OSDs by utilization [overload-percentage-for-consideration, default 120]", \
-	"osd", "rw", "cli,rest")
 COMMAND("osd volume create "					 \
 	"name=volumeName,type=CephString "			 \
 	"name=placeCode,type=CephString "			 \
@@ -537,14 +473,14 @@ COMMAND("osd volume create "					 \
 	"name=erasureWordSize,type=CephInt,range=0,req=false "	 \
 	"name=erasurePktSize,type=CephInt,range=0,req=false ",	 \
 	"Create a new volume",					 \
-	"vol", "rw", "cli,rest")
+	"osd", "rw", "cli,rest")
 COMMAND("osd volume remove "		   \
 	"name=volumeName,type=CephString", \
 	"Remove a volume",		   \
-	"vol", "rw", "cli,rest")
+	"osd", "rw", "cli,rest")
 COMMAND("osd volume list",			\
 	"list volumes",				\
-	"vol", "r", "cli,rest")
+	"osd", "r", "cli,rest")
 
 /*
  * mon/ConfigKeyService.cc

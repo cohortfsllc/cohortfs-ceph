@@ -106,9 +106,6 @@ enum {
   l_osd_buf,
 
   l_osd_pg,
-  l_osd_pg_primary,
-  l_osd_pg_replica,
-  l_osd_pg_stray,
   l_osd_hb_to,
   l_osd_hb_from,
   l_osd_map,
@@ -381,16 +378,6 @@ public:
     return t;
   }
 
-  // -- pg_temp --
-  Mutex pg_temp_lock;
-  map<pg_t, vector<int> > pg_temp_wanted;
-  void queue_want_pg_temp(pg_t pgid, vector<int>& want);
-  void remove_want_pg_temp(pg_t pgid) {
-    Mutex::Locker l(pg_temp_lock);
-    pg_temp_wanted.erase(pgid);
-  }
-  void send_pg_temp();
-
   // osd map cache (past osd maps)
   Mutex map_cache_lock;
   SharedLRU<epoch_t, const OSDMap> map_cache;
@@ -432,9 +419,6 @@ public:
   void clear_map_bl_cache_pins(epoch_t e);
 
   void need_heartbeat_peer_update();
-
-  void pg_stat_queue_enqueue(PG *pg);
-  void pg_stat_queue_dequeue(PG *pg);
 
   void init();
   void shutdown();
@@ -738,6 +722,7 @@ private:
 
 public:
   bool heartbeat_dispatch(Message *m);
+  bool require_same_or_newer_map(OpRequestRef op, epoch_t epoch);
 
   struct HeartbeatDispatcher : public Dispatcher {
     OSD *osd;
@@ -979,52 +964,6 @@ protected:
     waiting_for_pg.clear();
   }
 
-
-  // -- pg creation --
-  struct create_pg_info {
-    pg_history_t history;
-    int acting_osd;
-    pg_t parent;
-  };
-  ceph::unordered_map<pg_t, create_pg_info> creating_pgs;
-  double debug_drop_pg_create_probability;
-  int debug_drop_pg_create_duration;
-  int debug_drop_pg_create_left;  // 0 if we just dropped the last one, -1 if we can drop more
-
-  bool can_create_pg(pg_t pgid);
-  void handle_pg_create(OpRequestRef op);
-
-  // == monitor interaction ==
-  utime_t last_mon_report;
-  utime_t last_pg_stats_sent;
-
-  /* if our monitor dies, we want to notice it and reconnect.
-   *  So we keep track of when it last acked our stat updates,
-   *  and if too much time passes (and we've been sending
-   *  more updates) then we can call it dead and reconnect
-   *  elsewhere.
-   */
-  utime_t last_pg_stats_ack;
-  bool outstanding_pg_stats; // some stat updates haven't been acked yet
-  bool timeout_mon_on_pg_stats;
-  void restart_stats_timer() {
-    Mutex::Locker l(osd_lock);
-    last_pg_stats_ack = ceph_clock_now(cct);
-    timeout_mon_on_pg_stats = true;
-  }
-
-  class C_MonStatsAckTimer : public Context {
-    OSD *osd;
-  public:
-    C_MonStatsAckTimer(OSD *o) : osd(o) {}
-    void finish(int r) {
-      osd->restart_stats_timer();
-    }
-  };
-  friend class C_MonStatsAckTimer;
-
-  void do_mon_report();
-
   // -- boot --
   void start_boot();
   void _maybe_boot(epoch_t oldest, epoch_t newest);
@@ -1033,7 +972,7 @@ protected:
 
   void start_waiting_for_healthy();
   bool _is_healthy();
-  
+
   friend struct C_OSD_GetVersion;
 
   // -- alive --
@@ -1053,56 +992,9 @@ protected:
   void send_failures();
   void send_still_alive(epoch_t epoch, const entity_inst_t &i);
 
-  // -- pg stats --
-  Mutex pg_stat_queue_lock;
-  Cond pg_stat_queue_cond;
-  xlist<PG*> pg_stat_queue;
-  bool osd_stat_updated;
-  uint64_t pg_stat_tid, pg_stat_tid_flushed;
-
-  void send_pg_stats(const utime_t &now);
-  void handle_pg_stats_ack(class MPGStatsAck *ack);
-  void flush_pg_stats();
-
-  void pg_stat_queue_enqueue(PG *pg) {
-    pg_stat_queue_lock.Lock();
-    if (!pg->stat_queue_item.is_on_list()) {
-      pg->get("pg_stat_queue");
-      pg_stat_queue.push_back(&pg->stat_queue_item);
-    }
-    osd_stat_updated = true;
-    pg_stat_queue_lock.Unlock();
-  }
-  void pg_stat_queue_dequeue(PG *pg) {
-    pg_stat_queue_lock.Lock();
-    if (pg->stat_queue_item.remove_myself())
-      pg->put("pg_stat_queue");
-    pg_stat_queue_lock.Unlock();
-  }
-  void clear_pg_stat_queue() {
-    pg_stat_queue_lock.Lock();
-    while (!pg_stat_queue.empty()) {
-      PG *pg = pg_stat_queue.front();
-      pg_stat_queue.pop_front();
-      pg->put("pg_stat_queue");
-    }
-    pg_stat_queue_lock.Unlock();
-  }
-
   ceph_tid_t get_tid() {
     return service.get_tid();
   }
-
-  // -- generic pg peering --
-  bool require_mon_peer(Message *m);
-
-  bool require_same_or_newer_map(OpRequestRef op, epoch_t e);
-
-  void handle_pg_scan(OpRequestRef op);
-
-  void handle_pg_remove(OpRequestRef op);
-  void _remove_pg(PG *pg);
-
   // -- commands --
   struct Command {
     vector<string> cmd;

@@ -208,9 +208,6 @@ private:
 
 extern int do_rados_import(ThreadPool *tp, librados::IoCtx &io_ctx,
     IoCtxDistributor* io_ctx_dist, const char *dir_name,
-    bool force, bool delete_after);
-extern int do_rados_export(ThreadPool *tp, librados::IoCtx& io_ctx,
-    IoCtxDistributor *io_ctx_dist, const char *dir_name, 
-    bool create, bool force, bool delete_after);
+    bool force);
 
 #endif

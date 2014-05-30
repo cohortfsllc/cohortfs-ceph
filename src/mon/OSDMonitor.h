@@ -203,10 +203,8 @@ private:
   void send_incremental(PaxosServiceMessage *m, epoch_t first);
   void send_incremental(epoch_t first, entity_inst_t& dest, bool onetime);
 
-  int reweight_by_utilization(int oload, std::string& out_str);
-
   bool check_source(PaxosServiceMessage *m, uuid_d fsid);
- 
+
   bool preprocess_mark_me_down(class MOSDMarkMeDown *m);
 
   friend class C_AckMarkedDown;
@@ -249,9 +247,6 @@ private:
   int prepare_new_pool(MPoolOp *m);
 
   void update_pool_flags(int64_t pool_id, uint64_t flags);
-  bool update_pools_status();
-  void get_pools_health(list<pair<health_status_t,string> >& summary,
-                        list<pair<health_status_t,string> > *detail) const;
 
   bool prepare_set_flag(MMonCommand *m, int flag);
   bool prepare_unset_flag(MMonCommand *m, int flag);

@@ -157,40 +157,6 @@ int librados::IoCtxImpl::pool_change_auid_async(unsigned long long auid,
 
 // IO
 
-int librados::IoCtxImpl::list(Objecter::ListContext *context, int max_entries)
-{
-  Cond cond;
-  bool done;
-  int r = 0;
-  object_t oid;
-  Mutex mylock("IoCtxImpl::list::mylock");
-
-  if (context->at_end())
-    return 0;
-
-  context->max_entries = max_entries;
-  context->nspace = oloc.nspace;
-
-  lock->Lock();
-  objecter->list_objects(context, new C_SafeCond(&mylock, &cond, &done, &r));
-  lock->Unlock();
-
-  mylock.Lock();
-  while(!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
-
-  return r;
-}
-
-uint32_t librados::IoCtxImpl::list_seek(Objecter::ListContext *context,
-					uint32_t pos)
-{
-  Mutex::Locker l(*lock);
-  context->list.clear();
-  return objecter->list_objects_seek(context, pos);
-}
-
 int librados::IoCtxImpl::create(const object_t& oid, bool exclusive)
 {
   ::ObjectOperation op;

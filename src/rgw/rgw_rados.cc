@@ -1678,8 +1678,8 @@ int RGWRados::open_bucket_index_ctx(rgw_bucket& bucket, librados::IoCtx& index_c
  */
 int RGWRados::list_buckets_init(RGWAccessHandle *handle)
 {
-  librados::ObjectIterator *state = new librados::ObjectIterator(root_pool_ctx.objects_begin());
-  *handle = (RGWAccessHandle)state;
+    //librados::ObjectIterator *state = new librados::ObjectIterator(root_pool_ctx.objects_begin());
+    //*handle = (RGWAccessHandle)state;
   return 0;
 }
 
@@ -1691,17 +1691,17 @@ int RGWRados::list_buckets_init(RGWAccessHandle *handle)
  */
 int RGWRados::list_buckets_next(RGWObjEnt& obj, RGWAccessHandle *handle)
 {
-  librados::ObjectIterator *state = (librados::ObjectIterator *)*handle;
+//  librados::ObjectIterator *state = (librados::ObjectIterator *)*handle;
 
-  do {
-    if (*state == root_pool_ctx.objects_end()) {
-      delete state;
-      return -ENOENT;
-    }
+//  do {
+//    if (*state == root_pool_ctx.objects_end()) {
+//      delete state;
+//      return -ENOENT;
+//    }
 
-    obj.name = (*state)->first;
-    (*state)++;
-  } while (obj.name[0] == '.'); /* skip all entries starting with '.' */
+//    obj.name = (*state)->first;
+//    (*state)++;
+//  } while (obj.name[0] == '.'); /* skip all entries starting with '.' */
 
   return 0;
 }
@@ -1712,7 +1712,7 @@ int RGWRados::list_buckets_next(RGWObjEnt& obj, RGWAccessHandle *handle)
 struct log_list_state {
   string prefix;
   librados::IoCtx io_ctx;
-  librados::ObjectIterator obit;
+//  librados::ObjectIterator obit;
 };
 
 int RGWRados::log_list_init(const string& prefix, RGWAccessHandle *handle)
@@ -1725,7 +1725,7 @@ int RGWRados::log_list_init(const string& prefix, RGWAccessHandle *handle)
     return r;
   }
   state->prefix = prefix;
-  state->obit = state->io_ctx.objects_begin();
+//  state->obit = state->io_ctx.objects_begin();
   *handle = (RGWAccessHandle)state;
   return 0;
 }
@@ -1734,19 +1734,19 @@ int RGWRados::log_list_next(RGWAccessHandle handle, string *name)
 {
   log_list_state *state = static_cast<log_list_state *>(handle);
   while (true) {
-    if (state->obit == state->io_ctx.objects_end()) {
+//    if (state->obit == state->io_ctx.objects_end()) {
       delete state;
       return -ENOENT;
     }
-    if (state->prefix.length() &&
-	state->obit->first.find(state->prefix) != 0) {
-      state->obit++;
-      continue;
-    }
-    *name = state->obit->first;
-    state->obit++;
-    break;
-  }
+//    if (state->prefix.length() &&
+//	state->obit->first.find(state->prefix) != 0) {
+//      state->obit++;
+//      continue;
+//    }
+//    *name = state->obit->first;
+//    state->obit++;
+//    break;
+//  }
   return 0;
 }
 
@@ -5480,13 +5480,13 @@ int RGWRados::distribute(const string& key, bufferlist& bl)
 int RGWRados::pool_iterate_begin(rgw_bucket& bucket, RGWPoolIterCtx& ctx)
 {
   librados::IoCtx& io_ctx = ctx.io_ctx;
-  librados::ObjectIterator& iter = ctx.iter;
+//  librados::ObjectIterator& iter = ctx.iter;
 
   int r = open_bucket_data_ctx(bucket, io_ctx);
   if (r < 0)
     return r;
 
-  iter = io_ctx.objects_begin();
+//  iter = io_ctx.objects_begin();
 
   return 0;
 }
@@ -5495,29 +5495,29 @@ int RGWRados::pool_iterate(RGWPoolIterCtx& ctx, uint32_t num, vector<RGWObjEnt>&
                            bool *is_truncated, RGWAccessListFilter *filter)
 {
   librados::IoCtx& io_ctx = ctx.io_ctx;
-  librados::ObjectIterator& iter = ctx.iter;
+//  librados::ObjectIterator& iter = ctx.iter;
 
-  if (iter == io_ctx.objects_end())
-    return -ENOENT;
+//  if (iter == io_ctx.objects_end())
+//    return -ENOENT;
 
-  uint32_t i;
+//  uint32_t i;
 
-  for (i = 0; i < num && iter != io_ctx.objects_end(); ++i, ++iter) {
-    RGWObjEnt e;
+//  for (i = 0; i < num && iter != io_ctx.objects_end(); ++i, ++iter) {
+//    RGWObjEnt e;
 
-    string oid = iter->first;
-    ldout(cct, 20) << "RGWRados::pool_iterate: got " << oid << dendl;
+//    string oid = iter->first;
+//    ldout(cct, 20) << "RGWRados::pool_iterate: got " << oid << dendl;
 
     // fill it in with initial values; we may correct later
-    if (filter && !filter->filter(oid, oid))
-      continue;
+//    if (filter && !filter->filter(oid, oid))
+//      continue;
 
-    e.name = oid;
-    objs.push_back(e);
-  }
+//    e.name = oid;
+//    objs.push_back(e);
+//  }
 
-  if (is_truncated)
-    *is_truncated = (iter != io_ctx.objects_end());
+//  if (is_truncated)
+//    *is_truncated = (iter != io_ctx.objects_end());
 
   return objs.size();
 }

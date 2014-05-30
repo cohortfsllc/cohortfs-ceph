@@ -34,7 +34,6 @@ const char *ceph_osd_flag_name(unsigned flag)
   case CEPH_OSD_FLAG_WRITE: return "write";
   case CEPH_OSD_FLAG_PEERSTAT_OLD: return "peerstat_old";
   case CEPH_OSD_FLAG_PARALLELEXEC: return "parallelexec";
-  case CEPH_OSD_FLAG_PGOP: return "pgop";
   case CEPH_OSD_FLAG_EXEC: return "exec";
   case CEPH_OSD_FLAG_EXEC_PUBLIC: return "exec_public";
   case CEPH_OSD_FLAG_RWORDERED: return "rwordered";
@@ -1904,15 +1903,6 @@ ostream& operator<<(ostream& out, const OSDOp& op)
       op.indata.write(0, op.op.cls.class_len, out);
       out << ".";
       op.indata.write(op.op.cls.class_len, op.op.cls.method_len, out);
-    }
-  } else if (ceph_osd_op_type_pg(op.op.op)) {
-    switch (op.op.op) {
-    case CEPH_OSD_OP_PGLS:
-    case CEPH_OSD_OP_PGLS_FILTER:
-      out << " start_epoch " << op.op.pgls.start_epoch;
-      break;
-    case CEPH_OSD_OP_PG_HITSET_LS:
-      break;
     }
   } else if (ceph_osd_op_type_multi(op.op.op)) {
     switch (op.op.op) {
