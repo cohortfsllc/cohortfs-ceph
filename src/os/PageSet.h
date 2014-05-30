@@ -134,6 +134,7 @@ public:
 	page_type *page = new page_type(page_offset);
 	cur = pages.insert_commit(*page, commit);
 
+#if 0
 	// zero end of page past offset + length
 	if (offset + length < page->offset + PageSize)
 	  std::fill(page->data + offset + length - page->offset,
@@ -141,6 +142,7 @@ public:
 	// zero front of page between page_offset and offset
 	if (offset > page->offset)
 	  std::fill(page->data, page->data + offset - page->offset, 0);
+#endif
       } else { // exists
 	cur = insert.first;
       }
