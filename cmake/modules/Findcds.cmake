@@ -25,6 +25,13 @@ else ()
   endif ()
 endif ()
 
+find_library(CDS_LIBS 
+  NAMES cds
+  PATHS /usr/lib /usr/lib/x86_64-linux-gnu /opt/cds/bin/gcc-amd64-linux-64
+)
+
 mark_as_advanced(
   CDS_INC_DIR
+  CDS_LIBS
 )
+
