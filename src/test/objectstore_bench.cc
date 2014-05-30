@@ -103,6 +103,7 @@ int main(int argc, const char *argv[])
 	// command-line arguments
 	byte_units size = 1048576;
 	byte_units block_size = 4096;
+	int repeats = 1;
 
 	vector<const char*> args;
 	argv_to_vec(argc, argv, args);
@@ -127,6 +128,8 @@ int main(int argc, const char *argv[])
 				derr << "error parsing block-size: It must be an int." << dendl;
 				usage();
 			}
+		} else if (ceph_argparse_witharg(args, i, &val, "--repeats", (char*)NULL)) {
+		    repeats = atoi(val.c_str());
 		} else {
 			derr << "Error: can't understand argument: " << *i <<
 				"\n" << dendl;
@@ -142,6 +145,7 @@ int main(int argc, const char *argv[])
 	dout(0) << "journal " << g_conf->osd_journal << dendl;
 	dout(0) << "size " << size << dendl;
 	dout(0) << "block-size " << block_size << dendl;
+	dout(0) << "repeats " << repeats << dendl;
 
 	ObjectStore *fs = ObjectStore::create(g_ceph_context,
 			g_conf->osd_objectstore,
@@ -176,9 +180,11 @@ int main(int argc, const char *argv[])
 	dout(0) << "Writing " << size << " in blocks of " << block_size << dendl;
 	auto t1 = std::chrono::high_resolution_clock::now();
 
-	uint64_t offset = 0;
-	size_t len = size;
-	while (len) {
+	for (int ix = 0; ix < repeats; ++ix) {
+	    uint64_t offset = 0;
+	    size_t len = size;
+	    std::cout << "Write cycle " << ix << std::endl;
+	    while (len) {
 		size_t count = len < block_size ? len : (size_t)block_size;
 
 		ObjectStore::Transaction *t = new ObjectStore::Transaction;
@@ -187,6 +193,7 @@ int main(int argc, const char *argv[])
 
 		offset += count;
 		len -= count;
+	    }
 	}
 
 	if (gather.has_subs()) {
