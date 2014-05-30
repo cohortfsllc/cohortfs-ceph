@@ -13,8 +13,8 @@
  */
 
 
-#ifndef CEPH_MEMSTORE_H
-#define CEPH_MEMSTORE_H
+#ifndef CEPH_CDS_MEMSTORE_H
+#define CEPH_CDS_MEMSTORE_H
 
 #include "include/unordered_map.h"
 #include "include/memory.h"
@@ -25,7 +25,7 @@
 #include "include/assert.h"
 
 
-class MemStore : public ObjectStore {
+class CDSMemStore : public ObjectStore {
 private:
   static const size_t PageSize = 64 << 10;
   typedef PageSet<PageSize> page_set;
@@ -131,7 +131,7 @@ public:
       DECODE_FINISH(p);
     }
 
-    Collection() : lock("MemStore::Collection::lock") {}
+    Collection() : lock("CDSMemStore::Collection::lock") {}
   };
   typedef ceph::shared_ptr<Collection> CollectionRef;
 
@@ -235,12 +235,12 @@ private:
   void dump_all();
 
 public:
-  MemStore(CephContext *cct, const string& path)
+  CDSMemStore(CephContext *cct, const string& path)
     : ObjectStore(path),
-      coll_lock("MemStore::coll_lock"),
-      apply_lock("MemStore::apply_lock"),
+      coll_lock("CDSMemStore::coll_lock"),
+      apply_lock("CDSMemStore::apply_lock"),
       finisher(cct) { }
-  ~MemStore() { }
+  ~CDSMemStore() { }
 
   int update_version_stamp() {
     return 0;
@@ -360,7 +360,4 @@ public:
     ThreadPool::TPHandle *handle = NULL);
 };
 
-
-
-
-#endif
+#endif /* CEPH_CDS_MEMSTORE_H */

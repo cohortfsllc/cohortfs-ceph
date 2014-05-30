@@ -26,27 +26,26 @@
 #include "include/unordered_map.h"
 #include "include/memory.h"
 #include "common/errno.h"
-#include "MemStore.h"
+#include "CDSMemStore.h"
 
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix
-#define dout_prefix *_dout << "memstore(" << path << ") "
+#define dout_prefix *_dout << "cds_memstore(" << path << ") "
 
 // for comparing collections for lock ordering
-bool operator>(const MemStore::CollectionRef& l,
-	       const MemStore::CollectionRef& r)
+bool operator>(const CDSMemStore::CollectionRef& l,
+	       const CDSMemStore::CollectionRef& r)
 {
   return (unsigned long)l.get() > (unsigned long)r.get();
 }
 
-
-int MemStore::peek_journal_fsid(uuid_d *fsid)
+int CDSMemStore::peek_journal_fsid(uuid_d *fsid)
 {
   *fsid = uuid_d();
   return 0;
 }
 
-int MemStore::mount()
+int CDSMemStore::mount()
 {
   int r = _load();
   if (r < 0)
@@ -55,13 +54,13 @@ int MemStore::mount()
   return 0;
 }
 
-int MemStore::umount()
+int CDSMemStore::umount()
 {
   finisher.stop();
   return _save();
 }
 
-int MemStore::_save()
+int CDSMemStore::_save()
 {
   dout(10) << __func__ << dendl;
   Mutex::Locker l(apply_lock); // block any writer
@@ -91,7 +90,7 @@ int MemStore::_save()
   return 0;
 }
 
-void MemStore::dump_all()
+void CDSMemStore::dump_all()
 {
   Formatter *f = new_formatter("json-pretty");
   f->open_object_section("store");
@@ -103,7 +102,7 @@ void MemStore::dump_all()
   delete f;
 }
 
-void MemStore::dump(Formatter *f)
+void CDSMemStore::dump(Formatter *f)
 {
   f->open_array_section("collections");
   for (ceph::unordered_map<coll_t,CollectionRef>::iterator p = coll_map.begin();
@@ -140,7 +139,7 @@ void MemStore::dump(Formatter *f)
   f->close_section();
 }
 
-int MemStore::_load()
+int CDSMemStore::_load()
 {
   dout(10) << __func__ << dendl;
   bufferlist bl;
@@ -170,16 +169,16 @@ int MemStore::_load()
 
   dump_all();
 
-  return 0;  
+  return 0;
 }
 
-void MemStore::set_fsid(uuid_d u)
+void CDSMemStore::set_fsid(uuid_d u)
 {
   int r = write_meta("fs_fsid", stringify(u));
   assert(r >= 0);
 }
 
-uuid_d MemStore::get_fsid()
+uuid_d CDSMemStore::get_fsid()
 {
   string fsid_str;
   int r = read_meta("fs_fsid", &fsid_str);
@@ -190,7 +189,7 @@ uuid_d MemStore::get_fsid()
   return uuid;
 }
 
-int MemStore::mkfs()
+int CDSMemStore::mkfs()
 {
   string fsid_str;
   int r = read_meta("fs_fsid", &fsid_str);
@@ -218,7 +217,7 @@ int MemStore::mkfs()
   return 0;
 }
 
-int MemStore::statfs(struct statfs *st)
+int CDSMemStore::statfs(struct statfs *st)
 {
   dout(10) << __func__ << dendl;
   // make some shit up.  these are the only fields that matter.
@@ -229,13 +228,13 @@ int MemStore::statfs(struct statfs *st)
   return 0;
 }
 
-objectstore_perf_stat_t MemStore::get_cur_stats()
+objectstore_perf_stat_t CDSMemStore::get_cur_stats()
 {
   // fixme
   return objectstore_perf_stat_t();
 }
 
-MemStore::CollectionRef MemStore::get_collection(coll_t cid)
+CDSMemStore::CollectionRef CDSMemStore::get_collection(coll_t cid)
 {
   RWLock::RLocker l(coll_lock);
   ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
@@ -248,7 +247,7 @@ MemStore::CollectionRef MemStore::get_collection(coll_t cid)
 // ---------------
 // read operations
 
-bool MemStore::exists(coll_t cid, const ghobject_t& oid)
+bool CDSMemStore::exists(coll_t cid, const ghobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -261,7 +260,7 @@ bool MemStore::exists(coll_t cid, const ghobject_t& oid)
   return (bool)c->get_object(oid);
 }
 
-int MemStore::stat(
+int CDSMemStore::stat(
     coll_t cid,
     const ghobject_t& oid,
     struct stat *st,
@@ -283,7 +282,7 @@ int MemStore::stat(
   return 0;
 }
 
-int MemStore::read(
+int CDSMemStore::read(
     coll_t cid,
     const ghobject_t& oid,
     uint64_t offset,
@@ -312,7 +311,7 @@ int MemStore::read(
   return _read_pages(o->data, offset, l, bl);
 }
 
-int MemStore::_read_pages(page_set &pages, unsigned offset, size_t len,
+int CDSMemStore::_read_pages(page_set &pages, unsigned offset, size_t len,
 			  bufferlist &bl)
 {
   const unsigned end = offset + len;
@@ -349,7 +348,7 @@ int MemStore::_read_pages(page_set &pages, unsigned offset, size_t len,
   return len;
 }
 
-int MemStore::fiemap(coll_t cid, const ghobject_t& oid,
+int CDSMemStore::fiemap(coll_t cid, const ghobject_t& oid,
 		     uint64_t offset, size_t len, bufferlist& bl)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << offset << "~"
@@ -370,10 +369,10 @@ int MemStore::fiemap(coll_t cid, const ghobject_t& oid,
   map<uint64_t, uint64_t> m;
   m[offset] = l;
   ::encode(m, bl);
-  return 0;  
+  return 0;
 }
 
-int MemStore::getattr(coll_t cid, const ghobject_t& oid,
+int CDSMemStore::getattr(coll_t cid, const ghobject_t& oid,
 		      const char *name, bufferptr& value)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << name << dendl;
@@ -393,7 +392,7 @@ int MemStore::getattr(coll_t cid, const ghobject_t& oid,
   return 0;
 }
 
-int MemStore::getattrs(coll_t cid, const ghobject_t& oid,
+int CDSMemStore::getattrs(coll_t cid, const ghobject_t& oid,
 		       map<string,bufferptr>& aset, bool user_only)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -419,7 +418,7 @@ int MemStore::getattrs(coll_t cid, const ghobject_t& oid,
   return 0;
 }
 
-int MemStore::list_collections(vector<coll_t>& ls)
+int CDSMemStore::list_collections(vector<coll_t>& ls)
 {
   dout(10) << __func__ << dendl;
   RWLock::RLocker l(coll_lock);
@@ -431,14 +430,14 @@ int MemStore::list_collections(vector<coll_t>& ls)
   return 0;
 }
 
-bool MemStore::collection_exists(coll_t cid)
+bool CDSMemStore::collection_exists(coll_t cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
   RWLock::RLocker l(coll_lock);
   return coll_map.count(cid);
 }
 
-int MemStore::collection_getattr(coll_t cid, const char *name,
+int CDSMemStore::collection_getattr(coll_t cid, const char *name,
 				 void *value, size_t size)
 {
   dout(10) << __func__ << " " << cid << " " << name << dendl;
@@ -456,7 +455,7 @@ int MemStore::collection_getattr(coll_t cid, const char *name,
   return l;
 }
 
-int MemStore::collection_getattr(coll_t cid, const char *name, bufferlist& bl)
+int CDSMemStore::collection_getattr(coll_t cid, const char *name, bufferlist& bl)
 {
   dout(10) << __func__ << " " << cid << " " << name << dendl;
   CollectionRef c = get_collection(cid);
@@ -471,7 +470,7 @@ int MemStore::collection_getattr(coll_t cid, const char *name, bufferlist& bl)
   return bl.length();
 }
 
-int MemStore::collection_getattrs(coll_t cid, map<string,bufferptr> &aset)
+int CDSMemStore::collection_getattrs(coll_t cid, map<string,bufferptr> &aset)
 {
   dout(10) << __func__ << " " << cid << dendl;
   CollectionRef c = get_collection(cid);
@@ -483,7 +482,7 @@ int MemStore::collection_getattrs(coll_t cid, map<string,bufferptr> &aset)
   return 0;
 }
 
-bool MemStore::collection_empty(coll_t cid)
+bool CDSMemStore::collection_empty(coll_t cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
   CollectionRef c = get_collection(cid);
@@ -494,7 +493,7 @@ bool MemStore::collection_empty(coll_t cid)
   return c->object_map.empty();
 }
 
-int MemStore::collection_list(coll_t cid, vector<ghobject_t>& o)
+int CDSMemStore::collection_list(coll_t cid, vector<ghobject_t>& o)
 {
   dout(10) << __func__ << " " << cid << dendl;
   CollectionRef c = get_collection(cid);
@@ -509,8 +508,8 @@ int MemStore::collection_list(coll_t cid, vector<ghobject_t>& o)
   return 0;
 }
 
-int MemStore::collection_list_partial(coll_t cid, ghobject_t start,
-				      int min, int max, snapid_t snap, 
+int CDSMemStore::collection_list_partial(coll_t cid, ghobject_t start,
+				      int min, int max, snapid_t snap,
 				      vector<ghobject_t> *ls, ghobject_t *next)
 {
   dout(10) << __func__ << " " << cid << " " << start << " " << min << "-"
@@ -533,7 +532,7 @@ int MemStore::collection_list_partial(coll_t cid, ghobject_t start,
   return 0;
 }
 
-int MemStore::collection_list_range(coll_t cid,
+int CDSMemStore::collection_list_range(coll_t cid,
 				    ghobject_t start, ghobject_t end,
 				    snapid_t seq, vector<ghobject_t> *ls)
 {
@@ -553,7 +552,7 @@ int MemStore::collection_list_range(coll_t cid,
   return 0;
 }
 
-int MemStore::omap_get(
+int CDSMemStore::omap_get(
     coll_t cid,                ///< [in] Collection containing oid
     const ghobject_t &oid,   ///< [in] Object containing omap
     bufferlist *header,      ///< [out] omap header
@@ -574,7 +573,7 @@ int MemStore::omap_get(
   return 0;
 }
 
-int MemStore::omap_get_header(
+int CDSMemStore::omap_get_header(
     coll_t cid,                ///< [in] Collection containing oid
     const ghobject_t &oid,   ///< [in] Object containing omap
     bufferlist *header,      ///< [out] omap header
@@ -594,7 +593,7 @@ int MemStore::omap_get_header(
   return 0;
 }
 
-int MemStore::omap_get_keys(
+int CDSMemStore::omap_get_keys(
     coll_t cid,              ///< [in] Collection containing oid
     const ghobject_t &oid, ///< [in] Object containing omap
     set<string> *keys      ///< [out] Keys defined on oid
@@ -616,7 +615,7 @@ int MemStore::omap_get_keys(
   return 0;
 }
 
-int MemStore::omap_get_values(
+int CDSMemStore::omap_get_values(
     coll_t cid,                    ///< [in] Collection containing oid
     const ghobject_t &oid,       ///< [in] Object containing omap
     const set<string> &keys,     ///< [in] Keys to get
@@ -642,7 +641,7 @@ int MemStore::omap_get_values(
   return 0;
 }
 
-int MemStore::omap_check_keys(
+int CDSMemStore::omap_check_keys(
     coll_t cid,                ///< [in] Collection containing oid
     const ghobject_t &oid,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
@@ -668,7 +667,7 @@ int MemStore::omap_check_keys(
   return 0;
 }
 
-ObjectMap::ObjectMapIterator MemStore::get_omap_iterator(coll_t cid,
+ObjectMap::ObjectMapIterator CDSMemStore::get_omap_iterator(coll_t cid,
 							 const ghobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -687,7 +686,7 @@ ObjectMap::ObjectMapIterator MemStore::get_omap_iterator(coll_t cid,
 // ---------------
 // write operations
 
-int MemStore::queue_transactions(Sequencer *osr,
+int CDSMemStore::queue_transactions(Sequencer *osr,
 				 list<Transaction*>& tls,
 				 TrackedOpRef op,
 				 ThreadPool::TPHandle *handle)
@@ -715,7 +714,7 @@ int MemStore::queue_transactions(Sequencer *osr,
   return 0;
 }
 
-void MemStore::_do_transaction(Transaction& t)
+void CDSMemStore::_do_transaction(Transaction& t)
 {
   Transaction::iterator i = t.begin();
   int pos = 0;
@@ -734,7 +733,7 @@ void MemStore::_do_transaction(Transaction& t)
 	r = _touch(cid, oid);
       }
       break;
-      
+
     case Transaction::OP_WRITE:
       {
 	coll_t cid = i.get_cid();
@@ -747,7 +746,7 @@ void MemStore::_do_transaction(Transaction& t)
 	r = _write(cid, oid, off, len, bl, replica);
       }
       break;
-      
+
     case Transaction::OP_ZERO:
       {
 	coll_t cid = i.get_cid();
@@ -757,7 +756,7 @@ void MemStore::_do_transaction(Transaction& t)
 	r = _zero(cid, oid, off, len);
       }
       break;
-      
+
     case Transaction::OP_TRIMCACHE:
       {
 	i.get_cid();
@@ -767,7 +766,7 @@ void MemStore::_do_transaction(Transaction& t)
 	// deprecated, no-op
       }
       break;
-      
+
     case Transaction::OP_TRUNCATE:
       {
 	coll_t cid = i.get_cid();
@@ -776,7 +775,7 @@ void MemStore::_do_transaction(Transaction& t)
 	r = _truncate(cid, oid, off);
       }
       break;
-      
+
     case Transaction::OP_REMOVE:
       {
 	coll_t cid = i.get_cid();
@@ -784,7 +783,7 @@ void MemStore::_do_transaction(Transaction& t)
 	r = _remove(cid, oid);
       }
       break;
-      
+
     case Transaction::OP_SETATTR:
       {
 	coll_t cid = i.get_cid();
@@ -797,7 +796,7 @@ void MemStore::_do_transaction(Transaction& t)
 	r = _setattrs(cid, oid, to_set);
       }
       break;
-      
+
     case Transaction::OP_SETATTRS:
       {
 	coll_t cid = i.get_cid();
@@ -824,7 +823,7 @@ void MemStore::_do_transaction(Transaction& t)
 	r = _rmattrs(cid, oid);
       }
       break;
-      
+
     case Transaction::OP_CLONE:
       {
 	coll_t cid = i.get_cid();
@@ -839,7 +838,7 @@ void MemStore::_do_transaction(Transaction& t)
 	coll_t cid = i.get_cid();
 	ghobject_t oid = i.get_oid();
 	ghobject_t noid = i.get_oid();
- 	uint64_t off = i.get_length();
+	uint64_t off = i.get_length();
 	uint64_t len = i.get_length();
 	r = _clone_range(cid, oid, noid, off, len, off);
       }
@@ -850,9 +849,9 @@ void MemStore::_do_transaction(Transaction& t)
 	coll_t cid = i.get_cid();
 	ghobject_t oid = i.get_oid();
 	ghobject_t noid = i.get_oid();
- 	uint64_t srcoff = i.get_length();
+	uint64_t srcoff = i.get_length();
 	uint64_t len = i.get_length();
- 	uint64_t dstoff = i.get_length();
+	uint64_t dstoff = i.get_length();
 	r = _clone_range(cid, oid, noid, srcoff, len, dstoff);
       }
       break;
@@ -1024,7 +1023,8 @@ void MemStore::_do_transaction(Transaction& t)
 	  dump_all();
 	}
 
-	dout(0) << " error " << cpp_strerror(r) << " not handled on operation " << op
+	dout(0) << " error " << cpp_strerror(r) <<
+	  " not handled on operation " << op
 		<< " (op " << pos << ", counting from 0)" << dendl;
 	dout(0) << msg << dendl;
 	dout(0) << " transaction dump:\n";
@@ -1042,7 +1042,7 @@ void MemStore::_do_transaction(Transaction& t)
   }
 }
 
-int MemStore::_touch(coll_t cid, const ghobject_t& oid)
+int CDSMemStore::_touch(coll_t cid, const ghobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1059,7 +1059,7 @@ int MemStore::_touch(coll_t cid, const ghobject_t& oid)
   return 0;
 }
 
-int MemStore::_write(coll_t cid, const ghobject_t& oid,
+int CDSMemStore::_write(coll_t cid, const ghobject_t& oid,
 		     uint64_t offset, size_t len, const bufferlist& bl,
 		     bool replica)
 {
@@ -1088,7 +1088,7 @@ int MemStore::_write(coll_t cid, const ghobject_t& oid,
   return 0;
 }
 
-void MemStore::_write_pages(const bufferlist& src, unsigned offset,
+void CDSMemStore::_write_pages(const bufferlist& src, unsigned offset,
 			    page_set &pages)
 {
   // make sure the page range is allocated
@@ -1109,7 +1109,7 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
   }
 }
 
-int MemStore::_zero(coll_t cid, const ghobject_t& oid,
+int CDSMemStore::_zero(coll_t cid, const ghobject_t& oid,
 		    uint64_t offset, size_t len)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << offset << "~"
@@ -1121,7 +1121,7 @@ int MemStore::_zero(coll_t cid, const ghobject_t& oid,
   return _write(cid, oid, offset, len, bl);
 }
 
-int MemStore::_truncate(coll_t cid, const ghobject_t& oid, uint64_t size)
+int CDSMemStore::_truncate(coll_t cid, const ghobject_t& oid, uint64_t size)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << size << dendl;
   CollectionRef c = get_collection(cid);
@@ -1138,7 +1138,7 @@ int MemStore::_truncate(coll_t cid, const ghobject_t& oid, uint64_t size)
   return 0;
 }
 
-int MemStore::_remove(coll_t cid, const ghobject_t& oid)
+int CDSMemStore::_remove(coll_t cid, const ghobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1154,7 +1154,7 @@ int MemStore::_remove(coll_t cid, const ghobject_t& oid)
   return 0;
 }
 
-int MemStore::_setattrs(coll_t cid, const ghobject_t& oid,
+int CDSMemStore::_setattrs(coll_t cid, const ghobject_t& oid,
 			map<string,bufferptr>& aset)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -1166,12 +1166,13 @@ int MemStore::_setattrs(coll_t cid, const ghobject_t& oid,
   ObjectRef o = c->get_object(oid);
   if (!o)
     return -ENOENT;
-  for (map<string,bufferptr>::const_iterator p = aset.begin(); p != aset.end(); ++p)
+  for (map<string,bufferptr>::const_iterator p = aset.begin();
+       p != aset.end(); ++p)
     o->xattr[p->first] = p->second;
   return 0;
 }
 
-int MemStore::_rmattr(coll_t cid, const ghobject_t& oid, const char *name)
+int CDSMemStore::_rmattr(coll_t cid, const ghobject_t& oid, const char *name)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << name << dendl;
   CollectionRef c = get_collection(cid);
@@ -1188,7 +1189,7 @@ int MemStore::_rmattr(coll_t cid, const ghobject_t& oid, const char *name)
   return 0;
 }
 
-int MemStore::_rmattrs(coll_t cid, const ghobject_t& oid)
+int CDSMemStore::_rmattrs(coll_t cid, const ghobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1203,7 +1204,7 @@ int MemStore::_rmattrs(coll_t cid, const ghobject_t& oid)
   return 0;
 }
 
-int MemStore::_clone(coll_t cid, const ghobject_t& oldoid,
+int CDSMemStore::_clone(coll_t cid, const ghobject_t& oldoid,
 		     const ghobject_t& newoid)
 {
   dout(10) << __func__ << " " << cid << " " << oldoid
@@ -1225,7 +1226,7 @@ int MemStore::_clone(coll_t cid, const ghobject_t& oldoid,
   return -ENOTSUP;
 }
 
-int MemStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
+int CDSMemStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
 			   const ghobject_t& newoid,
 			   uint64_t srcoff, uint64_t len, uint64_t dstoff)
 {
@@ -1252,7 +1253,7 @@ int MemStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
   return -ENOTSUP;
 }
 
-int MemStore::_omap_clear(coll_t cid, const ghobject_t &oid)
+int CDSMemStore::_omap_clear(coll_t cid, const ghobject_t &oid)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1267,7 +1268,7 @@ int MemStore::_omap_clear(coll_t cid, const ghobject_t &oid)
   return 0;
 }
 
-int MemStore::_omap_setkeys(coll_t cid, const ghobject_t &oid,
+int CDSMemStore::_omap_setkeys(coll_t cid, const ghobject_t &oid,
 			    const map<string, bufferlist> &aset)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -1279,12 +1280,13 @@ int MemStore::_omap_setkeys(coll_t cid, const ghobject_t &oid,
   ObjectRef o = c->get_object(oid);
   if (!o)
     return -ENOENT;
-  for (map<string,bufferlist>::const_iterator p = aset.begin(); p != aset.end(); ++p)
+  for (map<string,bufferlist>::const_iterator p = aset.begin();
+       p != aset.end(); ++p)
     o->omap[p->first] = p->second;
   return 0;
 }
 
-int MemStore::_omap_rmkeys(coll_t cid, const ghobject_t &oid,
+int CDSMemStore::_omap_rmkeys(coll_t cid, const ghobject_t &oid,
 			   const set<string> &keys)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -1301,7 +1303,7 @@ int MemStore::_omap_rmkeys(coll_t cid, const ghobject_t &oid,
   return 0;
 }
 
-int MemStore::_omap_rmkeyrange(coll_t cid, const ghobject_t &oid,
+int CDSMemStore::_omap_rmkeyrange(coll_t cid, const ghobject_t &oid,
 			       const string& first, const string& last)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << first
@@ -1321,7 +1323,7 @@ int MemStore::_omap_rmkeyrange(coll_t cid, const ghobject_t &oid,
   return 0;
 }
 
-int MemStore::_omap_setheader(coll_t cid, const ghobject_t &oid,
+int CDSMemStore::_omap_setheader(coll_t cid, const ghobject_t &oid,
 			      const bufferlist &bl)
 {
   dout(10) << __func__ << " " << cid << " " << oid << dendl;
@@ -1337,7 +1339,7 @@ int MemStore::_omap_setheader(coll_t cid, const ghobject_t &oid,
   return 0;
 }
 
-int MemStore::_create_collection(coll_t cid)
+int CDSMemStore::_create_collection(coll_t cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
   RWLock::WLocker l(coll_lock);
@@ -1348,7 +1350,7 @@ int MemStore::_create_collection(coll_t cid)
   return 0;
 }
 
-int MemStore::_destroy_collection(coll_t cid)
+int CDSMemStore::_destroy_collection(coll_t cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
   RWLock::WLocker l(coll_lock);
@@ -1364,7 +1366,8 @@ int MemStore::_destroy_collection(coll_t cid)
   return 0;
 }
 
-int MemStore::_collection_add(coll_t cid, coll_t ocid, const ghobject_t& oid)
+int CDSMemStore::_collection_add(coll_t cid, coll_t ocid,
+				 const ghobject_t& oid)
 {
   dout(10) << __func__ << " " << cid << " " << ocid << " " << oid << dendl;
   CollectionRef c = get_collection(cid);
@@ -1386,8 +1389,9 @@ int MemStore::_collection_add(coll_t cid, coll_t ocid, const ghobject_t& oid)
   return 0;
 }
 
-int MemStore::_collection_move_rename(coll_t oldcid, const ghobject_t& oldoid,
-				      coll_t cid, const ghobject_t& oid)
+int CDSMemStore::_collection_move_rename(coll_t oldcid,
+					 const ghobject_t& oldoid,
+					 coll_t cid, const ghobject_t& oid)
 {
   dout(10) << __func__ << " " << oldcid << " " << oldoid << " -> "
 	   << cid << " " << oid << dendl;
@@ -1409,10 +1413,10 @@ int MemStore::_collection_move_rename(coll_t oldcid, const ghobject_t& oldoid,
   c->object_hash[oid] = o;
   oc->object_map.erase(oldoid);
   oc->object_hash.erase(oldoid);
-  return 0; 
+  return 0;
 }
 
-int MemStore::_collection_setattr(coll_t cid, const char *name,
+int CDSMemStore::_collection_setattr(coll_t cid, const char *name,
 				  const void *value, size_t size)
 {
   dout(10) << __func__ << " " << cid << " " << name << dendl;
@@ -1425,7 +1429,7 @@ int MemStore::_collection_setattr(coll_t cid, const char *name,
   return 0;
 }
 
-int MemStore::_collection_setattrs(coll_t cid, map<string,bufferptr> &aset)
+int CDSMemStore::_collection_setattrs(coll_t cid, map<string,bufferptr> &aset)
 {
   dout(10) << __func__ << " " << cid << dendl;
   ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
@@ -1441,7 +1445,7 @@ int MemStore::_collection_setattrs(coll_t cid, map<string,bufferptr> &aset)
   return 0;
 }
 
-int MemStore::_collection_rmattr(coll_t cid, const char *name)
+int CDSMemStore::_collection_rmattr(coll_t cid, const char *name)
 {
   dout(10) << __func__ << " " << cid << " " << name << dendl;
   ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
@@ -1455,7 +1459,7 @@ int MemStore::_collection_rmattr(coll_t cid, const char *name)
   return 0;
 }
 
-int MemStore::_collection_rename(const coll_t &cid, const coll_t &ncid)
+int CDSMemStore::_collection_rename(const coll_t &cid, const coll_t &ncid)
 {
   dout(10) << __func__ << " " << cid << " -> " << ncid << dendl;
   RWLock::WLocker l(coll_lock);
@@ -1468,7 +1472,7 @@ int MemStore::_collection_rename(const coll_t &cid, const coll_t &ncid)
   return 0;
 }
 
-int MemStore::_split_collection(coll_t cid, uint32_t bits, uint32_t match,
+int CDSMemStore::_split_collection(coll_t cid, uint32_t bits, uint32_t match,
 				coll_t dest)
 {
   dout(10) << __func__ << " " << cid << " " << bits << " " << match << " "
