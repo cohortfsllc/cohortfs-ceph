@@ -25,7 +25,7 @@ template<size_t PageSize>
 struct Page {
   Page(uint64_t offset = 0) : offset(offset) {}
 
-  char data[PageSize];
+  char data[PageSize] __attribute__ ((aligned(16)));
   boost::intrusive::avl_set_member_hook<> hook;
   uint64_t offset;
 
