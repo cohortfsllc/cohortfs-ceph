@@ -16,6 +16,7 @@
 #ifndef CEPH_PAGESET_H
 #define CEPH_PAGESET_H
 
+#include "common/Mutex.h"
 #include <algorithm>
 #include <boost/intrusive/avl_set.hpp>
 
@@ -65,9 +66,11 @@ public:
   typedef typename page_set::const_reverse_iterator const_reverse_iterator;
 
 private:
+  Mutex lock;
   page_set pages;
 
   void free_pages(iterator cur, iterator end) {
+    Mutex::Locker l(lock);
     while (cur != end) {
       page_type *page = &*cur;
       cur = pages.erase(cur);
@@ -76,21 +79,22 @@ private:
   }
 
 public:
-  PageSet() {}
+  PageSet() : lock("PageSet::lock"){}
   ~PageSet() {
     free_pages(pages.begin(), pages.end());
   }
 
-  bool empty() const { return pages.empty(); }
-  size_t size() const { return pages.size(); }
+  bool empty() const { Mutex::Locker l(lock); return pages.empty(); }
+  size_t size() const { Mutex::Locker l(lock); return pages.size(); }
 
-  iterator begin() { return pages.begin(); }
-  const_iterator begin() const { return pages.begin(); }
-  iterator end() { return pages.end(); }
-  const_iterator end() const { return pages.end(); }
+  iterator begin() { Mutex::Locker l(lock); return pages.begin(); }
+  const_iterator begin() const { Mutex::Locker l(lock); return pages.begin(); }
+  iterator end() { Mutex::Locker l(lock); return pages.end(); }
+  const_iterator end() const { Mutex::Locker l(lock); return pages.end(); }
 
   // allocate all pages that intersect the range [offset,length)
   iterator alloc_range(uint64_t offset, size_t length) {
+    Mutex::Locker l(lock);
     std::pair<iterator, bool> insert;
     iterator cur = pages.end();
 
@@ -127,6 +131,7 @@ public:
   }
 
   iterator first_page_containing(uint64_t offset, size_t length) {
+    Mutex::Locker l(lock);
     iterator cur = pages.lower_bound(offset & ~(PageSize-1), page_cmp());
     if (cur == pages.end() || cur->offset >= offset + length)
       return pages.end();
@@ -134,6 +139,7 @@ public:
   }
 
   void free_pages_after(uint64_t offset) {
+    Mutex::Locker l(lock);
     iterator cur = pages.lower_bound(offset & ~(PageSize-1), page_cmp());
     if (cur == pages.end())
       return;
