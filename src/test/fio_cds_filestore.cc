@@ -33,8 +33,26 @@ struct cds_filestore_options {
 	char *filestore_journal;
 };
 
-struct cds_filestore_data {
+struct cds_thread_data {
+    struct thread_data *td;
     struct io_u **aio_events;
+
+    cds_thread_data(struct thread_data *_td)
+    : td(_td),
+      aio_events(NULL) {
+	aio_events = (struct io_u **)
+	    malloc(td->o.iodepth * sizeof(struct io_u *));
+	memset(aio_events, 0, td->o.iodepth * sizeof(struct io_u *));
+    }
+
+    ~cds_thread_data() {
+	free(aio_events);
+    }
+
+};
+
+struct cds_filestore_data {
+
     ObjectStore *fs;
     cds::gc::HP hpGC;
 
@@ -44,8 +62,7 @@ struct cds_filestore_data {
     int nthreads;
 
     cds_filestore_data()
-	: aio_events(NULL),
-	  fs(NULL),
+	: fs(NULL),
 	  hpGC(167), // magic number for SkipListSet HP impl + 100
 	  mtx(PTHREAD_MUTEX_INITIALIZER),
 	  setup(false),
@@ -62,11 +79,12 @@ struct cds_filestore_data {
 	pthread_mutex_lock(&mtx);
 	if (! setup) {
 	    setup = true; // once
-	    aio_events = (struct io_u **)
-		malloc(td->o.iodepth * sizeof(struct io_u *));
-	    memset(aio_events, 0, td->o.iodepth * sizeof(struct io_u *));
 	}
 	pthread_mutex_unlock(&mtx);
+
+	// tsdata
+	td->io_ops->data = new cds_thread_data(td);
+
 	return (0);
     }
 
@@ -135,8 +153,11 @@ struct cds_filestore_data {
 	    // clean up ObjectStore
 	    fs->umount();
 	    delete fs;
-	    free(aio_events);
 	}
+	cds_thread_data *tdata =
+	    static_cast<cds_thread_data*>(td->io_ops->data);
+	delete tdata;
+	tdata = NULL;
     }
 
     ~cds_filestore_data() {
@@ -209,18 +230,18 @@ struct OnApplied : public Context {
 
 static struct io_u *fio_cds_filestore_event(struct thread_data *td, int event)
 {
-    struct cds_filestore_data *cds_filestore_data =
-	(struct cds_filestore_data *) td->io_ops->data;
+    struct cds_thread_data *cds_thread_data =
+	(struct cds_thread_data *) td->io_ops->data;
 
-    return cds_filestore_data->aio_events[event];
+    return cds_thread_data->aio_events[event];
 }
 
 static int fio_cds_filestore_getevents(struct thread_data *td,
 					unsigned int min,
 					unsigned int max, struct timespec *t)
 {
-    struct cds_filestore_data *cds_filestore_data =
-	(struct cds_filestore_data *) td->io_ops->data;
+    struct cds_thread_data *cds_thread_data =
+	(struct cds_thread_data *) td->io_ops->data;
     unsigned int events = 0;
     struct io_u *io_u;
     unsigned int i;
@@ -234,7 +255,7 @@ static int fio_cds_filestore_getevents(struct thread_data *td,
 	    fov = (struct fio_cds_filestore_iou *)io_u->engine_data;
 	    if (fov->io_complete) {
 		fov->io_complete = 0;
-		cds_filestore_data->aio_events[events] = io_u;
+		cds_thread_data->aio_events[events] = io_u;
 		events++;
 	    }
 	}
@@ -251,11 +272,9 @@ static int fio_cds_filestore_getevents(struct thread_data *td,
 static int fio_cds_filestore_queue(struct thread_data *td, struct io_u *io_u)
 {
     int r = -1;
-    struct cds_filestore_data *cds_filestore_data =
-	(struct cds_filestore_data *) td->io_ops->data;
     uint64_t len = io_u->xfer_buflen;
     uint64_t off = io_u->offset;
-    ObjectStore *fs = cds_filestore_data->fs;
+    ObjectStore *fs = cds_data->fs;
     sobject_t poid(object_t(io_u->file->file_name), 0);
 
     fio_ro_check(td, io_u);
@@ -328,7 +347,6 @@ static int fio_cds_filestore_setup(struct thread_data *td)
 	log_err("fio_setup_cds_filestore_data failed.\n");
 	goto cleanup;
     }
-    td->io_ops->data = cds_data;
 
     /* taken from "net" engine. Pretend we deal with files,
      * even if we do not have any ideas about files.
