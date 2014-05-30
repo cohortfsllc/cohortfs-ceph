@@ -3,14 +3,14 @@
 # CDS_INCLUDE_DIR - where to find cds/init.h
 # FIO_FOUND - True if found.
 
-find_path(CDS_INCLUDE_DIR cds/init.h NO_DEFAULT_PATH PATHS
+find_path(CDS_INC_DIR cds/init.h NO_DEFAULT_PATH PATHS
   /usr/include
   /opt/local/include
   /usr/local/include
   /opt/cds
 )
 
-if (CDS_INCLUDE_DIR)
+if (CDS_INC_DIR)
   set(CDS_FOUND TRUE)
 else ()
   set(CDS_FOUND FALSE)
@@ -26,5 +26,5 @@ else ()
 endif ()
 
 mark_as_advanced(
-  CDS_INCLUDE_DIR
+  CDS_INC_DIR
 )
