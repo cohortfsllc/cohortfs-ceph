@@ -1072,6 +1072,10 @@ int MemStore::_write(const coll_t &cid, const hobject_t& oid,
     c->object_hash[oid] = o;
   }
 
+  if (offset == (16384 * 100)) {
+    std::cout << "Stopping at " << offset << std::endl;
+  }
+
   _write_pages(bl, offset, o->data);
 
   // extend the length

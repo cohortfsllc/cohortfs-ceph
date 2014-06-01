@@ -183,6 +183,10 @@ int main(int argc, const char *argv[])
 	for (int ix = 0; ix < repeats; ++ix) {
 	    uint64_t offset = 0;
 	    size_t len = size;
+
+	    C_GatherBuilder gather(g_ceph_context);
+	    list<ObjectStore::Transaction*> tls;
+
 	    std::cout << "Write cycle " << ix << std::endl;
 	    while (len) {
 		size_t count = len < block_size ? len : (size_t)block_size;
@@ -190,13 +194,13 @@ int main(int argc, const char *argv[])
 		ObjectStore::Transaction *t = new ObjectStore::Transaction;
 		t->write(coll_t(), hobject_t(poid), offset, count, data);
 		fs->queue_transaction(NULL, t, NULL, gather.new_sub());
+		tls.push_back(t);
 
 		offset += count;
 		len -= count;
 	    }
-	}
 
-	if (gather.has_subs()) {
+	    if (gather.has_subs()) {
 		// wait for all writes to be committed
 		Mutex lock("osbench");
 		Cond cond;
@@ -209,7 +213,16 @@ int main(int argc, const char *argv[])
 		while (!done)
 			cond.Wait(lock);
 		lock.Unlock();
+	    }
+
+	    // we must delete all transactions
+	    while (! tls.empty()) {
+		ObjectStore::Transaction* t = tls.front();
+		tls.pop_front();
+		delete t;
+	    }
 	}
+
 
 	auto t2 = std::chrono::high_resolution_clock::now();
 
@@ -224,8 +237,8 @@ int main(int argc, const char *argv[])
 	using std::chrono::duration_cast;
 	using std::chrono::microseconds;
 	auto duration = duration_cast<microseconds>(t2 - t1);
-	byte_units rate = (1000000LL * size) / duration.count();
-	dout(0) << "Wrote " << size << " in " << duration.count()
+	byte_units rate = (1000000LL * size * repeats) / duration.count();
+	dout(0) << "Wrote " << size * repeats << " in " << duration.count()
 		<< "us, at a rate of " << rate << "/s" << dendl;
 
 	return 0;
