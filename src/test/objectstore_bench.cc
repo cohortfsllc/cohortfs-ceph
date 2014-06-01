@@ -193,12 +193,14 @@ int main(int argc, const char *argv[])
 
 		ObjectStore::Transaction *t = new ObjectStore::Transaction;
 		t->write(coll_t(), hobject_t(poid), offset, count, data);
-		fs->queue_transaction(NULL, t, NULL, gather.new_sub());
 		tls.push_back(t);
 
 		offset += count;
 		len -= count;
 	    }
+
+	    // try running each repeat set at once
+	    fs->queue_transactions(NULL, tls, NULL, gather.new_sub());
 
 	    if (gather.has_subs()) {
 		// wait for all writes to be committed
