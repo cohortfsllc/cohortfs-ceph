@@ -1080,6 +1080,11 @@ int CDSMemStore::_write(coll_t cid, const ghobject_t& oid,
     c->object_hash[oid] = o;
   }
 
+  /* XXXX hack to see page inserts */
+  if (offset == (16384 * 100)) {
+    std::cout << "Stopping at " << offset << std::endl;
+  }
+
   _write_pages(bl, offset, o->data);
 
   // extend the length
@@ -1094,18 +1099,19 @@ void CDSMemStore::_write_pages(const bufferlist& src, unsigned offset,
   // make sure the page range is allocated
   unsigned len = src.length();
   page_set::iterator page = pages.alloc_range(offset, len);
+  bufferlist* ncbl = const_cast<bufferlist*>(&src);
 
-  unsigned src_offset = 0;
-  while (len) {
+  buffer::list::iterator bl_iter = ncbl->begin();
+  while (! bl_iter.end()) {
+    char *data = bl_iter.get_bytes(&len);
     unsigned page_offset = offset - page->offset;
-    unsigned count = min((size_t)len, PageSize - page_offset);
-
-    src.copy(src_offset, count, page->data + page_offset);
-
-    src_offset += count;
+    unsigned pageoff = PageSize - page_offset;
+    unsigned count = min((size_t)len, (size_t) pageoff);
+    memcpy(page->data+page_offset, data, count);
     offset += count;
-    len -= count;
-    page++;
+    if (count == pageoff)
+      ++page;
+    bl_iter.advance(count);
   }
 }
 
