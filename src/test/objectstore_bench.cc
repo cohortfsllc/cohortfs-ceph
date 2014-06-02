@@ -97,88 +97,24 @@ std::ostream& operator<<(std::ostream &out, const byte_units &amount)
 	return out << v << ' ' << units[unit];
 }
 
+byte_units size = 1048576;
+byte_units block_size = 4096;
+int repeats = 1;
+int n_threads = 1;
+object_t poid("osbench");
+ObjectStore *fs;
 
-int main(int argc, const char *argv[])
+class OBS_Worker : public Thread
 {
-	// command-line arguments
-	byte_units size = 1048576;
-	byte_units block_size = 4096;
-	int repeats = 1;
+public:
+    OBS_Worker() { }
 
-	vector<const char*> args;
-	argv_to_vec(argc, argv, args);
-	env_to_vec(args);
-
-	global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
-			CODE_ENVIRONMENT_UTILITY, 0);
-
-	string val;
-	vector<const char*>::iterator i = args.begin();
-	while (i != args.end()) {
-		if (ceph_argparse_double_dash(args, i))
-			break;
-
-		if (ceph_argparse_witharg(args, i, &val, "--size", (char*)NULL)) {
-			if (!size.parse(val)) {
-				derr << "error parsing size: It must be an int." << dendl;
-				usage();
-			}
-		} else if (ceph_argparse_witharg(args, i, &val, "--block-size", (char*)NULL)) {
-			if (!block_size.parse(val)) {
-				derr << "error parsing block-size: It must be an int." << dendl;
-				usage();
-			}
-		} else if (ceph_argparse_witharg(args, i, &val, "--repeats", (char*)NULL)) {
-		    repeats = atoi(val.c_str());
-		} else {
-			derr << "Error: can't understand argument: " << *i <<
-				"\n" << dendl;
-			usage();
-		}
-	}
-
-	common_init_finish(g_ceph_context);
-
-	// create object store
-	dout(0) << "objectstore " << g_conf->osd_objectstore << dendl;
-	dout(0) << "data " << g_conf->osd_data << dendl;
-	dout(0) << "journal " << g_conf->osd_journal << dendl;
-	dout(0) << "size " << size << dendl;
-	dout(0) << "block-size " << block_size << dendl;
-	dout(0) << "repeats " << repeats << dendl;
-
-	ObjectStore *fs = ObjectStore::create(g_ceph_context,
-			g_conf->osd_objectstore,
-			g_conf->osd_data,
-			g_conf->osd_journal);
-	if (fs == NULL) {
-		derr << "bad objectstore type " << g_conf->osd_objectstore << dendl;
-		return 1;
-	}
-	if (fs->mkfs() < 0) {
-		derr << "mkfs failed" << dendl;
-		return 1;
-	}
-	if (fs->mount() < 0) {
-		derr << "mount failed" << dendl;
-		return 1;
-	}
-
-	dout(10) << "created objectstore " << fs << dendl;
-
-	ObjectStore::Transaction ft;
-	ft.create_collection(coll_t());
-	fs->apply_transaction(ft);
-
-	object_t poid("osbench");
-
-	C_GatherBuilder gather(g_ceph_context);
-
+    void *entry() {
 	bufferlist data;
 	data.append(buffer::create(block_size));
 
-	dout(0) << "Writing " << size << " in blocks of " << block_size << dendl;
-	auto t1 = std::chrono::high_resolution_clock::now();
+	dout(0) << "Writing " << size << " in blocks of " << block_size
+		<< dendl;
 
 	for (int ix = 0; ix < repeats; ++ix) {
 	    uint64_t offset = 0;
@@ -225,7 +161,88 @@ int main(int argc, const char *argv[])
 	    }
 	}
 
+	return 0;
+    }
+};
 
+int main(int argc, const char *argv[])
+{
+	// command-line arguments
+	vector<const char*> args;
+	argv_to_vec(argc, argv, args);
+	env_to_vec(args);
+
+	global_init(NULL, args, CEPH_ENTITY_TYPE_OSD,
+			CODE_ENVIRONMENT_UTILITY, 0);
+
+	string val;
+	vector<const char*>::iterator i = args.begin();
+	while (i != args.end()) {
+		if (ceph_argparse_double_dash(args, i))
+			break;
+
+		if (ceph_argparse_witharg(args, i, &val, "--size", (char*)NULL)) {
+			if (!size.parse(val)) {
+				derr << "error parsing size: It must be an int." << dendl;
+				usage();
+			}
+		} else if (ceph_argparse_witharg(args, i, &val, "--block-size", (char*)NULL)) {
+			if (!block_size.parse(val)) {
+				derr << "error parsing block-size: It must be an int." << dendl;
+				usage();
+			}
+		} else if (ceph_argparse_witharg(args, i, &val, "--repeats", (char*)NULL)) {
+		    repeats = atoi(val.c_str());
+		} else if (ceph_argparse_witharg(args, i, &val, "--threads", (char*)NULL)) {
+		    n_threads = atoi(val.c_str());
+		} else {
+			derr << "Error: can't understand argument: " << *i <<
+				"\n" << dendl;
+			usage();
+		}
+	}
+
+	common_init_finish(g_ceph_context);
+
+	// create object store
+	dout(0) << "objectstore " << g_conf->osd_objectstore << dendl;
+	dout(0) << "data " << g_conf->osd_data << dendl;
+	dout(0) << "journal " << g_conf->osd_journal << dendl;
+	dout(0) << "size " << size << dendl;
+	dout(0) << "block-size " << block_size << dendl;
+	dout(0) << "repeats " << repeats << dendl;
+
+	fs = ObjectStore::create(g_ceph_context,
+				 g_conf->osd_objectstore,
+				 g_conf->osd_data,
+				 g_conf->osd_journal);
+	if (fs == NULL) {
+		derr << "bad objectstore type " << g_conf->osd_objectstore << dendl;
+		return 1;
+	}
+	if (fs->mkfs() < 0) {
+		derr << "mkfs failed" << dendl;
+		return 1;
+	}
+	if (fs->mount() < 0) {
+		derr << "mount failed" << dendl;
+		return 1;
+	}
+
+	dout(10) << "created objectstore " << fs << dendl;
+
+	ObjectStore::Transaction ft;
+	ft.create_collection(coll_t());
+	fs->apply_transaction(ft);
+
+	int thr_ix;
+	vector<OBS_Worker> workers(n_threads);
+	auto t1 = std::chrono::high_resolution_clock::now();
+	for (auto &worker : workers)
+	    worker.create();
+	for (auto &worker : workers)
+	    worker.join();
+	workers.clear();
 	auto t2 = std::chrono::high_resolution_clock::now();
 
 	// remove the object
@@ -240,8 +257,9 @@ int main(int argc, const char *argv[])
 	using std::chrono::microseconds;
 	auto duration = duration_cast<microseconds>(t2 - t1);
 	byte_units rate = (1000000LL * size * repeats) / duration.count();
-	dout(0) << "Wrote " << size * repeats << " in " << duration.count()
-		<< "us, at a rate of " << rate << "/s" << dendl;
+	dout(0) << "Wrote " << size * repeats * n_threads << " in "
+		<< duration.count() << "us, at a rate of " << rate << "/s"
+		<< dendl;
 
 	return 0;
 }
