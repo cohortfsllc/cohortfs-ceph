@@ -1086,6 +1086,7 @@ int MemStore::_write(coll_t cid, const ghobject_t& oid,
     c->object_hash[oid] = o;
   }
 
+  /* XXXX hack to see page inserts */
   if (offset == (16384 * 100)) {
     std::cout << "Stopping at " << offset << std::endl;
   }
