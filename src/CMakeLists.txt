@@ -7,7 +7,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++11 -Wno-invalid-offsetof -Wnon-v
 
 if (HAVE_XIO)
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -I${Xio_INCLUDE_DIR} -DHAVE_XIO")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${Xio_INCLUDE_DIR} -DHAVE_XIO")
 
 endif(HAVE_XIO)
 
