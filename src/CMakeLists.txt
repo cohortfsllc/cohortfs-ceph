@@ -1,7 +1,7 @@
 include(GetGitRevisionDescription)
 
 add_definitions("-DCEPH_LIBDIR=${LIBRARY_OUTPUT_PATH}")
-add_definitions("-DCEPH_PKGLIBDIR=${LIBRARY_OUTPUT_PATH}")
+add_definitions("-DCEPH_PKGLIBDIR=\"${CMAKE_INSTALL_PREFIX}/lib\"")
 add_definitions("-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -rdynamic -Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -fPIC")
