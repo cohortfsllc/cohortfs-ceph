@@ -235,4 +235,7 @@
 /* Defined if FIO */
 #cmakedefine WITH_FIO
 
+/* Defined if CDS */
+#cmakedefine HAVE_CDS
+
 #endif /* CONFIG_H */
