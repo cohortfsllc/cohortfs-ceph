@@ -901,7 +901,13 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
       throw end_of_buffer();
     return ptr(*p, p_off, p->length() - p_off);
   }
-  
+
+  char* buffer::list::iterator::get_bytes(unsigned *nbytes)
+  {
+    *nbytes = p->length() - p_off;
+    return p->c_str()+p_off;
+  }
+
   // copy data out.
   // note that these all _append_ to dest!
   
