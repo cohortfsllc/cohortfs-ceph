@@ -7,7 +7,7 @@ set(rados_srcs
 )
 
 add_library(rados SHARED ${rados_srcs})
-target_link_libraries(rados osdc cls_lock_client common ${CRYPTO_LIBS} ${EXTRALIBS})
+target_link_libraries(rados osdc cls_lock_client common global ${CRYPTO_LIBS} ${EXTRALIBS})
 set_target_properties(rados PROPERTIES VERSION 2.0.0 SOVERSION 1)
 
 install(TARGETS rados DESTINATION lib)

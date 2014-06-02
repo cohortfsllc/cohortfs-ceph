@@ -1,3 +1,5 @@
+include_directories("${CMAKE_SOURCE_DIR}/src/civetweb/include")
+
 set(librgw_a_srcs
 	librgw.cc
 	rgw_acl.cc
@@ -64,16 +66,3 @@ add_executable(radosgw ${radosgw_srcs})
 
 target_link_libraries(radosgw librgw_a rados curl expat global fcgi resolv)
 install(TARGETS radosgw DESTINATION bin)
-
-set_target_properties(radosgw 
-PROPERTIES COMPILE_FLAGS "-Woverloaded-virtual -I${CMAKE_SOURCE_DIR}/src/civetweb/include")
-
-set_target_properties(librgw_a 
-PROPERTIES COMPILE_FLAGS -Woverloaded-virtual)
-
-get_target_property(radosgw_flags radosgw COMPILE_FLAGS)
-
-get_target_property(librgw_a_flags librgw_a COMPILE_FLAGS)
-
-message(STATUS ${radosgw_flags})
-message(STATUS ${librgw_a_flags})
