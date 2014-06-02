@@ -9,7 +9,6 @@ if (WITH_FIO)
 	install(TARGETS fio_ceph_filestore DESTINATION lib)
 
 	if (WITH_CDS)
-	  include_directories(${CDS_INC_DIR})
 	  add_library(fio_cds_filestore SHARED fio_cds_filestore.cc)
 	  target_link_libraries(
 	    fio_cds_filestore os global ${CRYPTO_LIBS} ${EXTRA_LIBS}
@@ -21,5 +20,5 @@ endif (WITH_FIO)
 
 # osbench
 add_executable(osbench objectstore_bench.cc)
-target_link_libraries(osbench os global)
+target_link_libraries(osbench os global ${CDS_LIBS})
 set_target_properties(osbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
