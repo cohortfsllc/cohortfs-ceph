@@ -131,6 +131,8 @@ public:
 	// zero front of page between page_offset and offset
 	if (offset > page->offset)
 	  std::fill(page->data, page->data + offset - page->offset, 0);
+#else
+	memset(page->data, 0, PageSize);
 #endif
 
       } else { // exists
