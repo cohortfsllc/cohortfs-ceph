@@ -66,7 +66,7 @@ public:
 	f->open_object_section("xattr");
 	f->dump_string("name", p->first);
 	f->dump_int("length", p->second.length());
-	f->close_section();	
+	f->close_section();
       }
       f->close_section();
 
@@ -77,7 +77,7 @@ public:
 	f->open_object_section("pair");
 	f->dump_string("key", p->first);
 	f->dump_int("length", p->second.length());
-	f->close_section();	
+	f->close_section();
       }
       f->close_section();
     }
@@ -86,7 +86,7 @@ public:
 
   struct Collection {
     ceph::unordered_map<ghobject_t, ObjectRef> object_hash;  ///< for lookup
-    map<ghobject_t, ObjectRef> object_map;        ///< for iteration
+    map<ghobject_t, ObjectRef> object_map;  ///< for iteration
     map<string,bufferptr> xattr;
     RWLock lock;   ///< for object_{map,hash}
 
@@ -96,7 +96,8 @@ public:
     // level.
 
     ObjectRef get_object(ghobject_t oid) {
-      ceph::unordered_map<ghobject_t,ObjectRef>::iterator o = object_hash.find(oid);
+      ceph::unordered_map<ghobject_t,ObjectRef>::iterator o =
+	object_hash.find(oid);
       if (o == object_hash.end())
 	return ObjectRef();
       return o->second;
@@ -161,7 +162,7 @@ private:
     }
     bool valid() {
       RWLock::RLocker l(c->lock);
-      return it != o->omap.end();      
+      return it != o->omap.end();
     }
     int next() {
       RWLock::RLocker l(c->lock);
@@ -192,16 +193,18 @@ private:
 
   void _do_transaction(Transaction& t);
 
-  int _read_pages(page_set &pages, unsigned offset, size_t len, bufferlist &dst);
+  int _read_pages(page_set &pages, unsigned offset, size_t len,
+		  bufferlist &dst);
   void _write_pages(const bufferlist& src, unsigned offset, page_set &pages);
 
   int _touch(coll_t cid, const ghobject_t& oid);
-  int _write(coll_t cid, const ghobject_t& oid, uint64_t offset, size_t len, const bufferlist& bl,
-      bool replica = false);
+  int _write(coll_t cid, const ghobject_t& oid, uint64_t offset, size_t len,
+	     const bufferlist& bl, bool replica = false);
   int _zero(coll_t cid, const ghobject_t& oid, uint64_t offset, size_t len);
   int _truncate(coll_t cid, const ghobject_t& oid, uint64_t size);
   int _remove(coll_t cid, const ghobject_t& oid);
-  int _setattrs(coll_t cid, const ghobject_t& oid, map<string,bufferptr>& aset);
+  int _setattrs(coll_t cid, const ghobject_t& oid,
+		map<string,bufferptr>& aset);
   int _rmattr(coll_t cid, const ghobject_t& oid, const char *name);
   int _rmattrs(coll_t cid, const ghobject_t& oid);
   int _clone(coll_t cid, const ghobject_t& oldoid, const ghobject_t& newoid);
@@ -288,9 +291,12 @@ public:
     size_t len,
     bufferlist& bl,
     bool allow_eio = false);
-  int fiemap(coll_t cid, const ghobject_t& oid, uint64_t offset, size_t len, bufferlist& bl);
-  int getattr(coll_t cid, const ghobject_t& oid, const char *name, bufferptr& value);
-  int getattrs(coll_t cid, const ghobject_t& oid, map<string,bufferptr>& aset, bool user_only = false);
+  int fiemap(coll_t cid, const ghobject_t& oid, uint64_t offset, size_t len,
+	     bufferlist& bl);
+  int getattr(coll_t cid, const ghobject_t& oid, const char *name,
+	      bufferptr& value);
+  int getattrs(coll_t cid, const ghobject_t& oid, map<string,bufferptr>& aset,
+	       bool user_only = false);
 
   int list_collections(vector<coll_t>& ls);
   bool collection_exists(coll_t c);
@@ -301,13 +307,13 @@ public:
   bool collection_empty(coll_t c);
   int collection_list(coll_t cid, vector<ghobject_t>& o);
   int collection_list_partial(coll_t cid, ghobject_t start,
-			      int min, int max, snapid_t snap, 
+			      int min, int max, snapid_t snap,
 			      vector<ghobject_t> *ls, ghobject_t *next);
   int collection_list_range(coll_t cid, ghobject_t start, ghobject_t end,
 			    snapid_t seq, vector<ghobject_t> *ls);
 
   int omap_get(
-    coll_t cid,                ///< [in] Collection containing oid
+    coll_t cid,    ///< [in] Collection containing oid
     const ghobject_t &oid,   ///< [in] Object containing omap
     bufferlist *header,      ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map
@@ -315,7 +321,7 @@ public:
 
   /// Get omap header
   int omap_get_header(
-    coll_t cid,                ///< [in] Collection containing oid
+    coll_t cid,  ///< [in] Collection containing oid
     const ghobject_t &oid,   ///< [in] Object containing omap
     bufferlist *header,      ///< [out] omap header
     bool allow_eio = false ///< [in] don't assert on eio
@@ -323,14 +329,14 @@ public:
 
   /// Get keys defined on oid
   int omap_get_keys(
-    coll_t cid,              ///< [in] Collection containing oid
+    coll_t cid,   ///< [in] Collection containing oid
     const ghobject_t &oid, ///< [in] Object containing omap
     set<string> *keys      ///< [out] Keys defined on oid
     );
 
   /// Get key values
   int omap_get_values(
-    coll_t cid,                    ///< [in] Collection containing oid
+    coll_t cid,  ///< [in] Collection containing oid
     const ghobject_t &oid,       ///< [in] Object containing omap
     const set<string> &keys,     ///< [in] Keys to get
     map<string, bufferlist> *out ///< [out] Returned keys and values
@@ -338,14 +344,14 @@ public:
 
   /// Filters keys into out which are defined on oid
   int omap_check_keys(
-    coll_t cid,                ///< [in] Collection containing oid
+    coll_t cid,   ///< [in] Collection containing oid
     const ghobject_t &oid,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
-    set<string> *out         ///< [out] Subset of keys defined on oid
+    set<string> *out  ///< [out] Subset of keys defined on oid
     );
 
   ObjectMap::ObjectMapIterator get_omap_iterator(
-    coll_t cid,              ///< [in] collection
+    coll_t cid,   ///< [in] collection
     const ghobject_t &oid  ///< [in] object
     );
 
