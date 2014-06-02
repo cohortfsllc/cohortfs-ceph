@@ -365,6 +365,10 @@ public:
 	  return ptr(*p, p_off, p->length() - p_off);
 	}
 
+      inline char* get_bytes(unsigned *nbytes) {
+        *nbytes = p->length() - p_off;
+        return p->c_str()+p_off;
+      }
 
       // copy data out.
       // note that these all _append_ to dest!
