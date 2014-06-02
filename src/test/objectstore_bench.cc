@@ -235,7 +235,6 @@ int main(int argc, const char *argv[])
 	ft.create_collection(coll_t());
 	fs->apply_transaction(ft);
 
-	int thr_ix;
 	vector<OBS_Worker> workers(n_threads);
 	auto t1 = std::chrono::high_resolution_clock::now();
 	for (auto &worker : workers)
@@ -256,7 +255,8 @@ int main(int argc, const char *argv[])
 	using std::chrono::duration_cast;
 	using std::chrono::microseconds;
 	auto duration = duration_cast<microseconds>(t2 - t1);
-	byte_units rate = (1000000LL * size * repeats) / duration.count();
+	byte_units rate = (1000000LL * size * repeats * n_threads)
+	    / duration.count();
 	dout(0) << "Wrote " << size * repeats * n_threads << " in "
 		<< duration.count() << "us, at a rate of " << rate << "/s"
 		<< dendl;
