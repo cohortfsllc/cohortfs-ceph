@@ -1755,5 +1755,5 @@ endif (WITH_FIO)
 
 # osbench
 add_executable(osbench objectstore_bench.cc)
-target_link_libraries(osbench os global)
+target_link_libraries(osbench os global ${CDS_LIBS})
 set_target_properties(osbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
