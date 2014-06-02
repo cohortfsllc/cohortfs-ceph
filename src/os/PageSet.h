@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <boost/intrusive/avl_set.hpp>
+#include <boost/pool/pool.hpp>
 
 
 template<size_t PageSize>
@@ -40,7 +41,22 @@ struct Page {
       return lhs.offset < rhs.offset;
     }
   };
-
+#if 0
+  // pool allocation
+  static boost::pool<>& get_pool() {
+    static boost::pool<> pool(PageSize);
+    return pool;
+  }
+  static void *operator new(size_t num_bytes) {
+    void *n = get_pool().malloc();
+    if (!n)
+      throw std::bad_alloc();
+    return n;
+  }
+  void operator delete(void *p) {
+    get_pool().free(p);
+  }
+#endif
   void encode(bufferlist &bl) const {
     bl.append(buffer::copy(data, PageSize));
     ::encode(offset, bl);
