@@ -17,7 +17,7 @@ else ()
 endif ()
 
 if (CDS_FOUND)
-  message(STATUS "Found cds: ${CDS_INCLUDE_DIR}")
+  message(STATUS "Found cds: ${CDS_INC_DIR}")
 else ()
   message(STATUS "Failed to find cds/init.h")
   if (CDS_FIND_REQUIRED)

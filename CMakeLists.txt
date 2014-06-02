@@ -179,6 +179,7 @@ endif(WITH_FIO)
 option(WITH_CDS "Support for CDS MemStore and fio engines" ON)
 if(WITH_CDS)
 	find_package(cds REQUIRED)
+	set(HAVE_CDS 1)
 endif(WITH_CDS)
 
 # Now create a useable config.h
