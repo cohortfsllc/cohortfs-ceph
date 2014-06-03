@@ -142,8 +142,8 @@ private:
 
   // Indexed Collections
   IndexManager index_manager;
-  int get_index(coll_t c, Index *index);
-  int init_index(coll_t c);
+  int get_index(const coll_t &c, Index *index);
+  int init_index(const coll_t &c);
 
   // ObjectMap
   boost::scoped_ptr<ObjectMap> object_map;
@@ -151,7 +151,7 @@ private:
   Finisher ondisk_finisher;
 
   // helper fns
-  int get_cdir(coll_t cid, char *s, int len);
+  int get_cdir(const coll_t &cid, char *s, int len);
   
   /// read a uuid from fd
   int read_fsid(int fd, uuid_d *uuid);
@@ -321,19 +321,20 @@ private:
   PerfCounters *logger;
 
 public:
-  int lfn_find(coll_t cid, const hobject_t& oid, IndexedPath *path);
-  int lfn_truncate(coll_t cid, const hobject_t& oid, off_t length);
-  int lfn_stat(coll_t cid, const hobject_t& oid, struct stat *buf);
+  int lfn_find(const coll_t &cid, const hobject_t& oid, IndexedPath *path);
+  int lfn_truncate(const coll_t &cid, const hobject_t& oid, off_t length);
+  int lfn_stat(const coll_t &cid, const hobject_t& oid, struct stat *buf);
   int lfn_open(
-    coll_t cid,
+    const coll_t &cid,
     const hobject_t& oid,
     bool create,
     FDRef *outfd,
     IndexedPath *path = 0,
     Index *index = 0);
   void lfn_close(FDRef fd);
-  int lfn_link(coll_t c, coll_t newcid, const hobject_t& o, const hobject_t& newoid) ;
-  int lfn_unlink(coll_t cid, const hobject_t& o, const SequencerPosition &spos,
+  int lfn_link(const coll_t &c, const coll_t &newcid,
+               const hobject_t& o, const hobject_t& newoid);
+  int lfn_unlink(const coll_t &cid, const hobject_t& o, const SequencerPosition &spos,
 		 bool force_clear_omap=false);
 
 public:
@@ -383,15 +384,15 @@ public:
 			 const SequencerPosition& spos,
 			 const hobject_t *oid=0,
 			 bool in_progress=false);
-  void _set_replay_guard(coll_t cid,
+  void _set_replay_guard(const coll_t &cid,
                          const SequencerPosition& spos,
                          bool in_progress);
-  void _set_global_replay_guard(coll_t cid,
+  void _set_global_replay_guard(const coll_t &cid,
 				const SequencerPosition &spos);
 
   /// close a replay guard opened with in_progress=true
   void _close_replay_guard(int fd, const SequencerPosition& spos);
-  void _close_replay_guard(coll_t cid, const SequencerPosition& spos);
+  void _close_replay_guard(const coll_t &cid, const SequencerPosition& spos);
 
   /**
    * check replay guard xattr on given file
@@ -410,43 +411,50 @@ public:
    * @return 1 if we can apply (maybe replay) this operation, -1 if spos has already been applied, 0 if it was in progress
    */
   int _check_replay_guard(int fd, const SequencerPosition& spos);
-  int _check_replay_guard(coll_t cid, const SequencerPosition& spos);
-  int _check_replay_guard(coll_t cid, hobject_t oid, const SequencerPosition& pos);
-  int _check_global_replay_guard(coll_t cid, const SequencerPosition& spos);
+  int _check_replay_guard(const coll_t &cid, const SequencerPosition& spos);
+  int _check_replay_guard(const coll_t &cid, hobject_t oid,
+                          const SequencerPosition& pos);
+  int _check_global_replay_guard(const coll_t &cid,
+                                 const SequencerPosition& spos);
 
   // ------------------
   // objects
   int pick_object_revision_lt(hobject_t& oid) {
     return 0;
   }
-  bool exists(coll_t cid, const hobject_t& oid);
+  bool exists(const coll_t &cid, const hobject_t& oid);
   int stat(
-    coll_t cid,
+    const coll_t &cid,
     const hobject_t& oid,
     struct stat *st,
     bool allow_eio = false);
   int read(
-    coll_t cid,
+    const coll_t &cid,
     const hobject_t& oid,
     uint64_t offset,
     size_t len,
     bufferlist& bl,
     bool allow_eio = false);
-  int fiemap(coll_t cid, const hobject_t& oid, uint64_t offset, size_t len, bufferlist& bl);
+  int fiemap(const coll_t &cid, const hobject_t& oid,
+             uint64_t offset, size_t len, bufferlist& bl);
 
-  int _touch(coll_t cid, const hobject_t& oid);
-  int _write(coll_t cid, const hobject_t& oid, uint64_t offset, size_t len, const bufferlist& bl,
-      bool replica = false);
-  int _zero(coll_t cid, const hobject_t& oid, uint64_t offset, size_t len);
-  int _truncate(coll_t cid, const hobject_t& oid, uint64_t size);
-  int _clone(coll_t cid, const hobject_t& oldoid, const hobject_t& newoid,
-	     const SequencerPosition& spos);
-  int _clone_range(coll_t cid, const hobject_t& oldoid, const hobject_t& newoid,
-		   uint64_t srcoff, uint64_t len, uint64_t dstoff,
+  int _touch(const coll_t &cid, const hobject_t& oid);
+  int _write(const coll_t &cid, const hobject_t& oid,
+             uint64_t offset, size_t len,
+	     const bufferlist& bl, bool replica = false);
+  int _zero(const coll_t &cid, const hobject_t& oid,
+            uint64_t offset, size_t len);
+  int _truncate(const coll_t &cid, const hobject_t& oid, uint64_t size);
+  int _clone(const coll_t &cid, const hobject_t& oldoid,
+             const hobject_t& newoid, const SequencerPosition& spos);
+  int _clone_range(const coll_t &cid, const hobject_t& oldoid,
+                   const hobject_t& newoid, uint64_t srcoff,
+		   uint64_t len, uint64_t dstoff,
 		   const SequencerPosition& spos);
   int _do_clone_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff);
   int _do_copy_range(int from, int to, uint64_t srcoff, uint64_t len, uint64_t dstoff);
-  int _remove(coll_t cid, const hobject_t& oid, const SequencerPosition &spos);
+  int _remove(const coll_t &cid, const hobject_t& oid,
+              const SequencerPosition &spos);
 
   int _fgetattr(int fd, const char *name, bufferptr& bp);
   int _fgetattrs(int fd, map<string,bufferptr>& aset, bool user_only);
@@ -481,23 +489,25 @@ public:
   int snapshot(const string& name);
 
   // attrs
-  int getattr(coll_t cid, const hobject_t& oid, const char *name, bufferptr &bp);
-  int getattrs(coll_t cid, const hobject_t& oid, map<string,bufferptr>& aset, bool user_only = false);
+  int getattr(const coll_t &cid, const hobject_t& oid,
+              const char *name, bufferptr &bp);
+  int getattrs(const coll_t &cid, const hobject_t& oid,
+               map<string,bufferptr>& aset, bool user_only = false);
 
-  int _setattrs(coll_t cid, const hobject_t& oid, map<string,bufferptr>& aset,
-		const SequencerPosition &spos);
-  int _rmattr(coll_t cid, const hobject_t& oid, const char *name,
+  int _setattrs(const coll_t &cid, const hobject_t& oid,
+                map<string,bufferptr>& aset, const SequencerPosition &spos);
+  int _rmattr(const coll_t &cid, const hobject_t& oid, const char *name,
 	      const SequencerPosition &spos);
-  int _rmattrs(coll_t cid, const hobject_t& oid,
+  int _rmattrs(const coll_t &cid, const hobject_t& oid,
 	       const SequencerPosition &spos);
 
-  int collection_getattr(coll_t c, const char *name, void *value, size_t size);
-  int collection_getattr(coll_t c, const char *name, bufferlist& bl);
-  int collection_getattrs(coll_t cid, map<string,bufferptr> &aset);
+  int collection_getattr(const coll_t &c, const char *name, void *value, size_t size);
+  int collection_getattr(const coll_t &c, const char *name, bufferlist& bl);
+  int collection_getattrs(const coll_t &cid, map<string,bufferptr> &aset);
 
-  int _collection_setattr(coll_t c, const char *name, const void *value, size_t size);
-  int _collection_rmattr(coll_t c, const char *name);
-  int _collection_setattrs(coll_t cid, map<string,bufferptr> &aset);
+  int _collection_setattr(const coll_t &c, const char *name, const void *value, size_t size);
+  int _collection_rmattr(const coll_t &c, const char *name);
+  int _collection_setattrs(const coll_t &cid, map<string,bufferptr> &aset);
   int _collection_remove_recursive(const coll_t &cid,
 				   const SequencerPosition &spos);
   int _collection_rename(const coll_t &cid, const coll_t &ncid,
@@ -505,42 +515,43 @@ public:
 
   // collections
   int list_collections(vector<coll_t>& ls);
-  int collection_version_current(coll_t c, uint32_t *version);
-  int collection_stat(coll_t c, struct stat *st);
-  bool collection_exists(coll_t c);
-  bool collection_empty(coll_t c);
-  int collection_list(coll_t c, vector<hobject_t>& oid);
-  int collection_list_partial(coll_t c, hobject_t start,
+  int collection_version_current(const coll_t &c, uint32_t *version);
+  int collection_stat(const coll_t &c, struct stat *st);
+  bool collection_exists(const coll_t &c);
+  bool collection_empty(const coll_t &c);
+  int collection_list(const coll_t &c, vector<hobject_t>& oid);
+  int collection_list_partial(const coll_t &c, hobject_t start,
 			      int min, int max, vector<hobject_t> *ls,
 			      hobject_t *next);
-  int collection_list_range(coll_t c, hobject_t start, hobject_t end,
-			    vector<hobject_t> *ls);
+  int collection_list_range(const coll_t &c, hobject_t start, hobject_t end,
+                            vector<hobject_t> *ls);
 
   // omap (see ObjectStore.h for documentation)
-  int omap_get(coll_t c, const hobject_t &oid, bufferlist *header,
+  int omap_get(const coll_t &c, const hobject_t &oid, bufferlist *header,
 	       map<string, bufferlist> *out);
   int omap_get_header(
-    coll_t c,
+    const coll_t &c,
     const hobject_t &oid,
     bufferlist *out,
     bool allow_eio = false);
-  int omap_get_keys(coll_t c, const hobject_t &oid, set<string> *keys);
-  int omap_get_values(coll_t c, const hobject_t &oid, const set<string> &keys,
-		      map<string, bufferlist> *out);
-  int omap_check_keys(coll_t c, const hobject_t &oid, const set<string> &keys,
-		      set<string> *out);
-  ObjectMap::ObjectMapIterator get_omap_iterator(coll_t c, const hobject_t &oid);
+  int omap_get_keys(const coll_t &c, const hobject_t &oid, set<string> *keys);
+  int omap_get_values(const coll_t &c, const hobject_t &oid,
+                      const set<string> &keys, map<string, bufferlist> *out);
+  int omap_check_keys(const coll_t &c, const hobject_t &oid,
+                      const set<string> &keys, set<string> *out);
+  ObjectMap::ObjectMapIterator get_omap_iterator(const coll_t &c,
+                                                 const hobject_t &oid);
 
-  int _create_collection(coll_t c);
-  int _create_collection(coll_t c, const SequencerPosition &spos);
-  int _destroy_collection(coll_t c);
-  int _collection_add(coll_t c, coll_t ocid, const hobject_t& oid,
+  int _create_collection(const coll_t &c);
+  int _create_collection(const coll_t &c, const SequencerPosition &spos);
+  int _destroy_collection(const coll_t &c);
+  int _collection_add(const coll_t &c, const coll_t &ocid, const hobject_t& oid,
 		      const SequencerPosition& spos);
-  int _collection_move_rename(coll_t oldcid, const hobject_t& oldoid,
-			      coll_t c, const hobject_t& o,
+  int _collection_move_rename(const coll_t &oldcid, const hobject_t& oldoid,
+			      const coll_t &c, const hobject_t& o,
 			      const SequencerPosition& spos);
 
-  int _set_alloc_hint(coll_t cid, const hobject_t& oid,
+  int _set_alloc_hint(const coll_t &cid, const hobject_t& oid,
                       uint64_t expected_object_size,
                       uint64_t expected_write_size);
 
@@ -552,18 +563,18 @@ private:
   void _inject_failure();
 
   // omap
-  int _omap_clear(coll_t cid, const hobject_t &oid,
+  int _omap_clear(const coll_t &cid, const hobject_t &oid,
 		  const SequencerPosition &spos);
-  int _omap_setkeys(coll_t cid, const hobject_t &oid,
+  int _omap_setkeys(const coll_t &cid, const hobject_t &oid,
 		    const map<string, bufferlist> &aset,
 		    const SequencerPosition &spos);
-  int _omap_rmkeys(coll_t cid, const hobject_t &oid, const set<string> &keys,
-		   const SequencerPosition &spos);
-  int _omap_rmkeyrange(coll_t cid, const hobject_t &oid,
+  int _omap_rmkeys(const coll_t &cid, const hobject_t &oid,
+                   const set<string> &keys, const SequencerPosition &spos);
+  int _omap_rmkeyrange(const coll_t &cid, const hobject_t &oid,
 		       const string& first, const string& last,
 		       const SequencerPosition &spos);
-  int _omap_setheader(coll_t cid, const hobject_t &oid, const bufferlist &bl,
-		      const SequencerPosition &spos);
+  int _omap_setheader(const coll_t &cid, const hobject_t &oid,
+                      const bufferlist &bl, const SequencerPosition &spos);
 
   virtual const char** get_tracked_conf_keys() const;
   virtual void handle_conf_change(const struct md_config_t *conf,

@@ -550,7 +550,7 @@ void ObjectStore::Transaction::generate_test_instances(list<ObjectStore::Transac
   o.push_back(t);  
 }
 
-int ObjectStore::collection_list(coll_t c, vector<hobject_t>& o)
+int ObjectStore::collection_list(const coll_t &c, vector<hobject_t>& o)
 {
   vector<hobject_t> go;
   int ret = collection_list(c, go);
@@ -562,7 +562,7 @@ int ObjectStore::collection_list(coll_t c, vector<hobject_t>& o)
   return ret;
 }
 
-int ObjectStore::collection_list_partial(coll_t c, hobject_t start,
+int ObjectStore::collection_list_partial(const coll_t &c, hobject_t start,
 					 int min, int max,
 					 vector<hobject_t> *ls, hobject_t *next)
 {
@@ -578,8 +578,8 @@ int ObjectStore::collection_list_partial(coll_t c, hobject_t start,
   return ret;
 }
 
-int ObjectStore::collection_list_range(coll_t c, hobject_t start, hobject_t end,
-				       vector<hobject_t> *ls)
+int ObjectStore::collection_list_range(const coll_t &c, hobject_t start,
+                                       hobject_t end, vector<hobject_t> *ls)
 {
   vector<hobject_t> go;
   hobject_t gstart(start), gend(end);
