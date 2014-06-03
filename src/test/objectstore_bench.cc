@@ -4,13 +4,16 @@
 
 #include <chrono>
 
+#include <cds/init.h>  //cds::Initialize и cds::Terminate
+#include <cds/gc/hp.h> //cds::gc::HP (Hazard Pointer)
+#include <cds/intrusive/skip_list_hp.h> //cds intrusive skip lists
+
 #include "os/ObjectStore.h"
 
 #include "global/global_init.h"
 
 #include "common/strtol.h"
 #include "common/ceph_argparse.h"
-
 
 #define dout_subsys ceph_subsys_filestore
 
@@ -97,13 +100,88 @@ std::ostream& operator<<(std::ostream &out, const byte_units &amount)
 	return out << v << ' ' << units[unit];
 }
 
+byte_units size = 1048576;
+byte_units block_size = 4096;
+int repeats = 1;
+int n_threads = 1;
+sobject_t poid(object_t("osbench"), 0);
+ObjectStore *fs;
+
+class CDS_Static {
+    cds::gc::HP hpGC;
+public:
+    CDS_Static() : hpGC(167) {
+	cds::Initialize(0);
+	cds::threading::Manager::init();
+    }
+};
+
+CDS_Static cds_static[1];
+
+class OBS_Worker : public Thread
+{
+public:
+    OBS_Worker() { }
+
+    void *entry() {
+	bufferlist data;
+	data.append(buffer::create(block_size));
+
+	dout(0) << "Writing " << size << " in blocks of " << block_size
+		<< dendl;
+
+	for (int ix = 0; ix < repeats; ++ix) {
+	    uint64_t offset = 0;
+	    size_t len = size;
+
+	    C_GatherBuilder gather(g_ceph_context);
+	    list<ObjectStore::Transaction*> tls;
+
+	    std::cout << "Write cycle " << ix << std::endl;
+	    while (len) {
+		size_t count = len < block_size ? len : (size_t)block_size;
+
+		ObjectStore::Transaction *t = new ObjectStore::Transaction;
+		t->write(coll_t(), hobject_t(poid), offset, count, data);
+		tls.push_back(t);
+
+		offset += count;
+		len -= count;
+	    }
+
+	    // try running each repeat set at once
+	    fs->queue_transactions(NULL, tls, NULL, gather.new_sub());
+
+	    if (gather.has_subs()) {
+		// wait for all writes to be committed
+		Mutex lock("osbench");
+		Cond cond;
+		bool done = false;
+
+		gather.set_finisher(new C_SafeCond(&lock, &cond, &done));
+		gather.activate();
+
+		lock.Lock();
+		while (!done)
+			cond.Wait(lock);
+		lock.Unlock();
+	    }
+
+	    // we must delete all transactions
+	    while (! tls.empty()) {
+		ObjectStore::Transaction* t = tls.front();
+		tls.pop_front();
+		delete t;
+	    }
+	}
+
+	return 0;
+    }
+};
 
 int main(int argc, const char *argv[])
 {
 	// command-line arguments
-	byte_units size = 1048576;
-	byte_units block_size = 4096;
-
 	vector<const char*> args;
 	argv_to_vec(argc, argv, args);
 	env_to_vec(args);
@@ -127,6 +205,10 @@ int main(int argc, const char *argv[])
 				derr << "error parsing block-size: It must be an int." << dendl;
 				usage();
 			}
+		} else if (ceph_argparse_witharg(args, i, &val, "--repeats", (char*)NULL)) {
+		    repeats = atoi(val.c_str());
+		} else if (ceph_argparse_witharg(args, i, &val, "--threads", (char*)NULL)) {
+		    n_threads = atoi(val.c_str());
 		} else {
 			derr << "Error: can't understand argument: " << *i <<
 				"\n" << dendl;
@@ -142,11 +224,12 @@ int main(int argc, const char *argv[])
 	dout(0) << "journal " << g_conf->osd_journal << dendl;
 	dout(0) << "size " << size << dendl;
 	dout(0) << "block-size " << block_size << dendl;
+	dout(0) << "repeats " << repeats << dendl;
 
-	ObjectStore *fs = ObjectStore::create(g_ceph_context,
-			g_conf->osd_objectstore,
-			g_conf->osd_data,
-			g_conf->osd_journal);
+	fs = ObjectStore::create(g_ceph_context,
+				 g_conf->osd_objectstore,
+				 g_conf->osd_data,
+				 g_conf->osd_journal);
 	if (fs == NULL) {
 		derr << "bad objectstore type " << g_conf->osd_objectstore << dendl;
 		return 1;
@@ -166,44 +249,19 @@ int main(int argc, const char *argv[])
 	ft.create_collection(coll_t());
 	fs->apply_transaction(ft);
 
-	sobject_t poid(object_t("osbench"), 0);
-
-	C_GatherBuilder gather(g_ceph_context);
-
-	bufferlist data;
-	data.append(buffer::create(block_size));
-
-	dout(0) << "Writing " << size << " in blocks of " << block_size << dendl;
+	int thr_ix;
+	OBS_Worker** workers = (OBS_Worker**) malloc(
+	    n_threads * sizeof(OBS_Worker*));
+	for (thr_ix = 0; thr_ix < n_threads; ++thr_ix) {
+	    workers[thr_ix] = new OBS_Worker();
+	}
 	auto t1 = std::chrono::high_resolution_clock::now();
-
-	uint64_t offset = 0;
-	size_t len = size;
-	while (len) {
-		size_t count = len < block_size ? len : (size_t)block_size;
-
-		ObjectStore::Transaction *t = new ObjectStore::Transaction;
-		t->write(coll_t(), hobject_t(poid), offset, count, data);
-		fs->queue_transaction(NULL, t, NULL, gather.new_sub());
-
-		offset += count;
-		len -= count;
+	for (thr_ix = 0; thr_ix < n_threads; ++thr_ix) {
+	    workers[thr_ix]->create();
 	}
-
-	if (gather.has_subs()) {
-		// wait for all writes to be committed
-		Mutex lock("osbench");
-		Cond cond;
-		bool done = false;
-
-		gather.set_finisher(new C_SafeCond(&lock, &cond, &done));
-		gather.activate();
-
-		lock.Lock();
-		while (!done)
-			cond.Wait(lock);
-		lock.Unlock();
+	for (thr_ix = 0; thr_ix < n_threads; ++thr_ix) {
+	    workers[thr_ix]->join();
 	}
-
 	auto t2 = std::chrono::high_resolution_clock::now();
 
 	// remove the object
@@ -217,9 +275,11 @@ int main(int argc, const char *argv[])
 	using std::chrono::duration_cast;
 	using std::chrono::microseconds;
 	auto duration = duration_cast<microseconds>(t2 - t1);
-	byte_units rate = (1000000LL * size) / duration.count();
-	dout(0) << "Wrote " << size << " in " << duration.count()
-		<< "us, at a rate of " << rate << "/s" << dendl;
+	byte_units rate = (1000000LL * size * repeats * n_threads)
+	    / duration.count();
+	dout(0) << "Wrote " << size * repeats * n_threads << " in "
+		<< duration.count() << "us, at a rate of " << rate << "/s"
+		<< dendl;
 
 	return 0;
 }

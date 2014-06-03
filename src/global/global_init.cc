@@ -12,6 +12,8 @@
  *
  */
 
+#include "global/CDS_Env.h"
+
 #include "common/Thread.h"
 #include "common/ceph_argparse.h"
 #include "common/code_environment.h"
@@ -110,11 +112,16 @@ void global_pre_init(std::vector < const char * > *alt_def_args,
   complain_about_parse_errors(cct, &parse_errors);
 }
 
+CDS_Env* global_cds_env;
+
 void global_init(std::vector < const char * > *alt_def_args,
 		 std::vector < const char* >& args,
 		 uint32_t module_type, code_environment_t code_env, int flags)
 {
   global_pre_init(alt_def_args, args, module_type, code_env, flags);
+
+  // CDS hooks (later will specialize)
+  global_cds_env = new CDS_Env();
 
   g_lockdep = g_ceph_context->_conf->lockdep;
 

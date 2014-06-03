@@ -301,6 +301,7 @@ public:
       char operator*();
       iterator& operator++();
       ptr get_current_ptr();
+      char* get_bytes(unsigned *nbytes);
 
       // copy data out.
       // note that these all _append_ to dest!

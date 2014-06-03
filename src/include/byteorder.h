@@ -96,6 +96,7 @@ MAKE_LE_CLASS(16)
 #define init_le32(x) { (__u32)mswab32(x) }
 #define init_le16(x) { (__u16)mswab16(x) }
 
+#if !defined(HAVE_FIO)
   /*
 #define cpu_to_le64(x) (x)
 #define cpu_to_le32(x) (x)
@@ -104,5 +105,6 @@ MAKE_LE_CLASS(16)
 #define le64_to_cpu(x) ((uint64_t)x)
 #define le32_to_cpu(x) ((__u32)x)
 #define le16_to_cpu(x) ((__u16)x)
+#endif
 
 #endif

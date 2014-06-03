@@ -226,4 +226,10 @@
 /* define if radosgw enabled */
 #cmakedefine WITH_RADOSGW
 
+/* Defined if XIO */
+#cmakedefine WITH_XIO
+
+/* Defined if CDS */
+#cmakedefine HAVE_CDS
+
 #endif /* CONFIG_H */
