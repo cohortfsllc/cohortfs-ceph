@@ -139,7 +139,7 @@ public:
 	 * them when read.  Just avoiding the fills isn't enough, but it
 	 * increased throughput by 100MB/s.   And it's enough for simple
 	 * benchmarks that only read after write.  */
-#if 0
+#if 1
 	// zero end of page past offset + length
 	if (offset + length < page->offset + PageSize)
 	  std::fill(page->data + offset + length - page->offset,
