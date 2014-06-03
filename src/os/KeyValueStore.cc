@@ -1515,7 +1515,7 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 // =========== KeyValueStore Op Implementation ==============
 // objects
 
-bool KeyValueStore::exists(coll_t cid, const ghobject_t& oid)
+bool KeyValueStore::exists(const coll_t &cid, const ghobject_t& oid)
 {
   dout(10) << __func__ << "collection: " << cid << " object: " << oid
            << dendl;
@@ -1530,7 +1530,7 @@ bool KeyValueStore::exists(coll_t cid, const ghobject_t& oid)
   return true;
 }
 
-int KeyValueStore::stat(coll_t cid, const ghobject_t& oid,
+int KeyValueStore::stat(const coll_t &cid, const ghobject_t& oid,
                         struct stat *st, bool allow_eio)
 {
   dout(10) << "stat " << cid << "/" << oid << dendl;
@@ -1624,7 +1624,7 @@ int KeyValueStore::_generic_read(StripObjectMap::StripObjectHeader &header,
 }
 
 
-int KeyValueStore::read(coll_t cid, const ghobject_t& oid, uint64_t offset,
+int KeyValueStore::read(const coll_t &cid, const ghobject_t& oid, uint64_t offset,
                         size_t len, bufferlist& bl, bool allow_eio)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " " << offset << "~"
@@ -1643,7 +1643,7 @@ int KeyValueStore::read(coll_t cid, const ghobject_t& oid, uint64_t offset,
   return _generic_read(header, offset, len, bl, allow_eio);
 }
 
-int KeyValueStore::fiemap(coll_t cid, const ghobject_t& oid,
+int KeyValueStore::fiemap(const coll_t &cid, const ghobject_t& oid,
                           uint64_t offset, size_t len, bufferlist& bl)
 {
   dout(10) << __func__ << " " << cid << " " << oid << " " << offset << "~"
@@ -1671,7 +1671,7 @@ int KeyValueStore::fiemap(coll_t cid, const ghobject_t& oid,
   return 0;
 }
 
-int KeyValueStore::_remove(coll_t cid, const ghobject_t& oid,
+int KeyValueStore::_remove(const coll_t &cid, const ghobject_t& oid,
                            BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << dendl;
@@ -1692,7 +1692,7 @@ int KeyValueStore::_remove(coll_t cid, const ghobject_t& oid,
   return r;
 }
 
-int KeyValueStore::_truncate(coll_t cid, const ghobject_t& oid, uint64_t size,
+int KeyValueStore::_truncate(const coll_t &cid, const ghobject_t& oid, uint64_t size,
                              BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " size " << size
@@ -1770,7 +1770,7 @@ int KeyValueStore::_truncate(coll_t cid, const ghobject_t& oid, uint64_t size,
   return r;
 }
 
-int KeyValueStore::_touch(coll_t cid, const ghobject_t& oid,
+int KeyValueStore::_touch(const coll_t &cid, const ghobject_t& oid,
                           BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << dendl;
@@ -1874,7 +1874,7 @@ int KeyValueStore::_generic_write(StripObjectMap::StripObjectHeader &header,
   return r;
 }
 
-int KeyValueStore::_write(coll_t cid, const ghobject_t& oid,
+int KeyValueStore::_write(const coll_t &cid, const ghobject_t& oid,
                           uint64_t offset, size_t len, const bufferlist& bl,
                           BufferTransaction &t, bool replica)
 {
@@ -1894,7 +1894,7 @@ int KeyValueStore::_write(coll_t cid, const ghobject_t& oid,
   return _generic_write(*header, offset, len, bl, t, replica);
 }
 
-int KeyValueStore::_zero(coll_t cid, const ghobject_t& oid, uint64_t offset,
+int KeyValueStore::_zero(const coll_t &cid, const ghobject_t& oid, uint64_t offset,
                          size_t len, BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " " << offset << "~" << len << dendl;
@@ -1910,7 +1910,7 @@ int KeyValueStore::_zero(coll_t cid, const ghobject_t& oid, uint64_t offset,
   return r;
 }
 
-int KeyValueStore::_clone(coll_t cid, const ghobject_t& oldoid,
+int KeyValueStore::_clone(const coll_t &cid, const ghobject_t& oldoid,
                           const ghobject_t& newoid, BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oldoid << " -> " << cid << "/"
@@ -1936,7 +1936,7 @@ int KeyValueStore::_clone(coll_t cid, const ghobject_t& oldoid,
   return r;
 }
 
-int KeyValueStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
+int KeyValueStore::_clone_range(const coll_t &cid, const ghobject_t& oldoid,
                                 const ghobject_t& newoid, uint64_t srcoff,
                                 uint64_t len, uint64_t dstoff,
                                 BufferTransaction &t)
@@ -1981,7 +1981,7 @@ int KeyValueStore::_clone_range(coll_t cid, const ghobject_t& oldoid,
 
 // attrs
 
-int KeyValueStore::getattr(coll_t cid, const ghobject_t& oid, const char *name,
+int KeyValueStore::getattr(const coll_t &cid, const ghobject_t& oid, const char *name,
                            bufferptr &bp)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " '" << name << "'"
@@ -2011,7 +2011,7 @@ int KeyValueStore::getattr(coll_t cid, const ghobject_t& oid, const char *name,
   return r;
 }
 
-int KeyValueStore::getattrs(coll_t cid, const ghobject_t& oid,
+int KeyValueStore::getattrs(const coll_t &cid, const ghobject_t& oid,
                            map<string,bufferptr>& aset, bool user_only)
 {
   int r;
@@ -2048,7 +2048,7 @@ int KeyValueStore::getattrs(coll_t cid, const ghobject_t& oid,
   return r;
 }
 
-int KeyValueStore::_setattrs(coll_t cid, const ghobject_t& oid,
+int KeyValueStore::_setattrs(const coll_t &cid, const ghobject_t& oid,
                              map<string, bufferptr>& aset,
                              BufferTransaction &t)
 {
@@ -2076,7 +2076,7 @@ out:
 }
 
 
-int KeyValueStore::_rmattr(coll_t cid, const ghobject_t& oid, const char *name,
+int KeyValueStore::_rmattr(const coll_t &cid, const ghobject_t& oid, const char *name,
                            BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << " '" << name << "'"
@@ -2101,7 +2101,7 @@ int KeyValueStore::_rmattr(coll_t cid, const ghobject_t& oid, const char *name,
   return r;
 }
 
-int KeyValueStore::_rmattrs(coll_t cid, const ghobject_t& oid,
+int KeyValueStore::_rmattrs(const coll_t &cid, const ghobject_t& oid,
                             BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << oid << dendl;
@@ -2133,7 +2133,7 @@ int KeyValueStore::_rmattrs(coll_t cid, const ghobject_t& oid,
 
 // collection attrs
 
-int KeyValueStore::collection_getattr(coll_t c, const char *name,
+int KeyValueStore::collection_getattr(const coll_t &c, const char *name,
                                       void *value, size_t size)
 {
   dout(15) << __func__ << " " << c.to_str() << " '" << name << "' len "
@@ -2160,7 +2160,7 @@ out:
   return r;
 }
 
-int KeyValueStore::collection_getattr(coll_t c, const char *name,
+int KeyValueStore::collection_getattr(const coll_t &c, const char *name,
                                       bufferlist& bl)
 {
   dout(15) << __func__ << " " << c.to_str() << " '" << name
@@ -2185,7 +2185,7 @@ int KeyValueStore::collection_getattr(coll_t c, const char *name,
   return bl.length();
 }
 
-int KeyValueStore::collection_getattrs(coll_t cid,
+int KeyValueStore::collection_getattrs(const coll_t &cid,
                                        map<string, bufferptr> &aset)
 {
   dout(10) << __func__ << " " << cid.to_str() << dendl;
@@ -2217,7 +2217,7 @@ int KeyValueStore::collection_getattrs(coll_t cid,
   return r;
 }
 
-int KeyValueStore::_collection_setattr(coll_t c, const char *name,
+int KeyValueStore::_collection_setattr(const coll_t &c, const char *name,
                                        const void *value, size_t size,
                                        BufferTransaction &t)
 {
@@ -2247,7 +2247,7 @@ int KeyValueStore::_collection_setattr(coll_t c, const char *name,
   return r;
 }
 
-int KeyValueStore::_collection_rmattr(coll_t c, const char *name,
+int KeyValueStore::_collection_rmattr(const coll_t &c, const char *name,
                                       BufferTransaction &t)
 {
   dout(15) << __func__ << " " << c << dendl;
@@ -2270,7 +2270,7 @@ int KeyValueStore::_collection_rmattr(coll_t c, const char *name,
   return r;
 }
 
-int KeyValueStore::_collection_setattrs(coll_t cid,
+int KeyValueStore::_collection_setattrs(const coll_t &cid,
                                         map<string,bufferptr>& aset,
                                         BufferTransaction &t)
 {
@@ -2300,7 +2300,7 @@ int KeyValueStore::_collection_setattrs(coll_t cid,
 
 // collections
 
-int KeyValueStore::_create_collection(coll_t c, BufferTransaction &t)
+int KeyValueStore::_create_collection(const coll_t &c, BufferTransaction &t)
 {
   dout(15) << __func__ << " " << c << dendl;
 
@@ -2324,7 +2324,7 @@ int KeyValueStore::_create_collection(coll_t c, BufferTransaction &t)
   return r;
 }
 
-int KeyValueStore::_destroy_collection(coll_t c, BufferTransaction &t)
+int KeyValueStore::_destroy_collection(const coll_t &c, BufferTransaction &t)
 {
   dout(15) << __func__ << " " << c << dendl;
 
@@ -2377,7 +2377,7 @@ out:
 }
 
 
-int KeyValueStore::_collection_add(coll_t c, coll_t oldcid,
+int KeyValueStore::_collection_add(const coll_t &c, const coll_t &oldcid,
                                    const ghobject_t& o,
                                    BufferTransaction &t)
 {
@@ -2417,9 +2417,9 @@ out:
   return r;
 }
 
-int KeyValueStore::_collection_move_rename(coll_t oldcid,
+int KeyValueStore::_collection_move_rename(const coll_t &oldcid,
                                            const ghobject_t& oldoid,
-                                           coll_t c, const ghobject_t& o,
+                                           const coll_t &c, const ghobject_t& o,
                                            BufferTransaction &t)
 {
   dout(15) << __func__ << " " << c << "/" << o << " from " << oldcid << "/"
@@ -2556,7 +2556,7 @@ int KeyValueStore::list_collections(vector<coll_t>& ls)
   return 0;
 }
 
-bool KeyValueStore::collection_exists(coll_t c)
+bool KeyValueStore::collection_exists(const coll_t &c)
 {
   dout(10) << __func__ << " " << dendl;
 
@@ -2569,7 +2569,7 @@ bool KeyValueStore::collection_exists(coll_t c)
   return true;
 }
 
-bool KeyValueStore::collection_empty(coll_t c)
+bool KeyValueStore::collection_empty(const coll_t &c)
 {
   dout(10) << __func__ << " " << dendl;
 
@@ -2579,7 +2579,7 @@ bool KeyValueStore::collection_empty(coll_t c)
   return oids.empty();
 }
 
-int KeyValueStore::collection_list_range(coll_t c, ghobject_t start,
+int KeyValueStore::collection_list_range(const coll_t &c, ghobject_t start,
                                          ghobject_t end, snapid_t seq,
                                          vector<ghobject_t> *ls)
 {
@@ -2614,7 +2614,7 @@ int KeyValueStore::collection_list_range(coll_t c, ghobject_t start,
   return 0;
 }
 
-int KeyValueStore::collection_list_partial(coll_t c, ghobject_t start,
+int KeyValueStore::collection_list_partial(const coll_t &c, ghobject_t start,
                                            int min, int max, snapid_t seq,
                                            vector<ghobject_t> *ls,
                                            ghobject_t *next)
@@ -2631,12 +2631,12 @@ int KeyValueStore::collection_list_partial(coll_t c, ghobject_t start,
   return backend->list_objects(c, start, max, ls, next);
 }
 
-int KeyValueStore::collection_list(coll_t c, vector<ghobject_t>& ls)
+int KeyValueStore::collection_list(const coll_t &c, vector<ghobject_t>& ls)
 {
   return collection_list_partial(c, ghobject_t(), 0, 0, 0, &ls, 0);
 }
 
-int KeyValueStore::collection_version_current(coll_t c, uint32_t *version)
+int KeyValueStore::collection_version_current(const coll_t &c, uint32_t *version)
 {
   *version = COLLECTION_VERSION;
   if (*version == target_version)
@@ -2647,7 +2647,7 @@ int KeyValueStore::collection_version_current(coll_t c, uint32_t *version)
 
 // omap
 
-int KeyValueStore::omap_get(coll_t c, const ghobject_t &hoid,
+int KeyValueStore::omap_get(const coll_t &c, const ghobject_t &hoid,
                             bufferlist *bl, map<string, bufferlist> *out)
 {
   dout(15) << __func__ << " " << c << "/" << hoid << dendl;
@@ -2685,7 +2685,7 @@ int KeyValueStore::omap_get(coll_t c, const ghobject_t &hoid,
   return 0;
 }
 
-int KeyValueStore::omap_get_header(coll_t c, const ghobject_t &hoid,
+int KeyValueStore::omap_get_header(const coll_t &c, const ghobject_t &hoid,
                                    bufferlist *bl, bool allow_eio)
 {
   dout(15) << __func__ << " " << c << "/" << hoid << dendl;
@@ -2708,7 +2708,7 @@ int KeyValueStore::omap_get_header(coll_t c, const ghobject_t &hoid,
   return 0;
 }
 
-int KeyValueStore::omap_get_keys(coll_t c, const ghobject_t &hoid, set<string> *keys)
+int KeyValueStore::omap_get_keys(const coll_t &c, const ghobject_t &hoid, set<string> *keys)
 {
   dout(15) << __func__ << " " << c << "/" << hoid << dendl;
 
@@ -2719,7 +2719,7 @@ int KeyValueStore::omap_get_keys(coll_t c, const ghobject_t &hoid, set<string> *
   return 0;
 }
 
-int KeyValueStore::omap_get_values(coll_t c, const ghobject_t &hoid,
+int KeyValueStore::omap_get_values(const coll_t &c, const ghobject_t &hoid,
                                    const set<string> &keys,
                                    map<string, bufferlist> *out)
 {
@@ -2732,7 +2732,7 @@ int KeyValueStore::omap_get_values(coll_t c, const ghobject_t &hoid,
   return 0;
 }
 
-int KeyValueStore::omap_check_keys(coll_t c, const ghobject_t &hoid,
+int KeyValueStore::omap_check_keys(const coll_t &c, const ghobject_t &hoid,
                                    const set<string> &keys, set<string> *out)
 {
   dout(15) << __func__ << " " << c << "/" << hoid << dendl;
@@ -2745,13 +2745,13 @@ int KeyValueStore::omap_check_keys(coll_t c, const ghobject_t &hoid,
 }
 
 ObjectMap::ObjectMapIterator KeyValueStore::get_omap_iterator(
-    coll_t c, const ghobject_t &hoid)
+    const coll_t &c, const ghobject_t &hoid)
 {
   dout(15) << __func__ << " " << c << "/" << hoid << dendl;
   return backend->get_iterator(c, hoid, OBJECT_OMAP);
 }
 
-int KeyValueStore::_omap_clear(coll_t cid, const ghobject_t &hoid,
+int KeyValueStore::_omap_clear(const coll_t &cid, const ghobject_t &hoid,
                                BufferTransaction &t)
 {
   dout(15) << __func__ << " " << cid << "/" << hoid << dendl;
@@ -2792,7 +2792,7 @@ int KeyValueStore::_omap_clear(coll_t cid, const ghobject_t &hoid,
   return 0;
 }
 
-int KeyValueStore::_omap_setkeys(coll_t cid, const ghobject_t &hoid,
+int KeyValueStore::_omap_setkeys(const coll_t &cid, const ghobject_t &hoid,
                                  map<string, bufferlist> &aset,
                                  BufferTransaction &t)
 {
@@ -2812,7 +2812,7 @@ int KeyValueStore::_omap_setkeys(coll_t cid, const ghobject_t &hoid,
   return 0;
 }
 
-int KeyValueStore::_omap_rmkeys(coll_t cid, const ghobject_t &hoid,
+int KeyValueStore::_omap_rmkeys(const coll_t &cid, const ghobject_t &hoid,
                                 const set<string> &keys,
                                 BufferTransaction &t)
 {
@@ -2833,7 +2833,7 @@ int KeyValueStore::_omap_rmkeys(coll_t cid, const ghobject_t &hoid,
   return r;
 }
 
-int KeyValueStore::_omap_rmkeyrange(coll_t cid, const ghobject_t &hoid,
+int KeyValueStore::_omap_rmkeyrange(const coll_t &cid, const ghobject_t &hoid,
                                     const string& first, const string& last,
                                     BufferTransaction &t)
 {
@@ -2854,7 +2854,7 @@ int KeyValueStore::_omap_rmkeyrange(coll_t cid, const ghobject_t &hoid,
   return _omap_rmkeys(cid, hoid, keys, t);
 }
 
-int KeyValueStore::_omap_setheader(coll_t cid, const ghobject_t &hoid,
+int KeyValueStore::_omap_setheader(const coll_t &cid, const ghobject_t &hoid,
                                    const bufferlist &bl,
                                    BufferTransaction &t)
 {
@@ -2875,8 +2875,8 @@ int KeyValueStore::_omap_setheader(coll_t cid, const ghobject_t &hoid,
   return 0;
 }
 
-int KeyValueStore::_split_collection(coll_t cid, uint32_t bits, uint32_t rem,
-                                     coll_t dest, BufferTransaction &t)
+int KeyValueStore::_split_collection(const coll_t &cid, uint32_t bits, uint32_t rem,
+                                     const coll_t &dest, BufferTransaction &t)
 {
   {
     dout(15) << __func__ << " " << cid << " bits: " << bits << dendl;
