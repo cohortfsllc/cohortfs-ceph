@@ -758,7 +758,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	utime_t start = ceph_clock_now(cct);
 	object_t oid("disk_bw_test");
 	for (int i=0; i<1000; i++) {
-	  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+	  ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
 	  t->write(coll_t::META_COLL, hobject_t(sobject_t(oid, 0)), i*bl.length(), bl.length(), bl);
 	  store->queue_transaction_and_cleanup(NULL, t);
 	}
@@ -3465,9 +3465,10 @@ bool remove_dir(
   coll_t coll, DeletingStateRef dstate,
   ThreadPool::TPHandle &handle)
 {
+  const int target_size = cct->_conf->osd_target_transaction_size;
   vector<ghobject_t> olist;
   int64_t num = 0;
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction(target_size);
   ghobject_t next;
   while (!next.is_max()) {
     handle.reset_tp_timeout();
@@ -3500,7 +3501,7 @@ bool remove_dir(
 	delete t;
 	if (!cont)
 	  return false;
-	t = new ObjectStore::Transaction;
+	t = new ObjectStore::Transaction(target_size);
 	num = 0;
       }
     }
@@ -3532,6 +3533,8 @@ void OSD::RemoveWQ::_process(
   if (!item.second->start_clearing())
     return;
 
+  int transaction_size = 2; // remove + rmkeys from PGLog::clear_info_log()
+
   list<coll_t> colls_to_remove;
   pg->get_colls(&colls_to_remove);
   for (list<coll_t>::iterator i = colls_to_remove.begin();
@@ -3542,12 +3545,13 @@ void OSD::RemoveWQ::_process(
       handle);
     if (!cont)
       return;
+    ++transaction_size;
   }
 
   if (!item.second->start_deleting())
     return;
 
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction(transaction_size);
   PGLog::clear_info_log(
     pg->info.pgid,
     OSD::make_infos_oid(),
@@ -4412,7 +4416,8 @@ void OSD::do_command(Connection *con, ceph_tid_t tid, vector<string>& cmd, buffe
     bp.zero();
     bl.push_back(bp);
 
-    ObjectStore::Transaction *cleanupt = new ObjectStore::Transaction;
+    ObjectStore::Transaction *cleanupt = new ObjectStore::Transaction(
+	count / bsize);
 
     store->sync_and_flush();
     utime_t start = ceph_clock_now(cct);
@@ -4421,7 +4426,7 @@ void OSD::do_command(Connection *con, ceph_tid_t tid, vector<string>& cmd, buffe
       snprintf(nm, sizeof(nm), "disk_bw_test_%lld", (long long)pos);
       object_t oid(nm);
       hobject_t soid(sobject_t(oid, 0));
-      ObjectStore::Transaction *t = new ObjectStore::Transaction;
+      ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
       t->write(coll_t::META_COLL, soid, 0, bsize, bl);
       store->queue_transaction_and_cleanup(NULL, t);
       cleanupt->remove(coll_t::META_COLL, soid);
@@ -5433,7 +5438,8 @@ void OSD::handle_osd_map(MOSDMap *m)
     skip_maps = true;
   }
 
-  ObjectStore::Transaction *_t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *_t = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
   ObjectStore::Transaction &t = *_t;
 
   // store new maps: queue for disk and put in the osdmap cache
@@ -5724,7 +5730,7 @@ void OSD::check_osdmap_features(ObjectStore *fs)
 	!fs->get_allow_sharded_objects()) {
     dout(0) << __func__ << " enabling on-disk ERASURE CODES compat feature" << dendl;
     superblock.compat_features.incompat.insert(CEPH_OSD_FEATURE_INCOMPAT_SHARDS);
-    ObjectStore::Transaction *t = new ObjectStore::Transaction;
+    ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
     write_superblock(*t);
     int err = store->queue_transaction_and_cleanup(NULL, t);
     assert(err == 0);
@@ -6766,7 +6772,8 @@ void OSD::handle_pg_trim(OpRequestRef op)
       }
     } else {
       // primary is instructing us to trim
-      ObjectStore::Transaction *t = new ObjectStore::Transaction;
+      ObjectStore::Transaction *t = new ObjectStore::Transaction(
+	  cct->_conf->osd_target_transaction_size);
       PG::PGLogEntryHandler handler;
       pg->pg_log.trim(&handler, m->trim_to, pg->info);
       handler.apply(pg, t);
@@ -7101,7 +7108,8 @@ void OSD::handle_pg_remove(OpRequestRef op)
 
 void OSD::_remove_pg(PG *pg)
 {
-  ObjectStore::Transaction *rmt = new ObjectStore::Transaction;
+  ObjectStore::Transaction *rmt = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
 
   // on_removal, which calls remove_watchers_and_notifies, and the erasure from
   // the pg_map must be done together without unlocking the pg lock,

@@ -805,7 +805,8 @@ void ECBackend::handle_sub_write(
   assert(!get_parent()->get_log().get_missing().is_missing(op.soid));
   if (!get_parent()->pgb_is_primary())
     get_parent()->update_stats(op.stats);
-  ObjectStore::Transaction *localt = new ObjectStore::Transaction;
+  ObjectStore::Transaction *localt = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
   if (!op.temp_added.empty()) {
     get_temp_coll(localt);
     add_temp_objs(op.temp_added);

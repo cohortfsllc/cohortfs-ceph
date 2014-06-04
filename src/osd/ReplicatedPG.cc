@@ -2083,7 +2083,8 @@ void ReplicatedBackend::_do_push(OpRequestRef op)
   pg_shard_t from = m->from;
 
   vector<PushReplyOp> replies;
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
   for (vector<PushOp>::iterator i = m->pushes.begin();
        i != m->pushes.end();
        ++i) {
@@ -2142,7 +2143,8 @@ void ReplicatedBackend::_do_pull_response(OpRequestRef op)
   pg_shard_t from = m->from;
 
   vector<PullOp> replies(1);
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
   list<hobject_t> to_continue;
   for (vector<PushOp>::iterator i = m->pushes.begin();
        i != m->pushes.end();
@@ -2260,7 +2262,8 @@ void ReplicatedPG::do_backfill(OpRequestRef op)
 	info.stats = m->stats;
       }
 
-      ObjectStore::Transaction *t = new ObjectStore::Transaction;
+      ObjectStore::Transaction *t = new ObjectStore::Transaction(
+	  cct->_conf->osd_target_transaction_size);
       dirty_info = true;
       write_if_dirty(*t);
       int tr = osd->store->queue_transaction_and_cleanup(osr.get(), t);
@@ -8911,7 +8914,8 @@ void ReplicatedBackend::sub_op_push(OpRequestRef op)
   pop.recovery_info = m->recovery_info;
   pop.before_progress = m->current_progress;
   pop.after_progress = m->recovery_progress;
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
 
   if (is_primary()) {
     PullOp resp;
@@ -8983,7 +8987,8 @@ void ReplicatedPG::sub_op_remove(OpRequestRef op)
 
   op->mark_started();
 
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
   remove_snap_mapped_object(*t, m->poid);
   int r = osd->store->queue_transaction_and_cleanup(osr.get(), t);
   assert(r == 0);
@@ -9072,7 +9077,8 @@ void ReplicatedPG::mark_all_unfound_lost(int what)
   pg_log.get_log().print(*_dout);
   *_dout << dendl;
 
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
   C_PG_MarkUnfoundLost *c = new C_PG_MarkUnfoundLost(this);
 
   utime_t mtime = ceph_clock_now(cct);
@@ -9769,7 +9775,7 @@ int ReplicatedPG::recover_primary(int max, ThreadPool::TPHandle &handle)
 	      obc->ondisk_write_lock();
 	      obc->obs.oi.version = latest->version;
 
-	      ObjectStore::Transaction *t = new ObjectStore::Transaction;
+	      ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
 	      t->register_on_applied(new ObjectStore::C_DeleteTransaction(t));
 	      bufferlist b2;
 	      obc->obs.oi.encode(b2);
@@ -12032,7 +12038,7 @@ boost::statechart::result ReplicatedPG::WaitingOnReplicas::react(const SnapTrim&
   dout(10) << "purged_snaps now " << pg->info.purged_snaps << ", snap_trimq now " 
 	   << pg->snap_trimq << dendl;
   
-  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *t = new ObjectStore::Transaction(10);
   pg->dirty_big_info = true;
   pg->write_if_dirty(*t);
   int tr = pg->osd->store->queue_transaction_and_cleanup(pg->osr.get(), t);
