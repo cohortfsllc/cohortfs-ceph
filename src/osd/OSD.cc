@@ -271,7 +271,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	utime_t start = ceph_clock_now(cct);
 	object_t oid("disk_bw_test");
 	for (int i=0; i<1000; i++) {
-	  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+	  ObjectStore::Transaction *t = new ObjectStore::Transaction(1);
 	  t->write(coll_t::META_COLL, hobject_t(oid), i*bl.length(), bl.length(), bl);
 	  store->queue_transaction_and_cleanup(NULL, t);
 	}
@@ -2478,7 +2478,8 @@ void OSD::handle_osd_map(MOSDMap *m)
     skip_maps = true;
   }
 
-  ObjectStore::Transaction *_t = new ObjectStore::Transaction;
+  ObjectStore::Transaction *_t = new ObjectStore::Transaction(
+      cct->_conf->osd_target_transaction_size);
   ObjectStore::Transaction &t = *_t;
 
   // store new maps: queue for disk and put in the osdmap cache
