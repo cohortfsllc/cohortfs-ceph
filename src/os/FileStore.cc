@@ -2107,241 +2107,128 @@ unsigned FileStore::_do_transaction(
 {
   dout(10) << "_do_transaction on " << &t << dendl;
 
-  Transaction::iterator i = t.begin();
-  
   SequencerPosition spos(op_seq, trans_num, 0);
-  while (i.have_op()) {
+
+  for (Transaction::op_iterator i = t.begin(); i != t.end(); ++i) {
     if (handle)
       handle->reset_tp_timeout();
 
-    int op = i.get_op();
     int r = 0;
 
     _inject_failure();
 
-    switch (op) {
+    switch (i->op) {
     case Transaction::OP_NOP:
       break;
     case Transaction::OP_TOUCH:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _touch(cid, oid);
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _touch(i->cid, i->oid);
       break;
-      
+
     case Transaction::OP_WRITE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	bool replica = i.get_replica();
-	bufferlist bl;
-	i.get_bl(bl);
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _write(cid, oid, off, len, bl, replica);
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _write(i->cid, i->oid, i->off, i->len, i->data, t.get_replica());
       break;
-      
+
     case Transaction::OP_ZERO:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _zero(cid, oid, off, len);
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _zero(i->cid, i->oid, i->off, i->len);
       break;
-      
+
     case Transaction::OP_TRIMCACHE:
-      {
-	i.get_cid();
-	i.get_oid();
-	i.get_length();
-	i.get_length();
-	// deprecated, no-op
-      }
+      // deprecated, no-op
       break;
-      
+
     case Transaction::OP_TRUNCATE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _truncate(cid, oid, off);
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _truncate(i->cid, i->oid, i->off);
       break;
-      
+
     case Transaction::OP_REMOVE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _remove(cid, oid, spos);
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _remove(i->cid, i->oid, spos);
       break;
-      
+
     case Transaction::OP_SETATTR:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	string name = i.get_attrname();
-	bufferlist bl;
-	i.get_bl(bl);
-	if (_check_replay_guard(cid, oid, spos) > 0) {
-	  map<string, bufferptr> to_set;
-	  to_set[name] = bufferptr(bl.c_str(), bl.length());
-	  r = _setattrs(cid, oid, to_set, spos);
-	  if (r == -ENOSPC)
-	    dout(0) << " ENOSPC on setxattr on " << cid << "/" << oid
-		    << " name " << name << " size " << bl.length() << dendl;
-	}
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0) {
+        bufferlist &bl = i->data;
+        map<string, bufferptr> to_set;
+        to_set[i->name] = bufferptr(bl.c_str(), bl.length());
+        r = _setattrs(i->cid, i->oid, to_set, spos);
+        if (r == -ENOSPC)
+          dout(0) << " ENOSPC on setxattr on " << i->cid << "/" << i->oid
+              << " name " << i->name << " size " << bl.length() << dendl;
       }
       break;
-      
+
     case Transaction::OP_SETATTRS:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	map<string, bufferptr> aset;
-	i.get_attrset(aset);
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _setattrs(cid, oid, aset, spos);
-	if (r == -ENOSPC)
-	  dout(0) << " ENOSPC on setxattrs on " << cid << "/" << oid << dendl;
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _setattrs(i->cid, i->oid, i->xattrs, spos);
+      if (r == -ENOSPC)
+        dout(0) << " ENOSPC on setxattrs on " << i->cid << "/" << i->oid << dendl;
       break;
 
     case Transaction::OP_RMATTR:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	string name = i.get_attrname();
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _rmattr(cid, oid, name.c_str(), spos);
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _rmattr(i->cid, i->oid, i->name.c_str(), spos);
       break;
 
     case Transaction::OP_RMATTRS:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _rmattrs(cid, oid, spos);
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _rmattrs(i->cid, i->oid, spos);
       break;
-      
+
     case Transaction::OP_CLONE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	hobject_t noid = i.get_oid();
-	r = _clone(cid, oid, noid, spos);
-      }
+      r = _clone(i->cid, i->oid, i->oid2, spos);
       break;
 
     case Transaction::OP_CLONERANGE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	hobject_t noid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	r = _clone_range(cid, oid, noid, off, len, off, spos);
-      }
+      r = _clone_range(i->cid, i->oid, i->oid2, i->off, i->len, i->off, spos);
       break;
 
     case Transaction::OP_CLONERANGE2:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	hobject_t noid = i.get_oid();
-	uint64_t srcoff = i.get_length();
-	uint64_t len = i.get_length();
-	uint64_t dstoff = i.get_length();
-	r = _clone_range(cid, oid, noid, srcoff, len, dstoff, spos);
-      }
+      r = _clone_range(i->cid, i->oid, i->oid2, i->off, i->len, i->off2, spos);
       break;
 
     case Transaction::OP_MKCOLL:
-      {
-	coll_t cid = i.get_cid();
-	if (_check_replay_guard(cid, spos) > 0)
-	  r = _create_collection(cid, spos);
-      }
+      if (_check_replay_guard(i->cid, spos) > 0)
+	r = _create_collection(i->cid, spos);
       break;
 
     case Transaction::OP_RMCOLL:
-      {
-	coll_t cid = i.get_cid();
-	if (_check_replay_guard(cid, spos) > 0)
-	  r = _destroy_collection(cid);
-      }
+      if (_check_replay_guard(i->cid, spos) > 0)
+	r = _destroy_collection(i->cid);
       break;
 
     case Transaction::OP_COLL_ADD:
-      {
-	coll_t ncid = i.get_cid();
-	coll_t ocid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	r = _collection_add(ncid, ocid, oid, spos);
-      }
+      r = _collection_add(i->cid, i->cid2, i->oid, spos);
       break;
 
     case Transaction::OP_COLL_REMOVE:
-       {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _remove(cid, oid, spos);
-       }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+	r = _remove(i->cid, i->oid, spos);
       break;
 
     case Transaction::OP_COLL_MOVE:
-      {
-	// WARNING: this is deprecated and buggy; only here to replay old journals.
-	coll_t ocid = i.get_cid();
-	coll_t ncid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	r = _collection_add(ocid, ncid, oid, spos);
-	if (r == 0 &&
-	    (_check_replay_guard(ocid, oid, spos) > 0))
-	  r = _remove(ocid, oid, spos);
-      }
+      // WARNING: this is deprecated and buggy; only here to replay old journals.
+      r = _collection_add(i->cid, i->cid2, i->oid, spos);
+      if (r == 0 && (_check_replay_guard(i->cid, i->oid, spos) > 0))
+	r = _remove(i->cid, i->oid, spos);
       break;
 
     case Transaction::OP_COLL_MOVE_RENAME:
-      {
-	coll_t oldcid = i.get_cid();
-	hobject_t oldoid = i.get_oid();
-	coll_t newcid = i.get_cid();
-	hobject_t newoid = i.get_oid();
-	r = _collection_move_rename(oldcid, oldoid, newcid, newoid, spos);
-      }
+      r = _collection_move_rename(i->cid, i->oid, i->cid2, i->oid2, spos);
       break;
 
     case Transaction::OP_COLL_SETATTR:
-      {
-	coll_t cid = i.get_cid();
-	string name = i.get_attrname();
-	bufferlist bl;
-	i.get_bl(bl);
-	if (_check_replay_guard(cid, spos) > 0)
-	  r = _collection_setattr(cid, name.c_str(), bl.c_str(), bl.length());
-      }
+      if (_check_replay_guard(i->cid, spos) > 0)
+	r = _collection_setattr(i->cid, i->name.c_str(),
+				i->data.c_str(), i->data.length());
       break;
 
     case Transaction::OP_COLL_RMATTR:
-      {
-	coll_t cid = i.get_cid();
-	string name = i.get_attrname();
-	if (_check_replay_guard(cid, spos) > 0)
-	  r = _collection_rmattr(cid, name.c_str());
-      }
+      if (_check_replay_guard(i->cid, spos) > 0)
+	r = _collection_rmattr(i->cid, i->name.c_str());
       break;
 
     case Transaction::OP_STARTSYNC:
@@ -2349,93 +2236,53 @@ unsigned FileStore::_do_transaction(
       break;
 
     case Transaction::OP_COLL_RENAME:
-      {
-	coll_t cid(i.get_cid());
-	coll_t ncid(i.get_cid());
-	r = _collection_rename(cid, ncid, spos);
-      }
+      r = _collection_rename(i->cid, i->cid2, spos);
       break;
 
     case Transaction::OP_OMAP_CLEAR:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	r = _omap_clear(cid, oid, spos);
-      }
+      r = _omap_clear(i->cid, i->oid, spos);
       break;
     case Transaction::OP_OMAP_SETKEYS:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	map<string, bufferlist> aset;
-	i.get_attrset(aset);
-	r = _omap_setkeys(cid, oid, aset, spos);
-      }
+      r = _omap_setkeys(i->cid, i->oid, i->attrs, spos);
       break;
     case Transaction::OP_OMAP_RMKEYS:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	set<string> keys;
-	i.get_keyset(keys);
-	r = _omap_rmkeys(cid, oid, keys, spos);
-      }
+      r = _omap_rmkeys(i->cid, i->oid, i->keys, spos);
       break;
     case Transaction::OP_OMAP_RMKEYRANGE:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	string first, last;
-	first = i.get_key();
-	last = i.get_key();
-	r = _omap_rmkeyrange(cid, oid, first, last, spos);
-      }
+      r = _omap_rmkeyrange(i->cid, i->oid, i->name, i->name2, spos);
       break;
     case Transaction::OP_OMAP_SETHEADER:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	bufferlist bl;
-	i.get_bl(bl);
-	r = _omap_setheader(cid, oid, bl, spos);
-      }
+      r = _omap_setheader(i->cid, i->oid, i->data, spos);
       break;
 
     case Transaction::OP_SETALLOCHINT:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	uint64_t expected_object_size = i.get_length();
-	uint64_t expected_write_size = i.get_length();
-	if (_check_replay_guard(cid, oid, spos) > 0)
-	  r = _set_alloc_hint(cid, oid, expected_object_size,
-			      expected_write_size);
-      }
+      if (_check_replay_guard(i->cid, i->oid, spos) > 0)
+        r = _set_alloc_hint(i->cid, i->oid, i->value1, i->value2);
       break;
 
     default:
-      derr << "bad op " << op << dendl;
+      derr << "bad op " << i->op << dendl;
       assert(0);
     }
 
     if (r < 0) {
       bool ok = false;
 
-      if (r == -ENOENT && !(op == Transaction::OP_CLONERANGE ||
-			    op == Transaction::OP_CLONE ||
-			    op == Transaction::OP_CLONERANGE2 ||
-			    op == Transaction::OP_COLL_ADD))
+      if (r == -ENOENT && !(i->op == Transaction::OP_CLONERANGE ||
+			    i->op == Transaction::OP_CLONE ||
+			    i->op == Transaction::OP_CLONERANGE2 ||
+			    i->op == Transaction::OP_COLL_ADD))
 	// -ENOENT is normally okay
 	// ...including on a replayed OP_RMCOLL with checkpoint mode
 	ok = true;
       if (r == -ENOENT && (
-	  op == Transaction::OP_COLL_ADD &&
-	  i.tolerate_collection_add_enoent()))
+	  i->op == Transaction::OP_COLL_ADD &&
+	  t.get_tolerate_collection_add_enoent()))
 	ok = true; // Hack for upgrade from snapcolls to snapmapper
       if (r == -ENODATA)
 	ok = true;
 
-      if (op == Transaction::OP_SETALLOCHINT)
+      if (i->op == Transaction::OP_SETALLOCHINT)
 	// Either EOPNOTSUPP or EINVAL most probably.  EINVAL in most
 	// cases means invalid hint size (e.g. too big, not a multiple
 	// of block size, etc) or, at least on xfs, an attempt to set
@@ -2444,15 +2291,15 @@ unsigned FileStore::_do_transaction(
 	ok = true;
 
       if (replaying && !backend->can_checkpoint()) {
-	if (r == -EEXIST && op == Transaction::OP_MKCOLL) {
+	if (r == -EEXIST && i->op == Transaction::OP_MKCOLL) {
 	  dout(10) << "tolerating EEXIST during journal replay since checkpoint is not enabled" << dendl;
 	  ok = true;
 	}
-	if (r == -EEXIST && op == Transaction::OP_COLL_ADD) {
+	if (r == -EEXIST && i->op == Transaction::OP_COLL_ADD) {
 	  dout(10) << "tolerating EEXIST during journal replay since checkpoint is not enabled" << dendl;
 	  ok = true;
 	}
-	if (r == -EEXIST && op == Transaction::OP_COLL_MOVE) {
+	if (r == -EEXIST && i->op == Transaction::OP_COLL_MOVE) {
 	  dout(10) << "tolerating EEXIST during journal replay since checkpoint is not enabled" << dendl;
 	  ok = true;
 	}
@@ -2469,9 +2316,9 @@ unsigned FileStore::_do_transaction(
       if (!ok) {
 	const char *msg = "unexpected error code";
 
-	if (r == -ENOENT && (op == Transaction::OP_CLONERANGE ||
-			     op == Transaction::OP_CLONE ||
-			     op == Transaction::OP_CLONERANGE2))
+	if (r == -ENOENT && (i->op == Transaction::OP_CLONERANGE ||
+			     i->op == Transaction::OP_CLONE ||
+			     i->op == Transaction::OP_CLONERANGE2))
 	  msg = "ENOENT on clone suggests osd bug";
 
 	if (r == -ENOSPC)
@@ -2483,7 +2330,7 @@ unsigned FileStore::_do_transaction(
 	  msg = "ENOTEMPTY suggests garbage data in osd data dir";
 	}
 
-	dout(0) << " error " << cpp_strerror(r) << " not handled on operation " << op
+	dout(0) << " error " << cpp_strerror(r) << " not handled on operation " << i->op
 		<< " (" << spos << ", or op " << spos.op << ", counting from 0)" << dendl;
 	dout(0) << msg << dendl;
 	dout(0) << " transaction dump:\n";

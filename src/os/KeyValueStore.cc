@@ -1152,221 +1152,111 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 {
   dout(10) << "_do_transaction on " << &transaction << dendl;
 
-  Transaction::iterator i = transaction.begin();
-
-  while (i.have_op()) {
+  typedef Transaction::op_iterator op_iterator;
+  for (op_iterator i = transaction.begin(); i != transaction.end(); ++i) {
     if (handle)
       handle->reset_tp_timeout();
 
-    int op = i.get_op();
     int r = 0;
 
-    switch (op) {
+    switch (i->op) {
     case Transaction::OP_NOP:
       break;
 
     case Transaction::OP_TOUCH:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	r = _touch(cid, oid, t);
-      }
+      r = _touch(i->cid, i->oid, t);
       break;
 
     case Transaction::OP_WRITE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	bool replica = i.get_replica();
-	bufferlist bl;
-	i.get_bl(bl);
-	r = _write(cid, oid, off, len, bl, t, replica);
-      }
+      r = _write(i->cid, i->oid, i->off, i->len, i->data,
+	         t, transaction.get_replica());
       break;
 
     case Transaction::OP_ZERO:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	r = _zero(cid, oid, off, len, t);
-      }
+      r = _zero(i->cid, i->oid, i->off, i->len, t);
       break;
 
     case Transaction::OP_TRIMCACHE:
-      {
-	i.get_cid();
-	i.get_oid();
-	i.get_length();
-	i.get_length();
-	// deprecated, no-op
-      }
+      // deprecated, no-op
       break;
 
     case Transaction::OP_TRUNCATE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	r = _truncate(cid, oid, off, t);
-      }
+      r = _truncate(i->cid, i->oid, i->off, t);
       break;
 
     case Transaction::OP_REMOVE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	r = _remove(cid, oid, t);
-      }
+      r = _remove(i->cid, i->oid, t);
       break;
 
     case Transaction::OP_SETATTR:
       {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	string name = i.get_attrname();
-	bufferlist bl;
-	i.get_bl(bl);
-	map<string, bufferptr> to_set;
-	to_set[name] = bufferptr(bl.c_str(), bl.length());
-	r = _setattrs(cid, oid, to_set, t);
-	if (r == -ENOSPC)
-	  dout(0) << " ENOSPC on setxattr on " << cid << "/" << oid
-		  << " name " << name << " size " << bl.length() << dendl;
+        map<string, bufferptr> to_set;
+        to_set[i->name] = bufferptr(i->data.c_str(), i->data.length());
+        r = _setattrs(i->cid, i->oid, to_set, t);
+        if (r == -ENOSPC)
+          dout(0) << " ENOSPC on setxattr on " << i->cid << "/" << i->oid
+                  << " name " << i->name << " size " << i->data.length() << dendl;
       }
       break;
 
     case Transaction::OP_SETATTRS:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	map<string, bufferptr> aset;
-	i.get_attrset(aset);
-	r = _setattrs(cid, oid, aset, t);
-	if (r == -ENOSPC)
-	  dout(0) << " ENOSPC on setxattrs on " << cid << "/" << oid << dendl;
-      }
+      r = _setattrs(i->cid, i->oid, i->xattrs, t);
+      if (r == -ENOSPC)
+	dout(0) << " ENOSPC on setxattrs on " << i->cid << "/" << i->oid << dendl;
       break;
 
     case Transaction::OP_RMATTR:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	string name = i.get_attrname();
-	r = _rmattr(cid, oid, name.c_str(), t);
-      }
+      r = _rmattr(i->cid, i->oid, i->name.c_str(), t);
       break;
 
     case Transaction::OP_RMATTRS:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	r = _rmattrs(cid, oid, t);
-      }
+      r = _rmattrs(i->cid, i->oid, t);
       break;
 
     case Transaction::OP_CLONE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	hobject_t noid = i.get_oid();
-	r = _clone(cid, oid, noid, t);
-      }
+      r = _clone(i->cid, i->oid, i->oid2, t);
       break;
 
     case Transaction::OP_CLONERANGE:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	hobject_t noid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	r = _clone_range(cid, oid, noid, off, len, off, t);
-      }
+      r = _clone_range(i->cid, i->oid, i->oid2, i->off, i->len, i->off, t);
       break;
 
     case Transaction::OP_CLONERANGE2:
-      {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	hobject_t noid = i.get_oid();
-	uint64_t srcoff = i.get_length();
-	uint64_t len = i.get_length();
-	uint64_t dstoff = i.get_length();
-	r = _clone_range(cid, oid, noid, srcoff, len, dstoff, t);
-      }
+      r = _clone_range(i->cid, i->oid, i->oid2, i->off, i->len, i->off2, t);
       break;
 
     case Transaction::OP_MKCOLL:
-      {
-	coll_t cid = i.get_cid();
-	r = _create_collection(cid, t);
-      }
+      r = _create_collection(i->cid, t);
       break;
 
     case Transaction::OP_RMCOLL:
-      {
-	coll_t cid = i.get_cid();
-	r = _destroy_collection(cid, t);
-      }
+      r = _destroy_collection(i->cid, t);
       break;
 
     case Transaction::OP_COLL_ADD:
-      {
-	coll_t ncid = i.get_cid();
-	coll_t ocid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	r = _collection_add(ncid, ocid, oid, t);
-      }
+      r = _collection_add(i->cid, i->cid2, i->oid, t);
       break;
 
     case Transaction::OP_COLL_REMOVE:
-       {
-	coll_t cid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	r = _remove(cid, oid, t);
-       }
+      r = _remove(i->cid, i->oid, t);
       break;
 
     case Transaction::OP_COLL_MOVE:
-      {
-	// WARNING: this is deprecated and buggy; only here to replay old journals.
-	coll_t ocid = i.get_cid();
-	coll_t ncid = i.get_cid();
-	hobject_t oid = i.get_oid();
-	r = _collection_move_rename(ocid, oid, ncid, oid, t);
-      }
+      // WARNING: this is deprecated and buggy; only here to replay old journals.
+      r = _collection_move_rename(i->cid, i->oid, i->cid2, i->oid, t);
       break;
 
     case Transaction::OP_COLL_MOVE_RENAME:
-      {
-	coll_t oldcid = i.get_cid();
-	hobject_t oldoid = i.get_oid();
-	coll_t newcid = i.get_cid();
-	hobject_t newoid = i.get_oid();
-	r = _collection_move_rename(oldcid, oldoid, newcid, newoid, t);
-      }
+      r = _collection_move_rename(i->cid, i->oid, i->cid2, i->oid2, t);
       break;
 
     case Transaction::OP_COLL_SETATTR:
-      {
-	coll_t cid = i.get_cid();
-	string name = i.get_attrname();
-	bufferlist bl;
-	i.get_bl(bl);
-	r = _collection_setattr(cid, name.c_str(), bl.c_str(), bl.length(), t);
-      }
+      r = _collection_setattr(i->cid, i->name.c_str(),
+			      i->data.c_str(), i->data.length(), t);
       break;
 
     case Transaction::OP_COLL_RMATTR:
-      {
-	coll_t cid = i.get_cid();
-	string name = i.get_attrname();
-	r = _collection_rmattr(cid, name.c_str(), t);
-      }
+      r = _collection_rmattr(i->cid, i->name.c_str(), t);
       break;
 
     case Transaction::OP_STARTSYNC:
@@ -1376,56 +1266,23 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
       }
 
     case Transaction::OP_COLL_RENAME:
-      {
-	coll_t cid(i.get_cid());
-	coll_t ncid(i.get_cid());
-	r = _collection_rename(cid, ncid, t);
-      }
+      r = _collection_rename(i->cid, i->cid2, t);
       break;
 
     case Transaction::OP_OMAP_CLEAR:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	r = _omap_clear(cid, oid, t);
-      }
+      r = _omap_clear(i->cid, i->oid, t);
       break;
     case Transaction::OP_OMAP_SETKEYS:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	map<string, bufferlist> aset;
-	i.get_attrset(aset);
-	r = _omap_setkeys(cid, oid, aset, t);
-      }
+      r = _omap_setkeys(i->cid, i->oid, i->attrs, t);
       break;
     case Transaction::OP_OMAP_RMKEYS:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	set<string> keys;
-	i.get_keyset(keys);
-	r = _omap_rmkeys(cid, oid, keys, t);
-      }
+      r = _omap_rmkeys(i->cid, i->oid, i->keys, t);
       break;
     case Transaction::OP_OMAP_RMKEYRANGE:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	string first, last;
-	first = i.get_key();
-	last = i.get_key();
-	r = _omap_rmkeyrange(cid, oid, first, last, t);
-      }
+      r = _omap_rmkeyrange(i->cid, i->oid, i->name, i->name2, t);
       break;
     case Transaction::OP_OMAP_SETHEADER:
-      {
-	coll_t cid(i.get_cid());
-	hobject_t oid = i.get_oid();
-	bufferlist bl;
-	i.get_bl(bl);
-	r = _omap_setheader(cid, oid, bl, t);
-      }
+      r = _omap_setheader(i->cid, i->oid, i->data, t);
       break;
 
     case Transaction::OP_SETALLOCHINT:
@@ -1433,16 +1290,16 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
       break;
 
     default:
-      derr << "bad op " << op << dendl;
+      derr << "bad op " << i->op << dendl;
       assert(0);
     }
 
     if (r < 0) {
       bool ok = false;
 
-      if (r == -ENOENT && !(op == Transaction::OP_CLONERANGE ||
-			    op == Transaction::OP_CLONE ||
-			    op == Transaction::OP_CLONERANGE2))
+      if (r == -ENOENT && !(i->op == Transaction::OP_CLONERANGE ||
+			    i->op == Transaction::OP_CLONE ||
+			    i->op == Transaction::OP_CLONERANGE2))
 	// -ENOENT is normally okay
 	// ...including on a replayed OP_RMCOLL with checkpoint mode
 	ok = true;
@@ -1452,9 +1309,9 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
       if (!ok) {
 	const char *msg = "unexpected error code";
 
-	if (r == -ENOENT && (op == Transaction::OP_CLONERANGE ||
-			    op == Transaction::OP_CLONE ||
-			    op == Transaction::OP_CLONERANGE2))
+	if (r == -ENOENT && (i->op == Transaction::OP_CLONERANGE ||
+			    i->op == Transaction::OP_CLONE ||
+			    i->op == Transaction::OP_CLONERANGE2))
 	  msg = "ENOENT on clone suggests osd bug";
 
 	if (r == -ENOSPC)
@@ -1467,7 +1324,7 @@ unsigned KeyValueStore::_do_transaction(Transaction& transaction,
 	}
 
 	dout(0) << " error " << cpp_strerror(r) << " not handled on operation "
-		<< op << " (" << spos << ", or op " << spos.op
+		<< i->op << " (" << spos << ", or op " << spos.op
 		<< ", counting from 0)" << dendl;
 	dout(0) << msg << dendl;
 	dout(0) << " transaction dump:\n";

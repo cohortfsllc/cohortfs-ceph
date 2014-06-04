@@ -260,14 +260,7 @@ public:
    * version itself and handle version upgrades that might change the
    * format of the encoded Transaction. This has already happened a
    * couple of times and the Transaction object contains some helper
-   * variables that aid in this legacy decoding:
-   *
-   *   sobject_encoding detects an older/simpler version of oid
-   *   present in pre-bobtail versions of ceph.  use_pool_override
-   *   also detects a situation where the pool of an oid can be
-   *   override for legacy operations/buffers.  For non-legacy
-   *   implementation of ObjectStore, neither of these fields is
-   *   relevant.
+   * variables that aid in this legacy decoding.
    *
    *
    * TRANSACTION ISOLATION
@@ -341,11 +334,33 @@ public:
       OP_SETALLOCHINT = 39,  // cid, oid, object_size, write_size
     };
 
+    struct Op {
+      uint32_t op;
+      coll_t cid, cid2;
+      hobject_t oid, oid2;
+      uint64_t off, off2;
+      uint64_t len;
+      bufferlist data;
+      string name, name2;
+      map<string, bufferptr> xattrs;
+      map<string, bufferlist> attrs;
+      set<string> keys;
+      uint64_t value1;
+      uint64_t value2;
+
+      Op(uint32_t op = OP_NOP) : op(op) {} // leave most fields uninitialized
+
+      void encode(bufferlist &bl) const;
+      void decode(bufferlist::iterator &p);
+    };
+
+    typedef vector<Op>::iterator op_iterator;
+    op_iterator begin() { return ops.begin(); }
+    op_iterator end() { return ops.end(); }
+
   private:
-    uint64_t ops;
-    uint64_t pad_unused_bytes;
-    uint32_t largest_data_len, largest_data_off, largest_data_off_in_tbl;
-    bufferlist tbl;
+    vector<Op> ops;
+    uint32_t largest_data_len, largest_data_off;
     int64_t pool_override;
     bool use_pool_override;
     bool replica;
@@ -358,6 +373,9 @@ public:
   public:
     void set_tolerate_collection_add_enoent() {
       tolerate_collection_add_enoent = true;
+    }
+    bool get_tolerate_collection_add_enoent() const {
+      return tolerate_collection_add_enoent;
     }
 
     /* Operations on callback contexts */
@@ -424,24 +442,23 @@ public:
       std::swap(ops, other.ops);
       std::swap(largest_data_len, other.largest_data_len);
       std::swap(largest_data_off, other.largest_data_off);
-      std::swap(largest_data_off_in_tbl, other.largest_data_off_in_tbl);
       std::swap(on_applied, other.on_applied);
       std::swap(on_commit, other.on_commit);
       std::swap(on_applied_sync, other.on_applied_sync);
-      tbl.swap(other.tbl);
     }
 
     /// Append the operations of the parameter to this Transaction. Those operations are removed from the parameter Transaction
     void append(Transaction& other) {
-      ops += other.ops;
-      assert(pad_unused_bytes == 0);
-      assert(other.pad_unused_bytes == 0);
+      ops.resize(ops.size() + other.ops.size());
+      // TODO: use c++11's std::move()
+      std::copy(other.ops.begin(), other.ops.end(),
+		ops.begin() + other.ops.size());
+      other.ops.clear();
+
       if (other.largest_data_len > largest_data_len) {
 	largest_data_len = other.largest_data_len;
 	largest_data_off = other.largest_data_off;
-	largest_data_off_in_tbl = tbl.length() + other.largest_data_off_in_tbl;
       }
-      tbl.append(other.tbl);
       on_applied.splice(on_applied.end(), other.on_applied);
       on_commit.splice(on_commit.end(), other.on_commit);
       on_applied_sync.splice(on_applied_sync.end(), other.on_applied_sync);
@@ -451,7 +468,7 @@ public:
 
     /// How big is the encoded Transaction buffer?
     uint64_t get_encoded_bytes() {
-      return 1 + 8 + 8 + 4 + 4 + 4 + 4 + tbl.length();
+      return 1 + 8 + 8 + 4 + 4 + 4 + 4;
     }
 
     uint64_t get_num_bytes() {
@@ -461,129 +478,19 @@ public:
     uint32_t get_data_length() {
       return largest_data_len;
     }
-    /// offset within the encoded buffer to the start of the first data buffer that's encoded
-    uint32_t get_data_offset() {
-      if (largest_data_off_in_tbl) {
-	return largest_data_off_in_tbl +
-	  sizeof(uint8_t) +  // encode struct_v
-	  sizeof(uint8_t) +  // encode compat_v
-	  sizeof(uint32_t) + // encode len
-	  sizeof(ops) +
-	  sizeof(pad_unused_bytes) +
-	  sizeof(largest_data_len) +
-	  sizeof(largest_data_off) +
-	  sizeof(largest_data_off_in_tbl) +
-	  sizeof(uint32_t);  // tbl length
-      }
-      return 0;	 // none
-    }
     /// offset of buffer as aligned to destination within object.
     int get_data_alignment() {
       if (!largest_data_len)
 	return -1;
-      return (largest_data_off - get_data_offset()) & ~CEPH_PAGE_MASK;
+      return largest_data_off & ~CEPH_PAGE_MASK;
     }
     /// Is the Transaction empty (no operations)
     bool empty() {
-      return !ops;
+      return ops.empty();
     }
     /// Number of operations in the transation
     int get_num_ops() {
-      return ops;
-    }
-
-    /**
-     * iterator
-     *
-     * Helper object to parse Transactions.
-     *
-     * ObjectStore instances use this object to step down the encoded
-     * buffer decoding operation codes and parameters as we go.
-     *
-     */
-    class iterator {
-      bufferlist::iterator p;
-      int64_t pool_override;
-      bool use_pool_override;
-      bool replica;
-      bool _tolerate_collection_add_enoent;
-
-      iterator(Transaction *t)
-	: p(t->tbl.begin()),
-	  pool_override(t->pool_override),
-	  use_pool_override(t->use_pool_override),
-	  replica(t->replica),
-	  _tolerate_collection_add_enoent(
-	    t->tolerate_collection_add_enoent) {}
-
-      friend class Transaction;
-
-    public:
-      bool tolerate_collection_add_enoent() const {
-	return _tolerate_collection_add_enoent;
-      }
-      /// true if there are more operations left to be enumerated
-      bool have_op() {
-	return !p.end();
-      }
-
-      /* Decode the specified type of object from the input
-       * stream. There is no checking that the encoded data is of the
-       * correct type.
-       */
-      int get_op() {
-	uint32_t op;
-	::decode(op, p);
-	return op;
-      }
-      void get_bl(bufferlist& bl) {
-	::decode(bl, p);
-      }
-      /// Get an oid, recognize various legacy forms and update them.
-      hobject_t get_oid() {
-	hobject_t oid;
-	::decode(oid, p);
-	return oid;
-      }
-      coll_t get_cid() {
-	coll_t c;
-	::decode(c, p);
-	return c;
-      }
-      uint64_t get_length() {
-	uint64_t len;
-	::decode(len, p);
-	return len;
-      }
-      string get_attrname() {
-	string s;
-	::decode(s, p);
-	return s;
-      }
-      string get_key() {
-	string s;
-	::decode(s, p);
-	return s;
-      }
-      void get_attrset(map<string,bufferptr>& aset) {
-	::decode(aset, p);
-      }
-      void get_attrset(map<string,bufferlist>& aset) {
-	::decode(aset, p);
-      }
-      void get_keyset(set<string> &keys) {
-	::decode(keys, p);
-      }
-      uint32_t get_u32() {
-	uint32_t bits;
-	::decode(bits, p);
-	return bits;
-      }
-      bool get_replica() { return replica; }
-    };
-
-    iterator begin() {
-      return iterator(this);
+      return ops.size();
     }
 
     /**
@@ -597,15 +504,11 @@ public:
 
     /// Commence a global file system sync operation.
     void start_sync() {
-      uint32_t op = OP_STARTSYNC;
-      ::encode(op, tbl);
-      ops++;
+      ops.push_back(Op(OP_STARTSYNC));
     }
     /// noop. 'nuf said
     void nop() {
-      uint32_t op = OP_NOP;
-      ::encode(op, tbl);
-      ops++;
+      ops.push_back(Op(OP_NOP));
     }
     /**
      * touch
@@ -614,11 +517,10 @@ public:
      * empty object if necessary
      */
     void touch(const coll_t &cid, const hobject_t& oid) {
-      uint32_t op = OP_TOUCH;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ops++;
+      ops.push_back(Op(OP_TOUCH));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
     }
     /**
      * Write data to an offset within an object. If the object is too
@@ -632,52 +534,46 @@ public:
      */
     void write(const coll_t &cid, const hobject_t& oid,
                uint64_t off, uint64_t len, const bufferlist& data) {
-      uint32_t op = OP_WRITE;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(off, tbl);
-      ::encode(len, tbl);
+      ops.push_back(Op(OP_WRITE));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.off = off;
+      op.len = len;
+      op.data = data;
       assert(len == data.length());
       if (data.length() > largest_data_len) {
 	largest_data_len = data.length();
 	largest_data_off = off;
-	largest_data_off_in_tbl = tbl.length() + sizeof(uint32_t);  // we are about to
       }
-      ::encode(data, tbl);
-      ops++;
     }
     /**
      * zero out the indicated byte range within an object. Some
      * ObjectStore instances may optimize this to release the
      * underlying storage space.
      */
-    void zero(const coll_t &cid, const hobject_t& oid,
-              uint64_t off, uint64_t len) {
-      uint32_t op = OP_ZERO;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(off, tbl);
-      ::encode(len, tbl);
-      ops++;
+    void zero(const coll_t &cid, const hobject_t& oid, uint64_t off, uint64_t len) {
+      ops.push_back(Op(OP_ZERO));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.off = off;
+      op.len = len;
     }
     /// Discard all data in the object beyond the specified size.
     void truncate(const coll_t &cid, const hobject_t& oid, uint64_t off) {
-      uint32_t op = OP_TRUNCATE;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(off, tbl);
-      ops++;
+      ops.push_back(Op(OP_TRUNCATE));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.off = off;
     }
     /// Remove an object. All four parts of the object are removed.
     void remove(const coll_t &cid, const hobject_t& oid) {
-      uint32_t op = OP_REMOVE;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ops++;
+      ops.push_back(Op(OP_REMOVE));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
     }
     /// Set an xattr of an object
     void setattr(const coll_t &cid, const hobject_t& oid,
@@ -688,33 +584,33 @@ public:
     /// Set an xattr of an object
     void setattr(const coll_t &cid, const hobject_t& oid,
                  const string& s, bufferlist& val) {
-      uint32_t op = OP_SETATTR;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(s, tbl);
-      ::encode(val, tbl);
-      ops++;
+      ops.push_back(Op(OP_SETATTR));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.name = s;
+      op.data = val;
     }
     /// Set multiple xattrs of an object
     void setattrs(const coll_t &cid, const hobject_t& oid,
-                  map<string,bufferptr>& attrset) {
-      uint32_t op = OP_SETATTRS;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(attrset, tbl);
-      ops++;
+                  map<string, bufferlist>& attrset) {
+      ops.push_back(Op(OP_SETATTRS));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      // encode/decode into bufferptr map
+      bufferlist bl;
+      ::encode(attrset, bl);
+      bufferlist::iterator p = bl.begin();
+      ::decode(op.xattrs, p);
     }
-    /// Set multiple xattrs of an object
     void setattrs(const coll_t &cid, const hobject_t& oid,
-                  map<string,bufferlist>& attrset) {
-      uint32_t op = OP_SETATTRS;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(attrset, tbl);
-      ops++;
+                  map<string, bufferptr>& attrset) {
+      ops.push_back(Op(OP_SETATTRS));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.xattrs.swap(attrset);
     }
     /// remove an xattr from an object
     void rmattr(const coll_t &cid, const hobject_t& oid, const char *name) {
@@ -723,20 +619,18 @@ public:
     }
     /// remove an xattr from an object
     void rmattr(const coll_t &cid, const hobject_t& oid, const string& s) {
-      uint32_t op = OP_RMATTR;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(s, tbl);
-      ops++;
+      ops.push_back(Op(OP_RMATTR));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.name = s;
     }
     /// remove all xattrs from an object
     void rmattrs(const coll_t &cid, const hobject_t& oid) {
-      uint32_t op = OP_RMATTRS;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ops++;
+      ops.push_back(Op(OP_RMATTRS));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
     }
     /**
      * Clone an object into another object.
@@ -750,12 +644,11 @@ public:
      * which case its previous contents are discarded.
      */
     void clone(const coll_t &cid, const hobject_t& oid, hobject_t noid) {
-      uint32_t op = OP_CLONE;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(noid, tbl);
-      ops++;
+      ops.push_back(Op(OP_CLONE));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.oid2 = noid;
     }
     /**
      * Clone a byte range from one object to another.
@@ -766,29 +659,26 @@ public:
      */
     void clone_range(const coll_t &cid, const hobject_t& oid, hobject_t noid,
 		     uint64_t srcoff, uint64_t srclen, uint64_t dstoff) {
-      uint32_t op = OP_CLONERANGE2;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(noid, tbl);
-      ::encode(srcoff, tbl);
-      ::encode(srclen, tbl);
-      ::encode(dstoff, tbl);
-      ops++;
+      ops.push_back(Op(OP_CLONERANGE2));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.oid2 = noid;
+      op.off = srcoff;
+      op.len = srclen;
+      op.off2 = dstoff;
     }
     /// Create the collection
     void create_collection(const coll_t &cid) {
-      uint32_t op = OP_MKCOLL;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ops++;
+      ops.push_back(Op(OP_MKCOLL));
+      Op &op = ops.back();
+      op.cid = cid;
     }
     /// remove the collection, the collection must be empty
     void remove_collection(const coll_t &cid) {
-      uint32_t op = OP_RMCOLL;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ops++;
+      ops.push_back(Op(OP_RMCOLL));
+      Op &op = ops.back();
+      op.cid = cid;
     }
     /**
      * Add object to another collection (DEPRECATED)
@@ -801,19 +691,17 @@ public:
      */
     void collection_add(const coll_t &cid, const coll_t &ocid,
                         const hobject_t& oid) {
-      uint32_t op = OP_COLL_ADD;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(ocid, tbl);
-      ::encode(oid, tbl);
-      ops++;
+      ops.push_back(Op(OP_COLL_ADD));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.cid2 = ocid;
+      op.oid = oid;
     }
     void collection_remove(const coll_t &cid, const hobject_t& oid) {
-      uint32_t op = OP_COLL_REMOVE;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ops++;
+      ops.push_back(Op(OP_COLL_REMOVE));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
     }
     void collection_move(const coll_t &cid, const coll_t &oldcid,
                          const hobject_t& oid) {
@@ -822,14 +710,13 @@ public:
       return;
     }
     void collection_move_rename(const coll_t &oldcid, const hobject_t& oldoid,
-                                const coll_t &cid, const hobject_t& oid) {
-      uint32_t op = OP_COLL_MOVE_RENAME;
-      ::encode(op, tbl);
-      ::encode(oldcid, tbl);
-      ::encode(oldoid, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ops++;
+				const coll_t &cid, const hobject_t& oid) {
+      ops.push_back(Op(OP_COLL_MOVE_RENAME));
+      Op &op = ops.back();
+      op.cid = oldcid;
+      op.oid = oldoid;
+      op.cid2 = cid;
+      op.oid2 = oid;
     }
 
     /// Set an xattr on a collection
@@ -840,12 +727,11 @@ public:
     /// Set an xattr on a collection
     void collection_setattr(const coll_t &cid, const string& name,
                             bufferlist& val) {
-      uint32_t op = OP_COLL_SETATTR;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(name, tbl);
-      ::encode(val, tbl);
-      ops++;
+      ops.push_back(Op(OP_COLL_SETATTR));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.name = name;
+      op.data = val;
     }
 
     /// Remove an xattr from a collection
@@ -855,35 +741,35 @@ public:
     }
     /// Remove an xattr from a collection
     void collection_rmattr(const coll_t &cid, const string& name) {
-      uint32_t op = OP_COLL_RMATTR;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(name, tbl);
-      ops++;
+      ops.push_back(Op(OP_COLL_RMATTR));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.name = name;
     }
     /// Set multiple xattrs on a collection
-    void collection_setattrs(const coll_t &cid, map<string,bufferptr>& aset) {
-      uint32_t op = OP_COLL_SETATTRS;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(aset, tbl);
-      ops++;
+    void collection_setattrs(const coll_t &cid, map<string, bufferlist>& aset) {
+      ops.push_back(Op(OP_COLL_SETATTRS));
+      Op &op = ops.back();
+      op.cid = cid;
+      // encode/decode into a bufferptr map
+      bufferlist bl;
+      ::encode(aset, bl);
+      bufferlist::iterator p = bl.begin();
+      ::decode(op.xattrs, p);
     }
     /// Set multiple xattrs on a collection
-    void collection_setattrs(const coll_t &cid, map<string,bufferlist>& aset) {
-      uint32_t op = OP_COLL_SETATTRS;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(aset, tbl);
-      ops++;
+    void collection_setattrs(const coll_t &cid, map<string, bufferptr>& aset) {
+      ops.push_back(Op(OP_COLL_SETATTRS));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.xattrs.swap(aset);
     }
     /// Change the name of a collection
     void collection_rename(const coll_t &cid, const coll_t &ncid) {
-      uint32_t op = OP_COLL_RENAME;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(ncid, tbl);
-      ops++;
+      ops.push_back(Op(OP_COLL_RENAME));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.cid2 = ncid;
     }
 
     /// Remove omap from oid
@@ -891,11 +777,10 @@ public:
       const coll_t &cid,	  ///< [in] Collection containing oid
       const hobject_t &oid  ///< [in] Object from which to remove omap
       ) {
-      uint32_t op = OP_OMAP_CLEAR;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ops++;
+      ops.push_back(Op(OP_OMAP_CLEAR));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
     }
     /// Set keys on oid omap.  Replaces duplicate keys.
     void omap_setkeys(
@@ -903,12 +788,11 @@ public:
       const hobject_t &oid,	///< [in] Object to update
       const map<string, bufferlist> &attrset ///< [in] Replacement keys and values
       ) {
-      uint32_t op = OP_OMAP_SETKEYS;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(attrset, tbl);
-      ops++;
+      ops.push_back(Op(OP_OMAP_SETKEYS));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.attrs = attrset; // TODO: swap instead of copy
     }
     /// Remove keys from oid omap
     void omap_rmkeys(
@@ -916,12 +800,11 @@ public:
       const hobject_t &oid, ///< [in] Object from which to remove the omap
       const set<string> &keys ///< [in] Keys to clear
       ) {
-      uint32_t op = OP_OMAP_RMKEYS;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(keys, tbl);
-      ops++;
+      ops.push_back(Op(OP_OMAP_RMKEYS));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.keys = keys; // TODO: swap instead of copy
     }
 
     /// Remove key range from oid omap
@@ -931,13 +814,12 @@ public:
       const string& first,  ///< [in] first key in range
       const string& last    ///< [in] first key past range, range is [first,last)
       ) {
-      uint32_t op = OP_OMAP_RMKEYRANGE;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(first, tbl);
-      ::encode(last, tbl);
-      ops++;
+      ops.push_back(Op(OP_OMAP_RMKEYRANGE));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.name = first;
+      op.name2 = last;
     }
 
     /// Set omap header
@@ -946,12 +828,11 @@ public:
       const hobject_t &oid, ///< [in] Object
       const bufferlist &bl  ///< [in] Header value
       ) {
-      uint32_t op = OP_OMAP_SETHEADER;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(bl, tbl);
-      ops++;
+      ops.push_back(Op(OP_OMAP_SETHEADER));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.data = bl;
     }
 
     void set_alloc_hint(
@@ -960,65 +841,48 @@ public:
       uint64_t expected_object_size,
       uint64_t expected_write_size
     ) {
-      uint32_t op = OP_SETALLOCHINT;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(oid, tbl);
-      ::encode(expected_object_size, tbl);
-      ::encode(expected_write_size, tbl);
-      ++ops;
+      ops.push_back(Op(OP_SETALLOCHINT));
+      Op &op = ops.back();
+      op.cid = cid;
+      op.oid = oid;
+      op.value1 = expected_object_size;
+      op.value2 = expected_write_size;
     }
 
     // etc.
-    Transaction() :
-      ops(0), pad_unused_bytes(0), largest_data_len(0), largest_data_off(0), largest_data_off_in_tbl(0),
-      pool_override(-1), use_pool_override(false), replica(false),
-      tolerate_collection_add_enoent(false) {}
+    Transaction(size_t op_count_hint = 0) :
+      largest_data_len(0), largest_data_off(0), replica(false),
+      tolerate_collection_add_enoent(false) {
+      ops.reserve(op_count_hint);
+    }
 
     Transaction(bufferlist::iterator &dp) :
-      ops(0), pad_unused_bytes(0), largest_data_len(0), largest_data_off(0), largest_data_off_in_tbl(0),
-      pool_override(-1), use_pool_override(false),
-      replica(false),
+      largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       decode(dp);
     }
 
     Transaction(bufferlist &nbl) :
-      ops(0), pad_unused_bytes(0), largest_data_len(0), largest_data_off(0), largest_data_off_in_tbl(0),
-      pool_override(-1), use_pool_override(false), replica(false),
+      largest_data_len(0), largest_data_off(0), replica(false),
       tolerate_collection_add_enoent(false) {
       bufferlist::iterator dp = nbl.begin();
       decode(dp);
     }
 
     void encode(bufferlist& bl) const {
-      ENCODE_START(7, 5, bl);
+      ENCODE_START(8, 8, bl);
       ::encode(ops, bl);
-      ::encode(pad_unused_bytes, bl);
       ::encode(largest_data_len, bl);
       ::encode(largest_data_off, bl);
-      ::encode(largest_data_off_in_tbl, bl);
-      ::encode(tbl, bl);
       ::encode(tolerate_collection_add_enoent, bl);
       ENCODE_FINISH(bl);
     }
     void decode(bufferlist::iterator &bl) {
-      DECODE_START_LEGACY_COMPAT_LEN(7, 5, 5, bl);
-      DECODE_OLDEST(2);
+      DECODE_START(8, bl);
       ::decode(ops, bl);
-      ::decode(pad_unused_bytes, bl);
-      if (struct_v >= 3) {
-	::decode(largest_data_len, bl);
-	::decode(largest_data_off, bl);
-	::decode(largest_data_off_in_tbl, bl);
-      }
-      ::decode(tbl, bl);
-      if (struct_v < 6) {
-	use_pool_override = true;
-      }
-      if (struct_v >= 7) {
-	::decode(tolerate_collection_add_enoent, bl);
-      }
+      ::decode(largest_data_len, bl);
+      ::decode(largest_data_off, bl);
+      ::decode(tolerate_collection_add_enoent, bl);
       DECODE_FINISH(bl);
     }
 
@@ -1502,6 +1366,7 @@ public:
   virtual void inject_data_error(const hobject_t &oid) {}
   virtual void inject_mdata_error(const hobject_t &oid) {}
 };
+WRITE_CLASS_ENCODER(ObjectStore::Transaction::Op)
 WRITE_CLASS_ENCODER(ObjectStore::Transaction)
 
 ostream& operator<<(ostream& out, const ObjectStore::Sequencer& s);
