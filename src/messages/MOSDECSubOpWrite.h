@@ -62,7 +62,7 @@ public:
   }
 
   void clear_buffers() {
-    op.t = ObjectStore::Transaction();
+    op.t.clear();
     op.log_entries.clear();
   }
 };

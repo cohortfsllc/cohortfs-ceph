@@ -810,7 +810,8 @@ void ECBackend::handle_sub_write(
     get_temp_coll(localt);
     add_temp_objs(op.temp_added);
   }
-  if (op.t.empty()) {
+  ObjectStore::Transaction remotet(op.t);
+  if (remotet.empty()) {
     for (set<hobject_t>::iterator i = op.temp_removed.begin();
 	 i != op.temp_removed.end();
 	 ++i) {
@@ -829,9 +830,9 @@ void ECBackend::handle_sub_write(
     op.log_entries,
     op.updated_hit_set_history,
     op.trim_to,
-    !(op.t.empty()),
+    !remotet.empty(),
     localt);
-  localt->append(op.t);
+  localt->append(remotet);
   if (on_local_applied_sync) {
     dout(10) << "Queueing onreadable_sync: " << on_local_applied_sync << dendl;
     localt->register_on_applied_sync(on_local_applied_sync);
@@ -1522,13 +1523,16 @@ void ECBackend::start_write(Op *op) {
       get_info().stats :
       parent->get_shard_info().find(*i)->second.stats;
 
+    bufferlist tbl;
+    ::encode(should_send ? iter->second : ObjectStore::Transaction(), tbl);
+
     ECSubWrite sop(
       get_parent()->whoami_shard(),
       op->tid,
       op->reqid,
       op->hoid,
       stats,
-      should_send ? iter->second : ObjectStore::Transaction(),
+      tbl,
       op->version,
       op->trim_to,
       op->log_entries,
