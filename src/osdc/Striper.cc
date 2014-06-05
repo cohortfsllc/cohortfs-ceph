@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include "Striper.h"
@@ -27,19 +27,20 @@
 
 
 void Striper::file_to_extents(CephContext *cct, const char *object_format,
-			    ceph_file_layout *layout,
-			    uint64_t offset, uint64_t len, uint64_t trunc_size,
-			    vector<ObjectExtent>& extents,
-			    uint64_t buffer_offset)
+			      uuid_d volume, ceph_file_layout *layout,
+			      uint64_t offset, uint64_t len,
+			      uint64_t trunc_size,
+			      vector<ObjectExtent>& extents,
+			      uint64_t buffer_offset)
 {
   map<object_t,vector<ObjectExtent> > object_extents;
-  file_to_extents(cct, object_format, layout, offset, len, trunc_size,
+  file_to_extents(cct, object_format, volume, layout, offset, len, trunc_size,
 		  object_extents, buffer_offset);
   assimilate_extents(object_extents, extents);
 }
 
 void Striper::file_to_extents(CephContext *cct, const char *object_format,
-			      ceph_file_layout *layout,
+			      uuid_d volume, ceph_file_layout *layout,
 			      uint64_t offset, uint64_t len, uint64_t trunc_size,
 			      map<object_t,vector<ObjectExtent> >& object_extents,
 			      uint64_t buffer_offset)
@@ -105,7 +106,7 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
       ex = &exv.back();
       ex->oid = oid;
       ex->objectno = objectno;
-      ex->oloc = OSDMap::file_to_object_locator(*layout);
+      ex->volume = volume;
 
       ex->offset = x_offset;
       ex->length = x_len;
@@ -119,31 +120,33 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
       ex->length += x_len;
     }
     ex->buffer_extents.push_back(make_pair(cur - offset + buffer_offset, x_len));
-        
-    ldout(cct, 15) << "file_to_extents  " << *ex << " in " << ex->oloc << dendl;
-    //ldout(cct, 0) << "map: ino " << ino << " oid " << ex.oid << " osd " << ex.osd << " offset " << ex.offset << " len " << ex.len << " ... left " << left << dendl;
-    
+
+    ldout(cct, 15) << "file_to_extents  " << *ex << " in "
+		   << ex->volume << dendl;
     left -= x_len;
     cur += x_len;
   }
 }
 
-void Striper::assimilate_extents(map<object_t,vector<ObjectExtent> >& object_extents,
-				 vector<ObjectExtent>& extents)
+void Striper::assimilate_extents(
+  map<object_t,vector<ObjectExtent> >& object_extents,
+  vector<ObjectExtent>& extents)
 {
   // make final list
-  for (map<object_t, vector<ObjectExtent> >::iterator it = object_extents.begin();
+  for (map<object_t, vector<ObjectExtent> >::iterator it
+	 = object_extents.begin();
        it != object_extents.end();
        ++it) {
-    for (vector<ObjectExtent>::iterator p = it->second.begin(); p != it->second.end(); ++p) {
+    for (vector<ObjectExtent>::iterator p = it->second.begin();
+	 p != it->second.end(); ++p) {
       extents.push_back(*p);
     }
   }
 }
 
-void Striper::extent_to_file(CephContext *cct, ceph_file_layout *layout,
-			   uint64_t objectno, uint64_t off, uint64_t len,
-			   vector<pair<uint64_t, uint64_t> >& extents)
+void Striper::extent_to_file(
+  CephContext *cct, ceph_file_layout *layout, uint64_t objectno, uuid_d volume,
+  uint64_t off, uint64_t len, vector<pair<uint64_t, uint64_t> >& extents)
 {
   ldout(cct, 10) << "extent_to_file " << objectno << " " << off << "~" << len << dendl;
 

@@ -38,7 +38,6 @@ class Monitor;
 #include "messages/MMonCommand.h"
 #include "messages/MOSDMap.h"
 #include "messages/MOSDFailure.h"
-#include "messages/MPoolOp.h"
 
 #define OSD_METADATA_PREFIX "osd_metadata"
 
@@ -141,12 +140,8 @@ private:
   void check_failures(utime_t now);
   bool check_failure(utime_t now, int target_osd, failure_info_t& fi);
 
-  bool _have_pending_crush();
-  CrushWrapper &_get_stable_crush();
-  void _get_pending_crush(CrushWrapper& newcrush);
-
   // svc
-public:  
+public:
   void create_initial();
 private:
   void update_from_paxos(bool *need_bootstrap);
@@ -222,36 +217,8 @@ private:
   bool prepare_alive(class MOSDAlive *m);
   void _reply_map(PaxosServiceMessage *m, epoch_t e);
 
-  int _check_remove_pool(int64_t pool, const pg_pool_t *pi, ostream *ss);
-  int _prepare_remove_pool(int64_t pool, ostream *ss);
-  int _prepare_rename_pool(int64_t pool, string newname);
-
-  bool preprocess_pool_op ( class MPoolOp *m);
-  bool preprocess_pool_op_create ( class MPoolOp *m);
-  bool prepare_pool_op (MPoolOp *m);
-  bool prepare_pool_op_create (MPoolOp *m);
-  bool prepare_pool_op_delete(MPoolOp *m);
-  int prepare_pool_crush_ruleset(const unsigned pool_type,
-				 const string &ruleset_name,
-				 int *crush_ruleset,
-				 stringstream &ss);
-  int prepare_pool_size(const unsigned pool_type,
-			unsigned *size,
-			stringstream &ss);
-  int prepare_new_pool(string& name, uint64_t auid,
-		       int crush_ruleset,
-		       const string &crush_ruleset_name,
-		       unsigned pg_num, unsigned pgp_num,
-		       const unsigned pool_type,
-		       stringstream &ss);
-  int prepare_new_pool(MPoolOp *m);
-
-  void update_pool_flags(int64_t pool_id, uint64_t flags);
-
   bool prepare_set_flag(MMonCommand *m, int flag);
   bool prepare_unset_flag(MMonCommand *m, int flag);
-
-  void _pool_op_reply(MPoolOp *m, int ret, epoch_t epoch, bufferlist *blp=NULL);
 
   struct C_Booted : public Context {
     OSDMonitor *cmon;
@@ -285,28 +252,6 @@ private:
 	osdmon->dispatch(m);
       else
 	assert(0 == "bad C_ReplyMap return value");
-    }    
-  };
-  struct C_PoolOp : public Context {
-    OSDMonitor *osdmon;
-    MPoolOp *m;
-    int replyCode;
-    int epoch;
-    bufferlist reply_data;
-    C_PoolOp(OSDMonitor * osd, MPoolOp *m_, int rc, int e, bufferlist *rd=NULL) :
-      osdmon(osd), m(m_), replyCode(rc), epoch(e) {
-      if (rd)
-	reply_data = *rd;
-    }
-    void finish(int r) {
-      if (r >= 0)
-	osdmon->_pool_op_reply(m, replyCode, epoch, &reply_data);
-      else if (r == -ECANCELED)
-	m->put();
-      else if (r == -EAGAIN)
-	osdmon->dispatch(m);
-      else
-	assert(0 == "bad C_PoolOp return value");
     }
   };
 
@@ -323,9 +268,6 @@ private:
   bool preprocess_command(MMonCommand *m);
   bool prepare_command(MMonCommand *m);
   bool prepare_command_impl(MMonCommand *m, map<string,cmd_vartype> &cmdmap);
-
-  int prepare_command_pool_set(map<string,cmd_vartype> &cmdmap,
-			       stringstream& ss);
 
   void handle_osd_timeouts(const utime_t &now,
 			   std::map<int,utime_t> &last_osd_report);

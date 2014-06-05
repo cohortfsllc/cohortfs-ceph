@@ -55,13 +55,6 @@ ${CMAKE_BINARY_DIR}/ceph
 
 
 configure_file(
-${CMAKE_SOURCE_DIR}/src/ceph-crush-location.in
-${CMAKE_BINARY_DIR}/ceph-crush-location
-@ONLY
-)
-
-
-configure_file(
 ${CMAKE_SOURCE_DIR}/src/init-ceph.in
 ${CMAKE_BINARY_DIR}/init-ceph
 @ONLY
@@ -95,15 +88,15 @@ add_subdirectory(mon)
 add_subdirectory(os)
 add_subdirectory(global)
 add_subdirectory(osd)
-add_subdirectory(mds)
-add_subdirectory(client)
+#add_subdirectory(mds) MDS later
+#add_subdirectory(client) MDS later
 add_subdirectory(erasure-code)
 add_subdirectory(tools)
 add_subdirectory(test)
 
-if(${WITH_RADOSGW})
-add_subdirectory(rgw)
-endif(${WITH_RADOSGW})
+#if(${WITH_RADOSGW})
+#add_subdirectory(rgw)
+#endif(${WITH_RADOSGW})
 
 if(${WITH_TCMALLOC})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
@@ -135,14 +128,14 @@ add_executable(ceph-osd ${ceph_osd_srcs})
 
 target_link_libraries(ceph-osd osd os global ${TCMALLOC_LIBS})
 
-#mds
-set(ceph_mds_srcs
-	ceph_mds.cc
-	${TCMALLOC_srcs}
-)
-add_executable(ceph-mds ${ceph_mds_srcs})
+#mds For Integration
+#set(ceph_mds_srcs
+#	ceph_mds.cc
+#	${TCMALLOC_srcs}
+#)
+#add_executable(ceph-mds ${ceph_mds_srcs})
 
-target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global ${TCMALLOC_LIBS} boost_thread)
+#target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global ${TCMALLOC_LIBS} boost_thread)
 
 # admin tools
 
@@ -154,14 +147,14 @@ if(FALSE) # removed due to conflict with libcephfs target
 	install(TARGETS cephfs DESTINATION bin)
 endif(FALSE)
 
-# synthetic client
-set(ceph_syn_srcs
-	ceph_syn.cc 
-	client/SyntheticClient.cc
-)
+# synthetic client For MDS integration
+#set(ceph_syn_srcs
+#	ceph_syn.cc 
+#	client/SyntheticClient.cc
+#)
 
-add_executable(ceph-syn ${ceph_syn_srcs})
-target_link_libraries(ceph-syn client global)
+#add_executable(ceph-syn ${ceph_syn_srcs})
+#target_link_libraries(ceph-syn client global)
 
 
 #librados_config_srcs
@@ -173,25 +166,27 @@ add_executable(librados-config ${librados_config_srcs})
 target_link_libraries(librados-config librados global)
 
 
-#ceph-fuse
-if(WITH_FUSE)
-set(ceph_fuse_srcs
-ceph_fuse.cc
-client/fuse_ll.cc
-)
+# For MDS integration
 
-add_executable(ceph-fuse ${ceph_fuse_srcs})
-target_link_libraries(ceph-fuse fuse client global)
-set(ceph_fuse_bin "ceph-fuse")
-endif(WITH_FUSE)
+#ceph-fuse
+#if(WITH_FUSE)
+#set(ceph_fuse_srcs
+#ceph_fuse.cc
+#client/fuse_ll.cc
+#)
+
+#add_executable(ceph-fuse ${ceph_fuse_srcs})
+#target_link_libraries(ceph-fuse fuse client global)
+#set(ceph_fuse_bin "ceph-fuse")
+#endif(WITH_FUSE)
 
 # add the install targets
 install(TARGETS
   ceph-mon
   ceph-osd
-  ceph-mds
-  ${ceph_fuse_bin}
-  ceph-syn
+#  ceph-mds For MDS integration
+#  ${ceph_fuse_bin} For MDS Integration
+#  ceph-syn For MDS integration
   librados-config
   DESTINATION bin)
 
@@ -201,7 +196,6 @@ DESTINATION bin
 ) 
 
 install(PROGRAMS
-  ${CMAKE_BINARY_DIR}/ceph-crush-location
   ${CMAKE_BINARY_DIR}/init-ceph
   ${CMAKE_BINARY_DIR}/mkcephfs
   ${CMAKE_SOURCE_DIR}/src/vstart.sh

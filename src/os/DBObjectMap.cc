@@ -129,54 +129,30 @@ bool DBObjectMap::check(std::ostream &out)
   return retval;
 }
 
-string DBObjectMap::hobject_key(const hobject_t &oid)
-{
-  string out;
-  append_escaped(oid.oid.name, &out);
-  out.push_back('.');
-  append_escaped(oid.get_key(), &out);
-  out.push_back('.');
-  append_escaped(oid.nspace, &out);
-  out.push_back('.');
-
-  char hashstr[1000];
-  char *t = hashstr;
-  char *end = t + sizeof(hashstr);
-  if (oid.pool == -1)
-    t += snprintf(t, end - t, ".none");
-  else
-    t += snprintf(t, end - t, ".%"PRIx64, oid.pool);
-  snprintf(t, end - t, ".%.*X", (int)(sizeof(oid.hash)*2), oid.hash);
-
-  out += string(hashstr);
-  return out;
-}
-
-string DBObjectMap::hobject_key_v0(coll_t c, const hobject_t &oid)
+string DBObjectMap::hobject_key(coll_t c, const hobject_t &oid)
 {
   string out;
   append_escaped(c.to_str(), &out);
   out.push_back('.');
   append_escaped(oid.oid.name, &out);
   out.push_back('.');
-  append_escaped(oid.get_key(), &out);
-  out.push_back('.');
 
-  char hashstr[1000];
-  char *t = hashstr;
-  char *end = t + sizeof(hashstr);
-  snprintf(t, end - t, ".%.*X", (int)(sizeof(oid.hash)*2), oid.hash);
-  out += string(hashstr);
+  char extra_str[1000];
+  char *t = extra_str;
+  char *end = t + sizeof(extra_str);
+  snprintf(t, end - t, ".%"PRIu32".%"PRIu32, oid.stripetype,
+	   oid.stripeno);
+  out += string(extra_str);
   return out;
 }
 
-bool DBObjectMap::parse_hobject_key_v0(const string &in, coll_t *c,
-				       hobject_t *oid)
+bool DBObjectMap::parse_hobject_key(const string &in, coll_t *c,
+				    hobject_t *oid)
 {
   string coll;
   string name;
-  string key;
-  uint32_t hash;
+  uint32_t stripetype;
+  uint32_t stripeno;
 
   string::const_iterator current = in.begin();
   string::const_iterator end;
@@ -197,33 +173,17 @@ bool DBObjectMap::parse_hobject_key_v0(const string &in, coll_t *c,
   for (; end != in.end() && *end != '.'; ++end) ;
   if (end == in.end())
     return false;
-  if (!append_unescaped(current, end, &key))
-    return false;
-
-  current = ++end;
-  // Bug in old encoding, double .
-  if (*current != '.')
-    return false;
-
-  current = ++end;
-  for (; end != in.end() && *end != '.'; ++end) ;
-  if (end == in.end())
-    return false;
-  string hash_str(current, end);
-  sscanf(hash_str.c_str(), "%X", &hash);
+  string extra_str(current, end);
+  sscanf(extra_str.c_str(), "%"PRIu32".%"PRIu32, &stripetype, &stripeno);
 
   *c = coll_t(coll);
-  int64_t pool = -1;
-  pg_t pg;
-  if (c->is_pg_prefix(pg))
-    pool = (int64_t)pg.pool();
-  (*oid) = hobject_t(hobject_t(name, key, hash, pool, ""));
+  (*oid) = hobject_t(object_t(name), (stripetype_t) stripetype, stripeno);
   return true;
 }
 
-string DBObjectMap::map_header_key(const hobject_t &oid)
+string DBObjectMap::map_header_key(coll_t coll, const hobject_t &oid)
 {
-  return hobject_key(oid);
+  return hobject_key(coll, oid);
 }
 
 string DBObjectMap::header_key(uint64_t seq)
@@ -983,8 +943,8 @@ int DBObjectMap::upgrade()
 
       coll_t coll;
       hobject_t oid;
-      assert(parse_hobject_key_v0(iter->key(), &coll, &oid));
-      new_map_headers[hobject_key(oid)] = got.begin()->second;
+      assert(parse_hobject_key(iter->key(), &coll, &oid));
+      new_map_headers[hobject_key(coll, oid)] = got.begin()->second;
     }
 
     t->rmkeys(LEAF_PREFIX, legacy_to_remove);
@@ -1083,7 +1043,7 @@ DBObjectMap::Header DBObjectMap::_lookup_map_header(const hobject_t &oid)
 
   map<string, bufferlist> out;
   set<string> to_get;
-  to_get.insert(map_header_key(oid));
+  to_get.insert(map_header_key(coll_t(), oid));
   int r = db->get(HOBJECT_TO_SEQ, to_get, &out);
   if (r < 0)
     return Header();
@@ -1185,7 +1145,7 @@ void DBObjectMap::remove_map_header(const hobject_t &oid,
   dout(20) << "remove_map_header: removing " << header->seq
 	   << " oid " << oid << dendl;
   set<string> to_remove;
-  to_remove.insert(map_header_key(oid));
+  to_remove.insert(map_header_key(coll_t(), oid));
   t->rmkeys(HOBJECT_TO_SEQ, to_remove);
 }
 
@@ -1196,7 +1156,7 @@ void DBObjectMap::set_map_header(const hobject_t &oid, _Header header,
 	   << " oid " << oid << " parent seq "
 	   << header.parent << dendl;
   map<string, bufferlist> to_set;
-  header.encode(to_set[map_header_key(oid)]);
+  header.encode(to_set[map_header_key(coll_t(), oid)]);
   t->set(HOBJECT_TO_SEQ, to_set);
 }
 

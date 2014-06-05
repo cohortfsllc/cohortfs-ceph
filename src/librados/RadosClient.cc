@@ -34,16 +34,12 @@
 
 // needed for static_cast
 #include "messages/PaxosServiceMessage.h"
-#include "messages/MPoolOpReply.h"
 #include "messages/MStatfsReply.h"
-#include "messages/MGetPoolStatsReply.h"
 #include "messages/MOSDOpReply.h"
 #include "messages/MOSDMap.h"
-#include "messages/MCommandReply.h"
 
 #include "AioCompletionImpl.h"
 #include "IoCtxImpl.h"
-#include "PoolAsyncCompletionImpl.h"
 #include "RadosClient.h"
 
 #include "include/assert.h"
@@ -75,9 +71,7 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     instance_id(0),
     objecter(NULL),
     osdmap_epoch(0),
-    pool_cache_epoch(0),
     lock("librados::RadosClient::lock"),
-    pool_cache_rwl("librados::RadosClient::pool_cache_rwl"),
     timer(cct, lock),
     refcnt(1),
     log_last_version(0), log_cb(NULL), log_cb_arg(NULL),
@@ -86,72 +80,32 @@ librados::RadosClient::RadosClient(CephContext *cct_)
 {
 }
 
-int64_t librados::RadosClient::lookup_pool(const char *name)
+uuid_d librados::RadosClient::lookup_volume(const string& name)
 {
-  pool_cache_rwl.get_read();
-  if (pool_cache_epoch && pool_cache_epoch == osdmap_epoch) {
-    map<string, int64_t>::iterator iter = pool_cache.find(name);
-    if (iter != pool_cache.end()) {
-      uint64_t val = iter->second;
-      pool_cache_rwl.unlock();
-      return val;
-    }
-  }
-
-  pool_cache_rwl.unlock();
-
-  lock.Lock();
+  Mutex::Locker l(lock);
 
   int r = wait_for_osdmap();
   if (r < 0)
-    return r;
-  int64_t ret = osdmap.lookup_pg_pool_name(name);
-  pool_cache_rwl.get_write();
-  lock.Unlock();
-  if (ret < 0) {
-    pool_cache_rwl.unlock();
-    return -ENOENT;
+    return uuid_d();
+  VolumeRef v;
+  if (!osdmap.find_by_name(name, v)) {
+    return uuid_d();
   }
-
-  if (pool_cache_epoch != osdmap_epoch) {
-    pool_cache.clear();
-    pool_cache_epoch = osdmap_epoch;
-  }
-  pool_cache[name] = ret;
-  pool_cache_rwl.unlock();
-  return ret;
+  return v->uuid;
 }
 
-const char *librados::RadosClient::get_pool_name(int64_t pool_id)
+string librados::RadosClient::lookup_volume(const uuid_d& id)
 {
   Mutex::Locker l(lock);
-  return osdmap.get_pool_name(pool_id);
-}
 
-int librados::RadosClient::pool_get_auid(uint64_t pool_id, unsigned long long *auid)
-{
-  Mutex::Locker l(lock);
   int r = wait_for_osdmap();
   if (r < 0)
-    return r;
-  const pg_pool_t *pg = osdmap.get_pg_pool(pool_id);
-  if (!pg)
-    return -ENOENT;
-  *auid = pg->auid;
-  return 0;
-}
-
-int librados::RadosClient::pool_get_name(uint64_t pool_id, std::string *s)
-{
-  Mutex::Locker l(lock);
-  int r = wait_for_osdmap();
-  if (r < 0)
-    return r;
-  const char *str = osdmap.get_pool_name(pool_id);
-  if (!str)
-    return -ENOENT;
-  *s = str;
-  return 0;
+    return string();
+  VolumeRef v;
+  if (!osdmap.find_by_uuid(id, v)) {
+    return string();
+  }
+  return v->name;
 }
 
 int librados::RadosClient::get_fsid(std::string *s)
@@ -320,13 +274,34 @@ librados::RadosClient::~RadosClient()
   cct = NULL;
 }
 
-int librados::RadosClient::create_ioctx(const char *name, IoCtxImpl **io)
+int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
 {
-  int64_t poolid = lookup_pool(name);
-  if (poolid < 0)
-    return (int)poolid;
+  uuid_d id;
+  VolumeRef v;
+  int r = wait_for_osdmap();
+  if (r < 0)
+    return -EIO;
 
-  *io = new librados::IoCtxImpl(this, objecter, &lock, poolid, name);
+  if (id.parse(name) && !osdmap.vol_exists(id))
+    *io = new librados::IoCtxImpl(this, objecter, &lock, id);
+  else if (osdmap.find_by_name(name, v))
+    *io = new librados::IoCtxImpl(this, objecter, &lock, v->uuid);
+  else
+    return -ENOENT;
+
+  return 0;
+}
+
+int librados::RadosClient::create_ioctx(const uuid_d &volume, IoCtxImpl **io)
+{
+  int r = wait_for_osdmap();
+  if (r < 0)
+    return -EIO;
+
+  if (volume.is_zero())
+    return -EEXIST;
+
+  *io = new librados::IoCtxImpl(this, objecter, &lock, volume);
   return 0;
 }
 
@@ -374,13 +349,8 @@ bool librados::RadosClient::_dispatch(Message *m)
     break;
   case CEPH_MSG_OSD_MAP:
     objecter->handle_osd_map(static_cast<MOSDMap*>(m));
-    pool_cache_rwl.get_write();
     osdmap_epoch = osdmap.get_epoch();
-    pool_cache_rwl.unlock();
     cond.Signal();
-    break;
-  case MSG_GETPOOLSTATSREPLY:
-    objecter->handle_get_pool_stats_reply(static_cast<MGetPoolStatsReply*>(m));
     break;
 
   case CEPH_MSG_MDS_MAP:
@@ -388,14 +358,6 @@ bool librados::RadosClient::_dispatch(Message *m)
 
   case CEPH_MSG_STATFS_REPLY:
     objecter->handle_fs_stats_reply(static_cast<MStatfsReply*>(m));
-    break;
-
-  case CEPH_MSG_POOLOP_REPLY:
-    objecter->handle_pool_op_reply(static_cast<MPoolOpReply*>(m));
-    break;
-
-  case MSG_COMMAND_REPLY:
-    objecter->handle_command_reply(static_cast<MCommandReply*>(m));
     break;
 
   case CEPH_MSG_WATCH_NOTIFY:
@@ -461,40 +423,6 @@ int librados::RadosClient::wait_for_latest_osdmap()
   return 0;
 }
 
-int librados::RadosClient::pool_list(std::list<std::string>& v)
-{
-  Mutex::Locker l(lock);
-  int r = wait_for_osdmap();
-  if (r < 0)
-    return r;
-  for (map<int64_t,pg_pool_t>::const_iterator p = osdmap.get_pools().begin();
-       p != osdmap.get_pools().end();
-       ++p)
-    v.push_back(osdmap.get_pool_name(p->first));
-  return 0;
-}
-
-int librados::RadosClient::get_pool_stats(std::list<string>& pools,
-					  map<string,::pool_stat_t>& result)
-{
-  Mutex mylock("RadosClient::get_pool_stats::mylock");
-  Cond cond;
-  bool done;
-  int ret = 0;
-
-  lock.Lock();
-  objecter->get_pool_stats(pools, &result, new C_SafeCond(&mylock, &cond, &done,
-							  &ret));
-  lock.Unlock();
-
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
-
-  return ret;
-}
-
 int librados::RadosClient::get_fs_stats(ceph_statfs& stats)
 {
   Mutex mylock ("RadosClient::get_fs_stats::mylock");
@@ -525,94 +453,9 @@ bool librados::RadosClient::put() {
   refcnt--;
   return (refcnt == 0);
 }
- 
-int librados::RadosClient::pool_create(string& name, unsigned long long auid,
-				       uint8_t crush_rule)
-{
-  int reply;
 
-  Mutex mylock ("RadosClient::pool_create::mylock");
-  Cond cond;
-  bool done;
-  Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &reply);
-  lock.Lock();
-  reply = objecter->create_pool(name, onfinish, auid, crush_rule);
-  lock.Unlock();
-
-  if (reply < 0) {
-    delete onfinish;
-  } else {
-    mylock.Lock();
-    while(!done)
-      cond.Wait(mylock);
-    mylock.Unlock();
-  }
-  return reply;
-}
-
-int librados::RadosClient::pool_create_async(string& name, PoolAsyncCompletionImpl *c,
-					     unsigned long long auid,
-					     uint8_t crush_rule)
-{
-  Mutex::Locker l(lock);
-  Context *onfinish = new C_PoolAsync_Safe(c);
-  int r = objecter->create_pool(name, onfinish, auid, crush_rule);
-  if (r < 0) {
-    delete onfinish;
-  }
-  return r;
-}
-
-int librados::RadosClient::pool_delete(const char *name)
-{
-  lock.Lock();
-  int r = wait_for_osdmap();
-  if (r < 0)
-    return r;
-  int tmp_pool_id = osdmap.lookup_pg_pool_name(name);
-  if (tmp_pool_id < 0) {
-    lock.Unlock();
-    return -ENOENT;
-  }
-
-  Mutex mylock("RadosClient::pool_delete::mylock");
-  Cond cond;
-  bool done;
-  int ret;
-  Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &ret);
-  ret = objecter->delete_pool(tmp_pool_id, onfinish);
-  lock.Unlock();
-
-  if (ret < 0) {
-    delete onfinish;
-  } else {
-    mylock.Lock();
-    while (!done)
-      cond.Wait(mylock);
-    mylock.Unlock();
-  }
-  return ret;
-}
-
-int librados::RadosClient::pool_delete_async(const char *name, PoolAsyncCompletionImpl *c)
-{
-  Mutex::Locker l(lock);
-  int r = wait_for_osdmap();
-  if (r < 0)
-    return r;
-  int tmp_pool_id = osdmap.lookup_pg_pool_name(name);
-  if (tmp_pool_id < 0)
-    return -ENOENT;
-
-  Context *onfinish = new C_PoolAsync_Safe(c);
-  r = objecter->delete_pool(tmp_pool_id, onfinish);
-  if (r < 0) {
-    delete onfinish;
-  }
-  return r;
-}
-
-void librados::RadosClient::register_watcher(WatchContext *wc, uint64_t *cookie)
+void librados::RadosClient::register_watcher(WatchContext *wc,
+					     uint64_t *cookie)
 {
   assert(lock.is_locked());
   wc->cookie = *cookie = ++max_watch_cookie;
@@ -729,55 +572,6 @@ int librados::RadosClient::mon_command(string name, const vector<string>& cmd,
     cond.Wait(mylock);
   mylock.Unlock();
   return rval;
-}
-
-int librados::RadosClient::osd_command(int osd, vector<string>& cmd,
-				       const bufferlist& inbl,
-				       bufferlist *poutbl, string *prs)
-{
-  Mutex mylock("RadosClient::osd_command::mylock");
-  Cond cond;
-  bool done;
-  int ret;
-  ceph_tid_t tid;
-
-  if (osd < 0)
-    return -EINVAL;
-
-  lock.Lock();
-  // XXX do anything with tid?
-  int r = objecter->osd_command(osd, cmd, inbl, &tid, poutbl, prs,
-			 new C_SafeCond(&mylock, &cond, &done, &ret));
-  lock.Unlock();
-  if (r != 0)
-    return r;
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
-  return ret;
-}
-
-int librados::RadosClient::pg_command(pg_t pgid, vector<string>& cmd,
-				      const bufferlist& inbl,
-				      bufferlist *poutbl, string *prs)
-{
-  Mutex mylock("RadosClient::pg_command::mylock");
-  Cond cond;
-  bool done;
-  int ret;
-  ceph_tid_t tid;
-  lock.Lock();
-  int r = objecter->pg_command(pgid, cmd, inbl, &tid, poutbl, prs,
-		        new C_SafeCond(&mylock, &cond, &done, &ret));
-  lock.Unlock();
-  if (r != 0)
-    return r;
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
-  return ret;
 }
 
 int librados::RadosClient::monitor_log(const string& level, rados_log_callback_t cb, void *arg)

@@ -26,7 +26,7 @@ int dupstore(ObjectStore* src, ObjectStore* dst)
   if (dst->mount() < 0) return 1;
 
   // objects
-  ceph::unordered_map<ghobject_t, coll_t> did_object;
+  map<hobject_t, coll_t> did_object;
 
   // collections
   vector<coll_t> collections;

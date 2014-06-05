@@ -447,34 +447,6 @@ void ObjectStore::Transaction::dump(ceph::Formatter *f)
       }
       break;
 
-    case Transaction::OP_SPLIT_COLLECTION:
-      {
-	coll_t cid(i.get_cid());
-	uint32_t bits(i.get_u32());
-	uint32_t rem(i.get_u32());
-	coll_t dest(i.get_cid());
-	f->dump_string("op_name", "op_split_collection_create");
-	f->dump_stream("collection") << cid;
-	f->dump_stream("bits") << bits;
-	f->dump_stream("rem") << rem;
-	f->dump_stream("dest") << dest;
-      }
-      break;
-
-    case Transaction::OP_SPLIT_COLLECTION2:
-      {
-	coll_t cid(i.get_cid());
-	uint32_t bits(i.get_u32());
-	uint32_t rem(i.get_u32());
-	coll_t dest(i.get_cid());
-	f->dump_string("op_name", "op_split_collection");
-	f->dump_stream("collection") << cid;
-	f->dump_stream("bits") << bits;
-	f->dump_stream("rem") << rem;
-	f->dump_stream("dest") << dest;
-      }
-      break;
-
     case Transaction::OP_OMAP_RMKEYRANGE:
       {
 	coll_t cid(i.get_cid());
@@ -537,13 +509,13 @@ void ObjectStore::Transaction::generate_test_instances(list<ObjectStore::Transac
   Transaction *t = new Transaction;
   t->nop();
   o.push_back(t);
-  
+
   t = new Transaction;
   coll_t c("foocoll");
   coll_t c2("foocoll2");
-  hobject_t o1(hobject_t("obj", "", 456, -1, ""));
-  hobject_t o2(hobject_t("obj2", "", 456, -1, ""));
-  hobject_t o3(hobject_t("obj3", "", 456, -1, ""));
+  hobject_t o1(hobject_t("obj", STRIPE_DATA, 91));
+  hobject_t o2(hobject_t("obj2", STRIPE_ECC, 456));
+  hobject_t o3(hobject_t("obj3", STRIPE_DATA, 456));
   t->touch(c, o1);
   bufferlist bl;
   bl.append("some data");

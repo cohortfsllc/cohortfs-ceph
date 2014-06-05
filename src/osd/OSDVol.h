@@ -12,8 +12,8 @@
  *
  */
 
-#ifndef CEPH_PG_H
-#define CEPH_PG_H
+#ifndef CEPH_OSDVOL_H
+#define CEPH_OSDVOL_H
 
 #include <boost/scoped_ptr.hpp>
 #include <boost/optional.hpp>
@@ -60,33 +60,18 @@ class OSD;
 class OSDService;
 class MOSDOp;
 
-class PG;
+class OSDVol;
 
-void intrusive_ptr_add_ref(PG *pg);
-void intrusive_ptr_release(PG *pg);
+void intrusive_ptr_add_ref(OSDVol *vol);
+void intrusive_ptr_release(OSDVol *vol);
 
-typedef boost::intrusive_ptr<PG> PGRef;
+typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
 
-struct PGPool {
-  int64_t id;
-  string name;
-  uint64_t auid;
 
-  pg_pool_t info;
-
-  PGPool(int64_t i, const char *_name, uint64_t au) :
-    id(i), auid(au) {
-    if (_name)
-      name = _name;
-  }
-
-  void update(OSDMapRef map);
-};
-
-/** PG - Replica Placement Group
+/** OSDVol - Volume abstraction in the OSD
  */
 
-class PG {
+class OSDVol {
   friend class OSD;
   friend class Watch;
 
@@ -100,14 +85,8 @@ public:
 
   std::string gen_dbg_prefix() const { return gen_prefix(); }
 
-  OSDMapRef pgb_get_osdmap() const {
-    return get_osdmap();
-  }
-  const pg_info_t &get_info() const {
+  const vol_info_t &get_info() const {
     return info;
-  }
-  const pg_pool_t &get_pool() const {
-    return pool.info;
   }
   ObjectContextRef get_obc(
     const hobject_t &hoid,
@@ -115,14 +94,7 @@ public:
     return get_object_context(hoid, true, &attrs);
   }
 
-  void update_stats(
-    const pg_stat_t &stat) {
-    info.stats = stat;
-  }
-
   entity_name_t get_cluster_msgr_name();
-
-  PerfCounters *get_logger();
 
   ceph_tid_t get_tid();
 
@@ -160,8 +132,8 @@ public:
     uint64_t bytes_written, bytes_read;
 
     utime_t mtime;
-    eversion_t at_version;       // pg's current version pointer
-    version_t user_at_version;   // pg's current user version pointer
+    eversion_t at_version;       // vol's current version pointer
+    version_t user_at_version;   // vol's current user version pointer
 
     int current_osd_subop_num;
 
@@ -176,7 +148,7 @@ public:
     MOSDOpReply *reply;
 
     utime_t readable_stamp;  // when applied on all replicas
-    PG *pg;
+    OSDVol *vol;
 
     int num_read;    ///< count read ops
     int num_write;   ///< count update ops
@@ -187,8 +159,8 @@ public:
     int async_read_result;
     unsigned inflightreads;
     friend struct OnReadComplete;
-    void start_async_reads(PG *pg);
-    void finish_read(PG *pg);
+    void start_async_reads(OSDVol *vol);
+    void finish_read(OSDVol *vol);
     bool async_reads_complete() {
       return inflightreads == 0;
     }
@@ -203,14 +175,14 @@ public:
     const OpContext& operator=(const OpContext& other);
 
     OpContext(OpRequestRef _op, osd_reqid_t _reqid, vector<OSDOp>& _ops,
-	      ObjectState *_obs, PG *_pg) :
+	      ObjectState *_obs, OSDVol *_vol) :
       op(_op), reqid(_reqid), ops(_ops), obs(_obs),
       new_obs(_obs->oi, _obs->exists),
       modify(false), user_modify(false),
       bytes_written(0), bytes_read(0), user_at_version(0),
       current_osd_subop_num(0),
       op_t(NULL),
-      data_off(0), reply(NULL), pg(_pg),
+      data_off(0), reply(NULL), vol(_vol),
       num_read(0),
       num_write(0),
       async_read_result(0),
@@ -245,7 +217,7 @@ public:
   friend struct OpContext;
 
   /*
-   * State on the PG primary associated with the replicated mutation
+   * State associated with a mutation
    */
   class Mutation {
   public:
@@ -302,7 +274,6 @@ protected:
   list<OpRequestRef> waiting_for_map;
   OSDMapRef osdmap_ref;
   OSDMapRef last_persisted_osdmap_ref;
-  PGPool pool;
 
   void queue_op(OpRequestRef op);
   void take_op_map_waiters();
@@ -424,7 +395,6 @@ public:
   void lock_suspend_timeout(ThreadPool::TPHandle &handle);
   void lock(bool no_lockdep = false);
   void unlock() {
-    //generic_dout(0) << this << " " << info.pgid << " unlock" << dendl;
     assert(!dirty_info);
     _lock.Unlock();
   }
@@ -436,31 +406,26 @@ public:
     return _lock.is_locked();
   }
 
-  void get(const string &tag);
-  void put(const string &tag);
+  void get();
+  void put();
 
   bool dirty_info;
 
-  // pg state
-  pg_info_t info;
+  // vol state
+  vol_info_t info;
   uint8_t info_struct_v;
   static const uint8_t cur_struct_v = 7;
-  static string get_info_key(pg_t pgid) {
-    return stringify(pgid) + "_info";
+  static string get_info_key(uuid_d vol) {
+    return stringify(vol) + "_info";
   }
-  static string get_epoch_key(pg_t pgid) {
-    return stringify(pgid) + "_epoch";
+  static string get_epoch_key(uuid_d vol) {
+    return stringify(vol) + "_epoch";
   }
-  hobject_t    log_oid;
-
-  /* You should not use these items without taking their respective queue locks
-   * (if they have one) */
-  xlist<PG*>::item stat_queue_item;
+  hobject_t log_oid;
 
   void handle_watch_timeout(WatchRef watch);
 
 protected:
-  unsigned    state;   // PG_STATE_*
   ObjectContextRef create_object_context(const object_info_t& oi);
   ObjectContextRef get_object_context(
     const hobject_t& soid,
@@ -470,25 +435,20 @@ protected:
 
   void context_registry_on_change();
   void object_context_destructor_callback(ObjectContext *obc);
-  struct C_PG_ObjectContext : public Context {
-    PGRef pg;
+  struct C_Vol_ObjectContext : public Context {
+    OSDVolRef osdvol;
     ObjectContext *obc;
-    C_PG_ObjectContext(PG *p, ObjectContext *o) :
-      pg(p), obc(o) {}
+    C_Vol_ObjectContext(OSDVol *v, ObjectContext *o) :
+      osdvol(v), obc(o) {}
     void finish(int r) {
-      pg->object_context_destructor_callback(obc);
+      osdvol->object_context_destructor_callback(obc);
     }
   };
 
   int find_object_context(const hobject_t& oid,
 			  ObjectContextRef *pobc,
 			  bool can_create,
-			  hobject_t *missing_oid=NULL);
-
-  void add_object_context_to_pg_stat(ObjectContextRef obc, pg_stat_t *stat);
-
-  void get_src_oloc(const object_t& oid, const object_locator_t& oloc,
-		    object_locator_t& src_oloc);
+			  hobject_t *missing_oid = NULL);
 
   // low level ops
 
@@ -561,20 +521,8 @@ protected:
   void requeue_op(OpRequestRef op);
   void requeue_ops(list<OpRequestRef> &l);
 
-  // stats that persist lazily
-  object_stat_collection_t unstable_stats;
-
-  // publish stats
-  Mutex pg_stats_publish_lock;
-  bool pg_stats_publish_valid;
-  pg_stat_t pg_stats_publish;
-
   // for ordering writes
   ceph::shared_ptr<ObjectStore::Sequencer> osr;
-
-  void _update_calc_stats();
-  void publish_stats_to_osd();
-  void clear_publish_stats();
 
 private:
   int _delete_oid(OpContext *ctx, bool no_whiteout);
@@ -588,7 +536,6 @@ public:
 
   void activate(ObjectStore::Transaction& t, epoch_t query_epoch);
   void _activate_committed(epoch_t e);
-  void all_activated_and_committed();
 
   Context *finish_sync_event;
 
@@ -598,44 +545,33 @@ public:
 
   friend class C_OSD_RepModify_Commit;
 
-  PG(OSDService *o, OSDMapRef curmap, const PGPool &_pool, pg_t p,
-     const hobject_t& oid, const hobject_t& ioid);
+  OSDVol(OSDService *o, OSDMapRef curmap, uuid_d vol, const hobject_t& ioid);
 
 
-  ~PG();
-  void log_op_stats(OpContext *ctx);
+  ~OSDVol();
 
 private:
   // Prevent copying
-  PG(const PG& rhs);
-  PG& operator=(const PG& rhs);
+  OSDVol(const OSDVol& rhs);
+  OSDVol& operator=(const OSDVol& rhs);
 
 public:
-  pg_t      get_pgid() const { return info.pgid; }
-
-  //int  get_state() const { return state; }
-  bool state_test(int m) const { return (state & m) != 0; }
-  void state_set(int m) { state |= m; }
-  void state_clear(int m) { state &= ~m; }
-
-  int get_state() const { return state; }
-  bool       is_active() const { return state_test(PG_STATE_ACTIVE); }
-  bool       is_down() const { return state_test(PG_STATE_DOWN); }
+  uuid_d get_volid() const { return info.volume; }
 
   bool  is_empty() const { return info.last_update == eversion_t(0,0); }
 
-  void init(pg_history_t& history, ObjectStore::Transaction *t);
+  void init(ObjectStore::Transaction *t);
 
 private:
   void write_info(ObjectStore::Transaction& t);
   void populate_obc_watchers(ObjectContextRef obc);
   void get_obc_watchers(ObjectContextRef obc,
-			list<obj_watch_item_t> &pg_watchers);
+			list<obj_watch_item_t> &vol_watchers);
   void check_blacklisted_obc_watchers(ObjectContextRef obc);
 
 public:
   static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
-			 pg_info_t &info, coll_t coll, hobject_t &infos_oid,
+			 vol_info_t &info, coll_t coll, hobject_t &infos_oid,
 			 uint8_t info_struct_v, bool force_ver = false);
   void write_if_dirty(ObjectStore::Transaction& t);
 
@@ -652,20 +588,19 @@ public:
 
   static int read_info(
     ObjectStore *store, const coll_t coll,
-    bufferlist &bl, pg_info_t &info,
+    bufferlist &bl, vol_info_t &info,
     hobject_t &infos_oid, uint8_t &);
   void read_state(ObjectStore *store, bufferlist &bl);
   static epoch_t peek_map_epoch(ObjectStore *store, coll_t coll,
 				hobject_t &infos_oid, bufferlist *bl);
-  void get_colls(list<coll_t> *out) {
-    out->push_back(coll);
+  coll_t get_coll(void) {
+    return coll;
   }
 
   // OpRequest queueing
   bool can_discard_op(OpRequestRef op);
   bool can_discard_request(OpRequestRef op);
 
-  template<typename T, int MSGTYPE>
   bool can_discard_replica_op(OpRequestRef op);
 
   static bool op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op);
@@ -677,12 +612,8 @@ public:
     return e <= get_osdmap()->get_epoch();
   }
 
-  bool op_has_sufficient_caps(OpRequestRef op);
-
-
   void take_waiters();
-  void handle_advance_map(
-    OSDMapRef osdmap, OSDMapRef lastmap);
+  void handle_advance_map(OSDMapRef osdmap);
   void handle_activate_map();
 
   void on_removal(ObjectStore::Transaction *t);
@@ -695,7 +626,6 @@ public:
 		 bufferlist& odata);
 
   void on_change(ObjectStore::Transaction *t);
-  void on_activate();
   void on_shutdown();
   void check_blacklisted_watchers();
   void get_watchers(std::list<obj_watch_item_t>&);
@@ -703,6 +633,7 @@ public:
   // From the Backend
 protected:
   const coll_t coll;
+  utime_t last_became_active;
 
 private:
   struct RepModify {
@@ -744,8 +675,8 @@ private:
 			  Context *on_complete);
 };
 
-ostream& operator<<(ostream& out, const PG& pg);
-void intrusive_ptr_add_ref(PG::Mutation *mutation);
-void intrusive_ptr_release(PG::Mutation *mutation);
+ostream& operator<<(ostream& out, const OSDVol& vol);
+void intrusive_ptr_add_ref(OSDVol::Mutation *mutation);
+void intrusive_ptr_release(OSDVol::Mutation *mutation);
 
 #endif

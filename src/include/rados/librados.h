@@ -135,9 +135,7 @@ typedef void *rados_config_t;
  *
  * An io context encapsulates a few settings for all I/O operations
  * done on it:
- * - pool - set when the io context is created (see rados_ioctx_create())
- * - object locator for all single-object operations (see
- *   rados_ioctx_locator_set_key())
+ * - volume - set when the io context is created (see rados_ioctx_create())
  *
  * @warning changing any of these settings is not thread-safe -
  * librados users must synchronize any of these changes on their own,
@@ -161,26 +159,6 @@ typedef void *rados_xattrs_iter_t;
  * rados_omap_get_end().
  */
 typedef void *rados_omap_iter_t;
-
-/**
- * @struct rados_pool_stat_t
- * Usage information for a pool.
- */
-struct rados_pool_stat_t {
-  /// space used in bytes
-  uint64_t num_bytes;
-  /// space used in KB
-  uint64_t num_kb;
-  /// number of objects in the pool
-  uint64_t num_objects;
-  /// number of objects replicated fewer times than they should be
-  /// (but found on at least one OSD)
-  uint64_t num_objects_degraded;
-  uint64_t num_rd;
-  uint64_t num_rd_kb;
-  uint64_t num_wr;
-  uint64_t num_wr_kb;
-};
 
 /**
  * @struct rados_cluster_stat_t
@@ -496,35 +474,6 @@ int rados_cluster_fsid(rados_t cluster, char *buf, size_t len);
 int rados_wait_for_latest_osdmap(rados_t cluster);
 
 /**
- * @defgroup librados_h_pools Pools
- *
- * RADOS pools are separate namespaces for objects. Pools may have
- * different crush rules associated with them, so they could have
- * differing replication levels or placement strategies. RADOS
- * permissions are also tied to pools - users can have different read,
- * write, and execute permissions on a per-pool basis.
- *
- * @{
- */
-
-/**
- * List pools
- *
- * Gets a list of pool names as NULL-terminated strings.  The pool
- * names will be placed in the supplied buffer one after another.
- * After the last pool name, there will be two 0 bytes in a row.
- *
- * If len is too short to fit all the pool name entries we need, we will fill
- * as much as we can.
- *
- * @param cluster cluster handle
- * @param buf output buffer
- * @param len output buffer length
- * @returns length of the buffer we would need to list all pools
- */
-int rados_pool_list(rados_t cluster, char *buf, size_t len);
-
-/**
  * Get a configuration handle for a rados cluster handle
  *
  * This handle is valid only as long as the cluster handle is valid.
@@ -548,14 +497,15 @@ uint64_t rados_get_instance_id(rados_t cluster);
  * Create an io context
  *
  * The io context allows you to perform operations within a particular
- * pool. For more details see rados_ioctx_t.
+ * volume. For more details see rados_ioctx_t.
  *
- * @param cluster which cluster the pool is in
- * @param pool_name name of the pool
+ * @param cluster which cluster the volume is in
+ * @param volume_name name of the volume
  * @param ioctx where to store the io context
  * @returns 0 on success, negative error code on failure
  */
-int rados_ioctx_create(rados_t cluster, const char *pool_name, rados_ioctx_t *ioctx);
+int rados_ioctx_create(rados_t cluster, const char *vol_name,
+		       rados_ioctx_t *ioctx);
 
 /**
  * The opposite of rados_ioctx_create
@@ -574,9 +524,9 @@ int rados_ioctx_create(rados_t cluster, const char *pool_name, rados_ioctx_t *io
 void rados_ioctx_destroy(rados_ioctx_t io);
 
 /**
- * Get configuration hadnle for a pool handle
+ * Get configuration hadnle for an IO Context
  *
- * @param io pool handle
+ * @param io context
  * @returns rados_config_t for this cluster
  */
 rados_config_t rados_ioctx_cct(rados_ioctx_t io);
@@ -592,189 +542,47 @@ rados_config_t rados_ioctx_cct(rados_ioctx_t io);
 rados_t rados_ioctx_get_cluster(rados_ioctx_t io);
 
 /**
- * Get pool usage statistics
+ * Get the uuid of a volume
  *
- * Fills in a rados_pool_stat_t after querying the cluster.
- *
- * @param io determines which pool to query
- * @param stats where to store the results
- * @returns 0 on success, negative error code on failure
+ * @param cluster which cluster the volume is in
+ * @param vol_name which volume to look up
+ * @param id of the volume
+ * @returns -ENOENT if the volume is not found
  */
-int rados_ioctx_pool_stat(rados_ioctx_t io, struct rados_pool_stat_t *stats);
+  void rados_volume_lookup(rados_t cluster, const char *vol_name, uuid_t &id);
 
 /**
- * Get the id of a pool
+ * Get the name of a volume
  *
- * @param cluster which cluster the pool is in
- * @param pool_name which pool to look up
- * @returns id of the pool
- * @returns -ENOENT if the pool is not found
- */
-int64_t rados_pool_lookup(rados_t cluster, const char *pool_name);
-
-/**
- * Get the name of a pool
- *
- * @param cluster which cluster the pool is in
- * @param id the id of the pool
- * @param buf where to store the pool name
+ * @param cluster which cluster the volume is in
+ * @param volume the id of the volume
+ * @param buf where to store the volume name
  * @param maxlen size of buffer where name will be stored
  * @returns length of string stored, or -ERANGE if buffer too small
  */
-int rados_pool_reverse_lookup(rados_t cluster, int64_t id, char *buf,
+int rados_volume_reverse_lookup(rados_t cluster, uuid_t id, char *buf,
 			      size_t maxlen);
 
 /**
- * Create a pool with default settings
- *
- * The default owner is the admin user (auid 0).
- * The default crush rule is rule 0.
- *
- * @param cluster the cluster in which the pool will be created
- * @param pool_name the name of the new pool
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_create(rados_t cluster, const char *pool_name);
-
-/**
- * Create a pool owned by a specific auid
- *
- * The auid is the authenticated user id to give ownership of the pool.
- * TODO: document auid and the rest of the auth system
- *
- * @param cluster the cluster in which the pool will be created
- * @param pool_name the name of the new pool
- * @param auid the id of the owner of the new pool
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_create_with_auid(rados_t cluster, const char *pool_name, uint64_t auid);
-
-/**
- * Create a pool with a specific CRUSH rule
- *
- * @param cluster the cluster in which the pool will be created
- * @param pool_name the name of the new pool
- * @param crush_rule_num which rule to use for placement in the new pool1
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_create_with_crush_rule(rados_t cluster, const char *pool_name,
-				      uint8_t crush_rule_num);
-
-/**
- * Create a pool with a specific CRUSH rule and auid
- *
- * This is a combination of rados_pool_create_with_crush_rule() and
- * rados_pool_create_with_auid().
- *
- * @param cluster the cluster in which the pool will be created
- * @param pool_name the name of the new pool
- * @param crush_rule_num which rule to use for placement in the new pool2
- * @param auid the id of the owner of the new pool
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_create_with_all(rados_t cluster, const char *pool_name, uint64_t auid,
-			       uint8_t crush_rule_num);
-
-/**
- * Delete a pool and all data inside it
- *
- * The pool is removed from the cluster immediately,
- * but the actual data is deleted in the background.
- *
- * @param cluster the cluster the pool is in
- * @param pool_name which pool to delete
- * @returns 0 on success, negative error code on failure
- */
-int rados_pool_delete(rados_t cluster, const char *pool_name);
-
-/**
- * Attempt to change an io context's associated auid "owner."
- *
- * Requires that you have write permission on both the current and new
- * auid.
- *
- * @param io reference to the pool to change.
- * @param auid the auid you wish the io to have.
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_pool_set_auid(rados_ioctx_t io, uint64_t auid);
-
-/**
- * Get the auid of a pool
- *
- * @param io pool to query
- * @param auid where to store the auid
- * @returns 0 on success, negative error code on failure
- */
-int rados_ioctx_pool_get_auid(rados_ioctx_t io, uint64_t *auid);
-
-/**
- * Get the pool id of the io context
+ * Get the volume id of the io context
  *
  * @param io the io context to query
- * @returns the id of the pool the io context uses
+ * @param id the uuid of the volume the io context uses
  */
-int64_t rados_ioctx_get_id(rados_ioctx_t io);
+void rados_ioctx_get_id(rados_ioctx_t io, uuid_t id);
 
 /**
- * Get the pool name of the io context
+ * Get the volume name of the io context
  *
  * @param io the io context to query
  * @param buf pointer to buffer where name will be stored
  * @param maxlen size of buffer where name will be stored
  * @returns length of string stored, or -ERANGE if buffer too small
  */
-int rados_ioctx_get_pool_name(rados_ioctx_t io, char *buf, unsigned maxlen);
-
-/** @} pools */
-
-/**
- * @defgroup librados_h_obj_loc Object Locators
- *
- * @{
- */
-
-/**
- * Set the key for mapping objects to pgs within an io context.
- *
- * The key is used instead of the object name to determine which
- * placement groups an object is put in. This affects all subsequent
- * operations of the io context - until a different locator key is
- * set, all objects in this io context will be placed in the same pg.
- *
- * This is useful if you need to do clone_range operations, which must
- * be done with the source and destination objects in the same pg.
- *
- * @param io the io context to change
- * @param key the key to use as the object locator, or NULL to discard
- * any previously set key
- */
-void rados_ioctx_locator_set_key(rados_ioctx_t io, const char *key);
-
-/**
- * Set the namespace for objects within an io context
- *
- * The namespace specification further refines a pool into different
- * domains.  The mapping of objects to pgs is also based on this
- * value.
- *
- * @param io the io context to change
- * @param nspace the name to use as the namespace, or NULL use the
- * default namespace
- */
-void rados_ioctx_set_namespace(rados_ioctx_t io, const char *nspace);
-/** @} obj_loc */
+int rados_ioctx_get_volume_name(rados_ioctx_t io, char *buf, unsigned maxlen);
 
 /**
  * @defgroup librados_h_synch_io Synchronous I/O
- * Writes are replicated to a number of OSDs based on the
- * configuration of the pool they are in. These write functions block
- * until data is in memory on all replicas of the object they're
- * writing to - they are equivalent to doing the corresponding
- * asynchronous write, and the calling
- * rados_ioctx_wait_for_complete().  For greater data safety, use the
- * asynchronous functions and rados_aio_wait_for_safe().
- *
  * @{
  */
 
@@ -838,12 +646,13 @@ int rados_append(rados_ioctx_t io, const char *oid, const char *buf, size_t len)
  * @returns number of bytes read on success, negative error code on
  * failure
  */
-int rados_read(rados_ioctx_t io, const char *oid, char *buf, size_t len, uint64_t off);
+int rados_read(rados_ioctx_t io, const char *oid, char *buf, size_t len,
+	       uint64_t off);
 
 /**
  * Delete an object
  *
- * @param io the pool to delete the object from
+ * @param io the IO context to delete the object through
  * @param oid the name of the object to delete
  * @returns 0 on success, negative error code on failure
  */
@@ -1449,7 +1258,7 @@ typedef void (*rados_watchcb_t)(uint8_t opcode, uint64_t ver, void *arg);
  * @note BUG: the ver parameter does not work, and -ERANGE will never be returned
  *            (http://www.tracker.newdream.net/issues/2592)
  *
- * @param io the pool the object is in
+ * @param io the context the object is in
  * @param o the object to watch
  * @param ver expected version of the object
  * @param handle where to store the internal id assigned to this watch
@@ -1458,8 +1267,8 @@ typedef void (*rados_watchcb_t)(uint8_t opcode, uint64_t ver, void *arg);
  * @returns 0 on success, negative error code on failure
  * @returns -ERANGE if the version of the object is greater than ver
  */
-int rados_watch(rados_ioctx_t io, const char *o, uint64_t ver, uint64_t *handle,
-                rados_watchcb_t watchcb, void *arg);
+int rados_watch(rados_ioctx_t io, const char *o, uint64_t ver,
+		uint64_t *handle, rados_watchcb_t watchcb, void *arg);
 
 /**
  * Unregister an interest in an object
@@ -1467,7 +1276,7 @@ int rados_watch(rados_ioctx_t io, const char *o, uint64_t ver, uint64_t *handle,
  * Once this completes, no more notifies will be sent to us for this
  * watch. This should be called to clean up unneeded watchers.
  *
- * @param io the pool the object is in
+ * @param io the context the object is in
  * @param o the name of the watched object
  * @param handle which watch to unregister
  * @returns 0 on success, negative error code on failure
@@ -1483,7 +1292,7 @@ int rados_unwatch(rados_ioctx_t io, const char *o, uint64_t handle);
  * @note BUG: the timeout is not changeable via the C API
  * @note BUG: the bufferlist is inaccessible in a rados_watchcb_t
  *
- * @param io the pool the object is in
+ * @param io the context the object is in
  * @param o the name of the object
  * @param ver obsolete - just pass zero
  * @param buf data to send to watchers
@@ -1507,15 +1316,15 @@ int rados_notify(rados_ioctx_t io, const char *o, uint64_t ver, const char *buf,
  * submitted with a LIBRADOS_OP_FLAG_FAILOK flag set) and is not
  * guaranteed to do anything on the backend.
  *
- * @param io the pool the object is in
+ * @param io the context the object is in
  * @param o the name of the object
  * @param expected_object_size expected size of the object, in bytes
  * @param expected_write_size expected size of writes to the object, in bytes
  * @returns 0 on success, negative error code on failure
  */
 int rados_set_alloc_hint(rados_ioctx_t io, const char *o,
-                         uint64_t expected_object_size,
-                         uint64_t expected_write_size);
+			 uint64_t expected_object_size,
+			 uint64_t expected_write_size);
 
 /** @} Hints */
 
@@ -2181,18 +1990,6 @@ int rados_mon_command_target(rados_t cluster, const char *name,
  * @param buf buffer pointer
  */
 void rados_buffer_free(char *buf);
-
-int rados_osd_command(rados_t cluster, int osdid, const char **cmd,
-		      size_t cmdlen,
-		      const char *inbuf, size_t inbuflen,
-		      char **outbuf, size_t *outbuflen,
-		      char **outs, size_t *outslen);
-
-int rados_pg_command(rados_t cluster, const char *pgstr, const char **cmd,
-		     size_t cmdlen,
-		     const char *inbuf, size_t inbuflen,
-		     char **outbuf, size_t *outbuflen,
-		     char **outs, size_t *outslen);
 
 /*
  * This is not a doxygen comment leadin, because doxygen breaks on

@@ -63,13 +63,9 @@ private:
 
   Objecter *objecter;
 
-  map<string, int64_t> pool_cache;
-
   epoch_t osdmap_epoch;
-  epoch_t pool_cache_epoch;
 
   Mutex lock;
-  RWLock pool_cache_rwl;
   Cond cond;
   SafeTimer timer;
   int refcnt;
@@ -94,24 +90,10 @@ public:
 
   int wait_for_latest_osdmap();
 
-  int create_ioctx(const char *name, IoCtxImpl **io);
-
+  int create_ioctx(const string &name, IoCtxImpl **io);
+  int create_ioctx(const uuid_d &volume, IoCtxImpl **io);
   int get_fsid(std::string *s);
-  int64_t lookup_pool(const char *name);
-  const char *get_pool_name(int64_t pool_id);
-  int pool_get_auid(uint64_t pool_id, unsigned long long *auid);
-  int pool_get_name(uint64_t pool_id, std::string *auid);
-
-  int pool_list(std::list<string>& ls);
-  int get_pool_stats(std::list<string>& ls, map<string,::pool_stat_t>& result);
   int get_fs_stats(ceph_statfs& result);
-
-  int pool_create(string& name, unsigned long long auid=0, uint8_t crush_rule=0);
-  int pool_create_async(string& name, PoolAsyncCompletionImpl *c, unsigned long long auid=0,
-			uint8_t crush_rule=0);
-  int pool_delete(const char *name);
-
-  int pool_delete_async(const char *name, PoolAsyncCompletionImpl *c);
 
   // watch/notify
   uint64_t max_watch_cookie;
@@ -121,17 +103,13 @@ public:
   void unregister_watcher(uint64_t cookie);
   void watch_notify(MWatchNotify *m);
   int mon_command(const vector<string>& cmd, const bufferlist &inbl,
-	          bufferlist *outbl, string *outs);
+		  bufferlist *outbl, string *outs);
   int mon_command(int rank,
 		  const vector<string>& cmd, const bufferlist &inbl,
-	          bufferlist *outbl, string *outs);
+		  bufferlist *outbl, string *outs);
   int mon_command(string name,
 		  const vector<string>& cmd, const bufferlist &inbl,
-	          bufferlist *outbl, string *outs);
-  int osd_command(int osd, vector<string>& cmd, const bufferlist& inbl,
-                  bufferlist *poutbl, string *prs);
-  int pg_command(pg_t pgid, vector<string>& cmd, const bufferlist& inbl,
-	         bufferlist *poutbl, string *prs);
+		  bufferlist *outbl, string *outs);
 
   void handle_log(MLog *m);
   int monitor_log(const string& level, rados_log_callback_t cb, void *arg);
@@ -139,6 +117,9 @@ public:
   void get();
   bool put();
   void blacklist_self(bool set);
+
+  uuid_d lookup_volume(const string& name);
+  string lookup_volume(const uuid_d& name);
 };
 
 #endif

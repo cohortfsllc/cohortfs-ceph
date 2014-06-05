@@ -16,14 +16,6 @@ set(monmaptool_srcs
 add_executable(monmaptool ${monmaptool_srcs})
 target_link_libraries(monmaptool global)
 
-#crushtool
-set(crushtool_srcs
-	crushtool.cc
-)
-
-add_executable(crushtool ${crushtool_srcs})
-target_link_libraries(crushtool global)
-
 #osdmaptool
 set(osdomaptool_srcs 
 	osdmaptool.cc
@@ -55,7 +47,6 @@ install(TARGETS
   ceph-conf
   monmaptool
   osdmaptool
-  crushtool
   ceph-authtool
   ceph_mon_store_converter
   DESTINATION bin)

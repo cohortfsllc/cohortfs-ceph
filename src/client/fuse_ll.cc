@@ -473,7 +473,6 @@ static void fuse_ll_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg, st
       l.stripe_unit = layout.fl_stripe_unit;
       l.stripe_count = layout.fl_stripe_count;
       l.object_size = layout.fl_object_size;
-      l.data_pool = layout.fl_pg_pool;
       fuse_reply_ioctl(req, 0, &l, sizeof(struct ceph_ioctl_layout));
     }
     break;

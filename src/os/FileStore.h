@@ -17,6 +17,7 @@
 #define CEPH_FILESTORE_H
 
 #include "include/types.h"
+#include "CollectionIndex.h"
 
 #include <map>
 #include <deque>
@@ -35,7 +36,6 @@ using namespace std;
 #include "common/WorkQueue.h"
 
 #include "common/Mutex.h"
-#include "HashIndex.h"
 #include "IndexManager.h"
 #include "ObjectMap.h"
 #include "SequencerPosition.h"
@@ -62,6 +62,8 @@ static const __SWORD_TYPE XFS_SUPER_MAGIC(0x58465342);
 #ifndef ZFS_SUPER_MAGIC
 static const __SWORD_TYPE ZFS_SUPER_MAGIC(0x2fc12fc1);
 #endif
+
+typedef CollectionIndex::IndexedPath IndexedPath;
 
 
 enum fs_types {
@@ -562,11 +564,6 @@ private:
 		       const SequencerPosition &spos);
   int _omap_setheader(coll_t cid, const hobject_t &oid, const bufferlist &bl,
 		      const SequencerPosition &spos);
-  int _split_collection(coll_t cid, uint32_t bits, uint32_t rem, coll_t dest,
-                        const SequencerPosition &spos);
-  int _split_collection_create(coll_t cid, uint32_t bits, uint32_t rem,
-			       coll_t dest,
-			       const SequencerPosition &spos);
 
   virtual const char** get_tracked_conf_keys() const;
   virtual void handle_conf_change(const struct md_config_t *conf,

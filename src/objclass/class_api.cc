@@ -5,7 +5,7 @@
 #include "common/debug.h"
 
 #include "objclass/objclass.h"
-#include "osd/PG.h"
+#include "osd/OSDVol.h"
 
 #include "osd/ClassHandler.h"
 
@@ -83,10 +83,10 @@ int cls_unregister_method(cls_method_handle_t handle)
 }
 
 int cls_call(cls_method_context_t hctx, const char *cls, const char *method,
-                                 char *indata, int datalen,
-                                 char **outdata, int *outdatalen)
+	     char *indata, int datalen,
+	     char **outdata, int *outdatalen)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   bufferlist idata;
   vector<OSDOp> nops(1);
   OSDOp& op = nops[0];
@@ -99,7 +99,7 @@ int cls_call(cls_method_context_t hctx, const char *cls, const char *method,
   op.indata.append(cls, op.op.cls.class_len);
   op.indata.append(method, op.op.cls.method_len);
   op.indata.append(indata, datalen);
-  r = (*pctx)->pg->do_osd_ops(*pctx, nops);
+  r = (*pctx)->vol->do_osd_ops(*pctx, nops);
 
   *outdata = (char *)malloc(op.outdata.length());
   if (!*outdata)
@@ -113,7 +113,7 @@ int cls_call(cls_method_context_t hctx, const char *cls, const char *method,
 int cls_getxattr(cls_method_context_t hctx, const char *name,
                                  char **outdata, int *outdatalen)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   bufferlist name_data;
   vector<OSDOp> nops(1);
   OSDOp& op = nops[0];
@@ -122,7 +122,7 @@ int cls_getxattr(cls_method_context_t hctx, const char *name,
   op.op.op = CEPH_OSD_OP_GETXATTR;
   op.indata.append(name);
   op.op.xattr.name_len = strlen(name);
-  r = (*pctx)->pg->do_osd_ops(*pctx, nops);
+  r = (*pctx)->vol->do_osd_ops(*pctx, nops);
 
   *outdata = (char *)malloc(op.outdata.length());
   if (!*outdata)
@@ -136,7 +136,7 @@ int cls_getxattr(cls_method_context_t hctx, const char *name,
 int cls_setxattr(cls_method_context_t hctx, const char *name,
                                  const char *value, int val_len)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   bufferlist name_data;
   vector<OSDOp> nops(1);
   OSDOp& op = nops[0];
@@ -147,20 +147,20 @@ int cls_setxattr(cls_method_context_t hctx, const char *name,
   op.indata.append(value);
   op.op.xattr.name_len = strlen(name);
   op.op.xattr.value_len = val_len;
-  r = (*pctx)->pg->do_osd_ops(*pctx, nops);
+  r = (*pctx)->vol->do_osd_ops(*pctx, nops);
 
   return r;
 }
 
 int cls_read(cls_method_context_t hctx, int ofs, int len,
-                                 char **outdata, int *outdatalen)
+	     char **outdata, int *outdatalen)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   ops[0].op.op = CEPH_OSD_OP_SYNC_READ;
   ops[0].op.extent.offset = ofs;
   ops[0].op.extent.length = len;
-  int r = (*pctx)->pg->do_osd_ops(*pctx, ops);
+  int r = (*pctx)->vol->do_osd_ops(*pctx, ops);
 
   *outdata = (char *)malloc(ops[0].outdata.length());
   if (!*outdata)
@@ -176,35 +176,35 @@ int cls_read(cls_method_context_t hctx, int ofs, int len,
 
 int cls_get_request_origin(cls_method_context_t hctx, entity_inst_t *origin)
 {
-  PG::OpContext **pctx = static_cast<PG::OpContext **>(hctx);
+  OSDVol::OpContext **pctx = static_cast<OSDVol::OpContext **>(hctx);
   *origin = (*pctx)->op->get_req()->get_orig_source_inst();
   return 0;
 }
 
 int cls_cxx_create(cls_method_context_t hctx, bool exclusive)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   ops[0].op.op = CEPH_OSD_OP_CREATE;
   ops[0].op.flags = (exclusive ? CEPH_OSD_OP_FLAG_EXCL : 0);
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_remove(cls_method_context_t hctx)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   ops[0].op.op = CEPH_OSD_OP_DELETE;
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_stat(cls_method_context_t hctx, uint64_t *size, time_t *mtime)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   int ret;
   ops[0].op.op = CEPH_OSD_OP_STAT;
-  ret = (*pctx)->pg->do_osd_ops(*pctx, ops);
+  ret = (*pctx)->vol->do_osd_ops(*pctx, ops);
   if (ret < 0)
     return ret;
   bufferlist::iterator iter = ops[0].outdata.begin();
@@ -225,13 +225,13 @@ int cls_cxx_stat(cls_method_context_t hctx, uint64_t *size, time_t *mtime)
 
 int cls_cxx_read(cls_method_context_t hctx, int ofs, int len, bufferlist *outbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   int ret;
   ops[0].op.op = CEPH_OSD_OP_SYNC_READ;
   ops[0].op.extent.offset = ofs;
   ops[0].op.extent.length = len;
-  ret = (*pctx)->pg->do_osd_ops(*pctx, ops);
+  ret = (*pctx)->vol->do_osd_ops(*pctx, ops);
   if (ret < 0)
     return ret;
   outbl->claim(ops[0].outdata);
@@ -240,29 +240,29 @@ int cls_cxx_read(cls_method_context_t hctx, int ofs, int len, bufferlist *outbl)
 
 int cls_cxx_write(cls_method_context_t hctx, int ofs, int len, bufferlist *inbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   ops[0].op.op = CEPH_OSD_OP_WRITE;
   ops[0].op.extent.offset = ofs;
   ops[0].op.extent.length = len;
   ops[0].indata = *inbl;
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_write_full(cls_method_context_t hctx, bufferlist *inbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   ops[0].op.op = CEPH_OSD_OP_WRITEFULL;
   ops[0].op.extent.offset = 0;
   ops[0].op.extent.length = inbl->length();
   ops[0].indata = *inbl;
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_replace(cls_method_context_t hctx, int ofs, int len, bufferlist *inbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(2);
   ops[0].op.op = CEPH_OSD_OP_TRUNCATE;
   ops[0].op.extent.offset = 0;
@@ -271,13 +271,13 @@ int cls_cxx_replace(cls_method_context_t hctx, int ofs, int len, bufferlist *inb
   ops[1].op.extent.offset = ofs;
   ops[1].op.extent.length = len;
   ops[1].indata = *inbl;
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_getxattr(cls_method_context_t hctx, const char *name,
-                     bufferlist *outbl)
+		     bufferlist *outbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   bufferlist name_data;
   vector<OSDOp> nops(1);
   OSDOp& op = nops[0];
@@ -286,7 +286,7 @@ int cls_cxx_getxattr(cls_method_context_t hctx, const char *name,
   op.op.op = CEPH_OSD_OP_GETXATTR;
   op.indata.append(name);
   op.op.xattr.name_len = strlen(name);
-  r = (*pctx)->pg->do_osd_ops(*pctx, nops);
+  r = (*pctx)->vol->do_osd_ops(*pctx, nops);
   if (r < 0)
     return r;
 
@@ -296,13 +296,13 @@ int cls_cxx_getxattr(cls_method_context_t hctx, const char *name,
 
 int cls_cxx_getxattrs(cls_method_context_t hctx, map<string, bufferlist> *attrset)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> nops(1);
   OSDOp& op = nops[0];
   int r;
 
   op.op.op = CEPH_OSD_OP_GETXATTRS;
-  r = (*pctx)->pg->do_osd_ops(*pctx, nops);
+  r = (*pctx)->vol->do_osd_ops(*pctx, nops);
   if (r < 0)
     return r;
 
@@ -318,7 +318,7 @@ int cls_cxx_getxattrs(cls_method_context_t hctx, map<string, bufferlist> *attrse
 int cls_cxx_setxattr(cls_method_context_t hctx, const char *name,
                      bufferlist *inbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   bufferlist name_data;
   vector<OSDOp> nops(1);
   OSDOp& op = nops[0];
@@ -329,14 +329,14 @@ int cls_cxx_setxattr(cls_method_context_t hctx, const char *name,
   op.indata.append(*inbl);
   op.op.xattr.name_len = strlen(name);
   op.op.xattr.value_len = inbl->length();
-  r = (*pctx)->pg->do_osd_ops(*pctx, nops);
+  r = (*pctx)->vol->do_osd_ops(*pctx, nops);
 
   return r;
 }
 
 int cls_cxx_map_get_all_vals(cls_method_context_t hctx, map<string, bufferlist>* vals)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   int ret;
@@ -351,8 +351,8 @@ int cls_cxx_map_get_all_vals(cls_method_context_t hctx, map<string, bufferlist>*
   ::encode(filter_prefix, op.indata);
 
   op.op.op = CEPH_OSD_OP_OMAPGETVALS;
-  
-  ret = (*pctx)->pg->do_osd_ops(*pctx, ops);
+
+  ret = (*pctx)->vol->do_osd_ops(*pctx, ops);
   if (ret < 0)
     return ret;
 
@@ -368,7 +368,7 @@ int cls_cxx_map_get_all_vals(cls_method_context_t hctx, map<string, bufferlist>*
 int cls_cxx_map_get_keys(cls_method_context_t hctx, const string &start_obj,
 			 uint64_t max_to_get, set<string> *keys)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   int ret;
@@ -378,7 +378,7 @@ int cls_cxx_map_get_keys(cls_method_context_t hctx, const string &start_obj,
 
   op.op.op = CEPH_OSD_OP_OMAPGETKEYS;
 
-  ret = (*pctx)->pg->do_osd_ops(*pctx, ops);
+  ret = (*pctx)->vol->do_osd_ops(*pctx, ops);
   if (ret < 0)
     return ret;
 
@@ -395,7 +395,7 @@ int cls_cxx_map_get_vals(cls_method_context_t hctx, const string &start_obj,
 			 const string &filter_prefix, uint64_t max_to_get,
 			 map<string, bufferlist> *vals)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   int ret;
@@ -407,8 +407,8 @@ int cls_cxx_map_get_vals(cls_method_context_t hctx, const string &start_obj,
   ::encode(filter_prefix, op.indata);
 
   op.op.op = CEPH_OSD_OP_OMAPGETVALS;
-  
-  ret = (*pctx)->pg->do_osd_ops(*pctx, ops);
+
+  ret = (*pctx)->vol->do_osd_ops(*pctx, ops);
   if (ret < 0)
     return ret;
 
@@ -423,12 +423,12 @@ int cls_cxx_map_get_vals(cls_method_context_t hctx, const string &start_obj,
 
 int cls_cxx_map_read_header(cls_method_context_t hctx, bufferlist *outbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   int ret;
   op.op.op = CEPH_OSD_OP_OMAPGETHEADER;
-  ret = (*pctx)->pg->do_osd_ops(*pctx, ops);
+  ret = (*pctx)->vol->do_osd_ops(*pctx, ops);
   if (ret < 0)
     return ret;
 
@@ -440,7 +440,7 @@ int cls_cxx_map_read_header(cls_method_context_t hctx, bufferlist *outbl)
 int cls_cxx_map_get_val(cls_method_context_t hctx, const string &key,
 			bufferlist *outbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   int ret;
@@ -450,7 +450,7 @@ int cls_cxx_map_get_val(cls_method_context_t hctx, const string &key,
   ::encode(k, op.indata);
 
   op.op.op = CEPH_OSD_OP_OMAPGETVALSBYKEYS;
-  ret = (*pctx)->pg->do_osd_ops(*pctx, ops);
+  ret = (*pctx)->vol->do_osd_ops(*pctx, ops);
   if (ret < 0)
     return ret;
 
@@ -473,7 +473,7 @@ int cls_cxx_map_get_val(cls_method_context_t hctx, const string &key,
 int cls_cxx_map_set_val(cls_method_context_t hctx, const string &key,
 			bufferlist *inbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   bufferlist& update_bl = op.indata;
@@ -483,13 +483,13 @@ int cls_cxx_map_set_val(cls_method_context_t hctx, const string &key,
 
   op.op.op = CEPH_OSD_OP_OMAPSETVALS;
 
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_map_set_vals(cls_method_context_t hctx,
 			 const std::map<string, bufferlist> *map)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   bufferlist& update_bl = op.indata;
@@ -497,35 +497,35 @@ int cls_cxx_map_set_vals(cls_method_context_t hctx,
 
   op.op.op = CEPH_OSD_OP_OMAPSETVALS;
 
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_map_clear(cls_method_context_t hctx)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
 
   op.op.op = CEPH_OSD_OP_OMAPCLEAR;
 
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_map_write_header(cls_method_context_t hctx, bufferlist *inbl)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   op.indata.claim(*inbl);
 
   op.op.op = CEPH_OSD_OP_OMAPSETHEADER;
 
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_cxx_map_remove_key(cls_method_context_t hctx, const string &key)
 {
-  PG::OpContext **pctx = (PG::OpContext **)hctx;
+  OSDVol::OpContext **pctx = (OSDVol::OpContext **)hctx;
   vector<OSDOp> ops(1);
   OSDOp& op = ops[0];
   bufferlist& update_bl = op.indata;
@@ -536,7 +536,7 @@ int cls_cxx_map_remove_key(cls_method_context_t hctx, const string &key)
 
   op.op.op = CEPH_OSD_OP_OMAPRMKEYS;
 
-  return (*pctx)->pg->do_osd_ops(*pctx, ops);
+  return (*pctx)->vol->do_osd_ops(*pctx, ops);
 }
 
 int cls_gen_random_bytes(char *buf, int size)
@@ -571,15 +571,15 @@ int cls_gen_rand_base64(char *dest, int size) /* size should be the required str
 
 uint64_t cls_current_version(cls_method_context_t hctx)
 {
-  PG::OpContext *ctx = *(PG::OpContext **)hctx;
+  OSDVol::OpContext *ctx = *(OSDVol::OpContext **)hctx;
 
-  return ctx->pg->info.last_user_version;
+  return ctx->vol->info.last_user_version;
 }
 
 
 int cls_current_subop_num(cls_method_context_t hctx)
 {
-  PG::OpContext *ctx = *(PG::OpContext **)hctx;
+  OSDVol::OpContext *ctx = *(OSDVol::OpContext **)hctx;
 
   return ctx->current_osd_subop_num;
 }

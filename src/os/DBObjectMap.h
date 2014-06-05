@@ -274,15 +274,14 @@ public:
   };
 
   /// String munging (public for testing)
-  static string hobject_key(const hobject_t &oid);
-  static string hobject_key_v0(coll_t c, const hobject_t &oid);
-  static bool parse_hobject_key_v0(const string &in,
-				   coll_t *c, hobject_t *oid);
+  static string hobject_key(coll_t c, const hobject_t &oid);
+  static bool parse_hobject_key(const string &in,
+				coll_t *c, hobject_t *oid);
 private:
   /// Implicit lock on Header->seq
   typedef ceph::shared_ptr<_Header> Header;
 
-  string map_header_key(const hobject_t &oid);
+  string map_header_key(coll_t coll, const hobject_t &oid);
   string header_key(uint64_t seq);
   string complete_prefix(Header header);
   string user_prefix(Header header);

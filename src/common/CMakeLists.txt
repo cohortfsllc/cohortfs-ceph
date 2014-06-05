@@ -21,16 +21,6 @@ set(auth_files
 	../auth/RotatingKeyRing.cc
 )
 
-set (crush_files 
-	../crush/builder.c 
-	../crush/mapper.c 
-	../crush/crush.c 
-	../crush/hash.c 
-	../crush/CrushWrapper.cc 
-	../crush/CrushCompiler.cc 
-	../crush/CrushTester.cc
-)
-
 add_custom_target(check_version ALL ${CMAKE_SOURCE_DIR}/src/check_version ${CMAKE_SOURCE_DIR}/src/.git_version) 
 
 add_custom_command(
@@ -152,7 +142,6 @@ set (libcommon_files
 	TrackedOp.cc
 	${arch_files}
 	${auth_files}
-	${crush_files}
 )
 
 

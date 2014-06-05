@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #ifndef OS_COLLECTIONINDEX_H
@@ -27,7 +27,7 @@
  */
 class CollectionIndex {
 protected:
-  /** 
+  /**
    * Object encapsulating a returned path.
    *
    * A path to an object (existent or non-existent) becomes invalid
@@ -49,14 +49,14 @@ protected:
 
     /// Normal Constructor
     Path(
-      string path,                              ///< [in] Path to return.
+      string path,				///< [in] Path to return.
       ceph::weak_ptr<CollectionIndex> ref)  ///< [in] weak_ptr to parent.
       : full_path(path), parent_ref(ref), parent_coll(parent_ref->coll()) {}
 
     /// Debugging Constructor
     Path(
-      string path,                              ///< [in] Path to return.
-      coll_t coll)                              ///< [in] collection
+      string path,				///< [in] Path to return.
+      coll_t coll)				///< [in] collection
       : full_path(path), parent_coll(coll) {}
       
     /// Getter for the stored path.
@@ -128,7 +128,7 @@ protected:
    */
   virtual int created(
     const hobject_t &oid, ///< [in] Created object.
-    const char *path       ///< [in] Path to created object.
+    const char *path	   ///< [in] Path to created object.
     ) = 0;
 
   /**
@@ -159,8 +159,8 @@ protected:
    * @return Error Code, 0 for success
    */
   virtual int split(
-    uint32_t match,                             //< [in] value to match
-    uint32_t bits,                              //< [in] bits to check
+    uint32_t match,				//< [in] value to match
+    uint32_t bits,				//< [in] bits to check
     ceph::shared_ptr<CollectionIndex> dest  //< [in] destination index
     ) { assert(0); return 0; }
 

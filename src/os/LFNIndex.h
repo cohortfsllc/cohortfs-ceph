@@ -475,31 +475,9 @@ private:
     ); ///< @return True if short_name is a subdir, false otherwise
 
   /// Generate object name
-  string lfn_generate_object_name_keyless(
-    const hobject_t &oid ///< [in] Object for which to generate.
-    ); ///< @return Generated object name.
-
-  /// Generate object name
-  string lfn_generate_object_name_poolless(
-    const hobject_t &oid ///< [in] Object for which to generate.
-    ); ///< @return Generated object name.
-
-  /// Generate object name
   string lfn_generate_object_name(
     const hobject_t &oid ///< [in] Object for which to generate.
     ); ///< @return Generated object name.
-
-  /// Parse object name
-  bool lfn_parse_object_name_keyless(
-    const string &long_name, ///< [in] Name to parse
-    hobject_t *out	     ///< [out] Resulting Object
-    ); ///< @return True if successfull, False otherwise.
-
-  /// Parse object name
-  bool lfn_parse_object_name_poolless(
-    const string &long_name, ///< [in] Name to parse
-    hobject_t *out	     ///< [out] Resulting Object
-    ); ///< @return True if successfull, False otherwise.
 
   /// Parse object name
   bool lfn_parse_object_name(

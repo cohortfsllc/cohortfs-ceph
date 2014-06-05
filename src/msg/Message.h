@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MESSAGE_H
@@ -50,13 +50,7 @@
 #define MSG_CLASS                  56
 #define MSG_CLASS_ACK              57
 
-#define MSG_GETPOOLSTATS           58
-#define MSG_GETPOOLSTATSREPLY      59
-
 #define MSG_MON_GLOBAL_ID          60
-
-// #define MSG_POOLOP                 49
-// #define MSG_POOLOPREPLY            48
 
 #define MSG_ROUTE                  47
 #define MSG_FORWARD                46
@@ -70,24 +64,6 @@
 #define MSG_OSD_FAILURE      72
 #define MSG_OSD_ALIVE        73
 #define MSG_OSD_MARK_ME_DOWN 74
-
-#define MSG_OSD_PGTEMP       78
-
-#define MSG_OSD_PG_SUMMARY     82
-#define MSG_OSD_PG_REMOVE      84
-
-#define MSG_PGSTATS            87
-#define MSG_PGSTATSACK         88
-
-#define MSG_OSD_PG_CREATE      89
-
-#define MSG_OSD_PG_MISSING     92
-
-#define MSG_OSD_PG_SCAN        94
-
-#define MSG_COMMAND            97
-#define MSG_COMMAND_REPLY      98
-
 
 // *** MDS ***
 

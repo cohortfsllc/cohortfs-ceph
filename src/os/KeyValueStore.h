@@ -532,13 +532,6 @@ class KeyValueStore : public ObjectStore,
 		       BufferTransaction &t);
   int _omap_setheader(coll_t cid, const hobject_t &oid, const bufferlist &bl,
 		      BufferTransaction &t);
-  int _split_collection(coll_t cid, uint32_t bits, uint32_t rem, coll_t dest,
-			BufferTransaction &t);
-  int _split_collection_create(coll_t cid, uint32_t bits, uint32_t rem,
-			       coll_t dest, BufferTransaction &t){
-    return 0;
-  }
-
   virtual const char** get_tracked_conf_keys() const;
   virtual void handle_conf_change(const struct md_config_t *conf,
 				  const std::set <std::string> &changed);

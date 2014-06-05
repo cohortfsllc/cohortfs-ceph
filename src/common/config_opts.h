@@ -58,7 +58,6 @@ OPTION(mon_cluster_log_file_level, OPT_STR, "info")
 DEFAULT_SUBSYS(0, 5)
 SUBSYS(lockdep, 0, 1)
 SUBSYS(context, 0, 1)
-SUBSYS(crush, 1, 1)
 SUBSYS(mds, 1, 5)
 SUBSYS(mds_balancer, 1, 5)
 SUBSYS(mds_locker, 1, 5)
@@ -147,7 +146,6 @@ OPTION(mon_osd_auto_mark_in, OPT_BOOL, false)         // mark any booting osds '
 OPTION(mon_osd_auto_mark_auto_out_in, OPT_BOOL, true) // mark booting auto-marked-out osds 'in'
 OPTION(mon_osd_auto_mark_new_in, OPT_BOOL, true)      // mark booting new osds 'in'
 OPTION(mon_osd_down_out_interval, OPT_INT, 300) // seconds
-OPTION(mon_osd_down_out_subtree_limit, OPT_STR, "rack")   // smallest crush unit/type that we will not automatically mark out
 OPTION(mon_osd_min_up_ratio, OPT_DOUBLE, .3)    // min osds required to be up to mark things down
 OPTION(mon_osd_min_in_ratio, OPT_DOUBLE, .3)   // min osds required to be in to mark things out
 OPTION(mon_osd_max_op_age, OPT_DOUBLE, 32)     // max op age before we get concerned (make it a power of 2)
@@ -274,8 +272,6 @@ OPTION(fuse_atomic_o_trunc, OPT_BOOL, true)
 OPTION(fuse_debug, OPT_BOOL, false)
 OPTION(fuse_multithreaded, OPT_BOOL, false)
 
-OPTION(crush_location, OPT_STR, "")       // whitespace-separated list of key=value pairs describing crush location
-
 OPTION(objecter_tick_interval, OPT_DOUBLE, 5.0)
 OPTION(objecter_timeout, OPT_DOUBLE, 10.0)    // before we ask for a map
 OPTION(objecter_inflight_op_bytes, OPT_U64, 1024*1024*100) // max in-flight data (both directions)
@@ -397,29 +393,6 @@ OPTION(osd_max_write_size, OPT_INT, 90)
 OPTION(osd_max_pgls, OPT_U64, 1024) // max number of pgls entries to return
 OPTION(osd_client_message_size_cap, OPT_U64, 500*1024L*1024L) // client data allowed in-memory (in bytes)
 OPTION(osd_client_message_cap, OPT_U64, 100)              // num client messages allowed in-memory
-OPTION(osd_crush_chooseleaf_type, OPT_INT, 1) // 1 = host
-OPTION(osd_pool_default_crush_rule, OPT_INT, -1) // deprecated for osd_pool_default_crush_replicated_ruleset
-OPTION(osd_pool_default_crush_replicated_ruleset, OPT_INT, CEPH_DEFAULT_CRUSH_REPLICATED_RULESET)
-OPTION(osd_pool_erasure_code_stripe_width, OPT_U32, OSD_POOL_ERASURE_CODE_STRIPE_WIDTH) // in bytes
-OPTION(osd_pool_default_size, OPT_INT, 3)
-OPTION(osd_pool_default_min_size, OPT_INT, 0)  // 0 means no specific default; ceph will use size-size/2
-OPTION(osd_pool_default_erasure_code_directory, OPT_STR, CEPH_PKGLIBDIR"/erasure-code") // default for the erasure-code-directory=XXX property of osd pool create
-OPTION(osd_pool_default_erasure_code_profile,
-       OPT_STR,
-       "plugin=jerasure "
-       "technique=reed_sol_van "
-       "k=2 "
-       "m=1 "
-       ) // default properties of osd pool create
-OPTION(osd_pool_default_flags, OPT_INT, 0)   // default flags for new pools
-OPTION(osd_pool_default_flag_hashpspool, OPT_BOOL, true)   // use new pg hashing to prevent pool/pg overlap
-OPTION(osd_pool_default_hit_set_bloom_fpp, OPT_FLOAT, .05)
-OPTION(osd_pool_default_cache_target_dirty_ratio, OPT_FLOAT, .4)
-OPTION(osd_pool_default_cache_target_full_ratio, OPT_FLOAT, .8)
-OPTION(osd_pool_default_cache_min_flush_age, OPT_INT, 0)  // seconds
-OPTION(osd_pool_default_cache_min_evict_age, OPT_INT, 0)  // seconds
-OPTION(osd_hit_set_min_size, OPT_INT, 1000)  // min target size for a HitSet
-OPTION(osd_hit_set_namespace, OPT_STR, ".ceph-internal") // rados namespace for hit_set tracking
 
 OPTION(osd_map_dedup, OPT_BOOL, true)
 OPTION(osd_map_cache_size, OPT_INT, 500)

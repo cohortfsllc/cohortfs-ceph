@@ -166,12 +166,12 @@ class ObjectCacher {
     int ref;
     ObjectCacher *oc;
     object_t oid;
+    uuid_d volume;
     friend struct ObjectSet;
 
   public:
     ObjectSet *oset;
     xlist<Object*>::item set_item;
-    object_locator_t oloc;
     uint64_t truncate_size, truncate_seq;
 
     bool complete;
@@ -192,11 +192,11 @@ class ObjectCacher {
     Object(const Object& other);
     const Object& operator=(const Object& other);
 
-    Object(ObjectCacher *_oc, object_t o, ObjectSet *os, object_locator_t& l,
+    Object(ObjectCacher *_oc, object_t o, ObjectSet *os, uuid_d& v,
 	   uint64_t ts, uint64_t tq) :
       ref(0),
       oc(_oc),
-      oid(o), oset(os), set_item(this), oloc(l),
+      oid(o), volume(v), oset(os), set_item(this),
       truncate_size(ts), truncate_seq(tq),
       complete(false), exists(true),
       last_write_tid(0), last_commit_tid(0),
@@ -214,10 +214,9 @@ class ObjectCacher {
 
     object_t get_oid() { return oid; }
     ObjectSet *get_object_set() { return oset; }
-    string get_namespace() { return oloc.nspace; }
 
-    object_locator_t& get_oloc() { return oloc; }
-    void set_object_locator(object_locator_t& l) { oloc = l; }
+    uuid_d& get_volume() { return volume; }
+    void set_volume(uuid_d& v) { volume = v; }
 
     bool can_close() {
       if (lru_is_expireable()) {
@@ -304,18 +303,18 @@ class ObjectCacher {
   struct ObjectSet {
     void *parent;
 
+    uuid_d volume;
     inodeno_t ino;
     uint64_t truncate_seq, truncate_size;
 
-    int64_t poolid;
     xlist<Object*> objects;
 
     int dirty_or_tx;
     bool return_enoent;
 
-    ObjectSet(void *p, int64_t _poolid, inodeno_t i)
-      : parent(p), ino(i), truncate_seq(0),
-	truncate_size(0), poolid(_poolid), dirty_or_tx(0),
+    ObjectSet(void *p, uuid_d _volume, inodeno_t i)
+      : parent(p), volume(_volume), ino(i), truncate_seq(0),
+	truncate_size(0), dirty_or_tx(0),
 	return_enoent(false) {}
 
   };
@@ -336,8 +335,7 @@ class ObjectCacher {
   flush_set_callback_t flush_set_callback;
   void *flush_set_callback_arg;
 
-  // indexed by pool_id
-  vector<ceph::unordered_map<object_t, Object*> > objects;
+  std::map<uuid_d, std::map<object_t, Object*> > objects;
 
   ceph_tid_t last_read_tid;
 
@@ -361,15 +359,14 @@ class ObjectCacher {
   Finisher finisher;
 
   // objects
-  Object *get_object_maybe(object_t oid, object_locator_t &l) {
+  Object *get_object_maybe(object_t oid, uuid_d &v) {
     // have it?
-    if (((uint32_t)l.pool < objects.size()) &&
-	(objects[l.pool].count(oid)))
-      return objects[l.pool][oid];
+    if (objects[v].count(oid))
+      return objects[v][oid];
     return NULL;
   }
 
-  Object *get_object(object_t oid, ObjectSet *oset, object_locator_t &l,
+  Object *get_object(object_t oid, ObjectSet *oset, uuid_d &v,
 		     uint64_t truncate_size, uint64_t truncate_seq);
   void close_object(Object *ob);
 
@@ -457,16 +454,16 @@ class ObjectCacher {
 	     bool external_call);
 
  public:
-  void bh_read_finish(int64_t poolid, object_t oid, ceph_tid_t tid,
+  void bh_read_finish(uuid_d volume, object_t oid, ceph_tid_t tid,
 		      loff_t offset, uint64_t length,
 		      bufferlist &bl, int r,
 		      bool trust_enoent);
-  void bh_write_commit(int64_t poolid, object_t oid, loff_t offset,
+  void bh_write_commit(uuid_d volume, object_t oid, loff_t offset,
 		       uint64_t length, ceph_tid_t t, int r);
 
   class C_ReadFinish : public Context {
     ObjectCacher *oc;
-    int64_t poolid;
+    uuid_d volume;
     object_t oid;
     loff_t start;
     uint64_t length;
@@ -478,14 +475,13 @@ class ObjectCacher {
     bufferlist bl;
     C_ReadFinish(ObjectCacher *c, Object *ob, ceph_tid_t t, loff_t s,
 		 uint64_t l) :
-      oc(c), poolid(ob->oloc.pool), oid(ob->get_oid()), start(s), length(l),
-      set_item(this), trust_enoent(true),
-      tid(t) {
+      oc(c), volume(ob->get_volume()), oid(ob->get_oid()), start(s), length(l),
+      set_item(this), trust_enoent(true), tid(t) {
       ob->reads.push_back(&set_item);
     }
 
     void finish(int r) {
-      oc->bh_read_finish(poolid, oid, tid, start, length, bl, r, trust_enoent);
+      oc->bh_read_finish(volume, oid, tid, start, length, bl, r, trust_enoent);
 
       // object destructor clears the list
       if (set_item.is_on_list())
@@ -499,17 +495,17 @@ class ObjectCacher {
 
   class C_WriteCommit : public Context {
     ObjectCacher *oc;
-    int64_t poolid;
+    uuid_d volume;
     object_t oid;
     loff_t start;
     uint64_t length;
   public:
     ceph_tid_t tid;
-    C_WriteCommit(ObjectCacher *c, int64_t _poolid, object_t o, loff_t s,
+    C_WriteCommit(ObjectCacher *c, uuid_d _volume, object_t o, loff_t s,
 		  uint64_t l) :
-      oc(c), poolid(_poolid), oid(o), start(s), length(l), tid(0) {}
+      oc(c), volume(_volume), oid(o), start(s), length(l), tid(0) {}
     void finish(int r) {
-      oc->bh_write_commit(poolid, oid, start, length, tid, r);
+      oc->bh_write_commit(volume, oid, start, length, tid, r);
     }
   };
 
@@ -642,7 +638,7 @@ public:
   int file_is_cached(ObjectSet *oset, ceph_file_layout *layout,
 		     loff_t offset, uint64_t len) {
     vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
+    Striper::file_to_extents(cct, oset->ino, oset->volume, layout, offset, len,
 			     oset->truncate_size, extents);
     return is_cached(oset, extents);
   }
@@ -653,7 +649,7 @@ public:
 		int flags,
 		Context *onfinish) {
     OSDRead *rd = prepare_read(bl, flags);
-    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
+    Striper::file_to_extents(cct, oset->ino, oset->volume, layout, offset, len,
 			     oset->truncate_size, rd->extents);
     return readx(rd, oset, onfinish);
   }
@@ -663,7 +659,7 @@ public:
 		 bufferlist& bl, utime_t mtime, int flags,
 		 Mutex& wait_on_lock) {
     OSDWrite *wr = prepare_write(bl, mtime, flags);
-    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
+    Striper::file_to_extents(cct, oset->ino, oset->volume, layout, offset, len,
 			     oset->truncate_size, wr->extents);
     return writex(wr, oset, wait_on_lock, NULL);
   }
@@ -671,7 +667,7 @@ public:
   bool file_flush(ObjectSet *oset, ceph_file_layout *layout,
 		  loff_t offset, uint64_t len, Context *onfinish) {
     vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, oset->ino, layout, offset, len,
+    Striper::file_to_extents(cct, oset->ino, oset->volume, layout, offset, len,
 			     oset->truncate_size, extents);
     return flush_set(oset, extents, onfinish);
   }

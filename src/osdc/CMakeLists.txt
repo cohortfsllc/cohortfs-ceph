@@ -1,7 +1,7 @@
 set(osdc_files
 	Objecter.cc 
 	ObjectCacher.cc 
-	Filer.cc 
+#	Filer.cc For MDS integration later.
 	Striper.cc
 )
 

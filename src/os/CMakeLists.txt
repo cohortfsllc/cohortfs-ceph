@@ -7,7 +7,6 @@ set(libos_srcs
 	KeyValueStore.cc
 	MemStore.cc
 	LFNIndex.cc 
-	HashIndex.cc 
 	IndexManager.cc 
 	FlatIndex.cc
 	GenericObjectMap.cc

@@ -44,8 +44,7 @@ private:
   int32_t retry_attempt;   // 0 is first attempt.  -1 if we don't know.
 
   object_t oid;
-  object_locator_t oloc;
-  pg_t pgid;
+  uuid_d volume;
 public:
   vector<OSDOp> ops;
 
@@ -58,30 +57,28 @@ public:
   }
   int get_client_inc() { return client_inc; }
   ceph_tid_t get_client_tid() { return header.tid; }
-  
+
   object_t& get_oid() { return oid; }
 
-  pg_t     get_pg() const { return pgid; }
-
-  object_locator_t get_object_locator() const {
-    return oloc;
+  uuid_d get_volume() const {
+    return volume;
   }
 
   epoch_t  get_map_epoch() { return osdmap_epoch; }
 
   eversion_t get_version() { return reassert_version; }
-  
+
   utime_t get_mtime() { return mtime; }
 
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
   MOSDOp(int inc, long tid,
-         object_t& _oid, object_locator_t& _oloc, pg_t _pgid, epoch_t _osdmap_epoch,
+	 object_t& _oid, uuid_d& _volume , epoch_t _osdmap_epoch,
 	 int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       client_inc(inc),
       osdmap_epoch(_osdmap_epoch), flags(_flags), retry_attempt(-1),
-      oid(_oid), oloc(_oloc), pgid(_pgid) {
+      oid(_oid), volume(_volume) {
     set_tid(tid);
   }
 private:
@@ -138,7 +135,7 @@ public:
   void set_want_ondisk(bool b) { flags |= CEPH_OSD_FLAG_ONDISK; }
 
   bool is_retry_attempt() const { return flags & CEPH_OSD_FLAG_RETRY; }
-  void set_retry_attempt(unsigned a) { 
+  void set_retry_attempt(unsigned a) {
     if (a)
       flags |= CEPH_OSD_FLAG_RETRY;
     else
@@ -162,119 +159,42 @@ public:
 
     OSDOp::merge_osd_op_vector_in_data(ops, data);
 
-    if ((features & CEPH_FEATURE_OBJECTLOCATOR) == 0) {
-      header.version = 1;
+    ::encode(client_inc, payload);
+    ::encode(osdmap_epoch, payload);
+    ::encode(flags, payload);
+    ::encode(mtime, payload);
+    ::encode(reassert_version, payload);
 
-      ::encode(client_inc, payload);
+    ::encode(volume, payload);
+    ::encode(oid, payload);
 
-      uint32_t su = 0;
-      ::encode(pgid, payload);
-      ::encode(su, payload);
+    uint16_t num_ops = ops.size();
+    ::encode(num_ops, payload);
+    for (unsigned i = 0; i < ops.size(); i++)
+      ::encode(ops[i].op, payload);
 
-      ::encode(osdmap_epoch, payload);
-      ::encode(flags, payload);
-      ::encode(mtime, payload);
-      ::encode(reassert_version, payload);
-
-      uint32_t oid_len = oid.name.length();
-      ::encode(oid_len, payload);
-
-      uint16_t num_ops = ops.size();
-      ::encode(num_ops, payload);
-      for (unsigned i = 0; i < ops.size(); i++)
-	::encode(ops[i].op, payload);
-
-      ::encode_nohead(oid.name, payload);
-    } else {
-      ::encode(client_inc, payload);
-      ::encode(osdmap_epoch, payload);
-      ::encode(flags, payload);
-      ::encode(mtime, payload);
-      ::encode(reassert_version, payload);
-
-      ::encode(oloc, payload);
-      ::encode(pgid, payload);
-      ::encode(oid, payload);
-
-      uint16_t num_ops = ops.size();
-      ::encode(num_ops, payload);
-      for (unsigned i = 0; i < ops.size(); i++)
-	::encode(ops[i].op, payload);
-
-      ::encode(retry_attempt, payload);
-    }
+    ::encode(retry_attempt, payload);
   }
 
   virtual void decode_payload() {
     bufferlist::iterator p = payload.begin();
+    // new decode
+    ::decode(client_inc, p);
+    ::decode(osdmap_epoch, p);
+    ::decode(flags, p);
+    ::decode(mtime, p);
+    ::decode(reassert_version, p);
 
-    if (header.version < 2) {
-      // old decode
-      ::decode(client_inc, p);
+    ::decode(volume, p);
+    ::decode(oid, p);
 
-      old_pg_t opgid;
-      ::decode_raw(opgid, p);
-      pgid = opgid;
+    uint16_t num_ops;
+    ::decode(num_ops, p);
+    ops.resize(num_ops);
+    for (unsigned i = 0; i < num_ops; i++)
+      ::decode(ops[i].op, p);
 
-      uint32_t su;
-      ::decode(su, p);
-      oloc.pool = pgid.pool();
-
-      ::decode(osdmap_epoch, p);
-      ::decode(flags, p);
-      ::decode(mtime, p);
-      ::decode(reassert_version, p);
-
-      uint32_t oid_len;
-      ::decode(oid_len, p);
-
-      uint16_t num_ops;
-      ::decode(num_ops, p);
-      ops.resize(num_ops);
-      for (unsigned i = 0; i < num_ops; i++)
-	::decode(ops[i].op, p);
-
-      decode_nohead(oid_len, oid.name, p);
-
-      // recalculate pgid hash value
-      pgid.set_ps(ceph_str_hash(CEPH_STR_HASH_RJENKINS,
-				oid.name.c_str(),
-				oid.name.length()));
-
-      retry_attempt = -1;
-    } else {
-      // new decode 
-      ::decode(client_inc, p);
-      ::decode(osdmap_epoch, p);
-      ::decode(flags, p);
-      ::decode(mtime, p);
-      ::decode(reassert_version, p);
-
-      ::decode(oloc, p);
-
-      if (header.version < 3) {
-	old_pg_t opgid;
-	::decode_raw(opgid, p);
-	pgid = opgid;
-      } else {
-	::decode(pgid, p);
-      }
-
-      ::decode(oid, p);
-
-      //::decode(ops, p);
-      uint16_t num_ops;
-      ::decode(num_ops, p);
-      ops.resize(num_ops);
-      for (unsigned i = 0; i < num_ops; i++)
-	::decode(ops[i].op, p);
-
-      if (header.version >= 4)
-	::decode(retry_attempt, p);
-      else
-	retry_attempt = -1;
-    }
-
+    ::decode(retry_attempt, p);
     OSDOp::split_osd_op_vector_in_data(ops, data);
   }
 
@@ -286,15 +206,10 @@ public:
   void print(ostream& out) const {
     out << "osd_op(" << get_reqid();
     out << " ";
-    if (!oloc.nspace.empty())
-      out << oloc.nspace << "/";
+    out << volume << ":";
     out << oid;
 
-    if (oloc.key.size())
-      out << " " << oloc;
-
     out << " " << ops;
-    out << " " << pgid;
     if (is_retry_attempt())
       out << " RETRY=" << get_retry_attempt();
     if (reassert_version != eversion_t())

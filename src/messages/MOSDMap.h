@@ -74,62 +74,15 @@ public:
     ::decode(fsid, p);
     ::decode(incremental_maps, p);
     ::decode(maps, p);
-    if (header.version >= 2) {
-      ::decode(oldest_map, p);
-      ::decode(newest_map, p);
-    } else {
-      oldest_map = 0;
-      newest_map = 0;
-    }
+    ::decode(oldest_map, p);
+    ::decode(newest_map, p);
   }
   void encode_payload(uint64_t features) {
     ::encode(fsid, payload);
-    if ((features & CEPH_FEATURE_PGID64) == 0 ||
-	(features & CEPH_FEATURE_PGPOOL3) == 0 ||
-	(features & CEPH_FEATURE_OSDENC) == 0 ||
-        (features & CEPH_FEATURE_OSDMAP_ENC) == 0) {
-      if ((features & CEPH_FEATURE_PGID64) == 0 ||
-	  (features & CEPH_FEATURE_PGPOOL3) == 0)
-	header.version = 1;  // old old_client version
-      else if ((features & CEPH_FEATURE_OSDENC) == 0)
-	header.version = 2;  // old pg_pool_t
-
-      // reencode maps using old format
-      //
-      // FIXME: this can probably be done more efficiently higher up
-      // the stack, or maybe replaced with something that only
-      // includes the pools the client cares about.
-      for (map<epoch_t,bufferlist>::iterator p = incremental_maps.begin();
-	   p != incremental_maps.end();
-	   ++p) {
-	OSDMap::Incremental inc;
-	bufferlist::iterator q = p->second.begin();
-	inc.decode(q);
-	p->second.clear();
-	if (inc.fullmap.length()) {
-	  // embedded full map?
-	  OSDMap m;
-	  m.decode(inc.fullmap);
-	  inc.fullmap.clear();
-	  m.encode(inc.fullmap, features);
-	}
-	inc.encode(p->second, features);
-      }
-      for (map<epoch_t,bufferlist>::iterator p = maps.begin();
-	   p != maps.end();
-	   ++p) {
-	OSDMap m;
-	m.decode(p->second);
-	p->second.clear();
-	m.encode(p->second, features);
-      }
-    }
     ::encode(incremental_maps, payload);
     ::encode(maps, payload);
-    if (header.version >= 2) {
-      ::encode(oldest_map, payload);
-      ::encode(newest_map, payload);
-    }
+    ::encode(oldest_map, payload);
+    ::encode(newest_map, payload);
   }
 
   const char *get_type_name() const { return "omap"; }

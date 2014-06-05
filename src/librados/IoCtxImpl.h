@@ -30,13 +30,11 @@ class RadosClient;
 struct librados::IoCtxImpl {
   atomic_t ref_cnt;
   RadosClient *client;
-  int64_t poolid;
-  string pool_name;
+  uuid_d volume;
   uint64_t assert_ver;
   map<object_t, uint64_t> assert_src_version;
   version_t last_objver;
   uint32_t notify_timeout;
-  object_locator_t oloc;
 
   Mutex aio_write_list_lock;
   ceph_tid_t aio_write_seq;
@@ -49,18 +47,16 @@ struct librados::IoCtxImpl {
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
-	    int poolid, const char *pool_name);
+	    const uuid_d& volume);
 
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count
     client = rhs.client;
-    poolid = rhs.poolid;
-    pool_name = rhs.pool_name;
+    volume = volume;
     assert_ver = rhs.assert_ver;
     assert_src_version = rhs.assert_src_version;
     last_objver = rhs.last_objver;
     notify_timeout = rhs.notify_timeout;
-    oloc = rhs.oloc;
     lock = rhs.lock;
     objecter = rhs.objecter;
   }
@@ -79,12 +75,9 @@ struct librados::IoCtxImpl {
   void flush_aio_writes_async(AioCompletionImpl *c);
   void flush_aio_writes();
 
-  int64_t get_id() {
-    return poolid;
+  uuid_d get_volume() {
+    return volume;
   }
-
-  uint32_t get_object_hash_position(const std::string& oid);
-  uint32_t get_object_pg_hash_position(const std::string& oid);
 
   ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);
 
@@ -159,10 +152,6 @@ struct librados::IoCtxImpl {
   int aio_exec(const object_t& oid, AioCompletionImpl *c, const char *cls,
 	       const char *method, bufferlist& inbl, bufferlist *outbl);
   int aio_stat(const object_t& oid, AioCompletionImpl *c, uint64_t *psize, time_t *pmtime);
-
-  int pool_change_auid(unsigned long long auid);
-  int pool_change_auid_async(unsigned long long auid, PoolAsyncCompletionImpl *c);
-
 
   void set_sync_op_version(version_t ver);
   int watch(const object_t& oid, uint64_t ver, uint64_t *cookie, librados::WatchCtx *ctx);

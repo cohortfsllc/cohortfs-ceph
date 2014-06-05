@@ -410,100 +410,35 @@ void MDSMap::mds_info_t::decode(bufferlist::iterator& bl)
 
 void MDSMap::encode(bufferlist& bl, uint64_t features) const
 {
-  if ((features & CEPH_FEATURE_PGID64) == 0) {
-    uint16_t v = 2;
-    ::encode(v, bl);
-    ::encode(epoch, bl);
-    ::encode(flags, bl);
-    ::encode(last_failure, bl);
-    ::encode(root, bl);
-    ::encode(session_timeout, bl);
-    ::encode(session_autoclose, bl);
-    ::encode(max_file_size, bl);
-    ::encode(max_mds, bl);
-    uint32_t n = mds_info.size();
-    ::encode(n, bl);
-    for (map<uint64_t, mds_info_t>::const_iterator i = mds_info.begin();
-	i != mds_info.end(); ++i) {
-      ::encode(i->first, bl);
-      ::encode(i->second, bl, features);
-    }
-    n = data_pools.size();
-    ::encode(n, bl);
-    for (set<int64_t>::const_iterator p = data_pools.begin(); p != data_pools.end(); ++p) {
-      n = *p;
-      ::encode(n, bl);
-    }
+  ENCODE_START(4, 4, bl);
+  ::encode(epoch, bl);
+  ::encode(flags, bl);
+  ::encode(last_failure, bl);
+  ::encode(root, bl);
+  ::encode(session_timeout, bl);
+  ::encode(session_autoclose, bl);
+  ::encode(max_file_size, bl);
+  ::encode(max_mds, bl);
+  ::encode(mds_info, bl, features);
+  ::encode(data_pools, bl);
+  ::encode(cas_pool, bl);
 
-    int32_t m = cas_pool;
-    ::encode(m, bl);
-    return;
-  } else if ((features & CEPH_FEATURE_MDSENC) == 0) {
-    uint16_t v = 3;
-    ::encode(v, bl);
-    ::encode(epoch, bl);
-    ::encode(flags, bl);
-    ::encode(last_failure, bl);
-    ::encode(root, bl);
-    ::encode(session_timeout, bl);
-    ::encode(session_autoclose, bl);
-    ::encode(max_file_size, bl);
-    ::encode(max_mds, bl);
-    uint32_t n = mds_info.size();
-    ::encode(n, bl);
-    for (map<uint64_t, mds_info_t>::const_iterator i = mds_info.begin();
-	i != mds_info.end(); ++i) {
-      ::encode(i->first, bl);
-      ::encode(i->second, bl, features);
-    }
-    ::encode(data_pools, bl);
-    ::encode(cas_pool, bl);
-
-    // kclient ignores everything from here
-    uint16_t ev = 5;
-    ::encode(ev, bl);
-    ::encode(compat, bl);
-    ::encode(metadata_pool, bl);
-    ::encode(created, bl);
-    ::encode(modified, bl);
-    ::encode(tableserver, bl);
-    ::encode(in, bl);
-    ::encode(inc, bl);
-    ::encode(up, bl);
-    ::encode(failed, bl);
-    ::encode(stopped, bl);
-    ::encode(last_failure_osd_epoch, bl);
-  } else {// have MDS encoding feature!
-    ENCODE_START(4, 4, bl);
-    ::encode(epoch, bl);
-    ::encode(flags, bl);
-    ::encode(last_failure, bl);
-    ::encode(root, bl);
-    ::encode(session_timeout, bl);
-    ::encode(session_autoclose, bl);
-    ::encode(max_file_size, bl);
-    ::encode(max_mds, bl);
-    ::encode(mds_info, bl, features);
-    ::encode(data_pools, bl);
-    ::encode(cas_pool, bl);
-
-    // kclient ignores everything from here
-    uint16_t ev = 7;
-    ::encode(ev, bl);
-    ::encode(compat, bl);
-    ::encode(metadata_pool, bl);
-    ::encode(created, bl);
-    ::encode(modified, bl);
-    ::encode(tableserver, bl);
-    ::encode(in, bl);
-    ::encode(inc, bl);
-    ::encode(up, bl);
-    ::encode(failed, bl);
-    ::encode(stopped, bl);
-    ::encode(last_failure_osd_epoch, bl);
-    ::encode(inline_data_enabled, bl);
-    ENCODE_FINISH(bl);
-  }
+  // kclient ignores everything from here
+  uint16_t ev = 7;
+  ::encode(ev, bl);
+  ::encode(compat, bl);
+  ::encode(metadata_pool, bl);
+  ::encode(created, bl);
+  ::encode(modified, bl);
+  ::encode(tableserver, bl);
+  ::encode(in, bl);
+  ::encode(inc, bl);
+  ::encode(up, bl);
+  ::encode(failed, bl);
+  ::encode(stopped, bl);
+  ::encode(last_failure_osd_epoch, bl);
+  ::encode(inline_data_enabled, bl);
+  ENCODE_FINISH(bl);
 }
 
 void MDSMap::decode(bufferlist::iterator& p)

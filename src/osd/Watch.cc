@@ -1,5 +1,5 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
-#include "PG.h"
+#include "OSDVol.h"
 
 #include "include/types.h"
 #include "messages/MWatchNotify.h"
@@ -7,7 +7,6 @@
 #include <map>
 
 #include "OSD.h"
-#include "PG.h"
 #include "Watch.h"
 
 #include "common/config.h"
@@ -107,12 +106,12 @@ void Notify::do_timeout()
   for (set<WatchRef>::iterator i = _watchers.begin();
        i != _watchers.end();
        ++i) {
-    boost::intrusive_ptr<PG> pg((*i)->get_pg());
-    pg->lock();
+    boost::intrusive_ptr<OSDVol> vol((*i)->get_vol());
+    vol->lock();
     if (!(*i)->is_discarded()) {
       (*i)->cancel_notify(self.lock());
     }
-    pg->unlock();
+    vol->unlock();
   }
 }
 
@@ -205,7 +204,7 @@ static ostream& _prefix(
 class HandleWatchTimeout : public CancelableContext {
   WatchRef watch;
 public:
-  bool canceled; // protected by watch->pg->lock
+  bool canceled; // protected by watch->vol->lock
   HandleWatchTimeout(WatchRef watch) : watch(watch), canceled(false) {}
   void cancel() {
     canceled = true;
@@ -213,15 +212,15 @@ public:
   void finish(int) { assert(0); /* not used */ }
   void complete(int) {
     dout(10) << "HandleWatchTimeout" << dendl;
-    boost::intrusive_ptr<PG> pg(watch->pg);
+    boost::intrusive_ptr<OSDVol> vol(watch->vol);
     OSDService *osd(watch->osd);
     osd->watch_lock.Unlock();
-    pg->lock();
+    vol->lock();
     watch->cb = NULL;
     if (!watch->is_discarded() && !canceled)
-      watch->pg->handle_watch_timeout(watch);
-    delete this; // ~Watch requires pg lock!
-    pg->unlock();
+      watch->vol->handle_watch_timeout(watch);
+    delete this; // ~Watch requires vol lock!
+    vol->unlock();
     osd->watch_lock.Lock();
   }
 };
@@ -236,10 +235,10 @@ public:
   }
   void finish(int) {
     dout(10) << "HandleWatchTimeoutDelayed" << dendl;
-    assert(watch->pg->is_locked());
+    assert(watch->vol->is_locked());
     watch->cb = NULL;
     if (!watch->is_discarded() && !canceled)
-      watch->pg->handle_watch_timeout(watch);
+      watch->vol->handle_watch_timeout(watch);
   }
 };
 
@@ -249,13 +248,13 @@ public:
 
 string Watch::gen_dbg_prefix() {
   stringstream ss;
-  ss << pg->gen_prefix() << " -- Watch(" 
+  ss << vol->gen_prefix() << " -- Watch(" 
      << make_pair(cookie, entity) << ") ";
   return ss.str();
 }
 
 Watch::Watch(
-  PG *pg,
+  OSDVol *vol,
   OSDService *osd,
   ObjectContextRef obc,
   uint32_t timeout,
@@ -264,7 +263,7 @@ Watch::Watch(
   const entity_addr_t &addr)
   : cb(NULL),
     osd(osd),
-    pg(pg),
+    vol(vol),
     obc(obc),
     timeout(timeout),
     cookie(cookie),
@@ -349,7 +348,7 @@ void Watch::discard()
 
 void Watch::discard_state()
 {
-  assert(pg->is_locked());
+  assert(vol->is_locked());
   assert(!discarded);
   assert(obc);
   in_progress_notifies.clear();
@@ -417,10 +416,10 @@ void Watch::notify_ack(uint64_t notify_id)
 }
 
 WatchRef Watch::makeWatchRef(
-  PG *pg, OSDService *osd,
+  OSDVol *vol, OSDService *osd,
   ObjectContextRef obc, uint32_t timeout, uint64_t cookie, entity_name_t entity, const entity_addr_t& addr)
 {
-  WatchRef ret(new Watch(pg, osd, obc, timeout, cookie, entity, addr));
+  WatchRef ret(new Watch(vol, osd, obc, timeout, cookie, entity, addr));
   ret->set_self(ret);
   return ret;
 }
@@ -447,11 +446,11 @@ void WatchConState::reset()
   for (set<WatchRef>::iterator i = _watches.begin();
        i != _watches.end();
        ++i) {
-    boost::intrusive_ptr<PG> pg((*i)->get_pg());
-    pg->lock();
+    boost::intrusive_ptr<OSDVol> vol((*i)->get_vol());
+    vol->lock();
     if (!(*i)->is_discarded()) {
       (*i)->disconnect();
     }
-    pg->unlock();
+    vol->unlock();
   }
 }

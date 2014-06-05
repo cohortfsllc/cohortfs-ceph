@@ -243,16 +243,13 @@ int main(int argc, const char **argv)
     CEPH_FEATURE_NOSRCADDR |
     CEPH_FEATURE_DIRLAYOUTHASH |
     CEPH_FEATURE_MDS_INLINE_DATA |
-    CEPH_FEATURE_PGID64 |
-    CEPH_FEATURE_MSG_AUTH |
-    CEPH_FEATURE_EXPORT_PEER;
+    CEPH_FEATURE_MSG_AUTH;
   uint64_t required =
     CEPH_FEATURE_OSDREPLYMUX;
   messenger->set_default_policy(Messenger::Policy::lossy_client(supported, required));
   messenger->set_policy(entity_name_t::TYPE_MON,
 			Messenger::Policy::lossy_client(supported,
-							CEPH_FEATURE_UID |
-							CEPH_FEATURE_PGID64));
+							CEPH_FEATURE_UID));
   messenger->set_policy(entity_name_t::TYPE_MDS,
 			Messenger::Policy::lossless_peer(supported,
 							 CEPH_FEATURE_UID));

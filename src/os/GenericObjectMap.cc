@@ -111,23 +111,8 @@ string GenericObjectMap::header_key(const coll_t &cid, const hobject_t &oid)
   char *end = t + sizeof(buf);
 
   // make field ordering match with hobject_t compare operations
-  snprintf(t, end - t, "%.*X", (int)(sizeof(oid.hash)*2),
-	   (uint32_t)oid.get_filestore_key_u32());
+  snprintf(t, end - t, "%"PRIu32"_%"PRIu32, oid.stripetype, oid.stripeno);
   full_name += string(buf);
-  full_name.append(HOBJECT_KEY_SEP_S);
-
-  append_escaped(oid.nspace, &full_name);
-  full_name.append(HOBJECT_KEY_SEP_S);
-
-  t = buf;
-  if (oid.pool == -1)
-    t += snprintf(t, end - t, "none");
-  else
-    t += snprintf(t, end - t, "%llx", (long long unsigned)oid.pool);
-  full_name += string(buf);
-  full_name.append(HOBJECT_KEY_SEP_S);
-
-  append_escaped(oid.get_key(), &full_name);
   full_name.append(HOBJECT_KEY_SEP_S);
 
   append_escaped(oid.oid.name, &full_name);
@@ -141,10 +126,8 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
 {
   string coll;
   string name;
-  string key;
-  string ns;
-  uint32_t hash;
-  uint64_t pool;
+  stripetype_t stripetype;
+  uint32_t stripeno;
 
   string::const_iterator current = long_name.begin();
   string::const_iterator end;
@@ -157,32 +140,9 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
   for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
   if (end == long_name.end())
     return false;
-  string hash_str(current, end);
-  sscanf(hash_str.c_str(), "%X", &hash);
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
-  if (end == long_name.end())
-    return false;
-  if (!append_unescaped(current, end, &ns))
-    return false;
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
-  if (end == long_name.end())
-    return false;
-  string pstring(current, end);
-  if (pstring == "none")
-    pool = (uint64_t)-1;
-  else
-    pool = strtoull(pstring.c_str(), NULL, 16);
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
-  if (end == long_name.end())
-    return false;
-  if (!append_unescaped(current, end, &key))
-    return false;
+  string extra_str(current, end);
+  sscanf(extra_str.c_str(), "%"SCNu32"_%"SCNu32, (uint32_t *) &stripetype,
+	 &stripeno);
 
   current = ++end;
   for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
@@ -194,9 +154,7 @@ bool GenericObjectMap::parse_header_key(const string &long_name,
   current = ++end;
 
   if (out) {
-    (*out) = hobject_t(name, key, hash, (int64_t)pool, ns);
-    // restore reversed hash. see calculate_key
-    out->hash = out->get_filestore_key();
+    (*out) = hobject_t(name, stripetype, stripeno);
   }
 
   if (out_coll)
@@ -1003,37 +961,10 @@ void GenericObjectMap::set_header(const coll_t &cid, const hobject_t &oid,
 }
 
 int GenericObjectMap::list_objects(const coll_t &cid, hobject_t start, int max,
-                                   vector<hobject_t> *out, hobject_t *next)
+				   vector<hobject_t> *out, hobject_t *next)
 {
   // FIXME
   Mutex::Locker l(header_lock);
-
-  if (start.is_max())
-      return 0;
-
-  if (start.is_min()) {
-    vector<hobject_t> oids;
-
-    KeyValueDB::Iterator iter = db->get_iterator(HOBJECT_TO_SEQ_PREFIX);
-    for (iter->lower_bound(header_key(cid)); iter->valid(); iter->next()) {
-      bufferlist bl = iter->value();
-      bufferlist::iterator bliter = bl.begin();
-      _Header header;
-      header.decode(bliter);
-
-      if (header.cid == cid)
-        oids.push_back(header.oid);
-
-      break;
-    }
-
-    if (oids.empty()) {
-      if (next)
-        *next = hobject_t::get_max();
-      return 0;
-    }
-    start = oids[0];
-  }
 
   int size = 0;
   KeyValueDB::Iterator iter = db->get_iterator(HOBJECT_TO_SEQ_PREFIX);
@@ -1044,8 +975,6 @@ int GenericObjectMap::list_objects(const coll_t &cid, hobject_t start, int max,
     header.decode(bliter);
 
     if (header.cid != cid) {
-      if (next)
-        *next = hobject_t::get_max();
       break;
     }
 
@@ -1066,10 +995,6 @@ int GenericObjectMap::list_objects(const coll_t &cid, hobject_t start, int max,
 
   if (out->size())
     dout(20) << "objects: " << *out << dendl;
-
-  if (!iter->valid())
-    if (next)
-      *next = hobject_t::get_max();
 
   return 0;
 }

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 
 #include <sys/types.h>
@@ -60,8 +60,8 @@ int obtain_monmap(MonitorDBStore &store, bufferlist &bl)
   /*
    * the monmap may be in one of three places:
    *  'monmap:<latest_version_no>' - the monmap we'd really like to have
-   *  'mon_sync:latest_monmap'     - last monmap backed up for the last sync
-   *  'mkfs:monmap'                - a monmap resulting from mkfs
+   *  'mon_sync:latest_monmap'	   - last monmap backed up for the last sync
+   *  'mkfs:monmap'		   - a monmap resulting from mkfs
    */
 
   if (store.exists("monmap", "last_committed")) {
@@ -71,7 +71,7 @@ int obtain_monmap(MonitorDBStore &store, bufferlist &bl)
       assert(err == 0);
       assert(bl.length() > 0);
       dout(10) << __func__ << " read last committed monmap ver "
-               << latest_ver << dendl;
+	       << latest_ver << dendl;
       return 0;
     }
   }
@@ -164,23 +164,23 @@ void usage()
 {
   cerr << "usage: ceph-mon -i monid [flags]" << std::endl;
   cerr << "  --debug_mon n\n";
-  cerr << "        debug monitor level (e.g. 10)\n";
+  cerr << "	   debug monitor level (e.g. 10)\n";
   cerr << "  --mkfs\n";
-  cerr << "        build fresh monitor fs\n";
+  cerr << "	   build fresh monitor fs\n";
   cerr << "  --force-sync\n";
-  cerr << "        force a sync from another mon by wiping local data (BE CAREFUL)\n";
+  cerr << "	   force a sync from another mon by wiping local data (BE CAREFUL)\n";
   cerr << "  --yes-i-really-mean-it\n";
-  cerr << "        mandatory safeguard for --force-sync\n";
+  cerr << "	   mandatory safeguard for --force-sync\n";
   cerr << "  --compact\n";
-  cerr << "        compact the monitor store\n";
+  cerr << "	   compact the monitor store\n";
   cerr << "  --osdmap <filename>\n";
-  cerr << "        only used when --mkfs is provided: load the osdmap from <filename>\n";
+  cerr << "	   only used when --mkfs is provided: load the osdmap from <filename>\n";
   cerr << "  --inject-monmap <filename>\n";
-  cerr << "        write the <filename> monmap to the local monitor store and exit\n";
+  cerr << "	   write the <filename> monmap to the local monitor store and exit\n";
   cerr << "  --extract-monmap <filename>\n";
-  cerr << "        extract the monmap from the local monitor store and exit\n";
+  cerr << "	   extract the monmap from the local monitor store and exit\n";
   cerr << "  --mon-data <directory>\n";
-  cerr << "        where the mon store and keyring are located\n";
+  cerr << "	   where the mon store and keyring are located\n";
   generic_server_usage();
 }
 
@@ -315,7 +315,7 @@ int main(int argc, const char **argv)
       catch (const buffer::error& e) {
 	cerr << argv[0] << ": error decoding monmap " << g_conf->monmap << ": " << e.what() << std::endl;
 	exit(1);
-      }      
+      }	     
     } else {
       int err = monmap.build_initial(g_ceph_context, cerr);
       if (err < 0) {
@@ -386,7 +386,7 @@ int main(int argc, const char **argv)
     int r = store.create_and_open(cerr);
     if (r < 0) {
       cerr << argv[0] << ": error opening mon data directory at '"
-           << g_conf->mon_data << "': " << cpp_strerror(r) << std::endl;
+	   << g_conf->mon_data << "': " << cpp_strerror(r) << std::endl;
       exit(1);
     }
     assert(r == 0);
@@ -431,7 +431,7 @@ int main(int argc, const char **argv)
     ret = converter.needs_conversion();
     if (ret < 0) {
       derr << "found errors while validating legacy unconverted monitor store: "
-           << cpp_strerror(ret) << dendl;
+	   << cpp_strerror(ret) << dendl;
       prefork.exit(1);
     }
     if (ret > 0) {
@@ -481,7 +481,7 @@ int main(int argc, const char **argv)
     // get next version
     version_t v = store->get("monmap", "last_committed");
     dout(0) << "last committed monmap epoch is " << v << ", injected map will be " << (v+1)
-            << dendl;
+	    << dendl;
     v++;
 
     // set the version
@@ -489,7 +489,7 @@ int main(int argc, const char **argv)
     tmp.decode(bl);
     if (tmp.get_epoch() != v) {
       dout(0) << "changing monmap epoch from " << tmp.get_epoch()
-           << " to " << v << dendl;
+	   << " to " << v << dendl;
       tmp.set_epoch(v);
     }
     bufferlist mapbl;
@@ -518,9 +518,9 @@ int main(int argc, const char **argv)
     int err = obtain_monmap(*store, mapbl);
     if (err >= 0) {
       try {
-        monmap.decode(mapbl);
+	monmap.decode(mapbl);
       } catch (const buffer::error& e) {
-        cerr << "can't decode monmap: " << e.what() << std::endl;
+	cerr << "can't decode monmap: " << e.what() << std::endl;
       }
     } else {
       derr << "unable to obtain a monmap: " << cpp_strerror(err) << dendl;
@@ -553,7 +553,7 @@ int main(int argc, const char **argv)
       if (conf_addr.parse(mon_addr_str.c_str()) && (ipaddr != conf_addr)) {
 	derr << "WARNING: 'mon addr' config option " << conf_addr
 	     << " does not match monmap file" << std::endl
-	     << "         continuing with monmap configuration" << dendl;
+	     << "	  continuing with monmap configuration" << dendl;
       }
     }
   } else {
@@ -571,7 +571,7 @@ int main(int argc, const char **argv)
       int err = tmpmap.build_initial(g_ceph_context, cerr);
       if (err < 0) {
 	derr << argv[0] << ": error generating initial monmap: "
-             << cpp_strerror(err) << dendl;
+	     << cpp_strerror(err) << dendl;
 	usage();
 	prefork.exit(1);
       }
@@ -598,18 +598,15 @@ int main(int argc, const char **argv)
     CEPH_FEATURE_UID |
     CEPH_FEATURE_NOSRCADDR |
     CEPH_FEATURE_MONCLOCKCHECK |
-    CEPH_FEATURE_PGID64 |
     CEPH_FEATURE_MSG_AUTH;
   messenger->set_default_policy(Messenger::Policy::stateless_server(supported, 0));
   messenger->set_policy(entity_name_t::TYPE_MON,
-                        Messenger::Policy::lossless_peer_reuse(supported,
+			Messenger::Policy::lossless_peer_reuse(supported,
 							       CEPH_FEATURE_UID |
-							       CEPH_FEATURE_PGID64 |
 							       CEPH_FEATURE_MON_SINGLE_PAXOS));
   messenger->set_policy(entity_name_t::TYPE_OSD,
-                        Messenger::Policy::stateless_server(supported,
-                                                            CEPH_FEATURE_PGID64 |
-                                                            CEPH_FEATURE_OSDENC));
+			Messenger::Policy::stateless_server(supported,
+							    CEPH_FEATURE_OSDENC));
   messenger->set_policy(entity_name_t::TYPE_CLIENT,
 			Messenger::Policy::stateless_server(supported, 0));
   messenger->set_policy(entity_name_t::TYPE_MDS,

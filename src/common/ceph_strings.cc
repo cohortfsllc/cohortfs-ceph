@@ -209,13 +209,3 @@ const char *ceph_lease_op_name(int o)
 	}
 	return "???";
 }
-
-const char *ceph_pool_op_name(int op)
-{
-	switch (op) {
-	case POOL_OP_CREATE: return "create";
-	case POOL_OP_DELETE: return "delete";
-	case POOL_OP_AUID_CHANGE: return "auid change";
-	}
-	return "???";
-}

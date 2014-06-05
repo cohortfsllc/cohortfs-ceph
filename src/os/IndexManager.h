@@ -23,7 +23,6 @@
 #include "common/debug.h"
 
 #include "CollectionIndex.h"
-#include "HashIndex.h"
 #include "FlatIndex.h"
 
 
@@ -47,7 +46,6 @@ typedef ceph::shared_ptr<CollectionIndex> Index;
 class IndexManager {
   Mutex lock; ///< Lock for Index Manager
   Cond cond;  ///< Cond for waiters on col_indices
-  bool upgrade;
 
   /// Currently in use CollectionIndices
   map<coll_t,ceph::weak_ptr<CollectionIndex> > col_indices;
@@ -85,8 +83,7 @@ class IndexManager {
   int build_index(coll_t c, const char *path, Index *index);
 public:
   /// Constructor
-  IndexManager(bool upgrade) : lock("IndexManager lock"),
-			       upgrade(upgrade) {}
+  IndexManager() : lock("IndexManager lock") {}
 
   /**
    * Reserve and return index for c

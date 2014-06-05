@@ -20,13 +20,6 @@ using namespace std;
 #include "messages/MStatfs.h"
 #include "messages/MStatfsReply.h"
 
-#include "messages/MGetPoolStats.h"
-#include "messages/MGetPoolStatsReply.h"
-
-
-#include "messages/MPoolOp.h"
-#include "messages/MPoolOpReply.h"
-
 #include "messages/PaxosServiceMessage.h"
 #include "messages/MMonCommand.h"
 #include "messages/MMonCommandAck.h"
@@ -42,9 +35,6 @@ using namespace std;
 #include "messages/MLogAck.h"
 
 #include "messages/MPing.h"
-
-#include "messages/MCommand.h"
-#include "messages/MCommandReply.h"
 
 #include "messages/MRoute.h"
 #include "messages/MForward.h"
@@ -262,18 +252,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
   case CEPH_MSG_STATFS_REPLY:
     m = new MStatfsReply;
     break;
-  case MSG_GETPOOLSTATS:
-    m = new MGetPoolStats;
-    break;
-  case MSG_GETPOOLSTATSREPLY:
-    m = new MGetPoolStatsReply;
-    break;
-  case CEPH_MSG_POOLOP:
-    m = new MPoolOp;
-    break;
-  case CEPH_MSG_POOLOP_REPLY:
-    m = new MPoolOpReply;
-    break;
   case MSG_MON_COMMAND:
     m = new MMonCommand;
     break;
@@ -309,12 +287,6 @@ Message *decode_message(CephContext *cct, ceph_msg_header& header, ceph_msg_foot
 
   case CEPH_MSG_PING:
     m = new MPing();
-    break;
-  case MSG_COMMAND:
-    m = new MCommand;
-    break;
-  case MSG_COMMAND_REPLY:
-    m = new MCommandReply;
     break;
 
   case MSG_ROUTE:

@@ -17,7 +17,7 @@
 
 #include "boost/tuple/tuple.hpp"
 
-#include "PG.h"
+#include "OSDVol.h"
 
 #include "msg/Dispatcher.h"
 
@@ -30,7 +30,6 @@
 #include "common/ceph_context.h"
 
 #include "os/ObjectStore.h"
-#include "OSDCap.h"
 
 #include "osd/ClassHandler.h"
 
@@ -56,73 +55,6 @@ using namespace std;
 #define CEPH_OSD_PROTOCOL    10 /* cluster internal */
 
 
-enum {
-  l_osd_first = 10000,
-  l_osd_opq,
-  l_osd_op_wip,
-  l_osd_op,
-  l_osd_op_inb,
-  l_osd_op_outb,
-  l_osd_op_lat,
-  l_osd_op_process_lat,
-  l_osd_op_r,
-  l_osd_op_r_outb,
-  l_osd_op_r_lat,
-  l_osd_op_r_process_lat,
-  l_osd_op_w,
-  l_osd_op_w_inb,
-  l_osd_op_w_rlat,
-  l_osd_op_w_lat,
-  l_osd_op_w_process_lat,
-  l_osd_op_rw,
-  l_osd_op_rw_inb,
-  l_osd_op_rw_outb,
-  l_osd_op_rw_rlat,
-  l_osd_op_rw_lat,
-  l_osd_op_rw_process_lat,
-
-  l_osd_sop,
-  l_osd_sop_inb,
-  l_osd_sop_lat,
-  l_osd_sop_w,
-  l_osd_sop_w_inb,
-  l_osd_sop_w_lat,
-  l_osd_sop_pull,
-  l_osd_sop_pull_lat,
-  l_osd_sop_push,
-  l_osd_sop_push_inb,
-  l_osd_sop_push_lat,
-
-  l_osd_pull,
-  l_osd_push,
-  l_osd_push_outb,
-
-  l_osd_push_in,
-  l_osd_push_inb,
-
-  l_osd_rop,
-
-  l_osd_loadavg,
-  l_osd_buf,
-
-  l_osd_pg,
-  l_osd_hb_to,
-  l_osd_hb_from,
-  l_osd_map,
-  l_osd_mape,
-  l_osd_mape_dup,
-
-  l_osd_waiting_for_map,
-
-  l_osd_stat_bytes,
-  l_osd_stat_bytes_used,
-  l_osd_stat_bytes_avail,
-
-  l_osd_copyfrom,
-
-  l_osd_last,
-};
-
 class Messenger;
 class Message;
 class MonClient;
@@ -138,119 +70,14 @@ class Notification;
 
 class AuthAuthorizeHandlerRegistry;
 
-class OpsFlightSocketHook;
-class HistoricOpsSocketHook;
-class TestOpsSocketHook;
-
 typedef ceph::shared_ptr<ObjectStore::Sequencer> SequencerRef;
-
-class DeletingState {
-  Mutex lock;
-  Cond cond;
-  enum {
-    QUEUED,
-    CLEARING_DIR,
-    CLEARING_WAITING,
-    DELETING_DIR,
-    DELETED_DIR,
-    CANCELED,
-  } status;
-  bool stop_deleting;
-public:
-  const pg_t pgid;
-  const PGRef old_pg_state;
-  DeletingState(const pair<pg_t, PGRef> &in) :
-    lock("DeletingState::lock"), status(QUEUED), stop_deleting(false),
-    pgid(in.first), old_pg_state(in.second) {}
-
-  /// transition status to clearing
-  bool start_clearing() {
-    Mutex::Locker l(lock);
-    assert(
-      status == QUEUED ||
-      status == DELETED_DIR);
-    if (stop_deleting) {
-      status = CANCELED;
-      cond.Signal();
-      return false;
-    }
-    status = CLEARING_DIR;
-    return true;
-  } ///< @return false if we should cancel deletion
-
-  /// transition status to CLEARING_WAITING
-  bool pause_clearing() {
-    Mutex::Locker l(lock);
-    assert(status == CLEARING_DIR);
-    if (stop_deleting) {
-      status = CANCELED;
-      cond.Signal();
-      return false;
-    }
-    status = CLEARING_WAITING;
-    return true;
-  } ///< @return false if we should cancel deletion
-
-  /// transition status to CLEARING_DIR
-  bool resume_clearing() {
-    Mutex::Locker l(lock);
-    assert(status == CLEARING_WAITING);
-    if (stop_deleting) {
-      status = CANCELED;
-      cond.Signal();
-      return false;
-    }
-    status = CLEARING_DIR;
-    return true;
-  } ///< @return false if we should cancel deletion
-
-  /// transition status to deleting
-  bool start_deleting() {
-    Mutex::Locker l(lock);
-    assert(status == CLEARING_DIR);
-    if (stop_deleting) {
-      status = CANCELED;
-      cond.Signal();
-      return false;
-    }
-    status = DELETING_DIR;
-    return true;
-  } ///< @return false if we should cancel deletion
-
-  /// signal collection removal queued
-  void finish_deleting() {
-    Mutex::Locker l(lock);
-    assert(status == DELETING_DIR);
-    status = DELETED_DIR;
-    cond.Signal();
-  }
-
-  /// try to halt the deletion
-  bool try_stop_deletion() {
-    Mutex::Locker l(lock);
-    stop_deleting = true;
-    /**
-     * If we are in DELETING_DIR or CLEARING_DIR, there are in progress
-     * operations we have to wait for before continuing on.  States
-     * CLEARING_WAITING and QUEUED indicate that the remover will check
-     * stop_deleting before queueing any further operations.  CANCELED
-     * indicates that the remover has already halted.  DELETED_DIR
-     * indicates that the deletion has been fully queueud.
-     */
-    while (status == DELETING_DIR || status == CLEARING_DIR)
-      cond.Wait(lock);
-    return status != DELETED_DIR;
-  } ///< @return true if we don't need to recreate the collection
-};
-typedef ceph::shared_ptr<DeletingState> DeletingStateRef;
 
 class OSD;
 class OSDService {
 public:
   OSD *osd;
   CephContext *cct;
-  SharedPtrRegistry<pg_t, ObjectStore::Sequencer> osr_registry;
-  SharedPtrRegistry<pg_t, DeletingState> deleting_pgs;
+  SharedPtrRegistry<uuid_d, ObjectStore::Sequencer> osr_registry;
   const int whoami;
   ObjectStore *&store;
   LogClient &clog;
@@ -259,12 +86,11 @@ private:
   Messenger *&cluster_messenger;
   Messenger *&client_messenger;
 public:
-  PerfCounters *&logger;
   MonClient   *&monc;
-  ThreadPool::WorkQueueVal<pair<PGRef, OpRequestRef>, PGRef> &op_wq;
+  ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> &op_wq;
   ClassHandler  *&class_handler;
 
-  void dequeue_pg(PG *pg, list<OpRequestRef> *dequeued);
+  void dequeue_vol(OSDVol *v, list<OpRequestRef> *dequeued);
 
   // -- superblock --
   Mutex publish_lock, pre_publish_lock; // pre-publish orders before publish
@@ -331,7 +157,6 @@ public:
 
   void reply_op_error(OpRequestRef op, int err);
   void reply_op_error(OpRequestRef op, int err, eversion_t v, version_t uv);
-  void handle_misdirected_op(PG *pg, OpRequestRef op);
 
   // -- Objecter, for teiring reads/writes from/to other OSDs --
   Mutex objecter_lock;
@@ -489,7 +314,6 @@ protected:
   Messenger   *client_messenger;
   Messenger   *objecter_messenger;
   MonClient   *monc; // check the "monc helpers" list before accessing directly
-  PerfCounters      *logger;
   ObjectStore *store;
 
   LogClient clog;
@@ -509,7 +333,6 @@ protected:
   Cond dispatch_cond;
   int dispatch_running;
 
-  void create_logger();
   void tick();
   void _dispatch(Message *m);
   void dispatch_op(OpRequestRef op);
@@ -536,17 +359,9 @@ public:
     return hobject_t(object_t(foo));
   }
 
-  static hobject_t make_pg_log_oid(pg_t pg) {
+  static hobject_t make_vol_biginfo_oid(uuid_d vol) {
     stringstream ss;
-    ss << "pglog_" << pg;
-    string s;
-    getline(ss, s);
-    return hobject_t(object_t(s.c_str()));
-  }
-  
-  static hobject_t make_pg_biginfo_oid(pg_t pg) {
-    stringstream ss;
-    ss << "pginfo_" << pg;
+    ss << "volinfo_" << vol;
     string s;
     getline(ss, s);
     return hobject_t(object_t(s.c_str()));
@@ -629,7 +444,6 @@ private:
 public:
   struct Session : public RefCountedObject {
     EntityName entity_name;
-    OSDCap caps;
     int64_t auid;
     epoch_t last_sent_epoch;
     ConnectionRef con;
@@ -743,11 +557,6 @@ public:
   } heartbeat_dispatcher;
 
 private:
-  // -- stats --
-  Mutex stat_lock;
-  osd_stat_t osd_stat;
-
-  void update_osd_stat();
 
   // -- waiters --
   list<OpRequestRef> finished;
@@ -769,25 +578,21 @@ private:
     finished_lock.Unlock();
   }
   void do_waiters();
-  
+
   // -- op tracking --
   OpTracker op_tracker;
   void check_ops_in_flight();
-  void test_ops(std::string command, std::string args, ostream& ss);
-  friend class TestOpsSocketHook;
-  TestOpsSocketHook *test_ops_hook;
-  friend struct C_CompleteSplits;
 
   // -- op queue --
 
-  struct OpWQ: public ThreadPool::WorkQueueVal<pair<PGRef, OpRequestRef>,
-					       PGRef > {
+  struct OpWQ: public ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>,
+					       OSDVolRef > {
     Mutex qlock;
-    map<PG*, list<OpRequestRef> > pg_for_processing;
+    map<OSDVol*, list<OpRequestRef> > vol_for_processing;
     OSD *osd;
-    PrioritizedQueue<pair<PGRef, OpRequestRef>, entity_inst_t > pqueue;
+    PrioritizedQueue<pair<OSDVolRef, OpRequestRef>, entity_inst_t > pqueue;
     OpWQ(OSD *o, time_t ti, ThreadPool *tp)
-      : ThreadPool::WorkQueueVal<pair<PGRef, OpRequestRef>, PGRef >(
+      : ThreadPool::WorkQueueVal<pair<OSDVolRef, OpRequestRef>, OSDVolRef> (
 	"OSD::OpWQ", ti, ti*10, tp),
 	qlock("OpWQ::qlock"),
 	osd(o),
@@ -801,35 +606,36 @@ private:
       unlock();
     }
 
-    void _enqueue_front(pair<PGRef, OpRequestRef> item);
-    void _enqueue(pair<PGRef, OpRequestRef> item);
-    PGRef _dequeue();
+    void _enqueue_front(pair<OSDVolRef, OpRequestRef> item);
+    void _enqueue(pair<OSDVolRef, OpRequestRef> item);
+    OSDVolRef _dequeue();
 
     struct Pred {
-      PG *pg;
-      Pred(PG *pg) : pg(pg) {}
-      bool operator()(const pair<PGRef, OpRequestRef> &op) {
-	return op.first == pg;
+      OSDVol *vol;
+      Pred(OSDVol *vol) : vol(vol) {}
+      bool operator()(const pair<OSDVolRef, OpRequestRef> &op) {
+	return op.first == vol;
       }
     };
-    void dequeue(PG *pg, list<OpRequestRef> *dequeued = 0) {
+    void dequeue(OSDVol *vol, list<OpRequestRef> *dequeued = 0) {
       lock();
       if (!dequeued) {
-	pqueue.remove_by_filter(Pred(pg));
-	pg_for_processing.erase(pg);
+	pqueue.remove_by_filter(Pred(vol));
+	vol_for_processing.erase(vol);
       } else {
-	list<pair<PGRef, OpRequestRef> > _dequeued;
-	pqueue.remove_by_filter(Pred(pg), &_dequeued);
-	for (list<pair<PGRef, OpRequestRef> >::iterator i = _dequeued.begin();
+	list<pair<OSDVolRef, OpRequestRef> > _dequeued;
+	pqueue.remove_by_filter(Pred(vol), &_dequeued);
+	for (list<pair<OSDVolRef, OpRequestRef> >::iterator i
+	       = _dequeued.begin();
 	     i != _dequeued.end();
 	     ++i) {
 	  dequeued->push_back(i->second);
 	}
-	if (pg_for_processing.count(pg)) {
+	if (vol_for_processing.count(vol)) {
 	  dequeued->splice(
 	    dequeued->begin(),
-	    pg_for_processing[pg]);
-	  pg_for_processing.erase(pg);
+	    vol_for_processing[vol]);
+	  vol_for_processing.erase(vol);
 	}
       }
       unlock();
@@ -837,21 +643,20 @@ private:
     bool _empty() {
       return pqueue.empty();
     }
-    void _process(PGRef pg, ThreadPool::TPHandle &handle);
+    void _process(OSDVolRef vol, ThreadPool::TPHandle &handle);
   } op_wq;
 
-  void enqueue_op(PG *pg, OpRequestRef op);
+  void enqueue_op(OSDVol *vol, OpRequestRef op);
   void dequeue_op(
-    PGRef pg, OpRequestRef op,
+    OSDVolRef vol, OpRequestRef op,
     ThreadPool::TPHandle &handle);
 
-  friend class PG;
+  friend class OSDVol;
 
-
- protected:
+protected:
 
   // -- osd map --
-  OSDMapRef       osdmap;
+  OSDMapRef osdmap;
   OSDMapRef get_osdmap() {
     return osdmap;
   }
@@ -875,12 +680,10 @@ private:
   void handle_osd_map(class MOSDMap *m);
   void note_down_osd(int osd);
   void note_up_osd(int osd);
-  
-  void advance_pg(
-    epoch_t advance_to, PG *pg,
-    ThreadPool::TPHandle &handle,
-    set<boost::intrusive_ptr<PG> > *split_pgs
-  );
+
+  void advance_vol(
+    epoch_t advance_to, OSDVol *vol,
+    ThreadPool::TPHandle &handle);
   void advance_map(ObjectStore::Transaction& t, C_Contexts *tfin);
   void consume_map();
   void activate_map();
@@ -917,52 +720,24 @@ private:
 
 protected:
   // -- placement groups --
-  ceph::unordered_map<pg_t, PG*> pg_map;
-  map<pg_t, list<OpRequestRef> > waiting_for_pg;
+  std::map<uuid_d, OSDVol*> vol_map;
 
-  PGPool _get_pool(int id, OSDMapRef createmap);
-
-  bool  _have_pg(pg_t pgid);
-  PG   *_lookup_lock_pg_with_map_lock_held(pg_t pgid);
-  PG   *_lookup_lock_pg(pg_t pgid);
-  PG   *_lookup_pg(pg_t pgid);
-  PG   *_open_lock_pg(OSDMapRef createmap,
-		      pg_t pg, bool no_lockdep_check=false,
-		      bool hold_map_lock=false);
-  enum res_result {
-    RES_PARENT,    // resurrected a parent
-    RES_SELF,      // resurrected self
-    RES_NONE       // nothing relevant deleting
-  };
-  res_result _try_resurrect_pg(
-    OSDMapRef curmap, pg_t pgid, pg_t *resurrected, PGRef *old_pg_state);
-  PG   *_create_lock_pg(
+  bool  _have_vol(uuid_d vol);
+  OSDVol* _lookup_lock_vol(uuid_d vol);
+  OSDVol* _lookup_vol(uuid_d vol);
+  OSDVol* _open_lock_vol(OSDMapRef createmap,
+			uuid_d vol, bool no_lockdep_check=false,
+			bool hold_map_lock=false);
+  OSDVol* _create_lock_vol(
     OSDMapRef createmap,
-    pg_t pgid,
+    uuid_d volume,
     bool newly_created,
     bool hold_map_lock,
     int acting_osd,
-    pg_history_t history,
     ObjectStore::Transaction& t);
-  PG   *_lookup_qlock_pg(pg_t pgid);
+  OSDVol* _lookup_qlock_vol(uuid_d vol);
 
-  PG* _make_pg(OSDMapRef createmap, pg_t pgid);
-
-  void load_pgs();
-
-  void wake_pg_waiters(pg_t pgid) {
-    if (waiting_for_pg.count(pgid)) {
-      take_waiters_front(waiting_for_pg[pgid]);
-      waiting_for_pg.erase(pgid);
-    }
-  }
-  void wake_all_pg_waiters() {
-    for (map<pg_t, list<OpRequestRef> >::iterator p = waiting_for_pg.begin();
-	 p != waiting_for_pg.end();
-	 ++p)
-      take_waiters_front(p->second);
-    waiting_for_pg.clear();
-  }
+  OSDVol* _make_vol(OSDMapRef createmap, uuid_d vol);
 
   // -- boot --
   void start_boot();
@@ -981,7 +756,7 @@ protected:
 
   void queue_want_up_thru(epoch_t want);
   void send_alive();
-  void dispatch_context(PG *pg, OSDMapRef curmap,
+  void dispatch_context(OSDVol *vol, OSDMapRef curmap,
 			ThreadPool::TPHandle *handle);
 
   // -- failures --
@@ -994,100 +769,6 @@ protected:
 
   ceph_tid_t get_tid() {
     return service.get_tid();
-  }
-  // -- commands --
-  struct Command {
-    vector<string> cmd;
-    ceph_tid_t tid;
-    bufferlist indata;
-    ConnectionRef con;
-
-    Command(vector<string>& c, ceph_tid_t t, bufferlist& bl, Connection *co)
-      : cmd(c), tid(t), indata(bl), con(co) {}
-  };
-  list<Command*> command_queue;
-  struct CommandWQ : public ThreadPool::WorkQueue<Command> {
-    OSD *osd;
-    CommandWQ(OSD *o, time_t ti, ThreadPool *tp)
-      : ThreadPool::WorkQueue<Command>("OSD::CommandWQ", ti, 0, tp), osd(o) {}
-
-    bool _empty() {
-      return osd->command_queue.empty();
-    }
-    bool _enqueue(Command *c) {
-      osd->command_queue.push_back(c);
-      return true;
-    }
-    void _dequeue(Command *pg) {
-      assert(0);
-    }
-    Command *_dequeue() {
-      if (osd->command_queue.empty())
-	return NULL;
-      Command *c = osd->command_queue.front();
-      osd->command_queue.pop_front();
-      return c;
-    }
-    void _process(Command *c) {
-      osd->osd_lock.Lock();
-      if (osd->is_stopping()) {
-	osd->osd_lock.Unlock();
-	delete c;
-	return;
-      }
-      osd->do_command(c->con.get(), c->tid, c->cmd, c->indata);
-      osd->osd_lock.Unlock();
-      delete c;
-    }
-    void _clear() {
-      while (!osd->command_queue.empty()) {
-	Command *c = osd->command_queue.front();
-	osd->command_queue.pop_front();
-	delete c;
-      }
-    }
-  } command_wq;
-
-  void handle_command(class MMonCommand *m);
-  void handle_command(class MCommand *m);
-  void do_command(Connection *con, ceph_tid_t tid, vector<string>& cmd, bufferlist& data);
-
-  // -- removing --
-  struct RemoveWQ :
-    public ThreadPool::WorkQueueVal<pair<PGRef, DeletingStateRef> > {
-    ObjectStore *&store;
-    list<pair<PGRef, DeletingStateRef> > remove_queue;
-    RemoveWQ(ObjectStore *&o, time_t ti, ThreadPool *tp)
-      : ThreadPool::WorkQueueVal<pair<PGRef, DeletingStateRef> >(
-	"OSD::RemoveWQ", ti, 0, tp),
-	store(o) {}
-
-    bool _empty() {
-      return remove_queue.empty();
-    }
-    void _enqueue(pair<PGRef, DeletingStateRef> item) {
-      remove_queue.push_back(item);
-    }
-    void _enqueue_front(pair<PGRef, DeletingStateRef> item) {
-      remove_queue.push_front(item);
-    }
-    bool _dequeue(pair<PGRef, DeletingStateRef> item) {
-      assert(0);
-    }
-    pair<PGRef, DeletingStateRef> _dequeue() {
-      assert(!remove_queue.empty());
-      pair<PGRef, DeletingStateRef> item = remove_queue.front();
-      remove_queue.pop_front();
-      return item;
-    }
-    void _process(pair<PGRef, DeletingStateRef>, ThreadPool::TPHandle &);
-    void _clear() {
-      remove_queue.clear();
-    }
-  } remove_wq;
-  uint64_t next_removal_seq;
-  coll_t get_next_removal_coll(pg_t pgid) {
-    return coll_t::make_removal_coll(next_removal_seq++, pgid);
   }
 
  private:

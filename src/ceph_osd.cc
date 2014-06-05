@@ -327,7 +327,6 @@ int main(int argc, const char **argv)
   uint64_t supported =
     CEPH_FEATURE_UID |
     CEPH_FEATURE_NOSRCADDR |
-    CEPH_FEATURE_PGID64 |
     CEPH_FEATURE_MSG_AUTH;
 
   ms_public->set_default_policy(Messenger::Policy::stateless_server(supported, 0));
@@ -336,9 +335,8 @@ int main(int argc, const char **argv)
 				   client_msg_throttler.get());
   ms_public->set_policy(entity_name_t::TYPE_MON,
 			Messenger::Policy::lossy_client(supported,
-							       CEPH_FEATURE_UID |
-							       CEPH_FEATURE_PGID64 |
-							       CEPH_FEATURE_OSDENC));
+							CEPH_FEATURE_UID |
+							CEPH_FEATURE_OSDENC));
   //try to poison pill any OSD connections on the wrong address
   ms_public->set_policy(entity_name_t::TYPE_OSD,
 			Messenger::Policy::stateless_server(0,0));
@@ -348,7 +346,6 @@ int main(int argc, const char **argv)
   ms_cluster->set_policy(entity_name_t::TYPE_OSD,
 			 Messenger::Policy::lossless_peer(supported,
 							  CEPH_FEATURE_UID |
-							  CEPH_FEATURE_PGID64 |
 							  CEPH_FEATURE_OSDENC));
   ms_cluster->set_policy(entity_name_t::TYPE_CLIENT,
 			 Messenger::Policy::stateless_server(0, 0));

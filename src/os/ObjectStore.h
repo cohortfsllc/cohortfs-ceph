@@ -302,44 +302,41 @@ public:
   class Transaction {
   public:
     enum {
-      OP_NOP =          0,
-      OP_TOUCH =        9,   // cid, oid
-      OP_WRITE =        10,  // cid, oid, offset, len, bl
-      OP_ZERO =         11,  // cid, oid, offset, len
-      OP_TRUNCATE =     12,  // cid, oid, len
-      OP_REMOVE =       13,  // cid, oid
-      OP_SETATTR =      14,  // cid, oid, attrname, bl
-      OP_SETATTRS =     15,  // cid, oid, attrset
-      OP_RMATTR =       16,  // cid, oid, attrname
-      OP_CLONE =        17,  // cid, oid, newoid
-      OP_CLONERANGE =   18,  // cid, oid, newoid, offset, len
-      OP_CLONERANGE2 =  30,  // cid, oid, newoid, srcoff, len, dstoff
+      OP_NOP =		0,
+      OP_TOUCH =	9,   // cid, oid
+      OP_WRITE =	10,  // cid, oid, offset, len, bl
+      OP_ZERO =		11,  // cid, oid, offset, len
+      OP_TRUNCATE =	12,  // cid, oid, len
+      OP_REMOVE =	13,  // cid, oid
+      OP_SETATTR =	14,  // cid, oid, attrname, bl
+      OP_SETATTRS =	15,  // cid, oid, attrset
+      OP_RMATTR =	16,  // cid, oid, attrname
+      OP_CLONE =	17,  // cid, oid, newoid
+      OP_CLONERANGE =	18,  // cid, oid, newoid, offset, len
+      OP_CLONERANGE2 =	30,  // cid, oid, newoid, srcoff, len, dstoff
 
-      OP_TRIMCACHE =    19,  // cid, oid, offset, len  **DEPRECATED**
+      OP_TRIMCACHE =	19,  // cid, oid, offset, len  **DEPRECATED**
 
-      OP_MKCOLL =       20,  // cid
-      OP_RMCOLL =       21,  // cid
-      OP_COLL_ADD =     22,  // cid, oldcid, oid
-      OP_COLL_REMOVE =  23,  // cid, oid
+      OP_MKCOLL =	20,  // cid
+      OP_RMCOLL =	21,  // cid
+      OP_COLL_ADD =	22,  // cid, oldcid, oid
+      OP_COLL_REMOVE =	23,  // cid, oid
       OP_COLL_SETATTR = 24,  // cid, attrname, bl
-      OP_COLL_RMATTR =  25,  // cid, attrname
+      OP_COLL_RMATTR =	25,  // cid, attrname
       OP_COLL_SETATTRS = 26,  // cid, attrset
-      OP_COLL_MOVE =    8,   // newcid, oldcid, oid
+      OP_COLL_MOVE =	8,   // newcid, oldcid, oid
 
-      OP_STARTSYNC =    27,  // start a sync
+      OP_STARTSYNC =	27,  // start a sync
 
-      OP_RMATTRS =      28,  // cid, oid
-      OP_COLL_RENAME =       29,  // cid, newcid
+      OP_RMATTRS =	28,  // cid, oid
+      OP_COLL_RENAME =	     29,  // cid, newcid
 
       OP_OMAP_CLEAR = 31,   // cid
       OP_OMAP_SETKEYS = 32, // cid, attrset
       OP_OMAP_RMKEYS = 33,  // cid, keyset
       OP_OMAP_SETHEADER = 34, // cid, header
-      OP_SPLIT_COLLECTION = 35, // cid, bits, destination
-      OP_SPLIT_COLLECTION2 = 36, /* cid, bits, destination
-				    doesn't create the destination */
-      OP_OMAP_RMKEYRANGE = 37,  // cid, oid, firstkey, lastkey
-      OP_COLL_MOVE_RENAME = 38,   // oldcid, oldoid, newcid, newoid
+      OP_OMAP_RMKEYRANGE = 37,	// cid, oid, firstkey, lastkey
+      OP_COLL_MOVE_RENAME = 38,	  // oldcid, oldoid, newcid, newoid
 
       OP_SETALLOCHINT = 39,  // cid, oid, object_size, write_size
     };
@@ -478,7 +475,7 @@ public:
 	  sizeof(largest_data_off_in_tbl) +
 	  sizeof(uint32_t);  // tbl length
       }
-      return 0;  // none
+      return 0;	 // none
     }
     /// offset of buffer as aligned to destination within object.
     int get_data_alignment() {
@@ -546,10 +543,6 @@ public:
       hobject_t get_oid() {
 	hobject_t oid;
 	::decode(oid, p);
-	if (use_pool_override && pool_override != -1 &&
-	    !oid.is_max() && oid.pool == -1) {
-	  oid.pool = pool_override;
-	}
 	return oid;
       }
       coll_t get_cid() {
@@ -629,7 +622,7 @@ public:
     }
     /**
      * Write data to an offset within an object. If the object is too
-     * small, it is expanded as needed.  It is possible to specify an
+     * small, it is expanded as needed.	 It is possible to specify an
      * offset beyond the current end of an object and it will be
      * expanded as needed. Simple implementations of ObjectStore will
      * just zero the data between the old end of the object and the
@@ -796,7 +789,7 @@ public:
      * Add object to another collection (DEPRECATED)
      *
      * The Object is added to the new collection. This is a virtual
-     * add, we now have two names for the same object.  This is only
+     * add, we now have two names for the same object.	This is only
      * used for conversion of old stores to new stores and is not
      * needed for new implementations unless they expect to make use
      * of the conversion infrastructure.
@@ -887,7 +880,7 @@ public:
 
     /// Remove omap from oid
     void omap_clear(
-      coll_t cid,           ///< [in] Collection containing oid
+      coll_t cid,	    ///< [in] Collection containing oid
       const hobject_t &oid  ///< [in] Object from which to remove omap
       ) {
       uint32_t op = OP_OMAP_CLEAR;
@@ -898,8 +891,8 @@ public:
     }
     /// Set keys on oid omap.  Replaces duplicate keys.
     void omap_setkeys(
-      coll_t cid,                           ///< [in] Collection containing oid
-      const hobject_t &oid,                ///< [in] Object to update
+      coll_t cid,			    ///< [in] Collection containing oid
+      const hobject_t &oid,		   ///< [in] Object to update
       const map<string, bufferlist> &attrset ///< [in] Replacement keys and values
       ) {
       uint32_t op = OP_OMAP_SETKEYS;
@@ -911,7 +904,7 @@ public:
     }
     /// Remove keys from oid omap
     void omap_rmkeys(
-      coll_t cid,             ///< [in] Collection containing oid
+      coll_t cid,	      ///< [in] Collection containing oid
       const hobject_t &oid,  ///< [in] Object from which to remove the omap
       const set<string> &keys ///< [in] Keys to clear
       ) {
@@ -925,7 +918,7 @@ public:
 
     /// Remove key range from oid omap
     void omap_rmkeyrange(
-      coll_t cid,             ///< [in] Collection containing oid
+      coll_t cid,	      ///< [in] Collection containing oid
       const hobject_t &oid,  ///< [in] Object from which to remove the omap keys
       const string& first,    ///< [in] first key in range
       const string& last      ///< [in] first key past range, range is [first,last)
@@ -941,7 +934,7 @@ public:
 
     /// Set omap header
     void omap_setheader(
-      coll_t cid,             ///< [in] Collection containing oid
+      coll_t cid,	      ///< [in] Collection containing oid
       const hobject_t &oid,  ///< [in] Object
       const bufferlist &bl    ///< [in] Header value
       ) {
@@ -951,22 +944,6 @@ public:
       ::encode(oid, tbl);
       ::encode(bl, tbl);
       ops++;
-    }
-
-    /// Split collection based on given prefixes, objects matching the specified bits/rem are
-    /// moved to the new collection
-    void split_collection(
-      coll_t cid,
-      uint32_t bits,
-      uint32_t rem,
-      coll_t destination) {
-      uint32_t op = OP_SPLIT_COLLECTION2;
-      ::encode(op, tbl);
-      ::encode(cid, tbl);
-      ::encode(bits, tbl);
-      ::encode(rem, tbl);
-      ::encode(destination, tbl);
-      ++ops;
     }
 
     void set_alloc_hint(
@@ -1080,7 +1057,7 @@ public:
     list<Transaction *> tls;
     tls.push_back(t);
     return queue_transactions(osr, tls, new C_DeleteTransaction(t),
-	                      NULL, NULL, TrackedOpRef(), handle);
+			      NULL, NULL, TrackedOpRef(), handle);
   }
 
   int queue_transaction(Sequencer *osr, Transaction *t, Context *onreadable, Context *ondisk=0,
@@ -1090,7 +1067,7 @@ public:
     list<Transaction*> tls;
     tls.push_back(t);
     return queue_transactions(osr, tls, onreadable, ondisk, onreadable_sync,
-	                      op, handle);
+			      op, handle);
   }
 
   int queue_transactions(Sequencer *osr, list<Transaction*>& tls,
@@ -1221,7 +1198,7 @@ public:
    * @param oid oid of object
    * @returns true if object exists, false otherwise
    */
-  virtual bool exists(coll_t cid, const hobject_t& oid) = 0;                   // useful?
+  virtual bool exists(coll_t cid, const hobject_t& oid) = 0;		       // useful?
 
   /**
    * stat -- get information for an object
@@ -1377,7 +1354,7 @@ public:
    * @returns 0 on success, negative error code on failure
    */
   virtual int collection_getattr(coll_t cid, const char *name,
-	                         void *value, size_t size) = 0;
+				 void *value, size_t size) = 0;
   /**
    * collection_getattr - get an xattr of a collection
    *
@@ -1446,39 +1423,39 @@ public:
   virtual int omap_get(
     coll_t c, ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,      ///< [out] omap header
+    bufferlist *header,	     ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map
     ) = 0;
 
   /// Get omap header
   virtual int omap_get_header(
-    coll_t c,                ///< [in] Collection containing oid
+    coll_t c,		     ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,      ///< [out] omap header
+    bufferlist *header,	     ///< [out] omap header
     bool allow_eio = false ///< [in] don't assert on eio
     ) = 0;
 
   /// Get keys defined on oid
   virtual int omap_get_keys(
-    coll_t c,              ///< [in] Collection containing oid
+    coll_t c,		   ///< [in] Collection containing oid
     const hobject_t &oid, ///< [in] Object containing omap
-    set<string> *keys      ///< [out] Keys defined on oid
+    set<string> *keys	   ///< [out] Keys defined on oid
     ) = 0;
 
   /// Get key values
   virtual int omap_get_values(
-    coll_t c,                    ///< [in] Collection containing oid
-    const hobject_t &oid,       ///< [in] Object containing omap
-    const set<string> &keys,     ///< [in] Keys to get
+    coll_t c,			 ///< [in] Collection containing oid
+    const hobject_t &oid,	///< [in] Object containing omap
+    const set<string> &keys,	 ///< [in] Keys to get
     map<string, bufferlist> *out ///< [out] Returned keys and values
     ) = 0;
 
   /// Filters keys into out which are defined on oid
   virtual int omap_check_keys(
-    coll_t c,                ///< [in] Collection containing oid
+    coll_t c,		     ///< [in] Collection containing oid
     const hobject_t &oid,   ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
-    set<string> *out         ///< [out] Subset of keys defined on oid
+    set<string> *out	     ///< [out] Subset of keys defined on oid
     ) = 0;
 
   /**
@@ -1486,12 +1463,12 @@ public:
    *
    * Warning!  The returned iterator is an implicit lock on filestore
    * operations in c.  Do not use filestore methods on c while the returned
-   * iterator is live.  (Filling in a transaction is no problem).
+   * iterator is live.	(Filling in a transaction is no problem).
    *
    * @return iterator, null on error
    */
   virtual ObjectMap::ObjectMapIterator get_omap_iterator(
-    coll_t c,              ///< [in] collection
+    coll_t c,		   ///< [in] collection
     const hobject_t &oid  ///< [in] object
     ) = 0;
 

@@ -23,10 +23,10 @@
 
 #include "include/types.h"
 #include "include/stringify.h"
-#include "include/unordered_map.h"
 #include "include/memory.h"
 #include "common/errno.h"
 #include "MemStore.h"
+#include <map>
 
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix
@@ -67,7 +67,7 @@ int MemStore::_save()
   Mutex::Locker l(apply_lock); // block any writer
   dump_all();
   set<coll_t> collections;
-  for (ceph::unordered_map<coll_t,CollectionRef>::iterator p = coll_map.begin();
+  for (map<coll_t,CollectionRef>::iterator p = coll_map.begin();
        p != coll_map.end();
        ++p) {
     dout(20) << __func__ << " coll " << p->first << " " << p->second << dendl;
@@ -106,7 +106,7 @@ void MemStore::dump_all()
 void MemStore::dump(Formatter *f)
 {
   f->open_array_section("collections");
-  for (ceph::unordered_map<coll_t,CollectionRef>::iterator p = coll_map.begin();
+  for (map<coll_t,CollectionRef>::iterator p = coll_map.begin();
        p != coll_map.end();
        ++p) {
     f->open_object_section("collection");
@@ -238,7 +238,7 @@ objectstore_perf_stat_t MemStore::get_cur_stats()
 MemStore::CollectionRef MemStore::get_collection(coll_t cid)
 {
   RWLock::RLocker l(coll_lock);
-  ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
+  map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return CollectionRef();
   return cp->second;
@@ -387,7 +387,7 @@ int MemStore::list_collections(vector<coll_t>& ls)
 {
   dout(10) << __func__ << dendl;
   RWLock::RLocker l(coll_lock);
-  for (ceph::unordered_map<coll_t,CollectionRef>::iterator p = coll_map.begin();
+  for (map<coll_t,CollectionRef>::iterator p = coll_map.begin();
        p != coll_map.end();
        ++p) {
     ls.push_back(p->first);
@@ -490,10 +490,9 @@ int MemStore::collection_list_partial(coll_t cid, hobject_t start,
     ls->push_back(p->first);
     ++p;
   }
-  if (p == c->object_map.end())
-    *next = hobject_t::get_max();
-  else
+  if (p != c->object_map.end())
     *next = p->first;
+
   return 0;
 }
 
@@ -936,18 +935,6 @@ void MemStore::_do_transaction(Transaction& t)
 	r = _omap_setheader(cid, oid, bl);
       }
       break;
-    case Transaction::OP_SPLIT_COLLECTION:
-      assert(0 == "deprecated");
-      break;
-    case Transaction::OP_SPLIT_COLLECTION2:
-      {
-	coll_t cid(i.get_cid());
-	uint32_t bits(i.get_u32());
-	uint32_t rem(i.get_u32());
-	coll_t dest(i.get_cid());
-	r = _split_collection(cid, bits, rem, dest);
-      }
-      break;
 
     case Transaction::OP_SETALLOCHINT:
       // nop
@@ -1324,7 +1311,7 @@ int MemStore::_create_collection(coll_t cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
   RWLock::WLocker l(coll_lock);
-  ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
+  map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp != coll_map.end())
     return -EEXIST;
   coll_map[cid].reset(new Collection);
@@ -1335,7 +1322,7 @@ int MemStore::_destroy_collection(coll_t cid)
 {
   dout(10) << __func__ << " " << cid << dendl;
   RWLock::WLocker l(coll_lock);
-  ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
+  map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return -ENOENT;
   {
@@ -1392,14 +1379,14 @@ int MemStore::_collection_move_rename(coll_t oldcid, const hobject_t& oldoid,
   c->object_hash[oid] = o;
   oc->object_map.erase(oldoid);
   oc->object_hash.erase(oldoid);
-  return 0; 
+  return 0;
 }
 
 int MemStore::_collection_setattr(coll_t cid, const char *name,
 				  const void *value, size_t size)
 {
   dout(10) << __func__ << " " << cid << " " << name << dendl;
-  ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
+  map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return -ENOENT;
   RWLock::WLocker l(cp->second->lock);
@@ -1411,7 +1398,7 @@ int MemStore::_collection_setattr(coll_t cid, const char *name,
 int MemStore::_collection_setattrs(coll_t cid, map<string,bufferptr> &aset)
 {
   dout(10) << __func__ << " " << cid << dendl;
-  ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
+  map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return -ENOENT;
   RWLock::WLocker l(cp->second->lock);
@@ -1427,7 +1414,7 @@ int MemStore::_collection_setattrs(coll_t cid, map<string,bufferptr> &aset)
 int MemStore::_collection_rmattr(coll_t cid, const char *name)
 {
   dout(10) << __func__ << " " << cid << " " << name << dendl;
-  ceph::unordered_map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
+  map<coll_t,CollectionRef>::iterator cp = coll_map.find(cid);
   if (cp == coll_map.end())
     return -ENOENT;
   RWLock::WLocker l(cp->second->lock);
@@ -1448,35 +1435,5 @@ int MemStore::_collection_rename(const coll_t &cid, const coll_t &ncid)
     return -EEXIST;
   coll_map[ncid] = coll_map[cid];
   coll_map.erase(cid);
-  return 0;
-}
-
-int MemStore::_split_collection(coll_t cid, uint32_t bits, uint32_t match,
-				coll_t dest)
-{
-  dout(10) << __func__ << " " << cid << " " << bits << " " << match << " "
-	   << dest << dendl;
-  CollectionRef sc = get_collection(cid);
-  if (!sc)
-    return -ENOENT;
-  CollectionRef dc = get_collection(dest);
-  if (!dc)
-    return -ENOENT;
-  RWLock::WLocker l1(MIN(sc, dc)->lock);
-  RWLock::WLocker l2(MAX(sc, dc)->lock);
-
-  map<hobject_t,ObjectRef>::iterator p = sc->object_map.begin();
-  while (p != sc->object_map.end()) {
-    if (p->first.match(bits, match)) {
-      dout(20) << " moving " << p->first << dendl;
-      dc->object_map.insert(make_pair(p->first, p->second));
-      dc->object_hash.insert(make_pair(p->first, p->second));
-      sc->object_hash.erase(p->first);
-      sc->object_map.erase(p++);
-    } else {
-      ++p;
-    }
-  }
-
   return 0;
 }

@@ -3,8 +3,7 @@ set(osd_srcs
 	ClassHandler.cc
 	OpRequest.cc 
 	OSD.cc 
-	OSDCap.cc 
-	PG.cc
+	OSDVol.cc
 	OSDriver.cc
 	Watch.cc 
 )

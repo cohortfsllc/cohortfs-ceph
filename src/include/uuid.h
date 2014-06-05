@@ -43,6 +43,12 @@ struct uuid_d {
     return uuid_unparse(uuid, s);
   }
 
+  std::string to_str() {
+    char b[uuid_d::char_rep_buf_size];
+    uuid_unparse(uuid, b);
+    return std::string(b);
+  }
+
   void encode(bufferlist& bl) const {
     ::encode_raw(uuid, bl);
   }
@@ -78,6 +84,5 @@ inline bool operator>(const uuid_d& l, const uuid_d& r) {
 inline bool operator>=(const uuid_d& l, const uuid_d& r) {
   return uuid_compare(l.uuid, r.uuid) >= 0;
 }
-
 
 #endif

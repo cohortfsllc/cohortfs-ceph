@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -10,9 +10,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -33,8 +33,6 @@
 #include "vol/Volume.h"
 
 #include "include/ceph_features.h"
-
-#include "crush/CrushWrapper.h"
 
 #include "include/interval_set.h"
 
@@ -102,21 +100,16 @@ public:
     uuid_d fsid;
     epoch_t epoch;   // new epoch; we are a diff from epoch-1 to epoch
     utime_t modified;
-    int64_t new_pool_max; //incremented by the OSDMonitor on each pool create
     int32_t new_flags;
 
     // full (rare)
     bufferlist fullmap;  // in leiu of below.
-    bufferlist crush;
 
     // incremental
     int32_t new_max_osd;
-    map<int64_t,pg_pool_t> new_pools;
-    map<int64_t,string> new_pool_names;
-    set<int64_t> old_pools;
     map<int32_t,entity_addr_t> new_up_client;
     map<int32_t,entity_addr_t> new_up_cluster;
-    map<int32_t,uint8_t> new_state;             // XORed onto previous state.
+    map<int32_t,uint8_t> new_state; // XORed onto previous state.
     map<int32_t,uint32_t> new_weight;
     map<int32_t,uint32_t> new_primary_affinity;
     map<int32_t,epoch_t> new_up_thru;
@@ -139,7 +132,7 @@ public:
 
     Incremental(epoch_t e=0) :
       encode_features(0),
-      epoch(e), new_pool_max(-1), new_flags(-1), new_max_osd(-1) {
+      epoch(e), new_flags(-1), new_max_osd(-1) {
       memset(&fsid, 0, sizeof(fsid));
     }
     Incremental(bufferlist &bl) {
@@ -148,12 +141,6 @@ public:
     }
     Incremental(bufferlist::iterator &p) {
       decode(p);
-    }
-
-    pg_pool_t *get_new_pool(int64_t pool, const pg_pool_t *orig) {
-      if (new_pools.count(pool) == 0)
-	new_pools[pool] = *orig;
-      return &new_pools[pool];
     }
 
     struct vol_inc_add {
@@ -196,9 +183,8 @@ public:
 
 private:
   uuid_d fsid;
-  epoch_t epoch;        // what epoch of the osd cluster descriptor is this
+  epoch_t epoch; // what epoch of the osd cluster descriptor is this
   utime_t created, modified; // epoch start time
-  int32_t pool_max;     // the largest pool num, ever
 
   uint32_t flags;
 
@@ -222,11 +208,6 @@ private:
 
   vector<uint32_t>   osd_weight;   // 16.16 fixed point, 0x10000 = "in", 0 = "out"
   vector<osd_info_t> osd_info;
-  ceph::shared_ptr< vector<uint32_t> > osd_primary_affinity; ///< 16.16 fixed point, 0x10000 = baseline
-
-  map<int64_t,pg_pool_t> pools;
-  map<int64_t,string> pool_name;
-  map<string,int64_t> name_pool;
 
   ceph::shared_ptr< vector<uuid_d> > osd_uuid;
   vector<osd_xinfo_t> osd_xinfo;
@@ -236,21 +217,17 @@ private:
   bool new_blacklist_entries;
 
  public:
-  ceph::shared_ptr<CrushWrapper> crush;       // hierarchical map
 
   friend class OSDMonitor;
-  friend class PGMonitor;
   friend class MDS;
 
  public:
-  OSDMap() : epoch(0), 
-	     pool_max(-1),
+  OSDMap() : epoch(0),
 	     flags(0),
 	     num_osd(0), max_osd(0),
 	     osd_addrs(new addrs_s),
 	     osd_uuid(new vector<uuid_d>),
-	     new_blacklist_entries(false),
-	     crush(new CrushWrapper) {
+	     new_blacklist_entries(false) {
     memset(&fsid, 0, sizeof(fsid));
   }
 
@@ -268,9 +245,6 @@ public:
 
     // NOTE: this still references shared entity_addr_t's.
     osd_addrs.reset(new addrs_s(*o.osd_addrs));
-
-    // NOTE: we do not copy crush.  note that apply_incremental will
-    // allocate a new CrushWrapper, though.
   }
 
   // map info
@@ -343,24 +317,6 @@ public:
   }
   void adjust_osd_weights(const map<int,double>& weights, Incremental& inc) const;
 
-  void set_primary_affinity(int o, int w) {
-    assert(o < max_osd);
-    if (!osd_primary_affinity)
-      osd_primary_affinity.reset(new vector<uint32_t>(max_osd,
-						   CEPH_OSD_DEFAULT_PRIMARY_AFFINITY));
-    (*osd_primary_affinity)[o] = w;
-  }
-  unsigned get_primary_affinity(int o) const {
-    assert(o < max_osd);
-    if (!osd_primary_affinity)
-      return CEPH_OSD_DEFAULT_PRIMARY_AFFINITY;
-    return (*osd_primary_affinity)[o];
-  }
-  float get_primary_affinityf(int o) const {
-    return (float)get_primary_affinity(o) / (float)CEPH_OSD_MAX_PRIMARY_AFFINITY;
-  }
-
-
   bool exists(int osd) const {
     //assert(osd >= 0);
     return osd >= 0 && osd < max_osd && (osd_state[osd] & CEPH_OSD_EXISTS);
@@ -382,13 +338,7 @@ public:
     return !is_out(osd);
   }
 
-  /**
-   * check if an entire crush subtre is down
-   */
-  bool subtree_is_down(int id, set<int> *down_cache) const;
-  bool containing_subtree_is_down(CephContext *cct, int osd, int subtree_type, set<int> *down_cache) const;
-  
-  int identify_osd(const entity_addr_t& addr) const;
+int identify_osd(const entity_addr_t& addr) const;
   int identify_osd(const uuid_d& u) const;
 
   bool have_addr(const entity_addr_t& addr) const {
@@ -517,119 +467,7 @@ public:
   void decode(bufferlist& bl);
   void decode(bufferlist::iterator& bl);
 
-
-  /****   mapping facilities   ****/
-  int object_locator_to_pg(const object_t& oid, const object_locator_t& loc, pg_t &pg) const;
-  pg_t object_locator_to_pg(const object_t& oid, const object_locator_t& loc) const {
-    pg_t pg;
-    int ret = object_locator_to_pg(oid, loc, pg);
-    assert(ret == 0);
-    return pg;
-  }
-
-  static object_locator_t file_to_object_locator(const ceph_file_layout& layout) {
-    return object_locator_t(layout.fl_pg_pool);
-  }
-
-  // XXX: not used, mentioned in psim.cc comment
-  // oid -> pg
-  ceph_object_layout file_to_object_layout(object_t oid, ceph_file_layout& layout, string nspace) const {
-    return make_object_layout(oid, layout.fl_pg_pool, nspace);
-  }
-
-  ceph_object_layout make_object_layout(object_t oid, int pg_pool, string nspace) const;
-
-  int get_pg_num(int pg_pool) const
-  {
-    const pg_pool_t *pool = get_pg_pool(pg_pool);
-    return pool->get_pg_num();
-  }
-
-private:
-  /// pg -> (raw osd list)
-  int _pg_to_osds(const pg_pool_t& pool, pg_t pg,
-		  vector<int> *osds, int *primary,
-		  ps_t *ppps) const;
-  void _remove_nonexistent_osds(const pg_pool_t& pool, vector<int>& osds) const;
-
-  void _apply_primary_affinity(ps_t seed, const pg_pool_t& pool,
-			       vector<int> *osds, int *primary) const;
-
-  /// pg -> (up osd list)
-  void _raw_to_up_osds(const pg_pool_t& pool, const vector<int>& raw,
-                       vector<int> *up, int *primary) const;
-
 public:
-  /***
-   * This is suitable only for looking at raw CRUSH outputs. It skips
-   * applying the temp and up checks and should not be used
-   * by anybody for data mapping purposes.
-   * raw and primary must be non-NULL
-   */
-  int pg_to_osds(pg_t pg, vector<int> *raw, int *primary) const;
-
-  /**
-   * This does not apply temp overrides and should not be used
-   * by anybody for data mapping purposes. Specify both pointers.
-   */
-  void pg_to_raw_up(pg_t pg, vector<int> *up, int *primary) const;
-  /**
-   * map a pg to its acting set as well as its up set. You must use
-   * the acting set for data mapping purposes, but some users will
-   * also find the up set useful for things like deciding what to
-   * Each of these pointers must be non-NULL.
-   */
-  void pg_to_osd(pg_t pg, int &osd) const;
-  int64_t lookup_pg_pool_name(const string& name) {
-    if (name_pool.count(name))
-      return name_pool[name];
-    return -ENOENT;
-  }
-
-  int64_t const_lookup_pg_pool_name(const char *name) const {
-    return const_cast<OSDMap *>(this)->lookup_pg_pool_name(name);
-  }
-
-  int64_t get_pool_max() const {
-    return pool_max;
-  }
-  const map<int64_t,pg_pool_t>& get_pools() const {
-    return pools;
-  }
-  const char *get_pool_name(int64_t p) const {
-    map<int64_t, string>::const_iterator i = pool_name.find(p);
-    if (i != pool_name.end())
-      return i->second.c_str();
-    return 0;
-  }
-  bool have_pg_pool(int64_t p) const {
-    return pools.count(p);
-  }
-  const pg_pool_t* get_pg_pool(int64_t p) const {
-    map<int64_t, pg_pool_t>::const_iterator i = pools.find(p);
-    if (i != pools.end())
-      return &i->second;
-    return NULL;
-  }
-  unsigned get_pg_size(pg_t pg) const {
-    map<int64_t,pg_pool_t>::const_iterator p = pools.find(pg.pool());
-    assert(p != pools.end());
-    return p->second.get_size();
-  }
-
-
-  pg_t raw_pg_to_pg(pg_t pg) const {
-    assert(pools.count(pg.pool()));
-    return pools.find(pg.pool())->second.raw_pg_to_pg(pg);
-  }
-
-  /* what replica # is a given osd? 0 primary, -1 for none. */
-  static int calc_pg_rank(int osd, const vector<int>& acting, int nrep=0);
-  static bool primary_changed(
-    int oldprimary,
-    const vector<int> &oldacting,
-    int newprimary,
-    const vector<int> &newacting);
 
   /*
    * handy helpers to build simple maps...
@@ -648,25 +486,12 @@ public:
    */
   int build_simple(CephContext *cct, epoch_t e, uuid_d &fsid,
 		   int num_osd);
-  static int _build_crush_types(CrushWrapper& crush);
-  static int build_simple_crush_map(CephContext *cct, CrushWrapper& crush,
-				    int num_osd, ostream *ss);
-  static int build_simple_crush_map_from_conf(CephContext *cct,
-					      CrushWrapper& crush,
-					      ostream *ss);
-  static int build_simple_crush_rulesets(CephContext *cct, CrushWrapper& crush,
-					 const string& root,
-					 ostream *ss);
-
-  bool crush_ruleset_in_use(int ruleset) const;
-
 private:
   void print_osd_line(int cur, ostream *out, Formatter *f) const;
 public:
   void print(ostream& out) const;
   void print_summary(Formatter *f, ostream& out) const;
   void print_oneline_summary(ostream& out) const;
-  void print_tree(ostream *out, Formatter *f) const;
 
   string get_flag_string() const;
   static string get_flag_string(unsigned flags);
@@ -678,6 +503,15 @@ public:
   int create_volume(VolumeRef volume, uuid_d& out);
   int add_volume(VolumeRef volume);
   int remove_volume(uuid_d uuid);
+
+  bool vol_exists(const uuid_d& uuid) {
+    map<uuid_d,VolumeRef>::iterator v = vols.by_uuid.find(uuid);
+    if (v == vols.by_uuid.end()) {
+      return false;
+    } else {
+      return true;
+    }
+  }
 
   bool find_by_uuid(const uuid_d& uuid, VolumeRef& vol) {
     map<uuid_d,VolumeRef>::iterator v = vols.by_uuid.find(uuid);

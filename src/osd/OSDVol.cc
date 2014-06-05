@@ -13,7 +13,7 @@
  */
 
 #include "boost/tuple/tuple.hpp"
-#include "PG.h"
+#include "OSDVol.h"
 #include "common/perf_counters.h"
 #include "common/errno.h"
 #include "common/config.h"
@@ -43,68 +43,52 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
 template <typename T>
-static ostream& _prefix(std::ostream *_dout, T *pg) {
-  return *_dout << pg->gen_prefix();
+static ostream& _prefix(std::ostream *_dout, T *vol) {
+  return *_dout << vol->gen_prefix();
 }
 
 
 
-void PG::get(const string &tag)
+void OSDVol::get()
 {
   ref.inc();
 }
 
-void PG::put(const string &tag)
+void OSDVol::put()
 {
   if (ref.dec() == 0)
     delete this;
 }
 
-void PGPool::update(OSDMapRef map)
-{
-  const pg_pool_t *pi = map->get_pg_pool(id);
-  assert(pi);
-  info = *pi;
-  auid = pi->auid;
-  name = map->get_pool_name(id);
-}
 
-PG::PG(OSDService *o, OSDMapRef curmap,
-       const PGPool &_pool, pg_t p, const hobject_t& loid,
-       const hobject_t& ioid) :
+OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
+	       uuid_d v, const hobject_t& ioid) :
   osd(o),
   cct(o->cct),
   osdriver(osd->store, coll_t()),
-  map_lock("PG::map_lock"),
-  osdmap_ref(curmap), last_persisted_osdmap_ref(curmap), pool(_pool),
-  _lock("PG::_lock"),
-  ref(0),
+  map_lock("OSDVol::map_lock"),
+  osdmap_ref(curmap), last_persisted_osdmap_ref(curmap),
+  _lock("OSDVol::_lock"), ref(0),
   deleting(false), dirty_info(false),
-  info(p),
-  info_struct_v(0),
-  log_oid(loid),
-  stat_queue_item(this),
-  state(0),
-  pg_stats_publish_lock("PG::pg_stats_publish_lock"),
-  pg_stats_publish_valid(false),
-  osr(osd->osr_registry.lookup_or_create(p, (stringify(p)))),
-  finish_sync_event(NULL),
-  coll(p)
+  info(v), info_struct_v(0),
+  osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
+  finish_sync_event(NULL), coll(v),
+  last_became_active(ceph_clock_now(cct))
 {
 }
 
-PG::~PG()
+OSDVol::~OSDVol()
 {
 }
 
-void PG::lock_suspend_timeout(ThreadPool::TPHandle &handle)
+void OSDVol::lock_suspend_timeout(ThreadPool::TPHandle &handle)
 {
   handle.suspend_tp_timeout();
   lock();
   handle.reset_tp_timeout();
 }
 
-void PG::lock(bool no_lockdep)
+void OSDVol::lock(bool no_lockdep)
 {
   _lock.Lock(no_lockdep);
   // if we have unrecorded dirty state with the lock dropped, there is a bug
@@ -113,31 +97,29 @@ void PG::lock(bool no_lockdep)
   dout(30) << "lock" << dendl;
 }
 
-std::string PG::gen_prefix() const
+std::string OSDVol::gen_prefix() const
 {
   stringstream out;
   OSDMapRef mapref = osdmap_ref;
   if (_lock.is_locked_by_me()) {
     out << "osd." << osd->whoami
-	<< " pg_epoch: " << (mapref ? mapref->get_epoch():0)
+	<< " vol_epoch: " << (mapref ? mapref->get_epoch():0)
 	<< " " << *this << " ";
   } else {
     out << "osd." << osd->whoami
-	<< " pg_epoch: " << (mapref ? mapref->get_epoch():0)
-	<< " pg[" << info.pgid << "(unlocked)] ";
+	<< " vol_epoch: " << (mapref ? mapref->get_epoch():0)
+	<< " vol[" << info.volume << "(unlocked)] ";
   }
   return out.str();
 }
-  
-/********* PG **********/
 
-void PG::remove_object(
+void OSDVol::remove_object(
   ObjectStore::Transaction &t, const hobject_t &soid)
 {
   t.remove(coll, soid);
 }
 
-void PG::clear_primary_state()
+void OSDVol::clear_primary_state()
 {
   dout(10) << "clear_primary_state" << dendl;
 
@@ -147,76 +129,34 @@ void PG::clear_primary_state()
   finish_sync_event = 0;  // so that _finish_recvoery doesn't go off in another thread
 }
 
-struct C_PG_ActivateCommitted : public Context {
-  PGRef pg;
+struct C_Vol_ActivateCommitted : public Context {
+  OSDVolRef vol;
   epoch_t epoch;
-  C_PG_ActivateCommitted(PG *p, epoch_t e)
-    : pg(p), epoch(e) {}
+  C_Vol_ActivateCommitted(OSDVol *v, epoch_t e)
+    : vol(v), epoch(e) {}
   void finish(int r) {
-    pg->_activate_committed(epoch);
+    vol->_activate_committed(epoch);
   }
 };
 
-void PG::activate(ObjectStore::Transaction& t,
-		  epoch_t query_epoch)
+void OSDVol::activate(ObjectStore::Transaction& t,
+		      epoch_t query_epoch)
 {
-  assert(!is_active());
-
-  // twiddle pg state
-  state_clear(PG_STATE_DOWN);
+  // twiddle volume state
 
   info.last_epoch_started = query_epoch;
 
   last_update_ondisk = info.last_update;
   last_update_applied = info.last_update;
 
-  // write pg info, log
+  // write volume info
   dirty_info = true;
 
   // find out when we commit
-  t.register_on_complete(new C_PG_ActivateCommitted(this, query_epoch));
+  t.register_on_complete(new C_Vol_ActivateCommitted(this, query_epoch));
 }
 
-bool PG::op_has_sufficient_caps(OpRequestRef op)
-{
-  // only check MOSDOp
-  if (op->get_req()->get_type() != CEPH_MSG_OSD_OP)
-    return true;
-
-  MOSDOp *req = static_cast<MOSDOp*>(op->get_req());
-
-  OSD::Session *session = (OSD::Session *)req->get_connection()->get_priv();
-  if (!session) {
-    dout(0) << "op_has_sufficient_caps: no session for op " << *req << dendl;
-    return false;
-  }
-  OSDCap& caps = session->caps;
-  session->put();
-
-  string key = req->get_object_locator().key;
-  if (key.length() == 0)
-    key = req->get_oid().name;
-
-  bool cap = caps.is_capable(pool.name, req->get_object_locator().nspace,
-			     pool.auid, key,
-			     op->need_read_cap(),
-			     op->need_write_cap(),
-			     op->need_class_read_cap(),
-			     op->need_class_write_cap());
-
-  dout(20) << "op_has_sufficient_caps pool=" << pool.id << " (" << pool.name
-		   << " " << req->get_object_locator().nspace
-	   << ") owner=" << pool.auid
-	   << " need_read_cap=" << op->need_read_cap()
-	   << " need_write_cap=" << op->need_write_cap()
-	   << " need_class_read_cap=" << op->need_class_read_cap()
-	   << " need_class_write_cap=" << op->need_class_write_cap()
-	   << " -> " << (cap ? "yes" : "NO")
-	   << dendl;
-  return cap;
-}
-
-void PG::take_op_map_waiters()
+void OSDVol::take_op_map_waiters()
 {
   Mutex::Locker l(map_lock);
   for (list<OpRequestRef>::iterator i = waiting_for_map.begin();
@@ -225,13 +165,13 @@ void PG::take_op_map_waiters()
     if (op_must_wait_for_map(get_osdmap_with_maplock(), *i)) {
       break;
     } else {
-      osd->op_wq.queue(make_pair(PGRef(this), *i));
+      osd->op_wq.queue(make_pair(OSDVolRef(this), *i));
       waiting_for_map.erase(i++);
     }
   }
 }
 
-void PG::queue_op(OpRequestRef op)
+void OSDVol::queue_op(OpRequestRef op)
 {
   Mutex::Locker l(map_lock);
   if (!waiting_for_map.empty()) {
@@ -243,14 +183,12 @@ void PG::queue_op(OpRequestRef op)
     waiting_for_map.push_back(op);
     return;
   }
-  osd->op_wq.queue(make_pair(PGRef(this), op));
+  osd->op_wq.queue(make_pair(OSDVolRef(this), op));
 }
 
-void PG::_activate_committed(epoch_t e)
+void OSDVol::_activate_committed(epoch_t e)
 {
   lock();
-  all_activated_and_committed();
-
   if (dirty_info) {
     ObjectStore::Transaction *t = new ObjectStore::Transaction;
     write_if_dirty(*t);
@@ -261,94 +199,29 @@ void PG::_activate_committed(epoch_t e)
   unlock();
 }
 
-/*
- * update info.history.last_epoch_started ONLY after we and all
- * replicas have activated AND committed the activate transaction
- * (i.e. the peering results are stable on disk).
- */
-void PG::all_activated_and_committed()
-{
-  dout(10) << "all_activated_and_committed" << dendl;
-
-  // info.last_epoch_started is set during activate()
-  info.history.last_epoch_started = info.last_epoch_started;
-  state_clear(PG_STATE_CREATING);
-
-  publish_stats_to_osd();
-}
-
-void PG::_update_calc_stats()
-{
-  info.stats.version = info.last_update;
-  info.stats.created = info.history.epoch_created;
-}
-
-void PG::publish_stats_to_osd()
-{
-  pg_stats_publish_lock.Lock();
-  // update our stat summary
-  info.stats.reported_epoch = get_osdmap()->get_epoch();
-  ++info.stats.reported_seq;
-
-  utime_t now = ceph_clock_now(cct);
-  info.stats.last_fresh = now;
-  if (info.stats.state != state) {
-    info.stats.state = state;
-    info.stats.last_change = now;
-    if ((state & PG_STATE_ACTIVE) &&
-	!(info.stats.state & PG_STATE_ACTIVE))
-      info.stats.last_became_active = now;
-  }
-  if (info.stats.state & PG_STATE_ACTIVE)
-    info.stats.last_active = now;
-  info.stats.last_unstale = now;
-
-  pg_stats_publish_valid = true;
-  pg_stats_publish = info.stats;
-  pg_stats_publish.stats.add(unstable_stats);
-
-  dout(15) << "publish_stats_to_osd " << pg_stats_publish.reported_epoch
-	   << ":" << pg_stats_publish.reported_seq << dendl;
-  pg_stats_publish_lock.Unlock();
-}
-
-void PG::clear_publish_stats()
-{
-  dout(15) << "clear_stats" << dendl;
-  pg_stats_publish_lock.Lock();
-  pg_stats_publish_valid = false;
-  pg_stats_publish_lock.Unlock();
-}
-
 /**
- * initialize a newly instantiated pg
+ * initialize a newly instantiated vol
  *
- * Initialize PG state, as when a PG is initially created, or when it
+ * Initialize state, as when a vol is initially created, or when it
  * is first instantiated on the current node.
  *
  * @param role our role/rank
  * @param newup up set
  * @param newacting acting set
- * @param history pg history
- * @param pi past_intervals
- * @param backfill true if info should be marked as backfill
  * @param t transaction to write out our new state in
  */
-void PG::init(pg_history_t& history, ObjectStore::Transaction *t)
+void OSDVol::init(ObjectStore::Transaction *t)
 {
-  info.history = history;
-
-  info.stats.osd = whoami();
-
   dirty_info = true;
   write_if_dirty(*t);
 }
 
-int PG::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
-    pg_info_t &info, coll_t coll,
-    hobject_t &infos_oid, uint8_t info_struct_v, bool force_ver)
+int OSDVol::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
+			vol_info_t &info, coll_t coll,
+			hobject_t &infos_oid, uint8_t info_struct_v,
+			bool force_ver)
 {
-  // pg state
+  //vol state
 
   if (info_struct_v > cur_struct_v)
     return -EINVAL;
@@ -363,19 +236,16 @@ int PG::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
 
   // info.
   map<string,bufferlist> v;
-  ::encode(epoch, v[get_epoch_key(info.pgid)]);
-  ::encode(info, v[get_info_key(info.pgid)]);
+  ::encode(epoch, v[get_epoch_key(info.volume)]);
+  ::encode(info, v[get_info_key(info.volume)]);
 
   t.omap_setkeys(coll_t::META_COLL, infos_oid, v);
 
   return 0;
 }
 
-void PG::write_info(ObjectStore::Transaction& t)
+void OSDVol::write_info(ObjectStore::Transaction& t)
 {
-  info.stats.stats.add(unstable_stats);
-  unstable_stats.clear();
-
   int ret = _write_info(t, get_osdmap()->get_epoch(), info, coll,
 			osd->infos_oid, info_struct_v);
   assert(ret == 0);
@@ -384,11 +254,11 @@ void PG::write_info(ObjectStore::Transaction& t)
   dirty_info = false;
 }
 
-epoch_t PG::peek_map_epoch(ObjectStore *store, coll_t coll, hobject_t &infos_oid, bufferlist *bl)
+epoch_t OSDVol::peek_map_epoch(ObjectStore *store, coll_t coll, hobject_t &infos_oid, bufferlist *bl)
 {
   assert(bl);
-  pg_t pgid;
-  bool ok = coll.is_pg(pgid);
+  uuid_d volume;
+  bool ok = coll.is_vol(volume);
   assert(ok);
   int r = store->collection_getattr(coll, "info", *bl);
   assert(r > 0);
@@ -403,9 +273,9 @@ epoch_t PG::peek_map_epoch(ObjectStore *store, coll_t coll, hobject_t &infos_oid
   } else {
     // get epoch out of leveldb
     bufferlist tmpbl;
-    string ek = get_epoch_key(pgid);
+    string ek = get_epoch_key(volume);
     set<string> keys;
-    keys.insert(get_epoch_key(pgid));
+    keys.insert(get_epoch_key(volume));
     map<string,bufferlist> values;
     store->omap_get_values(coll_t::META_COLL, infos_oid, keys, &values);
     assert(values.size() == 1);
@@ -416,15 +286,15 @@ epoch_t PG::peek_map_epoch(ObjectStore *store, coll_t coll, hobject_t &infos_oid
   return cur_epoch;
 }
 
-void PG::write_if_dirty(ObjectStore::Transaction& t)
+void OSDVol::write_if_dirty(ObjectStore::Transaction& t)
 {
   if (dirty_info)
     write_info(t);
 }
 
-int PG::read_info(
+int OSDVol::read_info(
   ObjectStore *store, const coll_t coll, bufferlist &bl,
-  pg_info_t &info, hobject_t &infos_oid, uint8_t &struct_v)
+  vol_info_t &info, hobject_t &infos_oid, uint8_t &struct_v)
 {
   bufferlist::iterator p = bl.begin();
   bufferlist lbl;
@@ -434,7 +304,7 @@ int PG::read_info(
   if (struct_v < 4)
     ::decode(info, p);
   // get info out of leveldb
-  string k = get_info_key(info.pgid);
+  string k = get_info_key(info.volume);
   set<string> keys;
   keys.insert(k);
   map<string,bufferlist> values;
@@ -446,7 +316,7 @@ int PG::read_info(
   return 0;
 }
 
-void PG::read_state(ObjectStore *store, bufferlist &bl)
+void OSDVol::read_state(ObjectStore *store, bufferlist &bl)
 {
   int r = read_info(store, coll, bl, info, osd->infos_oid, info_struct_v);
   assert(r >= 0);
@@ -456,7 +326,7 @@ void PG::read_state(ObjectStore *store, bufferlist &bl)
     osd->clog.error() << oss;
 }
 
-void PG::requeue_object_waiters(map<hobject_t, list<OpRequestRef> >& m)
+void OSDVol::requeue_object_waiters(map<hobject_t, list<OpRequestRef> >& m)
 {
   for (map<hobject_t, list<OpRequestRef> >::iterator it = m.begin();
        it != m.end();
@@ -465,37 +335,35 @@ void PG::requeue_object_waiters(map<hobject_t, list<OpRequestRef> >& m)
   m.clear();
 }
 
-void PG::requeue_op(OpRequestRef op)
+void OSDVol::requeue_op(OpRequestRef op)
 {
-  osd->op_wq.queue_front(make_pair(PGRef(this), op));
+  osd->op_wq.queue_front(make_pair(OSDVolRef(this), op));
 }
 
-void PG::requeue_ops(list<OpRequestRef> &ls)
+void OSDVol::requeue_ops(list<OpRequestRef> &ls)
 {
   dout(15) << " requeue_ops " << ls << dendl;
   for (list<OpRequestRef>::reverse_iterator i = ls.rbegin();
        i != ls.rend();
        ++i) {
-    osd->op_wq.queue_front(make_pair(PGRef(this), *i));
+    osd->op_wq.queue_front(make_pair(OSDVolRef(this), *i));
   }
   ls.clear();
 }
 
-ostream& operator<<(ostream& out, const PG& pg)
+ostream& operator<<(ostream& out, const OSDVol& vol)
 {
-  out << "pg[" << pg.info;
+  out << "vol[" << vol.info;
 
-  if (pg.last_update_ondisk != pg.info.last_update)
-    out << " luod=" << pg.last_update_ondisk;
-
-  out << " " << pg_state_string(pg.get_state());
+  if (vol.last_update_ondisk != vol.info.last_update)
+    out << " luod=" << vol.last_update_ondisk;
   out << "]";
 
 
   return out;
 }
 
-bool PG::can_discard_op(OpRequestRef op)
+bool OSDVol::can_discard_op(OpRequestRef op)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   if (OSD::op_is_discardable(m)) {
@@ -503,23 +371,17 @@ bool PG::can_discard_op(OpRequestRef op)
     return true;
   }
 
-  if (m->get_map_epoch() < info.history.same_primary_since) {
-    dout(7) << " changed after " << m->get_map_epoch()
-	    << ", dropping " << *m << dendl;
-    return true;
-  }
-
   return false;
 }
 
-bool PG::can_discard_request(OpRequestRef op)
+bool OSDVol::can_discard_request(OpRequestRef op)
 {
   if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
     return can_discard_op(op);
   return true;
 }
 
-bool PG::op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op)
+bool OSDVol::op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op)
 {
   if (op->get_req()->get_type() == CEPH_MSG_OSD_OP)
     return !have_same_or_newer_map(
@@ -528,27 +390,23 @@ bool PG::op_must_wait_for_map(OSDMapRef curmap, OpRequestRef op)
   return false;
 }
 
-void PG::take_waiters()
+void OSDVol::take_waiters()
 {
   dout(10) << "take_waiters" << dendl;
   take_op_map_waiters();
 }
 
-void PG::handle_advance_map(OSDMapRef osdmap, OSDMapRef lastmap)
+void OSDVol::handle_advance_map(OSDMapRef osdmap)
 {
-  assert(lastmap->get_epoch() == osdmap_ref->get_epoch());
-  assert(lastmap == osdmap_ref);
-  dout(10) << "handle_advance_map " << dendl;
   update_osdmap_ref(osdmap);
-  pool.update(osdmap);
 }
 
-void PG::handle_activate_map()
+void OSDVol::handle_activate_map()
 {
   if (osdmap_ref->check_new_blacklist_entries()) check_blacklisted_watchers();
 }
 
-void PG::on_removal(ObjectStore::Transaction *t)
+void OSDVol::on_removal(ObjectStore::Transaction *t)
 {
   dout(10) << "on_removal" << dendl;
 
@@ -559,19 +417,16 @@ void PG::on_removal(ObjectStore::Transaction *t)
   on_shutdown();
 }
 
-void PG::do_request(OpRequestRef op, ThreadPool::TPHandle &handle)
+void OSDVol::do_request(OpRequestRef op, ThreadPool::TPHandle &handle)
 {
-  if (!op_has_sufficient_caps(op)) {
-    osd->reply_op_error(op, -EPERM);
-    return;
-  }
+  // There should be a permission check here, but it was done in
+  // termse of namespaces and pools and is sort of sloppy and is based
+  // on pool AUIDs and user AUIDs and is something we almost certainly
+  // do not want. However we do WANT a permissions check and once we
+  // have a system of permissions worked out, this is where we should
+  // check it.
   assert(!op_must_wait_for_map(get_osdmap(), op));
   if (can_discard_request(op)) {
-    return;
-  }
-  if (!is_active()) {
-    // Delay unless PGBackend says it's ok
-    waiting_for_active.push_back(op);
     return;
   }
 
@@ -587,10 +442,10 @@ void PG::do_request(OpRequestRef op, ThreadPool::TPHandle &handle)
 
 /**
  * @brief do_op - do an op
- * pg lock will be held (if multithreaded)
+ * vol lock will be held (if multithreaded)
  * osd_lock NOT held.
  */
-void PG::do_op(OpRequestRef op)
+void OSDVol::do_op(OpRequestRef op)
 {
   MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
   assert(m->get_header().type == CEPH_MSG_OSD_OP);
@@ -615,19 +470,15 @@ void PG::do_op(OpRequestRef op)
 	   << " flags " << ceph_osd_flag_string(m->get_flags())
 	   << dendl;
 
-  hobject_t head(m->get_oid(), m->get_object_locator().key,
-		 m->get_pg().ps(), info.pgid.pool(),
-		 m->get_object_locator().nspace);
+  /* XXX For stripulation */
+  hobject_t head(m->get_oid());
 
 
   ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
   hobject_t missing_oid;
-  hobject_t oid(m->get_oid(),
-		m->get_object_locator().key,
-		m->get_pg().ps(),
-		m->get_object_locator().get_pool(),
-		m->get_object_locator().nspace);
+  // XXX For Stripulation
+  hobject_t oid(m->get_oid());
 
   int r = find_object_context(
     oid, &obc, can_create,
@@ -636,16 +487,6 @@ void PG::do_op(OpRequestRef op)
   if (r) {
     osd->reply_op_error(op, r);
     return;
-  }
-
-  // make sure locator is consistent
-  object_locator_t oloc(obc->obs.oi.soid);
-  if (m->get_object_locator() != oloc) {
-    dout(10) << " provided locator " << m->get_object_locator() 
-	     << " != object's " << obc->obs.oi.soid << dendl;
-    osd->clog.warn() << "bad locator " << m->get_object_locator() 
-		     << " on object " << oloc
-		     << " op " << *m << "\n";
   }
 
   dout(25) << __func__ << " oi " << obc->obs.oi << dendl;
@@ -658,18 +499,13 @@ void PG::do_op(OpRequestRef op)
     if (!ceph_osd_op_type_multi(osd_op.op.op))
       continue;
     if (osd_op.oid.name.length()) {
-      object_locator_t src_oloc;
-      get_src_oloc(m->get_oid(), m->get_object_locator(), src_oloc);
-      hobject_t src_oid(osd_op.oid, src_oloc.key,
-			m->get_pg().ps(), info.pgid.pool(),
-			m->get_object_locator().nspace);
+      // For Stripulation
+      hobject_t src_oid(osd_op.oid);
       if (!src_obc.count(src_oid)) {
 	ObjectContextRef sobc;
 	hobject_t wait_oid;
 
-	if (sobc->obs.oi.soid.get_key() != obc->obs.oi.soid.get_key() &&
-	    sobc->obs.oi.soid.get_key() != obc->obs.oi.soid.oid.name &&
-	    sobc->obs.oi.soid.oid.name != obc->obs.oi.soid.get_key()) {
+	if (sobc->obs.oi.soid.oid != obc->obs.oi.soid.oid) {
 	  dout(1) << " src_oid " << sobc->obs.oi.soid << " != "
 		  << obc->obs.oi.soid << dendl;
 	  osd->reply_op_error(op, -EINVAL);
@@ -717,40 +553,7 @@ void PG::do_op(OpRequestRef op)
   execute_ctx(ctx);
 }
 
-int PG::do_command(cmdmap_t cmdmap, ostream& ss, bufferlist& idata,
-		   bufferlist& odata)
-{
-  string prefix;
-  string format;
-
-  cmd_getval(cct, cmdmap, "format", format);
-  boost::scoped_ptr<Formatter> f(new_formatter(format));
-  // demand that we have a formatter
-  if (!f)
-    f.reset(new_formatter("json"));
-
-  string command;
-  cmd_getval(cct, cmdmap, "cmd", command);
-  if (command == "query") {
-    f->open_object_section("pg");
-    f->dump_string("state", pg_state_string(get_state()));
-    f->dump_unsigned("epoch", get_osdmap()->get_epoch());
-    f->open_object_section("info");
-    _update_calc_stats();
-    info.dump(f.get());
-    f->close_section();
-
-
-    f->close_section();
-    f->flush(odata);
-    return 0;
-  }
-
-  ss << "unknown pg command " << prefix;
-  return -EINVAL;
-}
-
-void PG::on_change(ObjectStore::Transaction *t)
+void OSDVol::on_change(ObjectStore::Transaction *t)
 {
   dout(10) << "on_change" << dendl;
 
@@ -772,21 +575,14 @@ void PG::on_change(ObjectStore::Transaction *t)
   apply_mutations(true);
 
   dout(10) << __func__ << dendl;
-  // clear temp
-  unstable_stats.clear();
 }
 
-void PG::on_activate()
-{
-  publish_stats_to_osd();
-}
-
-void PG::on_shutdown()
+void OSDVol::on_shutdown()
 {
   dout(10) << "on_shutdown" << dendl;
 
   // remove from queues
-  osd->dequeue_pg(this, 0);
+  osd->dequeue_vol(this, 0);
 
   // handles queue races
   deleting = true;
@@ -797,7 +593,8 @@ void PG::on_shutdown()
   clear_primary_state();
 }
 
-void PG::get_obc_watchers(ObjectContextRef obc, list<obj_watch_item_t> &pg_watchers)
+void OSDVol::get_obc_watchers(ObjectContextRef obc,
+			      list<obj_watch_item_t> &vol_watchers)
 {
   for (map<pair<uint64_t, entity_name_t>, WatchRef>::iterator j =
 	 obc->watchers.begin();
@@ -814,13 +611,12 @@ void PG::get_obc_watchers(ObjectContextRef obc, list<obj_watch_item_t> &pg_watch
     dout(30) << "watch: Found oid=" << owi.obj << " addr=" << owi.wi.addr
       << " name=" << owi.wi.name << " cookie=" << owi.wi.cookie << dendl;
 
-    pg_watchers.push_back(owi);
+    vol_watchers.push_back(owi);
   }
 }
 
-void PG::populate_obc_watchers(ObjectContextRef obc)
+void OSDVol::populate_obc_watchers(ObjectContextRef obc)
 {
-  assert(is_active());
   dout(10) << "populate_obc_watchers " << obc->obs.oi.soid << dendl;
   assert(obc->watchers.empty());
   // populate unconnected_watchers
@@ -828,7 +624,7 @@ void PG::populate_obc_watchers(ObjectContextRef obc)
 	obc->obs.oi.watchers.begin();
        p != obc->obs.oi.watchers.end();
        ++p) {
-    utime_t expire = info.stats.last_became_active;
+    utime_t expire = last_became_active;
     expire += p->second.timeout_seconds;
     dout(10) << "  unconnected watcher " << p->first << " will expire " << expire << dendl;
     WatchRef watch(
@@ -846,9 +642,9 @@ void PG::populate_obc_watchers(ObjectContextRef obc)
 }
 
 
-void PG::check_blacklisted_obc_watchers(ObjectContextRef obc)
+void OSDVol::check_blacklisted_obc_watchers(ObjectContextRef obc)
 {
-  dout(20) << "PG::check_blacklisted_obc_watchers for obc " << obc->obs.oi.soid << dendl;
+  dout(20) << "OSDVol::check_blacklisted_obc_watchers for obc " << obc->obs.oi.soid << dendl;
   for (map<pair<uint64_t, entity_name_t>, WatchRef>::iterator k =
 	 obc->watchers.begin();
 	k != obc->watchers.end();
@@ -860,93 +656,80 @@ void PG::check_blacklisted_obc_watchers(ObjectContextRef obc)
     dout(30) << "watch: Check entity_addr_t " << ea << dendl;
     if (get_osdmap()->is_blacklisted(ea)) {
       dout(10) << "watch: Found blacklisted watcher for " << ea << dendl;
-      assert(j->second->get_pg() == this);
+      assert(j->second->get_vol() == this);
       handle_watch_timeout(j->second);
     }
   }
 }
 
 
-void PG::check_blacklisted_watchers()
+void OSDVol::check_blacklisted_watchers()
 {
-  dout(20) << "PG::check_blacklisted_watchers for pg " << get_pgid() << dendl;
+  dout(20) << "OSDVol::check_blacklisted_watchers for vol " << info.volume
+	   << dendl;
   pair<hobject_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i))
     check_blacklisted_obc_watchers(i.second);
 }
 
-void PG::get_watchers(list<obj_watch_item_t> &pg_watchers)
+void OSDVol::get_watchers(list<obj_watch_item_t> &vol_watchers)
 {
   pair<hobject_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i)) {
     ObjectContextRef obc(i.second);
-    get_obc_watchers(obc, pg_watchers);
+    get_obc_watchers(obc, vol_watchers);
   }
 }
 
 
 
-void intrusive_ptr_add_ref(PG *pg) { pg->get("intptr"); }
-void intrusive_ptr_release(PG *pg) { pg->put("intptr"); }
+void intrusive_ptr_add_ref(OSDVol *vol) { vol->get(); }
+void intrusive_ptr_release(OSDVol *vol) { vol->put(); }
 
-int PG::whoami() {
+int OSDVol::whoami() {
   return osd->whoami;
 }
 
 struct OnReadComplete : public Context {
-  PG *pg;
-  PG::OpContext *opcontext;
+  OSDVol *vol;
+  OSDVol::OpContext *opcontext;
   OnReadComplete(
-    PG *pg,
-    PG::OpContext *ctx) : pg(pg), opcontext(ctx) {}
+    OSDVol *vol,
+    OSDVol::OpContext *ctx) : vol(vol), opcontext(ctx) {}
   void finish(int r) {
     if (r < 0)
       opcontext->async_read_result = r;
-    opcontext->finish_read(pg);
+    opcontext->finish_read(vol);
   }
   ~OnReadComplete() {}
 };
 
 // OpContext
-void PG::OpContext::start_async_reads(PG *pg)
+void OSDVol::OpContext::start_async_reads(OSDVol *vol)
 {
   inflightreads = 1;
-  pg->objects_read_async(
+  vol->objects_read_async(
     obc->obs.oi.soid,
     pending_async_reads,
-    new OnReadComplete(pg, this));
+    new OnReadComplete(vol, this));
   pending_async_reads.clear();
 }
-void PG::OpContext::finish_read(PG *pg)
+void OSDVol::OpContext::finish_read(OSDVol *vol)
 {
   assert(inflightreads > 0);
   --inflightreads;
   if (async_reads_complete()) {
-    assert(pg->in_progress_async_reads.size());
-    assert(pg->in_progress_async_reads.front().second == this);
-    pg->in_progress_async_reads.pop_front();
-    pg->complete_read_ctx(async_read_result, this);
+    assert(vol->in_progress_async_reads.size());
+    assert(vol->in_progress_async_reads.front().second == this);
+    vol->in_progress_async_reads.pop_front();
+    vol->complete_read_ctx(async_read_result, this);
   }
 }
 
-PerfCounters *PG::get_logger()
-{
-  return osd->logger;
-}
-
 
 // ==========================================================
 
-// ==========================================================
-
-void PG::get_src_oloc(const object_t& oid, const object_locator_t& oloc, object_locator_t& src_oloc)
-{
-  src_oloc = oloc;
-  if (oloc.key.empty())
-    src_oloc.key = oid.name;
-}
-
-void PG::execute_ctx(OpContext *ctx)
+void OSDVol::execute_ctx(OpContext *ctx)
 {
   dout(10) << __func__ << " " << ctx << dendl;
   ctx->reset_obs(ctx->obc);
@@ -1013,13 +796,6 @@ void PG::execute_ctx(OpContext *ctx)
     return;
   }
 
-  // check for full
-  if (ctx->delta_stats.num_bytes > 0 &&
-      pool.info.get_flags() & pg_pool_t::FLAG_FULL) {
-    reply_ctx(ctx, -ENOSPC);
-    return;
-  }
-
   bool successful_write = !ctx->op_t->empty() && op->may_write() && result >= 0;
   // prepare the reply
   ctx->reply = new MOSDOpReply(m, 0, get_osdmap()->get_epoch(), 0,
@@ -1064,76 +840,21 @@ void PG::execute_ctx(OpContext *ctx)
   mutation->put();
 }
 
-void PG::reply_ctx(OpContext *ctx, int r)
+void OSDVol::reply_ctx(OpContext *ctx, int r)
 {
   if (ctx->op)
     osd->reply_op_error(ctx->op, r);
   close_op_ctx(ctx, r);
 }
 
-void PG::reply_ctx(OpContext *ctx, int r, eversion_t v, version_t uv)
+void OSDVol::reply_ctx(OpContext *ctx, int r, eversion_t v, version_t uv)
 {
   if (ctx->op)
     osd->reply_op_error(ctx->op, r, v, uv);
   close_op_ctx(ctx, r);
 }
 
-void PG::log_op_stats(OpContext *ctx)
-{
-  OpRequestRef op = ctx->op;
-  MOSDOp *m = static_cast<MOSDOp*>(op->get_req());
-
-  utime_t now = ceph_clock_now(cct);
-  utime_t latency = now;
-  latency -= ctx->op->get_req()->get_recv_stamp();
-  utime_t process_latency = now;
-  process_latency -= ctx->op->get_dequeued_time();
-
-  utime_t rlatency;
-  if (ctx->readable_stamp != utime_t()) {
-    rlatency = ctx->readable_stamp;
-    rlatency -= ctx->op->get_req()->get_recv_stamp();
-  }
-
-  uint64_t inb = ctx->bytes_written;
-  uint64_t outb = ctx->bytes_read;
-
-  osd->logger->inc(l_osd_op);
-
-  osd->logger->inc(l_osd_op_outb, outb);
-  osd->logger->inc(l_osd_op_inb, inb);
-  osd->logger->tinc(l_osd_op_lat, latency);
-  osd->logger->tinc(l_osd_op_process_lat, process_latency);
-
-  if (op->may_read() && op->may_write()) {
-    osd->logger->inc(l_osd_op_rw);
-    osd->logger->inc(l_osd_op_rw_inb, inb);
-    osd->logger->inc(l_osd_op_rw_outb, outb);
-    osd->logger->tinc(l_osd_op_rw_rlat, rlatency);
-    osd->logger->tinc(l_osd_op_rw_lat, latency);
-    osd->logger->tinc(l_osd_op_rw_process_lat, process_latency);
-  } else if (op->may_read()) {
-    osd->logger->inc(l_osd_op_r);
-    osd->logger->inc(l_osd_op_r_outb, outb);
-    osd->logger->tinc(l_osd_op_r_lat, latency);
-    osd->logger->tinc(l_osd_op_r_process_lat, process_latency);
-  } else if (op->may_write() || op->may_cache()) {
-    osd->logger->inc(l_osd_op_w);
-    osd->logger->inc(l_osd_op_w_inb, inb);
-    osd->logger->tinc(l_osd_op_w_rlat, rlatency);
-    osd->logger->tinc(l_osd_op_w_lat, latency);
-    osd->logger->tinc(l_osd_op_w_process_lat, process_latency);
-  } else
-    assert(0);
-
-  dout(15) << "log_op_stats " << *m
-	   << " inb " << inb
-	   << " outb " << outb
-	   << " rlat " << rlatency
-	   << " lat " << latency << dendl;
-}
-
-int PG::do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr)
+int OSDVol::do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr)
 {
   uint64_t v2;
   if (xattr.length())
@@ -1161,7 +882,7 @@ int PG::do_xattr_cmp_uint64_t(int op, uint64_t v1, bufferlist& xattr)
   }
 }
 
-int PG::do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr)
+int OSDVol::do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr)
 {
   string v2s(xattr.c_str(), xattr.length());
 
@@ -1188,7 +909,7 @@ int PG::do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr)
 // ========================================================================
 // low level osd ops
 
-int PG::do_tmap2omap(OpContext *ctx, unsigned flags)
+int OSDVol::do_tmap2omap(OpContext *ctx, unsigned flags)
 {
   dout(20) << " convert tmap to omap for " << ctx->new_obs.oi.soid << dendl;
   bufferlist header, vals;
@@ -1214,7 +935,7 @@ int PG::do_tmap2omap(OpContext *ctx, unsigned flags)
   return do_osd_ops(ctx, ops);
 }
 
-int PG::do_tmapup_slow(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op,
+int OSDVol::do_tmapup_slow(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op,
 				    bufferlist& bl)
 {
   // decode
@@ -1280,7 +1001,7 @@ int PG::do_tmapup_slow(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op,
   return 0;
 }
 
-int PG::do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op)
+int OSDVol::do_tmapup(OpContext *ctx, bufferlist::iterator& bp, OSDOp& osd_op)
 {
   bufferlist::iterator orig_bp = bp;
   int result = 0;
@@ -1499,7 +1220,7 @@ struct FillInExtent : public Context {
   }
 };
 
-int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
+int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 {
   int result = 0;
   ObjectState& obs = ctx->new_obs;
@@ -1532,11 +1253,8 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 
     ObjectContextRef src_obc;
     if (ceph_osd_op_type_multi(op.op)) {
-      MOSDOp *m = static_cast<MOSDOp *>(ctx->op->get_req());
-      object_locator_t src_oloc;
-      get_src_oloc(soid.oid, m->get_object_locator(), src_oloc);
-      hobject_t src_oid(osd_op.oid, src_oloc.key,
-			soid.hash, info.pgid.pool(), src_oloc.nspace);
+      // For stripulation
+      hobject_t src_oid(osd_op.oid);
       src_obc = ctx->src_obc[src_oid];
       dout(10) << " src_oid " << src_oid << " obc " << src_obc << dendl;
       assert(src_obc);
@@ -2061,7 +1779,8 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 					 cct->_conf->osd_max_object_size);
 	if (result < 0)
 	  break;
-	t->write(coll, soid, op.extent.offset, op.extent.length, osd_op.indata);
+	t->write(coll, soid, op.extent.offset, op.extent.length,
+		 osd_op.indata);
 	write_update_size_and_usage(ctx->delta_stats, oi, ctx->modified_ranges,
 				    op.extent.offset, op.extent.length, true);
 	if (!obs.exists) {
@@ -2667,7 +2386,7 @@ int PG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
   return result;
 }
 
-int PG::_get_tmap(OpContext *ctx, bufferlist *header, bufferlist *vals)
+int OSDVol::_get_tmap(OpContext *ctx, bufferlist *header, bufferlist *vals)
 {
   if (ctx->new_obs.oi.size == 0) {
     dout(20) << "unable to get tmap for zero sized " << ctx->new_obs.oi.soid << dendl;
@@ -2691,7 +2410,7 @@ int PG::_get_tmap(OpContext *ctx, bufferlist *header, bufferlist *vals)
   return 0;
 }
 
-inline int PG::_delete_oid(OpContext *ctx, bool no_whiteout)
+inline int OSDVol::_delete_oid(OpContext *ctx, bool no_whiteout)
 {
   ObjectState& obs = ctx->new_obs;
   object_info_t& oi = obs.oi;
@@ -2718,7 +2437,7 @@ inline int PG::_delete_oid(OpContext *ctx, bool no_whiteout)
   return 0;
 }
 
-void PG::make_writeable(OpContext *ctx)
+void OSDVol::make_writeable(OpContext *ctx)
 {
   const hobject_t& soid = ctx->obs->oi.soid;
   ObjectStore::Transaction *t = new ObjectStore::Transaction();
@@ -2745,7 +2464,7 @@ void PG::make_writeable(OpContext *ctx)
 }
 
 
-void PG::write_update_size_and_usage(
+void OSDVol::write_update_size_and_usage(
   object_stat_sum_t& delta_stats, object_info_t& oi,
   interval_set<uint64_t>& modified, uint64_t offset, uint64_t length,
   bool count_bytes)
@@ -2764,14 +2483,7 @@ void PG::write_update_size_and_usage(
     delta_stats.num_wr_kb += SHIFT_ROUND_UP(length, 10);
 }
 
-void PG::add_interval_usage(interval_set<uint64_t>& s, object_stat_sum_t& delta_stats)
-{
-  for (interval_set<uint64_t>::const_iterator p = s.begin(); p != s.end(); ++p) {
-    delta_stats.num_bytes += p.get_len();
-  }
-}
-
-void PG::do_osd_op_effects(OpContext *ctx)
+void OSDVol::do_osd_op_effects(OpContext *ctx)
 {
   ConnectionRef conn(ctx->op->get_req()->get_connection());
   boost::intrusive_ptr<OSD::Session> session(
@@ -2865,7 +2577,7 @@ void PG::do_osd_op_effects(OpContext *ctx)
   }
 }
 
-int PG::prepare_transaction(OpContext *ctx)
+int OSDVol::prepare_transaction(OpContext *ctx)
 {
   assert(!ctx->ops.empty());
 
@@ -2882,7 +2594,6 @@ int PG::prepare_transaction(OpContext *ctx)
 
   // read-op?  done?
   if (ctx->op_t->empty() && !ctx->modify) {
-    unstable_stats.add(ctx->delta_stats, ctx->obc->obs.oi.category);
     return result;
   }
 
@@ -2893,7 +2604,7 @@ int PG::prepare_transaction(OpContext *ctx)
   return result;
 }
 
-void PG::finish_ctx(OpContext *ctx)
+void OSDVol::finish_ctx(OpContext *ctx)
 {
   const hobject_t& soid = ctx->obs->oi.soid;
   dout(20) << __func__ << " " << soid << " " << ctx
@@ -2934,11 +2645,9 @@ void PG::finish_ctx(OpContext *ctx)
 
   // apply new object state.
   ctx->obc->obs = ctx->new_obs;
-
-  info.stats.stats.add(ctx->delta_stats, ctx->obs->oi.category);
 }
 
-void PG::complete_read_ctx(int result, OpContext *ctx)
+void OSDVol::complete_read_ctx(int result, OpContext *ctx)
 {
   MOSDOp *m = static_cast<MOSDOp*>(ctx->op->get_req());
   assert(ctx->async_reads_complete());
@@ -2949,9 +2658,6 @@ void PG::complete_read_ctx(int result, OpContext *ctx)
   ctx->reply = NULL;
 
   if (result >= 0) {
-    log_op_stats(ctx);
-    publish_stats_to_osd();
-
     // on read, return the current object version
     reply->set_reply_versions(eversion_t(), ctx->obs->oi.user_version);
   } else if (result == -ENOENT) {
@@ -2968,18 +2674,18 @@ void PG::complete_read_ctx(int result, OpContext *ctx)
 // rep op gather
 
 class C_OSD_MutationApplied : public Context {
-  PGRef pg;
-  boost::intrusive_ptr<PG::Mutation> mutation;
+  OSDVolRef vol;
+  boost::intrusive_ptr<OSDVol::Mutation> mutation;
 public:
-  C_OSD_MutationApplied(PG *pg, PG::Mutation *mutation)
-  : pg(pg), mutation(mutation) {}
+  C_OSD_MutationApplied(OSDVol *vol, OSDVol::Mutation *mutation)
+  : vol(vol), mutation(mutation) {}
   void finish(int) {
-    pg->mutations_all_applied(mutation.get());
+    vol->mutations_all_applied(mutation.get());
   }
 };
 
 
-void PG::mutations_all_applied(Mutation *mutation)
+void OSDVol::mutations_all_applied(Mutation *mutation)
 {
   dout(10) << __func__ << ": mutation tid "
 	   << mutation->tid << " all applied " << dendl;
@@ -2994,17 +2700,17 @@ void PG::mutations_all_applied(Mutation *mutation)
 }
 
 class C_OSD_MutationCommit : public Context {
-  PGRef pg;
-  boost::intrusive_ptr<PG::Mutation> mutation;
+  OSDVolRef vol;
+  boost::intrusive_ptr<OSDVol::Mutation> mutation;
 public:
-  C_OSD_MutationCommit(PG *pg, PG::Mutation *mutation)
-    : pg(pg), mutation(mutation) {}
+  C_OSD_MutationCommit(OSDVol *vol, OSDVol::Mutation *mutation)
+    : vol(vol), mutation(mutation) {}
   void finish(int) {
-    pg->mutations_all_committed(mutation.get());
+    vol->mutations_all_committed(mutation.get());
   }
 };
 
-void PG::mutations_all_committed(Mutation *mutation)
+void OSDVol::mutations_all_committed(Mutation *mutation)
 {
   dout(10) << __func__ << ": mutation tid " << mutation->tid
 	   << " all committed " << dendl;
@@ -3018,7 +2724,7 @@ void PG::mutations_all_committed(Mutation *mutation)
   }
 }
 
-void PG::eval_mutation(Mutation *mutation)
+void OSDVol::eval_mutation(Mutation *mutation)
 {
   MOSDOp *m = NULL;
   if (mutation->ctx->op)
@@ -3033,10 +2739,6 @@ void PG::eval_mutation(Mutation *mutation)
 
     // ondisk?
     if (mutation->committed) {
-
-      log_op_stats(mutation->ctx);
-      publish_stats_to_osd();
-
       // send dup commits, in order
       if (waiting_for_ondisk.count(mutation->v)) {
 	assert(waiting_for_ondisk.begin()->first == mutation->v);
@@ -3140,7 +2842,7 @@ void PG::eval_mutation(Mutation *mutation)
   }
 }
 
-PG::Mutation *PG::new_mutation(OpContext *ctx, ObjectContextRef obc,
+OSDVol::Mutation *OSDVol::new_mutation(OpContext *ctx, ObjectContextRef obc,
 				ceph_tid_t tid)
 {
   if (ctx->op)
@@ -3154,23 +2856,19 @@ PG::Mutation *PG::new_mutation(OpContext *ctx, ObjectContextRef obc,
   mutation_map[mutation->tid] = mutation;
   mutation->get();
 
-  osd->logger->set(l_osd_op_wip, mutation_map.size());
-
   return mutation;
 }
- 
-void PG::remove_mutation(Mutation *mutation)
+
+void OSDVol::remove_mutation(Mutation *mutation)
 {
   dout(20) << __func__ << " " << mutation->tid << dendl;
   release_op_ctx_locks(mutation->ctx);
   mutation->ctx->finish(0);  // FIXME: return value here is sloppy
   mutation_map.erase(mutation->tid);
   mutation->put();
-
-  osd->logger->set(l_osd_op_wip, mutation_map.size());
 }
 
-PG::Mutation *PG::simple_mutation_create(ObjectContextRef obc)
+OSDVol::Mutation *OSDVol::simple_mutation_create(ObjectContextRef obc)
 {
   dout(20) << __func__ << " " << obc->obs.oi.soid << dendl;
   vector<OSDOp> ops;
@@ -3185,7 +2883,7 @@ PG::Mutation *PG::simple_mutation_create(ObjectContextRef obc)
   return mutation;
 }
 
-void PG::simple_mutation_submit(Mutation *mutation)
+void OSDVol::simple_mutation_submit(Mutation *mutation)
 {
   dout(20) << __func__ << " " << mutation->tid << dendl;
   issue_mutation(mutation, mutation->ctx->mtime);
@@ -3195,7 +2893,7 @@ void PG::simple_mutation_submit(Mutation *mutation)
 
 // -------------------------------------------------------
 
-void PG::handle_watch_timeout(WatchRef watch)
+void OSDVol::handle_watch_timeout(WatchRef watch)
 {
   ObjectContextRef obc = watch->get_obc(); // handle_watch_timeout owns this ref
   dout(10) << "handle_watch_timeout obc " << obc << dendl;
@@ -3231,11 +2929,11 @@ void PG::handle_watch_timeout(WatchRef watch)
   mutation->put();
 }
 
-ObjectContextRef PG::create_object_context(const object_info_t& oi)
+ObjectContextRef OSDVol::create_object_context(const object_info_t& oi)
 {
   ObjectContextRef obc(object_contexts.lookup_or_create(oi.soid));
   assert(obc->destructor_callback == NULL);
-  obc->destructor_callback = new C_PG_ObjectContext(this, obc.get());
+  obc->destructor_callback = new C_Vol_ObjectContext(this, obc.get());
   obc->obs.oi = oi;
   obc->obs.exists = false;
   dout(10) << "create_object_context " << (void*)obc.get() << " " << oi.soid
@@ -3244,7 +2942,7 @@ ObjectContextRef PG::create_object_context(const object_info_t& oi)
   return obc;
 }
 
-ObjectContextRef PG::get_object_context(
+ObjectContextRef OSDVol::get_object_context(
   const hobject_t& soid, bool can_create, map<string, bufferlist> *attrs)
 {
   ObjectContextRef obc = object_contexts.lookup(soid);
@@ -3282,10 +2980,8 @@ ObjectContextRef PG::get_object_context(
 
     object_info_t oi(bv);
 
-    assert(oi.soid.pool == (int64_t)info.pgid.pool());
-
     obc = object_contexts.lookup_or_create(oi.soid);
-    obc->destructor_callback = new C_PG_ObjectContext(this, obc.get());
+    obc->destructor_callback = new C_Vol_ObjectContext(this, obc.get());
     obc->obs.oi = oi;
     obc->obs.exists = true;
 
@@ -3300,7 +2996,7 @@ ObjectContextRef PG::get_object_context(
   return obc;
 }
 
-void PG::context_registry_on_change()
+void OSDVol::context_registry_on_change()
 {
   pair<hobject_t, ObjectContextRef> i;
   while (object_contexts.get_next(i.first, &i)) {
@@ -3327,13 +3023,13 @@ void PG::context_registry_on_change()
  * If we return an error but do not set *pmissing, then we know the
  * object does not exist.
  */
-int PG::find_object_context(const hobject_t& oid,
+int OSDVol::find_object_context(const hobject_t& oid,
 				      ObjectContextRef *pobc,
 				      bool can_create,
 				      hobject_t *pmissing)
 {
-  hobject_t head(oid.oid, oid.get_key(), oid.hash,
-		 info.pgid.pool(), oid.get_namespace());
+  // XXX Stripulator
+  hobject_t head(oid.oid);
 
   ObjectContextRef obc = get_object_context(head, can_create);
   if (!obc) {
@@ -3348,34 +3044,16 @@ int PG::find_object_context(const hobject_t& oid,
   return 0;
 }
 
-void PG::object_context_destructor_callback(ObjectContext *obc)
+void OSDVol::object_context_destructor_callback(ObjectContext *obc)
 {
   return;
 }
 
-void PG::add_object_context_to_pg_stat(ObjectContextRef obc, pg_stat_t *pgstat)
-{
-  object_info_t& oi = obc->obs.oi;
-
-  dout(10) << "add_object_context_to_pg_stat " << oi.soid << dendl;
-  object_stat_sum_t stat;
-
-  stat.num_bytes += oi.size;
-
-  if (oi.is_omap())
-    stat.num_objects_omap++;
-
-  // add it in
-  pgstat->stats.sum.add(stat);
-  if (oi.category.length())
-    pgstat->stats.cat_sum[oi.category].add(stat);
-}
-
 /*
- * pg status change notification
+ * Volume status change notification
  */
 
-void PG::apply_mutations(bool requeue)
+void OSDVol::apply_mutations(bool requeue)
 {
   list<OpRequestRef> rq;
 
@@ -3431,24 +3109,24 @@ void PG::apply_mutations(bool requeue)
   waiting_for_ack.clear();
 }
 
-entity_name_t PG::get_cluster_msgr_name() {
+entity_name_t OSDVol::get_cluster_msgr_name() {
   return osd->get_cluster_msgr_name();
 }
 
-ceph_tid_t PG::get_tid() {
+ceph_tid_t OSDVol::get_tid() {
   return osd->get_tid();
 }
 
-LogClientTemp PG::clog_error() {
+LogClientTemp OSDVol::clog_error() {
   return osd->clog.error();
 }
 
-void intrusive_ptr_add_ref(PG::Mutation *mutation) { mutation->get(); }
-void intrusive_ptr_release(PG::Mutation *mutation) { mutation->put(); }
+void intrusive_ptr_add_ref(OSDVol::Mutation *mutation) { mutation->get(); }
+void intrusive_ptr_release(OSDVol::Mutation *mutation) { mutation->put(); }
 
 // From the Backend
 
-int PG::objects_list_partial(const hobject_t &begin,
+int OSDVol::objects_list_partial(const hobject_t &begin,
 			     int min, int max,
 			     vector<hobject_t> *ls,
 			     hobject_t *next)
@@ -3457,7 +3135,7 @@ int PG::objects_list_partial(const hobject_t &begin,
   hobject_t _next(begin);
   ls->reserve(max);
   int r = 0;
-  while (!_next.is_max() && ls->size() < (unsigned)min) {
+  while (ls->size() < (unsigned)min) {
     vector<hobject_t> objects;
     int r = osd->store->collection_list_partial(
       coll,
@@ -3479,7 +3157,7 @@ int PG::objects_list_partial(const hobject_t &begin,
   return r;
 }
 
-int PG::objects_list_range(const hobject_t &start, const hobject_t &end,
+int OSDVol::objects_list_range(const hobject_t &start, const hobject_t &end,
 			   vector<hobject_t> *ls)
 {
   assert(ls);
@@ -3498,7 +3176,7 @@ int PG::objects_list_range(const hobject_t &start, const hobject_t &end,
   return r;
 }
 
-int PG::objects_get_attr(const hobject_t &hoid, const string &attr,
+int OSDVol::objects_get_attr(const hobject_t &hoid, const string &attr,
 			 bufferlist *out)
 {
   bufferptr bp;
@@ -3510,7 +3188,7 @@ int PG::objects_get_attr(const hobject_t &hoid, const string &attr,
   return r;
 }
 
-void PG::objects_read_async(const hobject_t &hoid,
+void OSDVol::objects_read_async(const hobject_t &hoid,
 			    const list<pair<pair<uint64_t, uint64_t>,
 			    pair<bufferlist*, Context*> > > &to_read,
 			    Context *on_complete)
@@ -3532,7 +3210,7 @@ void PG::objects_read_async(const hobject_t &hoid,
   on_complete->complete(r);
 }
 
-void PG::issue_mutation(Mutation *mutation, utime_t now)
+void OSDVol::issue_mutation(Mutation *mutation, utime_t now)
 {
   OpContext *ctx = mutation->ctx;
   const hobject_t& soid = ctx->obs->oi.soid;

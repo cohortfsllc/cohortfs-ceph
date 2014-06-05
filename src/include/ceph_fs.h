@@ -43,14 +43,6 @@ struct ceph_file_layout {
 	__le32 fl_stripe_count;    /* over this many objects */
 	__le32 fl_object_size;     /* until objects are this big, then move to
 				      new objects */
-	__le32 fl_cas_hash;        /* UNUSED.  0 = none; 1 = sha256 */
-
-	/* pg -> disk layout */
-	__le32 fl_object_stripe_unit;  /* UNUSED.  for per-object parity, if any */
-
-	/* object -> pg layout */
-	__le32 fl_unused;       /* unused; used to be preferred primary for pg (-1 for none) */
-	__le32 fl_pg_pool;      /* namespace, crush ruleset, rep level */
 } __attribute__ ((packed));
 
 #define CEPH_MIN_STRIPE_UNIT 65536
@@ -115,11 +107,6 @@ struct ceph_dir_layout {
 #define CEPH_MSG_CLIENT_LEASE           0x311
 #define CEPH_MSG_CLIENT_CAPRELEASE      0x313
 
-/* pool ops */
-#define CEPH_MSG_POOLOP_REPLY           48
-#define CEPH_MSG_POOLOP                 49
-
-
 /* osd */
 #define CEPH_MSG_OSD_MAP                41
 #define CEPH_MSG_OSD_OP                 42
@@ -133,13 +120,6 @@ enum {
   WATCH_NOTIFY_COMPLETE			= 2, /* notifier notified when done */
 };
 
-
-/* pool operations */
-enum {
-  POOL_OP_CREATE			= 0x01,
-  POOL_OP_DELETE			= 0x02,
-  POOL_OP_AUID_CHANGE			= 0x03,
-};
 
 struct ceph_mon_request_header {
 	__le64 have_version;
@@ -374,7 +354,6 @@ union ceph_mds_request_args {
 		__le32 stripe_unit;          /* layout for newly created file */
 		__le32 stripe_count;         /* ... */
 		__le32 object_size;
-		__le32 pool;                 /* if >= 0 and CREATEPOOLID feature */
 		__le32 unused;               /* used to be preferred */
 		__le64 old_size;             /* if O_TRUNC */
 	} __attribute__ ((packed)) open;

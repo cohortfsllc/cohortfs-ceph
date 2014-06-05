@@ -161,50 +161,7 @@ int main(int argc, const char **argv)
     for (int i=0; i<n; i++) {
       osdmap.set_state(i, osdmap.get_state(i) | CEPH_OSD_UP);
       osdmap.set_weight(i, CEPH_OSD_IN);
-      osdmap.crush->adjust_item_weightf(g_ceph_context, i, 1.0);
     }
-  }
-
-  if (!import_crush.empty()) {
-    bufferlist cbl;
-    std::string error;
-    r = cbl.read_file(import_crush.c_str(), &error);
-    if (r) {
-      cerr << me << ": error reading crush map from " << import_crush
-	   << ": " << error << std::endl;
-      exit(1);
-    }
-
-    // validate
-    CrushWrapper cw;
-    bufferlist::iterator p = cbl.begin();
-    cw.decode(p);
-
-    if (cw.get_max_devices() > osdmap.get_max_osd()) {
-      cerr << me << ": crushmap max_devices " << cw.get_max_devices()
-	   << " > osdmap max_osd " << osdmap.get_max_osd() << std::endl;
-      exit(1);
-    }
-    
-    // apply
-    OSDMap::Incremental inc;
-    inc.fsid = osdmap.get_fsid();
-    inc.epoch = osdmap.get_epoch()+1;
-    inc.crush = cbl;
-    osdmap.apply_incremental(inc);
-    cout << me << ": imported " << cbl.length() << " byte crush map from " << import_crush << std::endl;
-    modified = true;
-  }
-
-  if (!export_crush.empty()) {
-    bufferlist cbl;
-    osdmap.crush->encode(cbl);
-    r = cbl.write_file(export_crush.c_str());
-    if (r < 0) {
-      cerr << me << ": error writing crush map to " << import_crush << std::endl;
-      exit(1);
-    }
-    cout << me << ": exported crush map to " << export_crush << std::endl;
   }
 
   if (!print && !print_json && !tree && !modified &&
@@ -220,8 +177,6 @@ int main(int argc, const char **argv)
     osdmap.print(cout);
   if (print_json)
     osdmap.dump_json(cout);
-  if (tree) 
-    osdmap.print_tree(&cout, NULL);
 
   if (modified) {
     bl.clear();

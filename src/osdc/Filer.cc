@@ -36,9 +36,11 @@ public:
   Filer *filer;
   Probe *probe;
   object_t oid;
+  uuid_d volume;
   uint64_t size;
   utime_t mtime;
-  C_Probe(Filer *f, Probe *p, object_t o) : filer(f), probe(p), oid(o), size(0) {}
+  C_Probe(Filer *f, Probe *p, object_t o) : filer(f), probe(p), oid(o),
+					    size(0) {}
   void finish(int r) {
     if (r == -ENOENT) {
       r = 0;
@@ -50,28 +52,31 @@ public:
       probe->err = r;
 
     filer->_probed(probe, oid, size, mtime);
-  }  
+  }
 };
 
 int Filer::probe(inodeno_t ino,
+		 uuid_d voume,
 		 ceph_file_layout *layout,
 		 uint64_t start_from,
-		 uint64_t *end,           // LB, when !fwd
+		 uint64_t *end, // LB, when !fwd
 		 utime_t *pmtime,
 		 bool fwd,
 		 int flags,
-		 Context *onfinish) 
+		 Context *onfinish)
 {
   ldout(cct, 10) << "probe " << (fwd ? "fwd ":"bwd ")
 	   << hex << ino << dec
 	   << " starting from " << start_from
 	   << dendl;
 
-  Probe *probe = new Probe(ino, *layout, start_from, end, pmtime, flags, fwd, onfinish);
-  
+  Probe *probe = new Probe(ino, *layout, start_from, end, pmtime, flags, fwd,
+			   onfinish);
+
   // period (bytes before we jump unto a new set of object(s))
-  uint64_t period = (uint64_t)layout->fl_stripe_count * (uint64_t)layout->fl_object_size;
-  
+  uint64_t period = (uint64_t)layout->fl_stripe_count *
+    (uint64_t)layout->fl_object_size;
+
   // start with 1+ periods.
   probe->probing_len = period;
   if (probe->fwd) {
@@ -83,7 +88,7 @@ int Filer::probe(inodeno_t ino,
       probe->probing_len -= period - (start_from % period);
     probe->probing_off -= probe->probing_len;
   }
-  
+
   _probe(probe);
   return 0;
 }
@@ -91,28 +96,29 @@ int Filer::probe(inodeno_t ino,
 
 void Filer::_probe(Probe *probe)
 {
-  ldout(cct, 10) << "_probe " << hex << probe->ino << dec 
-	   << " " << probe->probing_off << "~" << probe->probing_len 
+  ldout(cct, 10) << "_probe " << hex << probe->ino << dec
+	   << " " << probe->probing_off << "~" << probe->probing_len
 	   << dendl;
-  
+
   // map range onto objects
   probe->known_size.clear();
   probe->probing.clear();
-  Striper::file_to_extents(cct, probe->ino, &probe->layout,
-			   probe->probing_off, probe->probing_len, 0, probe->probing);
+  Striper::file_to_extents(cct, probe->ino, &probe->layout, probe->probing_off,
+			   probe->probing_len, 0, probe->probing);
 
   for (vector<ObjectExtent>::iterator p = probe->probing.begin();
        p != probe->probing.end();
        ++p) {
     ldout(cct, 10) << "_probe  probing " << p->oid << dendl;
     C_Probe *c = new C_Probe(this, probe, p->oid);
-    objecter->stat(p->oid, p->oloc, &c->size, &c->mtime,
+    objecter->stat(p->oid, p->volume, &c->size, &c->mtime,
 		   probe->flags | CEPH_OSD_FLAG_RWORDERED, c);
     probe->ops.insert(p->oid);
   }
 }
 
-void Filer::_probed(Probe *probe, const object_t& oid, uint64_t size, utime_t mtime)
+void Filer::_probed(Probe *probe, const object_t& oid, uuid_d volume,
+		    uint64_t size, utime_t mtime)
 {
   ldout(cct, 10) << "_probed " << probe->ino << " object " << oid
 	   << " has size " << size << " mtime " << mtime << dendl;
@@ -124,7 +130,7 @@ void Filer::_probed(Probe *probe, const object_t& oid, uint64_t size, utime_t mt
   assert(probe->ops.count(oid));
   probe->ops.erase(oid);
 
-  if (!probe->ops.empty()) 
+  if (!probe->ops.empty())
     return;  // waiting for more!
 
   if (probe->err) { // we hit an error, propagate back up
@@ -161,7 +167,7 @@ void Filer::_probed(Probe *probe, const object_t& oid, uint64_t size, utime_t mt
       if ((probe->fwd && probe->known_size[p->oid] == shouldbe) ||
 	  (!probe->fwd && probe->known_size[p->oid] == 0 && probe->probing_off > 0))
 	continue;  // keep going
-      
+
       // aha, we found the end!
       // calc offset into buffer_extent to get distance from probe->from.
       uint64_t oleft = probe->known_size[p->oid] - p->offset;
@@ -173,11 +179,11 @@ void Filer::_probed(Probe *probe, const object_t& oid, uint64_t size, utime_t mt
 	  ldout(cct, 10) << "_probed  end is in buffer_extent " << i->first << "~" << i->second << " off " << oleft 
 		   << ", from was " << probe->probing_off << ", end is " << end 
 		   << dendl;
-	  
+
 	  probe->found_size = true;
 	  ldout(cct, 10) << "_probed found size at " << end << dendl;
 	  *probe->psize = end;
-	  
+
 	  if (!probe->pmtime)  // stop if we don't need mtime too
 	    break;
 	}
@@ -234,7 +240,7 @@ int Filer::purge_range(inodeno_t ino,
 		       uint64_t first_obj, uint64_t num_obj,
 		       utime_t mtime,
 		       int flags,
-		       Context *oncommit) 
+		       Context *oncommit)
 {
   assert(num_obj > 0);
 

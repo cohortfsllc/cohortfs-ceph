@@ -27,11 +27,11 @@ enum WatcherState {
   WATCHER_NOTIFIED,
 };
 
-class PG;
+class OSDVol;
 
 class OSDService;
-void intrusive_ptr_add_ref(PG *pg);
-void intrusive_ptr_release(PG *pg);
+void intrusive_ptr_add_ref(OSDVol *vol);
+void intrusive_ptr_release(OSDVol *vol);
 struct ObjectContext;
 class MWatchNotify;
 
@@ -151,7 +151,7 @@ class Watch {
   CancelableContext *cb;
 
   OSDService *osd;
-  boost::intrusive_ptr<PG> pg;
+  boost::intrusive_ptr<OSDVol> vol;
   ceph::shared_ptr<ObjectContext> obc;
 
   std::map<uint64_t, NotifyRef> in_progress_notifies;
@@ -165,7 +165,7 @@ class Watch {
   bool discarded;
 
   Watch(
-    PG *pg, OSDService *osd,
+    OSDVol *vol, OSDService *osd,
     ceph::shared_ptr<ObjectContext> obc, uint32_t timeout,
     uint64_t cookie, entity_name_t entity,
     const entity_addr_t& addr);
@@ -182,19 +182,20 @@ class Watch {
   /// Cleans up state on discard or remove (including Connection state, obc)
   void discard_state();
 public:
-  /// NOTE: must be called with pg lock held
+  /// NOTE: must be called with vol lock held
   ~Watch();
 
   string gen_dbg_prefix();
   static WatchRef makeWatchRef(
-    PG *pg, OSDService *osd,
-    ceph::shared_ptr<ObjectContext> obc, uint32_t timeout, uint64_t cookie, entity_name_t entity, const entity_addr_t &addr);
+    OSDVol *vol, OSDService *osd, ceph::shared_ptr<ObjectContext> obc,
+    uint32_t timeout, uint64_t cookie, entity_name_t entity,
+    const entity_addr_t &addr);
   void set_self(WatchRef _self) {
     self = _self;
   }
 
   /// Does not grant a ref count!
-  boost::intrusive_ptr<PG> get_pg() { return pg; }
+  boost::intrusive_ptr<OSDVol> get_vol() { return vol; }
 
   ceph::shared_ptr<ObjectContext> get_obc() { return obc; }
 

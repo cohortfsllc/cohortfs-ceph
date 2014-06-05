@@ -74,5 +74,4 @@ void OpRequest::set_read() { rmw_flags |= CEPH_OSD_RMW_FLAG_READ; }
 void OpRequest::set_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_WRITE; }
 void OpRequest::set_class_read() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_READ; }
 void OpRequest::set_class_write() { rmw_flags |= CEPH_OSD_RMW_FLAG_CLASS_WRITE; }
-void OpRequest::set_pg_op() { rmw_flags |= CEPH_OSD_RMW_FLAG_PGOP; }
 void OpRequest::set_cache() { rmw_flags |= CEPH_OSD_RMW_FLAG_CACHE; }

@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
- * Foundation.  See file COPYING.
- * 
+ * License version 2.1, as published by the Free Software
+ * Foundation.	See file COPYING.
+ *
  */
 #include <unistd.h>
 #include <stdlib.h>
@@ -64,7 +64,6 @@
 #include "common/perf_counters.h"
 #include "common/sync_filesystem.h"
 #include "common/fd.h"
-#include "HashIndex.h"
 #include "DBObjectMap.h"
 #include "LevelDBStore.h"
 
@@ -412,7 +411,7 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
   fsid_fd(-1), op_fd(-1),
   basedir_fd(-1), current_fd(-1),
   generic_backend(NULL), backend(NULL),
-  index_manager(do_update),
+  index_manager(),
   ondisk_finisher(g_ceph_context),
   lock("FileStore::lock"),
   force_sync(false), sync_epoch(0),
@@ -715,7 +714,7 @@ int FileStore::mkfs()
 	ret = backend->create_checkpoint(s, NULL);
 	VOID_TEMP_FAILURE_RETRY(::close(current_fd));
 	if (ret < 0 && ret != -EEXIST) {
-	  VOID_TEMP_FAILURE_RETRY(::close(fd));  
+	  VOID_TEMP_FAILURE_RETRY(::close(fd));	 
 	  derr << "mkfs: failed to create snap_1: " << cpp_strerror(ret) << dendl;
 	  goto close_fsid_fd;
 	}
@@ -846,7 +845,7 @@ bool FileStore::test_mount_in_use()
 
   fsid_fd = ::open(fn, O_RDWR, 0644);
   if (fsid_fd < 0)
-    return 0;   // no fsid, ok.
+    return 0;	// no fsid, ok.
   bool inuse = lock_fsid() < 0;
   VOID_TEMP_FAILURE_RETRY(::close(fsid_fd));
   fsid_fd = -1;
@@ -961,7 +960,7 @@ int FileStore::_sanity_check_fs()
     dout(0) << "mount ERROR: more than one of filestore journal {writeahead,parallel,trailing} enabled" << dendl;
     cerr << TEXT_RED 
 	 << " ** WARNING: more than one of 'filestore journal {writeahead,parallel,trailing}'\n"
-	 << "             is enabled in ceph.conf.  You must choose a single journal mode."
+	 << "		  is enabled in ceph.conf.  You must choose a single journal mode."
 	 << TEXT_NORMAL << std::endl;
     return -EINVAL;
   }
@@ -971,11 +970,11 @@ int FileStore::_sanity_check_fs()
       dout(0) << "mount WARNING: no btrfs, and no journal in writeahead mode; data may be lost" << dendl;
       cerr << TEXT_RED 
 	   << " ** WARNING: no btrfs AND (no journal OR journal not in writeahead mode)\n"
-	   << "             For non-btrfs volumes, a writeahead journal is required to\n"
-	   << "             maintain on-disk consistency in the event of a crash.  Your conf\n"
-	   << "             should include something like:\n"
-	   << "        osd journal = /path/to/journal_device_or_file\n"
-	   << "        filestore journal writeahead = true\n"
+	   << "		    For non-btrfs volumes, a writeahead journal is required to\n"
+	   << "		    maintain on-disk consistency in the event of a crash.  Your conf\n"
+	   << "		    should include something like:\n"
+	   << "	       osd journal = /path/to/journal_device_or_file\n"
+	   << "	       filestore journal writeahead = true\n"
 	   << TEXT_NORMAL;
     }
   }
@@ -984,10 +983,10 @@ int FileStore::_sanity_check_fs()
     dout(0) << "mount WARNING: no journal" << dendl;
     cerr << TEXT_YELLOW
 	 << " ** WARNING: No osd journal is configured: write latency may be high.\n"
-	 << "             If you will not be using an osd journal, write latency may be\n"
-	 << "             relatively high.  It can be reduced somewhat by lowering\n"
-	 << "             filestore_max_sync_interval, but lower values mean lower write\n"
-	 << "             throughput, especially with spinning disks.\n"
+	 << "		  If you will not be using an osd journal, write latency may be\n"
+	 << "		  relatively high.  It can be reduced somewhat by lowering\n"
+	 << "		  filestore_max_sync_interval, but lower values mean lower write\n"
+	 << "		  throughput, especially with spinning disks.\n"
 	 << TEXT_NORMAL;
   }
 
@@ -1266,7 +1265,7 @@ int FileStore::mount()
 	       << TEXT_NORMAL << std::endl;
 	}
 
-        dout(10) << "mount rolling back to consistent snap " << cp << dendl;
+	dout(10) << "mount rolling back to consistent snap " << cp << dendl;
 	snprintf(s, sizeof(s), COMMIT_SNAP_ITEM, (long long unsigned)cp);
       }
 
@@ -1596,7 +1595,7 @@ void FileStore::queue_op(OpSequencer *osr, Op *o)
   dout(5) << "queue_op " << o << " seq " << o->op
 	  << " " << *osr
 	  << " " << o->bytes << " bytes"
-	  << "   (queue has " << op_queue_len << " ops and " << op_queue_bytes << " bytes)"
+	  << "	 (queue has " << op_queue_len << " ops and " << op_queue_bytes << " bytes)"
 	  << dendl;
   op_wq.queue(osr);
 }
@@ -1619,7 +1618,7 @@ void FileStore::op_queue_reserve_throttle(Op *o, ThreadPool::TPHandle *handle)
   {
     Mutex::Locker l(op_throttle_lock);
     while ((max_ops && (op_queue_len + 1) > max_ops) ||
-           (max_bytes && op_queue_bytes      // let single large ops through!
+	   (max_bytes && op_queue_bytes	     // let single large ops through!
 	      && (op_queue_bytes + o->bytes) > max_bytes)) {
       dout(2) << "waiting " << op_queue_len + 1 << " > " << max_ops << " ops || "
 	      << op_queue_bytes + o->bytes << " > " << max_bytes << dendl;
@@ -1924,8 +1923,8 @@ int FileStore::_check_global_replay_guard(coll_t cid,
 
 
 void FileStore::_set_replay_guard(coll_t cid,
-                                  const SequencerPosition &spos,
-                                  bool in_progress=false)
+				  const SequencerPosition &spos,
+				  bool in_progress=false)
 {
   char fn[PATH_MAX];
   get_cdir(cid, fn, sizeof(fn));
@@ -1981,7 +1980,7 @@ void FileStore::_set_replay_guard(int fd,
 }
 
 void FileStore::_close_replay_guard(coll_t cid,
-                                    const SequencerPosition &spos)
+				    const SequencerPosition &spos)
 {
   char fn[PATH_MAX];
   get_cdir(cid, fn, sizeof(fn));
@@ -2079,7 +2078,7 @@ int FileStore::_check_replay_guard(int fd, const SequencerPosition& spos)
   bufferlist::iterator p = bl.begin();
   ::decode(opos, p);
   bool in_progress = false;
-  if (!p.end())   // older journals don't have this
+  if (!p.end())	  // older journals don't have this
     ::decode(in_progress, p);
   if (opos > spos) {
     dout(10) << "_check_replay_guard object has " << opos << " > current pos " << spos
@@ -2212,7 +2211,7 @@ unsigned FileStore::_do_transaction(
 	i.get_attrset(aset);
 	if (_check_replay_guard(cid, oid, spos) > 0)
 	  r = _setattrs(cid, oid, aset, spos);
-  	if (r == -ENOSPC)
+	if (r == -ENOSPC)
 	  dout(0) << " ENOSPC on setxattrs on " << cid << "/" << oid << dendl;
       }
       break;
@@ -2250,7 +2249,7 @@ unsigned FileStore::_do_transaction(
 	coll_t cid = i.get_cid();
 	hobject_t oid = i.get_oid();
 	hobject_t noid = i.get_oid();
- 	uint64_t off = i.get_length();
+	uint64_t off = i.get_length();
 	uint64_t len = i.get_length();
 	r = _clone_range(cid, oid, noid, off, len, off, spos);
       }
@@ -2261,9 +2260,9 @@ unsigned FileStore::_do_transaction(
 	coll_t cid = i.get_cid();
 	hobject_t oid = i.get_oid();
 	hobject_t noid = i.get_oid();
- 	uint64_t srcoff = i.get_length();
+	uint64_t srcoff = i.get_length();
 	uint64_t len = i.get_length();
- 	uint64_t dstoff = i.get_length();
+	uint64_t dstoff = i.get_length();
 	r = _clone_range(cid, oid, noid, srcoff, len, dstoff, spos);
       }
       break;
@@ -2401,34 +2400,16 @@ unsigned FileStore::_do_transaction(
 	r = _omap_setheader(cid, oid, bl, spos);
       }
       break;
-    case Transaction::OP_SPLIT_COLLECTION:
-      {
-	coll_t cid(i.get_cid());
-	uint32_t bits(i.get_u32());
-	uint32_t rem(i.get_u32());
-	coll_t dest(i.get_cid());
-	r = _split_collection_create(cid, bits, rem, dest, spos);
-      }
-      break;
-    case Transaction::OP_SPLIT_COLLECTION2:
-      {
-	coll_t cid(i.get_cid());
-	uint32_t bits(i.get_u32());
-	uint32_t rem(i.get_u32());
-	coll_t dest(i.get_cid());
-	r = _split_collection(cid, bits, rem, dest, spos);
-      }
-      break;
 
     case Transaction::OP_SETALLOCHINT:
       {
-        coll_t cid = i.get_cid();
-        hobject_t oid = i.get_oid();
-        uint64_t expected_object_size = i.get_length();
-        uint64_t expected_write_size = i.get_length();
-        if (_check_replay_guard(cid, oid, spos) > 0)
-          r = _set_alloc_hint(cid, oid, expected_object_size,
-                              expected_write_size);
+	coll_t cid = i.get_cid();
+	hobject_t oid = i.get_oid();
+	uint64_t expected_object_size = i.get_length();
+	uint64_t expected_write_size = i.get_length();
+	if (_check_replay_guard(cid, oid, spos) > 0)
+	  r = _set_alloc_hint(cid, oid, expected_object_size,
+			      expected_write_size);
       }
       break;
 
@@ -2455,12 +2436,12 @@ unsigned FileStore::_do_transaction(
 	ok = true;
 
       if (op == Transaction::OP_SETALLOCHINT)
-        // Either EOPNOTSUPP or EINVAL most probably.  EINVAL in most
-        // cases means invalid hint size (e.g. too big, not a multiple
-        // of block size, etc) or, at least on xfs, an attempt to set
-        // or change it when the file is not empty.  However,
-        // OP_SETALLOCHINT is advisory, so ignore all errors.
-        ok = true;
+	// Either EOPNOTSUPP or EINVAL most probably.  EINVAL in most
+	// cases means invalid hint size (e.g. too big, not a multiple
+	// of block size, etc) or, at least on xfs, an attempt to set
+	// or change it when the file is not empty.  However,
+	// OP_SETALLOCHINT is advisory, so ignore all errors.
+	ok = true;
 
       if (replaying && !backend->can_checkpoint()) {
 	if (r == -EEXIST && op == Transaction::OP_MKCOLL) {
@@ -2593,7 +2574,7 @@ int FileStore::read(
     len = st.st_size;
   }
 
-  bufferptr bptr(len);  // prealloc space for entire read
+  bufferptr bptr(len);	// prealloc space for entire read
   got = safe_pread(**fd, bptr.c_str(), len, offset);
   if (got < 0) {
     dout(10) << "FileStore::read(" << cid << "/" << oid << ") pread error: " << cpp_strerror(got) << dendl;
@@ -2601,8 +2582,8 @@ int FileStore::read(
     assert(allow_eio || !m_filestore_fail_eio || got != -EIO);
     return got;
   }
-  bptr.set_length(got);   // properly size the buffer
-  bl.push_back(bptr);   // put it in the target bufferlist
+  bptr.set_length(got);	  // properly size the buffer
+  bl.push_back(bptr);	// put it in the target bufferlist
 
   if (m_filestore_sloppy_crc && (!replaying || backend->can_checkpoint())) {
     ostringstream ss;
@@ -2627,8 +2608,8 @@ int FileStore::read(
 }
 
 int FileStore::fiemap(coll_t cid, const hobject_t& oid,
-                    uint64_t offset, size_t len,
-                    bufferlist& bl)
+		    uint64_t offset, size_t len,
+		    bufferlist& bl)
 {
   if (!backend->has_fiemap() || len <= (size_t)m_filestore_fiemap_threshold) {
     map<uint64_t, uint64_t> m;
@@ -2677,16 +2658,16 @@ int FileStore::fiemap(coll_t cid, const hobject_t& oid,
 
       /* try to merge extents */
       while ((i < fiemap->fm_mapped_extents - 1) &&
-             (extent->fe_logical + extent->fe_length == next->fe_logical)) {
-          next->fe_length += extent->fe_length;
-          next->fe_logical = extent->fe_logical;
-          extent = next;
-          next = extent + 1;
-          i++;
+	     (extent->fe_logical + extent->fe_length == next->fe_logical)) {
+	  next->fe_length += extent->fe_length;
+	  next->fe_logical = extent->fe_logical;
+	  extent = next;
+	  next = extent + 1;
+	  i++;
       }
 
       if (extent->fe_logical + extent->fe_length > offset + len)
-        extent->fe_length = offset + len - extent->fe_logical;
+	extent->fe_length = offset + len - extent->fe_logical;
       exomap[extent->fe_logical] = extent->fe_length;
       i++;
       extent++;
@@ -2740,8 +2721,8 @@ int FileStore::_touch(coll_t cid, const hobject_t& oid)
 }
 
 int FileStore::_write(coll_t cid, const hobject_t& oid,
-                     uint64_t offset, size_t len,
-                     const bufferlist& bl, bool replica)
+		     uint64_t offset, size_t len,
+		     const bufferlist& bl, bool replica)
 {
   dout(15) << "write " << cid << "/" << oid << " " << offset << "~" << len << dendl;
   int r;
@@ -3385,9 +3366,9 @@ int FileStore::_fgetattrs(int fd, map<string,bufferptr>& aset, bool user_only)
 	  can_get = false;
       }
       if (*set_name && can_get) {
-        dout(20) << "fgetattrs " << fd << " getting '" << name << "'" << dendl;
-        int r = _fgetattr(fd, attrname, aset[set_name]);
-        if (r < 0)
+	dout(20) << "fgetattrs " << fd << " getting '" << name << "'" << dendl;
+	int r = _fgetattr(fd, attrname, aset[set_name]);
+	if (r < 0)
 	  return r;
       }
     }
@@ -3939,11 +3920,11 @@ int FileStore::_collection_remove_recursive(const coll_t &cid,
     return r;
   }
 
+  hobject_t place;
   vector<hobject_t> objects;
-  hobject_t max;
   r = 0;
-  while (!max.is_max()) {
-    r = collection_list_partial(cid, max, 200, 300, &objects, &max);
+  do {
+    r = collection_list_partial(cid, place, 200, 300, &objects, &place);
     if (r < 0)
       return r;
     for (vector<hobject_t>::iterator i = objects.begin();
@@ -3954,7 +3935,7 @@ int FileStore::_collection_remove_recursive(const coll_t &cid,
       if (r < 0)
 	return r;
     }
-  }
+  } while (objects.size() > 0);
   return _destroy_collection(cid);
 }
 
@@ -4177,7 +4158,7 @@ int FileStore::collection_list_partial(coll_t c, hobject_t start,
 }
 
 int FileStore::collection_list(coll_t c, vector<hobject_t>& ls)
-{  
+{
   Index index;
   int r = get_index(c, &index);
   if (r < 0)
@@ -4371,7 +4352,7 @@ int FileStore::_collection_add(coll_t c, coll_t oldcid, const hobject_t& o,
 	     << oldcid << "/" << o << " (dne, continue replay) " << dendl;
     return 0;
   }
-  if (dstcmp > 0) {      // if dstcmp == 0 the guard already says "in-progress"
+  if (dstcmp > 0) {	 // if dstcmp == 0 the guard already says "in-progress"
     _set_replay_guard(**fd, spos, &o, true);
   }
 
@@ -4431,13 +4412,13 @@ int FileStore::_collection_move_rename(coll_t oldcid, const hobject_t& oldoid,
 	       << oldcid << "/" << oldoid << " (dne, continue replay) " << dendl;
       return 0;
     }
-    if (dstcmp > 0) {      // if dstcmp == 0 the guard already says "in-progress"
+    if (dstcmp > 0) {	   // if dstcmp == 0 the guard already says "in-progress"
       _set_replay_guard(**fd, spos, &o, true);
     }
 
     r = lfn_link(oldcid, c, oldoid, o);
     if (replaying && !backend->can_checkpoint() &&
-	r == -EEXIST)    // crashed between link() and set_replay_guard()
+	r == -EEXIST)	 // crashed between link() and set_replay_guard()
       r = 0;
 
     _inject_failure();
@@ -4562,141 +4543,13 @@ int FileStore::_omap_setheader(coll_t cid, const hobject_t &hoid,
   return object_map->set_header(hoid, bl, &spos);
 }
 
-int FileStore::_split_collection(coll_t cid,
-				 uint32_t bits,
-				 uint32_t rem,
-				 coll_t dest,
-				 const SequencerPosition &spos)
-{
-  int r;
-  {
-    dout(15) << __func__ << " " << cid << " bits: " << bits << dendl;
-    if (!collection_exists(cid)) {
-      dout(2) << __func__ << ": " << cid << " DNE" << dendl;
-      assert(replaying);
-      return 0;
-    }
-    if (!collection_exists(dest)) {
-      dout(2) << __func__ << ": " << dest << " DNE" << dendl;
-      assert(replaying);
-      return 0;
-    }
-
-    int dstcmp = _check_replay_guard(dest, spos);
-    if (dstcmp < 0)
-      return 0;
-    if (dstcmp > 0 && !collection_empty(dest))
-      return -ENOTEMPTY;
-
-    int srccmp = _check_replay_guard(cid, spos);
-    if (srccmp < 0)
-      return 0;
-
-    _set_global_replay_guard(cid, spos);
-    _set_replay_guard(cid, spos, true);
-    _set_replay_guard(dest, spos, true);
-
-    Index from;
-    r = get_index(cid, &from);
-
-    Index to;
-    if (!r)
-      r = get_index(dest, &to);
-
-    if (!r)
-      r = from->split(rem, bits, to);
-
-    _close_replay_guard(cid, spos);
-    _close_replay_guard(dest, spos);
-  }
-  if (g_conf->filestore_debug_verify_split) {
-    vector<hobject_t> objects;
-    hobject_t next;
-    while (1) {
-      collection_list_partial(
-	cid,
-	next,
-	get_ideal_list_min(), get_ideal_list_max(),
-	&objects,
-	&next);
-      if (objects.empty())
-	break;
-      for (vector<hobject_t>::iterator i = objects.begin();
-	   i != objects.end();
-	   ++i) {
-	dout(20) << __func__ << ": " << *i << " still in source "
-		 << cid << dendl;
-	assert(!i->match(bits, rem));
-      }
-      objects.clear();
-    }
-    next = hobject_t();
-    while (1) {
-      collection_list_partial(
-	dest,
-	next,
-	get_ideal_list_min(), get_ideal_list_max(),
-	&objects,
-	&next);
-      if (objects.empty())
-	break;
-      for (vector<hobject_t>::iterator i = objects.begin();
-	   i != objects.end();
-	   ++i) {
-	dout(20) << __func__ << ": " << *i << " now in dest "
-		 << *i << dendl;
-	assert(i->match(bits, rem));
-      }
-      objects.clear();
-    }
-  }
-  return r;
-}
-
-// DEPRECATED: remove once we are sure there won't be any such transactions
-// replayed
-int FileStore::_split_collection_create(coll_t cid,
-					uint32_t bits,
-					uint32_t rem,
-					coll_t dest,
-					const SequencerPosition &spos)
-{
-  dout(15) << __func__ << " " << cid << " bits: " << bits << dendl;
-  int r = _create_collection(dest);
-  if (r < 0 && !(r == -EEXIST && replaying))
-    return r;
-
-  int dstcmp = _check_replay_guard(cid, spos);
-  if (dstcmp < 0)
-    return 0;
-
-  int srccmp = _check_replay_guard(dest, spos);
-  if (srccmp < 0)
-    return 0;
-
-  _set_replay_guard(cid, spos, true);
-  _set_replay_guard(dest, spos, true);
-
-  Index from;
-  r = get_index(cid, &from);
-
-  Index to;
-  if (!r) 
-    r = get_index(dest, &to);
-
-  if (!r) 
-    r = from->split(rem, bits, to);
-
-  _close_replay_guard(cid, spos);
-  _close_replay_guard(dest, spos);
-  return r;
-}
-
 int FileStore::_set_alloc_hint(coll_t cid, const hobject_t& oid,
 			       uint64_t expected_object_size,
 			       uint64_t expected_write_size)
 {
-  dout(15) << "set_alloc_hint " << cid << "/" << oid << " object_size " << expected_object_size << " write_size " << expected_write_size << dendl;
+  dout(15) << "set_alloc_hint " << cid << "/" << oid << " object_size "
+	   << expected_object_size << " write_size " << expected_write_size
+	   << dendl;
 
   FDRef fd;
   int ret;

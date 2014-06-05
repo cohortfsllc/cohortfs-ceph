@@ -1,3 +1,4 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 #ifndef __LIBRADOS_HPP
 #define __LIBRADOS_HPP
 
@@ -22,10 +23,8 @@ namespace librados
   class IoCtx;
   struct IoCtxImpl;
   class ObjectOperationImpl;
-  struct PoolAsyncCompletionImpl;
   class RadosClient;
 
-  typedef uint64_t auid_t;
   typedef void *config_t;
 
   struct cluster_stat_t {
@@ -33,20 +32,11 @@ namespace librados
     uint64_t num_objects;
   };
 
-  struct pool_stat_t {
-    uint64_t num_bytes;    // in bytes
-    uint64_t num_kb;       // in KB
-    uint64_t num_objects;
-    uint64_t num_rd, num_rd_kb, num_wr, num_wr_kb;
-  };
-
   typedef struct {
     std::string client;
     std::string cookie;
     std::string address;
   } locker_t;
-
-  typedef std::map<std::string, pool_stat_t> stats_map;
 
   typedef void *completion_t;
   typedef void (*callback_t)(completion_t cb, void *arg);
@@ -74,16 +64,6 @@ namespace librados
     uint64_t get_version64();
     void release();
     AioCompletionImpl *pc;
-  };
-
-  struct PoolAsyncCompletion {
-    PoolAsyncCompletion(PoolAsyncCompletionImpl *pc_) : pc(pc_) {}
-    int set_callback(void *cb_arg, callback_t cb);
-    int wait();
-    bool is_complete();
-    int get_return_value();
-    void release();
-    PoolAsyncCompletionImpl *pc;
   };
 
   /**
@@ -354,12 +334,11 @@ namespace librados
   };
 
   /* IoCtx : This is a context in which we can perform I/O.
-   * It includes a Pool,
    *
    * Typical use (error checking omitted):
    *
    * IoCtx p;
-   * rados.ioctx_create("my_pool", p);
+   * rados.ioctx_create("my_volume", p);
    * p->stat(&stats);
    * ... etc ...
    */
@@ -367,28 +346,18 @@ namespace librados
   {
   public:
     IoCtx();
-    static void from_rados_ioctx_t(rados_ioctx_t p, IoCtx &pool);
+    static void from_rados_ioctx_t(rados_ioctx_t p, IoCtx &ctx);
     IoCtx(const IoCtx& rhs);
     IoCtx& operator=(const IoCtx& rhs);
 
     ~IoCtx();
 
-    // Close our pool handle
     void close();
 
     // deep copy
     void dup(const IoCtx& rhs);
 
-    // set pool auid
-    int set_auid(uint64_t auid_);
-
-    // set pool auid
-    int set_auid_async(uint64_t auid_, PoolAsyncCompletion *c);
-
-    // get pool auid
-    int get_auid(uint64_t *auid_);
-
-    std::string get_pool_name();
+    string get_volume_name();
 
     // create an object
     int create(const std::string& oid, bool exclusive);
@@ -440,23 +409,23 @@ namespace librados
     int tmap_to_omap(const std::string& oid, bool nullok=false);
 
     int omap_get_vals(const std::string& oid,
-                      const std::string& start_after,
-                      uint64_t max_return,
-                      std::map<std::string, bufferlist> *out_vals);
+		      const std::string& start_after,
+		      uint64_t max_return,
+		      std::map<std::string, bufferlist> *out_vals);
     int omap_get_vals(const std::string& oid,
-                      const std::string& start_after,
-                      const std::string& filter_prefix,
-                      uint64_t max_return,
-                      std::map<std::string, bufferlist> *out_vals);
+		      const std::string& start_after,
+		      const std::string& filter_prefix,
+		      uint64_t max_return,
+		      std::map<std::string, bufferlist> *out_vals);
     int omap_get_keys(const std::string& oid,
-                      const std::string& start_after,
-                      uint64_t max_return,
-                      std::set<std::string> *out_keys);
+		      const std::string& start_after,
+		      uint64_t max_return,
+		      std::set<std::string> *out_keys);
     int omap_get_header(const std::string& oid,
-                        bufferlist *bl);
+			bufferlist *bl);
     int omap_get_vals_by_keys(const std::string& oid,
-                              const std::set<std::string>& keys,
-                              std::map<std::string, bufferlist> *vals);
+			      const std::set<std::string>& keys,
+			      std::map<std::string, bufferlist> *vals);
     int omap_set(const std::string& oid,
 		 const std::map<std::string, bufferlist>& map);
     int omap_set_header(const std::string& oid,
@@ -536,7 +505,7 @@ namespace librados
     int aio_stat(const std::string& oid, AioCompletion *c, uint64_t *psize, time_t *pmtime);
 
     int aio_exec(const std::string& oid, AioCompletion *c, const char *cls, const char *method,
-	         bufferlist& inbl, bufferlist *outbl);
+		 bufferlist& inbl, bufferlist *outbl);
 
     // compound object operations
     int operate(const std::string& oid, ObjectWriteOperation *op);
@@ -571,22 +540,14 @@ namespace librados
      * @returns 0 on success, negative error code on failure
      */
     int set_alloc_hint(const std::string& o,
-                       uint64_t expected_object_size,
-                       uint64_t expected_write_size);
+		       uint64_t expected_object_size,
+		       uint64_t expected_write_size);
 
     // assert version for next sync operations
     void set_assert_version(uint64_t ver);
     void set_assert_src_version(const std::string& o, uint64_t ver);
 
-    const std::string& get_pool_name() const;
-
-    void locator_set_key(const std::string& key);
-    void set_namespace(const std::string& nspace);
-
-    int64_t get_id();
-
-    uint32_t get_object_hash_position(const std::string& oid);
-    uint32_t get_object_pg_hash_position(const std::string& oid);
+    uuid_d get_volume();
 
     config_t cct();
 
@@ -623,46 +584,22 @@ namespace librados
     int conf_set(const char *option, const char *value);
     int conf_get(const char *option, std::string &val);
 
-    int pool_create(const char *name);
-    int pool_create(const char *name, uint64_t auid);
-    int pool_create(const char *name, uint64_t auid, uint8_t crush_rule);
-    int pool_create_async(const char *name, PoolAsyncCompletion *c);
-    int pool_create_async(const char *name, uint64_t auid, PoolAsyncCompletion *c);
-    int pool_create_async(const char *name, uint64_t auid, uint8_t crush_rule, PoolAsyncCompletion *c);
-    int pool_delete(const char *name);
-    int pool_delete_async(const char *name, PoolAsyncCompletion *c);
-    int64_t pool_lookup(const char *name);
-    int pool_reverse_lookup(int64_t id, std::string *name);
 
     uint64_t get_instance_id();
 
     int mon_command(std::string cmd, const bufferlist& inbl,
 		    bufferlist *outbl, std::string *outs);
 
-    int ioctx_create(const char *name, IoCtx &pioctx);
+    int ioctx_create(const string &name, IoCtx &ioctx);
 
     // Features useful for test cases
     void test_blacklist_self(bool set);
 
-    int pool_list(std::list<std::string>& v);
-    int get_pool_stats(std::list<std::string>& v,
-		       std::map<std::string, stats_map>& stats);
-    int get_pool_stats(std::list<std::string>& v,
-		       std::string& category,
-		       std::map<std::string, stats_map>& stats);
     int cluster_stat(cluster_stat_t& result);
     int cluster_fsid(std::string *fsid);
 
     /// get/wait for the most recent osdmap
     int wait_for_latest_osdmap();
-
-    /*
-     * pool aio
-     *
-     * It is up to the caller to release the completion handler, even if the pool_create_async()
-     * and/or pool_delete_async() fails and does not send the async request
-     */
-    static PoolAsyncCompletion *pool_async_create_completion();
 
    // -- aio --
     static AioCompletion *aio_create_completion();

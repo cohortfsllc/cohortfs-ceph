@@ -1387,12 +1387,10 @@ void Monitor::handle_probe_probe(MMonProbe *m)
   if (missing) {
     dout(1) << " peer " << m->get_source_addr() << " missing features "
 	    << missing << dendl;
-    if (m->get_connection()->has_feature(CEPH_FEATURE_OSD_PRIMARY_AFFINITY)) {
-      MMonProbe *r = new MMonProbe(monmap->fsid, MMonProbe::OP_MISSING_FEATURES,
-				   name, has_ever_joined);
-      m->required_features = required_features;
-      messenger->send_message(r, m->get_connection());
-    }
+    MMonProbe *r = new MMonProbe(monmap->fsid, MMonProbe::OP_MISSING_FEATURES,
+				 name, has_ever_joined);
+    m->required_features = required_features;
+    messenger->send_message(r, m->get_connection());
     m->put();
     return;
   }
@@ -2920,9 +2918,6 @@ bool Monitor::dispatch(MonSession *s, Message *m, const bool src_is_mon)
     case MSG_OSD_FAILURE:
     case MSG_OSD_BOOT:
     case MSG_OSD_ALIVE:
-    case MSG_OSD_PGTEMP:
-      paxos_service[PAXOS_OSDMAP]->dispatch((PaxosServiceMessage*)m);
-      break;
 
     // MDSs
     case MSG_MDS_BEACON:
@@ -2935,11 +2930,6 @@ bool Monitor::dispatch(MonSession *s, Message *m, const bool src_is_mon)
     case CEPH_MSG_AUTH:
       /* no need to check caps here */
       paxos_service[PAXOS_AUTH]->dispatch((PaxosServiceMessage*)m);
-      break;
-
-    // pg
-    case CEPH_MSG_POOLOP:
-      paxos_service[PAXOS_OSDMAP]->dispatch((PaxosServiceMessage*)m);
       break;
 
     // log

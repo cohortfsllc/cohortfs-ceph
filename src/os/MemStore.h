@@ -77,7 +77,7 @@ public:
   typedef ceph::shared_ptr<Object> ObjectRef;
 
   struct Collection {
-    ceph::unordered_map<hobject_t, ObjectRef> object_hash;  ///< for lookup
+    std::map<hobject_t, ObjectRef> object_hash;  ///< for lookup
     map<hobject_t, ObjectRef> object_map;        ///< for iteration
     map<string,bufferptr> xattr;
     RWLock lock;   ///< for object_{map,hash}
@@ -88,7 +88,7 @@ public:
     // level.
 
     ObjectRef get_object(hobject_t oid) {
-      ceph::unordered_map<hobject_t,ObjectRef>::iterator o = object_hash.find(oid);
+      std::map<hobject_t,ObjectRef>::iterator o = object_hash.find(oid);
       if (o == object_hash.end())
 	return ObjectRef();
       return o->second;
@@ -174,7 +174,7 @@ private:
   };
 
 
-  ceph::unordered_map<coll_t, CollectionRef> coll_map;
+  map<coll_t, CollectionRef> coll_map;
   RWLock coll_lock;    ///< rwlock to protect coll_map
   Mutex apply_lock;    ///< serialize all updates
 
@@ -217,7 +217,6 @@ private:
   int _collection_setattrs(coll_t cid, map<string,bufferptr> &aset);
   int _collection_rmattr(coll_t cid, const char *name);
   int _collection_rename(const coll_t &cid, const coll_t &ncid);
-  int _split_collection(coll_t cid, uint32_t bits, uint32_t rem, coll_t dest);
 
   int _save();
   int _load();
