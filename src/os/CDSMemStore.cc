@@ -718,175 +718,81 @@ int CDSMemStore::queue_transactions(Sequencer *osr,
 
 void CDSMemStore::_do_transaction(Transaction& t)
 {
-  Transaction::iterator i = t.begin();
   int pos = 0;
 
-  while (i.have_op()) {
-    int op = i.get_op();
+  for (Transaction::op_iterator i = t.begin(); i != t.end(); ++i) {
     int r = 0;
 
-    switch (op) {
+    switch (i->op) {
     case Transaction::OP_NOP:
       break;
     case Transaction::OP_TOUCH:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	r = _touch(cid, oid);
-      }
+      r = _touch(i->cid, i->oid);
       break;
 
     case Transaction::OP_WRITE:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	bool replica = i.get_replica();
-	bufferlist bl;
-	i.get_bl(bl);
-	r = _write(cid, oid, off, len, bl, replica);
-      }
+      r = _write(i->cid, i->oid, i->off, i->len, i->data, t.get_replica());
       break;
 
     case Transaction::OP_ZERO:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	r = _zero(cid, oid, off, len);
-      }
-      break;
-
-    case Transaction::OP_TRIMCACHE:
-      {
-	i.get_cid();
-	i.get_oid();
-	i.get_length();
-	i.get_length();
-	// deprecated, no-op
-      }
+      r = _zero(i->cid, i->oid, i->off, i->len);
       break;
 
     case Transaction::OP_TRUNCATE:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	uint64_t off = i.get_length();
-	r = _truncate(cid, oid, off);
-      }
+      r = _truncate(i->cid, i->oid, i->off);
       break;
 
     case Transaction::OP_REMOVE:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	r = _remove(cid, oid);
-      }
+      r = _remove(i->cid, i->oid);
       break;
 
     case Transaction::OP_SETATTR:
       {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	string name = i.get_attrname();
-	bufferlist bl;
-	i.get_bl(bl);
+	bufferlist &bl = i->data;
 	map<string, bufferptr> to_set;
-	to_set[name] = bufferptr(bl.c_str(), bl.length());
-	r = _setattrs(cid, oid, to_set);
+	to_set[i->name] = bufferptr(bl.c_str(), bl.length());
+	r = _setattrs(i->cid, i->oid, to_set);
       }
       break;
 
     case Transaction::OP_SETATTRS:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	map<string, bufferptr> aset;
-	i.get_attrset(aset);
-	r = _setattrs(cid, oid, aset);
-      }
+      r = _setattrs(i->cid, i->oid, i->xattrs);
       break;
 
     case Transaction::OP_RMATTR:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	string name = i.get_attrname();
-	r = _rmattr(cid, oid, name.c_str());
-      }
+      r = _rmattr(i->cid, i->oid, i->name.c_str());
       break;
 
     case Transaction::OP_RMATTRS:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	r = _rmattrs(cid, oid);
-      }
+      r = _rmattrs(i->cid, i->oid);
       break;
 
     case Transaction::OP_CLONE:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	ghobject_t noid = i.get_oid();
-	r = _clone(cid, oid, noid);
-      }
+      r = _clone(i->cid, i->oid, i->oid2);
       break;
 
     case Transaction::OP_CLONERANGE:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	ghobject_t noid = i.get_oid();
-	uint64_t off = i.get_length();
-	uint64_t len = i.get_length();
-	r = _clone_range(cid, oid, noid, off, len, off);
-      }
+      r = _clone_range(i->cid, i->oid, i->oid2, i->off, i->len, i->off);
       break;
 
     case Transaction::OP_CLONERANGE2:
-      {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	ghobject_t noid = i.get_oid();
-	uint64_t srcoff = i.get_length();
-	uint64_t len = i.get_length();
-	uint64_t dstoff = i.get_length();
-	r = _clone_range(cid, oid, noid, srcoff, len, dstoff);
-      }
+      r = _clone_range(i->cid, i->oid, i->oid2, i->off, i->len, i->off2);
       break;
 
     case Transaction::OP_MKCOLL:
-      {
-	coll_t cid = i.get_cid();
-	r = _create_collection(cid);
-      }
+      r = _create_collection(i->cid);
       break;
 
     case Transaction::OP_RMCOLL:
-      {
-	coll_t cid = i.get_cid();
-	r = _destroy_collection(cid);
-      }
+      r = _destroy_collection(i->cid);
       break;
 
     case Transaction::OP_COLL_ADD:
-      {
-	coll_t ncid = i.get_cid();
-	coll_t ocid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	r = _collection_add(ncid, ocid, oid);
-      }
+      r = _collection_add(i->cid, i->cid2, i->oid);
       break;
 
     case Transaction::OP_COLL_REMOVE:
-       {
-	coll_t cid = i.get_cid();
-	ghobject_t oid = i.get_oid();
-	r = _remove(cid, oid);
-       }
+      r = _remove(i->cid, i->oid);
       break;
 
     case Transaction::OP_COLL_MOVE:
@@ -894,96 +800,42 @@ void CDSMemStore::_do_transaction(Transaction& t)
       break;
 
     case Transaction::OP_COLL_MOVE_RENAME:
-      {
-	coll_t oldcid = i.get_cid();
-	ghobject_t oldoid = i.get_oid();
-	coll_t newcid = i.get_cid();
-	ghobject_t newoid = i.get_oid();
-	r = _collection_move_rename(oldcid, oldoid, newcid, newoid);
-      }
+      r = _collection_move_rename(i->cid, i->oid, i->cid2, i->oid2);
       break;
 
     case Transaction::OP_COLL_SETATTR:
-      {
-	coll_t cid = i.get_cid();
-	string name = i.get_attrname();
-	bufferlist bl;
-	i.get_bl(bl);
-	r = _collection_setattr(cid, name.c_str(), bl.c_str(), bl.length());
-      }
+      r = _collection_setattr(i->cid, i->name.c_str(),
+			      i->data.c_str(), i->data.length());
       break;
 
     case Transaction::OP_COLL_RMATTR:
-      {
-	coll_t cid = i.get_cid();
-	string name = i.get_attrname();
-	r = _collection_rmattr(cid, name.c_str());
-      }
+      r = _collection_rmattr(i->cid, i->name.c_str());
       break;
 
     case Transaction::OP_COLL_RENAME:
-      {
-	coll_t cid(i.get_cid());
-	coll_t ncid(i.get_cid());
-	r = _collection_rename(cid, ncid);
-      }
+      r = _collection_rename(i->cid, i->cid2);
       break;
 
     case Transaction::OP_OMAP_CLEAR:
-      {
-	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
-	r = _omap_clear(cid, oid);
-      }
+      r = _omap_clear(i->cid, i->oid);
       break;
     case Transaction::OP_OMAP_SETKEYS:
-      {
-	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
-	map<string, bufferlist> aset;
-	i.get_attrset(aset);
-	r = _omap_setkeys(cid, oid, aset);
-      }
+      r = _omap_setkeys(i->cid, i->oid, i->attrs);
       break;
     case Transaction::OP_OMAP_RMKEYS:
-      {
-	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
-	set<string> keys;
-	i.get_keyset(keys);
-	r = _omap_rmkeys(cid, oid, keys);
-      }
+      r = _omap_rmkeys(i->cid, i->oid, i->keys);
       break;
     case Transaction::OP_OMAP_RMKEYRANGE:
-      {
-	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
-	string first, last;
-	first = i.get_key();
-	last = i.get_key();
-	r = _omap_rmkeyrange(cid, oid, first, last);
-      }
+      r = _omap_rmkeyrange(i->cid, i->oid, i->name, i->name2);
       break;
     case Transaction::OP_OMAP_SETHEADER:
-      {
-	coll_t cid(i.get_cid());
-	ghobject_t oid = i.get_oid();
-	bufferlist bl;
-	i.get_bl(bl);
-	r = _omap_setheader(cid, oid, bl);
-      }
+      r = _omap_setheader(i->cid, i->oid, i->data);
       break;
     case Transaction::OP_SPLIT_COLLECTION:
       assert(0 == "deprecated");
       break;
     case Transaction::OP_SPLIT_COLLECTION2:
-      {
-	coll_t cid(i.get_cid());
-	uint32_t bits(i.get_u32());
-	uint32_t rem(i.get_u32());
-	coll_t dest(i.get_cid());
-	r = _split_collection(cid, bits, rem, dest);
-      }
+      r = _split_collection(i->cid, i->value1, i->value2, i->cid2);
       break;
 
     case Transaction::OP_SETALLOCHINT:
@@ -991,17 +843,17 @@ void CDSMemStore::_do_transaction(Transaction& t)
       break;
 
     default:
-      derr << "bad op " << op << dendl;
+      derr << "bad op " << i->op << dendl;
       assert(0);
     }
 
     if (r < 0) {
       bool ok = false;
 
-      if (r == -ENOENT && !(op == Transaction::OP_CLONERANGE ||
-			    op == Transaction::OP_CLONE ||
-			    op == Transaction::OP_CLONERANGE2 ||
-			    op == Transaction::OP_COLL_ADD))
+      if (r == -ENOENT && !(i->op == Transaction::OP_CLONERANGE ||
+			    i->op == Transaction::OP_CLONE ||
+			    i->op == Transaction::OP_CLONERANGE2 ||
+			    i->op == Transaction::OP_COLL_ADD))
 	// -ENOENT is usually okay
 	ok = true;
       if (r == -ENODATA)
@@ -1010,9 +862,9 @@ void CDSMemStore::_do_transaction(Transaction& t)
       if (!ok) {
 	const char *msg = "unexpected error code";
 
-	if (r == -ENOENT && (op == Transaction::OP_CLONERANGE ||
-			     op == Transaction::OP_CLONE ||
-			     op == Transaction::OP_CLONERANGE2))
+	if (r == -ENOENT && (i->op == Transaction::OP_CLONERANGE ||
+			     i->op == Transaction::OP_CLONE ||
+			     i->op == Transaction::OP_CLONERANGE2))
 	  msg = "ENOENT on clone suggests osd bug";
 
 	if (r == -ENOSPC)
@@ -1025,8 +877,7 @@ void CDSMemStore::_do_transaction(Transaction& t)
 	  dump_all();
 	}
 
-	dout(0) << " error " << cpp_strerror(r) <<
-	  " not handled on operation " << op
+	dout(0) << " error " << cpp_strerror(r) << " not handled on operation " << i->op
 		<< " (op " << pos << ", counting from 0)" << dendl;
 	dout(0) << msg << dendl;
 	dout(0) << " transaction dump:\n";
