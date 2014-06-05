@@ -6,7 +6,6 @@ set(libos_srcs
 	JournalingObjectStore.cc
 	KeyValueStore.cc
 	MemStore.cc
-	CDSMemStore.cc
 	LFNIndex.cc 
 	HashIndex.cc 
 	IndexManager.cc 
@@ -19,6 +18,9 @@ set(libos_srcs
 	BtrfsFileStoreBackend.cc
 	ZFSFileStoreBackend.cc
 )
+if (WITH_CDS)
+	list(APPEND libos_srcs CDSMemStore.cc)
+endif (WITH_CDS)
 
 add_library(os ${libos_srcs})
 

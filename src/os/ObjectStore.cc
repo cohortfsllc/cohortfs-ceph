@@ -18,7 +18,9 @@
 #include "common/Formatter.h"
 #include "FileStore.h"
 #include "MemStore.h"
+#ifdef HAVE_CDS
 #include "CDSMemStore.h"
+#endif
 #include "KeyValueStore.h"
 #include "common/safe_io.h"
 
@@ -33,9 +35,11 @@ ObjectStore *ObjectStore::create(CephContext *cct,
   if (type == "memstore") {
     return new MemStore(cct, data);
   }
+#ifdef HAVE_CDS
   if (type == "cds_memstore") {
     return new CDSMemStore(cct, data);
   }
+#endif
   if (type == "keyvaluestore-dev") {
     return new KeyValueStore(data);
   }
