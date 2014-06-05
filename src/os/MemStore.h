@@ -22,7 +22,6 @@
 #include "common/RWLock.h"
 #include "ObjectStore.h"
 #include "PageSet.h"
-#include "include/assert.h"
 
 
 class MemStore : public ObjectStore {
