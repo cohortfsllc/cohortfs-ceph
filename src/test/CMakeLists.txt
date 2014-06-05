@@ -21,3 +21,8 @@ endif (WITH_FIO)
 add_executable(osbench objectstore_bench.cc)
 target_link_libraries(osbench os global)
 set_target_properties(osbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
+
+# mmapbench
+add_executable(mmapbench mmap_bench.cc)
+target_link_libraries(mmapbench os global)
+set_target_properties(mmapbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
