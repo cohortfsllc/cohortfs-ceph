@@ -20,6 +20,8 @@
 #include <boost/intrusive/avl_set.hpp>
 #include <boost/pool/pool.hpp>
 
+#include "include/assert.h"
+
 
 template<size_t PageSize>
 struct Page {
