@@ -1762,3 +1762,8 @@ set_target_properties(osbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
 add_executable(mmapbench mmap_bench.cc)
 target_link_libraries(mmapbench os global)
 set_target_properties(mmapbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
+
+# pagesetbench
+add_executable(pagesetbench pageset_bench.cc)
+target_link_libraries(pagesetbench os global)
+set_target_properties(pagesetbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
