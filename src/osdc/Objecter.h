@@ -732,14 +732,14 @@ public:
 
   struct op_target_t {
     int flags;
-    object_t oid;
+    hobject_t oid;
     uuid_d volume;
 
     bool paused;
 
     int osd;	  ///< the final target osd, or -1
 
-    op_target_t(object_t oid, uuid_d volume, int flags)
+    op_target_t(hobject_t oid, uuid_d volume, int flags)
       : flags(flags),
 	oid(oid),
 	volume(volume),
@@ -787,7 +787,7 @@ public:
     /// true if we should resend this message on failure
     bool should_resend;
 
-    Op(const object_t& o, const uuid_d& volume, vector<OSDOp>& op,
+    Op(const hobject_t& o, const uuid_d& volume, vector<OSDOp>& op,
        int f, Context *ac, Context *co, version_t *ov) :
       session(NULL), session_item(this), incarnation(0),
       target(o, volume, f),

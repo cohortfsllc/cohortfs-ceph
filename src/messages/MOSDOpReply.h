@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -35,7 +35,7 @@ class MOSDOpReply : public Message {
   static const int HEAD_VERSION = 6;
   static const int COMPAT_VERSION = 2;
 
-  object_t oid;
+  hobject_t oid;
   uuid_d volume;
   vector<OSDOp> ops;
   int64_t flags;
@@ -47,7 +47,7 @@ class MOSDOpReply : public Message {
   int32_t retry_attempt;
 
 public:
-  object_t get_oid() const { return oid; }
+  hobject_t get_oid() const { return oid; }
   uuid_d   get_volume() const { return volume; }
   int      get_flags() const { return flags; }
 

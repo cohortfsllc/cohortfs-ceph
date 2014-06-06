@@ -43,7 +43,7 @@ private:
   eversion_t reassert_version;
   int32_t retry_attempt;   // 0 is first attempt.  -1 if we don't know.
 
-  object_t oid;
+  hobject_t oid;
   uuid_d volume;
 public:
   vector<OSDOp> ops;
@@ -58,7 +58,7 @@ public:
   int get_client_inc() { return client_inc; }
   ceph_tid_t get_client_tid() { return header.tid; }
 
-  object_t& get_oid() { return oid; }
+  hobject_t& get_oid() { return oid; }
 
   uuid_d get_volume() const {
     return volume;
@@ -73,7 +73,7 @@ public:
   MOSDOp()
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION) { }
   MOSDOp(int inc, long tid,
-	 object_t& _oid, uuid_d& _volume , epoch_t _osdmap_epoch,
+	 hobject_t& _oid, uuid_d& _volume , epoch_t _osdmap_epoch,
 	 int _flags)
     : Message(CEPH_MSG_OSD_OP, HEAD_VERSION, COMPAT_VERSION),
       client_inc(inc),

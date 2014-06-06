@@ -27,8 +27,9 @@ namespace ceph {
 }
 
 enum stripetype_t {
-  STRIPE_DATA,
-  STRIPE_ECC
+  ENTIRETY, // Stripeno is not meaningful in this case
+  DATA,
+  ECC
 };
 WRITE_RAW_ENCODER(stripetype_t)
 /* This identifies a stripe of an object. hobject_t is a stupid name
@@ -45,13 +46,10 @@ struct hobject_t {
 
   string to_str() const;
 
-  hobject_t() : stripetype(STRIPE_DATA) {}
+  hobject_t() : stripetype(ENTIRETY) {}
 
-  /* Hello, Adam. This is your past self. If you forget to remove
-     these default values after implementing the Client Side Op I will
-     be very unhappy with you in the future. */
   hobject_t(object_t oid,
-	    stripetype_t stripetype = STRIPE_DATA,
+	    stripetype_t stripetype = ENTIRETY,
 	    uint32_t stripeno = 0) :
     oid(oid), stripetype(stripetype), stripeno(stripeno) { }
 

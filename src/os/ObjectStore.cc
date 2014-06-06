@@ -513,9 +513,9 @@ void ObjectStore::Transaction::generate_test_instances(list<ObjectStore::Transac
   t = new Transaction;
   coll_t c("foocoll");
   coll_t c2("foocoll2");
-  hobject_t o1(hobject_t("obj", STRIPE_DATA, 91));
-  hobject_t o2(hobject_t("obj2", STRIPE_ECC, 456));
-  hobject_t o3(hobject_t("obj3", STRIPE_DATA, 456));
+  hobject_t o1(hobject_t("obj", DATA, 91));
+  hobject_t o2(hobject_t("obj2", ECC, 456));
+  hobject_t o3(hobject_t("obj3", DATA, 456));
   t->touch(c, o1);
   bufferlist bl;
   bl.append("some data");

@@ -25,11 +25,15 @@ static void append_escaped(const string &in, string *out)
 
 static const string typestring(enum stripetype_t st) {
   switch (st) {
-  case STRIPE_DATA:
+  case ENTIRETY:
+    return "the whole shebang";
+    break;
+
+  case DATA:
     return "data";
     break;
 
-  case STRIPE_ECC:
+  case ECC:
     return "ecc";
     break;
   }
@@ -76,8 +80,8 @@ void hobject_t::dump(Formatter *f) const
 void hobject_t::generate_test_instances(list<hobject_t*>& o)
 {
   o.push_back(new hobject_t);
-  o.push_back(new hobject_t(object_t("oname"), STRIPE_DATA, 97));
-  o.push_back(new hobject_t(object_t("oname3"), STRIPE_ECC, 31));
+  o.push_back(new hobject_t(object_t("oname"), DATA, 97));
+  o.push_back(new hobject_t(object_t("oname3"), ECC, 31));
 }
 
 ostream& operator<<(ostream& out, const hobject_t& o)

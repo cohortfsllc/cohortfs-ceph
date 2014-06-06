@@ -3100,8 +3100,8 @@ void OSD::handle_op(OpRequestRef op)
     return;
 
   // object name too long?
-  if (m->get_oid().name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
-    dout(4) << "handle_op '" << m->get_oid().name << "' is longer than "
+  if (m->get_oid().oid.name.size() > MAX_CEPH_OBJECT_NAME_LEN) {
+    dout(4) << "handle_op '" << m->get_oid().oid.name << "' is longer than "
 	    << MAX_CEPH_OBJECT_NAME_LEN << " bytes!" << dendl;
     service.reply_op_error(op, -ENAMETOOLONG);
     return;
