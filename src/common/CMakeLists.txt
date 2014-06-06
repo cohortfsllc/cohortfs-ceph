@@ -100,6 +100,8 @@ set (libcommon_files
 	hobject.cc 
 	../osd/OSDMap.cc 
 	../vol/Volume.cc 
+	../osdc/Objecter.cc
+	../osdc/Striper.cc
 	../cohort/erasure.cc 
 	../cohort/CohortVolume.cc 
 	../osd/osd_types.cc

@@ -51,7 +51,13 @@ struct hobject_t {
   hobject_t(object_t oid,
 	    stripetype_t stripetype = ENTIRETY,
 	    uint32_t stripeno = 0) :
-    oid(oid), stripetype(stripetype), stripeno(stripeno) { }
+    oid(oid), stripetype(stripetype), stripeno(stripeno) {
+    assert(!(stripetype == ENTIRETY) || (stripeno == 0));
+  }
+
+  hobject_t datastripe(uint32_t _stripeno) {
+    return hobject_t(oid, DATA, _stripeno);
+  }
 
   void swap(hobject_t &o) {
     hobject_t temp(o);

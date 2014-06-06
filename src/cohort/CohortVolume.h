@@ -145,82 +145,80 @@ protected:
 			  int64_t size, string& error_message);
 
 
-#if 0
   int create(const object_t& oid,
 	     utime_t mtime,
 	     int global_flags, int create_flags,
 	     Context *onack, Context *oncommit,
 	     Objecter *objecter,
-	     eversion_t *objver = NULL,
+	     version_t *objver = NULL,
 	     ObjectOperation *extra_ops = NULL);
 
   int write(const object_t& oid, uint64_t off, uint64_t len,
 	    const bufferlist &bl,
 	    utime_t mtime, int flags, Context *onack,
 	    Context *oncommit, Objecter *objecter,
-	    eversion_t *objver = NULL,
+	    version_t *objver = NULL,
 	    ObjectOperation *extra_ops = NULL);
   int append(const object_t& oid, uint64_t len,
 	     const bufferlist &bl, utime_t mtime, int flags, Context *onack,
-	     Context *oncommit, Objecter *objecter, eversion_t *objver = NULL,
+	     Context *oncommit, Objecter *objecter, version_t *objver = NULL,
 	     ObjectOperation *extra_ops = NULL);
   int write_full(const object_t& oid,
 		 const bufferlist &bl, utime_t mtime, int flags,
 		 Context *onack, Context *oncommit, Objecter *objecter,
-		 eversion_t *objver = NULL, ObjectOperation *extra_ops = NULL);
+		 version_t *objver = NULL, ObjectOperation *extra_ops = NULL);
   int md_read(const object_t& oid, ObjectOperation& op,
 	      bufferlist *pbl, int flags,
-	      Context *onack, Objecter *objecter, eversion_t *objver = NULL);
+	      Context *onack, Objecter *objecter, version_t *objver = NULL);
   int read(const object_t& oid, uint64_t off, uint64_t len,
 	   bufferlist *pbl, int flags,
 	   Context *onfinish, Objecter *objecter,
-	   eversion_t *objver = NULL,
+	   version_t *objver = NULL,
 	   ObjectOperation *extra_ops = NULL);
   int remove(const object_t& oid,
 	     utime_t mtime, int flags,
 	     Context *onack, Context *oncommit,
 	     Objecter *objecter,
-	     eversion_t *objver = NULL,
+	     version_t *objver = NULL,
 	     ObjectOperation *extra_ops = NULL);
   int stat(const object_t& oid, uint64_t *psize,
 	   utime_t *pmtime, int flags, Context *onfinish,
-	   Objecter *objecter, eversion_t *objver = NULL,
+	   Objecter *objecter, version_t *objver = NULL,
 	   ObjectOperation *extra_ops = NULL);
   int getxattr(const object_t& oid, const char *name,
 	       bufferlist *pbl, int flags, Context *onfinish,
-	       Objecter *objecter, eversion_t *objver = NULL,
+	       Objecter *objecter, version_t *objver = NULL,
 	       ObjectOperation *extra_ops = NULL);
   int removexattr(const object_t& oid, const char *name,
 		  utime_t mtime, int flags,
 		  Context *onack, Context *oncommit,
-		  Objecter *objecter, eversion_t *objver = NULL,
+		  Objecter *objecter, version_t *objver = NULL,
 		  ObjectOperation *extra_ops = NULL);
   int setxattr(const object_t& oid, const char *name,
 	       const bufferlist &bl,
 	       utime_t mtime, int flags, Context *onack,
 	       Context *oncommit, Objecter *objecter,
-	       eversion_t *objver = NULL,
+	       version_t *objver = NULL,
 	       ObjectOperation *extra_ops = NULL);
   int getxattrs(const object_t& oid,
 		map<string, bufferlist>& attrset, int flags,
 		Context *onfinish, Objecter *objecter,
-		eversion_t *objver = NULL, ObjectOperation *extra_ops = NULL);
+		version_t *objver = NULL, ObjectOperation *extra_ops = NULL);
   int trunc(const object_t& oid,
 	    utime_t mtime, int flags,
 	    uint64_t trunc_size, __u32 trunc_seq,
 	    Context *onack, Context *oncommit,
-	    Objecter *objecter, eversion_t *objver = NULL,
+	    Objecter *objecter, version_t *objver = NULL,
 	    ObjectOperation *extra_ops = NULL);
   int zero(const object_t& oid, uint64_t off, uint64_t len,
 	   utime_t mtime, int flags,
 	   Context *onack, Context *oncommit, Objecter *objecter,
-	   eversion_t *objver = NULL, ObjectOperation *extra_ops = NULL);
+	   version_t *objver = NULL, ObjectOperation *extra_ops = NULL);
 
   int mutate_md(const object_t& oid, ObjectOperation& op,
 		utime_t mtime,
 		int flags, Context *onack, Context *oncommit,
-		Objecter *objecter, eversion_t *objver = NULL);
-#endif
+		Objecter *objecter, version_t *objver = NULL);
 };
 
 #endif // COHORT_COHORTVOLUME_H

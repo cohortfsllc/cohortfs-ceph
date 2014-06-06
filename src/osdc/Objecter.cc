@@ -1073,6 +1073,46 @@ ceph_tid_t Objecter::_op_submit(Op *op)
   return op->tid;
 }
 
+ceph_tid_t Objecter::op_submit_special(Op *op)
+{
+  // pick tid
+  ceph_tid_t mytid = ++last_tid;
+  op->tid = mytid;
+  assert(client_inc >= 0);
+
+  // add to gather set(s)
+  if (op->onack) {
+    ++num_unacked;
+  } else {
+    ldout(cct, 20) << " note: not requesting ack" << dendl;
+  }
+  if (op->oncommit) {
+    ++num_uncommitted;
+  } else {
+    ldout(cct, 20) << " note: not requesting commit" << dendl;
+  }
+  ops[op->tid] = op;
+
+  op->target.osd = op->osd;
+  op->session = get_session(op->target.osd);
+  op->session->ops.push_back(&op->session_item);
+
+  // send?
+  ldout(cct, 10) << "op_submit_special oid " << op->target.oid
+		 << " " << op->target.volume << " " << op->ops
+		 << " tid " << op->tid << " osd."
+		 << (op->session ? op->session->osd : -1)
+		 << dendl;
+
+  assert(op->target.flags & (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE));
+
+  send_op(op);
+
+  ldout(cct, 5) << num_unacked << " unacked, " << num_uncommitted << " uncommitted" << dendl;
+
+  return op->tid;
+}
+
 int Objecter::op_cancel(ceph_tid_t tid, int r)
 {
   assert(client_lock.is_locked());

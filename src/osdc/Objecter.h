@@ -755,6 +755,8 @@ public:
     xlist<Op*>::item session_item;
     int incarnation;
 
+    int osd; // TEMPORARY HACK
+
     op_target_t target;
 
     ConnectionRef con;	// for rx buffer only
@@ -1104,6 +1106,8 @@ private:
 
   // public interface
 public:
+  ceph_tid_t op_submit_special(Op *op); // Stupid Stupid Stupid
+
   ceph_tid_t op_submit(Op *op);
   bool is_active() {
     return !(ops.empty() && linger_ops.empty());
