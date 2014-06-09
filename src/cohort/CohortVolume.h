@@ -131,10 +131,10 @@ protected:
   virtual int update(VolumeCRef v);
 
   virtual void dump(Formatter *f) const;
-  virtual void decode_payload(bufferlist::iterator& bl, __u8 v);
+  virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
   virtual void encode(bufferlist& bl) const;
 
-  friend VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v,
+  friend VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v,
 				    vol_type t);
 
   static VolumeRef create(const string& name, const epoch_t last_update,
@@ -144,81 +144,54 @@ protected:
 			  int64_t word_size, int64_t packet_size,
 			  int64_t size, string& error_message);
 
+  virtual int create(const object_t& oid, utime_t mtime,
+		     int global_flags, Context *onack, Context *oncommit,
+		     Objecter *objecter);
+  virtual int write(const object_t& oid, uint64_t off, uint64_t len,
+		    const bufferlist &bl, utime_t mtime, int flags,
+		    Context *onack, Context *oncommit, Objecter *objecter);
 
-  int create(const object_t& oid,
-	     utime_t mtime,
-	     int global_flags, int create_flags,
-	     Context *onack, Context *oncommit,
-	     Objecter *objecter,
-	     version_t *objver = NULL,
-	     ObjectOperation *extra_ops = NULL);
+  virtual int append(const object_t& oid, uint64_t len, const bufferlist &bl,
+		     utime_t mtime, int flags, Context *onack,
+		     Context *oncommit, Objecter *objecter);
 
-  int write(const object_t& oid, uint64_t off, uint64_t len,
-	    const bufferlist &bl,
-	    utime_t mtime, int flags, Context *onack,
-	    Context *oncommit, Objecter *objecter,
-	    version_t *objver = NULL,
-	    ObjectOperation *extra_ops = NULL);
-  int append(const object_t& oid, uint64_t len,
-	     const bufferlist &bl, utime_t mtime, int flags, Context *onack,
-	     Context *oncommit, Objecter *objecter, version_t *objver = NULL,
-	     ObjectOperation *extra_ops = NULL);
-  int write_full(const object_t& oid,
-		 const bufferlist &bl, utime_t mtime, int flags,
-		 Context *onack, Context *oncommit, Objecter *objecter,
-		 version_t *objver = NULL, ObjectOperation *extra_ops = NULL);
-  int md_read(const object_t& oid, ObjectOperation& op,
-	      bufferlist *pbl, int flags,
-	      Context *onack, Objecter *objecter, version_t *objver = NULL);
-  int read(const object_t& oid, uint64_t off, uint64_t len,
-	   bufferlist *pbl, int flags,
-	   Context *onfinish, Objecter *objecter,
-	   version_t *objver = NULL,
-	   ObjectOperation *extra_ops = NULL);
-  int remove(const object_t& oid,
-	     utime_t mtime, int flags,
-	     Context *onack, Context *oncommit,
-	     Objecter *objecter,
-	     version_t *objver = NULL,
-	     ObjectOperation *extra_ops = NULL);
-  int stat(const object_t& oid, uint64_t *psize,
-	   utime_t *pmtime, int flags, Context *onfinish,
-	   Objecter *objecter, version_t *objver = NULL,
-	   ObjectOperation *extra_ops = NULL);
-  int getxattr(const object_t& oid, const char *name,
-	       bufferlist *pbl, int flags, Context *onfinish,
-	       Objecter *objecter, version_t *objver = NULL,
-	       ObjectOperation *extra_ops = NULL);
-  int removexattr(const object_t& oid, const char *name,
-		  utime_t mtime, int flags,
-		  Context *onack, Context *oncommit,
-		  Objecter *objecter, version_t *objver = NULL,
-		  ObjectOperation *extra_ops = NULL);
-  int setxattr(const object_t& oid, const char *name,
-	       const bufferlist &bl,
-	       utime_t mtime, int flags, Context *onack,
-	       Context *oncommit, Objecter *objecter,
-	       version_t *objver = NULL,
-	       ObjectOperation *extra_ops = NULL);
-  int getxattrs(const object_t& oid,
-		map<string, bufferlist>& attrset, int flags,
-		Context *onfinish, Objecter *objecter,
-		version_t *objver = NULL, ObjectOperation *extra_ops = NULL);
-  int trunc(const object_t& oid,
-	    utime_t mtime, int flags,
-	    uint64_t trunc_size, __u32 trunc_seq,
-	    Context *onack, Context *oncommit,
-	    Objecter *objecter, version_t *objver = NULL,
-	    ObjectOperation *extra_ops = NULL);
-  int zero(const object_t& oid, uint64_t off, uint64_t len,
-	   utime_t mtime, int flags,
-	   Context *onack, Context *oncommit, Objecter *objecter,
-	   version_t *objver = NULL, ObjectOperation *extra_ops = NULL);
-
-  int mutate_md(const object_t& oid, ObjectOperation& op,
-		utime_t mtime,
-		int flags, Context *onack, Context *oncommit,
-		Objecter *objecter, version_t *objver = NULL);
+  virtual int write_full(const object_t& oid, const bufferlist &bl,
+			 utime_t mtime, int flags, Context *onack,
+			 Context *oncommit, Objecter *objecter);
+  virtual int md_read(const object_t& oid, ObjectOperation& op,
+		      bufferlist *pbl, int flags, Context *onack,
+		      Objecter *objecter);
+  virtual int read(const object_t& oid, uint64_t off, uint64_t len,
+		   bufferlist *pbl, int flags, Context *onfinish,
+		   Objecter *objecter);
+  virtual int remove(const object_t& oid, utime_t mtime, int flags,
+		     Context *onack, Context *oncommit, Objecter *objecter);
+  virtual int stat(const object_t& oid, uint64_t *psize,
+		   utime_t *pmtime, int flags, Context *onfinish,
+		   Objecter *objecter);
+  virtual int getxattr(const object_t& oid, const char *name,
+		       bufferlist *pbl, int flags, Context *onfinish,
+		       Objecter *objecter);
+  virtual int removexattr(const object_t& oid, const char *name,
+			  utime_t mtime, int flags,
+			  Context *onack, Context *oncommit,
+			  Objecter *objecter);
+  virtual int setxattr(const object_t& oid, const char *name,
+		       const bufferlist &bl,
+		       utime_t mtime, int flags, Context *onack,
+		       Context *oncommit, Objecter *objecter);
+  virtual int getxattrs(const object_t& oid,
+			map<string, bufferlist>& attrset, int flags,
+			Context *onfinish, Objecter *objecter);
+  virtual int trunc(const object_t& oid, utime_t mtime, int flags,
+		    uint64_t trunc_size, uint32_t trunc_seq,
+		    Context *onack, Context *oncommit, Objecter *objecter);
+  virtual int zero(const object_t& oid, uint64_t off, uint64_t len,
+		   utime_t mtime, int flags, Context *onack, Context *oncommit,
+		   Objecter *objecter);
+  virtual int mutate_md(const object_t& oid, ObjectOperation& op,
+			utime_t mtime, int flags, Context *onack,
+			Context *oncommit, Objecter *objecter);
 };
 
 #endif // COHORT_COHORTVOLUME_H

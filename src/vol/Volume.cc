@@ -35,7 +35,7 @@ const std::string Volume::typestrings[] = {
   "CohortVol", "NotAVolType"
 };
 
-VolumeRef CohortVolFactory(bufferlist::iterator& bl, __u8 v, vol_type t);
+VolumeRef CohortVolFactory(bufferlist::iterator& bl, uint8_t v, vol_type t);
 
 const Volume::factory Volume::factories[] = {
   CohortVolFactory, NULL
@@ -50,7 +50,7 @@ void Volume::dump(Formatter *f) const
   f->dump_stream("last_update") << last_update;
 }
 
-void Volume::decode_payload(bufferlist::iterator& bl, __u8 v)
+void Volume::decode_payload(bufferlist::iterator& bl, uint8_t v)
 {
   ::decode(uuid, bl);
   ::decode(name, bl);

@@ -49,7 +49,7 @@ class Volume
 private:
   static const std::string typestrings[];
 
-  typedef VolumeRef(*factory)(bufferlist::iterator& bl, __u8 v, vol_type t);
+  typedef VolumeRef(*factory)(bufferlist::iterator& bl, uint8_t v, vol_type t);
 
   /* Factory Protocol
 
@@ -78,7 +78,7 @@ private:
   static const factory factories[];
 
 protected:
-  virtual void decode_payload(bufferlist::iterator& bl, __u8 v);
+  virtual void decode_payload(bufferlist::iterator& bl, uint8_t v);
 
   Volume(const vol_type t) :
     type(t), uuid(), name() { }
@@ -128,85 +128,52 @@ public:
 		    const unsigned int rule_index,
 		    vector<int>& osds) = 0;
 
-  virtual int create(const object_t& oid,
-		     utime_t mtime,
-		     int global_flags, int create_flags,
-		     Context *onack, Context *oncommit,
-		     Objecter *objecter,
-		     version_t *objver = NULL,
-		     ObjectOperation *extra_ops = NULL) = 0;
-
+  virtual int create(const object_t& oid, utime_t mtime,
+		     int global_flags, Context *onack,
+		     Context *oncommit, Objecter *objecter) = 0;
   virtual int write(const object_t& oid, uint64_t off, uint64_t len,
-		    const bufferlist &bl,
-		    utime_t mtime, int flags, Context *onack,
-		    Context *oncommit, Objecter *objecter,
-		    version_t *objver = NULL,
-		    ObjectOperation *extra_ops = NULL) = 0;
-  virtual int append(const object_t& oid, uint64_t len,
-		     const bufferlist &bl,
+		    const bufferlist &bl, utime_t mtime, int flags,
+		    Context *onack, Context *oncommit, Objecter *objecter) = 0;
+  virtual int append(const object_t& oid, uint64_t len, const bufferlist &bl,
 		     utime_t mtime, int flags, Context *onack,
-		     Context *oncommit, Objecter *objecter,
-		     version_t *objver = NULL,
-		     ObjectOperation *extra_ops = NULL) = 0;
-  virtual int write_full(const object_t& oid,
-			 const bufferlist &bl, utime_t mtime, int flags,
-			 Context *onack, Context *oncommit, Objecter *objecter,
-			 version_t *objver = NULL,
-			 ObjectOperation *extra_ops = NULL) = 0;
+		     Context *oncommit, Objecter *objecter) = 0;
+  virtual int write_full(const object_t& oid, const bufferlist &bl,
+			 utime_t mtime, int flags, Context *onack,
+			 Context *oncommit, Objecter *objecter) = 0;
   virtual int md_read(const object_t& oid, ObjectOperation& op,
-		      bufferlist *pbl, int flags,
-		      Context *onack, Objecter *objecter,
-		      version_t *objver = NULL) = 0;
+		      bufferlist *pbl, int flags, Context *onack,
+		      Objecter *objecter) = 0;
   virtual int read(const object_t& oid, uint64_t off, uint64_t len,
-		   bufferlist *pbl, int flags,
-		   Context *onfinish, Objecter *objecter,
-		   version_t *objver = NULL,
-		   ObjectOperation *extra_ops = NULL) = 0;
-  virtual int remove(const object_t& oid,
-		     utime_t mtime, int flags,
+		   bufferlist *pbl, int flags, Context *onfinish,
+		   Objecter *objecter) = 0;
+  virtual int remove(const object_t& oid, utime_t mtime, int flags,
 		     Context *onack, Context *oncommit,
-		     Objecter *objecter,
-		     version_t *objver = NULL,
-		     ObjectOperation *extra_ops = NULL) = 0;
+		     Objecter *objecter) = 0;
   virtual int stat(const object_t& oid, uint64_t *psize,
 		   utime_t *pmtime, int flags, Context *onfinish,
-		   Objecter *objecter, version_t *objver = NULL,
-		   ObjectOperation *extra_ops = NULL) = 0;
+		   Objecter *objecter) = 0;
   virtual int getxattr(const object_t& oid, const char *name,
 		       bufferlist *pbl, int flags, Context *onfinish,
-		       Objecter *objecter, version_t *objver = NULL,
-		       ObjectOperation *extra_ops = NULL) = 0;
+		       Objecter *objecter) = 0;
   virtual int removexattr(const object_t& oid, const char *name,
-			  utime_t mtime, int flags,
-			  Context *onack, Context *oncommit,
-			  Objecter *objecter, version_t *objver = NULL,
-			  ObjectOperation *extra_ops = NULL) = 0;
+			  utime_t mtime, int flags, Context *onack,
+			  Context *oncommit, Objecter *objecter) = 0;
   virtual int setxattr(const object_t& oid, const char *name,
-		       const bufferlist &bl,
-		       utime_t mtime, int flags, Context *onack,
-		       Context *oncommit, Objecter *objecter,
-		       version_t *objver = NULL,
-		       ObjectOperation *extra_ops = NULL) = 0;
-  virtual int getxattrs(const object_t& oid,
-			map<string,bufferlist>& attrset,
-			int flags, Context *onfinish, Objecter *objecter,
-			version_t *objver = NULL,
-			ObjectOperation *extra_ops = NULL) = 0;
-  virtual int trunc(const object_t& oid,
-		    utime_t mtime, int flags,
-		    uint64_t trunc_size, __u32 trunc_seq,
+		       const bufferlist &bl, utime_t mtime, int flags,
+		       Context *onack, Context *oncommit,
+		       Objecter *objecter) = 0;
+  virtual int getxattrs(const object_t& oid, map<string,bufferlist>& attrset,
+			int flags, Context *onfinish, Objecter *objecter) = 0;
+  virtual int trunc(const object_t& oid, utime_t mtime, int flags,
+		    uint64_t trunc_size, uint32_t trunc_seq,
 		    Context *onack, Context *oncommit,
-		    Objecter *objecter, version_t *objver = NULL,
-		    ObjectOperation *extra_ops = NULL) = 0;
+		    Objecter *objecter) = 0;
   virtual int zero(const object_t& oid, uint64_t off, uint64_t len,
-		   utime_t mtime, int flags,
-		   Context *onack, Context *oncommit, Objecter *objecter,
-		   version_t *objver = NULL,
-		   ObjectOperation *extra_ops = NULL) = 0;
+		   utime_t mtime, int flags, Context *onack,
+		   Context *oncommit, Objecter *objecter) = 0;
   virtual int mutate_md(const object_t& oid, ObjectOperation& op,
-			utime_t mtime,
-			int flags, Context *onack, Context *oncommit,
-			Objecter *objecter, version_t *objver = NULL) = 0;
+			utime_t mtime, int flags, Context *onack,
+			Context *oncommit, Objecter *objecter) = 0;
 };
 
 WRITE_CLASS_ENCODER(Volume)

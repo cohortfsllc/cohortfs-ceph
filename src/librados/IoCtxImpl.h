@@ -30,10 +30,7 @@ class RadosClient;
 struct librados::IoCtxImpl {
   atomic_t ref_cnt;
   RadosClient *client;
-  uuid_d volume;
-  uint64_t assert_ver;
-  map<object_t, uint64_t> assert_src_version;
-  version_t last_objver;
+  VolumeRef volume;
   uint32_t notify_timeout;
 
   Mutex aio_write_list_lock;
@@ -47,15 +44,12 @@ struct librados::IoCtxImpl {
 
   IoCtxImpl();
   IoCtxImpl(RadosClient *c, Objecter *objecter, Mutex *client_lock,
-	    const uuid_d& volume);
+	    VolumeRef volume);
 
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count
     client = rhs.client;
     volume = volume;
-    assert_ver = rhs.assert_ver;
-    assert_src_version = rhs.assert_src_version;
-    last_objver = rhs.last_objver;
     notify_timeout = rhs.notify_timeout;
     lock = rhs.lock;
     objecter = rhs.objecter;
@@ -76,10 +70,8 @@ struct librados::IoCtxImpl {
   void flush_aio_writes();
 
   uuid_d get_volume() {
-    return volume;
+    return volume->uuid;
   }
-
-  ::ObjectOperation *prepare_assert_ops(::ObjectOperation *op);
 
   // io
   int create(const object_t& oid, bool exclusive);
@@ -153,7 +145,6 @@ struct librados::IoCtxImpl {
 	       const char *method, bufferlist& inbl, bufferlist *outbl);
   int aio_stat(const object_t& oid, AioCompletionImpl *c, uint64_t *psize, time_t *pmtime);
 
-  void set_sync_op_version(version_t ver);
   int watch(const object_t& oid, uint64_t ver, uint64_t *cookie, librados::WatchCtx *ctx);
   int unwatch(const object_t& oid, uint64_t cookie);
   int notify(const object_t& oid, uint64_t ver, bufferlist& bl);
@@ -166,8 +157,6 @@ struct librados::IoCtxImpl {
                      uint64_t expected_write_size);
 
   version_t last_version();
-  void set_assert_version(uint64_t ver);
-  void set_assert_src_version(const object_t& oid, uint64_t ver);
   void set_notify_timeout(uint32_t timeout);
 
   struct C_NotifyComplete : public librados::WatchCtx {

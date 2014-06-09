@@ -106,7 +106,6 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
       ex = &exv.back();
       ex->oid = oid;
       ex->objectno = objectno;
-      ex->volume = volume;
 
       ex->offset = x_offset;
       ex->length = x_len;
@@ -122,7 +121,7 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
     ex->buffer_extents.push_back(make_pair(cur - offset + buffer_offset, x_len));
 
     ldout(cct, 15) << "file_to_extents  " << *ex << " in "
-		   << ex->volume << dendl;
+		   << dendl;
     left -= x_len;
     cur += x_len;
   }

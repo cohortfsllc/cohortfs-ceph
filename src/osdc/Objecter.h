@@ -789,8 +789,8 @@ public:
     /// true if we should resend this message on failure
     bool should_resend;
 
-    Op(const hobject_t& o, const uuid_d& volume, vector<OSDOp>& op,
-       int f, Context *ac, Context *co, version_t *ov) :
+    Op(const hobject_t& o, uuid_d volume, vector<OSDOp>& op,
+       int f, Context *ac, Context *co, version_t *ov = NULL) :
       session(NULL), session_item(this), incarnation(0),
       target(o, volume, f),
       con(NULL),
@@ -1140,10 +1140,10 @@ public:
   int op_cancel(ceph_tid_t tid, int r);
 
   // mid-level helpers
-  Op *prepare_mutate_op(const object_t& oid, const uuid_d& volume,
+  Op *prepare_mutate_op(const object_t& oid, VolumeRef volume,
 			ObjectOperation& op, utime_t mtime, int flags,
 			Context *onack, Context *oncommit, version_t *objver = NULL) {
-    Op *o = new Op(oid, volume, op.ops,
+    Op *o = new Op(oid, volume->uuid, op.ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->priority = op.priority;
@@ -1151,7 +1151,7 @@ public:
     o->out_rval.swap(op.out_rval);
     return o;
   }
-  ceph_tid_t mutate(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t mutate(const object_t& oid, VolumeRef volume,
 		    ObjectOperation& op, utime_t mtime, int flags,
 		    Context *onack, Context *oncommit,
 		    version_t *objver = NULL) {
@@ -1159,10 +1159,10 @@ public:
 			      oncommit, objver);
     return op_submit(o);
   }
-  Op *prepare_read_op(const object_t& oid, const uuid_d& volume,
+  Op *prepare_read_op(const object_t& oid, VolumeRef volume,
 		      ObjectOperation& op, bufferlist *pbl, int flags,
 		      Context *onack, version_t *objver = NULL) {
-    Op *o = new Op(oid, volume, op.ops,
+    Op *o = new Op(oid, volume->uuid, op.ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ, onack,
 		   NULL, objver);
     o->priority = op.priority;
@@ -1172,17 +1172,17 @@ public:
     o->out_rval.swap(op.out_rval);
     return o;
   }
-  ceph_tid_t read(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t read(const object_t& oid, VolumeRef volume,
 		  ObjectOperation& op, bufferlist *pbl, int flags,
 		  Context *onack, version_t *objver = NULL) {
     Op *o = prepare_read_op(oid, volume, op, pbl, flags, onack, objver);
     return op_submit(o);
   }
-  ceph_tid_t linger_mutate(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t linger_mutate(const object_t& oid, VolumeRef volume,
 			   ObjectOperation& op, utime_t mtime,
 			   bufferlist& inbl, int flags, Context *onack,
 			   Context *onfinish, version_t *objver);
-  ceph_tid_t linger_read(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t linger_read(const object_t& oid, VolumeRef volume,
 			 ObjectOperation& op, bufferlist& inbl,
 			 bufferlist *poutbl, int flags, Context *onack,
 			 version_t *objver);
@@ -1216,7 +1216,7 @@ public:
 
 
   // high-level helpers
-  ceph_tid_t stat(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t stat(const object_t& oid, VolumeRef volume,
 		  uint64_t *psize, utime_t *pmtime, int flags,
 		  Context *onfinish, version_t *objver = NULL,
 		  ObjectOperation *extra_ops = NULL) {
@@ -1224,14 +1224,14 @@ public:
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_STAT;
     C_Stat *fin = new C_Stat(psize, pmtime, onfinish);
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   fin, 0, objver);
     o->outbl = &fin->bl;
     return op_submit(o);
   }
 
-  ceph_tid_t read(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t read(const object_t& oid, VolumeRef volume,
 		  uint64_t off, uint64_t len, bufferlist *pbl, int flags,
 		  Context *onfinish,
 		  version_t *objver = NULL,
@@ -1243,14 +1243,14 @@ public:
     ops[i].op.extent.length = len;
     ops[i].op.extent.truncate_size = 0;
     ops[i].op.extent.truncate_seq = 0;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   onfinish, 0, objver);
     o->outbl = pbl;
     return op_submit(o);
   }
 
-  ceph_tid_t read_trunc(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t read_trunc(const object_t& oid, VolumeRef volume,
 			uint64_t off, uint64_t len, bufferlist *pbl, int flags,
 			uint64_t trunc_size, uint32_t trunc_seq,
 			Context *onfinish, version_t *objver = NULL,
@@ -1262,13 +1262,13 @@ public:
     ops[i].op.extent.length = len;
     ops[i].op.extent.truncate_size = trunc_size;
     ops[i].op.extent.truncate_seq = trunc_seq;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   onfinish, 0, objver);
     o->outbl = pbl;
     return op_submit(o);
   }
-  ceph_tid_t mapext(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t mapext(const object_t& oid, VolumeRef volume,
 		    uint64_t off, uint64_t len, bufferlist *pbl, int flags,
 		    Context *onfinish, version_t *objver = NULL,
 		    ObjectOperation *extra_ops = NULL) {
@@ -1279,13 +1279,13 @@ public:
     ops[i].op.extent.length = len;
     ops[i].op.extent.truncate_size = 0;
     ops[i].op.extent.truncate_seq = 0;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   onfinish, 0, objver);
     o->outbl = pbl;
     return op_submit(o);
   }
-  ceph_tid_t getxattr(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t getxattr(const object_t& oid, VolumeRef volume,
 		      const char *name, bufferlist *pbl, int flags,
 		      Context *onfinish, version_t *objver = NULL,
 		      ObjectOperation *extra_ops = NULL) {
@@ -1296,14 +1296,14 @@ public:
     ops[i].op.xattr.value_len = 0;
     if (name)
       ops[i].indata.append(name);
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   onfinish, 0, objver);
     o->outbl = pbl;
     return op_submit(o);
   }
 
-  ceph_tid_t getxattrs(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t getxattrs(const object_t& oid, VolumeRef volume,
 		       map<string,bufferlist>& attrset, int flags,
 		       Context *onfinish, version_t *objver = NULL,
 		       ObjectOperation *extra_ops = NULL) {
@@ -1311,14 +1311,14 @@ public:
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_GETXATTRS;
     C_GetAttrs *fin = new C_GetAttrs(attrset, onfinish);
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_READ,
 		   fin, 0, objver);
     o->outbl = &fin->bl;
     return op_submit(o);
   }
 
-  ceph_tid_t read_full(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t read_full(const object_t& oid, VolumeRef volume,
 		       bufferlist *pbl, int flags, Context *onfinish,
 		       version_t *objver = NULL,
 		       ObjectOperation *extra_ops = NULL) {
@@ -1328,17 +1328,16 @@ public:
   }
 
   // writes
-  ceph_tid_t _modify(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t _modify(const object_t& oid, VolumeRef volume,
 		     vector<OSDOp>& ops, utime_t mtime, int flags,
 		     Context *onack, Context *oncommit,
 		     version_t *objver = NULL) {
-    Op *o = new Op(oid, volume, ops,
-		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
-		   onack, oncommit, objver);
+    Op *o = new Op(oid, volume->uuid, ops, flags | global_op_flags |
+		   CEPH_OSD_FLAG_WRITE, onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
-  ceph_tid_t write(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t write(const object_t& oid, VolumeRef volume,
 		   uint64_t off, uint64_t len, const bufferlist &bl,
 		   utime_t mtime, int flags, Context *onack, Context *oncommit,
 		   version_t *objver = NULL,
@@ -1351,13 +1350,13 @@ public:
     ops[i].op.extent.truncate_size = 0;
     ops[i].op.extent.truncate_seq = 0;
     ops[i].indata = bl;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
-  ceph_tid_t append(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t append(const object_t& oid, VolumeRef volume,
 		    uint64_t len, const bufferlist &bl, utime_t mtime,
 		    int flags, Context *onack, Context *oncommit,
 		    version_t *objver = NULL,
@@ -1370,13 +1369,13 @@ public:
     ops[i].op.extent.truncate_size = 0;
     ops[i].op.extent.truncate_seq = 0;
     ops[i].indata = bl;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
-  ceph_tid_t write_trunc(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t write_trunc(const object_t& oid, VolumeRef volume,
 			 uint64_t off, uint64_t len, const bufferlist &bl,
 			 utime_t mtime, int flags, uint64_t trunc_size,
 			 uint32_t trunc_seq, Context *onack, Context *oncommit,
@@ -1390,13 +1389,13 @@ public:
     ops[i].op.extent.truncate_size = trunc_size;
     ops[i].op.extent.truncate_seq = trunc_seq;
     ops[i].indata = bl;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
-  ceph_tid_t write_full(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t write_full(const object_t& oid, VolumeRef volume,
 			const bufferlist &bl, utime_t mtime, int flags,
 			Context *onack, Context *oncommit,
 			version_t *objver = NULL,
@@ -1407,14 +1406,14 @@ public:
     ops[i].op.extent.offset = 0;
     ops[i].op.extent.length = bl.length();
     ops[i].indata = bl;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
 
-  ceph_tid_t trunc(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t trunc(const object_t& oid, VolumeRef volume,
 		   utime_t mtime, int flags, uint64_t trunc_size,
 		   uint32_t trunc_seq, Context *onack, Context *oncommit,
 		   version_t *objver = NULL,
@@ -1425,14 +1424,14 @@ public:
     ops[i].op.extent.offset = trunc_size;
     ops[i].op.extent.truncate_size = trunc_size;
     ops[i].op.extent.truncate_seq = trunc_seq;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
 
-  ceph_tid_t zero(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t zero(const object_t& oid, VolumeRef volume,
 		  uint64_t off, uint64_t len, utime_t mtime, int flags,
 		  Context *onack, Context *oncommit,
 		  version_t *objver = NULL,
@@ -1442,14 +1441,14 @@ public:
     ops[i].op.op = CEPH_OSD_OP_ZERO;
     ops[i].op.extent.offset = off;
     ops[i].op.extent.length = len;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
 
-  ceph_tid_t create(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t create(const object_t& oid, VolumeRef volume,
 		    utime_t mtime, int global_flags, int create_flags,
 		    Context *onack, Context *oncommit,
 		    version_t *objver = NULL,
@@ -1458,40 +1457,40 @@ public:
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_CREATE;
     ops[i].op.flags = create_flags;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   global_flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
 
-  ceph_tid_t remove(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t remove(const object_t& oid, VolumeRef volume,
 		    utime_t mtime, int flags, Context *onack,
 		    Context *oncommit, version_t *objver = NULL,
 		    ObjectOperation *extra_ops = NULL) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = CEPH_OSD_OP_DELETE;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
 
-  ceph_tid_t lock(const object_t& oid, const uuid_d& volume, int op,
+  ceph_tid_t lock(const object_t& oid, VolumeRef volume, int op,
 		  int flags, Context *onack, Context *oncommit,
 		  version_t *objver = NULL,
 		  ObjectOperation *extra_ops = NULL) {
     vector<OSDOp> ops;
     int i = init_ops(ops, 1, extra_ops);
     ops[i].op.op = op;
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     return op_submit(o);
   }
-  ceph_tid_t setxattr(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t setxattr(const object_t& oid, VolumeRef volume,
 		      const char *name, const bufferlist &bl,
 		      utime_t mtime, int flags,
 	      Context *onack, Context *oncommit,
@@ -1504,13 +1503,13 @@ public:
     if (name)
       ops[i].indata.append(name);
     ops[i].indata.append(bl);
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
     return op_submit(o);
   }
-  ceph_tid_t removexattr(const object_t& oid, const uuid_d& volume,
+  ceph_tid_t removexattr(const object_t& oid, VolumeRef volume,
 			 const char *name, utime_t mtime, int flags,
 			 Context *onack, Context *oncommit,
 			 version_t *objver = NULL,
@@ -1522,7 +1521,7 @@ public:
     ops[i].op.xattr.value_len = 0;
     if (name)
       ops[i].indata.append(name);
-    Op *o = new Op(oid, volume, ops,
+    Op *o = new Op(oid, volume->uuid, ops,
 		   flags | global_op_flags | CEPH_OSD_FLAG_WRITE,
 		   onack, oncommit, objver);
     o->mtime = mtime;
@@ -1563,11 +1562,11 @@ public:
     }
   };
 
-  void sg_read_trunc(vector<ObjectExtent>& extents, bufferlist *bl, int flags,
-		     uint64_t trunc_size, uint32_t trunc_seq,
-		     Context *onfinish) {
+  void sg_read_trunc(vector<ObjectExtent>& extents, VolumeRef volume,
+		     bufferlist *bl, int flags, uint64_t trunc_size,
+		     uint32_t trunc_seq, Context *onfinish) {
     if (extents.size() == 1) {
-      read_trunc(extents[0].oid, extents[0].volume, extents[0].offset,
+      read_trunc(extents[0].oid, volume, extents[0].offset,
 		 extents[0].length, bl, flags, extents[0].truncate_size,
 		 trunc_seq, onfinish);
     } else {
@@ -1576,7 +1575,7 @@ public:
       int i=0;
       for (vector<ObjectExtent>::iterator p = extents.begin();
 	   p != extents.end(); ++p) {
-	read_trunc(p->oid, p->volume, p->offset, p->length,
+	read_trunc(p->oid, volume, p->offset, p->length,
 		   &resultbl[i++], flags, p->truncate_size, trunc_seq,
 		   gather.new_sub());
       }
@@ -1585,16 +1584,17 @@ public:
     }
   }
 
-  void sg_read(vector<ObjectExtent>& extents, bufferlist *bl, int flags,
-	       Context *onfinish) {
-    sg_read_trunc(extents, bl, flags, 0, 0, onfinish);
+  void sg_read(vector<ObjectExtent>& extents, VolumeRef volume, bufferlist *bl,
+	       int flags, Context *onfinish) {
+    sg_read_trunc(extents, volume, bl, flags, 0, 0, onfinish);
   }
 
-  void sg_write_trunc(vector<ObjectExtent>& extents, const bufferlist& bl,
-		      utime_t mtime, int flags, uint64_t trunc_size,
-		      uint32_t trunc_seq, Context *onack, Context *oncommit) {
+  void sg_write_trunc(vector<ObjectExtent>& extents, VolumeRef volume,
+		      const bufferlist& bl, utime_t mtime, int flags,
+		      uint64_t trunc_size, uint32_t trunc_seq, Context *onack,
+		      Context *oncommit) {
     if (extents.size() == 1) {
-      write_trunc(extents[0].oid, extents[0].volume, extents[0].offset,
+      write_trunc(extents[0].oid, volume, extents[0].offset,
 		  extents[0].length, bl, mtime, flags,
 		  extents[0].truncate_size, trunc_seq, onack, oncommit);
     } else {
@@ -1609,7 +1609,7 @@ public:
 	     ++bit)
 	  bl.copy(bit->first, bit->second, cur);
 	assert(cur.length() == p->length);
-	write_trunc(p->oid, p->volume, p->offset, p->length,
+	write_trunc(p->oid, volume, p->offset, p->length,
 		    cur, mtime, flags, p->truncate_size, trunc_seq,
 		    onack ? gack.new_sub():0,
 	      oncommit ? gcom.new_sub():0);
@@ -1619,9 +1619,10 @@ public:
     }
   }
 
-  void sg_write(vector<ObjectExtent>& extents, const bufferlist& bl,
-		utime_t mtime, int flags, Context *onack, Context *oncommit) {
-    sg_write_trunc(extents, bl, mtime, flags, 0, 0, onack, oncommit);
+  void sg_write(vector<ObjectExtent>& extents, VolumeRef volume,
+		const bufferlist& bl, utime_t mtime, int flags, Context *onack,
+		Context *oncommit) {
+    sg_write_trunc(extents, volume, bl, mtime, flags, 0, 0, onack, oncommit);
   }
 
   void ms_handle_connect(Connection *con);

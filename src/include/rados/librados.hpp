@@ -60,8 +60,6 @@ namespace librados
     bool is_complete_and_cb();
     bool is_safe_and_cb();
     int get_return_value();
-    int get_version() __attribute__ ((deprecated));
-    uint64_t get_version64();
     void release();
     AioCompletionImpl *pc;
   };
@@ -123,13 +121,6 @@ namespace librados
     void exec(const char *cls, const char *method, bufferlist& inbl);
     void exec(const char *cls, const char *method, bufferlist& inbl, bufferlist *obl, int *prval);
     void exec(const char *cls, const char *method, bufferlist& inbl, ObjectOperationCompletion *completion);
-    /**
-     * Guard operation with a check that object version == ver
-     *
-     * @param ver [in] version to check
-     */
-    void assert_version(uint64_t ver);
-
     /**
      * Guard operatation with a check that the object already exists
      */
@@ -457,8 +448,6 @@ namespace librados
 		     std::list<librados::locker_t> *lockers);
 
 
-    uint64_t get_last_version();
-
     int aio_read(const std::string& oid, AioCompletion *c,
 		 bufferlist *pbl, size_t len, uint64_t off);
     int aio_sparse_read(const std::string& oid, AioCompletion *c,
@@ -542,10 +531,6 @@ namespace librados
     int set_alloc_hint(const std::string& o,
 		       uint64_t expected_object_size,
 		       uint64_t expected_write_size);
-
-    // assert version for next sync operations
-    void set_assert_version(uint64_t ver);
-    void set_assert_src_version(const std::string& o, uint64_t ver);
 
     uuid_d get_volume();
 

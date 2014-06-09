@@ -32,7 +32,6 @@ struct librados::AioCompletionImpl {
   int ref, rval;
   bool released;
   bool ack, safe;
-  version_t objver;
 
   rados_callback_t callback_complete, callback_safe;
   void *callback_complete_arg, *callback_safe_arg;
@@ -48,7 +47,6 @@ struct librados::AioCompletionImpl {
 
   AioCompletionImpl() : lock("AioCompletionImpl lock", false, false),
 			ref(1), rval(0), released(false), ack(false), safe(false),
-			objver(0),
 			callback_complete(0),
 			callback_safe(0),
 			callback_complete_arg(0),
@@ -127,12 +125,6 @@ struct librados::AioCompletionImpl {
     int r = rval;
     lock.Unlock();
     return r;
-  }
-  uint64_t get_version() {
-    lock.Lock();
-    version_t v = objver;
-    lock.Unlock();
-    return v;
   }
 
   void get() {

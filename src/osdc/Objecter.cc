@@ -339,7 +339,7 @@ void Objecter::unregister_linger(uint64_t linger_id)
   }
 }
 
-ceph_tid_t Objecter::linger_mutate(const object_t& oid, const uuid_d& volume,
+ceph_tid_t Objecter::linger_mutate(const object_t& oid, VolumeRef volume,
 				   ObjectOperation& op,
 				   utime_t mtime,
 				   bufferlist& inbl, int flags,
@@ -348,7 +348,7 @@ ceph_tid_t Objecter::linger_mutate(const object_t& oid, const uuid_d& volume,
 {
   LingerOp *info = new LingerOp;
   info->target.oid = oid;
-  info->target.volume = volume;
+  info->target.volume = volume->uuid;
   info->mtime = mtime;
   info->target.flags = flags | CEPH_OSD_FLAG_WRITE;
   info->ops = op.ops;
@@ -368,14 +368,14 @@ ceph_tid_t Objecter::linger_mutate(const object_t& oid, const uuid_d& volume,
   return info->linger_id;
 }
 
-ceph_tid_t Objecter::linger_read(const object_t& oid, const uuid_d& volume,
+ceph_tid_t Objecter::linger_read(const object_t& oid, VolumeRef volume,
 				 ObjectOperation& op, bufferlist& inbl,
 				 bufferlist *poutbl, int flags,
 				 Context *onfinish, version_t *objver)
 {
   LingerOp *info = new LingerOp;
   info->target.oid = oid;
-  info->target.volume = volume;
+  info->target.volume = volume->uuid;
   info->target.flags = flags;
   info->ops = op.ops;
   info->inbl = inbl;

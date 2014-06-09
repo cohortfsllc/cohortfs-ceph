@@ -100,10 +100,10 @@ set (libcommon_files
 	hobject.cc 
 	../osd/OSDMap.cc 
 	../vol/Volume.cc 
-	../osdc/Objecter.cc
-	../osdc/Striper.cc
 	../cohort/erasure.cc 
 	../cohort/CohortVolume.cc 
+	../osdc/Objecter.cc
+	../osdc/Striper.cc
 	../osd/osd_types.cc
 	../mds/MDSMap.cc 
 	../mds/inode_backtrace.cc 

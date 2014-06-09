@@ -999,7 +999,7 @@ bool ObjectCacher::is_cached(ObjectSet *oset, vector<ObjectExtent>& extents)
 
     // get Object cache
     object_t oid(oid);
-    Object *o = get_object_maybe(oid, ex_it->volume);
+    Object *o = get_object_maybe(oid, oset->volume);
     if (!o)
       return false;
     if (!o->is_cached(ex_it->offset, ex_it->length))
@@ -1039,7 +1039,7 @@ int ObjectCacher::_readx(OSDRead *rd, ObjectSet *oset, Context *onfinish,
 
     // get Object cache
     object_t oid = ex_it->oid;
-    Object *o = get_object(oid, oset, ex_it->volume, ex_it->truncate_size,
+    Object *o = get_object(oid, oset, oset->volume, ex_it->truncate_size,
 			   oset->truncate_seq);
     touch_ob(o);
 
@@ -1277,7 +1277,7 @@ int ObjectCacher::writex(OSDWrite *wr, ObjectSet *oset, Mutex& wait_on_lock,
        ++ex_it) {
     // get object cache
     object_t oid = ex_it->oid;
-    Object *o = get_object(oid, oset, ex_it->volume, ex_it->truncate_size,
+    Object *o = get_object(oid, oset, oset->volume, ex_it->truncate_size,
 			   oset->truncate_seq);
 
     // map it all into a single bufferhead.
@@ -1655,9 +1655,9 @@ bool ObjectCacher::flush_set(ObjectSet *oset, vector<ObjectExtent>& exv, Context
        ++p) {
     ObjectExtent &ex = *p;
     object_t oid = ex.oid;
-    if (objects[ex.volume].count(oid) == 0)
+    if (objects[oset->volume].count(oid) == 0)
       continue;
-    Object *ob = objects[ex.volume][oid];
+    Object *ob = objects[oset->volume][oid];
 
     ldout(cct, 20) << "flush_set " << oset << " ex " << ex << " ob " << oid << " " << ob << dendl;
 
@@ -1848,9 +1848,9 @@ void ObjectCacher::discard_set(ObjectSet *oset, vector<ObjectExtent>& exls)
     ldout(cct, 10) << "discard_set " << oset << " ex " << *p << dendl;
     ObjectExtent &ex = *p;
     object_t oid = ex.oid;
-    if (objects[ex.volume].count(oid) == 0)
+    if (objects[oset->volume].count(oid) == 0)
       continue;
-    Object *ob = objects[ex.volume][oid];
+    Object *ob = objects[oset->volume][oid];
 
     ob->discard(ex.offset, ex.length);
   }

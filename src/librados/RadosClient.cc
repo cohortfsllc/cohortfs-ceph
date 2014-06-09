@@ -282,23 +282,24 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
   if (r < 0)
     return -EIO;
 
-  if (id.parse(name) && !osdmap.vol_exists(id))
-    *io = new librados::IoCtxImpl(this, objecter, &lock, id);
-  else if (osdmap.find_by_name(name, v))
-    *io = new librados::IoCtxImpl(this, objecter, &lock, v->uuid);
-  else
+  if (id.parse(name))
+    osdmap.find_by_uuid(id, v);
+  else if (!osdmap.find_by_name(name, v))
     return -ENOENT;
+  else
+    *io = new librados::IoCtxImpl(this, objecter, &lock, v);
 
   return 0;
 }
 
-int librados::RadosClient::create_ioctx(const uuid_d &volume, IoCtxImpl **io)
+int librados::RadosClient::create_ioctx(const uuid_d &id, IoCtxImpl **io)
 {
   int r = wait_for_osdmap();
+  VolumeRef volume;
   if (r < 0)
     return -EIO;
 
-  if (volume.is_zero())
+  if (!osdmap.find_by_uuid(id, volume))
     return -EEXIST;
 
   *io = new librados::IoCtxImpl(this, objecter, &lock, volume);

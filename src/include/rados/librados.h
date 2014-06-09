@@ -587,17 +587,6 @@ int rados_ioctx_get_volume_name(rados_ioctx_t io, char *buf, unsigned maxlen);
  */
 
 /**
- * Return the version of the last object read or written to.
- *
- * This exposes the internal version number of the last object read or
- * written via this io context
- *
- * @param io the io context to check
- * @returns last read or written object version
- */
-uint64_t rados_get_last_version(rados_ioctx_t io);
-
-/**
  * Write data to an object
  *
  * @note This will never return a positive value not equal to len.

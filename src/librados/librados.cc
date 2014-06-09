@@ -127,12 +127,6 @@ void librados::ObjectOperation::src_cmpxattr(const std::string& src_oid,
   o->src_cmpxattr(oid, name, bl, op, CEPH_OSD_CMPXATTR_MODE_U64);
 }
 
-void librados::ObjectOperation::assert_version(uint64_t ver)
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->assert_version(ver);
-}
-
 void librados::ObjectOperation::assert_exists()
 {
   ::ObjectOperation *o = (::ObjectOperation *)impl;
@@ -489,18 +483,6 @@ int librados::AioCompletion::AioCompletion::get_return_value()
 {
   AioCompletionImpl *c = (AioCompletionImpl *)pc;
   return c->get_return_value();
-}
-
-int librados::AioCompletion::AioCompletion::get_version()
-{
-  AioCompletionImpl *c = (AioCompletionImpl *)pc;
-  return c->get_version();
-}
-
-uint64_t librados::AioCompletion::AioCompletion::get_version64()
-{
-  AioCompletionImpl *c = (AioCompletionImpl *)pc;
-  return c->get_version();
 }
 
 void librados::AioCompletion::AioCompletion::release()
@@ -940,11 +922,6 @@ int librados::IoCtx::list_lockers(const std::string &oid,
   return tmp_lockers.size();
 }
 
-uint64_t librados::IoCtx::get_last_version()
-{
-  return io_ctx_impl->last_version();
-}
-
 int librados::IoCtx::aio_read(const std::string& oid, librados::AioCompletion *c,
 			      bufferlist *pbl, size_t len, uint64_t off)
 {
@@ -1058,17 +1035,6 @@ int librados::IoCtx::set_alloc_hint(const std::string& o,
   object_t oid(o);
   return io_ctx_impl->set_alloc_hint(oid, expected_object_size,
 				     expected_write_size);
-}
-
-void librados::IoCtx::set_assert_version(uint64_t ver)
-{
-  io_ctx_impl->set_assert_version(ver);
-}
-
-void librados::IoCtx::set_assert_src_version(const std::string& oid, uint64_t ver)
-{
-  object_t obj(oid);
-  io_ctx_impl->set_assert_src_version(obj, ver);
 }
 
 uuid_d librados::IoCtx::get_volume()
@@ -1699,12 +1665,6 @@ extern "C" int rados_read(rados_ioctx_t io, const char *o, char *buf,
   return ret;
 }
 
-extern "C" uint64_t rados_get_last_version(rados_ioctx_t io)
-{
-  librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
-  return ctx->last_version();
-}
-
 extern "C" rados_t rados_ioctx_get_cluster(rados_ioctx_t io)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
@@ -1956,11 +1916,6 @@ extern "C" int rados_aio_is_safe_and_cb(rados_completion_t c)
 extern "C" int rados_aio_get_return_value(rados_completion_t c)
 {
   return ((librados::AioCompletionImpl*)c)->get_return_value();
-}
-
-extern "C" uint64_t rados_aio_get_version(rados_completion_t c)
-{
-  return ((librados::AioCompletionImpl*)c)->get_version();
 }
 
 extern "C" void rados_aio_release(rados_completion_t c)

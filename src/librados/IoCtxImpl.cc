@@ -24,17 +24,21 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "librados: "
 
+// This is a somewhat lobotomized version of IoCtxImpl that doesn't do
+// as many things as we might like. Attempts to do them result in
+// abort. This is so we can get to testing and do a bit of refinement
+// later.
+
 librados::IoCtxImpl::IoCtxImpl() :
-  ref_cnt(0), client(NULL), volume(), assert_ver(0), last_objver(0),
-  notify_timeout(30),
+  ref_cnt(0), client(NULL), volume(), notify_timeout(30),
   aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
   aio_write_seq(0), lock(NULL), objecter(NULL)
 {
 }
 
 librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
-			       Mutex *client_lock, const uuid_d &volume)
-  : ref_cnt(0), client(c), volume(volume), assert_ver(0),
+			       Mutex *client_lock, VolumeRef volume)
+  : ref_cnt(0), client(c), volume(volume),
     notify_timeout(c->cct->_conf->client_notify_timeout),
     aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
     aio_write_seq(0), lock(client_lock), objecter(objecter)
@@ -116,116 +120,149 @@ void librados::IoCtxImpl::flush_aio_writes()
 
 int librados::IoCtxImpl::create(const object_t& oid, bool exclusive)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  op.create(exclusive);
-  return operate(oid, &op, NULL);
+  utime_t ut = ceph_clock_now(client->cct);
+
+  Mutex mylock("IoCtxImpl::create::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *oncommit = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock->Lock();
+  r = volume->create(oid, ut, 0, NULL, oncommit, objecter);
+  lock->Unlock();
+
+  if (r < 0)
+    return r;
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  return r;
 }
 
 int librados::IoCtxImpl::create(const object_t& oid, bool exclusive,
 				const std::string& category)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  op.create(exclusive, category);
-  return operate(oid, &op, NULL);
-}
-
-/*
- * add any version assert operations that are appropriate given the
- * stat in the IoCtx, either the target version assert or any src
- * object asserts.  these affect a single ioctx operation, so clear
- * the ioctx state when we're doing.
- *
- * return a pointer to the ObjectOperation if we added any events;
- * this is convenient for passing the extra_ops argument into Objecter
- * methods.
- */
-::ObjectOperation *librados::IoCtxImpl::prepare_assert_ops(::ObjectOperation *op)
-{
-  ::ObjectOperation *pop = NULL;
-  if (assert_ver) {
-    op->assert_version(assert_ver);
-    assert_ver = 0;
-    pop = op;
-  }
-  while (!assert_src_version.empty()) {
-    map<object_t,uint64_t>::iterator p = assert_src_version.begin();
-    op->assert_src_version(p->first, p->second);
-    assert_src_version.erase(p);
-    pop = op;
-  }
-  return pop;
+  abort();
+  return -1;
 }
 
 int librados::IoCtxImpl::write(const object_t& oid, bufferlist& bl,
 			       size_t len, uint64_t off)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  bufferlist mybl;
-  mybl.substr_of(bl, 0, len);
-  op.write(off, mybl);
-  return operate(oid, &op, NULL);
+  utime_t ut = ceph_clock_now(client->cct);
+
+  Mutex mylock("IoCtxImpl::create::mylock");
+  Cond cond;
+  bool done;
+
+  int r = 0;
+
+  Context *oncommit = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock->Lock();
+  r = volume->write(oid, off, len, bl, ut, 0, NULL,
+			oncommit, objecter);
+  lock->Unlock();
+
+  if (r < 0)
+    return r;
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  return r;
 }
 
 int librados::IoCtxImpl::append(const object_t& oid, bufferlist& bl, size_t len)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  bufferlist mybl;
-  mybl.substr_of(bl, 0, len);
-  op.append(mybl);
-  return operate(oid, &op, NULL);
+  utime_t ut = ceph_clock_now(client->cct);
+
+  Mutex mylock("IoCtxImpl::create::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *oncommit = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock->Lock();
+  r = volume->append(oid, len, bl, ut, 0, NULL, oncommit, objecter);
+  lock->Unlock();
+
+  if (r < 0) {
+    delete oncommit;
+    return r;
+  }
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  return r;
 }
 
 int librados::IoCtxImpl::write_full(const object_t& oid, bufferlist& bl)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  op.write_full(bl);
-  return operate(oid, &op, NULL);
+  utime_t ut = ceph_clock_now(client->cct);
+
+  Mutex mylock("IoCtxImpl::create::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *oncommit = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock->Lock();
+  r = volume->write_full(oid, bl, ut, 0, NULL, oncommit, objecter);
+  lock->Unlock();
+
+  if (r < 0)
+    return r;
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  return r;
 }
 
 int librados::IoCtxImpl::operate(const object_t& oid, ::ObjectOperation *o,
 				 time_t *pmtime, int flags)
 {
   utime_t ut;
-  if (pmtime) {
+  if (pmtime)
     ut = utime_t(*pmtime, 0);
-  } else {
-    ut = ceph_clock_now(client->cct);
-  }
+  else
+    ceph_clock_now(client->cct);
 
-  if (!o->size())
-    return 0;
-
-  Mutex mylock("IoCtxImpl::operate::mylock");
+  Mutex mylock("IoCtxImpl::create::mylock");
   Cond cond;
   bool done;
   int r;
-  version_t ver;
 
   Context *oncommit = new C_SafeCond(&mylock, &cond, &done, &r);
 
-  int op = o->ops[0].op.op;
-  ldout(client->cct, 10) << ceph_osd_op_name(op) << " oid=" << oid << dendl;
-  Objecter::Op *objecter_op = objecter->prepare_mutate_op(oid, volume,
-							  *o, ut, flags,
-							  NULL, oncommit,
-							  &ver);
   lock->Lock();
-  objecter->op_submit(objecter_op);
+  r = volume->mutate_md(oid, *o, ut, flags, NULL, oncommit, objecter);
   lock->Unlock();
+
+  if (r < 0) {
+    delete oncommit;
+    return r;
+  }
 
   mylock.Lock();
   while (!done)
     cond.Wait(mylock);
   mylock.Unlock();
-  ldout(client->cct, 10) << "Objecter returned from "
-	<< ceph_osd_op_name(op) << " r=" << r << dendl;
-
-  set_sync_op_version(ver);
 
   return r;
 }
@@ -242,27 +279,23 @@ int librados::IoCtxImpl::operate_read(const object_t& oid,
   Cond cond;
   bool done;
   int r;
-  version_t ver;
 
   Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
 
-  int op = o->ops[0].op.op;
-  ldout(client->cct, 10) << ceph_osd_op_name(op) << " oid=" << oid << dendl;
-  Objecter::Op *objecter_op = objecter->prepare_read_op(oid, volume,
-							*o, pbl, flags,
-							onack, &ver);
   lock->Lock();
-  objecter->op_submit(objecter_op);
+  r = volume->md_read(oid, *o, pbl, flags, onack, objecter);
   lock->Unlock();
+
+  if (r < 0) {
+    delete onack;
+    return r;
+  }
+
 
   mylock.Lock();
   while (!done)
     cond.Wait(mylock);
   mylock.Unlock();
-  ldout(client->cct, 10) << "Objecter returned from "
-	<< ceph_osd_op_name(op) << " r=" << r << dendl;
-
-  set_sync_op_version(ver);
 
   return r;
 }
@@ -278,12 +311,10 @@ int librados::IoCtxImpl::aio_operate_read(const object_t &oid,
   c->is_read = true;
   c->io = this;
 
-  Objecter::Op *objecter_op = objecter->prepare_read_op(oid, volume,
-							*o, pbl, flags,
-							onack, &c->objver);
   Mutex::Locker l(*lock);
-  objecter->op_submit(objecter_op);
-  return 0;
+
+  int r = volume->md_read(oid, *o, pbl, flags, onack, objecter);
+  return r;
 }
 
 int librados::IoCtxImpl::aio_operate(const object_t& oid,
@@ -300,9 +331,9 @@ int librados::IoCtxImpl::aio_operate(const object_t& oid,
   queue_aio_write(c);
 
   Mutex::Locker l(*lock);
-  objecter->mutate(oid, volume, *o, ut, flags, onack, oncommit, &c->objver);
+  int r = volume->mutate_md(oid, *o, ut, flags, onack, oncommit, objecter);
 
-  return 0;
+  return r;
 }
 
 int librados::IoCtxImpl::aio_read(const object_t oid, AioCompletionImpl *c,
@@ -318,8 +349,8 @@ int librados::IoCtxImpl::aio_read(const object_t oid, AioCompletionImpl *c,
   c->blp = pbl;
 
   Mutex::Locker l(*lock);
-  objecter->read(oid, volume, off, len, pbl, 0, onack, &c->objver);
-  return 0;
+  int r = volume->read(oid, off, len, pbl, 0, onack, objecter);
+  return r;
 }
 
 int librados::IoCtxImpl::aio_read(const object_t oid, AioCompletionImpl *c,
@@ -337,7 +368,7 @@ int librados::IoCtxImpl::aio_read(const object_t oid, AioCompletionImpl *c,
   c->blp = &c->bl;
 
   Mutex::Locker l(*lock);
-  objecter->read(oid, volume, off, len, &c->bl, 0, onack, &c->objver);
+  volume->read(oid, off, len, &c->bl, 0, onack, objecter);
 
   return 0;
 }
@@ -359,6 +390,8 @@ int librados::IoCtxImpl::aio_sparse_read(const object_t oid,
 					 bufferlist *data_bl, size_t len,
 					 uint64_t off)
 {
+  puts("Not yet.");
+  abort();
   if (len > (size_t) INT_MAX)
     return -EDOM;
 
@@ -371,7 +404,8 @@ int librados::IoCtxImpl::aio_sparse_read(const object_t oid,
   onack->m_ops.sparse_read(off, len, m, data_bl, NULL);
 
   Mutex::Locker l(*lock);
-  objecter->read(oid, volume, onack->m_ops, NULL, 0, onack, &c->objver);
+  volume->md_read(oid, onack->m_ops, NULL, 0, onack, objecter);
+
   return 0;
 }
 
@@ -390,8 +424,7 @@ int librados::IoCtxImpl::aio_write(const object_t &oid, AioCompletionImpl *c,
   Context *onsafe = new C_aio_Safe(c);
 
   Mutex::Locker l(*lock);
-  objecter->write(oid, volume,
-		  off, len, bl, ut, 0, onack, onsafe, &c->objver);
+  volume->write(oid, off, len, bl, ut, 0, onack, onsafe, objecter);
 
   return 0;
 }
@@ -408,7 +441,7 @@ int librados::IoCtxImpl::aio_append(const object_t &oid, AioCompletionImpl *c,
   Context *onsafe = new C_aio_Safe(c);
 
   Mutex::Locker l(*lock);
-  objecter->append(oid, volume, len, bl, ut, 0, onack, onsafe, &c->objver);
+  volume->append(oid, len, bl, ut, 0, onack, onsafe, objecter);
 
   return 0;
 }
@@ -426,7 +459,7 @@ int librados::IoCtxImpl::aio_write_full(const object_t &oid,
   Context *onsafe = new C_aio_Safe(c);
 
   Mutex::Locker l(*lock);
-  objecter->write_full(oid, volume, bl, ut, 0, onack, onsafe, &c->objver);
+  volume->write_full(oid, bl, ut, 0, onack, onsafe, objecter);
 
   return 0;
 }
@@ -442,7 +475,7 @@ int librados::IoCtxImpl::aio_remove(const object_t &oid, AioCompletionImpl *c)
   Context *onsafe = new C_aio_Safe(c);
 
   Mutex::Locker l(*lock);
-  objecter->remove(oid, volume, ut, 0, onack, onsafe, &c->objver);
+  volume->remove(oid, ut, 0, onack, onsafe, objecter);
 
   return 0;
 }
@@ -455,55 +488,95 @@ int librados::IoCtxImpl::aio_stat(const object_t& oid, AioCompletionImpl *c,
   C_aio_stat_Ack *onack = new C_aio_stat_Ack(c, pmtime);
 
   Mutex::Locker l(*lock);
-  objecter->stat(oid, volume, psize, &onack->mtime, 0, onack, &c->objver);
+  volume->stat(oid, psize, &onack->mtime, 0, onack, objecter);
 
   return 0;
 }
 
 int librados::IoCtxImpl::remove(const object_t& oid)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  op.remove();
-  return operate(oid, &op, NULL);
+  utime_t ut = ceph_clock_now(client->cct);
+
+  Mutex mylock("IoCtxImpl::create::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *oncommit = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock->Lock();
+  r = volume->remove(oid, ut, 0, NULL, oncommit, objecter);
+  lock->Unlock();
+
+  if (r < 0)
+    return r;
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  return r;
 }
 
 int librados::IoCtxImpl::trunc(const object_t& oid, uint64_t size)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  op.truncate(size);
-  return operate(oid, &op, NULL);
+  utime_t ut = ceph_clock_now(client->cct);
+
+  Mutex mylock("IoCtxImpl::create::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *oncommit = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock->Lock();
+  r = volume->trunc(oid, ut, 0, size, 0, NULL, oncommit, objecter);
+  lock->Unlock();
+
+  if (r < 0)
+    return r;
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  return r;
 }
 
 int librados::IoCtxImpl::tmap_update(const object_t& oid, bufferlist& cmdbl)
 {
+  puts("No.");
+  abort();
   ::ObjectOperation wr;
-  prepare_assert_ops(&wr);
   wr.tmap_update(cmdbl);
   return operate(oid, &wr, NULL);
 }
 
 int librados::IoCtxImpl::tmap_put(const object_t& oid, bufferlist& bl)
 {
+  puts("No.");
+  abort();
   ::ObjectOperation wr;
-  prepare_assert_ops(&wr);
   wr.tmap_put(bl);
   return operate(oid, &wr, NULL);
 }
 
 int librados::IoCtxImpl::tmap_get(const object_t& oid, bufferlist& bl)
 {
+  puts("No.");
+  abort();
   ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
   rd.tmap_get(&bl, NULL);
   return operate_read(oid, &rd, NULL);
 }
 
 int librados::IoCtxImpl::tmap_to_omap(const object_t& oid, bool nullok)
 {
+  puts("No.");
+  abort();
   ::ObjectOperation wr;
-  prepare_assert_ops(&wr);
   wr.tmap_to_omap(nullok);
   return operate(oid, &wr, NULL);
 }
@@ -512,8 +585,9 @@ int librados::IoCtxImpl::exec(const object_t& oid,
 			      const char *cls, const char *method,
 			      bufferlist& inbl, bufferlist& outbl)
 {
+  puts("No.");
+  abort();
   ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
   rd.call(cls, method, inbl);
   return operate_read(oid, &rd, &outbl);
 }
@@ -522,6 +596,8 @@ int librados::IoCtxImpl::aio_exec(const object_t& oid, AioCompletionImpl *c,
 				  const char *cls, const char *method,
 				  bufferlist& inbl, bufferlist *outbl)
 {
+  puts("No.");
+  abort();
   Context *onack = new C_aio_Ack(c);
 
   c->is_read = true;
@@ -529,25 +605,36 @@ int librados::IoCtxImpl::aio_exec(const object_t& oid, AioCompletionImpl *c,
 
   Mutex::Locker l(*lock);
   ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
   rd.call(cls, method, inbl);
-  objecter->read(oid, volume, rd, outbl, 0, onack, &c->objver);
+  volume->md_read(oid, rd, outbl, 0, onack, objecter);
 
   return 0;
 }
 
-int librados::IoCtxImpl::read(const object_t& oid,
-			      bufferlist& bl, size_t len, uint64_t off)
+int librados::IoCtxImpl::read(const object_t& oid, bufferlist& bl, size_t len,
+			      uint64_t off)
 {
   if (len > (size_t) INT_MAX)
     return -EDOM;
 
-  ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
-  rd.read(off, len, &bl, NULL, NULL);
-  int r = operate_read(oid, &rd, &bl);
+  Mutex mylock("IoCtxImpl::operate_read::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock->Lock();
+  r = volume->read(oid, off, len, &bl, 0, onack, objecter);
+  lock->Unlock();
+
   if (r < 0)
     return r;
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
 
   if (bl.length() < len) {
     ldout(client->cct, 10) << "Returned length " << bl.length()
@@ -561,32 +648,9 @@ int librados::IoCtxImpl::mapext(const object_t& oid,
 				uint64_t off, size_t len,
 				std::map<uint64_t,uint64_t>& m)
 {
-  bufferlist bl;
-
-  Mutex mylock("IoCtxImpl::read::mylock");
-  Cond cond;
-  bool done;
-  int r;
-  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
-
-  lock->Lock();
-  objecter->mapext(oid, volume,
-		   off, len, &bl, 0, onack);
-  lock->Unlock();
-
-  mylock.Lock();
-  while (!done)
-    cond.Wait(mylock);
-  mylock.Unlock();
-  ldout(client->cct, 10) << "Objecter returned from read r=" << r << dendl;
-
-  if (r < 0)
-    return r;
-
-  bufferlist::iterator iter = bl.begin();
-  ::decode(m, iter);
-
-  return m.size();
+  puts("NEVER.");
+  abort();
+  return -1;
 }
 
 int librados::IoCtxImpl::sparse_read(const object_t& oid,
@@ -594,11 +658,12 @@ int librados::IoCtxImpl::sparse_read(const object_t& oid,
 				     bufferlist& data_bl, size_t len,
 				     uint64_t off)
 {
+  puts("Not now.");
+  abort();
   if (len > (size_t) INT_MAX)
     return -EDOM;
 
   ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
   rd.sparse_read(off, len, &m, &data_bl, NULL);
 
   int r = operate_read(oid, &rd, NULL);
@@ -610,16 +675,26 @@ int librados::IoCtxImpl::sparse_read(const object_t& oid,
 
 int librados::IoCtxImpl::stat(const object_t& oid, uint64_t *psize, time_t *pmtime)
 {
+  Mutex mylock("IoCtxImpl::stat::mylock");
+  Cond cond;
+  bool done;
+  int r;
+  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
   uint64_t size;
   utime_t mtime;
 
   if (!psize)
     psize = &size;
 
-  ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
-  rd.stat(psize, &mtime, NULL);
-  int r = operate_read(oid, &rd, NULL);
+  lock->Lock();
+  volume->stat(oid, psize, &mtime, 0, onack, objecter);
+  lock->Unlock();
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+  ldout(client->cct, 10) << "Objecter returned from stat" << dendl;
 
   if (r >= 0 && pmtime) {
     *pmtime = mtime.sec();
@@ -631,10 +706,23 @@ int librados::IoCtxImpl::stat(const object_t& oid, uint64_t *psize, time_t *pmti
 int librados::IoCtxImpl::getxattr(const object_t& oid,
 				    const char *name, bufferlist& bl)
 {
-  ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
-  rd.getxattr(name, &bl, NULL);
-  int r = operate_read(oid, &rd, NULL);
+  Mutex mylock("IoCtxImpl::getxattr::mylock");
+  Cond cond;
+  bool done;
+  int r;
+  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
+  eversion_t ver;
+
+  lock->Lock();
+  volume->getxattr(oid, name, &bl, 0, onack, objecter);
+  lock->Unlock();
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+  ldout(client->cct, 10) << "Objecter returned from getxattr" << dendl;
+
   if (r < 0)
     return r;
 
@@ -643,45 +731,88 @@ int librados::IoCtxImpl::getxattr(const object_t& oid,
 
 int librados::IoCtxImpl::rmxattr(const object_t& oid, const char *name)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  op.rmxattr(name);
-  return operate(oid, &op, NULL);
+  utime_t ut = ceph_clock_now(client->cct);
+  Mutex mylock("IoCtxImpl::rmxattr::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
+  eversion_t ver;
+
+  lock->Lock();
+  volume->removexattr(oid, name, ut, 0, onack, NULL, objecter);
+  lock->Unlock();
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  if (r < 0)
+    return r;
+
+  return 0;
 }
 
 int librados::IoCtxImpl::setxattr(const object_t& oid,
 				    const char *name, bufferlist& bl)
 {
-  ::ObjectOperation op;
-  prepare_assert_ops(&op);
-  op.setxattr(name, bl);
-  return operate(oid, &op, NULL);
+  utime_t ut = ceph_clock_now(client->cct);
+
+  Mutex mylock("IoCtxImpl::setxattr::mylock");
+  Cond cond;
+  bool done;
+  int r;
+
+  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
+  eversion_t ver;
+
+  lock->Lock();
+  volume->setxattr(oid, name, bl, ut, 0, onack, NULL, objecter);
+  lock->Unlock();
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  if (r < 0)
+    return r;
+
+  return 0;
 }
 
 int librados::IoCtxImpl::getxattrs(const object_t& oid,
 				     map<std::string, bufferlist>& attrset)
 {
-  map<string, bufferlist> aset;
+  Mutex mylock("IoCtxImpl::getexattrs::mylock");
+  Cond cond;
+  bool done;
+  int r;
+  eversion_t ver;
 
-  ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
-  rd.getxattrs(&aset, NULL);
-  int r = operate_read(oid, &rd, NULL);
+  Context *onack = new C_SafeCond(&mylock, &cond, &done, &r);
+
+  lock->Lock();
+  map<string, bufferlist> aset;
+  volume->getxattrs(oid, aset, 0, onack, objecter);
+  lock->Unlock();
 
   attrset.clear();
-  if (r >= 0) {
-    for (map<string,bufferlist>::iterator p = aset.begin(); p != aset.end(); ++p) {
-      ldout(client->cct, 10) << "IoCtxImpl::getxattrs: xattr=" << p->first << dendl;
-      attrset[p->first.c_str()] = p->second;
-    }
+
+
+  mylock.Lock();
+  while (!done)
+    cond.Wait(mylock);
+  mylock.Unlock();
+
+  for (map<string,bufferlist>::iterator p = aset.begin(); p != aset.end(); ++p) {
+    ldout(client->cct, 10) << "IoCtxImpl::getxattrs: xattr=" << p->first << dendl;
+    attrset[p->first.c_str()] = p->second;
   }
 
   return r;
-}
-
-void librados::IoCtxImpl::set_sync_op_version(version_t ver)
-{
-  last_objver = ver;
 }
 
 int librados::IoCtxImpl::watch(const object_t& oid, uint64_t ver,
@@ -699,7 +830,6 @@ int librados::IoCtxImpl::watch(const object_t& oid, uint64_t ver,
 
   WatchContext *wc = new WatchContext(this, oid, ctx);
   client->register_watcher(wc, cookie);
-  prepare_assert_ops(&wr);
   wr.watch(*cookie, ver, 1);
   bufferlist bl;
   wc->linger_id = objecter->linger_mutate(oid, volume, wr,
@@ -711,8 +841,6 @@ int librados::IoCtxImpl::watch(const object_t& oid, uint64_t ver,
   while (!done)
     cond.Wait(mylock);
   mylock.Unlock();
-
-  set_sync_op_version(objver);
 
   if (r < 0) {
     lock->Lock();
@@ -731,7 +859,6 @@ int librados::IoCtxImpl::_notify_ack(
   uint64_t cookie)
 {
   ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
   rd.notify_ack(notify_id, ver, cookie);
   objecter->read(oid, volume, rd, (bufferlist*)NULL, 0, 0, 0);
 
@@ -753,7 +880,6 @@ int librados::IoCtxImpl::unwatch(const object_t& oid, uint64_t cookie)
   client->unregister_watcher(cookie);
 
   ::ObjectOperation wr;
-  prepare_assert_ops(&wr);
   wr.watch(cookie, 0, 0);
   objecter->mutate(oid, volume, wr, ceph_clock_now(client->cct),
 		   0, NULL, oncommit, &ver);
@@ -763,8 +889,6 @@ int librados::IoCtxImpl::unwatch(const object_t& oid, uint64_t cookie)
   while (!done)
     cond.Wait(mylock);
   mylock.Unlock();
-
-  set_sync_op_version(ver);
 
   return r;
 }
@@ -786,7 +910,6 @@ int librados::IoCtxImpl::notify(const object_t& oid, uint64_t ver,
 					       &done_all);
 
   ::ObjectOperation rd;
-  prepare_assert_ops(&rd);
 
   lock->Lock();
   WatchContext *wc = new WatchContext(this, oid, ctx);
@@ -817,35 +940,18 @@ int librados::IoCtxImpl::notify(const object_t& oid, uint64_t ver,
   client->unregister_watcher(cookie);
   lock->Unlock();
 
-  set_sync_op_version(objver);
   delete ctx;
 
   return r;
 }
 
 int librados::IoCtxImpl::set_alloc_hint(const object_t& oid,
-                                        uint64_t expected_object_size,
-                                        uint64_t expected_write_size)
+					uint64_t expected_object_size,
+					uint64_t expected_write_size)
 {
   ::ObjectOperation wr;
-  prepare_assert_ops(&wr);
   wr.set_alloc_hint(expected_object_size, expected_write_size);
   return operate(oid, &wr, NULL);
-}
-
-version_t librados::IoCtxImpl::last_version()
-{
-  return last_objver;
-}
-
-void librados::IoCtxImpl::set_assert_version(uint64_t ver)
-{
-  assert_ver = ver;
-}
-void librados::IoCtxImpl::set_assert_src_version(const object_t& oid,
-						 uint64_t ver)
-{
-  assert_src_version[oid] = ver;
 }
 
 void librados::IoCtxImpl::set_notify_timeout(uint32_t timeout)
