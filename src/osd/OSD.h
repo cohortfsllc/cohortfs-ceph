@@ -941,8 +941,8 @@ public:
 
 private:
 
-  ThreadPool op_tp;
-  ShardedThreadPool op_sharded_tp;
+  ThreadPool osd_tp;
+  ShardedThreadPool osd_op_tp;
   ThreadPool recovery_tp;
   ThreadPool disk_tp;
   ThreadPool command_tp;

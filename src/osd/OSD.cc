@@ -189,8 +189,9 @@ OSDService::OSDService(OSD *osd) :
   scrub_wq(osd->scrub_wq),
   scrub_finalize_wq(osd->scrub_finalize_wq),
   rep_scrub_wq(osd->rep_scrub_wq),
-  push_wq("push_wq", cct->_conf->osd_recovery_thread_timeout, &osd->recovery_tp),
-  gen_wq("gen_wq", cct->_conf->osd_recovery_thread_timeout, &osd->recovery_tp),
+  push_wq("push_wq", cct->_conf->osd_recovery_thread_timeout,
+	  &osd->recovery_tp),
+  op_gen_wq("op_gen_wq", cct->_conf->osd_recovery_thread_timeout, &osd->osd_tp),
   class_handler(osd->class_handler),
   publish_lock("OSDService::publish_lock"),
   pre_publish_lock("OSDService::pre_publish_lock"),
@@ -926,6 +927,8 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   state(STATE_INITIALIZING), boot_epoch(0), up_epoch(0), bind_epoch(0),
   op_tp(cct, "OSD::op_tp", cct->_conf->osd_op_threads, "osd_op_threads"),
   op_sharded_tp(cct, "OSD::op_sharded_tp", 
+  osd_tp(cct, "OSD::osd_tp", cct->_conf->osd_op_threads, "osd_op_threads"),
+  osd_op_tp(cct, "OSD::osd_op_tp", 
     cct->_conf->osd_op_num_threads_per_shard * cct->_conf->osd_op_num_shards),
   recovery_tp(cct, "OSD::recovery_tp", cct->_conf->osd_recovery_threads, "osd_recovery_threads"),
   disk_tp(cct, "OSD::disk_tp", cct->_conf->osd_disk_threads, "osd_disk_threads"),
@@ -943,8 +946,8 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   op_tracker(cct, cct->_conf->osd_enable_op_tracker),
   test_ops_hook(NULL),
   op_shardedwq(cct->_conf->osd_op_num_shards, this, 
-    cct->_conf->osd_op_thread_timeout, &op_sharded_tp),
-  peering_wq(this, cct->_conf->osd_op_thread_timeout, &op_tp),
+    cct->_conf->osd_op_thread_timeout, &osd_op_tp),
+  peering_wq(this, cct->_conf->osd_op_thread_timeout, &osd_tp),
   map_lock("OSD::map_lock"),
   peer_map_epoch_lock("OSD::peer_map_epoch_lock"),
   debug_drop_pg_create_probability(cct->_conf->osd_debug_drop_pg_create_probability),
@@ -962,7 +965,7 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   replay_queue_lock("OSD::replay_queue_lock"),
   snap_trim_wq(this, cct->_conf->osd_snap_trim_thread_timeout, &disk_tp),
   scrub_wq(this, cct->_conf->osd_scrub_thread_timeout, &disk_tp),
-  scrub_finalize_wq(cct->_conf->osd_scrub_finalize_thread_timeout, &op_tp),
+  scrub_finalize_wq(cct->_conf->osd_scrub_finalize_thread_timeout, &osd_tp),
   rep_scrub_wq(this, cct->_conf->osd_scrub_thread_timeout, &disk_tp),
   remove_wq(store, cct->_conf->osd_remove_thread_timeout, &disk_tp),
   next_removal_seq(0),
@@ -1282,8 +1285,8 @@ int OSD::init()
   // tell monc about log_client so it will know about mon session resets
   monc->set_log_client(&clog);
 
-  op_tp.start();
-  op_sharded_tp.start();
+  osd_tp.start();
+  osd_op_tp.start();
   recovery_tp.start();
   disk_tp.start();
   command_tp.start();
@@ -1583,8 +1586,8 @@ void OSD::suicide(int exitcode)
   g_lockdep = 0;
 
   derr << " pausing thread pools" << dendl;
-  op_tp.pause();
-  op_sharded_tp.pause();
+  osd_tp.pause();
+  osd_op_tp.pause();
   disk_tp.pause();
   recovery_tp.pause();
   command_tp.pause();
@@ -1672,12 +1675,12 @@ int OSD::shutdown()
   recovery_tp.stop();
   dout(10) << "recovery tp stopped" << dendl;
 
-  op_tp.drain();
-  op_tp.stop();
+  osd_tp.drain();
+  osd_tp.stop();
   dout(10) << "op tp stopped" << dendl;
 
-  op_sharded_tp.drain();
-  op_sharded_tp.stop();
+  osd_op_tp.drain();
+  osd_op_tp.stop();
   dout(10) << "op sharded tp stopped" << dendl;
 
   command_tp.drain();
