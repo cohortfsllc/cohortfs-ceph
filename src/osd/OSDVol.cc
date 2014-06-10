@@ -681,8 +681,6 @@ void OSDVol::get_watchers(list<obj_watch_item_t> &vol_watchers)
   }
 }
 
-
-
 void intrusive_ptr_add_ref(OSDVol *vol) { vol->get(); }
 void intrusive_ptr_release(OSDVol *vol) { vol->put(); }
 
@@ -714,6 +712,7 @@ void OSDVol::OpContext::start_async_reads(OSDVol *vol)
     new OnReadComplete(vol, this));
   pending_async_reads.clear();
 }
+
 void OSDVol::OpContext::finish_read(OSDVol *vol)
 {
   assert(inflightreads > 0);
@@ -2389,7 +2388,8 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 int OSDVol::_get_tmap(OpContext *ctx, bufferlist *header, bufferlist *vals)
 {
   if (ctx->new_obs.oi.size == 0) {
-    dout(20) << "unable to get tmap for zero sized " << ctx->new_obs.oi.soid << dendl;
+    dout(20) << "unable to get tmap for zero sized " << ctx->new_obs.oi.soid
+	     << dendl;
     return -ENODATA;
   }
   vector<OSDOp> nops(1);

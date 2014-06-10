@@ -1,5 +1,4 @@
 set(osd_srcs
-	Ager.cc 
 	ClassHandler.cc
 	OpRequest.cc 
 	OSD.cc 
