@@ -20,10 +20,16 @@
 static void usage()
 {
 	derr << "usage: objectstore-bench [flags]\n"
+		"  --huge-pages\n"
+		"        use huge pages for the memory map\n"
 		"  --size\n"
 		"        total size in bytes\n"
 		"  --block-size\n"
-		"        block size in bytes for each write\n" << dendl;
+		"        block size in bytes for each write\n"
+		"  --repeats\n"
+		"        number of times to repeat the write cycle\n"
+		"  --threads\n"
+		"        number of threads to carry out this workload\n" << dendl;
 	generic_server_usage();
 }
 
@@ -104,6 +110,7 @@ byte_units size = 1048576;
 byte_units block_size = 4096;
 int repeats = 1;
 int n_threads = 1;
+bool huge_pages;
 void* mapped_region;
 
 class CDS_Static {
@@ -178,6 +185,8 @@ int main(int argc, const char *argv[])
 		    repeats = atoi(val.c_str());
 		} else if (ceph_argparse_witharg(args, i, &val, "--threads", (char*)NULL)) {
 		    n_threads = atoi(val.c_str());
+		} else if (ceph_argparse_flag(args, i, "--huge-pages", (char*)NULL)) {
+		    huge_pages = true;
 		} else {
 			derr << "Error: can't understand argument: " << *i <<
 				"\n" << dendl;
@@ -193,8 +202,11 @@ int main(int argc, const char *argv[])
 	dout(0) << "repeats " << repeats << dendl;
 	dout(0) << "threads " << n_threads << dendl;
 
-	const int mmap_prot = PROT_READ | PROT_WRITE;
-	const int mmap_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+	int mmap_prot = PROT_READ | PROT_WRITE;
+	int mmap_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+	if (huge_pages)
+		mmap_flags |= MAP_HUGETLB;
+
 	mapped_region = mmap(NULL, size, mmap_prot, mmap_flags, -1, 0);
 	if (mapped_region == MAP_FAILED) {
 		derr << "mmap failed with " << cpp_strerror(errno) << dendl;
