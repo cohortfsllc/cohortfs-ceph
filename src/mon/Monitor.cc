@@ -2918,6 +2918,8 @@ bool Monitor::dispatch(MonSession *s, Message *m, const bool src_is_mon)
     case MSG_OSD_FAILURE:
     case MSG_OSD_BOOT:
     case MSG_OSD_ALIVE:
+      paxos_service[PAXOS_OSDMAP]->dispatch((PaxosServiceMessage*)m);
+      break;
 
     // MDSs
     case MSG_MDS_BEACON:
