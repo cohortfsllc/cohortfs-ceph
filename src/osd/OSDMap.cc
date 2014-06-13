@@ -780,17 +780,7 @@ void OSDMap::decode(bufferlist& bl)
 
 void OSDMap::decode(bufferlist::iterator& bl)
 {
-  /**
-   * Older encodings of the OSDMap had a single struct_v which
-   * covered the whole encoding, and was prior to our modern
-   * stuff which includes a compatv and a size. So if we see
-   * a struct_v < 7, we must rewind to the beginning and use our
-   * classic decoder.
-   */
-  DECODE_START_LEGACY_COMPAT_LEN(7, 7, 7, bl); // wrapper
-  /**
-   * Since we made it past that hurdle, we can use our normal paths.
-   */
+  DECODE_START(7, bl); // wrapper
   {
     DECODE_START(3, bl); // client-usable data
     // base
