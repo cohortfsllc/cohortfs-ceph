@@ -47,6 +47,8 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE
   )
 
+message(STATUS "PYTHON_INSTDIR=${PYTHON_INSTDIR}")
+
 configure_file(
 ${CMAKE_SOURCE_DIR}/src/ceph.in.cmake
 ${CMAKE_BINARY_DIR}/ceph
@@ -197,11 +199,22 @@ DESTINATION bin
 
 install(PROGRAMS
   ${CMAKE_BINARY_DIR}/init-ceph
-  ${CMAKE_BINARY_DIR}/mkcephfs
   ${CMAKE_SOURCE_DIR}/src/vstart.sh
-  ${CMAKE_SOURCE_DIR}/src/ceph_common.sh
   ${CMAKE_BINARY_DIR}/ceph
   DESTINATION bin)
+
+install(PROGRAMS
+  ${CMAKE_SOURCE_DIR}/src/ceph_common.sh
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/ceph)
+
+install(PROGRAMS
+  ${CMAKE_SOURCE_DIR}/src/ceph-create-keys
+  ${CMAKE_SOURCE_DIR}/src/ceph-disk
+  ${CMAKE_SOURCE_DIR}/src/ceph-disk-activate
+  ${CMAKE_SOURCE_DIR}/src/ceph-disk-prepare
+  ${CMAKE_SOURCE_DIR}/src/ceph-disk-udev
+  ${CMAKE_BINARY_DIR}/mkcephfs
+  DESTINATION sbin)
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/pybind/
   DESTINATION ${PYTHON_INSTDIR})
