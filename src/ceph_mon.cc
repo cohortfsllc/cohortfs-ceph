@@ -29,8 +29,10 @@ using namespace std;
 #include "mon/MonClient.h"
 
 #include "msg/Messenger.h"
+#ifdef HAVE_XIO
 #include "msg/XioMessenger.h"
 #include "msg/QueueStrategy.h"
+#endif
 
 #include "include/CompatSet.h"
 
@@ -670,6 +672,7 @@ int main(int argc, const char **argv)
   }
 
   /* XioMessenger */
+#ifdef HAVE_XIO
   XioMessenger *xmsgr = new XioMessenger(g_ceph_context,
 					 entity_name_t::GENERIC(),
 					 "xio mon",
@@ -705,6 +708,9 @@ int main(int argc, const char **argv)
 				   NULL);
   xmsgr->set_policy_throttlers(entity_name_t::TYPE_MDS, daemon_throttler,
 				   NULL);
+#else
+  Messenger *xmsgr = NULL;
+#endif
 
   cout << "starting " << g_conf->name << " rank " << rank
        << " at " << ipaddr
@@ -712,11 +718,13 @@ int main(int argc, const char **argv)
        << " fsid " << monmap.get_fsid()
        << std::endl;
 
-  entity_addr_t xaddr = messenger->get_myaddr();
-  xaddr.set_port(xaddr.get_port() + 111 /* XXXX shift */);
-  err = xmsgr->bind(xaddr);
-  if (err < 0)
-    prefork.exit(1);
+  if (xmsgr) {
+    entity_addr_t xaddr = messenger->get_myaddr();
+    xaddr.set_port(xaddr.get_port() + 111 /* XXXX shift */);
+    err = xmsgr->bind(xaddr);
+    if (err < 0)
+      prefork.exit(1);
+  }
 
   // start monitor
   mon = new Monitor(g_ceph_context, g_conf->name.get_id(), store,
@@ -745,7 +753,8 @@ int main(int argc, const char **argv)
   }
 
   messenger->start();
-  xmsgr->start();
+  if (xmsgr)
+    xmsgr->start();
 
   mon->init();
 
