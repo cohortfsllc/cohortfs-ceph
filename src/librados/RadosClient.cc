@@ -31,8 +31,10 @@
 #include "messages/MWatchNotify.h"
 #include "messages/MLog.h"
 #include "msg/SimpleMessenger.h"
+#ifdef HAVE_XIO
 #include "msg/XioMessenger.h"
 #include "msg/QueueStrategy.h"
+#endif
 
 // needed for static_cast
 #include "messages/PaxosServiceMessage.h"
@@ -231,6 +233,7 @@ int librados::RadosClient::connect()
   nonce = getpid() + (1000000 * (uint64_t)rados_instance.inc());
 
   switch (use_xio) {
+#ifdef HAVE_XIO
   case true:
   {
     XioMessenger *xmsgr
@@ -241,6 +244,7 @@ int librados::RadosClient::connect()
     messenger = xmsgr;
   }
   break;
+#endif
   default:
     messenger = new SimpleMessenger(cct, entity_name_t::CLIENT(-1),
 				    "radosclient", nonce);

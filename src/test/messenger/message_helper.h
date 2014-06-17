@@ -17,7 +17,9 @@
 
 #include "msg/msg_types.h"
 #include "messages/MDataPing.h"
+#ifdef HAVE_XIO
 #include "msg/XioMessenger.h"
+#endif
 
 static inline Message* new_ping_monstyle(const char *tag, int mult)
 {
@@ -42,6 +44,7 @@ static inline Message* new_ping_monstyle(const char *tag, int mult)
   return m;
 }
 
+#ifdef HAVE_XIO
 extern struct xio_mempool *xio_msgr_mpool;
 
 void xio_hook_func(struct xio_mempool_obj *mp)
@@ -75,6 +78,7 @@ static inline Message* new_ping_with_data(const char *tag, uint32_t size)
 
   return static_cast<Message*>(m);
 }
+#endif
 
 static inline Message* new_simple_ping_with_data(const char *tag,
 						 uint32_t size)
