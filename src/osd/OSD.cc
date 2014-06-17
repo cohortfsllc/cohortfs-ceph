@@ -730,8 +730,10 @@ int OSD::init()
 
   objecter_messenger->add_dispatcher_head(&service.objecter_dispatcher);
 
-  client_xio_messenger->add_dispatcher_head(this);
-  objecter_xio_messenger->add_dispatcher_head(&service.objecter_dispatcher);
+  if (client_xio_messenger)
+    client_xio_messenger->add_dispatcher_head(this);
+  if (objecter_xio_messenger)
+    objecter_xio_messenger->add_dispatcher_head(&service.objecter_dispatcher);
 
   monc->set_want_keys(CEPH_ENTITY_TYPE_MON | CEPH_ENTITY_TYPE_OSD);
   r = monc->init();

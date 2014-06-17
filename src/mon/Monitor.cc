@@ -126,7 +126,7 @@ long parse_pos_long(const char *s, ostream *pss)
 }
 
 Monitor::Monitor(CephContext* cct_, string nm, MonitorDBStore *s,
-		 Messenger *m, XioMessenger *xm, MonMap *map) :
+		 Messenger *m, Messenger *xm, MonMap *map) :
   Dispatcher(cct_),
   name(nm),
   rank(-1), 
@@ -585,7 +585,8 @@ int Monitor::init()
 
   // i'm ready!
   messenger->add_dispatcher_tail(this);
-  xmsgr->add_dispatcher_tail(this);
+  if (xmsgr)
+    xmsgr->add_dispatcher_tail(this);
 
   bootstrap();
 
@@ -699,7 +700,8 @@ void Monitor::shutdown()
   lock.Unlock();
 
   messenger->shutdown();  // last thing!  ceph_mon.cc will delete mon.
-  xmsgr->shutdown();
+  if (xmsgr)
+    xmsgr->shutdown();
 }
 
 void Monitor::bootstrap()

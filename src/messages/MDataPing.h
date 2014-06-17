@@ -17,13 +17,15 @@
 
 
 #include "msg/Message.h"
+
+#ifdef HAVE_XIO
 #include "messages/MPing.h"
 extern "C" {
 #include "libxio.h"
 }
 
 typedef void (*mdata_hook_func)(struct xio_mempool_obj *mp);
-
+#endif
 
 class MDataPing : public Message {
 
@@ -34,32 +36,30 @@ class MDataPing : public Message {
 
   std::string tag;
   uint32_t counter;
+#ifdef HAVE_XIO
   mdata_hook_func mdata_hook;
   struct xio_mempool_obj mp;
+
+  struct xio_mempool_obj *get_mp() { return &mp; }
+  void set_rdma_hook(mdata_hook_func hook) { mdata_hook = hook; }
+#endif
   bool free_data;
 
   MDataPing()
     : Message(MSG_DATA_PING, HEAD_VERSION, COMPAT_VERSION),
+#ifdef HAVE_XIO
       mdata_hook(NULL),
+#endif
       free_data(false)
   {}
-
-  struct xio_mempool_obj *get_mp()
-    {
-      return &mp;
-    }
-
-  void set_rdma_hook(mdata_hook_func hook)
-    {
-      mdata_hook = hook;
-    }
 
 private:
   ~MDataPing()
     {
+#ifdef HAVE_XIO
       if (mdata_hook)
 	mdata_hook(&mp);
-
+#endif
       if (free_data)  {
 	const std::list<buffer::ptr>& buffers = data.buffers();
 	list<bufferptr>::const_iterator pb;
