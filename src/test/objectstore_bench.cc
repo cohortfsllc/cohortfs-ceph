@@ -135,7 +135,6 @@ public:
 	    size_t len = size;
 
 	    C_GatherBuilder gather(g_ceph_context);
-	    list<ObjectStore::Transaction*> tls;
 
 	    std::cout << "Write cycle " << ix << std::endl;
 	    while (len) {
@@ -143,14 +142,14 @@ public:
 
 		ObjectStore::Transaction *t = new ObjectStore::Transaction;
 		t->write(coll_t(), hobject_t(poid), offset, count, data);
-		tls.push_back(t);
+
+		fs->queue_transaction(NULL, t,
+				      new ObjectStore::C_DeleteTransaction(t),
+				      gather.new_sub());
 
 		offset += count;
 		len -= count;
 	    }
-
-	    // try running each repeat set at once
-	    fs->queue_transactions(NULL, tls, NULL, gather.new_sub());
 
 	    if (gather.has_subs()) {
 		// wait for all writes to be committed
@@ -165,13 +164,6 @@ public:
 		while (!done)
 			cond.Wait(lock);
 		lock.Unlock();
-	    }
-
-	    // we must delete all transactions
-	    while (! tls.empty()) {
-		ObjectStore::Transaction* t = tls.front();
-		tls.pop_front();
-		delete t;
 	    }
 	}
 
