@@ -14,6 +14,8 @@
 #ifndef CEPH_OBJECTSTORE_H
 #define CEPH_OBJECTSTORE_H
 
+#include <boost/intrusive/list.hpp>
+
 #include "include/Context.h"
 #include "include/buffer.h"
 #include "include/types.h"
@@ -40,6 +42,7 @@ using std::string;
 namespace ceph {
   class Formatter;
 }
+namespace bi = boost::intrusive;
 
 enum {
   l_os_first = 84000,
@@ -373,7 +376,14 @@ public:
     list<Context *> on_commit;
     list<Context *> on_applied_sync;
 
+    // member hook for intrusive work queue
+    bi::list_member_hook<> queue_hook;
   public:
+    typedef bi::list<Transaction,
+		     bi::member_hook<Transaction,
+				     bi::list_member_hook<>,
+				     &Transaction::queue_hook> > Queue;
+
     void set_tolerate_collection_add_enoent() {
       tolerate_collection_add_enoent = true;
     }
