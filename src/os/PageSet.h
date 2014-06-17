@@ -133,7 +133,6 @@ public:
       typename page_set::insert_commit_data commit;
       insert = pages.insert_check(cur, page_offset, page_cmp(), commit);
       if (insert.second) {
-	std::cout << "Inserting new page at " << page_offset << std::endl;
 	page_type *page = new page_type(page_offset);
 	cur = pages.insert_commit(*page, commit);
 
