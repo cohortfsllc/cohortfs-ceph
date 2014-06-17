@@ -182,6 +182,46 @@ private:
     }
   };
 
+  // transaction work queue
+  ThreadPool tx_tp;
+  ObjectStore::Transaction::Queue transactions;
+
+  class TransactionWQ : public ThreadPool::WorkQueue<Transaction> {
+    MemStore *store;
+  public:
+    TransactionWQ(MemStore *store, time_t timeout,
+		  time_t suicide_timeout, ThreadPool *tp)
+      : ThreadPool::WorkQueue<Transaction>("MemStore::TransactionWQ",
+					   timeout, suicide_timeout, tp),
+        store(store) {}
+
+    bool _enqueue(Transaction *t) {
+      store->transactions.push_back(*t);
+      return true;
+    }
+    void _dequeue(Transaction *t) {
+      assert(0);
+    }
+    bool _empty() {
+      return store->transactions.empty();
+    }
+    Transaction* _dequeue() {
+      if (store->transactions.empty())
+	return NULL;
+      Transaction *t = &store->transactions.front();
+      store->transactions.pop_front();
+      return t;
+    }
+    void _process(Transaction *t, ThreadPool::TPHandle &handle) {
+      store->_do_transaction(*t, handle);
+    }
+    void _process_finish(Transaction *t) {
+      store->_finish_transaction(*t);
+    }
+    void _clear() {
+      assert(store->transactions.empty());
+    }
+  } tx_wq;
 
   ceph::unordered_map<coll_t, CollectionRef> coll_map;
   RWLock coll_lock;    ///< rwlock to protect coll_map
@@ -191,7 +231,8 @@ private:
 
   Finisher finisher;
 
-  void _do_transaction(Transaction& t);
+  void _do_transaction(Transaction &t, ThreadPool::TPHandle &handle);
+  void _finish_transaction(Transaction &t);
 
   int _read_pages(page_set &pages, unsigned offset, size_t len, bufferlist &dst);
   void _write_pages(const bufferlist& src, unsigned offset, page_set &pages);
@@ -238,6 +279,10 @@ private:
 public:
   MemStore(CephContext *cct, const string& path)
     : ObjectStore(path),
+      tx_tp(g_ceph_context, "MemStore::tx_tp",
+	    g_conf->filestore_op_threads, "memstore_tx_threads"),
+      tx_wq(this, g_conf->filestore_op_thread_timeout,
+	    g_conf->filestore_op_thread_suicide_timeout, &tx_tp),
       coll_lock("MemStore::coll_lock"),
       apply_lock("MemStore::apply_lock"),
       finisher(cct) { }
