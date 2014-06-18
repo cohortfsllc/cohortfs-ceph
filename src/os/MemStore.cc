@@ -51,14 +51,14 @@ int MemStore::mount()
   int r = _load();
   if (r < 0)
     return r;
-  tx_tp.start();
+  op_tp.start();
   finisher.start();
   return 0;
 }
 
 int MemStore::umount()
 {
-  tx_tp.stop();
+  op_tp.stop();
   finisher.stop();
   return _save();
 }
@@ -66,7 +66,6 @@ int MemStore::umount()
 int MemStore::_save()
 {
   dout(10) << __func__ << dendl;
-  Mutex::Locker l(apply_lock); // block any writer
   dump_all();
   set<coll_t> collections;
   for (ceph::unordered_map<coll_t,CollectionRef>::iterator p = coll_map.begin();
@@ -689,35 +688,68 @@ ObjectMap::ObjectMapIterator MemStore::get_omap_iterator(const coll_t &cid,
 // ---------------
 // write operations
 
-int MemStore::queue_transactions(Sequencer *osr,
+int MemStore::queue_transactions(Sequencer *posr,
 				 list<Transaction*>& tls,
-				 TrackedOpRef op,
+				 TrackedOpRef trackedop,
 				 ThreadPool::TPHandle *handle)
 {
-  // fixme: ignore the Sequencer and serialize everything.
-  Mutex::Locker l(apply_lock);
+  OpSequencer *osr;
+  if (!posr)
+    posr = &default_osr;
+  if (posr->p) // use existing
+    osr = static_cast<OpSequencer*>(posr->p);
+  else // create new
+    posr->p = osr = new OpSequencer;
 
-  for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p)
-    tx_wq.queue(*p);
-
+  Op *op = build_op(tls);
+  osr->queue(op);
+  op_wq.queue(osr);
   return 0;
 }
 
-void MemStore::_finish_transaction(Transaction &t)
+MemStore::Op* MemStore::build_op(list<Transaction*> &tls)
 {
-  Context *on_apply_sync = t.get_on_applied_sync();
-  Context *on_apply = t.get_on_applied();
-  Context *on_commit = t.get_on_commit();
-
-  if (on_apply_sync)
-    on_apply_sync->complete(0);
-  if (on_apply)
-    finisher.queue(on_apply);
-  if (on_commit)
-    finisher.queue(on_commit);
+  Op *op = new Op;
+  op->seq = next_op_seq++;
+  swap(op->tls, tls);
+  Transaction::collect_contexts(op->tls, &op->on_applied,
+				&op->on_applied_sync, &op->on_commit);
+  return op;
 }
 
-void MemStore::_do_transaction(Transaction& t, ThreadPool::TPHandle &handle)
+void MemStore::_do_op(OpSequencer &osr, ThreadPool::TPHandle &handle)
+{
+  // hold apply_mutex until _finish_op()
+  osr.apply_mutex.Lock();
+  Op *op = osr.front();
+
+  dout(2) << "do_op " << op->seq << dendl;
+
+  for (list<Transaction*>::iterator i = op->tls.begin(); i != op->tls.end(); ++i) {
+    _do_transaction(**i);
+    handle.reset_tp_timeout();
+  }
+}
+
+void MemStore::_finish_op(OpSequencer &osr)
+{
+  Op *op = osr.pop_front();
+  dout(2) << "finish_op " << op->seq << dendl;
+
+  // locked in _do_op()
+  osr.apply_mutex.Unlock();
+
+  if (op->on_applied_sync)
+    op->on_applied_sync->complete(0);
+  if (op->on_applied)
+    finisher.queue(op->on_applied);
+  if (op->on_commit)
+    finisher.queue(op->on_commit);
+
+  delete op;
+}
+
+void MemStore::_do_transaction(Transaction &t)
 {
   int pos = 0;
 
@@ -893,8 +925,6 @@ void MemStore::_do_transaction(Transaction& t, ThreadPool::TPHandle &handle)
     }
 
     ++pos;
-
-    handle.reset_tp_timeout();
   }
 }
 

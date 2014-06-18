@@ -16,6 +16,8 @@
 #ifndef CEPH_MEMSTORE_H
 #define CEPH_MEMSTORE_H
 
+#include <boost/intrusive/list.hpp>
+
 #include "include/unordered_map.h"
 #include "include/memory.h"
 #include "common/Finisher.h"
@@ -23,6 +25,7 @@
 #include "ObjectStore.h"
 #include "PageSet.h"
 
+namespace bi = boost::intrusive;
 
 class MemStore : public ObjectStore {
 private:
@@ -182,57 +185,116 @@ private:
     }
   };
 
-  // transaction work queue
-  ThreadPool tx_tp;
-  ObjectStore::Transaction::Queue transactions;
+  // op work queue
+  struct Op {
+    uint64_t seq;
+    list<Transaction*> tls;
+    Context *on_applied;
+    Context *on_applied_sync;
+    Context *on_commit;
 
-  class TransactionWQ : public ThreadPool::WorkQueue<Transaction> {
+    bi::list_member_hook<> queue_hook;
+    typedef bi::list<Op, bi::member_hook<Op, bi::list_member_hook<>,
+					 &Op::queue_hook> > Queue;
+  };
+
+  class OpSequencer : public Sequencer_impl {
+    Mutex mutex;
+    Cond cond;
+    Op::Queue ops;
+  public:
+    Mutex apply_mutex;
+
+    OpSequencer()
+      : mutex("MemStore::OpSequencer::mutex", false, false),
+	apply_mutex("MemStore::OpSequencer::apply_mutex", false, false)
+    {}
+    ~OpSequencer() {
+      assert(ops.empty());
+    }
+
+    void queue(Op *o) {
+      Mutex::Locker lock(mutex);
+      ops.push_back(*o);
+    }
+    Op *front() {
+      assert(apply_mutex.is_locked());
+      return &ops.front();
+    }
+    Op *pop_front() {
+      assert(apply_mutex.is_locked());
+      Mutex::Locker lock(mutex);
+      Op *o = &ops.front();
+      ops.pop_front();
+      cond.Signal();
+      return o;
+    }
+    void flush() {
+      Mutex::Locker lock(mutex);
+      if (ops.empty())
+	return;
+      const uint64_t seq = ops.back().seq;
+      // drain everything prior to our watermark
+      while (!ops.empty() && ops.front().seq <= seq)
+	cond.Wait(mutex);
+    }
+  };
+  Sequencer default_osr;
+  uint64_t next_op_seq;
+
+  ThreadPool op_tp;
+  list<OpSequencer*> ops;
+
+  class OpWQ : public ThreadPool::WorkQueue<OpSequencer> {
     MemStore *store;
   public:
-    TransactionWQ(MemStore *store, time_t timeout,
-		  time_t suicide_timeout, ThreadPool *tp)
-      : ThreadPool::WorkQueue<Transaction>("MemStore::TransactionWQ",
+    OpWQ(MemStore *store, time_t timeout,
+	 time_t suicide_timeout, ThreadPool *tp)
+      : ThreadPool::WorkQueue<OpSequencer>("MemStore::OpWQ",
 					   timeout, suicide_timeout, tp),
         store(store) {}
 
-    bool _enqueue(Transaction *t) {
-      store->transactions.push_back(*t);
+    bool _enqueue(OpSequencer *osr) {
+      store->ops.push_back(osr);
       return true;
     }
-    void _dequeue(Transaction *t) {
+    void _dequeue(OpSequencer *osr) {
       assert(0);
     }
     bool _empty() {
-      return store->transactions.empty();
+      return store->ops.empty();
     }
-    Transaction* _dequeue() {
-      if (store->transactions.empty())
+    OpSequencer* _dequeue() {
+      if (store->ops.empty())
 	return NULL;
-      Transaction *t = &store->transactions.front();
-      store->transactions.pop_front();
-      return t;
+      OpSequencer *osr = store->ops.front();
+      store->ops.pop_front();
+      return osr;
     }
-    void _process(Transaction *t, ThreadPool::TPHandle &handle) {
-      store->_do_transaction(*t, handle);
+    void _process(OpSequencer *osr, ThreadPool::TPHandle &handle) {
+      store->_do_op(*osr, handle);
     }
-    void _process_finish(Transaction *t) {
-      store->_finish_transaction(*t);
+    void _process_finish(OpSequencer *osr) {
+      store->_finish_op(*osr);
     }
     void _clear() {
-      assert(store->transactions.empty());
+      assert(store->ops.empty());
     }
-  } tx_wq;
+  } op_wq;
 
   ceph::unordered_map<coll_t, CollectionRef> coll_map;
   RWLock coll_lock;    ///< rwlock to protect coll_map
-  Mutex apply_lock;    ///< serialize all updates
 
   CollectionRef get_collection(const coll_t &cid);
 
   Finisher finisher;
 
-  void _do_transaction(Transaction &t, ThreadPool::TPHandle &handle);
-  void _finish_transaction(Transaction &t);
+  Op* build_op(list<Transaction*> &tls);
+
+  void _do_op(OpSequencer &osr, ThreadPool::TPHandle &handle);
+  void _finish_op(OpSequencer &osr);
+
+  void _do_transaction(Transaction &t);
 
   int _read_pages(page_set &pages, unsigned offset, size_t len, bufferlist &dst);
   void _write_pages(const bufferlist& src, unsigned offset, page_set &pages);
@@ -279,12 +341,13 @@ private:
 public:
   MemStore(CephContext *cct, const string& path)
     : ObjectStore(path),
-      tx_tp(g_ceph_context, "MemStore::tx_tp",
-	    g_conf->filestore_op_threads, "memstore_tx_threads"),
-      tx_wq(this, g_conf->filestore_op_thread_timeout,
-	    g_conf->filestore_op_thread_suicide_timeout, &tx_tp),
+      default_osr("default"),
+      next_op_seq(0),
+      op_tp(g_ceph_context, "MemStore::op_tp",
+	    g_conf->filestore_op_threads, "memstore_op_threads"),
+      op_wq(this, g_conf->filestore_op_thread_timeout,
+	    g_conf->filestore_op_thread_suicide_timeout, &op_tp),
       coll_lock("MemStore::coll_lock"),
-      apply_lock("MemStore::apply_lock"),
       finisher(cct) { }
   ~MemStore() { }
 
