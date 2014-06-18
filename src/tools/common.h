@@ -10,7 +10,6 @@
 #include "common/Cond.h"
 #include "common/Mutex.h"
 #include "mon/MonClient.h"
-#include "mon/PGMap.h"
 #include "mds/MDSMap.h"
 #include "osd/OSDMap.h"
 #include "common/Timer.h"
@@ -20,8 +19,6 @@
 #include "mon/mon_types.h"
 #include "messages/MOSDMap.h"
 #include "messages/MLog.h"
-#include "messages/MCommand.h"
-#include "messages/MCommandReply.h"
 #include "messages/MMonCommandAck.h"
 
 
@@ -64,8 +61,8 @@ public:
   }
 
   bool ms_dispatch(Message *m);
-  void ms_handle_connect(Connection *con);
-  bool ms_handle_reset(Connection *con);
+  void ms_handle_connect(Connection* con);
+  bool ms_handle_reset(Connection* con);
   void ms_handle_remote_reset(Connection *con) {}
 
   bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool force_new);
@@ -77,7 +74,6 @@ class CephToolCtx
 {
 public:
   CephContext *cct;
-  PGMap pgmap;
   MDSMap mdsmap;
   OSDMap osdmap;
   MonClient mc;

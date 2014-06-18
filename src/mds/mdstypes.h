@@ -17,9 +17,7 @@ using namespace std;
 #include "include/frag.h"
 #include "include/xlist.h"
 #include "include/interval_set.h"
-
 #include "inode_backtrace.h"
-
 #include <boost/pool/pool.hpp>
 #include "include/assert.h"
 #include "include/hash_namespace.h"

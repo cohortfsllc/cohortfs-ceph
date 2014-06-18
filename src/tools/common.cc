@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,8 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
  */
 
 #include <sys/stat.h>
@@ -58,11 +57,8 @@ static SimpleMessenger *messenger = 0;
 static Tokenizer *tok;
 
 // sync command
-bool pending_tell;  // is tell, vs monitor command
-bool pending_tell_pgid;
 uint64_t pending_tid = 0;
 EntityName pending_target;
-pg_t pending_target_pgid;
 bool cmd_waiting_for_osdmap = false;
 vector<string> pending_cmd;
 bufferlist pending_bl;
@@ -74,21 +70,17 @@ entity_inst_t reply_from;
 
 OSDMap *osdmap = 0;
 
-Connection *command_con = NULL;
+ConnectionRef command_con = NULL;
 Context *tick_event = 0;
 float tick_interval = 3.0;
 
 // observe (push)
-#include "mon/PGMap.h"
 #include "mds/MDSMap.h"
 #include "common/LogEntry.h"
 
 #include "mon/mon_types.h"
 
 #include "messages/MOSDMap.h"
-
-#include "messages/MCommand.h"
-#include "messages/MCommandReply.h"
 
 static set<int> registered, seen;
 
@@ -97,7 +89,7 @@ struct C_Tick : public Context {
   C_Tick(CephToolCtx *c) : ctx(c) {}
   void finish(int r) {
     if (command_con)
-      messenger->send_keepalive(command_con);
+      messenger->send_keepalive(command_con.get());
 
     assert(tick_event == this);
     tick_event = new C_Tick(ctx);
@@ -107,93 +99,19 @@ struct C_Tick : public Context {
 
 static void send_command(CephToolCtx *ctx)
 {
-  if (!pending_tell && !pending_tell_pgid) {
-    version_t last_seen_version = 0;
-    MMonCommand *m = new MMonCommand(ctx->mc.monmap.fsid, last_seen_version);
-    m->cmd = pending_cmd;
-    m->set_data(pending_bl);
+  MMonCommand *m = new MMonCommand(ctx->mc.monmap.fsid);
+  m->cmd = pending_cmd;
+  m->set_data(pending_bl);
 
-    if (!ctx->concise)
-      *ctx->log << ceph_clock_now(g_ceph_context) << " mon" << " <- " << pending_cmd << std::endl;
+  if (!ctx->concise)
+    *ctx->log << ceph_clock_now(g_ceph_context) << " mon"
+	      << " <- " << pending_cmd << std::endl;
 
-    ctx->mc.send_mon_message(m);
-    return;
-  }
-
-  if (pending_tell_pgid || pending_target.get_type() == (int)entity_name_t::TYPE_OSD) {
-    if (!osdmap) {
-      ctx->mc.sub_want("osdmap", 0, CEPH_SUBSCRIBE_ONETIME);
-      ctx->mc.renew_subs();
-      cmd_waiting_for_osdmap = true;
-      return;
-    }
-  }
+  ctx->mc.send_mon_message(m);
+  return;
 
   if (!ctx->concise)
     *ctx->log << ceph_clock_now(g_ceph_context) << " " << pending_target << " <- " << pending_cmd << std::endl;
-
-  if (pending_tell_pgid) {
-    // pick target osd
-    vector<int> osds;
-    int r = osdmap->pg_to_acting_osds(pending_target_pgid, osds);
-    if (r < 0) {
-      reply_rs = "error mapping pgid to an osd";
-      reply_rc = -EINVAL;
-      reply = true;
-      cmd_cond.Signal();
-      return;
-    }
-    if (r == 0) {
-      reply_rs = "pgid currently maps to no osd";
-      reply_rc = -ENOENT;
-      reply = true;
-      cmd_cond.Signal();
-      return;
-    }
-    pending_target.set_name(entity_name_t::OSD(osds[0]));
-  }
-
-  if (pending_target.get_type() == (int)entity_name_t::TYPE_OSD) {
-    const char *start = pending_target.get_id().c_str();
-    char *end;
-    int n = strtoll(start, &end, 10);
-    if (end <= start) {
-      stringstream ss;
-      ss << "invalid osd id " << pending_target;
-      reply_rs = ss.str();
-      reply_rc = -EINVAL;
-      reply = true;
-      cmd_cond.Signal();
-      return;
-    }
-    
-    if (!osdmap->is_up(n)) {
-      stringstream ss;
-      ss << pending_target << " is not up";
-      reply_rs = ss.str();
-      reply_rc = -ESRCH;
-      reply = true;
-      cmd_cond.Signal();
-      return;
-    } else {
-      if (!ctx->concise)
-	*ctx->log << ceph_clock_now(g_ceph_context) << " " << pending_target << " <- " << pending_cmd << std::endl;
-
-      MCommand *m = new MCommand(ctx->mc.monmap.fsid);
-      m->cmd = pending_cmd;
-      m->set_data(pending_bl);
-      m->set_tid(++pending_tid);
-
-      command_con = messenger->get_connection(osdmap->get_inst(n));
-      messenger->send_message(m, command_con);
-
-      if (tick_event)
-	ctx->timer.cancel_event(tick_event);
-      tick_event = new C_Tick(ctx);
-      ctx->timer.add_event_after(tick_interval, tick_event);
-    }
-    return;
-  }
 
   reply_rc = -EINVAL;
   reply = true;
@@ -229,25 +147,6 @@ static void handle_ack(CephToolCtx *ctx, MMonCommandAck *ack)
   ack->put();
 }
 
-static void handle_ack(CephToolCtx *ctx, MCommandReply *ack)
-{
-  ctx->lock.Lock();
-  if (ack->get_tid() == pending_tid) {
-    reply = true;
-    reply_from = ack->get_source_inst();
-    reply_rs = ack->rs;
-    reply_rc = ack->r;
-    reply_bl = ack->get_data();
-    cmd_cond.Signal();
-    if (tick_event) {
-      ctx->timer.cancel_event(tick_event);
-      tick_event = 0;
-    }
-  }
-  ctx->lock.Unlock();
-  ack->put();
-}
-
 int do_command(CephToolCtx *ctx,
 	       vector<string>& cmd, bufferlist& bl, bufferlist& rbl)
 {
@@ -256,32 +155,7 @@ int do_command(CephToolCtx *ctx,
   pending_target = EntityName();
   pending_cmd = cmd;
   pending_bl = bl;
-  pending_tell = false;
-  pending_tell_pgid = false;
   reply = false;
-  
-  if (!cmd.empty() && cmd[0] == "tell") {
-    if (cmd.size() == 1) {
-      cerr << "no tell target specified" << std::endl;
-      return -EINVAL;
-    }
-    if (!pending_target.from_str(cmd[1])) {
-      cerr << "tell target '" << cmd[1] << "' not a valid entity name" << std::endl;
-      return -EINVAL;
-    }
-    pending_cmd.erase(pending_cmd.begin(), pending_cmd.begin() + 2);
-    pending_tell = true;
-  }
-  if (!cmd.empty() && cmd[0] == "pg") {
-    if (cmd.size() == 1) {
-      cerr << "pg requires at least one argument" << std::endl;
-      return -EINVAL;
-    }
-    if (pending_target_pgid.parse(cmd[1].c_str())) {
-      pending_tell_pgid = true;
-    }
-    // otherwise, send the request on to the monitor (e.g., 'pg dump').  sigh.
-  }
 
   send_command(ctx);
 
@@ -556,9 +430,6 @@ bool Admin::ms_dispatch(Message *m) {
   case MSG_MON_COMMAND_ACK:
     handle_ack(ctx, (MMonCommandAck*)m);
     break;
-  case MSG_COMMAND_REPLY:
-    handle_ack(ctx, (MCommandReply*)m);
-    break;
   case CEPH_MSG_MON_MAP:
     m->put();
     break;
@@ -577,7 +448,7 @@ bool Admin::ms_dispatch(Message *m) {
   return true;
 }
 
-void Admin::ms_handle_connect(Connection *con) {
+void Admin::ms_handle_connect(Connection* con) {
   if (con->get_peer_type() == CEPH_ENTITY_TYPE_MON) {
     ctx->lock.Lock();
     if (!pending_cmd.empty())
@@ -586,12 +457,11 @@ void Admin::ms_handle_connect(Connection *con) {
   }
 }
 
-bool Admin::ms_handle_reset(Connection *con)
+bool Admin::ms_handle_reset(Connection* con)
 {
   Mutex::Locker l(ctx->lock);
-  if (con == command_con) {
-    command_con->put();
-    command_con = NULL;
+  if (con == command_con.get()) {
+    command_con.reset();
     if (!pending_cmd.empty())
       send_command(ctx);
     return true;

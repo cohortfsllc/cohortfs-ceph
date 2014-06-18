@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <unistd.h>
 #include "client/ioctl.h"

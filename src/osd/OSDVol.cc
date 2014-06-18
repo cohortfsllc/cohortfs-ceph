@@ -31,7 +31,6 @@
 #include "messages/MOSDPing.h"
 #include "messages/MWatchNotify.h"
 #include "Watch.h"
-#include "mds/inode_backtrace.h" // Ugh
 #include <sstream>
 #include <utility>
 #include <errno.h>

@@ -69,6 +69,9 @@ endif(${WITH_TCMALLOC})
 set(heap_profiler_files ${TCMALLOC_srcs})
 add_library(heap_profiler_objs OBJECT ${heap_profiler_files})
 
+set(LIBEDIT_LIBS edit)
+
+
 # Common infrastructure
 configure_file(
   ${CMAKE_SOURCE_DIR}/src/ceph_ver.h.in.cmake
@@ -86,10 +89,8 @@ set(auth_files auth/AuthAuthorizeHandler.cc auth/AuthClientHandler.cc
   auth/KeyRing.cc auth/RotatingKeyRing.cc)
 
 set(mds_files)
-if(${WITH_MDS})
-  list(APPEND mds_files mds/MDSMap.cc mds/inode_backtrace.cc
-    mds/mdstypes.cc)
-endif(${WITH_MDS})
+list(APPEND mds_files mds/MDSMap.cc mds/inode_backtrace.cc
+  mds/mdstypes.cc)
 
 set(libcommon_files
   ${CMAKE_BINARY_DIR}/src/include/ceph_ver.h ceph_ver.c common/DecayCounter.cc
@@ -107,7 +108,7 @@ set(libcommon_files
   mon/MonCap.cc mon/MonClient.cc mon/MonMap.cc msg/Accepter.cc
   msg/DispatchQueue.cc msg/Message.cc common/RefCountedObj.cc
   msg/Messenger.cc msg/Pipe.cc msg/SimpleMessenger.cc
-  msg/msg_types.cc common/hobject.cc osd/OSDMap.cc
+  msg/msg_types.cc common/hobject.cc osd/OSDMap.cc common/histogram.cc
   osd/osd_types.cc common/blkdev.cc common/common_init.cc
   common/pipe.c common/ceph_argparse.cc common/ceph_context.cc
   common/buffer.cc common/code_environment.cc common/dout.cc
@@ -117,7 +118,8 @@ set(libcommon_files
   common/mime.c common/strtol.cc common/page.cc common/lockdep.cc
   common/version.cc common/hex.cc common/entity_name.cc common/ceph_crypto.cc
   common/ceph_crypto_cms.cc common/ceph_json.cc common/ipaddr.cc
-  common/pick_address.cc ${arch_files} ${auth_files} ${mds_files})
+  common/pick_address.cc common/linux_version.c vol/Volume.cc cohort/erasure.cc cohort/CohortVolume.cc
+  osdc/Striper.cc osdc/Objecter.cc ${arch_files} ${auth_files} ${mds_files})
 set(mon_common_files auth/AuthSessionHandler.cc
   auth/cephx/CephxSessionHandler.cc)
 add_library(mon_common_objs OBJECT ${mon_common_files})
@@ -222,7 +224,8 @@ set(libos_srcs os/FileJournal.cc os/FileStore.cc os/chain_xattr.cc
   os/ObjectStore.cc os/JournalingObjectStore.cc os/LFNIndex.cc
   os/IndexManager.cc os/FlatIndex.cc os/LevelDBStore.cc os/DBObjectMap.cc 
   os/WBThrottle.cc os/GenericFileStoreBackend.cc os/BtrfsFileStoreBackend.cc
-  os/ZFSFileStoreBackend.cc)
+  os/ZFSFileStoreBackend.cc os/KeyValueStore.cc os/MemStore.cc
+  os/GenericObjectMap.cc)
 set(os_mon_files os/LevelDBStore.cc)
 add_library(os_mon_objs OBJECT ${os_mon_files})
 add_library(os STATIC ${libos_srcs} $<TARGET_OBJECTS:os_mon_objs>)
@@ -342,6 +345,7 @@ target_link_libraries(cephfs common ${EXTRALIBS})
 
 set(ceph_srcs tools/ceph.cc tools/common.cc)
 add_executable(ceph ${ceph_srcs})
+target_link_libraries(ceph global ${LIBEDIT_LIBS})
 
 set(ceph_conf_srcs tools/ceph_conf.cc)
 add_executable(ceph-conf ${ceph_conf_srcs})
@@ -407,7 +411,6 @@ install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-create-keys
 
 # Filesystem client
 if(${WITH_CLIENT})
-  set(LIBEDIT_LIBS edit)
   set(libclient_srcs client/Client.cc client/Dentry.cc
     client/Inode.cc client/MetaRequest.cc client/MetaSession.cc
     client/Trace.cc)
