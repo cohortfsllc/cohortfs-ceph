@@ -130,11 +130,14 @@ public:
 	dout(0) << "Writing " << size << " in blocks of " << block_size
 		<< dendl;
 
+	// use a sequencer for each thread so they don't serialize each other
+	ObjectStore::Sequencer seq("osbench worker");
+
 	for (int ix = 0; ix < repeats; ++ix) {
 	    uint64_t offset = 0;
 	    size_t len = size;
 
-	    C_GatherBuilder gather(g_ceph_context);
+	    list<ObjectStore::Transaction*> tls;
 
 	    std::cout << "Write cycle " << ix << std::endl;
 	    while (len) {
@@ -143,27 +146,29 @@ public:
 		ObjectStore::Transaction *t = new ObjectStore::Transaction;
 		t->write(coll_t(), hobject_t(poid), offset, count, data);
 
-		fs->queue_transaction(NULL, t,
-				      new ObjectStore::C_DeleteTransaction(t),
-				      gather.new_sub());
+		tls.push_back(t);
 
 		offset += count;
 		len -= count;
 	    }
 
-	    if (gather.has_subs()) {
-		// wait for all writes to be committed
-		Mutex lock("osbench");
-		Cond cond;
-		bool done = false;
+	    // set up the finisher
+	    Mutex lock("osbench");
+	    Cond cond;
+	    bool done = false;
 
-		gather.set_finisher(new C_SafeCond(&lock, &cond, &done));
-		gather.activate();
+	    fs->queue_transactions(&seq, tls, NULL,
+				   new C_SafeCond(&lock, &cond, &done));
 
-		lock.Lock();
-		while (!done)
-			cond.Wait(lock);
-		lock.Unlock();
+	    lock.Lock();
+	    while (!done)
+	      cond.Wait(lock);
+	    lock.Unlock();
+
+	    while (!tls.empty()) {
+	      ObjectStore::Transaction *t = tls.front();
+	      tls.pop_front();
+	      delete t;
 	    }
 	}
 
