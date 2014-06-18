@@ -247,18 +247,15 @@ int main(int argc, const char *argv[])
 	fs->apply_transaction(ft);
 
 	int thr_ix;
-	OBS_Worker** workers = (OBS_Worker**) malloc(
-	    n_threads * sizeof(OBS_Worker*));
-	for (thr_ix = 0; thr_ix < n_threads; ++thr_ix) {
-	    workers[thr_ix] = new OBS_Worker();
-	}
+	OBS_Worker *workers = new OBS_Worker[n_threads];
 	auto t1 = std::chrono::high_resolution_clock::now();
 	for (thr_ix = 0; thr_ix < n_threads; ++thr_ix) {
-	    workers[thr_ix]->create();
+	    workers[thr_ix].create();
 	}
 	for (thr_ix = 0; thr_ix < n_threads; ++thr_ix) {
-	    workers[thr_ix]->join();
+	    workers[thr_ix].join();
 	}
+	delete[] workers;
 	auto t2 = std::chrono::high_resolution_clock::now();
 
 	// remove the object
