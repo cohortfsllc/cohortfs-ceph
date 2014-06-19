@@ -23,7 +23,13 @@ static void usage()
       "  --size\n"
       "        total size in bytes\n"
       "  --block-size\n"
-      "        block size in bytes for each write\n" << dendl;
+      "        block size in bytes for each write\n"
+      "  --repeats\n"
+      "        number of times to repeat the write cycle\n"
+      "  --threads\n"
+      "        number of threads to carry out this workload\n"
+      "  --multi-object\n"
+      "        have each thread write to a separate object\n" << dendl;
   generic_server_usage();
 }
 
@@ -104,7 +110,7 @@ byte_units size = 1048576;
 byte_units block_size = 4096;
 int repeats = 1;
 int n_threads = 1;
-sobject_t poid(object_t("osbench"), 0);
+bool multi_object = false;
 ObjectStore *fs;
 
 class CDS_Static {
@@ -120,8 +126,12 @@ CDS_Static cds_static[1];
 
 class OBS_Worker : public Thread
 {
+  sobject_t poid;
+
  public:
   OBS_Worker() { }
+
+  void set_oid(const sobject_t &oid) { poid = oid; }
 
   void *entry() {
     bufferlist data;
@@ -206,6 +216,8 @@ int main(int argc, const char *argv[])
       repeats = atoi(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--threads", (char*)NULL)) {
       n_threads = atoi(val.c_str());
+    } else if (ceph_argparse_flag(args, i, "--multi-object", (char*)NULL)) {
+      multi_object = true;
     } else {
       derr << "Error: can't understand argument: " << *i <<
           "\n" << dendl;
@@ -246,21 +258,37 @@ int main(int argc, const char *argv[])
   ft.create_collection(coll_t());
   fs->apply_transaction(ft);
 
-  int thr_ix;
-  OBS_Worker *workers = new OBS_Worker[n_threads];
+  std::vector<sobject_t> oids;
+  if (multi_object) {
+    oids.resize(n_threads);
+    for (int i = 0; i < n_threads; i++) {
+      stringstream oss;
+      oss << "osbench-thread-" << i;
+      oids[i].oid.name = oss.str();
+    }
+  } else {
+    oids.push_back(sobject_t(object_t("osbench"), 0));
+  }
+
+  std::vector<OBS_Worker> workers(n_threads);
   auto t1 = std::chrono::high_resolution_clock::now();
-  for (thr_ix = 0; thr_ix < n_threads; ++thr_ix) {
-    workers[thr_ix].create();
+  for (int i = 0; i < n_threads; i++) {
+    if (multi_object)
+      workers[i].set_oid(oids[i]);
+    else
+      workers[i].set_oid(oids[0]);
+    workers[i].create();
   }
-  for (thr_ix = 0; thr_ix < n_threads; ++thr_ix) {
-    workers[thr_ix].join();
+  for (int i = 0; i < n_threads; i++) {
+    workers[i].join();
   }
-  delete[] workers;
+  workers.clear();
   auto t2 = std::chrono::high_resolution_clock::now();
 
   // remove the object
   ObjectStore::Transaction t;
-  t.remove(coll_t(), hobject_t(poid));
+  for (vector<sobject_t>::iterator i = oids.begin(); i != oids.end(); ++i)
+    t.remove(coll_t(), hobject_t(*i));
   fs->apply_transaction(t);
 
   fs->umount();
