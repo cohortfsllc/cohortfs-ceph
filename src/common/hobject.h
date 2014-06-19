@@ -78,6 +78,15 @@ struct hobject_t {
 };
 WRITE_CLASS_ENCODER(hobject_t)
 
+CEPH_HASH_NAMESPACE_START
+template<> struct hash<hobject_t> {
+  size_t operator()(const hobject_t& r) const {
+    static hash<object_t> H;
+    return H(r.oid);
+  }
+};
+CEPH_HASH_NAMESPACE_END
+
 ostream& operator<<(ostream& out, const hobject_t& o);
 
 WRITE_EQ_OPERATORS_3(hobject_t, oid, stripetype, stripeno)

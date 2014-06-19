@@ -88,7 +88,7 @@ public:
   typedef ceph::shared_ptr<Object> ObjectRef;
 
   struct Collection {
-    std::map<hobject_t, ObjectRef> object_hash;  ///< for lookup
+    ceph::unordered_map<hobject_t, ObjectRef> object_hash;  ///< for lookup
     map<hobject_t, ObjectRef> object_map;        ///< for iteration
     map<string,bufferptr> xattr;
     RWLock lock;   ///< for object_{map,hash}
@@ -99,10 +99,22 @@ public:
     // level.
 
     ObjectRef get_object(hobject_t oid) {
-      std::map<hobject_t,ObjectRef>::iterator o = object_hash.find(oid);
+      RWLock::RLocker l(lock);
+      ceph::unordered_map<hobject_t, ObjectRef>::iterator o = object_hash.find(oid);
       if (o == object_hash.end())
-	return ObjectRef();
+        return ObjectRef();
       return o->second;
+    }
+
+    ObjectRef get_or_create_object(hobject_t oid) {
+      RWLock::WLocker l(lock);
+      ceph::unordered_map<hobject_t, ObjectRef>::iterator i = object_hash.find(oid);
+      if (i != object_hash.end())
+        return i->second;
+      ObjectRef o(new Object);
+      object_map[oid] = o;
+      object_hash[oid] = o;
+      return o;
     }
 
     void encode(bufferlist& bl) const {

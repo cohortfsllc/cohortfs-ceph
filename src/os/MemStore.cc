@@ -256,7 +256,6 @@ bool MemStore::exists(const coll_t &cid, const hobject_t& oid)
   CollectionRef c = get_collection(cid);
   if (!c)
     return false;
-  RWLock::RLocker l(c->lock);
 
   // Perform equivalent of c->get_object_(oid) != NULL. In C++11 the
   // shared_ptr needs to be compared to nullptr.
@@ -273,7 +272,6 @@ int MemStore::stat(
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -298,7 +296,6 @@ int MemStore::read(
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker lc(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -359,7 +356,6 @@ int MemStore::fiemap(const coll_t &cid, const hobject_t& oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker lc(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -382,7 +378,6 @@ int MemStore::getattr(const coll_t &cid, const hobject_t& oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -402,7 +397,6 @@ int MemStore::getattrs(const coll_t &cid, const hobject_t& oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -564,7 +558,6 @@ int MemStore::omap_get(
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -585,7 +578,6 @@ int MemStore::omap_get_header(
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -604,7 +596,6 @@ int MemStore::omap_get_keys(
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -627,7 +618,6 @@ int MemStore::omap_get_values(
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -653,7 +643,6 @@ int MemStore::omap_check_keys(
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -675,7 +664,6 @@ ObjectMap::ObjectMapIterator MemStore::get_omap_iterator(const coll_t &cid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return ObjectMap::ObjectMapIterator();
-  RWLock::RLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -896,14 +884,8 @@ int MemStore::_touch(const coll_t &cid, const hobject_t& oid)
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
-  ObjectRef o = c->get_object(oid);
-  if (!o) {
-    o.reset(new Object);
-    c->object_map[oid] = o;
-    c->object_hash[oid] = o;
-  }
+  c->get_or_create_object(oid);
   return 0;
 }
 
@@ -918,15 +900,8 @@ int MemStore::_write(const coll_t &cid, const hobject_t& oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
-  ObjectRef o = c->get_object(oid);
-  if (!o) {
-    // write implicitly creates a missing object
-    o.reset(new Object);
-    c->object_map[oid] = o;
-    c->object_hash[oid] = o;
-  }
+  ObjectRef o = c->get_or_create_object(oid);
 
   _write_pages(bl, offset, o);
 
@@ -978,7 +953,6 @@ int MemStore::_truncate(const coll_t &cid, const hobject_t& oid, uint64_t size)
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -995,7 +969,6 @@ int MemStore::_remove(const coll_t &cid, const hobject_t& oid)
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -1012,7 +985,6 @@ int MemStore::_setattrs(const coll_t &cid, const hobject_t& oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -1028,7 +1000,6 @@ int MemStore::_rmattr(const coll_t &cid, const hobject_t& oid, const char *name)
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -1045,7 +1016,6 @@ int MemStore::_rmattrs(const coll_t &cid, const hobject_t& oid)
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -1062,18 +1032,13 @@ int MemStore::_clone(const coll_t &cid, const hobject_t& oldoid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
+  // XXX: hold lock over both calls
   ObjectRef oo = c->get_object(oldoid);
   if (!oo)
     return -ENOENT;
-  ObjectRef no = c->get_object(newoid);
-  if (!no) {
-    no.reset(new Object);
-    c->object_map[newoid] = no;
-    c->object_hash[newoid] = no;
-  }
-  return -ENOTSUP;
+  ObjectRef no = c->get_or_create_object(newoid);
+  return -ENOTSUP; // TODO: clone
 }
 
 int MemStore::_clone_range(const coll_t &cid, const hobject_t& oldoid,
@@ -1087,20 +1052,15 @@ int MemStore::_clone_range(const coll_t &cid, const hobject_t& oldoid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
+  // XXX: hold lock over both calls
   ObjectRef oo = c->get_object(oldoid);
   if (!oo)
     return -ENOENT;
-  ObjectRef no = c->get_object(newoid);
-  if (!no) {
-    no.reset(new Object);
-    c->object_map[newoid] = no;
-    c->object_hash[newoid] = no;
-  }
+  ObjectRef no = c->get_or_create_object(newoid);
   if (srcoff >= oo->data_len)
     return 0;
-  return -ENOTSUP;
+  return -ENOTSUP; // TODO: clone
 }
 
 int MemStore::_omap_clear(const coll_t &cid, const hobject_t &oid)
@@ -1109,7 +1069,6 @@ int MemStore::_omap_clear(const coll_t &cid, const hobject_t &oid)
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -1125,7 +1084,6 @@ int MemStore::_omap_setkeys(const coll_t &cid, const hobject_t &oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -1142,7 +1100,6 @@ int MemStore::_omap_rmkeys(const coll_t &cid, const hobject_t &oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -1160,7 +1117,6 @@ int MemStore::_omap_rmkeyrange(const coll_t &cid, const hobject_t &oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
@@ -1179,7 +1135,6 @@ int MemStore::_omap_setheader(const coll_t &cid, const hobject_t &oid,
   CollectionRef c = get_collection(cid);
   if (!c)
     return -ENOENT;
-  RWLock::WLocker l(c->lock);
 
   ObjectRef o = c->get_object(oid);
   if (!o)
