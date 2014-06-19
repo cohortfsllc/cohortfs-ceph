@@ -31,13 +31,14 @@ private:
 public:
   struct Object {
     Spinlock alloc_lock;
+    RWLock omap_lock;
     page_set data;
     size_t data_len;
     map<string,bufferptr> xattr;
     bufferlist omap_header;
     map<string,bufferlist> omap;
 
-    Object() : data_len(0) {}
+    Object() : omap_lock("MemStore::Object::omap_lock"), data_len(0) {}
 
     void encode(bufferlist& bl) const {
       ENCODE_START(2, 2, bl);
@@ -147,35 +148,35 @@ private:
       : c(c), o(o), it(o->omap.begin()) {}
 
     int seek_to_first() {
-      RWLock::RLocker l(c->lock);
+      RWLock::RLocker l(o->omap_lock);
       it = o->omap.begin();
       return 0;
     }
     int upper_bound(const string &after) {
-      RWLock::RLocker l(c->lock);
+      RWLock::RLocker l(o->omap_lock);
       it = o->omap.upper_bound(after);
       return 0;
     }
     int lower_bound(const string &to) {
-      RWLock::RLocker l(c->lock);
+      RWLock::RLocker l(o->omap_lock);
       it = o->omap.lower_bound(to);
       return 0;
     }
     bool valid() {
-      RWLock::RLocker l(c->lock);
+      RWLock::RLocker l(o->omap_lock);
       return it != o->omap.end();      
     }
     int next() {
-      RWLock::RLocker l(c->lock);
+      RWLock::RLocker l(o->omap_lock);
       ++it;
       return 0;
     }
     string key() {
-      RWLock::RLocker l(c->lock);
+      RWLock::RLocker l(o->omap_lock);
       return it->first;
     }
     bufferlist value() {
-      RWLock::RLocker l(c->lock);
+      RWLock::RLocker l(o->omap_lock);
       return it->second;
     }
     int status() {
