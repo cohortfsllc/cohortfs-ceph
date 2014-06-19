@@ -928,7 +928,7 @@ int MemStore::_write(const coll_t &cid, const hobject_t& oid,
     c->object_hash[oid] = o;
   }
 
-  _write_pages(bl, offset, o->data);
+  _write_pages(bl, offset, o);
 
   // extend the length
   if (o->data_len < offset + len)
@@ -937,11 +937,13 @@ int MemStore::_write(const coll_t &cid, const hobject_t& oid,
 }
 
 void MemStore::_write_pages(const bufferlist& src, unsigned offset,
-			    page_set &pages)
+                            ObjectRef o)
 {
   // make sure the page range is allocated
   unsigned len = src.length();
-  page_set::iterator page = pages.alloc_range(offset, len);
+  o->alloc_lock.lock();
+  page_set::iterator page = o->data.alloc_range(offset, len);
+  o->alloc_lock.unlock();
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
 
   buffer::list::iterator bl_iter = ncbl->begin();
