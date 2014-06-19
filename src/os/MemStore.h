@@ -99,10 +99,22 @@ public:
     // level.
 
     ObjectRef get_object(ghobject_t oid) {
+      RWLock::RLocker l(lock);
       ceph::unordered_map<ghobject_t,ObjectRef>::iterator o = object_hash.find(oid);
       if (o == object_hash.end())
-	return ObjectRef();
+        return ObjectRef();
       return o->second;
+    }
+
+    ObjectRef get_or_create_object(ghobject_t oid) {
+      RWLock::WLocker l(lock);
+      ceph::unordered_map<ghobject_t,ObjectRef>::iterator i = object_hash.find(oid);
+      if (i != object_hash.end())
+        return i->second;
+      ObjectRef o(new Object);
+      object_map[oid] = o;
+      object_hash[oid] = o;
+      return o;
     }
 
     void encode(bufferlist& bl) const {
