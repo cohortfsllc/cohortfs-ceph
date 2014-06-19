@@ -969,9 +969,23 @@ public:
 			 TrackedOpRef op = TrackedOpRef(),
 			 ThreadPool::TPHandle *handle = NULL) {
     assert(!tls.empty());
-    tls.back()->register_on_applied(onreadable);
-    tls.back()->register_on_commit(ondisk);
-    tls.back()->register_on_applied_sync(onreadable_sync);
+    C_GatherBuilder g_onreadable(g_ceph_context, onreadable);
+    C_GatherBuilder g_ondisk(g_ceph_context, ondisk);
+    C_GatherBuilder g_onreadable_sync(g_ceph_context, onreadable_sync);
+    for (list<Transaction*>::iterator i = tls.begin(); i != tls.end(); ++i) {
+      if (onreadable)
+        (*i)->register_on_applied(g_onreadable.new_sub());
+      if (ondisk)
+        (*i)->register_on_commit(g_ondisk.new_sub());
+      if (onreadable_sync)
+        (*i)->register_on_applied_sync(g_onreadable_sync.new_sub());
+    }
+    if (onreadable)
+      g_onreadable.activate();
+    if (ondisk)
+      g_ondisk.activate();
+    if (onreadable_sync)
+      g_onreadable_sync.activate();
     return queue_transactions(osr, tls, op, handle);
   }
 
