@@ -30,6 +30,7 @@ private:
   typedef PageSet<PageSize> page_set;
 public:
   struct Object {
+    Spinlock alloc_lock;
     page_set data;
     size_t data_len;
     map<string,bufferptr> xattr;
@@ -235,7 +236,7 @@ private:
   void _finish_transaction(Transaction &t);
 
   int _read_pages(page_set &pages, unsigned offset, size_t len, bufferlist &dst);
-  void _write_pages(const bufferlist& src, unsigned offset, page_set &pages);
+  void _write_pages(const bufferlist& src, unsigned offset, ObjectRef o);
 
   int _touch(const coll_t &cid, const ghobject_t& oid);
   int _write(const coll_t &cid, const ghobject_t& oid, uint64_t offset, size_t len, const bufferlist& bl,
