@@ -1283,12 +1283,11 @@ int rados_unwatch(rados_ioctx_t io, const char *o, uint64_t handle);
  *
  * @param io the context the object is in
  * @param o the name of the object
- * @param ver obsolete - just pass zero
  * @param buf data to send to watchers
  * @param buf_len length of buf in bytes
  * @returns 0 on success, negative error code on failure
  */
-int rados_notify(rados_ioctx_t io, const char *o, uint64_t ver, const char *buf, int buf_len);
+int rados_notify(rados_ioctx_t io, const char *o, const char *buf, int buf_len);
 
 /** @} Watch/Notify */
 

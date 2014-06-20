@@ -893,8 +893,7 @@ int librados::IoCtxImpl::unwatch(const object_t& oid, uint64_t cookie)
   return r;
 }
 
-int librados::IoCtxImpl::notify(const object_t& oid, uint64_t ver,
-				bufferlist& bl)
+int librados::IoCtxImpl::notify(const object_t& oid, bufferlist& bl)
 {
   bufferlist inbl, outbl;
 
@@ -919,7 +918,7 @@ int librados::IoCtxImpl::notify(const object_t& oid, uint64_t ver,
   ::encode(prot_ver, inbl);
   ::encode(timeout, inbl);
   ::encode(bl, inbl);
-  rd.notify(cookie, ver, inbl);
+  rd.notify(cookie, inbl);
   wc->linger_id = objecter->linger_read(oid, volume, rd, inbl, NULL, 0,
 					onack, &objver);
   lock->Unlock();

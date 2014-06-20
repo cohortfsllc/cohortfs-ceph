@@ -108,6 +108,10 @@ option(WITH_CLIENT "Client is here" ON)
 option(WITH_KVS "Key value store is here" ON)
 # remote block storage
 option(WITH_RBD "Remote block storage is here" ON)
+if(${WITH_RBD})
+find_package(blkid REQUIRED)
+set(HAVE_LIBBLKID ${BLKID_FOUND})
+endif(${WITH_RBD})
 
 option(WITH_LEVELDB "LevelDB is here" ON)
 if(${WITH_LEVELDB})

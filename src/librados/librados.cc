@@ -1003,10 +1003,10 @@ int librados::IoCtx::unwatch(const string& oid, uint64_t handle)
   return io_ctx_impl->unwatch(obj, cookie);
 }
 
-int librados::IoCtx::notify(const string& oid, uint64_t ver, bufferlist& bl)
+int librados::IoCtx::notify(const string& oid, bufferlist& bl)
 {
   object_t obj(oid);
-  return io_ctx_impl->notify(obj, ver, bl);
+  return io_ctx_impl->notify(obj, bl);
 }
 
 int librados::IoCtx::list_watchers(const std::string& oid,
@@ -2030,7 +2030,7 @@ int rados_unwatch(rados_ioctx_t io, const char *o, uint64_t handle)
   return ctx->unwatch(oid, cookie);
 }
 
-int rados_notify(rados_ioctx_t io, const char *o, uint64_t ver,
+int rados_notify(rados_ioctx_t io, const char *o,
 		 const char *buf, int buf_len)
 {
   librados::IoCtxImpl *ctx = (librados::IoCtxImpl *)io;
@@ -2041,7 +2041,7 @@ int rados_notify(rados_ioctx_t io, const char *o, uint64_t ver,
     memcpy(p.c_str(), buf, buf_len);
     bl.push_back(p);
   }
-  return ctx->notify(oid, ver, bl);
+  return ctx->notify(oid, bl);
 }
 
 extern "C" int rados_set_alloc_hint(rados_ioctx_t io, const char *o,

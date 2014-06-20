@@ -27,20 +27,20 @@
 
 
 void Striper::file_to_extents(CephContext *cct, const char *object_format,
-			      uuid_d volume, ceph_file_layout *layout,
+			      ceph_file_layout *layout,
 			      uint64_t offset, uint64_t len,
 			      uint64_t trunc_size,
 			      vector<ObjectExtent>& extents,
 			      uint64_t buffer_offset)
 {
   map<object_t,vector<ObjectExtent> > object_extents;
-  file_to_extents(cct, object_format, volume, layout, offset, len, trunc_size,
+  file_to_extents(cct, object_format, layout, offset, len, trunc_size,
 		  object_extents, buffer_offset);
   assimilate_extents(object_extents, extents);
 }
 
 void Striper::file_to_extents(CephContext *cct, const char *object_format,
-			      uuid_d volume, ceph_file_layout *layout,
+			      ceph_file_layout *layout,
 			      uint64_t offset, uint64_t len, uint64_t trunc_size,
 			      map<object_t,vector<ObjectExtent> >& object_extents,
 			      uint64_t buffer_offset)
@@ -144,7 +144,7 @@ void Striper::assimilate_extents(
 }
 
 void Striper::extent_to_file(
-  CephContext *cct, ceph_file_layout *layout, uint64_t objectno, uuid_d volume,
+  CephContext *cct, ceph_file_layout *layout, uint64_t objectno,
   uint64_t off, uint64_t len, vector<pair<uint64_t, uint64_t> >& extents)
 {
   ldout(cct, 10) << "extent_to_file " << objectno << " " << off << "~" << len << dendl;

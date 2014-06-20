@@ -22,8 +22,7 @@ namespace librbd {
     LibrbdWriteback(ImageCtx *ictx, Mutex& lock);
     virtual ~LibrbdWriteback() {}
 
-    // Note that oloc, trunc_size, and trunc_seq are ignored
-    virtual void read(const object_t& oid, const object_locator_t& oloc,
+    virtual void read(const object_t& oid, const uuid_d& volume,
 		      uint64_t off, uint64_t len, bufferlist *pbl,
 		      uint64_t trunc_size,  uint32_t trunc_seq,
 		      Context *onfinish);
@@ -33,8 +32,7 @@ namespace librbd {
     virtual bool may_copy_on_write(const object_t& oid, uint64_t read_off,
 				   uint64_t read_len);
 
-    // Note that oloc, trunc_size, and trunc_seq are ignored
-    virtual ceph_tid_t write(const object_t& oid, const object_locator_t& oloc,
+    virtual ceph_tid_t write(const object_t& oid, const uuid_d& volume,
 			     uint64_t off, uint64_t len,
 			     const bufferlist &bl, utime_t mtime,
 			     uint64_t trunc_size, uint32_t trunc_seq,

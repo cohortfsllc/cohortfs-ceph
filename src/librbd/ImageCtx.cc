@@ -55,7 +55,7 @@ namespace librbd {
     memset(&layout, 0, sizeof(layout));
 
     string pname = string("librbd-") + id + string("-") +
-      data_ctx.get_pool_name() + string("/") + name;
+      data_ctx.get_volume_name() + string("/") + name;
     perf_start(pname);
 
     if (cct->_conf->rbd_cache) {
@@ -82,7 +82,7 @@ namespace librbd {
 				       cct->_conf->rbd_cache_target_dirty,
 				       cct->_conf->rbd_cache_max_dirty_age,
 				       cct->_conf->rbd_cache_block_writes_upfront);
-      object_set = new ObjectCacher::ObjectSet(NULL, data_ctx.get_id(), 0);
+      object_set = new ObjectCacher::ObjectSet(NULL, data_ctx.get_volume(), 0);
       object_set->return_enoent = true;
       object_cacher->start();
     }
@@ -162,7 +162,6 @@ namespace librbd {
     layout.fl_stripe_unit = stripe_unit;
     layout.fl_stripe_count = stripe_count;
     layout.fl_object_size = 1ull << order;
-    layout.fl_pg_pool = data_ctx.get_id();  // FIXME: pool id overflow?
 
     delete[] format_string;
     size_t len = object_prefix.length() + 16;
@@ -287,7 +286,6 @@ namespace librbd {
 				     uint64_t off, Context *onfinish) {
     ObjectCacher::OSDRead *rd = object_cacher->prepare_read(bl, 0);
     ObjectExtent extent(o, 0 /* a lie */, off, len, 0);
-    extent.oloc.pool = data_ctx.get_id();
     extent.buffer_extents.push_back(make_pair(0, len));
     rd->extents.push_back(extent);
     cache_lock.Lock();
@@ -302,9 +300,6 @@ namespace librbd {
     ObjectCacher::OSDWrite *wr
       = object_cacher->prepare_write(bl, utime_t(), 0);
     ObjectExtent extent(o, 0, off, len, 0);
-    extent.oloc.pool = data_ctx.get_id();
-    // XXX: nspace is always default, io_ctx_impl field private
-    //extent.oloc.nspace = data_ctx.io_ctx_impl->oloc.nspace;
     extent.buffer_extents.push_back(make_pair(0, len));
     wr->extents.push_back(extent);
     {

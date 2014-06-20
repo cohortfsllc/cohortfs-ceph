@@ -161,8 +161,9 @@ namespace librbd {
     // discard the weird boundary, if any
     if (delete_off > newsize) {
       vector<ObjectExtent> extents;
-      Striper::file_to_extents(ictx->cct, ictx->format_string, &ictx->layout,
-			       newsize, delete_off - newsize, 0, extents);
+      Striper::file_to_extents(ictx->cct, ictx->format_string,
+			       &ictx->layout, newsize,
+			       delete_off - newsize, 0, extents);
 
       for (vector<ObjectExtent>::iterator p = extents.begin();
 	   p != extents.end(); ++p) {
@@ -207,7 +208,7 @@ namespace librbd {
   }
 
   int read_header_bl(IoCtx& io_ctx, const string& header_oid,
-		     bufferlist& header, uint64_t *ver)
+		     bufferlist& header)
   {
     int r;
     uint64_t off = 0;
@@ -227,17 +228,11 @@ namespace librbd {
       return -ENXIO;
     }
 
-    if (ver)
-      *ver = io_ctx.get_last_version();
-
     return 0;
   }
 
-  int notify_change(IoCtx& io_ctx, const string& oid, uint64_t *pver,
-		    ImageCtx *ictx)
+  int notify_change(IoCtx& io_ctx, const string& oid, ImageCtx *ictx)
   {
-    uint64_t ver;
-
     if (ictx) {
       ictx->refresh_lock.Lock();
       ldout(ictx->cct, 20) << "notify_change refresh_seq = " << ictx->refresh_seq
@@ -246,20 +241,16 @@ namespace librbd {
       ictx->refresh_lock.Unlock();
     }
 
-    if (pver)
-      ver = *pver;
-    else
-      ver = io_ctx.get_last_version();
     bufferlist bl;
-    io_ctx.notify(oid, ver, bl);
+    io_ctx.notify(oid, bl);
     return 0;
   }
 
   int read_header(IoCtx& io_ctx, const string& header_oid,
-		  struct rbd_obj_header_ondisk *header, uint64_t *ver)
+		  struct rbd_obj_header_ondisk *header)
   {
     bufferlist header_bl;
-    int r = read_header_bl(io_ctx, header_oid, header_bl, ver);
+    int r = read_header_bl(io_ctx, header_oid, header_bl);
     if (r < 0)
       return r;
     if (header_bl.length() < (int)sizeof(*header))
@@ -274,7 +265,7 @@ namespace librbd {
     bufferlist bl;
     int r = io_ctx.write(header_oid, header, header.length(), 0);
 
-    notify_change(io_ctx, header_oid, NULL, NULL);
+    notify_change(io_ctx, header_oid, NULL);
 
     return r;
   }
@@ -653,7 +644,7 @@ namespace librbd {
     }
 
     if (old_format) {
-      notify_change(io_ctx, old_header_name(srcname), NULL, NULL);
+      notify_change(io_ctx, old_header_name(srcname), NULL);
     }
 
     return 0;
@@ -823,7 +814,7 @@ namespace librbd {
       lderr(cct) << "error writing header: " << cpp_strerror(-r) << dendl;
       return r;
     } else {
-      notify_change(ictx->md_ctx, ictx->header_oid, NULL, ictx);
+      notify_change(ictx->md_ctx, ictx->header_oid, ictx);
     }
 
     return 0;
@@ -892,7 +883,7 @@ namespace librbd {
       int r;
       ictx->lockers.clear();
       if (ictx->old_format) {
-	r = read_header(ictx->md_ctx, ictx->header_oid, &ictx->header, NULL);
+	r = read_header(ictx->md_ctx, ictx->header_oid, &ictx->header);
 	if (r < 0) {
 	  lderr(cct) << "Error reading header: " << cpp_strerror(r) << dendl;
 	  return r;
@@ -1200,7 +1191,7 @@ namespace librbd {
 			       cookie, tag, "", utime_t(), 0);
     if (r < 0)
       return r;
-    notify_change(ictx->md_ctx, ictx->header_oid, NULL, ictx);
+    notify_change(ictx->md_ctx, ictx->header_oid, ictx);
     return 0;
   }
 
@@ -1219,7 +1210,7 @@ namespace librbd {
 				 RBD_LOCK_NAME, cookie);
     if (r < 0)
       return r;
-    notify_change(ictx->md_ctx, ictx->header_oid, NULL, ictx);
+    notify_change(ictx->md_ctx, ictx->header_oid, ictx);
     return 0;
   }
 
@@ -1244,7 +1235,7 @@ namespace librbd {
 				     RBD_LOCK_NAME, cookie, lock_client);
     if (r < 0)
       return r;
-    notify_change(ictx->md_ctx, ictx->header_oid, NULL, ictx);
+    notify_change(ictx->md_ctx, ictx->header_oid, ictx);
     return 0;
   }
 
@@ -1647,8 +1638,8 @@ namespace librbd {
       } else {
 	vector<pair<uint64_t,uint64_t> > objectx;
 	Striper::extent_to_file(ictx->cct, &ictx->layout,
-			      p->objectno, 0, ictx->layout.fl_object_size,
-			      objectx);
+				p->objectno, 0, ictx->layout.fl_object_size,
+				objectx);
 	AioWrite *req = new AioWrite(ictx, p->oid.name, p->objectno, p->offset,
 				     objectx,
 				     bl, req_comp);

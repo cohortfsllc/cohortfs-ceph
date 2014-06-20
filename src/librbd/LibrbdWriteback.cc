@@ -89,7 +89,7 @@ namespace librbd {
   {
   }
 
-  void LibrbdWriteback::read(const object_t& oid, const object_locator_t& oloc,
+  void LibrbdWriteback::read(const object_t& oid, const uuid_d& volume,
 			     uint64_t off, uint64_t len,
 			     bufferlist *pbl, uint64_t trunc_size,
 			     uint32_t trunc_seq, Context *onfinish)
@@ -101,6 +101,7 @@ namespace librbd {
     librados::ObjectReadOperation op;
     op.read(off, len, pbl, NULL);
     int flags = m_ictx->get_read_flags();
+    // Volume is actually unused since it's in data_ctx
     int r = m_ictx->data_ctx.aio_operate(oid.name, rados_completion, &op,
 					 flags, NULL);
     rados_completion->release();
@@ -114,7 +115,7 @@ namespace librbd {
   }
 
   ceph_tid_t LibrbdWriteback::write(const object_t& oid,
-				    const object_locator_t& oloc,
+				    const uuid_d& volume,
 				    uint64_t off, uint64_t len,
 				    const bufferlist &bl, utime_t mtime,
 				    uint64_t trunc_size, uint32_t trunc_seq,

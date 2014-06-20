@@ -147,7 +147,7 @@ struct librados::IoCtxImpl {
 
   int watch(const object_t& oid, uint64_t ver, uint64_t *cookie, librados::WatchCtx *ctx);
   int unwatch(const object_t& oid, uint64_t cookie);
-  int notify(const object_t& oid, uint64_t ver, bufferlist& bl);
+  int notify(const object_t& oid, bufferlist& bl);
   int _notify_ack(
     const object_t& oid, uint64_t notify_id, uint64_t ver,
     uint64_t cookie);

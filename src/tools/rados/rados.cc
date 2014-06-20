@@ -1602,7 +1602,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     string msg(nargs[2]);
     bufferlist bl;
     ::encode(msg, bl);
-    ret = io_ctx.notify(oid, 0, bl);
+    ret = io_ctx.notify(oid, bl);
     if (ret != 0)
       cerr << "error calling notify: " << ret << std::endl;
   } else if (strcmp(nargs[0], "set-alloc-hint") == 0) {

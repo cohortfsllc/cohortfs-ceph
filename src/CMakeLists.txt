@@ -472,7 +472,8 @@ if(${WITH_RBD})
     $<TARGET_OBJECTS:rbd_mountcephfs_objs>
     $<TARGET_OBJECTS:heap_profiler_objs>)
   set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
-  target_link_libraries(rbd global librbd librados common keyutils ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+  target_link_libraries(rbd global librbd librados common keyutils
+    ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
   install(TARGETS rbd DESTINATION bin)
   install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer
     DESTINATION bin)

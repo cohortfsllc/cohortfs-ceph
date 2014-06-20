@@ -598,8 +598,8 @@ struct ObjectOperation {
     add_watch(CEPH_OSD_OP_WATCH, cookie, ver, (set ? 1 : 0), inbl);
   }
 
-  void notify(uint64_t cookie, uint64_t ver, bufferlist& inbl) {
-    add_watch(CEPH_OSD_OP_NOTIFY, cookie, ver, 1, inbl); 
+  void notify(uint64_t cookie, bufferlist& inbl) {
+    add_watch(CEPH_OSD_OP_NOTIFY, cookie, 0, 1, inbl);
   }
 
   void notify_ack(uint64_t notify_id, uint64_t ver, uint64_t cookie) {
