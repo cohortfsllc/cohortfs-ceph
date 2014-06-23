@@ -3,11 +3,9 @@ include(GetGitRevisionDescription)
 add_definitions("-DCEPH_LIBDIR=${LIBRARY_OUTPUT_PATH}")
 add_definitions("-DCEPH_PKGLIBDIR=${LIBRARY_OUTPUT_PATH}")
 
-set(AM_COMMON_FLAGS "-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE -rdynamic -Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -fPIC")
-
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wno-invalid-offsetof -Wnon-virtual-dtor -Wno-invalid-offsetof -Wstrict-null-sentinel")
 
-add_definitions("${AM_COMMON_FLAGS}")
+add_definitions("-DHAVE_CONFIG_H -D__CEPH__ -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_THREAD_SAFE -D__STDC_FORMAT_MACROS -D_GNU_SOURCE -rdynamic -Wall -Wtype-limits -Wignored-qualifiers -Winit-self -Wpointer-arith -Werror=format-security -fno-strict-aliasing -fsigned-char -fPIC")
 
 set(EXTRALIBS uuid rt profiler dl)
 if(${WITH_PROFILER})
@@ -338,6 +336,7 @@ endif(${WITH_MDS})
 
 # Support/Tools
 
+add_subdirectory(gtest)
 add_subdirectory(test)
 set(cephfs_srcs cephfs.cc)
 add_executable(cephfs ${cephfs_srcs})
