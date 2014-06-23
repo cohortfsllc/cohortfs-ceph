@@ -922,20 +922,44 @@ int MemStore::_write(const coll_t &cid, const ghobject_t& oid,
 void MemStore::_write_pages(const bufferlist& src, unsigned offset,
                             ObjectRef o)
 {
-  // make sure the page range is allocated
   unsigned len = src.length();
+
+  // count the overlapping pages
+  size_t page_count = 0;
+  if (offset % PageSize) {
+    page_count++;
+    size_t rem = PageSize - offset % PageSize;
+    len = len <= rem ? 0 : len - rem;
+  }
+  page_count += len / PageSize;
+  if (len % PageSize)
+    page_count++;
+
+  // allocate a vector for page pointers
+  typedef vector<page_set::page_type*> page_vec;
+  page_vec pages;
+  pages.reserve(page_count);
+
   o->alloc_lock.lock();
-  page_set::iterator page = o->data.alloc_range(offset, len);
+
+  // make sure the page range is allocated
+  page_set::iterator p = o->data.alloc_range(offset, src.length());
+  // flatten the range into a vector while we hold the lock
+  for (size_t i = 0; i < page_count; i++)
+    pages.push_back(&*p++);
+
   o->alloc_lock.unlock();
+
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
+  page_vec::iterator page = pages.begin();
 
   buffer::list::iterator bl_iter = ncbl->begin();
   while (! bl_iter.end()) {
     char *data = bl_iter.get_bytes(&len);
-    unsigned page_offset = offset - page->offset;
+    unsigned page_offset = offset - (*page)->offset;
     unsigned pageoff = PageSize - page_offset;
     unsigned count = min((size_t)len, (size_t) pageoff);
-    memcpy(page->data+page_offset, data, count);
+    memcpy((*page)->data + page_offset, data, count);
     offset += count;
     if (count == pageoff)
       ++page;
