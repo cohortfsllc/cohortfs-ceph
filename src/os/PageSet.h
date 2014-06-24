@@ -20,12 +20,14 @@
 #include <boost/intrusive/avl_set.hpp>
 #include <boost/pool/pool.hpp>
 
+#include "common/RefCountedObj.h"
 #include "include/assert.h"
 
 
 template<size_t PageSize>
-struct Page {
+struct Page : public RefCountedObject {
   Page(uint64_t offset = 0) : offset(offset) {}
+  ~Page() { assert(!hook.is_linked()); }
 
   char data[PageSize];
   boost::intrusive::avl_set_member_hook<> hook;
@@ -98,7 +100,7 @@ private:
     while (cur != end) {
       page_type *page = &*cur;
       cur = pages.erase(cur);
-      delete page;
+      page->put();
     }
   }
 
