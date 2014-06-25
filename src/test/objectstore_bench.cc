@@ -117,19 +117,6 @@ int n_threads = 1;
 bool multi_object = false;
 ObjectStore *fs;
 
-#ifdef HAVE_CDS
-class CDS_Static {
-  cds::gc::HP hpGC;
- public:
-  CDS_Static() : hpGC(167) {
-    cds::Initialize(0);
-    cds::threading::Manager::init();
-  }
-};
-
-CDS_Static cds_static[1];
-#endif
-
 class OBS_Worker : public Thread
 {
   sobject_t poid;

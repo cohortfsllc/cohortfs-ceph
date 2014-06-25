@@ -70,6 +70,9 @@ public:
   md_config_t *_conf;
   ceph::log::Log *_log;
 
+  /* Called from global_init() */
+  void init();
+
   /* Start the Ceph Context's service thread */
   void start_service_thread();
 
