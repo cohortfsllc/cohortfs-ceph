@@ -4,10 +4,6 @@
 
 #include <chrono>
 
-#include <cds/init.h>  //cds::Initialize и cds::Terminate
-#include <cds/gc/hp.h> //cds::gc::HP (Hazard Pointer)
-#include <cds/intrusive/skip_list_hp.h> //cds intrusive skip lists
-
 #include "global/global_init.h"
 #include "common/debug.h"
 
@@ -113,16 +109,6 @@ int n_threads = 1;
 bool huge_pages;
 void* mapped_region;
 
-class CDS_Static {
-	cds::gc::HP hpGC;
-public:
-	CDS_Static() : hpGC(167) {
-		cds::Initialize(0);
-		cds::threading::Manager::init();
-	}
-};
-
-CDS_Static cds_static[1];
 
 class OBS_Worker : public Thread
 {
