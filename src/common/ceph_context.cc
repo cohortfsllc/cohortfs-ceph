@@ -267,7 +267,6 @@ CephContext::CephContext(uint32_t module_type_)
   ceph_spin_init(&_service_thread_lock);
 
   _log = new ceph::log::Log(&_conf->subsys);
-  _log->start();
 
   _log_obs = new LogObs(_log);
   _conf->add_observer(_log_obs);
@@ -338,6 +337,12 @@ CephContext::~CephContext()
 
   delete _crypto_none;
   delete _crypto_aes;
+}
+
+void CephContext::init()
+{
+  /* We are assured that threads can be created by this point. */
+  _log->start();
 }
 
 void CephContext::start_service_thread()

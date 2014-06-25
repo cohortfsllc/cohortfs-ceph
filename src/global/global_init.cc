@@ -123,6 +123,9 @@ void global_init(std::vector < const char * > *alt_def_args,
   // CDS hooks (later will specialize)
   global_cds_env = new CDS_Env();
 
+  // init context (starts thread(s)
+  g_ceph_context->init();
+
   g_lockdep = g_ceph_context->_conf->lockdep;
 
   // signal stuff
