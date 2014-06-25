@@ -11,7 +11,7 @@
 #include "common/strtol.h"
 #include "common/ceph_argparse.h"
 
-#if HAVE_CDS
+#ifdef HAVE_CDS
 #include <cds/init.h>  //cds::Initialize и cds::Terminate
 #include <cds/gc/hp.h> //cds::gc::HP (Hazard Pointer)
 #include <cds/intrusive/skip_list_hp.h> //cds intrusive skip lists
@@ -115,7 +115,7 @@ int n_threads = 1;
 bool multi_object = false;
 ObjectStore *fs;
 
-#if HAVE_CDS
+#ifdef HAVE_CDS
 class CDS_Static {
   cds::gc::HP hpGC;
  public:
