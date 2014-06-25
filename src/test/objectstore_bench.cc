@@ -4,16 +4,18 @@
 
 #include <chrono>
 
-#include <cds/init.h>  //cds::Initialize и cds::Terminate
-#include <cds/gc/hp.h> //cds::gc::HP (Hazard Pointer)
-#include <cds/intrusive/skip_list_hp.h> //cds intrusive skip lists
-
 #include "os/ObjectStore.h"
 
 #include "global/global_init.h"
 
 #include "common/strtol.h"
 #include "common/ceph_argparse.h"
+
+#if WITH_CDS
+#include <cds/init.h>  //cds::Initialize и cds::Terminate
+#include <cds/gc/hp.h> //cds::gc::HP (Hazard Pointer)
+#include <cds/intrusive/skip_list_hp.h> //cds intrusive skip lists
+#endif
 
 #define dout_subsys ceph_subsys_filestore
 
@@ -113,6 +115,7 @@ int n_threads = 1;
 bool multi_object = false;
 ObjectStore *fs;
 
+#if WITH_CDS
 class CDS_Static {
   cds::gc::HP hpGC;
  public:
@@ -123,6 +126,7 @@ class CDS_Static {
 };
 
 CDS_Static cds_static[1];
+#endif
 
 class OBS_Worker : public Thread
 {
