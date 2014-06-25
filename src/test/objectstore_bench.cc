@@ -17,6 +17,8 @@
 #include <cds/intrusive/skip_list_hp.h> //cds intrusive skip lists
 #endif
 
+#include "include/assert.h"
+
 #define dout_subsys ceph_subsys_filestore
 
 static void usage()
