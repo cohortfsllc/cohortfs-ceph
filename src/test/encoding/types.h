@@ -29,67 +29,20 @@ TYPE(osd_xinfo_t)
 TYPEWITHSTRAYDATA(OSDMap)
 TYPEWITHSTRAYDATA(OSDMap::Incremental)
 
-#include "crush/CrushWrapper.h"
-TYPE_NOCOPY(CrushWrapper)
-
 #include "common/histogram.h"
 TYPE(pow2_hist_t)
 
 #include "osd/osd_types.h"
 TYPE(osd_reqid_t)
-TYPE(object_locator_t)
-TYPE(request_redirect_t)
-TYPE(pg_t)
 TYPE(coll_t)
 TYPE(objectstore_perf_stat_t)
 TYPE(osd_stat_t)
 TYPE(OSDSuperblock)
-TYPE_FEATUREFUL(pg_pool_t)
 TYPE(object_stat_sum_t)
 TYPE(object_stat_collection_t)
-TYPE(pg_stat_t)
-TYPE_FEATUREFUL(pool_stat_t)
-TYPE(pg_history_t)
-TYPE(pg_info_t)
-TYPE(pg_interval_t)
-TYPE_FEATUREFUL(pg_query_t)
-TYPE(pg_log_entry_t)
-TYPE(pg_log_t)
-TYPE(pg_missing_t::item)
-TYPE(pg_missing_t)
-TYPE(pg_ls_response_t)
-TYPE(object_copy_cursor_t)
-TYPE(object_copy_data_t)
-TYPE(pg_create_t)
 TYPE(watch_info_t)
 TYPE(object_info_t)
-TYPE(ObjectRecoveryInfo)
-TYPE(ObjectRecoveryProgress)
-TYPE(ScrubMap::object)
-TYPE(ScrubMap)
-TYPE(pg_hit_set_info_t)
-TYPE(pg_hit_set_history_t)
-TYPE(osd_peer_stat_t)
-TYPE(clone_info)
-TYPE(PullOp)
-TYPE(PushOp)
-TYPE(PushReplyOp)
-
-#include "osd/ECUtil.h"
-TYPE(ECUtil::HashInfo)
-
-#include "osd/ECMsgTypes.h"
-TYPE(ECSubWrite)
-TYPE(ECSubWriteReply)
-TYPE(ECSubRead)
-TYPE(ECSubReadReply)
-
-#include "osd/HitSet.h"
-TYPE(ExplicitHashHitSet)
-TYPE(ExplicitObjectHitSet)
-TYPE(BloomHitSet)
-TYPE(HitSet)
-TYPE(HitSet::Params)
+TYPE(vol_info_t)
 
 #include "os/ObjectStore.h"
 TYPE(ObjectStore::Transaction)
@@ -99,14 +52,9 @@ TYPE(SequencerPosition)
 
 #include "common/hobject.h"
 TYPE(hobject_t)
-TYPE(ghobject_t)
 
 #include "mon/AuthMonitor.h"
 TYPE(AuthMonitor::Incremental)
-
-#include "mon/PGMap.h"
-TYPE(PGMap::Incremental)
-TYPE(PGMap)
 
 #include "mon/MonitorDBStore.h"
 TYPE(MonitorDBStore::Transaction)
@@ -122,9 +70,12 @@ TYPE(MonCap)
 TYPE(DBObjectMap::_Header)
 TYPE(DBObjectMap::State)
 
+#ifndef NO_CLIENT
 #include "osdc/Journaler.h"
 TYPE(Journaler::Header)
+#endif /* NO_CLIENT */
 
+#ifndef NO_CLIENT
 #include "mds/Anchor.h"
 TYPE(Anchor)
 
@@ -198,6 +149,7 @@ TYPE(ETableClient)
 TYPE(ETableServer)
 #include "mds/events/EUpdate.h"
 TYPE(EUpdate)
+#endif /* NO_CLIENT */
 
 #ifdef WITH_RADOSGW
 
@@ -331,10 +283,6 @@ MESSAGE(MClientRequest)
 MESSAGE(MClientRequestForward)
 #include "messages/MClientSession.h"
 MESSAGE(MClientSession)
-#include "messages/MCommand.h"
-MESSAGE(MCommand)
-#include "messages/MCommandReply.h"
-MESSAGE(MCommandReply)
 #include "messages/MDentryLink.h"
 MESSAGE(MDentryLink)
 #include "messages/MDentryUnlink.h"
@@ -371,10 +319,6 @@ MESSAGE(MExportDirPrep)
 MESSAGE(MExportDirPrepAck)
 #include "messages/MForward.h"
 MESSAGE(MForward)
-#include "messages/MGetPoolStats.h"
-MESSAGE(MGetPoolStats)
-#include "messages/MGetPoolStatsReply.h"
-MESSAGE(MGetPoolStatsReply)
 #include "messages/MHeartbeat.h"
 MESSAGE(MHeartbeat)
 #include "messages/MInodeFileCaps.h"
@@ -449,46 +393,10 @@ MESSAGE(MOSDMap)
 MESSAGE(MOSDOp)
 #include "messages/MOSDOpReply.h"
 MESSAGE(MOSDOpReply)
-#include "messages/MOSDPGBackfill.h"
-MESSAGE(MOSDPGBackfill)
-#include "messages/MOSDPGCreate.h"
-MESSAGE(MOSDPGCreate)
-#include "messages/MOSDPGInfo.h"
-MESSAGE(MOSDPGInfo)
-#include "messages/MOSDPGLog.h"
-MESSAGE(MOSDPGLog)
-#include "messages/MOSDPGMissing.h"
-MESSAGE(MOSDPGMissing)
-#include "messages/MOSDPGNotify.h"
-MESSAGE(MOSDPGNotify)
-#include "messages/MOSDPGQuery.h"
-MESSAGE(MOSDPGQuery)
-#include "messages/MOSDPGRemove.h"
-MESSAGE(MOSDPGRemove)
-#include "messages/MOSDPGScan.h"
-MESSAGE(MOSDPGScan)
-#include "messages/MOSDPGTemp.h"
-MESSAGE(MOSDPGTemp)
-#include "messages/MOSDPGTrim.h"
-MESSAGE(MOSDPGTrim)
 #include "messages/MOSDPing.h"
 MESSAGE(MOSDPing)
-#include "messages/MOSDScrub.h"
-MESSAGE(MOSDScrub)
-#include "messages/MOSDSubOp.h"
-MESSAGE(MOSDSubOp)
-#include "messages/MOSDSubOpReply.h"
-MESSAGE(MOSDSubOpReply)
-#include "messages/MPGStats.h"
-MESSAGE(MPGStats)
-#include "messages/MPGStatsAck.h"
-MESSAGE(MPGStatsAck)
 #include "messages/MPing.h"
 MESSAGE(MPing)
-#include "messages/MPoolOp.h"
-MESSAGE(MPoolOp)
-#include "messages/MPoolOpReply.h"
-MESSAGE(MPoolOpReply)
 #include "messages/MRoute.h"
 MESSAGE(MRoute)
 #include "messages/MStatfs.h"

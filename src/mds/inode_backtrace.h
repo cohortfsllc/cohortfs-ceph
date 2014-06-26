@@ -30,7 +30,7 @@ struct inode_backpointer_t {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator &bl);
   void decode_old(bufferlist::iterator &bl);
-  void dump(Formatter *f) const;
+  void dump(ceph::Formatter *f) const;
   static void generate_test_instances(list<inode_backpointer_t*>& ls);
 };
 WRITE_CLASS_ENCODER(inode_backpointer_t)
@@ -59,7 +59,7 @@ struct inode_backtrace_t {
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator &bl);
-  void dump(Formatter *f) const;
+  void dump(ceph::Formatter *f) const;
   static void generate_test_instances(list<inode_backtrace_t*>& ls);
 };
 WRITE_CLASS_ENCODER(inode_backtrace_t)

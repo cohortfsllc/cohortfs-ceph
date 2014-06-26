@@ -65,7 +65,7 @@ inline bool operator!=(const osd_reqid_t& l, const osd_reqid_t& r) {
   return (l.name != r.name) || (l.inc != r.inc) || (l.tid != r.tid);
 }
 inline bool operator<(const osd_reqid_t& l, const osd_reqid_t& r) {
-  return (l.name < r.name) || (l.inc < r.inc) || 
+  return (l.name < r.name) || (l.inc < r.inc) ||
     (l.name == r.name && l.inc == r.inc && l.tid < r.tid);
 }
 inline bool operator<=(const osd_reqid_t& l, const osd_reqid_t& r) {
@@ -77,7 +77,7 @@ inline bool operator>=(const osd_reqid_t& l, const osd_reqid_t& r) { return !(l 
 
 CEPH_HASH_NAMESPACE_START
   template<> struct hash<osd_reqid_t> {
-    size_t operator()(const osd_reqid_t &r) const { 
+    size_t operator()(const osd_reqid_t &r) const {
       static hash<uint64_t> H;
       return H(r.name.num() ^ r.tid ^ r.inc);
     }
@@ -91,7 +91,6 @@ enum {
   CEPH_OSD_RMW_FLAG_WRITE	= (1 << 2),
   CEPH_OSD_RMW_FLAG_CLASS_READ	= (1 << 3),
   CEPH_OSD_RMW_FLAG_CLASS_WRITE = (1 << 4),
-  CEPH_OSD_RMW_FLAG_PGOP	= (1 << 5),
   CEPH_OSD_RMW_FLAG_CACHE	= (1 << 6),
 };
 
@@ -595,11 +594,6 @@ inline ostream& operator<<(ostream& out, const ObjectExtent &ex)
 	     << " -> " << ex.buffer_extents
 	     << ")";
 }
-
-
-
-
-
 
 // ---------------------------------------
 
@@ -1149,47 +1143,5 @@ struct obj_list_watch_response_t {
 };
 
 WRITE_CLASS_ENCODER(obj_list_watch_response_t)
-
-struct clone_info {
-  vector< pair<uint64_t,uint64_t> > overlap;
-  uint64_t size;
-
-  clone_info() : size(0) {}
-
-  void encode(bufferlist& bl) const {
-    ENCODE_START(1, 1, bl);
-    ::encode(overlap, bl);
-    ::encode(size, bl);
-    ENCODE_FINISH(bl);
-  }
-  void decode(bufferlist::iterator& bl) {
-    DECODE_START(1, bl);
-    ::decode(overlap, bl);
-    ::decode(size, bl);
-    DECODE_FINISH(bl);
-  }
-  void dump(Formatter *f) const {
-    f->open_array_section("overlaps");
-    for (vector< pair<uint64_t,uint64_t> >::const_iterator q = overlap.begin();
-	 q != overlap.end(); ++q) {
-      f->open_object_section("overlap");
-      f->dump_unsigned("offset", q->first);
-      f->dump_unsigned("length", q->second);
-      f->close_section();
-    }
-    f->close_section();
-    f->dump_unsigned("size", size);
-  }
-  static void generate_test_instances(list<clone_info*>& o) {
-    o.push_back(new clone_info);
-    o.push_back(new clone_info);
-    o.back()->overlap.push_back(pair<uint64_t,uint64_t>(0,4096));
-    o.back()->overlap.push_back(pair<uint64_t,uint64_t>(8192,4096));
-    o.back()->size = 16384;
-    o.push_back(new clone_info);
-    o.back()->size = 32768;
-  }
-};
-WRITE_CLASS_ENCODER(clone_info)
 
 #endif
