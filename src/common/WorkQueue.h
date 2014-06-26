@@ -84,7 +84,7 @@ public:
     ThreadPool *pool;
 
     virtual bool _enqueue(T *) = 0;
-    virtual bool _queue(const list<T*>&);
+    virtual bool _enqueue(const list<T*>&);
     virtual void _dequeue(T *) = 0;
     virtual void _dequeue(list<T*> *) = 0;
     virtual void _process(const list<T*> &) { assert(0); }
