@@ -126,6 +126,12 @@ public:
       pool->_lock.Unlock();
       return r;
     }
+    bool queue(const list<T*>& items) {
+      bool r = _enqueue(items);
+      pool->_cond.SignalOne();
+      pool->_lock.Unlock();
+      return r;
+    }
     void dequeue(T *item) {
       pool->_lock.Lock();
       _dequeue(item);
@@ -240,6 +246,7 @@ public:
     ThreadPool *pool;
     
     virtual bool _enqueue(T *) = 0;
+    virtual bool _enqueue(const list<T*>&) = 0;
     virtual void _dequeue(T *) = 0;
     virtual T *_dequeue() = 0;
     virtual void _process(T *t) { assert(0); }
@@ -273,6 +280,21 @@ public:
       pool->_lock.Unlock();
       return r;
     }
+
+    bool queue(const list<T*>& items) {
+      bool r = false;
+      auto iter = items.begin();
+      pool->_lock.Lock();
+      for (; iter != items.end(); ++iter) {
+	r = _enqueue(*iter);
+	if (! r)
+	  break;
+      }
+      pool->_cond.SignalOne();
+      pool->_lock.Unlock();
+      return r;
+    }
+
     void dequeue(T *item) {
       pool->_lock.Lock();
       _dequeue(item);

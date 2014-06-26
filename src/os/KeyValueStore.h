@@ -333,6 +333,14 @@ class KeyValueStore : public ObjectStore,
       store->op_queue.push_back(osr);
       return true;
     }
+    bool _enqueue(const list<OpSequencer*>& osrs) {
+      // std::deque has no splice
+      auto iter = osrs.begin();
+      for (; iter != osrs.end(); ++iter) {
+	store->op_queue.push_back(*iter);
+      }
+      return true;
+    }
     void _dequeue(OpSequencer *o) {
       assert(0);
     }

@@ -213,6 +213,13 @@ private:
       store->transactions.push_back(*t);
       return true;
     }
+    bool _enqueue(const list<Transaction*>& ts) {
+      auto iter = ts.begin();
+      for (; iter != ts.end(); ++iter) {
+	store->transactions.push_back(**iter);
+      }
+      return true;
+    }
     void _dequeue(Transaction *t) {
       assert(0);
     }

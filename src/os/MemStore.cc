@@ -685,8 +685,12 @@ int MemStore::queue_transactions(Sequencer *osr,
   // fixme: ignore the Sequencer and serialize everything.
   Mutex::Locker l(apply_lock);
 
+#if 0
   for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p)
     tx_wq.queue(*p);
+#else
+  tx_wq.queue(tls);
+#endif
 
   return 0;
 }
