@@ -339,6 +339,10 @@ target_link_libraries(bench_log global pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LI
 
 set(UNITTEST_LIBS gtest_main ${PTHREAD_LIBS})
 set(UNITTEST_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/src/gtest/include -I${CMAKE_BINARY_DIR}/src/gtest/include -fno-strict-aliasing")
+
+if (WITH_CLIENT)
+  list(APPEND UNITTEST_LIBS cephfs)
+endif (WITH_CLIENT)
   
 # unittest_encoding
 set(unittest_encoding_srcs
@@ -348,7 +352,7 @@ add_executable(unittest_encoding
   ${unittest_encoding_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(unittest_encoding cephfs librados global pthread rt m
+target_link_libraries(unittest_encoding librados global pthread rt m
   ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_encoding
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
@@ -362,7 +366,6 @@ add_executable(unittest_addrs
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 target_link_libraries(unittest_addrs
-  cephfs
   librados
   global
   pthread
@@ -843,7 +846,6 @@ add_executable(unittest_libcephfs_config
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
 target_link_libraries(unittest_libcephfs_config
-  cephfs
   global
   ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
@@ -1501,7 +1503,7 @@ if(${WITH_CLIENT})
   set_target_properties(test_libcephfs PROPERTIES COMPILE_FLAGS
     ${UNITTEST_CXX_FLAGS})
   target_link_libraries(test_libcephfs
-    libcephfs
+    cephfs
     ${UNITTEST_LIBS}
     ${EXTRALIBS}
     ${TCMALLOC_LIBS}
@@ -1695,7 +1697,7 @@ if(${WITH_CLIENT})
   target_link_libraries(test_c_headers
     librados
     rados
-    libcephfs
+    cephfs
     ${EXTRALIBS}
     ${TCMALLOC_LIBS}
     ${CMAKE_DL_LIBS}
