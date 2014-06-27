@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -69,7 +69,7 @@ public:
 	f->open_object_section("xattr");
 	f->dump_string("name", p->first);
 	f->dump_int("length", p->second.length());
-	f->close_section();	
+	f->close_section();
       }
       f->close_section();
 
@@ -80,7 +80,7 @@ public:
 	f->open_object_section("pair");
 	f->dump_string("key", p->first);
 	f->dump_int("length", p->second.length());
-	f->close_section();	
+	f->close_section();
       }
       f->close_section();
     }
@@ -88,8 +88,8 @@ public:
   typedef ceph::shared_ptr<Object> ObjectRef;
 
   struct Collection {
-    ceph::unordered_map<ghobject_t, ObjectRef> object_hash;  ///< for lookup
-    map<ghobject_t, ObjectRef> object_map;        ///< for iteration
+    ceph::unordered_map<ghobject_t, ObjectRef> object_hash; ///< for lookup
+    map<ghobject_t, ObjectRef> object_map; ///< for iteration
     map<string,bufferptr> xattr;
     RWLock lock;   ///< for object_{map,hash}
 
@@ -100,17 +100,19 @@ public:
 
     ObjectRef get_object(ghobject_t oid) {
       RWLock::RLocker l(lock);
-      ceph::unordered_map<ghobject_t,ObjectRef>::iterator o = object_hash.find(oid);
+      ceph::unordered_map<ghobject_t,ObjectRef>::iterator o =
+	object_hash.find(oid);
       if (o == object_hash.end())
-        return ObjectRef();
+	return ObjectRef();
       return o->second;
     }
 
     ObjectRef get_or_create_object(ghobject_t oid) {
       RWLock::WLocker l(lock);
-      ceph::unordered_map<ghobject_t,ObjectRef>::iterator i = object_hash.find(oid);
+      ceph::unordered_map<ghobject_t,ObjectRef>::iterator i =
+	object_hash.find(oid);
       if (i != object_hash.end())
-        return i->second;
+	return i->second;
       ObjectRef o(new Object);
       object_map[oid] = o;
       object_hash[oid] = o;
@@ -176,7 +178,7 @@ private:
     }
     bool valid() {
       RWLock::RLocker l(o->omap_lock);
-      return it != o->omap.end();      
+      return it != o->omap.end();
     }
     int next() {
       RWLock::RLocker l(o->omap_lock);
@@ -207,7 +209,7 @@ private:
 		  time_t suicide_timeout, ThreadPool *tp)
       : ThreadPool::WorkQueue<Transaction>("MemStore::TransactionWQ",
 					   timeout, suicide_timeout, tp),
-        store(store) {}
+	store(store) {}
 
     bool _enqueue(Transaction *t) {
       store->transactions.push_back(*t);
@@ -255,41 +257,51 @@ private:
   void _do_transaction(Transaction &t, ThreadPool::TPHandle &handle);
   void _finish_transaction(Transaction &t);
 
-  int _read_pages(page_set &pages, unsigned offset, size_t len, bufferlist &dst);
+  int _read_pages(page_set &pages, unsigned offset, size_t len,
+		  bufferlist &dst);
   void _write_pages(const bufferlist& src, unsigned offset, ObjectRef o);
 
   int _touch(const coll_t &cid, const ghobject_t& oid);
-  int _write(const coll_t &cid, const ghobject_t& oid, uint64_t offset, size_t len, const bufferlist& bl,
+  int _write(const coll_t &cid, const ghobject_t& oid, uint64_t offset,
+	     size_t len, const bufferlist& bl,
       bool replica = false);
-  int _zero(const coll_t &cid, const ghobject_t& oid, uint64_t offset, size_t len);
+  int _zero(const coll_t &cid, const ghobject_t& oid, uint64_t offset,
+	    size_t len);
   int _truncate(const coll_t &cid, const ghobject_t& oid, uint64_t size);
   int _remove(const coll_t &cid, const ghobject_t& oid);
-  int _setattrs(const coll_t &cid, const ghobject_t& oid, map<string,bufferptr>& aset);
+  int _setattrs(const coll_t &cid, const ghobject_t& oid,
+		map<string,bufferptr>& aset);
   int _rmattr(const coll_t &cid, const ghobject_t& oid, const char *name);
   int _rmattrs(const coll_t &cid, const ghobject_t& oid);
-  int _clone(const coll_t &cid, const ghobject_t& oldoid, const ghobject_t& newoid);
+  int _clone(const coll_t &cid, const ghobject_t& oldoid,
+	     const ghobject_t& newoid);
   int _clone_range(const coll_t &cid, const ghobject_t& oldoid,
 		   const ghobject_t& newoid,
 		   uint64_t srcoff, uint64_t len, uint64_t dstoff);
   int _omap_clear(const coll_t &cid, const ghobject_t &oid);
   int _omap_setkeys(const coll_t &cid, const ghobject_t &oid,
 		    const map<string, bufferlist> &aset);
-  int _omap_rmkeys(const coll_t &cid, const ghobject_t &oid, const set<string> &keys);
+  int _omap_rmkeys(const coll_t &cid, const ghobject_t &oid,
+		   const set<string> &keys);
   int _omap_rmkeyrange(const coll_t &cid, const ghobject_t &oid,
 		       const string& first, const string& last);
-  int _omap_setheader(const coll_t &cid, const ghobject_t &oid, const bufferlist &bl);
+  int _omap_setheader(const coll_t &cid, const ghobject_t &oid,
+		      const bufferlist &bl);
 
   int _create_collection(const coll_t &c);
   int _destroy_collection(const coll_t &c);
-  int _collection_add(const coll_t &cid, const coll_t &ocid, const ghobject_t& oid);
+  int _collection_add(const coll_t &cid, const coll_t &ocid,
+		      const ghobject_t& oid);
   int _collection_move_rename(const coll_t &oldcid, const ghobject_t& oldoid,
 			      const coll_t &cid, const ghobject_t& o);
-  int _collection_setattr(const coll_t &cid, const char *name, const void *value,
+  int _collection_setattr(const coll_t &cid, const char *name,
+			  const void *value,
 			  size_t size);
   int _collection_setattrs(const coll_t &cid, map<string,bufferptr> &aset);
   int _collection_rmattr(const coll_t &cid, const char *name);
   int _collection_rename(const coll_t &cid, const coll_t &ncid);
-  int _split_collection(const coll_t &cid, uint32_t bits, uint32_t rem, const coll_t &dest);
+  int _split_collection(const coll_t &cid, uint32_t bits, uint32_t rem,
+			const coll_t &dest);
 
   int _save();
   int _load();
@@ -355,9 +367,12 @@ public:
     size_t len,
     bufferlist& bl,
     bool allow_eio = false);
-  int fiemap(const coll_t &cid, const ghobject_t& oid, uint64_t offset, size_t len, bufferlist& bl);
-  int getattr(const coll_t &cid, const ghobject_t& oid, const char *name, bufferptr& value);
-  int getattrs(const coll_t &cid, const ghobject_t& oid, map<string,bufferptr>& aset, bool user_only = false);
+  int fiemap(const coll_t &cid, const ghobject_t& oid, uint64_t offset,
+	     size_t len, bufferlist& bl);
+  int getattr(const coll_t &cid, const ghobject_t& oid, const char *name,
+	      bufferptr& value);
+  int getattrs(const coll_t &cid, const ghobject_t& oid,
+	       map<string,bufferptr>& aset, bool user_only = false);
 
   int list_collections(vector<coll_t>& ls);
   bool collection_exists(const coll_t &c);
@@ -368,9 +383,10 @@ public:
   bool collection_empty(const coll_t &c);
   int collection_list(const coll_t &cid, vector<ghobject_t>& o);
   int collection_list_partial(const coll_t &cid, ghobject_t start,
-			      int min, int max, snapid_t snap, 
+			      int min, int max, snapid_t snap,
 			      vector<ghobject_t> *ls, ghobject_t *next);
-  int collection_list_range(const coll_t &cid, ghobject_t start, ghobject_t end,
+  int collection_list_range(const coll_t &cid, ghobject_t start,
+			    ghobject_t end,
 			    snapid_t seq, vector<ghobject_t> *ls);
 
   int omap_get(
@@ -426,8 +442,5 @@ public:
     TrackedOpRef op = TrackedOpRef(),
     ThreadPool::TPHandle *handle = NULL);
 };
-
-
-
 
 #endif
