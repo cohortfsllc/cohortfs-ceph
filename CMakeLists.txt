@@ -93,7 +93,7 @@ set(HAVE_LIBAIO ${AIO_FOUND})
 message(STATUS "${AIO_LIBS}")
 endif(${WITH_AIO})
 
-option(WITH_FUSE "Fuse is here" ON)
+option(WITH_FUSE "Fuse is here" OFF)
 if(${WITH_FUSE})
 find_package(fuse REQUIRED)
 set(HAVE_LIBFUSE ${FUSE_FOUND})
@@ -101,9 +101,9 @@ CHECK_FUNCTION_EXISTS(fuse_getgroups HAVE_FUSE_GETGROUPS)
 endif(${WITH_FUSE})
 
 # probably fuse etc need this -- how to check? XXX
-option(WITH_MDS "MDS is here" ON)
+option(WITH_MDS "MDS is here" OFF)
 # needs mds and? XXX
-option(WITH_CLIENT "Client is here" ON)
+option(WITH_CLIENT "Client is here" OFF)
 # key-value store
 option(WITH_KVS "Key value store is here" ON)
 # remote block storage
@@ -178,7 +178,7 @@ else()
 endif(${CRYPTOPP_FOUND})
 
 #option for RGW
-option(WITH_RADOSGW "Rados Gateway is enabled" ON)
+option(WITH_RADOSGW "Rados Gateway is enabled" OFF)
 
 # Now create a useable config.h
 configure_file(

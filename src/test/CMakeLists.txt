@@ -836,15 +836,20 @@ if(${WITH_RADOSGW})
 endif(${WITH_RADOSGW})
 
 # unittest_libcephfs_config
+if(${WITH_CLIENT})
 set(unittest_libcephfs_config_srcs libcephfs_config.cc)
 add_executable(unittest_libcephfs_config
   ${unittest_libcephfs_config_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(unittest_libcephfs_config cephfs ${CMAKE_DL_LIBS}
+target_link_libraries(unittest_libcephfs_config
+  cephfs
+  global
+  ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_libcephfs_config PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
+endif(${WITH_CLIENT})
 
 # unittest_lfnindex
 if(0) # Relies on hash foo we don't use any more.
@@ -1485,7 +1490,7 @@ target_link_libraries(test_rados_api_lock
   )
 endif(0)
 
-if(${WITH_CEPHFS})
+if(${WITH_CLIENT})
   add_executable(test_libcephfs
     libcephfs/test.cc
     libcephfs/readdir_r_cb.cc
@@ -1502,7 +1507,7 @@ if(${WITH_CEPHFS})
     ${TCMALLOC_LIBS}
     ${CMAKE_DL_LIBS}
     )
-endif(${WITH_CEPHFS})  
+endif(${WITH_CLIENT})  
 
 add_executable(test_objectstore
   objectstore/store_test.cc
@@ -1682,7 +1687,7 @@ if(${WITH_FUSE})
     )
 endif(${WITH_FUSE})
 
-if(${WITH_CEPHFS})
+if(${WITH_CLIENT})
   add_executable(test_c_headers
     test_c_headers.c
     $<TARGET_OBJECTS:heap_profiler_objs>
@@ -1695,7 +1700,7 @@ if(${WITH_CEPHFS})
     ${TCMALLOC_LIBS}
     ${CMAKE_DL_LIBS}
     )
-endif(${WITH_CEPHFS})
+endif(${WITH_CLIENT})
 
 add_executable(test_get_blkdev_size
   test_get_blkdev_size.cc
