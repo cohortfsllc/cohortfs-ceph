@@ -926,6 +926,44 @@ public:
     }
   };
 
+  // new style (sans sequencer)
+  unsigned apply_transaction(pthread_t tid, Transaction& t, Context *ondisk=0) {
+    // use op pool
+    Cond my_cond;
+    Mutex my_lock("ObjectStore::apply_transaction::my_lock");
+    int r = 0;
+    bool done;
+    C_SafeCond *onreadable = new C_SafeCond(&my_lock, &my_cond, &done, &r);
+
+    queue_transaction(tid, &t, onreadable, ondisk);
+
+    my_lock.Lock();
+    while (!done)
+      my_cond.Wait(my_lock);
+    my_lock.Unlock();
+    return r;
+  }
+
+  // ambiguous without _ex when pthread_t is a pointer type
+  unsigned apply_transactions_ex(pthread_t tid,
+				 list<Transaction*> &tls,
+				 Context *ondisk) {
+    // use op pool
+    Cond my_cond;
+    Mutex my_lock("ObjectStore::apply_transaction::my_lock");
+    int r = 0;
+    bool done;
+    C_SafeCond *onreadable = new C_SafeCond(&my_lock, &my_cond, &done, &r);
+
+    queue_transactions(tid, tls, onreadable, ondisk);
+
+    my_lock.Lock();
+    while (!done)
+      my_cond.Wait(my_lock);
+    my_lock.Unlock();
+    return r;
+  }
+
   // synchronous wrappers
   unsigned apply_transaction(Transaction& t, Context *ondisk=0) {
     list<Transaction*> tls;
@@ -991,6 +1029,50 @@ public:
     TrackedOpRef op = TrackedOpRef(),
     ThreadPool::TPHandle *handle = NULL) = 0;
 
+  int queue_transaction(pthread_t tid, Transaction *t, Context *onreadable,
+			Context *ondisk=0,
+			Context *onreadable_sync=0) {
+    if (onreadable)
+      t->register_on_applied(onreadable);
+    if (ondisk)
+      t->register_on_applied(ondisk);
+    if (onreadable_sync)
+      t->register_on_applied(onreadable_sync);
+
+    return queue_transaction(tid, t);
+  }
+
+  virtual int queue_transaction(pthread_t tid, Transaction *t) {
+    return ENOTSUP;
+  }
+
+  int queue_transactions(pthread_t tid, list<Transaction*>& tls,
+			 Context *onreadable, Context *ondisk=0,
+			 Context *onreadable_sync=0) {
+    assert(!tls.empty());
+    C_GatherBuilder g_onreadable(g_ceph_context, onreadable);
+    C_GatherBuilder g_ondisk(g_ceph_context, ondisk);
+    C_GatherBuilder g_onreadable_sync(g_ceph_context, onreadable_sync);
+    for (list<Transaction*>::iterator i = tls.begin(); i != tls.end(); ++i) {
+      if (onreadable)
+        (*i)->register_on_applied(g_onreadable.new_sub());
+      if (ondisk)
+        (*i)->register_on_commit(g_ondisk.new_sub());
+      if (onreadable_sync)
+        (*i)->register_on_applied_sync(g_onreadable_sync.new_sub());
+    }
+    if (onreadable)
+      g_onreadable.activate();
+    if (ondisk)
+      g_ondisk.activate();
+    if (onreadable_sync)
+      g_onreadable_sync.activate();
+    return queue_transactions(tid, tls);
+  }
+
+  virtual int queue_transactions(pthread_t tid, list<Transaction*>& tls) {
+    return ENOTSUP;
+  }
 
   int queue_transactions(
     Sequencer *osr,

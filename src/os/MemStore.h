@@ -23,6 +23,10 @@
 #include "ObjectStore.h"
 #include "PageSet.h"
 
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64 /* XXX arch-specific define */
+#endif
+#define CACHE_PAD(_n) char __pad ## _n [CACHE_LINE_SIZE]
 
 class MemStore : public ObjectStore {
 private:
@@ -198,53 +202,149 @@ private:
     }
   };
 
-  // transaction work queue
-  ThreadPool tx_tp;
-  ObjectStore::Transaction::Queue transactions;
+  typedef pair <int, Transaction*> WQItem;
+  typedef pair <int, list<Transaction*>& > WQItemList;
 
-  class TransactionWQ : public ThreadPool::WorkQueue<Transaction> {
+  // transaction mt work queue
+  class MultiLaneWQ :
+    // derive from Somnath Roy's sharded queue
+    public ShardedThreadPool::ShardedWQ<WQItem, WQItemList> {
+
+    struct Lane {
+      Mutex mtx;
+      Cond cond;
+      Spinlock sp;
+      atomic_t size;
+      int lane_ix;
+      MemStore *store;
+      ObjectStore::Transaction::Queue transactions;
+      ObjectStore::Transaction::Queue t_active;
+      CACHE_PAD(0); // coerce lanes into separate cache lines
+      Lane(const string& mtx_name, int _lane_ix, MemStore *_store) :
+	mtx(mtx_name.c_str()), size(0), lane_ix(_lane_ix), store(_store) {}
+    };
+
     MemStore *store;
-  public:
-    TransactionWQ(MemStore *store, time_t timeout,
-		  time_t suicide_timeout, ThreadPool *tp)
-      : ThreadPool::WorkQueue<Transaction>("MemStore::TransactionWQ",
-					   timeout, suicide_timeout, tp),
-	store(store) {}
+    Lane* lanes;
+    int n_lanes;
 
-    bool _enqueue(Transaction *t) {
-      store->transactions.push_back(*t);
-      return true;
-    }
-    bool _enqueue(const list<Transaction*>& ts) {
-      auto iter = ts.begin();
-      for (; iter != ts.end(); ++iter) {
-	store->transactions.push_back(**iter);
+    public:
+    MultiLaneWQ(MemStore *_store, time_t ti, ShardedThreadPool* tp) :
+      ShardedThreadPool::ShardedWQ<WQItem, WQItemList>
+      (ti, ti*10, tp), store(_store), n_lanes(tp->get_num_threads()) {
+      lanes = static_cast<Lane*>(malloc(n_lanes * sizeof(Lane)));
+      for(int ix = 0; ix < n_lanes; ix++) {
+	Lane& lane = lanes[ix];
+	string mtx_name = "MemStore:MultiLaneWQL:";
+	mtx_name += ix;
+	new (&lane) Lane(mtx_name, ix, store); // placement new
       }
-      return true;
     }
-    void _dequeue(Transaction *t) {
-      assert(0);
+
+    ~MultiLaneWQ() {
+      for(int ix = 0; ix < n_lanes; ix++) {
+	Lane& lane = lanes[ix];
+	lane.~Lane();
+      }
+      free(lanes);
     }
-    bool _empty() {
-      return store->transactions.empty();
+
+    void _process(uint32_t thread_index, heartbeat_handle_d *hb) {
+      static utime_t interval = utime_from_ms(50);
+      Lane& lane = lanes[thread_index];
+    restart:
+      if (! lane.size.read())
+	goto out;
+      lane.sp.lock();
+      if (likely(!lane.transactions.empty())) {
+	ObjectStore::Transaction::Queue::const_iterator iter =
+	  lane.t_active.end();
+	lane.t_active.splice(iter, lane.transactions);
+	lane.size.sub(lane.transactions.size());
+	lane.sp.unlock();
+	while (lane.t_active.size() > 0) {
+	  Transaction *t = &lane.t_active.front();
+	  lane.t_active.pop_front();
+	  store->_do_transaction(*t);
+	  store->_finish_transaction(*t); // XXX move into _do_transaction?
+	}
+	goto restart;
+      } else {
+	lane.sp.unlock();
+      }
+    out:
+      Mutex::Locker l(lane.mtx);
+      lane.cond.WaitInterval(store->cct, lane.mtx, interval);
     }
-    Transaction* _dequeue() {
-      if (store->transactions.empty())
-	return NULL;
-      Transaction *t = &store->transactions.front();
-      store->transactions.pop_front();
-      return t;
+
+    bool is_shard_empty(uint32_t thread_index) {
+      Lane& lane = lanes[thread_index];
+      Spinlock::Locker l(lane.sp);
+      return lane.transactions.empty();
     }
-    void _process(Transaction *t, ThreadPool::TPHandle &handle) {
-      store->_do_transaction(*t, handle);
+
+    void _enqueue(WQItem item) {
+      Lane& lane = lanes[item.first % n_lanes];
+      Spinlock::Locker l(lane.sp);
+      int sz = lane.size.read();
+      lane.transactions.push_back(*item.second);
+      lane.size.inc();
+      if (unlikely(!sz)) {
+	Mutex::Locker l(lane.mtx);
+	lane.cond.Signal();
+      }
     }
-    void _process_finish(Transaction *t) {
-      store->_finish_transaction(*t);
+
+    void _enqueue(WQItemList items) {
+      Lane& lane = lanes[items.first % n_lanes];
+      list<Transaction*>& ilist = items.second;
+      Spinlock::Locker l(lane.sp);
+      int sz = lane.size.read();
+      for (auto iter = ilist.begin(); iter != ilist.end(); ++iter) {
+        lane.transactions.push_back(**iter);
+      }
+      lane.size.add(ilist.size());
+      if (unlikely(!sz)) {
+	Mutex::Locker l(lane.mtx);
+	lane.cond.Signal();
+      }
     }
-    void _clear() {
-      assert(store->transactions.empty());
+
+    void _enqueue_front(WQItem item) {
+      Lane& lane = lanes[item.first % n_lanes];
+      Spinlock::Locker l(lane.sp);
+      int sz = lane.size.read();
+      lane.transactions.push_front(*item.second);
+      lane.size.inc();
+      if (unlikely(!sz)) {
+	Mutex::Locker l(lane.mtx);
+	lane.cond.Signal();
+      }
     }
-  } tx_wq;
+
+    void return_waiting_threads() {
+      for(int ix = 0; ix < n_lanes; ++ix) {
+	Lane& lane = lanes[ix];
+	Mutex::Locker l(lane.mtx);
+	lane.cond.Signal();
+      }
+    }
+
+    void dump(Formatter *f) {
+      for(int ix = 0; ix < n_lanes; ++ix) {
+	Lane& lane = lanes[ix];
+	Spinlock::Locker l(lane.sp);
+	// lane.transactions.dump(f); /* XXX needed? enotsup atm */
+      }
+    }
+
+  }; /* MultiLaneWQ */
+
+  CephContext *cct;
+
+  // transaction work queue
+  ShardedThreadPool tx_stp;
+  MultiLaneWQ tx_mlwq;
 
   ceph::unordered_map<coll_t, CollectionRef> coll_map;
   RWLock coll_lock;    ///< rwlock to protect coll_map
@@ -254,7 +354,7 @@ private:
 
   Finisher finisher;
 
-  void _do_transaction(Transaction &t, ThreadPool::TPHandle &handle);
+  void _do_transaction(Transaction &t);
   void _finish_transaction(Transaction &t);
 
   int _read_pages(page_set &pages, unsigned offset, size_t len,
@@ -310,12 +410,12 @@ private:
   void dump_all();
 
 public:
-  MemStore(CephContext *cct, const string& path)
+  MemStore(CephContext *_cct, const string& path)
     : ObjectStore(path),
-      tx_tp(g_ceph_context, "MemStore::tx_tp",
-	    g_conf->filestore_op_threads, "memstore_tx_threads"),
-      tx_wq(this, g_conf->filestore_op_thread_timeout,
-	    g_conf->filestore_op_thread_suicide_timeout, &tx_tp),
+      cct(_cct),
+      tx_stp(cct, "MemStore::tx_stp",
+	     g_conf->filestore_op_threads /* slot threads */),
+      tx_mlwq(this, g_conf->filestore_op_thread_timeout, &tx_stp),
       coll_lock("MemStore::coll_lock"),
       apply_lock("MemStore::apply_lock"),
       finisher(cct) { }
@@ -437,10 +537,31 @@ public:
 
   objectstore_perf_stat_t get_cur_stats();
 
+  /* XXXX virtual in ObjectStore! */
   int queue_transactions(
     Sequencer *osr, list<Transaction*>& tls,
     TrackedOpRef op = TrackedOpRef(),
-    ThreadPool::TPHandle *handle = NULL);
+      ThreadPool::TPHandle *handle = NULL) {
+  abort();
+}
+
+  int queue_transaction(pthread_t tid, Transaction *t) {
+    tx_mlwq.queue(WQItem(static_cast<int>(tid), t));
+    return 0;
+  }
+
+  int queue_transactions(pthread_t tid, list<Transaction*>& tls) {
+#if 0
+    for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p) {
+      Transaction* t = *p;
+      tx_mlwq.queue(WQItem(static_cast<int>(tid), t));
+    }
+#else
+    tx_mlwq.queue(WQItemList(static_cast<int>(tid), tls));
+#endif
+    return 0;
+  }
+
 };
 
 #endif

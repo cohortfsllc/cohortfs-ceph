@@ -160,8 +160,13 @@ class OBS_Worker : public Thread
       Cond cond;
       bool done = false;
 
+#if 0
       fs->queue_transactions(&seq, tls, NULL,
-                             new C_SafeCond(&lock, &cond, &done));
+			     new C_SafeCond(&lock, &cond, &done));
+#else
+      fs->queue_transactions(get_thread_id(), tls,
+			     new C_SafeCond(&lock, &cond, &done));
+#endif
 
       lock.Lock();
       while (!done)
@@ -249,7 +254,7 @@ int main(int argc, const char *argv[])
 
   ObjectStore::Transaction ft;
   ft.create_collection(coll_t());
-  fs->apply_transaction(ft);
+  fs->apply_transaction(pthread_self(), ft);
 
   std::vector<sobject_t> oids;
   if (multi_object) {
@@ -282,7 +287,7 @@ int main(int argc, const char *argv[])
   ObjectStore::Transaction t;
   for (vector<sobject_t>::iterator i = oids.begin(); i != oids.end(); ++i)
     t.remove(coll_t(), hobject_t(*i));
-  fs->apply_transaction(t);
+  fs->apply_transaction(pthread_self(), t);
 
   fs->umount();
   delete fs;

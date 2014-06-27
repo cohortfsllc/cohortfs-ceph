@@ -370,6 +370,11 @@ inline bool operator!=(const utime_t& a, const utime_t& b)
   return a.sec() != b.sec() || a.nsec() != b.nsec();
 }
 
+inline utime_t utime_from_ms(unsigned ms)
+{
+  return utime_t(0, 1000000ul * ms);
+}
+
 
 // output
 

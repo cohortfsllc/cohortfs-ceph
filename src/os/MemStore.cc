@@ -39,7 +39,6 @@ bool operator>(const MemStore::CollectionRef& l,
   return (unsigned long)l.get() > (unsigned long)r.get();
 }
 
-
 int MemStore::peek_journal_fsid(uuid_d *fsid)
 {
   *fsid = uuid_d();
@@ -51,14 +50,14 @@ int MemStore::mount()
   int r = _load();
   if (r < 0)
     return r;
-  tx_tp.start();
+  tx_stp.start();
   finisher.start();
   return 0;
 }
 
 int MemStore::umount()
 {
-  tx_tp.stop();
+  tx_stp.stop();
   finisher.stop();
   return _save();
 }
@@ -677,24 +676,6 @@ ObjectMap::ObjectMapIterator MemStore::get_omap_iterator(const coll_t &cid,
 // ---------------
 // write operations
 
-int MemStore::queue_transactions(Sequencer *osr,
-				 list<Transaction*>& tls,
-				 TrackedOpRef op,
-				 ThreadPool::TPHandle *handle)
-{
-  // fixme: ignore the Sequencer and serialize everything.
-  Mutex::Locker l(apply_lock);
-
-#if 0
-  for (list<Transaction*>::iterator p = tls.begin(); p != tls.end(); ++p)
-    tx_wq.queue(*p);
-#else
-  tx_wq.queue(tls);
-#endif
-
-  return 0;
-}
-
 void MemStore::_finish_transaction(Transaction &t)
 {
   Context *on_apply_sync = t.get_on_applied_sync();
@@ -709,7 +690,7 @@ void MemStore::_finish_transaction(Transaction &t)
     finisher.queue(on_commit);
 }
 
-void MemStore::_do_transaction(Transaction& t, ThreadPool::TPHandle &handle)
+void MemStore::_do_transaction(Transaction& t)
 {
   int pos = 0;
 
@@ -885,8 +866,6 @@ void MemStore::_do_transaction(Transaction& t, ThreadPool::TPHandle &handle)
     }
 
     ++pos;
-
-    handle.reset_tp_timeout();
   }
 }
 

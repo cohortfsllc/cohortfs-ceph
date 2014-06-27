@@ -483,7 +483,7 @@ public:
     virtual bool is_shard_empty(uint32_t thread_index) = 0;
   };
 
-  template <typename T>
+  template <typename T, typename TList>
   class ShardedWQ: public BaseShardedWQ {
 
     ShardedThreadPool* sharded_pool;
@@ -491,7 +491,8 @@ public:
   protected:
     virtual void _enqueue(T) = 0;
     virtual void _enqueue_front(T) = 0;
-
+    virtual void _enqueue(TList) = 0;
+    //virtual void _enqueue_front(TList) = 0; /* XXX useful? */
 
   public:
     ShardedWQ(time_t ti, time_t sti, ShardedThreadPool* tp) :
@@ -506,6 +507,11 @@ public:
     void queue_front(T item) {
       _enqueue_front(item);
     }
+
+    void queue(TList items) {
+      _enqueue(items);
+    }
+
     void drain() {
       sharded_pool->drain();
     }
@@ -537,6 +543,8 @@ private:
 public:
   ShardedThreadPool(CephContext *cct_, string nm, uint32_t pnum_threads);
   ~ShardedThreadPool() {};
+
+  uint32_t get_num_threads() { return num_threads; }
 
   /// start thread pool thread
   void start();
