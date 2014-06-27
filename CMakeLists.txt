@@ -180,6 +180,8 @@ endif(${CRYPTOPP_FOUND})
 #option for RGW
 option(WITH_RADOSGW "Rados Gateway is enabled" OFF)
 
+option(WITH_TESTS "Build tests" ON)
+
 # Now create a useable config.h
 configure_file(
   ${PROJECT_SOURCE_DIR}/src/include/config-h.in.cmake

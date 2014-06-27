@@ -520,7 +520,11 @@ endif(${WITH_MDS})
 # Support/Tools
 
 add_subdirectory(gtest)
-add_subdirectory(test)
+
+if (WITH_TESTS)
+  add_subdirectory(test)
+endif (WITH_TESTS)
+
 set(cephfs_srcs
   cephfs.cc
   )
