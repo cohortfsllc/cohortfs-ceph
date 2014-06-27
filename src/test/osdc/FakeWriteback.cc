@@ -59,7 +59,7 @@ FakeWriteback::~FakeWriteback()
 }
 
 void FakeWriteback::read(const object_t& oid,
-			 const object_locator_t& oloc,
+			 const uuid_d& vol,
 			 uint64_t off, uint64_t len,
 			 bufferlist *pbl, uint64_t trunc_size,
 			 uint32_t trunc_seq, Context *onfinish)
@@ -69,7 +69,7 @@ void FakeWriteback::read(const object_t& oid,
 }
 
 ceph_tid_t FakeWriteback::write(const object_t& oid,
-			   const object_locator_t& oloc,
+			   const uuid_d& vol,
 			   uint64_t off, uint64_t len,
 			   const bufferlist &bl, utime_t mtime,
 			   uint64_t trunc_size, uint32_t trunc_seq,

@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Uses a two-level B-tree to store a set of key-value pairs.
  *
@@ -129,7 +131,6 @@ struct object_data {
   map<std::string, bufferlist> omap; // the omap of the object
   bool unwritable; // an xattr that, if false, means an op is in
 		  // progress and other clients should not write to it.
-  uint64_t version; //the version at time of read
   uint64_t size; //the number of elements in the omap
 
   object_data()
@@ -147,18 +148,11 @@ struct object_data {
 
   object_data(key_data min, key_data kdat, string the_name,
       map<std::string, bufferlist> the_omap)
-  : min_kdata(min),
-    max_kdata(kdat),
-    name(the_name),
-    omap(the_omap)
-  {}
-
-  object_data(key_data min, key_data kdat, string the_name, int the_version)
-  : min_kdata(min),
-    max_kdata(kdat),
-    name(the_name),
-    version(the_version)
-  {}
+    : min_kdata(min),
+      max_kdata(kdat),
+      name(the_name),
+      omap(the_omap)
+    {}
 
   void encode(bufferlist &bl) const {
     ENCODE_START(1,1,bl);
@@ -167,7 +161,6 @@ struct object_data {
     ::encode(name, bl);
     ::encode(omap, bl);
     ::encode(unwritable, bl);
-    ::encode(version, bl);
     ::encode(size, bl);
     ENCODE_FINISH(bl);
   }
@@ -178,7 +171,6 @@ struct object_data {
     ::decode(name, p);
     ::decode(omap, p);
     ::decode(unwritable, p);
-    ::decode(version, p);
     ::decode(size, p);
     DECODE_FINISH(p);
   }
@@ -241,23 +233,20 @@ struct delete_data {
   key_data min;
   key_data max;
   string obj;
-  uint64_t version;
 
   delete_data()
   {}
 
-  delete_data(key_data n, key_data x, string o, uint64_t v)
+  delete_data(key_data n, key_data x, string o)
   : min(n),
     max(x),
-    obj(o),
-    version(v)
+    obj(o)
   {}
 
   delete_data & operator=(const delete_data &d) {
     min = d.min;
     max = d.max;
     obj = d.obj;
-    version = d.version;
     return *this;
   }
 
@@ -267,7 +256,6 @@ struct delete_data {
     ::encode(min, bl);
     ::encode(max, bl);
     ::encode(obj, bl);
-    ::encode(version, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator &p) {
@@ -275,7 +263,6 @@ struct delete_data {
     ::decode(min, p);
     ::decode(max, p);
     ::decode(obj, p);
-    ::decode(version, p);
     DECODE_FINISH(p);
   }
 };
@@ -369,7 +356,7 @@ struct index_data {
    * ts
    * elements of to_create, organized into (high key| obj name)
    * ;
-   * elements of to_delete, organized into (high key| obj name | version number)
+   * elements of to_delete, organized into (high key| obj name)
    * :
    * val)
    */
@@ -388,8 +375,8 @@ struct index_data {
       for(vector<delete_data >::const_iterator it = to_delete.begin();
 	  it != to_delete.end(); ++it) {
 	  strm << '(' << it->min.encoded() << '/' << it->max.encoded() << '|'
-	      << it->obj << '|'
-	      << it->version << ')';
+	       << it->obj << '|'
+	       << ')';
       }
       strm << ':';
     }
@@ -619,7 +606,6 @@ protected:
    * @pre: entries in create_data must have names and omaps and be in idata
    * order
    * @param delete_vector: vector of data about the objects to be deleted
-   * @pre: entries in to_delete must have versions and be in idata order
    * @param ops: the owos to set up. the pair is a pair of op identifiers
    * and names of objects - set_up_ops fills these in.
    * @pre: ops must be the correct size and the ObjectWriteOperation pointers
@@ -642,16 +628,6 @@ protected:
   void set_up_make_object(
       const map<std::string, bufferlist> &to_set,
       librados::ObjectWriteOperation *owo);
-
-  /**
-   * sets up owo to assert object version and that object version is
-   * writable,
-   * then mark it unwritable.
-   *
-   * @param ver: if this is 0, no version is asserted.
-   */
-  void set_up_unwrite_object(
-      const int &ver, librados::ObjectWriteOperation *owo);
 
   /**
    * sets up owo to assert that an object is unwritable and then mark it

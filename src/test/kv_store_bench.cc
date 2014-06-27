@@ -26,7 +26,6 @@ KvStoreBench::KvStoreBench()
   key_size(5),
   val_size(7),
   max_ops_in_flight(8),
-  clear_first(false),
   k(2),
   cache_size(10),
   cache_refresh(1),
@@ -95,8 +94,7 @@ int KvStoreBench::setup(int argc, const char** argv) {
       << "   --cache-refresh                               percent (1-100) of cache-size to read each \n"
       << "                                                 time the index is read\n"
       << "OTHER OPTIONS\n"
-      << "   --verbosity-on                                display debug output\n"
-      << "   --clear-first                                 delete all existing objects in the pool before running tests\n";
+      << "   --verbosity-on                                display debug output\n";
   for (unsigned i = 0; i < args.size(); i++) {
     if(i < args.size() - 1) {
       if (strcmp(args[i], "--ops") == 0) {
@@ -144,8 +142,6 @@ int KvStoreBench::setup(int argc, const char** argv) {
       }
     } else if (strcmp(args[i], "--verbosity-on") == 0) {
       verbose = true;
-    } else if (strcmp(args[i], "--clear-first") == 0) {
-      clear_first = true;
     } else if (strcmp(args[i], "--help") == 0) {
       cout << help.str() << std::endl;
       exit(1);
@@ -186,15 +182,6 @@ int KvStoreBench::setup(int argc, const char** argv) {
     cout << "error creating io ctx" << std::endl;
     rados.shutdown();
     return r;
-  }
-
-  if (clear_first) {
-    librados::ObjectIterator it;
-    for (it = io_ctx.objects_begin(); it != io_ctx.objects_end(); ++it) {
-      librados::ObjectWriteOperation rm;
-      rm.remove();
-      io_ctx.operate(it->first, &rm);
-    }
   }
 
   int err = kvs->setup(argc, argv);

@@ -101,7 +101,6 @@ protected:
   int key_size;//number of characters in keys to write
   int val_size;//number of characters in values to write
   int max_ops_in_flight;
-  bool clear_first;//if true, remove all objects in pool before starting tests
 
   //variables passed to KeyValueStructure
   int k;

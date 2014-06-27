@@ -42,6 +42,7 @@ target_link_libraries(test_crypt
   ${TCMALLOC_LIBS}
   )
 
+if(0)
 # test_rados
 add_executable(test_rados 
   osd/TestRados.cc
@@ -66,6 +67,7 @@ add_executable(test_mutate
   )
 target_link_libraries(test_mutate global librados ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS})
+endif(0)
 
 # test_rewrite_latency
 add_executable(test_rewrite_latency
@@ -262,6 +264,7 @@ target_link_libraries(kvstorebench librados global ${CMAKE_DL_LIBS}
 
 ## System tests
 
+if(0)
 # systest
 set(libsystest_srcs system/cross_process_sem.cc
   system/systest_runnable.cc
@@ -320,6 +323,7 @@ add_executable(test_rados_watch_notify
   )
 target_link_libraries(test_rados_watch_notify librados systest global
   pthread rt ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+endif()
 
 # bench_log
 set(bench_log_srcs
@@ -344,7 +348,7 @@ add_executable(unittest_encoding
   ${unittest_encoding_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(unittest_encoding cephfs librados pthread rt m
+target_link_libraries(unittest_encoding cephfs librados global pthread rt m
   ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_encoding
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
@@ -357,22 +361,17 @@ add_executable(unittest_addrs
   ${unittest_addrs_srcs}
   $<TARGET_OBJECTS:heap_profiler_objs>
   )
-target_link_libraries(unittest_addrs cephfs librados pthread rt m
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
+target_link_libraries(unittest_addrs
+  cephfs
+  librados
+  global
+  pthread
+  rt
+  m
+  ${CMAKE_DL_LIBS}
+  ${TCMALLOC_LIBS}
+  ${UNITTEST_LIBS})
 set_target_properties(unittest_addrs
-  PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
-
-# unittest_bloom_filter
-set(unittest_bloom_filter_srcs
-  common/test_bloom_filter.cc
-  )
-add_executable(unittest_bloom_filter
-  ${unittest_bloom_filter_srcs}
-  $<TARGET_OBJECTS:heap_profiler_objs>
-  )
-target_link_libraries(unittest_bloom_filter global
-  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
-set_target_properties(unittest_bloom_filter
   PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 
 # unittest_histogram
@@ -848,6 +847,7 @@ set_target_properties(unittest_libcephfs_config PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
 
 # unittest_lfnindex
+if(0) # Relies on hash foo we don't use any more.
 set(unittest_lfnindex_srcs os/TestLFNIndex.cc)
 add_executable(unittest_lfnindex
   ${unittest_lfnindex_srcs}
@@ -857,6 +857,7 @@ target_link_libraries(unittest_lfnindex os global ${CMAKE_DL_LIBS}
   ${TCMALLOC_LIBS} ${UNITTEST_LIBS})
 set_target_properties(unittest_lfnindex PROPERTIES COMPILE_FLAGS
   ${UNITTEST_CXX_FLAGS})
+endif(0)
 
 # unittest_librados_config
 set(unittest_librados_config_srcs librados/librados_config.cc)
@@ -1069,6 +1070,7 @@ if(${WITH_RADOSGW})
     ${UNITTEST_CXX_FLAGS})
 endif(${WITH_RADOSGW})
 
+if(0)
 # radostest 
 set(libradostest_srcs librados/test.cc librados/TestCase.cc)
 add_library(radostest STATIC ${libradostest_srcs})
@@ -1276,6 +1278,7 @@ if(${WITH_RADOSGW})
     ${CMAKE_DL_LIBS}
     radostest)
 endif(${WITH_RADOSGW})
+endif(0)
 
 add_executable(test_mon_workloadgen
   mon/test_mon_workloadgen.cc
@@ -1290,6 +1293,7 @@ target_link_libraries(test_mon_workloadgen
   ${CMAKE_DL_LIBS}
   )
 
+if(0)
 add_executable(test_rados_api_cmd
   librados/cmd.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
@@ -1479,6 +1483,7 @@ target_link_libraries(test_rados_api_lock
   ${CMAKE_DL_LIBS}
   radostest
   )
+endif(0)
 
 if(${WITH_CEPHFS})
   add_executable(test_libcephfs
@@ -1586,6 +1591,7 @@ target_link_libraries(test_filejournal
   ${CMAKE_DL_LIBS}
   )
 
+if(0)
 add_executable(test_stress_watch
   test_stress_watch.cc
   $<TARGET_OBJECTS:heap_profiler_objs>
@@ -1601,6 +1607,7 @@ target_link_libraries(test_stress_watch
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
   )
+endif(0)
 
 add_executable(test_objectcacher_stress
   osdc/object_cacher_stress.cc

@@ -4,10 +4,6 @@ TYPE(CompatSet)
 #include "include/filepath.h"
 TYPE(filepath)
 
-#include "common/bloom_filter.hpp"
-TYPE(bloom_filter)
-TYPE(compressible_bloom_filter)
-
 #include "common/DecayCounter.h"
 TYPE(DecayCounter)
 

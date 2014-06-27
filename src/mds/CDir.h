@@ -38,7 +38,6 @@ class CDentry;
 class MDCache;
 class MDCluster;
 class Context;
-class bloom_filter;
 
 struct ObjectOperation;
 
@@ -279,14 +278,9 @@ protected:
   friend class C_Dir_OMAP_Fetched;
   friend class C_Dir_Committed;
 
-  bloom_filter *bloom;
-  /* If you set up the bloom filter, you must keep it accurate!
-   * It's deleted when you mark_complete() and is deliberately not serialized.*/
-
  public:
   CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth);
   ~CDir() {
-    remove_bloom();
     g_num_dir--;
     g_num_dirs++;
   }
@@ -336,10 +330,6 @@ protected:
   void unlink_inode(CDentry *dn);
   void try_remove_unlinked_dn(CDentry *dn);
 
-  void add_to_bloom(CDentry *dn);
-  bool is_in_bloom(const string& name);
-  bool has_bloom() {return (bloom ? true : false);}
-  void remove_bloom();
 private:
   void link_inode_work(CDentry *dn, CInode *in);
   void unlink_inode_work(CDentry *dn);

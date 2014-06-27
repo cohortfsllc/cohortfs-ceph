@@ -104,7 +104,7 @@ void FileStoreTracker::write(const pair<string, string> &obj,
     to_write.append(*iter);
   }
   out->t->write(coll_t(obj.first),
-		ghobject_t(obj.second),
+		hobject_t(obj.second),
 		offset,
 		len,
 		to_write);
@@ -120,7 +120,7 @@ void FileStoreTracker::remove(const pair<string, string> &obj,
   if (!old_contents.exists())
     return;
   out->t->remove(coll_t(obj.first),
-		 ghobject_t(obj.second));
+		 hobject_t(obj.second));
   ObjectContents contents;
   out->in_flight->push_back(make_pair(obj, set_content(obj, contents)));
 }
@@ -173,10 +173,10 @@ void FileStoreTracker::clone(const pair<string, string> &from,
 
   if (to_contents.exists())
     out->t->remove(coll_t(to.first),
-		   ghobject_t(to.second));
+		   hobject_t(to.second));
   out->t->clone(coll_t(from.first),
-		ghobject_t(from.second),
-		ghobject_t(to.second));
+		hobject_t(from.second),
+		hobject_t(to.second));
   out->in_flight->push_back(make_pair(to, set_content(to, from_contents)));
 }
 
@@ -281,7 +281,7 @@ void FileStoreTracker::verify(const string &coll, const string &obj,
   std::cerr << "valid_reads is " << valid_reads << std::endl;
   bufferlist contents;
   int r = store->read(coll_t(coll),
-		      ghobject_t(obj),
+		      hobject_t(obj),
 		      0,
 		      2*SIZE,
 		      contents);

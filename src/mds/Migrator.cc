@@ -1464,7 +1464,6 @@ void Migrator::finish_export_dir(CDir *dir, utime_t now, int peer,
   // mark
   assert(dir->is_auth());
   dir->state_clear(CDir::STATE_AUTH);
-  dir->remove_bloom();
   dir->replica_nonce = CDir::EXPORT_NONCE;
 
   if (dir->is_dirty())
@@ -2328,7 +2327,6 @@ void Migrator::import_reverse(CDir *dir)
     // dir
     assert(cur->is_auth());
     cur->state_clear(CDir::STATE_AUTH);
-    cur->remove_bloom();
     cur->clear_replica_map();
     if (cur->is_dirty())
       cur->mark_clean();

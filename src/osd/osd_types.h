@@ -33,7 +33,6 @@
 #include "common/histogram.h"
 #include "include/interval_set.h"
 #include "common/Formatter.h"
-#include "common/bloom_filter.hpp"
 #include "common/hobject.h"
 #include "Watch.h"
 #include "OpRequest.h"

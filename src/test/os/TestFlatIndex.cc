@@ -47,12 +47,10 @@ TEST(FlatIndex, collection) {
   const std::string base_path("PATH");
   FlatIndex index(collection, base_path);
   const std::string key("KEY");
-  uint64_t hash = 111;
-  uint64_t pool = 222;
   const std::string object_name(10, 'A');
-  ghobject_t hoid(hobject_t(object_t(object_name), key, CEPH_NOSNAP, hash, pool, ""));
-  vector<ghobject_t> ls;
-  ASSERT_DEATH(index.collection_list_partial(hoid, 0, 0, 0, &ls, &hoid), "0");
+  hobject_t hoid(object_t(object_name), ENTIRETY);
+  vector<hobject_t> ls;
+  ASSERT_DEATH(index.collection_list_partial(hoid, 0, 0, &ls, &hoid), "0");
 }
 #endif //GTEST_HAS_DEATH_TEST
 
@@ -63,8 +61,6 @@ TEST(FlatIndex, created_unlink) {
   EXPECT_EQ(0, ::mkdir("PATH", 0700));
   ceph::shared_ptr<CollectionIndex> index(new FlatIndex(collection, base_path));
   const std::string key("KEY");
-  uint64_t hash = 111;
-  uint64_t pool = 222;
   //
   // short object name
   //
@@ -72,7 +68,7 @@ TEST(FlatIndex, created_unlink) {
     CollectionIndex::IndexedPath indexed_path;
     index->set_ref(index);
     const std::string object_name(10, 'A');
-    ghobject_t hoid(hobject_t(object_t(object_name), key, CEPH_NOSNAP, hash, pool, ""));
+    hobject_t hoid(object_t(object_name), ENTIRETY);
     int exists;
     EXPECT_EQ(0, index->lookup(hoid, &indexed_path, &exists));
     EXPECT_EQ(0, exists);
@@ -90,7 +86,7 @@ TEST(FlatIndex, created_unlink) {
     CollectionIndex::IndexedPath indexed_path;
     index->set_ref(index);
     const std::string object_name(1024, 'A');
-    ghobject_t hoid(hobject_t(object_t(object_name), key, CEPH_NOSNAP, hash, pool, ""));
+    hobject_t hoid(object_t(object_name), ENTIRETY);
     int exists;
     EXPECT_EQ(0, index->lookup(hoid, &indexed_path, &exists));
     EXPECT_EQ(0, exists);
@@ -112,10 +108,10 @@ TEST(FlatIndex, collection_list) {
   const std::string filename("PATH/" + object_name + "_head");
   EXPECT_EQ(0, ::close(::creat(filename.c_str(), 0600)));
   ceph::shared_ptr<CollectionIndex> index(new FlatIndex(collection, base_path));
-  vector<ghobject_t> ls;
+  vector<hobject_t> ls;
   index->collection_list(&ls);
   EXPECT_EQ((unsigned)1, ls.size());
-  EXPECT_EQ(object_name, ls[0].hobj.oid.name);
+  EXPECT_EQ(object_name, ls[0].oid.name);
   EXPECT_EQ(0, ::system("rm -fr PATH"));
 }
 

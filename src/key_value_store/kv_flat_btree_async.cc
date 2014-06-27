@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 /*
  * Key-value store using librados
  *
@@ -363,7 +365,7 @@ int KvFlatBtreeAsync::split(const index_data &idata) {
   vector<object_data> to_create;
   vector<object_data> to_delete;
   to_delete.push_back(object_data(idata.min_kdata,
-      args.odata.max_kdata, args.odata.name, args.odata.version));
+				  args.odata.max_kdata, args.odata.name));
 
   //for lower half object
   map<std::string, bufferlist>::const_iterator it = args.odata.omap.begin();
@@ -479,10 +481,8 @@ int KvFlatBtreeAsync::rebalance(const index_data &idata1,
     args1.odata.max_kdata = idata2.kdata;
 
     if (verbose) cout << "\t\t" << client_name << "-rebalance: read "
-	<< idata2.obj
-        << ". size: " << args1.odata.size << " version: "
-        << args1.odata.version
-        << std::endl;
+		      << idata2.obj << ". size: " << args1.odata.size
+		      << std::endl;
   } else {
     assert (next_idata.obj != "");
     //there is a next key, so get it.
@@ -509,10 +509,8 @@ int KvFlatBtreeAsync::rebalance(const index_data &idata1,
     args2.odata.max_kdata = idata2.kdata;
 
     if (verbose) cout << "\t\t" << client_name << "-rebalance: read "
-	<< idata2.obj
-        << ". size: " << args2.odata.size << " version: "
-        << args2.odata.version
-        << std::endl;
+		      << idata2.obj << ". size: " << args2.odata.size
+		      << std::endl;
   }
 
   if (verbose) cout << "\t\t" << client_name << "-rebalance: o1 is "
@@ -622,9 +620,9 @@ int KvFlatBtreeAsync::rebalance(const index_data &idata1,
   }
 
   to_delete.push_back(object_data(args1.odata.min_kdata,
-      args1.odata.max_kdata, args1.odata.name, args1.odata.version));
+      args1.odata.max_kdata, args1.odata.name));
   to_delete.push_back(object_data(args2.odata.min_kdata,
-      args2.odata.max_kdata, args2.odata.name, args2.odata.version));
+      args2.odata.max_kdata, args2.odata.name));
   for (int i = 1; i < 6; i++) {
     ops.push_back(make_pair(make_pair(0,""), &other_ops[i]));
   }
@@ -672,7 +670,6 @@ int KvFlatBtreeAsync::read_object(const string &obj, object_data * odata) {
     return err;
   }
   odata->unwritable = string(unw_bl.c_str(), unw_bl.length()) == "1";
-  odata->version = obj_aioc->get_version64();
   odata->size = odata->omap.size();
   obj_aioc->release();
   return 0;
@@ -697,7 +694,6 @@ int KvFlatBtreeAsync::read_object(const string &obj, rebalance_args * args) {
   bufferlist::iterator it = outbl.begin();
   args->decode(it);
   args->odata.name = obj;
-  args->odata.version = a->get_version64();
   a->release();
   return err;
 }
@@ -721,8 +717,8 @@ void KvFlatBtreeAsync::set_up_prefix_index(
   for(vector<object_data>::const_iterator it = to_delete.begin();
       it != to_delete.end();
       ++it) {
-    delete_data d(it->min_kdata, it->max_kdata, it->name, it->version);
-    idata->to_delete.push_back(d);
+      delete_data d(it->min_kdata, it->max_kdata, it->name);
+      idata->to_delete.push_back(d);
   }
   for(vector<object_data>::const_iterator it = to_delete.begin();
       it != to_delete.end();
@@ -765,13 +761,6 @@ void KvFlatBtreeAsync::set_up_ops(
   map<string, bufferlist> to_insert;
   std::set<string> to_remove;
   map<string, pair<bufferlist, int> > assertions;
-  if (create_vector.size() > 0) {
-    for (int i = 0; i < (int)idata.to_delete.size(); ++i) {
-      it->first = pair<int, string>(UNWRITE_OBJECT, idata.to_delete[i].obj);
-      set_up_unwrite_object(delete_vector[i].version, it->second);
-      ++it;
-    }
-  }
   for (int i = 0; i < (int)idata.to_create.size(); ++i) {
     index_data this_entry(idata.to_create[i].max, idata.to_create[i].min,
 	idata.to_create[i].obj);
@@ -814,15 +803,6 @@ void KvFlatBtreeAsync::set_up_make_object(
   bufferlist inbl;
   ::encode(to_set, inbl);
   owo->exec("kvs", "create_with_omap", inbl);
-}
-
-void KvFlatBtreeAsync::set_up_unwrite_object(
-    const int &ver, librados::ObjectWriteOperation *owo) {
-  if (ver > 0) {
-    owo->assert_version(ver);
-  }
-  owo->cmpxattr("unwritable", CEPH_OSD_CMPXATTR_OP_EQ, to_bl("0"));
-  owo->setxattr("unwritable", to_bl("1"));
 }
 
 void KvFlatBtreeAsync::set_up_restore_object(
@@ -1153,7 +1133,6 @@ int KvFlatBtreeAsync::cleanup(const index_data &idata, const int &error) {
 	idata.to_create.rbegin();
 	it != idata.to_create.rend(); ++it) {
       librados::ObjectWriteOperation rm;
-      set_up_unwrite_object(0, &rm);
       if ((((KeyValueStructure *)this)->*KvFlatBtreeAsync::interrupt)() == 1 )
       {
 	return -ESUICIDE;
@@ -2052,15 +2031,8 @@ bool KvFlatBtreeAsync::is_consistent() {
   oro.omap_get_vals("",LONG_MAX,&index,&err);
   io_ctx.operate(index_name, &oro, NULL);
   if (err < 0){
-    //probably because the index doesn't exist - this might be ok.
-    for (librados::ObjectIterator oit = io_ctx.objects_begin();
-        oit != io_ctx.objects_end(); ++oit) {
-      //if this executes, there are floating objects.
-      cerr << "Not consistent! found floating object " << oit->first
-             << std::endl;
-      ret = false;
-    }
-    return ret;
+      //probably because the index doesn't exist - this might be ok.
+      return ret;
   }
 
   std::map<std::string, string> parsed_index;
@@ -2094,8 +2066,7 @@ bool KvFlatBtreeAsync::is_consistent() {
 		break;
 	      }
 	    }
-	    if (atoi(string(un.c_str(), un.length()).c_str()) != 1 &&
-		aioc->get_version64() != dit->version) {
+	    if (atoi(string(un.c_str(), un.length()).c_str()) != 1) {
 	      cerr << "Not consistent! object " << dit->obj << " has been "
 		  << " modified since the client died was not cleaned up."
 		  << std::endl;
@@ -2112,18 +2083,6 @@ bool KvFlatBtreeAsync::is_consistent() {
       }
       parsed_index.insert(make_pair(it->first, idata.obj));
       onames.insert(idata.obj);
-    }
-  }
-
-  //make sure that an object exists iff it either is the index
-  //or is listed in the index
-  for (librados::ObjectIterator oit = io_ctx.objects_begin();
-      oit != io_ctx.objects_end(); ++oit) {
-    string name = oit->first;
-    if (name != index_name && onames.count(name) == 0
-	&& special_names.count(name) == 0) {
-      cerr << "Not consistent! found floating object " << name << std::endl;
-      ret = false;
     }
   }
 
@@ -2208,7 +2167,6 @@ string KvFlatBtreeAsync::str() {
 
   vector<std::string> all_names;
   vector<int> all_sizes(index.size());
-  vector<int> all_versions(index.size());
   vector<bufferlist> all_unwrit(index.size());
   vector<map<std::string,bufferlist> > all_maps(keys.size());
   vector<map<std::string,bufferlist>::iterator> its(keys.size());
@@ -2251,7 +2209,6 @@ string KvFlatBtreeAsync::str() {
       //return ret.str();
     }
     all_sizes[indexer] = all_maps[indexer].size();
-    all_versions[indexer] = aioc->get_version64();
     indexer++;
     aioc->release();
   }
@@ -2278,15 +2235,6 @@ string KvFlatBtreeAsync::str() {
     ret << "size: " << all_sizes[i];
     ret << string((25 - (string("size: ").length()
 	  + to_string("",all_sizes[i]).length()))/2, ' ') << "|\t";
-  }
-  ret << std::endl;
-  for (int i = 0; i < indexer; i++) {
-    its[i] = all_maps[i].begin();
-    ret << "|" << string((25 - (string("version: ").length()
-	+ to_string("",all_versions[i]).length()))/2, ' ');
-    ret << "version: " << all_versions[i];
-    ret << string((25 - (string("version: ").length()
-	  + to_string("",all_versions[i]).length()))/2, ' ') << "|\t";
   }
   ret << std::endl;
   for (int i = 0; i < indexer; i++) {

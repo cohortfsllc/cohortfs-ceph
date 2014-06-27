@@ -1791,7 +1791,7 @@ CDentry* Server::prepare_null_dentry(MDRequestRef& mdr, CDir *dir, const string&
   }
 
   // make sure dir is complete
-  if (!dir->is_complete() && (!dir->has_bloom() || dir->is_in_bloom(dname))) {
+  if (!dir->is_complete()) {
     dout(7) << " incomplete dir contents for " << *dir << ", fetching" << dendl;
     dir->fetch(new C_MDS_RetryRequest(mdcache, mdr));
     return 0;
@@ -2129,8 +2129,7 @@ CDentry* Server::rdlock_path_xlock_dentry(MDRequestRef& mdr, int n,
     dn = dir->lookup(dname);
 
     // make sure dir is complete
-    if (!dn && !dir->is_complete() &&
-        (!dir->has_bloom() || dir->is_in_bloom(dname))) {
+    if (!dn && !dir->is_complete()) {
       dout(7) << " incomplete dir contents for " << *dir << ", fetching" << dendl;
       dir->fetch(new C_MDS_RetryRequest(mdcache, mdr));
       return 0;

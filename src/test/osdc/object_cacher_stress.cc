@@ -26,7 +26,6 @@ struct op_data {
   op_data(std::string oid, uint64_t offset, uint64_t len, bool read)
     : extent(oid, 0, offset, len, 0), is_read(read)
   {
-    extent.oloc.pool = 0;
     extent.buffer_extents.push_back(make_pair(0, len));
   }
 
@@ -67,7 +66,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
 
   atomic_t outstanding_reads;
   vector<ceph::shared_ptr<op_data> > ops;
-  ObjectCacher::ObjectSet object_set(NULL, 0, 0);
+  ObjectCacher::ObjectSet object_set(NULL, uuid_d(), 0);
   ceph::buffer::ptr bp(max_op_len);
   ceph::bufferlist bl;
   bp.zero();

@@ -8,7 +8,7 @@
 #include "test/ObjectMap/KeyValueDBMemory.h"
 #include "os/KeyValueDB.h"
 #include "os/DBObjectMap.h"
-#include "os/HashIndex.h"
+#include "os/FlatIndex.h"
 #include "os/LevelDBStore.h"
 #include <sys/types.h>
 #include "global/global_init.h"
@@ -55,16 +55,16 @@ public:
   }
 
   void set_key(const string &objname, const string &key, const string &value) {
-    set_key(ghobject_t(hobject_t(objname)),
+    set_key(object_t(objname),
 	    key, value);
   }
 
   void set_xattr(const string &objname, const string &key, const string &value) {
-    set_xattr(ghobject_t(hobject_t(objname)),
+    set_xattr(hobject_t(objname),
 	      key, value);
   }
 
-  void set_key(ghobject_t hoid,
+  void set_key(hobject_t hoid,
 	       string key, string value) {
     map<string, bufferlist> to_write;
     bufferptr bp(value.c_str(), value.size());
@@ -74,7 +74,7 @@ public:
     db->set_keys(hoid, to_write);
   }
 
-  void set_xattr(ghobject_t hoid,
+  void set_xattr(hobject_t hoid,
 		 string key, string value) {
     map<string, bufferlist> to_write;
     bufferptr bp(value.c_str(), value.size());
@@ -85,11 +85,10 @@ public:
   }
 
   void set_header(const string &objname, const string &value) {
-    set_header(ghobject_t(hobject_t(objname)),
-	       value);
+    set_header(hobject_t(objname), value);
   }
 
-  void set_header(ghobject_t hoid,
+  void set_header(hobject_t hoid,
 		  const string &value) {
     bufferlist header;
     header.append(bufferptr(value.c_str(), value.size() + 1));
@@ -97,11 +96,10 @@ public:
   }
 
   int get_header(const string &objname, string *value) {
-    return get_header(ghobject_t(hobject_t(objname)),
-		      value);
+    return get_header(hobject_t(objname), value);
   }
 
-  int get_header(ghobject_t hoid,
+  int get_header(hobject_t hoid,
 		 string *value) {
     bufferlist header;
     int r = db->get_header(hoid, &header);
@@ -115,11 +113,10 @@ public:
   }
 
   int get_xattr(const string &objname, const string &key, string *value) {
-    return get_xattr(ghobject_t(hobject_t(objname)),
-		     key, value);
+    return get_xattr(hobject_t(objname), key, value);
   }
 
-  int get_xattr(ghobject_t hoid,
+  int get_xattr(hobject_t hoid,
 		string key, string *value) {
     set<string> to_get;
     to_get.insert(key);
@@ -135,11 +132,10 @@ public:
   }
 
   int get_key(const string &objname, const string &key, string *value) {
-    return get_key(ghobject_t(hobject_t(objname)),
-		   key, value);
+    return get_key(hobject_t(objname), key, value);
   }
 
-  int get_key(ghobject_t hoid,
+  int get_key(hobject_t hoid,
 	      string key, string *value) {
     set<string> to_get;
     to_get.insert(key);
@@ -155,11 +151,10 @@ public:
   }
 
   void remove_key(const string &objname, const string &key) {
-    remove_key(ghobject_t(hobject_t(objname)),
-	       key);
+    remove_key(hobject_t(objname), key);
   }
 
-  void remove_key(ghobject_t hoid,
+  void remove_key(hobject_t hoid,
 		  string key) {
     set<string> to_remove;
     to_remove.insert(key);
@@ -167,11 +162,11 @@ public:
   }
 
   void remove_xattr(const string &objname, const string &key) {
-    remove_xattr(ghobject_t(hobject_t(objname)),
+    remove_xattr(hobject_t(objname),
 		 key);
   }
 
-  void remove_xattr(ghobject_t hoid,
+  void remove_xattr(hobject_t hoid,
 		    string key) {
     set<string> to_remove;
     to_remove.insert(key);
@@ -179,28 +174,28 @@ public:
   }
 
   void clone(const string &objname, const string &target) {
-    clone(ghobject_t(hobject_t(objname)),
-	  ghobject_t(hobject_t(target)));
+    clone(hobject_t(objname),
+	  hobject_t(target));
   }
 
-  void clone(ghobject_t hoid,
-	     ghobject_t hoid2) {
+  void clone(hobject_t hoid,
+	     hobject_t hoid2) {
     db->clone(hoid, hoid2);
   }
 
   void clear(const string &objname) {
-    clear(ghobject_t(hobject_t(objname)));
+    clear(hobject_t(objname));
   }
 
-  void clear(ghobject_t hoid) {
+  void clear(hobject_t hoid) {
     db->clear(hoid);
   }
 
   void clear_omap(const string &objname) {
-    clear_omap(ghobject_t(hobject_t(objname)));
+    clear_omap(hobject_t(objname));
   }
 
-  void clear_omap(const ghobject_t &objname) {
+  void clear_omap(const hobject_t &objname) {
     db->clear_keys_header(objname);
   }
 
@@ -559,7 +554,7 @@ int main(int argc, char **argv) {
 }
 
 TEST_F(ObjectMapTest, CreateOneObject) {
-  ghobject_t hoid(hobject_t("foo"), 100, 0);
+  hobject_t hoid("foo", ENTIRETY, 100);
   map<string, bufferlist> to_set;
   string key("test");
   string val("test_val");
@@ -614,8 +609,8 @@ TEST_F(ObjectMapTest, CreateOneObject) {
 }
 
 TEST_F(ObjectMapTest, CloneOneObject) {
-  ghobject_t hoid(hobject_t("foo"), 200, 0);
-  ghobject_t hoid2(hobject_t("foo2"), 201, 1);
+  hobject_t hoid("foo", ENTIRETY, 200);
+  hobject_t hoid2("foo2", DATA, 201);
 
   tester.set_key(hoid, "foo", "bar");
   tester.set_key(hoid, "foo2", "bar2");
@@ -675,8 +670,8 @@ TEST_F(ObjectMapTest, CloneOneObject) {
 }
 
 TEST_F(ObjectMapTest, OddEvenClone) {
-  ghobject_t hoid(hobject_t("foo"));
-  ghobject_t hoid2(hobject_t("foo2"));
+  hobject_t hoid("foo");
+  hobject_t hoid2("foo2");
 
   for (unsigned i = 0; i < 1000; ++i) {
     tester.set_key(hoid, "foo" + num_str(i), "bar" + num_str(i));

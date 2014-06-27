@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 #include "acconfig.h"
 
@@ -55,12 +55,8 @@
 
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDAlive.h"
-#include "messages/MOSDPGCreate.h"
-#include "messages/MOSDPGRemove.h"
 #include "messages/MOSDMap.h"
-#include "messages/MPGStats.h"
 #include "messages/MLog.h"
-#include "messages/MOSDPGTemp.h"
 
 using namespace std;
 
@@ -311,9 +307,6 @@ class OSDStub : public TestStub
   OSDMap osdmap;
   osd_stat_t osd_stat;
 
-  map<pg_t,pg_stat_t> pgs;
-  set<pg_t> pgs_changes;
-
   rngen_t gen;
   boost::uniform_int<> mon_osd_rng;
 
@@ -325,29 +318,12 @@ class OSDStub : public TestStub
 
   enum {
     STUB_MON_OSD_ALIVE	  = 1,
-    STUB_MON_OSD_PGTEMP	  = 2,
     STUB_MON_OSD_FAILURE  = 3,
-    STUB_MON_OSD_PGSTATS  = 4,
     STUB_MON_LOG	  = 5,
 
     STUB_MON_OSD_FIRST	  = STUB_MON_OSD_ALIVE,
     STUB_MON_OSD_LAST	  = STUB_MON_LOG,
   };
-
-  struct C_CreatePGs : public Context {
-    OSDStub *s;
-    C_CreatePGs(OSDStub *stub) : s(stub) {}
-    void finish(int r) {
-      if (r == -ECANCELED) {
-	generic_dout(20) << "C_CreatePGs::" << __func__
-			<< " shutdown" << dendl;
-	return;
-      }
-      generic_dout(20) << "C_CreatePGs::" << __func__ << dendl;
-      s->auto_create_pgs();
-    }
-  };
-
 
   OSDStub(int whoami, CephContext *cct)
     : TestStub(cct, "osd"),
@@ -371,8 +347,7 @@ class OSDStub : public TestStub
 	g_conf->osd_client_message_size_cap);
     uint64_t supported =
       CEPH_FEATURE_UID |
-      CEPH_FEATURE_NOSRCADDR |
-      CEPH_FEATURE_PGID64;
+      CEPH_FEATURE_NOSRCADDR;
 
     messenger->set_default_policy(
 	Messenger::Policy::stateless_server(supported, 0));
@@ -380,7 +355,6 @@ class OSDStub : public TestStub
 				    &throttler, NULL);
     messenger->set_policy(entity_name_t::TYPE_MON,
 	Messenger::Policy::lossy_client(supported, CEPH_FEATURE_UID |
-	  CEPH_FEATURE_PGID64 |
 	  CEPH_FEATURE_OSDENC));
     messenger->set_policy(entity_name_t::TYPE_OSD,
 	Messenger::Policy::stateless_server(0,0));
@@ -439,9 +413,6 @@ class OSDStub : public TestStub
     update_osd_stat();
 
     start_ticking();
-    // give a chance to the mons to inform us of what PGs we should create
-    timer.add_event_after(30.0, new C_CreatePGs(this));
-
     return 0;
   }
 
@@ -467,170 +438,19 @@ class OSDStub : public TestStub
     monc.send_mon_message(mboot);
   }
 
-  void add_pg(pg_t pgid, epoch_t epoch, pg_t parent) {
-
-    utime_t now = ceph_clock_now(messenger->cct);
-
-    pg_stat_t s;
-    s.created = epoch;
-    s.last_epoch_clean = epoch;
-    s.parent = parent;
-    s.state |= PG_STATE_CLEAN | PG_STATE_ACTIVE;
-    s.last_fresh = now;
-    s.last_change = now;
-    s.last_clean = now;
-    s.last_active = now;
-    s.last_unstale = now;
-
-    pgs[pgid] = s;
-    pgs_changes.insert(pgid);
-  }
-
-  void auto_create_pgs() {
-    bool has_pgs = !pgs.empty();
-    dout(10) << __func__
-	     << ": " << (has_pgs ? "has pgs; ignore" : "create pgs") << dendl;
-    if (has_pgs)
-      return;
-
-    if (!osdmap.get_epoch()) {
-      dout(1) << __func__
-	      << " still don't have osdmap; reschedule pg creation" << dendl;
-      timer.add_event_after(10.0, new C_CreatePGs(this));
-      return;
-    }
-
-    const map<int64_t,pg_pool_t> &osdmap_pools = osdmap.get_pools();
-    map<int64_t,pg_pool_t>::const_iterator pit;
-    for (pit = osdmap_pools.begin(); pit != osdmap_pools.end(); ++pit) {
-      const int64_t pool_id = pit->first;
-      const pg_pool_t &pool = pit->second;
-      int ruleno = pool.get_crush_ruleset();
-
-      if (!osdmap.crush->rule_exists(ruleno)) {
-	dout(20) << __func__
-		 << " no crush rule for pool id " << pool_id
-		 << " rule no " << ruleno << dendl;
-	continue;
-      }
-
-      epoch_t pool_epoch = pool.get_last_change();
-      dout(20) << __func__
-	       << " pool num pgs " << pool.get_pg_num()
-	       << " epoch " << pool_epoch << dendl;
-
-      for (ps_t ps = 0; ps < pool.get_pg_num(); ++ps) {
-	pg_t pgid(ps, pool_id, -1);
-	pg_t parent;
-	dout(20) << __func__
-		 << " pgid " << pgid << " parent " << parent << dendl;
-	add_pg(pgid, pool_epoch, parent);
-      }
-    }
-  }
-
   void update_osd_stat() {
     struct statfs stbuf;
     int ret = statfs(".", &stbuf);
     if (ret < 0) {
       ret = -errno;
-      dout(0) << __func__ 
-              << " cannot statfs ." << cpp_strerror(ret) << dendl;
+      dout(0) << __func__
+	      << " cannot statfs ." << cpp_strerror(ret) << dendl;
       return;
     }
 
     osd_stat.kb = stbuf.f_blocks * stbuf.f_bsize / 1024;
     osd_stat.kb_used = (stbuf.f_blocks - stbuf.f_bfree) * stbuf.f_bsize / 1024;
     osd_stat.kb_avail = stbuf.f_bavail * stbuf.f_bsize / 1024;
-  }
-
-  void send_pg_stats() {
-    dout(10) << __func__
-	     << " pgs " << pgs.size() << " osdmap " << osdmap << dendl;
-    utime_t now = ceph_clock_now(messenger->cct);
-    MPGStats *mstats = new MPGStats(monc.get_fsid(), osdmap.get_epoch(), now);
-
-    mstats->set_tid(1);
-    mstats->osd_stat = osd_stat;
-
-    set<pg_t>::iterator it;
-    for (it = pgs_changes.begin(); it != pgs_changes.end(); ++it) {
-      pg_t pgid = (*it);
-      if (pgs.count(pgid) == 0) {
-	derr << __func__
-	     << " pgid " << pgid << " not on our map" << dendl;
-	assert(0 == "pgid not on our map");
-      }
-      pg_stat_t &s = pgs[pgid];
-      mstats->pg_stat[pgid] = s;
-
-      JSONFormatter f(true);
-      s.dump(&f);
-      dout(20) << __func__
-	       << " pg " << pgid << " stats:\n";
-      f.flush(*_dout);
-      *_dout << dendl;
-
-    }
-    dout(10) << __func__ << " send " << *mstats << dendl;
-    monc.send_mon_message(mstats);
-  }
-
-  void modify_pg(pg_t pgid) {
-    dout(10) << __func__ << " pg " << pgid << dendl;
-    assert(pgs.count(pgid) > 0);
-
-    pg_stat_t &s = pgs[pgid];
-    utime_t now = ceph_clock_now(messenger->cct);
-
-    if (now - s.last_change < 10.0) {
-      dout(10) << __func__
-	       << " pg " << pgid << " changed in the last 10s" << dendl;
-      return;
-    }
-
-    s.state ^= PG_STATE_CLEAN;
-    if (s.state & PG_STATE_CLEAN)
-      s.last_clean = now;
-    s.last_change = now;
-    s.reported_seq++;
-
-    pgs_changes.insert(pgid);
-  }
-
-  void modify_pgs() {
-    dout(10) << __func__ << dendl;
-
-    if (pgs.empty()) {
-      dout(1) << __func__
-	      << " no pgs available! don't attempt to modify." << dendl;
-      return;
-    }
-
-    boost::uniform_int<> pg_rng(0, pgs.size()-1);
-    set<int> pgs_pos;
-
-    int num_pgs = pg_rng(gen);
-    while ((int)pgs_pos.size() < num_pgs)
-      pgs_pos.insert(pg_rng(gen));
-
-    map<pg_t,pg_stat_t>::iterator it = pgs.begin();
-    set<int>::iterator pos_it = pgs_pos.begin();
-
-    int pgs_at = 0;
-    while (pos_it != pgs_pos.end()) {
-      int at = *pos_it;
-      dout(20) << __func__ << " pg at pos " << at << dendl;
-      while ((pgs_at != at) && (it != pgs.end())) {
-	++it;
-	++pgs_at;
-      }
-      assert(it != pgs.end());
-      dout(20) << __func__
-	       << " pg at pos " << at << ": " << it->first << dendl;
-      modify_pg(it->first);
-      ++pos_it;
-    }
   }
 
   void op_alive() {
@@ -652,48 +472,8 @@ class OSDStub : public TestStub
     monc.send_mon_message(new MOSDAlive(osdmap.get_epoch(), up_thru));
   }
 
-  void op_pgtemp() {
-    if (osdmap.get_epoch() == 0) {
-      dout(1) << __func__ << " wait for osdmap" << dendl;
-      return;
-    }
-    dout(10) << __func__ << dendl;
-    MOSDPGTemp *m = new MOSDPGTemp(osdmap.get_epoch());
-    monc.send_mon_message(m);
-  }
-
   void op_failure() {
     dout(10) << __func__ << dendl;
-  }
-
-  void op_pgstats() {
-    dout(10) << __func__ << dendl;
-
-    modify_pgs();
-    if (!pgs_changes.empty())
-      send_pg_stats();
-    monc.sub_want("osd_pg_creates", 0, CEPH_SUBSCRIBE_ONETIME);
-    monc.renew_subs();
-
-    dout(20) << __func__ << " pg pools:\n";
-
-    JSONFormatter f(true);
-    f.open_array_section("pools");
-    const map<int64_t,pg_pool_t> &osdmap_pools = osdmap.get_pools();
-    map<int64_t,pg_pool_t>::const_iterator pit;
-    for (pit = osdmap_pools.begin(); pit != osdmap_pools.end(); ++pit) {
-      const int64_t pool_id = pit->first;
-      const pg_pool_t &pool = pit->second;
-      f.open_object_section("pool");
-      f.dump_int("pool_id", pool_id);
-      f.open_object_section("pool_dump");
-      pool.dump(&f);
-      f.close_section();
-      f.close_section();
-    }
-    f.close_section();
-    f.flush(*_dout);
-    *_dout << dendl;
   }
 
   void op_log() {
@@ -736,46 +516,13 @@ class OSDStub : public TestStub
     case STUB_MON_OSD_ALIVE:
       op_alive();
       break;
-    case STUB_MON_OSD_PGTEMP:
-      op_pgtemp();
-      break;
     case STUB_MON_OSD_FAILURE:
       op_failure();
-      break;
-    case STUB_MON_OSD_PGSTATS:
-      op_pgstats();
       break;
     case STUB_MON_LOG:
       op_log();
       break;
     }
-  }
-
-  void handle_pg_create(MOSDPGCreate *m) {
-    assert(m != NULL);
-    if (m->epoch < osdmap.get_epoch()) {
-      std::cout << __func__ << " epoch " << m->epoch << " < "
-	       << osdmap.get_epoch() << "; dropping" << std::endl;
-      m->put();
-      return;
-    }
-
-    for (map<pg_t,pg_create_t>::iterator it = m->mkpg.begin();
-	 it != m->mkpg.end(); ++it) {
-      pg_create_t &c = it->second;
-      std::cout << __func__ << " pg " << it->first
-	      << " created " << c.created
-	      << " parent " << c.parent << std::endl;
-      if (pgs.count(it->first)) {
-	std::cout << __func__ << " pg " << it->first
-		 << " exists; skipping" << std::endl;
-	continue;
-      }
-
-      pg_t pgid = it->first;
-      add_pg(pgid, c.created, c.parent);
-    }
-    send_pg_stats();
   }
 
   void handle_osd_map(MOSDMap *m) {
@@ -880,9 +627,6 @@ class OSDStub : public TestStub
     dout(1) << __func__ << " " << *m << dendl;
 
     switch (m->get_type()) {
-    case MSG_OSD_PG_CREATE:
-      handle_pg_create((MOSDPGCreate*)m);
-      break;
     case CEPH_MSG_OSD_MAP:
       handle_osd_map((MOSDMap*)m);
       break;

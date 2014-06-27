@@ -5628,8 +5628,6 @@ bool MDCache::trim_dentry(CDentry *dn, map<int, MCacheExpire*>& expiremap)
   }
 
   // remove dentry
-  if (dir->is_auth())
-    dir->add_to_bloom(dn);
   dir->remove_dentry(dn);
 
   if (clear_complete)
@@ -5849,7 +5847,6 @@ void MDCache::trim_non_auth()
 	assert(dnl->is_null());
       }
 
-      assert(!dir->has_bloom());
       dir->remove_dentry(dn);
       // adjust the dir state
       dir->state_clear(CDir::STATE_COMPLETE);  // dir incomplete!
@@ -5945,7 +5942,6 @@ bool MDCache::trim_non_auth_subtree(CDir *dir)
         dout(20) << "trim_non_auth_subtree(" << dir << ") removing inode " << in << " with dentry" << dn << dendl;
         dir->unlink_inode(dn);
         remove_inode(in);
-	assert(!dir->has_bloom());
         dir->remove_dentry(dn);
       } else {
         dout(20) << "trim_non_auth_subtree(" << dir << ") keeping inode " << in << " with dentry " << dn <<dendl;
@@ -6944,9 +6940,8 @@ int MDCache::path_traverse(MDRequestRef& mdr, Message *req, Context *fin,     //
 
     if (curdir->is_auth()) {
       // dentry is mine.
-      if (curdir->is_complete() || (curdir->has_bloom() &&
-          !curdir->is_in_bloom(path[depth]))){
-        // file not found
+      if (curdir->is_complete()) {
+	// file not found
 	if (pdnvec) {
 	  // instantiate a null dn?
 	  if (depth < path.depth()-1){
@@ -7558,8 +7553,7 @@ int MDCache::open_ino_traverse_dir(inodeno_t ino, MMDSOpenIno *m,
 	  return 1;
 	}
 
-	if (!dnl && !dir->is_complete() &&
-	    (!dir->has_bloom() || dir->is_in_bloom(name))) {
+	if (!dnl && !dir->is_complete()) {
 	  dout(10) << " fetching incomplete " << *dir << dendl;
 	  _open_ino_fetch_dir(ino, m, dir);
 	  return 1;

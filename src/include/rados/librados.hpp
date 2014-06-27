@@ -14,6 +14,7 @@
 
 #include "librados.h"
 #include "rados_types.hpp"
+#include "include/uuid.h"
 
 namespace librados
 {
@@ -348,7 +349,7 @@ namespace librados
     // deep copy
     void dup(const IoCtx& rhs);
 
-    string get_volume_name();
+    std::string get_volume_name();
 
     // create an object
     int create(const std::string& oid, bool exclusive);
@@ -575,7 +576,7 @@ namespace librados
     int mon_command(std::string cmd, const bufferlist& inbl,
 		    bufferlist *outbl, std::string *outs);
 
-    int ioctx_create(const string &name, IoCtx &ioctx);
+    int ioctx_create(const std::string &name, IoCtx &ioctx);
 
     // Features useful for test cases
     void test_blacklist_self(bool set);

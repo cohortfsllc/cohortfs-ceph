@@ -136,6 +136,7 @@ set(libcommon_files
   common/fd.cc
   common/xattr.c
   common/str_list.cc
+  common/str_map.cc
   common/errno.cc
   common/TrackedOp.cc
   common/SloppyCRCMap.cc

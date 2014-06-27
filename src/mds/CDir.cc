@@ -27,7 +27,6 @@
 #include "MDLog.h"
 #include "LogSegment.h"
 
-#include "common/bloom_filter.hpp"
 #include "include/Context.h"
 #include "common/Clock.h"
 
@@ -157,8 +156,7 @@ CDir::CDir(CInode *in, frag_t fg, MDCache *mdcache, bool auth) :
   pop_me(ceph_clock_now(g_ceph_context)),
   pop_nested(ceph_clock_now(g_ceph_context)),
   pop_auth_subtree(ceph_clock_now(g_ceph_context)),
-  pop_auth_subtree_nested(ceph_clock_now(g_ceph_context)),
-  bloom(NULL)
+  pop_auth_subtree_nested(ceph_clock_now(g_ceph_context))
 {
   g_num_dir++;
   g_num_dira++;
@@ -560,33 +558,6 @@ void CDir::unlink_inode_work( CDentry *dn )
     in->remove_primary_parent(dn);
     dn->get_linkage()->inode = 0;
   }
-}
-
-void CDir::add_to_bloom(CDentry *dn)
-{
-  if (!bloom) {
-    /* not create bloom filter for incomplete dir that was added by log replay */
-    if (!is_complete())
-      return;
-    unsigned size = get_num_head_items();
-    if (size < 100) size = 100;
-    bloom = new bloom_filter(size, 1.0 / size, 0);
-  }
-  /* This size and false positive probability is completely random.*/
-  bloom->insert(dn->name.c_str(), dn->name.size());
-}
-
-bool CDir::is_in_bloom(const string& name)
-{
-  if (!bloom)
-    return false;
-  return bloom->contains(name.c_str(), name.size());
-}
-
-void CDir::remove_bloom()
-{
-  delete bloom;
-  bloom = NULL;
 }
 
 void CDir::remove_null_dentries() {
@@ -1219,7 +1190,6 @@ void CDir::log_mark_dirty()
 
 void CDir::mark_complete() {
   state_set(STATE_COMPLETE);
-  remove_bloom();
 }
 
 void CDir::first_get()
