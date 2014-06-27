@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_WORKQUEUE_H
@@ -245,7 +245,7 @@ public:
   template<class T>
   class WorkQueue : public WorkQueue_ {
     ThreadPool *pool;
-    
+
     virtual bool _enqueue(T *) = 0;
     virtual bool _enqueue(const list<T*>&) = 0;
     virtual void _dequeue(T *) = 0;
@@ -255,7 +255,7 @@ public:
       _process(t);
     }
     virtual void _process_finish(T *) {}
-    
+
     void *_void_dequeue() {
       return (void *)_dequeue();
     }
@@ -267,13 +267,14 @@ public:
     }
 
   public:
-    WorkQueue(string n, time_t ti, time_t sti, ThreadPool* p) : WorkQueue_(n, ti, sti), pool(p) {
+    WorkQueue(string n, time_t ti, time_t sti, ThreadPool* p) :
+      WorkQueue_(n, ti, sti), pool(p) {
       pool->add_work_queue(this);
     }
     ~WorkQueue() {
       pool->remove_work_queue(this);
     }
-    
+
     bool queue(T *item) {
       pool->_lock.Lock();
       bool r = _enqueue(item);
@@ -330,7 +331,6 @@ public:
 private:
   vector<WorkQueue_*> work_queues;
   int last_work_queue;
- 
 
   // threads
   struct WorkThread : public Thread {
@@ -341,7 +341,7 @@ private:
       return 0;
     }
   };
-  
+
   set<WorkThread*> _threads;
   list<WorkThread*> _old_threads;  ///< need to be joined
   int processing;
@@ -359,7 +359,7 @@ public:
     Mutex::Locker l(_lock);
     return _num_threads;
   }
-  
+
   /// assign a work queue to this thread pool
   void add_work_queue(WorkQueue_* wq) {
     work_queues.push_back(wq);
@@ -369,7 +369,7 @@ public:
     unsigned i = 0;
     while (work_queues[i] != wq)
       i++;
-    for (i++; i < work_queues.size(); i++) 
+    for (i++; i < work_queues.size(); i++)
       work_queues[i-1] = work_queues[i];
     assert(i == work_queues.size());
     work_queues.resize(i-1);
@@ -420,7 +420,7 @@ public:
   GenContextWQ(const string &name, time_t ti, ThreadPool *tp)
     : ThreadPool::WorkQueueVal<
       GenContext<ThreadPool::TPHandle&>*>(name, ti, ti*10, tp) {}
-  
+
   void _enqueue(GenContext<ThreadPool::TPHandle&> *c) {
     _queue.push_back(c);
   };
@@ -436,7 +436,8 @@ public:
     _queue.pop_front();
     return c;
   }
-  void _process(GenContext<ThreadPool::TPHandle&> *c, ThreadPool::TPHandle &tp) {
+  void _process(GenContext<ThreadPool::TPHandle&> *c,
+		ThreadPool::TPHandle &tp) {
     c->complete(tp);
   }
 };
@@ -470,20 +471,21 @@ class ShardedThreadPool {
 public:
 
   class BaseShardedWQ {
-  
+
   public:
     time_t timeout_interval, suicide_interval;
-    BaseShardedWQ(time_t ti, time_t sti):timeout_interval(ti), suicide_interval(sti) {}
+    BaseShardedWQ(time_t ti, time_t sti):timeout_interval(ti),
+					 suicide_interval(sti) {}
     virtual ~BaseShardedWQ() {}
 
     virtual void _process(uint32_t thread_index, heartbeat_handle_d *hb ) = 0;
     virtual void return_waiting_threads() = 0;
     virtual bool is_shard_empty(uint32_t thread_index) = 0;
-  };      
+  };
 
   template <typename T>
   class ShardedWQ: public BaseShardedWQ {
-  
+
     ShardedThreadPool* sharded_pool;
 
   protected:
@@ -492,8 +494,8 @@ public:
 
 
   public:
-    ShardedWQ(time_t ti, time_t sti, ShardedThreadPool* tp): BaseShardedWQ(ti, sti), 
-                                                                 sharded_pool(tp) {
+    ShardedWQ(time_t ti, time_t sti, ShardedThreadPool* tp) :
+      BaseShardedWQ(ti, sti), sharded_pool(tp) {
       tp->set_wq(this);
     }
     virtual ~ShardedWQ() {}
@@ -507,7 +509,7 @@ public:
     void drain() {
       sharded_pool->drain();
     }
-    
+
   };
 
 private:
@@ -532,13 +534,9 @@ private:
     wq = swq;
   }
 
-
-
 public:
-
   ShardedThreadPool(CephContext *cct_, string nm, uint32_t pnum_threads);
-
-  ~ShardedThreadPool(){};
+  ~ShardedThreadPool() {};
 
   /// start thread pool thread
   void start();
@@ -554,6 +552,5 @@ public:
   void drain();
 
 };
-
 
 #endif
