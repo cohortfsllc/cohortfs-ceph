@@ -102,6 +102,16 @@ set(auth_files
   auth/RotatingKeyRing.cc
   )
 
+if (HAVE_XIO)
+  set (xiomsg_files
+    msg/QueueStrategy.cc
+    msg/XioConnection.cc
+    msg/XioMessenger.cc
+    msg/XioMsg.cc
+    msg/XioPortal.cc
+    )
+endif (HAVE_XIO)
+
 set(mds_files
   mds/MDSMap.cc
   mds/inode_backtrace.cc
@@ -149,7 +159,9 @@ set(libcommon_files
   log/Log.cc
   log/SubsystemMap.cc
   mon/MonCap.cc
-  mon/MonClient.cc mon/MonMap.cc msg/Accepter.cc
+  mon/MonClient.cc
+  mon/MonMap.cc
+  msg/Accepter.cc
   msg/DispatchQueue.cc
   msg/Message.cc
   common/RefCountedObj.cc
@@ -201,6 +213,7 @@ set(libcommon_files
   osdc/Objecter.cc
   ${arch_files}
   ${auth_files}
+  ${xiomsg_files}
   ${mds_files})
 set(mon_common_files
   auth/AuthSessionHandler.cc
