@@ -605,15 +605,15 @@ configure_file(${CMAKE_SOURCE_DIR}/src/ceph-debugpack.in
   ${CMAKE_BINARY_DIR}/ceph-debugpack @ONLY)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/ceph.in.cmake
-  ${CMAKE_BINARY_DIR}/ceph @ONLY)
+  ${CMAKE_BINARY_DIR}/cephpy @ONLY)
 
 add_custom_target(shell_scripts ALL
   COMMAND chmod 755 ${CMAKE_BINARY_DIR}/mkcephfs
   ${CMAKE_BINARY_DIR}/init-ceph ${CMAKE_BINARY_DIR}/ceph-debugpack
-  ${CMAKE_BINARY_DIR}/ceph-coverage ${CMAKE_BINARY_DIR}/ceph
+  ${CMAKE_BINARY_DIR}/ceph-coverage ${CMAKE_BINARY_DIR}/cephpy
   DEPENDS ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph
   ${CMAKE_BINARY_DIR}/ceph-debugpack ${CMAKE_BINARY_DIR}/ceph-coverage
-  ${CMAKE_BINARY_DIR}/ceph COMMENT "Shell Scripts have permission")
+  ${CMAKE_BINARY_DIR}/cephpy COMMENT "Shell Scripts have permission")
 
 install(PROGRAMS 
   ${CMAKE_SOURCE_DIR}/src/ceph-run 
@@ -624,6 +624,7 @@ install(PROGRAMS
   # CMake to work properly. Same goes for the other configured scripts.
   ${CMAKE_BINARY_DIR}/ceph-debugpack
   ${CMAKE_BINARY_DIR}/ceph-coverage 
+  ${CMAKE_BINARY_DIR}/cephpy
   DESTINATION bin)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/init-ceph.in
