@@ -250,7 +250,7 @@ if(${WITH_PROFILER})
   target_link_libraries(common profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES})
+target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${CDS_LIBS})
 
 set(libglobal_srcs
   global/global_init.cc
