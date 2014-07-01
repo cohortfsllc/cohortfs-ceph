@@ -549,6 +549,7 @@ set(cephfs_srcs
 add_executable(cephfstool ${cephfs_srcs})
 target_link_libraries(cephfstool common ${EXTRALIBS})
 set_target_properties(cephfstool PROPERTIES OUTPUT_NAME cephfs)
+install(TARGETS cephfstool DESTINATION bin)
 
 set(ceph_srcs
   tools/ceph.cc
@@ -556,30 +557,35 @@ set(ceph_srcs
   )
 add_executable(ceph ${ceph_srcs})
 target_link_libraries(ceph global ${LIBEDIT_LIBS})
+install(TARGETS ceph DESTINATION bin)
 
 set(ceph_conf_srcs
   tools/ceph_conf.cc
   )
 add_executable(ceph-conf ${ceph_conf_srcs})
 target_link_libraries(ceph-conf global)
+install(TARGETS ceph-conf DESTINATION bin)
 
 set(monmaptool_srcs
   tools/monmaptool.cc
   )
 add_executable(monmaptool ${monmaptool_srcs})
 target_link_libraries(monmaptool global)
+install(TARGETS monmaptool DESTINATION bin)
 
 set(osdomaptool_srcs
   tools/osdmaptool.cc
   )
 add_executable(osdmaptool  ${osdomaptool_srcs})
 target_link_libraries(osdmaptool global ${CMAKE_DL_LIBS})
+install(TARGETS osdmaptool DESTINATION bin)
 
 set(ceph_authtool_srcs
   tools/ceph_authtool.cc
   )
 add_executable(ceph-authtool ${ceph_authtool_srcs})
 target_link_libraries(ceph-authtool global)
+install(TARGETS ceph-authtool DESTINATION bin)
 
 set(ceph_mon_store_converter_srcs
   tools/mon_store_converter.cc
@@ -587,6 +593,7 @@ set(ceph_mon_store_converter_srcs
 add_executable(ceph_mon_store_converter ${ceph_mon_store_converter_srcs}
   $<TARGET_OBJECTS:monitorstore_obj>)
 target_link_libraries(ceph_mon_store_converter os global)
+install(TARGETS ceph_mon_store_converter DESTINATION bin)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/mkcephfs.in
   ${CMAKE_BINARY_DIR}/mkcephfs @ONLY)
@@ -619,14 +626,6 @@ install(PROGRAMS
   ${CMAKE_BINARY_DIR}/ceph-coverage 
   DESTINATION bin)
 
-install(TARGETS
-  ceph
-  cephfstool
-  ceph-conf
-  ceph-authtool
-  ceph_mon_store_converter
-  DESTINATION bin
-  )
 configure_file(${CMAKE_SOURCE_DIR}/src/init-ceph.in
   ${CMAKE_BINARY_DIR}/init-ceph @ONLY)
 
