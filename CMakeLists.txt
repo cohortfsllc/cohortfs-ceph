@@ -19,6 +19,7 @@ link_directories(
 #Check Includes
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
+include(CheckLibraryExists)
 
 CHECK_FUNCTION_EXISTS(fallocate CEPH_HAVE_FALLOCATE)
 CHECK_FUNCTION_EXISTS(posix_fallocate HAVE_POSIX_FALLOCATE)
@@ -76,6 +77,8 @@ CHECK_INCLUDE_FILES("snappy.h" HAVE_SNAPPY_H)
 CHECK_INCLUDE_FILES("uuid/uuid.h" HAVE_UUID_H)
 CHECK_INCLUDE_FILES("atomic_ops.h" HAVE_ATOMIC_OPS)
 CHECK_INCLUDE_FILES("keyutils.h" HAVE_KEYUTILS_H)
+CHECK_LIBRARY_EXISTS(pthread pthread_spin_lock "pthread.h"
+  HAVE_PTHREAD_SPINLOCK)
 
 include(CheckSymbolExists)
 CHECK_SYMBOL_EXISTS(__u8 "sys/types.h;linux/types.h" HAVE___U8)
