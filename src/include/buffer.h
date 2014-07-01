@@ -477,10 +477,6 @@ public:
   };
 };
 
-#if defined(HAVE_XIO)
-  struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp);
-#endif
-
 typedef buffer::ptr bufferptr;
 typedef buffer::list bufferlist;
 typedef buffer::hash bufferhash;
@@ -555,6 +551,10 @@ inline bufferhash& operator<<(bufferhash& l, bufferlist &r) {
   return l;
 }
 
-}
+} // namespace ceph
+
+#if defined(HAVE_XIO)
+struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp);
+#endif
 
 #endif

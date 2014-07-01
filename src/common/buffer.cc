@@ -552,15 +552,6 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     }
   };
 
-  struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp)
-  {
-    buffer::xio_mempool *mb = dynamic_cast<buffer::xio_mempool*>(bp.get_raw());
-    if (mb) {
-      return mb->mp;
-    }
-    return NULL;
-  }
-
   buffer::raw* buffer::create_msg(
     unsigned len, char *buf, XioCompletionHook *m_hook) {
     XioPool& pool = m_hook->get_pool();
@@ -1800,5 +1791,14 @@ std::ostream& operator<<(std::ostream& out, const buffer::raw &r) {
   return out << "buffer::raw(" << (void*)r.data << " len " << r.len << " nref " << r.nref.read() << ")";
 }
 
+} // namespace ceph
 
+struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp)
+{
+  buffer::xio_mempool *mb = dynamic_cast<buffer::xio_mempool*>(bp.get_raw());
+  if (mb) {
+    return mb->mp;
+  }
+  return NULL;
 }
+
