@@ -16,7 +16,6 @@
 #define CEPH_SHAREDPTR_REGISTRY_H
 
 #include <map>
-#include <memory>
 #include "common/Mutex.h"
 #include "common/Cond.h"
 

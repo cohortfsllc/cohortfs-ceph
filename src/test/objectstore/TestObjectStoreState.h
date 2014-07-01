@@ -19,9 +19,7 @@
 #include <boost/random/uniform_int.hpp>
 #include <map>
 #include <vector>
-#include <memory>
 
-using std::tr1::shared_ptr;
 typedef boost::mt11213b rngen_t;
 
 class TestObjectStoreState {
@@ -60,7 +58,7 @@ public:
   static const coll_t TEMP_COLL;
 
  protected:
-  shared_ptr<ObjectStore> m_store;
+  ceph::shared_ptr<ObjectStore> m_store;
   map<int, coll_entry_t*> m_collections;
   vector<int> m_collections_ids;
   int m_next_coll_nr;

@@ -19,7 +19,6 @@
 #include <string>
 #include <map>
 #include <vector>
-#include <tr1/memory>
 #include "include/types.h"
 #include "common/Formatter.h"
 #include "include/uuid.h"
@@ -33,7 +32,6 @@ class Objecter;
 struct ObjectOperation;
 
 using namespace std;
-using namespace std::tr1;
 
 enum vol_type {
   CohortVol,
@@ -41,8 +39,8 @@ enum vol_type {
 };
 
 class Volume;
-typedef shared_ptr<Volume> VolumeRef;
-typedef shared_ptr<const Volume> VolumeCRef;
+typedef ceph::shared_ptr<Volume> VolumeRef;
+typedef ceph::shared_ptr<const Volume> VolumeCRef;
 
 class Volume
 {

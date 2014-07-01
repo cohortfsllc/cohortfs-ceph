@@ -136,11 +136,11 @@ TEST_F(SharedPtrRegistry_all, wait_lookup_or_create) {
     ASSERT_TRUE(wait_for(registry, 1));
     EXPECT_FALSE(t.ptr);
     // waiting on a key does not block lookups on other keys
-    EXPECT_TRUE(registry.lookup_or_create(key + 12345));
+    EXPECT_TRUE(registry.lookup_or_create(key + 12345).get());
     registry.remove(key);
     ASSERT_TRUE(wait_for(registry, 0));
     t.join();
-    EXPECT_TRUE(t.ptr);
+    EXPECT_TRUE(t.ptr.get());
   }
   {
     unsigned int key = 2;
@@ -154,19 +154,19 @@ TEST_F(SharedPtrRegistry_all, wait_lookup_or_create) {
     Thread_wait t(registry, key, value, Thread_wait::LOOKUP_OR_CREATE);
     t.create();
     ASSERT_TRUE(wait_for(registry, 1));
-    EXPECT_FALSE(t.ptr);
+    EXPECT_FALSE(t.ptr.get());
     // waiting on a key does not block lookups on other keys
     {
       int other_value = value + 1;
       unsigned int other_key = key + 1;
       shared_ptr<int> ptr = registry.lookup_or_create<int>(other_key, other_value);
-      EXPECT_TRUE(ptr);
+      EXPECT_TRUE(ptr.get());
       EXPECT_EQ(other_value, *ptr);
     }
     registry.remove(key);
     ASSERT_TRUE(wait_for(registry, 0));
     t.join();
-    EXPECT_TRUE(t.ptr);
+    EXPECT_TRUE(t.ptr.get());
     EXPECT_EQ(value, *t.ptr);
   }
 }
@@ -180,7 +180,7 @@ TEST_F(SharedPtrRegistry_all, lookup) {
     *ptr = value;
     ASSERT_EQ(value, *registry.lookup(key));
   }
-  ASSERT_FALSE(registry.lookup(key));
+  ASSERT_FALSE(registry.lookup(key).get());
 }
 
 TEST_F(SharedPtrRegistry_all, wait_lookup) {
@@ -320,10 +320,10 @@ TEST_F(SharedPtrRegistry_destructor, destructor) {
   {
     shared_ptr<TellDie> a = registry.lookup_or_create(key);
     EXPECT_EQ(NO, died);
-    EXPECT_TRUE(a);
+    EXPECT_TRUE(a.get());
   }
   EXPECT_EQ(YES, died);
-  EXPECT_FALSE(registry.lookup(key));
+  EXPECT_FALSE(registry.lookup(key).get());
 }
 
 int main(int argc, char **argv) {
