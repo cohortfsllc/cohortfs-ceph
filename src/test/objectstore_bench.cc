@@ -76,7 +76,7 @@ bool byte_units::parse(const string &val)
     case 'K':
       lshift += 10;
       if (*++endptr)
-        return false;
+	  return false;
     case 0:
       break;
 
@@ -119,19 +119,19 @@ ObjectStore *fs;
 
 class OBS_Worker : public Thread
 {
-  sobject_t poid;
+  hobject_t hobj;
 
  public:
   OBS_Worker() { }
 
-  void set_oid(const sobject_t &oid) { poid = oid; }
+  void set_oid(const sobject_t &oid) { hobj = hobject_t(oid); }
 
   void *entry() {
     bufferlist data;
     data.append(buffer::create(block_size));
 
     dout(0) << "Writing " << size << " in blocks of " << block_size
-        << dendl;
+	    << dendl;
 
     // use a sequencer for each thread so they don't serialize each other
     ObjectStore::Sequencer seq("osbench worker");
@@ -144,15 +144,15 @@ class OBS_Worker : public Thread
 
       std::cout << "Write cycle " << ix << std::endl;
       while (len) {
-        size_t count = len < block_size ? len : (size_t)block_size;
+	  size_t count = len < block_size ? len : (size_t)block_size;
 
-        ObjectStore::Transaction *t = new ObjectStore::Transaction;
-        t->write(coll_t(), hobject_t(poid), offset, count, data);
+	  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+	  t->write(coll_t(), hobj, offset, count, data);
 
-        tls.push_back(t);
+	  tls.push_back(t);
 
-        offset += count;
-        len -= count;
+	  offset += count;
+	  len -= count;
       }
 
       // set up the finisher
