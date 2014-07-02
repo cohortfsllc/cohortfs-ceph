@@ -546,7 +546,7 @@ CEPH_HASH_NAMESPACE_START
   template<> struct hash<coll_t> {
     size_t operator()(const coll_t &c) const { 
       size_t h = 0;
-      string str(c.to_str());
+      const string& str = c.to_str();
       std::string::const_iterator end(str.end());
       for (std::string::const_iterator s = str.begin(); s != end; ++s) {
 	h += *s;
