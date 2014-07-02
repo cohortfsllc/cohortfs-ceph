@@ -370,8 +370,10 @@ int main(int argc, const char **argv)
   }
 
   //try to poison pill any OSD connections on the wrong address
-  ms_xio_public->set_policy(entity_name_t::TYPE_OSD,
-			Messenger::Policy::stateless_server(0,0));
+  if (ms_xio_public) {
+    ms_xio_public->set_policy(entity_name_t::TYPE_OSD,
+			      Messenger::Policy::stateless_server(0,0));
+  }
 
 
   ms_cluster->set_default_policy(Messenger::Policy::stateless_server(0, 0));
