@@ -67,8 +67,8 @@ public:
   
   hobject_t() : snap(0), hash(0), max(false), pool(-1) {}
 
-  hobject_t(object_t oid, const string& key, snapid_t snap, uint64_t hash,
-	    int64_t pool, string nspace) :
+  hobject_t(const object_t &oid, const string& key, snapid_t snap,
+	    uint64_t hash, int64_t pool, string nspace) :
     oid(oid), snap(snap), hash(hash), max(false),
     pool(pool), nspace(nspace),
     key(oid.name == key ? string() : key) {}
