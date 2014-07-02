@@ -251,6 +251,7 @@ private:
 
     void _process(uint32_t thread_index, heartbeat_handle_d *hb) {
       static utime_t interval = utime_from_ms(50);
+      static uint32_t ctr = 0;
       Lane& lane = lanes[thread_index];
     restart:
       if (! lane.size.read())
@@ -273,8 +274,10 @@ private:
 	lane.sp.unlock();
       }
     out:
-      Mutex::Locker l(lane.mtx);
-      lane.cond.WaitInterval(store->cct, lane.mtx, interval);
+      if ((++ctr % 400) == 0) {
+	Mutex::Locker l(lane.mtx);
+	lane.cond.WaitInterval(store->cct, lane.mtx, interval);
+      }
     }
 
     bool is_shard_empty(uint32_t thread_index) {
