@@ -907,34 +907,14 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
 {
   unsigned len = src.length();
 
-  // count the overlapping pages
-  size_t page_count = 0;
-  if (offset % PageSize) {
-    page_count++;
-    size_t rem = PageSize - offset % PageSize;
-    len = len <= rem ? 0 : len - rem;
-  }
-  page_count += len / PageSize;
-  if (len % PageSize)
-    page_count++;
-
   // allocate a vector for page pointers
   // TODO: preallocate page vectors for each worker thread
   typedef vector<page_set::page_type*> page_vec;
   page_vec pages;
-  pages.reserve(page_count);
 
+  // make sure the page range is allocated under spinlock
   o->alloc_lock.lock();
-
-  // make sure the page range is allocated
-  page_set::iterator p = o->data.alloc_range(offset, src.length());
-  // flatten the range into a vector while we hold the lock
-  for (size_t i = 0; i < page_count; i++) {
-    pages.push_back(&*p);
-    p->get();
-    ++p;
-  }
-
+  o->data.alloc_range(offset, src.length(), pages);
   o->alloc_lock.unlock();
 
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
@@ -954,8 +934,8 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
   }
 
   // drop page refs
-  for (size_t i = 0; i < page_count; i++)
-    pages[i]->put();
+  for (page = pages.begin(); page != pages.end(); ++page)
+    (*page)->put();
 }
 
 int MemStore::_zero(const coll_t &cid, const ghobject_t& oid,

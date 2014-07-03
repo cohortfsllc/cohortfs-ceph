@@ -119,9 +119,10 @@ public:
   const_iterator end() const { return pages.end(); }
 
   // allocate all pages that intersect the range [offset,length)
-  iterator alloc_range(uint64_t offset, size_t length) {
+  pair<iterator, iterator> alloc_range(uint64_t offset, size_t length) {
     std::pair<iterator, bool> insert;
     iterator cur = pages.end();
+    iterator last = pages.end(); // track last page in range
 
     // loop in reverse so we can provide hints to avl_set::insert_check()
     //  and get O(1) insertions after the first
@@ -157,11 +158,22 @@ public:
       } else { // exists
 	cur = insert.first;
       }
+      if (last == pages.end())
+	last = cur;
 
       position -= PageSize;
       length -= std::min(length, PageSize);
     }
-    return cur;
+    return make_pair(cur, last);
+  }
+
+  void alloc_range(uint64_t offset, size_t length, vector<page_type*> &arr) {
+    pair<iterator, iterator> range = alloc_range(offset, length);
+    do {
+      arr.push_back(&*range.first);
+      range.first->get();
+      ++range.first;
+    } while (range.first != range.second);
   }
 
   iterator first_page_containing(uint64_t offset, size_t length) {

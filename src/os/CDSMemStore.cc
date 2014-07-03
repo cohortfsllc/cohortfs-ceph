@@ -947,25 +947,35 @@ int CDSMemStore::_write(const coll_t& cid, const ghobject_t& oid,
 }
 
 void CDSMemStore::_write_pages(const bufferlist& src, unsigned offset,
-			    page_set &pages)
+			    page_set &data)
 {
   // make sure the page range is allocated
   unsigned len = src.length();
-  page_set::iterator page = pages.alloc_range(offset, len);
+
+  typedef vector<page_set::page_type*> page_vec;
+  page_vec pages;
+  data.alloc_range(offset, len, pages);
+
+  page_vec::iterator page = pages.begin();
+
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
 
   buffer::list::iterator bl_iter = ncbl->begin();
   while (! bl_iter.end()) {
     char *data = bl_iter.get_bytes(&len);
-    unsigned page_offset = offset - page->offset;
+    unsigned page_offset = offset - (*page)->offset;
     unsigned pageoff = PageSize - page_offset;
     unsigned count = min((size_t)len, (size_t) pageoff);
-    memcpy(page->data+page_offset, data, count);
+    memcpy((*page)->data+page_offset, data, count);
     offset += count;
     if (count == pageoff)
       ++page;
     bl_iter.advance(count);
   }
+
+  // drop page refs
+  for (page = pages.begin(); page != pages.end(); ++page)
+    (*page)->put();
 }
 
 int CDSMemStore::_zero(const coll_t& cid, const ghobject_t& oid,
