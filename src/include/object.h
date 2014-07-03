@@ -22,6 +22,7 @@
 #include <iomanip>
 using namespace std;
 
+#include "include/atomic.h"
 #include "include/unordered_map.h"
 #include "include/hash_namespace.h"
 
@@ -46,7 +47,7 @@ struct object_t {
   void clear() {
     name.clear();
   }
-  
+
   void encode(bufferlist &bl) const {
     ::encode(name, bl);
   }

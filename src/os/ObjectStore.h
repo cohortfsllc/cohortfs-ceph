@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <vector>
+#include <memory>
 
 #if defined(DARWIN) || defined(__FreeBSD__)
 #include <sys/statvfs.h>
@@ -342,8 +343,8 @@ public:
 
     struct Op {
       uint32_t op;
-      coll_t cid, cid2;
-      ghobject_t oid, oid2;
+      std::shared_ptr<coll_t> cid, cid2;
+      std::shared_ptr<ghobject_t> oid, oid2;
       uint64_t off, off2;
       uint64_t len;
       bufferlist data;
@@ -442,7 +443,8 @@ public:
       return C_Contexts::list_to_context(on_applied_sync);
     }
 
-    /// For legacy transactions, provide the pool to override the encoded pool with
+    /// For legacy transactions, provide the pool to override the encoded pool
+    /// with
     void set_pool_override(int64_t pool) {
       pool_override = pool;
     }
@@ -526,7 +528,8 @@ public:
      * Ensure the existance of an object in a collection. Create an
      * empty object if necessary
      */
-    void touch(const coll_t &cid, const ghobject_t& oid) {
+    void touch(std::shared_ptr<coll_t> cid,
+	       std::shared_ptr<ghobject_t> oid) {
       ops.push_back(Op(OP_TOUCH));
       Op &op = ops.back();
       op.cid = cid;
@@ -542,7 +545,9 @@ public:
      * ObjectStore will omit the untouched data and store it as a
      * "hole" in the file.
      */
-    void write(const coll_t &cid, const ghobject_t& oid, uint64_t off, uint64_t len,
+    void write(std::shared_ptr<coll_t> cid,
+	       std::shared_ptr<ghobject_t> oid, uint64_t off,
+	       uint64_t len,
 	       const bufferlist& data) {
       ops.push_back(Op(OP_WRITE));
       Op &op = ops.back();
@@ -562,7 +567,9 @@ public:
      * ObjectStore instances may optimize this to release the
      * underlying storage space.
      */
-    void zero(const coll_t &cid, const ghobject_t& oid, uint64_t off, uint64_t len) {
+    void zero(std::shared_ptr<coll_t> cid,
+	      std::shared_ptr<ghobject_t> oid, uint64_t off,
+	      uint64_t len) {
       ops.push_back(Op(OP_ZERO));
       Op &op = ops.back();
       op.cid = cid;
@@ -571,7 +578,8 @@ public:
       op.len = len;
     }
     /// Discard all data in the object beyond the specified size.
-    void truncate(const coll_t &cid, const ghobject_t& oid, uint64_t off) {
+    void truncate(std::shared_ptr<coll_t> cid,
+		  std::shared_ptr<ghobject_t> oid, uint64_t off) {
       ops.push_back(Op(OP_TRUNCATE));
       Op &op = ops.back();
       op.cid = cid;
@@ -579,19 +587,24 @@ public:
       op.off = off;
     }
     /// Remove an object. All four parts of the object are removed.
-    void remove(const coll_t &cid, const ghobject_t& oid) {
+    void remove(std::shared_ptr<coll_t> cid,
+		std::shared_ptr<ghobject_t> oid) {
       ops.push_back(Op(OP_REMOVE));
       Op &op = ops.back();
       op.cid = cid;
       op.oid = oid;
     }
     /// Set an xattr of an object
-    void setattr(const coll_t &cid, const ghobject_t& oid, const char* name, bufferlist& val) {
+    void setattr(std::shared_ptr<coll_t> cid,
+		 std::shared_ptr<ghobject_t> oid, const char* name,
+		 bufferlist& val) {
       string n(name);
       setattr(cid, oid, n, val);
     }
     /// Set an xattr of an object
-    void setattr(const coll_t &cid, const ghobject_t& oid, const string& s, bufferlist& val) {
+    void setattr(std::shared_ptr<coll_t> cid,
+		 std::shared_ptr<ghobject_t> oid, const string& s,
+		 bufferlist& val) {
       ops.push_back(Op(OP_SETATTR));
       Op &op = ops.back();
       op.cid = cid;
@@ -600,7 +613,9 @@ public:
       op.data = val;
     }
     /// Set multiple xattrs of an object
-    void setattrs(const coll_t &cid, const ghobject_t& oid, map<string, bufferlist>& attrset) {
+    void setattrs(std::shared_ptr<coll_t> cid,
+		  std::shared_ptr<ghobject_t> oid, map<string,
+		  bufferlist>& attrset) {
       ops.push_back(Op(OP_SETATTRS));
       Op &op = ops.back();
       op.cid = cid;
@@ -611,7 +626,9 @@ public:
       bufferlist::iterator p = bl.begin();
       ::decode(op.xattrs, p);
     }
-    void setattrs(const coll_t &cid, const ghobject_t& oid, map<string, bufferptr>& attrset) {
+    void setattrs(std::shared_ptr<coll_t> cid,
+		  std::shared_ptr<ghobject_t> oid,
+		  map<string, bufferptr>& attrset) {
       ops.push_back(Op(OP_SETATTRS));
       Op &op = ops.back();
       op.cid = cid;
@@ -619,12 +636,14 @@ public:
       op.xattrs.swap(attrset);
     }
     /// remove an xattr from an object
-    void rmattr(const coll_t &cid, const ghobject_t& oid, const char *name) {
+    void rmattr(std::shared_ptr<coll_t> cid,
+		std::shared_ptr<ghobject_t> oid, const char *name) {
       string n(name);
       rmattr(cid, oid, n);
     }
     /// remove an xattr from an object
-    void rmattr(const coll_t &cid, const ghobject_t& oid, const string& s) {
+    void rmattr(std::shared_ptr<coll_t> cid,
+		std::shared_ptr<ghobject_t> oid, const string& s) {
       ops.push_back(Op(OP_RMATTR));
       Op &op = ops.back();
       op.cid = cid;
@@ -632,7 +651,8 @@ public:
       op.name = s;
     }
     /// remove all xattrs from an object
-    void rmattrs(const coll_t &cid, const ghobject_t& oid) {
+    void rmattrs(std::shared_ptr<coll_t> cid,
+		 std::shared_ptr<ghobject_t> oid) {
       ops.push_back(Op(OP_RMATTRS));
       Op &op = ops.back();
       op.cid = cid;
@@ -649,7 +669,9 @@ public:
      * The destination named object may already exist in
      * which case its previous contents are discarded.
      */
-    void clone(const coll_t &cid, const ghobject_t& oid, ghobject_t noid) {
+    void clone(std::shared_ptr<coll_t> cid,
+	       std::shared_ptr<ghobject_t> oid,
+	       std::shared_ptr<ghobject_t> noid) {
       ops.push_back(Op(OP_CLONE));
       Op &op = ops.back();
       op.cid = cid;
@@ -663,7 +685,9 @@ public:
      * portion of the data from the source object. None of the other
      * three parts of an object is copied from the source.
      */
-    void clone_range(const coll_t &cid, const ghobject_t& oid, ghobject_t noid,
+    void clone_range(std::shared_ptr<coll_t> cid,
+		     std::shared_ptr<ghobject_t> oid,
+		     std::shared_ptr<ghobject_t> noid,
 		     uint64_t srcoff, uint64_t srclen, uint64_t dstoff) {
       ops.push_back(Op(OP_CLONERANGE2));
       Op &op = ops.back();
@@ -675,13 +699,13 @@ public:
       op.off2 = dstoff;
     }
     /// Create the collection
-    void create_collection(const coll_t &cid) {
+    void create_collection(std::shared_ptr<coll_t> cid) {
       ops.push_back(Op(OP_MKCOLL));
       Op &op = ops.back();
       op.cid = cid;
     }
     /// remove the collection, the collection must be empty
-    void remove_collection(const coll_t &cid) {
+    void remove_collection(std::shared_ptr<coll_t> cid) {
       ops.push_back(Op(OP_RMCOLL));
       Op &op = ops.back();
       op.cid = cid;
@@ -695,26 +719,33 @@ public:
      * needed for new implementations unless they expect to make use
      * of the conversion infrastructure.
      */
-    void collection_add(const coll_t &cid, const coll_t &ocid, const ghobject_t& oid) {
+    void collection_add(std::shared_ptr<coll_t> cid,
+			std::shared_ptr<coll_t> ocid,
+			std::shared_ptr<ghobject_t> oid) {
       ops.push_back(Op(OP_COLL_ADD));
       Op &op = ops.back();
       op.cid = cid;
       op.cid2 = ocid;
       op.oid = oid;
     }
-    void collection_remove(const coll_t &cid, const ghobject_t& oid) {
+    void collection_remove(std::shared_ptr<coll_t> cid,
+			   std::shared_ptr<ghobject_t> oid) {
       ops.push_back(Op(OP_COLL_REMOVE));
       Op &op = ops.back();
       op.cid = cid;
       op.oid = oid;
     }
-    void collection_move(const coll_t &cid, const coll_t &oldcid, const ghobject_t& oid) {
+    void collection_move(std::shared_ptr<coll_t> cid,
+			 std::shared_ptr<coll_t> oldcid,
+			 std::shared_ptr<ghobject_t> oid) {
       collection_add(cid, oldcid, oid);
       collection_remove(oldcid, oid);
       return;
     }
-    void collection_move_rename(const coll_t &oldcid, const ghobject_t& oldoid,
-				const coll_t &cid, const ghobject_t& oid) {
+    void collection_move_rename(std::shared_ptr<coll_t> oldcid,
+				std::shared_ptr<ghobject_t> oldoid,
+				std::shared_ptr<coll_t> cid,
+				std::shared_ptr<ghobject_t> oid) {
       ops.push_back(Op(OP_COLL_MOVE_RENAME));
       Op &op = ops.back();
       op.cid = oldcid;
@@ -724,12 +755,14 @@ public:
     }
 
     /// Set an xattr on a collection
-    void collection_setattr(const coll_t &cid, const char* name, bufferlist& val) {
+    void collection_setattr(std::shared_ptr<coll_t> cid,
+			    const char* name, bufferlist& val) {
       string n(name);
       collection_setattr(cid, n, val);
     }
     /// Set an xattr on a collection
-    void collection_setattr(const coll_t &cid, const string& name, bufferlist& val) {
+    void collection_setattr(std::shared_ptr<coll_t> cid,
+			    const string& name, bufferlist& val) {
       ops.push_back(Op(OP_COLL_SETATTR));
       Op &op = ops.back();
       op.cid = cid;
@@ -738,19 +771,22 @@ public:
     }
 
     /// Remove an xattr from a collection
-    void collection_rmattr(const coll_t &cid, const char* name) {
+    void collection_rmattr(std::shared_ptr<coll_t> cid,
+			   const char* name) {
       string n(name);
       collection_rmattr(cid, n);
     }
     /// Remove an xattr from a collection
-    void collection_rmattr(const coll_t &cid, const string& name) {
+    void collection_rmattr(std::shared_ptr<coll_t> cid,
+			   const string& name) {
       ops.push_back(Op(OP_COLL_RMATTR));
       Op &op = ops.back();
       op.cid = cid;
       op.name = name;
     }
     /// Set multiple xattrs on a collection
-    void collection_setattrs(const coll_t &cid, map<string, bufferlist>& aset) {
+    void collection_setattrs(std::shared_ptr<coll_t> cid, map<string,
+			     bufferlist>& aset) {
       ops.push_back(Op(OP_COLL_SETATTRS));
       Op &op = ops.back();
       op.cid = cid;
@@ -761,14 +797,16 @@ public:
       ::decode(op.xattrs, p);
     }
     /// Set multiple xattrs on a collection
-    void collection_setattrs(const coll_t &cid, map<string, bufferptr>& aset) {
+    void collection_setattrs(std::shared_ptr<coll_t> cid, map<string,
+			     bufferptr>& aset) {
       ops.push_back(Op(OP_COLL_SETATTRS));
       Op &op = ops.back();
       op.cid = cid;
       op.xattrs.swap(aset);
     }
     /// Change the name of a collection
-    void collection_rename(const coll_t &cid, const coll_t &ncid) {
+    void collection_rename(std::shared_ptr<coll_t> cid,
+			   std::shared_ptr<coll_t> ncid) {
       ops.push_back(Op(OP_COLL_RENAME));
       Op &op = ops.back();
       op.cid = cid;
@@ -777,8 +815,8 @@ public:
 
     /// Remove omap from oid
     void omap_clear(
-      const coll_t &cid,     ///< [in] Collection containing oid
-      const ghobject_t &oid  ///< [in] Object from which to remove omap
+      std::shared_ptr<coll_t> cid, ///< [in] Collection containing oid
+      std::shared_ptr<ghobject_t> oid  ///< [in] Object from which to remove omap
       ) {
       ops.push_back(Op(OP_OMAP_CLEAR));
       Op &op = ops.back();
@@ -787,8 +825,8 @@ public:
     }
     /// Set keys on oid omap.  Replaces duplicate keys.
     void omap_setkeys(
-      const coll_t &cid,                    ///< [in] Collection containing oid
-      const ghobject_t &oid,                ///< [in] Object to update
+      std::shared_ptr<coll_t> cid, ///< [in] Collection containing oid
+      std::shared_ptr<ghobject_t> oid, ///< [in] Object to update
       const map<string, bufferlist> &attrset ///< [in] Replacement keys and values
       ) {
       ops.push_back(Op(OP_OMAP_SETKEYS));
@@ -799,8 +837,8 @@ public:
     }
     /// Remove keys from oid omap
     void omap_rmkeys(
-      const coll_t &cid,      ///< [in] Collection containing oid
-      const ghobject_t &oid,  ///< [in] Object from which to remove the omap
+      std::shared_ptr<coll_t> cid, ///< [in] Collection containing oid
+      std::shared_ptr<ghobject_t> oid,  ///< [in] Object from which to remove the omap
       const set<string> &keys ///< [in] Keys to clear
       ) {
       ops.push_back(Op(OP_OMAP_RMKEYS));
@@ -812,10 +850,10 @@ public:
 
     /// Remove key range from oid omap
     void omap_rmkeyrange(
-      const coll_t &cid,      ///< [in] Collection containing oid
-      const ghobject_t &oid,  ///< [in] Object from which to remove the omap keys
-      const string& first,    ///< [in] first key in range
-      const string& last      ///< [in] first key past range, range is [first,last)
+      std::shared_ptr<coll_t> cid, ///< [in] Collection containing oid
+      std::shared_ptr<ghobject_t> oid, ///< [in] Object from which to remove the omap keys
+      const string& first, ///< [in] first key in range
+      const string& last ///< [in] first key past range, range is [first,last)
       ) {
       ops.push_back(Op(OP_OMAP_RMKEYRANGE));
       Op &op = ops.back();
@@ -827,9 +865,9 @@ public:
 
     /// Set omap header
     void omap_setheader(
-      const coll_t &cid,      ///< [in] Collection containing oid
-      const ghobject_t &oid,  ///< [in] Object
-      const bufferlist &bl    ///< [in] Header value
+      std::shared_ptr<coll_t> cid, ///< [in] Collection containing oid
+      std::shared_ptr<ghobject_t> oid, ///< [in] Object
+      const bufferlist &bl ///< [in] Header value
       ) {
       ops.push_back(Op(OP_OMAP_SETHEADER));
       Op &op = ops.back();
@@ -838,13 +876,14 @@ public:
       op.data = bl;
     }
 
-    /// Split collection based on given prefixes, objects matching the specified bits/rem are
+    /// Split collection based on given prefixes, objects matching the
+    /// specified bits/rem are
     /// moved to the new collection
     void split_collection(
-      const coll_t &cid,
+      std::shared_ptr<coll_t> cid,
       uint32_t bits,
       uint32_t rem,
-      const coll_t &destination) {
+      std::shared_ptr<coll_t> destination) {
       ops.push_back(Op(OP_SPLIT_COLLECTION2));
       Op &op = ops.back();
       op.cid = cid;
@@ -854,8 +893,8 @@ public:
     }
 
     void set_alloc_hint(
-      const coll_t &cid,
-      const ghobject_t &oid,
+      std::shared_ptr<coll_t> cid,
+      std::shared_ptr<ghobject_t> oid,
       uint64_t expected_object_size,
       uint64_t expected_write_size
     ) {
@@ -927,7 +966,8 @@ public:
   };
 
   // new style (sans sequencer)
-  unsigned apply_transaction(pthread_t tid, Transaction& t, Context *ondisk=0) {
+  unsigned apply_transaction(pthread_t tid, Transaction& t,
+			     Context *ondisk=0) {
     // use op pool
     Cond my_cond;
     Mutex my_lock("ObjectStore::apply_transaction::my_lock");
@@ -970,7 +1010,8 @@ public:
     tls.push_back(&t);
     return apply_transactions(NULL, tls, ondisk);
   }
-  unsigned apply_transaction(Sequencer *osr, Transaction& t, Context *ondisk=0) {
+  unsigned apply_transaction(Sequencer *osr, Transaction& t,
+			     Context *ondisk=0) {
     list<Transaction*> tls;
     tls.push_back(&t);
     return apply_transactions(osr, tls, ondisk);
@@ -978,24 +1019,26 @@ public:
   unsigned apply_transactions(list<Transaction*>& tls, Context *ondisk=0) {
     return apply_transactions(NULL, tls, ondisk);
   }
-  unsigned apply_transactions(Sequencer *osr, list<Transaction*>& tls, Context *ondisk=0);
+  unsigned apply_transactions(Sequencer *osr, list<Transaction*>& tls,
+			      Context *ondisk=0);
 
   int queue_transaction_and_cleanup(Sequencer *osr, Transaction* t,
 				    ThreadPool::TPHandle *handle = NULL) {
     list<Transaction *> tls;
     tls.push_back(t);
     return queue_transactions(osr, tls, new C_DeleteTransaction(t),
-	                      NULL, NULL, TrackedOpRef(), handle);
+			      NULL, NULL, TrackedOpRef(), handle);
   }
 
-  int queue_transaction(Sequencer *osr, Transaction *t, Context *onreadable, Context *ondisk=0,
-				Context *onreadable_sync=0,
-				TrackedOpRef op = TrackedOpRef(),
-				ThreadPool::TPHandle *handle = NULL) {
+  int queue_transaction(Sequencer *osr, Transaction *t, Context *onreadable,
+			Context *ondisk=0,
+			Context *onreadable_sync=0,
+			TrackedOpRef op = TrackedOpRef(),
+			ThreadPool::TPHandle *handle = NULL) {
     list<Transaction*> tls;
     tls.push_back(t);
     return queue_transactions(osr, tls, onreadable, ondisk, onreadable_sync,
-	                      op, handle);
+			      op, handle);
   }
 
   int queue_transactions(Sequencer *osr, list<Transaction*>& tls,
@@ -1009,11 +1052,11 @@ public:
     C_GatherBuilder g_onreadable_sync(g_ceph_context, onreadable_sync);
     for (list<Transaction*>::iterator i = tls.begin(); i != tls.end(); ++i) {
       if (onreadable)
-        (*i)->register_on_applied(g_onreadable.new_sub());
+	(*i)->register_on_applied(g_onreadable.new_sub());
       if (ondisk)
-        (*i)->register_on_commit(g_ondisk.new_sub());
+	(*i)->register_on_commit(g_ondisk.new_sub());
       if (onreadable_sync)
-        (*i)->register_on_applied_sync(g_onreadable_sync.new_sub());
+	(*i)->register_on_applied_sync(g_onreadable_sync.new_sub());
     }
     if (onreadable)
       g_onreadable.activate();
@@ -1055,11 +1098,11 @@ public:
     C_GatherBuilder g_onreadable_sync(g_ceph_context, onreadable_sync);
     for (list<Transaction*>::iterator i = tls.begin(); i != tls.end(); ++i) {
       if (onreadable)
-        (*i)->register_on_applied(g_onreadable.new_sub());
+	(*i)->register_on_applied(g_onreadable.new_sub());
       if (ondisk)
-        (*i)->register_on_commit(g_ondisk.new_sub());
+	(*i)->register_on_commit(g_ondisk.new_sub());
       if (onreadable_sync)
-        (*i)->register_on_applied_sync(g_onreadable_sync.new_sub());
+	(*i)->register_on_applied_sync(g_onreadable_sync.new_sub());
     }
     if (onreadable)
       g_onreadable.activate();
@@ -1186,7 +1229,8 @@ public:
    * @param oid oid of object
    * @returns true if object exists, false otherwise
    */
-  virtual bool exists(const coll_t &cid, const ghobject_t& oid) = 0;                   // useful?
+  virtual bool exists(std::shared_ptr<coll_t> cid,
+		      std::shared_ptr<ghobject_t> oid) = 0; // useful?
 
   /**
    * stat -- get information for an object
@@ -1198,8 +1242,8 @@ public:
    * @returns 0 on success, negative error code on failure.
    */
   virtual int stat(
-    const coll_t &cid,
-    const ghobject_t& oid,
+    std::shared_ptr<coll_t> cid,
+    std::shared_ptr<ghobject_t> oid,
     struct stat *st,
     bool allow_eio = false) = 0; // struct stat?
 
@@ -1215,11 +1259,12 @@ public:
    * @param len number of bytes to be read
    * @param bl output bufferlist
    * @param allow_eio if false, assert on -EIO operation failure
-   * @returns number of bytes read on success, or negative error code on failure.
+   * @returns number of bytes read on success, or negative error code on
+   *  failure.
    */
    virtual int read(
-    const coll_t &cid,
-    const ghobject_t& oid,
+    std::shared_ptr<coll_t> cid,
+    std::shared_ptr<ghobject_t> oid,
     uint64_t offset,
     size_t len,
     bufferlist& bl,
@@ -1241,7 +1286,9 @@ public:
    * @param bl output bufferlist for extent map information.
    * @returns 0 on success, negative error code on failure.
    */
-  virtual int fiemap(const coll_t &cid, const ghobject_t& oid, uint64_t offset, size_t len, bufferlist& bl) = 0;
+  virtual int fiemap(std::shared_ptr<coll_t> cid,
+		     std::shared_ptr<ghobject_t> oid, uint64_t offset,
+		     size_t len, bufferlist& bl) = 0;
 
   /**
    * getattr -- get an xattr of an object
@@ -1252,7 +1299,9 @@ public:
    * @param value place to put output result.
    * @returns 0 on success, negative error code on failure.
    */
-  virtual int getattr(const coll_t &cid, const ghobject_t& oid, const char *name, bufferptr& value) = 0;
+  virtual int getattr(std::shared_ptr<coll_t> cid,
+		      std::shared_ptr<ghobject_t> oid, const char *name,
+		      bufferptr& value) = 0;
 
   /**
    * getattr -- get an xattr of an object
@@ -1263,7 +1312,9 @@ public:
    * @param value place to put output result.
    * @returns 0 on success, negative error code on failure.
    */
-  int getattr(const coll_t &cid, const ghobject_t& oid, const char *name, bufferlist& value) {
+  int getattr(std::shared_ptr<coll_t> cid,
+	      std::shared_ptr<ghobject_t> oid, const char *name,
+	      bufferlist& value) {
     bufferptr bp;
     int r = getattr(cid, oid, name, bp);
     if (bp.length())
@@ -1271,7 +1322,7 @@ public:
     return r;
   }
   int getattr(
-    const coll_t &cid, const ghobject_t& oid,
+    std::shared_ptr<coll_t> cid, std::shared_ptr<ghobject_t> oid,
     const string name, bufferlist& value) {
     bufferptr bp;
     int r = getattr(cid, oid, name.c_str(), bp);
@@ -1285,10 +1336,14 @@ public:
    * @param cid collection for object
    * @param oid oid of object
    * @param aset place to put output result.
-   * @param user_only true -> only user attributes are return else all attributes are returned
+   * @param user_only true -> only user attributes are return else all
+   *  attributes are returned
    * @returns 0 on success, negative error code on failure.
    */
-  virtual int getattrs(const coll_t &cid, const ghobject_t& oid, map<string,bufferptr>& aset, bool user_only = false) = 0;
+  virtual int getattrs(std::shared_ptr<coll_t> cid,
+		       std::shared_ptr<ghobject_t> oid,
+		       map<string,bufferptr>& aset,
+		       bool user_only = false) = 0;
 
   /**
    * getattrs -- get all of the xattrs of an object
@@ -1296,10 +1351,13 @@ public:
    * @param cid collection for object
    * @param oid oid of object
    * @param aset place to put output result.
-   * @param user_only true -> only user attributes are return else all attributes are returned
+   * @param user_only true -> only user attributes are return else all
+   *  attributes are returned
    * @returns 0 on success, negative error code on failure.
    */
-  int getattrs(const coll_t &cid, const ghobject_t& oid, map<string,bufferlist>& aset, bool user_only = false) {
+  int getattrs(std::shared_ptr<coll_t> cid,
+	       std::shared_ptr<ghobject_t> oid,
+	       map<string,bufferlist>& aset, bool user_only = false) {
     map<string,bufferptr> bmap;
     int r = getattrs(cid, oid, bmap, user_only);
     for (map<string,bufferptr>::iterator i = bmap.begin();
@@ -1321,7 +1379,8 @@ public:
    */
   virtual int list_collections(vector<coll_t>& ls) = 0;
 
-  virtual int collection_version_current(const coll_t &c, uint32_t *version) {
+  virtual int collection_version_current(std::shared_ptr<coll_t> c,
+					 uint32_t *version) {
     *version = 0;
     return 1;
   }
@@ -1331,7 +1390,7 @@ public:
    * @param c collection
    * @returns true if it exists, false otherwise
    */
-  virtual bool collection_exists(const coll_t &c) = 0;
+  virtual bool collection_exists(std::shared_ptr<coll_t> c) = 0;
   /**
    * collection_getattr - get an xattr of a collection
    *
@@ -1341,8 +1400,9 @@ public:
    * @param size size of buffer to receive value
    * @returns 0 on success, negative error code on failure
    */
-  virtual int collection_getattr(const coll_t &cid, const char *name,
-	                         void *value, size_t size) = 0;
+  virtual int collection_getattr(std::shared_ptr<coll_t> cid,
+				 const char *name,
+				 void *value, size_t size) = 0;
   /**
    * collection_getattr - get an xattr of a collection
    *
@@ -1351,7 +1411,8 @@ public:
    * @param bl buffer to receive value
    * @returns 0 on success, negative error code on failure
    */
-  virtual int collection_getattr(const coll_t &cid, const char *name, bufferlist& bl) = 0;
+  virtual int collection_getattr(std::shared_ptr<coll_t> cid,
+				 const char *name, bufferlist& bl) = 0;
   /**
    * collection_getattrs - get all xattrs of a collection
    *
@@ -1359,14 +1420,15 @@ public:
    * @param asert map of keys and buffers that contain the values
    * @returns 0 on success, negative error code on failure
    */
-  virtual int collection_getattrs(const coll_t &cid, map<string,bufferptr> &aset) = 0;
+  virtual int collection_getattrs(std::shared_ptr<coll_t> cid,
+				  map<string,bufferptr> &aset) = 0;
   /**
    * is a collection empty?
    *
    * @param c collection
    * @returns true if empty, false otherwise
    */
-  virtual bool collection_empty(const coll_t &c) = 0;
+  virtual bool collection_empty(std::shared_ptr<coll_t> c) = 0;
 
   /**
    * collection_list - get all objects of a collection in sorted order
@@ -1375,7 +1437,8 @@ public:
    * @param o [out] list of objects
    * @returns 0 on success, negative error code on failure
    */
-  virtual int collection_list(const coll_t &c, vector<ghobject_t>& o) = 0;
+  virtual int collection_list(std::shared_ptr<coll_t> c,
+			      vector<ghobject_t>& o) = 0;
 
   /**
    * list partial contents of collection relative to a hash offset/position
@@ -1389,9 +1452,11 @@ public:
    * @param next [out] next item sorts >= this value
    * @return zero on success, or negative error
    */
-  virtual int collection_list_partial(const coll_t &c, ghobject_t start,
+  virtual int collection_list_partial(std::shared_ptr<coll_t> c,
+				      ghobject_t start,
 				      int min, int max, snapid_t snap,
-				      vector<ghobject_t> *ls, ghobject_t *next) = 0;
+				      vector<ghobject_t> *ls,
+				      ghobject_t *next) = 0;
 
   /**
    * list contents of a collection that fall in the range [start, end)
@@ -1403,57 +1468,61 @@ public:
    * @param ls [out] result
    * @return zero on success, or negative error
    */
-  virtual int collection_list_range(const coll_t &c, ghobject_t start, ghobject_t end,
-	                            snapid_t seq, vector<ghobject_t> *ls) = 0;
+  virtual int collection_list_range(std::shared_ptr<coll_t> c,
+				    ghobject_t start, ghobject_t end,
+				    snapid_t seq, vector<ghobject_t> *ls) = 0;
 
   //TODO: Remove
-  int collection_list(const coll_t &c, vector<hobject_t>& o);
+  int collection_list(std::shared_ptr<coll_t> c, vector<hobject_t>& o);
 
-  int collection_list_partial(const coll_t &c, hobject_t start,
-				      int min, int max, snapid_t snap,
-				      vector<hobject_t> *ls, hobject_t *next);
+  int collection_list_partial(std::shared_ptr<coll_t> c,
+			      std::shared_ptr<hobject_t> start,
+			      int min, int max, snapid_t snap,
+			      vector<hobject_t> *ls, hobject_t *next);
 
-  int collection_list_range(const coll_t &c, hobject_t start, hobject_t end,
-	                            snapid_t seq, vector<hobject_t> *ls);
+  int collection_list_range(std::shared_ptr<coll_t> c,
+			    std::shared_ptr<hobject_t> start,
+			    std::shared_ptr<hobject_t> end,
+			    snapid_t seq, vector<hobject_t> *ls);
 
   /// OMAP
   /// Get omap contents
   virtual int omap_get(
-    const coll_t &c,         ///< [in] Collection containing oid
-    const ghobject_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,      ///< [out] omap header
+    std::shared_ptr<coll_t> c, ///< [in] Collection containing oid
+    std::shared_ptr<ghobject_t> oid, ///< [in] Object containing omap
+    bufferlist *header, ///< [out] omap header
     map<string, bufferlist> *out /// < [out] Key to value map
     ) = 0;
 
   /// Get omap header
   virtual int omap_get_header(
-    const coll_t &c,         ///< [in] Collection containing oid
-    const ghobject_t &oid,   ///< [in] Object containing omap
-    bufferlist *header,      ///< [out] omap header
+    std::shared_ptr<coll_t> c, ///< [in] Collection containing oid
+    std::shared_ptr<ghobject_t> oid, ///< [in] Object containing omap
+    bufferlist *header, ///< [out] omap header
     bool allow_eio = false ///< [in] don't assert on eio
     ) = 0;
 
   /// Get keys defined on oid
   virtual int omap_get_keys(
-    const coll_t &c,       ///< [in] Collection containing oid
-    const ghobject_t &oid, ///< [in] Object containing omap
+    std::shared_ptr<coll_t> c, ///< [in] Collection containing oid
+    std::shared_ptr<ghobject_t> oid, ///< [in] Object containing omap
     set<string> *keys      ///< [out] Keys defined on oid
     ) = 0;
 
   /// Get key values
   virtual int omap_get_values(
-    const coll_t &c,             ///< [in] Collection containing oid
-    const ghobject_t &oid,       ///< [in] Object containing omap
-    const set<string> &keys,     ///< [in] Keys to get
+    std::shared_ptr<coll_t> c, ///< [in] Collection containing oid
+    std::shared_ptr<ghobject_t> oid, ///< [in] Object containing omap
+    const set<string> &keys, ///< [in] Keys to get
     map<string, bufferlist> *out ///< [out] Returned keys and values
     ) = 0;
 
   /// Filters keys into out which are defined on oid
   virtual int omap_check_keys(
-    const coll_t &c,         ///< [in] Collection containing oid
-    const ghobject_t &oid,   ///< [in] Object containing omap
+    std::shared_ptr<coll_t> c, ///< [in] Collection containing oid
+    std::shared_ptr<ghobject_t> oid, ///< [in] Object containing omap
     const set<string> &keys, ///< [in] Keys to check
-    set<string> *out         ///< [out] Subset of keys defined on oid
+    set<string> *out ///< [out] Subset of keys defined on oid
     ) = 0;
 
   /**
@@ -1466,8 +1535,8 @@ public:
    * @return iterator, null on error
    */
   virtual ObjectMap::ObjectMapIterator get_omap_iterator(
-    const coll_t &c,       ///< [in] collection
-    const ghobject_t &oid  ///< [in] object
+    std::shared_ptr<coll_t> c, ///< [in] collection
+    std::shared_ptr<ghobject_t> oid  ///< [in] object
     ) = 0;
 
   virtual void sync(Context *onsync) {}
