@@ -124,7 +124,7 @@ public:
 	bufferlist data;
 	data.append(buffer::create(block_size));
 	vector<page_set::page_type*> pagevec;
-	PageSetX<PageSize>::PageVec pagevec_x(7);
+	vector<page_set::page_type*> pagevec_x;
 
 	dout(0) << "Writing " << size << " in blocks of " << block_size
 		<< dendl;

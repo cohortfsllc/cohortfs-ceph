@@ -302,24 +302,8 @@ public:
     free(t);
   }
 
-  class PageVec {
-  private:
-    unsigned int npart;
-    std::vector<page_type*> vec;
-  public:
-    PageVec(const PageSetX& pgset) : npart(pgset.npart) {};
-    std::vector<page_type*>& get_vec() {
-      return vec;
-    }
-    void clear() {
-      vec.clear();
-    }
-    void resize(unsigned int n) {
-      vec.resize(n);
-    }
-  };
-
-  void alloc_range(uint64_t offset, size_t length, PageVec& pgvec) {
+  void alloc_range(uint64_t offset, size_t length,
+		   std::vector<page_type*>& pgvec) {
 
     uint64_t page_offset = offset & ~(PageSize-1);
     uint64_t len = length + (offset-page_offset);
@@ -329,7 +313,7 @@ public:
     for( int ix = 0; ix < npart; ++ix) {
       pageset_type& pgset = t[ix];
       pgset.sp.lock();
-      pgset.alloc_range_ex(offset, length, pgvec.get_vec(), ix, npart);
+      pgset.alloc_range_ex(offset, length, pgvec, ix, npart);
       pgset.sp.unlock();
     }
   }
