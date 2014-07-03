@@ -230,10 +230,14 @@ public:
 		      unsigned int npart) {
     pair<iterator, iterator> range =
       alloc_range_ex(offset, length, soff, npart);
-    for (int ix = 0; range.first != range.second; ++range.first, ++ix) {
+
+    int ix = 0;
+    do {
       arr[(ix+soff)] = &*range.first;
       range.first->get();
-    }
+      ++range.first;
+      ++ix;
+    } while (range.first != range.second);
   }
 
   iterator first_page_containing(uint64_t offset, size_t length) {
