@@ -152,6 +152,7 @@ set(libcommon_files
   common/str_map.cc
   common/errno.cc
   common/TrackedOp.cc
+  common/util.cc
   common/SloppyCRCMap.cc
   json_spirit/json_spirit_reader.cpp
   json_spirit/json_spirit_writer.cpp
@@ -290,10 +291,9 @@ set(librados_srcs
   librados/IoCtxImpl.cc
   )
 add_library(librados ${CEPH_SHARED} ${librados_srcs}
-  $<TARGET_OBJECTS:cls_lock_objs>
-  $<TARGET_OBJECTS:cls_references_objs>)
+  cls/lock/cls_lock_client.cc)
 add_dependencies(librados osdc)
-target_link_libraries(librados osdc common osd os ${CRYPTO_LIBS} ${EXTRALIBS})
+target_link_libraries(librados osdc common ${CRYPTO_LIBS} ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2)
 endif(${ENABLE_SHARED})
@@ -338,17 +338,13 @@ set(lib_mon_srcs
   mon/DataHealthService.cc 
   mon/ConfigKeyService.cc
   )
-set(common_util_src
-  common/util.cc
-  )
 set(monitorstore_src
   mon/MonitorStore.cc
   )
-add_library(common_util_obj OBJECT ${common_util_src})
 add_library(monitorstore_obj OBJECT ${monitorstore_src})
 add_library(mon STATIC ${lib_mon_srcs} $<TARGET_OBJECTS:mon_common_objs>
   $<TARGET_OBJECTS:os_mon_objs> $<TARGET_OBJECTS:osd_mon_objs>
-  $<TARGET_OBJECTS:common_util_obj> $<TARGET_OBJECTS:monitorstore_obj>)
+  $<TARGET_OBJECTS:monitorstore_obj>)
 set(ceph_mon_srcs ceph_mon.cc common/TextTable.cc)
 add_executable(ceph-mon ${ceph_mon_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
 target_link_libraries(ceph-mon mon boost_thread common os global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
@@ -693,8 +689,7 @@ if(${WITH_RBD})
     librbd/AioRequest.cc cls/rbd/cls_rbd_client.cc librbd/ImageCtx.cc
     librbd/internal.cc librbd/LibrbdWriteback.cc librbd/WatchCtx.cc)
   add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
-    $<TARGET_OBJECTS:cls_lock_objs> $<TARGET_OBJECTS:osdc_rbd_objs>
-    $<TARGET_OBJECTS:common_util_obj>)
+    $<TARGET_OBJECTS:osdc_rbd_objs>)
   target_link_libraries(librbd ${CMAKE_DL_LIBS})
   if(${ENABLE_SHARED})
     set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd)
@@ -703,7 +698,7 @@ if(${WITH_RBD})
   set(rbd_srcs rbd.cc common/TextTable.cc)
   set(rbd_mountcephfs_files common/secret.c)
   add_library(rbd_mountcephfs_objs OBJECT ${rbd_mountcephfs_files})
-  add_executable(rbd ${rbd_srcs} $<TARGET_OBJECTS:common_util_obj>
+  add_executable(rbd ${rbd_srcs}
     $<TARGET_OBJECTS:rbd_mountcephfs_objs>
     $<TARGET_OBJECTS:heap_profiler_objs>)
   set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)

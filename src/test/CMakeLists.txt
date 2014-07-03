@@ -119,9 +119,10 @@ target_link_libraries(dencoder
   cls_refcount
   cls_replica_log
   librados
-  global
   osd
+  os
   mon
+  global
   ${EXTRALIBS}
   ${TCMALLOC_LIBS}
   ${CMAKE_DL_LIBS}
