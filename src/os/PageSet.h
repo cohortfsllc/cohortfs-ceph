@@ -185,7 +185,11 @@ public:
     // adjust for stride
     while ((position % npart) != soff) {
       position -= PageSize;
+      length -= PageSize;
     }
+
+    if (position < offset)
+      goto out;
 
     while (length) {
       const uint64_t page_offset = position & ~(PageSize-1);
@@ -211,8 +215,9 @@ public:
 	last = cur;
 
       position -= (PageSize * npart);
-      length -= std::min(length, PageSize);
+      length -= std::min(length, PageSize*npart);
     }
+  out:
     return make_pair(cur, last);
   }
 
