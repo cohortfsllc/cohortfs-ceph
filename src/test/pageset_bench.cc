@@ -108,6 +108,7 @@ byte_units size = 1048576;
 byte_units block_size = 4096;
 int repeats = 1;
 int n_threads = 1;
+bool prealloc = false;
 static const size_t PageSize = 64 << 10;
 typedef PageSet<PageSize> page_set;
 page_set pages;
@@ -121,6 +122,7 @@ public:
     void *entry() {
 	bufferlist data;
 	data.append(buffer::create(block_size));
+	vector<page_set::page_type*> pagevec;
 
 	dout(0) << "Writing " << size << " in blocks of " << block_size
 		<< dendl;
@@ -130,22 +132,44 @@ public:
 	    size_t len = size;
 
 	    std::cout << "Write cycle " << ix << std::endl;
+	    if (likely(prealloc)) {
+		page_set::iterator p = pages.begin();
+		while (len) {
+		    assert(p != pages.end());
+		    size_t count = len < block_size ? len : (size_t)block_size;
 
-	    page_set::iterator p = pages.begin();
-	    while (len) {
-		assert(p != pages.end());
-		size_t count = len < block_size ? len : (size_t)block_size;
-
-		const size_t page_off = offset - p->offset;
-		if (count > PageSize - page_off)
+		    const size_t page_off = offset - p->offset;
+		    if (count > PageSize - page_off)
 			count = PageSize - page_off;
 
-		memcpy(p->data + page_off, data.c_str(), count);
+		    memcpy(p->data + page_off, data.c_str(), count);
 
-		offset += count;
-		len -= count;
-		if ((offset % PageSize) == 0)
+		    offset += count;
+		    len -= count;
+		    if ((offset % PageSize) == 0)
 			++p;
+		}
+	    } else {
+		/* !prealloc */
+		pages.sp.lock();
+		pages.alloc_range(offset, len, pagevec);
+		pages.sp.unlock();
+		for (auto& p : pagevec) {
+		    size_t count = len < block_size ? len : (size_t)block_size;
+
+		    const size_t page_off = offset - p->offset;
+		    if (count > PageSize - page_off)
+			count = PageSize - page_off;
+
+		    memcpy(p->data + page_off, data.c_str(), count);
+		    p->put();
+
+		    offset += count;
+		    len -= count;
+		    if ((offset % PageSize) == 0)
+			++p;
+		}
+		pagevec.clear();
 	    }
 	}
 	return 0;
@@ -182,6 +206,8 @@ int main(int argc, const char *argv[])
 		    repeats = atoi(val.c_str());
 		} else if (ceph_argparse_witharg(args, i, &val, "--threads", (char*)NULL)) {
 		    n_threads = atoi(val.c_str());
+		} else if (ceph_argparse_flag(args, i, "--prealloc", (char*)NULL)) {
+		    prealloc = true;
 		} else {
 			derr << "Error: can't understand argument: " << *i <<
 				"\n" << dendl;
@@ -197,7 +223,9 @@ int main(int argc, const char *argv[])
 	dout(0) << "repeats " << repeats << dendl;
 	dout(0) << "threads " << n_threads << dendl;
 
-	pages.alloc_range(0, size);
+	// minmize lock contention
+	if (prealloc)
+	    pages.alloc_range(0, size);
 
 	int thr_ix;
 	OBS_Worker *workers = new OBS_Worker[n_threads];
