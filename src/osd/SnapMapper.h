@@ -18,6 +18,7 @@
 #include <string>
 #include <set>
 #include <utility>
+#include <memory>
 #include <string.h>
 
 #include "common/map_cacher.hpp"
@@ -29,18 +30,18 @@
 
 class OSDriver : public MapCacher::StoreDriver<std::string, bufferlist> {
   ObjectStore *os;
-  coll_t cid;
-  hobject_t hoid;
+  std::shared_ptr<coll_t> cid;
+  std::shared_ptr<hobject_t> hoid;
 
 public:
   class OSTransaction : public MapCacher::Transaction<std::string, bufferlist> {
     friend class OSDriver;
-    coll_t cid;
-    hobject_t hoid;
+    std::shared_ptr<coll_t> cid;
+    std::shared_ptr<hobject_t> hoid;
     ObjectStore::Transaction *t;
     OSTransaction(
-      coll_t cid,
-      const hobject_t &hoid,
+      std::shared_ptr<coll_t>& cid,
+      std::shared_ptr<hobject_t>& hoid,
       ObjectStore::Transaction *t)
       : cid(cid), hoid(hoid), t(t) {}
   public:
@@ -63,7 +64,8 @@ public:
     return OSTransaction(cid, hoid, t);
   }
 
-  OSDriver(ObjectStore *os, coll_t cid, const hobject_t &hoid) :
+  OSDriver(ObjectStore *os, std::shared_ptr<coll_t>& cid,
+	   std::shared_ptr<hobject_t>& hoid) :
     os(os), cid(cid), hoid(hoid) {}
   int get_keys(
     const std::set<std::string> &keys,
@@ -98,9 +100,10 @@ public:
 class SnapMapper {
 public:
   struct object_snaps {
-    hobject_t oid;
+    std::shared_ptr<hobject_t> oid;
     std::set<snapid_t> snaps;
-    object_snaps(hobject_t oid, const std::set<snapid_t> &snaps)
+    object_snaps(std::shared_ptr<hobject_t>& oid,
+		 const std::set<snapid_t>& snaps)
       : oid(oid), snaps(snaps) {}
     object_snaps() {}
     void encode(bufferlist &bl) const;
@@ -118,34 +121,36 @@ private:
   std::string to_raw_key(
     const std::pair<snapid_t, hobject_t> &to_map);
 
+  /* XXXX shared::ptr<hobject_t> */
   std::pair<std::string, bufferlist> to_raw(
     const std::pair<snapid_t, hobject_t> &to_map);
 
   static bool is_mapping(const std::string &to_test);
 
+  /* XXXX shared::ptr<hobject_t> */
   std::pair<snapid_t, hobject_t> from_raw(
     const std::pair<std::string, bufferlist> &image);
 
-  std::string to_object_key(const hobject_t &hoid);
+  std::string to_object_key(std::shared_ptr<hobject_t>& hoid);
 
-  int get_snaps(const hobject_t &oid, object_snaps *out);
+  int get_snaps(std::shared_ptr<hobject_t>& oid, object_snaps *out);
 
   void set_snaps(
-    const hobject_t &oid,
+    std::shared_ptr<hobject_t>& oid,
     const object_snaps &out,
     MapCacher::Transaction<std::string, bufferlist> *t);
 
   void clear_snaps(
-    const hobject_t &oid,
+    std::shared_Ptr<hobject_t>& oid,
     MapCacher::Transaction<std::string, bufferlist> *t);
 
   // True if hoid belongs in this mapping based on mask_bits and match
-  bool check(const hobject_t &hoid) const {
+  bool check(std::shared_ptr<hobject_t>& hoid) const {
     return hoid.match(mask_bits, match);
   }
 
   int _remove_oid(
-    const hobject_t &oid,    ///< [in] oid to remove
+    std::shared_ptr<hobject_t>& oid,    ///< [in] oid to remove
     MapCacher::Transaction<std::string, bufferlist> *t ///< [out] transaction
     );
 
@@ -197,7 +202,7 @@ public:
 
   /// Update snaps for oid, empty new_snaps removes the mapping
   int update_snaps(
-    const hobject_t &oid,       ///< [in] oid to update
+    std::shared_ptr<hobject_t>& oid, ///< [in] oid to update
     const std::set<snapid_t> &new_snaps, ///< [in] new snap set
     const std::set<snapid_t> *old_snaps, ///< [in] old snaps (for debugging)
     MapCacher::Transaction<std::string, bufferlist> *t ///< [out] transaction
@@ -205,7 +210,7 @@ public:
 
   /// Add mapping for oid, must not already be mapped
   void add_oid(
-    const hobject_t &oid,       ///< [in] oid to add
+    std::shared_ptr<hobject_t>& oid, ///< [in] oid to add
     std::set<snapid_t> new_snaps, ///< [in] snaps
     MapCacher::Transaction<std::string, bufferlist> *t ///< [out] transaction
     );
@@ -213,18 +218,18 @@ public:
   /// Returns first object with snap as a snap
   int get_next_object_to_trim(
     snapid_t snap,              ///< [in] snap to check
-    hobject_t *hoid             ///< [out] next hoid to trim
+    std::shared_ptr<hobject_t> hoid             ///< [out] next hoid to trim
     );  ///< @return error, -ENOENT if no more objects
 
   /// Remove mapping for oid
   int remove_oid(
-    const hobject_t &oid,    ///< [in] oid to remove
+    std::shared_ptr<hobject_t>& oid,    ///< [in] oid to remove
     MapCacher::Transaction<std::string, bufferlist> *t ///< [out] transaction
     ); ///< @return error, -ENOENT if the object is not mapped
 
   /// Get snaps for oid
   int get_snaps(
-    const hobject_t &oid,     ///< [in] oid to get snaps for
+    std::shared_ptr<hobject_t>& oid,     ///< [in] oid to get snaps for
     std::set<snapid_t> *snaps ///< [out] snaps
     ); ///< @return error, -ENOENT if oid is not recorded
 };
