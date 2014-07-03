@@ -15,6 +15,7 @@
 #ifndef __CEPH_OS_HOBJECT_H
 #define __CEPH_OS_HOBJECT_H
 
+#include <memory>
 #include <string.h>
 #include "include/types.h"
 #include "include/object.h"
@@ -30,7 +31,7 @@ namespace ceph {
 }
 
 struct hobject_t {
-  object_t oid;
+  std::shared_ptr<object_t> oid;
   snapid_t snap;
   uint32_t hash;
 private:
@@ -67,7 +68,7 @@ public:
   
   hobject_t() : snap(0), hash(0), max(false), pool(-1) {}
 
-  hobject_t(const object_t &oid, const string& key, snapid_t snap,
+  hobject_t(object_t &oid, const string& key, snapid_t snap,
 	    uint64_t hash, int64_t pool, string nspace) :
     oid(oid), snap(snap), hash(hash), max(false),
     pool(pool), nspace(nspace),
