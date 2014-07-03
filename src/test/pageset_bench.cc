@@ -112,6 +112,7 @@ bool prealloc = false;
 static const size_t PageSize = 64 << 10;
 typedef PageSet<PageSize> page_set;
 page_set pages;
+PageSetX<PageSize> pages_x(7);
 
 
 class OBS_Worker : public Thread
@@ -123,6 +124,7 @@ public:
 	bufferlist data;
 	data.append(buffer::create(block_size));
 	vector<page_set::page_type*> pagevec;
+	PageSetX<PageSize>::PageVec pagevec_x(7);
 
 	dout(0) << "Writing " << size << " in blocks of " << block_size
 		<< dendl;
@@ -170,6 +172,9 @@ public:
 			++p;
 		}
 		pagevec.clear();
+
+		pages_x.alloc_range(offset, len, pagevec_x);
+
 	    }
 	}
 	return 0;

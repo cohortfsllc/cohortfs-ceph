@@ -75,10 +75,18 @@ private: // copy disabled
   const Page<PageSize>& operator=(const Page<PageSize>&) { return *this; }
 };
 
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64 /* XXX arch-specific define */
+#endif
+#define CACHE_PAD(_n) char __pad ## _n [CACHE_LINE_SIZE]
+
+
 template<size_t PageSize>
 class PageSet {
 public:
   typedef Page<PageSize> page_type;
+
+  Spinlock sp;
 
   // store pages in a boost intrusive avl_set
   typedef typename page_type::Less page_cmp;
@@ -95,6 +103,7 @@ public:
 
 private:
   page_set pages;
+  CACHE_PAD(0); // coerce lanes into separate cache lines
 
   void free_pages(iterator cur, iterator end) {
     while (cur != end) {
@@ -139,11 +148,6 @@ public:
 	page_type *page = new page_type(page_offset);
 	cur = pages.insert_commit(*page, commit);
 
-	/* XXX  Dont zero-fill pages AOT, rather find holes and expand
-	 * them when read.  Just avoiding the fills isn't enough, but it
-	 * increased throughput by 100MB/s.   And it's enough for simple
-	 * benchmarks that only read after write.  */
-#if 1
 	// zero end of page past offset + length
 	if (offset + length < page->offset + PageSize)
 	  std::fill(page->data + offset + length - page->offset,
@@ -151,9 +155,6 @@ public:
 	// zero front of page between page_offset and offset
 	if (offset > page->offset)
 	  std::fill(page->data, page->data + offset - page->offset, 0);
-#else
-	memset(page->data, 0, PageSize);
-#endif
 
       } else { // exists
 	cur = insert.first;
@@ -167,6 +168,54 @@ public:
     return make_pair(cur, last);
   }
 
+  // allocate all pages that intersect the range [offset,length)
+  pair<iterator, iterator> alloc_range_ex(uint64_t offset, size_t length,
+					  unsigned int soff,
+					  unsigned int npart) {
+    std::pair<iterator, bool> insert;
+    iterator cur = pages.end();
+    iterator last = pages.end(); // track last page in range
+
+    // loop in reverse so we can provide hints to avl_set::insert_check()
+    //  and get O(1) insertions after the first
+    uint64_t position = offset + length;
+    if ((position & ~(PageSize-1)) == position)
+      position--;
+
+    // adjust for stride
+    while ((position % npart) != soff) {
+      position -= PageSize;
+    }
+
+    while (length) {
+      const uint64_t page_offset = position & ~(PageSize-1);
+
+      typename page_set::insert_commit_data commit;
+      insert = pages.insert_check(cur, page_offset, page_cmp(), commit);
+      if (insert.second) {
+	page_type *page = new page_type(page_offset);
+	cur = pages.insert_commit(*page, commit);
+
+	// zero end of page past offset + length
+	if (offset + length < page->offset + PageSize)
+	  std::fill(page->data + offset + length - page->offset,
+	      page->data + PageSize, 0);
+	// zero front of page between page_offset and offset
+	if (offset > page->offset)
+	  std::fill(page->data, page->data + offset - page->offset, 0);
+
+      } else { // exists
+	cur = insert.first;
+      }
+      if (last == pages.end())
+	last = cur;
+
+      position -= (PageSize * npart);
+      length -= std::min(length, PageSize);
+    }
+    return make_pair(cur, last);
+  }
+
   void alloc_range(uint64_t offset, size_t length, vector<page_type*> &arr) {
     pair<iterator, iterator> range = alloc_range(offset, length);
     do {
@@ -174,6 +223,17 @@ public:
       range.first->get();
       ++range.first;
     } while (range.first != range.second);
+  }
+
+  void alloc_range_ex(uint64_t offset, size_t length,
+		      vector<page_type*> &arr, unsigned int soff,
+		      unsigned int npart) {
+    pair<iterator, iterator> range =
+      alloc_range_ex(offset, length, soff, npart);
+    for (int ix = 0; range.first != range.second; ++range.first, ++ix) {
+      arr[(ix+soff)] = &*range.first;
+      range.first->get();
+    }
   }
 
   iterator first_page_containing(uint64_t offset, size_t length) {
@@ -207,6 +267,66 @@ public:
       page_type *page = new page_type;
       page->decode(p);
       cur = pages.insert_before(cur, *page);
+    }
+  }
+};
+
+template<size_t PageSize>
+class PageSetX {
+public:
+  typedef Page<PageSize> page_type;
+  typedef PageSet<PageSize> pageset_type;
+
+private:
+  unsigned int npart;
+  pageset_type *t;
+
+public:
+  PageSetX(unsigned int _npart) : npart(_npart) {
+    t = static_cast<pageset_type*>(malloc(npart*sizeof(pageset_type)));
+    for (int ix = 0; ix < npart; ++ix)  {
+      pageset_type& pgset = t[ix];
+      new (&pgset) pageset_type(); // placement new
+    }
+  }
+
+  ~PageSetX() {
+    for (int ix = 0; ix < npart; ++ix)  {
+      pageset_type& pgset = t[ix];
+      pgset.~pageset_type();
+    }
+    free(t);
+  }
+
+  class PageVec {
+  private:
+    unsigned int npart;
+    std::vector<page_type*> vec;
+  public:
+    PageVec(const PageSetX& pgset) : npart(pgset.npart) {};
+    std::vector<page_type*>& get_vec() {
+      return vec;
+    }
+    void clear() {
+      vec.clear();
+    }
+    void resize(unsigned int n) {
+      vec.resize(n);
+    }
+  };
+
+  void alloc_range(uint64_t offset, size_t length, PageVec& pgvec) {
+
+    uint64_t page_offset = offset & ~(PageSize-1);
+    uint64_t len = length + (offset-page_offset);
+    unsigned int n = len/PageSize;
+
+    pgvec.resize(n);
+    for( int ix = 0; ix < npart; ++ix) {
+      pageset_type& pgset = t[ix];
+      pgset.sp.lock();
+      pgset.alloc_range_ex(offset, length, pgvec.get_vec(), ix, npart);
+      pgset.sp.unlock();
     }
   }
 };
