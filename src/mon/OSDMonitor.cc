@@ -302,7 +302,7 @@ void OSDMonitor::create_pending()
 {
   pending_inc = OSDMap::Incremental(osdmap.epoch+1);
   pending_inc.fsid = mon->monmap->fsid;
-  
+
   dout(10) << "create_pending e " << pending_inc.epoch << dendl;
 }
 
@@ -332,7 +332,7 @@ void OSDMonitor::encode_pending(MonitorDBStore::Transaction *t)
   }
   for (map<int32_t,entity_addr_t>::iterator i = pending_inc.new_up_client.begin();
        i != pending_inc.new_up_client.end();
-       ++i) { 
+       ++i) {
     //FIXME: insert cluster addresses too
     dout(2) << " osd." << i->first << " UP " << i->second << dendl;
   }
@@ -999,7 +999,7 @@ bool OSDMonitor::prepare_boot(MOSDBoot *m)
     // preprocess should have caught these;  if not, assert.
     assert(osdmap.get_inst(from) != m->get_orig_source_inst());
     assert(osdmap.get_uuid(from) == m->sb.osd_fsid);
-    
+
     if (pending_inc.new_state.count(from) == 0 ||
 	(pending_inc.new_state[from] & CEPH_OSD_UP) == 0) {
       // mark previous guy down
@@ -1445,7 +1445,7 @@ void OSDMonitor::tick()
 	  pending_inc.new_state[o] |= CEPH_OSD_AUTOOUT;
 
 	  do_propose = true;
-	
+
 	  mon->clog.info() << "osd." << o << " out (down for " << down << ")\n";
 	} else
 	  continue;
@@ -2266,7 +2266,7 @@ done:
     if (!Volume::valid_name(name, error_message)) {
       ss << error_message;
       err = -EINVAL;
-      return true;
+      goto reply;
     }
     vol = CohortVolume::create(name, last_update, place_text,
 			       symbols, erasure_type, data_blocks,
@@ -2275,10 +2275,15 @@ done:
     if (vol) {
       ss << "volume: " << vol << " created.";
       pending_inc.include_addition(vol);
+      wait_for_finished_proposal(new Monitor::C_Command(
+				   mon, m, 0, rs,
+				   get_last_committed() + 1));
+
+      return true;
     } else {
       ss << error_message;
       err = -EINVAL;
-      return true;
+      goto reply;
     }
   } else if (prefix == "osd volume remove") {
     string name;
@@ -2289,9 +2294,13 @@ done:
     if (!osdmap.find_by_name(name, vol)) {
       ss << "volume named " << name << " not found";
       err = -EINVAL;
-      return true;
+      goto reply;
     }
     pending_inc.include_removal(vol->uuid);
+    wait_for_finished_proposal(new Monitor::C_Command(
+				 mon, m, 0, rs,
+				 get_last_committed() + 1));
+    return true;
   } else {
     err = -EINVAL;
   }
