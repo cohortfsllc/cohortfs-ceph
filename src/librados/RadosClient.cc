@@ -307,6 +307,7 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
 {
   uuid_d id;
   VolumeRef v;
+  Mutex::Locker l(lock);
   int r = wait_for_osdmap();
   if (r < 0)
     return -EIO;
@@ -323,6 +324,7 @@ int librados::RadosClient::create_ioctx(const string &name, IoCtxImpl **io)
 
 int librados::RadosClient::create_ioctx(const uuid_d &id, IoCtxImpl **io)
 {
+  Mutex::Locker l(lock);
   int r = wait_for_osdmap();
   VolumeRef volume;
   if (r < 0)
