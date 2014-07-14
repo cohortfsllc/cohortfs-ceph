@@ -322,14 +322,18 @@ install(FILES include/rados/librados.h include/rados/rados_types.h
   DESTINATION include/rados)
 install(TARGETS librados DESTINATION lib)
 
-set(rados_srcs tools/rados/rados.cc common/obj_bencher.cc)
-add_executable(rados ${rados_srcs})
-target_link_libraries(rados librados global ${CMAKE_DL_LIBS})
+set(rados_srcs
+  tools/rados/rados.cc
+  common/obj_bencher.cc)
+add_executable(rados ${rados_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
+target_link_libraries(rados librados global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 
 set(librados_config_srcs
   librados-config.cc)
-add_executable(librados-config ${librados_config_srcs})
-target_link_libraries(librados-config librados global ${CMAKE_DL_LIBS})
+add_executable(librados-config ${librados_config_srcs}
+  $<TARGET_OBJECTS:heap_profiler_objs>)
+target_link_libraries(librados-config librados global ${CMAKE_DL_LIBS}
+  ${TCMALLOC_LIBS})
 
 install(TARGETS rados librados-config DESTINATION bin)
 
@@ -366,7 +370,8 @@ add_library(mon STATIC ${lib_mon_srcs} $<TARGET_OBJECTS:mon_common_objs>
   $<TARGET_OBJECTS:monitorstore_obj>)
 set(ceph_mon_srcs ceph_mon.cc common/TextTable.cc)
 add_executable(ceph-mon ${ceph_mon_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(ceph-mon mon boost_thread common os global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${EXTRALIBS})
+target_link_libraries(ceph-mon mon boost_thread common os global ${EXTRALIBS}
+  ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
 install(TARGETS ceph-mon DESTINATION bin)
 
 # OSD
@@ -553,7 +558,8 @@ if(${WITH_MDS})
   add_library(mds ${mds_srcs})
   set(ceph_mds_srcs ceph_mds.cc)
   add_executable(ceph-mds ${ceph_mds_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-  target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global ${TCMALLOC_LIBS} boost_thread)
+  target_link_libraries(ceph-mds mds osdc ${CMAKE_DL_LIBS} global
+    ${TCMALLOC_LIBS} boost_thread)
   install(TARGETS ceph-mds DESTINATION bin)
 endif(${WITH_MDS})
 
@@ -662,10 +668,8 @@ if(${WITH_CLIENT})
     client/Inode.cc client/MetaRequest.cc client/MetaSession.cc
     client/Trace.cc)
   add_library(client ${libclient_srcs})
-  target_link_libraries(client PRIVATE osdc ${LIBEDIT_LIBS})
-  set(libcephfs_srcs
-    libcephfs.cc
-    )
+  target_link_libraries(client osdc ${LIBEDIT_LIBS})
+  set(libcephfs_srcs libcephfs.cc)
   add_library(cephfs SHARED ${libcephfs_srcs})
   target_link_libraries(cephfs PRIVATE client global)
   if(${ENABLE_SHARED})
@@ -751,7 +755,8 @@ if(${WITH_RADOSGW})
     rgw/rgw_rest_conn.cc rgw/rgw_rest_log.cc rgw/rgw_rest_metadata.cc
     rgw/rgw_rest_opstate.cc rgw/rgw_rest_replica_log.cc ${kvs_srcs})
   add_executable(radosgw ${radosgw_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-  target_link_libraries(radosgw librgw_a librados cls_rgw cls_lock cls_refcount
-    cls_log cls_statelog cls_version cls_replica_log cls_kvs cls_user curl expat global fcgi resolv ${TCMALLOC_LIBS})
+  target_link_libraries(radosgw rgw_a librados cls_rgw cls_lock cls_refcount
+    cls_log cls_statelog cls_version cls_replica_log cls_kvs cls_user curl
+    expat global fcgi resolv ${TCMALLOC_LIBS})
   install(TARGETS radosgw DESTINATION bin)
 endif(${WITH_RADOSGW})
