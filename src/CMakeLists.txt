@@ -646,6 +646,12 @@ install(PROGRAMS
   ${CMAKE_BINARY_DIR}/ceph-coverage 
   ${CMAKE_BINARY_DIR}/ceph
   DESTINATION bin)
+install(TARGETS
+  cephfstool
+  ceph-conf
+  ceph-authtool
+  ceph_mon_store_converter
+  DESTINATION bin)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/init-ceph.in
   ${CMAKE_BINARY_DIR}/init-ceph @ONLY)
