@@ -33,8 +33,6 @@ int main(int argc, char **argv)
      "set number of rbd images to use")
     ("image-size", po::value<unsigned>()->default_value(4096),
      "set image size in megabytes")
-    ("order", po::value<unsigned>()->default_value(22),
-     "set log_2(object size)")
     ("io-size", po::value<unsigned>()->default_value(4<<10),
      "set io size")
     ("write-ratio", po::value<double>()->default_value(0.25),
@@ -133,11 +131,10 @@ int main(int argc, char **argv)
   librbd::RBD rbd;
   {
     map<string, ceph::shared_ptr<librbd::Image> > images;
-    int order = vm["order"].as<unsigned>();
     uint64_t image_size = ((uint64_t)vm["image-size"].as<unsigned>()) << 20;
     for (set<string>::const_iterator i = image_names.begin();
 	 i != image_names.end(); ++i) {
-      r = rbd.create(ioctx, i->c_str(), image_size, &order);
+      r = rbd.create(ioctx, i->c_str(), image_size);
       if (r < 0) {
 	cerr << "error creating image " << *i << " r=" << r << std::endl;
 	return -r;

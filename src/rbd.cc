@@ -58,7 +58,7 @@
 #include <blkid/blkid.h>
 
 #define MAX_SECRET_LEN 1000
-#define MAX_POOL_NAME_SIZE 128
+#define MAX_VOL_NAME_SIZE 128
 
 #define RBD_DIFF_BANNER "rbd diff v1\n"
 
@@ -77,11 +77,11 @@ void usage()
 {
   cout <<
 "usage: rbd [-n <auth user>] [OPTIONS] <cmd> ...\n"
-"where 'pool' is a rados pool name (default is 'rbd') and 'cmd' is one of:\n"
-"  (ls | list) [pool-name]                     list rbd images\n"
+"where 'vol' is a rados vol name (default is 'rbd') and 'cmd' is one of:\n"
+"  (ls | list) [vol-name]                     list rbd images\n"
 "  info <image-name>                           show information about image size,\n"
 "                                              striping, etc.\n"
-"  create [--order <bits>] --size <MB> <name>  create an empty image\n"
+"  create --size <MB> <name>                   create an empty image\n"
 "  resize --size <MB> <image-name>             resize (expand or contract) image\n"
 "  rm <image-name>                             delete an image\n"
 "  export <image-name> <path>                  export image to file\n"
@@ -108,21 +108,16 @@ void usage()
 "                 --io-total <bytes>             total bytes to write\n"
 "                 --io-pattern <seq|rand>        write pattern\n"
 "\n"
-"<image-name> is [pool/]name, or you may specify\n"
-"individual pieces of names with -p/--pool and/or --image.\n"
+"<image-name> is [vol/]name, or you may specify\n"
+"individual pieces of names with -p/--vol and/or --image.\n"
 "\n"
 "Other input options:\n"
-"  -p, --pool <pool>                  source pool name\n"
+"  --vol <volume>                     source volume name\n"
 "  --image <image-name>               image name\n"
-"  --dest <image-name>                destination [pool and] image name\n"
-"  --dest-pool <name>                 destination pool name\n"
+"  --dest <image-name>                destination [volume and] image name\n"
+"  --dest-vol <name>                  destination volume name\n"
 "  --path <path-name>                 path name for import/export\n"
 "  --size <size in MB>                size of image for create and resize\n"
-"  --order <bits>                     the object size in bits; object size will be\n"
-"                                     (1 << order) bytes. Default is 22 (4 MB).\n"
-"  --image-format <format-number>     format to use when creating an image\n"
-"                                     format 1 is the original format (default)\n"
-"                                     format 2 supports cloning\n"
 "  --id <username>                    rados user (without 'client.'prefix) to\n"
 "                                     authenticate as\n"
 "  --keyfile <path>                   file containing secret key for use with cephx\n"
@@ -134,41 +129,6 @@ void usage()
 "  -o, --options <map-options>        options to use when mapping an image\n"
 "  --read-only                        set device readonly when mapping image\n"
 "  --allow-shrink                     allow shrinking of an image when resizing\n";
-}
-
-static string feature_str(uint64_t feature)
-{
-  switch (feature) {
-  case RBD_FEATURE_STRIPINGV2:
-    return "striping";
-  default:
-    return "";
-  }
-}
-
-static string features_str(uint64_t features)
-{
-  string s = "";
-
-  for (uint64_t feature = 1; feature <= RBD_FEATURE_STRIPINGV2;
-       feature <<= 1) {
-    if (feature & features) {
-      if (s.size())
-	s += ", ";
-      s += feature_str(feature);
-    }
-  }
-  return s;
-}
-
-static void format_features(Formatter *f, uint64_t features)
-{
-  f->open_array_section("features");
-  for (uint64_t feature = 1; feature <= RBD_FEATURE_STRIPINGV2;
-       feature <<= 1) {
-    f->dump_string("feature", feature_str(feature));
-  }
-  f->close_section();
 }
 
 struct MyProgressContext : public librbd::ProgressContext {
@@ -259,7 +219,7 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
     tbl.define_column("LOCK", TextTable::LEFT, TextTable::LEFT);
   }
 
-  string pool, image;
+  string vol, image;
 
   for (std::vector<string>::const_iterator i = names.begin();
        i != names.end(); ++i) {
@@ -283,9 +243,6 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
     if (im.stat(info, sizeof(info)) < 0)
       return -EINVAL;
 
-    uint8_t old_format;
-    im.old_format(&old_format);
-
     list<librbd::locker_t> lockers;
     bool exclusive;
     r = im.list_lockers(&lockers, &exclusive, NULL);
@@ -300,14 +257,12 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
       f->open_object_section("image");
       f->dump_string("image", *i);
       f->dump_unsigned("size", info.size);
-      f->dump_int("format", old_format ? 1 : 2);
       if (!lockers.empty())
 	f->dump_string("lock_type", exclusive ? "exclusive" : "shared");
       f->close_section();
     } else {
       tbl << *i
 	  << stringify(si_t(info.size))
-	  << ((old_format) ? '1' : '2')
 	  << ""				// protect doesn't apply to images
 	  << lockstr
 	  << TextTable::endrow;
@@ -324,29 +279,12 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
 }
 
 static int do_create(librbd::RBD &rbd, librados::IoCtx& io_ctx,
-		     const char *imgname, uint64_t size, int *order,
-		     int format, uint64_t features,
-		     uint64_t stripe_unit, uint64_t stripe_count)
+		     const char *imgname, uint64_t size)
 {
   int r;
 
-  if (format == 1) {
-    // weird striping not allowed with format 1!
-    if ((stripe_unit || stripe_count) &&
-	(stripe_unit != (1ull << *order) && stripe_count != 1)) {
-      cerr << "non-default striping not allowed with format 1; use --format 2"
-	   << std::endl;
-      return -EINVAL;
-    }
-    r = rbd.create(io_ctx, imgname, size, order);
-  } else {
-    if ((stripe_unit || stripe_count) &&
-	(stripe_unit != (1ull << *order) && stripe_count != 1)) {
-      features |= RBD_FEATURE_STRIPINGV2;
-    }
-    r = rbd.create3(io_ctx, imgname, size, features, order,
-		    stripe_unit, stripe_count);
-  }
+  r = rbd.create(io_ctx, imgname, size);
+
   if (r < 0)
     return r;
   return 0;
@@ -365,66 +303,19 @@ static int do_show_info(const char *imgname, librbd::Image& image,
 			Formatter *f)
 {
   librbd::image_info_t info;
-  uint8_t old_format;
-  uint64_t features;
   int r;
 
   r = image.stat(info, sizeof(info));
   if (r < 0)
     return r;
 
-  r = image.old_format(&old_format);
-  if (r < 0)
-    return r;
-
-  r = image.features(&features);
-  if (r < 0)
-    return r;
-
-  char prefix[RBD_MAX_BLOCK_NAME_SIZE + 1];
-  strncpy(prefix, info.block_name_prefix, RBD_MAX_BLOCK_NAME_SIZE);
-  prefix[RBD_MAX_BLOCK_NAME_SIZE] = '\0';
-
   if (f) {
     f->open_object_section("image");
     f->dump_string("name", imgname);
     f->dump_unsigned("size", info.size);
-    f->dump_unsigned("objects", info.num_objs);
-    f->dump_int("order", info.order);
-    f->dump_unsigned("object_size", info.obj_size);
-    f->dump_string("block_name_prefix", prefix);
-    f->dump_int("format", (old_format ? 1 : 2));
   } else {
     cout << "rbd image '" << imgname << "':\n"
-	 << "\tsize " << prettybyte_t(info.size) << " in "
-	 << info.num_objs << " objects"
-	 << std::endl
-	 << "\torder " << info.order
-	 << " (" << prettybyte_t(info.obj_size) << " objects)"
-	 << std::endl
-	 << "\tblock_name_prefix: " << prefix
-	 << std::endl
-	 << "\tformat: " << (old_format ? "1" : "2")
-	 << std::endl;
-  }
-
-  if (!old_format) {
-    if (f)
-      format_features(f, features);
-    else
-      cout << "\tfeatures: " << features_str(features) << std::endl;
-  }
-
-  // striping info, if feature is set
-  if (features & RBD_FEATURE_STRIPINGV2) {
-    if (f) {
-      f->dump_unsigned("stripe_unit", image.get_stripe_unit());
-      f->dump_unsigned("stripe_count", image.get_stripe_count());
-    } else {
-      cout << "\tstripe unit: " << prettybyte_t(image.get_stripe_unit())
-	   << std::endl
-	   << "\tstripe count: " << image.get_stripe_count() << std::endl;
-    }
+	 << "\tsize " << prettybyte_t(info.size) << std::endl;
   }
 
   if (f) {
@@ -789,8 +680,8 @@ static const char *imgname_from_path(const char *path)
   return imgname;
 }
 
-static void set_pool_image_name(const char *orig_pool, const char *orig_img,
-				char **new_pool, char **new_img)
+static void set_vol_image_name(const char *orig_vol, const char *orig_img,
+			       char **new_vol, char **new_img)
 {
   const char *sep;
 
@@ -803,8 +694,8 @@ static void set_pool_image_name(const char *orig_pool, const char *orig_img,
     return;
   }
 
-  *new_pool =  strdup(orig_img);
-  sep = strchr(*new_pool, '/');
+  *new_vol =  strdup(orig_img);
+  sep = strchr(*new_vol, '/');
   assert (sep);
 
   *(char *)sep = '\0';
@@ -812,24 +703,18 @@ static void set_pool_image_name(const char *orig_pool, const char *orig_img,
 }
 
 static int do_import(librbd::RBD &rbd, librados::IoCtx& io_ctx,
-		     const char *imgname, int *order, const char *path,
-		     int format, uint64_t features, uint64_t size)
+		     const char *imgname, const char *path)
 {
   int fd, r;
   struct stat stat_buf;
   MyProgressContext pc("Importing image");
+  uint64_t size = 0;
 
   assert(imgname);
 
-  // default order as usual
-  if (*order == 0)
-    *order = 22;
-
-  // try to fill whole imgblklen blocks for sparsification
   uint64_t image_pos = 0;
-  size_t imgblklen = 1 << *order;
-  char *p = new char[imgblklen];
-  size_t reqlen = imgblklen;	// amount requested from read
+  char *p = new char[io_ctx.op_size()];
+  size_t reqlen = io_ctx.op_size(); // amount requested from read
   ssize_t readlen;		// amount received from one read
   size_t blklen = 0;		// amount accumulated from reads to fill blk
   librbd::Image image;
@@ -837,7 +722,6 @@ static int do_import(librbd::RBD &rbd, librados::IoCtx& io_ctx,
   bool from_stdin = !strcmp(path, "-");
   if (from_stdin) {
     fd = 0;
-    size = 1ULL << *order;
   } else {
     if ((fd = open(path, O_RDONLY)) < 0) {
       r = -errno;
@@ -869,7 +753,7 @@ static int do_import(librbd::RBD &rbd, librados::IoCtx& io_ctx,
       size = (uint64_t) bdev_size;
     }
   }
-  r = do_create(rbd, io_ctx, imgname, size, order, format, features, 0, 0);
+  r = do_create(rbd, io_ctx, imgname, size);
   if (r < 0) {
     cerr << "rbd: image creation failed" << std::endl;
     goto done;
@@ -903,7 +787,7 @@ static int do_import(librbd::RBD &rbd, librados::IoCtx& io_ctx,
       }
     }
 
-    // write as much as we got; perhaps less than imgblklen
+    // write as much as we got; perhaps less than op_size
     // but skip writing zeros to create sparse images
     if (!bl.is_zero()) {
       r = image.write(image_pos, blklen, bl);
@@ -919,7 +803,7 @@ static int do_import(librbd::RBD &rbd, librados::IoCtx& io_ctx,
     if (readlen == 0)
       break;
     blklen = 0;
-    reqlen = imgblklen;
+    reqlen = io_ctx.op_size();
   }
   if (from_stdin) {
     r = image.resize(image_pos);
@@ -974,22 +858,15 @@ static int do_watch(librados::IoCtx& pp, const char *imgname)
   uint64_t cookie;
   RbdWatchCtx ctx(imgname);
 
-  string old_header_oid = imgname;
-  old_header_oid += RBD_SUFFIX;
-  string new_header_oid = RBD_HEADER_PREFIX;
-  new_header_oid += imgname;
-  bool old_format = true;
+  string header_oid = imgname;
+  header_oid += RBD_SUFFIX;
 
-  int r = pp.stat(old_header_oid, NULL, NULL);
+  int r = pp.stat(header_oid, NULL, NULL);
   if (r < 0) {
-    r = pp.stat(new_header_oid, NULL, NULL);
-    if (r < 0)
-      return r;
-    old_format = false;
+    return r;
   }
 
-  r = pp.watch(old_format ? old_header_oid : new_header_oid,
-	       0, &cookie, &ctx);
+  r = pp.watch(header_oid, 0, &cookie, &ctx);
   if (r < 0) {
     cerr << "rbd: watch failed" << std::endl;
     return r;
@@ -1001,7 +878,7 @@ static int do_watch(librados::IoCtx& pp, const char *imgname)
   return 0;
 }
 
-static int do_kernel_add(const char *poolname, const char *imgname)
+static int do_kernel_add(const char *volname, const char *imgname)
 {
   MonMap monmap;
   int r = monmap.build_initial(g_ceph_context, cerr);
@@ -1065,7 +942,7 @@ static int do_kernel_add(const char *poolname, const char *imgname)
     oss << "," << it->second;
   }
 
-  oss << " " << poolname << " " << imgname;
+  oss << " " << volname << " " << imgname;
 
   // modprobe the rbd module if /sys/bus/rbd doesn't exist
   struct stat sb;
@@ -1193,7 +1070,7 @@ static int do_kernel_showmapped(Formatter *f)
     f->open_object_section("devices");
   } else {
     tbl.define_column("id", TextTable::LEFT, TextTable::LEFT);
-    tbl.define_column("pool", TextTable::LEFT, TextTable::LEFT);
+    tbl.define_column("vol", TextTable::LEFT, TextTable::LEFT);
     tbl.define_column("image", TextTable::LEFT, TextTable::LEFT);
     tbl.define_column("device", TextTable::LEFT, TextTable::LEFT);
   }
@@ -1216,9 +1093,9 @@ static int do_kernel_showmapped(Formatter *f)
       continue;
     }
 
-    char pool[4096];
-    snprintf(fn, sizeof(fn), "%s/%s/pool", devices_path, dent->d_name);
-    r = read_file(fn, pool, sizeof(pool));
+    char vol[4096];
+    snprintf(fn, sizeof(fn), "%s/%s/vol", devices_path, dent->d_name);
+    r = read_file(fn, vol, sizeof(vol));
     if (r < 0) {
       cerr << "rbd: could not read name from " << fn << ": "
 	   << cpp_strerror(-r) << std::endl;
@@ -1227,12 +1104,12 @@ static int do_kernel_showmapped(Formatter *f)
 
     if (f) {
       f->open_object_section(dent->d_name);
-      f->dump_string("pool", pool);
+      f->dump_string("ivol", vol);
       f->dump_string("name", name);
       f->dump_string("device", dev);
       f->close_section();
     } else {
-      tbl << dent->d_name << pool << name << dev << TextTable::endrow;
+      tbl << dent->d_name << vol << name << dev << TextTable::endrow;
     }
     have_output = true;
 
@@ -1631,19 +1508,15 @@ int main(int argc, const char **argv)
   int opt_cmd = OPT_NO_CMD;
   global_init(NULL, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_UTILITY, 0);
 
-  const char *poolname = NULL;
+  const char *volname = NULL;
   uint64_t size = 0;  // in bytes
-  int order = 0;
-  bool format_specified = false, output_format_specified = false;
-  int format = 1;
-  uint64_t features = 0;
+  bool output_format_specified = false;
   const char *imgname = NULL, *destname = NULL,
-    *dest_poolname = NULL, *path = NULL,
+    *dest_volname = NULL, *path = NULL,
     *devpath = NULL, *lock_cookie = NULL, *lock_client = NULL,
     *lock_tag = NULL, *output_format = "plain";
   bool lflag = false;
   int pretty_format = 0;
-  long long stripe_unit = 0, stripe_count = 0;
   long long bench_io_size = 4096, bench_io_threads = 16, bench_bytes = 1 << 30;
   string bench_pattern = "seq";
 
@@ -1660,20 +1533,15 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
       usage();
       return 0;
-    } else if (ceph_argparse_flag(args, i, "--new-format", (char*)NULL)) {
-      format = 2;
-      format_specified = true;
-    } else if (ceph_argparse_withint(args, i, &format, &err, "--image-format",
-				     (char*)NULL)) {
-      if (!err.str().empty()) {
-	cerr << "rbd: " << err.str() << std::endl;
-	return EXIT_FAILURE;
-      }
-      format_specified = true;
-    } else if (ceph_argparse_witharg(args, i, &val, "-p", "--pool", (char*)NULL)) {
-      poolname = strdup(val.c_str());
-    } else if (ceph_argparse_witharg(args, i, &val, "--dest-pool", (char*)NULL)) {
-      dest_poolname = strdup(val.c_str());
+    } else if (ceph_argparse_witharg(args, i, &val, "--volume", (char*)NULL)) {
+      volname = strdup(val.c_str());
+    } else if (ceph_argparse_witharg(args, i, &val, "--format", (char*)NULL)) {
+      output_format = strdup(val.c_str());
+      output_format_specified = true;
+    } else if (ceph_argparse_flag(args, i, &val, "--pretty-format", (char*)NULL)) {
+      pretty_format = true;
+    } else if (ceph_argparse_witharg(args, i, &val, "--dest-vol", (char*)NULL)) {
+      dest_volname = strdup(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "-i", "--image", (char*)NULL)) {
       imgname = strdup(val.c_str());
     } else if (ceph_argparse_withlonglong(args, i, &sizell, &err, "-s", "--size", (char*)NULL)) {
@@ -1689,18 +1557,10 @@ int main(int argc, const char **argv)
       size_set = true;
     } else if (ceph_argparse_flag(args, i, "-l", "--long", (char*)NULL)) {
       lflag = true;
-    } else if (ceph_argparse_withlonglong(args, i, &stripe_unit, &err, "--stripe-unit", (char*)NULL)) {
-    } else if (ceph_argparse_withlonglong(args, i, &stripe_count, &err, "--stripe-count", (char*)NULL)) {
-    } else if (ceph_argparse_withint(args, i, &order, &err, "--order", (char*)NULL)) {
-      if (!err.str().empty()) {
-	cerr << "rbd: " << err.str() << std::endl;
-	return EXIT_FAILURE;
-      }
     } else if (ceph_argparse_withlonglong(args, i, &bench_io_size, &err, "--io-size", (char*)NULL)) {
     } else if (ceph_argparse_withlonglong(args, i, &bench_io_threads, &err, "--io-threads", (char*)NULL)) {
     } else if (ceph_argparse_withlonglong(args, i, &bench_bytes, &err, "--io-total", (char*)NULL)) {
     } else if (ceph_argparse_witharg(args, i, &bench_pattern, &err, "--io-pattern", (char*)NULL)) {
-    } else if (ceph_argparse_withlonglong(args, i, &stripe_count, &err, "--stripe-count", (char*)NULL)) {
     } else if (ceph_argparse_witharg(args, i, &val, "--path", (char*)NULL)) {
       path = strdup(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--dest", (char*)NULL)) {
@@ -1722,20 +1582,7 @@ int main(int argc, const char **argv)
       progress = false;
     } else if (ceph_argparse_flag(args, i , "--allow-shrink", (char *)NULL)) {
       resize_allow_shrink = true;
-    } else if (ceph_argparse_witharg(args, i, &val, "--format", (char *) NULL)) {
-      std::string err;
-      long long ret = strict_strtoll(val.c_str(), 10, &err);
-      if (err.empty()) {
-	format = ret;
-	format_specified = true;
-	cerr << "rbd: using --format for specifying the rbd image format is"
-	     << " deprecated, use --image-format instead"
-	     << std::endl;
-      } else {
-	output_format = strdup(val.c_str());
-	output_format_specified = true;
-      }
-    } else {
+    }  else {
       ++i;
     }
   }
@@ -1776,7 +1623,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     const char *v = *i;
     switch (opt_cmd) {
       case OPT_LIST:
-	SET_CONF_PARAM(v, &poolname, NULL, NULL);
+	SET_CONF_PARAM(v, &volname, NULL, NULL);
 	break;
       case OPT_INFO:
       case OPT_CREATE:
@@ -1819,12 +1666,6 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     }
   }
 
-  if (format_specified && opt_cmd != OPT_IMPORT && opt_cmd != OPT_CREATE) {
-    cerr << "rbd: image format can only be set when "
-	 << "creating or importing an image" << std::endl;
-    return EXIT_FAILURE;
-  }
-
   if (pretty_format && !strcmp(output_format, "plain")) {
     cerr << "rbd: --pretty-format only works when --format is json or xml"
 	 << std::endl;
@@ -1840,13 +1681,6 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     return EXIT_FAILURE;
   } else if (get_outfmt(output_format, pretty_format, &formatter) < 0) {
     return EXIT_FAILURE;
-  }
-
-  if (format_specified) {
-    if (format < 1 || format > 2) {
-      cerr << "rbd: image format must be 1 or 2" << std::endl;
-      return EXIT_FAILURE;
-    }
   }
 
   if (opt_cmd == OPT_EXPORT && !imgname) {
@@ -1892,31 +1726,31 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     return EXIT_FAILURE;
   }
 
-  // do this unconditionally so we can parse pool/image into
+  // do this unconditionally so we can parse vol/image into
   // the relevant parts
-  set_pool_image_name(poolname, imgname, (char **)&poolname,
-		      (char **)&imgname);
-  set_pool_image_name(dest_poolname, destname, (char **)&dest_poolname,
-		      (char **)&destname);
+  set_vol_image_name(volname, imgname, (char **)&volname,
+		     (char **)&imgname);
+  set_vol_image_name(dest_volname, destname, (char **)&dest_volname,
+		     (char **)&destname);
 
   if (opt_cmd == OPT_IMPORT) {
-    if (poolname && dest_poolname) {
-      cerr << "rbd: source and destination pool both specified" << std::endl;
+    if (volname && dest_volname) {
+      cerr << "rbd: source and destination vol both specified" << std::endl;
       return EXIT_FAILURE;
     }
     if (imgname && destname) {
       cerr << "rbd: source and destination image both specified" << std::endl;
       return EXIT_FAILURE;
     }
-    if (poolname)
-      dest_poolname = poolname;
+    if (volname)
+      dest_volname = volname;
   }
 
-  if (!poolname)
-    poolname = "rbd";
+  if (!volname)
+    volname = "rbd";
 
-  if (!dest_poolname)
-    dest_poolname = "rbd";
+  if (!dest_volname)
+    dest_volname = "rbd";
 
   if (opt_cmd == OPT_EXPORT && !path)
     path = imgname;
@@ -1927,9 +1761,9 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     return EXIT_FAILURE;
   }
 
-  if ((opt_cmd == OPT_RENAME) && (strcmp(poolname, dest_poolname) != 0)) {
-    cerr << "rbd: mv/rename across pools not supported" << std::endl;
-    cerr << "source pool: " << poolname << " dest pool: " << dest_poolname
+  if ((opt_cmd == OPT_RENAME) && (strcmp(volname, dest_volname) != 0)) {
+    cerr << "rbd: mv/rename across vols not supported" << std::endl;
+    cerr << "source vol: " << volname << " dest vol: " << dest_volname
       << std::endl;
     return EXIT_FAILURE;
   }
@@ -1949,9 +1783,9 @@ if (!set_conf_param(v, p1, p2, p3)) { \
 
   int r;
   if (talk_to_cluster && opt_cmd != OPT_IMPORT) {
-    r = rados.ioctx_create(poolname, io_ctx);
+    r = rados.ioctx_create(volname, io_ctx);
     if (r < 0) {
-      cerr << "rbd: error opening pool " << poolname << ": "
+      cerr << "rbd: error opening vol " << volname << ": "
 	   << cpp_strerror(-r) << std::endl;
       return -r;
     }
@@ -1978,9 +1812,9 @@ if (!set_conf_param(v, p1, p2, p3)) { \
   }
 
   if (opt_cmd == OPT_COPY || opt_cmd == OPT_IMPORT) {
-    r = rados.ioctx_create(dest_poolname, dest_io_ctx);
+    r = rados.ioctx_create(dest_volname, dest_io_ctx);
     if (r < 0) {
-      cerr << "rbd: error opening pool " << dest_poolname << ": "
+      cerr << "rbd: error opening vol " << dest_volname << ": "
 	   << cpp_strerror(-r) << std::endl;
       return -r;
     }
@@ -2003,19 +1837,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     break;
 
   case OPT_CREATE:
-    if (order && (order < 12 || order > 25)) {
-      cerr << "rbd: order must be between 12 (4 KB) and 25 (32 MB)"
-	   << std::endl;
-      return EINVAL;
-    }
-    if ((stripe_unit && !stripe_count) || (!stripe_unit && stripe_count)) {
-      cerr << "must specify both (or neither) of stripe-unit and stripe-count"
-	   << std::endl;
-      usage();
-      return EINVAL;
-    }
-    r = do_create(rbd, io_ctx, imgname, size, &order, format, features,
-		  stripe_unit, stripe_count);
+    r = do_create(rbd, io_ctx, imgname, size);
     if (r < 0) {
       cerr << "rbd: create error: " << cpp_strerror(-r) << std::endl;
       return -r;
@@ -2092,8 +1914,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
       cerr << "rbd: import requires pathname" << std::endl;
       return EINVAL;
     }
-    r = do_import(rbd, dest_io_ctx, destname, &order, path,
-		  format, features, size);
+    r = do_import(rbd, dest_io_ctx, destname, path);
     if (r < 0) {
       cerr << "rbd: import failed: " << cpp_strerror(-r) << std::endl;
       return -r;
@@ -2117,7 +1938,7 @@ if (!set_conf_param(v, p1, p2, p3)) { \
     break;
 
   case OPT_MAP:
-    r = do_kernel_add(poolname, imgname);
+    r = do_kernel_add(volname, imgname);
     if (r < 0) {
       cerr << "rbd: add failed: " << cpp_strerror(-r) << std::endl;
       return -r;

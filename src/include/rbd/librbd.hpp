@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -69,12 +69,7 @@ public:
   // see librbd.h
   int open_read_only(IoCtx& io_ctx, Image& image, const char *name);
   int list(IoCtx& io_ctx, std::vector<std::string>& names);
-  int create(IoCtx& io_ctx, const char *name, uint64_t size, int *order);
-  int create2(IoCtx& io_ctx, const char *name, uint64_t size,
-	      uint64_t features, int *order);
-  int create3(IoCtx& io_ctx, const char *name, uint64_t size,
-	      uint64_t features, int *order,
-	      uint64_t stripe_unit, uint64_t stripe_count);
+  int create(IoCtx& io_ctx, const char *name, uint64_t size);
   int remove(IoCtx& io_ctx, const char *name);
   int remove_with_progress(IoCtx& io_ctx, const char *name, ProgressContext& pctx);
   int rename(IoCtx& src_io_ctx, const char *srcname, const char *destname);
@@ -94,9 +89,7 @@ public:
   int resize(uint64_t size);
   int resize_with_progress(uint64_t size, ProgressContext& pctx);
   int stat(image_info_t &info, size_t infosize);
-  int old_format(uint8_t *old);
   int size(uint64_t *size);
-  int features(uint64_t *features);
   int overlap(uint64_t *overlap);
   int copy(IoCtx& dest_io_ctx, const char *destname);
   int copy2(Image& dest);

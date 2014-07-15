@@ -572,7 +572,6 @@ ostream& operator<<(ostream& out, const osd_peer_stat_t &stat);
 class ObjectExtent {
  public:
   object_t    oid;	 // object id
-  uint64_t    objectno;
   uint64_t    offset;	 // in object
   uint64_t    length;	 // in object
   uint64_t    truncate_size;	// in object
@@ -580,15 +579,15 @@ class ObjectExtent {
   // off -> len.  extents in buffer being mapped (may be fragmented bc of striping!)
   vector<pair<uint64_t,uint64_t> >  buffer_extents;
 
-  ObjectExtent() : objectno(0), offset(0), length(0), truncate_size(0) {}
-  ObjectExtent(object_t o, uint64_t ono, uint64_t off,
+  ObjectExtent() : offset(0), length(0), truncate_size(0) {}
+  ObjectExtent(object_t o, uint64_t off,
 	       uint64_t l, uint64_t ts) :
-    oid(o), objectno(ono), offset(off), length(l), truncate_size(ts) { }
+    oid(o), offset(off), length(l), truncate_size(ts) { }
 };
 
 inline ostream& operator<<(ostream& out, const ObjectExtent &ex)
 {
-  return out << "extent(" << ex.oid << " (" << ex.objectno << ") in "
+  return out << "extent( in "
 	     << " " << ex.offset << "~" << ex.length
 	     << " -> " << ex.buffer_extents
 	     << ")";

@@ -24,7 +24,7 @@
 // XXX: Only tests default namespace
 struct op_data {
   op_data(std::string oid, uint64_t offset, uint64_t len, bool read)
-    : extent(oid, 0, offset, len, 0), is_read(read)
+    : extent(oid, offset, len, 0), is_read(read)
   {
     extent.buffer_extents.push_back(make_pair(0, len));
   }

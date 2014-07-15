@@ -36,48 +36,25 @@ using librados::IoCtx;
 using librados::Rados;
 
 namespace librbd {
-  const string id_obj_name(const string &name)
-  {
-    return RBD_ID_PREFIX + name;
-  }
-
-  const string header_name(const string &image_id)
-  {
-    return RBD_HEADER_PREFIX + image_id;
-  }
-
-  const string old_header_name(const string &image_name)
+  const string header_name(const string &image_name)
   {
     return image_name + RBD_SUFFIX;
   }
 
-  int detect_format(IoCtx &io_ctx, const string &name,
-		    bool *old_format, uint64_t *size)
+  const string image_name(const string &name)
   {
-    CephContext *cct = (CephContext *)io_ctx.cct();
-    if (old_format)
-      *old_format = true;
-    int r = io_ctx.stat(old_header_name(name), size, NULL);
-    if (r < 0) {
-      if (old_format)
-	*old_format = false;
-      r = io_ctx.stat(id_obj_name(name), size, NULL);
-      if (r < 0)
-	return r;
-    }
+    return "rb." + name + ".image";
+  }
 
-    ldout(cct, 20) << "detect format of " << name << " : "
-		   << (old_format ? (*old_format ? "old" : "new") :
-		       "don't care")  << dendl;
-    return 0;
+  int check_exists(IoCtx &io_ctx, const string &name, uint64_t *size)
+  {
+    int r = io_ctx.stat(header_name(name), size, NULL);
+    return r;
   }
 
   void init_rbd_header(struct rbd_obj_header_ondisk& ondisk,
-		       uint64_t size, int order, uint64_t bid)
+		       uint64_t size)
   {
-    uint32_t hi = bid >> 32;
-    uint32_t lo = bid & 0xFFFFFFFF;
-    uint32_t extra = rand() % 0xFFFFFFFF;
     memset(&ondisk, 0, sizeof(ondisk));
 
     memcpy(&ondisk.text, RBD_HEADER_TEXT, sizeof(RBD_HEADER_TEXT));
@@ -85,126 +62,37 @@ namespace librbd {
 	   sizeof(RBD_HEADER_SIGNATURE));
     memcpy(&ondisk.version, RBD_HEADER_VERSION, sizeof(RBD_HEADER_VERSION));
 
-    snprintf(ondisk.block_name, sizeof(ondisk.block_name), "rb.%x.%x.%x",
-	     hi, lo, extra);
-
     ondisk.image_size = size;
-    ondisk.options.order = order;
   }
 
   void image_info(ImageCtx *ictx, image_info_t& info, size_t infosize)
   {
-    int obj_order = ictx->order;
     ictx->md_lock.get_read();
     info.size = ictx->get_image_size();
     ictx->md_lock.put_read();
-    info.obj_size = 1ULL << obj_order;
-    info.num_objs = rbd_howmany(info.size, ictx->get_object_size());
-    info.order = obj_order;
-    memcpy(&info.block_name_prefix, ictx->object_prefix.c_str(),
-	   min((size_t)RBD_MAX_BLOCK_NAME_SIZE,
-	       ictx->object_prefix.length() + 1));
-  }
-
-  uint64_t oid_to_object_no(const string& oid, const string& object_prefix)
-  {
-    istringstream iss(oid);
-    // skip object prefix and separator
-    iss.ignore(object_prefix.length() + 1);
-    uint64_t num;
-    iss >> std::hex >> num;
-    return num;
-  }
-
-  int init_rbd_info(struct rbd_info *info)
-  {
-    memset(info, 0, sizeof(*info));
-    return 0;
   }
 
   void trim_image(ImageCtx *ictx, uint64_t newsize, ProgressContext& prog_ctx)
   {
     CephContext *cct = (CephContext *)ictx->data_ctx.cct();
-
     uint64_t size = ictx->get_current_size();
-    uint64_t period = ictx->get_stripe_period();
-    uint64_t num_period = ((newsize + period - 1) / period);
-    uint64_t delete_off = MIN(num_period * period, size);
-    // first object we can delete free and clear
-    uint64_t delete_start = num_period * ictx->get_stripe_count();
-    uint64_t num_objects = ictx->get_num_objects();
-    uint64_t object_size = ictx->get_object_size();
 
-    ldout(cct, 10) << "trim_image " << size << " -> " << newsize
-		   << " periods " << num_period
-		   << " discard to offset " << delete_off
-		   << " delete objects " << delete_start
-		   << " to " << (num_objects-1)
-		   << dendl;
-
-    SimpleThrottle throttle(cct->_conf->rbd_concurrent_management_ops, true);
-    if (delete_start < num_objects) {
-      ldout(cct, 2) << "trim_image objects " << delete_start << " to "
-		    << (num_objects - 1) << dendl;
-      for (uint64_t i = delete_start; i < num_objects; ++i) {
-	string oid = ictx->get_object_name(i);
-	Context *req_comp = new C_SimpleThrottle(&throttle);
-	librados::AioCompletion *rados_completion =
-	  librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
-	ictx->data_ctx.aio_remove(oid, rados_completion);
-	rados_completion->release();
-	prog_ctx.update_progress((i - delete_start) * object_size,
-				 (num_objects - delete_start) * object_size);
+    if (newsize < size) {
+      SimpleThrottle throttle(cct->_conf->rbd_concurrent_management_ops, true);
+      Context *req_comp = new C_SimpleThrottle(&throttle);
+      librados::AioCompletion *rados_completion =
+	librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
+      librados::ObjectWriteOperation op;
+      op.truncate(newsize);
+      ictx->data_ctx.aio_operate(ictx->image_oid, rados_completion,
+				 &op, 0);
+      rados_completion->release();
+      int r = throttle.wait_for_ret();
+      if (r < 0) {
+	lderr(cct) << "warning: failed to remove some object(s): "
+		   << cpp_strerror(r) << dendl;
       }
     }
-
-    // discard the weird boundary, if any
-    if (delete_off > newsize) {
-      vector<ObjectExtent> extents;
-      Striper::file_to_extents(ictx->cct, ictx->format_string,
-			       &ictx->layout, newsize,
-			       delete_off - newsize, 0, extents);
-
-      for (vector<ObjectExtent>::iterator p = extents.begin();
-	   p != extents.end(); ++p) {
-	ldout(ictx->cct, 20) << " ex " << *p << dendl;
-	Context *req_comp = new C_SimpleThrottle(&throttle);
-	librados::AioCompletion *rados_completion =
-	  librados::Rados::aio_create_completion(req_comp, NULL, rados_ctx_cb);
-	if (p->offset == 0) {
-	  ictx->data_ctx.aio_remove(p->oid.name, rados_completion);
-	} else {
-	  librados::ObjectWriteOperation op;
-	  op.truncate(p->offset);
-	  ictx->data_ctx.aio_operate(p->oid.name, rados_completion, &op);
-	}
-	rados_completion->release();
-      }
-    }
-    int r = throttle.wait_for_ret();
-    if (r < 0) {
-      lderr(cct) << "warning: failed to remove some object(s): "
-		 << cpp_strerror(r) << dendl;
-    }
-  }
-
-  int read_rbd_info(IoCtx& io_ctx, const string& info_oid,
-		    struct rbd_info *info)
-  {
-    int r;
-    bufferlist bl;
-    r = io_ctx.read(info_oid, bl, sizeof(*info), 0);
-    if (r < 0)
-      return r;
-    if (r == 0) {
-      return init_rbd_info(info);
-    }
-
-    if (r < (int)sizeof(*info))
-      return -EIO;
-
-    memcpy(info, bl.c_str(), r);
-    return 0;
   }
 
   int read_header_bl(IoCtx& io_ctx, const string& header_oid,
@@ -311,28 +199,10 @@ namespace librbd {
       }
     }
 
-    // new format images are accessed by class methods
-    int max_read = 1024;
-    string last_read = "";
-    do {
-      map<string, string> images;
-      cls_client::dir_list(&io_ctx, RBD_DIRECTORY,
-			   last_read, max_read, &images);
-      for (map<string, string>::const_iterator it = images.begin();
-	   it != images.end(); ++it) {
-	names.push_back(it->first);
-      }
-      if (!images.empty()) {
-	last_read = images.rbegin()->first;
-      }
-      r = images.size();
-    } while (r == max_read);
-
     return 0;
   }
 
-  int create_v1(IoCtx& io_ctx, const char *imgname, uint64_t bid,
-		uint64_t size, int order)
+  int create(IoCtx& io_ctx, const char *imgname, uint64_t size)
   {
     CephContext *cct = (CephContext *)io_ctx.cct();
     ldout(cct, 2) << "adding rbd image to directory..." << dendl;
@@ -345,12 +215,12 @@ namespace librbd {
 
     ldout(cct, 2) << "creating rbd image..." << dendl;
     struct rbd_obj_header_ondisk header;
-    init_rbd_header(header, size, order, bid);
+    init_rbd_header(header, size);
 
     bufferlist bl;
     bl.append((const char *)&header, sizeof(header));
 
-    string header_oid = old_header_name(imgname);
+    string header_oid = header_name(imgname);
     r = io_ctx.write(header_oid, bl, bl.length(), 0);
     if (r < 0) {
       lderr(cct) << "Error writing image header: " << cpp_strerror(r)
@@ -368,177 +238,6 @@ namespace librbd {
     return 0;
   }
 
-  int create_v2(IoCtx& io_ctx, const char *imgname, uint64_t bid, uint64_t size,
-		int order, uint64_t features, uint64_t stripe_unit,
-		uint64_t stripe_count)
-  {
-    ostringstream bid_ss;
-    uint32_t extra;
-    string id, id_obj, header_oid;
-    int remove_r;
-    ostringstream oss;
-    CephContext *cct = (CephContext *)io_ctx.cct();
-
-    id_obj = id_obj_name(imgname);
-
-    int r = io_ctx.create(id_obj, true);
-    if (r < 0) {
-      lderr(cct) << "error creating rbd id object: " << cpp_strerror(r)
-		 << dendl;
-      return r;
-    }
-
-    extra = rand() % 0xFFFFFFFF;
-    bid_ss << std::hex << bid << std::hex << extra;
-    id = bid_ss.str();
-    r = cls_client::set_id(&io_ctx, id_obj, id);
-    if (r < 0) {
-      lderr(cct) << "error setting image id: " << cpp_strerror(r) << dendl;
-      goto err_remove_id;
-    }
-
-    ldout(cct, 2) << "adding rbd image to directory..." << dendl;
-    r = cls_client::dir_add_image(&io_ctx, RBD_DIRECTORY, imgname, id);
-    if (r < 0) {
-      lderr(cct) << "error adding image to directory: " << cpp_strerror(r)
-		 << dendl;
-      goto err_remove_id;
-    }
-
-    oss << RBD_DATA_PREFIX << id;
-    header_oid = header_name(id);
-    r = cls_client::create_image(&io_ctx, header_oid, size, order,
-				 features, oss.str());
-    if (r < 0) {
-      lderr(cct) << "error writing header: " << cpp_strerror(r) << dendl;
-      goto err_remove_from_dir;
-    }
-
-    if ((stripe_unit || stripe_count) &&
-	(stripe_count != 1 || stripe_unit != (1ull << order))) {
-      r = cls_client::set_stripe_unit_count(&io_ctx, header_oid,
-					    stripe_unit, stripe_count);
-      if (r < 0) {
-	lderr(cct) << "error setting striping parameters: "
-		   << cpp_strerror(r) << dendl;
-	goto err_remove_header;
-      }
-    }
-
-    ldout(cct, 2) << "done." << dendl;
-    return 0;
-
-  err_remove_header:
-    remove_r = io_ctx.remove(header_oid);
-    if (remove_r < 0) {
-      lderr(cct) << "error cleaning up image header after creation failed: "
-		 << dendl;
-    }
-  err_remove_from_dir:
-    remove_r = cls_client::dir_remove_image(&io_ctx, RBD_DIRECTORY,
-					    imgname, id);
-    if (remove_r < 0) {
-      lderr(cct) << "error cleaning up image from rbd_directory object "
-		 << "after creation failed: " << cpp_strerror(remove_r)
-		 << dendl;
-    }
-  err_remove_id:
-    remove_r = io_ctx.remove(id_obj);
-    if (remove_r < 0) {
-      lderr(cct) << "error cleaning up id object after creation failed: "
-		 << cpp_strerror(remove_r) << dendl;
-    }
-
-    return r;
-  }
-
-  int create(librados::IoCtx& io_ctx, const char *imgname, uint64_t size,
-	     int *order)
-  {
-    CephContext *cct = (CephContext *)io_ctx.cct();
-    bool old_format = cct->_conf->rbd_default_format == 1;
-    uint64_t features = old_format ? 0 : cct->_conf->rbd_default_features;
-    return create(io_ctx, imgname, size, old_format, features, order, 0, 0);
-  }
-
-  int create(IoCtx& io_ctx, const char *imgname, uint64_t size,
-	     bool old_format, uint64_t features, int *order,
-	     uint64_t stripe_unit, uint64_t stripe_count)
-  {
-    CephContext *cct = (CephContext *)io_ctx.cct();
-    ldout(cct, 20) << "create " << &io_ctx << " name = " << imgname
-		   << " size = " << size << " old_format = " << old_format
-		   << " features = " << features << " order = " << *order
-		   << " stripe_unit = " << stripe_unit
-		   << " stripe_count = " << stripe_count
-		   << dendl;
-
-
-    if (features & ~RBD_FEATURES_ALL) {
-      lderr(cct) << "librbd does not support requested features." << dendl;
-      return -ENOSYS;
-    }
-
-    // make sure it doesn't already exist, in either format
-    int r = detect_format(io_ctx, imgname, NULL, NULL);
-    if (r != -ENOENT) {
-      if (r) {
-	lderr(cct) << "Could not tell if " << imgname << " already exists" << dendl;
-	return r;
-      }
-      lderr(cct) << "rbd image " << imgname << " already exists" << dendl;
-      return -EEXIST;
-    }
-
-    if (!order)
-      return -EINVAL;
-
-    if (!*order)
-      *order = cct->_conf->rbd_default_order;
-    if (!*order)
-      *order = RBD_DEFAULT_OBJ_ORDER;
-
-    if (*order && (*order > 64 || *order < 12)) {
-      lderr(cct) << "order must be in the range [12, 64]" << dendl;
-      return -EDOM;
-    }
-
-    Rados rados(io_ctx);
-    uint64_t bid = rados.get_instance_id();
-
-    // if striping is enabled, use possibly custom defaults
-    if (!old_format && (features & RBD_FEATURE_STRIPINGV2) &&
-	!stripe_unit && !stripe_count) {
-      stripe_unit = cct->_conf->rbd_default_stripe_unit;
-      stripe_count = cct->_conf->rbd_default_stripe_count;
-    }
-
-    // normalize for default striping
-    if (stripe_unit == (1ull << *order) && stripe_count == 1) {
-      stripe_unit = 0;
-      stripe_count = 0;
-    }
-    if ((stripe_unit || stripe_count) &&
-	(features & RBD_FEATURE_STRIPINGV2) == 0) {
-      lderr(cct) << "STRIPINGV2 and format 2 or later required for non-default striping" << dendl;
-      return -EINVAL;
-    }
-    if ((stripe_unit && !stripe_count) ||
-	(!stripe_unit && stripe_count))
-      return -EINVAL;
-
-    if (old_format) {
-      if (stripe_unit && stripe_unit != (1ull << *order))
-	return -EINVAL;
-      if (stripe_count && stripe_count != 1)
-	return -EINVAL;
-
-      return create_v1(io_ctx, imgname, bid, size, *order);
-    } else {
-      return create_v2(io_ctx, imgname, bid, size, *order, features,
-		       stripe_unit, stripe_count);
-    }
-  }
 
   int rename(IoCtx& io_ctx, const char *srcname, const char *dstname)
   {
@@ -546,27 +245,15 @@ namespace librbd {
     ldout(cct, 20) << "rename " << &io_ctx << " " << srcname << " -> "
 		   << dstname << dendl;
 
-    bool old_format;
     uint64_t src_size;
-    int r = detect_format(io_ctx, srcname, &old_format, &src_size);
+    int r = check_exists(io_ctx, srcname, &src_size);
     if (r < 0) {
       lderr(cct) << "error finding source object: " << cpp_strerror(r) << dendl;
       return r;
     }
 
-    string src_oid =
-      old_format ? old_header_name(srcname) : id_obj_name(srcname);
-    string dst_oid =
-      old_format ? old_header_name(dstname) : id_obj_name(dstname);
-
-    string id;
-    if (!old_format) {
-      r = cls_client::get_id(&io_ctx, src_oid, &id);
-      if (r < 0) {
-	lderr(cct) << "error reading image id: " << cpp_strerror(r) << dendl;
-	return r;
-      }
-    }
+    string src_oid = header_name(srcname);
+    string dst_oid = header_name(dstname);
 
     bufferlist databl;
     map<string, bufferlist> omap_values;
@@ -592,7 +279,7 @@ namespace librbd {
 	last_read = outbl.rbegin()->first;
     } while (r == MAX_READ);
 
-    r = detect_format(io_ctx, dstname, NULL, NULL);
+    r = check_exists(io_ctx, dstname);
     if (r < 0 && r != -ENOENT) {
       lderr(cct) << "error checking for existing image called "
 		 << dstname << ":" << cpp_strerror(r) << dendl;
@@ -615,26 +302,17 @@ namespace librbd {
       return r;
     }
 
-    if (old_format) {
-      r = tmap_set(io_ctx, dstname);
-      if (r < 0) {
-	io_ctx.remove(dst_oid);
-	lderr(cct) << "couldn't add " << dstname << " to directory: "
-		   << cpp_strerror(r) << dendl;
-	return r;
-      }
-      r = tmap_rm(io_ctx, srcname);
-      if (r < 0) {
-	lderr(cct) << "warning: couldn't remove old entry from directory ("
-		   << srcname << ")" << dendl;
-      }
-    } else {
-      r = cls_client::dir_rename_image(&io_ctx, RBD_DIRECTORY,
-				       srcname, dstname, id);
-      if (r < 0) {
-	lderr(cct) << "error updating directory: " << cpp_strerror(r) << dendl;
-	return r;
-      }
+    r = tmap_set(io_ctx, dstname);
+    if (r < 0) {
+      io_ctx.remove(dst_oid);
+      lderr(cct) << "couldn't add " << dstname << " to directory: "
+		 << cpp_strerror(r) << dendl;
+      return r;
+    }
+    r = tmap_rm(io_ctx, srcname);
+    if (r < 0) {
+      lderr(cct) << "warning: couldn't remove old entry from directory ("
+		 << srcname << ")" << dendl;
     }
 
     r = io_ctx.remove(src_oid);
@@ -643,9 +321,7 @@ namespace librbd {
 		 << src_oid << ")" << dendl;
     }
 
-    if (old_format) {
-      notify_change(io_ctx, old_header_name(srcname), NULL);
-    }
+    notify_change(io_ctx, header_name(srcname), NULL);
 
     return 0;
   }
@@ -663,15 +339,6 @@ namespace librbd {
     return 0;
   }
 
-  int get_old_format(ImageCtx *ictx, uint8_t *old)
-  {
-    int r = ictx_check(ictx);
-    if (r < 0)
-      return r;
-    *old = ictx->old_format;
-    return 0;
-  }
-
   int get_size(ImageCtx *ictx, uint64_t *size)
   {
     int r = ictx_check(ictx);
@@ -682,32 +349,17 @@ namespace librbd {
     return 0;
   }
 
-  int get_features(ImageCtx *ictx, uint64_t *features)
-  {
-    int r = ictx_check(ictx);
-    if (r < 0)
-      return r;
-    RWLock::RLocker l(ictx->md_lock);
-    return ictx->get_features(features);
-  }
-
   int remove(IoCtx& io_ctx, const char *imgname, ProgressContext& prog_ctx)
   {
     CephContext *cct((CephContext *)io_ctx.cct());
     ldout(cct, 20) << "remove " << &io_ctx << " " << imgname << dendl;
 
-    string id;
-    bool old_format = false;
-    bool unknown_format = true;
-    ImageCtx *ictx = new ImageCtx(imgname, "", io_ctx, false);
+    ImageCtx *ictx = new ImageCtx(imgname, io_ctx, false);
     int r = open_image(ictx);
     if (r < 0) {
       ldout(cct, 2) << "error opening image: " << cpp_strerror(-r) << dendl;
     } else {
       string header_oid = ictx->header_oid;
-      old_format = ictx->old_format;
-      unknown_format = false;
-      id = ictx->id;
 
       std::list<obj_watch_t> watchers;
       r = io_ctx.list_watchers(header_oid, &watchers);
@@ -737,37 +389,12 @@ namespace librbd {
       }
     }
 
-    if (old_format || unknown_format) {
-      ldout(cct, 2) << "removing rbd image from directory..." << dendl;
-      r = tmap_rm(io_ctx, imgname);
-      old_format = (r == 0);
-      if (r < 0 && !unknown_format) {
-	lderr(cct) << "error removing img from old-style directory: "
-		   << cpp_strerror(-r) << dendl;
-	return r;
-      }
-    }
-    if (!old_format) {
-      ldout(cct, 2) << "removing id object..." << dendl;
-      r = io_ctx.remove(id_obj_name(imgname));
-      if (r < 0 && r != -ENOENT) {
-	lderr(cct) << "error removing id object: " << cpp_strerror(r) << dendl;
-	return r;
-      }
-
-      r = cls_client::dir_get_id(&io_ctx, RBD_DIRECTORY, imgname, &id);
-      if (r < 0 && r != -ENOENT) {
-	lderr(cct) << "error getting id of image" << dendl;
-	return r;
-      }
-
-      ldout(cct, 2) << "removing rbd image from directory..." << dendl;
-      r = cls_client::dir_remove_image(&io_ctx, RBD_DIRECTORY, imgname, id);
-      if (r < 0) {
-	lderr(cct) << "error removing img from new-style directory: "
-		   << cpp_strerror(-r) << dendl;
-	return r;
-      }
+    ldout(cct, 2) << "removing rbd image from directory..." << dendl;
+    r = tmap_rm(io_ctx, imgname);
+    if (r < 0) {
+      lderr(cct) << "error removing img from old-style directory: "
+		 << cpp_strerror(-r) << dendl;
+      return r;
     }
 
     ldout(cct, 2) << "done." << dendl;
@@ -796,15 +423,11 @@ namespace librbd {
     ictx->size = size;
 
     int r;
-    if (ictx->old_format) {
-      // rewrite header
-      bufferlist bl;
-      ictx->header.image_size = size;
-      bl.append((const char *)&(ictx->header), sizeof(ictx->header));
-      r = ictx->md_ctx.write(ictx->header_oid, bl, bl.length(), 0);
-    } else {
-      r = cls_client::set_size(&(ictx->md_ctx), ictx->header_oid, size);
-    }
+    // rewrite header
+    bufferlist bl;
+    ictx->header.image_size = size;
+    bl.append((const char *)&(ictx->header), sizeof(ictx->header));
+    r = ictx->md_ctx.write(ictx->header_oid, bl, bl.length(), 0);
 
     // TODO: remove this useless check
     if (r == -ERANGE)
@@ -882,58 +505,30 @@ namespace librbd {
     {
       int r;
       ictx->lockers.clear();
-      if (ictx->old_format) {
-	r = read_header(ictx->md_ctx, ictx->header_oid, &ictx->header);
-	if (r < 0) {
-	  lderr(cct) << "Error reading header: " << cpp_strerror(r) << dendl;
-	  return r;
-	}
-	ClsLockType lock_type = LOCK_NONE;
-	r = rados::cls::lock::get_lock_info(&ictx->md_ctx, ictx->header_oid,
-					    RBD_LOCK_NAME, &ictx->lockers,
-					    &lock_type, &ictx->lock_tag);
-
-	// If EOPNOTSUPP, treat image as if there are no locks (we can't
-	// query them).
-
-	// Ugly: OSDs prior to eed28daaf8927339c2ecae1b1b06c1b63678ab03
-	// return EIO when the class isn't present; should be EOPNOTSUPP.
-	// Treat EIO or EOPNOTSUPP the same for now, as LOCK_NONE.  Blech.
-
-	if (r < 0 && ((r != -EOPNOTSUPP) && (r != -EIO))) {
-	  lderr(cct) << "Error getting lock info: " << cpp_strerror(r)
-		     << dendl;
-	  return r;
-	}
-	ictx->exclusive_locked = (lock_type == LOCK_EXCLUSIVE);
-	ictx->order = ictx->header.options.order;
-	ictx->size = ictx->header.image_size;
-	ictx->object_prefix = ictx->header.block_name;
-	ictx->init_layout();
-      } else {
-	do {
-	  uint64_t incompatible_features;
-	  r = cls_client::get_mutable_metadata(&ictx->md_ctx, ictx->header_oid,
-					       &ictx->size, &ictx->features,
-					       &incompatible_features,
-					       &ictx->lockers,
-					       &ictx->exclusive_locked,
-					       &ictx->lock_tag);
-	  if (r < 0) {
-	    lderr(cct) << "Error reading mutable metadata: " << cpp_strerror(r)
-		       << dendl;
-	    return r;
-	  }
-
-	  uint64_t unsupported = incompatible_features & ~RBD_FEATURES_ALL;
-	  if (unsupported) {
-	    lderr(ictx->cct) << "Image uses unsupported features: "
-			     << unsupported << dendl;
-	    return -ENOSYS;
-	  }
-
-	} while (r == -ENOENT);
+      r = read_header(ictx->md_ctx, ictx->header_oid, &ictx->header);
+      if (r < 0) {
+	lderr(cct) << "Error reading header: " << cpp_strerror(r) << dendl;
+	return r;
       }
+      ClsLockType lock_type = LOCK_NONE;
+      r = rados::cls::lock::get_lock_info(&ictx->md_ctx, ictx->header_oid,
+					  RBD_LOCK_NAME, &ictx->lockers,
+					  &lock_type, &ictx->lock_tag);
+
+      // If EOPNOTSUPP, treat image as if there are no locks (we can't
+      // query them).
+
+      // Ugly: OSDs prior to eed28daaf8927339c2ecae1b1b06c1b63678ab03
+      // return EIO when the class isn't present; should be EOPNOTSUPP.
+      // Treat EIO or EOPNOTSUPP the same for now, as LOCK_NONE.  Blech.
+
+      if (r < 0 && ((r != -EOPNOTSUPP) && (r != -EIO))) {
+	lderr(cct) << "Error getting lock info: " << cpp_strerror(r)
+		   << dendl;
+	return r;
+      }
+      ictx->exclusive_locked = (lock_type == LOCK_EXCLUSIVE);
+      ictx->size = ictx->header.image_size;
     }
 
     ictx->refresh_lock.Lock();
@@ -970,20 +565,18 @@ namespace librbd {
     CephContext *cct = (CephContext *)dest_md_ctx.cct();
     ldout(cct, 20) << "copy " << src->name
 		   << " -> " << destname << dendl;
-    int order = src->order;
 
     src->md_lock.get_read();
     uint64_t src_size = src->get_image_size();
     src->md_lock.put_read();
 
-    int r = create(dest_md_ctx, destname, src_size, src->old_format,
-		   src->features, &order, src->stripe_unit, src->stripe_count);
+    int r = create(dest_md_ctx, destname, src_size);
     if (r < 0) {
       lderr(cct) << "header creation failed" << dendl;
       return r;
     }
 
-    ImageCtx *dest = new librbd::ImageCtx(destname, "", dest_md_ctx, false);
+    ImageCtx *dest = new librbd::ImageCtx(destname, dest_md_ctx, false);
     r = open_image(dest);
     if (r < 0) {
       lderr(cct) << "failed to read newly created header" << dendl;
@@ -1066,9 +659,8 @@ namespace librbd {
     }
     int r;
     SimpleThrottle throttle(cct->_conf->rbd_concurrent_management_ops, false);
-    uint64_t period = src->get_stripe_period();
-    for (uint64_t offset = 0; offset < src_size; offset += period) {
-      uint64_t len = min(period, src_size - offset);
+    uint64_t len = src->data_ctx.op_size();
+    for (uint64_t offset = 0; offset < src_size; offset += len) {
       bufferlist *bl = new bufferlist();
       Context *ctx = new C_CopyRead(&throttle, dest, offset, bl);
       AioCompletion *comp = aio_create_completion_internal(ctx, rbd_ctx_cb);
@@ -1095,7 +687,6 @@ namespace librbd {
   {
     ldout(ictx->cct, 20) << "open_image: ictx = " << ictx
 			 << " name = '" << ictx->name
-			 << "' id = '" << ictx->id
 			 << dendl;
     int r = ictx->init();
     if (r < 0)
@@ -1266,13 +857,11 @@ namespace librbd {
       return r;
 
     int64_t total_read = 0;
-    uint64_t period = ictx->get_stripe_period();
     uint64_t left = mylen;
 
     start_time = ceph_clock_now(ictx->cct);
     while (left > 0) {
-      uint64_t period_off = off - (off % period);
-      uint64_t read_len = min(period_off + period - off, left);
+      uint64_t read_len = ictx->data_ctx.op_size();
 
       bufferlist bl;
 
@@ -1327,15 +916,6 @@ namespace librbd {
 
   ssize_t read(ImageCtx *ictx, uint64_t ofs, size_t len, char *buf)
   {
-    vector<pair<uint64_t,uint64_t> > extents;
-    extents.push_back(make_pair(ofs, len));
-    return read(ictx, extents, buf, NULL);
-  }
-
-  ssize_t read(ImageCtx *ictx,
-	       const vector<pair<uint64_t,uint64_t> >& image_extents,
-	       char *buf, bufferlist *pbl)
-  {
     Mutex mylock("IoCtxImpl::write::mylock");
     Cond cond;
     bool done;
@@ -1343,7 +923,7 @@ namespace librbd {
 
     Context *ctx = new C_SafeCond(&mylock, &cond, &done, &ret);
     AioCompletion *c = aio_create_completion_internal(ctx, rbd_ctx_cb);
-    int r = aio_read(ictx, image_extents, buf, pbl, c);
+    int r = aio_read(ictx, ofs, len, buf, NULL, c);
     if (r < 0) {
       c->release();
       delete ctx;
@@ -1612,43 +1192,24 @@ namespace librbd {
       return -EROFS;
 
     // map
-    vector<ObjectExtent> extents;
-    if (len > 0) {
-      Striper::file_to_extents(ictx->cct, ictx->format_string,
-			       &ictx->layout, off, mylen, 0, extents);
-    }
-
     c->get();
     c->init_time(ictx, AIO_TYPE_WRITE);
-    for (vector<ObjectExtent>::iterator p = extents.begin(); p != extents.end(); ++p) {
-      ldout(cct, 20) << " oid " << p->oid << " " << p->offset << "~" << p->length
-		     << " from " << p->buffer_extents << dendl;
-      // assemble extent
-      bufferlist bl;
-      for (vector<pair<uint64_t,uint64_t> >::iterator q = p->buffer_extents.begin();
-	   q != p->buffer_extents.end();
-	   ++q) {
-	bl.append(buf + q->first, q->second);
-      }
-
-      C_AioWrite *req_comp = new C_AioWrite(cct, c);
-      if (ictx->object_cacher) {
-	c->add_request();
-	ictx->write_to_cache(p->oid, bl, p->length, p->offset, req_comp);
-      } else {
-	vector<pair<uint64_t,uint64_t> > objectx;
-	Striper::extent_to_file(ictx->cct, &ictx->layout,
-				p->objectno, 0, ictx->layout.fl_object_size,
-				objectx);
-	AioWrite *req = new AioWrite(ictx, p->oid.name, p->objectno, p->offset,
-				     objectx,
-				     bl, req_comp);
-	c->add_request();
-	r = req->send();
-	if (r < 0)
-	  goto done;
-      }
+    bufferlist bl;
+    bl.append(buf, len);
+    C_AioWrite *req_comp = new C_AioWrite(cct, c);
+    if (ictx->object_cacher) {
+      c->add_request();
+      ictx->write_to_cache(ictx->image_oid, bl,
+			   len, off, req_comp);
+    } else {
+      AioWrite *req = new AioWrite(ictx, ictx->image_oid, off,
+				   bl, req_comp);
+      c->add_request();
+      r = req->send();
+      if (r < 0)
+	goto done;
     }
+
   done:
     c->finish_adding_requests(ictx->cct);
     c->put();
@@ -1656,7 +1217,6 @@ namespace librbd {
     ictx->perfcounter->inc(l_librbd_aio_wr);
     ictx->perfcounter->inc(l_librbd_aio_wr_bytes, mylen);
 
-    /* FIXME: cleanup all the allocated stuff */
     return r;
   }
 
@@ -1677,48 +1237,29 @@ namespace librbd {
     if (ictx->read_only)
       return -EROFS;
 
-    // map
-    vector<ObjectExtent> extents;
-    if (len > 0) {
-      Striper::file_to_extents(ictx->cct, ictx->format_string,
-			       &ictx->layout, off, len, 0, extents);
-    }
-
     c->get();
     c->init_time(ictx, AIO_TYPE_DISCARD);
-    for (vector<ObjectExtent>::iterator p = extents.begin(); p != extents.end(); ++p) {
-      ldout(cct, 20) << " oid " << p->oid << " " << p->offset << "~" << p->length
-		     << " from " << p->buffer_extents << dendl;
-      C_AioWrite *req_comp = new C_AioWrite(cct, c);
-      AbstractWrite *req;
-      c->add_request();
+    C_AioWrite *req_comp = new C_AioWrite(cct, c);
+    AbstractWrite *req;
+    c->add_request();
 
-      vector<pair<uint64_t,uint64_t> > objectx;
-      Striper::extent_to_file(ictx->cct, &ictx->layout,
-			      p->objectno, 0, ictx->layout.fl_object_size,
-			      objectx);
-
-      if (p->offset == 0 && p->length == ictx->layout.fl_object_size) {
-	req = new AioRemove(ictx, p->oid.name, p->objectno, objectx,
-			    req_comp);
-      } else if (p->offset + p->length == ictx->layout.fl_object_size) {
-	req = new AioTruncate(ictx, p->oid.name, p->objectno, p->offset, objectx,
-			      req_comp);
-      } else {
-	req = new AioZero(ictx, p->oid.name, p->objectno, p->offset, p->length,
-			  objectx,
-			  req_comp);
-      }
-
-      r = req->send();
-      if (r < 0)
-	goto done;
+    if (off + len <= ictx->size) {
+      req = new AioTruncate(ictx, ictx->image_oid, off, req_comp);
+    } else {
+      req = new AioZero(ictx, ictx->image_oid, off, len, req_comp);
     }
+
+    r = req->send();
+    if (r < 0)
+      goto done;
     r = 0;
   done:
     if (ictx->object_cacher) {
       Mutex::Locker l(ictx->cache_lock);
-      ictx->object_cacher->discard_set(ictx->object_set, extents);
+      ObjectExtent x(ictx->image_oid, off, len, 0);
+      vector<ObjectExtent> xs;
+      xs.push_back(x);
+      ictx->object_cacher->discard_set(ictx->object_set, xs);
     }
 
     c->finish_adding_requests(ictx->cct);
@@ -1742,83 +1283,52 @@ namespace librbd {
 	       char *buf, bufferlist *bl,
 	       AioCompletion *c)
   {
-    vector<pair<uint64_t,uint64_t> > image_extents(1);
-    image_extents[0] = make_pair(off, len);
-    return aio_read(ictx, image_extents, buf, bl, c);
-  }
-
-  int aio_read(ImageCtx *ictx, const vector<pair<uint64_t,uint64_t> >& image_extents,
-	       char *buf, bufferlist *pbl, AioCompletion *c)
-  {
-    ldout(ictx->cct, 20) << "aio_read " << ictx << " completion " << c << " " << image_extents << dendl;
+    ldout(ictx->cct, 20) << "aio_read " << ictx << " completion " << c
+			 << " " << off << "~" << len << dendl;
 
     int r = ictx_check(ictx);
     if (r < 0)
       return r;
 
-    // map
-    map<object_t,vector<ObjectExtent> > object_extents;
-
-    uint64_t buffer_ofs = 0;
-    for (vector<pair<uint64_t,uint64_t> >::const_iterator p = image_extents.begin();
-	 p != image_extents.end();
-	 ++p) {
-      uint64_t len = p->second;
-      r = clip_io(ictx, p->first, &len);
-      if (r < 0)
-	return r;
-      if (len == 0)
-	continue;
-
-      Striper::file_to_extents(ictx->cct, ictx->format_string, &ictx->layout,
-			       p->first, len, 0, object_extents, buffer_ofs);
-      buffer_ofs += len;
-    }
+    r = clip_io(ictx, off, &len);
+    if (r < 0)
+      return r;
 
     int64_t ret;
 
     c->read_buf = buf;
-    c->read_buf_len = buffer_ofs;
-    c->read_bl = pbl;
+    c->read_buf_len = len;
+    c->read_bl = bl;
 
     c->get();
     c->init_time(ictx, AIO_TYPE_READ);
-    for (map<object_t,vector<ObjectExtent> >::iterator p = object_extents.begin(); p != object_extents.end(); ++p) {
-      for (vector<ObjectExtent>::iterator q = p->second.begin(); q != p->second.end(); ++q) {
-	ldout(ictx->cct, 20) << " oid " << q->oid << " " << q->offset << "~" << q->length
-			     << " from " << q->buffer_extents << dendl;
+    C_AioRead *req_comp = new C_AioRead(ictx->cct, c);
+    AioRead *req = new AioRead(ictx, ictx->image_oid,
+			       off, len, req_comp);
+    req_comp->set_req(req);
+    c->add_request();
 
-	C_AioRead *req_comp = new C_AioRead(ictx->cct, c);
-	AioRead *req = new AioRead(ictx, q->oid.name, 
-				   q->objectno, q->offset, q->length,
-				   q->buffer_extents,
-				   true, req_comp);
-	req_comp->set_req(req);
-	c->add_request();
-
-	if (ictx->object_cacher) {
-	  C_CacheRead *cache_comp = new C_CacheRead(req);
-	  ictx->aio_read_from_cache(q->oid, &req->data(),
-				    q->length, q->offset,
-				    cache_comp);
-	} else {
-	  r = req->send();
-	  if (r < 0 && r == -ENOENT)
-	    r = 0;
-	  if (r < 0) {
-	    ret = r;
-	    goto done;
-	  }
-	}
+    if (ictx->object_cacher) {
+      C_CacheRead *cache_comp = new C_CacheRead(req);
+      ictx->aio_read_from_cache(ictx->image_oid, &req->data(),
+				len, off, cache_comp);
+    } else {
+      r = req->send();
+      if (r < 0 && r == -ENOENT)
+	r = 0;
+      if (r < 0) {
+	ret = r;
+	goto done;
       }
     }
-    ret = buffer_ofs;
+
+    ret = len;
   done:
     c->finish_adding_requests(ictx->cct);
     c->put();
 
     ictx->perfcounter->inc(l_librbd_aio_rd);
-    ictx->perfcounter->inc(l_librbd_aio_rd_bytes, buffer_ofs);
+    ictx->perfcounter->inc(l_librbd_aio_rd_bytes, len);
 
     return ret;
   }

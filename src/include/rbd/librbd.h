@@ -26,8 +26,7 @@ extern "C" {
 #include <sys/types.h>
 #endif
 #include <string.h>
-#include "../rados/librados.h"
-#include "features.h"
+#include "rados/librados.h"
 
 #define LIBRBD_VER_MAJOR 0
 #define LIBRBD_VER_MINOR 1
@@ -45,43 +44,24 @@ typedef void *rbd_image_t;
 typedef int (*librbd_progress_fn_t)(uint64_t offset, uint64_t total, void *ptr);
 
 #define RBD_MAX_IMAGE_NAME_SIZE 96
-#define RBD_MAX_BLOCK_NAME_SIZE 24
 
 typedef struct {
   uint64_t size;
-  uint64_t obj_size;
-  uint64_t num_objs;
-  int order;
-  char block_name_prefix[RBD_MAX_BLOCK_NAME_SIZE];
 } rbd_image_info_t;
 
 void rbd_version(int *major, int *minor, int *extra);
 
 /* images */
 int rbd_list(rados_ioctx_t io, char *names, size_t *size);
-int rbd_create(rados_ioctx_t io, const char *name, uint64_t size, int *order);
-int rbd_create2(rados_ioctx_t io, const char *name, uint64_t size,
-		uint64_t features, int *order);
 /**
  * create new rbd image
- *
- * The stripe_unit must be a factor of the object size (1 << order).
- * The stripe_count can be one (no intra-object striping) or greater
- * than one.  The RBD_FEATURE_STRIPINGV2 must be specified if the
- * stripe_unit != the object size and the stripe_count is != 1.
  *
  * @param io ioctx
  * @param name image name
  * @param size image size in bytes
- * @param features initial feature bits
- * @param order object/block size, as a power of two (object size == 1 << order)
- * @param stripe_unit stripe unit size, in bytes.
- * @param stripe_count number of objects to stripe over before looping
  * @return 0 on success, or negative error code
  */
-int rbd_create3(rados_ioctx_t io, const char *name, uint64_t size,
-		uint64_t features, int *order,
-		uint64_t stripe_unit, uint64_t stripe_count);
+int rbd_create(rados_ioctx_t io, const char *name, uint64_t size);
 int rbd_remove(rados_ioctx_t io, const char *name);
 int rbd_remove_with_progress(rados_ioctx_t io, const char *name,
 			     librbd_progress_fn_t cb, void *cbdata);
@@ -113,11 +93,7 @@ int rbd_resize(rbd_image_t image, uint64_t size);
 int rbd_resize_with_progress(rbd_image_t image, uint64_t size,
 			     librbd_progress_fn_t cb, void *cbdata);
 int rbd_stat(rbd_image_t image, rbd_image_info_t *info, size_t infosize);
-int rbd_get_old_format(rbd_image_t image, uint8_t *old);
 int rbd_get_size(rbd_image_t image, uint64_t *size);
-int rbd_get_features(rbd_image_t image, uint64_t *features);
-int rbd_get_stripe_unit(rbd_image_t image, uint64_t *stripe_unit);
-int rbd_get_stripe_count(rbd_image_t image, uint64_t *stripe_count);
 int rbd_copy(rbd_image_t image, rados_ioctx_t dest_io_ctx, const char *destname);
 int rbd_copy2(rbd_image_t src, rbd_image_t dest);
 int rbd_copy_with_progress(rbd_image_t image, rados_ioctx_t dest_p, const char *destname,
@@ -236,8 +212,7 @@ int64_t rbd_read_iterate(rbd_image_t image, uint64_t ofs, size_t len,
  *
  * Reads each region of the image and calls the callback.  If the
  * buffer pointer passed to the callback is NULL, the given extent is
- * defined to be zeros (a hole).  Normally the granularity for the
- * callback is the image stripe size.
+ * defined to be zeros (a hole)
  *
  * @param image image to read
  * @param ofs offset to start from

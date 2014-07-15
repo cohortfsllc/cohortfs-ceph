@@ -61,24 +61,17 @@ namespace librbd {
     }
   };
 
-  const std::string id_obj_name(const std::string &name);
-  const std::string header_name(const std::string &image_id);
-  const std::string old_header_name(const std::string &image_name);
+  const std::string header_name(const std::string &name);
+  const std::string image_name(const std::string &name);
 
-  int detect_format(librados::IoCtx &io_ctx, const std::string &name,
-		    bool *old_format, uint64_t *size);
+  int check_exists(librados::IoCtx &io_ctx, const std::string &name,
+		   uint64_t *size = NULL);
 
   int list(librados::IoCtx& io_ctx, std::vector<std::string>& names);
-  int create(librados::IoCtx& io_ctx, const char *imgname, uint64_t size,
-	     int *order);
-  int create(librados::IoCtx& io_ctx, const char *imgname, uint64_t size,
-	     bool old_format, uint64_t features, int *order,
-	     uint64_t stripe_unit, uint64_t stripe_count);
+  int create(librados::IoCtx& io_ctx, const char *imgname, uint64_t size);
   int rename(librados::IoCtx& io_ctx, const char *srcname, const char *dstname);
   int info(ImageCtx *ictx, image_info_t& info, size_t image_size);
-  int get_old_format(ImageCtx *ictx, uint8_t *old);
   int get_size(ImageCtx *ictx, uint64_t *size);
-  int get_features(ImageCtx *ictx, uint64_t *features);
 
   int remove(librados::IoCtx& io_ctx, const char *imgname,
 	     ProgressContext& prog_ctx);
@@ -107,8 +100,6 @@ namespace librbd {
 		 const std::string& cookie);
 
   void trim_image(ImageCtx *ictx, uint64_t newsize, ProgressContext& prog_ctx);
-  int read_rbd_info(librados::IoCtx& io_ctx, const std::string& info_oid,
-		    struct rbd_info *info);
 
   int read_header_bl(librados::IoCtx& io_ctx, const std::string& md_oid,
 		     ceph::bufferlist& header);
@@ -123,26 +114,19 @@ namespace librbd {
   void image_info(const ImageCtx *ictx, image_info_t& info, size_t info_size);
   std::string get_block_oid(const std::string &object_prefix, uint64_t num,
 			    bool old_format);
-  uint64_t oid_to_object_no(const string& oid, const string& object_prefix);
   int clip_io(ImageCtx *ictx, uint64_t off, uint64_t *len);
-  int init_rbd_info(struct rbd_info *info);
-  void init_rbd_header(struct rbd_obj_header_ondisk& ondisk,
-		       uint64_t size, int order, uint64_t bid);
+  void init_rbd_header(struct rbd_obj_header_ondisk& ondisk, uint64_t size);
 
   int64_t read_iterate(ImageCtx *ictx, uint64_t off, uint64_t len,
 		       int (*cb)(uint64_t, size_t, const char *, void *),
 		       void *arg);
   ssize_t read(ImageCtx *ictx, uint64_t off, size_t len, char *buf);
-  ssize_t read(ImageCtx *ictx, const vector<pair<uint64_t,uint64_t> >& image_extents,
-	       char *buf, bufferlist *pbl);
   ssize_t write(ImageCtx *ictx, uint64_t off, size_t len, const char *buf);
   int discard(ImageCtx *ictx, uint64_t off, uint64_t len);
   int aio_write(ImageCtx *ictx, uint64_t off, size_t len, const char *buf,
 		AioCompletion *c);
   int aio_discard(ImageCtx *ictx, uint64_t off, uint64_t len, AioCompletion *c);
   int aio_read(ImageCtx *ictx, uint64_t off, size_t len,
-	       char *buf, bufferlist *pbl, AioCompletion *c);
-  int aio_read(ImageCtx *ictx, const vector<pair<uint64_t,uint64_t> >& image_extents,
 	       char *buf, bufferlist *pbl, AioCompletion *c);
   int aio_flush(ImageCtx *ictx, AioCompletion *c);
   int flush(ImageCtx *ictx);

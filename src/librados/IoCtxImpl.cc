@@ -673,6 +673,15 @@ int librados::IoCtxImpl::sparse_read(const object_t& oid,
   return m.size();
 }
 
+uint64_t librados::IoCtxImpl::op_size(void)
+{
+  uint64_t size;
+  lock->Lock();
+  size = volume->op_size();
+  lock->Unlock();
+  return size;
+}
+
 int librados::IoCtxImpl::stat(const object_t& oid, uint64_t *psize, time_t *pmtime)
 {
   Mutex mylock("IoCtxImpl::stat::mylock");

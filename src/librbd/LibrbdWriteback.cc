@@ -100,10 +100,9 @@ namespace librbd {
       librados::Rados::aio_create_completion(req, context_cb, NULL);
     librados::ObjectReadOperation op;
     op.read(off, len, pbl, NULL);
-    int flags = m_ictx->get_read_flags();
     // Volume is actually unused since it's in data_ctx
     int r = m_ictx->data_ctx.aio_operate(oid.name, rados_completion, &op,
-					 flags, NULL);
+					 0, NULL);
     rados_completion->release();
     assert(r >= 0);
   }
@@ -121,19 +120,11 @@ namespace librbd {
 				    uint64_t trunc_size, uint32_t trunc_seq,
 				    Context *oncommit)
   {
-    uint64_t object_no = oid_to_object_no(oid.name, m_ictx->object_prefix);
-
-    vector<pair<uint64_t,uint64_t> > objectx;
-    Striper::extent_to_file(m_ictx->cct, &m_ictx->layout,
-			  object_no, 0, m_ictx->layout.fl_object_size,
-			  objectx);
     write_result_d *result = new write_result_d(oid.name, oncommit);
     m_writes[oid.name].push(result);
     ldout(m_ictx->cct, 20) << "write will wait for result " << result << dendl;
     C_OrderedWrite *req_comp = new C_OrderedWrite(m_ictx->cct, result, this);
-    AioWrite *req = new AioWrite(m_ictx, oid.name,
-				 object_no, off, objectx,
-				 bl, req_comp);
+    AioWrite *req = new AioWrite(m_ictx, oid.name, off, bl, req_comp);
     req->send();
     return ++m_tid;
   }

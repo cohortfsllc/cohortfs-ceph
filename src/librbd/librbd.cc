@@ -22,7 +22,7 @@
 #include "osdc/ObjectCacher.h"
 
 #include "librbd/AioCompletion.h"
-#include "cls/rbd/cls_rbd_client.h"
+#include "cls/lock/cls_lock_client.h"
 #include "librbd/ImageCtx.h"
 #include "librbd/internal.h"
 #include "librbd/LibrbdWriteback.h"
@@ -80,7 +80,7 @@ namespace librbd {
 
   int RBD::open(IoCtx& io_ctx, Image& image, const char *name)
   {
-    ImageCtx *ictx = new ImageCtx(name, "", io_ctx, false);
+    ImageCtx *ictx = new ImageCtx(name, io_ctx, false);
 
     int r = librbd::open_image(ictx);
     if (r < 0)
@@ -92,7 +92,7 @@ namespace librbd {
 
   int RBD::open_read_only(IoCtx& io_ctx, Image& image, const char *name)
   {
-    ImageCtx *ictx = new ImageCtx(name, "", io_ctx, true);
+    ImageCtx *ictx = new ImageCtx(name, io_ctx, true);
 
     int r = librbd::open_image(ictx);
     if (r < 0)
@@ -102,23 +102,9 @@ namespace librbd {
     return 0;
   }
 
-  int RBD::create(IoCtx& io_ctx, const char *name, uint64_t size, int *order)
+  int RBD::create(IoCtx& io_ctx, const char *name, uint64_t size)
   {
-    return librbd::create(io_ctx, name, size, order);
-  }
-
-  int RBD::create2(IoCtx& io_ctx, const char *name, uint64_t size,
-		   uint64_t features, int *order)
-  {
-    return librbd::create(io_ctx, name, size, false, features, order, 0, 0);
-  }
-
-  int RBD::create3(IoCtx& io_ctx, const char *name, uint64_t size,
-		   uint64_t features, int *order, uint64_t stripe_unit,
-		   uint64_t stripe_count)
-  {
-    return librbd::create(io_ctx, name, size, false, features, order,
-			  stripe_unit, stripe_count);
+    return librbd::create(io_ctx, name, size);
   }
 
   int RBD::remove(IoCtx& io_ctx, const char *name)
@@ -215,34 +201,10 @@ namespace librbd {
     return librbd::info(ictx, info, infosize);
   }
 
-  int Image::old_format(uint8_t *old)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::get_old_format(ictx, old);
-  }
-
   int Image::size(uint64_t *size)
   {
     ImageCtx *ictx = (ImageCtx *)ctx;
     return librbd::get_size(ictx, size);
-  }
-
-  int Image::features(uint64_t *features)
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return librbd::get_features(ictx, features);
-  }
-
-  uint64_t Image::get_stripe_unit() const
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return ictx->get_stripe_unit();
-  }
-
-  uint64_t Image::get_stripe_count() const
-  {
-    ImageCtx *ictx = (ImageCtx *)ctx;
-    return ictx->get_stripe_count();
   }
 
   int Image::copy(IoCtx& dest_io_ctx, const char *destname)
@@ -425,31 +387,11 @@ extern "C" int rbd_list(rados_ioctx_t p, char *names, size_t *size)
   return (int)expected_size;
 }
 
-extern "C" int rbd_create(rados_ioctx_t p, const char *name, uint64_t size, int *order)
+extern "C" int rbd_create(rados_ioctx_t p, const char *name, uint64_t size)
 {
   librados::IoCtx io_ctx;
   librados::IoCtx::from_rados_ioctx_t(p, io_ctx);
-  return librbd::create(io_ctx, name, size, order);
-}
-
-extern "C" int rbd_create2(rados_ioctx_t p, const char *name,
-			   uint64_t size, uint64_t features,
-			   int *order)
-{
-  librados::IoCtx io_ctx;
-  librados::IoCtx::from_rados_ioctx_t(p, io_ctx);
-  return librbd::create(io_ctx, name, size, false, features, order, 0, 0);
-}
-
-extern "C" int rbd_create3(rados_ioctx_t p, const char *name,
-			   uint64_t size, uint64_t features,
-			   int *order,
-			   uint64_t stripe_unit, uint64_t stripe_count)
-{
-  librados::IoCtx io_ctx;
-  librados::IoCtx::from_rados_ioctx_t(p, io_ctx);
-  return librbd::create(io_ctx, name, size, false, features, order,
-			stripe_unit, stripe_count);
+  return librbd::create(io_ctx, name, size);
 }
 
 extern "C" int rbd_remove(rados_ioctx_t p, const char *name)
@@ -521,8 +463,7 @@ extern "C" int rbd_open(rados_ioctx_t p, const char *name, rbd_image_t *image)
 {
   librados::IoCtx io_ctx;
   librados::IoCtx::from_rados_ioctx_t(p, io_ctx);
-  librbd::ImageCtx *ictx = new librbd::ImageCtx(name, "", io_ctx,
-						false);
+  librbd::ImageCtx *ictx = new librbd::ImageCtx(name, io_ctx, false);
   int r = librbd::open_image(ictx);
   if (r >= 0)
     *image = (rbd_image_t)ictx;
@@ -534,7 +475,7 @@ extern "C" int rbd_open_read_only(rados_ioctx_t p, const char *name,
 {
   librados::IoCtx io_ctx;
   librados::IoCtx::from_rados_ioctx_t(p, io_ctx);
-  librbd::ImageCtx *ictx = new librbd::ImageCtx(name, "", io_ctx, true);
+  librbd::ImageCtx *ictx = new librbd::ImageCtx(name, io_ctx, true);
   int r = librbd::open_image(ictx);
   if (r >= 0)
     *image = (rbd_image_t)ictx;
@@ -570,36 +511,10 @@ extern "C" int rbd_stat(rbd_image_t image, rbd_image_info_t *info,
   return librbd::info(ictx, *info, infosize);
 }
 
-extern "C" int rbd_get_old_format(rbd_image_t image, uint8_t *old)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::get_old_format(ictx, old);
-}
-
 extern "C" int rbd_get_size(rbd_image_t image, uint64_t *size)
 {
   librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
   return librbd::get_size(ictx, size);
-}
-
-extern "C" int rbd_get_features(rbd_image_t image, uint64_t *features)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  return librbd::get_features(ictx, features);
-}
-
-extern "C" int rbd_get_stripe_unit(rbd_image_t image, uint64_t *stripe_unit)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  *stripe_unit = ictx->get_stripe_unit();
-  return 0;
-}
-
-extern "C" int rbd_get_stripe_count(rbd_image_t image, uint64_t *stripe_count)
-{
-  librbd::ImageCtx *ictx = (librbd::ImageCtx *)image;
-  *stripe_count = ictx->get_stripe_count();
-  return 0;
 }
 
 extern "C" ssize_t rbd_list_lockers(rbd_image_t image, int *exclusive,

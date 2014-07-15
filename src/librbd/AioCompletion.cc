@@ -32,25 +32,13 @@ namespace librbd {
 
   void AioCompletion::finalize(CephContext *cct, ssize_t rval)
   {
-    ldout(cct, 20) << "AioCompletion::finalize() " << (void*)this << " rval " << rval << " read_buf " << (void*)read_buf
+    ldout(cct, 20) << "AioCompletion::finalize() " << (void*)this << " rval "
+		   << rval << " read_buf " << (void*)read_buf
 		   << " read_bl " << (void*)read_bl << dendl;
     if (rval >= 0 && aio_type == AIO_TYPE_READ) {
       // FIXME: make the destriper write directly into a buffer so
       // that we avoid shuffling pointers and copying zeros around.
       bufferlist bl;
-      destriper.assemble_result(cct, bl, true);
-
-      if (read_buf) {
-	assert(bl.length() == read_buf_len);
-	bl.copy(0, read_buf_len, read_buf);
-	ldout(cct, 20) << "AioCompletion::finalize() copied resulting " << bl.length()
-		       << " bytes to " << (void*)read_buf << dendl;
-      }
-      if (read_bl) {
-	ldout(cct, 20) << "AioCompletion::finalize() moving resulting " << bl.length()
-		       << " bytes to bl " << (void*)read_bl << dendl;
-	read_bl->claim(bl);
-      }
     }
   }
 
@@ -79,21 +67,29 @@ namespace librbd {
   {
     ldout(m_cct, 10) << "C_AioRead::finish() " << this << " r = " << r << dendl;
     if (r >= 0 || r == -ENOENT) { // this was a sparse_read operation
-      ldout(m_cct, 10) << " got " << m_req->m_ext_map
-		       << " for " << m_req->m_buffer_extents
-		       << " bl " << m_req->data().length() << dendl;
-      // reads from the parent don't populate the m_ext_map and the overlap
-      // may not be the full buffer.  compensate here by filling in m_ext_map
-      // with the read extent when it is empty.
-      if (m_req->m_ext_map.empty())
-	m_req->m_ext_map[m_req->m_object_off] = m_req->data().length();
-
+      ldout(m_cct, 10) << " got " << " bl " << m_req->data().length() << dendl;
       m_completion->lock.Lock();
-      m_completion->destriper.add_partial_sparse_result(
-	  m_cct, m_req->data(), m_req->m_ext_map, m_req->m_object_off,
-	  m_req->m_buffer_extents);
+      if (m_completion->read_buf) {
+	if (m_completion ->read_buf_len > m_req->data().length())
+	  memset(m_completion-> read_buf + m_req->data().length(), 0,
+		 m_completion->read_buf_len - m_req->data().length());
+	try {
+	  unsigned int len = (m_req->data().length() <
+			      m_completion->read_buf_len ?
+			      m_completion->read_buf_len :
+			      m_req->data().length());
+	  m_req->data().copy(0, len, m_completion->read_buf);
+	} catch (buffer::end_of_buffer &e) { }
+      }
+      if (m_completion->read_bl) {
+	m_completion->read_bl->claim(m_req->data());
+	if (m_completion->read_bl->length() < m_req->m_len) {
+	  unsigned int spare = m_req->m_len - m_completion->read_bl->length();
+	  m_completion->read_bl->append_zero(spare);
+	}
+      }
       m_completion->lock.Unlock();
-      r = m_req->m_object_len;
+      r = m_req->m_len;
     }
     m_completion->complete_request(m_cct, r);
   }

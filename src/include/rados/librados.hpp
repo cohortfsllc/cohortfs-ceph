@@ -382,6 +382,7 @@ namespace librados
     int getxattrs(const std::string& oid, std::map<std::string, bufferlist>& attrset);
     int setxattr(const std::string& oid, const char *name, bufferlist& bl);
     int rmxattr(const std::string& oid, const char *name);
+    uint64_t op_size(void);
     int stat(const std::string& oid, uint64_t *psize, time_t *pmtime);
     int exec(const std::string& oid, const char *cls, const char *method,
 	     bufferlist& inbl, bufferlist& outbl);

@@ -643,6 +643,11 @@ int librados::IoCtx::rmxattr(const std::string& oid, const char *name)
   return io_ctx_impl->rmxattr(obj, name);
 }
 
+uint64_t librados::IoCtx::op_size(void)
+{
+  return io_ctx_impl->op_size();
+}
+
 int librados::IoCtx::stat(const std::string& oid, uint64_t *psize,
 			  time_t *pmtime)
 {

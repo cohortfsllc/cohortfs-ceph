@@ -33,7 +33,7 @@ struct rbd_stat {
 
 struct rbd_options {
 	char *ceph_config;
-	char *pool_name;
+	char *vol_name;
 };
 
 struct rbd_image {

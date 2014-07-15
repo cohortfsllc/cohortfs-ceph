@@ -26,8 +26,7 @@ using ceph::bufferlist;
 using librados::IoCtx;
 
 namespace librbd {
-  ImageCtx::ImageCtx(const string &image_name, const string &image_id,
-		     IoCtx& p, bool ro)
+  ImageCtx::ImageCtx(const string &image_name, IoCtx& p, bool ro)
     : cct((CephContext*)p.cct()),
       perfcounter(NULL),
       read_only(ro),
@@ -40,21 +39,15 @@ namespace librbd {
       md_lock("librbd::ImageCtx::md_lock"),
       cache_lock("librbd::ImageCtx::cache_lock"),
       refresh_lock("librbd::ImageCtx::refresh_lock"),
-      extra_read_flags(0),
-      old_format(true),
-      order(0), size(0), features(0),
-      format_string(NULL),
-      id(image_id),
-      stripe_unit(0), stripe_count(0),
+      size(0),
       object_cacher(NULL), writeback_handler(NULL), object_set(NULL)
   {
     md_ctx.dup(p);
     data_ctx.dup(p);
 
     memset(&header, 0, sizeof(header));
-    memset(&layout, 0, sizeof(layout));
 
-    string pname = string("librbd-") + id + string("-") +
+    string pname = string("librbd-") + string("-") +
       data_ctx.get_volume_name() + string("/") + name;
     perf_start(pname);
 
@@ -102,90 +95,19 @@ namespace librbd {
       delete object_set;
       object_set = NULL;
     }
-    delete[] format_string;
   }
 
   int ImageCtx::init() {
     int r;
-    if (id.length()) {
-      old_format = false;
-    } else {
-      r = detect_format(md_ctx, name, &old_format, NULL);
-      if (r < 0) {
-	lderr(cct) << "error finding header: " << cpp_strerror(r) << dendl;
-	return r;
-      }
+
+    r = check_exists(md_ctx, name, NULL);
+    if (r < 0) {
+      lderr(cct) << "error finding header: " << cpp_strerror(r) << dendl;
+      return r;
     }
-
-    if (!old_format) {
-      if (!id.length()) {
-	r = cls_client::get_id(&md_ctx, id_obj_name(name), &id);
-	if (r < 0) {
-	  lderr(cct) << "error reading image id: " << cpp_strerror(r)
-		     << dendl;
-	  return r;
-	}
-      }
-
-      header_oid = header_name(id);
-      r = cls_client::get_immutable_metadata(&md_ctx, header_oid,
-					     &object_prefix, &order);
-      if (r < 0) {
-	lderr(cct) << "error reading immutable metadata: "
-		   << cpp_strerror(r) << dendl;
-	return r;
-      }
-
-      r = cls_client::get_stripe_unit_count(&md_ctx, header_oid,
-					    &stripe_unit, &stripe_count);
-      if (r < 0 && r != -ENOEXEC && r != -EINVAL) {
-	lderr(cct) << "error reading striping metadata: "
-		   << cpp_strerror(r) << dendl;
-	return r;
-      }
-
-      init_layout();
-    } else {
-      header_oid = old_header_name(name);
-    }
+    header_oid = header_name(name);
+    image_oid = image_name(name);
     return 0;
-  }
-  
-  void ImageCtx::init_layout()
-  {
-    if (stripe_unit == 0 || stripe_count == 0) {
-      stripe_unit = 1ull << order;
-      stripe_count = 1;
-    }
-
-    memset(&layout, 0, sizeof(layout));
-    layout.fl_stripe_unit = stripe_unit;
-    layout.fl_stripe_count = stripe_count;
-    layout.fl_object_size = 1ull << order;
-
-    delete[] format_string;
-    size_t len = object_prefix.length() + 16;
-    format_string = new char[len];
-    if (old_format) {
-      snprintf(format_string, len, "%s.%%012llx", object_prefix.c_str());
-    } else {
-      snprintf(format_string, len, "%s.%%016llx", object_prefix.c_str());
-    }
-
-    // size object cache appropriately
-    if (object_cacher) {
-      uint64_t obj = cct->_conf->rbd_cache_size / (1ull << order);
-      ldout(cct, 10) << " cache bytes " << cct->_conf->rbd_cache_size << " order " << (int)order
-		     << " -> about " << obj << " objects" << dendl;
-      object_cacher->set_max_objects(obj * 4 + 10);
-    }
-
-    ldout(cct, 10) << "init_layout stripe_unit " << stripe_unit
-		   << " stripe_count " << stripe_count
-		   << " object_size " << layout.fl_object_size
-		   << " prefix " << object_prefix
-		   << " format " << format_string
-		   << dendl;
   }
 
   void ImageCtx::perf_start(string name) {
@@ -225,50 +147,9 @@ namespace librbd {
     delete perfcounter;
   }
 
-  void ImageCtx::set_read_flag(unsigned flag) {
-    extra_read_flags |= flag;
-  }
-
-  int ImageCtx::get_read_flags() {
-    return librados::OPERATION_NOFLAG | extra_read_flags;
-  }
-
   uint64_t ImageCtx::get_current_size() const
   {
     return size;
-  }
-
-  uint64_t ImageCtx::get_object_size() const
-  {
-    return 1ull << order;
-  }
-
-  string ImageCtx::get_object_name(uint64_t num) const {
-    char buf[object_prefix.length() + 32];
-    snprintf(buf, sizeof(buf), format_string, num);
-    return string(buf);
-  }
-
-  uint64_t ImageCtx::get_stripe_unit() const
-  {
-    return stripe_unit;
-  }
-
-  uint64_t ImageCtx::get_stripe_count() const
-  {
-    return stripe_count;
-  }
-
-  uint64_t ImageCtx::get_stripe_period() const
-  {
-    return stripe_count * (1ull << order);
-  }
-
-  uint64_t ImageCtx::get_num_objects() const
-  {
-    uint64_t period = get_stripe_period();
-    uint64_t num_periods = (size + period - 1) / period;
-    return num_periods * stripe_count;
   }
 
   uint64_t ImageCtx::get_image_size() const
@@ -276,16 +157,10 @@ namespace librbd {
     return size;
   }
 
-  int ImageCtx::get_features(uint64_t *out_features) const
-  {
-    *out_features = features;
-    return 0;
-  }
-
   void ImageCtx::aio_read_from_cache(object_t o, bufferlist *bl, size_t len,
 				     uint64_t off, Context *onfinish) {
     ObjectCacher::OSDRead *rd = object_cacher->prepare_read(bl, 0);
-    ObjectExtent extent(o, 0 /* a lie */, off, len, 0);
+    ObjectExtent extent(o, off, len, 0);
     extent.buffer_extents.push_back(make_pair(0, len));
     rd->extents.push_back(extent);
     cache_lock.Lock();
@@ -299,7 +174,7 @@ namespace librbd {
 				uint64_t off, Context *onfinish) {
     ObjectCacher::OSDWrite *wr
       = object_cacher->prepare_write(bl, utime_t(), 0);
-    ObjectExtent extent(o, 0, off, len, 0);
+    ObjectExtent extent(o, off, len, 0);
     extent.buffer_extents.push_back(make_pair(0, len));
     wr->extents.push_back(extent);
     {

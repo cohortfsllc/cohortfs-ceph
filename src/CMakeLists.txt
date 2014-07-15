@@ -677,16 +677,8 @@ if(${WITH_CLIENT})
 endif(${WITH_CLIENT})
 
 if(${WITH_RBD})
-  set(cls_rbd_files cls/rbd/cls_rbd.cc)
-  add_library(cls_rbd_objs OBJECT ${cls_rbd_files})
-  add_library(cls_rbd ${CEPH_SHARED} $<TARGET_OBJECTS:cls_rbd_objs>)
-  if(${ENABLE_SHARED})
-    set_target_properties(cls_rbd PROPERTIES OUTPUT_NAME cls_rbd VERSION "1.0.0" SOVERSION "1")
-  endif(${ENABLE_SHARED})
-  install(TARGETS cls_rbd DESTINATION lib/rados-classes)
-
   set(librbd_srcs librbd/librbd.cc librbd/AioCompletion.cc
-    librbd/AioRequest.cc cls/rbd/cls_rbd_client.cc librbd/ImageCtx.cc
+    librbd/AioRequest.cc librbd/ImageCtx.cc
     librbd/internal.cc librbd/LibrbdWriteback.cc librbd/WatchCtx.cc)
   add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
     $<TARGET_OBJECTS:osdc_rbd_objs>)

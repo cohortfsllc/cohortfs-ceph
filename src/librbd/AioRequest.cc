@@ -20,16 +20,15 @@ namespace librbd {
 
   AioRequest::AioRequest() :
     m_ictx(NULL), m_ioctx(NULL),
-    m_object_no(0), m_object_off(0), m_object_len(0),
+    m_off(0), m_len(0),
     m_completion(NULL),
     m_hide_enoent(false) {}
   AioRequest::AioRequest(ImageCtx *ictx, const std::string &oid,
-			 uint64_t objectno, uint64_t off, uint64_t len,
+			 uint64_t off, uint64_t len,
 			 Context *completion,
 			 bool hide_enoent) :
-    m_ictx(ictx), m_ioctx(&ictx->data_ctx), m_oid(oid), m_object_no(objectno),
-    m_object_off(off), m_object_len(len),
-    m_completion(completion),
+    m_ictx(ictx), m_ioctx(&ictx->data_ctx), m_oid(oid),
+    m_off(off), m_len(len), m_completion(completion),
     m_hide_enoent(hide_enoent) {}
 
   AioRequest::~AioRequest() { }
@@ -38,26 +37,21 @@ namespace librbd {
 
   bool AioRead::should_complete(int r)
   {
-    ldout(m_ictx->cct, 20) << "should_complete " << this << " " << m_oid << " " << m_object_off << "~" << m_object_len
-			   << " r = " << r << dendl;
+    ldout(m_ictx->cct, 20) << "should_complete " << this << " " << m_oid
+			   << " " << m_off << "~" << m_len << " r = "
+			   << r << dendl;
     return true;
   }
 
   int AioRead::send() {
-    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " " << m_object_off << "~" << m_object_len << dendl;
+    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " "
+			   << m_off << "~" << m_len << dendl;
 
     librados::AioCompletion *rados_completion =
       librados::Rados::aio_create_completion(this, rados_req_cb, NULL);
     int r;
     librados::ObjectReadOperation op;
-    int flags = m_ictx->get_read_flags();
-    if (m_sparse) {
-      op.sparse_read(m_object_off, m_object_len, &m_ext_map, &m_read_data,
-		     NULL);
-    } else {
-      op.read(m_object_off, m_object_len, &m_read_data, NULL);
-    }
-    r = m_ioctx->aio_operate(m_oid, rados_completion, &op, flags, NULL);
+    r = m_ioctx->aio_read(m_oid, rados_completion, &m_read_data, m_len, m_off);
 
     rados_completion->release();
     return r;
@@ -69,26 +63,23 @@ namespace librbd {
   }
 
   AbstractWrite::AbstractWrite(ImageCtx *ictx, const std::string &oid,
-			       uint64_t object_no, uint64_t object_off, uint64_t len,
-			       vector<pair<uint64_t,uint64_t> >& objectx,
+			       uint64_t object_off, uint64_t len,
 			       Context *completion,
 			       bool hide_enoent)
-    : AioRequest(ictx, oid, object_no, object_off, len, completion,
-		 hide_enoent)
-  {
-    m_object_image_extents = objectx;
-  }
+    : AioRequest(ictx, oid, object_off, len, completion, hide_enoent) { }
 
   bool AbstractWrite::should_complete(int r)
   {
-    ldout(m_ictx->cct, 20) << "write " << this << " " << m_oid << " " << m_object_off << "~" << m_object_len
-			   << " should_complete: r = " << r << dendl;
+    ldout(m_ictx->cct, 20) << "write " << this << " " << m_oid << " " << m_off
+			   << "~" << m_len << " should_complete: r = " << r
+			   << dendl;
 
     return true;
   }
 
   int AbstractWrite::send() {
-    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " " << m_object_off << "~" << m_object_len << dendl;
+    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " " << m_off
+			   << "~" << m_len << dendl;
     librados::AioCompletion *rados_completion =
       librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
     int r;
@@ -99,7 +90,6 @@ namespace librbd {
   }
 
   void AioWrite::add_write_ops(librados::ObjectWriteOperation &wr) {
-    wr.set_alloc_hint(m_ictx->get_object_size(), m_ictx->get_object_size());
-    wr.write(m_object_off, m_write_data);
+    wr.write(m_off, m_write_data);
   }
 }

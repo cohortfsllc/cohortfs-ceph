@@ -24,7 +24,7 @@ namespace librbd {
   public:
     AioRequest();
     AioRequest(ImageCtx *ictx, const std::string &oid,
-	       uint64_t objectno, uint64_t off, uint64_t len,
+	       uint64_t off, uint64_t len,
 	       Context *completion,
 	       bool hide_enoent);
     virtual ~AioRequest();
@@ -46,7 +46,7 @@ namespace librbd {
     ImageCtx *m_ictx;
     librados::IoCtx *m_ioctx;
     std::string m_oid;
-    uint64_t m_object_no, m_object_off, m_object_len;
+    uint64_t m_off, m_len;
     Context *m_completion;
     ceph::bufferlist m_read_data;
     bool m_hide_enoent;
@@ -55,14 +55,10 @@ namespace librbd {
   class AioRead : public AioRequest {
   public:
     AioRead(ImageCtx *ictx, const std::string &oid,
-	    uint64_t objectno, uint64_t offset, uint64_t len,
-	    vector<pair<uint64_t,uint64_t> >& be,
-	    bool sparse,
+	    uint64_t offset, uint64_t len,
 	    Context *completion)
-      : AioRequest(ictx, oid, objectno, offset, len, completion,
-		   false),
-	m_buffer_extents(be),
-	m_sparse(sparse) {
+      : AioRequest(ictx, oid, offset, len, completion,
+		   false) {
     }
     virtual ~AioRead() {}
     virtual bool should_complete(int r);
@@ -71,21 +67,15 @@ namespace librbd {
     ceph::bufferlist &data() {
       return m_read_data;
     }
-    std::map<uint64_t, uint64_t> m_ext_map;
 
     friend class C_AioRead;
-
-  private:
-    vector<pair<uint64_t,uint64_t> > m_buffer_extents;
-    bool m_sparse;
   };
 
   class AbstractWrite : public AioRequest {
   public:
     AbstractWrite();
     AbstractWrite(ImageCtx *ictx, const std::string &oid,
-		  uint64_t object_no, uint64_t object_off, uint64_t len,
-		  vector<pair<uint64_t,uint64_t> >& objectx,
+		  uint64_t object_off, uint64_t len,
 		  Context *completion,
 		  bool hide_enoent);
     virtual ~AbstractWrite() {}
@@ -93,20 +83,17 @@ namespace librbd {
     virtual int send();
 
   protected:
-    vector<pair<uint64_t,uint64_t> > m_object_image_extents;
     librados::ObjectWriteOperation m_write;
   };
 
   class AioWrite : public AbstractWrite {
   public:
     AioWrite(ImageCtx *ictx, const std::string &oid,
-	     uint64_t object_no, uint64_t object_off,
-	     vector<pair<uint64_t,uint64_t> >& objectx,
+	     uint64_t object_off,
 	     const ceph::bufferlist &data,
 	     Context *completion)
       : AbstractWrite(ictx, oid,
-		      object_no, object_off, data.length(),
-		      objectx,
+		      data.length(), object_off,
 		      completion, false),
 	m_write_data(data) {
       add_write_ops(m_write);
@@ -121,12 +108,9 @@ namespace librbd {
   class AioRemove : public AbstractWrite {
   public:
     AioRemove(ImageCtx *ictx, const std::string &oid,
-	      uint64_t object_no,
-	      vector<pair<uint64_t,uint64_t> >& objectx,
 	      Context *completion)
       : AbstractWrite(ictx, oid,
-		      object_no, 0, 0,
-		      objectx,
+		      0, 0,
 		      completion,
 		      true) {
       m_write.remove();
@@ -137,15 +121,12 @@ namespace librbd {
   class AioTruncate : public AbstractWrite {
   public:
     AioTruncate(ImageCtx *ictx, const std::string &oid,
-		uint64_t object_no, uint64_t object_off,
-		vector<pair<uint64_t,uint64_t> >& objectx,
-		Context *completion)
+		uint64_t off, Context *completion)
       : AbstractWrite(ictx, oid,
-		      object_no, object_off, 0,
-		      objectx,
+		      off, 0,
 		      completion,
 		      true) {
-      m_write.truncate(object_off);
+      m_write.truncate(off);
     }
     virtual ~AioTruncate() {}
 
@@ -154,12 +135,10 @@ namespace librbd {
   class AioZero : public AbstractWrite {
   public:
     AioZero(ImageCtx *ictx, const std::string &oid,
-	    uint64_t object_no, uint64_t object_off, uint64_t object_len,
-	    vector<pair<uint64_t,uint64_t> >& objectx,
+	    uint64_t object_off, uint64_t object_len,
 	    Context *completion)
       : AbstractWrite(ictx, oid,
-		      object_no, object_off, object_len,
-		      objectx,
+		      object_off, object_len,
 		      completion,
 		      true) {
       m_write.zero(object_off, object_len);
