@@ -1770,7 +1770,7 @@ int Pipe::read_message(Message **pm, AuthSessionHandler* auth_handler)
   if (connection_state->has_feature(CEPH_FEATURE_NOSRCADDR)) {
     if (tcp_read((char*)&header, sizeof(header)) < 0)
       return -1;
-    if (msgr->crcflags & MSG_CRC_REST) {
+    if (msgr->crcflags & MSG_CRC_HEADER) {
       header_crc = ceph_crc32c(0, (unsigned char *)&header, sizeof(header) - sizeof(header.crc));
     }
   } else {
@@ -1781,7 +1781,7 @@ int Pipe::read_message(Message **pm, AuthSessionHandler* auth_handler)
     memcpy(&header, &oldheader, sizeof(header));
     header.src = oldheader.src.name;
     header.reserved = oldheader.reserved;
-    if (msgr->crcflags & MSG_CRC_REST) {
+    if (msgr->crcflags & MSG_CRC_HEADER) {
       header.crc = oldheader.crc;
       header_crc = ceph_crc32c(0, (unsigned char *)&oldheader, sizeof(oldheader) - sizeof(oldheader.crc));
     }
@@ -1795,7 +1795,7 @@ int Pipe::read_message(Message **pm, AuthSessionHandler* auth_handler)
            << dendl;
 
   // verify header crc
-  if (!(msgr->crcflags & MSG_CRC_REST)) {
+  if (!(msgr->crcflags & MSG_CRC_HEADER)) {
   } else if (header_crc != header.crc) {
     ldout(msgr->cct,0) << "reader got bad header crc " << header_crc << " != " << header.crc << dendl;
     return -1;
@@ -1922,7 +1922,7 @@ int Pipe::read_message(Message **pm, AuthSessionHandler* auth_handler)
     ceph_msg_footer_old old_footer;
     if (tcp_read((char*)&old_footer, sizeof(old_footer)) < 0)
       goto out_dethrottle;
-    if (msgr->crcflags & MSG_CRC_REST) {
+    if (msgr->crcflags & MSG_CRC_HEADER) {
       footer.front_crc = old_footer.front_crc;
       footer.middle_crc = old_footer.middle_crc;
       footer.data_crc = old_footer.data_crc;
@@ -2139,7 +2139,7 @@ int Pipe::write_message(ceph_msg_header& header, ceph_msg_footer& footer, buffer
     oldheader.src.addr = connection_state->get_peer_addr();
     oldheader.orig_src = oldheader.src;
     oldheader.reserved = header.reserved;
-    if (msgr->crcflags & MSG_CRC_REST) {
+    if (msgr->crcflags & MSG_CRC_HEADER) {
 	oldheader.crc = ceph_crc32c(0, (unsigned char*)&oldheader,
 				    sizeof(oldheader) - sizeof(oldheader.crc));
     } else {
@@ -2207,7 +2207,7 @@ int Pipe::write_message(ceph_msg_header& header, ceph_msg_footer& footer, buffer
     msglen += sizeof(footer);
     msg.msg_iovlen++;
   } else {
-    if (msgr->crcflags & MSG_CRC_REST) {
+    if (msgr->crcflags & MSG_CRC_HEADER) {
       old_footer.front_crc = footer.front_crc;   
       old_footer.middle_crc = footer.middle_crc;   
       old_footer.data_crc = footer.data_crc;   
