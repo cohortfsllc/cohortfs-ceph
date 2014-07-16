@@ -308,8 +308,7 @@ set(librados_srcs
 add_library(librados ${CEPH_SHARED} ${librados_srcs}
   $<TARGET_OBJECTS:cls_lock_objs>
   $<TARGET_OBJECTS:cls_references_objs>
-  $<TARGET_OBJECTS:heap_profiler_objs>
-  )
+  $<TARGET_OBJECTS:heap_profiler_objs>)
 add_dependencies(librados osdc)
 target_link_libraries(librados PRIVATE osdc osd os global common ${CRYPTO_LIBS} ${EXTRALIBS} ${TCMALLOC_LIBS})
 if(${ENABLE_SHARED})
@@ -325,15 +324,13 @@ install(TARGETS librados DESTINATION lib)
 set(rados_srcs
   tools/rados/rados.cc
   common/obj_bencher.cc)
-add_executable(rados ${rados_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(rados librados global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+add_executable(rados ${rados_srcs})
+target_link_libraries(rados librados global ${CMAKE_DL_LIBS})
 
 set(librados_config_srcs
   librados-config.cc)
-add_executable(librados-config ${librados_config_srcs}
-  $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(librados-config librados global ${CMAKE_DL_LIBS}
-  ${TCMALLOC_LIBS})
+add_executable(librados-config ${librados_config_srcs})
+target_link_libraries(librados-config librados global ${CMAKE_DL_LIBS})
 
 install(TARGETS rados librados-config DESTINATION bin)
 
@@ -516,7 +513,7 @@ set(osd_mon_files mon/Monitor.cc)
 add_library(osd_mon_objs OBJECT ${osd_mon_files})
 add_library(osd STATIC ${osd_srcs} $<TARGET_OBJECTS:osd_mon_objs>
   $<TARGET_OBJECTS:cls_references_objs>)
-target_link_libraries(osd PRIVATE dl leveldb)
+target_link_libraries(osd PRIVATE common dl leveldb)
 
 set(ceph_osd_srcs ceph_osd.cc objclass/class_api.cc)
 add_executable(ceph-osd ${ceph_osd_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
@@ -674,7 +671,7 @@ if(${WITH_CLIENT})
     client/Inode.cc client/MetaRequest.cc client/MetaSession.cc
     client/Trace.cc)
   add_library(client ${libclient_srcs})
-  target_link_libraries(client osdc ${LIBEDIT_LIBS})
+  target_link_libraries(client PRIVATE osdc ${LIBEDIT_LIBS})
   set(libcephfs_srcs libcephfs.cc)
   add_library(cephfs SHARED ${libcephfs_srcs})
   target_link_libraries(cephfs PRIVATE client global)
@@ -710,7 +707,7 @@ if(${WITH_RBD})
     librbd/AioRequest.cc librbd/ImageCtx.cc
     librbd/internal.cc librbd/LibrbdWriteback.cc librbd/WatchCtx.cc)
   add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
-    $<TARGET_OBJECTS:osdc_rbd_objs>)
+    $<TARGET_OBJECTS:cls_lock_objs> $<TARGET_OBJECTS:osdc_rbd_objs>)
   target_link_libraries(librbd PRIVATE ${CMAKE_DL_LIBS})
   if(${ENABLE_SHARED})
     set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd
