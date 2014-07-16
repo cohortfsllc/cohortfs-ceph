@@ -134,18 +134,17 @@ static void lfn_translate(const char *path, const char *name, char *new_name, in
   return;
 }
 
-static int append_oname(const hobject_t &oid, char *s, int len)
+static char *append_oname(char *dest, const char* src, size_t len)
 {
-  //assert(sizeof(oid) == 28);
-  char *end = s + len;
-  char *t = s + strlen(s);
+  char *end = dest + len;
+  char *t = dest;
 
-  const char *i = oid.oid.name.c_str();
+  const char *i = src;
   while (*i && t < end) {
     if (*i == '\\') {
       *t++ = '\\';
       *t++ = '\\';
-    } else if (*i == '.' && i == oid.oid.name.c_str()) {  // only escape leading .
+    } else if (*i == '.' && i == src) {  // only escape leading .
       *t++ = '\\';
       *t++ = '.';
     } else if (*i == '/') {
@@ -156,11 +155,7 @@ static int append_oname(const hobject_t &oid, char *s, int len)
     i++;
   }
 
-  *t = '\0';
-
-  int size = t - s;
-
-  return size;
+  return t;
 }
 
 static bool parse_object(char *s, hobject_t& oid)
@@ -207,7 +202,12 @@ static int lfn_get(const char *coll_path, const hobject_t& oid, char *pathname, 
   char *filename = pathname + path_len;
 
   *lfn = '\0';
-  int actual_len = append_oname(oid, lfn, lfn_len);
+
+  if (!oid.append_c_str(lfn, '_', lfn_len, append_oname))
+    return -ERANGE;
+
+  int actual_len = strlen(lfn);
+
 
   if (actual_len < (int)FILENAME_PREFIX_LEN) {
     /* not a long file name, just build it as it is */
@@ -269,7 +269,11 @@ int FlatIndex::init() {
 int FlatIndex::created(const hobject_t &hoid, const char *path) {
   char long_name[PATH_MAX];
   long_name[0] = '\0';
-  int actual_len = append_oname(hoid, long_name, sizeof(long_name));
+  if (!hoid.append_c_str(long_name, '_', sizeof(long_name), append_oname))
+    return -ERANGE;
+
+  int actual_len = strlen(long_name);
+
   if (actual_len < (int)FILENAME_PREFIX_LEN) {
     return 0;
   }

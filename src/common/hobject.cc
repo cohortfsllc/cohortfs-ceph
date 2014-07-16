@@ -40,8 +40,11 @@ bool hobject_t::append_c_str(
   char *orig, char sep, size_t len,
   char *(*appender)(char *dest, const char* src, size_t len)) const
 {
-  char *cursor  = orig;
   char *bound = orig + len;
+  char *cursor  = (char *)memchr(orig, '\0', len);
+  if (!cursor)
+    return false;
+
   if (appender) {
     cursor = appender(orig, oid.name.c_str(), bound - cursor);
     if (!cursor)
