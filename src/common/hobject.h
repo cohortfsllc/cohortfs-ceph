@@ -29,7 +29,8 @@ namespace ceph {
 enum stripetype_t {
   ENTIRETY, // Stripeno is not meaningful in this case
   DATA,
-  ECC
+  ECC,
+  TERMINUS
 };
 WRITE_RAW_ENCODER(stripetype_t)
 /* This identifies a stripe of an object. hobject_t is a stupid name
@@ -44,6 +45,13 @@ struct hobject_t {
   // whatever it is, it should be consistent.
   uint32_t stripeno;
 
+  bool append_c_str(char *orig, char sep, size_t len,
+		    char *(*appender)(char *dest, const char* src,
+				      size_t len) = NULL) const;
+
+  void append_str(
+    string &orig, char sep,
+    void (*appender)(string &dest, const string &src) = NULL) const;
   string to_str() const;
 
   hobject_t() : stripetype(ENTIRETY) {}
