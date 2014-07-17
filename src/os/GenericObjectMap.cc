@@ -45,46 +45,46 @@ const char GenericObjectMap::HOBJECT_KEY_SEP_C = '!';
 
 // ============== GenericObjectMap Key Function =================
 
-static void append_escaped(const string &in, string *out)
+static void append_escaped(string &out, const string &in)
 {
   for (string::const_iterator i = in.begin(); i != in.end(); ++i) {
     if (*i == '%') {
-      out->push_back('%');
-      out->push_back('p');
+      out.push_back('%');
+      out.push_back('p');
     } else if (*i == '.') {
-      out->push_back('%');
-      out->push_back('e');
+      out.push_back('%');
+      out.push_back('e');
     } else if (*i == GenericObjectMap::HOBJECT_KEY_SEP_C) {
-      out->push_back('%');
-      out->push_back('u');
+      out.push_back('%');
+      out.push_back('u');
     } else if (*i == '!') {
-      out->push_back('%');
-      out->push_back('s');
+      out.push_back('%');
+      out.push_back('s');
     } else {
-      out->push_back(*i);
+      out.push_back(*i);
     }
   }
 }
 
-static bool append_unescaped(string::const_iterator begin,
-                             string::const_iterator end,
-                             string *out) 
+static bool append_unescaped(string &out,
+			     const char *begin,
+			     const char *end)
 {
-  for (string::const_iterator i = begin; i != end; ++i) {
+  for (const char *i = begin; i < end; ++i) {
     if (*i == '%') {
       ++i;
       if (*i == 'p')
-        out->push_back('%');
+	out.push_back('%');
       else if (*i == 'e')
-        out->push_back('.');
+	out.push_back('.');
       else if (*i == 'u')
-        out->push_back(GenericObjectMap::HOBJECT_KEY_SEP_C);
+	out.push_back(GenericObjectMap::HOBJECT_KEY_SEP_C);
       else if (*i == 's')
-        out->push_back('!');
+	out.push_back('!');
       else
-        return false;
+	return false;
     } else {
-      out->push_back(*i);
+      out.push_back(*i);
     }
   }
   return true;
@@ -94,7 +94,7 @@ string GenericObjectMap::header_key(const coll_t &cid)
 {
   string full_name;
 
-  append_escaped(cid.to_str(), &full_name);
+  append_escaped(full_name, cid.to_str());
   full_name.append(HOBJECT_KEY_SEP_S);
   return full_name;
 }
@@ -103,62 +103,45 @@ string GenericObjectMap::header_key(const coll_t &cid, const hobject_t &oid)
 {
   string full_name;
 
-  append_escaped(cid.to_str(), &full_name);
-  full_name.append(HOBJECT_KEY_SEP_S);
+  append_escaped(full_name, cid.to_str());
+  full_name.push_back(HOBJECT_KEY_SEP_C);
 
-  char buf[PATH_MAX];
-  char *t = buf;
-  char *end = t + sizeof(buf);
-
-  // make field ordering match with hobject_t compare operations
-  snprintf(t, end - t, "%" PRIu32 "_%" PRIu32, oid.stripetype, oid.stripeno);
-  full_name += string(buf);
-  full_name.append(HOBJECT_KEY_SEP_S);
-
-  append_escaped(oid.oid.name, &full_name);
-  full_name.append(HOBJECT_KEY_SEP_S);
+  oid.append_str(full_name, HOBJECT_KEY_SEP_C, append_escaped);
+  full_name.push_back(HOBJECT_KEY_SEP_C);
 
   return full_name;
 }
 
 bool GenericObjectMap::parse_header_key(const string &long_name,
-					coll_t *out_coll, hobject_t *out)
+					coll_t *coll, hobject_t *out)
 {
-  string coll;
-  string name;
-  stripetype_t stripetype;
-  uint32_t stripeno;
+  const char *current = long_name.c_str();
+  const char *bound = strchr(current, HOBJECT_KEY_SEP_C);
 
-  string::const_iterator current = long_name.begin();
-  string::const_iterator end;
-
-  for (end = current; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
-  if (!append_unescaped(current, end, &coll))
+  if (!bound)
     return false;
 
-  current = ++end;
-  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
-  if (end == long_name.end())
-    return false;
-  string extra_str(current, end);
-  sscanf(extra_str.c_str(), "%" SCNu32 "_%" SCNu32, (uint32_t *) &stripetype,
-	 &stripeno);
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != HOBJECT_KEY_SEP_C; ++end) ;
-  if (end == long_name.end())
-    return false;
-  if (!append_unescaped(current, end, &name))
-    return false;
-
-  current = ++end;
-
-  if (out) {
-    (*out) = hobject_t(name, stripetype, stripeno);
+  if (coll) {
+    string cs;
+    if (!append_unescaped(cs, current, bound)) {
+      return false;
+    }
+    *coll = coll_t(cs);
   }
 
-  if (out_coll)
-    *out_coll = coll_t(coll);
+  current = bound + 1;
+  bound = long_name.c_str() + long_name.length() - 1;
+  if (*bound != HOBJECT_KEY_SEP_C)
+    return false;
+
+  try {
+    if (out) {
+      *out = hobject_t::parse_c_str(current, HOBJECT_KEY_SEP_C,
+				    append_unescaped, bound);
+    }
+  } catch (std::invalid_argument &e) {
+    return false;
+  }
 
   return true;
 }

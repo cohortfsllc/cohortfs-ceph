@@ -117,12 +117,18 @@ hobject_t hobject_t::parse_c_str(const char *in, char sep,
 				 bool (*appender)(
 				   string &dest,
 				   const char *begin,
-				   const char *bound))
+				   const char *bound),
+				 const char *end)
 {
   hobject_t underconstruction;
 
   const char* cursor = in;
-  const char* bound = strchr(in, sep);
+  const char* bound;
+
+  if (end)
+    bound = (char *)memchr(cursor, sep, end - cursor);
+  else
+    bound = strchr(in, sep);
 
   if (!bound)
     throw std::invalid_argument(in);
@@ -134,6 +140,9 @@ hobject_t hobject_t::parse_c_str(const char *in, char sep,
   underconstruction.oid.name.reserve(underconstruction.oid.name.size());
 
   cursor = bound + 1;
+  if (end && cursor >= end)
+    throw std::invalid_argument(in);
+
   bound = strchr(cursor, sep);
   if (!bound)
     throw std::invalid_argument(in);
@@ -145,8 +154,11 @@ hobject_t hobject_t::parse_c_str(const char *in, char sep,
   }
 
   cursor = bound + 1;
+  if (end && cursor >= end)
+    throw std::invalid_argument(in);
+
   underconstruction.stripeno = strtoul(cursor, (char**) &bound, 10);
-  if (*cursor == '\0' || *bound != '\0')
+  if (*cursor == '\0' || (*bound != '\0' && bound != end))
     throw std::invalid_argument(in);
 
   return underconstruction;

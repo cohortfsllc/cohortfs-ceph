@@ -54,7 +54,8 @@ struct hobject_t {
 			       bool (*appender)(
 				 string &dest,
 				 const char *begin,
-				 const char *bound));
+				 const char *bound),
+			       const char *end = NULL);
 
   hobject_t() : stripetype(ENTIRETY) {}
 
