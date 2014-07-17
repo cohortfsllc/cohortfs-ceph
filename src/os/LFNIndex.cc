@@ -556,21 +556,20 @@ int LFNIndex::remove_attr_path(const vector<string> &path,
   return chain_removexattr(full_path.c_str(), mangled_attr_name.c_str());
 }
 
-static void append_escaped(string::const_iterator begin,
-			   string::const_iterator end, 
-			   string *out)
+static void append_escaped(string &out,
+			   const string &src)
 {
-  for (string::const_iterator i = begin; i != end; ++i) {
+  for (string::const_iterator i = src.cbegin(); i != src.cend(); ++i) {
     if (*i == '\\') {
-      out->append("\\\\");
+      out.append("\\\\");
     } else if (*i == '/') {
-      out->append("\\s");
+      out.append("\\s");
     } else if (*i == '_') {
-      out->append("\\u");
+      out.append("\\u");
     } else if (*i == '\0') {
-      out->append("\\n");
+      out.append("\\n");
     } else {
-      out->append(i, i+1);
+      out.append(i, i+1);
     }
   }
 }
@@ -578,22 +577,7 @@ static void append_escaped(string::const_iterator begin,
 string LFNIndex::lfn_generate_object_name(const hobject_t &oid)
 {
   string full_name;
-  string::const_iterator i = oid.oid.name.begin();
-  if (oid.oid.name.substr(0, 4) == "DIR_") {
-    full_name.append("\\d");
-    i += 4;
-  } else if (oid.oid.name[0] == '.') {
-    full_name.append("\\.");
-    ++i;
-  }
-  append_escaped(i, oid.oid.name.end(), &full_name);
-
-  char buf[PATH_MAX];
-  char *t = buf;
-  char *end = t + sizeof(buf);
-  snprintf(t, end - t, "_%" PRIu32 "_%" PRIu32, oid.stripetype, oid.stripeno);
-  full_name += string(buf);
-
+  oid.append_str(full_name, '_', append_escaped);
   return full_name;
 }
 
@@ -778,25 +762,25 @@ bool LFNIndex::lfn_is_subdir(const string &name, string *demangled)
   return 0;
 }
 
-static bool append_unescaped(string::const_iterator begin,
-			     string::const_iterator end,
-			     string *out)
+static bool append_unescaped(string &out,
+			     const char *begin,
+			     const char *end)
 {
-  for (string::const_iterator i = begin; i != end; ++i) {
+  for (const char *i = begin; i < end; ++i) {
     if (*i == '\\') {
       ++i;
       if (*i == '\\')
-	out->append("\\");
+	out.push_back('\\');
       else if (*i == 's')
-	out->append("/");
+	out.push_back('/');
       else if (*i == 'n')
-	(*out) += '\0';
+	out.push_back('\0');
       else if (*i == 'u')
-	out->append("_");
+	out.push_back('_');
       else
 	return false;
     } else {
-      out->append(i, i+1);
+      out.push_back(*i);
     }
   }
   return true;
@@ -804,48 +788,12 @@ static bool append_unescaped(string::const_iterator begin,
 
 bool LFNIndex::lfn_parse_object_name(const string &long_name, hobject_t *out)
 {
-  string name;
-  stripetype_t stripetype;
-  uint32_t stripeno;
-
-  string::const_iterator current = long_name.begin();
-  if (*current == '\\') {
-    ++current;
-    if (current == long_name.end()) {
-      return false;
-    } else if (*current == 'd') {
-      name.append("DIR_");
-      ++current;
-    } else if (*current == '.') {
-      name.append(".");
-      ++current;
-    } else {
-      --current;
-    }
+  try {
+    *out = hobject_t::parse_str(long_name, '_', append_unescaped);
+  } catch (std::invalid_argument &e) {
+    return false;
   }
 
-  string::const_iterator end = current;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  if (!append_unescaped(current, end, &name))
-    return false;
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-
-  current = ++end;
-  for ( ; end != long_name.end() && *end != '_'; ++end) ;
-  if (end == long_name.end())
-    return false;
-  string stripe_str(current, end);
-
-  sscanf(stripe_str.c_str(), "%" SCNu32 "_%" SCNu32, (uint32_t *) &stripetype,
-	 &stripeno);
-
-  (*out) = hobject_t(name, stripetype, stripeno);
   return true;
 }
 
