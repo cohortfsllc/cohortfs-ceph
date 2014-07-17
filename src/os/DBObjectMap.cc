@@ -35,20 +35,20 @@ const string DBObjectMap::HOBJECT_TO_SEQ = "_HOBJTOSEQ_";
 const string DBObjectMap::LEAF_PREFIX = "_LEAF_";
 const string DBObjectMap::REVERSE_LEAF_PREFIX = "_REVLEAF_";
 
-static void append_escaped(const string &in, string *out)
+static void append_escaped(string &out, const string &in)
 {
   for (string::const_iterator i = in.begin(); i != in.end(); ++i) {
     if (*i == '%') {
-      out->push_back('%');
-      out->push_back('p');
+      out.push_back('%');
+      out.push_back('p');
     } else if (*i == '.') {
-      out->push_back('%');
-      out->push_back('e');
+      out.push_back('%');
+      out.push_back('e');
     } else if (*i == '_') {
-      out->push_back('%');
-      out->push_back('u');
+      out.push_back('%');
+      out.push_back('u');
     } else {
-      out->push_back(*i);
+      out.push_back(*i);
     }
   }
 }
@@ -132,17 +132,8 @@ bool DBObjectMap::check(std::ostream &out)
 string DBObjectMap::hobject_key(coll_t c, const hobject_t &oid)
 {
   string out;
-  append_escaped(c.to_str(), &out);
-  out.push_back('.');
-  append_escaped(oid.oid.name, &out);
-  out.push_back('.');
-
-  char extra_str[1000];
-  char *t = extra_str;
-  char *end = t + sizeof(extra_str);
-  snprintf(t, end - t, ".%" PRIu32 ".%" PRIu32, oid.stripetype,
-	   oid.stripeno);
-  out += string(extra_str);
+  append_escaped(out, c.to_str());
+  oid.append_str(out, '.', append_escaped);
   return out;
 }
 

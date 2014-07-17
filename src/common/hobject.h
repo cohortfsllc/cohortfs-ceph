@@ -22,10 +22,6 @@
 #include "include/assert.h"   // spirit clobbers it!
 
 
-namespace ceph {
-  class Formatter;
-}
-
 enum stripetype_t {
   ENTIRETY, // Stripeno is not meaningful in this case
   DATA,
@@ -48,11 +44,15 @@ struct hobject_t {
   bool append_c_str(char *orig, char sep, size_t len,
 		    char *(*appender)(char *dest, const char* src,
 				      size_t len) = NULL) const;
-
   void append_str(
     string &orig, char sep,
     void (*appender)(string &dest, const string &src) = NULL) const;
   string to_str() const;
+  hobject_t parse_c_str(const char *in, char sep,
+			bool (*appender)(
+			  string &dest,
+			  const char *begin,
+			  const char *bound)) const;
 
   hobject_t() : stripetype(ENTIRETY) {}
 
@@ -75,7 +75,7 @@ struct hobject_t {
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
-  void dump(Formatter *f) const;
+  void dump(ceph::Formatter *f) const;
   static void generate_test_instances(list<hobject_t*>& o);
   friend bool operator<(const hobject_t&, const hobject_t&);
   friend bool operator>(const hobject_t&, const hobject_t&);

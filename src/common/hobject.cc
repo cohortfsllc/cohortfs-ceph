@@ -32,6 +32,13 @@ static const string typestrings[] = {
   [TERMINUS] = "terminus"
 };
 
+static const map<string, stripetype_t> stringtypes = {
+  {"entirety", ENTIRETY},
+  {"data", DATA},
+  {"ecc", ECC},
+  {"terminus", TERMINUS}
+};
+
 
 // The appender must append a sequence of characters WIHOUT A NUL and
 // return a pointer to the next character after the last appended. Or
@@ -83,6 +90,7 @@ void hobject_t::append_str(
   string &orig, char sep,
   void (*appender)(string &dest, const string &src)) const
 {
+  orig.reserve(orig.size() + oid.name.size() + 30);
   if (appender) {
     appender(orig, oid.name);
   } else {
@@ -94,6 +102,7 @@ void hobject_t::append_str(
   orig.append(typestrings[stripetype]);
   orig.push_back(sep);
   orig.append(to_string(stripeno));
+  orig.reserve(orig.length());
 }
 
 
@@ -102,6 +111,44 @@ string hobject_t::to_str() const
   string result;
   append_str(result, '.', append_escaped);
   return result;
+}
+
+hobject_t hobject_t::parse_c_str(const char *in, char sep,
+				 bool (*appender)(
+				   string &dest,
+				   const char *begin,
+				   const char *bound)) const
+{
+  hobject_t underconstruction;
+
+  const char* cursor = in;
+  const char* bound = strchr(in, sep);
+
+  if (!bound)
+    throw std::invalid_argument(in);
+
+  underconstruction.oid.name.reserve(bound - cursor);
+
+  if (!appender(underconstruction.oid.name, cursor, bound))
+    throw std::invalid_argument(in);
+
+  cursor = bound + 1;
+  bound = strchr(cursor, sep);
+  if (!bound)
+    throw std::invalid_argument(in);
+  string temp(cursor, bound - cursor);
+  try {
+    underconstruction.stripetype = stringtypes.at(temp);
+  } catch (std::out_of_range &e) {
+    throw std::invalid_argument(in);
+  }
+
+  cursor = bound + 1;
+  underconstruction.stripeno = strtoul(cursor, (char**) &bound, 10);
+  if (*cursor == '\0' || *bound != '\0')
+    throw std::invalid_argument(in);
+
+  return underconstruction;
 }
 
 void hobject_t::encode(bufferlist& bl) const
