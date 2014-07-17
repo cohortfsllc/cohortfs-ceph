@@ -53,22 +53,23 @@ static void append_escaped(string &out, const string &in)
   }
 }
 
-static bool append_unescaped(string::const_iterator begin,
-			     string::const_iterator end, 
-			     string *out) {
-  for (string::const_iterator i = begin; i != end; ++i) {
+static bool append_unescaped(string &out,
+			     const char *begin,
+			     const char *end)
+{
+  for (const char *i = begin; i < end; ++i) {
     if (*i == '%') {
       ++i;
       if (*i == 'p')
-	out->push_back('%');
+	out.push_back('%');
       else if (*i == 'e')
-	out->push_back('.');
+	out.push_back('.');
       else if (*i == 'u')
-	out->push_back('_');
+	out.push_back('_');
       else
 	return false;
     } else {
-      out->push_back(*i);
+      out.push_back(*i);
     }
   }
   return true;
@@ -141,34 +142,24 @@ bool DBObjectMap::parse_hobject_key(const string &in, coll_t *c,
 				    hobject_t *oid)
 {
   string coll;
-  string name;
-  uint32_t stripetype;
-  uint32_t stripeno;
 
-  string::const_iterator current = in.begin();
-  string::const_iterator end;
-  for (end = current; end != in.end() && *end != '.'; ++end) ;
-  if (end == in.end())
+  const char *current = in.c_str();
+  const char *bound = strchr(current, '.');
+  if (*bound == '\0')
     return false;
-  if (!append_unescaped(current, end, &coll))
+  if (!append_unescaped(coll, current, bound))
     return false;
 
-  current = ++end;
-  for (; end != in.end() && *end != '.'; ++end) ;
-  if (end == in.end())
-    return false;
-  if (!append_unescaped(current, end, &name))
-    return false;
+  current = bound + 1;
 
-  current = ++end;
-  for (; end != in.end() && *end != '.'; ++end) ;
-  if (end == in.end())
+
+  try {
+    *oid = hobject_t::parse_c_str(current, '.', append_unescaped);
+  } catch (std::invalid_argument &e) {
     return false;
-  string extra_str(current, end);
-  sscanf(extra_str.c_str(), "%" PRIu32 ".%" PRIu32, &stripetype, &stripeno);
+  }
 
   *c = coll_t(coll);
-  (*oid) = hobject_t(object_t(name), (stripetype_t) stripetype, stripeno);
   return true;
 }
 

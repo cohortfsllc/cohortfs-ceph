@@ -48,11 +48,13 @@ struct hobject_t {
     string &orig, char sep,
     void (*appender)(string &dest, const string &src) = NULL) const;
   string to_str() const;
-  hobject_t parse_c_str(const char *in, char sep,
-			bool (*appender)(
-			  string &dest,
-			  const char *begin,
-			  const char *bound)) const;
+
+  // Basically a constructor.
+  static hobject_t parse_c_str(const char *in, char sep,
+			       bool (*appender)(
+				 string &dest,
+				 const char *begin,
+				 const char *bound));
 
   hobject_t() : stripetype(ENTIRETY) {}
 

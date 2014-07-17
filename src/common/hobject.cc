@@ -117,7 +117,7 @@ hobject_t hobject_t::parse_c_str(const char *in, char sep,
 				 bool (*appender)(
 				   string &dest,
 				   const char *begin,
-				   const char *bound)) const
+				   const char *bound))
 {
   hobject_t underconstruction;
 
@@ -131,6 +131,7 @@ hobject_t hobject_t::parse_c_str(const char *in, char sep,
 
   if (!appender(underconstruction.oid.name, cursor, bound))
     throw std::invalid_argument(in);
+  underconstruction.oid.name.reserve(underconstruction.oid.name.size());
 
   cursor = bound + 1;
   bound = strchr(cursor, sep);
