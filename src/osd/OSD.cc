@@ -1057,9 +1057,7 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
 // ======================================================
 // Volumes
 
-OSDVol *OSD::_open_lock_vol(
-  OSDMapRef createmap, uuid_d volume, bool no_lockdep_check,
-  bool hold_map_lock)
+OSDVol *OSD::_open_lock_vol(OSDMapRef createmap, uuid_d volume)
 {
   assert(osd_lock.is_locked());
 
@@ -1067,7 +1065,7 @@ OSDVol *OSD::_open_lock_vol(
 
   vol_map[volume] = vol;
 
-  vol->lock(no_lockdep_check);
+  vol->lock();
   vol->get();  // because it's in vol_map
   return vol;
 }
@@ -1087,14 +1085,11 @@ OSDVol* OSD::_make_vol(
 OSDVol *OSD::_create_lock_vol(
   OSDMapRef createmap,
   uuid_d volume,
-  bool newly_created,
-  bool hold_map_lock,
-  int acting_osd,
   ObjectStore::Transaction& t)
 {
   assert(osd_lock.is_locked());
 
-  OSDVol *vol = _open_lock_vol(createmap, volume, true, hold_map_lock);
+  OSDVol *vol = _open_lock_vol(createmap, volume);
 
   vol->init(&t);
 
@@ -2065,7 +2060,7 @@ bool OSD::heartbeat_dispatch(Message *m)
 {
   dout(30) << "heartbeat_dispatch " << m << dendl;
   switch (m->get_type()) {
-    
+
   case CEPH_MSG_PING:
     dout(10) << "ping from " << m->get_source_inst() << dendl;
     m->put();
@@ -2226,7 +2221,7 @@ bool OSD::ms_verify_authorizer(Connection *con, int peer_type,
 void OSD::do_waiters()
 {
   assert(osd_lock.is_locked());
-  
+
   dout(10) << "do_waiters -- start" << dendl;
   finished_lock.Lock();
   while (!finished.empty()) {
@@ -3149,8 +3144,10 @@ void OSD::handle_op(OpRequestRef op)
       return;
     }
   }
+
   uuid_d volume = m->get_volume();
-  OSDVol *vol = _have_vol(volume) ? _lookup_vol(volume) : NULL;
+  OSDVol *vol = _have_vol(volume) ? _lookup_vol(volume) :
+    _open_lock_vol(osdmap, volume);
   if (!vol) {
     dout(7) << "hit non-existent volume " << volume << dendl;
     service.reply_op_error(op, -ENXIO);

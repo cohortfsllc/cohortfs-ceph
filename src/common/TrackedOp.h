@@ -111,14 +111,14 @@ public:
   {
     typename T::Ref retval(new T(ref, this),
 			   RemoveOnDelete(this));
-    
+
     _mark_event(retval.get(), "header_read", ref->get_recv_stamp());
     _mark_event(retval.get(), "throttled", ref->get_throttle_stamp());
     _mark_event(retval.get(), "all_read", ref->get_recv_complete_stamp());
     _mark_event(retval.get(), "dispatched", ref->get_dispatch_stamp());
-    
+
     retval->init_from_message();
-    
+
     return retval;
   }
 };

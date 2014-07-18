@@ -730,15 +730,10 @@ protected:
   bool  _have_vol(uuid_d vol);
   OSDVol* _lookup_lock_vol(uuid_d vol);
   OSDVol* _lookup_vol(uuid_d vol);
-  OSDVol* _open_lock_vol(OSDMapRef createmap,
-			uuid_d vol, bool no_lockdep_check=false,
-			bool hold_map_lock=false);
+  OSDVol* _open_lock_vol(OSDMapRef createmap, uuid_d vol);
   OSDVol* _create_lock_vol(
     OSDMapRef createmap,
     uuid_d volume,
-    bool newly_created,
-    bool hold_map_lock,
-    int acting_osd,
     ObjectStore::Transaction& t);
   OSDVol* _lookup_qlock_vol(uuid_d vol);
 
