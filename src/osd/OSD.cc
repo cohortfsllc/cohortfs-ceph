@@ -1057,70 +1057,61 @@ void OSD::recursive_remove_collection(ObjectStore *store, coll_t tmp)
 // ======================================================
 // Volumes
 
-OSDVol *OSD::_open_lock_vol(OSDMapRef createmap, uuid_d volume)
-{
-  assert(osd_lock.is_locked());
-
-  OSDVol* vol = _make_vol(createmap, volume);
-
-  vol_map[volume] = vol;
-
-  vol->lock();
-  vol->get();  // because it's in vol_map
-  return vol;
-}
-
-OSDVol* OSD::_make_vol(
-  OSDMapRef createmap,
-  uuid_d volume)
-{
-  // create
-  OSDVol *vol;
-  hobject_t infooid = make_vol_biginfo_oid(volume);
-  vol = new OSDVol(&service, createmap, volume, infooid);
-  return vol;
-}
-
-
-OSDVol *OSD::_create_lock_vol(
-  OSDMapRef createmap,
-  uuid_d volume,
-  ObjectStore::Transaction& t)
-{
-  assert(osd_lock.is_locked());
-
-  OSDVol *vol = _open_lock_vol(createmap, volume);
-
-  vol->init(&t);
-
-  dout(7) << "_create_lock_vol " << *vol << dendl;
-  return vol;
-}
-
-
 bool OSD::_have_vol(uuid_d volume)
 {
   assert(osd_lock.is_locked());
   return vol_map.count(volume);
 }
 
-OSDVol* OSD::_lookup_lock_vol(uuid_d volume)
+OSDVolRef OSD::_lookup_vol(const uuid_d& volid)
 {
   assert(osd_lock.is_locked());
-  if (!vol_map.count(volume))
-    return NULL;
-  OSDVol *vol = vol_map[volume];
-  vol->lock();
-  return vol;
+  map<uuid_d, OSDVol*>::iterator i = vol_map.find(volid);
+  if (i != vol_map.end()) {
+    OSDVolRef vol = i->second;
+    service.lru.lru_touch(&*vol);
+    return vol;
+  } else {
+    return _create_vol(volid);
+  }
 }
 
-
-OSDVol *OSD::_lookup_vol(uuid_d volume)
+OSDVolRef OSD::_create_vol(const uuid_d& volid)
 {
   assert(osd_lock.is_locked());
-  if (!vol_map.count(volume))
-    return NULL;
-  OSDVol *vol = vol_map[volume];
+  OSDVol* vol = new OSDVol(&service, osdmap, volid, hobject_t("info"));
+  service.lru.lru_insert_top(vol);
+  vol_map[volid] = vol;
+
+  trim_vols();
+  return OSDVolRef(vol);
+}
+
+void OSD::trim_vols(void)
+{
+  unsigned last = 0;
+  assert(osd_lock.is_locked());
+  while (service.lru.lru_get_size() != last) {
+    last = service.lru.lru_get_size();
+
+    if (service.lru.lru_get_size() <=
+	service.lru.lru_get_max())
+      break;
+
+    OSDVol* vol = static_cast<OSDVol*>(service.lru.lru_expire());
+    if (!vol)
+      break;
+
+    vol_map.erase(vol->id);
+    delete(vol);
+  }
+}
+
+OSDVolRef OSD::_lookup_lock_vol(const uuid_d& volid)
+{
+  OSDVolRef vol = _lookup_vol(volid);
+  if (vol)
+    vol->lock();
   return vol;
 }
 
@@ -3146,8 +3137,7 @@ void OSD::handle_op(OpRequestRef op)
   }
 
   uuid_d volume = m->get_volume();
-  OSDVol *vol = _have_vol(volume) ? _lookup_vol(volume) :
-    _open_lock_vol(osdmap, volume);
+  OSDVolRef vol = _lookup_vol(volume);
   if (!vol) {
     dout(7) << "hit non-existent volume " << volume << dendl;
     service.reply_op_error(op, -ENXIO);
@@ -3172,7 +3162,7 @@ bool OSD::op_is_discardable(MOSDOp *op)
 /*
  * enqueue called with osd_lock held
  */
-void OSD::enqueue_op(OSDVol *vol, OpRequestRef op)
+void OSD::enqueue_op(OSDVolRef vol, OpRequestRef op)
 {
   utime_t latency = ceph_clock_now(cct) - op->get_req()->get_recv_stamp();
   dout(15) << "enqueue_op " << op << " prio " << op->get_req()->get_priority()

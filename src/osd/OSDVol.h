@@ -50,6 +50,7 @@ using namespace std;
 
 #include "include/unordered_map.h"
 #include "include/unordered_set.h"
+#include "lru.h"
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
 
@@ -71,7 +72,7 @@ typedef boost::intrusive_ptr<OSDVol> OSDVolRef;
 /** OSDVol - Volume abstraction in the OSD
  */
 
-class OSDVol {
+class OSDVol : public LRUObject {
   friend class OSD;
   friend class Watch;
 
@@ -412,6 +413,7 @@ public:
   bool dirty_info;
 
   // vol state
+  uuid_d id;
   vol_info_t info;
   uint8_t info_struct_v;
   static const uint8_t cur_struct_v = 7;
@@ -546,7 +548,6 @@ public:
   friend class C_OSD_RepModify_Commit;
 
   OSDVol(OSDService *o, OSDMapRef curmap, uuid_d vol, const hobject_t& ioid);
-
 
   ~OSDVol();
 

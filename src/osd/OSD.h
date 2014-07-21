@@ -51,6 +51,7 @@ using namespace std;
 #include "common/simple_cache.hpp"
 #include "common/sharedptr_registry.hpp"
 #include "common/PrioritizedQueue.h"
+#include "lru.h"
 
 #define CEPH_OSD_PROTOCOL    10 /* cluster internal */
 
@@ -76,6 +77,7 @@ class OSD;
 class OSDService {
 public:
   OSD *osd;
+  LRU lru;
   CephContext *cct;
   SharedPtrRegistry<uuid_d, ObjectStore::Sequencer> osr_registry;
   const int whoami;
@@ -651,7 +653,7 @@ private:
     void _process(OSDVolRef vol, ThreadPool::TPHandle &handle);
   } op_wq;
 
-  void enqueue_op(OSDVol *vol, OpRequestRef op);
+  void enqueue_op(OSDVolRef vol, OpRequestRef op);
   void dequeue_op(
     OSDVolRef vol, OpRequestRef op,
     ThreadPool::TPHandle &handle);
@@ -727,17 +729,11 @@ protected:
   // -- placement groups --
   std::map<uuid_d, OSDVol*> vol_map;
 
-  bool  _have_vol(uuid_d vol);
-  OSDVol* _lookup_lock_vol(uuid_d vol);
-  OSDVol* _lookup_vol(uuid_d vol);
-  OSDVol* _open_lock_vol(OSDMapRef createmap, uuid_d vol);
-  OSDVol* _create_lock_vol(
-    OSDMapRef createmap,
-    uuid_d volume,
-    ObjectStore::Transaction& t);
-  OSDVol* _lookup_qlock_vol(uuid_d vol);
-
-  OSDVol* _make_vol(OSDMapRef createmap, uuid_d vol);
+  bool _have_vol(uuid_d volume);
+  OSDVolRef _lookup_vol(const uuid_d& volid);
+  OSDVolRef _create_vol(const uuid_d& volid);
+  void trim_vols(void);
+  OSDVolRef _lookup_lock_vol(const uuid_d& volid);
 
   // -- boot --
   void start_boot();

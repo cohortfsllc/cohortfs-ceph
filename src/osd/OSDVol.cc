@@ -69,7 +69,7 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
   osdmap_ref(curmap), last_persisted_osdmap_ref(curmap),
   _lock("OSDVol::_lock"), ref(0),
   deleting(false), dirty_info(false),
-  info(v), info_struct_v(0),
+  id(v), info(v), info_struct_v(0),
   osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
   finish_sync_event(NULL), coll(v),
   last_became_active(ceph_clock_now(cct))

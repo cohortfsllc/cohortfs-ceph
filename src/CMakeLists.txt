@@ -284,7 +284,7 @@ add_library(global STATIC
 target_link_libraries(global PRIVATE common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(global PROPERTIES OUTPUT_NAME ceph-global VERSION "1.0.0" SOVERSION "1"
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 
 # RADOS client/library
