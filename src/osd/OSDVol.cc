@@ -2580,8 +2580,6 @@ int OSDVol::prepare_transaction(OpContext *ctx)
 {
   assert(!ctx->ops.empty());
 
-  const hobject_t& soid = ctx->obs->oi.soid;
-
   // prepare the actual mutation
   int result = do_osd_ops(ctx, ctx->ops);
   if (result < 0)

@@ -411,7 +411,7 @@ void OSDMonitor::share_map_with_random_osd()
 
 version_t OSDMonitor::get_trim_to()
 {
-  epoch_t floor;
+  epoch_t floor = 0;
   dout(10) << " min_last_epoch_clean " << dendl;
   if (g_conf->mon_osd_force_trim_to > 0 &&
       g_conf->mon_osd_force_trim_to < (int)get_last_committed()) {

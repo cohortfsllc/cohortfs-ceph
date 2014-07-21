@@ -998,7 +998,7 @@ bool ObjectCacher::is_cached(ObjectSet *oset, vector<ObjectExtent>& extents)
     ldout(cct, 10) << "is_cached " << *ex_it << dendl;
 
     // get Object cache
-    object_t oid(oid);
+    object_t oid(ex_it->oid);
     Object *o = get_object_maybe(oid, oset->volume);
     if (!o)
       return false;

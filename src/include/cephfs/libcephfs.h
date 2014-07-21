@@ -88,7 +88,7 @@ struct vinodeno_t;
 typedef struct vinodeno_t vinodeno;
 struct ceph_mount_info;
 struct ceph_dir_result;
-struct CephContext;
+class CephContext;
 
 /* setattr mask bits */
 #ifndef CEPH_SETATTR_MODE

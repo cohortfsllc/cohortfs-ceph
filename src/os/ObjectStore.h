@@ -365,7 +365,6 @@ public:
     vector<Op> ops;
     uint32_t largest_data_len, largest_data_off;
     int64_t pool_override;
-    bool use_pool_override;
     bool replica;
     bool tolerate_collection_add_enoent;
 

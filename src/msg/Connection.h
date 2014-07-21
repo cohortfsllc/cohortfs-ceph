@@ -133,13 +133,13 @@ typedef boost::intrusive_ptr<Connection> ConnectionRef;
 
 class Pipe;
 
-struct PipeConnection : public Connection {
+class PipeConnection : public Connection {
+public:
   Pipe* pipe;
 
   friend class boost::intrusive_ptr<PipeConnection>;
   friend class Pipe;
 
-public:
 
   PipeConnection(Messenger *m)
     : Connection(m),
