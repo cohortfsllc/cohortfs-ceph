@@ -727,7 +727,7 @@ protected:
 
 protected:
   // -- placement groups --
-  std::map<uuid_d, OSDVol*> vol_map;
+  std::map<uuid_d, OSDVolRef> vol_map;
 
   bool _have_vol(uuid_d volume);
   OSDVolRef _lookup_vol(const uuid_d& volid);

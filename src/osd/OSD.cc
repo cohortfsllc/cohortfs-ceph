@@ -556,12 +556,12 @@ bool OSD::asok_command(string command, cmdmap_t& cmdmap, string format,
   } else if (command == "dump_watchers") {
     list<obj_watch_item_t> watchers;
     osd_lock.Lock();
-    for (std::map<uuid_d,OSDVol*>::iterator it = vol_map.begin();
+    for (std::map<uuid_d,OSDVolRef>::iterator it = vol_map.begin();
 	 it != vol_map.end();
 	 ++it) {
 
       list<obj_watch_item_t> vol_watchers;
-      OSDVol *vol = it->second;
+      OSDVolRef vol = it->second;
       vol->lock();
       vol->get_watchers(vol_watchers);
       vol->unlock();
@@ -875,7 +875,7 @@ int OSD::shutdown()
   cct->_conf->set_val("debug_ms", "100");
   cct->_conf->apply_changes(NULL);
 
-  for (std::map<uuid_d, OSDVol*>::iterator p = vol_map.begin();
+  for (std::map<uuid_d, OSDVolRef>::iterator p = vol_map.begin();
        p != vol_map.end();
        ++p) {
     dout(20) << " kicking vol " << p->first << dendl;
@@ -954,7 +954,7 @@ int OSD::shutdown()
   store = 0;
   dout(10) << "Store synced" << dendl;
 
-  for (map<uuid_d, OSDVol*>::iterator p = vol_map.begin();
+  for (map<uuid_d, OSDVolRef>::iterator p = vol_map.begin();
        p != vol_map.end();
        ++p) {
     dout(20) << " kicking vol " << p->first << dendl;
@@ -1066,7 +1066,7 @@ bool OSD::_have_vol(uuid_d volume)
 OSDVolRef OSD::_lookup_vol(const uuid_d& volid)
 {
   assert(osd_lock.is_locked());
-  map<uuid_d, OSDVol*>::iterator i = vol_map.find(volid);
+  map<uuid_d, OSDVolRef>::iterator i = vol_map.find(volid);
   if (i != vol_map.end()) {
     OSDVolRef vol = i->second;
     service.lru.lru_touch(&*vol);
@@ -1103,7 +1103,6 @@ void OSD::trim_vols(void)
       break;
 
     vol_map.erase(vol->id);
-    delete(vol);
   }
 }
 

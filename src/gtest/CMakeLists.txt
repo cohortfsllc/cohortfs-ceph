@@ -8,8 +8,6 @@
 # ctest.  You can select which tests to run using 'ctest -R regex'.
 # For more options, run 'ctest --help'.
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLIKE_COMMON_FLAGS} -std=c++11 -w")
-
 # For hermetic builds, we may need to tell CMake to use compiler in a
 # specific location.
 if (gtest_compiler)

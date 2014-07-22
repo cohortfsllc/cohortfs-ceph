@@ -24,19 +24,16 @@ struct RefCountedObject {
   atomic_t nref;
   RefCountedObject() : nref(1) {}
   virtual ~RefCountedObject() {}
-  
+
   RefCountedObject *get() {
-    //generic_dout(0) << "RefCountedObject::get " << this << " " << nref.read() << " -> " << (nref.read() + 1) << dendl;
     nref.inc();
     return this;
   }
   RefCountedObject *add(int n) {
-    //generic_dout(0) << "RefCountedObject::add " << this << " " << nref.read() << " -> " << (nref.read() + n) << dendl;
     nref.add(n);
     return this;
   }
   void put() {
-    //generic_dout(0) << "RefCountedObject::put " << this << " " << nref.read() << " -> " << (nref.read() - 1) << dendl;
     if (nref.dec() == 0)
       delete this;
   }
