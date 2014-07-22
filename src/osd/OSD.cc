@@ -965,7 +965,6 @@ int OSD::shutdown()
       assert(0);
     }
     p->second->unlock();
-    p->second->put();
   }
   vol_map.clear();
   cct->_conf->remove_observer(this);
