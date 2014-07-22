@@ -126,7 +126,7 @@ CompatSet OSD::get_osd_compat_set() {
 }
 
 OSDService::OSDService(OSD *osd) :
-  osd(osd),
+  osd(osd), lru(20), // More sophisticated later
   cct(osd->cct),
   whoami(osd->whoami), store(osd->store), clog(osd->clog),
   infos_oid(OSD::make_infos_oid()),
