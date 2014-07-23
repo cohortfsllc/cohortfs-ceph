@@ -315,7 +315,7 @@ add_dependencies(librados osdc)
 target_link_libraries(librados PRIVATE osdc osd os global common ${CRYPTO_LIBS} ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 install(FILES include/rados/librados.h include/rados/rados_types.h
   include/rados/rados_types.hpp include/rados/librados.hpp
@@ -413,7 +413,7 @@ add_library(cls_refcount_objs OBJECT ${cls_refcount_files})
 add_library(cls_refcount ${CEPH_SHARED} $<TARGET_OBJECTS:cls_refcount_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(cls_refcount PROPERTIES OUTPUT_NAME cls_refcount VERSION "1.0.0" SOVERSION "1"
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 install(TARGETS cls_refcount DESTINATION lib/rados-classes)
 
@@ -428,7 +428,7 @@ add_library(cls_lock_objs OBJECT ${cls_lock_files})
 add_library(cls_lock ${CEPH_SHARED} $<TARGET_OBJECTS:cls_lock_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(cls_lock PROPERTIES OUTPUT_NAME cls_lock VERSION "1.0.0" SOVERSION "1"
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 install(TARGETS cls_lock DESTINATION lib/rados-classes)
 
@@ -441,7 +441,7 @@ add_library(cls_version_objs OBJECT ${cls_version_files})
 add_library(cls_version ${CEPH_SHARED} $<TARGET_OBJECTS:cls_version_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(cls_version PROPERTIES OUTPUT_NAME cls_version VERSION "1.0.0" SOVERSION "1"
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 install(TARGETS cls_version DESTINATION lib/rados-classes)
 
@@ -453,7 +453,7 @@ add_library(cls_log_objs OBJECT ${cls_log_files})
 add_library(cls_log ${CEPH_SHARED} $<TARGET_OBJECTS:cls_log_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(cls_log PROPERTIES OUTPUT_NAME cls_log VERSION "1.0.0" SOVERSION "1"
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 install(TARGETS cls_log DESTINATION lib/rados-classes)
 
@@ -467,7 +467,7 @@ add_library(cls_replica_log_objs OBJECT ${cls_replica_log_files})
 add_library(cls_replica_log ${CEPH_SHARED} $<TARGET_OBJECTS:cls_replica_log_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(cls_replica_log PROPERTIES OUTPUT_NAME cls_replica_log VERSION "1.0.0" SOVERSION "1"
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 install(TARGETS cls_replica_log DESTINATION lib/rados-classes)
 
@@ -479,7 +479,7 @@ add_library(cls_statelog_objs OBJECT ${cls_statelog_files})
 add_library(cls_statelog ${CEPH_SHARED} $<TARGET_OBJECTS:cls_statelog_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(cls_statelog PROPERTIES OUTPUT_NAME cls_statelog VERSION "1.0.0" SOVERSION "1"
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 install(TARGETS cls_statelog DESTINATION lib/rados-classes)
 
@@ -493,7 +493,7 @@ add_library(cls_user_objs OBJECT ${cls_user_files})
 add_library(cls_user ${CEPH_SHARED} $<TARGET_OBJECTS:cls_user_objs>)
 if(${ENABLE_SHARED})
   set_target_properties(cls_user PROPERTIES OUTPUT_NAME cls_user VERSION "1.0.0" SOVERSION "1"
-    LINK_FLAGS "-export-dynamic")
+    LINK_FLAGS "-Wl,-export-dynamic")
 endif(${ENABLE_SHARED})
 install(TARGETS cls_user DESTINATION lib/rados-classes)
 
@@ -679,7 +679,7 @@ if(${WITH_CLIENT})
   target_link_libraries(cephfs PRIVATE client global)
   if(${ENABLE_SHARED})
     set_target_properties(cephfs PROPERTIES OUTPUT_NAME cephfs VERSION 1.0.0 SOVERSION 1
-      LINK_FLAGS "-export-dynamic")
+      LINK_FLAGS "-Wl,-export-dynamic")
   endif(${ENABLE_SHARED})
   install(TARGETS cephfs DESTINATION lib)
   install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/include/cephfs" DESTINATION include)
@@ -713,7 +713,7 @@ if(${WITH_RBD})
   target_link_libraries(librbd PRIVATE ${CMAKE_DL_LIBS})
   if(${ENABLE_SHARED})
     set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd
-      LINK_FLAGS "-export-dynamic")
+      LINK_FLAGS "-Wl,-export-dynamic")
   endif(${ENABLE_SHARED})
   install(TARGETS librados librbd DESTINATION lib)
   set(rbd_srcs rbd.cc common/TextTable.cc)
@@ -736,7 +736,7 @@ if(${WITH_KVS})
   add_library(cls_kvs ${CEPH_SHARED} ${kvs_srcs})
   if(${ENABLE_SHARED})
     set_target_properties(cls_kvs PROPERTIES OUTPUT_NAME cls_kvs VERSION "1.0.0" SOVERSION "1"
-      LINK_FLAGS "-export-dynamic")
+      LINK_FLAGS "-Wl,-export-dynamic")
   endif(${ENABLE_SHARED})
   install(TARGETS cls_kvs DESTINATION lib/rados-classes)
 endif(${WITH_KVS})
@@ -748,7 +748,7 @@ if(${WITH_RADOSGW})
   add_library(cls_rgw ${CEPH_SHARED} $<TARGET_OBJECTS:cls_rgw_objs>)
   if(${ENABLE_SHARED})
     set_target_properties(cls_rgw PROPERTIES OUTPUT_NAME cls_rgw VERSION "1.0.0" SOVERSION "1"
-      LINK_FLAGS "-export-dynamic")
+      LINK_FLAGS "-Wl,-export-dynamic")
   endif(${ENABLE_SHARED})
   install(TARGETS cls_rgw DESTINATION lib/rados-classes)
 
