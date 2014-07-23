@@ -147,8 +147,6 @@ OSDService::OSDService(OSD *osd) :
   watch_lock("OSD::watch_lock"),
   watch_timer(osd->client_messenger->cct, watch_lock),
   next_notif_id(0),
-  backfill_request_lock("OSD::backfill_request_lock"),
-  backfill_request_timer(cct, backfill_request_lock, false),
   last_tid(0),
   tid_lock("OSDService::tid_lock"),
   map_cache_lock("OSDService::map_lock"),
@@ -188,10 +186,6 @@ void OSDService::shutdown()
   objecter->shutdown_unlocked();
   objecter_finisher.stop();
 
-  {
-    Mutex::Locker l(backfill_request_lock);
-    backfill_request_timer.shutdown();
-  }
   osdmap = OSDMapRef();
   next_osdmap = OSDMapRef();
 }
@@ -625,7 +619,6 @@ int OSD::init()
     return 0;
 
   tick_timer.init();
-  service.backfill_request_timer.init();
 
   // mount.
   dout(2) << "mounting " << dev_path << " "
@@ -3283,7 +3276,6 @@ void OSD::dequeue_op(
 const char** OSD::get_tracked_conf_keys() const
 {
   static const char* KEYS[] = {
-    "osd_max_backfills",
     "osd_op_complaint_time", "osd_op_log_threshold",
     "osd_op_history_size", "osd_op_history_duration",
     NULL
