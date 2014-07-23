@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.11)
 
 project(Ceph)
-set(VERSION "0.80cohort")
+set(VERSION "0.80")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
@@ -31,6 +31,7 @@ CHECK_INCLUDE_FILES("boost/random/discrete_distribution.hpp" HAVE_BOOST_RANDOM_D
 CHECK_INCLUDE_FILES("dirent.h" HAVE_DIRENT_H)
 CHECK_INCLUDE_FILES("dlfcn.h" HAVE_DLFCN_H)
 CHECK_INCLUDE_FILES("inttypes.h" HAVE_INTTYPES_H)
+CHECK_INCLUDE_FILES("linux/types.h" HAVE_LINUX_TYPES_H)
 CHECK_INCLUDE_FILES("leveldb/filter_policy.h" HAVE_LEVELDB_FILTER_POLICY)
 CHECK_INCLUDE_FILES("memory.h" HAVE_MEMORY_H)
 CHECK_INCLUDE_FILES("ndir.h" HAVE_NDIR_H)
@@ -58,7 +59,7 @@ CHECK_INCLUDE_FILES("sys/wait.h" HAVE_SYS_WAIT_H)
 CHECK_INCLUDE_FILES("sys/xattr.h" HAVE_SYS_XATTR_H)
 CHECK_INCLUDE_FILES("unistd.h" HAVE_UNISTD_H)
 CHECK_INCLUDE_FILES("utime.h" HAVE_UTIME_H)
-CHECK_INCLUDE_FILES("linux/fiemap.h" HAVE_FIEMAP_H)
+CHECK_INCLUDE_FILES("${CMAKE_SOURCE_DIR}/src/include/fiemap.h" HAVE_FIEMAP_H)
 CHECK_INCLUDE_FILES("expat.h" HAVE_EXPAT_H)
 CHECK_INCLUDE_FILES("fuse/fuse_lowlevel.h" HAVE_FUSE_LOWLEVEL_H)
 CHECK_INCLUDE_FILES("curl/curl.h" HAVE_FUSE_LOWLEVEL_H)
@@ -75,7 +76,13 @@ CHECK_INCLUDE_FILES("fcgi_stdio.h" HAVE_FASTCGI_STDIO_H)
 CHECK_INCLUDE_FILES("openssl/ssl.h" HAVE_SSL_H)
 CHECK_INCLUDE_FILES("snappy.h" HAVE_SNAPPY_H)
 CHECK_INCLUDE_FILES("uuid/uuid.h" HAVE_UUID_H)
+CHECK_INCLUDE_FILES("atomic_ops.h" HAVE_ATOMIC_OPS)
 CHECK_INCLUDE_FILES("keyutils.h" HAVE_KEYUTILS_H)
+
+include(CheckSymbolExists)
+CHECK_SYMBOL_EXISTS(__u8 "sys/types.h;linux/types.h" HAVE___U8)
+CHECK_SYMBOL_EXISTS(__u64 "sys/types.h;linux/types.h" HAVE___U64)
+CHECK_SYMBOL_EXISTS(__s64 "sys/types.h;linux/types.h" HAVE___S64)
 
 set(CEPH_MAN_DIR "share/man" CACHE STRING "Install location for man pages (relative to prefix).")
 
@@ -86,6 +93,10 @@ else(${ENABLE_SHARED})
  set(CEPH_SHARED STATIC)
 endif(${ENABLE_SHARED})
 
+find_package(udev REQUIRED)
+set(HAVE_UDEV ${UDEV_FOUND})
+message(STATUS "${UDEV_LIBS}")
+
 option(WITH_AIO "AIO is here ON" ON)
 if(${WITH_AIO})
 find_package(aio REQUIRED)
@@ -93,7 +104,7 @@ set(HAVE_LIBAIO ${AIO_FOUND})
 message(STATUS "${AIO_LIBS}")
 endif(${WITH_AIO})
 
-option(WITH_FUSE "Fuse is here" OFF)
+option(WITH_FUSE "Fuse is here" ON)
 if(${WITH_FUSE})
 find_package(fuse REQUIRED)
 set(HAVE_LIBFUSE ${FUSE_FOUND})
@@ -101,11 +112,15 @@ CHECK_FUNCTION_EXISTS(fuse_getgroups HAVE_FUSE_GETGROUPS)
 endif(${WITH_FUSE})
 
 # probably fuse etc need this -- how to check? XXX
-option(WITH_MDS "MDS is here" OFF)
+option(WITH_MDS "MDS is here" ON)
+
 # needs mds and? XXX
-option(WITH_CLIENT "Client is here" OFF)
+option(WITH_CLIENT "Client is here" ON)
+option(WITH_LIBCEPHFS "libcephfs client library" ON)
+
 # key-value store
 option(WITH_KVS "Key value store is here" ON)
+
 # remote block storage
 option(WITH_RBD "Remote block storage is here" ON)
 if(${WITH_RBD})
@@ -132,7 +147,7 @@ find_package(fcgi REQUIRED)
 set(HAVE_FCGI ${FCGI_FOUND})
 endif(${WITH_FCGI})
 
-option(WITH_ATOMIC_OPS "Atomic Ops is here" ON)
+option(WITH_ATOMICS_OPS "Atomic Ops is here" ON)
 if(${WITH_ATOMIC_OPS})
 find_package(atomic_ops REQUIRED)
 set(HAVE_ATOMIC_OPS ${ATOMIC_OPS_FOUND})
@@ -158,7 +173,7 @@ endif(${WITH_TCMALLOC})
 
 option(USE_CRYPTOPP "Cryptopp is ON" ON)
 find_package(cryptopp)
-if(${CRYPTOPP_FOUND})
+if(CRYPTOPP_FOUND)
         MESSAGE(STATUS "${CRYPTOPP_LIBRARIES}")
         set(CRYPTO_LIBS ${CRYPTOPP_LIBRARIES})
         set(USE_NSS 0)
@@ -167,15 +182,15 @@ else()
         set(USE_NSS 1)
 	MESSAGE(STATUS "${NSS_LIBRARIES}")
         find_package(NSS)
-        if(${NSS_FOUND})
+        if(NSS_FOUND)
                 MESSAGE(STATUS "${NSS_LIBRARIES}")
                 #It is known to be false why the test
-		if(NOT ${CRYPTOPP_FOUND})
+		if(NOT CRYPTOPP_FOUND)
                         set(CRYPTO_LIBS ${NSS_LIBRARIES})
                         add_definitions(-DUSE_NSS)
-		endif(NOT ${CRYPTOPP_FOUND})
-	endif(${NSS_FOUND})
-endif(${CRYPTOPP_FOUND})
+		endif(NOT CRYPTOPP_FOUND)
+	endif(NSS_FOUND)
+endif(CRYPTOPP_FOUND)
 
 option(WITH_XIO "Enable XIO messaging" ON)
 if(WITH_XIO)
@@ -184,20 +199,21 @@ set(HAVE_XIO ${Xio_FOUND})
 endif(WITH_XIO)
 
 #option for RGW
-option(WITH_RADOSGW "Rados Gateway is enabled" OFF)
+option(WITH_RADOSGW "Rados Gateway is enabled" ON)
 
-option(WITH_TESTS "Build tests" ON)
 
-option(WITH_FIO "Support for fio engines" OFF)
-if(WITH_FIO)
-	find_package(fio REQUIRED)
+option(WITH_TESTS "Build tests" ON) 	 			 	
+	
+option(WITH_FIO "Support for fio engines" OFF) 	 	
+if(WITH_FIO) 	 	
+	find_package(fio REQUIRED) 	 	
 endif(WITH_FIO)
 
-option(WITH_CDS "Support for CDS MemStore and fio engines" ON)
-if(WITH_CDS)
-	find_package(cds REQUIRED)
-	set(HAVE_CDS 1)
-	include_directories(${CDS_INC_DIR})
+option(WITH_CDS "Support for CDS MemStore and fio engines" ON) 	 	
+	if(WITH_CDS) 	 	
+	find_package(cds REQUIRED) 	 	
+	set(HAVE_CDS 1) 	 	
+	include_directories(${CDS_INC_DIR}) 	 	
 endif(WITH_CDS)
 
 # Now create a useable config.h
@@ -216,7 +232,7 @@ else(${ENABLE_SHARED})
 endif(${ENABLE_SHARED})
 
 set(Boost_USE_MULTITHREADED ON)
-find_package(Boost COMPONENTS thread system REQUIRED)
+find_package(Boost COMPONENTS thread system regex REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
 
 find_package(Threads REQUIRED)
@@ -232,7 +248,6 @@ endif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 set(OperatingSystem "Mac OS X")  
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-
 
 add_subdirectory(src)
 add_subdirectory(man)

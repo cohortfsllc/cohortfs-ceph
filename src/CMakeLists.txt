@@ -16,8 +16,15 @@ endif(${WITH_PROFILER})
 
 if (HAVE_XIO)
   include_directories(${Xio_INCLUDE_DIR})
-  list(APPEND EXTRALIBS ${Xio_LIBRARY} ibverbs rdmacm pthread)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${Xio_INCLUDE_DIR}")
+  add_definitions("-DHAVE_XIO")
+  list(APPEND EXTRALIBS ${Xio_LIBRARY} ibverbs rdmacm pthread rt)
 endif(HAVE_XIO)
+
+
+if(WITH_CDS)
+list(APPEND EXTRALIBS ${CDS_LIBS})
+endif(WITH_CDS)
 
 set(CRYPTO_LIBS cryptopp)
 
@@ -57,6 +64,11 @@ execute_process(
   ${PYTHON_EXECUTABLE} -c "from distutils import sysconfig; print sysconfig.get_python_lib(1,0,prefix='${PYTHON_INSTALL_TEMPLATE}')"
   OUTPUT_VARIABLE PYTHON_INSTDIR
   OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(
+COMMAND
+${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/ceph.setpath.py ${PYTHON_INSTDIR} ${CMAKE_INSTALL_PREFIX}/bin
+OUTPUT_VARIABLE CEPH_PYTHON_SET_PATH)
 
 include_directories(".")
 include_directories("./include")
@@ -249,10 +261,10 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c
   APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/include/ceph_ver.h)
 
 if(${WITH_PROFILER})
-  target_link_libraries(common profiler)
+  target_link_libraries(common PRIVATE profiler)
 endif(${WITH_PROFILER})
 
-target_link_libraries(common ${CRYPTO_LIBS} rt ${Boost_LIBRARIES} ${CDS_LIBS})
+target_link_libraries(common PRIVATE ${CRYPTO_LIBS} rt uuid ${Boost_LIBRARIES} ${CDS_LIBS})
 
 set(libglobal_srcs
   global/global_init.cc
@@ -267,7 +279,7 @@ add_library(global STATIC
   ${libglobal_srcs}
   $<TARGET_OBJECTS:global_common_objs>
   )
-target_link_libraries(global common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
+target_link_libraries(global PRIVATE common ${CMAKE_THREAD_LIBS_INIT} ${CRYPTO_LIBS} m ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(global PROPERTIES OUTPUT_NAME ceph-global VERSION "1.0.0" SOVERSION "1")
 endif(${ENABLE_SHARED})
@@ -292,9 +304,12 @@ set(librados_srcs
   librados/IoCtxImpl.cc
   )
 add_library(librados ${CEPH_SHARED} ${librados_srcs}
-  cls/lock/cls_lock_client.cc)
+  $<TARGET_OBJECTS:cls_lock_objs>
+  $<TARGET_OBJECTS:cls_references_objs>
+  $<TARGET_OBJECTS:heap_profiler_objs>
+  )
 add_dependencies(librados osdc)
-target_link_libraries(librados osdc common ${CRYPTO_LIBS} ${EXTRALIBS})
+target_link_libraries(librados PRIVATE osdc osd os global common ${CRYPTO_LIBS} ${EXTRALIBS})
 if(${ENABLE_SHARED})
   set_target_properties(librados PROPERTIES OUTPUT_NAME rados VERSION 2.0.0 SOVERSION 2)
 endif(${ENABLE_SHARED})
@@ -305,13 +320,13 @@ install(FILES include/rados/librados.h include/rados/rados_types.h
 install(TARGETS librados DESTINATION lib)
 
 set(rados_srcs tools/rados/rados.cc common/obj_bencher.cc)
-add_executable(rados ${rados_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(rados librados global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+add_executable(rados ${rados_srcs})
+target_link_libraries(rados librados global ${CMAKE_DL_LIBS})
 
 set(librados_config_srcs
   librados-config.cc)
-add_executable(librados-config ${librados_config_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(librados-config librados global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+add_executable(librados-config ${librados_config_srcs})
+target_link_libraries(librados-config librados global ${CMAKE_DL_LIBS})
 
 install(TARGETS rados librados-config DESTINATION bin)
 
@@ -348,7 +363,7 @@ add_library(mon STATIC ${lib_mon_srcs} $<TARGET_OBJECTS:mon_common_objs>
   $<TARGET_OBJECTS:monitorstore_obj>)
 set(ceph_mon_srcs ceph_mon.cc common/TextTable.cc)
 add_executable(ceph-mon ${ceph_mon_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
-target_link_libraries(ceph-mon mon boost_thread common os global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
+target_link_libraries(ceph-mon mon boost_thread common os global ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS} ${EXTRALIBS})
 install(TARGETS ceph-mon DESTINATION bin)
 
 # OSD
@@ -378,9 +393,9 @@ set(os_mon_files
 add_library(os_mon_objs OBJECT ${os_mon_files})
 add_library(os STATIC ${libos_srcs} $<TARGET_OBJECTS:os_mon_objs>)
 if(${HAVE_LIBAIO})
-  target_link_libraries(os aio)
+  target_link_libraries(os PRIVATE aio)
 endif(${HAVE_LIBAIO})
-target_link_libraries(os leveldb snappy)
+target_link_libraries(os PRIVATE leveldb snappy)
 
 set(cls_references_files objclass/class_api.cc)
 add_library(cls_references_objs OBJECT ${cls_references_files})
@@ -486,7 +501,7 @@ set(osd_mon_files mon/Monitor.cc)
 add_library(osd_mon_objs OBJECT ${osd_mon_files})
 add_library(osd STATIC ${osd_srcs} $<TARGET_OBJECTS:osd_mon_objs>
   $<TARGET_OBJECTS:cls_references_objs>)
-target_link_libraries(osd dl leveldb)
+target_link_libraries(osd PRIVATE dl leveldb)
 
 set(ceph_osd_srcs ceph_osd.cc objclass/class_api.cc)
 add_executable(ceph-osd ${ceph_osd_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
@@ -536,9 +551,9 @@ endif(${WITH_MDS})
 
 add_subdirectory(gtest)
 
-if (WITH_TESTS)
+#if (WITH_TESTS)
   add_subdirectory(test)
-endif (WITH_TESTS)
+#endif (WITH_TESTS)
 
 set(cephfs_srcs
   cephfs.cc
@@ -581,7 +596,7 @@ set(ceph_authtool_srcs
   tools/ceph_authtool.cc
   )
 add_executable(ceph-authtool ${ceph_authtool_srcs})
-target_link_libraries(ceph-authtool global)
+target_link_libraries(ceph-authtool global ${EXTRALIBS})
 install(TARGETS ceph-authtool DESTINATION bin)
 
 set(ceph_mon_store_converter_srcs
@@ -645,12 +660,12 @@ if(${WITH_CLIENT})
     client/Inode.cc client/MetaRequest.cc client/MetaSession.cc
     client/Trace.cc)
   add_library(client ${libclient_srcs})
-  target_link_libraries(client osdc ${LIBEDIT_LIBS})
+  target_link_libraries(client PRIVATE osdc ${LIBEDIT_LIBS})
   set(libcephfs_srcs
     libcephfs.cc
     )
   add_library(cephfs SHARED ${libcephfs_srcs})
-  target_link_libraries(cephfs client global)
+  target_link_libraries(cephfs PRIVATE client global)
   if(${ENABLE_SHARED})
     set_target_properties(cephfs PROPERTIES OUTPUT_NAME cephfs VERSION 1.0.0 SOVERSION 1)
   endif(${ENABLE_SHARED})
@@ -683,7 +698,7 @@ if(${WITH_RBD})
     librbd/internal.cc librbd/LibrbdWriteback.cc librbd/WatchCtx.cc)
   add_library(librbd ${CEPH_SHARED} ${librbd_srcs}
     $<TARGET_OBJECTS:osdc_rbd_objs>)
-  target_link_libraries(librbd ${CMAKE_DL_LIBS})
+  target_link_libraries(librbd PRIVATE ${CMAKE_DL_LIBS})
   if(${ENABLE_SHARED})
     set_target_properties(librbd PROPERTIES VERSION "1.0.0" SOVERSION "1" OUTPUT_NAME rbd)
   endif(${ENABLE_SHARED})
@@ -695,7 +710,7 @@ if(${WITH_RBD})
     $<TARGET_OBJECTS:rbd_mountcephfs_objs>
     $<TARGET_OBJECTS:heap_profiler_objs>)
   set_target_properties(rbd PROPERTIES OUTPUT_NAME rbd)
-  target_link_libraries(rbd global librbd librados common keyutils
+  target_link_libraries(rbd global librbd librados common keyutils udev
     ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS} ${TCMALLOC_LIBS})
   install(TARGETS rbd DESTINATION bin)
   install(PROGRAMS ${CMAKE_SOURCE_DIR}/src/ceph-rbdnamer
@@ -731,6 +746,6 @@ if(${WITH_RADOSGW})
     rgw/rgw_rest_opstate.cc rgw/rgw_rest_replica_log.cc ${kvs_srcs})
   add_executable(radosgw ${radosgw_srcs} $<TARGET_OBJECTS:heap_profiler_objs>)
   target_link_libraries(radosgw librgw_a librados cls_rgw cls_lock cls_refcount
-    cls_log cls_statelog cls_version cls_replica_log cls_kvs curl expat global fcgi resolv ${TCMALLOC_LIBS})
+    cls_log cls_statelog cls_version cls_replica_log cls_kvs cls_user curl expat global fcgi resolv ${TCMALLOC_LIBS})
   install(TARGETS radosgw DESTINATION bin)
 endif(${WITH_RADOSGW})
