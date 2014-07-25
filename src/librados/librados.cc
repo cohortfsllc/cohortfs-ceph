@@ -1253,6 +1253,7 @@ int rados_create_common(rados_t *pcluster,
   cct->_conf->parse_env(); // environment variables override
   cct->_conf->apply_changes(NULL);
 
+  cct->init();
   librados::RadosClient *radosp = new librados::RadosClient(cct);
   *pcluster = (void *)radosp;
 
@@ -1269,7 +1270,7 @@ extern "C" int rados_create(rados_t *pcluster, const char * const id)
   return rados_create_common(pcluster, "ceph", &iparams);
 }
 
-// as above, but 
+// as above, but
 // 1) don't assume 'client.'; name is a full type.id namestr
 // 2) allow setting clustername
 // 3) flags is for future expansion (maybe some of the global_init()

@@ -99,21 +99,6 @@ def make_ex(ret, msg):
     else:
         return Error(msg + (": errno %s" % errno.errorcode[ret]))
 
-class rados_pool_stat_t(Structure):
-    """ Usage information for a pool """
-    _fields_ = [("num_bytes", c_uint64),
-                ("num_kb", c_uint64),
-                ("num_objects", c_uint64),
-                ("num_object_clones", c_uint64),
-                ("num_object_copies", c_uint64),
-                ("num_objects_missing_on_primary", c_uint64),
-                ("num_objects_unfound", c_uint64),
-                ("num_objects_degraded", c_uint64),
-                ("num_rd", c_uint64),
-                ("num_rd_kb", c_uint64),
-                ("num_wr", c_uint64),
-                ("num_wr_kb", c_uint64)]
-
 class rados_cluster_stat_t(Structure):
     """ Cluster-wide usage information """
     _fields_ = [("kb", c_uint64),
@@ -449,109 +434,6 @@ Rados object in state %s." % (self.state))
                 'kb_avail': stats.kb_avail,
                 'num_objects': stats.num_objects}
 
-    def pool_exists(self, pool_name):
-        """
-        Checks if a given pool exists.
-
-        :param pool_name: name of the pool to check
-        :type pool_name: str
-
-        :raises: :class:`TypeError`, :class:`Error`
-        :returns: bool - whether the pool exists, false otherwise.
-        """
-        self.require_state("connected")
-        if not isinstance(pool_name, str):
-            raise TypeError('pool_name must be a string')
-        ret = run_in_thread(self.librados.rados_pool_lookup,
-                            (self.cluster, c_char_p(pool_name)))
-        if (ret >= 0):
-            return True
-        elif (ret == -errno.ENOENT):
-            return False
-        else:
-            raise make_ex(ret, "error looking up pool '%s'" % pool_name)
-
-    def create_pool(self, pool_name, auid=None, crush_rule=None):
-        """
-        Create a pool:
-        - with default settings: if auid=None and crush_rule=None
-        - owned by a specific auid: auid given and crush_rule=None
-        - with a specific CRUSH rule: if auid=None and crush_rule given
-        - with a specific CRUSH rule and auid: if auid and crush_rule given
-
-        :param pool_name: name of the pool to create
-        :type pool_name: str
-        :param auid: the id of the owner of the new pool
-        :type auid: int
-        :param crush_rule: rule to use for placement in the new pool
-        :type crush_rule: str
-
-        :raises: :class:`TypeError`, :class:`Error`
-        """
-        self.require_state("connected")
-        if not isinstance(pool_name, str):
-            raise TypeError('pool_name must be a string')
-        if crush_rule is not None and not isinstance(crush_rule, str):
-            raise TypeError('cruse_rule must be a string')
-        if (auid == None):
-            if (crush_rule == None):
-                ret = run_in_thread(self.librados.rados_pool_create,
-                                    (self.cluster, c_char_p(pool_name)))
-            else:
-                ret = run_in_thread(self.librados.\
-                                    rados_pool_create_with_crush_rule,
-                                    (self.cluster, c_char_p(pool_name),
-                                    c_ubyte(crush_rule)))
-
-        elif (crush_rule == None):
-            ret = run_in_thread(self.librados.rados_pool_create_with_auid,
-                                (self.cluster, c_char_p(pool_name),
-                                c_uint64(auid)))
-        else:
-            ret = run_in_thread(self.librados.rados_pool_create_with_all,
-                                (self.cluster, c_char_p(pool_name),
-                                c_uint64(auid), c_ubyte(crush_rule)))
-        if ret < 0:
-            raise make_ex(ret, "error creating pool '%s'" % pool_name)
-
-    def delete_pool(self, pool_name):
-        """
-        Delete a pool and all data inside it.
-
-        The pool is removed from the cluster immediately,
-        but the actual data is deleted in the background.
-
-        :param pool_name: name of the pool to delete 
-        :type pool_name: str
-
-        :raises: :class:`TypeError`, :class:`Error`
-        """
-        self.require_state("connected")
-        if not isinstance(pool_name, str):
-            raise TypeError('pool_name must be a string')
-        ret = run_in_thread(self.librados.rados_pool_delete,
-                            (self.cluster, c_char_p(pool_name)))
-        if ret < 0:
-            raise make_ex(ret, "error deleting pool '%s'" % pool_name)
-
-    def list_pools(self):
-        """
-        Gets a list of pool names. 
-
-        :returns: list - of pool names.
-        """
-        self.require_state("connected")
-        size = c_size_t(512)
-        while True:
-            c_names = create_string_buffer(size.value)
-            ret = run_in_thread(self.librados.rados_pool_list,
-                                (self.cluster, byref(c_names), size))
-            if ret > size.value:
-                size = c_size_t(ret)
-            else:
-                break
-        return filter(lambda name: name != '', c_names.raw.split('\0'))
-
     def get_fsid(self):
         """
         Get the fsid of the cluster as a hexadecimal string.
@@ -629,98 +511,6 @@ Rados object in state %s." % (self.state))
 
         return (ret, my_outbuf, my_outs)
 
-    def osd_command(self, osdid, cmd, inbuf, timeout=0):
-        """
-        osd_command(osdid, cmd, inbuf, outbuf, outbuflen, outs, outslen)
-        returns (int ret, string outbuf, string outs)
-        """
-        import sys
-        self.require_state("connected")
-        outbufp = pointer(pointer(c_char()))
-        outbuflen = c_long()
-        outsp = pointer(pointer(c_char()))
-        outslen = c_long()
-        cmdarr = (c_char_p * len(cmd))(*cmd)
-        ret = run_in_thread(self.librados.rados_osd_command,
-                            (self.cluster, osdid, cmdarr, len(cmd),
-                            c_char_p(inbuf), len(inbuf),
-                            outbufp, byref(outbuflen), outsp, byref(outslen)),
-                            timeout)
-
-        # copy returned memory (ctypes makes a copy, not a reference)
-        my_outbuf = outbufp.contents[:(outbuflen.value)]
-        my_outs = outsp.contents[:(outslen.value)]
-
-        # free callee's allocations
-        if outbuflen.value:
-            run_in_thread(self.librados.rados_buffer_free, (outbufp.contents,))
-        if outslen.value:
-            run_in_thread(self.librados.rados_buffer_free, (outsp.contents,))
-
-        return (ret, my_outbuf, my_outs)
-
-    def pg_command(self, pgid, cmd, inbuf, timeout=0):
-        """
-        pg_command(pgid, cmd, inbuf, outbuf, outbuflen, outs, outslen)
-        returns (int ret, string outbuf, string outs)
-        """
-        import sys
-        self.require_state("connected")
-        outbufp = pointer(pointer(c_char()))
-        outbuflen = c_long()
-        outsp = pointer(pointer(c_char()))
-        outslen = c_long()
-        cmdarr = (c_char_p * len(cmd))(*cmd)
-        ret = run_in_thread(self.librados.rados_pg_command,
-                            (self.cluster, c_char_p(pgid), cmdarr, len(cmd),
-                            c_char_p(inbuf), len(inbuf),
-                            outbufp, byref(outbuflen), outsp, byref(outslen)),
-                            timeout)
-
-        # copy returned memory (ctypes makes a copy, not a reference)
-        my_outbuf = outbufp.contents[:(outbuflen.value)]
-        my_outs = outsp.contents[:(outslen.value)]
-
-        # free callee's allocations
-        if outbuflen.value:
-            run_in_thread(self.librados.rados_buffer_free, (outbufp.contents,))
-        if outslen.value:
-            run_in_thread(self.librados.rados_buffer_free, (outsp.contents,))
-
-        return (ret, my_outbuf, my_outs)
-
-class ObjectIterator(object):
-    """rados.Ioctx Object iterator"""
-    def __init__(self, ioctx):
-        self.ioctx = ioctx
-        self.ctx = c_void_p()
-        ret = run_in_thread(self.ioctx.librados.rados_objects_list_open,
-                            (self.ioctx.io, byref(self.ctx)))
-        if ret < 0:
-            raise make_ex(ret, "error iterating over the objects in ioctx '%s'" \
-                % self.ioctx.name)
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        """
-        Get the next object name and locator in the pool
-
-        :raises: StopIteration
-        :returns: next rados.Ioctx Object
-        """
-        key = c_char_p()
-        locator = c_char_p()
-        ret = run_in_thread(self.ioctx.librados.rados_objects_list_next,
-                            (self.ctx, byref(key), byref(locator)))
-        if ret < 0:
-            raise StopIteration()
-        return Object(self.ioctx, key.value, locator.value)
-
-    def __del__(self):
-        run_in_thread(self.ioctx.librados.rados_objects_list_close, (self.ctx,))
-
 class XattrIterator(object):
     """Extended attribute iterator"""
     def __init__(self, ioctx, it, oid):
@@ -754,80 +544,6 @@ in '%s'" % self.oid)
 
     def __del__(self):
         run_in_thread(self.ioctx.librados.rados_getxattrs_end, (self.it,))
-
-class SnapIterator(object):
-    """Snapshot iterator"""
-    def __init__(self, ioctx):
-        self.ioctx = ioctx
-        # We don't know how big a buffer we need until we've called the
-        # function. So use the exponential doubling strategy.
-        num_snaps = 10
-        while True:
-            self.snaps = (ctypes.c_uint64 * num_snaps)()
-            ret = run_in_thread(self.ioctx.librados.rados_ioctx_snap_list,
-                                (self.ioctx.io, self.snaps, c_int(num_snaps)))
-            if (ret >= 0):
-                self.max_snap = ret
-                break
-            elif (ret != -errno.ERANGE):
-                raise make_ex(ret, "error calling rados_snap_list for \
-ioctx '%s'" % self.ioctx.name)
-            num_snaps = num_snaps * 2
-        self.cur_snap = 0
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        """
-        Get the next Snapshot
-
-        :raises: :class:`Error`, StopIteration 
-        :returns: Snap - next snapshot
-        """
-        if (self.cur_snap >= self.max_snap):
-            raise StopIteration
-        snap_id = self.snaps[self.cur_snap]
-        name_len = 10
-        while True:
-            name = create_string_buffer(name_len)
-            ret = run_in_thread(self.ioctx.librados.rados_ioctx_snap_get_name,
-                                (self.ioctx.io, c_uint64(snap_id), byref(name),
-                                 c_int(name_len)))
-            if (ret == 0):
-                name_len = ret
-                break
-            elif (ret != -errno.ERANGE):
-                raise make_ex(ret, "rados_snap_get_name error")
-            name_len = name_len * 2
-        snap = Snap(self.ioctx, name.value, snap_id)
-        self.cur_snap = self.cur_snap + 1
-        return snap
-
-class Snap(object):
-    """Snapshot object"""
-    def __init__(self, ioctx, name, snap_id):
-        self.ioctx = ioctx
-        self.name = name
-        self.snap_id = snap_id
-
-    def __str__(self):
-        return "rados.Snap(ioctx=%s,name=%s,snap_id=%d)" \
-            % (str(self.ioctx), self.name, self.snap_id)
-
-    def get_timestamp(self):
-        """
-        Find when a snapshot in the current pool occurred
-
-        :raises: :class:`Error`
-        :returns: datetime - the data and time the snapshot was created
-        """
-        snap_time = c_long(0)
-        ret = run_in_thread(self.ioctx.librados.rados_ioctx_snap_get_stamp,
-                            (self.ioctx.io, self.snap_id, byref(snap_time)))
-        if (ret != 0):
-            raise make_ex(ret, "rados_ioctx_snap_get_stamp error")
-        return datetime.fromtimestamp(snap_time.value)
 
 class Completion(object):
     """completion object"""
@@ -1317,61 +1033,9 @@ returned %d, but should return zero on success." % (self.name, ret))
             raise make_ex(ret, "Ioctx.read(%s): failed to read %s" % (self.name, key))
         return ctypes.string_at(ret_buf, ret)
 
-    def get_stats(self):
-        """
-        Get pool usage statistics
-
-        :returns: dict - contains the following keys:
-
-            - ``num_bytes`` (int) - size of pool in bytes
-
-            - ``num_kb`` (int) - size of pool in kbytes
-
-            - ``num_objects`` (int) - number of objects in the pool
-
-            - ``num_object_clones`` (int) - number of object clones
-
-            - ``num_object_copies`` (int) - number of object copies
-
-            - ``num_objects_missing_on_primary`` (int) - number of objets
-                missing on primary
-
-            - ``num_objects_unfound`` (int) - number of unfound objects
-
-            - ``num_objects_degraded`` (int) - number of degraded objects
-
-            - ``num_rd`` (int) - bytes read
-
-            - ``num_rd_kb`` (int) - kbytes read
-
-            - ``num_wr`` (int) - bytes written
-
-            - ``num_wr_kb`` (int) - kbytes written
-        """
-        self.require_ioctx_open()
-        stats = rados_pool_stat_t()
-        ret = run_in_thread(self.librados.rados_ioctx_pool_stat,
-                            (self.io, byref(stats)))
-        if ret < 0:
-            raise make_ex(ret, "Ioctx.get_stats(%s): get_stats failed" % self.name)
-        return {'num_bytes': stats.num_bytes,
-                'num_kb': stats.num_kb,
-                'num_objects': stats.num_objects,
-                'num_object_clones': stats.num_object_clones,
-                'num_object_copies': stats.num_object_copies,
-                "num_objects_missing_on_primary": stats.num_objects_missing_on_primary,
-                "num_objects_unfound": stats.num_objects_unfound,
-                "num_objects_degraded": stats.num_objects_degraded,
-                "num_rd": stats.num_rd,
-                "num_rd_kb": stats.num_rd_kb,
-                "num_wr": stats.num_wr,
-                "num_wr_kb": stats.num_wr_kb }
-
     def remove_object(self, key):
         """
         Delete an object
-
-        This does not delete any snapshots of the object.
 
         :param key: the name of the object to delete
         :type key: str
@@ -1544,81 +1208,6 @@ returned %d, but should return zero on success." % (self.name, ret))
                 (key, xattr_name))
         return True
 
-    def list_objects(self):
-        """ 
-        Get ObjectIterator on rados.Ioctx object.
-
-        :returns: ObjectIterator
-        """
-        self.require_ioctx_open()
-        return ObjectIterator(self)
-
-    def list_snaps(self):
-        """ 
-        Get SnapIterator on rados.Ioctx object.
-
-        :returns: SnapIterator
-        """
-        self.require_ioctx_open()
-        return SnapIterator(self)
-
-    def create_snap(self, snap_name):
-        """
-        Create a pool-wide snapshot
-
-        :param snap_name: the name of the snapshot
-        :type snap_name: str
-
-        :raises: :class:`TypeError`
-        :raises: :class:`Error`
-        """
-        self.require_ioctx_open()
-        if not isinstance(snap_name, str):
-            raise TypeError('snap_name must be a string')
-        ret = run_in_thread(self.librados.rados_ioctx_snap_create,
-                            (self.io, c_char_p(snap_name)))
-        if (ret != 0):
-            raise make_ex(ret, "Failed to create snap %s" % snap_name)
-
-    def remove_snap(self, snap_name):
-        """
-        Removes a pool-wide snapshot
-
-        :param snap_name: the name of the snapshot
-        :type snap_name: str
-
-        :raises: :class:`TypeError`
-        :raises: :class:`Error`
-        """
-        self.require_ioctx_open()
-        if not isinstance(snap_name, str):
-            raise TypeError('snap_name must be a string')
-        ret = run_in_thread(self.librados.rados_ioctx_snap_remove,
-                            (self.io, c_char_p(snap_name)))
-        if (ret != 0):
-            raise make_ex(ret, "Failed to remove snap %s" % snap_name)
-
-    def lookup_snap(self, snap_name):
-        """
-        Get the id of a pool snapshot
-
-        :param snap_name: the name of the snapshot to lookop
-        :type snap_name: str
-
-        :raises: :class:`TypeError`
-        :raises: :class:`Error`
-        :returns: Snap - on success
-        """
-        self.require_ioctx_open()
-        if not isinstance(snap_name, str):
-            raise TypeError('snap_name must be a string')
-        snap_id = c_uint64()
-        ret = run_in_thread(self.librados.rados_ioctx_snap_lookup,
-                           (self.io, c_char_p(snap_name), byref(snap_id)))
-        if (ret != 0):
-            raise make_ex(ret, "Failed to lookup snap %s" % snap_name)
-        return Snap(self, snap_name, snap_id)
-
     def get_last_version(self):
         """
         Return the version of the last object read or written to.
@@ -1630,18 +1219,6 @@ returned %d, but should return zero on success." % (self.name, ret))
         """
         self.require_ioctx_open()
         return run_in_thread(self.librados.rados_get_last_version, (self.io,))
-
-def set_object_locator(func):
-    def retfunc(self, *args, **kwargs):
-        if self.locator_key is not None:
-            old_locator = self.ioctx.get_locator_key()
-            self.ioctx.set_locator_key(self.locator_key)
-            retval = func(self, *args, **kwargs)
-            self.ioctx.set_locator_key(old_locator)
-            return retval
-        else:
-            return func(self, *args, **kwargs)
-    return retfunc
 
 class Object(object):
     """Rados object wrapper, makes the object look like a file"""
