@@ -455,9 +455,9 @@ Rados object in state %s." % (self.state))
         Create an io context
 
         The io context allows you to perform operations within a particular
-        pool. 
+        volume. 
 
-        :param ioctx_name: name of the pool 
+        :param ioctx_name: name of the volume
         :type ioctx_name: str
 
         :raises: :class:`TypeError`, :class:`Error`
@@ -604,7 +604,6 @@ class Ioctx(object):
         self.librados = librados
         self.io = io
         self.state = "open"
-        self.locator_key = ""
         self.safe_cbs = {}
         self.complete_cbs = {}
         RADOS_CB = CFUNCTYPE(c_int, c_void_p, c_void_p)
@@ -847,53 +846,7 @@ class Ioctx(object):
         :raises: IoctxStateError
         """
         if self.state != "open":
-            raise IoctxStateError("The pool is %s" % self.state)
-
-    def change_auid(self, auid):
-        """
-        Attempt to change an io context's associated auid "owner."
-
-        Requires that you have write permission on both the current and new
-        auid.
-
-        :raises: :class:`Error`
-        """
-        self.require_ioctx_open()
-        ret = run_in_thread(self.librados.rados_ioctx_pool_set_auid,
-                            (self.io, ctypes.c_uint64(auid)))
-        if ret < 0:
-            raise make_ex(ret, "error changing auid of '%s' to %d" %\
-                (self.name, auid))
-
-    def set_locator_key(self, loc_key):
-        """
-        Set the key for mapping objects to pgs within an io context.
-
-        The key is used instead of the object name to determine which
-        placement groups an object is put in. This affects all subsequent
-        operations of the io context - until a different locator key is
-        set, all objects in this io context will be placed in the same pg.
-
-        :param loc_key: the key to use as the object locator, or NULL to discard
-            any previously set key
-        :type loc_key: str
-
-        :raises: :class:`TypeError`
-        """
-        self.require_ioctx_open()
-        if not isinstance(loc_key, str):
-            raise TypeError('loc_key must be a string')
-        run_in_thread(self.librados.rados_ioctx_locator_set_key,
-                     (self.io, c_char_p(loc_key)))
-        self.locator_key = loc_key
-
-    def get_locator_key(self):
-        """
-        Get the locator_key of context
-
-        :returns: locator_key
-        """
-        return self.locator_key
+            raise IoctxStateError("The volume is %s" % self.state)
 
     def close(self):
         """
@@ -1222,12 +1175,11 @@ returned %d, but should return zero on success." % (self.name, ret))
 
 class Object(object):
     """Rados object wrapper, makes the object look like a file"""
-    def __init__(self, ioctx, key, locator_key=None):
+    def __init__(self, ioctx, key):
         self.key = key
         self.ioctx = ioctx
         self.offset = 0
         self.state = "exists"
-        self.locator_key = locator_key
 
     def __str__(self):
         return "rados.Object(ioctx=%s,key=%s)" % (str(self.ioctx), self.key)
@@ -1236,27 +1188,23 @@ class Object(object):
         if self.state != "exists":
             raise ObjectStateError("The object is %s" % self.state)
 
-    @set_object_locator
     def read(self, length = 1024*1024):
         self.require_object_exists()
         ret = self.ioctx.read(self.key, length, self.offset)
         self.offset += len(ret)
         return ret
 
-    @set_object_locator
     def write(self, string_to_write):
         self.require_object_exists()
         ret = self.ioctx.write(self.key, string_to_write, self.offset)
         self.offset += ret
         return ret
 
-    @set_object_locator
     def remove(self):
         self.require_object_exists()
         self.ioctx.remove_object(self.key)
         self.state = "removed"
 
-    @set_object_locator
     def stat(self):
         self.require_object_exists()
         return self.ioctx.stat(self.key)
@@ -1265,22 +1213,18 @@ class Object(object):
         self.require_object_exists()
         self.offset = position
 
-    @set_object_locator
     def get_xattr(self, xattr_name):
         self.require_object_exists()
         return self.ioctx.get_xattr(self.key, xattr_name)
 
-    @set_object_locator
     def get_xattrs(self):
         self.require_object_exists()
         return self.ioctx.get_xattrs(self.key)
 
-    @set_object_locator
     def set_xattr(self, xattr_name, xattr_value):
         self.require_object_exists()
         return self.ioctx.set_xattr(self.key, xattr_name, xattr_value)
 
-    @set_object_locator
     def rm_xattr(self, xattr_name):
         self.require_object_exists()
         return self.ioctx.rm_xattr(self.key, xattr_name)
