@@ -233,16 +233,51 @@ public:
   void alloc_range_ex(uint64_t offset, size_t length,
 		      vector<page_type*> &arr, unsigned int soff,
 		      unsigned int npart) {
-    pair<iterator, iterator> range =
-      alloc_range_ex(offset, length, soff, npart);
+    std::pair<iterator, bool> insert;
+    typename page_set::iterator cur = pages.end();
+    typename page_set::iterator last = pages.end(); // track last page in range
 
-    int ix = 0;
-    do {
-      arr[(ix+soff)] = &*range.first;
-      range.first->get();
-      ++range.first;
-      ++ix;
-    } while (range.first != range.second);
+    // loop in reverse so we can provide hints to avl_set::insert_check()
+    //  and get O(1) insertions after the first
+    uint64_t position = offset + length;
+    if ((position & ~(PageSize-1)) == position)
+      position--;
+
+    // adjust for stride
+    while ((position % npart) != soff) {
+      position -= PageSize;
+      length -= PageSize;
+    }
+
+    if (position < offset)
+      return;
+
+    while (length) {
+      const uint64_t page_offset = position & ~(PageSize-1);
+
+      typename page_set::insert_commit_data commit;
+      insert = pages.insert_check(cur, page_offset, page_cmp(), commit);
+      if (insert.second) {
+	page_type *page = new page_type(page_offset);
+	cur = pages.insert_commit(*page, commit);
+
+	// zero end of page past offset + length
+	if (offset + length < page->offset + PageSize)
+	  std::fill(page->data + offset + length - page->offset,
+	      page->data + PageSize, 0);
+	// zero front of page between page_offset and offset
+	if (offset > page->offset)
+	  std::fill(page->data, page->data + offset - page->offset, 0);
+
+      } else { // exists
+	cur = insert.first;
+      }
+      if (last == pages.end())
+	last = cur;
+
+      position -= (PageSize * npart);
+      length -= std::min(length, PageSize*npart);
+    }
   }
 
   iterator first_page_containing(uint64_t offset, size_t length) {
