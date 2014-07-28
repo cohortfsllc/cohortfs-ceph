@@ -558,13 +558,13 @@ if(${WITH_MDS})
   install(TARGETS ceph-mds DESTINATION bin)
 endif(${WITH_MDS})
 
-# Support/Tools
 
-add_subdirectory(gtest)
-
-#if (WITH_TESTS)
+if (WITH_TESTS)
+  add_subdirectory(gtest)
   add_subdirectory(test)
-#endif (WITH_TESTS)
+endif (WITH_TESTS)
+
+# Support/Tools
 
 set(cephfs_srcs
   cephfs.cc
