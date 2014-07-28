@@ -469,19 +469,13 @@ void OSDVol::do_op(OpRequestRef op)
 	   << " flags " << ceph_osd_flag_string(m->get_flags())
 	   << dendl;
 
-  /* XXX For stripulation */
-  hobject_t head(m->get_oid());
-
-
   ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
-  hobject_t missing_oid;
   // XXX For Stripulation
   hobject_t oid(m->get_oid());
 
   int r = find_object_context(
-    oid, &obc, can_create,
-    &missing_oid);
+    oid, &obc, can_create);
 
   if (r) {
     osd->reply_op_error(op, r);
@@ -1543,7 +1537,7 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	bp.copy(op.xattr.name_len, aname);
 	string name = "_" + aname;
 	name[op.xattr.name_len + 1] = 0;
-	
+
 	bufferlist xattr;
 	if (op.op == CEPH_OSD_OP_CMPXATTR)
 	  result = objects_get_attr(
@@ -3021,17 +3015,11 @@ void OSDVol::context_registry_on_change()
  * object does not exist.
  */
 int OSDVol::find_object_context(const hobject_t& oid,
-				      ObjectContextRef *pobc,
-				      bool can_create,
-				      hobject_t *pmissing)
+				ObjectContextRef *pobc,
+				bool can_create)
 {
-  // XXX Stripulator
-  hobject_t head(oid.oid);
-
-  ObjectContextRef obc = get_object_context(head, can_create);
+  ObjectContextRef obc = get_object_context(oid, can_create);
   if (!obc) {
-    if (pmissing)
-      *pmissing = head;
     return -ENOENT;
   }
   dout(10) << "find_object_context " << oid

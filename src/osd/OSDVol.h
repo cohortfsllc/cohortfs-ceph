@@ -449,8 +449,7 @@ protected:
 
   int find_object_context(const hobject_t& oid,
 			  ObjectContextRef *pobc,
-			  bool can_create,
-			  hobject_t *missing_oid = NULL);
+			  bool can_create);
 
   // low level ops
 
