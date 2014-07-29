@@ -727,7 +727,7 @@ protected:
 
   bool _have_vol(uuid_d volume);
   OSDVolRef _lookup_vol(const uuid_d& volid);
-  OSDVolRef _create_vol(const uuid_d& volid);
+  OSDVolRef _load_vol(const uuid_d& volid);
   void trim_vols(void);
   OSDVolRef _lookup_lock_vol(const uuid_d& volid);
 

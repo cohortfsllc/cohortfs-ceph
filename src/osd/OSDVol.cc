@@ -12,6 +12,7 @@
  *
  */
 
+#include <system_error>
 #include "boost/tuple/tuple.hpp"
 #include "OSDVol.h"
 #include "common/perf_counters.h"
@@ -22,7 +23,6 @@
 #include "OpRequest.h"
 #include "mon/MonClient.h"
 #include "osdc/Objecter.h"
-
 
 #include "common/Timer.h"
 
@@ -60,8 +60,7 @@ void OSDVol::put()
 }
 
 
-OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
-	       uuid_d v, const hobject_t& ioid) :
+OSDVol::OSDVol(OSDService *o, OSDMapRef curmap, uuid_d v) :
   osd(o),
   cct(o->cct),
   osdriver(osd->store, coll_t()),
@@ -69,15 +68,25 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap,
   osdmap_ref(curmap), last_persisted_osdmap_ref(curmap),
   _lock("OSDVol::_lock"), ref(0),
   deleting(false), dirty_info(false),
-  id(v), info(v), info_struct_v(0),
+  id(v), info(v), info_oid(hobject_t("info")),
   osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
   finish_sync_event(NULL), coll(v),
   last_became_active(ceph_clock_now(cct))
 {
+  // RAII, Baby
+
+  Mutex::Locker l(_lock);
+
+  if (osd->store->collection_exists(coll)) {
+    read_info();
+  } else {
+    init();
+  }
 }
 
 OSDVol::~OSDVol()
 {
+  on_shutdown();
 }
 
 void OSDVol::lock_suspend_timeout(ThreadPool::TPHandle &handle)
@@ -203,36 +212,24 @@ void OSDVol::_activate_committed(epoch_t e)
  *
  * Initialize state, as when a vol is initially created, or when it
  * is first instantiated on the current node.
- *
- * @param role our role/rank
- * @param newup up set
- * @param newacting acting set
- * @param t transaction to write out our new state in
  */
-void OSDVol::init(ObjectStore::Transaction *t)
+void OSDVol::init(void)
 {
+  ObjectStore::Transaction *t = new ObjectStore::Transaction;
+  t->create_collection(coll_t::META_COLL);
   dirty_info = true;
-  write_if_dirty(*t);
+  write_info(*t);
+  int r = osd->store->apply_transaction(*t);
+  if (r < 0) {
+    throw std::system_error(-r, std::system_category(),
+			    "initializing volume");
+  }
 }
 
 int OSDVol::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
 			vol_info_t &info, coll_t coll,
-			hobject_t &infos_oid, uint8_t info_struct_v,
-			bool force_ver)
+			hobject_t &infos_oid)
 {
-  //vol state
-
-  if (info_struct_v > cur_struct_v)
-    return -EINVAL;
-
-  // Only need to write struct_v to attr when upgrading
-  if (force_ver || info_struct_v < cur_struct_v) {
-    bufferlist attrbl;
-    info_struct_v = cur_struct_v;
-    ::encode(info_struct_v, attrbl);
-    t.collection_setattr(coll, "info", attrbl);
-  }
-
   // info.
   map<string,bufferlist> v;
   ::encode(epoch, v[get_epoch_key(info.volume)]);
@@ -246,43 +243,11 @@ int OSDVol::_write_info(ObjectStore::Transaction& t, epoch_t epoch,
 void OSDVol::write_info(ObjectStore::Transaction& t)
 {
   int ret = _write_info(t, get_osdmap()->get_epoch(), info, coll,
-			osd->infos_oid, info_struct_v);
+			osd->infos_oid);
   assert(ret == 0);
   last_persisted_osdmap_ref = osdmap_ref;
 
   dirty_info = false;
-}
-
-epoch_t OSDVol::peek_map_epoch(ObjectStore *store, coll_t coll, hobject_t &infos_oid, bufferlist *bl)
-{
-  assert(bl);
-  uuid_d volume;
-  bool ok = coll.is_vol(volume);
-  assert(ok);
-  int r = store->collection_getattr(coll, "info", *bl);
-  assert(r > 0);
-  bufferlist::iterator bp = bl->begin();
-  uint8_t struct_v = 0;
-  ::decode(struct_v, bp);
-  if (struct_v < 5)
-    return 0;
-  epoch_t cur_epoch = 0;
-  if (struct_v < 6) {
-    ::decode(cur_epoch, bp);
-  } else {
-    // get epoch out of leveldb
-    bufferlist tmpbl;
-    string ek = get_epoch_key(volume);
-    set<string> keys;
-    keys.insert(get_epoch_key(volume));
-    map<string,bufferlist> values;
-    store->omap_get_values(coll_t::META_COLL, infos_oid, keys, &values);
-    assert(values.size() == 1);
-    tmpbl = values[ek];
-    bufferlist::iterator p = tmpbl.begin();
-    ::decode(cur_epoch, p);
-  }
-  return cur_epoch;
 }
 
 void OSDVol::write_if_dirty(ObjectStore::Transaction& t)
@@ -291,38 +256,26 @@ void OSDVol::write_if_dirty(ObjectStore::Transaction& t)
     write_info(t);
 }
 
-int OSDVol::read_info(
-  ObjectStore *store, const coll_t coll, bufferlist &bl,
-  vol_info_t &info, hobject_t &infos_oid, uint8_t &struct_v)
+void OSDVol::read_info()
 {
-  bufferlist::iterator p = bl.begin();
-  bufferlist lbl;
+  // We shouldn't even be called if this isn't the case
+  assert(osd->store->collection_exists(coll));
 
-  // info
-  ::decode(struct_v, p);
-  if (struct_v < 4)
-    ::decode(info, p);
   // get info out of leveldb
   string k = get_info_key(info.volume);
   set<string> keys;
   keys.insert(k);
   map<string,bufferlist> values;
-  store->omap_get_values(coll_t::META_COLL, infos_oid, keys, &values);
+  int r = osd->store->omap_get_values(coll_t::META_COLL, info_oid, keys,
+				      &values);
+  if (r < 0) {
+    throw std::system_error(-r, std::system_category(),
+			    "reading volume info");
+  }
   assert(values.size() == 1);
-  lbl = values[k];
-  p = lbl.begin();
+  bufferlist bl = values[k];
+  bufferlist::iterator p = bl.begin();
   ::decode(info, p);
-  return 0;
-}
-
-void OSDVol::read_state(ObjectStore *store, bufferlist &bl)
-{
-  int r = read_info(store, coll, bl, info, osd->infos_oid, info_struct_v);
-  assert(r >= 0);
-
-  ostringstream oss;
-  if (oss.str().length())
-    osd->clog.error() << oss;
 }
 
 void OSDVol::requeue_object_waiters(map<hobject_t, list<OpRequestRef> >& m)

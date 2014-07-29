@@ -696,7 +696,7 @@ public:
      * of the conversion infrastructure.
      */
     void collection_add(const coll_t &cid, const coll_t &ocid,
-                        const hobject_t& oid) {
+			const hobject_t& oid) {
       ops.push_back(Op(OP_COLL_ADD));
       Op &op = ops.back();
       op.cid = cid;
@@ -710,7 +710,7 @@ public:
       op.oid = oid;
     }
     void collection_move(const coll_t &cid, const coll_t &oldcid,
-                         const hobject_t& oid) {
+			 const hobject_t& oid) {
       collection_add(cid, oldcid, oid);
       collection_remove(oldcid, oid);
       return;
@@ -732,7 +732,7 @@ public:
     }
     /// Set an xattr on a collection
     void collection_setattr(const coll_t &cid, const string& name,
-                            bufferlist& val) {
+			    bufferlist& val) {
       ops.push_back(Op(OP_COLL_SETATTR));
       Op &op = ops.back();
       op.cid = cid;
@@ -1171,7 +1171,7 @@ public:
    * @returns 0 on success, negative error code on failure.
    */
   int getattr(const coll_t &cid, const hobject_t& oid,
-              const char *name, bufferlist& value) {
+	      const char *name, bufferlist& value) {
     bufferptr bp;
     int r = getattr(cid, oid, name, bp);
     if (bp.length())
@@ -1196,7 +1196,7 @@ public:
    * @returns 0 on success, negative error code on failure.
    */
   virtual int getattrs(const coll_t &cid, const hobject_t& oid,
-                       map<string,bufferptr>& aset, bool user_only = false) = 0;
+		       map<string,bufferptr>& aset, bool user_only = false) = 0;
 
   /**
    * getattrs -- get all of the xattrs of an object
@@ -1208,7 +1208,7 @@ public:
    * @returns 0 on success, negative error code on failure.
    */
   int getattrs(const coll_t &cid, const hobject_t& oid,
-               map<string,bufferlist>& aset, bool user_only = false) {
+	       map<string,bufferlist>& aset, bool user_only = false) {
     map<string,bufferptr> bmap;
     int r = getattrs(cid, oid, bmap, user_only);
     for (map<string,bufferptr>::iterator i = bmap.begin();

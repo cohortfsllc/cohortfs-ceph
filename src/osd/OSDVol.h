@@ -76,6 +76,8 @@ class OSDVol : public LRUObject {
   friend class OSD;
   friend class Watch;
 
+  static const int cur_struct_v = 0;
+
 public:
   std::string gen_prefix() const;
 
@@ -413,17 +415,15 @@ public:
   bool dirty_info;
 
   // vol state
-  uuid_d id;
+  const uuid_d id;
   vol_info_t info;
-  uint8_t info_struct_v;
-  static const uint8_t cur_struct_v = 7;
   static string get_info_key(uuid_d vol) {
     return stringify(vol) + "_info";
   }
   static string get_epoch_key(uuid_d vol) {
     return stringify(vol) + "_epoch";
   }
-  hobject_t log_oid;
+  hobject_t info_oid;
 
   void handle_watch_timeout(WatchRef watch);
 
@@ -527,6 +527,9 @@ protected:
 
 private:
   int _delete_oid(OpContext *ctx, bool no_whiteout);
+  static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
+			 vol_info_t &info, coll_t coll,
+			 hobject_t &infos_oid);
 
 public:
   void clear_primary_state();
@@ -546,7 +549,7 @@ public:
 
   friend class C_OSD_RepModify_Commit;
 
-  OSDVol(OSDService *o, OSDMapRef curmap, uuid_d vol, const hobject_t& ioid);
+  OSDVol(OSDService *o, OSDMapRef curmap, uuid_d vol);
 
   ~OSDVol();
 
@@ -560,9 +563,10 @@ public:
 
   bool  is_empty() const { return info.last_update == eversion_t(0,0); }
 
-  void init(ObjectStore::Transaction *t);
 
 private:
+  void init();
+  void read_info();
   void write_info(ObjectStore::Transaction& t);
   void populate_obc_watchers(ObjectContextRef obc);
   void get_obc_watchers(ObjectContextRef obc,
@@ -570,9 +574,6 @@ private:
   void check_blacklisted_obc_watchers(ObjectContextRef obc);
 
 public:
-  static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
-			 vol_info_t &info, coll_t coll, hobject_t &infos_oid,
-			 uint8_t info_struct_v, bool force_ver = false);
   void write_if_dirty(ObjectStore::Transaction& t);
 
   eversion_t get_next_version() const {
@@ -586,13 +587,6 @@ public:
     return at_version;
   }
 
-  static int read_info(
-    ObjectStore *store, const coll_t coll,
-    bufferlist &bl, vol_info_t &info,
-    hobject_t &infos_oid, uint8_t &);
-  void read_state(ObjectStore *store, bufferlist &bl);
-  static epoch_t peek_map_epoch(ObjectStore *store, coll_t coll,
-				hobject_t &infos_oid, bufferlist *bl);
   coll_t get_coll(void) {
     return coll;
   }
@@ -626,7 +620,6 @@ public:
 		 bufferlist& odata);
 
   void on_change(ObjectStore::Transaction *t);
-  void on_shutdown();
   void check_blacklisted_watchers();
   void get_watchers(std::list<obj_watch_item_t>&);
 
@@ -635,7 +628,8 @@ protected:
   const coll_t coll;
   utime_t last_became_active;
 
-private:
+  void on_shutdown();
+
   struct RepModify {
     OpRequestRef op;
     bool applied, committed;

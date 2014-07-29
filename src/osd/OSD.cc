@@ -282,7 +282,7 @@ int OSD::mkfs(CephContext *cct, ObjectStore *store, const string &dev,
 	       << ret << dendl;
 	  goto umount_store;
 	}
-	
+
 	// set osd weight
 	sb.weight = (1000.0 / (double)end);
       }
@@ -1064,17 +1064,16 @@ OSDVolRef OSD::_lookup_vol(const uuid_d& volid)
     service.lru.lru_touch(&*vol);
     return vol;
   } else {
-    return _create_vol(volid);
+    return _load_vol(volid);
   }
 }
 
-OSDVolRef OSD::_create_vol(const uuid_d& volid)
+OSDVolRef OSD::_load_vol(const uuid_d& volid)
 {
   assert(osd_lock.is_locked());
-  OSDVol* vol = new OSDVol(&service, osdmap, volid, hobject_t("info"));
+  OSDVol* vol = new OSDVol(&service, osdmap, volid);
   service.lru.lru_insert_top(vol);
   vol_map[volid] = vol;
-
   trim_vols();
   return OSDVolRef(vol);
 }
@@ -1105,55 +1104,6 @@ OSDVolRef OSD::_lookup_lock_vol(const uuid_d& volid)
     vol->lock();
   return vol;
 }
-
-#if 0 // Reserved for future use
-
-void OSD::load_vols()
-{
-  assert(osd_lock.is_locked());
-  dout(0) << "load_volumes" << dendl;
-  assert(vol_map.empty());
-
-  vector<coll_t> ls;
-  int r = store->list_collections(ls);
-  if (r < 0) {
-    derr << "failed to list vols: " << cpp_strerror(-r) << dendl;
-  }
-
-  set<uuid_d> volumes;
-  for (vector<coll_t>::iterator it = ls.begin();
-       it != ls.end();
-       ++it) {
-    uuid_d vlumes;
-    uint64_t seq;
-
-    if (it->is_volume(volume)) {
-      volumes.insert(volume);
-    }
-    dout(10) << "load_vols ignoring unrecognized " << *it << dendl;
-  }
-
-  for (set<uuid_d>::iterator i = volumes.begin();
-       i != head_volumes.end();
-       ++i) {
-    uuid_d volume(*i);
-
-    dout(10) << "volume" << volume << " coll " << coll_t(volume) << dendl;
-    bufferlist bl;
-    epoch_t map_epoch = OSDVol::peek_map_epoch(store, coll_t(volume),
-					       service.infos_oid, &bl);
-
-    OSDVOl *vol = _open_lock_volume(map_epoch == 0 ? osdmap :
-				    service.get_map(map_epoch), volume);
-
-    vol->read_state(store, bl);
-
-    dout(10) << "load_vols loaded " << *vol << dendl;
-    vol->unlock();
-  }
-  dout(0) << "load_vols opened " << vol_map.size() << " volumes" << dendl;
-}
-#endif
 
 // -------------------------------------
 
