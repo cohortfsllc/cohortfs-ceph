@@ -2268,13 +2268,6 @@ unsigned FileStore::_do_transaction(
     if (r < 0) {
       bool ok = false;
 
-      if (r == -ENOENT && !(i->op == Transaction::OP_CLONERANGE ||
-			    i->op == Transaction::OP_CLONE ||
-			    i->op == Transaction::OP_CLONERANGE2 ||
-			    i->op == Transaction::OP_COLL_ADD))
-	// -ENOENT is normally okay
-	// ...including on a replayed OP_RMCOLL with checkpoint mode
-	ok = true;
       if (r == -ENOENT && (
 	  i->op == Transaction::OP_COLL_ADD &&
 	  t.get_tolerate_collection_add_enoent()))
