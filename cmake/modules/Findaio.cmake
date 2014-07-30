@@ -1,6 +1,6 @@
 # - Find AIO
 #
-# AIO_INCLUDE - Where to find AIO/aio.h
+# AIO_INCLUDE - Where to find aio.h
 # AIO_LIBS - List of libraries when using AIO.
 # AIO_FOUND - True if AIO found.
 
@@ -8,16 +8,16 @@ get_filename_component(module_file_path ${CMAKE_CURRENT_LIST_FILE} PATH)
 
 # Look for the header file.
 find_path(AIO_INCLUDE 
-NAMES AIO/aio.h 
+NAMES aio.h 
 PATHS /usr/include  $ENV{AIO_ROOT}/include /opt/local/include /usr/local/include 
-DOC "Path in which the file AIO/aio.h is located." )
+DOC "Path in which the file aio.h is located." )
 
 mark_as_advanced(AIO_INCLUDE)
 
 # Look for the library.
 # Does this work on UNIX systems? (LINUX)
 find_library(AIO_LIBS 
-NAMES AIO 
+NAMES aio 
 PATHS /usr/lib /usr/lib/x86_64-linux-gnu $ENV{AIO_ROOT}/lib 
 DOC "Path to AIO library.")
 
