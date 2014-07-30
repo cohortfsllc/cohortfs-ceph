@@ -216,7 +216,7 @@ void OSDVol::_activate_committed(epoch_t e)
 void OSDVol::init(void)
 {
   ObjectStore::Transaction *t = new ObjectStore::Transaction;
-  t->create_collection(coll_t::META_COLL);
+  t->create_collection(coll);
   dirty_info = true;
   write_info(*t);
   int r = osd->store->apply_transaction(*t);
