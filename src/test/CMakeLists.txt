@@ -1697,7 +1697,6 @@ if(${WITH_CLIENT})
   )
   target_link_libraries(test_c_headers
     librados
-    rados
     cephfs
     ${EXTRALIBS}
     ${TCMALLOC_LIBS}
