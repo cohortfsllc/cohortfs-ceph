@@ -709,13 +709,6 @@ void object_info_t::copy_user_bits(const object_info_t& other)
 
 void object_info_t::encode(bufferlist& bl) const
 {
-  map<entity_name_t, watch_info_t> old_watchers;
-  for (map<pair<uint64_t, entity_name_t>, watch_info_t>::const_iterator i =
-	 watchers.begin();
-       i != watchers.end();
-       ++i) {
-    old_watchers.insert(make_pair(i->first.second, i->second));
-  }
   ENCODE_START(13, 8, bl);
   ::encode(soid, bl);
   ::encode(category, bl);
@@ -727,11 +720,7 @@ void object_info_t::encode(bufferlist& bl) const
   ::encode(wrlock_by, bl);
   ::encode(truncate_seq, bl);
   ::encode(truncate_size, bl);
-  ::encode(old_watchers, bl);
-  /* shenanigans to avoid breaking backwards compatibility in the disk format.
-   * When we can, switch this out for simply putting the version_t on disk. */
-  eversion_t user_eversion(0, user_version);
-  ::encode(user_eversion, bl);
+  ::encode(user_version, bl);
   ::encode(watchers, bl);
   uint32_t _flags = flags;
   ::encode(_flags, bl);
@@ -741,15 +730,8 @@ void object_info_t::encode(bufferlist& bl) const
 void object_info_t::decode(bufferlist::iterator& bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(13, 8, 8, bl);
-  map<entity_name_t, watch_info_t> old_watchers;
   ::decode(soid, bl);
-  if (struct_v == 6) {
-    hobject_t hoid(soid.oid);
-    soid = hoid;
-  }
-
-  if (struct_v >= 5)
-    ::decode(category, bl);
+  ::decode(category, bl);
   ::decode(version, bl);
   ::decode(prior_version, bl);
   ::decode(last_reqid, bl);
@@ -758,38 +740,11 @@ void object_info_t::decode(bufferlist::iterator& bl)
   ::decode(wrlock_by, bl);
   ::decode(truncate_seq, bl);
   ::decode(truncate_size, bl);
-  if (struct_v >= 3) {
-    // if this is struct_v >= 13, we will overwrite this
-    // below since this field is just here for backwards
-    // compatibility
-    uint8_t lo;
-    ::decode(lo, bl);
-    flags = (flag_t)lo;
-  } else {
-    flags = (flag_t)0;
-  }
-  if (struct_v >= 4) {
-    ::decode(old_watchers, bl);
-    eversion_t user_eversion;
-    ::decode(user_eversion, bl);
-    user_version = user_eversion.version;
-  }
-  if (struct_v >= 11) {
-    ::decode(watchers, bl);
-  } else {
-    for (map<entity_name_t, watch_info_t>::iterator i = old_watchers.begin();
-	 i != old_watchers.end();
-	 ++i) {
-      watchers.insert(
-	make_pair(
-	  make_pair(i->second.cookie, i->first), i->second));
-    }
-  }
-  if (struct_v >= 13) {
-    uint32_t _flags;
-    ::decode(_flags, bl);
-    flags = (flag_t)_flags;
-  }
+  ::decode(user_version, bl);
+  ::decode(watchers, bl);
+  uint32_t _flags;
+  ::decode(_flags, bl);
+  flags = (flag_t)_flags;
   DECODE_FINISH(bl);
 }
 
