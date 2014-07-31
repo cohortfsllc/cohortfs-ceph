@@ -574,14 +574,6 @@ target_link_libraries(cephfstool common ${EXTRALIBS})
 set_target_properties(cephfstool PROPERTIES OUTPUT_NAME cephfs)
 install(TARGETS cephfstool DESTINATION bin)
 
-set(ceph_srcs
-  tools/ceph.cc
-  tools/common.cc
-  )
-add_executable(ceph ${ceph_srcs})
-target_link_libraries(ceph global ${LIBEDIT_LIBS})
-install(TARGETS ceph DESTINATION bin)
-
 set(ceph_conf_srcs
   tools/ceph_conf.cc
   )
@@ -628,15 +620,15 @@ configure_file(${CMAKE_SOURCE_DIR}/src/ceph-debugpack.in
   ${CMAKE_BINARY_DIR}/ceph-debugpack @ONLY)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/ceph.in.cmake
-  ${CMAKE_BINARY_DIR}/cephpy @ONLY)
+  ${CMAKE_BINARY_DIR}/ceph @ONLY)
 
 add_custom_target(shell_scripts ALL
   COMMAND chmod 755 ${CMAKE_BINARY_DIR}/mkcephfs
   ${CMAKE_BINARY_DIR}/init-ceph ${CMAKE_BINARY_DIR}/ceph-debugpack
-  ${CMAKE_BINARY_DIR}/ceph-coverage ${CMAKE_BINARY_DIR}/cephpy
+  ${CMAKE_BINARY_DIR}/ceph-coverage ${CMAKE_BINARY_DIR}/ceph
   DEPENDS ${CMAKE_BINARY_DIR}/mkcephfs ${CMAKE_BINARY_DIR}/init-ceph
   ${CMAKE_BINARY_DIR}/ceph-debugpack ${CMAKE_BINARY_DIR}/ceph-coverage
-  ${CMAKE_BINARY_DIR}/cephpy COMMENT "Shell Scripts have permission")
+  ${CMAKE_BINARY_DIR}/ceph COMMENT "Shell Scripts have permission")
 
 install(PROGRAMS 
   ${CMAKE_SOURCE_DIR}/src/ceph-run 
@@ -647,7 +639,7 @@ install(PROGRAMS
   # CMake to work properly. Same goes for the other configured scripts.
   ${CMAKE_BINARY_DIR}/ceph-debugpack
   ${CMAKE_BINARY_DIR}/ceph-coverage 
-  ${CMAKE_BINARY_DIR}/cephpy
+  ${CMAKE_BINARY_DIR}/ceph
   DESTINATION bin)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/init-ceph.in
