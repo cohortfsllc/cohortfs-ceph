@@ -782,7 +782,7 @@ struct C_Inode_Stored : public Context {
 object_t CInode::get_object_name(inodeno_t ino, frag_t fg, const char *suffix)
 {
   char n[60];
-  snprintf(n, sizeof(n), "%"PRIx64".%08"PRIx32"%s",
+  snprintf(n, sizeof(n), "%" PRIx64 ".%08"PRIx32"%s",
 	   ino.val, fg._enc, suffix ? suffix : "");
   return object_t(n);
 }
