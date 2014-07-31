@@ -303,13 +303,6 @@ void librados::ObjectWriteOperation::create(bool exclusive)
   o->create(exclusive);
 }
 
-void librados::ObjectWriteOperation::create(bool exclusive,
-					    const std::string& category)
-{
-  ::ObjectOperation *o = (::ObjectOperation *)impl;
-  o->create(exclusive, category);
-}
-
 void librados::ObjectWriteOperation::write(uint64_t off, const bufferlist& bl)
 {
   ::ObjectOperation *o = (::ObjectOperation *)impl;
@@ -554,13 +547,6 @@ int librados::IoCtx::create(const std::string& oid, bool exclusive)
 {
   object_t obj(oid);
   return io_ctx_impl->create(obj, exclusive);
-}
-
-int librados::IoCtx::create(const std::string& oid, bool exclusive,
-			    const std::string& category)
-{
-  object_t obj(oid);
-  return io_ctx_impl->create(obj, exclusive, category);
 }
 
 int librados::IoCtx::write(const std::string& oid, bufferlist& bl, size_t len,

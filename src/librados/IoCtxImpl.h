@@ -75,7 +75,6 @@ struct librados::IoCtxImpl {
 
   // io
   int create(const object_t& oid, bool exclusive);
-  int create(const object_t& oid, bool exclusive, const std::string& category);
   int write(const object_t& oid, bufferlist& bl, size_t len, uint64_t off);
   int append(const object_t& oid, bufferlist& bl, size_t len);
   int write_full(const object_t& oid, bufferlist& bl);

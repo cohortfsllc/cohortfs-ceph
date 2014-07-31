@@ -1452,12 +1452,7 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     if (vol_name.empty() || nargs.size() < 2)
       usage_exit();
     string oid(nargs[1]);
-    if (nargs.size() > 2) {
-      string category(nargs[2]);
-      ret = io_ctx.create(oid, true, category);
-    } else {
-      ret = io_ctx.create(oid, true);
-    }
+    ret = io_ctx.create(oid, true);
     if (ret < 0) {
       cerr << "error creating " << vol_name << "/" << oid << ": " << cpp_strerror(ret) << std::endl;
       goto out;

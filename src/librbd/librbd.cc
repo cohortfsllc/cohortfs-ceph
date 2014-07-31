@@ -121,11 +121,13 @@ namespace librbd {
     return r;
   }
 
+#if 0
   int RBD::list(IoCtx& io_ctx, vector<string>& names)
   {
     int r = librbd::list(io_ctx, names);
     return r;
   }
+  #endif
 
   int RBD::rename(IoCtx& src_io_ctx, const char *srcname, const char *destname)
   {
@@ -357,6 +359,7 @@ extern "C" void rbd_version(int *major, int *minor, int *extra)
     *extra = LIBRBD_VER_EXTRA;
 }
 
+#if 0
 /* images */
 extern "C" int rbd_list(rados_ioctx_t p, char *names, size_t *size)
 {
@@ -386,6 +389,7 @@ extern "C" int rbd_list(rados_ioctx_t p, char *names, size_t *size)
   }
   return (int)expected_size;
 }
+#endif
 
 extern "C" int rbd_create(rados_ioctx_t p, const char *name, uint64_t size)
 {

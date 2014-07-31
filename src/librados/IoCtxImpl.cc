@@ -144,13 +144,6 @@ int librados::IoCtxImpl::create(const object_t& oid, bool exclusive)
   return r;
 }
 
-int librados::IoCtxImpl::create(const object_t& oid, bool exclusive,
-				const std::string& category)
-{
-  abort();
-  return -1;
-}
-
 int librados::IoCtxImpl::write(const object_t& oid, bufferlist& bl,
 			       size_t len, uint64_t off)
 {
@@ -547,8 +540,6 @@ int librados::IoCtxImpl::trunc(const object_t& oid, uint64_t size)
 
 int librados::IoCtxImpl::tmap_update(const object_t& oid, bufferlist& cmdbl)
 {
-  puts("No.");
-  abort();
   ::ObjectOperation wr;
   wr.tmap_update(cmdbl);
   return operate(oid, &wr, NULL);
@@ -556,8 +547,6 @@ int librados::IoCtxImpl::tmap_update(const object_t& oid, bufferlist& cmdbl)
 
 int librados::IoCtxImpl::tmap_put(const object_t& oid, bufferlist& bl)
 {
-  puts("No.");
-  abort();
   ::ObjectOperation wr;
   wr.tmap_put(bl);
   return operate(oid, &wr, NULL);
@@ -565,8 +554,6 @@ int librados::IoCtxImpl::tmap_put(const object_t& oid, bufferlist& bl)
 
 int librados::IoCtxImpl::tmap_get(const object_t& oid, bufferlist& bl)
 {
-  puts("No.");
-  abort();
   ::ObjectOperation rd;
   rd.tmap_get(&bl, NULL);
   return operate_read(oid, &rd, NULL);
@@ -574,8 +561,6 @@ int librados::IoCtxImpl::tmap_get(const object_t& oid, bufferlist& bl)
 
 int librados::IoCtxImpl::tmap_to_omap(const object_t& oid, bool nullok)
 {
-  puts("No.");
-  abort();
   ::ObjectOperation wr;
   wr.tmap_to_omap(nullok);
   return operate(oid, &wr, NULL);
@@ -585,8 +570,6 @@ int librados::IoCtxImpl::exec(const object_t& oid,
 			      const char *cls, const char *method,
 			      bufferlist& inbl, bufferlist& outbl)
 {
-  puts("No.");
-  abort();
   ::ObjectOperation rd;
   rd.call(cls, method, inbl);
   return operate_read(oid, &rd, &outbl);
@@ -596,8 +579,6 @@ int librados::IoCtxImpl::aio_exec(const object_t& oid, AioCompletionImpl *c,
 				  const char *cls, const char *method,
 				  bufferlist& inbl, bufferlist *outbl)
 {
-  puts("No.");
-  abort();
   Context *onack = new C_aio_Ack(c);
 
   c->is_read = true;

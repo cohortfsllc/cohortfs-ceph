@@ -26,7 +26,9 @@
  */
 
 #define RBD_SUFFIX ".rbd"
+#if 0
 #define RBD_DIRECTORY "rbd_directory"
+#endif
 #define RBD_INFO "rbd_info"
 
 #define RBD_LOCK_NAME "rbd_lock"

@@ -52,7 +52,9 @@ typedef struct {
 void rbd_version(int *major, int *minor, int *extra);
 
 /* images */
+#if 0
 int rbd_list(rados_ioctx_t io, char *names, size_t *size);
+#endif
 /**
  * create new rbd image
  *

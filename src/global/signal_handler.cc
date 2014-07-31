@@ -53,26 +53,6 @@ void sighup_handler(int signum)
   g_ceph_context->reopen_logs();
 }
 
-static void reraise_fatal(int signum)
-{
-  // Use default handler to dump core
-  int ret = raise(signum);
-
-  // Normally, we won't get here. If we do, something is very weird.
-  char buf[1024];
-  if (ret) {
-    snprintf(buf, sizeof(buf), "reraise_fatal: failed to re-raise "
-	    "signal %d\n", signum);
-    dout_emergency(buf);
-  }
-  else {
-    snprintf(buf, sizeof(buf), "reraise_fatal: default handler for "
-	    "signal %d didn't terminate the process?\n", signum);
-    dout_emergency(buf);
-  }
-  exit(1);
-}
-
 /// --- safe handler ---
 
 #include "common/Thread.h"

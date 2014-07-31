@@ -1415,17 +1415,6 @@ void rados_write_op_setxattr(rados_write_op_t write_op,
 void rados_write_op_rmxattr(rados_write_op_t write_op, const char *name);
 
 /**
- * Create the object
- * @param write_op operation to add this action to
- * @param exclusive set to either LIBRADOS_CREATE_EXCLUSIVE or
-   LIBRADOS_CREATE_IDEMPOTENT
- * will error if the object already exists.
- */
-void rados_write_op_create(rados_write_op_t write_op,
-                           int exclusive,
-                           const char* category);
-
-/**
  * Write to offset
  * @param write_op operation to add this action to
  * @param offset offset to write to

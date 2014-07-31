@@ -679,7 +679,6 @@ static inline ostream& operator<<(ostream& out, const notify_info_t& n) {
 
 struct object_info_t {
   hobject_t soid;
-  string category;
 
   eversion_t version, prior_version;
   version_t user_version;

@@ -703,7 +703,6 @@ void object_info_t::copy_user_bits(const object_info_t& other)
   truncate_seq = other.truncate_seq;
   truncate_size = other.truncate_size;
   flags = other.flags;
-  category = other.category;
   user_version = other.user_version;
 }
 
@@ -711,7 +710,6 @@ void object_info_t::encode(bufferlist& bl) const
 {
   ENCODE_START(13, 8, bl);
   ::encode(soid, bl);
-  ::encode(category, bl);
   ::encode(version, bl);
   ::encode(prior_version, bl);
   ::encode(last_reqid, bl);
@@ -731,7 +729,6 @@ void object_info_t::decode(bufferlist::iterator& bl)
 {
   DECODE_START_LEGACY_COMPAT_LEN(13, 8, 8, bl);
   ::decode(soid, bl);
-  ::decode(category, bl);
   ::decode(version, bl);
   ::decode(prior_version, bl);
   ::decode(last_reqid, bl);
@@ -753,7 +750,6 @@ void object_info_t::dump(Formatter *f) const
   f->open_object_section("oid");
   soid.dump(f);
   f->close_section();
-  f->dump_string("category", category);
   f->dump_stream("version") << version;
   f->dump_stream("prior_version") << prior_version;
   f->dump_stream("last_reqid") << last_reqid;

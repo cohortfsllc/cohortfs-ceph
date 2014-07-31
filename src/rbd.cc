@@ -62,7 +62,9 @@
 
 #define RBD_DIFF_BANNER "rbd diff v1\n"
 
+#if 0
 static string dir_oid = RBD_DIRECTORY;
+#endif
 static string dir_info_oid = RBD_INFO;
 
 bool udevadm_settle = true;
@@ -180,6 +182,7 @@ static int get_outfmt(const char *output_format,
   return 0;
 }
 
+#if 0
 static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
 		   Formatter *f)
 {
@@ -277,6 +280,7 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
 
   return 0;
 }
+#endif
 
 static int do_create(librbd::RBD &rbd, librados::IoCtx& io_ctx,
 		     const char *imgname, uint64_t size)
@@ -1515,7 +1519,9 @@ int main(int argc, const char **argv)
     *dest_volname = NULL, *path = NULL,
     *devpath = NULL, *lock_cookie = NULL, *lock_client = NULL,
     *lock_tag = NULL, *output_format = "plain";
+#if 0
   bool lflag = false;
+#endif
   int pretty_format = 0;
   long long bench_io_size = 4096, bench_io_threads = 16, bench_bytes = 1 << 30;
   string bench_pattern = "seq";
@@ -1555,8 +1561,10 @@ int main(int argc, const char **argv)
       }
       size = sizell << 20;   // bytes to MB
       size_set = true;
+#if 0
     } else if (ceph_argparse_flag(args, i, "-l", "--long", (char*)NULL)) {
       lflag = true;
+#endif
     } else if (ceph_argparse_withlonglong(args, i, &bench_io_size, &err, "--io-size", (char*)NULL)) {
     } else if (ceph_argparse_withlonglong(args, i, &bench_io_threads, &err, "--io-threads", (char*)NULL)) {
     } else if (ceph_argparse_withlonglong(args, i, &bench_bytes, &err, "--io-total", (char*)NULL)) {
@@ -1828,12 +1836,16 @@ if (!set_conf_param(v, p1, p2, p3)) { \
   }
 
   switch (opt_cmd) {
+#if 0
   case OPT_LIST:
     r = do_list(rbd, io_ctx, lflag, formatter.get());
     if (r < 0) {
       cerr << "rbd: list: " << cpp_strerror(-r) << std::endl;
       return -r;
     }
+#endif
+    cerr << "rbd: list: unsupported, currently." << std::endl;
+    return -1;
     break;
 
   case OPT_CREATE:

@@ -67,7 +67,9 @@ namespace librbd {
   int check_exists(librados::IoCtx &io_ctx, const std::string &name,
 		   uint64_t *size = NULL);
 
+#if 0
   int list(librados::IoCtx& io_ctx, std::vector<std::string>& names);
+#endif
   int create(librados::IoCtx& io_ctx, const char *imgname, uint64_t size);
   int rename(librados::IoCtx& io_ctx, const char *srcname, const char *dstname);
   int info(ImageCtx *ictx, image_info_t& info, size_t image_size);
@@ -109,8 +111,10 @@ namespace librbd {
 		  struct rbd_obj_header_ondisk *header);
   int write_header(librados::IoCtx& io_ctx, const std::string& md_oid,
 		   ceph::bufferlist& header);
+#if 0
   int tmap_set(librados::IoCtx& io_ctx, const std::string& imgname);
   int tmap_rm(librados::IoCtx& io_ctx, const std::string& imgname);
+#endif
   void image_info(const ImageCtx *ictx, image_info_t& info, size_t info_size);
   std::string get_block_oid(const std::string &object_prefix, uint64_t num,
 			    bool old_format);

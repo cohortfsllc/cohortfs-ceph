@@ -1794,25 +1794,6 @@ int OSDVol::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	if (obs.exists && (flags & CEPH_OSD_OP_FLAG_EXCL)) {
 	  result = -EEXIST; /* this is an exclusive create */
 	} else {
-	  if (osd_op.indata.length()) {
-	    bufferlist::iterator p = osd_op.indata.begin();
-	    string category;
-	    try {
-	      ::decode(category, p);
-	    }
-	    catch (buffer::error& e) {
-	      result = -EINVAL;
-	      goto fail;
-	    }
-	    if (category.size()) {
-	      if (obs.exists) {
-		if (obs.oi.category != category)
-		  result = -EEXIST;  // category cannot be reset
-	      } else {
-		obs.oi.category = category;
-	      }
-	    }
-	  }
 	  if (result >= 0) {
 	    if (!obs.exists)
 	      ctx->mod_desc.create();

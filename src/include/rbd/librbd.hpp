@@ -68,7 +68,9 @@ public:
   int open(IoCtx& io_ctx, Image& image, const char *name);
   // see librbd.h
   int open_read_only(IoCtx& io_ctx, Image& image, const char *name);
+#if 0
   int list(IoCtx& io_ctx, std::vector<std::string>& names);
+#endif
   int create(IoCtx& io_ctx, const char *name, uint64_t size);
   int remove(IoCtx& io_ctx, const char *name);
   int remove_with_progress(IoCtx& io_ctx, const char *name, ProgressContext& pctx);
