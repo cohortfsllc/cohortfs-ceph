@@ -219,7 +219,7 @@ static int do_list(librbd::RBD &rbd, librados::IoCtx& io_ctx, bool lflag,
     tbl.define_column("LOCK", TextTable::LEFT, TextTable::LEFT);
   }
 
-  string vol, image;
+  string image;
 
   for (std::vector<string>::const_iterator i = names.begin();
        i != names.end(); ++i) {
@@ -1198,19 +1198,19 @@ static int get_rbd_seq(dev_t devno, string &seq)
       snprintf(fn, sizeof(fn), "%s/%s/minor", devices_path, dent->d_name);
       r = read_file(fn, buf, sizeof(buf));
       if (r < 0) {
-        cerr << "rbd: could not read minor number from " << fn << ": "
-             << cpp_strerror(-r) << std::endl;
-        continue;
+	cerr << "rbd: could not read minor number from " << fn << ": "
+	     << cpp_strerror(-r) << std::endl;
+	continue;
       }
       int cur_minor = strict_strtol(buf, 10, &err);
       if (!err.empty()) {
-        cerr << err << std::endl;
-        cerr << "rbd: could not parse minor number read from " << fn << ": "
-             << cpp_strerror(-r) << std::endl;
-        continue;
+	cerr << err << std::endl;
+	cerr << "rbd: could not parse minor number read from " << fn << ": "
+	     << cpp_strerror(-r) << std::endl;
+	continue;
       }
       if (cur_minor != (int)minor(wholediskno))
-        continue;
+	continue;
     } else {
       assert(match_minor == 0);
     }
@@ -1533,7 +1533,7 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
       usage();
       return 0;
-    } else if (ceph_argparse_witharg(args, i, &val, "--volume", (char*)NULL)) {
+    } else if (ceph_argparse_witharg(args, i, &val, "--vol", (char*)NULL)) {
       volname = strdup(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--format", (char*)NULL)) {
       output_format = strdup(val.c_str());
