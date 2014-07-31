@@ -25,10 +25,6 @@ void install_sighandler(int signum, signal_handler_t handler, int flags);
 // handles SIGHUP
 void sighup_handler(int signum);
 
-// Install the standard Ceph signal handlers
-void install_standard_sighandlers(void);
-
-
 /// initialize async signal handler framework
 void init_async_signal_handler();
 

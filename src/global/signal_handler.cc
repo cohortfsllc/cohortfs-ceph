@@ -73,52 +73,6 @@ static void reraise_fatal(int signum)
   exit(1);
 }
 
-static void handle_fatal_signal(int signum)
-{
-  // This code may itself trigger a SIGSEGV if the heap is corrupt. In that
-  // case, SA_RESETHAND specifies that the default signal handler--
-  // presumably dump core-- will handle it.
-  char buf[1024];
-  snprintf(buf, sizeof(buf), "*** Caught signal (%s) **\n "
-	    "in thread %llx\n", sys_siglist[signum], (unsigned long long)pthread_self());
-  dout_emergency(buf);
-  pidfile_remove();
-
-  // TODO: don't use an ostringstream here. It could call malloc(), which we
-  // don't want inside a signal handler.
-  // Also fix the backtrace code not to allocate memory.
-  BackTrace bt(0);
-  ostringstream oss;
-  bt.print(oss);
-  dout_emergency(oss.str());
-
-  // dump to log.  this uses the heap extensively, but we're better
-  // off trying than not.
-  derr << buf << std::endl;
-  bt.print(*_dout);
-  *_dout << " NOTE: a copy of the executable, or `objdump -rdS <executable>` "
-	 << "is needed to interpret this.\n"
-	 << dendl;
-
-  g_ceph_context->_log->dump_recent();
-
-  reraise_fatal(signum);
-}
-
-void install_standard_sighandlers(void)
-{
-  install_sighandler(SIGSEGV, handle_fatal_signal, SA_RESETHAND | SA_NODEFER);
-  install_sighandler(SIGABRT, handle_fatal_signal, SA_RESETHAND | SA_NODEFER);
-  install_sighandler(SIGBUS, handle_fatal_signal, SA_RESETHAND | SA_NODEFER);
-  install_sighandler(SIGILL, handle_fatal_signal, SA_RESETHAND | SA_NODEFER);
-  install_sighandler(SIGFPE, handle_fatal_signal, SA_RESETHAND | SA_NODEFER);
-  install_sighandler(SIGXCPU, handle_fatal_signal, SA_RESETHAND | SA_NODEFER);
-  install_sighandler(SIGXFSZ, handle_fatal_signal, SA_RESETHAND | SA_NODEFER);
-  install_sighandler(SIGSYS, handle_fatal_signal, SA_RESETHAND | SA_NODEFER);
-}
-
-
-
 /// --- safe handler ---
 
 #include "common/Thread.h"
