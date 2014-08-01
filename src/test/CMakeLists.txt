@@ -120,7 +120,6 @@ target_link_libraries(dencoder
   cls_replica_log
   librados
   osd
-  mds
   osdc
   mon
   global
