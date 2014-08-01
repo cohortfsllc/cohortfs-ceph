@@ -8,7 +8,9 @@
 #include "common/perf_counters.h"
 
 #include "librbd/internal.h"
+#if 0
 #include "librbd/WatchCtx.h"
+#endif
 
 #include "librbd/ImageCtx.h"
 
@@ -33,7 +35,9 @@ namespace librbd {
       flush_encountered(false),
       exclusive_locked(false),
       name(image_name),
+#if 0
       wctx(NULL),
+#endif
       refresh_seq(0),
       last_refresh(0),
       md_lock("librbd::ImageCtx::md_lock"),
@@ -271,6 +275,7 @@ namespace librbd {
     cache_lock.Unlock();
   }
 
+#if 0
   int ImageCtx::register_watch() {
     assert(!wctx);
     wctx = new WatchCtx(this);
@@ -284,4 +289,5 @@ namespace librbd {
     delete wctx;
     wctx = NULL;
   }
+#endif
 }

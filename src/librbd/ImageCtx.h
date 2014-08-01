@@ -24,7 +24,9 @@ class PerfCounters;
 
 namespace librbd {
 
+#if 0
   class WatchCtx;
+#endif
 
   struct ImageCtx {
     CephContext *cct;
@@ -41,7 +43,9 @@ namespace librbd {
 
     std::string name;
     IoCtx data_ctx, md_ctx;
+#if 0
     WatchCtx *wctx;
+#endif
     int refresh_seq;    ///< sequence for refresh requests
     int last_refresh;   ///< last completed refresh
 
@@ -83,8 +87,10 @@ namespace librbd {
     void shutdown_cache();
     void invalidate_cache();
     void clear_nonexistence_cache();
+#if 0
     int register_watch();
     void unregister_watch();
+#endif
   };
 }
 

@@ -702,6 +702,7 @@ namespace librbd {
     if (r < 0)
       return r;
 
+#if 0
     if (!ictx->read_only) {
       r = ictx->register_watch();
       if (r < 0) {
@@ -710,6 +711,7 @@ namespace librbd {
 	goto err_close;
       }
     }
+#endif
 
     ictx->md_lock.get_write();
     r = ictx_refresh(ictx);
@@ -732,8 +734,10 @@ namespace librbd {
     else
       flush(ictx);
 
+#if 0
     if (ictx->wctx)
       ictx->unregister_watch();
+#endif
 
     delete ictx;
   }
