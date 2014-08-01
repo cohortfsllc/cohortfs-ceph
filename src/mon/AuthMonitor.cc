@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #include <sstream>
@@ -39,6 +39,11 @@
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, get_last_committed())
+
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::new_formatter;
+
 static ostream& _prefix(std::ostream *_dout, Monitor *mon, version_t v) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name()
@@ -381,7 +386,7 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       ::decode(supported, indata);
       ::decode(entity_name, indata);
       ::decode(s->global_id, indata);
-    } catch (const buffer::error &e) {
+    } catch (const ceph::buffer::error &e) {
       dout(10) << "failed to decode initial auth message" << dendl;
       ret = -EINVAL;
       goto reply;
@@ -494,14 +499,14 @@ bool AuthMonitor::prep_auth(MAuth *m, bool paxos_writable)
       string str;
       try {
 	::decode(str, p);
-      } catch (const buffer::error &err) {
+      } catch (const ceph::buffer::error &err) {
 	derr << "corrupt cap data for " << entity_name << " in auth db" << dendl;
 	str.clear();
       }
       s->caps.parse(str, NULL);
       s->auid = auid;
     }
-  } catch (const buffer::error &err) {
+  } catch (const ceph::buffer::error &err) {
     ret = -EINVAL;
     dout(0) << "caught error when trying to handle auth request, probably malformed request" << dendl;
   }
@@ -721,7 +726,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
     KeyRing keyring;
     try {
       ::decode(keyring, iter);
-    } catch (const buffer::error &ex) {
+    } catch (const ceph::buffer::error &ex) {
       ss << "error decoding keyring" << " " << ex.what();
       rs = err;
       goto done;
@@ -750,7 +755,7 @@ bool AuthMonitor::prepare_command(MMonCommand *m)
       bufferlist::iterator iter = bl.begin();
       try {
         ::decode(new_keyring, iter);
-      } catch (const buffer::error &ex) {
+      } catch (const ceph::buffer::error &ex) {
         ss << "error decoding keyring";
         err = -EINVAL;
         goto done;
@@ -1024,7 +1029,7 @@ void AuthMonitor::upgrade_format()
       bufferlist::iterator it = p->second.caps["mon"].begin();
       ::decode(mon_caps, it);
     }
-    catch (buffer::error) {
+    catch (ceph::buffer::error) {
       dout(10) << __func__ << " unable to parse mon cap for "
                << p->first << dendl;
       continue;

@@ -118,7 +118,7 @@ int RGWRegion::read_default(RGWDefaultRegionInfo& default_info)
   try {
     bufferlist::iterator iter = bl.begin();
     ::decode(default_info, iter);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     derr << "error decoding data from " << pool << ":" << oid << dendl;
     return -EIO;
   }
@@ -218,7 +218,7 @@ int RGWRegion::read_info(const string& region_name)
   try {
     bufferlist::iterator iter = bl.begin();
     ::decode(*this, iter);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     ldout(cct, 0) << "ERROR: failed to decode region from " << pool << ":" << oid << dendl;
     return -EIO;
   }
@@ -358,7 +358,7 @@ int RGWZoneParams::init(CephContext *cct, RGWRados *store, RGWRegion& region)
   try {
     bufferlist::iterator iter = bl.begin();
     ::decode(*this, iter);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     ldout(cct, 0) << "ERROR: failed to decode zone info from " << pool << ":" << oid << dendl;
     return -EIO;
   }
@@ -447,7 +447,7 @@ int RGWRegionMap::read(CephContext *cct, RGWRados *store)
   try {
     bufferlist::iterator iter = bl.begin();
     ::decode(*this, iter);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     ldout(cct, 0) << "ERROR: failed to decode region map info from " << pool << ":" << oid << dendl;
     return -EIO;
   }
@@ -1804,7 +1804,7 @@ int RGWRados::log_show_next(RGWAccessHandle handle, rgw_log_entry *entry)
     bufferlist old;
     try {
       old.substr_of(state->bl, off, state->bl.length() - off);
-    } catch (buffer::error& err) {
+    } catch (ceph::buffer::error& err) {
       return -EINVAL;
     }
     state->bl.clear();
@@ -1821,7 +1821,7 @@ int RGWRados::log_show_next(RGWAccessHandle handle, rgw_log_entry *entry)
   try {
     ::decode(*entry, state->p);
   }
-  catch (const buffer::error &e) {
+  catch (const ceph::buffer::error &e) {
     return -EINVAL;
   }
   return 1;
@@ -2141,7 +2141,7 @@ int RGWRados::decode_policy(bufferlist& bl, ACLOwner *owner)
   RGWAccessControlPolicy policy(cct);
   try {
     policy.decode_owner(i);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     ldout(cct, 0) << "ERROR: could not decode policy, caught buffer::error" << dendl;
     return -EIO;
   }
@@ -2159,7 +2159,7 @@ int rgw_policy_from_attrset(CephContext *cct, map<string, bufferlist>& attrset, 
   bufferlist::iterator iter = bl.begin();
   try {
     policy->decode(iter);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     ldout(cct, 0) << "ERROR: could not decode policy, caught buffer::error" << dendl;
     return -EIO;
   }
@@ -2532,7 +2532,7 @@ int RGWRados::select_legacy_bucket_placement(const string& bucket_name, rgw_buck
   try {
     bufferlist::iterator iter = map_bl.begin();
     ::decode(m, iter);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     ldout(cct, 0) << "ERROR: couldn't decode avail_pools" << dendl;
   }
 
@@ -3876,7 +3876,7 @@ int RGWRados::get_obj_state(RGWRadosCtx *rctx, rgw_obj& obj, RGWObjState **state
       ::decode(s->manifest, miter);
       s->has_manifest = true;
       s->size = s->manifest.get_obj_size();
-    } catch (buffer::error& err) {
+    } catch (ceph::buffer::error& err) {
       ldout(cct, 20) << "ERROR: couldn't decode manifest" << dendl;
       return -EIO;
     }
@@ -5317,7 +5317,7 @@ int RGWRados::get_bucket_instance_from_oid(void *ctx, string& oid, RGWBucketInfo
   bufferlist::iterator iter = epbl.begin();
   try {
     ::decode(info, iter);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     ldout(cct, 0) << "ERROR: could not decode buffer info, caught buffer::error" << dendl;
     return -EIO;
   }
@@ -5341,7 +5341,7 @@ int RGWRados::get_bucket_entrypoint_info(void *ctx, const string& bucket_name,
   bufferlist::iterator iter = bl.begin();
   try {
     ::decode(entry_point, iter);
-  } catch (buffer::error& err) {
+  } catch (ceph::buffer::error& err) {
     ldout(cct, 0) << "ERROR: could not decode buffer info, caught buffer::error" << dendl;
     return -EIO;
   }
@@ -6489,7 +6489,7 @@ int RGWRados::process_intent_log(rgw_bucket& bucket, string& oid,
     struct rgw_intent_log_entry entry;
     try {
       ::decode(entry, iter);
-    } catch (buffer::error& err) {
+    } catch (ceph::buffer::error& err) {
       cerr << "failed to decode intent log entry in " << bucket << ":" << oid << std::endl;
       cerr << "skipping log" << std::endl; // no use to continue
       ret = -EIO;
