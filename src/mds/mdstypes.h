@@ -20,6 +20,7 @@ using namespace std;
 #include "include/interval_set.h"
 #include "inode_backtrace.h"
 #include <boost/pool/pool.hpp>
+#include <linux/types.h> // __le64, &c, drat!
 
 #define CEPH_FS_ONDISK_MAGIC "ceph fs volume v011"
 

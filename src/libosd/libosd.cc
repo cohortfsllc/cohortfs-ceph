@@ -533,7 +533,7 @@ int LibOSD::write(const char *object, const uuid_t volume,
     return -ENODEV;
 
   bufferlist bl;
-  bl.append(buffer::create_static(length, data));
+  bl.append(ceph::buffer::create_static(length, data));
 
   // set up osd write op
   MOSDOp *m = new MOSDOp(client, tid, oid, vol, epoch, 0);

@@ -15,6 +15,9 @@
 #include "common/TextTable.h"
 #include <iostream>
 #include "gtest/gtest.h"
+#include "include/buffer.h" /* opens the ceph namespace */
+
+using namespace ceph;
 
 TEST(TextTable, Alignment) {
   TextTable t;

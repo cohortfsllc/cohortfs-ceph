@@ -45,7 +45,10 @@ extern "C"{
 			  else cout << "(" << #c << ") PASSED\n";
 #define EXPECT_TRUE(c) ASSERT_TRUE(c)
 #endif
+
 using namespace std;
+using ceph::Formatter;
+using ceph::JSONFormatter;
 
 #define CURL_VERBOSE 0
 #define HTTP_RESPONSE_STR "RespCode"

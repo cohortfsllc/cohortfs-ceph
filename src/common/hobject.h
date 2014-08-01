@@ -33,6 +33,8 @@ WRITE_RAW_ENCODER(stripetype_t)
    for it. Either change it, which will be a pain, or find some
    retronym to justify it. */
 
+using ceph::Formatter;
+
 struct hobject_t {
   object_t oid;
   stripetype_t stripetype;

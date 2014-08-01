@@ -31,6 +31,10 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "memstore(" << path << ") "
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::new_formatter;
+
 /* Factory method */
 ObjectStore* MemStore_factory(CephContext* cct,
 			      const std::string& data,
@@ -964,7 +968,7 @@ void MemStore::_write_pages(const bufferlist& src, unsigned offset,
   bufferlist* ncbl = const_cast<bufferlist*>(&src);
   page_vec::iterator page = pages.begin();
 
-  buffer::list::iterator bl_iter = ncbl->begin();
+  ceph::buffer::list::iterator bl_iter = ncbl->begin();
   while (! bl_iter.end()) {
     char *data = bl_iter.get_bytes(&len);
     unsigned page_offset = offset - (*page)->offset;

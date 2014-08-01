@@ -453,7 +453,7 @@ uint64_t Journaler::append_entry(bufferlist& bl)
 
   // append, but consolidate into page-sized buffers
   ::encode(s, write_buf);
-  std::list<buffer::ptr>::const_iterator p;
+  std::list<ceph::buffer::ptr>::const_iterator p;
   for (p = bl.buffers().begin(); p != bl.buffers().end(); ++p)
     write_buf.append(p->c_str(), p->length());
   write_pos += sizeof(s) + s;

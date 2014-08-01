@@ -21,6 +21,7 @@
 #include "common/config.h"
 #include "common/entity_name.h"
 
+
 class Cond;
 
 struct EntityAuth {
@@ -51,7 +52,8 @@ WRITE_CLASS_ENCODER(EntityAuth)
 
 static inline std::ostream& operator<<(std::ostream& out,
 				       const EntityAuth& a) {
-  return out << "auth(auid = " << a.auid << " key=" << a.key << " with " << a.caps.size() << " caps)";
+  return out << "auth(auid = " << a.auid << " key=" << a.key << " with "
+	     << a.caps.size() << " caps)";
 }
 
 struct AuthCapsInfo {

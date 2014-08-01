@@ -10,7 +10,6 @@
 
 using std::list;
 
-
 // ----
 // LogEntryKey
 

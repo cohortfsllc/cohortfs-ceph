@@ -365,7 +365,6 @@ void inode_t::generate_test_instances(list<inode_t*>& ls)
   // i am lazy.
 }
 
-
 /*
  * fnode_t
  */

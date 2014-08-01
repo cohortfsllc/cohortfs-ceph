@@ -44,6 +44,8 @@
 #undef dout_prefix
 #define dout_prefix *_dout << messenger->get_myname() << ".objecter "
 
+using ceph::Formatter;
+using ceph::new_formatter;
 
 enum {
   l_osdc_first = 123200,

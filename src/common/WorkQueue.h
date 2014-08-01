@@ -23,6 +23,8 @@
 
 class CephContext;
 
+using ceph::heartbeat_handle_d;
+
 class ThreadPool : public md_config_obs_t {
   CephContext *cct;
   string name;

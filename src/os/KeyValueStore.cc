@@ -56,6 +56,9 @@ using ceph::crypto::SHA1;
 
 #define dout_subsys ceph_subsys_keyvaluestore
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+
 /* Factory method */
 ObjectStore* KVStore_factory(CephContext* cct,
 			     const std::string& data,

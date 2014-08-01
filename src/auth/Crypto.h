@@ -23,6 +23,8 @@
 
 #include <string>
 
+using ceph::Formatter;
+
 class CephContext;
 class CryptoHandler;
 

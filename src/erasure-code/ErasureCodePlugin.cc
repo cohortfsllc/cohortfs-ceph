@@ -24,6 +24,8 @@
 #define PLUGIN_SUFFIX ".so"
 #define PLUGIN_INIT_FUNCTION "__erasure_code_init"
 
+using namespace ceph;
+
 ErasureCodePluginRegistry ErasureCodePluginRegistry::singleton;
 
 ErasureCodePluginRegistry::ErasureCodePluginRegistry() :

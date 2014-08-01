@@ -38,8 +38,11 @@ class Monitor;
 #include "messages/MMonCommand.h"
 #include "messages/MOSDMap.h"
 #include "messages/MOSDFailure.h"
+#include "erasure-code/ErasureCodeInterface.h"
 
 #define OSD_METADATA_PREFIX "osd_metadata"
+
+using ceph::ErasureCodeInterfaceRef;
 
 /// information about a particular peer's failure reports for one osd
 struct failure_reporter_t {

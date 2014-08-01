@@ -128,7 +128,7 @@ class OBS_Worker : public Thread
 
   void *entry() {
     bufferlist data;
-    data.append(buffer::create(block_size));
+    data.append(ceph::buffer::create(block_size));
 
     dout(0) << "Writing " << size << " in blocks of " << block_size
 	<< dendl;

@@ -13,6 +13,8 @@
 
 #define dout_subsys ceph_subsys_rgw
 
+using ceph::FormatterAttrs;
+
 int RGWListBuckets_ObjStore_SWIFT::get_params()
 {
   marker = s->info.args.get("marker");

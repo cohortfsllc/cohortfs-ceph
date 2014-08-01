@@ -5,7 +5,10 @@
 #include "common/Formatter.h"
 #include <gtest/gtest.h>
 
+
 using std::cout;
+using ceph::Formatter;
+using ceph::new_formatter;
 
 void dump(const SloppyCRCMap& scm)
 {

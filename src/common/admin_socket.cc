@@ -50,6 +50,10 @@ using std::ostringstream;
 using std::map;
 using std::vector;
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::new_formatter;
+
 /*
  * UNIX domain sockets created by an application persist even after that
  * application closes, unless they're explicitly unlinked. This is because the

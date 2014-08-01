@@ -22,6 +22,9 @@
 
 #define dout_subsys ceph_subsys_rgw
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::XMLFormatter;
 
 struct rgw_http_attr {
   const char *rgw_attr;

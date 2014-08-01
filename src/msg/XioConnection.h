@@ -24,7 +24,8 @@ extern "C" {
 }
 #include "Connection.h"
 #include "Messenger.h"
-
+#include <linux/types.h> // __le64, &c, drat!
+#include "include/buffer_xio.h"
 
 #define XIO_ALL_FEATURES (CEPH_FEATURES_ALL & \
 			  ~CEPH_FEATURE_MSGR_KEEPALIVE2)
@@ -39,12 +40,12 @@ class XioMsgCnt
 {
 public:
   __le32 msg_cnt;
-  buffer::list bl;
+  ceph::buffer::list bl;
 public:
-  XioMsgCnt(buffer::ptr p)
+  XioMsgCnt(ceph::buffer::ptr p)
     {
       bl.append(p);
-      buffer::list::iterator bl_iter = bl.begin();
+      ceph::buffer::list::iterator bl_iter = bl.begin();
       ::decode(msg_cnt, bl_iter);
     }
 };
@@ -235,7 +236,7 @@ public:
       struct xio_iovec_ex *iov = &iovs[ix];
       /* we can recover the address of the buffer flyweight from
        * iov->base, but, heck */
-      iov->user_context = (void*) buffer::create_reg(iov);
+      iov->user_context = (void*) ceph::buffer::create_reg(iov);
     }
     return 0;
   } /* assign_data */

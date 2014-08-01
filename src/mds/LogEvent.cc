@@ -52,7 +52,7 @@ LogEvent *LogEvent::decode(bufferlist& bl)
       event = decode_event(bl, p, type);
       DECODE_FINISH(p);
     }
-    catch (const buffer::error &e) {
+    catch (const ceph::buffer::error &e) {
       generic_dout(0) << "failed to decode LogEvent (type maybe " << type << ")" << dendl;
       return NULL;
     }
@@ -95,7 +95,8 @@ LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, uint32
   case EVENT_TABLESERVER: le = new ETableServer; break;
 
   default:
-    generic_dout(0) << "uh oh, unknown log event type " << type << " length " << length << dendl;
+    generic_dout(0) << "uh oh, unknown log event type " << type << " length "
+		    << length << dendl;
     return NULL;
   }
 
@@ -103,7 +104,7 @@ LogEvent *LogEvent::decode_event(bufferlist& bl, bufferlist::iterator& p, uint32
   try {
     le->decode(p);
   }
-  catch (const buffer::error &e) {
+  catch (const ceph::buffer::error &e) {
     generic_dout(0) << "failed to decode LogEvent type " << type << dendl;
     delete le;
     return NULL;

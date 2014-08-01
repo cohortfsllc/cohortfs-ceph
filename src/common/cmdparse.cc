@@ -221,7 +221,7 @@ handle_bad_get(CephContext *cct, string k, const char *tname)
   errstr << "bad boost::get: key " << k << " is not type " << typestr;
   lderr(cct) << errstr.str() << dendl;
 
-  BackTrace bt(1);
+  ceph::BackTrace bt(1);
   ostringstream oss;
   bt.print(oss);
   lderr(cct) << oss << dendl;

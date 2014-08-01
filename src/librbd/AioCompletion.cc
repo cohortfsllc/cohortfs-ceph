@@ -79,7 +79,7 @@ namespace librbd {
 			      m_completion->read_buf_len :
 			      m_req->data().length());
 	  m_req->data().copy(0, len, m_completion->read_buf);
-	} catch (buffer::end_of_buffer &e) { }
+	} catch (ceph::buffer::end_of_buffer &e) { }
       }
       if (m_completion->read_bl) {
 	m_completion->read_bl->claim(m_req->data());

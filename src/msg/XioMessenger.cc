@@ -22,11 +22,14 @@
 #include "XioMsg.h"
 #include "XioMessenger.h"
 #include "common/address_helper.h"
+#include "include/buffer_xio.h"
 
 #define dout_subsys ceph_subsys_xio
 
 Mutex mtx;
 std::atomic<bool> initialized;
+
+using namespace ceph;
 
 std::atomic<uint64_t> XioMessenger::nInstances;
 
@@ -639,7 +642,7 @@ xio_place_buffers(buffer::list& bl, XioMsg *xmsg, struct xio_msg*& req,
       //break;
     default:
     {
-      struct xio_mempool_obj *mp = get_xio_mp(*pb);
+      struct xio_mempool_obj *mp = ceph::buffer::get_xio_mp(*pb);
       iov->mr = (mp) ? mp->mr : NULL;
     }
       break;

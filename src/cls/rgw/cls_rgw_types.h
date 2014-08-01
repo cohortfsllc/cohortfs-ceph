@@ -17,6 +17,8 @@ namespace ceph {
   class Formatter;
 }
 
+using ceph::Formatter;
+
 enum RGWPendingState {
   CLS_RGW_STATE_PENDING_MODIFY = 0,
   CLS_RGW_STATE_COMPLETE       = 1,
@@ -168,7 +170,7 @@ void decode_packed_val(T& val, bufferlist::iterator& bl)
       }
       break;
     default:
-      throw buffer::error();
+      throw ceph::buffer::error();
   }
 }
 

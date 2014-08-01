@@ -7,7 +7,7 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software
+ * License version 2.1, as published by the Free Software0
  * Foundation.	See file COPYING.
  *
  */
@@ -27,6 +27,8 @@
 
 #define dout_subsys ceph_subsys_mds
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
 
 int Dumper::init(int rank_)
 {

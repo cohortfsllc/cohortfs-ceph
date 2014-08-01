@@ -59,14 +59,16 @@
 #include "messages/MLog.h"
 
 using namespace std;
+using ceph::Formatter;
+using ceph::JSONFormatter;
 
 #define dout_subsys ceph_subsys_
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, get_name())
+
 static ostream& _prefix(std::ostream *_dout, string n) {
   return *_dout << " stub(" << n << ") ";
 }
-
 
 typedef boost::mt11213b rngen_t;
 typedef boost::scoped_ptr<Messenger> MessengerRef;

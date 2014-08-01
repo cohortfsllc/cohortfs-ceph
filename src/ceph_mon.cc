@@ -324,7 +324,7 @@ int main(int argc, const char **argv)
 	// always mark seed/mkfs monmap as epoch 0
 	monmap.set_epoch(0);
       }
-      catch (const buffer::error& e) {
+      catch (const ceph::buffer::error& e) {
 	cerr << argv[0] << ": error decoding monmap " << g_conf->monmap
 	     << ": " << e.what() << std::endl;
 	exit(1);
@@ -538,7 +538,7 @@ int main(int argc, const char **argv)
     if (err >= 0) {
       try {
 	monmap.decode(mapbl);
-      } catch (const buffer::error& e) {
+      } catch (const ceph::buffer::error& e) {
 	cerr << "can't decode monmap: " << e.what() << std::endl;
       }
     } else {

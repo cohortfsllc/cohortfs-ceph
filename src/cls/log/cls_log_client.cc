@@ -9,7 +9,8 @@ using namespace librados;
 
 
 
-void cls_log_add(librados::ObjectWriteOperation& op, list<cls_log_entry>& entries)
+void cls_log_add(librados::ObjectWriteOperation& op,
+		 list<cls_log_entry>& entries)
 {
   bufferlist in;
   cls_log_add_op call;
@@ -99,7 +100,7 @@ public:
 	  *truncated = ret.truncated;
 	if (marker)
 	  *marker = ret.marker;
-      } catch (buffer::error& err) {
+      } catch (ceph::buffer::error& err) {
 	// nothing we can do about it atm
       }
     }
@@ -135,7 +136,7 @@ public:
 	::decode(ret, iter);
 	if (header)
 	  *header = ret.header;
-      } catch (buffer::error& err) {
+      } catch (ceph::buffer::error& err) {
 	// nothing we can do about it atm
       }
     }

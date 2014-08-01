@@ -12,7 +12,6 @@
  *
  */
 
-
 #include <sstream>
 #include <stdlib.h>
 #include <signal.h>
@@ -86,12 +85,14 @@
 #define dout_prefix _prefix(_dout, this)
 static ostream& _prefix(std::ostream *_dout, const Monitor *mon) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
-		<< "(" << mon->get_state_name() << ") e" << mon->monmap->get_epoch() << " ";
+		<< "(" << mon->get_state_name() << ") e"
+		<< mon->monmap->get_epoch() << " ";
 }
 
 const string Monitor::MONITOR_NAME = "monitor";
 const string Monitor::MONITOR_STORE_PREFIX = "monitor_store";
 
+using ceph::new_formatter;
 
 #undef COMMAND
 MonCommand mon_commands[] = {
@@ -99,7 +100,6 @@ MonCommand mon_commands[] = {
   {parsesig, helptext, modulename, req_perms, avail},
 #include <mon/MonCommands.h>
 };
-
 
 long parse_pos_long(const char *s, ostream *pss)
 {
@@ -3804,7 +3804,7 @@ int Monitor::mkfs(bufferlist& osdmapbl)
       OSDMap om;
       om.decode(osdmapbl);
     }
-    catch (buffer::error& e) {
+    catch (ceph::buffer::error& e) {
       derr << "error decoding provided osdmap: " << e.what() << dendl;
       return -EINVAL;
     }
@@ -3825,7 +3825,7 @@ int Monitor::mkfs(bufferlist& osdmapbl)
 	  bufferlist::iterator i = bl.begin();
 	  keyring.decode_plaintext(i);
 	}
-	catch (const buffer::error& e) {
+	catch (const ceph::buffer::error& e) {
 	  derr << "error decoding keyring " << keyring_plaintext
 	       << ": " << e.what() << dendl;
 	  return -EINVAL;

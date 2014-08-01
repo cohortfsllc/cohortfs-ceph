@@ -27,6 +27,7 @@
 #define dout_subsys ceph_subsys_paxos
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, mon->name, mon->rank, paxos_name, state, first_committed, last_committed)
+
 static ostream& _prefix(std::ostream *_dout, Monitor *mon, const string& name,
 			int rank, const string& paxos_name, int state,
 			version_t first_committed, version_t last_committed)

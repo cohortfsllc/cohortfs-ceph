@@ -11,8 +11,8 @@
 
 using namespace librados;
 
-
-void cls_user_set_buckets(librados::ObjectWriteOperation& op, list<cls_user_bucket_entry>& entries, bool add)
+void cls_user_set_buckets(librados::ObjectWriteOperation& op,
+			  list<cls_user_bucket_entry>& entries, bool add)
 {
   bufferlist in;
   cls_user_set_buckets_op call;
@@ -61,7 +61,7 @@ public:
 	  *truncated = ret.truncated;
 	if (marker)
 	  *marker = ret.marker;
-      } catch (buffer::error& err) {
+      } catch (ceph::buffer::error& err) {
 	r = -EIO;
       }
     }
@@ -104,7 +104,7 @@ public:
 	::decode(ret, iter);
 	if (header)
 	  *header = ret.header;
-      } catch (buffer::error& err) {
+      } catch (ceph::buffer::error& err) {
 	r = -EIO;
       }
       if (ret_ctx) {

@@ -74,6 +74,10 @@ map<string, string> map_options; // -o / --options map
 
 #define dout_subsys ceph_subsys_rbd
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::XMLFormatter;
+
 void usage()
 {
   cout <<

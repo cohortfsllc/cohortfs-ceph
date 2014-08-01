@@ -19,7 +19,6 @@
 #include "common/Mutex.h"
 #include "common/Cond.h"
 
-
 struct RefCountedObject {
   std::atomic<uint64_t> nref;
   RefCountedObject() : nref(1) {}

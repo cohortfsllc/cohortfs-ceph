@@ -21,6 +21,9 @@
 #include "msg/XioMessenger.h"
 #endif
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+
 static inline Message* new_ping_monstyle(const char *tag, int mult)
 {
   Message *m = new MPing();
@@ -73,7 +76,7 @@ static inline Message* new_ping_with_data(const char *tag, uint32_t size)
   uint32_t* t = (uint32_t* ) (((char*) p) + size - 32);
   *t = counter;
 
-  bl.append(buffer::create_static(size, (char*) p));
+  bl.append(ceph::buffer::create_static(size, (char*) p));
   m->set_data(bl);
 
   return static_cast<Message*>(m);
@@ -117,7 +120,7 @@ static inline Message* new_simple_ping_with_data(const char *tag,
     *t = counter;
     t[1] = i;
 
-    bl.append(buffer::create_static(segsize, (char*) p));
+    bl.append(ceph::buffer::create_static(segsize, (char*) p));
   }
   m->set_data(bl);
 
