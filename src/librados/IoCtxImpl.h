@@ -49,7 +49,7 @@ struct librados::IoCtxImpl {
   void dup(const IoCtxImpl& rhs) {
     // Copy everything except the ref count
     client = rhs.client;
-    volume = volume;
+    volume = rhs.volume;
     notify_timeout = rhs.notify_timeout;
     lock = rhs.lock;
     objecter = rhs.objecter;
