@@ -19,7 +19,6 @@ endif(${WITH_PROFILER})
 if (HAVE_XIO)
   include_directories(${Xio_INCLUDE_DIR})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${Xio_INCLUDE_DIR}")
-  add_definitions("-DHAVE_XIO")
   list(APPEND EXTRALIBS ${Xio_LIBRARY} ibverbs rdmacm pthread rt)
 endif(HAVE_XIO)
 
