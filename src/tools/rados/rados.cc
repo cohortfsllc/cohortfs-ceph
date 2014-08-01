@@ -45,6 +45,10 @@ using namespace librados;
 using std::cout;
 using std::cerr;
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::XMLFormatter;
+
 int rados_tool_sync(const std::map < std::string, std::string > &opts,
 		    std::vector<const char*> &args);
 
@@ -363,7 +367,7 @@ public:
     try {
       bufferlist::iterator iter = bl.begin();
       ::decode(s, iter);
-    } catch (buffer::error *err) {
+    } catch (ceph::buffer::error *err) {
       cout << "could not decode bufferlist, buffer length=" << bl.length() << std::endl;
     }
     cout << name << " got notification opcode=" << (int)opcode << " ver=" << ver << " msg='" << s << "'" << std::endl;
@@ -536,7 +540,7 @@ int LoadGen::bootstrap(const string &volume)
   }
 
   int buf_len = 1;
-  bufferptr p = buffer::create(buf_len);
+  bufferptr p = ceph::buffer::create(buf_len);
   bufferlist bl;
   memset(p.c_str(), 0, buf_len);
   bl.push_back(p);
@@ -596,7 +600,7 @@ void LoadGen::run_op(LoadGenOp *op)
     io_ctx.aio_read(op->oid, op->completion, &op->bl, op->len, op->off);
     break;
   case OP_WRITE:
-    bufferptr p = buffer::create(op->len);
+    bufferptr p = ceph::buffer::create(op->len);
     memset(p.c_str(), 0, op->len);
     op->bl.push_back(p);
 
@@ -1427,7 +1431,8 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
       const string & oid = *iter;
       ret = io_ctx.remove(oid);
       if (ret < 0) {
-	cerr << "error removing " << vol_name << "/" << oid << ": " << cpp_strerror(ret) << std::endl;
+	cerr << "error removing " << vol_name << "/" << oid << ": "
+	     << cpp_strerror(ret) << std::endl;
 	goto out;
       }
     }
@@ -1438,11 +1443,11 @@ static int rados_tool_common(const std::map < std::string, std::string > &opts,
     string oid(nargs[1]);
     ret = io_ctx.create(oid, true);
     if (ret < 0) {
-      cerr << "error creating " << vol_name << "/" << oid << ": " << cpp_strerror(ret) << std::endl;
+      cerr << "error creating " << vol_name << "/" << oid << ": "
+	   << cpp_strerror(ret) << std::endl;
       goto out;
     }
   }
-
   else if (strcmp(nargs[0], "bench") == 0) {
     if (vol_name.empty() || nargs.size() < 3)
       usage_exit();

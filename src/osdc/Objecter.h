@@ -206,7 +206,7 @@ struct ObjectOperation {
 	    *pmtime = mtime;
 	  if (ptime)
 	    *ptime = mtime.sec();
-	} catch (buffer::error& e) {
+	} catch (ceph::buffer::error& e) {
 	  if (prval)
 	    *prval = -EIO;
 	}
@@ -258,7 +258,7 @@ struct ObjectOperation {
 	try {
 	  ::decode(*extents, iter);
 	  ::decode(*data_bl, iter);
-	} catch (buffer::error& e) {
+	} catch (ceph::buffer::error& e) {
 	  if (prval)
 	    *prval = -EIO;
 	}
@@ -331,7 +331,7 @@ struct ObjectOperation {
 	  if (pattrs)
 	    ::decode(*pattrs, p);
 	}
-	catch (buffer::error& e) {
+	catch (ceph::buffer::error& e) {
 	  if (prval)
 	    *prval = -EIO;
 	}
@@ -351,7 +351,7 @@ struct ObjectOperation {
 	  if (pattrs)
 	    ::decode(*pattrs, p);
 	}
-	catch (buffer::error& e) {
+	catch (ceph::buffer::error& e) {
 	  if (prval)
 	    *prval = -EIO;
 	}
@@ -384,7 +384,7 @@ struct ObjectOperation {
 	    }
 	  }
 	}
-	catch (buffer::error& e) {
+	catch (ceph::buffer::error& e) {
 	  if (prval)
 	    *prval = -EIO;
 	}
@@ -539,8 +539,8 @@ struct ObjectOperation {
     add_call(CEPH_OSD_OP_CALL, cname, method, indata, NULL, NULL, NULL);
   }
 
-  void call(const char *cname, const char *method, bufferlist &indata, bufferlist *outdata,
-	    Context *ctx, int *prval) {
+  void call(const char *cname, const char *method, bufferlist &indata,
+	    bufferlist *outdata, Context *ctx, int *prval) {
     add_call(CEPH_OSD_OP_CALL, cname, method, indata, outdata, ctx, prval);
   }
 
@@ -578,6 +578,7 @@ struct ObjectOperation {
     OSDOp& osd_op = add_op(CEPH_OSD_OP_ASSERT_VER);
     osd_op.op.assert_ver.ver = ver;
   }
+
   void assert_src_version(const object_t& srcoid, uint64_t ver) {
     bufferlist bl;
     add_watch(CEPH_OSD_OP_ASSERT_SRC_VERSION, 0, ver, 0, bl);

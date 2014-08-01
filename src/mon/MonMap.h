@@ -23,6 +23,8 @@ namespace ceph {
   class Formatter;
 }
 
+using ceph::Formatter;
+
 class MonMap {
  public:
   epoch_t epoch;       // what epoch/version of the monmap

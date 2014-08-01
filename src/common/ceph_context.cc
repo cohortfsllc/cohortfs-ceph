@@ -34,6 +34,7 @@
 #include "include/Spinlock.h"
 
 using ceph::HeartbeatMap;
+using ceph::new_formatter;
 
 class CephContextServiceThread : public Thread
 {

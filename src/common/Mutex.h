@@ -18,6 +18,8 @@
 #include <cassert>
 #include <pthread.h>
 
+class CephContext;
+
 enum {
   l_mutex_first = 999082,
   l_mutex_wait,

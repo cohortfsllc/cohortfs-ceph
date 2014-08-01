@@ -43,6 +43,11 @@
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, mdsmap)
+
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::new_formatter;
+
 static ostream& _prefix(std::ostream *_dout, Monitor *mon, MDSMap& mdsmap) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name()

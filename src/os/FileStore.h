@@ -12,7 +12,6 @@
  *
  */
 
-
 #ifndef CEPH_FILESTORE_H
 #define CEPH_FILESTORE_H
 
@@ -62,6 +61,8 @@ static const __SWORD_TYPE ZFS_SUPER_MAGIC(0x2fc12fc1);
 
 typedef CollectionIndex::IndexedPath IndexedPath;
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
 
 enum fs_types {
   FS_TYPE_NONE = 0,

@@ -12,7 +12,6 @@
  *
  */
 
-
 #ifndef CEPH_FILEPATH_H
 #define CEPH_FILEPATH_H
 
@@ -33,6 +32,7 @@ using namespace std;
 
 #include "common/Formatter.h"
 
+using ceph::Formatter;
 
 class filepath {
   inodeno_t ino;   // base inode.  ino=0 implies pure relative path.

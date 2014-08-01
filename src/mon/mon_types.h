@@ -38,6 +38,9 @@ inline const char *get_paxos_name(int p) {
 
 #define CEPH_MON_ONDISK_MAGIC "ceph mon volume v012"
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+
 /**
  * leveldb store stats
  *

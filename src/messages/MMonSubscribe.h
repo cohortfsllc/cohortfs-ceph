@@ -17,6 +17,7 @@
 
 #include "msg/Message.h"
 #include "include/ceph_features.h"
+#include <linux/types.h> // __le64, &c, drat!
 
 /*
  * compatibility with old crap

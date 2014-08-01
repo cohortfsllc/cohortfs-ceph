@@ -100,6 +100,10 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, whoami, get_osdmap())
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::new_formatter;
+
 static ostream& _prefix(std::ostream* _dout, int whoami, OSDMapRef osdmap) {
   return *_dout << "osd." << whoami << " "
 		<< (osdmap ? osdmap->get_epoch():0)

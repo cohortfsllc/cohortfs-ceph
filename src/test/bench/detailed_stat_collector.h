@@ -13,6 +13,10 @@
 #include <map>
 #include <boost/tuple/tuple.hpp>
 #include <ostream>
+#include "common/Formatter.h"
+
+using ceph::Formatter;
+using ceph::JSONFormatter;
 
 class DetailedStatCollector : public StatCollector {
 public:

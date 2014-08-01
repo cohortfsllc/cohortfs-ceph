@@ -22,11 +22,14 @@
 #include "auth/none/AuthNoneProtocol.h" // XXX
 
 #include "common/dout.h"
+#include "include/buffer_xio.h"
 
 extern struct xio_mempool *xio_msgr_mpool;
 extern struct xio_mempool *xio_msgr_noreg_mpool;
 
 #define dout_subsys ceph_subsys_xio
+
+using namespace ceph;
 
 void print_xio_msg_hdr(const char *tag, const XioMsgHdr &hdr,
 		       const struct xio_msg *msg)
@@ -148,7 +151,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
    * xio_session */
   if (! in_seq.p) {
     XioMsgCnt msg_cnt(
-      buffer::create_static(treq->in.header.iov_len,
+      ceph::buffer::create_static(treq->in.header.iov_len,
 			    (char*) treq->in.header.iov_base));
     in_seq.cnt = msg_cnt.msg_cnt;
     in_seq.p = true;
@@ -177,7 +180,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
   XioMessenger *msgr = static_cast<XioMessenger*>(get_messenger());
   ceph_msg_header header;
   ceph_msg_footer footer;
-  buffer::list payload, middle, data;
+  ceph::buffer::list payload, middle, data;
 
   struct timeval t1, t2;
 
@@ -189,7 +192,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
 
   treq = *msg_iter;
   XioMsgHdr hdr(header, footer,
-		buffer::create_static(treq->in.header.iov_len,
+		ceph::buffer::create_static(treq->in.header.iov_len,
 				    (char*) treq->in.header.iov_base));
 
   uint_to_timeval(t1, treq->timestamp);
@@ -199,7 +202,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
   }
 
   struct xio_iovec_ex *msg_iov, *iovs;
-  buffer::ptr bp;
+  ceph::buffer::ptr bp;
   unsigned int ix, blen, iov_len, msg_off = 0;
   uint32_t take_len, left_len = 0;
 
@@ -211,7 +214,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
     iovs = vmsg_sglist(&treq->in);
     for (; blen && (ix < iov_len); ++ix) {
       msg_iov = &iovs[ix];
-      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
+      bp = ceph::buffer::ptr(ceph::buffer::ptr_to_raw(msg_iov->user_context));
       /* XXX need to detect any buffer which needs to be
        * split due to coalescing of a segment (front, middle,
        * data) boundary */
@@ -221,7 +224,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
       else {
 	// XXXX this means we need to deal with disposing bp when
 	// consumed?  I think no.
-	payload.append(buffer::ptr(bp, msg_off, take_len));
+	payload.append(ceph::buffer::ptr(bp, msg_off, take_len));
       }
       blen -= take_len;
       if (! blen) {
@@ -253,7 +256,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
     iovs = vmsg_sglist(&treq->in);
     for (; blen && (ix < iov_len); ++ix) {
       msg_iov = &iovs[ix];
-      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
+      bp = ceph::buffer::ptr(ceph::buffer::ptr_to_raw(msg_iov->user_context));
       /* XXX need to detect any buffer which needs to be
        * split due to coalescing of a segment (front, middle,
        * data) boundary */
@@ -263,7 +266,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
       else {
 	// XXXX this means we need to deal with disposing bp when
 	// consumed?
-	middle.append(buffer::ptr(bp, msg_off, take_len));
+	middle.append(ceph::buffer::ptr(bp, msg_off, take_len));
       }
       blen -= take_len;
       if (! blen) {
@@ -295,7 +298,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
     iovs = vmsg_sglist(&treq->in);
     for (; blen && (ix < iov_len); ++ix) {
       msg_iov = &iovs[ix];
-      bp = buffer::ptr(buffer::ptr_to_raw(msg_iov->user_context));
+      bp = ceph::buffer::ptr(ceph::buffer::ptr_to_raw(msg_iov->user_context));
       /* XXX need to detect any buffer which needs to be
        * split due to coalescing of a segment (front, middle,
        * data) boundary */
@@ -305,7 +308,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
       else {
 	// XXXX this means we need to deal with disposing bp when
 	// consumed?
-	data.append(buffer::ptr(bp, msg_off, take_len));
+	data.append(ceph::buffer::ptr(bp, msg_off, take_len));
       }
       blen -= take_len;
       if (! blen) {

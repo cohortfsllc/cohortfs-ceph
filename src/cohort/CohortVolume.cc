@@ -347,7 +347,7 @@ void CohortVolume::make_stripes(uint64_t off, unsigned len,
 				  bufferlist &blin,
 				  vector<writestripe> &stripes)
 {
-  buffer::list::iterator i(&blin);
+  ceph::buffer::list::iterator i(&blin);
   size_t stripe;
   uint64_t thislen;
   len = min(len, blin.length());
@@ -586,7 +586,7 @@ public:
 	    assert(real_len <= len);
 	  }
 	  rval = real_len;
-	} catch (buffer::end_of_buffer &e) {
+	} catch (ceph::buffer::end_of_buffer &e) {
 	  puts("This ought not happen.");
 	}
       }
@@ -698,7 +698,7 @@ struct C_MultiStat : public Context {
 	  if (pmtime)
 	    *pmtime = max(*pmtime, m);
 	  foundone = true;
-	} catch (buffer::end_of_buffer &e) { }
+	} catch (ceph::buffer::end_of_buffer &e) { }
       }
       fin->complete(foundone ? 0 : -ENOENT);
       delete this;

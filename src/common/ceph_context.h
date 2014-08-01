@@ -55,7 +55,9 @@ public:
   // ref count!
 private:
   ~CephContext();
+
   std::atomic<uint64_t> nref;
+
 public:
   CephContext *get() {
     ++nref;

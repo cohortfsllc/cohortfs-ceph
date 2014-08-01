@@ -125,7 +125,7 @@ int main(int argc, const char **argv)
       try {
 	osdmap.decode(bl);
       }
-      catch (const buffer::error &e) {
+      catch (const ceph::buffer::error &e) {
 	cerr << me << ": error decoding osdmap '" << fn << "'" << std::endl;
 	return -1;
       }

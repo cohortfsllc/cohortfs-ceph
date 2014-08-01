@@ -62,7 +62,7 @@ struct Page : public RefCountedObject {
   }
 #endif
   void encode(bufferlist &bl) const {
-    bl.append(buffer::copy(data, PageSize));
+    bl.append(ceph::buffer::copy(data, PageSize));
     ::encode(offset, bl);
   }
   void decode(bufferlist::iterator &p) {

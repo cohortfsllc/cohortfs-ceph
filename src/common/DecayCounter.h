@@ -53,7 +53,7 @@ public:
 
   void encode(bufferlist& bl) const;
   void decode(const utime_t &t, bufferlist::iterator& p);
-  void dump(Formatter *f) const;
+  void dump(ceph::Formatter *f) const;
   static void generate_test_instances(std::list<DecayCounter*>& ls);
 
   DecayCounter(const utime_t &now)

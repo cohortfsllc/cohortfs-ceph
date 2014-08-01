@@ -9,6 +9,7 @@
 
 #include "boost/assign.hpp"
 #include "erasure.h"
+#include <linux/types.h> // __le64, &c, drat!
 
 using namespace boost::assign;
 

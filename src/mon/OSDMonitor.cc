@@ -47,10 +47,17 @@
 #include "include/str_list.h"
 #include "include/str_map.h"
 #include "cohort/CohortVolume.h"
+#include "erasure-code/ErasureCodePlugin.h"
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, mon, osdmap)
+
+using ceph::Formatter;
+using ceph::JSONFormatter;
+using ceph::new_formatter;
+using ceph::ErasureCodePluginRegistry;
+
 static ostream& _prefix(std::ostream *_dout, Monitor *mon, OSDMap& osdmap) {
   return *_dout << "mon." << mon->name << "@" << mon->rank
 		<< "(" << mon->get_state_name()
@@ -368,7 +375,7 @@ int OSDMonitor::dump_osd_metadata(int osd, Formatter *f, ostream *err)
     bufferlist::iterator p = bl.begin();
     ::decode(m, p);
   }
-  catch (buffer::error& e) {
+  catch (ceph::buffer::error& e) {
     if (err)
       *err << "osd." << osd << " metadata is corrupt";
     return -EIO;

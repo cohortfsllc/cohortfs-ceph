@@ -26,6 +26,8 @@
 #include "rgw_cors.h"
 
 using namespace std;
+using ceph::Formatter;
+using ceph::XMLFormatter;
 
 class RGWCORSRule_S3 : public RGWCORSRule, public XMLObj
 {

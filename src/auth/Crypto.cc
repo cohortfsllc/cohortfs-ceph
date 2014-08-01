@@ -221,7 +221,7 @@ int CryptoAES::create(bufferptr& secret)
   int r = get_random_bytes(AES_KEY_LEN, bl);
   if (r < 0)
     return r;
-  secret = buffer::ptr(bl.c_str(), bl.length());
+  secret = ceph::buffer::ptr(bl.c_str(), bl.length());
   return 0;
 }
 
@@ -234,8 +234,8 @@ int CryptoAES::validate_secret(bufferptr& secret)
   return 0;
 }
 
-void CryptoAES::encrypt(const bufferptr& secret, const bufferlist& in, bufferlist& out,
-			std::string &error) const
+void CryptoAES::encrypt(const bufferptr& secret, const bufferlist& in,
+			bufferlist& out, std::string &error) const
 {
   if (secret.length() < AES_KEY_LEN) {
     error = "key is too short";
@@ -246,8 +246,10 @@ void CryptoAES::encrypt(const bufferptr& secret, const bufferlist& in, bufferlis
     const unsigned char *key = (const unsigned char *)secret.c_str();
 
     string ciphertext;
-    CryptoPP::AES::Encryption aesEncryption(key, CryptoPP::AES::DEFAULT_KEYLENGTH);
-    CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption( aesEncryption, (const byte*)CEPH_AES_IV );
+    CryptoPP::AES::Encryption aesEncryption(key,
+					    CryptoPP::AES::DEFAULT_KEYLENGTH);
+    CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption(
+	aesEncryption, (const byte*)CEPH_AES_IV );
     CryptoPP::StringSink *sink = new CryptoPP::StringSink(ciphertext);
     CryptoPP::StreamTransformationFilter stfEncryptor(cbcEncryption, sink);
 
@@ -279,8 +281,10 @@ void CryptoAES::decrypt(const bufferptr& secret, const bufferlist& in,
 #ifdef USE_CRYPTOPP
   const unsigned char *key = (const unsigned char *)secret.c_str();
 
-  CryptoPP::AES::Decryption aesDecryption(key, CryptoPP::AES::DEFAULT_KEYLENGTH);
-  CryptoPP::CBC_Mode_ExternalCipher::Decryption cbcDecryption( aesDecryption, (const byte*)CEPH_AES_IV );
+  CryptoPP::AES::Decryption aesDecryption(key,
+					  CryptoPP::AES::DEFAULT_KEYLENGTH);
+  CryptoPP::CBC_Mode_ExternalCipher::Decryption cbcDecryption(
+      aesDecryption, (const byte*)CEPH_AES_IV );
 
   string decryptedtext;
   CryptoPP::StringSink *sink = new CryptoPP::StringSink(decryptedtext);
@@ -318,7 +322,8 @@ int CryptoKey::set_secret(CephContext *cct, int type, bufferptr& s)
 
   CryptoHandler *h = cct->get_crypto_handler(type);
   if (!h) {
-    lderr(cct) << "ERROR: cct->get_crypto_handler(type=" << type << ") returned NULL" << dendl;
+    lderr(cct) << "ERROR: cct->get_crypto_handler(type=" << type
+	       << ") returned NULL" << dendl;
     return -EOPNOTSUPP;
   }
   int ret = h->validate_secret(s);
@@ -338,13 +343,15 @@ int CryptoKey::create(CephContext *cct, int t)
 
   CryptoHandler *h = cct->get_crypto_handler(type);
   if (!h) {
-    lderr(cct) << "ERROR: cct->get_crypto_handler(type=" << type << ") returned NULL" << dendl;
+    lderr(cct) << "ERROR: cct->get_crypto_handler(type=" << type
+	       << ") returned NULL" << dendl;
     return -EOPNOTSUPP;
   }
   return h->create(secret);
 }
 
-void CryptoKey::encrypt(CephContext *cct, const bufferlist& in, bufferlist& out, std::string &error) const
+void CryptoKey::encrypt(CephContext *cct, const bufferlist& in,
+			bufferlist& out, std::string &error) const
 {
   if (!ch || ch->get_type() != type) {
     ch = cct->get_crypto_handler(type);
@@ -357,7 +364,8 @@ void CryptoKey::encrypt(CephContext *cct, const bufferlist& in, bufferlist& out,
   ch->encrypt(this->secret, in, out, error);
 }
 
-void CryptoKey::decrypt(CephContext *cct, const bufferlist& in, bufferlist& out, std::string &error) const
+void CryptoKey::decrypt(CephContext *cct, const bufferlist& in,
+			bufferlist& out, std::string &error) const
 {
   if (!ch || ch->get_type() != type) {
     ch = cct->get_crypto_handler(type);

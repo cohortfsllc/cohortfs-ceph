@@ -122,6 +122,9 @@ e 12v
 
 #include "MonitorDBStore.h"
 
+using ceph::Formatter;
+using ceph::JSONFormatter;
+
 class Monitor;
 class MMonPaxos;
 class Paxos;

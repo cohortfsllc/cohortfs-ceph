@@ -117,7 +117,7 @@ public:
     ::decode(_type, bl);
     ::decode(_num, bl);
   }
-  void dump(Formatter *f) const;
+  void dump(ceph::Formatter *f) const;
 
   static void generate_test_instances(std::list<entity_name_t*>& o);
 };
@@ -343,7 +343,7 @@ struct entity_addr_t {
     ::decode(addr, bl);
   }
 
-  void dump(Formatter *f) const;
+  void dump(ceph::Formatter *f) const;
 
   static void generate_test_instances(std::list<entity_addr_t*>& o);
 };

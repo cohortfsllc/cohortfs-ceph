@@ -121,7 +121,7 @@ int main(int argc, const char **argv)
 
   cout << "concurrent = " << concurrent << std::endl;
 
-  buffer::ptr bp(bytes);
+  ceph::buffer::ptr bp(bytes);
   bp.zero();
   bufferlist bl;
   bl.push_back(bp);

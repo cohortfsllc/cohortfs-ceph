@@ -360,7 +360,6 @@ void object_stat_collection_t::generate_test_instances(list<object_stat_collecti
   }
 }
 
-
 // -- vol_info_t --
 
 void vol_info_t::encode(bufferlist &bl) const

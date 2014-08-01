@@ -30,6 +30,7 @@
 #include <gtest/gtest.h>
 
 using std::cout;
+using namespace ceph;
 
 class ThrottleTest : public ::testing::Test {
 protected:

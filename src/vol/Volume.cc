@@ -130,12 +130,12 @@ VolumeRef Volume::decode_volume(bufferlist::iterator& bl)
 
   ::decode(v, bl);
   if (v != 0) {
-    throw buffer::malformed_input("Bad version.");
+    throw ceph::buffer::malformed_input("Bad version.");
   }
 
   ::decode(t, bl);
   if (t < 0 || t >= NotAVolType || factories[t] == NULL)
-    throw buffer::malformed_input("Bad (or unimplemented) volume type.");
+    throw ceph::buffer::malformed_input("Bad (or unimplemented) volume type.");
 
   return factories[t](bl, v, t);
 }

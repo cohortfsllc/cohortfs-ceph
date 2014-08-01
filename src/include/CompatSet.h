@@ -19,6 +19,8 @@
 
 #include "common/Formatter.h"
 
+using ceph::Formatter;
+
 struct CompatSet {
 
   struct Feature {
