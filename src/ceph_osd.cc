@@ -446,12 +446,14 @@ int main(int argc, const char **argv)
   ms_hb_front_server->set_policy(entity_name_t::TYPE_OSD,
 				 Messenger::Policy::stateless_server(0, 0));
 
+#if defined(HAVE_XIO)
   ms_xio_hb_cl->set_policy(entity_name_t::TYPE_OSD,
 			   Messenger::Policy::lossy_client(0, 0));
   ms_xio_hb_fs->set_policy(entity_name_t::TYPE_OSD,
 			   Messenger::Policy::stateless_server(0, 0));
   ms_xio_hb_bs->set_policy(entity_name_t::TYPE_OSD,
 			   Messenger::Policy::stateless_server(0, 0));
+#endif
 
   ms_objecter->set_default_policy(Messenger::Policy::lossy_client(0, CEPH_FEATURE_OSDREPLYMUX));
 
@@ -562,7 +564,6 @@ int main(int argc, const char **argv)
 		  &mc,
 		  g_conf->osd_data,
 		  g_conf->osd_journal);
-  }
 #endif
 
   int err = osd->pre_init();
