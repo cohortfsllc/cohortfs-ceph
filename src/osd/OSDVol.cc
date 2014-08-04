@@ -143,7 +143,9 @@ struct C_Vol_ActivateCommitted : public Context {
   C_Vol_ActivateCommitted(OSDVol *v, epoch_t e)
     : vol(v), epoch(e) {}
   void finish(int r) {
+    vol->lock();
     vol->_activate_committed(epoch);
+    vol->unlock();
   }
 };
 
@@ -641,9 +643,11 @@ struct OnReadComplete : public Context {
     OSDVol *vol,
     OSDVol::OpContext *ctx) : vol(vol), opcontext(ctx) {}
   void finish(int r) {
+    vol->lock();
     if (r < 0)
       opcontext->async_read_result = r;
     opcontext->finish_read(vol);
+    vol->unlock();
   }
   ~OnReadComplete() {}
 };
@@ -2605,7 +2609,9 @@ public:
   C_OSD_MutationApplied(OSDVol *vol, OSDVol::Mutation *mutation)
   : vol(vol), mutation(mutation) {}
   void finish(int) {
+    vol->lock();
     vol->mutations_all_applied(mutation.get());
+    vol->unlock();
   }
 };
 
@@ -2631,7 +2637,9 @@ public:
   C_OSD_MutationCommit(OSDVol *vol, OSDVol::Mutation *mutation)
     : vol(vol), mutation(mutation) {}
   void finish(int) {
+    vol->lock();
     vol->mutations_all_committed(mutation.get());
+    vol->unlock();
   }
 };
 
