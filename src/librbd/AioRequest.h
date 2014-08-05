@@ -90,7 +90,7 @@ namespace librbd {
 	     const ceph::bufferlist &data,
 	     Context *completion)
       : AbstractWrite(ictx, oid,
-		      data.length(), object_off,
+		      object_off, data.length(),
 		      completion, false),
 	m_write_data(data) { }
     virtual ~AioWrite() {}
