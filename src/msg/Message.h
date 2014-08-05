@@ -164,8 +164,12 @@
 #define MSG_TIMECHECK             0x600
 #define MSG_MON_HEALTH            0x601
 
-// Xio Testing
-#define MSG_DATA_PING		  0x602
+// Xio
+#define MSG_DATA_PING		  0x602 // test ping
+
+// Session startup
+#define MSG_CONNECT               0x603
+#define MSG_CONNECT_REPLY         0x604
 
 // *** Message::encode() crcflags bits.
 #define MSG_CRC_DATA		1
