@@ -942,7 +942,22 @@ int librados::IoCtx::aio_write(const std::string& oid, librados::AioCompletion *
   return io_ctx_impl->aio_write(oid, c->pc, bl, len, off);
 }
 
-int librados::IoCtx::aio_append(const std::string& oid, librados::AioCompletion *c,
+int librados::IoCtx::aio_trunc(const std::string& oid,
+			       AioCompletion *c,
+			       size_t size)
+{
+  return io_ctx_impl->aio_trunc(oid, c->pc, size);
+}
+
+int librados::IoCtx::aio_zero(const std::string& oid,
+			      librados::AioCompletion *c,
+			      size_t len, uint64_t off)
+{
+  return io_ctx_impl->aio_zero(oid, c->pc, len, off);
+}
+
+int librados::IoCtx::aio_append(const std::string& oid,
+				librados::AioCompletion *c,
 				const bufferlist& bl, size_t len)
 {
   return io_ctx_impl->aio_append(oid, c->pc, bl, len);

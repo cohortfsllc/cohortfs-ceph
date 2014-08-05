@@ -422,6 +422,42 @@ int librados::IoCtxImpl::aio_write(const object_t &oid, AioCompletionImpl *c,
   return 0;
 }
 
+int librados::IoCtxImpl::aio_zero(const object_t &oid, AioCompletionImpl *c,
+				  size_t len, uint64_t off)
+{
+  utime_t ut = ceph_clock_now(client->cct);
+  ldout(client->cct, 20) << "aio_write " << oid << " " << off << "~"
+			 << len << dendl;
+
+  c->io = this;
+  queue_aio_write(c);
+
+  Context *onack = new C_aio_Ack(c);
+  Context *onsafe = new C_aio_Safe(c);
+
+  Mutex::Locker l(*lock);
+  volume->zero(oid, off, len, ut, 0, onack, onsafe, objecter);
+
+  return 0;
+}
+
+int librados::IoCtxImpl::aio_trunc(const object_t &oid, AioCompletionImpl *c,
+				   size_t size)
+{
+  utime_t ut = ceph_clock_now(client->cct);
+  ldout(client->cct, 20) << "aio_trunc " << oid << " " << size << dendl;
+
+  c->io = this;
+  queue_aio_write(c);
+
+  Context *onack = new C_aio_Ack(c);
+  Context *onsafe = new C_aio_Safe(c);
+
+  Mutex::Locker l(*lock);
+  volume->trunc(oid, ut, 0, size, 0, onack, onsafe, objecter);
+  return 0;
+}
+
 int librados::IoCtxImpl::aio_append(const object_t &oid, AioCompletionImpl *c,
 				    const bufferlist& bl, size_t len)
 {

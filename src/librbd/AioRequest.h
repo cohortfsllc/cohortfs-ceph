@@ -80,10 +80,7 @@ namespace librbd {
 		  bool hide_enoent);
     virtual ~AbstractWrite() {}
     virtual bool should_complete(int r);
-    virtual int send();
-
-  protected:
-    librados::ObjectWriteOperation m_write;
+    virtual int send() = 0;
   };
 
   class AioWrite : public AbstractWrite {
@@ -95,13 +92,11 @@ namespace librbd {
       : AbstractWrite(ictx, oid,
 		      data.length(), object_off,
 		      completion, false),
-	m_write_data(data) {
-      add_write_ops(m_write);
-    }
+	m_write_data(data) { }
     virtual ~AioWrite() {}
+    virtual int send();
 
   private:
-    void add_write_ops(librados::ObjectWriteOperation &wr);
     ceph::bufferlist m_write_data;
   };
 
@@ -112,10 +107,9 @@ namespace librbd {
       : AbstractWrite(ictx, oid,
 		      0, 0,
 		      completion,
-		      true) {
-      m_write.remove();
-    }
+		      true) { }
     virtual ~AioRemove() {}
+    virtual int send();
   };
 
   class AioTruncate : public AbstractWrite {
@@ -125,11 +119,9 @@ namespace librbd {
       : AbstractWrite(ictx, oid,
 		      off, 0,
 		      completion,
-		      true) {
-      m_write.truncate(off);
-    }
+		      true) { }
     virtual ~AioTruncate() {}
-
+    virtual int send();
   };
 
   class AioZero : public AbstractWrite {
@@ -140,10 +132,9 @@ namespace librbd {
       : AbstractWrite(ictx, oid,
 		      object_off, object_len,
 		      completion,
-		      true) {
-      m_write.zero(object_off, object_len);
-    }
+		      true) { }
     virtual ~AioZero() {}
+    virtual int send();
   };
 
 }

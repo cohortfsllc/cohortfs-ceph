@@ -455,6 +455,9 @@ namespace librados
 			size_t len, uint64_t off);
     int aio_write(const std::string& oid, AioCompletion *c, const bufferlist& bl,
 		  size_t len, uint64_t off);
+    int aio_trunc(const std::string& oid, AioCompletion *c, size_t size);
+    int aio_zero(const std::string& oid, AioCompletion *c,
+		 size_t len, uint64_t off);
     int aio_append(const std::string& oid, AioCompletion *c, const bufferlist& bl,
 		  size_t len);
     int aio_write_full(const std::string& oid, AioCompletion *c, const bufferlist& bl);

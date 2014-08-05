@@ -136,6 +136,9 @@ struct librados::IoCtxImpl {
 		      size_t len, uint64_t off);
   int aio_write(const object_t &oid, AioCompletionImpl *c,
 		const bufferlist& bl, size_t len, uint64_t off);
+  int aio_zero(const object_t &oid, AioCompletionImpl *c,
+	       size_t len, uint64_t off);
+  int aio_trunc(const object_t &oid, AioCompletionImpl *c, size_t size);
   int aio_append(const object_t &oid, AioCompletionImpl *c,
 		 const bufferlist& bl, size_t len);
   int aio_write_full(const object_t &oid, AioCompletionImpl *c,

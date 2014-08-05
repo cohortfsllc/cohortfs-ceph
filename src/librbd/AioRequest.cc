@@ -77,19 +77,47 @@ namespace librbd {
     return true;
   }
 
-  int AbstractWrite::send() {
+  int AioWrite::send() {
     ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " " << m_off
 			   << "~" << m_len << dendl;
     librados::AioCompletion *rados_completion =
       librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
     int r;
-    assert(m_write.size());
-    r = m_ioctx->aio_operate(m_oid, rados_completion, &m_write);
+    r = m_ioctx->aio_write(m_oid, rados_completion, m_write_data, m_len,
+			   m_off);
     rados_completion->release();
     return r;
   }
 
-  void AioWrite::add_write_ops(librados::ObjectWriteOperation &wr) {
-    wr.write(m_off, m_write_data);
+  int AioRemove::send() {
+    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << dendl;
+    librados::AioCompletion *rados_completion =
+      librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
+    int r;
+    r = m_ioctx->aio_remove(m_oid, rados_completion);
+    rados_completion->release();
+    return r;
+  }
+
+  int AioTruncate::send() {
+    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " "
+			   << m_len << dendl;
+    librados::AioCompletion *rados_completion =
+      librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
+    int r;
+    r = m_ioctx->aio_trunc(m_oid, rados_completion, m_len);
+    rados_completion->release();
+    return r;
+  }
+
+  int AioZero::send() {
+    ldout(m_ictx->cct, 20) << "send " << this << " " << m_oid << " " << m_off
+			   << "~" << m_len << dendl;
+    librados::AioCompletion *rados_completion =
+      librados::Rados::aio_create_completion(this, NULL, rados_req_cb);
+    int r;
+    r = m_ioctx->aio_zero(m_oid, rados_completion, m_len, m_off);
+    rados_completion->release();
+    return r;
   }
 }
