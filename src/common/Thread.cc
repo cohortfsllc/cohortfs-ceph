@@ -17,10 +17,7 @@
 #include "common/debug.h"
 #include "common/signal.h"
 #include "common/config.h"
-
-#ifdef HAVE_CDS
-#include <cds/init.h>  //cds::Initialize и cds::Terminate
-#endif
+#include "global/CDS_Env.h"
 
 #include <dirent.h>
 #include <errno.h>

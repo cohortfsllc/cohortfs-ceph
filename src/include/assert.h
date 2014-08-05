@@ -133,8 +133,16 @@ using namespace ceph;
 #undef __ASSERT_FUNCTION
 #define __ASSERT_FUNCTION
 
+// libcds headers depend on assert() arguments not being evaluated in NDEBUG
+#if defined(NDEBUG) && defined(CDS_ASSERT_OVERRIDE)
+
+#define assert(expr) (__CEPH_ASSERT_VOID_CAST (0))
+
+#else
+
 #define assert(expr)							\
   ((expr)								\
    ? __CEPH_ASSERT_VOID_CAST (0)					\
    : __ceph_assert_fail (__STRING(expr), __FILE__, __LINE__, __CEPH_ASSERT_FUNCTION))
 
+#endif

@@ -5,9 +5,14 @@
 
 #ifdef HAVE_CDS
 
+// ceph assert() breaks cds headers in release configurations
+#define CDS_ASSERT_OVERRIDE
+
 #include <cds/init.h>  //cds::Initialize и cds::Terminate
 #include <cds/gc/hp.h> //cds::gc::HP (Hazard Pointer)
 #include <cds/intrusive/skip_list_hp.h> //cds intrusive skip lists
+
+#undef CDS_ASSERT_OVERRIDE
 
 class CDS_Env {
     cds::gc::HP hpGC;
