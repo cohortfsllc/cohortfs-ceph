@@ -17,40 +17,40 @@
 #define CEPH_MSG_CONNECT_H
 
 #include "msg/Message.h"
+#include "msg/msg_types.h"
 
 /*
  * A family of messages designed to formalize Ceph transport session
  * negotiation for XioMessenger, but potentially re-usable.
  */
 class MConnect : public Message {
- public:
-
+public:
   static const int HEAD_VERSION = 1;
   static const int COMPAT_VERSION = 1;
 
-  std::string banner   /* ceph banner */
-  __le64 features;     /* supported feature bits */
-  __le32 host_type;    /* CEPH_ENTITY_TYPE_* */
-  __le32 global_seq;   /* count connections initiated by this host */
-  __le32 connect_seq;  /* count connections initiated in this session */
-  __le32 protocol_version;
-  __le32 authorizer_protocol;
-  __le32 authorizer_len;
+  std::string banner;   /* ceph banner */
+  uint64_t features;     /* supported feature bits */
+  __u32 host_type;    /* CEPH_ENTITY_TYPE_* */
+  __u32 global_seq;   /* count connections initiated by this host */
+  __u32 connect_seq;  /* count connections initiated in this session */
+  __u32 protocol_version;
+  __u32 authorizer_protocol;
+  __u32 authorizer_len;
 
   entity_addr_t addr;
-  struct ceph_entity_name name;
-  __le64 last_in_seq;
-  __le64 last_out_seq;
-  __le32 reply_code; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
-  __le32 flags;          /* CEPH_MSG_CONNECT_* */
+  entity_name_t name;
+  uint64_t last_in_seq;
+  uint64_t last_out_seq;
+  __u32 reply_code; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
+  __u32 flags;          /* CEPH_MSG_CONNECT_* */
 
   MConnect()
-    : Message(MSG_AUTHNEGO_1, HEAD_VERSION, COMPAT_VERSION)
+    : Message(MSG_CONNECT, HEAD_VERSION, COMPAT_VERSION)
   {}
 
   ~MConnect() {}
 
-  void encode_payload(uint64_t _features) {
+void encode_payload(uint64_t _features) {
     ::encode(CEPH_BANNER, payload);
     ::encode(features, payload);
     ::encode(host_type, payload);
@@ -63,7 +63,7 @@ class MConnect : public Message {
     ::encode(name, payload);
     ::encode(last_in_seq, payload);
     ::encode(last_out_seq, payload);
-    ::encode(reply_code, p);
+    ::encode(reply_code, payload);
     ::encode(flags, payload);
   }
 
@@ -88,7 +88,7 @@ class MConnect : public Message {
   const char *get_type_name() const { return "MConnect"; }
 
   void print(ostream& out) const {
-    out << get_type_name() << " " << counter;
+    out << get_type_name() << " ";
   }
 }; /* MConnect */
 
@@ -99,24 +99,24 @@ class MConnectReply : public Message {
   static const int HEAD_VERSION = 1;
   static const int COMPAT_VERSION = 1;
 
-  std::string banner   /* ceph banner */
-  __le64 features;     /* supported feature bits */
-  __le32 host_type;    /* CEPH_ENTITY_TYPE_* */
-  __le32 global_seq;   /* count connections initiated by this host */
-  __le32 connect_seq;  /* count connections initiated in this session */
-  __le32 protocol_version;
-  __le32 authorizer_protocol;
-  __le32 authorizer_len;
+  std::string banner;   /* ceph banner */
+  uint64_t features;     /* supported feature bits */
+  __u32 host_type;    /* CEPH_ENTITY_TYPE_* */
+  __u32 global_seq;   /* count connections initiated by this host */
+  __u32 connect_seq;  /* count connections initiated in this session */
+  __u32 protocol_version;
+  __u32 authorizer_protocol;
+  __u32 authorizer_len;
 
   entity_addr_t addr;
-  struct ceph_entity_name name;
-  __le64 last_in_seq;
-  __le64 last_out_seq;
-  __le32 reply_code; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
-  __le32 flags;          /* CEPH_MSG_CONNECT_* */
+  entity_name_t name;
+  uint64_t last_in_seq;
+  uint64_t last_out_seq;
+  __u32 reply_code; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
+  __u32 flags;          /* CEPH_MSG_CONNECT_* */
 
   MConnectReply()
-    : Message(MSG_AUTHNEGO_1, HEAD_VERSION, COMPAT_VERSION)
+    : Message(MSG_CONNECT_REPLY, HEAD_VERSION, COMPAT_VERSION)
   {}
 
   ~MConnectReply() {}
@@ -134,7 +134,7 @@ class MConnectReply : public Message {
     ::encode(name, payload);
     ::encode(last_in_seq, payload);
     ::encode(last_out_seq, payload);
-    ::encode(reply_code, p);
+    ::encode(reply_code, payload);
     ::encode(flags, payload);
   }
 
@@ -159,7 +159,7 @@ class MConnectReply : public Message {
   const char *get_type_name() const { return "MConnect"; }
 
   void print(ostream& out) const {
-    out << get_type_name() << " " << counter;
+    out << get_type_name() << " ";
   }
 }; /* MConnectReply */
 

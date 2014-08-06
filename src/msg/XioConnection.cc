@@ -16,6 +16,7 @@
 #include "XioMsg.h"
 #include "XioConnection.h"
 #include "XioMessenger.h"
+#include "ConnectHelper.h"
 #include "messages/MDataPing.h"
 
 #include "auth/none/AuthNoneProtocol.h" // XXX
@@ -346,6 +347,11 @@ int XioConnection::on_msg_req(struct xio_session *session,
     m->set_recv_stamp(t1);
     m->set_recv_complete_stamp(t2);
     m->set_seq(header.seq);
+
+    /* handle connect negotiation */
+    uint64_t cstate = state.state.read();
+    if (unlikely(cstate == lifecycle::CONNECTING))
+      return ConnectHelper::next_state(this, m);
 
     /* MP-SAFE */
     state.set_in_seq(header.seq);

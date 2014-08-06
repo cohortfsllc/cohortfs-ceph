@@ -56,13 +56,20 @@ private:
   struct lifecycle {
     // different from Pipe states?
     enum lf_state {
-      INIT,
-      LOCAL_DISCON,
-      REMOTE_DISCON,
+      INIT = 0,
       CONNECTING,
       UP,
+      LOCAL_DISCON,
+      REMOTE_DISCON,
       DEAD
-    } state;
+    };
+
+    enum connect_state {
+      START = 0,
+      
+    };
+
+    atomic_t state;
 
     /* XXX */
     uint32_t reconnects;
