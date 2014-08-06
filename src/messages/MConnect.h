@@ -46,11 +46,11 @@ public:
 
   MConnect()
     : Message(MSG_CONNECT, HEAD_VERSION, COMPAT_VERSION)
-  {}
+    {}
 
   ~MConnect() {}
 
-void encode_payload(uint64_t _features) {
+  void encode_payload(uint64_t _features) {
     ::encode(CEPH_BANNER, payload);
     ::encode(features, payload);
     ::encode(host_type, payload);
@@ -94,7 +94,7 @@ void encode_payload(uint64_t _features) {
 
 
 class MConnectReply : public Message {
- public:
+public:
 
   static const int HEAD_VERSION = 1;
   static const int COMPAT_VERSION = 1;
@@ -117,7 +117,7 @@ class MConnectReply : public Message {
 
   MConnectReply()
     : Message(MSG_CONNECT_REPLY, HEAD_VERSION, COMPAT_VERSION)
-  {}
+    {}
 
   ~MConnectReply() {}
 
