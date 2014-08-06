@@ -59,9 +59,10 @@ private:
       INIT,
       LOCAL_DISCON,
       REMOTE_DISCON,
-      RECONNECTING,
+      CONNECTING,
       UP,
-      DEAD } state;
+      DEAD
+    } state;
 
     /* XXX */
     uint32_t reconnects;

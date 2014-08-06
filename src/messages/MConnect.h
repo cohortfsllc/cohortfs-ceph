@@ -28,6 +28,7 @@ class MConnect : public Message {
   static const int HEAD_VERSION = 1;
   static const int COMPAT_VERSION = 1;
 
+  std::string banner   /* ceph banner */
   __le64 features;     /* supported feature bits */
   __le32 host_type;    /* CEPH_ENTITY_TYPE_* */
   __le32 global_seq;   /* count connections initiated by this host */
@@ -50,6 +51,7 @@ class MConnect : public Message {
   ~MConnect() {}
 
   void encode_payload(uint64_t _features) {
+    ::encode(CEPH_BANNER, payload);
     ::encode(features, payload);
     ::encode(host_type, payload);
     ::encode(global_seq, payload);
@@ -67,6 +69,7 @@ class MConnect : public Message {
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
+    ::decode(banner, p);
     ::decode(features, p);
     ::decode(host_type, p);
     ::decode(global_seq, p);
@@ -96,6 +99,7 @@ class MConnectReply : public Message {
   static const int HEAD_VERSION = 1;
   static const int COMPAT_VERSION = 1;
 
+  std::string banner   /* ceph banner */
   __le64 features;     /* supported feature bits */
   __le32 host_type;    /* CEPH_ENTITY_TYPE_* */
   __le32 global_seq;   /* count connections initiated by this host */
@@ -118,6 +122,7 @@ class MConnectReply : public Message {
   ~MConnectReply() {}
 
   void encode_payload(uint64_t _features) {
+    ::encode(CEPH_BANNER, payload);
     ::encode(features, payload);
     ::encode(host_type, payload);
     ::encode(global_seq, payload);
@@ -135,6 +140,7 @@ class MConnectReply : public Message {
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
+    ::decode(banner, p);
     ::decode(features, p);
     ::decode(host_type, p);
     ::decode(global_seq, p);
