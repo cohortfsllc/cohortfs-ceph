@@ -714,6 +714,8 @@ if(${WITH_RBD})
       LINK_FLAGS "-Wl,-export-dynamic")
   endif(${ENABLE_SHARED})
   install(TARGETS librados librbd DESTINATION lib)
+  install(FILES include/rbd/librbd.h include/rbd/librbd.hpp
+    DESTINATION include/rbd)
   set(rbd_srcs rbd.cc common/TextTable.cc)
   set(rbd_mountcephfs_files common/secret.c)
   add_library(rbd_mountcephfs_objs OBJECT ${rbd_mountcephfs_files})
