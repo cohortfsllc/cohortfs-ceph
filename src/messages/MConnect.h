@@ -29,6 +29,7 @@ public:
   static const int COMPAT_VERSION = 1;
 
   std::string banner;   /* ceph banner */
+  __u32 tag; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
   uint64_t features;     /* supported feature bits */
   __u32 host_type;    /* CEPH_ENTITY_TYPE_* */
   __u32 global_seq;   /* count connections initiated by this host */
@@ -41,7 +42,6 @@ public:
   entity_name_t name;
   uint64_t last_in_seq;
   uint64_t last_out_seq;
-  __u32 reply_code; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
   __u32 flags;          /* CEPH_MSG_CONNECT_* */
 
   MConnect()
@@ -52,6 +52,7 @@ public:
 
   void encode_payload(uint64_t _features) {
     ::encode(CEPH_BANNER, payload);
+    ::encode(tag, payload);
     ::encode(features, payload);
     ::encode(host_type, payload);
     ::encode(global_seq, payload);
@@ -63,13 +64,13 @@ public:
     ::encode(name, payload);
     ::encode(last_in_seq, payload);
     ::encode(last_out_seq, payload);
-    ::encode(reply_code, payload);
     ::encode(flags, payload);
   }
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(banner, p);
+    ::decode(tag, p);
     ::decode(features, p);
     ::decode(host_type, p);
     ::decode(global_seq, p);
@@ -81,7 +82,6 @@ public:
     ::decode(name, p);
     ::decode(last_in_seq, p);
     ::decode(last_out_seq, p);
-    ::decode(reply_code, p);
     ::decode(flags, p);
   }
 
@@ -100,6 +100,7 @@ public:
   static const int COMPAT_VERSION = 1;
 
   std::string banner;   /* ceph banner */
+  __u32 tag; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
   uint64_t features;     /* supported feature bits */
   __u32 host_type;    /* CEPH_ENTITY_TYPE_* */
   __u32 global_seq;   /* count connections initiated by this host */
@@ -112,7 +113,6 @@ public:
   entity_name_t name;
   uint64_t last_in_seq;
   uint64_t last_out_seq;
-  __u32 reply_code; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
   __u32 flags;          /* CEPH_MSG_CONNECT_* */
 
   MConnectReply()
@@ -123,6 +123,7 @@ public:
 
   void encode_payload(uint64_t _features) {
     ::encode(CEPH_BANNER, payload);
+    ::encode(tag, payload);
     ::encode(features, payload);
     ::encode(host_type, payload);
     ::encode(global_seq, payload);
@@ -134,13 +135,13 @@ public:
     ::encode(name, payload);
     ::encode(last_in_seq, payload);
     ::encode(last_out_seq, payload);
-    ::encode(reply_code, payload);
     ::encode(flags, payload);
   }
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(banner, p);
+    ::decode(tag, p);
     ::decode(features, p);
     ::decode(host_type, p);
     ::decode(global_seq, p);
@@ -152,7 +153,6 @@ public:
     ::decode(name, p);
     ::decode(last_in_seq, p);
     ::decode(last_out_seq, p);
-    ::decode(reply_code, p);
     ::decode(flags, p);
   }
 
