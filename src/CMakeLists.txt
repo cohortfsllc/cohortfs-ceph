@@ -175,6 +175,7 @@ set(libcommon_files
   msg/Pipe.cc
   msg/PipeConnection.cc
   msg/SimpleMessenger.cc
+  msg/DirectMessenger.cc
   msg/msg_types.cc
   common/hobject.cc
   osd/OSDMap.cc
