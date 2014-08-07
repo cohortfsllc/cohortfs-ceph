@@ -29,20 +29,13 @@ public:
   static const int COMPAT_VERSION = 1;
 
   std::string banner;   /* ceph banner */
-  __u32 tag; // Ceph Messenger tag (e.g., CEPH_MSGR_TAG_FEATURES)
-  uint64_t features;     /* supported feature bits */
-  __u32 host_type;    /* CEPH_ENTITY_TYPE_* */
-  __u32 global_seq;   /* count connections initiated by this host */
-  __u32 connect_seq;  /* count connections initiated in this session */
-  __u32 protocol_version;
-  __u32 authorizer_protocol;
-  __u32 authorizer_len;
-
   entity_addr_t addr;
   entity_name_t name;
+  __u32 flags;
+  __u32 global_seq;   /* count connections initiated by this host */
+  __u32 connect_seq;  /* count connections initiated in this session */
   uint64_t last_in_seq;
   uint64_t last_out_seq;
-  __u32 flags;          /* CEPH_MSG_CONNECT_* */
 
   MConnect()
     : Message(MSG_CONNECT, HEAD_VERSION, COMPAT_VERSION)
@@ -52,37 +45,25 @@ public:
 
   void encode_payload(uint64_t _features) {
     ::encode(CEPH_BANNER, payload);
-    ::encode(tag, payload);
-    ::encode(features, payload);
-    ::encode(host_type, payload);
-    ::encode(global_seq, payload);
-    ::encode(connect_seq, payload);
-    ::encode(protocol_version, payload);
-    ::encode(authorizer_protocol, payload);
-    ::encode(authorizer_len, payload);
     ::encode(addr, payload);
     ::encode(name, payload);
+    ::encode(flags, payload);
+    ::encode(global_seq, payload);
+    ::encode(connect_seq, payload);
     ::encode(last_in_seq, payload);
     ::encode(last_out_seq, payload);
-    ::encode(flags, payload);
   }
 
   void decode_payload() {
     bufferlist::iterator p = payload.begin();
     ::decode(banner, p);
-    ::decode(tag, p);
-    ::decode(features, p);
-    ::decode(host_type, p);
-    ::decode(global_seq, p);
-    ::decode(connect_seq, p);
-    ::decode(protocol_version, p);
-    ::decode(authorizer_protocol, p);
-    ::decode(authorizer_len, p);
     ::decode(addr, p);
     ::decode(name, p);
+    ::decode(flags, p);
+    ::decode(global_seq, p);
+    ::decode(connect_seq, p);
     ::decode(last_in_seq, p);
     ::decode(last_out_seq, p);
-    ::decode(flags, p);
   }
 
   const char *get_type_name() const { return "MConnect"; }

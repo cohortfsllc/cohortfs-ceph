@@ -25,6 +25,7 @@ extern "C" {
 #include "Connection.h"
 #include "Messenger.h"
 #include "include/atomic.h"
+#include "messages/MConnect.h"
 
 #define XIO_ALL_FEATURES (CEPH_FEATURES_ALL & \
 			  ~CEPH_FEATURE_MSGR_KEEPALIVE2)
@@ -63,8 +64,7 @@ private:
       INIT = 0,
       CONNECTING,
       UP,
-      LOCAL_DISCON,
-      REMOTE_DISCON
+      DISCONNECTED
     };
 
     enum session_startup_states {
@@ -107,11 +107,9 @@ private:
       return out_seq.inc();
     };
 
-    int next_state(Message* m) {
-
-
-      return 0;
-    }
+    // state machine
+    int init_state();
+    int next_state(Message* m);
 
   } cstate; /* ConnectHelper */
 
