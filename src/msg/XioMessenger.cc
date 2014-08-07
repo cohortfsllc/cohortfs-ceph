@@ -287,8 +287,8 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
 #define XMSG_MEMPOOL_MAX 4096
 
       xio_msgr_noreg_mpool =
-	xio_mempool_create_ex(-1 /* nodeid */,
-			      XIO_MEMPOOL_FLAG_REGULAR_PAGES_ALLOC);
+	xio_mempool_create(-1 /* nodeid */,
+			   XIO_MEMPOOL_FLAG_REGULAR_PAGES_ALLOC);
 
       (void) xio_mempool_add_allocator(xio_msgr_noreg_mpool, 64, 15,
 				       XMSG_MEMPOOL_MAX, XMSG_MEMPOOL_MIN);
@@ -425,10 +425,10 @@ int XioMessenger::session_event(struct xio_session *session,
 
     (void) xio_query_connection(conn, &xcona,
 				XIO_CONNECTION_ATTR_CTX|
-				XIO_CONNECTION_ATTR_SRC_ADDR);
+				XIO_CONNECTION_ATTR_PEER_ADDR);
     /* XXX assumes RDMA */
     (void) entity_addr_from_sockaddr(&s_inst.addr,
-				     (struct sockaddr *) &xcona.src_addr);
+				     (struct sockaddr *) &xcona.peer_addr);
 
     if (port_shift)
       s_inst.addr.set_port(s_inst.addr.get_port()-port_shift);
@@ -623,7 +623,7 @@ xio_place_buffers(buffer::list& bl, XioMsg *xmsg, struct xio_msg*& req,
 
     if (unlikely(msg_off >= XIO_MSGR_IOVLEN || req_size >= MAX_XIO_BUF_SIZE)) {
       /* finish this request */
-      req->out.data_iovlen = msg_off;
+      req->out.pdata_iov.nents = msg_off;
       req->more_in_batch = 1;
       /* advance to next, and write in it if it's not the last one. */
       if (++req_off >= ex_cnt) {
@@ -631,7 +631,7 @@ xio_place_buffers(buffer::list& bl, XioMsg *xmsg, struct xio_msg*& req,
 	msg_iov = NULL;
       } else {
 	req = &xmsg->req_arr[req_off].msg;
-	msg_iov = req->out.pdata_iov;
+	msg_iov = req->out.pdata_iov.sglist;
       }
       msg_off = 0;
       req_size = 0;
@@ -803,7 +803,7 @@ int XioMessenger::send_message_impl(Message *m, XioConnection *xcon)
   }
 
   struct xio_msg *req = &xmsg->req_0.msg;
-  struct xio_iovec_ex *msg_iov = req->out.pdata_iov;
+  struct xio_iovec_ex *msg_iov = req->out.pdata_iov.sglist;
 
   if (magic & (MSG_MAGIC_XIO)) {
     dout(4) << "payload: " << payload.buffers().size() <<
@@ -835,7 +835,7 @@ int XioMessenger::send_message_impl(Message *m, XioConnection *xcon)
 
   /* finalize request */
   if (msg_off)
-    req->out.data_iovlen = msg_off;
+    req->out.pdata_iov.nents = msg_off;
 
   /* fixup first msg */
   req = &xmsg->req_0.msg;
