@@ -195,9 +195,9 @@ bool ceph_argparse_double_dash(std::vector<const char*> &args,
 }
 
 bool ceph_argparse_flag(std::vector<const char*> &args,
-	std::vector<const char*>::iterator &i, ...)
+			std::vector<const char*>::iterator *i, ...)
 {
-  const char *first = *i;
+  const char *first = **i;
   char tmp[strlen(first)+1];
   dashes_to_underscores(first, tmp);
   first = tmp;
@@ -213,7 +213,7 @@ bool ceph_argparse_flag(std::vector<const char*> &args,
     char a2[strlen(a)+1];
     dashes_to_underscores(a, a2);
     if (strcmp(a2, first) == 0) {
-      i = args.erase(i);
+      *i = args.erase(*i);
       va_end(ap);
       return true;
     }
@@ -410,7 +410,7 @@ CephInitParameters ceph_argparse_early_args
        * argument parses will still need to see it. */
       break;
     }
-    else if (ceph_argparse_flag(args, i, "--version", "-v", (char*)NULL)) {
+    else if (ceph_argparse_flag(args, &i, "--version", "-v", (char*)NULL)) {
       cout << pretty_version_to_str() << std::endl;
       _exit(0);
     }
@@ -435,7 +435,7 @@ CephInitParameters ceph_argparse_early_args
 	_exit(1);
       }
     }
-    else if (ceph_argparse_flag(args, i, "--show_args", (char*)NULL)) {
+    else if (ceph_argparse_flag(args, &i, "--show_args", (char*)NULL)) {
       cout << "args: ";
       for (std::vector<const char *>::iterator ci = orig_args.begin(); ci != orig_args.end(); ++ci) {
         if (ci != orig_args.begin())

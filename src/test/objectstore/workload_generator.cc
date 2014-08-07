@@ -181,9 +181,9 @@ void WorkloadGenerator::init_args(vector<const char*> args)
     } else if (ceph_argparse_witharg(args, i, &val,
         "--test-show-stats-period", (char*) NULL)) {
       m_stats_show_secs = strtoll(val.c_str(), NULL, 10);
-    } else if (ceph_argparse_flag(args, i, "--test-show-stats", (char*) NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--test-show-stats", (char*) NULL)) {
       m_do_stats = true;
-    } else if (ceph_argparse_flag(args, i, "--help", (char*) NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--help", (char*) NULL)) {
       usage();
       exit(0);
     }

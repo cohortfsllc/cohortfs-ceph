@@ -974,7 +974,7 @@ int main(int argc, const char **argv)
 	      CINIT_FLAG_UNPRIVILEGED_DAEMON_DEFAULTS);
 
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ++i) {
-    if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage();
       return 0;
     }

@@ -781,7 +781,7 @@ int main(int argc, const char *argv[])
 		  << err << std::endl;
 	exit(1);
       }
-    } else if (ceph_argparse_flag(args, i, "--help", (char*) NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--help", (char*) NULL)) {
       usage();
       exit(0);
     } else {

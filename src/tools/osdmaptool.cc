@@ -68,13 +68,13 @@ int main(int argc, const char **argv)
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
-    } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage();
-    } else if (ceph_argparse_flag(args, i, "-p", "--print", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-p", "--print", (char*)NULL)) {
       print = true;
-    } else if (ceph_argparse_flag(args, i, "--dump-json", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--dump-json", (char*)NULL)) {
       print_json = true;
-    } else if (ceph_argparse_flag(args, i, "--tree", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--tree", (char*)NULL)) {
       tree = true;
     } else if (ceph_argparse_withint(args, i, &num_osd, &err, "--createsimple", (char*)NULL)) {
       if (!err.str().empty()) {
@@ -82,11 +82,11 @@ int main(int argc, const char **argv)
 	exit(EXIT_FAILURE);
       }
       createsimple = true;
-    } else if (ceph_argparse_flag(args, i, "--create-from-conf", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--create-from-conf", (char*)NULL)) {
       create_from_conf = true;
-    } else if (ceph_argparse_flag(args, i, "--mark-up-in", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--mark-up-in", (char*)NULL)) {
       mark_up_in = true;
-    } else if (ceph_argparse_flag(args, i, "--clobber", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--clobber", (char*)NULL)) {
       clobber = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--export_crush", (char*)NULL)) {
       export_crush = val;

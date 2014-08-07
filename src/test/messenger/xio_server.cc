@@ -65,8 +65,8 @@ int main(int argc, const char **argv)
 	  } else if (ceph_argparse_witharg(args, arg_iter, &val, "--port",
 				    (char*) NULL)) {
 	    port = val;
-	  }  else if (ceph_argparse_flag(args, arg_iter, "--dfast",
-					   (char*) NULL)) {
+	  }  else if (ceph_argparse_flag(args, &arg_iter, "--dfast",
+					 (char*) NULL)) {
 	    dfast = true;
 	  } else {
 	    ++arg_iter;

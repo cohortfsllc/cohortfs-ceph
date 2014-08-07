@@ -61,7 +61,7 @@ TEST(CephArgParse, SimpleArgParse) {
   for (std::vector<const char*>::iterator i = bar5.arr.begin();
        i != bar5.arr.end(); )
   {
-      if (ceph_argparse_flag(bar5.arr, i, "--foo", (char*)NULL)) {
+      if (ceph_argparse_flag(bar5.arr, &i, "--foo", (char*)NULL)) {
 	found_foo = true;
       }
       else if (ceph_argparse_witharg(bar5.arr, i, &found_bar, "--bar", (char*)NULL)) {
@@ -78,7 +78,7 @@ TEST(CephArgParse, SimpleArgParse) {
   for (std::vector<const char*>::iterator i = foo.arr.begin();
        i != foo.arr.end(); )
   {
-      if (ceph_argparse_flag(foo.arr, i, "--foo", (char*)NULL)) {
+      if (ceph_argparse_flag(foo.arr, &i, "--foo", (char*)NULL)) {
 	found_foo = true;
       }
       else if (ceph_argparse_witharg(foo.arr, i, &found_bar, "--bar", (char*)NULL)) {
@@ -95,7 +95,7 @@ TEST(CephArgParse, SimpleArgParse) {
   for (std::vector<const char*>::iterator i = none.arr.begin();
        i != none.arr.end(); )
   {
-      if (ceph_argparse_flag(none.arr, i, "--foo", (char*)NULL)) {
+      if (ceph_argparse_flag(none.arr, &i, "--foo", (char*)NULL)) {
 	found_foo = true;
       }
       else if (ceph_argparse_witharg(none.arr, i, &found_bar, "--bar", (char*)NULL)) {
@@ -148,7 +148,7 @@ TEST(CephArgParse, WithDashesAndUnderscores) {
   for (std::vector<const char*>::iterator i = bazstuff1.arr.begin();
        i != bazstuff1.arr.end(); )
   {
-      if (ceph_argparse_flag(bazstuff1.arr, i, "--baz-stuff", (char*)NULL)) {
+      if (ceph_argparse_flag(bazstuff1.arr, &i, "--baz-stuff", (char*)NULL)) {
 	found_baz = "true";
       }
       else
@@ -162,7 +162,7 @@ TEST(CephArgParse, WithDashesAndUnderscores) {
   for (std::vector<const char*>::iterator i = bazstuff2.arr.begin();
        i != bazstuff2.arr.end(); )
   {
-      if (ceph_argparse_flag(bazstuff2.arr, i, "--baz-stuff", (char*)NULL)) {
+      if (ceph_argparse_flag(bazstuff2.arr, &i, "--baz-stuff", (char*)NULL)) {
 	found_baz = "true";
       }
       else
@@ -228,7 +228,7 @@ TEST(CephArgParse, WithDashesAndUnderscores) {
   for (std::vector<const char*>::iterator i = none1.arr.begin();
        i != none1.arr.end(); )
   {
-      if (ceph_argparse_flag(none1.arr, i, "--baz-stuff", (char*)NULL)) {
+      if (ceph_argparse_flag(none1.arr, &i, "--baz-stuff", (char*)NULL)) {
 	found_baz = "true";
       }
       else if (ceph_argparse_witharg(none1.arr, i, &found_baz, "--baz-stuff", (char*)NULL)) {
@@ -244,7 +244,7 @@ TEST(CephArgParse, WithDashesAndUnderscores) {
   for (std::vector<const char*>::iterator i = none2.arr.begin();
        i != none2.arr.end(); )
   {
-      if (ceph_argparse_flag(none2.arr, i, "--baz-stuff", (char*)NULL)) {
+      if (ceph_argparse_flag(none2.arr, &i, "--baz-stuff", (char*)NULL)) {
 	found_baz = "true";
       }
       else if (ceph_argparse_witharg(none2.arr, i, &found_baz, "--baz-stuff", (char*)NULL)) {
@@ -260,7 +260,7 @@ TEST(CephArgParse, WithDashesAndUnderscores) {
   for (std::vector<const char*>::iterator i = none3.arr.begin();
        i != none3.arr.end(); )
   {
-      if (ceph_argparse_flag(none3.arr, i, "--baz-stuff", (char*)NULL)) {
+      if (ceph_argparse_flag(none3.arr, &i, "--baz-stuff", (char*)NULL)) {
 	found_baz = "true";
       }
       else if (ceph_argparse_witharg(none3.arr, i, &found_baz, "--baz-stuff", (char*)NULL)) {

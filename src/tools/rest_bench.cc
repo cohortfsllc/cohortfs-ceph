@@ -685,12 +685,12 @@ int main(int argc, const char **argv)
   for (i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
-    } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage(cout);
       exit(0);
-    } else if (ceph_argparse_flag(args, i, "--show-time", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--show-time", (char*)NULL)) {
       show_time = true;
-    } else if (ceph_argparse_flag(args, i, "--no-cleanup", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--no-cleanup", (char*)NULL)) {
       cleanup = false;
     } else if (ceph_argparse_witharg(args, i, &user_agent, "--agent", (char*)NULL)) {
       /* nothing */

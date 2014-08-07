@@ -230,7 +230,7 @@ int main(int argc, const char *argv[])
     } else if (ceph_argparse_witharg(args, i, &val,
         "--test-status-file", (char*) NULL)) {
       status_file = val;
-    } else if (ceph_argparse_flag(args, i, "--help", (char*) NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--help", (char*) NULL)) {
       usage(our_name);
       exit(0);
     } else {

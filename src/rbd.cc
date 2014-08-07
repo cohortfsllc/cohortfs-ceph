@@ -1536,7 +1536,7 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--secret", (char*)NULL)) {
       int r = g_conf->set_val("keyfile", val.c_str());
       assert(r == 0);
-    } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage();
       return 0;
     } else if (ceph_argparse_witharg(args, i, &val, "--vol", (char*)NULL)) {
@@ -1544,7 +1544,7 @@ int main(int argc, const char **argv)
     } else if (ceph_argparse_witharg(args, i, &val, "--format", (char*)NULL)) {
       output_format = strdup(val.c_str());
       output_format_specified = true;
-    } else if (ceph_argparse_flag(args, i, &val, "--pretty-format", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, &val, "--pretty-format", (char*)NULL)) {
       pretty_format = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--dest-vol", (char*)NULL)) {
       dest_volname = strdup(val.c_str());
@@ -1562,7 +1562,7 @@ int main(int argc, const char **argv)
       size = sizell << 20;   // bytes to MB
       size_set = true;
 #if 0
-    } else if (ceph_argparse_flag(args, i, "-l", "--long", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-l", "--long", (char*)NULL)) {
       lflag = true;
 #endif
     } else if (ceph_argparse_withlonglong(args, i, &bench_io_size, &err, "--io-size", (char*)NULL)) {
@@ -1575,7 +1575,7 @@ int main(int argc, const char **argv)
       destname = strdup(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--shared", (char *)NULL)) {
       lock_tag = strdup(val.c_str());
-    } else if (ceph_argparse_flag(args, i, "--no-settle", (char *)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--no-settle", (char *)NULL)) {
       udevadm_settle = false;
     } else if (ceph_argparse_witharg(args, i, &val, "-o", "--options", (char*)NULL)) {
       char *map_options = strdup(val.c_str());
@@ -1583,12 +1583,12 @@ int main(int argc, const char **argv)
         cerr << "rbd: couldn't parse map options" << std::endl;
         return EXIT_FAILURE;
       }
-    } else if (ceph_argparse_flag(args, i, "--read-only", (char *)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--read-only", (char *)NULL)) {
       // --read-only is equivalent to -o ro
       put_map_option("rw", "ro");
-    } else if (ceph_argparse_flag(args, i, "--no-progress", (char *)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--no-progress", (char *)NULL)) {
       progress = false;
-    } else if (ceph_argparse_flag(args, i , "--allow-shrink", (char *)NULL)) {
+    } else if (ceph_argparse_flag(args, &i , "--allow-shrink", (char *)NULL)) {
       resize_allow_shrink = true;
     }  else {
       ++i;

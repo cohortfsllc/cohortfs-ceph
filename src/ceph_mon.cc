@@ -211,7 +211,7 @@ int main(int argc, const char **argv)
 	 i != args_copy.end(); ) {
       if (ceph_argparse_double_dash(args_copy, i)) {
 	break;
-      } else if (ceph_argparse_flag(args_copy, i, "--mkfs", (char*)NULL)) {
+      } else if (ceph_argparse_flag(args_copy, &i, "--mkfs", (char*)NULL)) {
 	flags |= CINIT_FLAG_NO_DAEMON_ACTIONS;
       } else if (ceph_argparse_witharg(args_copy, i, &val, "--inject_monmap", (char*)NULL)) {
 	flags |= CINIT_FLAG_NO_DAEMON_ACTIONS;
@@ -231,16 +231,16 @@ int main(int argc, const char **argv)
        i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
-    } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage();
       exit(0);
-    } else if (ceph_argparse_flag(args, i, "--mkfs", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--mkfs", (char*)NULL)) {
       mkfs = true;
-    } else if (ceph_argparse_flag(args, i, "--compact", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--compact", (char*)NULL)) {
       compact = true;
-    } else if (ceph_argparse_flag(args, i, "--force-sync", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--force-sync", (char*)NULL)) {
       force_sync = true;
-    } else if (ceph_argparse_flag(args, i, "--yes-i-really-mean-it",
+    } else if (ceph_argparse_flag(args, &i, "--yes-i-really-mean-it",
 				  (char*)NULL)) {
       yes_really = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--osdmap", (char*)NULL)) {

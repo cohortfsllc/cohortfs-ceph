@@ -171,7 +171,7 @@ int main(int argc, const char *argv[])
 		    repeats = atoi(val.c_str());
 		} else if (ceph_argparse_witharg(args, i, &val, "--threads", (char*)NULL)) {
 		    n_threads = atoi(val.c_str());
-		} else if (ceph_argparse_flag(args, i, "--huge-pages", (char*)NULL)) {
+		} else if (ceph_argparse_flag(args, &i, "--huge-pages", (char*)NULL)) {
 		    huge_pages = true;
 		} else {
 			derr << "Error: can't understand argument: " << *i <<

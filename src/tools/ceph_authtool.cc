@@ -78,13 +78,13 @@ int main(int argc, const char **argv)
     std::string val;
     if (ceph_argparse_double_dash(args, i)) {
       break;
-    } else if (ceph_argparse_flag(args, i, "-g", "--gen-key", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-g", "--gen-key", (char*)NULL)) {
       gen_key = true;
-    } else if (ceph_argparse_flag(args, i, "--gen-print-key", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--gen-print-key", (char*)NULL)) {
       gen_print_key = true;
     } else if (ceph_argparse_witharg(args, i, &val, "-a", "--add-key", (char*)NULL)) {
       add_key = val;
-    } else if (ceph_argparse_flag(args, i, &val, "-l", "--list", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, &val, "-l", "--list", (char*)NULL)) {
       list = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--caps", (char*)NULL)) {
       caps_fn = val;
@@ -97,9 +97,9 @@ int main(int argc, const char **argv)
       std::string my_val = *i;
       ++i;
       ::encode(my_val, caps[my_key]);
-    } else if (ceph_argparse_flag(args, i, "-p", "--print-key", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-p", "--print-key", (char*)NULL)) {
       print_key = true;
-    } else if (ceph_argparse_flag(args, i, "-C", "--create-keyring", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-C", "--create-keyring", (char*)NULL)) {
       create_keyring = true;
     } else if (ceph_argparse_witharg(args, i, &val, "--import-keyring", (char*)NULL)) {
       import_keyring = val;

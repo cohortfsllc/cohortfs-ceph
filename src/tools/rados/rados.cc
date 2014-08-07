@@ -1734,18 +1734,18 @@ int main(int argc, const char **argv)
   for (i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
-    } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage(cout);
       exit(0);
-    } else if (ceph_argparse_flag(args, i, "-f", "--force", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-f", "--force", (char*)NULL)) {
       opts["force"] = "true";
-    } else if (ceph_argparse_flag(args, i, "-d", "--delete-after", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-d", "--delete-after", (char*)NULL)) {
       opts["delete-after"] = "true";
-    } else if (ceph_argparse_flag(args, i, "--pretty-format", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--pretty-format", (char*)NULL)) {
       opts["pretty-format"] = "true";
-    } else if (ceph_argparse_flag(args, i, "--show-time", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--show-time", (char*)NULL)) {
       opts["show-time"] = "true";
-    } else if (ceph_argparse_flag(args, i, "--no-cleanup", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--no-cleanup", (char*)NULL)) {
       opts["no-cleanup"] = "true";
     } else if (ceph_argparse_witharg(args, i, &val, "--run-name", (char*)NULL)) {
       opts["run-name"] = val;
@@ -1797,7 +1797,7 @@ int main(int argc, const char **argv)
       opts["lock-type"] = val;
     } else if (ceph_argparse_witharg(args, i, &val, "-N", "--namespace", (char*)NULL)) {
       opts["namespace"] = val;
-    } else if (ceph_argparse_flag(args, i, "-x", "--xio", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-x", "--xio", (char*)NULL)) {
       opts["xio"] = "true";
     } else {
       if (val[0] == '-')

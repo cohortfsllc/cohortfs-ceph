@@ -209,7 +209,7 @@ int main(int argc, const char *argv[])
       repeats = atoi(val.c_str());
     } else if (ceph_argparse_witharg(args, i, &val, "--threads", (char*)NULL)) {
       n_threads = atoi(val.c_str());
-    } else if (ceph_argparse_flag(args, i, "--multi-object", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--multi-object", (char*)NULL)) {
       multi_object = true;
     } else {
       derr << "Error: can't understand argument: " << *i <<

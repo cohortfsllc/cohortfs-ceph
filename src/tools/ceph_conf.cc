@@ -172,14 +172,14 @@ int main(int argc, const char **argv)
       break;
     } else if (ceph_argparse_witharg(args, i, &val, "-s", "--section", (char*)NULL)) {
       sections.push_back(val);
-    } else if (ceph_argparse_flag(args, i, "-r", "--resolve_search", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-r", "--resolve_search", (char*)NULL)) {
       resolve_search = true;
-    } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       action = "help";
     } else if (ceph_argparse_witharg(args, i, &val, "--lookup", (char*)NULL)) {
       action = "lookup";
       lookup_key = val;
-    } else if (ceph_argparse_flag(args, i, "-L", "--list_all_sections", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-L", "--list_all_sections", (char*)NULL)) {
       action = "list-sections";
       section_list_prefix = "";
     } else if (ceph_argparse_witharg(args, i, &val, "-l", "--list_sections", (char*)NULL)) {

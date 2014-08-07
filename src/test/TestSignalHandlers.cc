@@ -77,11 +77,11 @@ int main(int argc, const char **argv)
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
-    } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage();
-    } else if (ceph_argparse_flag(args, i, "--infinite_recursion", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--infinite_recursion", (char*)NULL)) {
       fn = infinite_recursion_test;
-    } else if (ceph_argparse_flag(args, i, "-s", "--simple_segv", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-s", "--simple_segv", (char*)NULL)) {
       fn = simple_segv_test;
     } else {
       cerr << "Garbage at end of command line." << std::endl;

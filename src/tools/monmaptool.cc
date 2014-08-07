@@ -58,19 +58,19 @@ int main(int argc, const char **argv)
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
       break;
-    } else if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-h", "--help", (char*)NULL)) {
       usage();
-    } else if (ceph_argparse_flag(args, i, "-p", "--print", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "-p", "--print", (char*)NULL)) {
       print = true;
-    } else if (ceph_argparse_flag(args, i, "--create", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--create", (char*)NULL)) {
       create = true;
-    } else if (ceph_argparse_flag(args, i, "--clobber", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--clobber", (char*)NULL)) {
       clobber = true;
-    } else if (ceph_argparse_flag(args, i, "--generate", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--generate", (char*)NULL)) {
       generate = true;
-    } else if (ceph_argparse_flag(args, i, "--set-initial-members", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--set-initial-members", (char*)NULL)) {
       filter = true;
-    } else if (ceph_argparse_flag(args, i, "--add", (char*)NULL)) {
+    } else if (ceph_argparse_flag(args, &i, "--add", (char*)NULL)) {
       string name = *i;
       i = args.erase(i);
       if (i == args.end())
