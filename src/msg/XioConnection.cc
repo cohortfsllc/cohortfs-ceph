@@ -16,7 +16,6 @@
 #include "XioMsg.h"
 #include "XioConnection.h"
 #include "XioMessenger.h"
-#include "ConnectHelper.h"
 #include "messages/MDataPing.h"
 
 #include "auth/none/AuthNoneProtocol.h" // XXX
@@ -89,7 +88,8 @@ XioConnection::XioConnection(XioMessenger *m, XioConnection::type _type,
   session(NULL),
   conn(NULL),
   magic(m->get_magic()),
-  in_seq()
+  in_seq(),
+  cstate(this)
 {
   pthread_spin_init(&sp, PTHREAD_PROCESS_PRIVATE);
   if (xio_conn_type == XioConnection::ACTIVE)
@@ -349,12 +349,11 @@ int XioConnection::on_msg_req(struct xio_session *session,
     m->set_seq(header.seq);
 
     /* handle connect negotiation */
-    uint64_t cstate = state.state.read();
-    if (unlikely(cstate == lifecycle::CONNECTING))
-      return ConnectHelper::next_state(this, m);
+    if (unlikely(cstate.get_session_state() == ConnectHelper::CONNECTING))
+      return cstate.next_state(m);
 
     /* MP-SAFE */
-    state.set_in_seq(header.seq);
+    cstate.set_in_seq(header.seq);
 
     /* XXXX validate peer type */
     if (peer_type != (int) hdr.peer_type) { /* XXX isn't peer_type -1? */

@@ -53,31 +53,51 @@ private:
   uint32_t magic;
   uint32_t special_handling;
 
-  struct lifecycle {
-    // different from Pipe states?
-    enum lf_state {
+  /* batching */
+  XioInSeq in_seq;
+
+  class ConnectHelper
+  {
+  public:
+    enum session_states {
       INIT = 0,
       CONNECTING,
       UP,
       LOCAL_DISCON,
-      REMOTE_DISCON,
-      DEAD
+      REMOTE_DISCON
     };
 
-    enum connect_state {
-      START = 0,
-      
+    enum session_startup_states {
+      IDLE = 0,
+      START,
+      EXCHANGE_ID,
+      AUTHORIZING,
+      FAILED,
+      READY
     };
 
-    atomic_t state;
+    uint64_t features;
+    AuthAuthorizer *authorizer;
+    XioConnection *xcon;
 
-    /* XXX */
+    atomic_t session_state;
+    atomic_t startup_state;
+
     uint32_t reconnects;
     uint32_t connect_seq, peer_global_seq;
     uint32_t in_seq, out_seq_acked; // atomic<uint64_t>, got receipt
     atomic_t out_seq; // atomic<uint32_t>
 
-    lifecycle() : state(lifecycle::INIT), in_seq(0), out_seq(0) {}
+    ConnectHelper(XioConnection* _xcon)
+      : xcon(_xcon),
+	session_state(INIT),
+	startup_state(IDLE),
+	in_seq(0),
+	out_seq(0) {}
+
+    uint64_t get_session_state() {
+      return session_state.read();
+    }
 
     void set_in_seq(uint32_t seq) {
       in_seq = seq;
@@ -87,10 +107,13 @@ private:
       return out_seq.inc();
     };
 
-  } state;
+    int next_state(Message* m) {
 
-  /* batching */
-  XioInSeq in_seq;
+
+      return 0;
+    }
+
+  } cstate; /* ConnectHelper */
 
   // conns_entity_map comparison functor
   struct EntityComp

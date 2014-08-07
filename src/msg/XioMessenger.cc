@@ -664,7 +664,7 @@ int XioMessenger::send_message(Message *m, Connection *con)
 
   int code = 0;
 
-  m->set_seq(xcon->state.next_out_seq());
+  m->set_seq(xcon->cstate.next_out_seq());
   m->set_magic(magic); // trace flag
   m->set_special_handling(special_handling);
 
