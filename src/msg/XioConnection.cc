@@ -87,6 +87,7 @@ XioConnection::XioConnection(XioMessenger *m, XioConnection::type _type,
   peer(_peer),
   session(NULL),
   conn(NULL),
+  mtx("XioConnection"),
   magic(m->get_magic()),
   in_seq(),
   cstate(this)

@@ -659,8 +659,12 @@ int XioMessenger::send_message(Message *m, Connection *con)
   }
 
   XioConnection *xcon = static_cast<XioConnection*>(con);
+#if 0
+  /* XXXX needs put() */
   if (! xcon->is_connected())
     return ENOTCONN;
+#else
+#endif
 
   int code = 0;
 
@@ -806,7 +810,6 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
     return cref;
   }
   else {
-    conns_sp.unlock();
     string xio_uri = xio_uri_from_entity(_dest.addr, true /* want_port */);
 
     dout(4) << "XioMessenger " << this << " get_connection: xio_uri "
@@ -821,6 +824,14 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
 
     XioConnection *xcon = new XioConnection(this, XioConnection::ACTIVE,
 					    _dest);
+    /* session_state::INIT */
+
+    /* sentinel ref */
+    xcon->get(); /* xcon->nref == 1 */
+
+    conns_list.push_back(*xcon);
+    conns_entity_map.insert(*xcon);
+    conns_sp.unlock();
 
     xcon->session = xio_session_create(XIO_SESSION_REQ, &attr, xio_uri.c_str(),
 				       0, 0, this);
@@ -834,13 +845,6 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
     xcon->conn = xio_connect(xcon->session, this->portals.get_portal0()->ctx,
 			     0, NULL, xcon);
     xcon->connected.set(true);
-
-    /* sentinel ref */
-    xcon->get(); /* xcon->nref == 1 */
-    conns_sp.lock();
-    conns_list.push_back(*xcon);
-    conns_entity_map.insert(*xcon);
-    conns_sp.unlock();
 
     return xcon->get(); /* nref +1 */
   }

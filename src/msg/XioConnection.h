@@ -48,6 +48,8 @@ private:
   entity_inst_t peer;
   struct xio_session *session;
   struct xio_connection	*conn;
+  Mutex mtx;
+  Cond cv;
   pthread_spinlock_t sp;
   atomic_t send;
   atomic_t recv;
