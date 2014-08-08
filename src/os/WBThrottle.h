@@ -17,7 +17,6 @@
 
 #include <map>
 #include <boost/tuple/tuple.hpp>
-#include "include/memory.h"
 #include "include/buffer.h"
 #include "common/Formatter.h"
 #include "common/hobject.h"

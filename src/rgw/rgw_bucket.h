@@ -304,7 +304,7 @@ class RGWDataChangesLog {
     }
   };
 
-  typedef ceph::shared_ptr<ChangeStatus> ChangeStatusPtr;
+  typedef std::shared_ptr<ChangeStatus> ChangeStatusPtr;
 
   lru_map<string, ChangeStatusPtr> changes;
 

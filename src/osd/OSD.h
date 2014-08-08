@@ -40,9 +40,6 @@
 
 #include <map>
 #include <memory>
-#include "include/memory.h"
-using namespace std;
-
 #include "include/unordered_map.h"
 #include "include/unordered_set.h"
 
@@ -71,7 +68,7 @@ class Notification;
 
 class AuthAuthorizeHandlerRegistry;
 
-typedef ceph::shared_ptr<ObjectStore::Sequencer> SequencerRef;
+typedef std::shared_ptr<ObjectStore::Sequencer> SequencerRef;
 
 class OSD;
 class OSDService {

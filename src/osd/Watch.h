@@ -15,7 +15,6 @@
 #define CEPH_WATCH_H
 
 #include <boost/intrusive_ptr.hpp>
-#include "include/memory.h"
 #include <set>
 
 #include "msg/Messenger.h"
@@ -36,12 +35,12 @@ struct ObjectContext;
 class MWatchNotify;
 
 class Watch;
-typedef ceph::shared_ptr<Watch> WatchRef;
-typedef ceph::weak_ptr<Watch> WWatchRef;
+typedef std::shared_ptr<Watch> WatchRef;
+typedef std::weak_ptr<Watch> WWatchRef;
 
 class Notify;
-typedef ceph::shared_ptr<Notify> NotifyRef;
-typedef ceph::weak_ptr<Notify> WNotifyRef;
+typedef std::shared_ptr<Notify> NotifyRef;
+typedef std::weak_ptr<Notify> WNotifyRef;
 
 struct CancelableContext;
 
@@ -152,7 +151,7 @@ class Watch {
 
   OSDService *osd;
   boost::intrusive_ptr<OSDVol> vol;
-  ceph::shared_ptr<ObjectContext> obc;
+  std::shared_ptr<ObjectContext> obc;
 
   std::map<uint64_t, NotifyRef> in_progress_notifies;
 
@@ -166,7 +165,7 @@ class Watch {
 
   Watch(
     OSDVol *vol, OSDService *osd,
-    ceph::shared_ptr<ObjectContext> obc, uint32_t timeout,
+    std::shared_ptr<ObjectContext> obc, uint32_t timeout,
     uint64_t cookie, entity_name_t entity,
     const entity_addr_t& addr);
 
@@ -187,7 +186,7 @@ public:
 
   string gen_dbg_prefix();
   static WatchRef makeWatchRef(
-    OSDVol *vol, OSDService *osd, ceph::shared_ptr<ObjectContext> obc,
+    OSDVol *vol, OSDService *osd, std::shared_ptr<ObjectContext> obc,
     uint32_t timeout, uint64_t cookie, entity_name_t entity,
     const entity_addr_t &addr);
   void set_self(WatchRef _self) {
@@ -197,7 +196,7 @@ public:
   /// Does not grant a ref count!
   boost::intrusive_ptr<OSDVol> get_vol() { return vol; }
 
-  ceph::shared_ptr<ObjectContext> get_obc() { return obc; }
+  std::shared_ptr<ObjectContext> get_obc() { return obc; }
 
   uint64_t get_cookie() const { return cookie; }
   entity_name_t get_entity() const { return entity; }

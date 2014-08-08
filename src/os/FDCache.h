@@ -61,7 +61,7 @@ public:
   ~FDCache() {
     cct->_conf->remove_observer(this);
   }
-  typedef ceph::shared_ptr<FD> FDRef;
+  typedef std::shared_ptr<FD> FDRef;
 
   FDRef lookup(const hobject_t &hoid) {
     return registry.lookup(hoid);

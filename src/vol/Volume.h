@@ -39,8 +39,8 @@ enum vol_type {
 };
 
 class Volume;
-typedef ceph::shared_ptr<Volume> VolumeRef;
-typedef ceph::shared_ptr<const Volume> VolumeCRef;
+typedef std::shared_ptr<Volume> VolumeRef;
+typedef std::shared_ptr<const Volume> VolumeCRef;
 
 class Volume
 {

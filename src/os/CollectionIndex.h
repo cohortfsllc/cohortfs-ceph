@@ -17,7 +17,6 @@
 
 #include <string>
 #include <vector>
-#include "include/memory.h"
 
 #include "osd/osd_types.h"
 #include "include/object.h"
@@ -43,14 +42,14 @@ protected:
     /// Returned path
     string full_path;
     /// Ref to parent Index
-    ceph::shared_ptr<CollectionIndex> parent_ref;
+    std::shared_ptr<CollectionIndex> parent_ref;
     /// coll_t for parent Index
     coll_t parent_coll;
 
     /// Normal Constructor
     Path(
       string path,				///< [in] Path to return.
-      ceph::weak_ptr<CollectionIndex> ref)  ///< [in] weak_ptr to parent.
+      std::weak_ptr<CollectionIndex> ref)  ///< [in] weak_ptr to parent.
       : full_path(path), parent_ref(ref), parent_coll(parent_ref->coll()) {}
 
     /// Debugging Constructor
@@ -66,13 +65,13 @@ protected:
     coll_t coll() const { return parent_coll; }
 
     /// Getter for parent
-    ceph::shared_ptr<CollectionIndex> get_index() const {
+    std::shared_ptr<CollectionIndex> get_index() const {
       return parent_ref;
     }
   };
  public:
   /// Type of returned paths
-  typedef ceph::shared_ptr<Path> IndexedPath;
+  typedef std::shared_ptr<Path> IndexedPath;
 
   static IndexedPath get_testing_path(string path, coll_t collection) {
     return IndexedPath(new Path(path, collection));
@@ -94,12 +93,12 @@ protected:
    */
   virtual coll_t coll() const = 0;
 
-  /** 
+  /**
    * For setting the internal weak_ptr to a shared_ptr to this.
    *
    * @see IndexManager
    */
-  virtual void set_ref(ceph::shared_ptr<CollectionIndex> ref) = 0;
+  virtual void set_ref(std::shared_ptr<CollectionIndex> ref) = 0;
 
   /** 
    * Initializes the index.
@@ -161,7 +160,7 @@ protected:
   virtual int split(
     uint32_t match,				//< [in] value to match
     uint32_t bits,				//< [in] bits to check
-    ceph::shared_ptr<CollectionIndex> dest  //< [in] destination index
+    std::shared_ptr<CollectionIndex> dest  //< [in] destination index
     ) { assert(0); return 0; }
 
 

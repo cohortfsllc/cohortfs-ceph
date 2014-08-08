@@ -14,7 +14,6 @@
 #ifndef OS_INDEXMANAGER_H
 #define OS_INDEXMANAGER_H
 
-#include "include/memory.h"
 #include <map>
 
 #include "common/Mutex.h"
@@ -27,7 +26,7 @@
 
 
 /// Public type for Index
-typedef ceph::shared_ptr<CollectionIndex> Index;
+typedef std::shared_ptr<CollectionIndex> Index;
 /**
  * Encapsulates mutual exclusion for CollectionIndexes.
  *
@@ -48,7 +47,7 @@ class IndexManager {
   Cond cond;  ///< Cond for waiters on col_indices
 
   /// Currently in use CollectionIndices
-  map<coll_t,ceph::weak_ptr<CollectionIndex> > col_indices;
+  map<coll_t,std::weak_ptr<CollectionIndex> > col_indices;
 
   /// Cleans up state for c @see RemoveOnDelete
   void put_index(

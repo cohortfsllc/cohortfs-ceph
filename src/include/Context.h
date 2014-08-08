@@ -21,7 +21,6 @@
 #include <set>
 #include <iostream>
 
-#include "include/memory.h"
 #include "common/dout.h"
 
 #define mydout(cct, v) lgeneric_subdout(cct, context, v)
@@ -94,7 +93,7 @@ struct RunOnDelete {
       to_run->complete(0);
   }
 };
-typedef ceph::shared_ptr<RunOnDelete> RunOnDeleteRef;
+typedef std::shared_ptr<RunOnDelete> RunOnDeleteRef;
 
 /*
  * finish and destroy a list of Contexts

@@ -25,8 +25,8 @@ class MMDSSlaveRequest;
 
 struct MutationImpl;
 struct MDRequestImpl;
-typedef ceph::shared_ptr<MutationImpl> MutationRef;
-typedef ceph::shared_ptr<MDRequestImpl> MDRequestRef;
+typedef std::shared_ptr<MutationImpl> MutationRef;
+typedef std::shared_ptr<MDRequestImpl> MDRequestRef;
 
 enum {
   l_mdss_first = 1000,

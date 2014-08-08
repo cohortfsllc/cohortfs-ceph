@@ -17,7 +17,6 @@
 #include "Object.h"
 #include "TestOpStat.h"
 #include "test/librados/test.h"
-#include "include/memory.h"
 #include "common/sharedptr_registry.hpp"
 #include "common/errno.h"
 #include "osd/HitSet.h"
@@ -931,7 +930,7 @@ public:
   ObjectDesc old_value;
   int snap;
 
-  ceph::shared_ptr<int> in_use;
+  std::shared_ptr<int> in_use;
 
   bufferlist result;
   int retval;
@@ -1343,7 +1342,7 @@ public:
   bool done;
   librados::ObjectWriteOperation op;
   librados::AioCompletion *comp;
-  ceph::shared_ptr<int> in_use;
+  std::shared_ptr<int> in_use;
 
   RollbackOp(int n,
 	     RadosTestContext *context,
@@ -1412,7 +1411,7 @@ public:
     context->update_object_version(oid, comp->get_version64());
     context->oid_in_use.erase(oid);
     context->oid_not_in_use.insert(oid);
-    in_use = ceph::shared_ptr<int>();
+    in_use = std::shared_ptr<int>();
     context->kick();
   }
 
@@ -1435,7 +1434,7 @@ public:
   librados::ObjectReadOperation rd_op;
   librados::AioCompletion *comp;
   librados::AioCompletion *comp_racing_read;
-  ceph::shared_ptr<int> in_use;
+  std::shared_ptr<int> in_use;
   int snap;
   int done;
   uint64_t version;
@@ -1700,7 +1699,7 @@ public:
   bool dirty;
   ObjectDesc old_value;
   int snap;
-  ceph::shared_ptr<int> in_use;
+  std::shared_ptr<int> in_use;
 
   IsDirtyOp(int n,
 	    RadosTestContext *context,
@@ -1795,7 +1794,7 @@ public:
   bool blocking;
   int snap;
   bool can_fail;
-  ceph::shared_ptr<int> in_use;
+  std::shared_ptr<int> in_use;
 
   CacheFlushOp(int n,
 	       RadosTestContext *context,
@@ -1904,7 +1903,7 @@ public:
   librados::AioCompletion *completion;
   librados::ObjectReadOperation op;
   string oid;
-  ceph::shared_ptr<int> in_use;
+  std::shared_ptr<int> in_use;
 
   CacheEvictOp(int n,
 	       RadosTestContext *context,

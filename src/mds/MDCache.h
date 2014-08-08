@@ -66,7 +66,7 @@ class MMDSFragmentNotify;
 class ESubtreeMap;
 
 struct MDRequestImpl;
-typedef ceph::shared_ptr<MDRequestImpl> MDRequestRef;
+typedef std::shared_ptr<MDRequestImpl> MDRequestRef;
 struct MDSlaveUpdate;
 
 

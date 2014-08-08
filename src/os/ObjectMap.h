@@ -19,7 +19,6 @@
 #include "SequencerPosition.h"
 #include <string>
 #include <vector>
-#include "include/memory.h"
 
 /**
  * Encapsulates the FileStore key value store
@@ -149,7 +148,7 @@ public:
     virtual int status() = 0;
     virtual ~ObjectMapIteratorImpl() {}
   };
-  typedef ceph::shared_ptr<ObjectMapIteratorImpl> ObjectMapIterator;
+  typedef std::shared_ptr<ObjectMapIteratorImpl> ObjectMapIterator;
   virtual ObjectMapIterator get_iterator(const hobject_t &oid) {
     return ObjectMapIterator();
   }

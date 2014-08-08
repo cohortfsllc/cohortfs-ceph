@@ -1568,7 +1568,7 @@ void MDCache::predirty_journal_parents(MutationRef mut, EMetaBlob *blob,
 
     // can cast only because i'm passing nowait=true in the sole user
     MDRequestRef mdmut =
-      ceph::static_pointer_cast<MDRequestImpl,MutationImpl>(mut);
+      std::static_pointer_cast<MDRequestImpl,MutationImpl>(mut);
     if (!stop &&
 	mut->wrlocks.count(&pin->nestlock) == 0 &&
 	(!pin->versionlock.can_wrlock() ||                   // make sure we can take versionlock, too

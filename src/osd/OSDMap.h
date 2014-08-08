@@ -40,9 +40,6 @@
 #include <list>
 #include <set>
 #include <map>
-#include "include/memory.h"
-using namespace std;
-
 #include "include/unordered_set.h"
 
 /*
@@ -200,21 +197,21 @@ private:
   } vols;
 
   struct addrs_s {
-    vector<ceph::shared_ptr<entity_addr_t> > client_addr;
-    vector<ceph::shared_ptr<entity_addr_t> > cluster_addr;
-    vector<ceph::shared_ptr<entity_addr_t> > hb_back_addr;
-    vector<ceph::shared_ptr<entity_addr_t> > hb_front_addr;
+    vector<std::shared_ptr<entity_addr_t> > client_addr;
+    vector<std::shared_ptr<entity_addr_t> > cluster_addr;
+    vector<std::shared_ptr<entity_addr_t> > hb_back_addr;
+    vector<std::shared_ptr<entity_addr_t> > hb_front_addr;
     entity_addr_t blank;
   };
-  ceph::shared_ptr<addrs_s> osd_addrs;
+  std::shared_ptr<addrs_s> osd_addrs;
 
   vector<uint32_t>   osd_weight;   // 16.16 fixed point, 0x10000 = "in", 0 = "out"
   vector<osd_info_t> osd_info;
 
-  ceph::shared_ptr< vector<uuid_d> > osd_uuid;
+  std::shared_ptr< vector<uuid_d> > osd_uuid;
   vector<osd_xinfo_t> osd_xinfo;
 
-  ceph::unordered_map<entity_addr_t,utime_t> blacklist;
+  std::unordered_map<entity_addr_t,utime_t> blacklist;
 
   bool new_blacklist_entries;
 
@@ -543,7 +540,7 @@ WRITE_CLASS_ENCODER_FEATURES(OSDMap::Incremental)
 WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_add)
 WRITE_CLASS_ENCODER(OSDMap::Incremental::vol_inc_remove)
 
-typedef ceph::shared_ptr<const OSDMap> OSDMapRef;
+typedef std::shared_ptr<const OSDMap> OSDMapRef;
 
 inline ostream& operator<<(ostream& out, const OSDMap& m) {
   m.print_oneline_summary(out);

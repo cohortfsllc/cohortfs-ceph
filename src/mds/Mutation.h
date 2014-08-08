@@ -146,7 +146,7 @@ inline ostream& operator<<(ostream& out, MutationImpl &mut)
   return out;
 }
 
-typedef ceph::shared_ptr<MutationImpl> MutationRef;
+typedef std::shared_ptr<MutationImpl> MutationRef;
 
 
 
@@ -303,7 +303,7 @@ struct MDRequestImpl : public MutationImpl {
   void print(ostream &out);
 };
 
-typedef ceph::shared_ptr<MDRequestImpl> MDRequestRef;
+typedef std::shared_ptr<MDRequestImpl> MDRequestRef;
 
 
 struct MDSlaveUpdate {

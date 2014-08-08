@@ -289,12 +289,12 @@ public:
   public:
     uint64_t pos;
     ObjectDesc &obj;
-    list<pair<list<pair<ceph::shared_ptr<ContentsGenerator>,
+    list<pair<list<pair<std::shared_ptr<ContentsGenerator>,
 			ContDesc> >::iterator,
 	      uint64_t> > stack;
     map<ContDesc,ContentsGenerator::iterator> cont_iters;
     uint64_t limit;
-    list<pair<ceph::shared_ptr<ContentsGenerator>,
+    list<pair<std::shared_ptr<ContentsGenerator>,
 	      ContDesc> >::iterator cur_cont;
     
     iterator(ObjectDesc &obj) :
@@ -361,7 +361,7 @@ public:
 
   uint64_t version;
 private:
-  list<pair<ceph::shared_ptr<ContentsGenerator>, ContDesc> > layers;
+  list<pair<std::shared_ptr<ContentsGenerator>, ContDesc> > layers;
 };
 
 #endif

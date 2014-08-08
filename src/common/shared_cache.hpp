@@ -24,8 +24,8 @@
 
 template <class K, class V>
 class SharedLRU {
-  typedef ceph::shared_ptr<V> VPtr;
-  typedef ceph::weak_ptr<V> WeakVPtr;
+  typedef std::shared_ptr<V> VPtr;
+  typedef std::weak_ptr<V> WeakVPtr;
   Mutex lock;
   size_t max_size;
   Cond cond;

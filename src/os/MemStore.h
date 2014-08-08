@@ -17,7 +17,6 @@
 #define CEPH_MEMSTORE_H
 
 #include "include/unordered_map.h"
-#include "include/memory.h"
 #include "common/Finisher.h"
 #include "common/RWLock.h"
 #include "ObjectStore.h"
@@ -85,7 +84,7 @@ public:
       f->close_section();
     }
   };
-  typedef ceph::shared_ptr<Object> ObjectRef;
+  typedef std::shared_ptr<Object> ObjectRef;
 
   struct Collection {
     ceph::unordered_map<hobject_t, ObjectRef> object_hash;  ///< for lookup
@@ -148,7 +147,7 @@ public:
 
     Collection() {}
   };
-  typedef ceph::shared_ptr<Collection> CollectionRef;
+  typedef std::shared_ptr<Collection> CollectionRef;
 
 private:
   class OmapIteratorImpl : public ObjectMap::ObjectMapIteratorImpl {

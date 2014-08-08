@@ -142,7 +142,6 @@
 
 #include <map>
 #include <set>
-#include "include/memory.h"
 #include "include/buffer.h"
 
 class CrushWrapper;
@@ -363,7 +362,7 @@ namespace ceph {
     }
   };
 
-  typedef ceph::shared_ptr<ErasureCodeInterface> ErasureCodeInterfaceRef;
+  typedef std::shared_ptr<ErasureCodeInterface> ErasureCodeInterfaceRef;
 
 }
 

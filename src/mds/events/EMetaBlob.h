@@ -215,7 +215,7 @@ public:
   private:
     mutable bufferlist dnbl;
     bool dn_decoded;
-    list<ceph::shared_ptr<fullbit> >   dfull;
+    list<std::shared_ptr<fullbit> >   dfull;
     list<remotebit> dremote;
     list<nullbit>   dnull;
 
@@ -233,7 +233,7 @@ public:
     bool is_dirty_dft() { return state & STATE_DIRTYDFT; }
     void mark_dirty_dft() { state |= STATE_DIRTYDFT; }
 
-    list<ceph::shared_ptr<fullbit> >   &get_dfull()   { return dfull; }
+    list<std::shared_ptr<fullbit> >   &get_dfull()   { return dfull; }
     list<remotebit> &get_dremote() { return dremote; }
     list<nullbit>   &get_dnull()   { return dnull; }
 
@@ -243,7 +243,7 @@ public:
 	  << " num " << nfull << "/" << nremote << "/" << nnull
 	  << std::endl;
       _decode_bits();
-      for (list<ceph::shared_ptr<fullbit> >::iterator p = dfull.begin(); p != dfull.end(); ++p)
+      for (list<std::shared_ptr<fullbit> >::iterator p = dfull.begin(); p != dfull.end(); ++p)
 	(*p)->print(out);
       for (list<remotebit>::iterator p = dremote.begin(); p != dremote.end(); ++p)
 	p->print(out);
@@ -295,7 +295,7 @@ private:
   // my lumps.  preserve the order we added them in a list.
   list<dirfrag_t>         lump_order;
   map<dirfrag_t, dirlump> lump_map;
-  list<ceph::shared_ptr<fullbit> > roots;
+  list<std::shared_ptr<fullbit> > roots;
 
   list<pair<uint8_t,version_t> > table_tids;  // tableclient transactions
 
@@ -433,7 +433,7 @@ private:
       state |= fullbit::STATE_DIRTYPARENT;
 
     lump.nfull++;
-    lump.get_dfull().push_back(ceph::shared_ptr<fullbit>(
+    lump.get_dfull().push_back(std::shared_ptr<fullbit>(
 				 new fullbit(dn->get_name(),
 					     dn->get_projected_version(),
 					     *pi, in->dirfragtree,
@@ -479,7 +479,7 @@ private:
     if (!pdft) pdft = &in->dirfragtree;
     if (!px) px = in->get_projected_xattrs();
 
-    for (list<ceph::shared_ptr<fullbit> >::iterator p
+    for (list<std::shared_ptr<fullbit> >::iterator p
 	   = roots.begin(); p != roots.end(); ++p) {
       if ((*p)->inode.ino == in->ino()) {
 	roots.erase(p);
@@ -488,7 +488,7 @@ private:
     }
 
     string empty;
-    roots.push_back(ceph::shared_ptr<fullbit>(
+    roots.push_back(std::shared_ptr<fullbit>(
 		      new fullbit(empty, 0, *pi,
 				  *pdft, *px, in->symlink,
 				  dirty ? fullbit::STATE_DIRTY : 0)));

@@ -18,7 +18,6 @@
 #include <cassert>
 #include <boost/scoped_ptr.hpp>
 #include <boost/optional.hpp>
-#include "include/memory.h"
 
 // re-include our assert to clobber boost's
 #include "include/types.h"
@@ -45,8 +44,6 @@
 #include <list>
 #include <memory>
 #include <string>
-using namespace std;
-
 #include "include/unordered_map.h"
 #include "include/unordered_set.h"
 #include "lru.h"
@@ -522,7 +519,7 @@ protected:
   void requeue_ops(list<OpRequestRef> &l);
 
   // for ordering writes
-  ceph::shared_ptr<ObjectStore::Sequencer> osr;
+  std::shared_ptr<ObjectStore::Sequencer> osr;
 
 private:
   int _delete_oid(OpContext *ctx, bool no_whiteout);

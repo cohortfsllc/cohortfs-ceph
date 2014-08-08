@@ -773,7 +773,7 @@ struct ObjectState {
 
 struct ObjectContext;
 
-typedef ceph::shared_ptr<ObjectContext> ObjectContextRef;
+typedef std::shared_ptr<ObjectContext> ObjectContextRef;
 
 struct ObjectContext {
   ObjectState obs;

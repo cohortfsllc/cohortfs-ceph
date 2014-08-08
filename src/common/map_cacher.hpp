@@ -17,7 +17,6 @@
 
 #include <boost/scoped_ptr.hpp>
 #include <boost/optional.hpp>
-#include "include/memory.h"
 #include <set>
 #include <map>
 #include <utility>

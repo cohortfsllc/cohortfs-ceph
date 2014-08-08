@@ -12,7 +12,6 @@
  * 
  */
 
-#include "include/memory.h"
 #include <map>
 
 #if defined(__FreeBSD__)

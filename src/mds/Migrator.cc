@@ -325,8 +325,8 @@ void Migrator::export_try_cancel(CDir *dir, bool notify_peer)
     mds->queue_waiters(it->second.waiting_for_finish);
     // drop locks
     if (state == EXPORT_LOCKING || state == EXPORT_DISCOVERING) {
-      MDRequestRef mdr = ceph::static_pointer_cast<MDRequestImpl,
-						   MutationImpl>(it->second.mut);
+      MDRequestRef mdr = std::static_pointer_cast<MDRequestImpl,
+						  MutationImpl>(it->second.mut);
       assert(mdr);
       if (mdr->more()->waiting_on_slave.empty())
 	mds->mdcache->request_finish(mdr);
@@ -845,8 +845,8 @@ void Migrator::handle_export_discover_ack(MExportDirDiscoverAck *m)
   } else {
     assert(it->second.state == EXPORT_DISCOVERING);
     // release locks to avoid deadlock
-    MDRequestRef mdr = ceph::static_pointer_cast<MDRequestImpl,
-						 MutationImpl>(it->second.mut);
+    MDRequestRef mdr = std::static_pointer_cast<MDRequestImpl,
+						MutationImpl>(it->second.mut);
     assert(mdr);
     mds->mdcache->request_finish(mdr);
     it->second.mut.reset();
