@@ -354,8 +354,8 @@ public:
 			 gen_type *rng,
 			 ObjectStore::Sequencer *osr,
 			 coll_t cid)
-    : cid(cid), in_flight(0), object_gen(gen), rng(rng), store(store), osr(osr),
-      lock("State lock") {}
+    : cid(cid), in_flight(0), object_gen(gen), rng(rng), store(store),
+      osr(osr) {}
 
   int init() {
     ObjectStore::Transaction t;

@@ -172,7 +172,6 @@ class TestStub : public Dispatcher
   TestStub(CephContext *cct, string who)
     : Dispatcher(cct),
       monc(cct),
-      lock(who.append("::lock").c_str()),
       timer(cct, lock),
       do_shutdown(false),
       tick_seconds(0.0) { }
@@ -669,7 +668,7 @@ double const OSDStub::STUB_BOOT_INTERVAL = 10.0;
 
 const char *our_name = NULL;
 vector<TestStub*> stubs;
-Mutex shutdown_lock("main::shutdown_lock");
+Mutex shutdown_lock;
 Cond shutdown_cond;
 Context *shutdown_cb = NULL;
 SafeTimer *shutdown_timer = NULL;

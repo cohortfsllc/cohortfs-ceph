@@ -39,7 +39,7 @@ class RGWSwift {
     Cond cond;
 
   public:
-    KeystoneRevokeThread(CephContext *_cct, RGWSwift *_swift) : cct(_cct), swift(_swift), lock("KeystoneRevokeThread") {}
+    KeystoneRevokeThread(CephContext *_cct, RGWSwift *_swift) : cct(_cct),swift(_swift) {}
     void *entry();
     void stop();
   };

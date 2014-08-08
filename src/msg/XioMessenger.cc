@@ -25,7 +25,7 @@
 
 #define dout_subsys ceph_subsys_xio
 
-Mutex mtx("XioMessenger Package Lock");
+Mutex mtx;
 atomic_t initialized;
 
 atomic_t XioMessenger::nInstances;

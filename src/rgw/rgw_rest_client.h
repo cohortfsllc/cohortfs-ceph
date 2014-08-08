@@ -63,7 +63,7 @@ public:
 
   RGWRESTStreamWriteRequest(CephContext *_cct, string& _url, list<pair<string, string> > *_headers,
                 list<pair<string, string> > *_params) : RGWRESTSimpleRequest(_cct, _url, _headers, _params),
-                lock("RGWRESTStreamWriteRequest"), handle(NULL), cb(NULL) {}
+                handle(NULL), cb(NULL) {}
   ~RGWRESTStreamWriteRequest();
   int put_obj_init(RGWAccessKey& key, rgw_obj& obj, uint64_t obj_size, map<string, bufferlist>& attrs);
   int complete(string& etag, time_t *mtime);
@@ -85,7 +85,7 @@ public:
 
   RGWRESTStreamReadRequest(CephContext *_cct, string& _url, RGWGetDataCB *_cb, list<pair<string, string> > *_headers,
                 list<pair<string, string> > *_params) : RGWRESTSimpleRequest(_cct, _url, _headers, _params),
-                lock("RGWRESTStreamReadRequest"), cb(_cb),
+                cb(_cb),
                 chunk_ofs(0), ofs(0) {}
   ~RGWRESTStreamReadRequest() {}
   int get_obj(RGWAccessKey& key, map<string, string>& extra_headers, rgw_obj& obj);

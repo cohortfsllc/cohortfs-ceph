@@ -992,7 +992,7 @@ struct RGWRegionMap {
   RGWQuotaInfo bucket_quota;
   RGWQuotaInfo user_quota;
 
-  RGWRegionMap() : lock("RGWRegionMap") {}
+  RGWRegionMap() {}
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
@@ -1249,11 +1249,11 @@ protected:
   RGWQuotaHandler *quota_handler;
 
 public:
-  RGWRados() : lock("rados_timer_lock"), timer(NULL),
+  RGWRados() : timer(NULL),
                gc(NULL), use_gc_thread(false), quota_threads(false),
                num_watchers(0), watchers(NULL), watch_handles(NULL),
                watch_initialized(false),
-               bucket_id_lock("rados_bucket_id"), max_bucket_id(0),
+               max_bucket_id(0),
                max_chunk_size(0),
                cct(NULL), rados(NULL),
                pools_initialized(false),

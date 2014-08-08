@@ -29,12 +29,11 @@ private:
   map<int, Policy> policy_map; // entity_name_t::type -> Policy
 
 public:
-  
+
   SimplePolicyMessenger(CephContext *cct, entity_name_t name,
 			string mname, uint64_t _nonce)
-    : Messenger(cct, name),
-      policy_lock("SimplePolicyMessenger::policy_lock")
-    { 
+    : Messenger(cct, name)
+    {
     }
 
     /**

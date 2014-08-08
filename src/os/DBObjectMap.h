@@ -68,8 +68,7 @@ public:
   set<uint64_t> in_use;
   set<hobject_t> map_header_in_use;
 
-  DBObjectMap(KeyValueDB *db) : db(db),
-				header_lock("DBOBjectMap")
+  DBObjectMap(KeyValueDB *db) : db(db)
     {}
 
   int set_keys(

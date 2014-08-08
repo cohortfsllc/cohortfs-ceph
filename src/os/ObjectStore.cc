@@ -82,7 +82,7 @@ unsigned ObjectStore::apply_transactions(Sequencer *osr,
 {
   // use op pool
   Cond my_cond;
-  Mutex my_lock("ObjectStore::apply_transaction::my_lock");
+  Mutex my_lock;
   int r = 0;
   bool done;
   C_SafeCond *onreadable = new C_SafeCond(&my_lock, &my_cond, &done, &r);

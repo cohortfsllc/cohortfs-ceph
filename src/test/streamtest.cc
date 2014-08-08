@@ -29,11 +29,11 @@ struct io {
 };
 map<off_t,io> writes;
 Cond cond;
-Mutex test_lock("streamtest.cc lock");
+Mutex test_lock;
 
 unsigned concurrent = 1;
 void throttle()
-{ 
+{
   Mutex::Locker l(test_lock);
   while (writes.size() >= concurrent) {
     //generic_dout(0) << "waiting" << dendl;

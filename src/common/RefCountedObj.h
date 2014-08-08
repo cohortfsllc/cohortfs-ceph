@@ -51,7 +51,7 @@ struct RefCountedCond : public RefCountedObject {
   Cond cond;
   int rval;
 
-  RefCountedCond() : complete(false), lock("RefCountedCond"), rval(0) {}
+  RefCountedCond() : complete(false), rval(0) {}
 
   int wait() {
     Mutex::Locker l(lock);

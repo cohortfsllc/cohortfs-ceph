@@ -58,7 +58,7 @@ public:
   AsyncReserver(
     Finisher *f,
     unsigned max_allowed)
-    : f(f), max_allowed(max_allowed), lock("AsyncReserver::lock") {}
+    : f(f), max_allowed(max_allowed) {}
 
   void set_max(unsigned max) {
     Mutex::Locker l(lock);

@@ -124,9 +124,7 @@ public:
       sync_fd(sync_fd),
       tp(cct, "DumbBackend::tp", worker_threads),
       thread(this),
-      sync_loop_mutex("DumbBackend::sync_loop_mutex"),
       sync_loop_stop(0),
-      pending_commit_mutex("DumbBackend::pending_commit_mutex"),
       queue(this, 20, &tp) {
     thread.create();
     tp.start();

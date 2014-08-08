@@ -353,12 +353,8 @@ private:
  public:
   FileJournal(uuid_d fsid, Finisher *fin, Cond *sync_cond, const char *f, bool dio=false, bool ai=true, bool faio=false) :
     Journal(fsid, fin, sync_cond),
-    finisher_lock("FileJournal::finisher_lock", false, true, false, g_ceph_context),
     journaled_seq(0),
     plug_journal_completions(false),
-    writeq_lock("FileJournal::writeq_lock", false, true, false, g_ceph_context),
-    completions_lock(
-      "FileJournal::completions_lock", false, true, false, g_ceph_context),
     fn(f),
     zero_buf(NULL),
     max_size(0), block_size(0),
@@ -366,18 +362,16 @@ private:
     must_write_header(false),
     write_pos(0), read_pos(0),
 #ifdef HAVE_LIBAIO
-    aio_lock("FileJournal::aio_lock"),
     aio_ctx(0),
     aio_num(0), aio_bytes(0),
 #endif
-    last_committed_seq(0), 
+    last_committed_seq(0),
     journaled_since_start(0),
     full_state(FULL_NOTFULL),
     fd(-1),
     writing_seq(0),
     throttle_ops(g_ceph_context, "filestore_ops"),
     throttle_bytes(g_ceph_context, "filestore_bytes"),
-    write_lock("FileJournal::write_lock", false, true, false, g_ceph_context),
     write_stop(false),
     write_thread(this),
     write_finish_thread(this) { }

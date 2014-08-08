@@ -4498,10 +4498,9 @@ struct get_obj_data : public RefCountedObject {
   get_obj_data(CephContext *_cct)
     : cct(_cct),
       rados(NULL), ctx(NULL),
-      total_read(0), lock("get_obj_data"), data_lock("get_obj_data::data_lock"),
-      client_cb(NULL),
+      total_read(0), client_cb(NULL),
       throttle(cct, "get_obj_data", cct->_conf->rgw_get_obj_window_size, false) {}
-  virtual ~get_obj_data() { } 
+  virtual ~get_obj_data() { }
   void set_cancelled(int r) {
     cancelled.set(1);
     err_code.set(r);

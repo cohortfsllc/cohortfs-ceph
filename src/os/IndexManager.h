@@ -83,7 +83,7 @@ class IndexManager {
   int build_index(coll_t c, const char *path, Index *index);
 public:
   /// Constructor
-  IndexManager() : lock("IndexManager lock") {}
+  IndexManager() {}
 
   /**
    * Reserve and return index for c

@@ -16,8 +16,7 @@
 #include "common/debug.h"
 
 QueueStrategy::QueueStrategy(int _n_threads)
-  : lock("QueueStrategy::lock"),
-    n_threads(_n_threads),
+  : n_threads(_n_threads),
     stop(false),
     mqueue(),
     disp_threads()

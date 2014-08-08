@@ -157,8 +157,7 @@ Client::Client(Messenger *m, MonClient *mc)
     monclient(mc), messenger(m), whoami(m->get_myname().num()),
     initialized(false), mounted(false), unmounting(false),
     local_osd(-1), local_osd_epoch(0),
-    unsafe_sync_write(0),
-    client_lock("Client::client_lock")
+    unsafe_sync_write(0)
 {
   monclient->set_messenger(m);
 
@@ -2629,7 +2628,7 @@ void Client::_flush_range(Inode *in, int64_t offset, uint64_t size)
     return;
   }
 
-  Mutex flock("Client::_flush_range flock");
+  Mutex flock;
   Cond cond;
   bool safe = false;
   Context *onflush = new C_SafeCond(&flock, &cond, &safe);
@@ -5531,7 +5530,7 @@ retry:
   if (r < 0)
     return r;
 
-  Mutex uninline_flock("Clinet::_read_uninline_data flock");
+  Mutex uninline_flock;
   Cond uninline_cond;
   bool uninline_done = false;
   int uninline_ret = 0;
@@ -5716,7 +5715,7 @@ int Client::_read_async(Fh *f, uint64_t off, uint64_t len, bufferlist *bl)
 
   // read (and possibly block)
   int r, rvalue = 0;
-  Mutex flock("Client::_read_async flock");
+  Mutex flock;
   Cond cond;
   bool done = false;
   Context *onfinish = new C_SafeCond(&flock, &cond, &done, &rvalue);
@@ -5749,7 +5748,7 @@ int Client::_read_sync(Fh *f, uint64_t off, uint64_t len, bufferlist *bl,
 
   ldout(cct, 10) << "_read_sync " << *in << " " << off << "~" << len << dendl;
 
-  Mutex flock("Client::_read_sync flock");
+  Mutex flock;
   Cond cond;
   while (left > 0) {
     int r = 0;
@@ -5912,7 +5911,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
   if (r < 0)
     return r;
 
-  Mutex uninline_flock("Clinet::_write_uninline_data flock");
+  Mutex uninline_flock;
   Cond uninline_cond;
   bool uninline_done = false;
   int uninline_ret = 0;
@@ -5974,7 +5973,7 @@ int Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf)
     }
   } else {
     // simple, non-atomic sync write
-    Mutex flock("Client::_write flock");
+    Mutex flock;
     Cond cond;
     bool done = false;
     Context *onfinish = new C_SafeCond(&flock, &cond, &done);
@@ -6099,13 +6098,13 @@ int Client::_fsync(Fh *f, bool syncdataonly)
   Inode *in = f->inode;
   ceph_tid_t wait_on_flush = 0;
   bool flushed_metadata = false;
-  Mutex lock("Client::_fsync::lock");
+  Mutex lock;
   Cond cond;
   bool done = false;
   C_SafeCond *object_cacher_completion = NULL;
 
   ldout(cct, 3) << "_fsync(" << f << ", " << (syncdataonly ? "dataonly)":"data+metadata)") << dendl;
-  
+
   if (cct->_conf->client_oc) {
     object_cacher_completion = new C_SafeCond(&lock, &cond, &done, &r);
     in->get(); // take a reference; C_SafeCond doesn't and _flush won't either
@@ -6235,7 +6234,7 @@ int Client::statfs(const char *path, struct statvfs *stbuf)
 
   ceph_statfs stats;
 
-  Mutex lock("Client::statfs::lock");
+  Mutex lock;
   Cond cond;
   bool done;
   int rval;
@@ -7710,7 +7709,7 @@ int Client::ll_read_block(Inode *in, uint64_t blockid,
 			  ceph_file_layout* layout)
 {
   Mutex::Locker lock(client_lock);
-  Mutex flock("Client::ll_read_block flock");
+  Mutex flock;
   Cond cond;
   vinodeno_t vino = ll_get_vino(in);
   object_t oid = file_object_t(vino.ino, blockid);
@@ -7746,7 +7745,7 @@ int Client::ll_write_block(Inode *in, uint64_t blockid,
 			   uint64_t length, ceph_file_layout* layout,
 			   uint32_t sync)
 {
-  Mutex flock("Client::ll_write_block flock");
+  Mutex flock;
   vinodeno_t vino = ll_get_vino(in);
   Cond cond;
   bool done;
@@ -7897,7 +7896,7 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
   if (r < 0)
     return r;
 
-  Mutex uninline_flock("Clinet::_fallocate_uninline_data flock");
+  Mutex uninline_flock;
   Cond uninline_cond;
   bool uninline_done = false;
   int uninline_ret = 0;
@@ -7932,7 +7931,7 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
 	uninline_data(in, onuninline);
       }
 
-      Mutex flock("Client::_punch_hole flock");
+      Mutex flock;
       Cond cond;
       bool done = false;
       Context *onfinish = new C_SafeCond(&flock, &cond, &done);

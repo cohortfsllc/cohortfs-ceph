@@ -394,7 +394,8 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
     Cond cond;
   public:
 
-    BucketsSyncThread(CephContext *_cct, RGWUserStatsCache *_s) : cct(_cct), stats(_s), lock("RGWUserStatsCache::BucketsSyncThread") {}
+    BucketsSyncThread(CephContext *_cct, RGWUserStatsCache *_s)
+      : cct(_cct), stats(_s)  {}
 
     void *entry() {
       ldout(cct, 20) << "BucketsSyncThread: start" << dendl;
@@ -446,7 +447,8 @@ class RGWUserStatsCache : public RGWQuotaCache<string> {
     Cond cond;
   public:
 
-    UserSyncThread(CephContext *_cct, RGWUserStatsCache *_s) : cct(_cct), stats(_s), lock("RGWUserStatsCache::UserSyncThread") {}
+    UserSyncThread(CephContext *_cct, RGWUserStatsCache *_s)
+      : cct(_cct), stats(_s)  {}
 
     void *entry() {
       ldout(cct, 20) << "UserSyncThread: start" << dendl;

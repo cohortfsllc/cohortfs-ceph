@@ -32,7 +32,6 @@ enum {
 Throttle::Throttle(CephContext *cct, std::string n, int64_t m, bool _use_perf)
   : cct(cct), name(n), logger(NULL),
 		max(m),
-    lock("Throttle::lock"),
     use_perf(_use_perf)
 {
   assert(m >= 0);
@@ -236,8 +235,7 @@ int64_t Throttle::put(int64_t c)
 }
 
 SimpleThrottle::SimpleThrottle(uint64_t max, bool ignore_enoent)
-  : m_lock("SimpleThrottle"),
-    m_max(max),
+  : m_max(max),
     m_current(0),
     m_ret(0),
     m_ignore_enoent(ignore_enoent)

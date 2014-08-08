@@ -91,7 +91,7 @@ struct SignalHandler : public Thread {
   Mutex lock;
 
   SignalHandler()
-    : stop(false), lock("SignalHandler::lock")
+    : stop(false)
   {
     for (unsigned i = 0; i < 32; i++)
       handlers[i] = NULL;

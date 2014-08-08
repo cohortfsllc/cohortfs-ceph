@@ -37,7 +37,7 @@ int Resetter::init(int rank)
 
 void Resetter::reset()
 {
-  Mutex mylock("Resetter::reset::lock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;

@@ -299,9 +299,7 @@ class KeyValueStore : public ObjectStore,
     }
 
     OpSequencer()
-      : qlock("KeyValueStore::OpSequencer::qlock", false, false),
-	parent(0),
-	apply_lock("KeyValueStore::OpSequencer::apply_lock", false, false) {}
+      : parent(0) {}
     ~OpSequencer() {
       assert(q.empty());
     }
@@ -561,7 +559,6 @@ class KeyValueStore : public ObjectStore,
     uint64_t op_submitted;
    public:
     SubmitManager() :
-	lock("JOS::SubmitManager::lock", false, true, false, g_ceph_context),
 	op_seq(0), op_submitted(0)
     {}
     uint64_t op_submit_start();

@@ -32,9 +32,7 @@ KvStoreBench::KvStoreBench()
   client_name("admin"),
   verbose(false),
   kvs(NULL),
-  data_lock("data lock"),
   ops_in_flight(0),
-  ops_in_flight_lock("KvStoreBench::ops_in_flight_lock"),
   rados_id("admin"),
   pool_name("data")
 {

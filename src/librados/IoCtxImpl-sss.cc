@@ -200,7 +200,7 @@ int librados::IoCtxImpl::operate(const object_t& oid, ::ObjectOperation *o,
   if (!o->size())
     return 0;
 
-  Mutex mylock("IoCtxImpl::operate::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -238,7 +238,7 @@ int librados::IoCtxImpl::operate_read(const object_t& oid,
   if (!o->size())
     return 0;
 
-  Mutex mylock("IoCtxImpl::operate_read::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -563,7 +563,7 @@ int librados::IoCtxImpl::mapext(const object_t& oid,
 {
   bufferlist bl;
 
-  Mutex mylock("IoCtxImpl::read::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -688,7 +688,7 @@ int librados::IoCtxImpl::watch(const object_t& oid, uint64_t ver,
 			       uint64_t *cookie, librados::WatchCtx *ctx)
 {
   ::ObjectOperation wr;
-  Mutex mylock("IoCtxImpl::watch::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -742,7 +742,7 @@ int librados::IoCtxImpl::unwatch(const object_t& oid, uint64_t cookie)
 {
   bufferlist inbl, outbl;
 
-  Mutex mylock("IoCtxImpl::unwatch::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -774,8 +774,8 @@ int librados::IoCtxImpl::notify(const object_t& oid, uint64_t ver,
 {
   bufferlist inbl, outbl;
 
-  Mutex mylock("IoCtxImpl::notify::mylock");
-  Mutex mylock_all("IoCtxImpl::notify::mylock_all");
+  Mutex mylock;
+  Mutex mylock_all;
   Cond cond, cond_all;
   bool done, done_all;
   int r;

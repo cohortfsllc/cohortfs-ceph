@@ -39,7 +39,7 @@ using namespace std;
 
 Messenger *messenger = 0;
 
-Mutex test_lock("mylock");
+Mutex test_lock;
 Cond cond;
 
 uint64_t received = 0;

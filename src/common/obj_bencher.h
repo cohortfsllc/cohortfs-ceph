@@ -89,7 +89,7 @@ protected:
   ostream& out(ostream& os);
   ostream& out(ostream& os, utime_t& t);
 public:
-  ObjBencher(CephContext *cct_) : show_time(false), cct(cct_), lock("ObjBencher::lock") {}
+  ObjBencher(CephContext *cct_) : show_time(false), cct(cct_) {}
   virtual ~ObjBencher() {}
   int aio_bench(
     int operation, int secondsToRun, int maxObjectsToCreate,

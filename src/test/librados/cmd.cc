@@ -141,7 +141,7 @@ struct Log {
   Cond cond;
   Mutex lock;
 
-  Log() : lock("l::lock") {}
+  Log() {}
 
   bool contains(string str) {
     Mutex::Locker l(lock);

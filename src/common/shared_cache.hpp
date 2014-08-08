@@ -85,8 +85,8 @@ class SharedLRU {
 
 public:
   SharedLRU(size_t max_size = 20)
-    : lock("SharedLRU::lock"), max_size(max_size), size(0) {}
-  
+    : max_size(max_size), size(0) {}
+
   ~SharedLRU() {
     contents.clear();
     lru.clear();

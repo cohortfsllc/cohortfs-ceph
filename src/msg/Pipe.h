@@ -80,7 +80,6 @@ class DispatchQueue;
     public:
       DelayedDelivery(Pipe *p)
 	: pipe(p),
-	  delay_lock("Pipe::DelayedDelivery::delay_lock"),
 	  stop_delayed_delivery(false) { }
       ~DelayedDelivery() {
 	discard();

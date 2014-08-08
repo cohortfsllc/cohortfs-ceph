@@ -48,7 +48,7 @@ int Dumper::recover_journal()
 {
   bool done = false;
   Cond cond;
-  Mutex localLock("dump:recover_journal");
+  Mutex localLock;
   int r;
 
   lock.Lock();
@@ -74,7 +74,7 @@ void Dumper::dump(const char *dump_file)
   bool done = false;
   int r = 0;
   Cond cond;
-  Mutex localLock("dump:lock");
+  Mutex localLock;
 
   r = recover_journal();
   if (r) {
@@ -219,7 +219,7 @@ void Dumper::undump(const char *dump_file)
  */
 void Dumper::dump_entries()
 {
-  Mutex localLock("dump_entries");
+  Mutex localLock;
   JSONFormatter jf(true);
 
   int r = recover_journal();

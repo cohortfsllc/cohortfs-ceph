@@ -742,7 +742,7 @@ void Objecter::close_session(OSDSession *s)
 void Objecter::wait_for_osd_map()
 {
   if (osdmap->get_epoch()) return;
-  Mutex lock("");
+  Mutex lock;
   Cond cond;
   bool done;
   lock.Lock();

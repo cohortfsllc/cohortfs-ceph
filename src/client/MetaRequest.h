@@ -91,7 +91,6 @@ public:
     kick(false),
     readdir_offset(0), readdir_end(false), readdir_num(0),
     got_unsafe(false), item(this), unsafe_item(this),
-    lock("MetaRequest lock"),
     caller_cond(0), dispatch_cond(0),
     target(0) {
     memset(&head, 0, sizeof(ceph_mds_request_head));

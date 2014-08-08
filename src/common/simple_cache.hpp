@@ -43,7 +43,7 @@ class SimpleLRU {
   }
 
 public:
-  SimpleLRU(size_t max_size) : lock("SimpleLRU::lock"), max_size(max_size) {}
+  SimpleLRU(size_t max_size) : max_size(max_size) {}
 
   void pin(K key, V val) {
     Mutex::Locker l(lock);

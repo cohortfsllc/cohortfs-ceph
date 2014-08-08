@@ -146,7 +146,6 @@ public:
 #ifdef HAVE_LEVELDB_FILTER_POLICY
     filterpolicy(NULL),
 #endif
-    compact_queue_lock("LevelDBStore::compact_thread_lock"),
     compact_queue_stop(false),
     compact_thread(this),
     options()

@@ -40,9 +40,7 @@ namespace librbd {
 #endif
       refresh_seq(0),
       last_refresh(0),
-      md_lock("librbd::ImageCtx::md_lock"),
-      cache_lock("librbd::ImageCtx::cache_lock"),
-      refresh_lock("librbd::ImageCtx::refresh_lock"),
+      md_lock("ImageCtx::md_lock"),
       size(0),
       object_cacher(NULL), writeback_handler(NULL), object_set(NULL)
   {
@@ -190,7 +188,7 @@ namespace librbd {
   int ImageCtx::read_from_cache(object_t o, bufferlist *bl, size_t len,
 				uint64_t off) {
     int r;
-    Mutex mylock("librbd::ImageCtx::read_from_cache");
+    Mutex mylock;
     Cond cond;
     bool done;
     Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &r);
@@ -229,7 +227,7 @@ namespace librbd {
 
   int ImageCtx::flush_cache() {
     int r = 0;
-    Mutex mylock("librbd::ImageCtx::flush_cache");
+    Mutex mylock;
     Cond cond;
     bool done;
     Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &r);

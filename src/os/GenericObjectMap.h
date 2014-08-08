@@ -81,7 +81,7 @@ class GenericObjectMap {
    */
   set<uint64_t> in_use;
 
-  GenericObjectMap(KeyValueDB *db) : db(db), header_lock("GenericObjectMap") {}
+  GenericObjectMap(KeyValueDB *db) : db(db) {}
 
   int get(
     const coll_t &cid,

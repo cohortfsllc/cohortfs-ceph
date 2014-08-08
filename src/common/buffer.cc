@@ -175,13 +175,10 @@ static uint32_t simple_spinlock_t buffer_debug_lock = SIMPLE_SPINLOCK_INITIALIZE
     mutable Mutex crc_lock;
     map<pair<size_t, size_t>, pair<uint32_t, uint32_t> > crc_map;
 
-    raw_crc(unsigned l) :
-    raw(l),
-    crc_lock("buffer::raw::crc_lock", false, false)
-      {}
+    raw_crc(unsigned l) : raw(l)
+      { }
     raw_crc(char *c, unsigned l) :
-      raw(c, l),
-      crc_lock("buffer::raw::crc_lock", false, false)
+      raw(c, l)
       {}
     virtual ~raw_crc() {};
 

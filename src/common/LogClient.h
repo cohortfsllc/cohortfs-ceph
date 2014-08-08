@@ -20,6 +20,7 @@
 
 #include <iosfwd>
 #include <sstream>
+#include "common/ceph_context.h"
 
 class LogClient;
 class MLog;

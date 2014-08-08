@@ -23,6 +23,7 @@
 #include "common/safe_io.h"
 #include "common/version.h"
 #include "include/color.h"
+#include "common/lockdep.h"
 
 #include <errno.h>
 #include <deque>

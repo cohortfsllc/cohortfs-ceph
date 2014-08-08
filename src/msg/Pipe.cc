@@ -79,7 +79,6 @@ Pipe::Pipe(SimpleMessenger *r, int st, PipeConnection *con)
     conn_id(r->dispatch_queue.get_id()),
     sd(-1), port(0),
     peer_type(-1),
-    pipe_lock("SimpleMessenger::Pipe::pipe_lock"),
     state(st),
     connection_state(NULL),
     reader_running(false), reader_needs_join(false),
@@ -431,7 +430,7 @@ int Pipe::accept()
     // existing?
     existing = msgr->_lookup_pipe(peer_addr);
     if (existing) {
-      existing->pipe_lock.Lock(true);  // skip lockdep check (we are locking a second Pipe here)
+      existing->pipe_lock.Lock();
 
       if (connect.global_seq < existing->peer_global_seq) {
 	ldout(msgr->cct,10) << "accept existing " << existing << ".gseq " << existing->peer_global_seq

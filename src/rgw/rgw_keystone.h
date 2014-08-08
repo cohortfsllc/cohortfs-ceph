@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_KEYSTONE_H
 #define CEPH_RGW_KEYSTONE_H
 
@@ -95,7 +97,7 @@ class RGWKeystoneTokenCache {
   size_t max;
 
 public:
-  RGWKeystoneTokenCache(CephContext *_cct, int _max) : cct(_cct), lock("RGWKeystoneTokenCache"), max(_max) {}
+  RGWKeystoneTokenCache(CephContext *_cct, int _max) : cct(_cct), max(_max) {}
 
   bool find(const string& token_id, KeystoneToken& token);
   void add(const string& token_id, KeystoneToken& token);

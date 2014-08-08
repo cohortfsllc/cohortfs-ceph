@@ -245,9 +245,7 @@ private:
     }
 
     OpSequencer()
-      : qlock("FileStore::OpSequencer::qlock", false, false),
-	parent(0),
-	apply_lock("FileStore::OpSequencer::apply_lock", false, false) {}
+      : parent(0) {}
     ~OpSequencer() {
       assert(q.empty());
     }

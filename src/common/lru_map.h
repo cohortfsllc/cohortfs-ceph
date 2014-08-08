@@ -33,7 +33,7 @@ public:
   void _add(const K& key, V& value);
 
 public:
-  lru_map(int _max) : lock("lru_map"), max(_max) {}
+  lru_map(int _max) : max(_max) {}
   virtual ~lru_map() {}
 
   bool find(const K& key, V& value);

@@ -20,7 +20,7 @@ namespace
   int array_idx;
   TestContext* test_contexts[MAX_TEST_CONTEXTS];
 
-  Mutex array_lock("test_timers_mutex");
+  Mutex array_lock;
 }
 
 class TestContext : public Context
@@ -259,7 +259,7 @@ int main(int argc, const char **argv)
   common_init_finish(g_ceph_context);
 
   int ret;
-  Mutex safe_timer_lock("safe_timer_lock");
+  Mutex safe_timer_lock;
   SafeTimer safe_timer(g_ceph_context, safe_timer_lock);
 
   ret = basic_timer_test <SafeTimer>(safe_timer, &safe_timer_lock);

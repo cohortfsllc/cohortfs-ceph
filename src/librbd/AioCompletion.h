@@ -60,7 +60,7 @@ namespace librbd {
     char *read_buf;
     size_t read_buf_len;
 
-    AioCompletion() : lock("AioCompletion::lock", true),
+    AioCompletion() : lock(true),
 		      done(false), rval(0), complete_cb(NULL),
 		      complete_arg(NULL), rbd_comp(NULL),
 		      pending_count(0), building(true),

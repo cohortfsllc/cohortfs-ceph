@@ -12,7 +12,7 @@ class TestOpStat {
 public:
   Mutex stat_lock;
 
-  TestOpStat() : stat_lock("TestOpStat lock") {}
+  TestOpStat()  {}
     
   static uint64_t gettime()
   {

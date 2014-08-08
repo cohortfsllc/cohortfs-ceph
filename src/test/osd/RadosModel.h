@@ -69,8 +69,7 @@ public:
   uint64_t handle;
   bool waiting;
   Mutex lock;
-  TestWatchContext() : handle(0), waiting(false),
-		       lock("watch lock") {}
+  TestWatchContext() : handle(0), waiting(false) {}
   void notify(uint8_t opcode, uint64_t ver, bufferlist &bl) {
     Mutex::Locker l(lock);
     waiting = false;
@@ -186,7 +185,6 @@ public:
 		   bool no_omap,
 		   bool pool_snaps,
 		   const char *id = 0) :
-    state_lock("Context Lock"),
     pool_obj_cont(),
     current_snap(0),
     pool_name(pool_name),

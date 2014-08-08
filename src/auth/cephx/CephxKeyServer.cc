@@ -135,8 +135,7 @@ bool KeyServerData::get_caps(CephContext *cct, const EntityName& name,
 
 KeyServer::KeyServer(CephContext *cct_, KeyRing *extra_secrets)
   : cct(cct_),
-    data(extra_secrets),
-    lock("KeyServer::lock")
+    data(extra_secrets)
 {
 }
 

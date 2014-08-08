@@ -321,7 +321,8 @@ class RGWDataChangesLog {
     Cond cond;
 
   public:
-    ChangesRenewThread(CephContext *_cct, RGWDataChangesLog *_log) : cct(_cct), log(_log), lock("ChangesRenewThread") {}
+    ChangesRenewThread(CephContext *_cct, RGWDataChangesLog *_log)
+	    : cct(_cct), log(_log) {}
     void *entry();
     void stop();
   };
@@ -330,7 +331,7 @@ class RGWDataChangesLog {
 
 public:
 
-  RGWDataChangesLog(CephContext *_cct, RGWRados *_store) : cct(_cct), store(_store), lock("RGWDataChangesLog"),
+  RGWDataChangesLog(CephContext *_cct, RGWRados *_store) : cct(_cct), store(_store),
                                                            changes(cct->_conf->rgw_data_log_changes_size) {
     num_shards = cct->_conf->rgw_data_log_num_shards;
 

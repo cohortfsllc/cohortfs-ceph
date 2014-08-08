@@ -51,7 +51,6 @@ WorkloadGenerator::WorkloadGenerator(vector<const char*> args)
     m_suppress_write_xattr_coll(false), m_suppress_write_log(false),
     m_do_stats(false),
     m_stats_finished_txs(0),
-    m_stats_lock("WorldloadGenerator::m_stats_lock"),
     m_stats_show_secs(5),
     m_stats_total_written(0),
     m_stats_begin()

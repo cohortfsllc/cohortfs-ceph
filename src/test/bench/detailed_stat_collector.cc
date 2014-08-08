@@ -77,7 +77,7 @@ DetailedStatCollector::DetailedStatCollector(
   AdditionalPrinting *details
   ) : bin_size(bin_size), f(formatter), out(out),
       summary_out(summary_out), details(details),
-      lock("Stat::lock"), cur_seq(0) {
+      cur_seq(0) {
   last_dump = cur_time();
 }
 

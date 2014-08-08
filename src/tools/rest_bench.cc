@@ -105,7 +105,7 @@ struct req_context : public RefCountedObject {
   bool used;
 
   req_context() : complete(false), status(S3StatusOK), ctx(NULL), cb(NULL), arg(NULL), in_bl(NULL), off(0), len(0),
-                  lock("req_context"), bucket_ctx(NULL), should_destroy_ctx(false), op(OP_NONE), used(false) {}
+		  bucket_ctx(NULL), should_destroy_ctx(false), op(OP_NONE), used(false) {}
   ~req_context() {
     if (should_destroy_ctx) {
       S3_destroy_request_context(ctx);

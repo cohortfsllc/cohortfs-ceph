@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_RGW_GC_H
 #define CEPH_RGW_GC_H
 
@@ -28,7 +30,7 @@ class RGWGC {
     Cond cond;
 
   public:
-    GCWorker(CephContext *_cct, RGWGC *_gc) : cct(_cct), gc(_gc), lock("GCWorker") {}
+    GCWorker(CephContext *_cct, RGWGC *_gc) : cct(_cct), gc(_gc) {}
     void *entry();
     void stop();
   };

@@ -145,7 +145,7 @@ md_config_t::md_config_t()
 #undef OPTION
 #undef SUBSYS
 #undef DEFAULT_SUBSYS
-  lock("md_config_t", true)
+  lock(true)
 {
   init_subsys();
 }

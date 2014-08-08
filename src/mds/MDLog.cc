@@ -526,7 +526,7 @@ void MDLog::_replay_thread()
            * the MDS is going to either shut down or restart when
            * we return this error, doing it synchronously is fine
            * -- as long as we drop the main mds lock--. */
-          Mutex mylock("MDLog::_replay_thread lock");
+	  Mutex mylock;
           Cond cond;
           bool done = false;
           int err = 0;

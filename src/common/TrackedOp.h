@@ -69,9 +69,9 @@ class OpTracker {
 public:
   bool tracking_enabled;
   CephContext *cct;
-  OpTracker(CephContext *cct_, bool tracking) : seq(0), ops_in_flight_lock("OpTracker mutex"),
-						complaint_time(0), log_threshold(0),
-						tracking_enabled(tracking), cct(cct_) {}
+  OpTracker(CephContext *cct_, bool tracking)
+    : seq(0), complaint_time(0), log_threshold(0),
+      tracking_enabled(tracking), cct(cct_) {}
   void set_complaint_and_threshold(float time, int threshold) {
     complaint_time = time;
     log_threshold = threshold;
@@ -143,7 +143,6 @@ protected:
     xitem(this),
     request(req),
     tracker(_tracker),
-    lock("TrackedOp::lock"),
     seq(0),
     warn_interval_multiplier(1)
   {

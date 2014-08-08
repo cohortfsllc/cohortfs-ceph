@@ -22,7 +22,7 @@ bool aio = false;
 
 // ----
 Cond cond;
-Mutex wait_lock("lock");
+Mutex wait_lock;
 bool done;
 
 void wait()
@@ -42,7 +42,7 @@ public:
   C_SafeCond *c;
 
   C_Sync()
-    : lock("C_Sync::lock"), done(false) {
+    : done(false) {
     c = new C_SafeCond(&lock, &cond, &done);
   }
   ~C_Sync() {

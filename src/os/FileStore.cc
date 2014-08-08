@@ -414,23 +414,18 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, const cha
   generic_backend(NULL), backend(NULL),
   index_manager(),
   ondisk_finisher(g_ceph_context),
-  lock("FileStore::lock"),
   force_sync(false), sync_epoch(0),
-  sync_entry_timeo_lock("sync_entry_timeo_lock"),
   timer(g_ceph_context, sync_entry_timeo_lock),
   stop(false), sync_thread(this),
-  fdcache_lock("fdcache_lock"),
   fdcache(g_ceph_context),
   wbthrottle(g_ceph_context),
   default_osr("default"),
   op_queue_len(0), op_queue_bytes(0),
-  op_throttle_lock("FileStore::op_throttle_lock"),
   op_finisher(g_ceph_context),
   op_tp(g_ceph_context, "FileStore::op_tp", g_conf->filestore_op_threads, "filestore_op_threads"),
   op_wq(this, g_conf->filestore_op_thread_timeout,
 	g_conf->filestore_op_thread_suicide_timeout, &op_tp),
   logger(NULL),
-  read_error_lock("FileStore::read_error_lock"),
   m_filestore_commit_timeout(g_conf->filestore_commit_timeout),
   m_filestore_journal_parallel(g_conf->filestore_journal_parallel ),
   m_filestore_journal_trailing(g_conf->filestore_journal_trailing),
@@ -3062,7 +3057,7 @@ void FileStore::start_sync(Context *onsafe)
 
 void FileStore::sync()
 {
-  Mutex l("FileStore::sync");
+  Mutex l;
   Cond c;
   bool done;
   C_SafeCond *fin = new C_SafeCond(&l, &c, &done);
@@ -3095,7 +3090,7 @@ void FileStore::flush()
 
   if (g_conf->filestore_blackhole) {
     // wait forever
-    Mutex lock("FileStore::flush::lock");
+    Mutex lock;
     Cond cond;
     lock.Lock();
     while (true)

@@ -1,3 +1,5 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// vim: ts=8 sw=2 smarttab
 #ifndef CEPH_CLASSHANDLER_H
 #define CEPH_CLASSHANDLER_H
 
@@ -79,12 +81,12 @@ private:
   int _load_class(ClassData *cls);
 
 public:
-  ClassHandler(CephContext *cct_) : cct(cct_), mutex("ClassHandler") {}
-  
+  ClassHandler(CephContext *cct_) : cct(cct_) {}
+
   int open_all_classes();
 
   int open_class(const string& cname, ClassData **pcls);
-  
+
   ClassData *register_class(const char *cname);
   void unregister_class(ClassData *cls);
 

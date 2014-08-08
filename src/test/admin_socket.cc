@@ -191,7 +191,7 @@ public:
   Mutex _lock;
   Cond _cond;
 
-  BlockingHook() : _lock("BlockingHook::_lock") {}
+  BlockingHook() {}
 
   bool call(std::string command, cmdmap_t& cmdmap, std::string format, bufferlist& result) {
     Mutex::Locker l(_lock);

@@ -116,7 +116,7 @@ void Bencher::init(
   for (uint64_t i = 0; i < size; ++i) {
     bl.append(0);
   }
-  Mutex lock("init_lock");
+  Mutex lock;
   Cond cond;
   bool done = 0;
   {

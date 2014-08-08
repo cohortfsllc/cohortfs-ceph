@@ -19,7 +19,6 @@ namespace librbd {
     uint64_t cookie;
     WatchCtx(ImageCtx *ctx) : ictx(ctx),
 			      valid(true),
-			      lock("librbd::WatchCtx"),
 			      cookie(0) {}
     virtual ~WatchCtx() {}
     void invalidate();

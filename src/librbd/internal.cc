@@ -879,7 +879,7 @@ namespace librbd {
 
       bufferlist bl;
 
-      Mutex mylock("IoCtxImpl::write::mylock");
+      Mutex mylock;
       Cond cond;
       bool done;
       int ret;
@@ -930,7 +930,7 @@ namespace librbd {
 
   ssize_t read(ImageCtx *ictx, uint64_t ofs, size_t len, char *buf)
   {
-    Mutex mylock("IoCtxImpl::write::mylock");
+    Mutex mylock;
     Cond cond;
     bool done;
     int ret;
@@ -959,7 +959,7 @@ namespace librbd {
 			 << len << dendl;
 
     start_time = ceph_clock_now(ictx->cct);
-    Mutex mylock("librbd::write::mylock");
+    Mutex mylock;
     Cond cond;
     bool done;
     int ret;
@@ -1000,7 +1000,7 @@ namespace librbd {
 			 << len << dendl;
 
     start_time = ceph_clock_now(ictx->cct);
-    Mutex mylock("librbd::discard::mylock");
+    Mutex mylock;
     Cond cond;
     bool done;
     int ret;

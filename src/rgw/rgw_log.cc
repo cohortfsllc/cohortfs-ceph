@@ -103,7 +103,8 @@ class UsageLogger {
   }
 public:
 
-  UsageLogger(CephContext *_cct, RGWRados *_store) : cct(_cct), store(_store), lock("UsageLogger"), num_entries(0), timer_lock("UsageLogger::timer_lock"), timer(cct, timer_lock) {
+  UsageLogger(CephContext *_cct, RGWRados *_store)
+      : cct(_cct), store(_store), num_entries(0), timer(cct, timer_lock) {
     timer.init();
     Mutex::Locker l(timer_lock);
     set_timer();
@@ -236,7 +237,7 @@ void OpsLogSocket::init_connection(bufferlist& bl)
   bl.append("[");
 }
 
-OpsLogSocket::OpsLogSocket(CephContext *cct, uint64_t _backlog) : OutputDataSocket(cct, _backlog), lock("OpsLogSocket")
+OpsLogSocket::OpsLogSocket(CephContext *cct, uint64_t _backlog) : OutputDataSocket(cct, _backlog)
 {
   formatter = new JSONFormatter;
   delim.append(",\n");

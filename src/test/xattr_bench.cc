@@ -87,7 +87,7 @@ uint64_t do_run(ObjectStore *store, int attrsize, int numattrs,
 		int run,
 		int transsize, int ops,
 		ostream &out) {
-  Mutex lock("lock");
+  Mutex lock;
   Cond cond;
   int in_flight = 0;
   ObjectStore::Transaction t;

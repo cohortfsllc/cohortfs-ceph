@@ -62,7 +62,6 @@ struct MonClientPinger : public Dispatcher {
 
   MonClientPinger(CephContext *cct_, string *res_) :
     Dispatcher(cct_),
-    lock("MonClientPinger::lock"),
     result(res_),
     done(false)
   { }

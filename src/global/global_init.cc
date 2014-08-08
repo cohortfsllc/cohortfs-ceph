@@ -30,6 +30,7 @@
 #include "global/signal_handler.h"
 #include "include/compat.h"
 #include "include/color.h"
+#include "common/lockdep.h"
 
 #include <errno.h>
 #include <deque>

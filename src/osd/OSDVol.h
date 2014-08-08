@@ -395,7 +395,7 @@ public:
 
   int whoami();
   void lock_suspend_timeout(ThreadPool::TPHandle &handle);
-  void lock(bool no_lockdep = false);
+  void lock();
   void unlock() {
     assert(!dirty_info);
     _lock.Unlock();

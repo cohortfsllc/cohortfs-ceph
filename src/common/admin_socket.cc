@@ -108,7 +108,6 @@ AdminSocket::AdminSocket(CephContext *cct)
     m_sock_fd(-1),
     m_shutdown_rd_fd(-1),
     m_shutdown_wr_fd(-1),
-    m_lock("AdminSocket::m_lock"),
     m_version_hook(NULL),
     m_help_hook(NULL),
     m_getdescs_hook(NULL)

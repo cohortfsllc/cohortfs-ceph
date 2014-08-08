@@ -20,7 +20,6 @@
 MDSUtility::MDSUtility() :
   Dispatcher(g_ceph_context),
   objecter(NULL),
-  lock("MDSUtility::lock"),
   timer(g_ceph_context, lock),
   waiting_for_mds_map(NULL)
 {
@@ -79,7 +78,7 @@ int MDSUtility::init()
   timer.init();
 
   // Prepare to receive MDS map and request it
-  Mutex init_lock("MDSUtility:init");
+  Mutex init_lock;
   Cond cond;
   bool done = false;
   assert(!mdsmap->get_epoch());

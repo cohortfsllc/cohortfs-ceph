@@ -31,7 +31,7 @@ class CephContext;
 class AdminSocketHook {
 public:
   virtual bool call(std::string command, cmdmap_t &cmdmap, std::string format,
-		    bufferlist& out) = 0;
+		    ceph::bufferlist& out) = 0;
   virtual ~AdminSocketHook() {};
 };
 

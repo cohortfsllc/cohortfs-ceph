@@ -28,8 +28,7 @@
 using std::ostringstream;
 
 PerfCountersCollection::PerfCountersCollection(CephContext *cct)
-  : m_cct(cct),
-    m_lock("PerfCountersCollection")
+  : m_cct(cct)
 {
 }
 
@@ -279,9 +278,7 @@ PerfCounters::PerfCounters(CephContext *cct, const std::string &name,
   : m_cct(cct),
     m_lower_bound(lower_bound),
     m_upper_bound(upper_bound),
-    m_name(name.c_str()),
-    m_lock_name(std::string("PerfCounters::") + name.c_str()),
-    m_lock(m_lock_name.c_str())
+    m_name(name.c_str())
 {
   m_data.resize(upper_bound - lower_bound - 1);
 }

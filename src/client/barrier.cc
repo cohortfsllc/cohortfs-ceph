@@ -66,7 +66,7 @@ Barrier::~Barrier()
 
 /* BarrierContext */
 BarrierContext::BarrierContext(Client *c, uint64_t ino) :
-  cl(c), ino(ino), lock("BarrierContext")
+  cl(c), ino(ino)
 { };
 
 void BarrierContext::write_nobarrier(C_Block_Sync &cbs)

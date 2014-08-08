@@ -84,8 +84,7 @@ class Finisher {
   void wait_for_empty();
 
   Finisher(CephContext *cct_) :
-    cct(cct_), finisher_lock("Finisher::finisher_lock"),
-    finisher_stop(false), finisher_running(false),
+    cct(cct_), finisher_stop(false), finisher_running(false),
     logger(0),
     finisher_thread(this) {}
   Finisher(CephContext *cct_, string name) :

@@ -469,7 +469,7 @@ public:
   Mutex lock;
   Cond cond;
 
-  LoadGen(Rados *_rados) : rados(_rados), going_down(false), lock("LoadGen") {
+  LoadGen(Rados *_rados) : rados(_rados), going_down(false) {
     read_percent = 80;
     min_obj_len = 1024;
     max_obj_len = 5ull * 1024ull * 1024ull * 1024ull;

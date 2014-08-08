@@ -31,7 +31,6 @@
 
 librados::IoCtxImpl::IoCtxImpl() :
   ref_cnt(0), client(NULL), volume(), notify_timeout(30),
-  aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
   aio_write_seq(0), lock(NULL), objecter(NULL)
 {
 }
@@ -40,7 +39,6 @@ librados::IoCtxImpl::IoCtxImpl(RadosClient *c, Objecter *objecter,
 			       Mutex *client_lock, VolumeRef volume)
   : ref_cnt(0), client(c), volume(volume),
     notify_timeout(c->cct->_conf->client_notify_timeout),
-    aio_write_list_lock("librados::IoCtxImpl::aio_write_list_lock"),
     aio_write_seq(0), lock(client_lock), objecter(objecter)
 {
 }
@@ -122,7 +120,7 @@ int librados::IoCtxImpl::create(const object_t& oid, bool exclusive)
 {
   utime_t ut = ceph_clock_now(client->cct);
 
-  Mutex mylock("IoCtxImpl::create::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -149,7 +147,7 @@ int librados::IoCtxImpl::write(const object_t& oid, bufferlist& bl,
 {
   utime_t ut = ceph_clock_now(client->cct);
 
-  Mutex mylock("IoCtxImpl::create::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
 
@@ -177,7 +175,7 @@ int librados::IoCtxImpl::append(const object_t& oid, bufferlist& bl, size_t len)
 {
   utime_t ut = ceph_clock_now(client->cct);
 
-  Mutex mylock("IoCtxImpl::create::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -205,7 +203,7 @@ int librados::IoCtxImpl::write_full(const object_t& oid, bufferlist& bl)
 {
   utime_t ut = ceph_clock_now(client->cct);
 
-  Mutex mylock("IoCtxImpl::create::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -236,7 +234,7 @@ int librados::IoCtxImpl::operate(const object_t& oid, ::ObjectOperation *o,
   else
     ceph_clock_now(client->cct);
 
-  Mutex mylock("IoCtxImpl::create::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -268,7 +266,7 @@ int librados::IoCtxImpl::operate_read(const object_t& oid,
   if (!o->size())
     return 0;
 
-  Mutex mylock("IoCtxImpl::operate_read::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -526,7 +524,7 @@ int librados::IoCtxImpl::remove(const object_t& oid)
 {
   utime_t ut = ceph_clock_now(client->cct);
 
-  Mutex mylock("IoCtxImpl::create::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -552,7 +550,7 @@ int librados::IoCtxImpl::trunc(const object_t& oid, uint64_t size)
 {
   utime_t ut = ceph_clock_now(client->cct);
 
-  Mutex mylock("IoCtxImpl::create::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -634,7 +632,7 @@ int librados::IoCtxImpl::read(const object_t& oid, bufferlist& bl, size_t len,
   if (len > (size_t) INT_MAX)
     return -EDOM;
 
-  Mutex mylock("IoCtxImpl::operate_read::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -701,7 +699,7 @@ uint64_t librados::IoCtxImpl::op_size(void)
 
 int librados::IoCtxImpl::stat(const object_t& oid, uint64_t *psize, time_t *pmtime)
 {
-  Mutex mylock("IoCtxImpl::stat::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -732,7 +730,7 @@ int librados::IoCtxImpl::stat(const object_t& oid, uint64_t *psize, time_t *pmti
 int librados::IoCtxImpl::getxattr(const object_t& oid,
 				    const char *name, bufferlist& bl)
 {
-  Mutex mylock("IoCtxImpl::getxattr::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -758,7 +756,7 @@ int librados::IoCtxImpl::getxattr(const object_t& oid,
 int librados::IoCtxImpl::rmxattr(const object_t& oid, const char *name)
 {
   utime_t ut = ceph_clock_now(client->cct);
-  Mutex mylock("IoCtxImpl::rmxattr::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -786,7 +784,7 @@ int librados::IoCtxImpl::setxattr(const object_t& oid,
 {
   utime_t ut = ceph_clock_now(client->cct);
 
-  Mutex mylock("IoCtxImpl::setxattr::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -812,7 +810,7 @@ int librados::IoCtxImpl::setxattr(const object_t& oid,
 int librados::IoCtxImpl::getxattrs(const object_t& oid,
 				     map<std::string, bufferlist>& attrset)
 {
-  Mutex mylock("IoCtxImpl::getexattrs::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -845,7 +843,7 @@ int librados::IoCtxImpl::watch(const object_t& oid, uint64_t ver,
 			       uint64_t *cookie, librados::WatchCtx *ctx)
 {
   ::ObjectOperation wr;
-  Mutex mylock("IoCtxImpl::watch::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -895,7 +893,7 @@ int librados::IoCtxImpl::unwatch(const object_t& oid, uint64_t cookie)
 {
   bufferlist inbl, outbl;
 
-  Mutex mylock("IoCtxImpl::unwatch::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -923,8 +921,8 @@ int librados::IoCtxImpl::notify(const object_t& oid, bufferlist& bl)
 {
   bufferlist inbl, outbl;
 
-  Mutex mylock("IoCtxImpl::notify::mylock");
-  Mutex mylock_all("IoCtxImpl::notify::mylock_all");
+  Mutex mylock;
+  Mutex mylock_all;
   Cond cond, cond_all;
   bool done, done_all;
   int r;

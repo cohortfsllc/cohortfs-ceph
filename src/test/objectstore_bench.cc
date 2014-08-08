@@ -156,7 +156,7 @@ class OBS_Worker : public Thread
       }
 
       // set up the finisher
-      Mutex lock("osbench");
+      Mutex lock;
       Cond cond;
       bool done = false;
 

@@ -75,7 +75,6 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     instance_id(0),
     objecter(NULL),
     osdmap_epoch(0),
-    lock("librados::RadosClient::lock"),
     timer(cct, lock),
     refcnt(1),
     log_last_version(0), log_cb(NULL), log_cb_arg(NULL),
@@ -447,7 +446,7 @@ int librados::RadosClient::wait_for_osdmap()
 
 int librados::RadosClient::wait_for_latest_osdmap()
 {
-  Mutex mylock("RadosClient::wait_for_latest_osdmap");
+  Mutex mylock;
   Cond cond;
   bool done;
 
@@ -465,7 +464,7 @@ int librados::RadosClient::wait_for_latest_osdmap()
 
 int librados::RadosClient::get_fs_stats(ceph_statfs& stats)
 {
-  Mutex mylock ("RadosClient::get_fs_stats::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int ret = 0;

@@ -1003,7 +1003,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   int n = 0;
 
   // for object traces
-  Mutex lock("synclient foo");
+  Mutex lock;
   Cond cond;
   bool ack;
   bool safe;
@@ -2217,7 +2217,7 @@ int SyntheticClient::create_objects(int nobj, int osize, int inflight)
   bufferlist bl;
   bl.push_back(bp);
 
-  Mutex lock("create_objects lock");
+  Mutex lock;
   Cond cond;
 
   int unack = 0;
@@ -2306,7 +2306,7 @@ int SyntheticClient::object_rw(int nobj, int osize, int wrpc,
     prime += 2;
   }
 
-  Mutex lock("lock");
+  Mutex lock;
   Cond cond;
 
   int unack = 0;
@@ -3409,7 +3409,7 @@ int SyntheticClient::chunk_file(string &filename)
   while (pos < size) {
     int get = MIN(size-pos, 1048576);
 
-    Mutex flock("synclient chunk_file lock");
+    Mutex flock;
     Cond cond;
     bool done;
     bufferlist bl;

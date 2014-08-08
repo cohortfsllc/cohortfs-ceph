@@ -16,14 +16,7 @@
 #define CEPH_MUTEX_H
 
 #include <cassert>
-#include "lockdep.h"
-#include "common/ceph_context.h"
-
 #include <pthread.h>
-
-using namespace ceph;
-
-class PerfCounters;
 
 enum {
   l_mutex_first = 999082,
@@ -34,38 +27,41 @@ enum {
 class Mutex {
 private:
   const char *name;
-  int id;
   bool recursive;
-  bool lockdep;
-  bool backtrace;  // gather backtrace on lock acquisition
 
   pthread_mutex_t _m;
   int nlock;
   pthread_t locked_by;
-  CephContext *cct;
-  PerfCounters *logger;
 
   // don't allow copying.
   void operator=(Mutex &M);
   Mutex(const Mutex &M);
 
-  void _register() {
-    id = lockdep_register(name);
-  }
-  void _will_lock() { // about to lock
-    id = lockdep_will_lock(name, id);
-  }
-  void _locked() {    // just locked
-    id = lockdep_locked(name, id, backtrace);
-  }
-  void _will_unlock() {  // about to unlock
-    id = lockdep_will_unlock(name, id);
-  }
-
 public:
-  Mutex(const char *n, bool r = false, bool ld=true, bool bt=false,
-	CephContext *cct = 0);
-  ~Mutex();
+
+  Mutex(bool r = false) : recursive(r), nlock(0), locked_by(0)
+    {
+      if (recursive) {
+	// Mutexes of type PTHREAD_MUTEX_RECURSIVE do all the same checks as
+	// mutexes of type PTHREAD_MUTEX_ERRORCHECK.
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	pthread_mutex_init(&_m,&attr);
+	pthread_mutexattr_destroy(&attr);
+      } else {
+	// If the mutex type is PTHREAD_MUTEX_NORMAL, deadlock detection
+	// shall not be provided. Attempting to relock the mutex causes
+	// deadlock. If a thread attempts to unlock a mutex that  it  has not
+	// locked or a mutex which is unlocked, undefined behavior results.
+	pthread_mutex_init(&_m, NULL);
+      }
+    }
+  ~Mutex()
+    {
+      assert(nlock == 0);
+      pthread_mutex_destroy(&_m);
+    }
   bool is_locked() const {
     return (nlock > 0);
   }
@@ -75,14 +71,17 @@ public:
 
   bool TryLock() {
     int r = pthread_mutex_trylock(&_m);
-    if (r == 0) {
-      if (lockdep && g_lockdep) _locked();
+    if (r == 0)
       _post_lock();
-    }
     return r == 0;
   }
 
-  void Lock(bool no_lockdep=false);
+  void Lock()
+    {
+      int r = pthread_mutex_lock(&_m);
+      assert(r == 0);
+      _post_lock();
+    }
 
   void _post_lock() {
     if (!recursive) {
@@ -103,7 +102,6 @@ public:
   }
   void Unlock() {
     _pre_unlock();
-    if (lockdep && g_lockdep) _will_unlock();
     int r = pthread_mutex_unlock(&_m);
     assert(r == 0);
   }
@@ -124,6 +122,5 @@ public:
     }
   };
 };
-
 
 #endif

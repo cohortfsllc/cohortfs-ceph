@@ -57,8 +57,7 @@ public:
 
 public:
   Connection(Messenger *m)
-    : lock("Connection::lock"),
-      msgr(m),
+    : msgr(m),
       priv(NULL),
       peer_type(-1),
       features(0),

@@ -52,7 +52,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
 		uint64_t max_obj_size, uint64_t delay_ns,
 		uint64_t max_op_len, float percent_reads)
 {
-  Mutex lock("object_cacher_stress::object_cacher");
+  Mutex lock;
   FakeWriteback writeback(g_ceph_context, &lock, delay_ns);
 
   ObjectCacher obc(g_ceph_context, "test", writeback, lock, NULL, NULL,
@@ -137,7 +137,7 @@ int stress_test(uint64_t num_ops, uint64_t num_objs,
   lock.Unlock();
 
   int r = 0;
-  Mutex mylock("librbd::ImageCtx::flush_cache");
+  Mutex mylock;
   Cond cond;
   bool done;
   Context *onfinish = new C_SafeCond(&mylock, &cond, &done, &r);

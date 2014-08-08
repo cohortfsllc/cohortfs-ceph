@@ -53,7 +53,6 @@ public:
     max_in_flight(max_in_flight),
     max_duration(max_duration),
     max_ops(max_ops),
-    lock("Bencher::lock"),
     open_ops(0)
   {}
   Bencher(

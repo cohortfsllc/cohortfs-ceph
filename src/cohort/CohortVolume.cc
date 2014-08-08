@@ -275,7 +275,7 @@ class C_MultiCond : public Context {
 
 public:
   C_MultiCond(size_t ref, Context *dep)
-    : lock("C_MultiCond::lock"), rval(0), refcnt(ref), dependent(dep) {
+    : rval(0), refcnt(ref), dependent(dep) {
   }
   void finish(int r) {
     lock.Lock();
@@ -427,7 +427,7 @@ int CohortVolume::append(const object_t& oid, uint64_t len,
 			 Context *oncommit, Objecter *objecter)
 {
   /* A bit gross, but expedient */
-  Mutex mylock("CohortVolume::mylock");
+  Mutex mylock;
   Cond cond;
   bool done;
   int r;
@@ -525,7 +525,7 @@ public:
 
   C_MultiRead(size_t ref, Context *dep, bufferlist *b,
 	      const erasure_params *e, uint64_t o, uint64_t l)
-    : lock("C_MultiCond::lock"), rval(-ENOENT), refcnt(ref), dependent(dep),
+    : rval(-ENOENT), refcnt(ref), dependent(dep),
       bl(b), erasure(e), off(o), len(l), reads(ref) { }
 
   size_t ostripe(const uint64_t o) {

@@ -915,7 +915,6 @@ public:
 
   ObjectContext()
     : destructor_callback(0),
-      lock("ReplicatedPG::ObjectContext::lock"),
       unstable_writes(0), readers(0), writers_waiting(0), readers_waiting(0) {}
 
   ~ObjectContext() {

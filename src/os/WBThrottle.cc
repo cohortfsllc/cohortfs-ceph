@@ -11,7 +11,6 @@ WBThrottle::WBThrottle(CephContext *cct) :
   cct(cct),
   logger(NULL),
   stopping(true),
-  lock("WBThrottle::lock", false, true, false, cct),
   fs(XFS)
 {
   {

@@ -27,7 +27,6 @@
 ErasureCodePluginRegistry ErasureCodePluginRegistry::singleton;
 
 ErasureCodePluginRegistry::ErasureCodePluginRegistry() :
-  lock("ErasureCodePluginRegistry::lock"),
   loading(false),
   disable_dlclose(false)
 {

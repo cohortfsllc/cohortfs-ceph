@@ -26,7 +26,6 @@ class CephContext;
 class ThreadPool : public md_config_obs_t {
   CephContext *cct;
   string name;
-  string lockname;
   Mutex _lock;
   Cond _cond;
   bool _stop;
@@ -208,7 +207,7 @@ public:
 
   public:
     WorkQueueVal(string n, time_t ti, time_t sti, ThreadPool *p)
-      : WorkQueue_(n, ti, sti), _lock("WorkQueueVal::lock"), pool(p) {
+      : WorkQueue_(n, ti, sti), pool(p) {
       pool->add_work_queue(this);
     }
     ~WorkQueueVal() {

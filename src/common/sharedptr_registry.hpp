@@ -58,8 +58,7 @@ private:
 
 public:
   SharedPtrRegistry() :
-    waiting(0),
-    lock("SharedPtrRegistry::lock")
+    waiting(0)
   {}
 
   bool empty() {

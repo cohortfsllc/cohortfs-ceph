@@ -23,8 +23,7 @@ class FileStoreTracker {
   };
 public:
   FileStoreTracker(ObjectStore *store, KeyValueDB *db)
-    : store(store), db(db),
-      lock("Tracker Lock"), restart_seq(0) {}
+    : store(store), db(db), restart_seq(0) {}
 
   class Transaction {
     class Op {

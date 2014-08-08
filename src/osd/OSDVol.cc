@@ -64,10 +64,8 @@ OSDVol::OSDVol(OSDService *o, OSDMapRef curmap, uuid_d v) :
   osd(o),
   cct(o->cct),
   osdriver(osd->store, coll_t()),
-  map_lock("OSDVol::map_lock"),
   osdmap_ref(curmap), last_persisted_osdmap_ref(curmap),
-  _lock("OSDVol::_lock"), ref(0),
-  deleting(false), dirty_info(false),
+  ref(0), deleting(false), dirty_info(false),
   id(v), info(v), info_oid(hobject_t("info")),
   osr(osd->osr_registry.lookup_or_create(v, (stringify(v)))),
   finish_sync_event(NULL), coll(v),
@@ -96,9 +94,9 @@ void OSDVol::lock_suspend_timeout(ThreadPool::TPHandle &handle)
   handle.reset_tp_timeout();
 }
 
-void OSDVol::lock(bool no_lockdep)
+void OSDVol::lock()
 {
-  _lock.Lock(no_lockdep);
+  _lock.Lock();
   // if we have unrecorded dirty state with the lock dropped, there is a bug
   assert(!dirty_info);
 

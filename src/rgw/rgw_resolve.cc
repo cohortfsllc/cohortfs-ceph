@@ -24,7 +24,7 @@ class RGWDNSResolver {
 
 public:
   ~RGWDNSResolver();
-  RGWDNSResolver() : lock("RGWDNSResolver") {}
+  RGWDNSResolver() {}
   int resolve_cname(const string& hostname, string& cname, bool *found);
 };
 

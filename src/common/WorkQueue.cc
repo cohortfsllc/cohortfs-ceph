@@ -28,8 +28,6 @@
 
 ThreadPool::ThreadPool(CephContext *cct_, string nm, int n, const char *option)
   : cct(cct_), name(nm),
-    lockname(nm + "::lock"),
-    _lock(lockname.c_str()),  // this should be safe due to declaration order
     _stop(false),
     _pause(0),
     _draining(0),

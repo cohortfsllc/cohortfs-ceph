@@ -732,9 +732,7 @@ KvFlatBtreeAsync(int k_val, string name, int cache, double cache_r,
     cache_size(cache),
     cache_refresh(cache_r),
     verbose(verb),
-    client_index_lock("client_index_lock"),
     client_index(0),
-    icache_lock("icache_lock"),
     icache(cache)
   {}
 

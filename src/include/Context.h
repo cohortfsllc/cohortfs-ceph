@@ -252,8 +252,7 @@ private:
   C_Gather(CephContext *cct_, Context *onfinish_)
     : cct(cct_), result(0), onfinish(onfinish_),
       sub_created_count(0), sub_existing_count(0),
-      lock("C_Gather::lock", true, false), //disable lockdep
-      activated(false)
+      lock(true), activated(false)
   {
     mydout(cct,10) << "C_Gather " << this << ".new" << dendl;
   }

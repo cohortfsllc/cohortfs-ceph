@@ -38,8 +38,7 @@ public:
   RotatingKeyRing(CephContext *cct_, uint32_t s, KeyRing *kr) :
     cct(cct_),
     service_id(s),
-    keyring(kr),
-    lock("RotatingKeyRing::lock") {}
+    keyring(kr) {}
 
   bool need_new_secrets() const;
   bool need_new_secrets(utime_t now) const;
