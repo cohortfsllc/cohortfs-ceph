@@ -37,7 +37,7 @@ protected:
   void *place_shared;
 
   CohortVolume(vol_type t)
-    : Volume(t), compile_lock("CohortVolume::compile_lock"),
+    : Volume(t),
       place_text(), symbols(),
       entry_points(),
       compiled_epoch(0),

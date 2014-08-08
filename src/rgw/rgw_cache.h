@@ -144,7 +144,7 @@ class ObjectCache {
   void touch_lru(string& name, ObjectCacheEntry& entry, std::list<string>::iterator& lru_iter);
   void remove_lru(string& name, std::list<string>::iterator& lru_iter);
 public:
-  ObjectCache() : lru_size(0), lru_counter(0), lru_window(0), lock("ObjectCache"), cct(NULL) { }
+  ObjectCache() : lru_size(0), lru_counter(0), lru_window(0), cct(NULL) { }
   int get(std::string& name, ObjectCacheInfo& bl, uint32_t mask);
   void put(std::string& name, ObjectCacheInfo& bl);
   void remove(std::string& name);

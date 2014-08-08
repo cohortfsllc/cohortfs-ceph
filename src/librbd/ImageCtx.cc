@@ -40,7 +40,6 @@ namespace librbd {
 #endif
       refresh_seq(0),
       last_refresh(0),
-      md_lock("ImageCtx::md_lock"),
       size(0),
       object_cacher(NULL), writeback_handler(NULL), object_set(NULL)
   {

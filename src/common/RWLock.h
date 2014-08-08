@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 
@@ -18,21 +18,14 @@
 #define CEPH_RWLock_Posix__H
 
 #include <pthread.h>
-#include "lockdep.h"
 
 class RWLock
 {
   mutable pthread_rwlock_t L;
-  const char *name;
-  mutable int id;
 
 public:
-  RWLock(const RWLock& other);
-  const RWLock& operator=(const RWLock& other);
-
-  RWLock(const char *n) : name(n), id(-1) {
+  RWLock() {
     pthread_rwlock_init(&L, NULL);
-    if (g_lockdep) id = lockdep_register(name);
   }
 
   virtual ~RWLock() {
@@ -41,19 +34,15 @@ public:
   }
 
   void unlock() const {
-    if (g_lockdep) id = lockdep_will_unlock(name, id);
     pthread_rwlock_unlock(&L);
   }
 
   // read
   void get_read() const {
-    if (g_lockdep) id = lockdep_will_lock(name, id);
     pthread_rwlock_rdlock(&L);
-    if (g_lockdep) id = lockdep_locked(name, id);
   }
   bool try_get_read() const {
     if (pthread_rwlock_tryrdlock(&L) == 0) {
-      if (g_lockdep) id = lockdep_locked(name, id);
       return true;
     }
     return false;
@@ -64,13 +53,10 @@ public:
 
   // write
   void get_write() {
-    if (g_lockdep) id = lockdep_will_lock(name, id);
     pthread_rwlock_wrlock(&L);
-    if (g_lockdep) id = lockdep_locked(name, id);
   }
   bool try_get_write() {
     if (pthread_rwlock_trywrlock(&L) == 0) {
-      if (g_lockdep) id = lockdep_locked(name, id);
       return true;
     }
     return false;

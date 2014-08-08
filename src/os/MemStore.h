@@ -38,7 +38,7 @@ public:
     bufferlist omap_header;
     map<string,bufferlist> omap;
 
-    Object() : omap_lock("Memstore::Object::omap_lock"), data_len(0) {}
+    Object() : data_len(0) {}
 
     void encode(bufferlist& bl) const {
       ENCODE_START(2, 2, bl);
@@ -146,7 +146,7 @@ public:
       DECODE_FINISH(p);
     }
 
-    Collection() : lock("MemStore::Collection::lock") {}
+    Collection() {}
   };
   typedef ceph::shared_ptr<Collection> CollectionRef;
 
@@ -302,7 +302,6 @@ public:
 	    g_conf->filestore_op_threads, "memstore_tx_threads"),
       tx_wq(this, g_conf->filestore_op_thread_timeout,
 	    g_conf->filestore_op_thread_suicide_timeout, &tx_tp),
-      coll_lock("MemStore::coll_lock"),
       finisher(cct) { }
   ~MemStore() { }
 

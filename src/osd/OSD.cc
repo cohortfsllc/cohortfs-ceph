@@ -22,6 +22,7 @@
 #include <signal.h>
 #include <ctype.h>
 #include <boost/scoped_ptr.hpp>
+#include "common/lockdep.h"
 
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
@@ -431,7 +432,6 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   heartbeat_dispatcher(this),
   op_tracker(cct, cct->_conf->osd_enable_op_tracker),
   op_wq(this, cct->_conf->osd_op_thread_timeout, &op_tp),
-  map_lock("OSD::map_lock"),
   up_thru_wanted(0), up_thru_pending(0), service(this)
 {
   monc->set_messenger(client_messenger);

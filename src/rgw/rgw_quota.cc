@@ -517,8 +517,9 @@ protected:
   }
 
 public:
-  RGWUserStatsCache(RGWRados *_store, bool quota_threads) : RGWQuotaCache<string>(_store, _store->ctx()->_conf->rgw_bucket_quota_cache_size),
-                                        rwlock("RGWUserStatsCache::rwlock") {
+  RGWUserStatsCache(RGWRados *_store, bool quota_threads)
+    : RGWQuotaCache<string>(
+      _store, _store->ctx()->_conf->rgw_bucket_quota_cache_size) {
     if (quota_threads) {
       buckets_sync_thread = new BucketsSyncThread(store->ctx(), this);
       buckets_sync_thread->create();
