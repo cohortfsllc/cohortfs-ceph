@@ -209,7 +209,6 @@ set(libcommon_files
   common/mime.c
   common/strtol.cc
   common/page.cc
-  common/lockdep.cc
   common/version.cc
   common/hex.cc
   common/entity_name.cc

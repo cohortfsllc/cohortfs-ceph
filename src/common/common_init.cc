@@ -23,7 +23,6 @@
 #include "common/safe_io.h"
 #include "common/version.h"
 #include "include/color.h"
-#include "common/lockdep.h"
 
 #include <errno.h>
 #include <deque>
@@ -119,9 +118,4 @@ void common_init_finish(CephContext *cct, int flags)
 
   if (!(flags & CINIT_FLAG_NO_DAEMON_ACTIONS))
     cct->start_service_thread();
-
-  if (cct->_conf->lockdep) {
-    g_lockdep = true;
-    lockdep_register_ceph_context(cct);
-  }
 }

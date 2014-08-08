@@ -24,7 +24,6 @@ OPTION(client_rdma, OPT_BOOL, false)
 OPTION(num_client, OPT_INT, 1)
 OPTION(monmap, OPT_STR, "")
 OPTION(mon_host, OPT_STR, "")
-OPTION(lockdep, OPT_BOOL, false)
 OPTION(run_dir, OPT_STR, "/var/run/ceph")       // the "/var/run/ceph" dir, created on daemon startup
 OPTION(admin_socket, OPT_STR, "$run_dir/$cluster-$name.asok") // default changed by common_preinit()
 
@@ -59,7 +58,6 @@ OPTION(mon_cluster_log_file, OPT_STR, "/var/log/ceph/$cluster.log")
 OPTION(mon_cluster_log_file_level, OPT_STR, "info")
 
 DEFAULT_SUBSYS(0, 5)
-SUBSYS(lockdep, 0, 1)
 SUBSYS(context, 0, 1)
 SUBSYS(mds, 1, 5)
 SUBSYS(mds_balancer, 1, 5)

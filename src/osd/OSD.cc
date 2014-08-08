@@ -22,7 +22,6 @@
 #include <signal.h>
 #include <ctype.h>
 #include <boost/scoped_ptr.hpp>
-#include "common/lockdep.h"
 
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
@@ -812,9 +811,6 @@ void OSD::suicide(int exitcode)
     derr << " filestore_blackhole=true, doing abbreviated shutdown" << dendl;
     _exit(exitcode);
   }
-
-  // turn off lockdep; the surviving threads tend to fight with exit() below
-  g_lockdep = 0;
 
   derr << " pausing thread pools" << dendl;
   op_tp.pause();

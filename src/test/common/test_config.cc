@@ -67,9 +67,6 @@ public:
       std::string mon_host = "$cluster_network";
       EXPECT_EQ(0, set_val("mon_host", mon_host.c_str(), false));
 
-      std::string lockdep = "true";
-      EXPECT_EQ(0, set_val("lockdep", lockdep.c_str(), false));
-
       std::string cluster_network = "$public_network $public_network $lockdep $host";
       EXPECT_EQ(0, set_val("cluster_network", cluster_network.c_str(), false));
 
@@ -81,7 +78,6 @@ public:
       EXPECT_TRUE(expand_meta(val, &oss));
       EXPECT_EQ(public_network + " " +
                 public_network + " " +
-                lockdep + " " +
                 "localhost", val);
       EXPECT_EQ("", oss.str());
     }
