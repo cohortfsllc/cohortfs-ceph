@@ -148,7 +148,6 @@ void global_init(std::vector < const char * > *alt_def_args,
   if (g_lockdep) {
     lockdep_register_ceph_context(g_ceph_context);
   }
-  register_assert_context(g_ceph_context);
 
   // call all observers now.  this has the side-effect of configuring
   // and opening the log file immediately.

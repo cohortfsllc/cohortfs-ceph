@@ -14,6 +14,7 @@
 
 #include <fcntl.h>
 #include <iostream>
+#include <cassert>
 #include <string.h>
 #include <string>
 
@@ -34,7 +35,6 @@
 #include "include/str_list.h"
 #include "messages/MMonMap.h"
 #include "msg/Messenger.h"
-#include "include/assert.h"
 
 struct ceph_mount_info
 {

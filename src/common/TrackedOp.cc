@@ -14,10 +14,10 @@
 #include "common/Formatter.h"
 #include <iostream>
 #include <vector>
+#include <cassert>
 #include "common/debug.h"
 #include "common/config.h"
 #include "msg/Message.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_optracker
 #undef dout_prefix

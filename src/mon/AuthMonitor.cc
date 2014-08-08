@@ -12,6 +12,7 @@
  * 
  */
 
+#include <cassert>
 #include <sstream>
 
 #include "mon/AuthMonitor.h"
@@ -32,7 +33,6 @@
 #include "osd/osd_types.h"
 
 #include "common/config.h"
-#include "include/assert.h"
 #include "common/cmdparse.h"
 #include "include/str_list.h"
 

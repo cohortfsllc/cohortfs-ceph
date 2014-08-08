@@ -12,6 +12,7 @@
  * 
  */
 
+#include <cassert>
 #include "MDS.h"
 #include "MDCache.h"
 #include "SessionMap.h"
@@ -19,7 +20,6 @@
 
 #include "common/config.h"
 #include "common/errno.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix

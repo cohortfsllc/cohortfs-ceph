@@ -33,9 +33,9 @@
 #include "Watch.h"
 #include <sstream>
 #include <utility>
+#include <cassert>
 #include <errno.h>
 #include "common/BackTrace.h"
-#include "include/assert.h"  // json_spirit clobbers it
 
 #define dout_subsys ceph_subsys_osd
 #define DOUT_PREFIX_ARGS this, osd->whoami, get_osdmap()

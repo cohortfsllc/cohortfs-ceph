@@ -18,6 +18,7 @@
 #include <signal.h>
 #include <limits.h>
 #include <cstring>
+#include <cassert>
 
 #include "Monitor.h"
 #include "common/version.h"
@@ -80,7 +81,6 @@
 
 #include "common/config.h"
 #include "common/cmdparse.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix

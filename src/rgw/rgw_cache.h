@@ -1,12 +1,12 @@
 #ifndef CEPH_RGWCACHE_H
 #define CEPH_RGWCACHE_H
 
+#include <cassert>
 #include "rgw_rados.h"
 #include <string>
 #include <map>
 #include "include/types.h"
 #include "include/utime.h"
-#include "include/assert.h"
 #include "common/RWLock.h"
 
 enum {

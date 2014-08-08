@@ -56,11 +56,7 @@ extern "C" {
 }
 #endif /* HAVE_XIO */
 
-#ifdef __CEPH__
-# include "include/assert.h"
-#else
 # include <assert.h>
-#endif
 
 class XioCompletionHook;
 

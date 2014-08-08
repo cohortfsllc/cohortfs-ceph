@@ -13,6 +13,7 @@
  */
 #include "acconfig.h"
 
+#include <cassert>
 #include <fstream>
 #include <iostream>
 #include <errno.h>
@@ -94,7 +95,6 @@
 #include "common/cmdparse.h"
 #include "include/str_list.h"
 
-#include "include/assert.h"
 #include "common/config.h"
 
 #define dout_subsys ceph_subsys_osd
@@ -660,7 +660,6 @@ int OSD::init()
     }
   }
 
-  assert_warn(whoami == superblock.whoami);
   if (whoami != superblock.whoami) {
     derr << "OSD::init: superblock says osd"
 	 << superblock.whoami << " but i am osd." << whoami << dendl;
@@ -701,7 +700,6 @@ int OSD::init()
   }
 
   // load up "current" osdmap
-  assert_warn(!osdmap);
   if (osdmap) {
     derr << "OSD::init: unable to read current osdmap" << dendl;
     r = -EINVAL;

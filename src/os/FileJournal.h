@@ -225,7 +225,7 @@ private:
   bool directio, aio, force_aio;
   bool must_write_header;
   off64_t write_pos;      // byte where the next entry to be written will go
-  off64_t read_pos;       // 
+  off64_t read_pos;
 
 #ifdef HAVE_LIBAIO
   /// state associated with an in-flight aio request
@@ -236,7 +236,7 @@ private:
     struct iovec *iov;
     bool done;
     uint64_t off, len;    ///< these are for debug only
-    uint64_t seq;         ///< seq number to complete on aio completion, if non-zero
+    uint64_t seq; ///< seq number to complete on aio completion, if non-zero
 
     aio_info(bufferlist& b, uint64_t o, uint64_t s)
       : iov(NULL), done(false), off(o), len(b.length()), seq(s) {

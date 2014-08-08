@@ -15,8 +15,8 @@
 #include "include/linux_fiemap.h"
 #include "include/color.h"
 #include "include/buffer.h"
-#include "include/assert.h"
 
+#include <cassert>
 #include <iostream>
 #include <fstream>
 #include <sstream>

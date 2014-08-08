@@ -13,6 +13,7 @@
  *
  */
 
+#include <cassert>
 #include "XioMsg.h"
 #include "XioConnection.h"
 #include "XioMessenger.h"
@@ -20,7 +21,6 @@
 
 #include "auth/none/AuthNoneProtocol.h" // XXX
 
-#include "include/assert.h"
 #include "common/dout.h"
 
 extern struct xio_mempool *xio_msgr_mpool;

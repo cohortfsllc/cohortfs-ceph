@@ -3,6 +3,7 @@
 #include "include/buffer.h"
 
 #include <iostream>
+#include <cassert>
 #include <set>
 #include <map>
 #include <string>
@@ -16,7 +17,6 @@
 
 #include "common/debug.h"
 #include "common/config.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix

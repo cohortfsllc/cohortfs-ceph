@@ -6,6 +6,7 @@
 #include "include/types.h"
 #include "include/buffer.h"
 #include "KeyValueDB.h"
+#include <cassert>
 #include <set>
 #include <map>
 #include <string>
@@ -23,7 +24,6 @@
 #include <errno.h>
 #include "common/errno.h"
 #include "common/dout.h"
-#include "include/assert.h"
 #include "common/Formatter.h"
 
 #include "common/ceph_context.h"

@@ -29,6 +29,7 @@
 #include <sys/statvfs.h>
 
 #include <iostream>
+#include <cassert>
 using namespace std;
 
 #include "common/config.h"
@@ -80,7 +81,6 @@ using namespace std;
 #include "MetaRequest.h"
 #include "ObjecterWriteback.h"
 
-#include "include/assert.h"
 #include "include/stat.h"
 
 #undef dout_prefix

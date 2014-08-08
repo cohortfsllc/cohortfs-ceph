@@ -12,8 +12,8 @@
  *
  */
 
+#include <cassert>
 #include <boost/lexical_cast.hpp>
-#include "include/assert.h"  // lexical_cast includes system assert.h
 
 #include <boost/config/warning_disable.hpp>
 #include <boost/spirit/include/qi.hpp>

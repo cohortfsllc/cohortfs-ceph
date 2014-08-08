@@ -4,6 +4,7 @@
 #ifndef CEPH_CLIENT_INODE_H
 #define CEPH_CLIENT_INODE_H
 
+#include <cassert>
 #include "include/types.h"
 #include "include/xlist.h"
 #include "include/filepath.h"
@@ -11,7 +12,6 @@
 #include "mds/mdstypes.h" // hrm
 
 #include "osdc/ObjectCacher.h"
-#include "include/assert.h"
 
 struct MetaSession;
 class Dentry;

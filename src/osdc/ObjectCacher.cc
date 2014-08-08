@@ -9,7 +9,7 @@
 #include "common/errno.h"
 #include "common/perf_counters.h"
 
-#include "include/assert.h"
+#include <cassert>
 
 #define MAX_FLUSH_UNDER_LOCK 20	 ///< max bh's we start writeback on while holding the lock
 

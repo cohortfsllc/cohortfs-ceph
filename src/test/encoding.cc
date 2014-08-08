@@ -33,17 +33,6 @@ TEST(EncodingRoundTrip, StringNewline) {
 typedef std::multimap < int, std::string > multimap_t;
 typedef multimap_t::value_type my_val_ty;
 
-static std::ostream& operator<<(std::ostream& oss, const multimap_t &multimap)
-{
-  for (multimap_t::const_iterator m = multimap.begin();
-       m != multimap.end();
-       ++m)
-  {
-    oss << m->first << "->" << m->second << " ";
-  }
-  return oss;
-}
-
 TEST(EncodingRoundTrip, Multimap) {
   multimap_t multimap;
   multimap.insert( my_val_ty(1, "foo") );

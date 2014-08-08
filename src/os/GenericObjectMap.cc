@@ -16,6 +16,7 @@
 
 #include "include/buffer.h"
 
+#include <cassert>
 #include <iostream>
 #include <set>
 #include <map>
@@ -27,7 +28,6 @@
 #include "GenericObjectMap.h"
 #include "common/debug.h"
 #include "common/config.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_keyvaluestore
 const string GenericObjectMap::GLOBAL_STATE_KEY = "HEADER";

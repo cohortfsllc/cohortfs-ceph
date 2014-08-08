@@ -20,10 +20,10 @@
 #include <string>
 #include <boost/scoped_ptr.hpp>
 #include <sstream>
+#include <cassert>
 #include "os/KeyValueDB.h"
 #include "os/LevelDBStore.h"
 
-#include "include/assert.h"
 #include "common/Formatter.h"
 #include "common/errno.h"
 
@@ -246,7 +246,7 @@ class MonitorDBStore
 	break;
       default:
 	derr << __func__ << " unknown op type " << op.type << dendl;
-	ceph_assert(0);
+	abort();
 	break;
       }
     }

@@ -12,6 +12,7 @@
  *
  */
 
+#include <cassert>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -46,7 +47,6 @@
 #include "IoCtxImpl.h"
 #include "RadosClient.h"
 
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_rados
 #undef dout_prefix

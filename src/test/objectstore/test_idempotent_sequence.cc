@@ -10,6 +10,7 @@
 * License version 2.1, as published by the Free Software
 * Foundation. See file COPYING.
 */
+#include <cassert>
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
@@ -25,7 +26,6 @@
 #include "FileStoreDiff.h"
 
 #include "common/config.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_
 #undef dout_prefix
@@ -148,10 +148,10 @@ int run_sequence_to(int val, std::string& filestore_path,
   }
   
   err = store->mkfs();
-  ceph_assert(err == 0);
+  assert(err == 0);
 
   err = store->mount();
-  ceph_assert(err == 0);
+  assert(err == 0);
 
   DeterministicOpSequence op_sequence(store, status_file);
   op_sequence.init(num_colls, num_objs);

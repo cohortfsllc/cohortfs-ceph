@@ -7,11 +7,12 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
+#include <cassert>
 #include "PaxosService.h"
 #include "common/Clock.h"
 #include "Monitor.h"
@@ -19,7 +20,6 @@
 
 
 #include "common/config.h"
-#include "include/assert.h"
 #include "common/Formatter.h"
 
 #define dout_subsys ceph_subsys_paxos

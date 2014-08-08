@@ -13,6 +13,7 @@
  */
 
 #include <string>
+#include <cassert>
 #include <stdio.h>
 
 #include "CInode.h"
@@ -38,7 +39,6 @@
 
 #include "common/config.h"
 #include "global/global_context.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix

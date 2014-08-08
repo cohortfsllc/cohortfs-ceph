@@ -20,13 +20,13 @@
 
 #include "include/types.h"
 
+#include <cassert>
 #include <map>
 #include <deque>
 #include <boost/scoped_ptr.hpp>
 #include <fstream>
 using namespace std;
 
-#include "include/assert.h"
 
 #include "ObjectStore.h"
 

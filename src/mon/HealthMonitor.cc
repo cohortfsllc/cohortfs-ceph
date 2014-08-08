@@ -13,12 +13,11 @@
  */
 
 #include <sstream>
+#include <cassert>
 #include <stdlib.h>
 #include <limits.h>
 
 #include <boost/intrusive_ptr.hpp>
-// Because intusive_ptr clobbers our assert...
-#include "include/assert.h"
 
 #include "mon/Monitor.h"
 #include "mon/QuorumService.h"

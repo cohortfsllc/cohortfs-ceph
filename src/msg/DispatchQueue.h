@@ -16,8 +16,8 @@
 #define CEPH_DISPATCHQUEUE_H
 
 #include <map>
+#include <cassert>
 #include <boost/intrusive_ptr.hpp>
-#include "include/assert.h"
 #include "include/xlist.h"
 #include "include/atomic.h"
 #include "common/Mutex.h"

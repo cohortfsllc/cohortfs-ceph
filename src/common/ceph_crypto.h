@@ -10,13 +10,12 @@
 
 #ifdef USE_CRYPTOPP
 # define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
+#include "common/ceph_context.h"
+#include <cassert>
 #include <string.h>
-# include <cryptopp/md5.h>
-# include <cryptopp/sha.h>
-# include <cryptopp/hmac.h>
-
-// reinclude our assert to clobber the system one
-# include "include/assert.h"
+#include <cryptopp/md5.h>
+#include <cryptopp/sha.h>
+#include <cryptopp/hmac.h>
 
 namespace ceph {
   namespace crypto {
@@ -40,15 +39,16 @@ namespace ceph {
 }
 #elif USE_NSS
 // you *must* use CRYPTO_CXXFLAGS in Makefile.am for including this include
-# include <nss.h>
-# include <pk11pub.h>
+#include <cassert>
+#include <nss.h>
+#include <pk11pub.h>
+#include "common/ceph_context.h"
 
 // NSS thinks a lot of fairly fundamental operations might potentially
 // fail, because it has been written to support e.g. smartcards doing all
 // the crypto operations. We don't want to contaminate too much code
 // with error checking, and just say these really should never fail.
 // This assert MUST NOT be compiled out, even on non-debug builds.
-# include "include/assert.h"
 
 // ugly bit of CryptoPP that we have to emulate here :(
 typedef unsigned char byte;

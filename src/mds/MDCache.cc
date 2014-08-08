@@ -18,6 +18,7 @@
 #include <sstream>
 #include <string>
 #include <map>
+#include <cassert>
 
 #include "MDCache.h"
 #include "MDS.h"
@@ -98,7 +99,6 @@ using namespace std;
 extern struct ceph_file_layout g_default_file_layout;
 
 #include "common/config.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix

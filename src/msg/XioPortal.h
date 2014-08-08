@@ -16,6 +16,7 @@
 #ifndef XIO_PORTAL_H
 #define XIO_PORTAL_H
 
+#include <cassert>
 extern "C" {
 #include "libxio.h"
 }
@@ -25,7 +26,6 @@ extern "C" {
 #include "XioConnection.h"
 #include "XioMsg.h"
 
-#include "include/assert.h"
 #include "common/dout.h"
 
 #ifndef CACHE_LINE_SIZE

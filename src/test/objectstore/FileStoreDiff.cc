@@ -29,10 +29,10 @@ FileStoreDiff::FileStoreDiff(FileStore *a, FileStore *b)
 {
   int err;
   err = a_store->mount();
-  ceph_assert(err == 0);
+  assert(err == 0);
 
   err = b_store->mount();
-  ceph_assert(err == 0);
+  assert(err == 0);
 }
 
 FileStoreDiff::~FileStoreDiff()

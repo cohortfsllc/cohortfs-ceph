@@ -43,8 +43,8 @@ int main(int argc, char **argv)
   while (loop++ < count) {
     ret = safe_write(fd, buf, bsize);
     if (ret)
-      ceph_abort();
-    //if ((loop % 100) == 0) 
+      abort();
+    //if ((loop % 100) == 0)
     //fprintf(stderr, ".");
   }
   ::fsync(fd);

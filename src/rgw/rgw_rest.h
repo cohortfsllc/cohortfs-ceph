@@ -2,8 +2,8 @@
 #define CEPH_RGW_REST_H
 #define TIME_BUF_SIZE 128
 
+#include <cassert>
 #include "common/ceph_json.h"
-#include "include/assert.h" /* needed because of common/ceph_json.h */
 #include "rgw_op.h"
 #include "rgw_formats.h"
 

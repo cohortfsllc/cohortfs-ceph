@@ -17,10 +17,10 @@
 
 #include <stdlib.h>
 #include <ostream>
+#include <cassert>
 
 #include <boost/intrusive_ptr.hpp>
 // Because intusive_ptr clobbers our assert...
-#include "include/assert.h"
 
 #include "include/types.h"
 #include "include/buffer.h"

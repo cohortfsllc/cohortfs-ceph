@@ -14,6 +14,7 @@
 
 #define FUSE_USE_VERSION 30
 
+#include <cassert>
 #include <fuse/fuse.h>
 #include <fuse/fuse_lowlevel.h>
 #include <signal.h>
@@ -32,7 +33,6 @@
 #include "Fh.h"
 #include "ioctl.h"
 #include "common/config.h"
-#include "include/assert.h"
 
 #include "fuse_ll.h"
 
@@ -686,7 +686,7 @@ static void do_init(void *data, fuse_conn_info *bar)
     if (err) {
       derr << "fuse_ll: do_init: safe_write failed with error "
 	   << cpp_strerror(err) << dendl;
-      ceph_abort();
+      abort();
     }
     //cout << "fuse init done signaling on fd " << fd_on_success << std::endl;
 

@@ -11,6 +11,8 @@
  * Foundation.	See file COPYING.
  *
  */
+
+#include <cassert>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -70,7 +72,6 @@
 #include "common/ceph_crypto.h"
 using ceph::crypto::SHA1;
 
-#include "include/assert.h"
 
 #include "common/config.h"
 
@@ -2859,7 +2860,7 @@ public:
     bt->print(*_dout);
     *_dout << dendl;
     delete bt;
-    ceph_abort();
+    abort();
   }
 private:
   int m_commit_timeo;

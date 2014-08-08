@@ -3,6 +3,7 @@
 #ifndef CEPH_MDSTYPES_H
 #define CEPH_MDSTYPES_H
 
+#include <cassert>
 #include <math.h>
 #include <ostream>
 #include <set>
@@ -19,7 +20,6 @@ using namespace std;
 #include "include/interval_set.h"
 #include "inode_backtrace.h"
 #include <boost/pool/pool.hpp>
-#include "include/assert.h"
 #include "include/hash_namespace.h"
 
 #define CEPH_FS_ONDISK_MAGIC "ceph fs volume v011"

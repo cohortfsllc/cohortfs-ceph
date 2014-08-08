@@ -13,6 +13,7 @@
  */
 
 
+#include <cassert>
 #include "include/types.h"
 
 #include "CDir.h"
@@ -33,7 +34,6 @@
 #include "osdc/Objecter.h"
 
 #include "common/config.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix

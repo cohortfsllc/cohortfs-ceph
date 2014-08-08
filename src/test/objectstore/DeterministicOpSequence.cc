@@ -10,6 +10,7 @@
 * License version 2.1, as published by the Free Software
 * Foundation. See file COPYING.
 */
+#include <cassert>
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
@@ -28,7 +29,6 @@
 #include "DeterministicOpSequence.h"
 
 #include "common/config.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix
@@ -145,7 +145,7 @@ bool DeterministicOpSequence::do_touch(rngen_t& gen)
   int obj_id = _gen_obj_id(gen);
 
   coll_entry_t *entry = get_coll_at(coll_id);
-  ceph_assert(entry != NULL);
+  assert(entry != NULL);
 
   // Don't care about other collections if already exists
   if (!entry->check_for_obj(obj_id)) {
@@ -153,7 +153,7 @@ bool DeterministicOpSequence::do_touch(rngen_t& gen)
     map<int, coll_entry_t*>::iterator it = m_collections.begin();
     for (; it != m_collections.end(); ++it) {
       if (it->second->check_for_obj(obj_id)) {
-        ceph_assert(it->first != coll_id);
+        assert(it->first != coll_id);
         other_found = true;
       }
     }
@@ -175,7 +175,7 @@ bool DeterministicOpSequence::do_remove(rngen_t& gen)
   int coll_id = _gen_coll_id(gen);
 
   coll_entry_t *entry = get_coll_at(coll_id);
-  ceph_assert(entry != NULL);
+  assert(entry != NULL);
 
   if (entry->m_objects.size() == 0) {
     dout(0) << "do_remove no objects in collection" << dendl;
@@ -183,13 +183,13 @@ bool DeterministicOpSequence::do_remove(rngen_t& gen)
   }
   int obj_id = entry->get_random_obj_id(gen);
   hobject_t *obj = entry->touch_obj(obj_id);
-  ceph_assert(obj);
+  assert(obj);
 
   dout(0) << "do_remove " << entry->m_coll.to_str() << "/" << obj->oid.name << dendl;
 
   _do_remove(entry->m_coll, *obj);
   hobject_t *rmobj = entry->remove_obj(obj_id);
-  ceph_assert(rmobj);
+  assert(rmobj);
   delete rmobj;
   return true;
 }
@@ -231,7 +231,7 @@ bool DeterministicOpSequence::do_set_attrs(rngen_t& gen)
   int coll_id = _gen_coll_id(gen);
 
   coll_entry_t *entry = get_coll_at(coll_id);
-  ceph_assert(entry != NULL);
+  assert(entry != NULL);
 
   if (entry->m_objects.size() == 0) {
     dout(0) << "do_set_attrs no objects in collection" << dendl;
@@ -239,7 +239,7 @@ bool DeterministicOpSequence::do_set_attrs(rngen_t& gen)
   }
   int obj_id = entry->get_random_obj_id(gen);
   hobject_t *obj = entry->touch_obj(obj_id);
-  ceph_assert(obj);
+  assert(obj);
 
   map<string, bufferlist> out;
   gen_attrs(gen, &out);
@@ -254,7 +254,7 @@ bool DeterministicOpSequence::do_write(rngen_t& gen)
   int coll_id = _gen_coll_id(gen);
 
   coll_entry_t *entry = get_coll_at(coll_id);
-  ceph_assert(entry != NULL);
+  assert(entry != NULL);
 
   if (entry->m_objects.size() == 0) {
     dout(0) << "do_write no objects in collection" << dendl;
@@ -262,7 +262,7 @@ bool DeterministicOpSequence::do_write(rngen_t& gen)
   }
   int obj_id = entry->get_random_obj_id(gen);
   hobject_t *obj = entry->touch_obj(obj_id);
-  ceph_assert(obj);
+  assert(obj);
 
   boost::uniform_int<> size_rng(100, (2 << 19));
   size_t size = (size_t) size_rng(gen);
@@ -282,7 +282,7 @@ bool DeterministicOpSequence::_prepare_clone(rngen_t& gen,
   int coll_id = _gen_coll_id(gen);
 
   coll_entry_t *entry = get_coll_at(coll_id);
-  ceph_assert(entry != NULL);
+  assert(entry != NULL);
 
   if (entry->m_objects.size() >= 2) {
     dout(0) << "_prepare_clone coll " << entry->m_coll.to_str()
@@ -292,14 +292,14 @@ bool DeterministicOpSequence::_prepare_clone(rngen_t& gen,
 
   int orig_obj_id = entry->get_random_obj_id(gen);
   hobject_t *orig_obj = entry->touch_obj(orig_obj_id);
-  ceph_assert(orig_obj);
+  assert(orig_obj);
 
   int id;
   do {
     id = entry->get_random_obj_id(gen);
   } while (id == orig_obj_id);
   hobject_t *new_obj = entry->touch_obj(id);
-  ceph_assert(new_obj);
+  assert(new_obj);
 
   coll_ret = entry->m_coll;
   orig_obj_ret = *orig_obj;
@@ -357,7 +357,7 @@ bool DeterministicOpSequence::do_clone_range(rngen_t& gen)
 bool DeterministicOpSequence::_prepare_colls(rngen_t& gen,
 					     coll_entry_t* &orig_coll, coll_entry_t* &new_coll)
 {
-  ceph_assert(m_collections_ids.size() > 1);
+  assert(m_collections_ids.size() > 1);
   int orig_coll_id = _gen_coll_id(gen);
   int new_coll_id;
   do {
@@ -368,9 +368,9 @@ bool DeterministicOpSequence::_prepare_colls(rngen_t& gen,
       << " to coll id " << new_coll_id << dendl;
 
   orig_coll = get_coll_at(orig_coll_id);
-  ceph_assert(orig_coll != NULL);
+  assert(orig_coll != NULL);
   new_coll = get_coll_at(new_coll_id);
-  ceph_assert(new_coll != NULL);
+  assert(new_coll != NULL);
 
   if (!orig_coll->m_objects.size()) {
     dout(0) << "_prepare_colls coll " << orig_coll->m_coll.to_str()
@@ -412,7 +412,7 @@ bool DeterministicOpSequence::do_coll_add(rngen_t& gen)
   if (!_prepare_colls(gen, orig_coll, new_coll))
     return false;
 
-  ceph_assert(orig_coll && new_coll);
+  assert(orig_coll && new_coll);
 
   boost::uniform_int<> obj_rng(0, orig_coll->m_objects.size()-1);
   int obj_pos = obj_rng(gen);

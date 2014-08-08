@@ -10,6 +10,7 @@
 * License version 2.1, as published by the Free Software
 * Foundation. See file COPYING.
 */
+#include <cassert>
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
@@ -23,7 +24,6 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/lexical_cast.hpp>
 #include "TestObjectStoreState.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_filestore
 #undef dout_prefix
@@ -59,7 +59,7 @@ void TestObjectStoreState::init(int colls, int objs)
     for (int i = 0; i < objs; i++) {
       hobject_t *obj = entry->touch_obj(i + baseid);
       t->touch(entry->m_coll, *obj);
-      ceph_assert(i + baseid == m_num_objects);
+      assert(i + baseid == m_num_objects);
       m_num_objects++;
     }
     baseid += objs;
@@ -282,7 +282,7 @@ TestObjectStoreState::coll_entry_t::replace_obj(int id, hobject_t *obj) {
 
 int TestObjectStoreState::coll_entry_t::get_random_obj_id(rngen_t& gen)
 {
-  ceph_assert(!m_objects.empty());
+  assert(!m_objects.empty());
 
   boost::uniform_int<> orig_obj_rng(0, m_objects.size()-1);
   int pos = orig_obj_rng(gen);
@@ -292,5 +292,5 @@ int TestObjectStoreState::coll_entry_t::get_random_obj_id(rngen_t& gen)
       return it->first;
     }
   }
-  ceph_assert(0 == "INTERNAL ERROR");
+  assert(0 == "INTERNAL ERROR");
 }

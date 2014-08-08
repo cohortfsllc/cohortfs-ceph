@@ -12,6 +12,7 @@
  *
  */
 #include <memory>
+#include <cassert>
 #include "include/memory.h"
 #include <errno.h>
 #include <map>
@@ -36,7 +37,6 @@
 #include "messages/MMonHealth.h"
 #include "include/types.h"
 #include "include/Context.h"
-#include "include/assert.h"
 #include "common/Formatter.h"
 #include "common/errno.h"
 

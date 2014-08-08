@@ -17,11 +17,11 @@
 #define CEPH_PAGESET_H
 
 #include <algorithm>
+#include <cassert>
 #include <boost/intrusive/avl_set.hpp>
 #include <boost/pool/pool.hpp>
 
 #include "common/RefCountedObj.h"
-#include "include/assert.h"
 
 
 template<size_t PageSize>

@@ -10,6 +10,7 @@
  * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
  */
+#include <cassert>
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
@@ -27,7 +28,6 @@
 #include <boost/scoped_ptr.hpp>
 #include <boost/lexical_cast.hpp>
 #include "workload_generator.h"
-#include "include/assert.h"
 
 #include "TestObjectStoreState.h"
 
@@ -66,16 +66,16 @@ WorkloadGenerator::WorkloadGenerator(vector<const char*> args)
   dout(0) << "journal size    = " << g_conf->osd_journal_size << dendl;
 
   err = ::mkdir(g_conf->osd_data.c_str(), 0755);
-  ceph_assert(err == 0 || (err < 0 && errno == EEXIST));
+  assert(err == 0 || (err < 0 && errno == EEXIST));
   ObjectStore *store_ptr = ObjectStore::create(g_ceph_context,
                                                g_conf->osd_objectstore,
                                                g_conf->osd_data,
                                                g_conf->osd_journal);
   m_store.reset(store_ptr);
   err = m_store->mkfs();
-  ceph_assert(err == 0);
+  assert(err == 0);
   err = m_store->mount();
-  ceph_assert(err == 0);
+  assert(err == 0);
 
   set_max_in_flight(m_max_in_flight);
   set_num_objs_per_coll(def_num_obj_per_coll);

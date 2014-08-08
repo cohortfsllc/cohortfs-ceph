@@ -21,6 +21,7 @@
 #include <sys/param.h>
 #endif
 
+#include <cassert>
 #include <iostream>
 #include <string>
 #include <map>
@@ -51,7 +52,6 @@
 #include "auth/KeyRing.h"
 #include "auth/AuthAuthorizeHandler.h"
 #include "include/uuid.h"
-#include "include/assert.h"
 
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDAlive.h"

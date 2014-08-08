@@ -13,6 +13,7 @@
  */
 
 #include <sstream>
+#include <cassert>
 #include "Paxos.h"
 #include "Monitor.h"
 #include "MonitorDBStore.h"
@@ -20,7 +21,6 @@
 #include "messages/MMonPaxos.h"
 
 #include "common/config.h"
-#include "include/assert.h"
 #include "include/stringify.h"
 #include "common/Formatter.h"
 

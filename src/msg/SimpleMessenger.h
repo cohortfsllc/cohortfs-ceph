@@ -20,6 +20,7 @@
 
 #include <list>
 #include <map>
+#include <cassert>
 using namespace std;
 #include "include/unordered_map.h"
 #include "include/unordered_set.h"
@@ -32,7 +33,6 @@ using namespace std;
 
 #include "Messenger.h"
 #include "Message.h"
-#include "include/assert.h"
 #include "DispatchQueue.h"
 
 #include "Pipe.h"

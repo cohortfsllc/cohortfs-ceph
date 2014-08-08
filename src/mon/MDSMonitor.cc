@@ -13,6 +13,7 @@
  */
 
 #include <sstream>
+#include <cassert>
 
 #include "MDSMonitor.h"
 #include "Monitor.h"
@@ -33,7 +34,6 @@
 #include "common/Timer.h"
 
 #include "common/config.h"
-#include "include/assert.h"
 
 #include "MonitorDBStore.h"
 #include "common/cmdparse.h"

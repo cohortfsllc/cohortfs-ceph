@@ -12,13 +12,13 @@
  *
  */
 
+#include <cassert>
 #include "common/perf_counters.h"
 #include "common/dout.h"
 #include "include/Context.h"
 #include "msg/Messenger.h"
 #include "osdc/Journaler.h"
 #include "common/errno.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_journaler
 #undef dout_prefix

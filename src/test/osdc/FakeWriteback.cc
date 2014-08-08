@@ -3,12 +3,12 @@
 
 #include <errno.h>
 #include <time.h>
+#include <cassert>
 
 #include "common/debug.h"
 #include "common/Cond.h"
 #include "common/Finisher.h"
 #include "common/Mutex.h"
-#include "include/assert.h"
 #include "include/utime.h"
 
 #include "FakeWriteback.h"

@@ -26,10 +26,10 @@
 #include "mon/OSDMonitor.h"
 
 #include <sstream>
+#include <cassert>
 #include "common/config.h"
 #include "common/cmdparse.h"
 #include "include/str_list.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mon
 #undef dout_prefix

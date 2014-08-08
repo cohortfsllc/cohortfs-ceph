@@ -14,6 +14,8 @@
 
 #include <iostream>
 #include <sstream>
+#include <cassert>
+#include <cstdlib>
 using namespace std;
 
 
@@ -34,7 +36,6 @@ using namespace std;
 #include <sys/statvfs.h>
 
 #include "common/errno.h"
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_client
 #undef dout_prefix
@@ -239,7 +240,7 @@ void parse_syn_options(vector<const char*>& args)
 	syn_sargs.push_back(args[++i]);
       } else {
 	cerr << "unknown syn arg " << args[i] << std::endl;
-	assert(0);
+	abort();
       }
     }
     else {
@@ -884,7 +885,7 @@ int SyntheticClient::run()
       break;
 
     default:
-      assert(0);
+      abort();
     }
   }
   dout(1) << "syn done, unmounting " << dendl;
@@ -1466,7 +1467,7 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
     else {
       dout(0) << (t.get_line()-1) << ": *** trace hit unrecognized symbol '"
 	      << op << "' " << dendl;
-      assert(0);
+      abort();
     }
   }
 
@@ -2851,7 +2852,7 @@ int SyntheticClient::random_walk(int num_req)
 	   it != c.end();
 	   ++it) {
 	//dout(DBL) << " got " << *it << dendl;
-	assert(0);
+	abort();
 	/*contents[*it] = it->second;
 	if (it->second &&
 	    S_ISDIR(it->second->st_mode)) 
@@ -2955,7 +2956,7 @@ void SyntheticClient::foo()
   if (1) {
     // bug1.cpp
     const char *fn = "blah";
-    char buffer[8192]; 
+    char buffer[8192];
     client->unlink(fn);
     int handle = client->open(fn,O_CREAT|O_RDWR,S_IRWXU);
     assert(handle>=0);
@@ -2963,9 +2964,9 @@ void SyntheticClient::foo()
     assert(r>=0);
     r=client->close(handle);
     assert(r>=0);
-	 
+
     handle = client->open(fn,O_RDWR); // open the same	file, it must have some data already
-    assert(handle>=0);	    
+    assert(handle>=0);
     r=client->read(handle,buffer,8192);
     assert(r==8192); //	 THIS ASSERTION FAILS with disabled cache
     r=client->close(handle);

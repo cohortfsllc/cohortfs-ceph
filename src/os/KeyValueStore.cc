@@ -14,6 +14,7 @@
  *
  */
 
+#include <cassert>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -51,7 +52,6 @@
 #include "common/ceph_crypto.h"
 using ceph::crypto::SHA1;
 
-#include "include/assert.h"
 
 #include "common/config.h"
 

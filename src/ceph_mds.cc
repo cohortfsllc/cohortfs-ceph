@@ -18,6 +18,7 @@
 
 #include <iostream>
 #include <string>
+#include <cstdlib>
 using namespace std;
 
 #include "include/ceph_features.h"
@@ -48,7 +49,6 @@ using namespace std;
 
 #include "auth/KeyRing.h"
 
-#include "include/assert.h"
 
 #define dout_subsys ceph_subsys_mds
 
@@ -103,7 +103,7 @@ static int do_cmds_special_action(const std::string &action,
     resetter.reset();
     resetter.shutdown();
   } else {
-    assert(0);
+    abort();
   }
   return 0;
 }

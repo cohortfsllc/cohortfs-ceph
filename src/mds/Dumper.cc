@@ -112,7 +112,7 @@ void Dumper::dump(const char *dump_file)
 	    4);
     int r = safe_write(fd, buf, sizeof(buf));
     if (r)
-      ceph_abort();
+      abort();
 
     // write the data
     ::lseek64(fd, start, SEEK_SET);

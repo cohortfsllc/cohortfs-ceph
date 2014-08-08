@@ -1,6 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <cassert>
 #include "Log.h"
 
 #include <errno.h>
@@ -12,7 +13,6 @@
 #include "common/errno.h"
 #include "common/safe_io.h"
 #include "common/Clock.h"
-#include "include/assert.h"
 #include "include/compat.h"
 #include "include/on_exit.h"
 

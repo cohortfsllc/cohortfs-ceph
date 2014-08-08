@@ -6,8 +6,8 @@
 
 #include <string>
 #include <vector>
+#include <cassert>
 
-#include "include/assert.h"
 
 namespace ceph {
 namespace log {

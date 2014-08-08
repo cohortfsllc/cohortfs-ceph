@@ -14,7 +14,7 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <stdio.h>
-#include "include/assert.h"
+#include <cassert>
 
 #if defined(__linux__)
 #include <linux/fs.h>

@@ -4,11 +4,11 @@
 #include "common/Formatter.h"
 #include <iostream>
 #include <vector>
+#include <cassert>
 #include "common/debug.h"
 #include "common/config.h"
 #include "msg/Message.h"
 #include "messages/MOSDOp.h"
-#include "include/assert.h"
 #include "osd/osd_types.h"
 
 

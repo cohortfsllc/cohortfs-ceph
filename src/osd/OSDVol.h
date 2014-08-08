@@ -15,13 +15,12 @@
 #ifndef CEPH_OSDVOL_H
 #define CEPH_OSDVOL_H
 
+#include <cassert>
 #include <boost/scoped_ptr.hpp>
 #include <boost/optional.hpp>
 #include "include/memory.h"
 
 // re-include our assert to clobber boost's
-#include "include/assert.h"
-
 #include "include/types.h"
 #include "include/stringify.h"
 #include "osd_types.h"

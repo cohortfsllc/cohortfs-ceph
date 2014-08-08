@@ -19,6 +19,7 @@
 #include "include/types.h"
 #include "CollectionIndex.h"
 
+#include <cassert>
 #include <map>
 #include <deque>
 #include <boost/scoped_ptr.hpp>
@@ -27,7 +28,6 @@ using namespace std;
 
 #include "include/unordered_map.h"
 
-#include "include/assert.h"
 
 #include "ObjectStore.h"
 #include "JournalingObjectStore.h"

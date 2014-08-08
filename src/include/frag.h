@@ -19,24 +19,23 @@
 #include <map>
 #include <list>
 #include <iostream>
+#include <cassert>
 #include <stdio.h>
 
 #include "buffer.h"
-
 #include "ceph_frag.h"
-#include "include/assert.h"
 
 /*
- * 
+ *
  * the goal here is to use a binary split strategy to partition a namespace.  
  * frag_t represents a particular fragment.  bits() tells you the size of the
  * fragment, and value() it's name.  this is roughly analogous to an ip address
  * and netmask.
- * 
+ *
  * fragtree_t represents an entire namespace and it's partition.  it essentially 
  * tells you where fragments are split into other fragments, and by how much 
  * (i.e. by how many bits, resulting in a power of 2 number of child fragments).
- * 
+ *
  * this vaguely resembles a btree, in that when a fragment becomes large or small
  * we can split or merge, except that there is no guarantee of being balanced.
  *

@@ -117,13 +117,6 @@ TEST(chain_xattr, get_and_set) {
   }
 
   {
-    int x;
-    const string name = user + string(CHAIN_XATTR_MAX_NAME_LEN * 2, '@');
-    ASSERT_THROW(chain_setxattr(file, name.c_str(), &x, sizeof(x)), FailedAssertion);
-    ASSERT_THROW(chain_fsetxattr(fd, name.c_str(), &x, sizeof(x)), FailedAssertion);
-  }
-
-  {
     const string name = user + string(CHAIN_XATTR_MAX_NAME_LEN - user.size(), '@');
     const string x(LARGE_BLOCK_LEN, 'X');
     {

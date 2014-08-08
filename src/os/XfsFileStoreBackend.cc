@@ -14,6 +14,7 @@
 
 #include "XfsFileStoreBackend.h"
 
+#include <cassert>
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -23,7 +24,6 @@
 #include <xfs/xfs.h>
 
 #include "common/errno.h"
-#include "include/assert.h"
 #include "include/compat.h"
 
 #define dout_subsys ceph_subsys_filestore

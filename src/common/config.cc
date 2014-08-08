@@ -12,6 +12,15 @@
  *
  */
 
+#include <sstream>
+#include <cassert>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+
 #include "auth/Auth.h"
 #include "common/ConfUtils.h"
 #include "common/ceph_argparse.h"
@@ -27,14 +36,6 @@
 #include "osd/osd_types.h"
 #include "common/errno.h"
 
-#include "include/assert.h"
-
-#include <errno.h>
-#include <sstream>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 
 /* Don't use standard Ceph logging in this file.
  * We can't use logging until it's initialized, and a lot of the necessary

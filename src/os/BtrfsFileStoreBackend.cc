@@ -12,6 +12,7 @@
  *
  */
 
+#include <cassert>
 #include "include/types.h"
 
 #include <unistd.h>
@@ -25,7 +26,6 @@
 #include "include/linux_fiemap.h"
 #include "include/color.h"
 #include "include/buffer.h"
-#include "include/assert.h"
 
 #ifndef __CYGWIN__
 #include "btrfs_ioctl.h"

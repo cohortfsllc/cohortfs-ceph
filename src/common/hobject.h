@@ -15,11 +15,11 @@
 #ifndef __CEPH_OS_HOBJECT_H
 #define __CEPH_OS_HOBJECT_H
 
+#include <cassert>
 #include <string.h>
 #include "include/types.h"
 #include "include/object.h"
 #include "include/cmp.h"
-#include "include/assert.h"   // spirit clobbers it!
 
 
 enum stripetype_t {

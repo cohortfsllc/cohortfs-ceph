@@ -16,13 +16,13 @@
 #endif
 
 #include <iostream>
+#include <cstdlib>
 using namespace std;
 
 #include "include/Context.h"
 #include "Client.h"
 #include "common/config.h"
 #include "barrier.h"
-#include "include/assert.h"
 
 #undef dout_prefix
 #define dout_prefix *_dout << "client." << whoami << " "
@@ -170,7 +170,7 @@ void BarrierContext::complete(C_Block_Sync &cbs)
     }
     break;
     default:
-      assert(false);
+      abort();
       break;
     }
 

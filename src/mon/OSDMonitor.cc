@@ -16,6 +16,7 @@
  */
 
 #include <sstream>
+#include <cassert>
 
 #include "OSDMonitor.h"
 #include "Monitor.h"
@@ -39,7 +40,6 @@
 #include "common/errno.h"
 
 #include "include/compat.h"
-#include "include/assert.h"
 #include "include/stringify.h"
 #include "include/util.h"
 #include "common/cmdparse.h"
