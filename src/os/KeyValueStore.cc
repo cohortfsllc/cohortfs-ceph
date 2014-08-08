@@ -34,7 +34,6 @@
 #include <sstream>
 
 #include "KeyValueStore.h"
-#include "common/BackTrace.h"
 #include "include/types.h"
 
 #include "osd/osd_types.h"

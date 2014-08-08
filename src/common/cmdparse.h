@@ -10,7 +10,6 @@
 #include <vector>
 #include <stdexcept>
 #include "common/Formatter.h"
-#include "common/BackTrace.h"
 
 class CephContext;
 
