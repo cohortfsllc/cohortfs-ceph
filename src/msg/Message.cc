@@ -47,6 +47,8 @@ using namespace std;
 
 #include "messages/MPing.h"
 
+#include "messages/MConnect.h"
+
 #include "messages/MCommand.h"
 #include "messages/MCommandReply.h"
 #include "messages/MBackfillReserve.h"
@@ -355,6 +357,15 @@ Message *decode_message(CephContext *cct, int crcflags,
   case CEPH_MSG_PING:
     m = new MPing();
     break;
+
+    // new session startup messages
+  case MSG_CONNECT:
+    m = new MConnect();
+    break;
+  case MSG_CONNECT_REPLY:
+    m = new MConnectReply();
+    break;
+
   case MSG_COMMAND:
     m = new MCommand;
     break;

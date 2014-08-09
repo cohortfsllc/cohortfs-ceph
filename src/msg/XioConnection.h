@@ -118,6 +118,7 @@ private:
     // state machine
     int init_state();
     int next_state(Message* m);
+    int msg_connect(MConnect *m);
 
   } cstate; /* ConnectHelper */
 

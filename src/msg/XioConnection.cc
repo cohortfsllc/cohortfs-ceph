@@ -471,10 +471,7 @@ int XioConnection::on_msg_error(struct xio_session *session,
 int XioConnection::ConnectHelper::init_state()
 {
   assert(xcon->xio_conn_type==XioConnection::ACTIVE);
-  assert(session_state.read()
-	 == ConnectHelper::CONNECTING); // enum class!!
-  assert(startup_state.read() == ConnectHelper::IDLE);
-
+  session_state.set(ConnectHelper::CONNECTING);
   startup_state.set(ConnectHelper::START);
   XioMessenger *msgr = static_cast<XioMessenger*>(xcon->get_messenger());
   MConnect *m = new MConnect();
@@ -486,7 +483,7 @@ int XioConnection::ConnectHelper::init_state()
   m->last_out_seq = out_seq.read();
 
   // send it
-  msgr->send_message(m, xcon);
+  msgr->send_message_impl(m, xcon);
 
   return 0;
 }
@@ -494,6 +491,43 @@ int XioConnection::ConnectHelper::init_state()
 int XioConnection::ConnectHelper::next_state(Message* m)
 {
 
+  switch (m->get_type()) {
+  case MSG_CONNECT:
+    return msg_connect(static_cast<MConnect*>(m));
+  break;
+  case MSG_CONNECT_REPLY:
+    abort();
+    break;
+  default:
+    abort();
+  };
+
+out:
   m->put();
   return 0;
-}
+} /* next_state */
+
+int XioConnection::ConnectHelper::msg_connect(MConnect *m)
+{
+  if (xcon->xio_conn_type != XioConnection::PASSIVE) {
+    m->put();
+    return -EINVAL;
+  }
+
+  xcon->peer.name = m->name;
+  xcon->peer.addr = xcon->peer_addr = m->addr;
+  xcon->peer_type = m->name.type();
+  xcon->peer_addr = m->addr;
+
+  Messenger::Policy policy =
+    xcon->get_messenger()->get_policy(xcon->peer_type);
+
+  dout(11) << "accept of host_type " << xcon->peer_type
+	   << ", policy.lossy=" << policy.lossy
+	   << " policy.server=" << policy.server
+	   << " policy.standby=" << policy.standby
+	   << " policy.resetcheck=" << policy.resetcheck
+	   << dendl;
+
+  return 0;
+} /* msg_connect */

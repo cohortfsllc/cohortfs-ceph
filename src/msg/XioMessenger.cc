@@ -648,13 +648,12 @@ int XioMessenger::send_message(Message *m, Connection *con)
   XioConnection *xcon = static_cast<XioConnection*>(con);
 
   /* If con is not in READY state, we have to enforce policy */
-  if (! xcon->is_connected()) {
+  if (xcon->cstate.session_state.read() !=
+      XioConnection::ConnectHelper::READY) {
     pthread_spin_lock(&xcon->sp);
-    if (! xcon->is_connected()) {
-      if (! xcon->cstate.policy.lossy)
-	xcon->outgoing.mqueue.push_back(*m);
-      else
-	m->put();
+    if (xcon->cstate.session_state.read() !=
+	XioConnection::ConnectHelper::READY) {
+      xcon->outgoing.mqueue.push_back(*m);
       pthread_spin_unlock(&xcon->sp);
       return 0;
     }
@@ -847,6 +846,9 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
     xcon->conn = xio_connect(xcon->session, this->portals.get_portal0()->ctx,
 			     0, NULL, xcon);
     xcon->connected.set(true);
+
+    /* kickoff session negotition */
+    xcon->cstate.init_state();
 
     return xcon->get(); /* nref +1 */
   }
