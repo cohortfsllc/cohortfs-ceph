@@ -436,14 +436,33 @@ void XioConnection::msg_release_fail(struct xio_msg *msg, int code)
     " (" << xio_strerror(code) << ")" << dendl;
 } /* msg_release_fail */
 
+int XioConnection::flush_send_queue() {
+  XioMessenger* msgr = static_cast<XioMessenger*>(get_messenger());
+  pthread_spin_lock(&sp);
+  int ix, q_size = outgoing.mqueue.size();
+  for (ix = 0; ix < q_size; ++ix) {
+    Message::Queue::iterator q_iter = outgoing.mqueue.begin();
+    Message* m = &(*q_iter);
+    outgoing.mqueue.erase(q_iter);
+    msgr->send_message_impl(m, this);
+  }
+  pthread_spin_unlock(&sp);
+  return 0;
+}
+
 int XioConnection::on_msg_error(struct xio_session *session,
 				enum xio_status error,
 				struct xio_msg  *msg,
 				void *conn_user_context)
 {
   XioMsg *xmsg = static_cast<XioMsg*>(msg->user_context);
+
+  /* XXXX need to return these to the front of the input queue */
+#if 1
   if (xmsg)
     xmsg->put();
+#else
+#endif
 
   return 0;
 } /* on_msg_error */

@@ -99,6 +99,8 @@ public:
 
   virtual int send_message(Message *m, Connection *con);
 
+  int send_message_impl(Message *m, XioConnection *xcon);
+
   virtual int lazy_send_message(Message *m, const entity_inst_t& dest)
     { return EINVAL; }
 

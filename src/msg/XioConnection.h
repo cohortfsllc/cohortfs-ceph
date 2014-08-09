@@ -79,6 +79,8 @@ private:
     };
 
     uint64_t features;
+    Messenger::Policy policy;
+
     AuthAuthorizer *authorizer;
     XioConnection *xcon;
 
@@ -101,6 +103,10 @@ private:
       return session_state.read();
     }
 
+    uint64_t get_startup_state() {
+      return startup_state.read();
+    }
+
     void set_in_seq(uint32_t seq) {
       in_seq = seq;
     }
@@ -114,6 +120,11 @@ private:
     int next_state(Message* m);
 
   } cstate; /* ConnectHelper */
+
+  // message submission queue
+  struct SendQ {
+    Message::Queue mqueue; // deferred
+  } outgoing;
 
   // conns_entity_map comparison functor
   struct EntityComp
@@ -219,6 +230,9 @@ public:
   void msg_send_fail(XioMsg *xmsg, int code);
 
   void msg_release_fail(struct xio_msg *msg, int code);
+
+  int flush_send_queue();
+
 };
 
 class XioLoopbackConnection : public Connection

@@ -634,6 +634,36 @@ int XioMessenger::send_message(Message *m, const entity_inst_t& dest)
     return EINVAL;
 } /* send_message(Message *, const entity_inst_t&) */
 
+int XioMessenger::send_message(Message *m, Connection *con)
+{
+  if (con == &loop_con) {
+    m->set_connection(con);
+    m->set_src(get_myinst().name);
+    XioLoopbackConnection *xlcon = static_cast<XioLoopbackConnection*>(con);
+    m->set_seq(xlcon->next_seq());
+    ds_dispatch(m);
+    return 0;
+  }
+
+  XioConnection *xcon = static_cast<XioConnection*>(con);
+
+  /* If con is not in READY state, we have to enforce policy */
+  if (! xcon->is_connected()) {
+    pthread_spin_lock(&xcon->sp);
+    if (! xcon->is_connected()) {
+      if (! xcon->cstate.policy.lossy)
+	xcon->outgoing.mqueue.push_back(*m);
+      else
+	m->put();
+      pthread_spin_unlock(&xcon->sp);
+      return 0;
+    }
+    pthread_spin_unlock(&xcon->sp);
+  }
+
+  return send_message_impl(m, xcon);
+} /* send_message(Message* m, Connection *con) */
+
 static inline XioMsg* pool_alloc_xio_msg(Message *m, XioConnection *xcon,
   int ex_cnt)
 {
@@ -647,25 +677,8 @@ static inline XioMsg* pool_alloc_xio_msg(Message *m, XioConnection *xcon,
   return xmsg;
 }
 
-int XioMessenger::send_message(Message *m, Connection *con)
+int XioMessenger::send_message_impl(Message *m, XioConnection *xcon)
 {
-  if (con == &loop_con) {
-    m->set_connection(con);
-    m->set_src(get_myinst().name);
-    XioLoopbackConnection *xlcon = static_cast<XioLoopbackConnection*>(con);
-    m->set_seq(xlcon->next_seq());
-    ds_dispatch(m);
-    return 0;
-  }
-
-  XioConnection *xcon = static_cast<XioConnection*>(con);
-#if 0
-  /* XXXX needs put() */
-  if (! xcon->is_connected())
-    return ENOTCONN;
-#else
-#endif
-
   int code = 0;
 
   m->set_seq(xcon->cstate.next_out_seq());
@@ -763,22 +776,11 @@ int XioMessenger::send_message(Message *m, Connection *con)
   req->out.header.iov_len = pb->length();
 
   /* deliver via xio, preserve ordering */
-  if (xmsg->hdr.msg_cnt > 1) {
-    struct xio_msg *head = &xmsg->req_0.msg;
-    struct xio_msg *tail = head;
-    for (req_off = 0; ((unsigned) req_off) < xmsg->hdr.msg_cnt-1; ++req_off) {
-      req = &xmsg->req_arr[req_off].msg;
-assert(!req->in.data_iovlen);
-assert(req->out.data_iovlen || !nbuffers);
-      tail->next = req;
-      tail = req;
-     }
-    tail->next = NULL;
-  }
+  xmsg->xio_pre_submit();
   xcon->portal->enqueue_for_send(xcon, xmsg);
 
   return code;
-} /* send_message(Message *, Connection *) */
+} /* send_message_impl(Message*, XioConnection *) */
 
 int XioMessenger::shutdown()
 {

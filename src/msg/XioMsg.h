@@ -251,6 +251,24 @@ public:
     }
   }
 
+  void xio_pre_submit() {
+    /* chain linked message using xio_msg's next pointer */
+    struct xio_msg *head = &req_0.msg;
+    if (hdr.msg_cnt > 1) {
+      struct xio_msg *tail = head;
+      for (int req_off = 0; ((unsigned) req_off) < hdr.msg_cnt-1;
+	   ++req_off) {
+	struct xio_msg *req = &(req_arr[req_off].msg);
+	assert(!req->in.data_iovlen);
+	assert(req->out.data_iovlen /* || !nbuffers */);
+	tail->next = req;
+	tail = req;
+      }
+      tail->next = NULL;
+    } else
+      head->next = NULL;
+  }
+
   Message *get_message() { return m; }
 
   ~XioMsg()
