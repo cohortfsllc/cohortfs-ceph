@@ -350,7 +350,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
     m->set_seq(header.seq);
 
     /* handle connect negotiation */
-    if (unlikely((cstate.get_session_state() == ConnectHelper::CONNECTING) ||
+    if (unlikely((cstate.get_session_state() == ConnectHelper::INIT) ||
 		 (cstate.get_session_state() == ConnectHelper::DISCONNECTED)))
       return cstate.next_state(m);
 
