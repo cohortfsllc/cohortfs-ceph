@@ -119,6 +119,9 @@ private:
     int init_state();
     int next_state(Message* m);
     int msg_connect(MConnect *m);
+    int msg_connect_reply(MConnectReply *m);
+    int msg_connect_auth(MConnectAuth *m);
+    int msg_connect_auth_reply(MConnectAuthReply *m);
 
   } cstate; /* ConnectHelper */
 

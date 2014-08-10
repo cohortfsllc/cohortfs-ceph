@@ -498,7 +498,13 @@ int XioConnection::ConnectHelper::next_state(Message* m)
     return msg_connect(static_cast<MConnect*>(m));
   break;
   case MSG_CONNECT_REPLY:
-    abort();
+    return msg_connect_reply(static_cast<MConnectReply*>(m));
+    break;
+  case MSG_CONNECT_AUTH:
+    return msg_connect_auth(static_cast<MConnectAuth*>(m));
+  break;
+  case MSG_CONNECT_AUTH_REPLY:
+    return msg_connect_auth_reply(static_cast<MConnectAuthReply*>(m));
     break;
   default:
     abort();
@@ -547,3 +553,39 @@ int XioConnection::ConnectHelper::msg_connect(MConnect *m)
 
   return 0;
 } /* msg_connect */
+
+int XioConnection::ConnectHelper::msg_connect_reply(MConnectReply *m)
+{
+  if (xcon->xio_conn_type != XioConnection::ACTIVE) {
+    m->put();
+    return -EINVAL;
+  }
+
+  // XXX
+
+  return 0;
+} /* msg_connect_reply */
+
+int XioConnection::ConnectHelper::msg_connect_auth(MConnectAuth *m)
+{
+  if (xcon->xio_conn_type != XioConnection::PASSIVE) {
+    m->put();
+    return -EINVAL;
+  }
+
+  // XXX
+
+  return 0;
+} /* msg_connect_auth */
+
+int XioConnection::ConnectHelper::msg_connect_auth_reply(MConnectAuthReply *m)
+{
+  if (xcon->xio_conn_type != XioConnection::ACTIVE) {
+    m->put();
+    return -EINVAL;
+  }
+
+  // XXX
+
+  return 0;
+} /* msg_connect_reply */
