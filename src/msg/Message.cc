@@ -365,6 +365,12 @@ Message *decode_message(CephContext *cct, int crcflags,
   case MSG_CONNECT_REPLY:
     m = new MConnectReply();
     break;
+  case MSG_CONNECT_AUTH:
+    m = new MConnectAuth();
+    break;
+  case MSG_CONNECT_AUTH_REPLY:
+    m = new MConnectAuthReply();
+    break;
 
   case MSG_COMMAND:
     m = new MCommand;

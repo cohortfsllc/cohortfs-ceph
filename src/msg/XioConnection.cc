@@ -478,6 +478,8 @@ int XioConnection::ConnectHelper::init_state()
   m->addr = msgr->get_myinst().addr;
   m->name = msgr->get_myinst().name;
   m->flags = 0;
+
+  // XXXX needed?  correct?
   m->connect_seq = ++connect_seq;
   m->last_in_seq = in_seq;
   m->last_out_seq = out_seq.read();
@@ -502,7 +504,6 @@ int XioConnection::ConnectHelper::next_state(Message* m)
     abort();
   };
 
-out:
   m->put();
   return 0;
 } /* next_state */
@@ -519,8 +520,8 @@ int XioConnection::ConnectHelper::msg_connect(MConnect *m)
   xcon->peer_type = m->name.type();
   xcon->peer_addr = m->addr;
 
-  Messenger::Policy policy =
-    xcon->get_messenger()->get_policy(xcon->peer_type);
+  XioMessenger *msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+  Messenger::Policy policy = msgr->get_policy(xcon->peer_type);
 
   dout(11) << "accept of host_type " << xcon->peer_type
 	   << ", policy.lossy=" << policy.lossy
@@ -528,6 +529,21 @@ int XioConnection::ConnectHelper::msg_connect(MConnect *m)
 	   << " policy.standby=" << policy.standby
 	   << " policy.resetcheck=" << policy.resetcheck
 	   << dendl;
+
+  MConnectReply *m2 = new MConnectReply();
+  m->addr = msgr->get_myinst().addr;
+  m->name = msgr->get_myinst().name;
+  m->flags = 0;
+
+  // XXXX needed?  correct?
+  m->last_in_seq = in_seq;
+  m->last_out_seq = out_seq.read();
+
+  // send m2
+  msgr->send_message_impl(m2, xcon);
+
+  // dispose m
+  m->put();
 
   return 0;
 } /* msg_connect */

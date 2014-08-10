@@ -170,6 +170,9 @@
 // Session startup
 #define MSG_CONNECT               0x603
 #define MSG_CONNECT_REPLY         0x604
+#define MSG_CONNECT_AUTH          0x605
+#define MSG_CONNECT_AUTH_REPLY    0x606
+
 
 // *** Message::encode() crcflags bits.
 #define MSG_CRC_DATA		1
