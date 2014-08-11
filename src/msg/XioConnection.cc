@@ -469,14 +469,13 @@ int XioConnection::on_msg_error(struct xio_session *session,
   return 0;
 } /* on_msg_error */
 
-
 int XioConnection::ConnectHelper::init_state()
 {
   assert(xcon->xio_conn_type==XioConnection::ACTIVE);
-  session_state.set(ConnectHelper::CONNECTING);
-  startup_state.set(ConnectHelper::START);
-  XioMessenger *msgr = static_cast<XioMessenger*>(xcon->get_messenger());
-  MConnect *m = new MConnect();
+  session_state.set(ConnectHelper::START);
+  startup_state.set(ConnectHelper::CONNECTING);
+  XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+  MConnect* m = new MConnect();
   m->addr = msgr->get_myinst().addr;
   m->name = msgr->get_myinst().name;
   m->flags = 0;
@@ -494,7 +493,6 @@ int XioConnection::ConnectHelper::init_state()
 
 int XioConnection::ConnectHelper::next_state(Message* m)
 {
-
   switch (m->get_type()) {
   case MSG_CONNECT:
     return msg_connect(static_cast<MConnect*>(m));
@@ -528,8 +526,8 @@ int XioConnection::ConnectHelper::msg_connect(MConnect *m)
   xcon->peer_type = m->name.type();
   xcon->peer_addr = m->addr;
 
-  XioMessenger *msgr = static_cast<XioMessenger*>(xcon->get_messenger());
-  Messenger::Policy policy = msgr->get_policy(xcon->peer_type);
+  XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+  policy = msgr->get_policy(xcon->peer_type);
 
   dout(11) << "accept of host_type " << xcon->peer_type
 	   << ", policy.lossy=" << policy.lossy
@@ -538,7 +536,7 @@ int XioConnection::ConnectHelper::msg_connect(MConnect *m)
 	   << " policy.resetcheck=" << policy.resetcheck
 	   << dendl;
 
-  MConnectReply *m2 = new MConnectReply();
+  MConnectReply* m2 = new MConnectReply();
   m2->addr = msgr->get_myinst().addr;
   m2->name = msgr->get_myinst().name;
   m2->flags = 0;
@@ -564,11 +562,11 @@ int XioConnection::ConnectHelper::msg_connect_reply(MConnectReply *m)
   }
 
   // XXX do we need any data from this phase?
-  XioMessenger *msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+  XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
   authorizer =
     msgr->ms_deliver_get_authorizer(xcon->peer_type, false /* force_new */);
 
-  MConnectAuth *m2 = new MConnectAuth();
+  MConnectAuth* m2 = new MConnectAuth();
   m2->features = policy.features_supported;
   m2->flags = 0;
   if (policy.lossy)
@@ -583,11 +581,11 @@ int XioConnection::ConnectHelper::msg_connect_reply(MConnectReply *m)
   m2->authorizer_len = authorizer ? authorizer->bl.length() : 0;
   if (m2->authorizer_len) {
     buffer::ptr bp = buffer::create(m2->authorizer_len);
-    bp.copy_in(0, m2->authorizer_len, authorizer->bl.c_str()); /* XXX size */
+    bp.copy_in(0 /* off */, m2->authorizer_len, authorizer->bl.c_str());
     m2->get_data().append(bp);
   }
 
- // send m2
+  // send m2
   msgr->send_message_impl(m2, xcon);
 
   // dispose m
@@ -603,7 +601,98 @@ int XioConnection::ConnectHelper::msg_connect_auth(MConnectAuth *m)
     return -EINVAL;
   }
 
+  bool auth_valid;
+  uint64_t fdelta;
+  buffer::list auth_bl, auth_reply_bl;
+  buffer::ptr bp;
+
+  XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+  int peer_type = xcon->peer.name.type();
+
+  MConnectAuthReply* m2 = new MConnectAuthReply();
+
+  m2->protocol_version = msgr->get_proto_version(peer_type, false);
+  if (m->protocol_version != m2->protocol_version) {
+    m2->tag = CEPH_MSGR_TAG_BADPROTOVER;
+    goto send_m2;
+  }
+
+  // required CephX features
+  if (m->authorizer_protocol == CEPH_AUTH_CEPHX) {
+    if (peer_type == CEPH_ENTITY_TYPE_OSD ||
+	peer_type == CEPH_ENTITY_TYPE_MDS) {
+      if (msgr->cct->_conf->cephx_require_signatures ||
+	  msgr->cct->_conf->cephx_cluster_require_signatures) {
+	policy.features_required |= CEPH_FEATURE_MSG_AUTH;
+	}
+    } else {
+      if (msgr->cct->_conf->cephx_require_signatures ||
+	  msgr->cct->_conf->cephx_service_require_signatures) {
+	policy.features_required |= CEPH_FEATURE_MSG_AUTH;
+      }
+    }
+  }
+
+  fdelta = policy.features_required & ~(uint64_t(m->features));
+  if (fdelta) {
+    m2->tag = CEPH_MSGR_TAG_FEATURES;
+    goto send_m2;
+  }
+
+  // decode authorizer
+  if (m->authorizer_len) {
+    bp = buffer::create(m->authorizer_len);
+    bp.copy_in(0 /* off */, m2->authorizer_len, m2->get_data().c_str());
+    auth_bl.push_back(bp);
+  }
+
+  if (!msgr->ms_deliver_verify_authorizer(
+	xcon->get(), peer_type, m->authorizer_protocol, auth_bl,
+	auth_reply_bl, auth_valid, session_key) || !auth_valid) {
+    m2->tag = CEPH_MSGR_TAG_BADAUTHORIZER;
+    session_security.reset();
+    goto send_m2;
+  }
+
+  // sequence checks
+  
+
+
   // XXX
+
+  // ready
+  m2->tag = CEPH_MSGR_TAG_READY;
+  m2->features = policy.features_supported;
+  m2->global_seq = msgr->get_global_seq();
+  m2->connect_seq = connect_seq;
+  m2->flags = 0;
+  m2->authorizer_len = auth_reply_bl.length();
+  if (m2->authorizer_len) {
+    buffer::ptr bp = buffer::create(m2->authorizer_len);
+    bp.copy_in(0 /* off */, m2->authorizer_len, auth_reply_bl.c_str());
+    m2->get_data().append(bp);
+  }
+
+  if (policy.lossy)
+    m2->flags |= CEPH_MSG_CONNECT_LOSSY;
+
+  // XXXX locking?
+  session_state.set(UP);
+  startup_state.set(READY);
+  features = m2->features;
+
+  session_security.reset(
+    get_auth_session_handler(msgr->cct, m2->authorizer_protocol,
+			     session_key, features));
+
+  // notify ULP
+  msgr->ms_deliver_handle_connect(xcon);
+
+send_m2:
+  msgr->send_message_impl(m2, xcon);
+
+  // dispose m
+  m->put();
 
   return 0;
 } /* msg_connect_auth */
@@ -614,8 +703,6 @@ int XioConnection::ConnectHelper::msg_connect_auth_reply(MConnectAuthReply *m)
     m->put();
     return -EINVAL;
   }
-
-  // XXX
 
   return 0;
 } /* msg_connect_reply */

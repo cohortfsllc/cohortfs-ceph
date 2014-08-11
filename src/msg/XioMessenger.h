@@ -39,9 +39,11 @@ private:
   DispatchStrategy* dispatch_strategy;
   XioLoopbackConnection loop_con;
   int port_shift;
+  int cluster_protocol;
   uint32_t magic;
   uint32_t special_handling;
   atomic_t global_seq;
+  bool bound;
 
 public:
   XioMessenger(CephContext *cct, entity_name_t name,
@@ -89,8 +91,40 @@ public:
   virtual double get_dispatch_queue_max_age(utime_t now)
     { return 0; } /* XXX bogus? */
 
-  virtual void set_cluster_protocol(int p)
-    { }
+  /**
+   * Get the protocol version we support for the given peer type: either
+   * a peer protocol (if it matches our own), the protocol version for the
+   * peer (if we're connecting), or our protocol version (if we're accepting).
+   */
+  int get_proto_version(int peer_type, bool connect) {
+    int my_type = my_inst.name.type();
+
+    // set reply protocol version
+    if (peer_type == my_type) {
+      // internal
+      return cluster_protocol;
+    } else {
+      // public
+      if (connect) {
+	switch (peer_type) {
+	case CEPH_ENTITY_TYPE_OSD: return CEPH_OSDC_PROTOCOL;
+	case CEPH_ENTITY_TYPE_MDS: return CEPH_MDSC_PROTOCOL;
+	case CEPH_ENTITY_TYPE_MON: return CEPH_MONC_PROTOCOL;
+	}
+      } else {
+	switch (my_type) {
+	case CEPH_ENTITY_TYPE_OSD: return CEPH_OSDC_PROTOCOL;
+	case CEPH_ENTITY_TYPE_MDS: return CEPH_MDSC_PROTOCOL;
+	case CEPH_ENTITY_TYPE_MON: return CEPH_MONC_PROTOCOL;
+	}
+      }
+    }
+    return 0;
+  }
+
+  virtual void set_cluster_protocol(int p) {
+    cluster_protocol = p;
+  }
 
   virtual int bind(const entity_addr_t& addr);
 

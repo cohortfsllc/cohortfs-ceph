@@ -26,6 +26,7 @@ extern "C" {
 #include "Messenger.h"
 #include "include/atomic.h"
 #include "messages/MConnect.h"
+#include "auth/AuthSessionHandler.h"
 
 #define XIO_ALL_FEATURES (CEPH_FEATURES_ALL & \
 			  ~CEPH_FEATURE_MSGR_KEEPALIVE2)
@@ -64,23 +65,22 @@ private:
   public:
     enum session_states {
       INIT = 0,
-      CONNECTING,
+      START,
       UP,
       DISCONNECTED
     };
 
     enum session_startup_states {
       IDLE = 0,
-      START,
-      EXCHANGE_ID,
-      AUTHORIZING,
-      FAILED,
+      CONNECTING,
       READY
     };
 
     uint64_t features;
     Messenger::Policy policy;
 
+    CryptoKey session_key;
+    ceph::shared_ptr<AuthSessionHandler> session_security;
     AuthAuthorizer *authorizer;
     XioConnection *xcon;
 

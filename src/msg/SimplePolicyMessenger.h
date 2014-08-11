@@ -34,7 +34,7 @@ public:
 			string mname, uint64_t _nonce)
     : Messenger(cct, name),
       policy_lock("SimplePolicyMessenger::policy_lock")
-    { 
+    {
     }
 
     /**

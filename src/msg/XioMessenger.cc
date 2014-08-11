@@ -22,6 +22,7 @@
 #include "XioMsg.h"
 #include "XioMessenger.h"
 #include "common/address_helper.h"
+#include "XioHelo.h"
 
 #define dout_subsys ceph_subsys_xio
 
@@ -245,9 +246,11 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
     dispatch_strategy(ds),
     loop_con(this),
     port_shift(0),
+    cluster_protocol(0),
     magic(0),
     special_handling(0),
-    global_seq(0)
+    global_seq(0),
+    bound(false)
 {
 
   if (cct->_conf->xio_trace_xcon)
@@ -432,8 +435,13 @@ int XioMessenger::session_event(struct xio_session *session,
     xcon->on_teardown_event();
     break;
   case XIO_SESSION_TEARDOWN_EVENT:
+  {
     dout(2) << "xio_session_teardown " << session << dendl;
+    struct xio_session_attr attr;
+    xio_query_session(session, &attr, XIO_SESSION_ATTR_USER_CTX);
+    free(attr.user_context); /* xhelo buffer dup */
     xio_session_destroy(session);
+  }
     break;
   default:
     break;
@@ -571,6 +579,7 @@ xio_place_buffers(buffer::list& bl, XioMsg *xmsg, struct xio_msg*& req,
 
 int XioMessenger::bind(const entity_addr_t& addr)
 {
+  bound = true;
   const entity_addr_t *a = &addr;
   if (a->is_blank_ip()) {
     struct entity_addr_t _addr = *a;
@@ -817,12 +826,18 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
     dout(4) << "XioMessenger " << this << " get_connection: xio_uri "
       << xio_uri << dendl;
 
+    buffer::list xhelo_bl;
+    XioHelo xhelo(bound ? XIO_HELO_FLAG_BOUND_ADDR : XIO_HELO_FLAG_NONE,
+    self_inst, dest);
+    ::encode(xhelo, xhelo_bl);
+
     /* XXX client session attributes */
-    struct xio_session_attr attr = {
-      &xio_msgr_ops,
-      NULL, /* XXX server private data? */
-      0     /* XXX? */
-    };
+    struct xio_session_attr attr;
+    attr.ses_ops = &xio_msgr_ops;
+    attr.user_context_len = xhelo_bl.length();
+    attr.user_context = malloc(attr.user_context_len);
+    memcpy(attr.user_context, xhelo_bl.c_str(), attr.user_context_len);
+    attr.uri = NULL; /* XXX */
 
     XioConnection *xcon = new XioConnection(this, XioConnection::ACTIVE,
 					    _dest);
