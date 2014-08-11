@@ -69,17 +69,17 @@ class buffer {
 
 public:
   struct error : public std::exception{
-    const char *what() const throw () {
+    const char *what() const noexcept {
       return "buffer::exception";
     }
   };
   struct bad_alloc : public error {
-    const char *what() const throw () {
+    const char *what() const noexcept {
       return "buffer::bad_alloc";
     }
   };
   struct end_of_buffer : public error {
-    const char *what() const throw () {
+    const char *what() const noexcept {
       return "buffer::end_of_buffer";
     }
   };
@@ -87,7 +87,7 @@ public:
     explicit malformed_input(const char *w) {
       snprintf(buf, sizeof(buf), "buffer::malformed_input: %s", w);
     }
-    const char *what() const throw () {
+    const char *what() const noexcept {
       return buf;
     }
   private:

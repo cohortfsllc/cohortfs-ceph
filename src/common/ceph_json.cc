@@ -14,14 +14,6 @@ using namespace json_spirit;
 
 #define dout_subsys ceph_subsys_rgw
 
-JSONObjIter::JSONObjIter()
-{
-}
-
-JSONObjIter::~JSONObjIter()
-{
-}
-
 void JSONObjIter::set(const JSONObjIter::map_iter_t &_cur, const JSONObjIter::map_iter_t &_last)
 {
   cur = _cur;

@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// vim: ts=8 sw=2 smarttab
+
 #ifndef CEPH_JSON_H
 #define CEPH_JSON_H
 
@@ -20,8 +23,6 @@ class JSONObjIter {
   map_iter_t last;
 
 public:
-  JSONObjIter();
-  ~JSONObjIter();
   void set(const JSONObjIter::map_iter_t &_cur, const JSONObjIter::map_iter_t &_end);
 
   void operator++();

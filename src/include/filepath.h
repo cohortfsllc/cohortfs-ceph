@@ -79,8 +79,15 @@ class filepath {
     bits = o.bits;
     encoded = o.encoded;
   }
+  filepath& operator=(const filepath& o) {
+    ino = o.ino;
+    path = o.path;
+    bits = o.bits;
+    encoded = o.encoded;
+    return *this;
+  }
   filepath(inodeno_t i) : ino(i), encoded(false) { }
-  
+
   void set_path(const char *s, inodeno_t b) {
     path = s;
     ino = b;
