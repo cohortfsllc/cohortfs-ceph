@@ -21,6 +21,9 @@
 
 #define PREALLOC 1000000
 
+using std::cerr;
+using std::cout;
+
 namespace ceph {
 namespace log {
 

@@ -414,7 +414,7 @@ bool OSDMap::is_blacklisted(const entity_addr_t& a) const
 
 void OSDMap::get_blacklist(list<pair<entity_addr_t,utime_t> > *bl) const
 {
-  for (ceph::unordered_map<entity_addr_t,utime_t>::const_iterator it = blacklist.begin() ;
+  for (std::unordered_map<entity_addr_t,utime_t>::const_iterator it = blacklist.begin() ;
 			 it != blacklist.end(); ++it) {
     bl->push_back(*it);
   }
@@ -896,7 +896,7 @@ void OSDMap::dump(Formatter *f) const
   f->close_section();
 
   f->open_array_section("blacklist");
-  for (ceph::unordered_map<entity_addr_t,utime_t>::const_iterator p = blacklist.begin();
+  for (std::unordered_map<entity_addr_t,utime_t>::const_iterator p = blacklist.begin();
        p != blacklist.end();
        ++p) {
     stringstream ss;
@@ -997,7 +997,7 @@ void OSDMap::print(ostream& out) const
   }
   out << std::endl;
 
-  for (ceph::unordered_map<entity_addr_t,utime_t>::const_iterator p = blacklist.begin();
+  for (std::unordered_map<entity_addr_t,utime_t>::const_iterator p = blacklist.begin();
        p != blacklist.end();
        ++p)
     out << "blacklist " << p->first << " expires " << p->second << "\n";

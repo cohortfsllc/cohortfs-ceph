@@ -29,7 +29,7 @@ using std::set;
 using std::map;
 using std::fstream;
 
-#include "include/unordered_map.h"
+#include <unordered_map>
 
 #include "include/filepath.h"
 #include "include/interval_set.h"
@@ -307,7 +307,7 @@ protected:
   WritebackHandler      *writeback_handler;
 
   // cache
-  ceph::unordered_map<vinodeno_t, Inode*> inode_map;
+  std::unordered_map<vinodeno_t, Inode*> inode_map;
   Inode* root;
   LRU lru;    // lru list of Dentry's in our local metadata cache.
 
@@ -320,7 +320,7 @@ protected:
 
   // file handles, etc.
   interval_set<int> free_fd_set;  // unused fds
-  ceph::unordered_map<int, Fh*> fd_map;
+  std::unordered_map<int, Fh*> fd_map;
 
   int get_fd() {
     int fd = free_fd_set.range_start();
@@ -335,7 +335,7 @@ protected:
    * Resolve file descriptor, or return NULL.
    */
   Fh *get_filehandle(int fd) {
-    ceph::unordered_map<int, Fh*>::iterator p = fd_map.find(fd);
+    std::unordered_map<int, Fh*>::iterator p = fd_map.find(fd);
     if (p == fd_map.end())
       return NULL;
     return p->second;

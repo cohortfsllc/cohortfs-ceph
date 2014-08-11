@@ -16,9 +16,7 @@
 #define CEPH_MDS_SESSIONMAP_H
 
 #include <set>
-using std::set;
-
-#include "include/unordered_map.h"
+#include <unordered_map>
 
 #include "include/Context.h"
 #include "include/xlist.h"
@@ -234,7 +232,7 @@ class MDS;
 class SessionMap {
 private:
   MDS *mds;
-  ceph::unordered_map<entity_name_t, Session*> session_map;
+  std::unordered_map<entity_name_t, Session*> session_map;
 public:
   map<int,xlist<Session*>* > by_state;
   
@@ -331,14 +329,14 @@ public:
   void dump();
 
   void get_client_set(set<client_t>& s) {
-    for (ceph::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin();
+    for (std::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin();
 	 p != session_map.end();
 	 ++p)
       if (p->second->info.inst.name.is_client())
 	s.insert(p->second->info.inst.name.num());
   }
   void get_client_session_set(set<Session*>& s) {
-    for (ceph::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin();
+    for (std::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin();
 	 p != session_map.end();
 	 ++p)
       if (p->second->info.inst.name.is_client())

@@ -101,7 +101,7 @@ public:
 };
 WRITE_CLASS_ENCODER(CryptoKey);
 
-static inline ostream& operator<<(ostream& out, const CryptoKey& k)
+static inline std::ostream& operator<<(std::ostream& out, const CryptoKey& k)
 {
   k.print(out);
   return out;

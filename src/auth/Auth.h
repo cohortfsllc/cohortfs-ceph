@@ -26,7 +26,7 @@ class Cond;
 struct EntityAuth {
   uint64_t auid;
   CryptoKey key;
-  map<string, bufferlist> caps;
+  std::map<std::string, bufferlist> caps;
 
   EntityAuth() : auid(CEPH_AUTH_UID_DEFAULT) {}
 
@@ -49,7 +49,8 @@ struct EntityAuth {
 };
 WRITE_CLASS_ENCODER(EntityAuth)
 
-static inline ostream& operator<<(ostream& out, const EntityAuth& a) {
+static inline std::ostream& operator<<(std::ostream& out,
+				       const EntityAuth& a) {
   return out << "auth(auid = " << a.auid << " key=" << a.key << " with " << a.caps.size() << " caps)";
 }
 
@@ -166,13 +167,14 @@ struct ExpiringCryptoKey {
 };
 WRITE_CLASS_ENCODER(ExpiringCryptoKey);
 
-static inline ostream& operator<<(ostream& out, const ExpiringCryptoKey& c)
+static inline std::ostream& operator<<(std::ostream& out,
+				       const ExpiringCryptoKey& c)
 {
   return out << c.key << " expires " << c.expiration;
 }
 
 struct RotatingSecrets {
-  map<uint64_t, ExpiringCryptoKey> secrets;
+  std::map<uint64_t, ExpiringCryptoKey> secrets;
   version_t max_ver;
   
   RotatingSecrets() : max_ver(0) {}
@@ -208,12 +210,12 @@ struct RotatingSecrets {
     return secrets.begin()->second;
   }
   ExpiringCryptoKey& current() {
-    map<uint64_t, ExpiringCryptoKey>::iterator p = secrets.begin();
+    std::map<uint64_t, ExpiringCryptoKey>::iterator p = secrets.begin();
     ++p;
     return p->second;
   }
   const ExpiringCryptoKey& current() const {
-    map<uint64_t, ExpiringCryptoKey>::const_iterator p = secrets.begin();
+    std::map<uint64_t, ExpiringCryptoKey>::const_iterator p = secrets.begin();
     ++p;
     return p->second;
   }

@@ -969,12 +969,12 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
 
   utime_t start = ceph_clock_now(client->cct);
 
-  ceph::unordered_map<int64_t, int64_t> open_files;
-  ceph::unordered_map<int64_t, dir_result_t*> open_dirs;
+  std::unordered_map<int64_t, int64_t> open_files;
+  std::unordered_map<int64_t, dir_result_t*> open_dirs;
 
-  ceph::unordered_map<int64_t, Fh*> ll_files;
-  ceph::unordered_map<int64_t, dir_result_t*> ll_dirs;
-  ceph::unordered_map<uint64_t, int64_t> ll_inos;
+  std::unordered_map<int64_t, Fh*> ll_files;
+  std::unordered_map<int64_t, dir_result_t*> ll_dirs;
+  std::unordered_map<uint64_t, int64_t> ll_inos;
 
   Inode *i1, *i2;
 
@@ -1483,25 +1483,25 @@ int SyntheticClient::play_trace(Trace& t, string& prefix, bool metadata_only)
   lock.Unlock();
 
   // close open files
-  for (ceph::unordered_map<int64_t, int64_t>::iterator fi = open_files.begin();
+  for (std::unordered_map<int64_t, int64_t>::iterator fi = open_files.begin();
        fi != open_files.end();
        ++fi) {
     dout(1) << "leftover close " << fi->second << dendl;
     if (fi->second > 0) client->close(fi->second);
   }
-  for (ceph::unordered_map<int64_t, dir_result_t*>::iterator fi = open_dirs.begin();
+  for (std::unordered_map<int64_t, dir_result_t*>::iterator fi = open_dirs.begin();
        fi != open_dirs.end();
        ++fi) {
     dout(1) << "leftover closedir " << fi->second << dendl;
     if (fi->second != 0) client->closedir(fi->second);
   }
-  for (ceph::unordered_map<int64_t,Fh*>::iterator fi = ll_files.begin();
+  for (std::unordered_map<int64_t,Fh*>::iterator fi = ll_files.begin();
        fi != ll_files.end();
        ++fi) {
     dout(1) << "leftover ll_release " << fi->second << dendl;
     if (fi->second) client->ll_release(fi->second);
   }
-  for (ceph::unordered_map<int64_t,dir_result_t*>::iterator fi = ll_dirs.begin();
+  for (std::unordered_map<int64_t,dir_result_t*>::iterator fi = ll_dirs.begin();
        fi != ll_dirs.end();
        ++fi) {
     dout(1) << "leftover ll_releasedir " << fi->second << dendl;
@@ -1563,8 +1563,8 @@ int SyntheticClient::full_walk(string& basedir)
   memset(&empty, 0, sizeof(empty));
   statq.push_back(empty);
 
-  ceph::unordered_map<inodeno_t, int> nlink;
-  ceph::unordered_map<inodeno_t, int> nlink_seen;
+  std::unordered_map<inodeno_t, int> nlink;
+  std::unordered_map<inodeno_t, int> nlink_seen;
 
   while (!dirq.empty()) {
     string dir = dirq.front();
@@ -1642,7 +1642,7 @@ int SyntheticClient::full_walk(string& basedir)
     }
   }
 
-  for (ceph::unordered_map<inodeno_t,int>::iterator p = nlink.begin(); p != nlink.end(); ++p) {
+  for (std::unordered_map<inodeno_t,int>::iterator p = nlink.begin(); p != nlink.end(); ++p) {
     if (nlink_seen[p->first] != p->second)
       dout(0) << p->first << " nlink " << p->second << " != " << nlink_seen[p->first] << "seen" << dendl;
   }

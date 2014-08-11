@@ -6,10 +6,12 @@
 #include "global/global_init.h"
 #include "common/common_init.h"
 
+using std::cout;
+
 TEST(WorkQueue, StartStop)
 {
   ThreadPool tp(g_ceph_context, "foo", 10, "");
-  
+
   tp.start();
   tp.pause();
   tp.pause_new();

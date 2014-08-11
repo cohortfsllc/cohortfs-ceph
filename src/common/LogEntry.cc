@@ -8,6 +8,7 @@
 
 #include "include/stringify.h"
 
+using std::list;
 
 
 // ----

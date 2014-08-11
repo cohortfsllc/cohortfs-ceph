@@ -26,6 +26,7 @@
 #include <string>
 
 using std::ostringstream;
+using std::make_pair;
 
 PerfCountersCollection::PerfCountersCollection(CephContext *cct)
   : m_cct(cct)

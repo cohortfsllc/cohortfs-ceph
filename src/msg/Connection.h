@@ -50,7 +50,7 @@ public:
   bool failed; // true if we are a lossy connection that has failed.
 
   int rx_buffers_version;
-  map<ceph_tid_t,pair<bufferlist,int> > rx_buffers;
+  std::map<ceph_tid_t,std::pair<bufferlist,int> > rx_buffers;
 
   friend class boost::intrusive_ptr<Connection>;
   friend class PipeConnection;
@@ -115,7 +115,7 @@ public:
   void post_rx_buffer(ceph_tid_t tid, bufferlist& bl) {
     Mutex::Locker l(lock);
     ++rx_buffers_version;
-    rx_buffers[tid] = pair<bufferlist,int>(bl, rx_buffers_version);
+    rx_buffers[tid] = std::pair<bufferlist,int>(bl, rx_buffers_version);
   }
 
   void revoke_rx_buffer(ceph_tid_t tid) {

@@ -2726,7 +2726,7 @@ void OSD::consume_map()
   int num_vols;
   list<OSDVolRef> to_remove;
   // scan volumes
-  for (ceph::unordered_map<uuid_d,VolRef*>::iterator it = vol_map.begin();
+  for (std::unordered_map<uuid_d,VolRef*>::iterator it = vol_map.begin();
        it != vol_map.end();
        ++it) {
     OSDVol *vol = it->second;

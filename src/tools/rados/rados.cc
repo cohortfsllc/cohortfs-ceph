@@ -42,6 +42,9 @@ using namespace librados;
 #include "cls/lock/cls_lock_client.h"
 #include "include/compat.h"
 
+using std::cout;
+using std::cerr;
+
 int rados_tool_sync(const std::map < std::string, std::string > &opts,
 		    std::vector<const char*> &args);
 
@@ -675,12 +678,12 @@ int LoadGen::run()
       double rate = (double)cur_completed_rate() / (1024 * 1024);
       ++total_sec;
       cout.precision(3);
-      cout << setw(5) << total_sec << ": throughput=" << rate  << "MB/sec" << " pending data=" << sent - completed << std::endl;
-      stamp_time = now; 
+      cout << std::setw(5) << total_sec << ": throughput=" << rate  << "MB/sec" << " pending data=" << sent - completed << std::endl;
+      stamp_time = now;
     }
 
     while (sent < expected &&
-           sent - completed < max_backlog &&
+	   sent - completed < max_backlog &&
 	   pending_ops.size() < max_ops) {
       sent += gen_next_op();
     }

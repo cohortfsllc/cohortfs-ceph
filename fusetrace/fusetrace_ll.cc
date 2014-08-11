@@ -33,7 +33,7 @@
 #include <time.h>
 
 
-#include "include/unordered_map.h"
+#include <unordered_map>
 #include "include/hash_namespace.h"
 
 #ifndef __LP64__
@@ -89,7 +89,7 @@ struct Inode {
 };
 
 Inode *root = 0;
-ceph::unordered_map<ino_t, Inode*> inode_map;
+std::unordered_map<ino_t, Inode*> inode_map;
 
 bool make_inode_path(string &buf, Inode *in)
 {

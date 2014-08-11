@@ -28,6 +28,11 @@
 #include <streambuf>
 #include <sstream>
 
+using std::ostream;
+using std::cerr;
+using std::hex;
+using std::dec;
+
 extern void dout_emergency(const char * const str);
 extern void dout_emergency(const std::string &str);
 
@@ -49,7 +54,7 @@ inline std::ostream& operator<<(std::ostream& out, _bad_endl_use_dendl_t) {
       char __array[((v >= -1) && (v <= 200)) ? 0 : -1] __attribute__((unused)); \
     }									\
     ceph::log::Entry *_dout_e = cct->_log->create_entry(v, sub);	\
-    ostream _dout_os(&_dout_e->m_streambuf);				\
+    std::ostream _dout_os(&_dout_e->m_streambuf);			\
     CephContext *_dout_cct = cct;					\
     std::ostream* _dout = &_dout_os;
 

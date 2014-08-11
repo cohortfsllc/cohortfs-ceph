@@ -20,9 +20,8 @@
 
 #include <iostream>
 #include <iomanip>
-using namespace std;
+#include <unordered_map>
 
-#include "include/unordered_map.h"
 #include "include/hash_namespace.h"
 
 #include "hash.h"
@@ -34,11 +33,11 @@ using namespace std;
 #define MAX_CEPH_OBJECT_NAME_LEN 4096
 
 struct object_t {
-  string name;
+  std::string name;
 
   object_t() {}
   object_t(const char *s) : name(s) {}
-  object_t(const string& s) : name(s) {}
+  object_t(const std::string& s) : name(s) {}
 
   void swap(object_t& o) {
     name.swap(o.name);
@@ -74,7 +73,7 @@ inline bool operator>=(const object_t& l, const object_t& r) {
 inline bool operator<=(const object_t& l, const object_t& r) {
   return l.name <= r.name;
 }
-inline ostream& operator<<(ostream& out, const object_t& o) {
+inline std::ostream& operator<<(std::ostream& out, const object_t& o) {
   return out << o.name;
 }
 

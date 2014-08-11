@@ -45,6 +45,7 @@
 #define dout_prefix *_dout << "asok(" << (void*)m_cct << ") "
 
 using std::ostringstream;
+using std::list;
 
 /*
  * UNIX domain sockets created by an application persist even after that

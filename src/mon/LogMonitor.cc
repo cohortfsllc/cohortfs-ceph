@@ -45,7 +45,7 @@ ostream& operator<<(ostream& out, LogMonitor& pm)
 {
   /*
   std::stringstream ss;
-  for (ceph::unordered_map<int,int>::iterator p = pm.pg_map.num_pg_by_state.begin();
+  for (std::unordered_map<int,int>::iterator p = pm.pg_map.num_pg_by_state.begin();
        p != pm.pg_map.num_pg_by_state.end();
        ++p) {
     if (p != pm.pg_map.num_pg_by_state.begin())

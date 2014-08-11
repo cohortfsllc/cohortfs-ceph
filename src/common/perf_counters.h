@@ -29,6 +29,8 @@ class CephContext;
 class PerfCountersBuilder;
 class PerfCountersCollectionTest;
 
+using std::pair;
+
 enum perfcounter_type_d
 {
   PERFCOUNTER_NONE = 0,

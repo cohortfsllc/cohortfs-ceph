@@ -19,6 +19,9 @@
 #include "global/global_context.h"
 #include "include/rados/librados.h"
 
+using std::cout;
+using std::cerr;
+
 void usage()
 {
   cout << "usage: librados-config [option]\n"
@@ -71,7 +74,7 @@ int main(int argc, const char **argv)
     rados_version(&maj, &min, &ext);
     cout << maj << "." << min << "." << ext << std::endl;
   } else if (opt_vernum) {
-    cout << hex << LIBRADOS_VERSION_CODE << dec << std::endl;
+    cout << std::hex << LIBRADOS_VERSION_CODE << std::dec << std::endl;
   }
 
   return 0;

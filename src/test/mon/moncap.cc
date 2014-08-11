@@ -63,7 +63,7 @@ TEST(MonCap, ParseGood) {
     string str = parse_good[i];
     MonCap cap;
     std::cout << "Testing good input: '" << str << "'" << std::endl;
-    ASSERT_TRUE(cap.parse(str, &cout));
+    ASSERT_TRUE(cap.parse(str, &std::cout));
     std::cout << "                                         -> " << cap << std::endl;
   }
 }
@@ -102,7 +102,7 @@ TEST(MonCap, ParseIdentity)
     string str = parse_identity[i];
     MonCap cap;
     std::cout << "Testing good input: '" << str << "'" << std::endl;
-    ASSERT_TRUE(cap.parse(str, &cout));
+    ASSERT_TRUE(cap.parse(str, &std::cout));
     string out = stringify(cap);
     ASSERT_EQ(out, str);
   }
@@ -139,7 +139,7 @@ TEST(MonCap, ParseBad) {
     string str = parse_bad[i];
     MonCap cap;
     std::cout << "Testing bad input: '" << str << "'" << std::endl;
-    ASSERT_FALSE(cap.parse(str, &cout));
+    ASSERT_FALSE(cap.parse(str, &std::cout));
   }
 }
 

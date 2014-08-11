@@ -45,9 +45,12 @@
 #undef generic_dout
 #undef dendl
 
+using std::cout;
+using std::cerr;
+
 void string_to_vec(std::vector<std::string>& args, std::string argstr)
 {
-  istringstream iss(argstr);
+  std::istringstream iss(argstr);
   while(iss) {
     string sub;
     iss >> sub;
@@ -123,7 +126,7 @@ void vec_to_argv(const char *argv0, std::vector<const char*>& args,
 {
   *argv = (const char**)malloc(sizeof(char*) * (args.size() + 1));
   if (!*argv)
-    throw bad_alloc();
+    throw std::bad_alloc();
   *argc = 1;
   (*argv)[0] = argv0;
 

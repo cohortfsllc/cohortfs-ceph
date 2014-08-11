@@ -101,7 +101,7 @@ void hobject_t::append_str(
   assert(stripetype < TERMINUS);
   orig.append(typestrings[stripetype]);
   orig.push_back(sep);
-  orig.append(to_string(stripeno));
+  orig.append(std::to_string(stripeno));
   orig.reserve(orig.length());
 }
 
@@ -196,7 +196,7 @@ void hobject_t::generate_test_instances(list<hobject_t*>& o)
   o.push_back(new hobject_t(object_t("oname3"), ECC, 31));
 }
 
-ostream& operator<<(ostream& out, const hobject_t& o)
+std::ostream& operator<<(std::ostream& out, const hobject_t& o)
 {
   out << o.to_str();
   return out;

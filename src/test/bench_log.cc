@@ -9,6 +9,9 @@
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
 
+using std::cout;
+using std::cerr;
+
 struct T : public Thread {
   int num;
   set<int> myset;

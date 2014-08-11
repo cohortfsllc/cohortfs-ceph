@@ -18,9 +18,9 @@ class Throttle {
   PerfCounters *logger;
 	ceph::atomic_t count, max;
   Mutex lock;
-  list<Cond*> cond;
+  std::list<Cond*> cond;
   bool use_perf;
-  
+
 public:
   Throttle(CephContext *cct, std::string n, int64_t m = 0, bool _use_perf = true);
   ~Throttle();

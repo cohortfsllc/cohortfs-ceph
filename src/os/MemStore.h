@@ -16,7 +16,7 @@
 #ifndef CEPH_MEMSTORE_H
 #define CEPH_MEMSTORE_H
 
-#include "include/unordered_map.h"
+#include <unordered_map>
 #include "common/Finisher.h"
 #include "common/RWLock.h"
 #include "ObjectStore.h"
@@ -87,7 +87,7 @@ public:
   typedef std::shared_ptr<Object> ObjectRef;
 
   struct Collection {
-    ceph::unordered_map<hobject_t, ObjectRef> object_hash;  ///< for lookup
+    std::unordered_map<hobject_t, ObjectRef> object_hash;  ///< for lookup
     map<hobject_t, ObjectRef> object_map;        ///< for iteration
     map<string,bufferptr> xattr;
     RWLock lock;   ///< for object_{map,hash}
@@ -99,7 +99,7 @@ public:
 
     ObjectRef get_object(hobject_t oid) {
       RWLock::RLocker l(lock);
-      ceph::unordered_map<hobject_t, ObjectRef>::iterator o = object_hash.find(oid);
+      std::unordered_map<hobject_t, ObjectRef>::iterator o = object_hash.find(oid);
       if (o == object_hash.end())
         return ObjectRef();
       return o->second;
@@ -107,7 +107,7 @@ public:
 
     ObjectRef get_or_create_object(hobject_t oid) {
       RWLock::WLocker l(lock);
-      ceph::unordered_map<hobject_t, ObjectRef>::iterator i = object_hash.find(oid);
+      std::unordered_map<hobject_t, ObjectRef>::iterator i = object_hash.find(oid);
       if (i != object_hash.end())
         return i->second;
       ObjectRef o(new Object);

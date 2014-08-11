@@ -38,7 +38,7 @@ bool buf_is_zero(const char *buf, size_t len)
 }
 
 
-int64_t unit_to_bytesize(string val, ostream *pss)
+int64_t unit_to_bytesize(string val, std::ostream *pss)
 {
   if (val.empty()) {
     if (pss)

@@ -29,7 +29,7 @@
 void SessionMap::dump()
 {
   dout(10) << "dump" << dendl;
-  for (ceph::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin();
+  for (std::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin();
        p != session_map.end();
        ++p) 
     dout(10) << p->first << " " << p->second
@@ -152,7 +152,7 @@ void SessionMap::encode(bufferlist& bl) const
   ENCODE_START(3, 3, bl);
   ::encode(version, bl);
 
-  for (ceph::unordered_map<entity_name_t,Session*>::const_iterator p = session_map.begin(); 
+  for (std::unordered_map<entity_name_t,Session*>::const_iterator p = session_map.begin(); 
        p != session_map.end(); 
        ++p) {
     if (p->second->is_open() ||
@@ -219,7 +219,7 @@ void SessionMap::decode(bufferlist::iterator& p)
 void SessionMap::dump(Formatter *f) const
 {
   f->open_array_section("Sessions");
-  for (ceph::unordered_map<entity_name_t,Session*>::const_iterator p = session_map.begin();
+  for (std::unordered_map<entity_name_t,Session*>::const_iterator p = session_map.begin();
        p != session_map.end();
        ++p)  {
     f->open_object_section("Session");
@@ -256,7 +256,7 @@ void SessionMap::wipe()
 
 void SessionMap::wipe_ino_prealloc()
 {
-  for (ceph::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin(); 
+  for (std::unordered_map<entity_name_t,Session*>::iterator p = session_map.begin(); 
        p != session_map.end(); 
        ++p) {
     p->second->pending_prealloc_inos.clear();

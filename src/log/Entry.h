@@ -14,6 +14,8 @@
 namespace ceph {
 namespace log {
 
+using std::ostream;
+
 struct Entry {
   utime_t m_stamp;
   pthread_t m_thread;

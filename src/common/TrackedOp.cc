@@ -169,7 +169,7 @@ bool OpTracker::check_ops_in_flight(std::vector<string> &warning_vector)
         break;
 
       utime_t age = now - (*i)->get_arrived();
-      stringstream ss;
+      std::stringstream ss;
       ss << "slow request " << age << " seconds old, received at " << (*i)->get_arrived()
 	 << ": " << *((*i)->request) << " currently "
 	 << ((*i)->current.size() ? (*i)->current : (*i)->state_string());
@@ -184,7 +184,7 @@ bool OpTracker::check_ops_in_flight(std::vector<string> &warning_vector)
   // only summarize if we warn about any.  if everything has backed
   // off, we will stay silent.
   if (warned > 0) {
-    stringstream ss;
+    std::stringstream ss;
     ss << slow << " slow requests, " << warned << " included below; oldest blocked for > "
        << oldest_secs << " secs";
     warning_vector[0] = ss.str();
@@ -265,7 +265,7 @@ void TrackedOp::mark_event(const string &event)
 void TrackedOp::dump(utime_t now, Formatter *f) const
 {
   Message *m = request;
-  stringstream name;
+  std::stringstream name;
   m->print(name);
   f->dump_string("description", name.str().c_str()); // this TrackedOp
   f->dump_stream("received_at") << get_arrived();

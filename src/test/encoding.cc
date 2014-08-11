@@ -4,6 +4,9 @@
 
 #include "gtest/gtest.h"
 
+
+using std::ostream;
+
 template < typename T >
 static void test_encode_and_decode(const T& src)
 {

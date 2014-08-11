@@ -15,8 +15,10 @@
 #include "include/types.h"
 #include "msg/msg_types.h"
 #include "gtest/gtest.h"
-
 #include <sstream>
+
+using std::cout;
+using std::cerr;
 
 // input, parsed+printed addr output, leftover
 // if the parse fails, output + leftover should both be blank.
@@ -55,7 +57,7 @@ TEST(Msgr, TestAddrParsing)
       getline(ss, out);
     }
     string left = end;
-      
+
     cout << "'" << addr_checks[i][0] << "' -> '" << out << "' + '" << left << "'" << std::endl;
 
     ASSERT_EQ(out, addr_checks[i][1]);

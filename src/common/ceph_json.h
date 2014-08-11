@@ -101,7 +101,7 @@ public:
 
   JSONDecoder(bufferlist& bl) {
     if (!parser.parse(bl.c_str(), bl.length())) {
-      cout << "JSONDecoder::err()" << std::endl;
+	    std::cout << "JSONDecoder::err()" << std::endl;
       throw JSONDecoder::err("failed to parse JSON input");
     }
   }

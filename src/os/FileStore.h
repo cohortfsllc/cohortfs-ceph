@@ -24,9 +24,7 @@
 #include <deque>
 #include <boost/scoped_ptr.hpp>
 #include <fstream>
-using namespace std;
-
-#include "include/unordered_map.h"
+#include <unordered_map>
 
 
 #include "ObjectStore.h"

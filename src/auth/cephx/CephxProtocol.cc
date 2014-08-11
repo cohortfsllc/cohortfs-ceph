@@ -465,7 +465,7 @@ bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
   }
 
   ldout(cct, 10) << "verify_authorizer ok nonce " << hex << auth_msg.nonce << dec
-	   << " reply_bl.length()=" << reply_bl.length() <<  dendl;
+		 << " reply_bl.length()=" << reply_bl.length() <<  dendl;
   return true;
 }
 

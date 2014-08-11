@@ -1148,7 +1148,7 @@ void Pipe::register_pipe()
 void Pipe::unregister_pipe()
 {
   assert(msgr->lock.is_locked());
-  ceph::unordered_map<entity_addr_t,Pipe*>::iterator p = msgr->rank_pipe.find(peer_addr);
+  std::unordered_map<entity_addr_t,Pipe*>::iterator p = msgr->rank_pipe.find(peer_addr);
   if (p != msgr->rank_pipe.end() && p->second == this) {
     ldout(msgr->cct,10) << "unregister_pipe" << dendl;
     msgr->rank_pipe.erase(p);

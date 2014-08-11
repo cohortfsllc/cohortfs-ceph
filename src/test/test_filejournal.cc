@@ -13,6 +13,9 @@
 #include "common/Mutex.h"
 #include "common/safe_io.h"
 
+using std::cout;
+using std::cerr;
+
 Finisher *finisher;
 Cond sync_cond;
 char path[200];

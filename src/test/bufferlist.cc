@@ -35,6 +35,9 @@
 #include "fcntl.h"
 #include "sys/stat.h"
 
+using std::cout;
+using std::cerr;
+
 #define MAX_TEST 1000000
 
 TEST(Buffer, constructors) {

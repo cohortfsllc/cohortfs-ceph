@@ -83,7 +83,7 @@ class MDCache {
   // -- my cache --
   LRU lru;   // dentry lru for expiring items from cache
  protected:
-  ceph::unordered_map<vinodeno_t,CInode*> inode_map;  // map of inodes by ino
+  std::unordered_map<vinodeno_t,CInode*> inode_map;  // map of inodes by ino
   CInode *root;                            // root inode
   CInode *myin;                            // .ceph/mds%d dir
 
@@ -239,7 +239,7 @@ protected:
 
   // -- requests --
 protected:
-  ceph::unordered_map<metareqid_t, MDRequestRef> active_requests;
+  std::unordered_map<metareqid_t, MDRequestRef> active_requests;
 
 public:
   int get_num_client_requests();
@@ -1012,7 +1012,7 @@ public:
   CInode *hack_pick_random_inode() {
     assert(!inode_map.empty());
     int n = rand() % inode_map.size();
-    ceph::unordered_map<vinodeno_t,CInode*>::iterator p = inode_map.begin();
+    std::unordered_map<vinodeno_t,CInode*>::iterator p = inode_map.begin();
     while (n--) ++p;
     return p->second;
   }

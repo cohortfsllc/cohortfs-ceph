@@ -15,7 +15,7 @@ MemoryModel::MemoryModel(CephContext *cct_)
 
 void MemoryModel::_sample(snap *psnap)
 {
-  ifstream f;
+  std::ifstream f;
 
   f.open("/proc/self/status");
   if (!f.is_open()) {

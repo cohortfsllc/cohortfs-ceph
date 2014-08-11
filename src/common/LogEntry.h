@@ -52,7 +52,7 @@ struct LogEntryKey {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<LogEntryKey*>& o);
+  static void generate_test_instances(std::list<LogEntryKey*>& o);
 };
 WRITE_CLASS_ENCODER(LogEntryKey)
 
@@ -74,13 +74,13 @@ struct LogEntry {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<LogEntry*>& o);
+  static void generate_test_instances(std::list<LogEntry*>& o);
 };
 WRITE_CLASS_ENCODER(LogEntry)
 
 struct LogSummary {
   version_t version;
-  list<LogEntry> tail;
+  std::list<LogEntry> tail;
 
   LogSummary() : version(0) {}
 
@@ -90,7 +90,7 @@ struct LogSummary {
       tail.pop_front();
   }
   bool contains(const LogEntryKey& k) const {
-    for (list<LogEntry>::const_iterator p = tail.begin();
+    for (std::list<LogEntry>::const_iterator p = tail.begin();
 	 p != tail.end();
 	 ++p)
       if (p->key() == k)
@@ -101,11 +101,11 @@ struct LogSummary {
   void encode(bufferlist& bl) const;
   void decode(bufferlist::iterator& bl);
   void dump(Formatter *f) const;
-  static void generate_test_instances(list<LogSummary*>& o);
+  static void generate_test_instances(std::list<LogSummary*>& o);
 };
 WRITE_CLASS_ENCODER(LogSummary)
 
-inline ostream& operator<<(ostream& out, clog_type t)
+inline std::ostream& operator<<(std::ostream& out, clog_type t)
 {
   switch (t) {
   case CLOG_DEBUG:
@@ -123,7 +123,7 @@ inline ostream& operator<<(ostream& out, clog_type t)
   }
 }
 
-inline ostream& operator<<(ostream& out, const LogEntry& e)
+inline std::ostream& operator<<(std::ostream& out, const LogEntry& e)
 {
   return out << e.stamp << " " << e.who << " " << e.seq << " : " << e.type << " " << e.msg;
 }

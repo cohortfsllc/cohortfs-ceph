@@ -104,7 +104,7 @@ inline void finish_contexts(CephContext *cct, std::list<Context*>& finished,
   if (finished.empty())
     return;
 
-  list<Context*> ls;
+  std::list<Context*> ls;
   ls.swap(finished); // swap out of place to avoid weird loops
 
   if (cct)
@@ -125,7 +125,7 @@ inline void finish_contexts(CephContext *cct, std::vector<Context*>& finished,
   if (finished.empty())
     return;
 
-  vector<Context*> ls;
+  std::vector<Context*> ls;
   ls.swap(finished); // swap out of place to avoid weird loops
 
   if (cct)
@@ -170,7 +170,7 @@ public:
   }
   bool empty() { return contexts.empty(); }
 
-  static Context *list_to_context(list<Context *> &cs) {
+  static Context *list_to_context(std::list<Context *> &cs) {
     if (cs.size() == 0) {
       return 0;
     } else if (cs.size() == 1) {

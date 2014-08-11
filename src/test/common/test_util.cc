@@ -17,6 +17,8 @@
 
 #include <sstream>
 
+using std::cerr;
+
 TEST(util, unit_to_bytesize)
 {
   ASSERT_EQ(1234ll, unit_to_bytesize("1234", &cerr));

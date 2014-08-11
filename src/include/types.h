@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,9 +7,9 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 #ifndef CEPH_TYPES_H
 #define CEPH_TYPES_H
@@ -23,6 +23,20 @@
 #include <fcntl.h>
 #include <string.h>
 #include <inttypes.h>
+
+using std::set;
+using std::map;
+using std::unordered_map;
+using std::multimap;
+using std::pair;
+using std::make_pair;
+using std::string;
+using std::vector;
+using std::list;
+using std::deque;
+using std::stringstream;
+using std::ostringstream;
+using std::istringstream;
 
 // <macro hackery>
 // temporarily remap __le* to ceph_le* for benefit of shared kernel/userland headers
@@ -59,9 +73,7 @@ extern "C" {
 #include <iostream>
 #include <iomanip>
 
-using namespace std;
-
-#include "include/unordered_map.h"
+#include <unordered_map>
 #include "include/hash_namespace.h"
 
 #include "object.h"
@@ -87,14 +99,14 @@ typedef off_t off64_t;
 // -- io helpers --
 
 template<class A, class B>
-inline ostream& operator<<(ostream& out, const pair<A,B>& v) {
+inline std::ostream& operator<<(std::ostream& out, const std::pair<A,B>& v) {
   return out << v.first << "," << v.second;
 }
 
 template<class A>
-inline ostream& operator<<(ostream& out, const vector<A>& v) {
+inline std::ostream& operator<<(std::ostream& out, const std::vector<A>& v) {
   out << "[";
-  for (typename vector<A>::const_iterator p = v.begin(); p != v.end(); ++p) {
+  for (typename std::vector<A>::const_iterator p = v.begin(); p != v.end(); ++p) {
     if (p != v.begin()) out << ",";
     out << *p;
   }
@@ -102,9 +114,10 @@ inline ostream& operator<<(ostream& out, const vector<A>& v) {
   return out;
 }
 template<class A>
-inline ostream& operator<<(ostream& out, const deque<A>& v) {
+inline std::ostream& operator<<(std::ostream& out, const std::deque<A>& v) {
   out << "<";
-  for (typename deque<A>::const_iterator p = v.begin(); p != v.end(); ++p) {
+  for (typename std::deque<A>::const_iterator p = v.begin(); p != v.end();
+       ++p) {
     if (p != v.begin()) out << ",";
     out << *p;
   }
@@ -113,8 +126,8 @@ inline ostream& operator<<(ostream& out, const deque<A>& v) {
 }
 
 template<class A>
-inline ostream& operator<<(ostream& out, const list<A>& ilist) {
-  for (typename list<A>::const_iterator it = ilist.begin();
+inline std::ostream& operator<<(std::ostream& out, const std::list<A>& ilist) {
+  for (typename std::list<A>::const_iterator it = ilist.begin();
        it != ilist.end();
        ++it) {
     if (it != ilist.begin()) out << ",";
@@ -124,8 +137,8 @@ inline ostream& operator<<(ostream& out, const list<A>& ilist) {
 }
 
 template<class A>
-inline ostream& operator<<(ostream& out, const set<A>& iset) {
-  for (typename set<A>::const_iterator it = iset.begin();
+inline std::ostream& operator<<(std::ostream& out, const std::set<A>& iset) {
+  for (typename std::set<A>::const_iterator it = iset.begin();
        it != iset.end();
        ++it) {
     if (it != iset.begin()) out << ",";
@@ -135,8 +148,8 @@ inline ostream& operator<<(ostream& out, const set<A>& iset) {
 }
 
 template<class A>
-inline ostream& operator<<(ostream& out, const multiset<A>& iset) {
-  for (typename multiset<A>::const_iterator it = iset.begin();
+inline std::ostream& operator<<(std::ostream& out, const std::multiset<A>& iset) {
+  for (typename std::multiset<A>::const_iterator it = iset.begin();
        it != iset.end();
        ++it) {
     if (it != iset.begin()) out << ",";
@@ -146,10 +159,10 @@ inline ostream& operator<<(ostream& out, const multiset<A>& iset) {
 }
 
 template<class A,class B>
-inline ostream& operator<<(ostream& out, const map<A,B>& m) 
+inline std::ostream& operator<<(std::ostream& out, const std::map<A,B>& m)
 {
   out << "{";
-  for (typename map<A,B>::const_iterator it = m.begin();
+  for (typename std::map<A,B>::const_iterator it = m.begin();
        it != m.end();
        ++it) {
     if (it != m.begin()) out << ",";
@@ -160,10 +173,10 @@ inline ostream& operator<<(ostream& out, const map<A,B>& m)
 }
 
 template<class A,class B>
-inline ostream& operator<<(ostream& out, const multimap<A,B>& m) 
+inline std::ostream& operator<<(std::ostream& out, const std::multimap<A,B>& m)
 {
   out << "{{";
-  for (typename multimap<A,B>::const_iterator it = m.begin();
+  for (typename std::multimap<A,B>::const_iterator it = m.begin();
        it != m.end();
        ++it) {
     if (it != m.begin()) out << ",";
@@ -179,8 +192,8 @@ inline ostream& operator<<(ostream& out, const multimap<A,B>& m)
 /*
  * comparators for stl containers
  */
-// for ceph::unordered_map:
-//   ceph::unordered_map<const char*, long, hash<const char*>, eqstr> vals;
+// for std::unordered_map:
+//   std::unordered_map<const char*, long, hash<const char*>, eqstr> vals;
 struct eqstr
 {
   bool operator()(const char* s1, const char* s2) const
@@ -263,7 +276,7 @@ static inline bool operator>=(const client_t& l, const client_t& r) { return l.v
 static inline bool operator>=(const client_t& l, int64_t o) { return l.v >= o; }
 static inline bool operator<(const client_t& l, int64_t o) { return l.v < o; }
 
-inline ostream& operator<<(ostream& out, const client_t& c) {
+inline std::ostream& operator<<(std::ostream& out, const client_t& c) {
   return out << c.v;
 }
 
@@ -290,8 +303,8 @@ struct inodeno_t {
 } __attribute__ ((__may_alias__));
 WRITE_CLASS_ENCODER(inodeno_t)
 
-inline ostream& operator<<(ostream& out, inodeno_t ino) {
-  return out << hex << ino.val << dec;
+inline std::ostream& operator<<(std::ostream& out, inodeno_t ino) {
+  return out << std::hex << ino.val << std::dec;
 }
 
 CEPH_HASH_NAMESPACE_START
@@ -331,13 +344,13 @@ struct prettybyte_t {
   prettybyte_t(uint64_t _v) : v(_v) {}
 };
 
-inline ostream& operator<<(ostream& out, const prettybyte_t& b)
+inline std::ostream& operator<<(std::ostream& out, const prettybyte_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
-    return out << (b.v >> 60) << " EB";    
+    return out << (b.v >> 60) << " EB";
   if (b.v > bump_after << 50)
-    return out << (b.v >> 50) << " PB";    
+    return out << (b.v >> 50) << " PB";
   if (b.v > bump_after << 40)
     return out << (b.v >> 40) << " TB";    
   if (b.v > bump_after << 30)
@@ -354,7 +367,7 @@ struct si_t {
   si_t(uint64_t _v) : v(_v) {}
 };
 
-inline ostream& operator<<(ostream& out, const si_t& b)
+inline std::ostream& operator<<(std::ostream& out, const si_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
@@ -377,7 +390,7 @@ struct pretty_si_t {
   pretty_si_t(uint64_t _v) : v(_v) {}
 };
 
-inline ostream& operator<<(ostream& out, const pretty_si_t& b)
+inline std::ostream& operator<<(std::ostream& out, const pretty_si_t& b)
 {
   uint64_t bump_after = 100;
   if (b.v > bump_after << 60)
@@ -400,13 +413,13 @@ struct kb_t {
   kb_t(uint64_t _v) : v(_v) {}
 };
 
-inline ostream& operator<<(ostream& out, const kb_t& kb)
+inline std::ostream& operator<<(std::ostream& out, const kb_t& kb)
 {
   uint64_t bump_after = 100;
   if (kb.v > bump_after << 40)
-    return out << (kb.v >> 40) << " PB";    
+    return out << (kb.v >> 40) << " PB";
   if (kb.v > bump_after << 30)
-    return out << (kb.v >> 30) << " TB";    
+    return out << (kb.v >> 30) << " TB";
   if (kb.v > bump_after << 20)
     return out << (kb.v >> 20) << " GB";    
   if (kb.v > bump_after << 10)
@@ -414,7 +427,7 @@ inline ostream& operator<<(ostream& out, const kb_t& kb)
   return out << kb.v << " kB";
 }
 
-inline ostream& operator<<(ostream& out, const ceph_mon_subscribe_item& i)
+inline std::ostream& operator<<(std::ostream& out, const ceph_mon_subscribe_item& i)
 {
   return out << i.start
 	     << ((i.flags & CEPH_SUBSCRIBE_ONETIME) ? "" : "+");
@@ -427,7 +440,7 @@ enum health_status_t {
 };
 
 #ifdef __cplusplus
-inline ostream& operator<<(ostream &oss, health_status_t status) {
+inline std::ostream& operator<<(std::ostream &oss, health_status_t status) {
   switch (status) {
     case HEALTH_ERR:
       oss << "HEALTH_ERR";

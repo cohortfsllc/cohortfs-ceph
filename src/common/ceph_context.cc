@@ -172,7 +172,7 @@ void CephContext::do_command(std::string command, cmdmap_t& cmdmap,
   Formatter *f = new_formatter(format);
   if (!f)
     f = new_formatter("json-pretty");
-  stringstream ss;
+  std::stringstream ss;
   for (cmdmap_t::iterator it = cmdmap.begin(); it != cmdmap.end(); ++it) {
     if (it->first != "prefix") {
       ss << it->first  << ":" << cmd_vartype_stringify(it->second) << " ";
@@ -203,11 +203,11 @@ void CephContext::do_command(std::string command, cmdmap_t& cmdmap,
       } else {
 	// val may be multiple words
 	string valstr = str_join(val, " ");
-        int r = _conf->set_val(var.c_str(), valstr.c_str());
-        if (r < 0) {
-          f->dump_stream("error") << "error setting '" << var << "' to '" << valstr << "': " << cpp_strerror(r);
-        } else {
-          ostringstream ss;
+	int r = _conf->set_val(var.c_str(), valstr.c_str());
+	if (r < 0) {
+	  f->dump_stream("error") << "error setting '" << var << "' to '" << valstr << "': " << cpp_strerror(r);
+	} else {
+	  ostringstream ss;
           _conf->apply_changes(&ss);
           f->dump_string("success", ss.str());
         }

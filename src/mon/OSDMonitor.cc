@@ -1458,7 +1458,7 @@ void OSDMonitor::tick()
   }
 
   // expire blacklisted items?
-  for (ceph::unordered_map<entity_addr_t,utime_t>::iterator p = osdmap.blacklist.begin();
+  for (std::unordered_map<entity_addr_t,utime_t>::iterator p = osdmap.blacklist.begin();
        p != osdmap.blacklist.end();
        ++p) {
     if (p->second < now) {
@@ -1761,7 +1761,7 @@ bool OSDMonitor::preprocess_command(MMonCommand *m)
     if (f)
       f->open_array_section("blacklist");
 
-    for (ceph::unordered_map<entity_addr_t,utime_t>::iterator p = osdmap.blacklist.begin();
+    for (std::unordered_map<entity_addr_t,utime_t>::iterator p = osdmap.blacklist.begin();
 	 p != osdmap.blacklist.end();
 	 ++p) {
       if (f) {

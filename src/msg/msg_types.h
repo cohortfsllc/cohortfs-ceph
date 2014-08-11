@@ -33,7 +33,7 @@ inline bool operator!=(const sockaddr_in& a, const sockaddr_in& b) {
   return strncmp((const char*)&a, (const char*)&b, sizeof(a)) != 0;
 }
 
-extern ostream& operator<<(ostream& out, const sockaddr_storage &ss);
+extern std::ostream& operator<<(std::ostream& out, const sockaddr_storage &ss);
 
 class entity_name_t {
 public:
@@ -80,7 +80,7 @@ public:
     return n;
   }
 
-  bool parse(const string& s) {
+  bool parse(const std::string& s) {
     const char *start = s.c_str();
     char *end;
     bool got = parse(start, &end);
@@ -120,7 +120,7 @@ public:
   }
   void dump(Formatter *f) const;
 
-  static void generate_test_instances(list<entity_name_t*>& o);
+  static void generate_test_instances(std::list<entity_name_t*>& o);
 };
 WRITE_CLASS_ENCODER(entity_name_t)
 
@@ -346,11 +346,11 @@ struct entity_addr_t {
 
   void dump(Formatter *f) const;
 
-  static void generate_test_instances(list<entity_addr_t*>& o);
+  static void generate_test_instances(std::list<entity_addr_t*>& o);
 };
 WRITE_CLASS_ENCODER(entity_addr_t)
 
-inline ostream& operator<<(ostream& out, const entity_addr_t &addr)
+inline std::ostream& operator<<(std::ostream& out, const entity_addr_t &addr)
 {
   return out << addr.addr << '/' << addr.nonce;
 }
@@ -429,11 +429,11 @@ CEPH_HASH_NAMESPACE_START
 CEPH_HASH_NAMESPACE_END
 
 
-inline ostream& operator<<(ostream& out, const entity_inst_t &i)
+inline std::ostream& operator<<(std::ostream& out, const entity_inst_t &i)
 {
   return out << i.name << " " << i.addr;
 }
-inline ostream& operator<<(ostream& out, const ceph_entity_inst &i)
+inline std::ostream& operator<<(std::ostream& out, const ceph_entity_inst &i)
 {
   entity_inst_t n = i;
   return out << n;

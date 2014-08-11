@@ -24,6 +24,8 @@
 #include "common/strtol.h"
 
 
+using std::string;
+
 // --------
 // utime_t
 
@@ -144,7 +146,7 @@ public:
   }
 
   // output
-  ostream& gmtime(ostream& out) const {
+  std::ostream& gmtime(std::ostream& out) const {
     out.setf(std::ios::right);
     char oldfill = out.fill();
     out.fill('0');
@@ -173,7 +175,7 @@ public:
   }
 
   // output
-  ostream& asctime(ostream& out) const {
+  std::ostream& asctime(std::ostream& out) const {
     out.setf(std::ios::right);
     char oldfill = out.fill();
     out.fill('0');
@@ -199,7 +201,7 @@ public:
     return out;
   }
 
-  ostream& localtime(ostream& out) const {
+  std::ostream& localtime(std::ostream& out) const {
     out.setf(std::ios::right);
     char oldfill = out.fill();
     out.fill('0');

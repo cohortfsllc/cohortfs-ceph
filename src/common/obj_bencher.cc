@@ -27,6 +27,10 @@
 #include <sstream>
 #include <vector>
 
+using std::cout;
+using std::cerr;
+using std::setw;
+using std::setfill;
 
 const std::string BENCH_LASTRUN_METADATA = "benchmark_last_metadata";
 const std::string BENCH_PREFIX = "benchmark_data";

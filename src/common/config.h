@@ -118,7 +118,7 @@ public:
   // Expand all metavariables. Make any pending observer callbacks.
   void apply_changes(std::ostream *oss);
   void _apply_changes(std::ostream *oss);
-  bool _internal_field(const string& k);
+  bool _internal_field(const std::string& k);
   void call_all_observers();
 
   // Called by the Ceph daemons to make configuration changes at runtime
@@ -198,7 +198,7 @@ public:
   EntityName name;
 
   /// cluster name
-  string cluster;
+  std::string cluster;
 
 #define OPTION_OPT_INT(name) const int name;
 #define OPTION_OPT_LONGLONG(name) const long long name;

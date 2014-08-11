@@ -5,6 +5,8 @@
 #include "common/Formatter.h"
 #include <gtest/gtest.h>
 
+using std::cout;
+
 void dump(const SloppyCRCMap& scm)
 {
   Formatter *f = new_formatter("json-pretty");

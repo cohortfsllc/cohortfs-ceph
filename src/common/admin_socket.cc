@@ -48,6 +48,8 @@
 
 
 using std::ostringstream;
+using std::map;
+using std::vector;
 
 /*
  * UNIX domain sockets created by an application persist even after that
@@ -317,10 +319,10 @@ bool AdminSocket::do_accept()
 
   bool rval = false;
 
-  map<string, cmd_vartype> cmdmap;
-  string format;
-  vector<string> cmdvec;
-  stringstream errss;
+  std::map<std::string, cmd_vartype> cmdmap;
+  std::string format;
+  std::vector<std::string> cmdvec;
+  std::stringstream errss;
   cmdvec.push_back(cmd);
   if (!cmdmap_from_json(cmdvec, &cmdmap, errss)) {
     ldout(m_cct, 0) << "AdminSocket: " << errss << dendl;
@@ -483,7 +485,7 @@ public:
 	 p != m_as->m_descs.end();
 	 ++p) {
       ostringstream secname;
-      secname << "cmd" << setfill('0') << std::setw(3) << cmdnum;
+      secname << "cmd" << std::setfill('0') << std::setw(3) << cmdnum;
       dump_cmd_and_help_to_json(&jf,
 				secname.str().c_str(),
 				p->second.c_str(),

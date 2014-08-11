@@ -11,6 +11,8 @@
 
 #include "include/buffer.h"
 
+using std::ostream;
+
 namespace ceph {
 
 

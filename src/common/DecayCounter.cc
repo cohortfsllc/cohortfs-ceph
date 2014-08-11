@@ -48,7 +48,7 @@ void DecayCounter::dump(Formatter *f) const
   f->dump_float("velocity", vel);
 }
 
-void DecayCounter::generate_test_instances(list<DecayCounter*>& ls)
+void DecayCounter::generate_test_instances(std::list<DecayCounter*>& ls)
 {
   utime_t fake_time;
   DecayCounter *counter = new DecayCounter(fake_time);

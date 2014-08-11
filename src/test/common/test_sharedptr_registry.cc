@@ -27,7 +27,8 @@
 #include "global/global_init.h"
 #include <gtest/gtest.h>
 
-using namespace std::tr1;
+using std::shared_ptr;
+using std::weak_ptr;
 
 class SharedPtrRegistryTest : public SharedPtrRegistry<unsigned int, int> {
 public:
@@ -93,7 +94,7 @@ public:
 	  break;
       }
       if (delay > 0)
-	cout << "delay " << delay << "us, is not long enough, try again\n";
+	std::cout << "delay " << delay << "us, is not long enough, try again\n";
     } while (( delay = delay * 2 + 1) < DELAY_MAX);
     return delay < DELAY_MAX;
   }

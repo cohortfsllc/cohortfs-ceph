@@ -23,6 +23,9 @@
 #include "auth/Auth.h"
 #include "auth/KeyRing.h"
 
+using std::cout;
+using std::cerr;
+
 #include <sstream>
 
 void usage()

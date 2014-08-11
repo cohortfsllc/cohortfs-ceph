@@ -229,9 +229,9 @@ extern void cephx_build_service_ticket_request(CephContext *cct,
 
 extern bool cephx_build_service_ticket_reply(CephContext *cct,
 					     CryptoKey& principal_secret,
-					     vector<CephXSessionAuthInfo> ticket_info,
-                                             bool should_encrypt_ticket,
-                                             CryptoKey& ticket_enc_key,
+					     std::vector<CephXSessionAuthInfo> ticket_info,
+					     bool should_encrypt_ticket,
+					     CryptoKey& ticket_enc_key,
 					     bufferlist& reply);
 
 struct CephXServiceTicketRequest {
@@ -316,7 +316,7 @@ private:
 };
 
 struct CephXTicketManager {
-  typedef map<uint32_t, CephXTicketHandler> tickets_map_t;
+  typedef std::map<uint32_t, CephXTicketHandler> tickets_map_t;
   tickets_map_t tickets_map;
   uint64_t global_id;
 
@@ -442,7 +442,7 @@ void decode_decrypt_enc_bl(CephContext *cct, T& t, CryptoKey key, bufferlist& bl
   ::decode(struct_v, iter2);
   ::decode(magic, iter2);
   if (magic != AUTH_ENC_MAGIC) {
-    ostringstream oss;
+    std::ostringstream oss;
     oss << "bad magic in decode_decrypt, " << magic << " != " << AUTH_ENC_MAGIC;
     error = oss.str();
     return;
