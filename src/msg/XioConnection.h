@@ -88,7 +88,7 @@ private:
     atomic_t startup_state;
 
     uint32_t reconnects;
-    uint32_t connect_seq, peer_global_seq;
+    uint32_t connect_seq, global_seq, peer_global_seq;
     uint32_t in_seq, out_seq_acked; // atomic<uint64_t>, got receipt
     atomic_t out_seq; // atomic<uint32_t>
 

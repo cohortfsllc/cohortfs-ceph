@@ -246,7 +246,8 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
     loop_con(this),
     port_shift(0),
     magic(0),
-    special_handling(0)
+    special_handling(0),
+    global_seq(0)
 {
 
   if (cct->_conf->xio_trace_xcon)
@@ -825,7 +826,7 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
 
     XioConnection *xcon = new XioConnection(this, XioConnection::ACTIVE,
 					    _dest);
-    /* session_state::INIT */
+    /* XXXX session_state::INIT */
 
     /* sentinel ref */
     xcon->get(); /* xcon->nref == 1 */

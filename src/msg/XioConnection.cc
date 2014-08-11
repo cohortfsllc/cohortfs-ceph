@@ -98,6 +98,8 @@ XioConnection::XioConnection(XioMessenger *m, XioConnection::type _type,
   peer_type = peer.name.type();
   set_peer_addr(peer.addr);
 
+  cstate.policy = m->get_policy(_peer.name.type());
+
   /* XXXX fake features, aieee! */
   set_features(XIO_ALL_FEATURES);
 }
@@ -537,13 +539,13 @@ int XioConnection::ConnectHelper::msg_connect(MConnect *m)
 	   << dendl;
 
   MConnectReply *m2 = new MConnectReply();
-  m->addr = msgr->get_myinst().addr;
-  m->name = msgr->get_myinst().name;
-  m->flags = 0;
+  m2->addr = msgr->get_myinst().addr;
+  m2->name = msgr->get_myinst().name;
+  m2->flags = 0;
 
   // XXXX needed?  correct?
-  m->last_in_seq = in_seq;
-  m->last_out_seq = out_seq.read();
+  m2->last_in_seq = in_seq;
+  m2->last_out_seq = out_seq.read();
 
   // send m2
   msgr->send_message_impl(m2, xcon);
@@ -561,7 +563,35 @@ int XioConnection::ConnectHelper::msg_connect_reply(MConnectReply *m)
     return -EINVAL;
   }
 
-  // XXX
+  // XXX do we need any data from this phase?
+  XioMessenger *msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+  authorizer =
+    msgr->ms_deliver_get_authorizer(xcon->peer_type, false /* force_new */);
+
+  MConnectAuth *m2 = new MConnectAuth();
+  m2->features = policy.features_supported;
+  m2->flags = 0;
+  if (policy.lossy)
+    m2->flags |= CEPH_MSG_CONNECT_LOSSY; // fyi, actually, server decides
+
+  // XXX move seq capture to init_state()?
+  m2->global_seq = global_seq = msgr->get_global_seq(); // msgr-wide seq
+  m2->connect_seq = connect_seq; // semantics?
+
+  // serialize authorizer in data[0]
+  m2->authorizer_protocol = authorizer ? authorizer->protocol : 0;
+  m2->authorizer_len = authorizer ? authorizer->bl.length() : 0;
+  if (m2->authorizer_len) {
+    buffer::ptr bp = buffer::create(m2->authorizer_len);
+    bp.copy_in(0, m2->authorizer_len, authorizer->bl.c_str()); /* XXX size */
+    m2->get_data().append(bp);
+  }
+
+ // send m2
+  msgr->send_message_impl(m2, xcon);
+
+  // dispose m
+  m->put();
 
   return 0;
 } /* msg_connect_reply */

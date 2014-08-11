@@ -41,6 +41,7 @@ private:
   int port_shift;
   uint32_t magic;
   uint32_t special_handling;
+  atomic_t global_seq;
 
 public:
   XioMessenger(CephContext *cct, entity_name_t name,
@@ -64,6 +65,10 @@ public:
   void set_special_handling(int n) { special_handling = n; }
   int pool_hint(uint32_t size);
   void try_insert(XioConnection *xcon);
+
+  uint32_t get_global_seq() {
+    return global_seq.inc();
+  }
 
   /* xio hooks */
   int new_session(struct xio_session *session,
