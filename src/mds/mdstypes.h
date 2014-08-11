@@ -20,7 +20,6 @@ using namespace std;
 #include "include/interval_set.h"
 #include "inode_backtrace.h"
 #include <boost/pool/pool.hpp>
-#include "include/hash_namespace.h"
 
 #define CEPH_FS_ONDISK_MAGIC "ceph fs volume v011"
 
@@ -237,14 +236,14 @@ inline bool operator<(const vinodeno_t &l, const vinodeno_t &r) {
   return l.ino < r.ino;
 }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<vinodeno_t> {
     size_t operator()(const vinodeno_t &vino) const {
       hash<inodeno_t> H;
       return H(vino.ino);
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 
 
 
@@ -529,14 +528,14 @@ inline bool operator<=(const metareqid_t& l, const metareqid_t& r) {
 inline bool operator>(const metareqid_t& l, const metareqid_t& r) { return !(l <= r); }
 inline bool operator>=(const metareqid_t& l, const metareqid_t& r) { return !(l < r); }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<metareqid_t> {
     size_t operator()(const metareqid_t &r) const { 
       hash<uint64_t> H;
       return H(r.name.num()) ^ H(r.name.type()) ^ H(r.tid);
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 
 
 // cap info for client reconnect
@@ -649,7 +648,7 @@ inline bool operator==(dirfrag_t l, dirfrag_t r) {
   return l.ino == r.ino && l.frag == r.frag;
 }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<dirfrag_t> {
     size_t operator()(const dirfrag_t &df) const { 
       static rjhash<uint64_t> H;
@@ -657,7 +656,7 @@ CEPH_HASH_NAMESPACE_START
       return H(df.ino) ^ I(df.frag);
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 
 
 

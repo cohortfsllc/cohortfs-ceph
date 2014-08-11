@@ -34,17 +34,16 @@
 
 
 #include <unordered_map>
-#include "include/hash_namespace.h"
 
 #ifndef __LP64__
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<uint64_t> {
     size_t operator()(uint64_t __x) const { 
       static hash<uint32_t> H;
       return H((__x >> 32) ^ (__x & 0xffffffff)); 
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 #endif
 
 

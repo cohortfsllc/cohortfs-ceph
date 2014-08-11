@@ -22,8 +22,6 @@
 #include <iomanip>
 #include <unordered_map>
 
-#include "include/hash_namespace.h"
-
 #include "hash.h"
 #include "encoding.h"
 #include "ceph_hash.h"
@@ -77,7 +75,7 @@ inline std::ostream& operator<<(std::ostream& out, const object_t& o) {
   return out << o.name;
 }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<object_t> {
     size_t operator()(const object_t& r) const {
       //static hash<string> H;
@@ -85,7 +83,7 @@ CEPH_HASH_NAMESPACE_START
       return ceph_str_hash_linux(r.name.c_str(), r.name.length());
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 
 
 struct file_object_t {

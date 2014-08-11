@@ -97,14 +97,14 @@ struct hobject_t {
 };
 WRITE_CLASS_ENCODER(hobject_t)
 
-CEPH_HASH_NAMESPACE_START
-template<> struct hash<hobject_t> {
-  size_t operator()(const hobject_t& r) const {
-    static hash<object_t> H;
-    return H(r.oid);
-  }
-};
-CEPH_HASH_NAMESPACE_END
+namespace std {
+  template<> struct hash<hobject_t> {
+    size_t operator()(const hobject_t& r) const {
+      static hash<object_t> H;
+      return H(r.oid);
+    }
+  };
+}
 
 std::ostream& operator<<(std::ostream& out, const hobject_t& o);
 

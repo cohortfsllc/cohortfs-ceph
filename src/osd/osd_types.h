@@ -74,14 +74,14 @@ inline bool operator<=(const osd_reqid_t& l, const osd_reqid_t& r) {
 inline bool operator>(const osd_reqid_t& l, const osd_reqid_t& r) { return !(l <= r); }
 inline bool operator>=(const osd_reqid_t& l, const osd_reqid_t& r) { return !(l < r); }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<osd_reqid_t> {
     size_t operator()(const osd_reqid_t &r) const {
       static hash<uint64_t> H;
       return H(r.name.num() ^ r.tid ^ r.inc);
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 
 
 // Internal OSD op flags - set by the OSD based on the op types

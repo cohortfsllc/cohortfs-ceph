@@ -20,7 +20,6 @@
 #include "include/types.h"
 #include "include/blobhash.h"
 #include "include/encoding.h"
-#include "include/hash_namespace.h"
 
 namespace ceph {
   class Formatter;
@@ -142,7 +141,7 @@ inline std::ostream& operator<<(std::ostream& out, const ceph_entity_name& addr)
   return out << *(const entity_name_t*)&addr;
 }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash< entity_name_t >
   {
     size_t operator()( const entity_name_t &m ) const
@@ -150,7 +149,7 @@ CEPH_HASH_NAMESPACE_START
       return rjhash32(m.type() ^ m.num());
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 
 
 
@@ -362,7 +361,7 @@ inline bool operator<=(const entity_addr_t& a, const entity_addr_t& b) { return 
 inline bool operator>(const entity_addr_t& a, const entity_addr_t& b) { return memcmp(&a, &b, sizeof(a)) > 0; }
 inline bool operator>=(const entity_addr_t& a, const entity_addr_t& b) { return memcmp(&a, &b, sizeof(a)) >= 0; }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash< entity_addr_t >
   {
     size_t operator()( const entity_addr_t& x ) const
@@ -371,7 +370,7 @@ CEPH_HASH_NAMESPACE_START
       return H((const char*)&x, sizeof(x));
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 
 
 /*
@@ -416,7 +415,7 @@ inline bool operator<=(const entity_inst_t& a, const entity_inst_t& b) {
 inline bool operator>(const entity_inst_t& a, const entity_inst_t& b) { return b < a; }
 inline bool operator>=(const entity_inst_t& a, const entity_inst_t& b) { return b <= a; }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash< entity_inst_t >
   {
     size_t operator()( const entity_inst_t& x ) const
@@ -426,7 +425,7 @@ CEPH_HASH_NAMESPACE_START
       return H(x.name) ^ I(x.addr);
     }
   };
-CEPH_HASH_NAMESPACE_END
+}
 
 
 inline std::ostream& operator<<(std::ostream& out, const entity_inst_t &i)
