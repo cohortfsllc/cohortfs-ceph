@@ -133,7 +133,6 @@ set(mds_files
   )
 
 set(libcommon_files
-  ceph_ver.c
   common/DecayCounter.cc
   common/LogClient.cc
   common/LogEntry.cc
@@ -252,8 +251,7 @@ endif(${ENABLE_SHARED})
 add_library(common STATIC ${libcommon_files} $<TARGET_OBJECTS:mon_common_objs>
   $<TARGET_OBJECTS:common_mountcephfs_objs>)
 
-set_source_files_properties(${CMAKE_SOURCE_DIR}/src/ceph_ver.c
-  ${CMAKE_SOURCE_DIR}/src/common/version.cc
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/common/version.cc
   ${CMAKE_SOURCE_DIR}/src/test/encoding/ceph_dencoder.cc
   APPEND PROPERTY OBJECT_DEPENDS ${CMAKE_BINARY_DIR}/src/include/ceph_ver.h)
 
