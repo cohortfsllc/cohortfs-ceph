@@ -290,7 +290,7 @@ inline void decode(T &o, bufferlist& bl)
 #define _BACKWARD_BACKWARD_WARNING_H   // make gcc 4.3 shut up about hash_*
 #endif
 #include <unordered_map>
-#include "include/unordered_set.h"
+#include <unordered_set>
 
 #include "triple.h"
 
@@ -675,17 +675,17 @@ inline void decode(std::unordered_map<T,U>& m, bufferlist::iterator& p)
   }
 }
 
-// ceph::unordered_set
+// std::unordered_set
 template<class T>
-inline void encode(const ceph::unordered_set<T>& m, bufferlist& bl)
+inline void encode(const std::unordered_set<T>& m, bufferlist& bl)
 {
   uint32_t n = m.size();
   encode(n, bl);
-  for (typename ceph::unordered_set<T>::const_iterator p = m.begin(); p != m.end(); ++p)
+  for (typename std::unordered_set<T>::const_iterator p = m.begin(); p != m.end(); ++p)
     encode(*p, bl);
 }
 template<class T>
-inline void decode(ceph::unordered_set<T>& m, bufferlist::iterator& p)
+inline void decode(std::unordered_set<T>& m, bufferlist::iterator& p)
 {
   uint32_t n;
   decode(n, p);

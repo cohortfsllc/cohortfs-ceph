@@ -24,8 +24,8 @@
 #include "CDentry.h"
 #include "CDir.h"
 
-#include "include/unordered_set.h"
-using ceph::unordered_set;
+#include <unordered_set>
+using unordered_set;
 
 class CDir;
 class CInode;
@@ -54,7 +54,7 @@ class LogSegment {
   
   set<CInode*> truncating_inodes;
 
-  map<int, ceph::unordered_set<version_t> > pending_commit_tids;  // mdstable
+  map<int, std::unordered_set<version_t> > pending_commit_tids;  // mdstable
   set<metareqid_t> uncommitted_masters;
   set<dirfrag_t> uncommitted_fragments;
 
