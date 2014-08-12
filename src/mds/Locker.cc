@@ -2094,7 +2094,7 @@ bool Locker::check_inode_max_size(CInode *in, bool force_wrlock,
   // use EOpen if the file is still open; otherwise, use EUpdate.
   // this is just an optimization to push open files forward into
   // newer log segments.
-  LogEvent *le;
+  LogEvent *le = NULL;
   EMetaBlob *metablob;
   if (in->is_any_caps_wanted()) {
     EOpen *eo = new EOpen(mds->mdlog);
@@ -2252,8 +2252,6 @@ void Locker::handle_client_caps(MClientCaps *m)
 
   Capability *cap = 0;
   cap = in->get_client_cap(client);
-  if (!cap && in != in)
-    cap = in->get_client_cap(client);
   if (!cap) {
     dout(7) << "handle_client_caps no cap for client." << client << " on " << *in << dendl;
     m->put();

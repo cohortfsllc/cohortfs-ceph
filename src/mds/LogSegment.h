@@ -25,7 +25,6 @@
 #include "CDir.h"
 
 #include <unordered_set>
-using unordered_set;
 
 class CDir;
 class CInode;
@@ -51,7 +50,7 @@ class LogSegment {
   elist<CInode*>  dirty_dirfrag_dirfragtree;
 
   elist<MDSlaveUpdate*> slave_updates;
-  
+
   set<CInode*> truncating_inodes;
 
   map<int, std::unordered_set<version_t> > pending_commit_tids;  // mdstable

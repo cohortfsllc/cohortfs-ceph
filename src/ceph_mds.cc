@@ -268,12 +268,11 @@ int main(int argc, const char **argv)
   simple_msgr->set_policy(entity_name_t::TYPE_MON,
 			Messenger::Policy::lossy_client(supported,
 							CEPH_FEATURE_UID));
-  messenger->set_policy(entity_name_t::TYPE_MDS,
-			Messenger::Policy::lossless_peer(supported,
+  simple_msgr->set_policy(entity_name_t::TYPE_MDS,
+			  Messenger::Policy::lossless_peer(supported,
 							 CEPH_FEATURE_UID));
   simple_msgr->set_policy(entity_name_t::TYPE_CLIENT,
-			Messenger::Policy::stateful_server(supported, 0));
-
+			  Messenger::Policy::stateful_server(supported, 0));
   int r = simple_msgr->bind(g_conf->public_addr);
   if (r < 0)
     exit(1);
@@ -341,7 +340,9 @@ int main(int argc, const char **argv)
     kill(getpid(), SIGTERM);
 
   simple_msgr->wait();
+#if defined(HAVE_XIO)
   xmsgr->wait();
+#endif
 
   unregister_async_signal_handler(SIGHUP, sighup_handler);
   unregister_async_signal_handler(SIGINT, handle_mds_signal);
