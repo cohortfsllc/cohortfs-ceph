@@ -265,8 +265,6 @@ public:
       for (int req_off = 0; ((unsigned) req_off) < hdr.msg_cnt-1;
 	   ++req_off) {
 	struct xio_msg *req = &(req_arr[req_off].msg);
-	assert(!req->in.data_iovlen);
-	assert(req->out.data_iovlen /* || !nbuffers */);
 	tail->next = req;
 	tail = req;
       }

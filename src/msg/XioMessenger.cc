@@ -342,7 +342,7 @@ int XioMessenger::new_session(struct xio_session *session,
   int code = 0;
 
   /* new xio_sessions now have startup info */
-  decode_xiohelo(xhelo, (char*) req->user_context, req->user_context_len);
+  decode_xiohelo(xhelo, (char*) req->private_data, req->private_data_len);
 
   if (xhelo.flags & XIO_HELO_FLAG_BOUND_ADDR ) {
     inst = &xhelo.src;
