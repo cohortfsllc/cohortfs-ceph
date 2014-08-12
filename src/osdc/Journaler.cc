@@ -54,7 +54,7 @@ void Journaler::set_layout(ceph_file_layout *l)
 {
   layout = *l;
 
-  assert(layout.fl_pg_pool == pg_pool);
+  assert(layout.fl_uuid == volume->uuid);
   last_written.layout = layout;
   last_committed.layout = layout;
 
@@ -145,8 +145,7 @@ void Journaler::read_head(Context *on_finish, bufferlist *bl)
   assert(state == STATE_READHEAD || state == STATE_REREADHEAD);
 
   object_t oid = file_object_t(ino, 0);
-  object_locator_t oloc(pg_pool);
-  objecter->read_full(oid, oloc, bl, 0, on_finish);
+  objecter->read_full(oid, volume, bl, 0, on_finish);
 }
 
 /**
@@ -346,8 +345,7 @@ void Journaler::write_head(Context *oncommit)
   ::encode(last_written, bl);
 
   object_t oid = file_object_t(ino, 0);
-  object_locator_t oloc(pg_pool);
-  objecter->write_full(oid, oloc, bl, ceph_clock_now(cct), 0,
+  objecter->write_full(oid, volume, bl, ceph_clock_now(cct), 0,
 		       NULL, new C_WriteHead(this, last_written, oncommit));
 }
 
@@ -530,7 +528,7 @@ void Journaler::_do_flush(unsigned amount)
     write_buf.splice(0, len, &write_bl);
   }
 
-  filer.write(ino, &layout, flush_pos, len, write_bl, ceph_clock_now(cct),
+  filer.write(ino, volume, &layout, flush_pos, len, write_bl, ceph_clock_now(cct),
 	      0, NULL, onsafe);
 
   flush_pos += len;
@@ -646,7 +644,7 @@ void Journaler::_issue_prezero()
       ldout(cct, 10) << "_issue_prezero zeroing " << prezeroing_pos << "~" << len << " (partial period)" << dendl;
     }
     Context *c = new C_Journaler_Prezero(this, prezeroing_pos, len);
-    filer.zero(ino, &layout, prezeroing_pos, len, ceph_clock_now(cct), 0, NULL, c);
+    filer.zero(ino, volume, &layout, prezeroing_pos, len, ceph_clock_now(cct), 0, NULL, c);
     prezeroing_pos += len;
   }
 }
@@ -812,7 +810,7 @@ void Journaler::_issue_read(uint64_t len)
     if (l > len)
       l = len;
     C_Read *c = new C_Read(this, requested_pos);
-    filer.read(ino, &layout, requested_pos, l, &c->bl, 0, c);
+    filer.read(ino, volume, &layout, requested_pos, l, &c->bl, 0, c);
     requested_pos += l;
     len -= l;
   }

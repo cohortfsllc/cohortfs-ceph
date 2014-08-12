@@ -11,6 +11,35 @@
  */
 #include "include/types.h"
 
+packed_ceph_file_layout & packed_ceph_file_layout::operator=(const ceph_file_layout &x) {
+	memcpy(this->fl_uuid, &x.fl_uuid, sizeof this->fl_uuid);
+	return *this;
+}
+
+ceph_file_layout & ceph_file_layout::operator=(const packed_ceph_file_layout &x) {
+	memset(this, 0, sizeof *this);
+	memcpy(&this->fl_uuid, x.fl_uuid, sizeof this->fl_uuid);
+	return *this;
+}
+void ceph_file_layout::encode(bufferlist &bl) const {
+	::encode(fl_stripe_unit, bl);
+	::encode(fl_stripe_count, bl);
+	::encode(fl_object_size, bl);
+	::encode(fl_uuid, bl);
+}
+void ceph_file_layout::decode(bufferlist::iterator &bl) {
+	::decode(fl_stripe_unit, bl);
+	::decode(fl_stripe_count, bl);
+	::decode(fl_object_size, bl);
+	::decode(fl_uuid, bl);
+}
+void ceph_dir_layout::encode(bufferlist &bl) const {
+	::encode(dl_dir_hash, bl);
+}
+void ceph_dir_layout::decode(bufferlist::iterator &bl) {
+	::decode(dl_dir_hash, bl);
+}
+
 /*
  * return true if @layout appears to be valid
  */

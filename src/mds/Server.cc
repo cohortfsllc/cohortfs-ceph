@@ -270,10 +270,12 @@ void Server::flush_client_sessions(set<client_t>& client_set, C_GatherBuilder& g
   for (set<client_t>::iterator p = client_set.begin(); p != client_set.end(); ++p) {
     Session *session = mds->sessionmap.get_session(entity_name_t::CLIENT(p->v));
     assert(session);
+#ifdef CEPH_FEATURE_EXPORT_PEER	// XXX assume we always have it?  -mdw
     if (!session->is_open() ||
 	!session->connection.get() ||
 	!session->connection->has_feature(CEPH_FEATURE_EXPORT_PEER))
       continue;
+#endif
     version_t seq = session->wait_for_flush(gather.new_sub());
     mds->send_message_client(new MClientSession(CEPH_SESSION_FLUSHMSG, seq), session);
   }
@@ -2297,7 +2299,7 @@ void Server::handle_client_lookup_ino(MDRequestRef& mdr,
     return;
   }
   if (!in) {
-    mdcache->open_ino(ino, (int64_t)-1, new C_MDS_LookupIno2(this, mdr), false);
+    mdcache->open_ino(ino, NULL, new C_MDS_LookupIno2(this, mdr), false);
     return;
   }
 
@@ -2573,6 +2575,7 @@ void Server::handle_client_openc(MDRequestRef& mdr)
     layout.fl_stripe_count = req->head.args.open.stripe_count;
   if (req->head.args.open.object_size)
     layout.fl_object_size = req->head.args.open.object_size;
+#if 0
   if (req->get_connection()->has_feature(CEPH_FEATURE_CREATEPOOLID) &&
       (int32_t)req->head.args.open.pool >= 0) {
     layout.fl_pg_pool = req->head.args.open.pool;
@@ -2583,17 +2586,20 @@ void Server::handle_client_openc(MDRequestRef& mdr)
       return;
     }
   }
+#endif
 
   if (!ceph_file_layout_is_valid(&layout)) {
     dout(10) << " invalid initial file layout" << dendl;
     reply_request(mdr, -EINVAL);
     return;
   }
+#if 0
   if (!mds->mdsmap->is_data_pool(layout.fl_pg_pool)) {
     dout(10) << " invalid data pool " << layout.fl_pg_pool << dendl;
     reply_request(mdr, -EINVAL);
     return;
   }
+#endif
 
   CInode *diri = dn->get_dir()->get_inode();
   rdlocks.insert(&diri->authlock);
@@ -2623,8 +2629,10 @@ void Server::handle_client_openc(MDRequestRef& mdr)
   dn->push_projected_linkage(in);
 
   in->inode.version = dn->pre_dirty();
+#if 0
   if (layout.fl_pg_pool != mdcache->default_file_layout.fl_pg_pool)
     in->inode.add_old_pool(mdcache->default_file_layout.fl_pg_pool);
+#endif
   in->inode.update_backtrace();
   if (cmode & CEPH_FILE_MODE_WR) {
     in->inode.client_ranges[client].range.first = 0;
@@ -3219,18 +3227,17 @@ void Server::handle_client_setlayout(MDRequestRef& mdr)
   // validate layout
   ceph_file_layout layout = cur->get_projected_inode()->layout;
   // save existing layout for later
-  int64_t old_pool = layout.fl_pg_pool;
+  uuid_d old_vol = layout.fl_uuid;
 
+#if 0
   if (req->head.args.setlayout.layout.fl_object_size > 0)
     layout.fl_object_size = req->head.args.setlayout.layout.fl_object_size;
   if (req->head.args.setlayout.layout.fl_stripe_unit > 0)
     layout.fl_stripe_unit = req->head.args.setlayout.layout.fl_stripe_unit;
   if (req->head.args.setlayout.layout.fl_stripe_count > 0)
     layout.fl_stripe_count=req->head.args.setlayout.layout.fl_stripe_count;
-  if (req->head.args.setlayout.layout.fl_cas_hash > 0)
-    layout.fl_cas_hash = req->head.args.setlayout.layout.fl_cas_hash;
-  if (req->head.args.setlayout.layout.fl_object_stripe_unit > 0)
-    layout.fl_object_stripe_unit = req->head.args.setlayout.layout.fl_object_stripe_unit;
+#endif
+#if 0
   if (req->head.args.setlayout.layout.fl_pg_pool > 0) {
     layout.fl_pg_pool = req->head.args.setlayout.layout.fl_pg_pool;
 
@@ -3240,16 +3247,19 @@ void Server::handle_client_setlayout(MDRequestRef& mdr)
       return;
     }
   }
+#endif
   if (!ceph_file_layout_is_valid(&layout)) {
     dout(10) << "bad layout" << dendl;
     reply_request(mdr, -EINVAL);
     return;
   }
+#if 0
   if (!mds->mdsmap->is_data_pool(layout.fl_pg_pool)) {
     dout(10) << " invalid data pool " << layout.fl_pg_pool << dendl;
     reply_request(mdr, -EINVAL);
     return;
   }
+#endif
 
   xlocks.insert(&cur->filelock);
   if (!mds->locker->acquire_locks(mdr, rdlocks, wrlocks, xlocks))
@@ -3259,7 +3269,7 @@ void Server::handle_client_setlayout(MDRequestRef& mdr)
   inode_t *pi = cur->project_inode();
   pi->layout = layout;
   // add the old pool to the inode
-  pi->add_old_pool(old_pool);
+  pi->add_old_volume(old_vol);
   pi->version = cur->pre_dirty();
   pi->ctime = ceph_clock_now(g_ceph_context);
   
@@ -3301,16 +3311,15 @@ void Server::handle_client_setdirlayout(MDRequestRef& mdr)
   else
     layout = mds->mdcache->default_file_layout;
 
+#if 0
   if (req->head.args.setlayout.layout.fl_object_size > 0)
     layout.fl_object_size = req->head.args.setlayout.layout.fl_object_size;
   if (req->head.args.setlayout.layout.fl_stripe_unit > 0)
     layout.fl_stripe_unit = req->head.args.setlayout.layout.fl_stripe_unit;
   if (req->head.args.setlayout.layout.fl_stripe_count > 0)
     layout.fl_stripe_count=req->head.args.setlayout.layout.fl_stripe_count;
-  if (req->head.args.setlayout.layout.fl_cas_hash > 0)
-    layout.fl_cas_hash = req->head.args.setlayout.layout.fl_cas_hash;
-  if (req->head.args.setlayout.layout.fl_object_stripe_unit > 0)
-    layout.fl_object_stripe_unit = req->head.args.setlayout.layout.fl_object_stripe_unit;
+#endif
+#if 0
   if (req->head.args.setlayout.layout.fl_pg_pool > 0) {
     layout.fl_pg_pool = req->head.args.setlayout.layout.fl_pg_pool;
     // make sure we have as new a map as the client
@@ -3319,16 +3328,19 @@ void Server::handle_client_setdirlayout(MDRequestRef& mdr)
       return;
     }  
   }
+#endif
   if (!ceph_file_layout_is_valid(&layout)) {
     dout(10) << "bad layout" << dendl;
     reply_request(mdr, -EINVAL);
     return;
   }
+#if 0
   if (!mds->mdsmap->is_data_pool(layout.fl_pg_pool)) {
     dout(10) << " invalid data pool " << layout.fl_pg_pool << dendl;
     reply_request(mdr, -EINVAL);
     return;
   }
+#endif
 
   pi = cur->project_inode();
   pi->layout = layout;
@@ -3391,12 +3403,15 @@ int Server::parse_layout_vxattr(string name, string value, ceph_file_layout *lay
 	if (r < 0)
 	  return r;
       }
+#if 0
     } else if (name == "layout.object_size") {
       layout->fl_object_size = boost::lexical_cast<unsigned>(value);
     } else if (name == "layout.stripe_unit") {
       layout->fl_stripe_unit = boost::lexical_cast<unsigned>(value);
     } else if (name == "layout.stripe_count") {
       layout->fl_stripe_count = boost::lexical_cast<unsigned>(value);
+#endif
+#if 0
     } else if (name == "layout.pool") {
       try {
 	layout->fl_pg_pool = boost::lexical_cast<unsigned>(value);
@@ -3408,6 +3423,7 @@ int Server::parse_layout_vxattr(string name, string value, ceph_file_layout *lay
 	}
 	layout->fl_pg_pool = pool;
       }
+#endif
     } else {
       dout(10) << " unknown layout vxattr " << name << dendl;
       return -EINVAL;
@@ -3421,10 +3437,12 @@ int Server::parse_layout_vxattr(string name, string value, ceph_file_layout *lay
     dout(10) << "bad layout" << dendl;
     return -EINVAL;
   }
+#if 0
   if (!mds->mdsmap->is_data_pool(layout->fl_pg_pool)) {
     dout(10) << " invalid data pool " << layout->fl_pg_pool << dendl;
     return -EINVAL;
   }
+#endif
   return 0;
 }
 
@@ -3445,7 +3463,7 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
       name.find("ceph.dir.layout") == 0) {
     inode_t *pi;
     string rest;
-    int64_t old_pool = -1;
+    uuid_d old_vol;
     if (name.find("ceph.dir.layout") == 0) {
       if (!cur->is_dir()) {
 	reply_request(mdr, -EINVAL);
@@ -3513,8 +3531,8 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
 	return;
 
       pi = cur->project_inode();
-      old_pool = pi->layout.fl_pg_pool;
-      pi->add_old_pool(old_pool);
+      old_vol = pi->layout.fl_uuid;
+      pi->add_old_volume(old_vol);
       pi->layout = layout;
       pi->ctime = ceph_clock_now(g_ceph_context);
     }
@@ -3817,8 +3835,10 @@ void Server::handle_client_mknod(MDRequestRef& mdr)
   newi->inode.rdev = req->head.args.mknod.rdev;
   newi->inode.version = dn->pre_dirty();
   newi->inode.rstat.rfiles = 1;
+#if 0
   if (layout.fl_pg_pool != mdcache->default_file_layout.fl_pg_pool)
-    newi->inode.add_old_pool(mdcache->default_file_layout.fl_pg_pool);
+    newi->inode.add_old_volume(mdcache->default_file_layout.fl_pg_pool);
+#endif
   newi->inode.update_backtrace();
 
   // if the client created a _regular_ file via MKNOD, it's highly likely they'll

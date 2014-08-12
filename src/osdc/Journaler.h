@@ -120,7 +120,7 @@ public:
 	  f->dump_unsigned("object_size", layout.fl_stripe_unit);
 	  f->dump_unsigned("cas_hash", layout.fl_stripe_unit);
 	  f->dump_unsigned("object_stripe_unit", layout.fl_stripe_unit);
-	  f->dump_unsigned("pg_pool", layout.fl_stripe_unit);
+	  f->dump_stream("uuid") << layout.fl_uuid;
 	}
 	f->close_section(); // layout
       }
@@ -143,7 +143,7 @@ public:
 private:
   // me
   inodeno_t ino;
-  int64_t pg_pool;
+  VolumeRef volume;
   bool readonly;
   ceph_file_layout layout;
 
@@ -280,9 +280,9 @@ private:
   void handle_write_error(int r);
 
 public:
-  Journaler(inodeno_t ino_, int64_t pool, const char *mag, Objecter *obj, PerfCounters *l, int lkey, SafeTimer *tim) : 
+  Journaler(inodeno_t ino_, VolumeRef vol_, const char *mag, Objecter *obj, PerfCounters *l, int lkey, SafeTimer *tim) : 
     cct(obj->cct), last_written(mag), last_committed(mag),
-    ino(ino_), pg_pool(pool), readonly(true), magic(mag),
+    ino(ino_), volume(vol_), readonly(true), magic(mag),
     objecter(obj), filer(objecter), logger(l), logger_key_lat(lkey),
     timer(tim), delay_flush_event(0),
     state(STATE_UNDEF), error(0),

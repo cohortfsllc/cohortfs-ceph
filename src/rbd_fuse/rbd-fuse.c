@@ -570,7 +570,7 @@ rbdfs_setxattr(const char *path, const char *name, const char *value,
 	for (ap = attrs; ap->attrname != NULL; ap++) {
 		if (strcmp(name, ap->attrname) == 0) {
 			*ap->attrvalp = strtoull(value, NULL, 0);
-			fprintf(stderr, "rbd-fuse: %s set to 0x%"PRIx64"\n",
+			fprintf(stderr, "rbd-fuse: %s set to 0x%" PRIx64 "\n",
 				ap->attrname, *ap->attrvalp);
 			return 0;
 		}

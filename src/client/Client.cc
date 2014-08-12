@@ -7517,9 +7517,9 @@ int Client::ll_get_stripe_osd(Inode *in, uint64_t blockno,
   uint64_t stripeno = blockno / stripe_count;    // which horizontal stripe        (Y)
   uint64_t stripepos = blockno % stripe_count;   // which object in the object set (X)
   uint64_t objectsetno = stripeno / stripes_per_object;       // which object set
-  uint64_t objectno = objectsetno * stripe_count + stripepos;  // object id
+//  uint64_t objectno = objectsetno * stripe_count + stripepos;  // object id
 
-  object_t oid = file_object_t(ino, objectno);
+  object_t oid = file_object_t(ino);
   ceph_object_layout olayout
     = objecter->osdmap->file_to_object_layout(oid, *layout, "");
 

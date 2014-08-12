@@ -20,6 +20,7 @@
 
 #include "include/types.h"
 #include "common/Clock.h"
+#include "vol/Volume.h"
 #include "msg/Message.h"
 
 #include <set>
@@ -179,11 +180,12 @@ protected:
 
   // file data pools available to clients (via an ioctl).  first is
   // the default.
-  set<int64_t> data_pools;
+  set<uuid_d> data_volumes;
   // where CAS objects go
-  int64_t cas_pool;
+  uuid_d cas_uuid;
   // where fs metadata objects go
-  int64_t metadata_pool;
+  uuid_d metadata_uuid;
+  VolumeRef metadata_volume;
 
   /*
    * in: the set of logical mds #'s that define the cluster.  this is the set
@@ -215,7 +217,7 @@ public:
   MDSMap()
     : epoch(0), flags(0), last_failure(0), last_failure_osd_epoch(0),
       tableserver(0), root(0), session_timeout(0), session_autoclose(0),
-      max_file_size(0), cas_pool(-1), metadata_pool(0), max_mds(0),
+      max_file_size(0), cas_uuid(), metadata_volume(0), max_mds(0),
       inline_data_enabled(false) {
   }
 
@@ -249,12 +251,12 @@ public:
   int get_tableserver() const { return tableserver; }
   int get_root() const { return root; }
 
-  const set<int64_t> &get_data_pools() const { return data_pools; }
-  int64_t get_first_data_pool() const { return *data_pools.begin(); }
-  int64_t get_cas_pool() const { return cas_pool; }
-  int64_t get_metadata_pool() const { return metadata_pool; }
-  bool is_data_pool(int64_t poolid) const {
-    return data_pools.count(poolid);
+  const set<uuid_d> &get_data_volumes() const { return data_volumes; }
+  const uuid_d & get_first_data_volume() const { return *data_volumes.begin(); }
+  const uuid_d & get_cas_uuid() const { return cas_uuid; }
+  VolumeRef get_metadata_volume() const { return metadata_volume; }
+  bool is_data_volume(uuid_d &volume) const {
+    return data_volumes.count(volume);
   }
 
   const map<uint64_t,mds_info_t>& get_mds_info() { return mds_info; }
@@ -297,14 +299,14 @@ public:
   }
 
   // data pools
-  void add_data_pool(int64_t poolid) {
-    data_pools.insert(poolid);
+  void add_data_volume(uuid_d &uuid) {
+    data_volumes.insert(uuid);
   }
-  int remove_data_pool(int64_t poolid) {
-    set<int64_t>::iterator p = data_pools.find(poolid);
-    if (p == data_pools.end())
+  int remove_data_volume(uuid_d &uuid) {
+    set<uuid_d>::iterator p = data_volumes.find(uuid);
+    if (p == data_volumes.end())
       return -ENOENT;
-    data_pools.erase(p);
+    data_volumes.erase(p);
     return 0;
   }
 

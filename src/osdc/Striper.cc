@@ -105,6 +105,7 @@ void Striper::file_to_extents(CephContext *cct, const char *object_format,
       exv.resize(exv.size() + 1);
       ex = &exv.back();
       ex->oid = oid;
+      ex->volume = layout->fl_uuid;
 
       ex->offset = x_offset;
       ex->length = x_len;

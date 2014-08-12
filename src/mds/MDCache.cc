@@ -276,10 +276,10 @@ void MDCache::remove_inode(CInode *o)
 void MDCache::init_layouts()
 {
   default_file_layout = g_default_file_layout;
-  default_file_layout.fl_pg_pool = mds->mdsmap->get_first_data_pool();
+  default_file_layout.fl_uuid = mds->mdsmap->get_metadata_volume()->uuid;
 
   default_log_layout = g_default_file_layout;
-  default_log_layout.fl_pg_pool = mds->mdsmap->get_metadata_pool();
+  default_log_layout.fl_uuid = mds->mdsmap->get_metadata_volume()->uuid;
   if (g_conf->mds_log_segment_size > 0) {
     default_log_layout.fl_object_size = g_conf->mds_log_segment_size;
     default_log_layout.fl_stripe_unit = g_conf->mds_log_segment_size;
@@ -325,7 +325,7 @@ CInode *MDCache::create_root_inode()
 {
   CInode *i = create_system_inode(MDS_INO_ROOT, S_IFDIR|0755);
   i->inode.layout = default_file_layout;
-  i->inode.layout.fl_pg_pool = mds->mdsmap->get_first_data_pool();
+  i->inode.layout.fl_uuid = mds->mdsmap->get_first_data_volume();
   return i;
 }
 
@@ -1386,9 +1386,9 @@ void MDCache::journal_dirty_inode(MutationImpl *mut, EMetaBlob *metablob,
   } else {
     CDentry *dn = in->get_projected_parent_dn();
     if (in->get_projected_inode()->is_backtrace_updated()) {
-      bool dirty_pool = in->get_projected_inode()->layout.fl_pg_pool !=
-			in->get_previous_projected_inode()->layout.fl_pg_pool;
-      metablob->add_primary_dentry(dn, in, true, true, dirty_pool);
+      bool dirty_vol = in->get_projected_inode()->layout.fl_uuid !=
+			in->get_previous_projected_inode()->layout.fl_uuid;
+      metablob->add_primary_dentry(dn, in, true, true, dirty_vol);
     } else {
       metablob->add_primary_dentry(dn, in, true);
     }
@@ -4674,9 +4674,12 @@ bool MDCache::process_imported_caps()
     if (cap_imports_missing.count(p->first) > 0)
       continue;
 
+    VolumeRef volume;
+    mds->osdmap->find_by_uuid(in->inode.layout.fl_uuid, volume);
+
     cap_imports_num_opening++;
     dout(10) << "  opening missing ino " << p->first << dendl;
-    open_ino(p->first, (int64_t)-1, new C_MDC_RejoinOpenInoFinish(this, p->first), false);
+    open_ino(p->first, volume, new C_MDC_RejoinOpenInoFinish(this, p->first), false);
   }
 
   if (cap_imports_num_opening > 0)
@@ -5300,10 +5303,10 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size, utime_t mtime)
 void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
 {
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
+  VolumeRef volume(mds->mdsmap->get_metadata_volume());
 
   dout(10) << "purge_prealloc_ino " << ino << " oid " << oid << dendl;
-  mds->objecter->remove(oid, oloc, ceph_clock_now(g_ceph_context), 0, 0, fin);
+  mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context), 0, 0, fin);
 }
 
 
@@ -5356,7 +5359,7 @@ void MDCache::_truncate_inode(CInode *in, LogSegment *ls)
 
   in->auth_pin(this);
 
-  mds->filer->truncate(in->inode.ino, &in->inode.layout,
+  mds->filer->truncate(in->inode.ino, in->volume, &in->inode.layout,
 		       pi->truncate_size, pi->truncate_from-pi->truncate_size, pi->truncate_seq, utime_t(), 0,
 		       0, new C_MDC_TruncateFinish(this, in, ls));
 }
@@ -7290,7 +7293,7 @@ void MDCache::open_remote_dentry(CDentry *dn, bool projected, Context *fin, bool
   if (mode == 0)
     open_remote_ino(ino, fin2, want_xlocked); // anchor
   else
-    open_ino(ino, -1, fin2, true, want_xlocked); // backtrace
+    open_ino(ino, NULL, fin2, true, want_xlocked); // backtrace
 }
 
 void MDCache::_open_remote_dentry_finish(CDentry *dn, inodeno_t ino, Context *fin,
@@ -7382,22 +7385,22 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
   inode_backtrace_t backtrace;
   if (err == 0) {
     ::decode(backtrace, bl);
-    if (backtrace.pool != info.pool && backtrace.pool != -1) {
-      dout(10) << " old object in pool " << info.pool
-	       << ", retrying pool " << backtrace.pool << dendl;
-      info.pool = backtrace.pool;
+    if (backtrace.volume != info.volume->uuid && !backtrace.volume.is_zero()) {
+      dout(10) << " old object in volume " << info.volume
+	       << ", retrying volume " << backtrace.volume << dendl;
+      mds->osdmap->find_by_uuid(backtrace.volume, info.volume);
       C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-      fetch_backtrace(ino, info.pool, fin->bl, fin);
+      fetch_backtrace(ino, info.volume, fin->bl, fin);
       return;
     }
   } else if (err == -ENOENT) {
-    int64_t meta_pool = mds->mdsmap->get_metadata_pool();
-    if (info.pool != meta_pool) {
-      dout(10) << " no object in pool " << info.pool
-	       << ", retrying pool " << meta_pool << dendl;
-      info.pool = meta_pool;
+    VolumeRef meta_volume = mds->mdsmap->get_metadata_volume();
+    if (info.volume != meta_volume) {
+      dout(10) << " no object in volume " << info.volume
+	       << ", retrying volume " << meta_volume << dendl;
+      info.volume = meta_volume;
       C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-      fetch_backtrace(ino, info.pool, fin->bl, fin);
+      fetch_backtrace(ino, info.volume, fin->bl, fin);
       return;
     }
   }
@@ -7621,11 +7624,11 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
     info.checked.clear();
     info.checked.insert(mds->get_nodeid());
     C_MDC_OpenInoBacktraceFetched *fin = new C_MDC_OpenInoBacktraceFetched(this, ino);
-    fetch_backtrace(ino, info.pool, fin->bl, fin);
+    fetch_backtrace(ino, info.volume, fin->bl, fin);
   } else {
     assert(!info.ancestors.empty());
     info.checking = mds->get_nodeid();
-    open_ino(info.ancestors[0].dirino, mds->mdsmap->get_metadata_pool(),
+    open_ino(info.ancestors[0].dirino, mds->mdsmap->get_metadata_volume(),
 	     new C_MDC_OpenInoParentOpened(this, ino), info.want_replica);
   }
 }
@@ -7764,10 +7767,10 @@ void MDCache::kick_open_ino_peers(int who)
   }
 }
 
-void MDCache::open_ino(inodeno_t ino, int64_t pool, Context* fin,
+void MDCache::open_ino(inodeno_t ino, VolumeRef volume, Context* fin,
 		       bool want_replica, bool want_xlocked)
 {
-  dout(10) << "open_ino " << ino << " pool " << pool << " want_replica "
+  dout(10) << "open_ino " << ino << " volume " << volume << " want_replica "
 	   << want_replica << dendl;
 
   if (opening_inodes.count(ino)) {
@@ -7792,11 +7795,13 @@ void MDCache::open_ino(inodeno_t ino, int64_t pool, Context* fin,
     info.waiters.push_back(fin);
   } else {
     open_ino_info_t& info = opening_inodes[ino];
+    if (!volume)
+	mds->osdmap->find_by_uuid(default_file_layout.fl_uuid, volume);
     info.checked.insert(mds->get_nodeid());
     info.want_replica = want_replica;
     info.want_xlocked = want_xlocked;
     info.tid = ++open_ino_last_tid;
-    info.pool = pool >= 0 ? pool : default_file_layout.fl_pg_pool;
+    info.volume = volume;
     info.waiters.push_back(fin);
     do_open_ino(ino, info, 0);
   }
@@ -8517,11 +8522,11 @@ void MDCache::eval_remote(CDentry *dn)
   }
 }
 
-void MDCache::fetch_backtrace(inodeno_t ino, int64_t pool, bufferlist& bl,
+void MDCache::fetch_backtrace(inodeno_t ino, VolumeRef volume, bufferlist& bl,
 			      Context *fin)
 {
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  mds->objecter->getxattr(oid, object_locator_t(pool), "parent",
+  mds->objecter->getxattr(oid, volume, "parent",
 			  &bl, 0, fin);
 }
 
@@ -8567,7 +8572,7 @@ void MDCache::purge_stray(CDentry *dn)
   C_GatherBuilder gather(g_ceph_context, new C_MDC_PurgeStrayPurged(this, dn));
 
   if (in->is_dir()) {
-    object_locator_t oloc(mds->mdsmap->get_metadata_pool());
+    VolumeRef volume(mds->mdsmap->get_metadata_volume());
     list<frag_t> ls;
     if (!in->dirfragtree.is_leaf(frag_t()))
       in->dirfragtree.get_leaves(ls);
@@ -8577,7 +8582,7 @@ void MDCache::purge_stray(CDentry *dn)
 	 ++p) {
       object_t oid = CInode::get_object_name(in->inode.ino, *p, "");
       dout(10) << "purge_stray remove dirfrag " << oid << dendl;
-      mds->objecter->remove(oid, oloc, ceph_clock_now(g_ceph_context),
+      mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context),
 			    0, NULL, gather.new_sub());
     }
     assert(gather.has_subs());
@@ -8608,19 +8613,21 @@ void MDCache::purge_stray(CDentry *dn)
   object_t oid = CInode::get_object_name(pi->ino, frag_t(), "");
   // remove the backtrace object if it was not purged
   if (!gather.has_subs()) {
-    object_locator_t oloc(pi->layout.fl_pg_pool);
+    VolumeRef volume;
+    mds->osdmap->find_by_uuid(pi->layout.fl_uuid, volume);
     dout(10) << "purge_stray remove backtrace object " << oid
-	     << " pool " << oloc.pool << dendl;
-    mds->objecter->remove(oid, oloc,
+	     << " volume " << volume << dendl;
+    mds->objecter->remove(oid, volume,
 			  ceph_clock_now(g_ceph_context), 0, NULL,
 			  gather.new_sub());
   }
   // remove old backtrace objects
-  for (vector<int64_t>::iterator p = pi->old_pools.begin();
-       p != pi->old_pools.end();
+  for (vector<uuid_d>::iterator p = pi->old_volumes.begin();
+       p != pi->old_volumes.end();
        ++p) {
-    object_locator_t oloc(*p);
-    mds->objecter->remove(oid, oloc, ceph_clock_now(g_ceph_context), 0,
+    VolumeRef volume;
+    mds->osdmap->find_by_uuid(*p, volume);
+    mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context), 0,
 			  NULL, gather.new_sub());
   }
   assert(gather.has_subs());
@@ -10638,7 +10645,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   // remove old frags
   C_GatherBuilder gather(g_ceph_context, new C_MDC_FragmentFinish(this, basedirfrag, resultfrags));
 
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
+  VolumeRef volume(mds->mdsmap->get_metadata_volume());
   for (list<frag_t>::iterator p = uf.old_frags.begin();
        p != uf.old_frags.end();
        ++p) {
@@ -10653,7 +10660,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
       dout(10) << " removing orphan dirfrag " << oid << dendl;
       op.remove();
     }
-    mds->objecter->mutate(oid, oloc, op, ceph_clock_now(g_ceph_context),
+    mds->objecter->mutate(oid, volume, op, ceph_clock_now(g_ceph_context),
 			  0, NULL, gather.new_sub());
   }
 

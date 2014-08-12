@@ -279,13 +279,13 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls)
   assert(!projected_nodes.empty());
   dout(15) << "pop_and_dirty_projected_inode " << projected_nodes.front()->inode
 	   << " v" << projected_nodes.front()->inode->version << dendl;
-  int64_t old_pool = inode.layout.fl_pg_pool;
+  uuid_d old_vol = inode.layout.fl_uuid;
 
   mark_dirty(projected_nodes.front()->inode->version, ls);
   inode = *projected_nodes.front()->inode;
 
   if (inode.is_backtrace_updated())
-    _mark_dirty_parent(ls, old_pool != inode.layout.fl_pg_pool);
+    _mark_dirty_parent(ls, old_vol != inode.layout.fl_uuid);
 
   map<string,bufferptr> *px = projected_nodes.front()->xattrs;
   if (px) {
@@ -782,7 +782,7 @@ struct C_Inode_Stored : public Context {
 object_t CInode::get_object_name(inodeno_t ino, frag_t fg, const char *suffix)
 {
   char n[60];
-  snprintf(n, sizeof(n), "%" PRIx64 ".%08"PRIx32"%s",
+  snprintf(n, sizeof(n), "%" PRIx64 ".%08" PRIx32 "%s",
 	   ino.val, fg._enc, suffix ? suffix : "");
   return object_t(n);
 }
@@ -803,9 +803,9 @@ void CInode::store(Context *fin)
   m.write_full(bl);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
-  object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pool());
+  VolumeRef mvol(mdcache->mds->mdsmap->get_metadata_volume());
 
-  mdcache->mds->objecter->mutate(oid, oloc, m, ceph_clock_now(g_ceph_context), 0,
+  mdcache->mds->objecter->mutate(oid, mvol, m, ceph_clock_now(g_ceph_context), 0,
 				 NULL, new C_Inode_Stored(this, get_version(), fin) );
 }
 
@@ -836,17 +836,17 @@ void CInode::fetch(Context *fin)
   C_GatherBuilder gather(g_ceph_context, c);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), "");
-  object_locator_t oloc(mdcache->mds->mdsmap->get_metadata_pool());
+  VolumeRef volume(mdcache->mds->mdsmap->get_metadata_volume());
 
   ObjectOperation rd;
   rd.getxattr("inode", &c->bl, NULL);
 
-  mdcache->mds->objecter->read(oid, oloc, rd,
+  mdcache->mds->objecter->read(oid, volume, rd,
 			       (bufferlist*)NULL, 0, gather.new_sub());
 
   // read from separate object too
   object_t oid2 = CInode::get_object_name(ino(), frag_t(), ".inode");
-  mdcache->mds->objecter->read(oid2, oloc, 0, 0, &c->bl2,
+  mdcache->mds->objecter->read(oid2, volume, 0, 0, &c->bl2,
 			       0, gather.new_sub());
 
   gather.activate();
@@ -873,15 +873,16 @@ void CInode::_fetched(bufferlist& bl, bufferlist& bl2, Context *fin)
   } else {
     decode_store(p);
     dout(10) << "_fetched " << *this << dendl;
+    mdcache->mds->osdmap->find_by_uuid(inode.layout.fl_uuid, volume);
     fin->complete(0);
   }
 }
 
-void CInode::build_backtrace(int64_t pool, inode_backtrace_t& bt)
+void CInode::build_backtrace(uuid_d volume, inode_backtrace_t& bt)
 {
   bt.ino = inode.ino;
   bt.ancestors.clear();
-  bt.pool = pool;
+  bt.volume = volume;
 
   CInode *in = this;
   CDentry *pdn = get_parent_dn();
@@ -891,14 +892,14 @@ void CInode::build_backtrace(int64_t pool, inode_backtrace_t& bt)
     in = diri;
     pdn = in->get_parent_dn();
   }
-  vector<int64_t>::iterator i = inode.old_pools.begin();
-  while(i != inode.old_pools.end()) {
-    // don't add our own pool id to old_pools to avoid looping (e.g. setlayout 0, 1, 0)
-    if (*i == pool) {
+  vector<uuid_d>::iterator i = inode.old_volumes.begin();
+  while(i != inode.old_volumes.end()) {
+    // don't add our own volume to old_volumes to avoid looping (e.g. setlayout 0, 1, 0)
+    if (*i == volume) {
       ++i;
       continue;
     }
-    bt.old_pools.insert(*i);
+    bt.old_volumes.insert(*i);
     ++i;
   }
 }
@@ -921,14 +922,14 @@ void CInode::store_backtrace(Context *fin)
 
   auth_pin(this);
 
-  int64_t pool;
+  VolumeRef mvol;
   if (is_dir())
-    pool = mdcache->mds->mdsmap->get_metadata_pool();
+    mvol = mdcache->mds->mdsmap->get_metadata_volume();
   else
-    pool = inode.layout.fl_pg_pool;
+    mvol = volume;
 
   inode_backtrace_t bt;
-  build_backtrace(pool, bt);
+  build_backtrace(volume->uuid, bt);
   bufferlist bl;
   ::encode(bt, bl);
 
@@ -937,38 +938,38 @@ void CInode::store_backtrace(Context *fin)
   op.setxattr("parent", bl);
 
   object_t oid = get_object_name(ino(), frag_t(), "");
-  object_locator_t oloc(pool);
   Context *fin2 = new C_Inode_StoredBacktrace(this, inode.backtrace_version,
 					      fin);
 
-  if (!state_test(STATE_DIRTYPOOL) || inode.old_pools.empty()) {
-    mdcache->mds->objecter->mutate(oid, oloc, op,
+  if (!state_test(STATE_DIRTYPOOL) || inode.old_volumes.empty()) {
+    mdcache->mds->objecter->mutate(oid, volume, op,
 				   ceph_clock_now(g_ceph_context), 0,
 				   NULL, fin2);
     return;
   }
 
   C_GatherBuilder gather(g_ceph_context, fin2);
-  mdcache->mds->objecter->mutate(oid, oloc, op,
+  mdcache->mds->objecter->mutate(oid, volume, op,
 				 ceph_clock_now(g_ceph_context),
 				 0, NULL, gather.new_sub());
 
-  set<int64_t> old_pools;
-  for (vector<int64_t>::iterator p = inode.old_pools.begin();
-      p != inode.old_pools.end();
+  set<uuid_d> old_volumes;
+  for (vector<uuid_d>::iterator p = inode.old_volumes.begin();
+      p != inode.old_volumes.end();
       ++p) {
-    if (*p == pool || old_pools.count(*p))
+    if (*p == volume->uuid || old_volumes.count(*p))
       continue;
 
     ObjectOperation op;
     op.create(false);
     op.setxattr("parent", bl);
 
-    object_locator_t oloc(*p);
-    mdcache->mds->objecter->mutate(oid, oloc, op,
+    VolumeRef ovol;
+    mdcache->mds->osdmap->find_by_uuid(*p, ovol);
+    mdcache->mds->objecter->mutate(oid, ovol, op,
 				   ceph_clock_now(g_ceph_context),
 				   0, NULL, gather.new_sub());
-    old_pools.insert(*p);
+    old_volumes.insert(*p);
   }
   gather.activate();
 }

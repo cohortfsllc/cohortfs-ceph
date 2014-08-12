@@ -576,6 +576,8 @@ class ObjectExtent {
   uint64_t    length;	 // in object
   uint64_t    truncate_size;	// in object
 
+  uuid_d	volume;
+
   // off -> len.  extents in buffer being mapped (may be fragmented bc of striping!)
   vector<pair<uint64_t,uint64_t> >  buffer_extents;
 

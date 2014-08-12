@@ -21,6 +21,7 @@
 #include "include/filepath.h"
 #include "include/elist.h"
 
+#include "vol/Volume.h"
 #include "CInode.h"
 #include "CDentry.h"
 #include "CDir.h"
@@ -777,7 +778,7 @@ protected:
     bool want_replica;
     bool want_xlocked;
     version_t tid;
-    int64_t pool;
+    VolumeRef volume;
     list<Context*> waiters;
     open_ino_info_t() : checking(-1), auth_hint(-1),
       check_peers(true), fetch_backtrace(true), discover(false) {}
@@ -804,7 +805,7 @@ protected:
 
 public:
   void kick_open_ino_peers(int who);
-  void open_ino(inodeno_t ino, int64_t pool, Context *fin,
+  void open_ino(inodeno_t ino, VolumeRef volume, Context *fin,
 		bool want_replica=true, bool want_xlocked=false);
   
   // -- find_ino_peer --
@@ -857,7 +858,7 @@ public:
   }
 protected:
   void scan_stray_dir(dirfrag_t next=dirfrag_t());
-  void fetch_backtrace(inodeno_t ino, int64_t pool, bufferlist& bl, Context *fin);
+  void fetch_backtrace(inodeno_t ino, VolumeRef volume, bufferlist& bl, Context *fin);
   void purge_stray(CDentry *dn);
   void _purge_stray_purged(CDentry *dn, int r=0);
   void _purge_stray_logged(CDentry *dn, version_t pdv, LogSegment *ls);

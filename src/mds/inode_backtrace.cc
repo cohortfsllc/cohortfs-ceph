@@ -55,34 +55,20 @@ void inode_backpointer_t::generate_test_instances(list<inode_backpointer_t*>& ls
 
 void inode_backtrace_t::encode(bufferlist& bl) const
 {
-  ENCODE_START(5, 4, bl);
+  ENCODE_START(85, 85, bl);
   ::encode(ino, bl);
   ::encode(ancestors, bl);
-  ::encode(pool, bl);
-  ::encode(old_pools, bl);
+  ::encode(volume, bl);
+  ::encode(old_volumes, bl);
   ENCODE_FINISH(bl);
 }
 
 void inode_backtrace_t::decode(bufferlist::iterator& bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(5, 4, 4, bl);
-  if (struct_v < 3)
-    return;  // sorry, the old data was crap
-  ::decode(ino, bl);
-  if (struct_v >= 4) {
-    ::decode(ancestors, bl);
-  } else {
-    uint32_t n;
-    ::decode(n, bl);
-    while (n--) {
-      ancestors.push_back(inode_backpointer_t());
-      ancestors.back().decode_old(bl);
-    }
-  }
-  if (struct_v >= 5) {
-    ::decode(pool, bl);
-    ::decode(old_pools, bl);
-  }
+  DECODE_START_LEGACY_COMPAT_LEN(85, 85, 4, bl);
+  ::decode(ancestors, bl);
+  ::decode(volume, bl);
+  ::decode(old_volumes, bl);
   DECODE_FINISH(bl);
 }
 
@@ -96,16 +82,20 @@ void inode_backtrace_t::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
-  f->dump_int("pool", pool);
-  f->open_array_section("old_pools");
-  for (set<int64_t>::iterator p = old_pools.begin(); p != old_pools.end(); ++p) {
-    f->dump_int("old_pool", *p);
+  f->dump_stream("volume") << volume;
+  f->open_array_section("old_volumes");
+  for (set<uuid_d>::iterator p = old_volumes.begin(); p != old_volumes.end(); ++p) {
+    f->dump_stream("uuid") << *p;
   }
   f->close_section();
 }
 
 void inode_backtrace_t::generate_test_instances(list<inode_backtrace_t*>& ls)
 {
+  uuid_d uuid1, uuid2, uuid3;
+  uuid1.parse("5a9e54a4-7740-4d03-b0fb-e1f3b899b185");
+  uuid2.parse("5edbdba8-af1a-4b48-8f2f-1ec5cf84efbe");
+  uuid3.parse("e9013f90-e7a3-4f69-bb85-bcf74559e68d");
   ls.push_back(new inode_backtrace_t);
   ls.push_back(new inode_backtrace_t);
   ls.back()->ino = 1;
@@ -113,8 +103,8 @@ void inode_backtrace_t::generate_test_instances(list<inode_backtrace_t*>& ls)
   ls.back()->ancestors.back().dirino = 123;
   ls.back()->ancestors.back().dname = "bar";
   ls.back()->ancestors.back().version = 456;
-  ls.back()->pool = 0;
-  ls.back()->old_pools.insert(10);
-  ls.back()->old_pools.insert(7);
+  ls.back()->volume = uuid1;
+  ls.back()->old_volumes.insert(uuid2);
+  ls.back()->old_volumes.insert(uuid3);
 }
 
