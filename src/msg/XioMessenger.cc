@@ -337,16 +337,21 @@ int XioMessenger::new_session(struct xio_session *session,
 			      void *cb_user_context)
 {
   XioHelo xhelo;
-  bool reject = false;
+  XioConnection *xcon = NULL;
+  entity_inst_t s_inst, *inst;
   int code = 0;
 
+  /* new xio_sessions now have startup info */
   decode_xiohelo(xhelo, (char*) req->user_context, req->user_context_len);
+
   if (xhelo.flags & XIO_HELO_FLAG_BOUND_ADDR ) {
+    inst = &xhelo.src;
+    /* check for reconnection */
     conns_sp.lock();
     XioConnection::EntitySet::iterator conn_iter =
       conns_entity_map.find(xhelo.src, XioConnection::EntityComp());
-    if (conn_iter != conns_entity_map.end()) {
-      XioConnection *xcon = (*conn_iter).get(); // could skip ref (conns_sp)
+    if (unlikely(conn_iter != conns_entity_map.end())) {
+      xcon = (*conn_iter).get(); // could skip ref (conns_sp)
       pthread_spin_lock(&xcon->sp);
       switch (xcon->cstate.startup_state.read()) {
       case XioConnection::ConnectHelper::IDLE:
@@ -359,26 +364,38 @@ int XioMessenger::new_session(struct xio_session *session,
       case XioConnection::ConnectHelper::CONNECTING:
 	/* outbound connection in progress (statup race) */
 	code = xio_reject(session, (enum xio_status) EISCONN, NULL, 0);
-	reject = true;
+	pthread_spin_unlock(&xcon->sp);
+	xcon->put();
+	conns_sp.unlock();
+	return code;
 	break;
       case XioConnection::ConnectHelper::ACCEPTING: /* bad user state */
       case XioConnection::ConnectHelper::READY: /* Accelio state violation */
-	code = xio_reject(session, (enum xio_status) EISCONN, NULL, 0);
-	reject = true;
+	pthread_spin_unlock(&xcon->sp);
+	xcon->put();
+	conns_sp.unlock();
+	return code;
 	/* RESET? */
 	break;
       };
       pthread_spin_unlock(&xcon->sp);
       xcon->put();
-    } else {
-      /* brand new session */
-      /* XXX finish */
     }
     conns_sp.unlock();
+  } else {
+    inst = &s_inst;
+    (void) entity_addr_from_sockaddr(
+      &s_inst.addr, (struct sockaddr *) &req->src_addr);
   }
 
-  if (! reject)
-    code = portals.accept(session, req, cb_user_context);
+  if (likely(! xcon)) {
+    xcon = new XioConnection(this, XioConnection::PASSIVE, s_inst);
+    xcon->session = session;
+    struct xio_session_attr attr;
+    
+  }
+
+  code = portals.accept(session, req, cb_user_context);
 
   return code;
 } /* new_session */
@@ -483,7 +500,8 @@ int XioMessenger::session_event(struct xio_session *session,
     dout(2) << "xio_session_teardown " << session << dendl;
     struct xio_session_attr attr;
     xio_query_session(session, &attr, XIO_SESSION_ATTR_USER_CTX);
-    free(attr.user_context); /* xhelo buffer dup */
+    if (attr.user_context)
+      free(attr.user_context); /* xhelo buffer dup */
     xio_session_destroy(session);
   }
     break;
@@ -896,7 +914,8 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
     conns_sp.unlock();
 
     xcon->session = xio_session_create(XIO_SESSION_REQ, &attr, xio_uri.c_str(),
-				       0, 0, this);
+				       0, 0, xcon);
+    /* XXX connection setup races are prevented by session startup protocol */
     if (! xcon->session) {
       delete xcon;
       return NULL;
