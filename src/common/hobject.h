@@ -41,6 +41,32 @@ struct hobject_t {
   // whatever it is, it should be consistent.
   uint32_t stripeno;
 
+  hobject_t() : stripetype(ENTIRETY) {}
+  hobject_t(const object_t& oid,
+	    stripetype_t stripetype = ENTIRETY,
+	    uint32_t stripeno = 0) :
+    oid(oid), stripetype(stripetype), stripeno(stripeno) {
+    assert(!(stripetype == ENTIRETY) || (stripeno == 0));
+  }
+  hobject_t(object_t &&oid,
+	    stripetype_t stripetype = ENTIRETY,
+	    uint32_t stripeno = 0) :
+    oid(oid), stripetype(stripetype), stripeno(stripeno) {
+    assert(!(stripetype == ENTIRETY) || (stripeno == 0));
+  }
+
+
+  hobject_t datastripe(uint32_t _stripeno) {
+    return hobject_t(oid, DATA, _stripeno);
+  }
+
+  void swap(hobject_t &o) {
+    oid.swap(o.oid);
+    std::swap(stripetype, o.stripetype);
+    std::swap(stripeno, o.stripeno);
+  }
+
+
   bool append_c_str(char *orig, char sep, size_t len,
 		    char *(*appender)(char *dest, const char* src,
 				      size_t len) = NULL) const;
@@ -63,25 +89,6 @@ struct hobject_t {
 			       const char *begin,
 			       const char *bound)) {
     return parse_c_str(in.c_str(), sep, appender);
-  }
-
-  hobject_t() : stripetype(ENTIRETY) {}
-
-  hobject_t(object_t oid,
-	    stripetype_t stripetype = ENTIRETY,
-	    uint32_t stripeno = 0) :
-    oid(oid), stripetype(stripetype), stripeno(stripeno) {
-    assert(!(stripetype == ENTIRETY) || (stripeno == 0));
-  }
-
-  hobject_t datastripe(uint32_t _stripeno) {
-    return hobject_t(oid, DATA, _stripeno);
-  }
-
-  void swap(hobject_t &o) {
-    hobject_t temp(o);
-    o = (*this);
-    (*this) = temp;
   }
 
   void encode(bufferlist& bl) const;

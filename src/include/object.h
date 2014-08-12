@@ -36,6 +36,7 @@ struct object_t {
   object_t() {}
   object_t(const char *s) : name(s) {}
   object_t(const std::string& s) : name(s) {}
+  object_t(std::string&& s) : name(s) {}
 
   void swap(object_t& o) {
     name.swap(o.name);
