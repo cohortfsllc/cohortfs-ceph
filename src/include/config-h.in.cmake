@@ -241,4 +241,7 @@
 /* Use ceph assert override */
 #cmakedefine USE_CEPH_ASSERT
 
+/* Defined if using LTTng */
+#cmakedefine HAVE_LTTNG
+
 #endif /* CONFIG_H */
