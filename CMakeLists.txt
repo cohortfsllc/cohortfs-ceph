@@ -148,6 +148,12 @@ find_package(fcgi REQUIRED)
 set(HAVE_FCGI ${FCGI_FOUND})
 endif(${WITH_FCGI})
 
+option(WITH_LTTNG "LTTng is enabled" ON)
+if(${WITH_LTTNG})
+  find_package(LTTng REQUIRED)
+set(HAVE_LTTNG ${LTTNG_FOUND})
+endif(${WITH_LTTNG})
+
 option(WITH_PROFILER "The Profiler is here" ON)
 if(${WITH_PROFILER})
 find_package(profiler REQUIRED)

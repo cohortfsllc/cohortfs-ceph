@@ -247,4 +247,7 @@
 /* Default system ceph path */
 #define CEPH_CONF_SYS_DEFAULT @sysconfdir@/ceph
 
+/* Defined if using LTTng */
+#cmakedefine HAVE_LTTNG
+
 #endif /* CONFIG_H */
