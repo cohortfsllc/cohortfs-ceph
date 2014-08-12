@@ -61,13 +61,14 @@ void MDSMonitor::print_map(MDSMap &m, int dbl)
   *_dout << dendl;
 }
 
-void MDSMonitor::create_new_fs(MDSMap &m, int metadata_pool, int data_pool)
+void MDSMonitor::create_new_fs(MDSMap &m, uuid_d &metadata_vol, uuid_d &data_vol)
 {
+  uuid_d zero_uuid;
   m.max_mds = g_conf->max_mds;
   m.created = ceph_clock_now(g_ceph_context);
-  m.data_pools.insert(data_pool);
-  m.metadata_pool = metadata_pool;
-  m.cas_pool = -1;
+  m.data_volumes.insert(data_vol);
+  m.metadata_uuid = metadata_vol;
+  m.cas_uuid = zero_uuid;
   m.compat = get_mdsmap_compat_set_default();
 
   m.session_timeout = g_conf->mds_session_timeout;
@@ -82,7 +83,10 @@ void MDSMonitor::create_new_fs(MDSMap &m, int metadata_pool, int data_pool)
 void MDSMonitor::create_initial()
 {
   dout(10) << "create_initial" << dendl;
+#if 0
+// XXX who calls this?  what volume do i use?  does this even make sense?
   create_new_fs(pending_mdsmap, MDS_METADATA_POOL, MDS_DATA_POOL);
+#endif
 }
 
 
@@ -1038,7 +1042,8 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
 
   } else if (prefix == "mds newfs") {
     MDSMap newmap;
-    int64_t metadata, data;
+    string metadata, data;
+    VolumeRef metadata_vol, data_vol;
     if (!cmd_getval(g_ceph_context, cmdmap, "metadata", metadata)) {
       ss << "error parsing 'metadata' value '"
 	 << cmd_vartype_stringify(cmdmap["metadata"]) << "'";
@@ -1054,20 +1059,30 @@ bool MDSMonitor::prepare_command(MMonCommand *m)
     string sure;
     cmd_getval(g_ceph_context, cmdmap, "sure", sure);
     if (sure != "--yes-i-really-mean-it") {
-      ss << "this is DANGEROUS and will wipe out the mdsmap's fs, and may clobber data in the new pools you specify.  add --yes-i-really-mean-it if you do.";
+      ss << "this is DANGEROUS and will wipe out the mdsmap's fs, and may clobber data in the new volumes you specify.  add --yes-i-really-mean-it if you do.";
       r = -EPERM;
-    } else {
-      newmap.inc = pending_mdsmap.inc;
-      pending_mdsmap = newmap;
-      pending_mdsmap.epoch = mdsmap.epoch + 1;
-      create_new_fs(pending_mdsmap, metadata, data);
-      ss << "new fs with metadata pool " << metadata << " and data pool " << data;
-      string rs;
-      getline(ss, rs);
-      wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
-						get_last_committed() + 1));
-      return true;
+      goto out;
     }
+    newmap.inc = pending_mdsmap.inc;
+    pending_mdsmap = newmap;
+    pending_mdsmap.epoch = mdsmap.epoch + 1;
+    if (!mon->osdmon()->osdmap.find_by_name(metadata, metadata_vol)) {
+      ss << "Can't find volume named " << metadata << " for metadata";
+      r = -EPERM;
+      goto out;
+    }
+    if (!mon->osdmon()->osdmap.find_by_name(data, data_vol)) {
+      ss << "Can't find volume named " << data << " for data";
+      r = -EPERM;
+      goto out;
+    }
+    create_new_fs(pending_mdsmap, metadata_vol->uuid, data_vol->uuid);
+    ss << "new fs with metadata volume " << metadata << " and data volume " << data;
+    string rs;
+    getline(ss, rs);
+    wait_for_finished_proposal(new Monitor::C_Command(mon, m, 0, rs,
+					      get_last_committed() + 1));
+    return true;
   } else {
     ss << "unrecognized command";
   }

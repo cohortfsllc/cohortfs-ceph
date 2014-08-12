@@ -31,6 +31,7 @@
 #include "osd/OSDMap.h"
 #include "Objecter.h"
 #include "Striper.h"
+#include "vol/Volume.h"
 
 class Context;
 class Messenger;
@@ -45,8 +46,8 @@ class Filer {
   // probes
   struct Probe {
     inodeno_t ino;
-    uuid_d volume;
     ceph_file_layout layout;
+    uuid_d volume;
 
     uint64_t *psize;
     utime_t *pmtime;
@@ -68,10 +69,14 @@ class Filer {
     int err;
     bool found_size;
 
+    VolumeRef mvol;
+
     Probe(inodeno_t i, ceph_file_layout &l, uint64_t f, uint64_t *e,
 	  utime_t *m, int fl, bool fw, Context *c) :
-      ino(i), layout(l), psize(e), pmtime(m), flags(fl), fwd(fw), onfinish(c),
-      probing_off(f), probing_len(0), err(0), found_size(false) {}
+      ino(i), layout(l), volume(layout.fl_uuid), psize(e), pmtime(m),
+      flags(fl), fwd(fw), onfinish(c),
+      probing_off(f), probing_len(0), err(0), found_size(false) {
+    }
   };
 
   class C_Probe;
@@ -94,7 +99,7 @@ class Filer {
   /*** async file interface.  scatter/gather as needed. ***/
 
   int read(inodeno_t ino,
-	   uuid_d volume,
+	   VolumeRef volume,
 	   ceph_file_layout *layout,
 	   uint64_t offset,
 	   uint64_t len,
@@ -102,14 +107,14 @@ class Filer {
 	   int flags,
 	   Context *onfinish) {
     vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, ino, volume, layout, offset, len, 0,
+    Striper::file_to_extents(cct, ino, layout, offset, len, 0,
 			     extents);
-    objecter->sg_read(extents, bl, flags, onfinish);
+    objecter->sg_read(extents, volume, bl, flags, onfinish);
     return 0;
   }
 
   int read_trunc(inodeno_t ino,
-		 uuid_d volume,
+		 VolumeRef volume,
 		 ceph_file_layout *layout,
 		 uint64_t offset,
 		 uint64_t len,
@@ -119,15 +124,15 @@ class Filer {
 		 uint32_t truncate_seq,
 		 Context *onfinish) {
     vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, ino, volume, layout, offset, len,
+    Striper::file_to_extents(cct, ino, layout, offset, len,
 			     truncate_size, extents);
-    objecter->sg_read_trunc(extents, bl, flags,
+    objecter->sg_read_trunc(extents, volume, bl, flags,
 			    truncate_size, truncate_seq, onfinish);
     return 0;
   }
 
   int write(inodeno_t ino,
-	    uuid_d volume,
+	    VolumeRef volume,
 	    ceph_file_layout *layout,
 	    uint64_t offset,
 	    uint64_t len,
@@ -137,15 +142,15 @@ class Filer {
 	    Context *onack,
 	    Context *oncommit) {
     vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, ino, volume, layout, offset, len, 0,
+    Striper::file_to_extents(cct, ino, layout, offset, len, 0,
 			     extents);
-    objecter->sg_write(extents, bl, mtime, flags, onack,
+    objecter->sg_write(extents, volume, bl, mtime, flags, onack,
 		       oncommit);
     return 0;
   }
 
   int write_trunc(inodeno_t ino,
-		  uuid_d volume,
+		  VolumeRef volume,
 		  ceph_file_layout *layout,
 		  uint64_t offset,
 		  uint64_t len,
@@ -157,15 +162,15 @@ class Filer {
 		  Context *onack,
 		  Context *oncommit) {
     vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, ino, volume, layout, offset, len,
+    Striper::file_to_extents(cct, ino, layout, offset, len,
 			     truncate_size, extents);
-    objecter->sg_write_trunc(extents, bl, mtime, flags, truncate_size,
+    objecter->sg_write_trunc(extents, volume, bl, mtime, flags, truncate_size,
 			     truncate_seq, onack, oncommit);
     return 0;
   }
 
   int truncate(inodeno_t ino,
-	       uuid_d volume,
+	       VolumeRef volume,
 	       ceph_file_layout *layout,
 	       uint64_t offset,
 	       uint64_t len,
@@ -175,14 +180,14 @@ class Filer {
 	       Context *onack,
 	       Context *oncommit) {
     vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, ino, volume, layout, offset, len, 0,
+    Striper::file_to_extents(cct, ino, layout, offset, len, 0,
 			     extents);
     if (extents.size() == 1) {
       vector<OSDOp> ops(1);
       ops[0].op.op = CEPH_OSD_OP_TRIMTRUNC;
       ops[0].op.extent.truncate_seq = truncate_seq;
       ops[0].op.extent.truncate_size = extents[0].offset;
-      objecter->_modify(extents[0].oid, extents[0].volume, ops, mtime,
+      objecter->_modify(extents[0].oid, volume, ops, mtime,
 			flags, onack, oncommit);
     } else {
       C_GatherBuilder gack(cct, onack);
@@ -194,7 +199,7 @@ class Filer {
 	ops[0].op.op = CEPH_OSD_OP_TRIMTRUNC;
 	ops[0].op.extent.truncate_size = p->offset;
 	ops[0].op.extent.truncate_seq = truncate_seq;
-	objecter->_modify(p->oid, p->volume, ops, mtime, flags,
+	objecter->_modify(p->oid, volume, ops, mtime, flags,
 			  onack ? gack.new_sub() : 0,
 			  oncommit ? gcom.new_sub() : 0);
       }
@@ -205,7 +210,7 @@ class Filer {
   }
 
   int zero(inodeno_t ino,
-	   uuid_d volume,
+	   VolumeRef volume,
 	   ceph_file_layout *layout,
 	   uint64_t offset,
 	   uint64_t len,
@@ -215,15 +220,15 @@ class Filer {
 	   Context *onack,
 	   Context *oncommit) {
     vector<ObjectExtent> extents;
-    Striper::file_to_extents(cct, ino, volume, layout, offset, len, 0, extents);
+    Striper::file_to_extents(cct, ino, layout, offset, len, 0, extents);
     if (extents.size() == 1) {
       if (extents[0].offset == 0 && extents[0].length ==
 	  layout->fl_object_size &&
-	  (!keep_first || extents[0].objectno != 0))
-	objecter->remove(extents[0].oid, extents[0].volume,
+	  (!keep_first))
+	objecter->remove(extents[0].oid, volume,
 			 mtime, flags, onack, oncommit);
       else
-	objecter->zero(extents[0].oid, extents[0].volume, extents[0].offset,
+	objecter->zero(extents[0].oid, volume, extents[0].offset,
 		       extents[0].length, mtime, flags,
 		       onack, oncommit);
     } else {
@@ -233,12 +238,12 @@ class Filer {
 	   p != extents.end();
 	   ++p) {
 	if (p->offset == 0 && p->length == layout->fl_object_size &&
-	    (!keep_first || p->objectno != 0))
-	  objecter->remove(p->oid, p->volume, mtime, flags,
+	    (!keep_first))
+	  objecter->remove(p->oid, volume, mtime, flags,
 			   onack ? gack.new_sub() : 0,
 			   oncommit ? gcom.new_sub() : 0);
 	else
-	  objecter->zero(p->oid, p->volume, p->offset, p->length, mtime, flags,
+	  objecter->zero(p->oid, volume, p->offset, p->length, mtime, flags,
 			 onack ? gack.new_sub() : 0,
 			 oncommit ? gcom.new_sub() : 0);
       }
@@ -249,7 +254,7 @@ class Filer {
   }
 
   int zero(inodeno_t ino,
-	   uuid_d volume,
+	   VolumeRef volume,
 	   ceph_file_layout *layout,
 	   uint64_t offset,
 	   uint64_t len,
@@ -262,7 +267,7 @@ class Filer {
 		onack, oncommit);
   }
   // purge range of ino.### objects
-  int purge_range(inodeno_t ino, uuid_d volume, ceph_file_layout *layout,
+  int purge_range(inodeno_t ino, ceph_file_layout *layout,
 		  uint64_t first_obj, uint64_t num_obj,
 		  utime_t mtime, int flags, Context *oncommit);
   void _do_purge_range(struct PurgeRange *pr, int fin);
@@ -273,7 +278,6 @@ class Filer {
    *  and whether we stop when we find data, or hole.
    */
   int probe(inodeno_t ino,
-	    uuid_d volume,
 	    ceph_file_layout *layout,
 	    uint64_t start_from,
 	    uint64_t *end,

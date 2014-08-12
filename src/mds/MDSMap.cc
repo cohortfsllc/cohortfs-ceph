@@ -137,20 +137,28 @@ void MDSMap::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
-  f->open_array_section("data_pools");
-  for (set<int64_t>::const_iterator p = data_pools.begin(); p != data_pools.end(); ++p)
-    f->dump_int("pool", *p);
+  f->open_array_section("data_volumes");
+  for (set<uuid_d>::const_iterator p = data_volumes.begin(); p != data_volumes.end(); ++p)
+    f->dump_stream("uuid") << *p;
   f->close_section();
-  f->dump_int("metadata_pool", metadata_pool);
+  f->dump_stream("metadata_uuid") << metadata_uuid;
 }
 
 void MDSMap::generate_test_instances(list<MDSMap*>& ls)
 {
   MDSMap *m = new MDSMap();
   m->max_mds = 1;
-  m->data_pools.insert(0);
+  uuid_d uuid1, uuid2, uuid3;
+  uuid1.parse("5a9e54a4-7740-4d03-b0fb-e1f3b899b185");
+  uuid2.parse("5edbdba8-af1a-4b48-8f2f-1ec5cf84efbe");
+  uuid3.parse("e9013f90-e7a3-4f69-bb85-bcf74559e68d");
+  m->metadata_uuid = uuid1;
+  m->cas_uuid = uuid2;
+  m->data_volumes.insert(uuid3);
+#if 0
   m->metadata_pool = 1;
   m->cas_pool = 2;
+#endif
   m->compat = get_mdsmap_compat_set_all();
 
   // these aren't the defaults, just in case anybody gets confused
@@ -179,8 +187,10 @@ void MDSMap::print(ostream& out)
       << "up\t" << up << "\n"
       << "failed\t" << failed << "\n"
       << "stopped\t" << stopped << "\n";
-  out << "data_pools\t" << data_pools << "\n";
+  out << "data_volumes\t" << data_volumes << "\n";
+#if 0
   out << "metadata_pool\t" << metadata_pool << "\n";
+#endif
   out << "inline_data\t" << (inline_data_enabled ? "enabled" : "disabled") << "\n";
 
   multimap< pair<unsigned,unsigned>, uint64_t > foo;
@@ -356,7 +366,7 @@ void MDSMap::get_health(list<pair<health_status_t,string> >& summary,
 
 void MDSMap::mds_info_t::encode_versioned(bufferlist& bl, uint64_t features) const
 {
-  ENCODE_START(4, 4, bl);
+  ENCODE_START(84, 84, bl);
   ::encode(global_id, bl);
   ::encode(name, bl);
   ::encode(rank, bl);
@@ -373,7 +383,7 @@ void MDSMap::mds_info_t::encode_versioned(bufferlist& bl, uint64_t features) con
 
 void MDSMap::mds_info_t::encode_unversioned(bufferlist& bl) const
 {
-  uint8_t struct_v = 3;
+  uint8_t struct_v = 84;
   ::encode(struct_v, bl);
   ::encode(global_id, bl);
   ::encode(name, bl);
@@ -390,7 +400,7 @@ void MDSMap::mds_info_t::encode_unversioned(bufferlist& bl) const
 
 void MDSMap::mds_info_t::decode(bufferlist::iterator& bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(4, 4, 4, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(84, 84, 4, bl);
   ::decode(global_id, bl);
   ::decode(name, bl);
   ::decode(rank, bl);
@@ -401,8 +411,7 @@ void MDSMap::mds_info_t::decode(bufferlist::iterator& bl)
   ::decode(laggy_since, bl);
   ::decode(standby_for_rank, bl);
   ::decode(standby_for_name, bl);
-  if (struct_v >= 2)
-    ::decode(export_targets, bl);
+  ::decode(export_targets, bl);
   DECODE_FINISH(bl);
 }
 
@@ -410,7 +419,7 @@ void MDSMap::mds_info_t::decode(bufferlist::iterator& bl)
 
 void MDSMap::encode(bufferlist& bl, uint64_t features) const
 {
-  ENCODE_START(4, 4, bl);
+  ENCODE_START(84, 84, bl);
   ::encode(epoch, bl);
   ::encode(flags, bl);
   ::encode(last_failure, bl);
@@ -420,14 +429,14 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
   ::encode(max_file_size, bl);
   ::encode(max_mds, bl);
   ::encode(mds_info, bl, features);
-  ::encode(data_pools, bl);
-  ::encode(cas_pool, bl);
+  ::encode(data_volumes, bl);
+  ::encode(cas_uuid, bl);
 
   // kclient ignores everything from here
-  uint16_t ev = 7;
+  uint16_t ev = 87;
   ::encode(ev, bl);
   ::encode(compat, bl);
-  ::encode(metadata_pool, bl);
+  ::encode(metadata_uuid, bl);
   ::encode(created, bl);
   ::encode(modified, bl);
   ::encode(tableserver, bl);
@@ -443,7 +452,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
 
 void MDSMap::decode(bufferlist::iterator& p)
 {
-  DECODE_START_LEGACY_COMPAT_LEN_16(4, 4, 4, p);
+  DECODE_START_LEGACY_COMPAT_LEN_16(84, 84, 4, p);
   ::decode(epoch, p);
   ::decode(flags, p);
   ::decode(last_failure, p);
@@ -453,37 +462,15 @@ void MDSMap::decode(bufferlist::iterator& p)
   ::decode(max_file_size, p);
   ::decode(max_mds, p);
   ::decode(mds_info, p);
-  if (struct_v < 3) {
-    uint32_t n;
-    ::decode(n, p);
-    while (n--) {
-      uint32_t m;
-      ::decode(m, p);
-      data_pools.insert(m);
-    }
-    int32_t s;
-    ::decode(s, p);
-    cas_pool = s;
-  } else {
-    ::decode(data_pools, p);
-    ::decode(cas_pool, p);
+  if (1) {
+    ::decode(data_volumes, p);
+    ::decode(cas_uuid, p);
   }
 
   // kclient ignores everything from here
-  uint16_t ev = 1;
-  if (struct_v >= 2)
-    ::decode(ev, p);
-  if (ev >= 3)
-    ::decode(compat, p);
-  else
-    compat = get_mdsmap_compat_set_base();
-  if (ev < 5) {
-    uint32_t n;
-    ::decode(n, p);
-    metadata_pool = n;
-  } else {
-    ::decode(metadata_pool, p);
-  }
+  uint16_t ev = 87;
+  ::decode(ev, p);
+  ::decode(metadata_uuid, p);
   ::decode(created, p);
   ::decode(modified, p);
   ::decode(tableserver, p);
@@ -492,9 +479,7 @@ void MDSMap::decode(bufferlist::iterator& p)
   ::decode(up, p);
   ::decode(failed, p);
   ::decode(stopped, p);
-  if (ev >= 4)
-    ::decode(last_failure_osd_epoch, p);
-  if (ev >= 7)
-    ::decode(inline_data_enabled, p);
+  ::decode(last_failure_osd_epoch, p);
+  ::decode(inline_data_enabled, p);
   DECODE_FINISH(p);
 }

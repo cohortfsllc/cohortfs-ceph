@@ -50,6 +50,7 @@ extern "C" {
 
 #define CEPH_INO_ROOT  1
 
+DO I INCLUDE THIS FILE?
 struct ceph_file_layout {
 	/* file -> object mapping */
 	uint32_t fl_stripe_unit;     /* stripe unit, in bytes.  must be multiple

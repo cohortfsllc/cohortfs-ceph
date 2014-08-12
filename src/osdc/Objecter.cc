@@ -14,7 +14,7 @@
 
 #include "Objecter.h"
 #include "osd/OSDMap.h"
-//#include "Filer.h"
+#include "Filer.h"
 #include "Striper.h"
 
 #include "mon/MonClient.h"

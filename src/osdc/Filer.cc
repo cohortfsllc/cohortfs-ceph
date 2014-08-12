@@ -56,7 +56,6 @@ public:
 };
 
 int Filer::probe(inodeno_t ino,
-		 uuid_d voume,
 		 ceph_file_layout *layout,
 		 uint64_t start_from,
 		 uint64_t *end, // LB, when !fwd
@@ -72,6 +71,7 @@ int Filer::probe(inodeno_t ino,
 
   Probe *probe = new Probe(ino, *layout, start_from, end, pmtime, flags, fwd,
 			   onfinish);
+  objecter->osdmap->find_by_uuid(layout->fl_uuid, probe->mvol);
 
   // period (bytes before we jump unto a new set of object(s))
   uint64_t period = (uint64_t)layout->fl_stripe_count *
@@ -111,13 +111,13 @@ void Filer::_probe(Probe *probe)
        ++p) {
     ldout(cct, 10) << "_probe  probing " << p->oid << dendl;
     C_Probe *c = new C_Probe(this, probe, p->oid);
-    objecter->stat(p->oid, p->volume, &c->size, &c->mtime,
+    objecter->stat(p->oid, probe->mvol, &c->size, &c->mtime,
 		   probe->flags | CEPH_OSD_FLAG_RWORDERED, c);
     probe->ops.insert(p->oid);
   }
 }
 
-void Filer::_probed(Probe *probe, const object_t& oid, uuid_d volume,
+void Filer::_probed(Probe *probe, const object_t& oid,
 		    uint64_t size, utime_t mtime)
 {
   ldout(cct, 10) << "_probed " << probe->ino << " object " << oid
@@ -246,9 +246,11 @@ int Filer::purge_range(inodeno_t ino,
 
   // single object?  easy!
   if (num_obj == 1) {
+	// XXX should find way to pass volref down to here? mdw
+    VolumeRef volref;
+    objecter->osdmap->find_by_uuid(layout->fl_uuid, volref);
     object_t oid = file_object_t(ino, first_obj);
-    object_locator_t oloc = objecter->osdmap->file_to_object_locator(*layout);
-    objecter->remove(oid, oloc, mtime, flags, NULL, oncommit);
+    objecter->remove(oid, volref, mtime, flags, NULL, oncommit);
     return 0;
   }
 
@@ -291,8 +293,9 @@ void Filer::_do_purge_range(PurgeRange *pr, int fin)
   int max = 10 - pr->uncommitted;
   while (pr->num > 0 && max > 0) {
     object_t oid = file_object_t(pr->ino, pr->first);
-    object_locator_t oloc = objecter->osdmap->file_to_object_locator(pr->layout);
-    objecter->remove(oid, oloc, pr->mtime, pr->flags,
+    VolumeRef volref;
+    objecter->osdmap->find_by_uuid(pr->layout.fl_uuid, volref);
+    objecter->remove(oid, volref, pr->mtime, pr->flags,
 		     NULL, new C_PurgeRange(this, pr));
     pr->uncommitted++;
     pr->first++;

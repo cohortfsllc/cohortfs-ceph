@@ -36,6 +36,20 @@
 /*
  * ceph_file_layout - describe data layout for a file/inode
  */
+
+struct ceph_file_layout;
+
+struct packed_ceph_file_layout {
+        uint8_t fl_uuid[16];
+#ifdef __cplusplus
+	packed_ceph_file_layout & operator=(const ceph_file_layout &x);
+#endif
+} __attribute__ ((packed));
+#ifdef __cplusplus
+WRITE_RAW_ENCODER(packed_ceph_file_layout);
+#endif
+
+#ifdef __cplusplus
 struct ceph_file_layout {
 	/* file -> object mapping */
 	__le32 fl_stripe_unit;     /* stripe unit, in bytes.  must be multiple
@@ -43,7 +57,13 @@ struct ceph_file_layout {
 	__le32 fl_stripe_count;    /* over this many objects */
 	__le32 fl_object_size;     /* until objects are this big, then move to
 				      new objects */
-} __attribute__ ((packed));
+	uuid_d fl_uuid;		   /* where this lives (can this not be on disk?) */
+	void encode(bufferlist &bl) const;
+	void decode(bufferlist::iterator &p);
+	ceph_file_layout & operator=(const packed_ceph_file_layout &x);
+};
+WRITE_CLASS_ENCODER(ceph_file_layout)
+#endif
 
 #define CEPH_MIN_STRIPE_UNIT 65536
 
@@ -54,7 +74,14 @@ struct ceph_dir_layout {
 	uint8_t   dl_unused1;
 	uint16_t  dl_unused2;
 	uint32_t  dl_unused3;
-} __attribute__ ((packed));
+#ifdef __cplusplus
+	void encode(bufferlist &bl) const;
+	void decode(bufferlist::iterator &p);
+#endif
+};
+#ifdef __cplusplus
+WRITE_CLASS_ENCODER(ceph_dir_layout)
+#endif
 
 /* crypto algorithms */
 #define CEPH_CRYPTO_NONE 0x0
@@ -361,7 +388,7 @@ union ceph_mds_request_args {
 		__le32 flags;
 	} __attribute__ ((packed)) setxattr;
 	struct {
-		struct ceph_file_layout layout;
+		struct packed_ceph_file_layout layout;
 	} __attribute__ ((packed)) setlayout;
 	struct {
 		uint8_t rule; /* currently fcntl or flock */
@@ -438,7 +465,7 @@ struct ceph_mds_reply_inode {
 	__le64 version;                /* inode version */
 	__le64 xattr_version;          /* version for xattr blob */
 	struct ceph_mds_reply_cap cap; /* caps issued for this inode */
-	struct ceph_file_layout layout;
+	struct packed_ceph_file_layout layout;
 	struct ceph_timespec ctime, mtime, atime;
 	__le32 time_warp_seq;
 	__le64 size, max_size, truncate_size;
@@ -638,7 +665,7 @@ struct ceph_mds_caps {
 			__le64 size, max_size, truncate_size;
 			__le32 truncate_seq;
 			struct ceph_timespec mtime, atime, ctime;
-			struct ceph_file_layout layout;
+			struct packed_ceph_file_layout layout;
 			__le32 time_warp_seq;
 		};
 		/* export message */

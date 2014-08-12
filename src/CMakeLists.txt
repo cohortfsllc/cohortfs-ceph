@@ -288,9 +288,9 @@ set(osdc_rbd_files
   osdc/ObjectCacher.cc
   osdc/Striper.cc
   )
-if(${WITH_CLIENT})
+if(${WITH_CLIENT} OR ${WITH_MDS})
   list(APPEND osdc_files osdc/Filer.cc)
-endif(${WITH_CLIENT})
+endif(${WITH_CLIENT} OR ${WITH_MDS})
 add_library(osdc_rbd_objs OBJECT ${osdc_rbd_files})
 add_library(osdc STATIC ${osdc_files} $<TARGET_OBJECTS:osdc_rbd_objs>)
 

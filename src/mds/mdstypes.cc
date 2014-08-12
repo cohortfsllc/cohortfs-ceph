@@ -221,7 +221,7 @@ void inode_t::encode(bufferlist &bl) const
   ::encode(file_data_version, bl);
   ::encode(xattr_version, bl);
   ::encode(backtrace_version, bl);
-  ::encode(old_pools, bl);
+  ::encode(old_volumes, bl);
   ::encode(max_size_ever, bl);
   ::encode(inline_version, bl);
   ::encode(inline_data, bl);
@@ -280,7 +280,7 @@ void inode_t::decode(bufferlist::iterator &p)
   if (struct_v >= 2)
     ::decode(backtrace_version, p);
   if (struct_v >= 7)
-    ::decode(old_pools, p);
+    ::decode(old_volumes, p);
   if (struct_v >= 8)
     ::decode(max_size_ever, p);
   if (struct_v >= 9) {
@@ -314,10 +314,10 @@ void inode_t::dump(Formatter *f) const
   ::dump(layout, f);
   f->close_section();
 
-  f->open_array_section("old_pools");
-  vector<int64_t>::const_iterator i = old_pools.begin();
-  while(i != old_pools.end()) {
-    f->dump_int("pool", *i);
+  f->open_array_section("old_volumes");
+  vector<uuid_d>::const_iterator i = old_volumes.begin();
+  while(i != old_volumes.end()) {
+    f->dump_stream("uuid") << *i;
   }
   f->close_section();
 

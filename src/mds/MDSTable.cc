@@ -63,8 +63,8 @@ void MDSTable::save(Context *onfinish, version_t v)
 
   // write (async)
   object_t oid = get_object_name();
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
-  mds->objecter->write_full(oid, oloc,
+  VolumeRef volume(mds->mdsmap->get_metadata_volume());
+  mds->objecter->write_full(oid, volume,
 			    bl, ceph_clock_now(g_ceph_context), 0,
 			    NULL, new C_MT_Save(this, version));
 }
@@ -133,8 +133,8 @@ void MDSTable::load(Context *onfinish)
 
   C_MT_Load *c = new C_MT_Load(this, onfinish);
   object_t oid = get_object_name();
-  object_locator_t oloc(mds->mdsmap->get_metadata_pool());
-  mds->objecter->read_full(oid, oloc, &c->bl, 0, c);
+  VolumeRef volume(mds->mdsmap->get_metadata_volume());
+  mds->objecter->read_full(oid, volume, &c->bl, 0, c);
 }
 
 void MDSTable::load_2(int r, bufferlist& bl, Context *onfinish)

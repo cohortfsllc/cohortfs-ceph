@@ -63,7 +63,7 @@ class MDSMonitor : public PaxosService {
     }
   };
 
-  void create_new_fs(MDSMap &m, int metadata_pool, int data_pool);
+  void create_new_fs(MDSMap &m, uuid_d &metadata_volume, uuid_d &data_volume);
 
   version_t get_trim_to();
 

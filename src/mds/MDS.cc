@@ -484,9 +484,11 @@ int MDS::init(int wanted_state)
   while (true) {
     objecter->maybe_request_map();
     objecter->wait_for_osd_map();
+#ifdef CEPH_FEATURE_OSD_TMAP2OMAP	// XXX no? -mdw
     uint64_t osd_features = objecter->osdmap->get_up_osd_features();
     if (osd_features & CEPH_FEATURE_OSD_TMAP2OMAP)
       break;
+#endif
     if (objecter->osdmap->get_num_up_osds() > 0) {
         derr << "*** one or more OSDs do not support TMAP2OMAP; upgrade OSDs before starting MDS (or downgrade MDS) ***" << dendl;
     } else {
