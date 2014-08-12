@@ -24,6 +24,7 @@ extern "C" {
 #include "SimplePolicyMessenger.h"
 #include "XioConnection.h"
 #include "XioMsg.h"
+#include "XioHelo.h"
 
 #include "include/assert.h"
 #include "common/dout.h"
@@ -299,9 +300,9 @@ public:
   int bind(struct xio_session_ops *ops, const string& base_uri,
 	   const int base_port);
 
-    int accept(struct xio_session *session,
-		 struct xio_new_session_req *req,
-		 void *cb_user_context)
+  int accept(struct xio_session *session,
+	     struct xio_new_session_req *req,
+	     void *cb_user_context)
     {
       const char **portals_vec = get_vec();
       int portals_len = get_portals_len()-1;

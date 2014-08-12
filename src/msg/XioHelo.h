@@ -37,6 +37,8 @@ public:
   entity_inst_t dest;
   // sequence numbers?
 
+  XioHelo() {}
+
   XioHelo(__u32 _flags, entity_inst_t _src, entity_inst_t _dest)
     : vers(version), flags(_flags), src(_src), dest(_dest) {}
 
@@ -56,5 +58,12 @@ public:
 };
 
 WRITE_CLASS_ENCODER(XioHelo);
+
+static inline void decode_xiohelo(XioHelo& xhelo, const char *buf, int len) {
+    buffer::list xhelo_bl;
+    xhelo_bl.append(buffer::create_static(len, (char*) buf));
+    buffer::list::iterator bl_iter = xhelo_bl.begin();
+    ::decode(xhelo, bl_iter);
+  }
 
 #endif /* XIO_HELO_H */

@@ -336,7 +336,51 @@ int XioMessenger::new_session(struct xio_session *session,
 			      struct xio_new_session_req *req,
 			      void *cb_user_context)
 {
-  return portals.accept(session, req, cb_user_context);
+  XioHelo xhelo;
+  bool reject = false;
+  int code = 0;
+
+  decode_xiohelo(xhelo, (char*) req->user_context, req->user_context_len);
+  if (xhelo.flags & XIO_HELO_FLAG_BOUND_ADDR ) {
+    conns_sp.lock();
+    XioConnection::EntitySet::iterator conn_iter =
+      conns_entity_map.find(xhelo.src, XioConnection::EntityComp());
+    if (conn_iter != conns_entity_map.end()) {
+      XioConnection *xcon = (*conn_iter).get(); // could skip ref (conns_sp)
+      pthread_spin_lock(&xcon->sp);
+      switch (xcon->cstate.startup_state.read()) {
+      case XioConnection::ConnectHelper::IDLE:
+	/* normal reconnect */
+	xcon->xio_conn_type = XioConnection::PASSIVE;
+	xcon->cstate.session_state.set(XioConnection::ConnectHelper::START);
+	xcon->cstate.startup_state.set(
+	  XioConnection::ConnectHelper::ACCEPTING);
+	break;
+      case XioConnection::ConnectHelper::CONNECTING:
+	/* outbound connection in progress (statup race) */
+	code = xio_reject(session, (enum xio_status) EISCONN, NULL, 0);
+	reject = true;
+	break;
+      case XioConnection::ConnectHelper::ACCEPTING: /* bad user state */
+      case XioConnection::ConnectHelper::READY: /* Accelio state violation */
+	code = xio_reject(session, (enum xio_status) EISCONN, NULL, 0);
+	reject = true;
+	/* RESET? */
+	break;
+      };
+      pthread_spin_unlock(&xcon->sp);
+      xcon->put();
+    } else {
+      /* brand new session */
+      /* XXX finish */
+    }
+    conns_sp.unlock();
+  }
+
+  if (! reject)
+    code = portals.accept(session, req, cb_user_context);
+
+  return code;
 } /* new_session */
 
 int XioMessenger::session_event(struct xio_session *session,
@@ -841,10 +885,11 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
 
     XioConnection *xcon = new XioConnection(this, XioConnection::ACTIVE,
 					    _dest);
-    /* XXXX session_state::INIT */
-
     /* sentinel ref */
     xcon->get(); /* xcon->nref == 1 */
+
+    /* lock xcon until state established */
+    pthread_spin_lock(&xcon->sp);
 
     conns_list.push_back(*xcon);
     conns_entity_map.insert(*xcon);
@@ -864,7 +909,9 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
     xcon->connected.set(true);
 
     /* kickoff session negotition */
-    xcon->cstate.init_state();
+    xcon->cstate.init_state(); /* LOCKED */
+
+    pthread_spin_unlock(&xcon->sp);
 
     return xcon->get(); /* nref +1 */
   }

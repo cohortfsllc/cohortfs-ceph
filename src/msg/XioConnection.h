@@ -73,6 +73,7 @@ private:
     enum session_startup_states {
       IDLE = 0,
       CONNECTING,
+      ACCEPTING,
       READY
     };
 
