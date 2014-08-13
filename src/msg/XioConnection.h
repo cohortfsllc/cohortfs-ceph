@@ -42,6 +42,21 @@ class XioConnection : public Connection
 public:
   enum type { ACTIVE, PASSIVE };
 
+  enum session_states {
+    INIT = 0,
+    START,
+    UP,
+    DISCONNECTED,
+    DELETED
+  };
+
+  enum session_startup_states {
+    IDLE = 0,
+    CONNECTING,
+    ACCEPTING,
+    READY
+  };
+
 private:
   XioConnection::type xio_conn_type;
   XioPortal *portal;
@@ -63,21 +78,6 @@ private:
   class ConnectHelper
   {
   public:
-    enum session_states {
-      INIT = 0,
-      START,
-      UP,
-      DISCONNECTED,
-      DELETED
-    };
-
-    enum session_startup_states {
-      IDLE = 0,
-      CONNECTING,
-      ACCEPTING,
-      READY
-    };
-
     uint64_t features;
     Messenger::Policy policy;
 
@@ -198,7 +198,7 @@ public:
   const entity_inst_t& get_peer() const { return peer; }
 
   XioConnection* get() {
-#if 0
+#if 1
     int refs = nref.read();
     cout << "XioConnection::get " << this << " " << refs << std::endl;
 #endif
@@ -208,7 +208,7 @@ public:
 
   void put() {
     RefCountedObject::put();
-#if 0
+#if 1
     int refs = nref.read();
     cout << "XioConnection::put " << this << " " << refs << std::endl;
 #endif

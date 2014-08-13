@@ -352,9 +352,10 @@ int XioConnection::on_msg_req(struct xio_session *session,
     m->set_seq(header.seq);
 
     /* handle connect negotiation */
-    if (unlikely((cstate.get_session_state() == ConnectHelper::INIT) ||
-		 (cstate.get_session_state() == ConnectHelper::DISCONNECTED)))
+    if (unlikely(cstate.get_session_state() == XioConnection::START))
       return cstate.next_state(m);
+
+    assert(cstate.get_session_state() == XioConnection::UP);
 
     /* MP-SAFE */
     cstate.set_in_seq(header.seq);
@@ -472,8 +473,8 @@ int XioConnection::on_msg_error(struct xio_session *session,
 int XioConnection::ConnectHelper::init_state()
 {
   assert(xcon->xio_conn_type==XioConnection::ACTIVE);
-  session_state.set(ConnectHelper::START);
-  startup_state.set(ConnectHelper::CONNECTING);
+  session_state.set(XioConnection::START);
+  startup_state.set(XioConnection::CONNECTING);
   XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
   MConnect* m = new MConnect();
   m->addr = msgr->get_myinst().addr;

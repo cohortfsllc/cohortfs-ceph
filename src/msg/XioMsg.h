@@ -287,16 +287,15 @@ public:
 
       /* testing only! server's ready, resubmit request (not reached on
        * PASSIVE/server side) */
-      if (unlikely(m->get_special_handling() & MSG_SPECIAL_HANDLING_REDUPE)) {
-	if (likely(xcon->is_connected())) {
+      if (unlikely(
+	(m->get_special_handling() & MSG_SPECIAL_HANDLING_REDUPE) &&
+	((m->get_type() == CEPH_MSG_PING) ||
+	    (m->get_type() == MSG_DATA_PING)) &&
+	(likely(xcon->is_connected())))) {
 	  xcon->get_messenger()->send_message(m, xcon);
 	} else {
-	  /* dispose it */
-	  m->put();
-	}
-      } else {
-	  /* the normal case: done with message */
-	  m->put();
+	/* dispose it */
+	m->put();
       }
       /* submit queue ref */
       xcon->put();

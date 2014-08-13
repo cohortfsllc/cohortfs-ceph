@@ -100,7 +100,9 @@ static int on_session_event(struct xio_session *session,
 			    struct xio_session_event_data *event_data,
 			    void *cb_user_context)
 {
-  XioMessenger *msgr = static_cast<XioMessenger*>(cb_user_context);
+  XioMessenger *msgr =
+    static_cast<XioMessenger*>(
+      static_cast<XioConnection*>(cb_user_context)->get_messenger());
 
   dout(4) << "session event: " << xio_session_event_str(event_data->event)
     << ". reason: " << xio_strerror(event_data->reason) << dendl;
@@ -354,14 +356,14 @@ int XioMessenger::new_session(struct xio_session *session,
       xcon = (*conn_iter).get(); // could skip ref (conns_sp)
       pthread_spin_lock(&xcon->sp);
       switch (xcon->cstate.startup_state.read()) {
-      case XioConnection::ConnectHelper::IDLE:
+      case XioConnection::IDLE:
 	/* normal reconnect */
 	xcon->xio_conn_type = XioConnection::PASSIVE;
-	xcon->cstate.session_state.set(XioConnection::ConnectHelper::START);
+	xcon->cstate.session_state.set(XioConnection::START);
 	xcon->cstate.startup_state.set(
-	  XioConnection::ConnectHelper::ACCEPTING);
+	  XioConnection::ACCEPTING);
 	break;
-      case XioConnection::ConnectHelper::CONNECTING:
+      case XioConnection::CONNECTING:
 	/* outbound connection in progress (statup race) */
 	code = xio_reject(session, (enum xio_status) EISCONN, NULL, 0);
 	pthread_spin_unlock(&xcon->sp);
@@ -369,8 +371,8 @@ int XioMessenger::new_session(struct xio_session *session,
 	conns_sp.unlock();
 	return code;
 	break;
-      case XioConnection::ConnectHelper::ACCEPTING: /* bad user state */
-      case XioConnection::ConnectHelper::READY: /* Accelio state violation */
+      case XioConnection::ACCEPTING: /* bad user state */
+      case XioConnection::READY: /* Accelio state violation */
 	code = xio_reject(session, (enum xio_status) EISCONN, NULL, 0);
 	pthread_spin_unlock(&xcon->sp);
 	xcon->put();
@@ -395,6 +397,7 @@ int XioMessenger::new_session(struct xio_session *session,
     struct xio_session_attr attr;
     attr.user_context = xcon;
     xio_modify_session(session, &attr, XIO_SESSION_ATTR_USER_CTX);
+    xcon->get(); // sentinel
     conns_list.push_back(*xcon);
   }
 
@@ -445,18 +448,12 @@ int XioMessenger::session_event(struct xio_session *session,
     xcon->portal = static_cast<XioPortal*>(xctxa.user_context);
     assert(xcon->portal);
 
-    xcona.user_context = xcon;
+    xcona.user_context = xcon->get();
     (void) xio_modify_connection(conn, &xcona, XIO_CONNECTION_ATTR_USER_CTX);
 
+    xcon->cstate.session_state.set(XioConnection::START);
+    xcon->cstate.startup_state.set(XioConnection::ACCEPTING);
     xcon->connected.set(true);
-
-    /* sentinel ref */
-    xcon->get(); /* xcon->nref == 1 */
-    conns_sp.lock();
-    conns_list.push_back(*xcon);
-    /* XXX we can't put xcon in conns_entity_map becase we don't yet know
-     * it's peer address */
-    conns_sp.unlock();
 
     dout(4) << "new connection session " << session
       << " xcon " << xcon << dendl;
@@ -486,7 +483,7 @@ int XioMessenger::session_event(struct xio_session *session,
       /* now find xcon on conns_list, erase, and release sentinel ref */
       XioConnection::ConnList::iterator citer =
 	XioConnection::ConnList::s_iterator_to(*xcon);
-      /* XXX check if citer on conn_list? */
+      /* XXX check if citer on conns_list? */
       conns_list.erase(citer);
       xcon->on_disconnect_event();
     }
@@ -500,10 +497,6 @@ int XioMessenger::session_event(struct xio_session *session,
   case XIO_SESSION_TEARDOWN_EVENT:
   {
     dout(2) << "xio_session_teardown " << session << dendl;
-    struct xio_session_attr attr;
-    xio_query_session(session, &attr, XIO_SESSION_ATTR_USER_CTX);
-    if (attr.user_context)
-      free(attr.user_context); /* xhelo buffer dup */
     xio_session_destroy(session);
   }
     break;
@@ -722,11 +715,9 @@ int XioMessenger::send_message(Message *m, Connection *con)
   XioConnection *xcon = static_cast<XioConnection*>(con);
 
   /* If con is not in READY state, we have to enforce policy */
-  if (xcon->cstate.session_state.read() !=
-      XioConnection::ConnectHelper::READY) {
+  if (xcon->cstate.session_state.read() != XioConnection::READY) {
     pthread_spin_lock(&xcon->sp);
-    if (xcon->cstate.session_state.read() !=
-	XioConnection::ConnectHelper::READY) {
+    if (xcon->cstate.session_state.read() != XioConnection::READY) {
       xcon->outgoing.mqueue.push_back(*m);
       pthread_spin_unlock(&xcon->sp);
       return 0;
@@ -888,8 +879,7 @@ retry:
     pthread_spin_lock(&xcon->sp);
     /* the DISCONNECTED state connotes mapped AND discon (cf. DELETED) */
     uint32_t session_state = xcon->cstate.session_state.read();
-    if (unlikely(session_state ==
-		 XioConnection::ConnectHelper::DISCONNECTED)) {
+    if (unlikely(session_state == XioConnection::DISCONNECTED)) {
       string xio_uri = xio_uri_from_entity(_dest.addr, true /* want_port */);
 	  buffer::list xhelo_bl;
 	  XioHelo xhelo(bound ? XIO_HELO_FLAG_BOUND_ADDR : XIO_HELO_FLAG_NONE,
@@ -912,7 +902,7 @@ retry:
 	  /* kickoff session negotiation */
 	  xcon->cstate.init_state(); /* LOCKED */
     } else if (unlikely(session_state ==
-			XioConnection::ConnectHelper::DELETED)) {
+			XioConnection::DELETED)) {
       pthread_spin_unlock(&xcon->sp);
       pthread_yield();
       goto retry;
@@ -942,7 +932,7 @@ retry:
     XioConnection *xcon = new XioConnection(this, XioConnection::ACTIVE,
 					    _dest);
     /* sentinel ref */
-    xcon->get(); /* xcon->nref == 1 */
+    xcon->get();
 
     /* lock xcon until state established */
     pthread_spin_lock(&xcon->sp);
