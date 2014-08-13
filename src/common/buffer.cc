@@ -1606,8 +1606,6 @@ std::ostream& operator<<(std::ostream& out, const buffer::raw &r) {
   return out << "buffer::raw(" << (void*)r.data << " len " << r.len << " nref " << r.nref.read() << ")";
 }
 
-} // namespace ceph
-
 #if defined(HAVE_XIO)
 struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp)
 {
@@ -1618,3 +1616,5 @@ struct xio_mempool_obj* get_xio_mp(const buffer::ptr& bp)
   return NULL;
 }
 #endif // HAVE_XIO
+
+} // namespace ceph
