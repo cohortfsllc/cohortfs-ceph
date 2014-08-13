@@ -34,6 +34,7 @@ class Log : private Thread
 
   int m_syslog_log, m_syslog_crash;
   int m_stderr_log, m_stderr_crash;
+  bool m_lttng_enabled;
 
   bool m_stop;
 
@@ -62,6 +63,7 @@ public:
 
   void set_syslog_level(int log, int crash);
   void set_stderr_level(int log, int crash);
+  void enable_lttng(bool on);
 
   Entry *create_entry(int level, int subsys);
   void submit_entry(Entry *e);
