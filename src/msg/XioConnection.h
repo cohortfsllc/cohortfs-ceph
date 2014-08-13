@@ -85,6 +85,7 @@ private:
     ceph::shared_ptr<AuthSessionHandler> session_security;
     AuthAuthorizer *authorizer;
     XioConnection *xcon;
+    uint32_t protocol_version;
 
     atomic_t session_state;
     atomic_t startup_state;
@@ -96,6 +97,7 @@ private:
 
     ConnectHelper(XioConnection* _xcon)
       : xcon(_xcon),
+	protocol_version(0),
 	session_state(INIT),
 	startup_state(IDLE),
 	in_seq(0),
@@ -124,6 +126,7 @@ private:
     int msg_connect_reply(MConnectReply *m);
     int msg_connect_auth(MConnectAuth *m);
     int msg_connect_auth_reply(MConnectAuthReply *m);
+    int state_up_ready();
 
   } cstate; /* ConnectHelper */
 

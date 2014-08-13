@@ -68,8 +68,13 @@ public:
   int pool_hint(uint32_t size);
   void try_insert(XioConnection *xcon);
 
-  uint32_t get_global_seq() {
-    return global_seq.inc();
+  uint32_t get_global_seq(uint32_t old=0) {
+    uint32_t gseq = global_seq.inc();
+    if (old > gseq) {
+      global_seq.set(old);
+      gseq = global_seq.inc();
+    }
+    return gseq;
   }
 
   /* xio hooks */

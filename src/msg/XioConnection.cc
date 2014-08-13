@@ -515,6 +515,13 @@ int XioConnection::ConnectHelper::next_state(Message* m)
   return 0;
 } /* next_state */
 
+int XioConnection::ConnectHelper::state_up_ready() {
+  xcon->flush_send_queue();
+  session_state.set(UP);
+  startup_state.set(READY);
+  return (0);
+}
+
 int XioConnection::ConnectHelper::msg_connect(MConnect *m)
 {
   if (xcon->xio_conn_type != XioConnection::PASSIVE) {
@@ -612,7 +619,8 @@ int XioConnection::ConnectHelper::msg_connect_auth(MConnectAuth *m)
 
   MConnectAuthReply* m2 = new MConnectAuthReply();
 
-  m2->protocol_version = msgr->get_proto_version(peer_type, false);
+  m2->protocol_version = protocol_version =
+    msgr->get_proto_version(peer_type, false);
   if (m->protocol_version != m2->protocol_version) {
     m2->tag = CEPH_MSGR_TAG_BADPROTOVER;
     goto send_m2;
@@ -643,7 +651,7 @@ int XioConnection::ConnectHelper::msg_connect_auth(MConnectAuth *m)
   // decode authorizer
   if (m->authorizer_len) {
     bp = buffer::create(m->authorizer_len);
-    bp.copy_in(0 /* off */, m2->authorizer_len, m2->get_data().c_str());
+    bp.copy_in(0 /* off */, m->authorizer_len, m->get_data().c_str());
     auth_bl.push_back(bp);
   }
 
@@ -678,8 +686,6 @@ int XioConnection::ConnectHelper::msg_connect_auth(MConnectAuth *m)
     m2->flags |= CEPH_MSG_CONNECT_LOSSY;
 
   // XXXX locking?
-  session_state.set(UP);
-  startup_state.set(READY);
   features = m2->features;
 
   session_security.reset(
@@ -687,7 +693,11 @@ int XioConnection::ConnectHelper::msg_connect_auth(MConnectAuth *m)
 			     session_key, features));
 
   // notify ULP
-  msgr->ms_deliver_handle_connect(xcon);
+  msgr->ms_deliver_handle_accept(xcon);
+
+  state_up_ready();
+
+  // XXX need queue for up-ready races (other side)?
 
 send_m2:
   msgr->send_message_impl(m2, xcon);
@@ -704,6 +714,102 @@ int XioConnection::ConnectHelper::msg_connect_auth_reply(MConnectAuthReply *m)
     m->put();
     return -EINVAL;
   }
+
+  buffer::list auth_bl;
+  buffer::ptr bp;
+
+  XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+
+  m->features = ceph_sanitize_features(m->features);
+
+  if (m->tag == CEPH_MSGR_TAG_FEATURES) {
+    dout(4)  << "connect protocol feature mismatch, my " << std::hex
+	     << features << " < peer " << m->features
+	     << " missing " << (m->features & ~policy.features_supported)
+	     << std::dec << dendl;
+  }
+
+  if (m->tag == CEPH_MSGR_TAG_BADPROTOVER) {
+    dout(4) << "connect protocol version mismatch, my " << protocol_version
+	    << " != " << m->protocol_version << dendl;
+    //XXX goto fail_locked;
+  }
+
+  if (m->tag == CEPH_MSGR_TAG_RESETSESSION) {
+    dout(4) << "connect got RESETSESSION" << dendl;
+
+    // XXXX discard input queue
+    in_seq = 0;
+    if (features & CEPH_FEATURE_MSG_AUTH) {
+      (void) get_random_bytes((char *)&out_seq, sizeof(out_seq));
+      out_seq.set(out_seq.read() & 0x7fffffff);
+    } else {
+      out_seq.set(0);
+    }
+    connect_seq = 0;
+    // notify ULP
+    msgr->ms_deliver_handle_reset(xcon);
+    init_state();
+    goto dispose_m;
+  }
+
+  // can we remove global_seq?
+  if (m->tag == CEPH_MSGR_TAG_RETRY_GLOBAL) {
+    global_seq = msgr->get_global_seq(m->global_seq);
+    dout(4) << "connect got RETRY_GLOBAL " << m->global_seq
+	    << " chose new " << global_seq << dendl;
+    init_state();
+    goto dispose_m;
+  }
+
+  if (!! authorizer) {
+    if (m->authorizer_len) {
+      bp = buffer::create(m->authorizer_len);
+      bp.copy_in(0 /* off */, m->authorizer_len, m->get_data().c_str());
+      auth_bl.push_back(bp);
+      bufferlist::iterator iter = auth_bl.begin();
+      if (!authorizer->verify_reply(iter)) {
+	//XXX goto fail;
+      }
+    } else {
+      //XXX goto fail;
+    }
+  }
+
+  if (m->tag == CEPH_MSGR_TAG_READY) {
+    uint64_t fdelta = policy.features_required & ~((uint64_t) m->features);
+    if (fdelta) {
+      dout(4) << "missing required features " << std::hex << fdelta
+	      << std::dec << dendl;
+      // XXX goto fail_locked;
+      // don't understand intended behavior
+    }
+  }
+
+  // hooray!
+  //peer_global_seq = m->global_seq;
+  policy.lossy = m->flags & CEPH_MSG_CONNECT_LOSSY;
+  //connect_seq = cseq + 1;
+  //assert(connect_seq == reply.connect_seq);
+  features = ((uint64_t) m->features & (uint64_t) features);
+
+  if (!! authorizer) {
+    session_security.reset(
+      get_auth_session_handler(
+	msgr->cct, authorizer->protocol, authorizer->session_key, features));
+    delete authorizer; authorizer = NULL;
+      }  else {
+      // no authorizer, so we shouldn't be applying security to messages
+      session_security.reset();
+    }
+
+  state_up_ready();
+
+  // notify ULP
+  msgr->ms_deliver_handle_connect(xcon);
+
+dispose_m:
+  m->put();
 
   return 0;
 } /* msg_connect_reply */
