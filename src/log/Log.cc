@@ -160,6 +160,16 @@ void Log::submit_entry(Entry *e)
     tracepoint(ceph, log, e->m_prio, e->m_subsys, e->get_str().c_str());
 #endif // HAVE_LTTNG
 
+  // avoid queueing if all other logging is disabled
+  if (m_subs->get_log_level(e->m_subsys) < e->m_prio ||
+      (!m_fd && m_syslog_crash < e->m_prio && m_stderr_crash < e->m_prio)) {
+    // go straight to recent queue
+    m_recent.enqueue(e);
+    if (m_recent.m_len > m_max_recent)
+      delete m_recent.dequeue();
+    return;
+  }
+
   pthread_mutex_lock(&m_queue_mutex);
 
   // wait for flush to catch up
