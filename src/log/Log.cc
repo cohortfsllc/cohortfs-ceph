@@ -16,7 +16,11 @@
 #include "include/compat.h"
 #include "include/on_exit.h"
 
-#define DEFAULT_MAX_NEW	   100
+#ifdef HAVE_LTTNG
+#include "LttngLog.h"
+#endif // HAVE_LTTNG
+
+#define DEFAULT_MAX_NEW    100
 #define DEFAULT_MAX_RECENT 10000
 
 #define PREALLOC 1000000
@@ -43,6 +47,7 @@ Log::Log(SubsystemMap *s)
     m_fd(-1),
     m_syslog_log(-2), m_syslog_crash(-2),
     m_stderr_log(1), m_stderr_crash(-1),
+    m_lttng_enabled(false),
     m_stop(false),
     m_max_new(DEFAULT_MAX_NEW),
     m_max_recent(DEFAULT_MAX_RECENT)
@@ -140,8 +145,21 @@ void Log::set_stderr_level(int log, int crash)
   pthread_mutex_unlock(&m_flush_mutex);
 }
 
+void Log::enable_lttng(bool on)
+{
+  // could be atomic, but we can tolerate races with config changes
+  m_lttng_enabled = on;
+}
+
 void Log::submit_entry(Entry *e)
 {
+#ifdef HAVE_LTTNG
+  // signal lttng tracepoints directly from the submitting thread,
+  // regardless of log levels; lttng user will filter the events
+  if (m_lttng_enabled)
+    tracepoint(ceph, log, e->m_prio, e->m_subsys, e->get_str().c_str());
+#endif // HAVE_LTTNG
+
   pthread_mutex_lock(&m_queue_mutex);
 
   // wait for flush to catch up

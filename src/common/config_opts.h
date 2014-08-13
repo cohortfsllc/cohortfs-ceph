@@ -42,7 +42,8 @@ OPTION(err_to_stderr, OPT_BOOL, true) // default changed by common_preinit()
 OPTION(log_to_syslog, OPT_BOOL, false)
 OPTION(err_to_syslog, OPT_BOOL, false)
 OPTION(log_flush_on_exit, OPT_BOOL, true) // default changed by common_preinit()
-OPTION(log_stop_at_utilization, OPT_FLOAT, .97)	 // stop logging at (near) full
+OPTION(log_to_lttng, OPT_BOOL, false) // lttng tracepoints for log output
+OPTION(log_stop_at_utilization, OPT_FLOAT, .97)  // stop logging at (near) full
 
 OPTION(xio_trace_mempool, OPT_BOOL, false) // mempool allocation counters
 OPTION(xio_trace_msgcnt, OPT_BOOL, false) // incoming/outgoing msg counters

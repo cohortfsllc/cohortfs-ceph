@@ -114,6 +114,7 @@ public:
       "err_to_syslog",
       "log_to_stderr",
       "err_to_stderr",
+      "log_to_lttng",
       NULL
     };
     return KEYS;
@@ -145,6 +146,11 @@ public:
 
     if (changed.count("log_max_recent")) {
       log->set_max_recent(conf->log_max_recent);
+    }
+
+    // lttng
+    if (changed.count("log_to_lttng")) {
+      log->enable_lttng(conf->log_to_lttng);
     }
   }
 };
