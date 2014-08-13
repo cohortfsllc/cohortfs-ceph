@@ -338,16 +338,16 @@ int XioMessenger::new_session(struct xio_session *session,
 {
   XioHelo xhelo;
   XioConnection *xcon = NULL;
-  entity_inst_t s_inst, *inst;
+  entity_inst_t s_inst;
   int code = 0;
 
   /* new xio_sessions now have startup info */
   decode_xiohelo(xhelo, (char*) req->private_data, req->private_data_len);
 
+  conns_sp.lock();
+
   if (xhelo.flags & XIO_HELO_FLAG_BOUND_ADDR ) {
-    inst = &xhelo.src;
     /* check for reconnection */
-    conns_sp.lock();
     XioConnection::EntitySet::iterator conn_iter =
       conns_entity_map.find(xhelo.src, XioConnection::EntityComp());
     if (unlikely(conn_iter != conns_entity_map.end())) {
@@ -371,6 +371,7 @@ int XioMessenger::new_session(struct xio_session *session,
 	break;
       case XioConnection::ConnectHelper::ACCEPTING: /* bad user state */
       case XioConnection::ConnectHelper::READY: /* Accelio state violation */
+	code = xio_reject(session, (enum xio_status) EISCONN, NULL, 0);
 	pthread_spin_unlock(&xcon->sp);
 	xcon->put();
 	conns_sp.unlock();
@@ -381,19 +382,23 @@ int XioMessenger::new_session(struct xio_session *session,
       pthread_spin_unlock(&xcon->sp);
       xcon->put();
     }
-    conns_sp.unlock();
   } else {
-    inst = &s_inst;
+    /* fall back on the remote's src address (ephemeral port for RDMA) */
     (void) entity_addr_from_sockaddr(
       &s_inst.addr, (struct sockaddr *) &req->src_addr);
   }
 
   if (likely(! xcon)) {
+    // save new XioConnection with state {PASSIVE, INIT, IDLE}
     xcon = new XioConnection(this, XioConnection::PASSIVE, s_inst);
     xcon->session = session;
     struct xio_session_attr attr;
-    
+    attr.user_context = xcon;
+    xio_modify_session(session, &attr, XIO_SESSION_ATTR_USER_CTX);
+    conns_list.push_back(*xcon);
   }
+
+  conns_sp.unlock();
 
   code = portals.accept(session, req, cb_user_context);
 
@@ -426,18 +431,15 @@ int XioMessenger::session_event(struct xio_session *session,
     (void) xio_query_connection(conn, &xcona,
 				XIO_CONNECTION_ATTR_CTX|
 				XIO_CONNECTION_ATTR_PEER_ADDR);
-    /* XXX assumes RDMA */
-    (void) entity_addr_from_sockaddr(&s_inst.addr,
-				     (struct sockaddr *) &xcona.peer_addr);
-
-    if (port_shift)
-      s_inst.addr.set_port(s_inst.addr.get_port()-port_shift);
-
-    xcon = new XioConnection(this, XioConnection::PASSIVE, s_inst);
-    xcon->session = session;
 
     struct xio_context_attr xctxa;
     (void) xio_query_context(xcona.ctx, &xctxa, XIO_CONTEXT_ATTR_USER_CTX);
+
+    /* recover stashed XioConnection */
+    struct xio_session_attr sattr;
+    xio_query_session(session, &sattr, XIO_SESSION_ATTR_USER_CTX);
+    xcon = static_cast<XioConnection*>(sattr.user_context);
+    assert(xcon);
 
     xcon->conn = conn;
     xcon->portal = static_cast<XioPortal*>(xctxa.user_context);
@@ -874,12 +876,48 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
       _dest.addr.get_port() + port_shift);
   }
 
+retry:
   conns_sp.lock();
   XioConnection::EntitySet::iterator conn_iter =
     conns_entity_map.find(_dest, XioConnection::EntityComp());
   if (conn_iter != conns_entity_map.end()) {
-    ConnectionRef cref = &(*conn_iter);
+    XioConnectionRef cref  = &(*conn_iter); /* ref+1 */
+    XioConnection *xcon = cref->get(); /* ref'd above, so safe this scope */
     conns_sp.unlock();
+    /* lock xcon until state established */
+    pthread_spin_lock(&xcon->sp);
+    /* the DISCONNECTED state connotes mapped AND discon (cf. DELETED) */
+    uint32_t session_state = xcon->cstate.session_state.read();
+    if (unlikely(session_state ==
+		 XioConnection::ConnectHelper::DISCONNECTED)) {
+      string xio_uri = xio_uri_from_entity(_dest.addr, true /* want_port */);
+	  buffer::list xhelo_bl;
+	  XioHelo xhelo(bound ? XIO_HELO_FLAG_BOUND_ADDR : XIO_HELO_FLAG_NONE,
+			self_inst, dest);
+	  ::encode(xhelo, xhelo_bl);
+	  /* XXX client session attributes */
+	  struct xio_session_attr attr;
+	  attr.ses_ops = &xio_msgr_ops;
+	  attr.user_context_len = xhelo_bl.length();
+	  attr.user_context = malloc(attr.user_context_len);
+	  memcpy(attr.user_context, xhelo_bl.c_str(), attr.user_context_len);
+	  attr.uri = NULL; /* XXX */
+	  xcon->session = xio_session_create(
+	    XIO_SESSION_REQ, &attr, xio_uri.c_str(), 0, 0, xcon);
+	  /* this should cause callbacks with user context of conn, but
+	   * we can always set it explicitly */
+	  xcon->conn = xio_connect(
+	    xcon->session, this->portals.get_portal0()->ctx, 0, NULL, xcon);
+	  xcon->connected.set(true);
+	  /* kickoff session negotiation */
+	  xcon->cstate.init_state(); /* LOCKED */
+    } else if (unlikely(session_state ==
+			XioConnection::ConnectHelper::DELETED)) {
+      pthread_spin_unlock(&xcon->sp);
+      pthread_yield();
+      goto retry;
+    }
+    pthread_spin_unlock(&xcon->sp);
     return cref;
   }
   else {
@@ -915,7 +953,6 @@ ConnectionRef XioMessenger::get_connection(const entity_inst_t& dest)
 
     xcon->session = xio_session_create(XIO_SESSION_REQ, &attr, xio_uri.c_str(),
 				       0, 0, xcon);
-    /* XXX connection setup races are prevented by session startup protocol */
     if (! xcon->session) {
       delete xcon;
       return NULL;

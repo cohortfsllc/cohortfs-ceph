@@ -67,7 +67,8 @@ private:
       INIT = 0,
       START,
       UP,
-      DISCONNECTED
+      DISCONNECTED,
+      DELETED
     };
 
     enum session_startup_states {
@@ -239,6 +240,8 @@ public:
   int flush_send_queue();
 
 };
+
+typedef boost::intrusive_ptr<XioConnection> XioConnectionRef;
 
 class XioLoopbackConnection : public Connection
 {
