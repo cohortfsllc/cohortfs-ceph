@@ -22,19 +22,18 @@ struct Entry {
   short m_prio, m_subsys;
   Entry *m_next;
 
-  char m_static_buf[CEPH_LOG_ENTRY_PREALLOC];
   PrebufferedStreambuf m_streambuf;
 
   Entry()
     : m_thread(0), m_prio(0), m_subsys(0),
       m_next(NULL),
-      m_streambuf(m_static_buf, sizeof(m_static_buf))
+      m_streambuf(CEPH_LOG_ENTRY_PREALLOC)
   {}
   Entry(utime_t s, pthread_t t, short pr, short sub,
 	const char *msg = NULL)
     : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
       m_next(NULL),
-      m_streambuf(m_static_buf, sizeof(m_static_buf))
+      m_streambuf(CEPH_LOG_ENTRY_PREALLOC)
   {
     if (msg) {
       ostream os(&m_streambuf);
@@ -47,7 +46,7 @@ struct Entry {
     os << s;
   }
 
-  std::string get_str() const {
+  const std::string& get_str() {
     return m_streambuf.get_str();
   }
 };

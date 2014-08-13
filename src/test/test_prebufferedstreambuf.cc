@@ -6,8 +6,7 @@
 
 TEST(PrebufferedStreambuf, Empty)
 {
-  char buf[10];
-  PrebufferedStreambuf sb(buf, sizeof(buf));
+  PrebufferedStreambuf sb(10);
 
   std::istream is(&sb);
   std::string out;
@@ -17,8 +16,7 @@ TEST(PrebufferedStreambuf, Empty)
 
 TEST(PrebufferedStreambuf, Simple)
 {
-  char buf[10];
-  PrebufferedStreambuf sb(buf, sizeof(buf));
+  PrebufferedStreambuf sb(10);
 
   std::ostream os(&sb);
   os << "test";
@@ -31,8 +29,7 @@ TEST(PrebufferedStreambuf, Simple)
 
 TEST(PrebufferedStreambuf, Multiline)
 {
-  char buf[10];
-  PrebufferedStreambuf sb(buf, sizeof(buf));
+  PrebufferedStreambuf sb(10);
 
   std::ostream os(&sb);
   const char *s = "this is a line\nanother line\nand a third\nwhee!\n";
@@ -46,8 +43,7 @@ TEST(PrebufferedStreambuf, Multiline)
 
 TEST(PrebufferedStreambuf, Withnull)
 {
-  char buf[10];
-  PrebufferedStreambuf sb(buf, sizeof(buf));
+  PrebufferedStreambuf sb(10);
 
   std::ostream os(&sb);
   std::string s("null \0 and more", 15);
@@ -61,8 +57,7 @@ TEST(PrebufferedStreambuf, Withnull)
 
 TEST(PrebufferedStreambuf, SimpleOverflow)
 {
-  char buf[10];
-  PrebufferedStreambuf sb(buf, sizeof(buf));
+  PrebufferedStreambuf sb(10);
 
   std::ostream os(&sb);
   const char *s = "hello, this is longer than buf[10]";
@@ -78,8 +73,7 @@ TEST(PrebufferedStreambuf, SimpleOverflow)
 
 TEST(PrebufferedStreambuf, ManyOverflow)
 {
-  char buf[10];
-  PrebufferedStreambuf sb(buf, sizeof(buf));
+  PrebufferedStreambuf sb(10);
 
   std::ostream os(&sb);
   const char *s = "hello, this way way way way way way way way way way way way way way way way way way way way way way way way way _way_ longer than buf[10]";

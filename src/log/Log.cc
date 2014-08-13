@@ -209,8 +209,7 @@ void Log::_flush(EntryQueue *t, EntryQueue *requeue, bool crash)
       buflen += snprintf(buf + buflen, sizeof(buf)-buflen, " %lx %2d ",
 			(unsigned long)e->m_thread, e->m_prio);
 
-      // FIXME: this is slow
-      string s = e->get_str();
+      const string& s = e->get_str();
 
       if (do_fd) {
 	int r = safe_write(m_fd, buf, buflen);

@@ -1,63 +1,59 @@
 
 #include "common/PrebufferedStreambuf.h"
 
-PrebufferedStreambuf::PrebufferedStreambuf(char *buf, size_t len)
-  : m_buf(buf), m_buf_len(len)
+PrebufferedStreambuf::PrebufferedStreambuf(size_t len)
 {
+  // reserve memory for the buffer
+  m_buf.resize(len);
+
   // init output buffer
-  this->setp(m_buf, m_buf + m_buf_len);
+  setp(&m_buf[0], &m_buf[0] + len);
 
   // so we underflow on first read
-  this->setg(0, 0, 0);
+  setg(pptr(), pptr(), pptr());
 }
 
 PrebufferedStreambuf::int_type PrebufferedStreambuf::overflow(int_type c)
 {
-  int old_len = m_overflow.size();
-  if (old_len == 0) {
-    m_overflow.resize(m_buf_len);
+  int old_len = m_buf.size();
+  if (m_buf.size() < m_buf.capacity()) {
+    // overflow after get_str()
+    m_buf.resize(m_buf.capacity());
   } else {
-    m_overflow.resize(old_len * 2);
+    // double buffer length
+    m_buf.resize(old_len * 2);
   }
-  m_overflow[old_len] = c;
-  this->setp(&m_overflow[old_len + 1], &*m_overflow.begin() + m_overflow.size());
-  return std::char_traits<char>::not_eof(c);
+
+  // update output sequence
+  m_buf[old_len] = c;
+  setp(&m_buf[old_len + 1], &m_buf[0] + m_buf.size());
+
+  // update input sequence (resize may have moved the buffer)
+  setg(&m_buf[0], &m_buf[gptr()-eback()], pptr());
+
+  return traits_ty::not_eof(c);
 }
 
 PrebufferedStreambuf::int_type PrebufferedStreambuf::underflow()
 {
-  if (this->gptr() == 0) {
-    // first read; start with the static buffer
-    if (m_overflow.size())
-      // there is overflow, so start with entire prealloc buffer
-      this->setg(m_buf, m_buf, m_buf + m_buf_len);
-    else if (this->pptr() == m_buf)
-      // m_buf is empty
-      return traits_ty::eof();  // no data
-    else
-      // set up portion of m_buf we've filled
-      this->setg(m_buf, m_buf, this->pptr());
-    return *this->gptr();
-  }
-  if (this->gptr() == m_buf + m_buf_len && m_overflow.size()) {
-    // at end of m_buf; continue with the overflow string
-    this->setg(&m_overflow[0], &m_overflow[0], this->pptr());
-    return *this->gptr();
-  }
+  if (gptr() == pptr())
+    return traits_ty::eof();
 
-  // otherwise we must be at the end (of m_buf and/or m_overflow)
-  return traits_ty::eof();
+  // update end of input sequence
+  setg(eback(), gptr(), pptr());
+  return *gptr();
 }
 
-std::string PrebufferedStreambuf::get_str() const
+const std::string& PrebufferedStreambuf::get_str()
 {
-  if (m_overflow.size()) {
-    std::string s(m_buf, m_buf + m_buf_len);
-    s.append(&m_overflow[0], this->pptr() - &m_overflow[0]);
-    return s;
-  } else if (this->pptr() == m_buf) {
-    return std::string();
-  } else {
-    return std::string(m_buf, this->pptr() - m_buf);
-  }  
+  // resize the buffer to end at pptr()
+  m_buf.resize(pptr()-eback());
+
+  // update end of output sequence (next write overflows)
+  setp(pptr(), pptr());
+
+  // update end of input sequence
+  setg(eback(), gptr(), pptr());
+
+  return m_buf;
 }
