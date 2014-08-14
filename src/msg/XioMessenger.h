@@ -45,6 +45,8 @@ private:
   atomic_t global_seq;
   bool bound;
 
+  friend class XioConnection;
+
 public:
   XioMessenger(CephContext *cct, entity_name_t name,
 	       string mname, uint64_t nonce, int nportals,
@@ -66,7 +68,6 @@ public:
   uint32_t get_special_handling() { return special_handling; }
   void set_special_handling(int n) { special_handling = n; }
   int pool_hint(uint32_t size);
-  void try_insert(XioConnection *xcon);
 
   uint32_t get_global_seq(uint32_t old=0) {
     uint32_t gseq = global_seq.inc();
@@ -178,6 +179,10 @@ public:
 
   void ds_dispatch(Message *m)
     { dispatch_strategy->ds_dispatch(m); }
+
+private:
+  void try_insert(XioConnection *xcon);
+  void unmap_connection(XioConnection *xcon);
 
 protected:
   virtual void ready()

@@ -360,7 +360,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
     /* MP-SAFE */
     cstate.set_in_seq(header.seq);
 
-    /* XXXX validate peer type */
+#if 0 /* XXXX going away, replaced by challenge-response */
     if (peer_type != (int) hdr.peer_type) { /* XXX isn't peer_type -1? */
       peer_type = hdr.peer_type;
       peer_addr = hdr.addr;
@@ -375,6 +375,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
 	passive_setup();
       }
     }
+#endif
 
     if (magic & (MSG_MAGIC_TRACE_XCON)) {
       dout(4) << "decode m is " << m->get_type() << dendl;
@@ -472,6 +473,8 @@ int XioConnection::on_msg_error(struct xio_session *session,
 
 int XioConnection::ConnectHelper::init_state()
 {
+  dout(11) << __func__ << " ENTER " << dendl;
+
   assert(xcon->xio_conn_type==XioConnection::ACTIVE);
   session_state.set(XioConnection::START);
   startup_state.set(XioConnection::CONNECTING);
@@ -494,6 +497,8 @@ int XioConnection::ConnectHelper::init_state()
 
 int XioConnection::ConnectHelper::next_state(Message* m)
 {
+  dout(11) << __func__ << " ENTER " << dendl;
+
   switch (m->get_type()) {
   case MSG_CONNECT:
     return msg_connect(static_cast<MConnect*>(m));
@@ -516,9 +521,22 @@ int XioConnection::ConnectHelper::next_state(Message* m)
 } /* next_state */
 
 int XioConnection::ConnectHelper::state_up_ready() {
+  dout(11) << __func__ << " ENTER " << dendl;
+
   xcon->flush_send_queue();
+
   session_state.set(UP);
   startup_state.set(READY);
+
+  return (0);
+}
+
+int XioConnection::ConnectHelper::state_discon() {
+  dout(11) << __func__ << " ENTER " << dendl;
+
+  session_state.set(DISCONNECTED);
+  startup_state.set(IDLE);
+
   return (0);
 }
 
@@ -528,6 +546,8 @@ int XioConnection::ConnectHelper::msg_connect(MConnect *m)
     m->put();
     return -EINVAL;
   }
+
+  dout(11) << __func__ << " ENTER " << dendl;
 
   xcon->peer.name = m->name;
   xcon->peer.addr = xcon->peer_addr = m->addr;
@@ -569,6 +589,8 @@ int XioConnection::ConnectHelper::msg_connect_reply(MConnectReply *m)
     return -EINVAL;
   }
 
+  dout(11) << __func__ << " ENTER " << dendl;
+
   // XXX do we need any data from this phase?
   XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
   authorizer =
@@ -608,6 +630,8 @@ int XioConnection::ConnectHelper::msg_connect_auth(MConnectAuth *m)
     m->put();
     return -EINVAL;
   }
+
+  dout(11) << __func__ << " ENTER " << dendl;
 
   bool auth_valid;
   uint64_t fdelta;
@@ -714,6 +738,8 @@ int XioConnection::ConnectHelper::msg_connect_auth_reply(MConnectAuthReply *m)
     m->put();
     return -EINVAL;
   }
+
+  dout(11) << __func__ << " ENTER " << dendl;
 
   buffer::list auth_bl;
   buffer::ptr bp;

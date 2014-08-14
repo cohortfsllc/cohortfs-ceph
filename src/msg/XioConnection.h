@@ -127,6 +127,7 @@ private:
     int msg_connect_auth(MConnectAuth *m);
     int msg_connect_auth_reply(MConnectAuthReply *m);
     int state_up_ready();
+    int state_discon();
 
   } cstate; /* ConnectHelper */
 
@@ -171,6 +172,7 @@ private:
   int on_disconnect_event() {
     connected.set(false);
     pthread_spin_lock(&sp);
+    cstate.state_discon();
     if (!conn)
       this->put();
     pthread_spin_unlock(&sp);

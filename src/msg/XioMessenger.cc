@@ -399,6 +399,7 @@ int XioMessenger::new_session(struct xio_session *session,
     xio_modify_session(session, &attr, XIO_SESSION_ATTR_USER_CTX);
     xcon->get(); // sentinel
     conns_list.push_back(*xcon);
+    conns_entity_map.insert(*xcon);
   }
 
   conns_sp.unlock();
@@ -407,6 +408,26 @@ int XioMessenger::new_session(struct xio_session *session,
 
   return code;
 } /* new_session */
+
+void XioMessenger::unmap_connection(XioConnection *xcon) {
+  Spinlock::Locker lckr(conns_sp);
+  XioConnection::EntitySet::iterator conn_iter =
+    conns_entity_map.find(xcon->peer, XioConnection::EntityComp());
+  if (conn_iter != conns_entity_map.end()) {
+    XioConnection *xcon2 = &(*conn_iter);
+    if (xcon == xcon2) {
+      conns_entity_map.erase(conn_iter);
+    }
+  }
+  /* now find xcon on conns_list, erase, and release sentinel ref */
+  XioConnection::ConnList::iterator citer =
+    XioConnection::ConnList::s_iterator_to(*xcon);
+  /* XXX check if citer on conns_list? */
+  conns_list.erase(citer);
+
+  /* release map ref */
+  xcon->put();
+}
 
 int XioMessenger::session_event(struct xio_session *session,
 				struct xio_session_event_data *event_data,
@@ -466,25 +487,19 @@ int XioMessenger::session_event(struct xio_session *session,
     break;
   case XIO_SESSION_CONNECTION_CLOSED_EVENT: /* orderly discon */
   case XIO_SESSION_CONNECTION_DISCONNECTED_EVENT: /* unexpected discon */
+    dout(2) << xio_session_event_types[event_data->event]
+      << " user_context " << event_data->conn_user_context << dendl;
+    xcon = static_cast<XioConnection*>(event_data->conn_user_context);
+    if (likely(!!xcon)) {
+      xcon->on_disconnect_event();
+    }
+    break;
   case XIO_SESSION_CONNECTION_REFUSED_EVENT:
     dout(2) << xio_session_event_types[event_data->event]
       << " user_context " << event_data->conn_user_context << dendl;
     xcon = static_cast<XioConnection*>(event_data->conn_user_context);
     if (likely(!!xcon)) {
-      Spinlock::Locker lckr(conns_sp);
-      XioConnection::EntitySet::iterator conn_iter =
-	conns_entity_map.find(xcon->peer, XioConnection::EntityComp());
-      if (conn_iter != conns_entity_map.end()) {
-	XioConnection *xcon2 = &(*conn_iter);
-	if (xcon == xcon2) {
-	  conns_entity_map.erase(conn_iter);
-	}
-      }
-      /* now find xcon on conns_list, erase, and release sentinel ref */
-      XioConnection::ConnList::iterator citer =
-	XioConnection::ConnList::s_iterator_to(*xcon);
-      /* XXX check if citer on conns_list? */
-      conns_list.erase(citer);
+      unmap_connection(xcon);
       xcon->on_disconnect_event();
     }
     break;
@@ -943,10 +958,8 @@ retry:
 
     xcon->session = xio_session_create(XIO_SESSION_REQ, &attr, xio_uri.c_str(),
 				       0, 0, xcon);
-    if (! xcon->session) {
-      delete xcon;
-      return NULL;
-    }
+    if (! xcon->session)
+      abort();
 
     /* this should cause callbacks with user context of conn, but
      * we can always set it explicitly */
