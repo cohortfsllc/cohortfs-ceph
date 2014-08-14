@@ -173,19 +173,17 @@ private:
     connected.set(false);
     pthread_spin_lock(&sp);
     cstate.state_discon();
-    if (!conn)
-      this->put();
     pthread_spin_unlock(&sp);
     return 0;
   }
 
   int on_teardown_event() {
     pthread_spin_lock(&sp);
-    if (conn)
+    if (!! conn) {
       xio_connection_destroy(conn);
-    conn = NULL;
+      conn = NULL;
+    }
     pthread_spin_unlock(&sp);
-    this->put();
     return 0;
   }
 

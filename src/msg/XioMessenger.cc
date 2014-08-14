@@ -730,9 +730,9 @@ int XioMessenger::send_message(Message *m, Connection *con)
   XioConnection *xcon = static_cast<XioConnection*>(con);
 
   /* If con is not in READY state, we have to enforce policy */
-  if (xcon->cstate.session_state.read() != XioConnection::READY) {
+  if (xcon->cstate.session_state.read() != XioConnection::UP) {
     pthread_spin_lock(&xcon->sp);
-    if (xcon->cstate.session_state.read() != XioConnection::READY) {
+    if (xcon->cstate.session_state.read() != XioConnection::UP) {
       xcon->outgoing.mqueue.push_back(*m);
       pthread_spin_unlock(&xcon->sp);
       return 0;

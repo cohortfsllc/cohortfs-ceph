@@ -25,6 +25,8 @@ extern "C" {
 #include "msg/msg_types.h"
 #include "XioPool.h"
 
+#include "include/assert.h"
+
 namespace bi = boost::intrusive;
 
 class XioMsgCnt
@@ -287,6 +289,10 @@ public:
 
       /* testing only! server's ready, resubmit request (not reached on
        * PASSIVE/server side) */
+      lsubdout(xcon->get_messenger()->cct, xio  , 11) << __func__ <<
+	" m: " <<  *m << " (" << m->get_type() << ") " <<
+	"connected: " << xcon->is_connected() << dendl;
+
       if (unlikely(
 	(m->get_special_handling() & MSG_SPECIAL_HANDLING_REDUPE) &&
 	((m->get_type() == CEPH_MSG_PING) ||
