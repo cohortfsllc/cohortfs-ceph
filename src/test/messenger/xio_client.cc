@@ -150,6 +150,7 @@ int main(int argc, const char **argv)
 	conn = messenger->get_connection(dest_server);
 
 	// do stuff
+	extern uint64_t xio_rcount;
 	time_t t1, t2;
 	t1 = time(NULL);
 
@@ -171,7 +172,8 @@ int main(int argc, const char **argv)
 	}
 
 	t2 = time(NULL);
-	cout << "Processed " << dispatcher->get_dcount() + n_msgs
+	cout << "Processed "
+	     << xio_rcount
 	     << " round-trip messages in " << t2-t1 << "s"
 	     << std::endl;
 

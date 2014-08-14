@@ -33,6 +33,7 @@ atomic_t XioMessenger::nInstances;
 
 struct xio_mempool *xio_msgr_noreg_mpool;
 
+uint64_t xio_rcount;
 static struct xio_session_ops xio_msgr_ops;
 
 /* Accelio API callouts */
@@ -51,49 +52,48 @@ static const char *xio_session_event_types[] =
   "XIO_SESSION_ERROR_EVENT"
 };
 
-namespace xio_log
-{
-typedef pair<const char*, int> level_pair;
-static const level_pair LEVELS[] = {
-  make_pair("fatal", 0),
-  make_pair("error", 0),
-  make_pair("warn", 1),
-  make_pair("info", 5),
-  make_pair("debug", 10),
-  make_pair("trace", 20)
-};
+namespace xio_log {
+  typedef pair<const char*, int> level_pair;
+  static const level_pair LEVELS[] = {
+    make_pair("fatal", 0),
+    make_pair("error", 0),
+    make_pair("warn", 1),
+    make_pair("info", 5),
+    make_pair("debug", 10),
+    make_pair("trace", 20)
+  };
 
-int get_level()
-{
-  int level = 0;
-  for (size_t i = 0; i < sizeof(LEVELS); i++) {
-    if (!dlog_p(dout_subsys, LEVELS[i].second))
-      break;
-    level++;
+  int get_level()
+  {
+    int level = 0;
+    for (size_t i = 0; i < sizeof(LEVELS); i++) {
+      if (!dlog_p(dout_subsys, LEVELS[i].second))
+	break;
+      level++;
+    }
+    return level;
   }
-  return level;
-}
 
-void log_dout(const char *file, unsigned line,
-	      const char *function, unsigned level,
-	      const char *fmt, ...)
-{
-  char buffer[2048];
-  va_list args;
-  va_start(args, fmt);
-  int n = vsnprintf(buffer, sizeof(buffer), fmt, args);
-  va_end(args);
+  void log_dout(const char *file, unsigned line,
+		const char *function, unsigned level,
+		const char *fmt, ...)
+  {
+    char buffer[2048];
+    va_list args;
+    va_start(args, fmt);
+    int n = vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
 
-  if (n > 0) {
-    const char *short_file = strrchr(file, '/');
-    short_file = (short_file == NULL) ? file : short_file + 1;
-
-    const level_pair &lvl = LEVELS[level];
-    dout(lvl.second) << '[' << lvl.first << "] "
-      << short_file << ':' << line << ' '
-      << function << " - " << buffer << dendl;
+    if (n > 0) {
+      const char *short_file = strrchr(file, '/');
+      short_file = (short_file == NULL) ? file : short_file + 1;
+      
+      const level_pair &lvl = LEVELS[level];
+      dout(lvl.second) << '[' << lvl.first << "] "
+		       << short_file << ':' << line << ' '
+		       << function << " - " << buffer << dendl;
+    }
   }
-}
 }
 
 static int on_session_event(struct xio_session *session,
@@ -311,6 +311,8 @@ XioMessenger::XioMessenger(CephContext *cct, entity_name_t name,
       xio_msgr_ops.on_msg_error = on_msg_error;
       xio_msgr_ops.on_cancel = on_cancel;
       xio_msgr_ops.on_cancel_request = on_cancel_request;
+
+      xio_rcount = 0;
 
       /* mark initialized */
       initialized.set(1);

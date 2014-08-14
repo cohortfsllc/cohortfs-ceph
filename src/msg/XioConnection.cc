@@ -399,7 +399,7 @@ int XioConnection::on_msg_send_complete(struct xio_session *session,
   abort(); /* XXX */
 } /* on_msg_send_complete */
 
-static uint64_t rcount;
+extern uint64_t xio_rcount;
 
 int XioConnection::on_msg_delivered(struct xio_session *session,
 				    struct xio_msg *req,
@@ -407,7 +407,7 @@ int XioConnection::on_msg_delivered(struct xio_session *session,
 				    void *conn_user_context)
 {
   /* requester send complete (one-way) */
-  uint64_t rc = ++rcount;
+  uint64_t rc = ++xio_rcount;
 
   XioMsg* xmsg = static_cast<XioMsg*>(req->user_context);
   if (unlikely(magic & MSG_MAGIC_TRACE_CTR)) {
