@@ -20,6 +20,7 @@
 
 #include "include/types.h"
 #include "common/Clock.h"
+#include "osd/OSDMap.h"
 #include "vol/Volume.h"
 #include "msg/Message.h"
 
@@ -254,7 +255,15 @@ public:
   const set<uuid_d> &get_data_volumes() const { return data_volumes; }
   const uuid_d & get_first_data_volume() const { return *data_volumes.begin(); }
   const uuid_d & get_cas_uuid() const { return cas_uuid; }
-  VolumeRef get_metadata_volume() const { return metadata_volume; }
+  VolumeRef get_metadata_volume(OSDMap *osdmap) {
+    if (!metadata_volume) {
+	osdmap->find_by_uuid(metadata_uuid, metadata_volume);
+    }
+    return metadata_volume;
+  }
+  uuid_d get_metadata_uuid() const {
+    return metadata_uuid;
+  }
   bool is_data_volume(uuid_d &volume) const {
     return data_volumes.count(volume);
   }

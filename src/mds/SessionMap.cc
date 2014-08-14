@@ -71,7 +71,7 @@ void SessionMap::load(Context *onload)
   
   C_SM_Load *c = new C_SM_Load(this);
   object_t oid = get_object_name();
-  VolumeRef volume(mds->mdsmap->get_metadata_volume());
+  VolumeRef volume(mds->get_metadata_volume());
   mds->objecter->read_full(oid, volume, &c->bl, 0, c);
 }
 
@@ -125,7 +125,7 @@ void SessionMap::save(Context *onsave, version_t needv)
   encode(bl);
   committing = version;
   object_t oid = get_object_name();
-  VolumeRef volume(mds->mdsmap->get_metadata_volume());
+  VolumeRef volume(mds->get_metadata_volume());
 
   mds->objecter->write_full(oid, volume,
 			    bl, ceph_clock_now(g_ceph_context), 0,

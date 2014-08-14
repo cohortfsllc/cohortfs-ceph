@@ -276,10 +276,10 @@ void MDCache::remove_inode(CInode *o)
 void MDCache::init_layouts()
 {
   default_file_layout = g_default_file_layout;
-  default_file_layout.fl_uuid = mds->mdsmap->get_metadata_volume()->uuid;
+  default_file_layout.fl_uuid = mds->mdsmap->get_metadata_uuid();
 
   default_log_layout = g_default_file_layout;
-  default_log_layout.fl_uuid = mds->mdsmap->get_metadata_volume()->uuid;
+  default_log_layout.fl_uuid = mds->mdsmap->get_metadata_uuid();
   if (g_conf->mds_log_segment_size > 0) {
     default_log_layout.fl_object_size = g_conf->mds_log_segment_size;
     default_log_layout.fl_stripe_unit = g_conf->mds_log_segment_size;
@@ -5303,7 +5303,7 @@ void MDCache::_recovered(CInode *in, int r, uint64_t size, utime_t mtime)
 void MDCache::purge_prealloc_ino(inodeno_t ino, Context *fin)
 {
   object_t oid = CInode::get_object_name(ino, frag_t(), "");
-  VolumeRef volume(mds->mdsmap->get_metadata_volume());
+  VolumeRef volume(mds->get_metadata_volume());
 
   dout(10) << "purge_prealloc_ino " << ino << " oid " << oid << dendl;
   mds->objecter->remove(oid, volume, ceph_clock_now(g_ceph_context), 0, 0, fin);
@@ -7394,7 +7394,7 @@ void MDCache::_open_ino_backtrace_fetched(inodeno_t ino, bufferlist& bl, int err
       return;
     }
   } else if (err == -ENOENT) {
-    VolumeRef meta_volume = mds->mdsmap->get_metadata_volume();
+    VolumeRef meta_volume = mds->get_metadata_volume();
     if (info.volume != meta_volume) {
       dout(10) << " no object in volume " << info.volume
 	       << ", retrying volume " << meta_volume << dendl;
@@ -7628,7 +7628,7 @@ void MDCache::do_open_ino(inodeno_t ino, open_ino_info_t& info, int err)
   } else {
     assert(!info.ancestors.empty());
     info.checking = mds->get_nodeid();
-    open_ino(info.ancestors[0].dirino, mds->mdsmap->get_metadata_volume(),
+    open_ino(info.ancestors[0].dirino, mds->get_metadata_volume(),
 	     new C_MDC_OpenInoParentOpened(this, ino), info.want_replica);
   }
 }
@@ -8572,7 +8572,7 @@ void MDCache::purge_stray(CDentry *dn)
   C_GatherBuilder gather(g_ceph_context, new C_MDC_PurgeStrayPurged(this, dn));
 
   if (in->is_dir()) {
-    VolumeRef volume(mds->mdsmap->get_metadata_volume());
+    VolumeRef volume(mds->get_metadata_volume());
     list<frag_t> ls;
     if (!in->dirfragtree.is_leaf(frag_t()))
       in->dirfragtree.get_leaves(ls);
@@ -10645,7 +10645,7 @@ void MDCache::_fragment_committed(dirfrag_t basedirfrag, list<CDir*>& resultfrag
   // remove old frags
   C_GatherBuilder gather(g_ceph_context, new C_MDC_FragmentFinish(this, basedirfrag, resultfrags));
 
-  VolumeRef volume(mds->mdsmap->get_metadata_volume());
+  VolumeRef volume(mds->get_metadata_volume());
   for (list<frag_t>::iterator p = uf.old_frags.begin();
        p != uf.old_frags.end();
        ++p) {

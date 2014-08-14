@@ -249,6 +249,9 @@ class MDS : public Dispatcher {
 
   ceph_tid_t issue_tid() { return ++last_tid; }
 
+  VolumeRef get_metadata_volume() const {
+    return mdsmap->get_metadata_volume(osdmap);
+  }
 
   // -- waiters --
   list<Context*> finished_queue;

@@ -803,7 +803,7 @@ void CInode::store(Context *fin)
   m.write_full(bl);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), ".inode");
-  VolumeRef mvol(mdcache->mds->mdsmap->get_metadata_volume());
+  VolumeRef mvol(mdcache->mds->get_metadata_volume());
 
   mdcache->mds->objecter->mutate(oid, mvol, m, ceph_clock_now(g_ceph_context), 0,
 				 NULL, new C_Inode_Stored(this, get_version(), fin) );
@@ -836,7 +836,7 @@ void CInode::fetch(Context *fin)
   C_GatherBuilder gather(g_ceph_context, c);
 
   object_t oid = CInode::get_object_name(ino(), frag_t(), "");
-  VolumeRef volume(mdcache->mds->mdsmap->get_metadata_volume());
+  VolumeRef volume(mdcache->mds->get_metadata_volume());
 
   ObjectOperation rd;
   rd.getxattr("inode", &c->bl, NULL);
@@ -924,7 +924,7 @@ void CInode::store_backtrace(Context *fin)
 
   VolumeRef mvol;
   if (is_dir())
-    mvol = mdcache->mds->mdsmap->get_metadata_volume();
+    mvol = mdcache->mds->get_metadata_volume();
   else
     mvol = volume;
 
