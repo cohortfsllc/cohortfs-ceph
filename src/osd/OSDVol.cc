@@ -35,6 +35,7 @@
 #include <utility>
 #include <cassert>
 #include <errno.h>
+#include "common/BackTrace.h"
 
 #define dout_subsys ceph_subsys_osd
 #define DOUT_PREFIX_ARGS this, osd->whoami, get_osdmap()

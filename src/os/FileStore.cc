@@ -50,6 +50,7 @@
 #include "BtrfsFileStoreBackend.h"
 #include "XfsFileStoreBackend.h"
 #include "ZFSFileStoreBackend.h"
+#include "common/BackTrace.h"
 #include "include/types.h"
 #include "FileJournal.h"
 
@@ -2842,15 +2843,18 @@ int FileStore::_clone_range(const coll_t &cid, const hobject_t& oldoid, const ho
 
 class SyncEntryTimeout : public Context {
 public:
-  SyncEntryTimeout(int commit_timeo)
+  SyncEntryTimeout(int commit_timeo) 
     : m_commit_timeo(commit_timeo)
   {
   }
 
   void finish(int r) {
+    BackTrace *bt = new BackTrace(1);
     generic_dout(-1) << "FileStore: sync_entry timed out after "
-		     << m_commit_timeo << " seconds.";
+	   << m_commit_timeo << " seconds.\n";
+    bt->print(*_dout);
     *_dout << dendl;
+    delete bt;
     abort();
   }
 private:

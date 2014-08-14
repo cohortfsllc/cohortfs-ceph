@@ -12,6 +12,7 @@
  *
  */
 
+#include "common/BackTrace.h"
 #include "common/perf_counters.h"
 #include "global/pidfile.h"
 #include "common/debug.h"

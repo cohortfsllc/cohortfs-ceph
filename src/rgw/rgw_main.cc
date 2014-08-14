@@ -64,6 +64,7 @@
 #include <sstream>
 
 #include "include/types.h"
+#include "common/BackTrace.h"
 
 #define dout_subsys ceph_subsys_rgw
 
