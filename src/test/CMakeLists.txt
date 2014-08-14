@@ -1756,6 +1756,7 @@ endif(HAVE_XIO)
 if (WITH_FIO)
   include_directories(${FIO_INC_DIR})
   add_library(fio_ceph_filestore SHARED fio_ceph_filestore.cc)
+  set_target_properties(fio_ceph_filestore PROPERTIES COMPILE_FLAGS "-fpermissive -Wno-pointer-arith")
   target_link_libraries(fio_ceph_filestore os global ${CRYPTO_LIBS} ${EXTRA_LIBS})
   install(TARGETS fio_ceph_filestore DESTINATION lib)
 endif (WITH_FIO)
@@ -1763,14 +1764,11 @@ endif (WITH_FIO)
 # osbench
 add_executable(osbench objectstore_bench.cc)
 target_link_libraries(osbench os global ${CDS_LIBS})
-set_target_properties(osbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
 
 # mmapbench
 add_executable(mmapbench mmap_bench.cc)
 target_link_libraries(mmapbench os global)
-set_target_properties(mmapbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
 
 # pagesetbench
 add_executable(pagesetbench pageset_bench.cc)
 target_link_libraries(pagesetbench os global)
-set_target_properties(pagesetbench PROPERTIES COMPILE_FLAGS "-std=gnu++11")
