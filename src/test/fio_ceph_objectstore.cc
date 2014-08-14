@@ -9,7 +9,9 @@
 #include "os/ObjectStore.h"
 #include "global/global_init.h"
 
+#define typeof decltype
 #include <fio.h>
+#undef typeof
 
 struct fio_ceph_os_iou {
 	struct io_u *io_u;
