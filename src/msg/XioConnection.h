@@ -82,6 +82,9 @@ private:
     static const int FLAG_NONE = 0x0000;
     static const int FLAG_BAD_AUTH = 0x0001;
 
+    static const int OP_FLAG_NONE = 0x0000;
+    static const int OP_FLAG_LOCKED = 0x0001;
+
     uint64_t features;
     Messenger::Policy policy;
 
@@ -136,6 +139,7 @@ private:
     int msg_connect_auth_reply(MConnectAuthReply *m);
     int state_up_ready();
     int state_discon();
+    int state_fail(Message* m, uint32_t flags);
 
   } cstate; /* CState */
 
@@ -248,7 +252,8 @@ public:
 
   void msg_release_fail(struct xio_msg *msg, int code);
 
-  int flush_send_queue();
+  int flush_input_queue(uint32_t flags);
+  int discard_input_queue(uint32_t flags);
 
 };
 

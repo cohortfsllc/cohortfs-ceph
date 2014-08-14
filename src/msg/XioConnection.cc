@@ -440,9 +440,10 @@ void XioConnection::msg_release_fail(struct xio_msg *msg, int code)
     " (" << xio_strerror(code) << ")" << dendl;
 } /* msg_release_fail */
 
-int XioConnection::flush_send_queue() {
+int XioConnection::flush_input_queue(uint32_t flags) {
   XioMessenger* msgr = static_cast<XioMessenger*>(get_messenger());
-  pthread_spin_lock(&sp);
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_lock(&sp);
   int ix, q_size = outgoing.mqueue.size();
   for (ix = 0; ix < q_size; ++ix) {
     Message::Queue::iterator q_iter = outgoing.mqueue.begin();
@@ -450,7 +451,27 @@ int XioConnection::flush_send_queue() {
     outgoing.mqueue.erase(q_iter);
     msgr->send_message_impl(m, this);
   }
-  pthread_spin_unlock(&sp);
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_unlock(&sp);
+  return 0;
+}
+
+int XioConnection::discard_input_queue(uint32_t flags) {
+  Message::Queue disc_q;
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_lock(&sp);
+  Message::Queue::const_iterator i1 = disc_q.end();
+  disc_q.splice(i1, outgoing.mqueue);
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_unlock(&sp);
+
+  int ix, q_size =  disc_q.size();
+  for (ix = 0; ix < q_size; ++ix) {
+    Message::Queue::iterator q_iter = disc_q.begin();
+    Message* m = &(*q_iter);
+    disc_q.erase(q_iter);
+    m->put();
+  }
   return 0;
 }
 
@@ -523,7 +544,7 @@ int XioConnection::CState::next_state(Message* m)
 int XioConnection::CState::state_up_ready() {
   dout(11) << __func__ << " ENTER " << dendl;
 
-  xcon->flush_send_queue();
+  xcon->flush_input_queue(OP_FLAG_NONE);
 
   session_state.set(UP);
   startup_state.set(READY);
@@ -537,7 +558,24 @@ int XioConnection::CState::state_discon() {
   session_state.set(DISCONNECTED);
   startup_state.set(IDLE);
 
-  return (0);
+  return 0;
+}
+
+int XioConnection::CState::state_fail(Message* m, uint32_t flags)
+{
+  if (! (flags & CState::OP_FLAG_LOCKED)) {
+    pthread_spin_lock(&xcon->sp);
+    flags |= OP_FLAG_LOCKED;
+  }
+
+  // advance to state FAIL, adjust LRU
+  xcon->discard_input_queue(flags);
+  m->put();
+
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_unlock(&xcon->sp);
+
+  return 0;
 }
 
 int XioConnection::CState::msg_connect(MConnect *m)
@@ -818,7 +856,7 @@ int XioConnection::CState::msg_connect_auth_reply(MConnectAuthReply *m)
   if (m->tag == CEPH_MSGR_TAG_RESETSESSION) {
     dout(4) << "connect got RESETSESSION" << dendl;
 
-    // XXXX discard input queue
+    xcon->discard_input_queue(OP_FLAG_NONE);
     in_seq = 0;
     if (features & CEPH_FEATURE_MSG_AUTH) {
       (void) get_random_bytes((char *)&out_seq, sizeof(out_seq));
@@ -849,10 +887,10 @@ int XioConnection::CState::msg_connect_auth_reply(MConnectAuthReply *m)
       auth_bl.push_back(bp);
       bufferlist::iterator iter = auth_bl.begin();
       if (!authorizer->verify_reply(iter)) {
-	//XXX goto fail;
+	return state_fail(m, OP_FLAG_NONE);
       }
     } else {
-      //XXX goto fail;
+      return state_fail(m, OP_FLAG_NONE);
     }
   }
 
@@ -861,8 +899,8 @@ int XioConnection::CState::msg_connect_auth_reply(MConnectAuthReply *m)
     if (fdelta) {
       dout(4) << "missing required features " << std::hex << fdelta
 	      << std::dec << dendl;
-      // XXX goto fail_locked;
-      // don't understand intended behavior
+      // XXX don't understand intended behavior
+      return state_fail(m, OP_FLAG_NONE);
     }
   }
 
