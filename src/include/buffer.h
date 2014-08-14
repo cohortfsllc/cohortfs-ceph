@@ -47,6 +47,7 @@
 #include <string>
 #include <exception>
 
+#include "acconfig.h"
 #include "page.h"
 #include "crc32c.h"
 
