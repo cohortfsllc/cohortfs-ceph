@@ -54,7 +54,8 @@ public:
     IDLE = 0,
     CONNECTING,
     ACCEPTING,
-    READY
+    READY,
+    FAIL
   };
 
 private:
@@ -81,9 +82,11 @@ private:
 
     static const int FLAG_NONE = 0x0000;
     static const int FLAG_BAD_AUTH = 0x0001;
+    static const int FLAG_MAPPED = 0x0002;
 
     static const int OP_FLAG_NONE = 0x0000;
     static const int OP_FLAG_LOCKED = 0x0001;
+    static const int OP_FLAG_LRU = 0x0002;
 
     uint64_t features;
     Messenger::Policy policy;
@@ -254,6 +257,7 @@ public:
 
   int flush_input_queue(uint32_t flags);
   int discard_input_queue(uint32_t flags);
+  int adjust_clru(uint32_t flags);
 
 };
 

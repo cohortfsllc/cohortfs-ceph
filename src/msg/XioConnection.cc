@@ -456,7 +456,8 @@ int XioConnection::flush_input_queue(uint32_t flags) {
   return 0;
 }
 
-int XioConnection::discard_input_queue(uint32_t flags) {
+int XioConnection::discard_input_queue(uint32_t flags)
+{
   Message::Queue disc_q;
   if (! (flags & CState::OP_FLAG_LOCKED))
     pthread_spin_lock(&sp);
@@ -472,6 +473,30 @@ int XioConnection::discard_input_queue(uint32_t flags) {
     disc_q.erase(q_iter);
     m->put();
   }
+  return 0;
+}
+
+int XioConnection::adjust_clru(uint32_t flags)
+{
+  if (flags & CState::OP_FLAG_LOCKED)
+    pthread_spin_unlock(&sp);
+
+  XioMessenger* msgr = static_cast<XioMessenger*>(get_messenger());
+  msgr->conns_sp.lock();
+  pthread_spin_lock(&sp);
+
+  if (cstate.flags & CState::FLAG_MAPPED) {
+    XioConnection::ConnList::iterator citer =
+      XioConnection::ConnList::s_iterator_to(*this);
+    msgr->conns_list.erase(citer);
+    msgr->conns_list.push_front(*this); // LRU
+  }
+
+  msgr->conns_sp.unlock();
+
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_unlock(&sp);
+
   return 0;
 }
 
@@ -563,17 +588,25 @@ int XioConnection::CState::state_discon() {
 
 int XioConnection::CState::state_fail(Message* m, uint32_t flags)
 {
-  if (! (flags & CState::OP_FLAG_LOCKED)) {
+  if (! (flags & OP_FLAG_LOCKED)) {
     pthread_spin_lock(&xcon->sp);
     flags |= OP_FLAG_LOCKED;
   }
 
-  // advance to state FAIL, adjust LRU
-  xcon->discard_input_queue(flags);
-  m->put();
+  // advance to state FAIL, drop queued, msgs, adjust LRU
+  session_state.set(DISCONNECTED);
+  startup_state.set(FAIL);
 
-  if (! (flags & CState::OP_FLAG_LOCKED))
+  xcon->discard_input_queue(flags);
+  xcon->adjust_clru(OP_FLAG_LOCKED|OP_FLAG_LRU);
+
+  if (! (flags & OP_FLAG_LOCKED))
     pthread_spin_unlock(&xcon->sp);
+
+  // notify ULP
+  XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+  msgr->ms_deliver_handle_reset(xcon);
+  m->put();
 
   return 0;
 }

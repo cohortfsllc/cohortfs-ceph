@@ -398,7 +398,7 @@ int XioMessenger::new_session(struct xio_session *session,
     attr.user_context = xcon;
     xio_modify_session(session, &attr, XIO_SESSION_ATTR_USER_CTX);
     xcon->get(); // sentinel
-    conns_list.push_back(*xcon);
+    conns_list.push_back(*xcon); // MRU
     conns_entity_map.insert(*xcon);
   }
 
@@ -952,7 +952,7 @@ retry:
     /* lock xcon until state established */
     pthread_spin_lock(&xcon->sp);
 
-    conns_list.push_back(*xcon);
+    conns_list.push_back(*xcon); // MRU
     conns_entity_map.insert(*xcon);
     conns_sp.unlock();
 
