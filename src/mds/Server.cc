@@ -1880,6 +1880,7 @@ CInode* Server::prepare_new_inode(MDRequestRef& mdr, CDir *dir, inodeno_t useino
   } else {
     in->inode.layout = mds->mdcache->default_file_layout;
   }
+  mds->osdmap->find_by_uuid(in->inode.layout.fl_uuid, in->volume);
 
   in->inode.truncate_size = -1ull;  // not truncated, yet!
   in->inode.truncate_seq = 1; /* starting with 1, 0 is kept for no-truncation logic */
