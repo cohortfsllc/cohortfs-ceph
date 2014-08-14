@@ -153,6 +153,7 @@ set(libcommon_files
   common/crc32c.cc
   common/crc32c_intel_baseline.c
   common/crc32c_intel_fast.c
+  common/assert.cc
   common/run_cmd.cc
   common/WorkQueue.cc
   common/ConfUtils.cc

@@ -238,4 +238,7 @@
 /* Defined if CDS */
 #cmakedefine HAVE_CDS
 
+/* Use ceph assert override */
+#cmakedefine USE_CEPH_ASSERT
+
 #endif /* CONFIG_H */

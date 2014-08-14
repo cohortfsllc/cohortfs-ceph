@@ -30,6 +30,7 @@
 #include "global/signal_handler.h"
 #include "include/compat.h"
 #include "include/color.h"
+#include "include/ceph_assert.h"
 
 #include <errno.h>
 #include <deque>
@@ -142,6 +143,7 @@ void global_init(std::vector < const char * > *alt_def_args,
       derr << "warning: unable to create " << g_conf->run_dir << ": " << cpp_strerror(r) << dendl;
     }
   }
+  register_assert_context(g_ceph_context);
 
   // call all observers now.  this has the side-effect of configuring
   // and opening the log file immediately.

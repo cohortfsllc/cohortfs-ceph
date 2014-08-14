@@ -210,11 +210,13 @@ if(WITH_FIO)
 endif(WITH_FIO)
 
 option(WITH_CDS "Support for CDS MemStore and fio engines" ON) 	 	
-	if(WITH_CDS) 	 	
+if(WITH_CDS) 	 	
 	find_package(cds REQUIRED) 	 	
 	set(HAVE_CDS 1) 	 	
 	include_directories(${CDS_INC_DIR}) 	 	
 endif(WITH_CDS)
+
+option(USE_CEPH_ASSERT "Use Ceph's assert override" ON)
 
 # Now create a useable config.h
 configure_file(
