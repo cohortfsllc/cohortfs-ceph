@@ -471,7 +471,7 @@ int XioConnection::on_msg_error(struct xio_session *session,
   return 0;
 } /* on_msg_error */
 
-int XioConnection::ConnectHelper::init_state()
+int XioConnection::CState::init_state()
 {
   dout(11) << __func__ << " ENTER " << dendl;
 
@@ -495,7 +495,7 @@ int XioConnection::ConnectHelper::init_state()
   return 0;
 }
 
-int XioConnection::ConnectHelper::next_state(Message* m)
+int XioConnection::CState::next_state(Message* m)
 {
   dout(11) << __func__ << " ENTER " << dendl;
 
@@ -520,7 +520,7 @@ int XioConnection::ConnectHelper::next_state(Message* m)
   return 0;
 } /* next_state */
 
-int XioConnection::ConnectHelper::state_up_ready() {
+int XioConnection::CState::state_up_ready() {
   dout(11) << __func__ << " ENTER " << dendl;
 
   xcon->flush_send_queue();
@@ -531,7 +531,7 @@ int XioConnection::ConnectHelper::state_up_ready() {
   return (0);
 }
 
-int XioConnection::ConnectHelper::state_discon() {
+int XioConnection::CState::state_discon() {
   dout(11) << __func__ << " ENTER " << dendl;
 
   session_state.set(DISCONNECTED);
@@ -540,7 +540,7 @@ int XioConnection::ConnectHelper::state_discon() {
   return (0);
 }
 
-int XioConnection::ConnectHelper::msg_connect(MConnect *m)
+int XioConnection::CState::msg_connect(MConnect *m)
 {
   if (xcon->xio_conn_type != XioConnection::PASSIVE) {
     m->put();
@@ -582,7 +582,7 @@ int XioConnection::ConnectHelper::msg_connect(MConnect *m)
   return 0;
 } /* msg_connect */
 
-int XioConnection::ConnectHelper::msg_connect_reply(MConnectReply *m)
+int XioConnection::CState::msg_connect_reply(MConnectReply *m)
 {
   if (xcon->xio_conn_type != XioConnection::ACTIVE) {
     m->put();
@@ -591,7 +591,7 @@ int XioConnection::ConnectHelper::msg_connect_reply(MConnectReply *m)
 
   dout(11) << __func__ << " ENTER " << dendl;
 
-  // XXX do we need any data from this phase?
+ // XXX do we need any data from this phase?
   XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
   authorizer =
     msgr->ms_deliver_get_authorizer(xcon->peer_type, false /* force_new */);
@@ -622,9 +622,51 @@ int XioConnection::ConnectHelper::msg_connect_reply(MConnectReply *m)
   m->put();
 
   return 0;
-} /* msg_connect_reply */
+} /* msg_connect_reply 1 */
 
-int XioConnection::ConnectHelper::msg_connect_auth(MConnectAuth *m)
+int XioConnection::CState::msg_connect_reply(MConnectAuthReply *m)
+{
+  if (xcon->xio_conn_type != XioConnection::ACTIVE) {
+    m->put();
+    return -EINVAL;
+  }
+
+  dout(11) << __func__ << " ENTER " << dendl;
+
+ // XXX do we need any data from this phase?
+  XioMessenger* msgr = static_cast<XioMessenger*>(xcon->get_messenger());
+  authorizer =
+    msgr->ms_deliver_get_authorizer(xcon->peer_type, true /* force_new */);
+
+  MConnectAuth* m2 = new MConnectAuth();
+  m2->features = policy.features_supported;
+  m2->flags = 0;
+  if (policy.lossy)
+    m2->flags |= CEPH_MSG_CONNECT_LOSSY; // fyi, actually, server decides
+
+  // XXX move seq capture to init_state()?
+  m2->global_seq = global_seq = msgr->get_global_seq(); // msgr-wide seq
+  m2->connect_seq = connect_seq; // semantics?
+
+  // serialize authorizer in data[0]
+  m2->authorizer_protocol = authorizer ? authorizer->protocol : 0;
+  m2->authorizer_len = authorizer ? authorizer->bl.length() : 0;
+  if (m2->authorizer_len) {
+    buffer::ptr bp = buffer::create(m2->authorizer_len);
+    bp.copy_in(0 /* off */, m2->authorizer_len, authorizer->bl.c_str());
+    m2->get_data().append(bp);
+  }
+
+  // send m2
+  msgr->send_message_impl(m2, xcon);
+
+  // dispose m
+  m->put();
+
+  return 0;
+} /* msg_connect_reply 2 */
+
+int XioConnection::CState::msg_connect_auth(MConnectAuth *m)
 {
   if (xcon->xio_conn_type != XioConnection::PASSIVE) {
     m->put();
@@ -732,7 +774,7 @@ send_m2:
   return 0;
 } /* msg_connect_auth */
 
-int XioConnection::ConnectHelper::msg_connect_auth_reply(MConnectAuthReply *m)
+int XioConnection::CState::msg_connect_auth_reply(MConnectAuthReply *m)
 {
   if (xcon->xio_conn_type != XioConnection::ACTIVE) {
     m->put();
@@ -758,7 +800,19 @@ int XioConnection::ConnectHelper::msg_connect_auth_reply(MConnectAuthReply *m)
   if (m->tag == CEPH_MSGR_TAG_BADPROTOVER) {
     dout(4) << "connect protocol version mismatch, my " << protocol_version
 	    << " != " << m->protocol_version << dendl;
-    //XXX goto fail_locked;
+    goto dispose_m;
+  }
+
+  if (m->tag == CEPH_MSGR_TAG_BADAUTHORIZER) {
+    dout(4) << "connect got BADAUTHORIZER" << dendl;
+    if (flags & FLAG_BAD_AUTH) {
+      // prevent oscillation
+      flags &= ~FLAG_BAD_AUTH;
+      goto dispose_m;
+    } else {
+      flags |= FLAG_BAD_AUTH;
+      return msg_connect_reply(m);
+    }
   }
 
   if (m->tag == CEPH_MSGR_TAG_RESETSESSION) {

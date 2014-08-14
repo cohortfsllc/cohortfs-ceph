@@ -75,9 +75,13 @@ private:
   /* batching */
   XioInSeq in_seq;
 
-  class ConnectHelper
+  class CState
   {
   public:
+
+    static const int FLAG_NONE = 0x0000;
+    static const int FLAG_BAD_AUTH = 0x0001;
+
     uint64_t features;
     Messenger::Policy policy;
 
@@ -95,13 +99,16 @@ private:
     uint32_t in_seq, out_seq_acked; // atomic<uint64_t>, got receipt
     atomic_t out_seq; // atomic<uint32_t>
 
-    ConnectHelper(XioConnection* _xcon)
+    uint32_t flags;
+
+    CState(XioConnection* _xcon)
       : xcon(_xcon),
 	protocol_version(0),
 	session_state(INIT),
 	startup_state(IDLE),
 	in_seq(0),
-	out_seq(0) {}
+	out_seq(0),
+	flags(FLAG_NONE) {}
 
     uint64_t get_session_state() {
       return session_state.read();
@@ -124,12 +131,13 @@ private:
     int next_state(Message* m);
     int msg_connect(MConnect *m);
     int msg_connect_reply(MConnectReply *m);
+    int msg_connect_reply(MConnectAuthReply *m);
     int msg_connect_auth(MConnectAuth *m);
     int msg_connect_auth_reply(MConnectAuthReply *m);
     int state_up_ready();
     int state_discon();
 
-  } cstate; /* ConnectHelper */
+  } cstate; /* CState */
 
   // message submission queue
   struct SendQ {
