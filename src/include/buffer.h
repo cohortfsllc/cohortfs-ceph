@@ -58,7 +58,7 @@ extern "C" {
 # include <assert.h>
 #endif
 
-class XioCompletionHook;
+class XioDispatchHook;
 
 namespace ceph {
 
@@ -157,7 +157,7 @@ public:
   static raw* create_zero_copy(unsigned len, int fd, int64_t *offset);
 
 #if defined(HAVE_XIO)
- static raw* create_msg(unsigned len, char *buf, XioCompletionHook *m_hook);
+ static raw* create_msg(unsigned len, char *buf, XioDispatchHook* m_hook);
 #endif
 
   /*

@@ -308,7 +308,7 @@ public:
     }
 };
 
-class XioCompletionHook : public Message::CompletionHook
+class XioDispatchHook : public Message::CompletionHook
 {
 private:
   XioConnection *xcon;
@@ -321,8 +321,8 @@ private:
 public:
   struct xio_mempool_obj mp_this;
 
-  XioCompletionHook(XioConnection *_xcon, Message *_m, XioInSeq& _msg_seq,
-		    struct xio_mempool_obj& _mp) :
+  XioDispatchHook(XioConnection *_xcon, Message *_m, XioInSeq& _msg_seq,
+		  struct xio_mempool_obj& _mp) :
     CompletionHook(_m),
     xcon(_xcon->get()),
     msg_seq(_msg_seq),
@@ -342,9 +342,10 @@ public:
 
   int release_msgs();
 
-  XioCompletionHook* get() {
+  XioDispatchHook* get() {
     nrefs.inc(); return this;
   }
+
   virtual void set_message(Message *_m) {
     m = _m;
   }
@@ -358,7 +359,7 @@ public:
       if (!cl_flag && release_msgs())
 	return;
       struct xio_mempool_obj *mp = &this->mp_this;
-      this->~XioCompletionHook();
+      this->~XioDispatchHook();
       xio_mempool_free(mp);
     }
   }
@@ -373,23 +374,23 @@ public:
 
   XioPool& get_pool() { return rsp_pool; }
 
-  void on_err_finalize(XioConnection *xcon) {
+  void on_err_finalize(XioConnection* xcon) {
     /* can't decode message; even with one-way must free
      * xio_msg structures, and then xiopool
      */
     this->finish(-1);
   }
 
-  ~XioCompletionHook() {
+  ~XioDispatchHook() {
     xcon->put();
   }
 };
 
 struct XioRsp : public XioSubmit
 {
-  XioCompletionHook *xhook;
+  XioDispatchHook *xhook;
 public:
-  XioRsp(XioConnection *_xcon, XioCompletionHook *_xhook)
+  XioRsp(XioConnection* _xcon, XioDispatchHook* _xhook)
     : XioSubmit(XioSubmit::INCOMING_MSG_RELEASE, _xcon /* not xcon! */),
       xhook(_xhook->get()) {
       // submit queue ref
@@ -400,7 +401,7 @@ public:
     return xhook->get_seq().dequeue();
   }
 
-  XioCompletionHook *get_xhook() { return xhook; }
+  XioDispatchHook *get_xhook() { return xhook; }
 
   void finalize() {
     xcon->put();

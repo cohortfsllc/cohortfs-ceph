@@ -182,7 +182,7 @@ private:
 
   friend class XioPortal;
   friend class XioMessenger;
-  friend class XioCompletionHook;
+  friend class XioDispatchHook;
   friend class XioMsg;
 
   int on_disconnect_event() {

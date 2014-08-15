@@ -139,16 +139,16 @@ int XioConnection::passive_setup()
 
 #define uint_to_timeval(tv, s) ((tv).tv_sec = (s), (tv).tv_usec = 0)
 
-static inline XioCompletionHook* pool_alloc_xio_completion_hook(
+static inline XioDispatchHook* pool_alloc_xio_completion_hook(
   XioConnection *xcon, Message *m, XioInSeq& msg_seq)
 {
   struct xio_mempool_obj mp_mem;
   int e = xio_mempool_alloc(xio_msgr_noreg_mpool,
-			    sizeof(XioCompletionHook), &mp_mem);
+			    sizeof(XioDispatchHook), &mp_mem);
   if (!!e)
     return NULL;
-  XioCompletionHook *xhook = (XioCompletionHook*) mp_mem.addr;
-  new (xhook) XioCompletionHook(xcon, m, msg_seq, mp_mem);
+  XioDispatchHook *xhook = (XioDispatchHook*) mp_mem.addr;
+  new (xhook) XioDispatchHook(xcon, m, msg_seq, mp_mem);
   return xhook;
 }
 
@@ -191,7 +191,7 @@ int XioConnection::on_msg_req(struct xio_session *session,
   }
 
   XioMessenger *msgr = static_cast<XioMessenger*>(get_messenger());
-  XioCompletionHook *m_hook =
+  XioDispatchHook *m_hook =
     pool_alloc_xio_completion_hook(this, NULL /* msg */, in_seq);
   XioInSeq& msg_seq = m_hook->msg_seq;
   in_seq.clear();
