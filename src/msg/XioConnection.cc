@@ -519,10 +519,8 @@ int XioConnection::on_msg_error(struct xio_session *session,
 
 int XioConnection::mark_down(uint32_t flags)
 {
-  if (! (flags & CState::OP_FLAG_LOCKED)) {
+  if (! (flags & CState::OP_FLAG_LOCKED))
     pthread_spin_lock(&sp);
-    flags |= CState::OP_FLAG_LOCKED;
-  }
 
   // per interface comment, we only stage a remote reset if the
   // current policy required it
@@ -534,7 +532,20 @@ int XioConnection::mark_down(uint32_t flags)
 
   // XXX always discrd input--but are we in startup?  ie, should mark_down
   // be forcing a disconnect?
-  discard_input_queue(flags);
+  discard_input_queue(flags|CState::OP_FLAG_LOCKED);
+
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_unlock(&sp);
+
+  return 0;
+}
+
+int XioConnection::mark_disposable(uint32_t flags)
+{
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_lock(&sp);
+
+  cstate.policy.lossy = true;
 
   if (! (flags & CState::OP_FLAG_LOCKED))
     pthread_spin_unlock(&sp);
@@ -613,17 +624,15 @@ int XioConnection::CState::state_discon() {
 
 int XioConnection::CState::state_fail(Message* m, uint32_t flags)
 {
-  if (! (flags & OP_FLAG_LOCKED)) {
+  if (! (flags & OP_FLAG_LOCKED))
     pthread_spin_lock(&xcon->sp);
-    flags |= OP_FLAG_LOCKED;
-  }
 
   // advance to state FAIL, drop queued, msgs, adjust LRU
   session_state.set(DISCONNECTED);
   startup_state.set(FAIL);
 
-  xcon->discard_input_queue(flags);
-  xcon->adjust_clru(OP_FLAG_LOCKED|OP_FLAG_LRU);
+  xcon->discard_input_queue(flags|OP_FLAG_LOCKED);
+  xcon->adjust_clru(flags|OP_FLAG_LOCKED|OP_FLAG_LRU);
 
   if (! (flags & OP_FLAG_LOCKED))
     pthread_spin_unlock(&xcon->sp);

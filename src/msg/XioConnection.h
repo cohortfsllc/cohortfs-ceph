@@ -208,6 +208,7 @@ private:
   }
 
   int mark_down(uint32_t flags);
+  int mark_disposable(uint32_t flags);
 
 public:
   XioConnection(XioMessenger *m, XioConnection::type _type,

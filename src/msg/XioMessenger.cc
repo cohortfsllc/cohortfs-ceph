@@ -1038,6 +1038,12 @@ void XioMessenger::mark_down_on_empty(Connection* con)
   (void) send_message_impl(m, xcon);
 }
 
+void XioMessenger::mark_disposable(Connection *con)
+{
+  XioConnection *xcon = static_cast<XioConnection*>(con);
+  xcon->mark_disposable(XioConnection::CState::OP_FLAG_NONE);
+}
+
 void XioMessenger::try_insert(XioConnection *xcon)
 {
   Spinlock::Locker lckr(conns_sp);
