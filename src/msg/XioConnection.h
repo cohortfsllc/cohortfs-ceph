@@ -83,6 +83,7 @@ private:
     static const int FLAG_NONE = 0x0000;
     static const int FLAG_BAD_AUTH = 0x0001;
     static const int FLAG_MAPPED = 0x0002;
+    static const int FLAG_RESET = 0x0004;
 
     static const int OP_FLAG_NONE = 0x0000;
     static const int OP_FLAG_LOCKED = 0x0001;
@@ -156,14 +157,14 @@ private:
   {
     // for internal ordering
     bool operator()(const XioConnection &lhs,  const XioConnection &rhs) const
-      {  return lhs.get_peer() < rhs.get_peer(); }
+      {  return lhs.get_peer().addr < rhs.get_peer().addr; }
 
     // for external search by entity_inst_t(peer)
     bool operator()(const entity_inst_t &peer, const XioConnection &c) const
-      {  return peer < c.get_peer(); }
+      {  return peer.addr < c.get_peer().addr; }
 
     bool operator()(const XioConnection &c, const entity_inst_t &peer) const
-      {  return c.get_peer() < peer;  }
+      {  return c.get_peer().addr < peer.addr;  }
   };
 
   bi::list_member_hook<> conns_hook;
@@ -201,6 +202,8 @@ private:
     pthread_spin_unlock(&sp);
     return 0;
   }
+
+  int mark_down(uint32_t flags);
 
 public:
   XioConnection(XioMessenger *m, XioConnection::type _type,

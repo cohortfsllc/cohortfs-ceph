@@ -162,20 +162,16 @@ public:
   virtual int send_keepalive(Connection *con)
     { return EINVAL; }
 
-  virtual void mark_down(const entity_addr_t& a)
-    { }
-
-  virtual void mark_down(Connection *con)
-    { }
+  virtual void mark_down(const entity_addr_t& a);
+  virtual void mark_down(Connection *con);
 
   virtual void mark_down_on_empty(Connection *con)
-    { }
+    { /* FIXME */ }
 
   virtual void mark_disposable(Connection *con)
-    { }
+    { /* FIXME */ }
 
-  virtual void mark_down_all()
-    { }
+  virtual void mark_down_all();
 
   void ds_dispatch(Message *m)
     { dispatch_strategy->ds_dispatch(m); }

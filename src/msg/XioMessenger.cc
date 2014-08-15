@@ -986,6 +986,33 @@ ConnectionRef XioMessenger::get_loopback_connection()
   return (loop_con.get());
 } /* get_loopback_connection */
 
+void XioMessenger::mark_down(const entity_addr_t& addr)
+{
+  entity_inst_t inst(entity_name_t(), addr);
+  Spinlock::Locker lckr(conns_sp);
+  XioConnection::EntitySet::iterator conn_iter =
+    conns_entity_map.find(inst, XioConnection::EntityComp());
+  if (conn_iter != conns_entity_map.end()) {
+      (*conn_iter).mark_down(XioConnection::CState::OP_FLAG_NONE);
+    }
+} /* mark_down(const entity_addr_t& */
+
+void XioMessenger::mark_down(Connection* con)
+{
+  XioConnection *xcon = static_cast<XioConnection*>(con);
+  xcon->mark_down(XioConnection::CState::OP_FLAG_NONE);
+} /* mark_down(Connection*) */
+
+void XioMessenger::mark_down_all()
+{
+  Spinlock::Locker lckr(conns_sp);
+  XioConnection::EntitySet::iterator conn_iter;
+  for (conn_iter = conns_entity_map.begin(); conn_iter !=
+	 conns_entity_map.begin(); ++conn_iter) {
+    (*conn_iter).mark_down(XioConnection::CState::OP_FLAG_NONE);
+  }
+} /* mark_down_all */
+
 void XioMessenger::try_insert(XioConnection *xcon)
 {
   Spinlock::Locker lckr(conns_sp);

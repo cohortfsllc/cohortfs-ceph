@@ -517,6 +517,28 @@ int XioConnection::on_msg_error(struct xio_session *session,
   return 0;
 } /* on_msg_error */
 
+int XioConnection::mark_down(uint32_t flags)
+{
+  if (! (flags & CState::OP_FLAG_LOCKED)) {
+    pthread_spin_lock(&sp);
+    flags |= CState::OP_FLAG_LOCKED;
+  }
+
+  // per interface comment, we only stage a remote reset if the
+  // current policy required it
+  if (cstate.policy.resetcheck)
+    cstate.flags |= CState::FLAG_RESET;
+
+  // XXX always discrd input--but are we in startup?  ie, should mark_down
+  // be forcing a disconnect?
+  discard_input_queue(flags);
+
+  if (! (flags & CState::OP_FLAG_LOCKED))
+    pthread_spin_unlock(&sp);
+
+  return 0;
+}
+
 int XioConnection::CState::init_state()
 {
   dout(11) << __func__ << " ENTER " << dendl;
@@ -800,11 +822,19 @@ int XioConnection::CState::msg_connect_auth(MConnectAuth *m)
     goto send_m2;
   }
 
-  // sequence checks
-  
+  // RESET check
+  if (policy.resetcheck) {
+    pthread_spin_lock(&xcon->sp);
+    if (xcon->cstate.flags & FLAG_RESET) {
+      m2->tag = CEPH_MSGR_TAG_RESETSESSION;
+      // XXX need completion functor (XioMsg::on_msg_delivered)
+      pthread_spin_unlock(&xcon->sp);
+      goto send_m2;
+    }
+    pthread_spin_unlock(&xcon->sp);
+  }
 
-
-  // XXX
+  // XXX sequence checks
 
   // ready
   m2->tag = CEPH_MSGR_TAG_READY;
