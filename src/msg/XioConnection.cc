@@ -529,6 +529,9 @@ int XioConnection::mark_down(uint32_t flags)
   if (cstate.policy.resetcheck)
     cstate.flags |= CState::FLAG_RESET;
 
+  // Accelio disconnect
+  xio_disconnect(conn);
+
   // XXX always discrd input--but are we in startup?  ie, should mark_down
   // be forcing a disconnect?
   discard_input_queue(flags);
