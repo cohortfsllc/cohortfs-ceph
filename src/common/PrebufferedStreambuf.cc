@@ -1,5 +1,9 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
 #include "common/PrebufferedStreambuf.h"
+
+using namespace std;
 
 PrebufferedStreambuf::PrebufferedStreambuf(size_t len)
 {
@@ -44,7 +48,45 @@ PrebufferedStreambuf::int_type PrebufferedStreambuf::underflow()
   return *gptr();
 }
 
-const std::string& PrebufferedStreambuf::get_str()
+streampos PrebufferedStreambuf::seekpos(streampos sp, ios_base::openmode which)
+{
+  if (eback() + sp > egptr())
+    return streampos(-1);
+  if (which & ios_base::in)
+    setg(eback(), eback() + sp, egptr());
+  if (which & ios_base::out)
+    setp(eback() + sp, epptr());
+  return sp;
+}
+
+streampos PrebufferedStreambuf::seekoff(streamoff off, ios_base::seekdir way,
+					ios_base::openmode which)
+{
+  if (way == ios_base::beg)
+    return seekpos(off, which);
+
+  if (way == ios_base::end)
+    return seekpos(egptr() - eback() + off, which);
+
+  if (way == ios_base::cur) {
+    // fail if both in|out
+    if (which == ios_base::in) {
+      if (gptr() + off > egptr() || gptr() + off < eback())
+	return streampos(-1);
+      setg(eback(), gptr() + off, egptr());
+      return gptr() - eback();
+    }
+    if (which == ios_base::out) {
+      if (pptr() + off > epptr() || pptr() + off < pbase())
+	return streampos(-1);
+      setp(pptr() + off, epptr());
+      return pptr() - eback();
+    }
+  }
+  return streampos(-1);
+}
+
+const string& PrebufferedStreambuf::get_str()
 {
   // resize the buffer to end at pptr()
   m_buf.resize(pptr()-eback());

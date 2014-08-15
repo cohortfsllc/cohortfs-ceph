@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #ifndef CEPH_COMMON_PREBUFFEREDSTREAMBUF_H
 #define CEPH_COMMON_PREBUFFEREDSTREAMBUF_H
 
@@ -23,6 +26,13 @@ class PrebufferedStreambuf
   typedef traits_ty::int_type int_type;
   typedef traits_ty::pos_type pos_type;
   typedef traits_ty::off_type off_type;
+
+protected:
+  // support pubseekpos() and pubseekoff()
+  virtual std::streampos seekpos(std::streampos sp,
+      std::ios_base::openmode which = std::ios_base::in | std::ios_base::out);
+  virtual std::streampos seekoff(std::streamoff off, std::ios_base::seekdir way,
+      std::ios_base::openmode which = std::ios_base::in | std::ios_base::out);
 
 public:
   PrebufferedStreambuf(size_t len);
