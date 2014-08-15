@@ -402,6 +402,7 @@ int XioMessenger::new_session(struct xio_session *session,
     xcon->get(); // sentinel
     conns_list.push_back(*xcon); // MRU
     conns_entity_map.insert(*xcon);
+    xcon->cstate.flags |= XioConnection::CState::FLAG_MAPPED;
   }
 
   conns_sp.unlock();
@@ -426,6 +427,7 @@ void XioMessenger::unmap_connection(XioConnection *xcon) {
     XioConnection::ConnList::s_iterator_to(*xcon);
   /* XXX check if citer on conns_list? */
   conns_list.erase(citer);
+  xcon->cstate.flags &= ~XioConnection::CState::FLAG_MAPPED;
 
   /* release map ref */
   xcon->put();
@@ -956,6 +958,7 @@ retry:
 
     conns_list.push_back(*xcon); // MRU
     conns_entity_map.insert(*xcon);
+    xcon->cstate.flags |= XioConnection::CState::FLAG_MAPPED;
     conns_sp.unlock();
 
     xcon->session = xio_session_create(XIO_SESSION_REQ, &attr, xio_uri.c_str(),
@@ -988,6 +991,7 @@ void XioMessenger::try_insert(XioConnection *xcon)
   Spinlock::Locker lckr(conns_sp);
   /* already resident in conns_list */
   conns_entity_map.insert(*xcon);
+  xcon->cstate.flags |= XioConnection::CState::FLAG_MAPPED;
 }
 
 XioMessenger::~XioMessenger()
