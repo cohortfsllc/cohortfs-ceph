@@ -88,7 +88,7 @@ namespace xio_log {
     if (n > 0) {
       const char *short_file = strrchr(file, '/');
       short_file = (short_file == NULL) ? file : short_file + 1;
-      
+
       const level_pair &lvl = LEVELS[level];
       dout(lvl.second) << '[' << lvl.first << "] "
 		       << short_file << ':' << line << ' '
