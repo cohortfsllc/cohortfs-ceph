@@ -386,6 +386,36 @@ public:
   }
 };
 
+/* A sender-side CompletionHook that relies on the on_msg_delivered
+ * to complete a pending mark down. */
+class XioMarkDownHook : public Message::CompletionHook
+{
+private:
+  XioConnection* xcon;
+
+public:
+  struct xio_mempool_obj mp_this;
+
+  XioMarkDownHook(
+    XioConnection* _xcon, Message *_m, struct xio_mempool_obj& _mp) :
+    CompletionHook(_m), xcon(_xcon->get()), mp_this(_mp)
+    { }
+
+  virtual void claim(int r) {}
+
+  virtual void finish(int r) {
+    xcon->put();
+    struct xio_mempool_obj *mp = &this->mp_this;
+    this->~XioMarkDownHook();
+    xio_mempool_free(mp);
+  }
+
+  virtual void complete(int r) {
+    xcon->mark_down(XioConnection::CState::OP_FLAG_NONE);
+    finish(r);
+  }
+};
+
 struct XioRsp : public XioSubmit
 {
   XioDispatchHook *xhook;

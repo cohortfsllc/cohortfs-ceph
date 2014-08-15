@@ -33,6 +33,8 @@ extern "C" {
 
 namespace bi = boost::intrusive;
 
+#define XIO_NOP_TAG_MARKDOWN 0x0001
+
 class XioPortal;
 class XioMessenger;
 class XioMsg;
@@ -47,7 +49,8 @@ public:
     START,
     UP,
     DISCONNECTED,
-    DELETED
+    DELETED,
+    BARRIER
   };
 
   enum session_startup_states {
@@ -184,6 +187,7 @@ private:
   friend class XioMessenger;
   friend class XioDispatchHook;
   friend class XioMsg;
+  friend class XioMarkDownHook;
 
   int on_disconnect_event() {
     connected.set(false);

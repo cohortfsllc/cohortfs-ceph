@@ -173,6 +173,8 @@
 #define MSG_CONNECT_AUTH          0x605
 #define MSG_CONNECT_AUTH_REPLY    0x606
 
+// Special
+#define MSG_NOP                   0x607
 
 // *** Message::encode() crcflags bits.
 #define MSG_CRC_DATA		1

@@ -164,9 +164,7 @@ public:
 
   virtual void mark_down(const entity_addr_t& a);
   virtual void mark_down(Connection *con);
-
-  virtual void mark_down_on_empty(Connection *con)
-    { /* FIXME */ }
+  virtual void mark_down_on_empty(Connection *con);
 
   virtual void mark_disposable(Connection *con)
     { /* FIXME */ }

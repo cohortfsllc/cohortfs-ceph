@@ -23,6 +23,7 @@
 #include "XioMessenger.h"
 #include "common/address_helper.h"
 #include "XioHelo.h"
+#include "messages/MNop.h"
 
 #define dout_subsys ceph_subsys_xio
 
@@ -1012,6 +1013,30 @@ void XioMessenger::mark_down_all()
     (*conn_iter).mark_down(XioConnection::CState::OP_FLAG_NONE);
   }
 } /* mark_down_all */
+
+static inline XioMarkDownHook* pool_alloc_markdown_hook(
+  XioConnection *xcon, Message *m)
+{
+  struct xio_mempool_obj mp_mem;
+  int e = xio_mempool_alloc(xio_msgr_noreg_mpool,
+			    sizeof(XioMarkDownHook), &mp_mem);
+  if (!!e)
+    return NULL;
+  XioMarkDownHook *hook = static_cast<XioMarkDownHook*>(mp_mem.addr);
+  new (hook) XioMarkDownHook(xcon, m, mp_mem);
+  return hook;
+}
+
+void XioMessenger::mark_down_on_empty(Connection* con)
+{
+  XioConnection *xcon = static_cast<XioConnection*>(con);
+  MNop* m = new MNop();
+  m->tag = XIO_NOP_TAG_MARKDOWN;
+  m->set_completion_hook(pool_alloc_markdown_hook(xcon, m));
+  // stall new messages
+  xcon->cstate.session_state.set(XioConnection::BARRIER);
+  (void) send_message_impl(m, xcon);
+}
 
 void XioMessenger::try_insert(XioConnection *xcon)
 {
