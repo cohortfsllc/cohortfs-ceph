@@ -374,7 +374,7 @@ Message *decode_message(CephContext *cct, int crcflags,
     break;
 
   case MSG_NOP:
-    m = new MNop();
+    return 0;
     break;
 
   case MSG_COMMAND:
