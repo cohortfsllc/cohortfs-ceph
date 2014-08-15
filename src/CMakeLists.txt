@@ -72,7 +72,7 @@ ${PYTHON_EXECUTABLE} ${CMAKE_SOURCE_DIR}/src/ceph.setpath.py ${PYTHON_INSTDIR} $
 OUTPUT_VARIABLE CEPH_PYTHON_SET_PATH)
 
 include_directories(".")
-include_directories("./include")
+#include_directories("./include")
 
 if(${WITH_TCMALLOC})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")

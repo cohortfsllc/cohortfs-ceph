@@ -17,7 +17,7 @@
 #include "common/config.h"
 #include "common/debug.h"
 #include "common/Clock.h"
-#include "ceph_assert.h"
+#include "include/ceph_assert.h"
 
 #include <errno.h>
 #include <iostream>

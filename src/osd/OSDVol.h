@@ -46,7 +46,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include "lru.h"
+#include "include/lru.h"
 #include "messages/MOSDOp.h"
 #include "messages/MOSDOpReply.h"
 

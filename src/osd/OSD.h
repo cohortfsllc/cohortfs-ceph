@@ -48,7 +48,7 @@
 #include "common/simple_cache.hpp"
 #include "common/sharedptr_registry.hpp"
 #include "common/PrioritizedQueue.h"
-#include "lru.h"
+#include "include/lru.h"
 
 #define CEPH_OSD_PROTOCOL    10 /* cluster internal */
 
