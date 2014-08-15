@@ -1,12 +1,15 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#ifndef CEPH_LOG_LTTNGLOG_H
+//#ifndef CEPH_LOG_LTTNGLOG_H
+//#define CEPH_LOG_LTTNGLOG_H
+
+#define TRACEPOINT_PROVIDER ceph
+#undef TRACEPOINT_INCLUDE
+#define TRACEPOINT_INCLUDE "/home/ali/ceph-local/src/log/LttngLog.h"
+
+#if !defined(CEPH_LOG_LTTNGLOG_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
 #define CEPH_LOG_LTTNGLOG_H
 
-#define TRACEPOINT_CREATE_PROBES
-#define TRACEPOINT_DEFINE
-#define TRACEPOINT_PROBE_DYNAMIC_LINKAGE
 #include <lttng/tracepoint.h>
 
 TRACEPOINT_EVENT(
@@ -26,3 +29,5 @@ TRACEPOINT_LOGLEVEL(
        TRACE_INFO)
 
 #endif
+
+#include <lttng/tracepoint-event.h>
